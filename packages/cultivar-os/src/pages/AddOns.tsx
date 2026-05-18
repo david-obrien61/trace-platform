@@ -11,7 +11,7 @@ export function AddOns() {
   const { tagId } = useParams<{ tagId: string }>();
   const navigate = useNavigate();
 
-  const { item, addons: cartAddons, transport, setTransport, setAddons, toggleAddon } = useCart();
+  const { item, addons: cartAddons, transport, setTransport, setAddons, toggleAddon, setNettingDeclined } = useCart();
   const { addons: dbAddons, loading, error } = useAddons();
 
   // Local state for netting when DB addon isn't loaded yet
@@ -40,10 +40,12 @@ export function AddOns() {
   const nettingId = nettingCartAddon?.addon.id ?? '__netting__';
 
   function handleNettingToggle() {
+    const willBeSelected = !nettingSelected;
+    setNettingDeclined(!willBeSelected);
     if (nettingCartAddon) {
       toggleAddon(nettingId);
     } else {
-      setLocalNettingSelected((v) => !v);
+      setLocalNettingSelected(willBeSelected);
     }
   }
 

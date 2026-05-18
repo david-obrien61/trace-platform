@@ -13,28 +13,46 @@ export interface CartAddon {
 }
 
 export interface OrderPayload {
-  nursery_id: string;
-  customer: CustomerInput;
-  item: CartItem;
-  addons: CartAddon[];
-  transport: TransportOption;
+  nursery_id:       string;
+  customer:         CustomerInput;
+  item:             CartItem;
+  addons:           CartAddon[];
+  transport:        TransportOption;
+  netting_declined: boolean;
+  transport_note:   string;
 }
 
 export interface Order {
-  id: string;
-  nursery_id: string;
-  customer_id: string;
-  employee_id: string | null;
-  qb_invoice_id: string | null;
-  qb_invoice_url: string | null;
+  id:               string;
+  nursery_id:       string;
+  customer_id:      string;
+  employee_id:      string | null;
+  qb_invoice_id:    string | null;
+  qb_invoice_url:   string | null;
   transport_method: TransportOption;
-  install_date: string | null;
-  subtotal: number;
-  tax_amount: number;
-  total_amount: number;
-  addons_amount: number;
-  status: 'pending' | 'invoiced' | 'paid' | 'cancelled';
-  leakage_flag: boolean;
-  notes: string | null;
-  created_at: string;
+  transport_note:   string | null;
+  netting_declined: boolean;
+  install_date:     string | null;
+  subtotal:         number;
+  tax_amount:       number;
+  total_amount:     number;
+  addons_amount:    number;
+  status:           'pending' | 'invoiced' | 'paid' | 'cancelled';
+  leakage_flag:     boolean;
+  notes:            string | null;
+  created_at:       string;
+}
+
+export function buildTransportNote(
+  transport: TransportOption,
+  nettingDeclined: boolean,
+  nettingSelected: boolean,
+): string {
+  if (transport !== 'self') {
+    return 'LAWNS staff transport';
+  }
+  if (nettingSelected && !nettingDeclined) {
+    return 'Customer self-transport — netting purchased';
+  }
+  return 'Customer self-transport — netting declined, Texas TCC Ch.725 waiver acknowledged';
 }

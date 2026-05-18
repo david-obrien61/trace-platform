@@ -267,12 +267,101 @@ async def qbo_get_invoices(days: int = Query(90, ge=1, le=365), nursery_id: str 
     return {"invoices": invoices, "count": len(invoices)}
 
 
+def _build_transport_lines(
+    transport_method: str,
+    netting_declined: bool,
+    netting_selected: bool,
+    quantity: int,
+    netting_price_per_tree: float,
+) -> tuple[list[dict], str]:
+    """
+    Returns (qbo_line_items, memo_addition) for the transport/netting decision.
+
+    Called by qbo_push_invoice before submitting to QB.
+    The returned lines are appended to the invoice's Line array.
+    The memo is appended to the invoice's CustomerMemo.
+    """
+    if transport_method in ("delivery", "install"):
+        line = {
+            "Description": "Transport: LAWNS Tree Farm staff delivery/install",
+            "Amount": 0.00,
+            "DetailType": "SalesItemLineDetail",
+            "SalesItemLineDetail": {
+                "UnitPrice": 0.00,
+                "Qty": 1,
+            },
+        }
+        memo = "LAWNS Tree Farm delivering/installing. Transport by nursery staff."
+        return [line], memo
+
+    # transport_method == "self"
+    if netting_selected and not netting_declined:
+        total = netting_price_per_tree * quantity
+        line = {
+            "Description": f"Protective travel netting ({quantity} tree{'s' if quantity != 1 else ''})",
+            "Amount": round(total, 2),
+            "DetailType": "SalesItemLineDetail",
+            "SalesItemLineDetail": {
+                "UnitPrice": round(netting_price_per_tree, 2),
+                "Qty": quantity,
+            },
+        }
+        memo = (
+            f"Customer self-transporting. Protective netting applied before loading "
+            f"per Texas Transportation Code Ch. 725."
+        )
+        return [line], memo
+    else:
+        line = {
+            "Description": "Protective travel netting — DECLINED",
+            "Amount": 0.00,
+            "DetailType": "SalesItemLineDetail",
+            "SalesItemLineDetail": {
+                "UnitPrice": 0.00,
+                "Qty": quantity,
+            },
+        }
+        memo = (
+            "Customer advised of Texas Transportation Code Ch. 725 load securing requirements. "
+            "Customer declined netting and accepted responsibility for transport."
+        )
+        return [line], memo
+
+
 @qbo_router.post("/invoice")
-async def qbo_push_invoice(payload: dict, nursery_id: str = Query(None)):
-    """Pushes a completed Cultivar OS work order as a new Invoice to QuickBooks Online."""
+async def qbo_push_invoice(
+    payload: dict,
+    nursery_id: str = Query(None),
+    transport_method: str = Query("self"),
+    netting_declined: bool = Query(False),
+    netting_selected: bool = Query(True),
+    quantity: int = Query(1),
+    netting_price_per_tree: float = Query(10.0),
+):
+    """Pushes a completed Cultivar OS work order as a new Invoice to QuickBooks Online.
+
+    Automatically injects a transport/netting line item and memo into every invoice
+    based on the customer's transport and netting decisions.
+    """
     load_qbo_tokens(nursery_id)
     if not qbo_tokens.get("connected"):
         raise HTTPException(status_code=401, detail="QuickBooks not connected.")
+
+    # Inject transport lines
+    transport_lines, transport_memo = _build_transport_lines(
+        transport_method=transport_method,
+        netting_declined=netting_declined,
+        netting_selected=netting_selected,
+        quantity=quantity,
+        netting_price_per_tree=netting_price_per_tree,
+    )
+
+    existing_lines = payload.get("Line", [])
+    payload["Line"] = existing_lines + transport_lines
+
+    existing_memo = payload.get("CustomerMemo", {}).get("value", "")
+    separator = " | " if existing_memo else ""
+    payload["CustomerMemo"] = {"value": f"{existing_memo}{separator}{transport_memo}"}
 
     realm   = qbo_tokens["realm_id"]
     url     = f"{QBO_API_BASE}/{realm}/invoice?minorversion=65"
