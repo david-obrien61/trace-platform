@@ -1,0 +1,11 @@
+{
+  "name": "trace-platform",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:cultivar": "npm run dev --workspace=packages/cultivar-os",
+    "dev:ignition": "npm run dev --workspace=packages/ignition-os"
+  }
+}
