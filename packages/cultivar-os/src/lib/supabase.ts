@@ -1,1 +1,1 @@
-export { supabase } from '@trace/shared';
+export { supabase } from './shared/supabase/client';
