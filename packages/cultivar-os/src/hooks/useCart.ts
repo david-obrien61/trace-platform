@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Plant, Addon } from '../types/plant';
 import type { CartItem, CartAddon } from '../types/order';
+import type { CustomerInput } from '../types/customer';
 import { TRANSPORT_OPTIONS, type TransportOption } from '../lib/constants';
 
 interface CartStore {
@@ -8,6 +9,7 @@ interface CartStore {
   addons:           CartAddon[];
   transport:        TransportOption;
   nettingDeclined:  boolean;
+  customer:         CustomerInput | null;
 
   setItem:            (plant: Plant, qty: number) => void;
   setQty:             (qty: number) => void;
@@ -15,6 +17,7 @@ interface CartStore {
   setAddons:          (addons: Addon[]) => void;
   toggleAddon:        (addonId: string) => void;
   setNettingDeclined: (val: boolean) => void;
+  setCustomer:        (c: CustomerInput) => void;
   clear:              () => void;
 }
 
@@ -23,6 +26,7 @@ export const useCart = create<CartStore>((set) => ({
   addons:          [],
   transport:       TRANSPORT_OPTIONS.SELF,
   nettingDeclined: false,
+  customer:        null,
 
   setItem: (plant, qty) =>
     set({ item: { plant, quantity: qty } }),
@@ -49,10 +53,13 @@ export const useCart = create<CartStore>((set) => ({
 
   setNettingDeclined: (val) => set({ nettingDeclined: val }),
 
+  setCustomer: (c) => set({ customer: c }),
+
   clear: () => set({
     item:            null,
     addons:          [],
     transport:       TRANSPORT_OPTIONS.SELF,
     nettingDeclined: false,
+    customer:        null,
   }),
 }));

@@ -23,5 +23,7 @@ export interface CustomerInput {
   phone?: string;
   address_line1?: string;
   city?: string;
+  state?: string;
   zip?: string;
+  marketing_opt_in?: boolean;
 }
