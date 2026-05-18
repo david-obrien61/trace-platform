@@ -10,3 +10,6 @@ export * from './quickbooks/invoice';
 // AI Engine
 export { default as AIEngine } from './ai/AIEngine';
 export type { AIPayload, AIOptions, AIResult } from './ai/AIEngine';
+
+// Notifications
+export * from './notifications/index';
