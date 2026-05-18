@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
 import { useAddons } from '../hooks/useAddons';
@@ -13,6 +13,9 @@ export function AddOns() {
 
   const { item, addons: cartAddons, transport, setTransport, setAddons, toggleAddon } = useCart();
   const { addons: dbAddons, loading, error } = useAddons();
+
+  // Local state for netting when DB addon isn't loaded yet
+  const [localNettingSelected, setLocalNettingSelected] = useState(true);
 
   useEffect(() => {
     if (dbAddons.length > 0) {
@@ -32,9 +35,17 @@ export function AddOns() {
   const alwaysAddons = cartAddons.filter((a) => a.addon.trigger_rule === 'always');
 
   // Netting prompt shows whenever transport=self, with DB data if available or a hardcoded fallback
-  const nettingSelected = nettingCartAddon?.selected ?? true;
-  const nettingPrice = nettingCartAddon?.addon.price_per_plant ?? 20;
+  const nettingSelected = nettingCartAddon ? nettingCartAddon.selected : localNettingSelected;
+  const nettingPrice = nettingCartAddon?.addon.price_per_plant ?? 10;
   const nettingId = nettingCartAddon?.addon.id ?? '__netting__';
+
+  function handleNettingToggle() {
+    if (nettingCartAddon) {
+      toggleAddon(nettingId);
+    } else {
+      setLocalNettingSelected((v) => !v);
+    }
+  }
 
   const dbAddonsTotal = cartAddons
     .filter((a) => {
@@ -94,7 +105,7 @@ export function AddOns() {
         <div className="section" style={{ paddingTop: 0 }}>
           <NettingPrompt
             selected={nettingSelected}
-            onToggle={() => nettingCartAddon ? toggleAddon(nettingId) : undefined}
+            onToggle={handleNettingToggle}
             pricePerPlant={nettingPrice}
             quantity={quantity}
           />

@@ -38,51 +38,93 @@ export function NettingPrompt({ selected, onToggle, pricePerPlant, quantity }: P
         $10 per tree — applied by staff before you leave
       </p>
 
-      {/* Primary action */}
-      <button
-        onClick={() => { if (!selected) onToggle(); }}
-        style={{
-          display: 'block',
-          width: '100%',
-          minHeight: 48,
-          padding: '12px 20px',
-          border: selected ? 'none' : '2px solid #27500A',
-          borderRadius: 8,
-          background: selected ? '#27500A' : '#fff',
-          color: selected ? '#fff' : '#27500A',
-          fontSize: '1rem',
-          fontWeight: 700,
-          cursor: selected ? 'default' : 'pointer',
-          textAlign: 'center',
-        }}
-      >
-        {selected ? `✓ Netting added — $${total.toFixed(2)}` : `Yes — add netting ($${total.toFixed(2)})`}
-      </button>
-
-      {/* Decline link */}
-      <div style={{ textAlign: 'center', marginTop: 10 }}>
-        {selected ? (
+      {selected ? (
+        <>
+          {/* Confirmed state */}
           <button
-            onClick={() => onToggle()}
+            onClick={() => { /* no-op — already added */ }}
             style={{
-              background: 'none',
+              display: 'block',
+              width: '100%',
+              minHeight: 48,
+              padding: '12px 20px',
               border: 'none',
-              fontSize: '0.8125rem',
-              color: '#9ca3af',
-              cursor: 'pointer',
-              padding: '4px 0',
-              textDecoration: 'underline',
-              textDecorationColor: '#d1d5db',
+              borderRadius: 8,
+              background: '#27500A',
+              color: '#fff',
+              fontSize: '1rem',
+              fontWeight: 700,
+              cursor: 'default',
+              textAlign: 'center',
             }}
           >
-            I understand the risk — no thanks
+            ✓ Netting added — ${total.toFixed(2)}
           </button>
-        ) : (
-          <p style={{ fontSize: '0.8125rem', color: '#92400e', fontStyle: 'italic', padding: '4px 0' }}>
+
+          <div style={{ textAlign: 'center', marginTop: 10 }}>
+            <button
+              onClick={onToggle}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '0.8125rem',
+                color: '#9ca3af',
+                cursor: 'pointer',
+                padding: '4px 0',
+                textDecoration: 'underline',
+                textDecorationColor: '#d1d5db',
+              }}
+            >
+              I understand the risk — no thanks
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Declined state */}
+          <div
+            style={{
+              display: 'block',
+              width: '100%',
+              minHeight: 48,
+              padding: '12px 20px',
+              border: '2px solid #d1d5db',
+              borderRadius: 8,
+              background: '#f9fafb',
+              color: '#6b7280',
+              fontSize: '1rem',
+              fontWeight: 600,
+              textAlign: 'center',
+              lineHeight: '24px',
+              boxSizing: 'border-box',
+            }}
+          >
+            Netting declined
+          </div>
+
+          <p style={{ fontSize: '0.8125rem', color: '#92400e', fontStyle: 'italic', textAlign: 'center', marginTop: 8 }}>
             No netting added. Drive carefully and secure your load.
           </p>
-        )}
-      </div>
+
+          <div style={{ textAlign: 'center', marginTop: 6 }}>
+            <button
+              onClick={onToggle}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '0.8125rem',
+                color: '#27500A',
+                cursor: 'pointer',
+                padding: '4px 0',
+                textDecoration: 'underline',
+                fontWeight: 600,
+              }}
+            >
+              Actually, add netting back — ${total.toFixed(2)}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
