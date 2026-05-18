@@ -28,15 +28,26 @@ export function AddOns() {
   const { plant, quantity } = item;
   const isSelfTransport = transport === TRANSPORT_OPTIONS.SELF;
 
-  const nettingAddon = cartAddons.find((a) => a.addon.trigger_rule === 'transport=self');
+  const nettingCartAddon = cartAddons.find((a) => a.addon.trigger_rule === 'transport=self');
   const alwaysAddons = cartAddons.filter((a) => a.addon.trigger_rule === 'always');
 
-  const addonsTotal = cartAddons
+  // Netting prompt shows whenever transport=self, with DB data if available or a hardcoded fallback
+  const nettingSelected = nettingCartAddon?.selected ?? true;
+  const nettingPrice = nettingCartAddon?.addon.price_per_plant ?? 20;
+  const nettingId = nettingCartAddon?.addon.id ?? '__netting__';
+
+  const dbAddonsTotal = cartAddons
     .filter((a) => {
       if (a.addon.trigger_rule === 'transport=self') return isSelfTransport && a.selected;
       return a.selected;
     })
     .reduce((sum, a) => sum + a.addon.price_per_plant * quantity, 0);
+
+  // If netting isn't in DB yet, include fallback price when selected + self-transport
+  const fallbackNettingTotal =
+    !nettingCartAddon && isSelfTransport && nettingSelected ? nettingPrice * quantity : 0;
+
+  const addonsTotal = dbAddonsTotal + fallbackNettingTotal;
 
   const plantSubtotal = plant.base_price * quantity;
   const grandTotal = plantSubtotal + addonsTotal;
@@ -78,13 +89,13 @@ export function AddOns() {
         <TransportToggle value={transport} onChange={setTransport} />
       </div>
 
-      {/* Netting prompt — only when self-transport */}
-      {isSelfTransport && nettingAddon && (
+      {/* Netting prompt — shows whenever transport=self, regardless of DB state */}
+      {isSelfTransport && (
         <div className="section" style={{ paddingTop: 0 }}>
           <NettingPrompt
-            selected={nettingAddon.selected}
-            onToggle={() => toggleAddon(nettingAddon.addon.id)}
-            pricePerPlant={nettingAddon.addon.price_per_plant}
+            selected={nettingSelected}
+            onToggle={() => nettingCartAddon ? toggleAddon(nettingId) : undefined}
+            pricePerPlant={nettingPrice}
             quantity={quantity}
           />
         </div>

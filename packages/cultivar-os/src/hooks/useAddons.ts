@@ -31,8 +31,10 @@ export function useAddons(): UseAddonsResult {
       if (cancelled) return;
 
       if (err) {
+        console.error('[useAddons] Supabase error:', err.message, err);
         setError(err.message);
       } else {
+        console.log('[useAddons] fetched addons:', data);
         setAddons(data ?? []);
       }
       setLoading(false);
