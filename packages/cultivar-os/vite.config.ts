@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@trace/shared': path.resolve(__dirname, '../../shared/src'),
+      '@trace/shared': path.resolve(__dirname, '../shared/src'),
     },
   },
 });

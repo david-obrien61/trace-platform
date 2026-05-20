@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { DEMO_NURSERY_ID, LARGE_CONTAINERS, TAX_RATE } from '../lib/constants';
 import { buildTransportNote } from '../types/order';
-import { sendSilently } from '../lib/shared/notifications/send';
-import { buildOrderConfirmationEmail } from '../lib/orderEmail';
+import { sendSilently } from '@trace/shared/notifications';
 import type { CartAddon } from '../types/order';
 import type { CustomerInput } from '../types/customer';
 import type { Plant } from '../types/plant';
@@ -189,23 +188,31 @@ export function useSubmitOrder() {
 
       // Fire order confirmation email — non-blocking, never throws
       sendSilently({
-        to:      { email: customer.email, name: `${customer.first_name} ${customer.last_name}` },
-        subject: `Your LAWNS Tree Farm order is confirmed — ${invoiceNumber}`,
-        html:    buildOrderConfirmationEmail({
-          customerName: `${customer.first_name} ${customer.last_name}`,
+        vertical:   'cultivar',
+        templateId: 'order_confirmation',
+        to: {
+          email:      customer.email,
+          name:       `${customer.first_name} ${customer.last_name}`,
+          emailOptIn: customer.marketing_opt_in ?? true,
+        },
+        data: {
+          customerName:  `${customer.first_name} ${customer.last_name}`,
           invoiceNumber,
-          plantName: plant.common_name ?? plant.species,
-          container: plant.current_container,
+          plantName:     plant.common_name ?? plant.species,
+          container:     plant.current_container,
           quantity,
-          plantTotal: `$${plantSubtotal.toFixed(2)}`,
-          addonsTotal: `$${addonsAmount.toFixed(2)}`,
-          tax: `$${taxAmount.toFixed(2)}`,
-          total: `$${total.toFixed(2)}`,
+          plantTotal:    `$${plantSubtotal.toFixed(2)}`,
+          addonsTotal:   `$${addonsAmount.toFixed(2)}`,
+          subtotal:      `$${subtotal.toFixed(2)}`,
+          tax:           `$${taxAmount.toFixed(2)}`,
+          total:         `$${total.toFixed(2)}`,
           transport,
           nettingActive,
-        }),
-        text:    `Hi ${customer.first_name}, your LAWNS order ${invoiceNumber} is confirmed. Total: $${total.toFixed(2)}.`,
+          payOnline:     false,
+          payUrl:        '',
+        },
         entityId: orderId,
+        tenantId: nurseryId,
       });
 
       // ── QB invoice — non-blocking, never throws ────────────────────────────
