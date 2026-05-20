@@ -10,8 +10,10 @@ Only change from original: shop_id → nursery_id in token storage.
 import os
 import base64
 import secrets
+from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 import httpx
 from dotenv import load_dotenv
 
@@ -276,6 +278,188 @@ async def qbo_get_invoices(days: int = Query(90, ge=1, le=365), nursery_id: str 
     data = await _qbo_get(f"query?query=select * from Invoice where TxnDate >= '{since}' MAXRESULTS 500", nursery_id)
     invoices = data.get("QueryResponse", {}).get("Invoice", [])
     return {"invoices": invoices, "count": len(invoices)}
+
+
+async def _find_or_create_qb_customer(name: str, email: str, nursery_id: str) -> str:
+    """Find QB customer by email, or create. Returns QB customer Id string."""
+    realm = qbo_tokens["realm_id"]
+    headers = {
+        "Authorization": f"Bearer {qbo_tokens['access_token']}",
+        "Accept": "application/json",
+    }
+
+    # Search by email
+    safe_email = email.replace("'", "\\'")
+    query = f"select * from Customer where PrimaryEmailAddr = '{safe_email}' MAXRESULTS 1"
+    search_url = f"{QBO_API_BASE}/{realm}/query?query={quote(query)}&minorversion=65"
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(search_url, headers=headers)
+        if resp.status_code == 200:
+            customers = resp.json().get("QueryResponse", {}).get("Customer", [])
+            if customers:
+                return str(customers[0]["Id"])
+    except Exception as e:
+        print(f"[QB] customer search failed: {e}")
+
+    # Create customer
+    display_name = f"{name} ({email})"
+    create_url = f"{QBO_API_BASE}/{realm}/customer?minorversion=65"
+    payload = {
+        "DisplayName": display_name,
+        "PrimaryEmailAddr": {"Address": email},
+    }
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                create_url,
+                headers={**headers, "Content-Type": "application/json"},
+                json=payload,
+            )
+        if resp.status_code in (200, 201):
+            return str(resp.json().get("Customer", {}).get("Id", "1"))
+        print(f"[QB] customer create failed: {resp.text}")
+    except Exception as e:
+        print(f"[QB] customer create threw: {e}")
+
+    return "1"
+
+
+class CultivarInvoiceRequest(BaseModel):
+    order_id: str
+    nursery_id: str
+
+
+@qbo_router.post("/invoice/cultivar")
+async def cultivar_create_invoice(req: CultivarInvoiceRequest):
+    """
+    Create a QB invoice from a saved Cultivar OS order.
+    Fetches order + items + addons + customer from Supabase, builds and pushes invoice.
+    Always returns 200 — QB failure is logged but never blocks the order.
+    """
+    load_qbo_tokens(req.nursery_id)
+    if not qbo_tokens.get("connected"):
+        return {"qb_status": "not_connected", "qb_invoice_id": None, "qb_invoice_number": None, "qb_invoice_url": None}
+
+    try:
+        db = _supabase()
+
+        # Load order with customer
+        order_res = db.table("orders").select("*, customers(*)").eq("id", req.order_id).single().execute()
+        if not order_res.data:
+            return {"qb_status": "error", "detail": "Order not found", "qb_invoice_id": None, "qb_invoice_number": None, "qb_invoice_url": None}
+        order = order_res.data
+        customer = order["customers"]
+
+        # Load items and addons
+        items = db.table("order_items").select("*, plants(*)").eq("order_id", req.order_id).execute().data or []
+        order_addons = db.table("order_addons").select("*, addons(*)").eq("order_id", req.order_id).execute().data or []
+
+        # Find or create QB customer
+        customer_name = f"{customer['first_name']} {customer['last_name']}"
+        qb_customer_id = await _find_or_create_qb_customer(
+            name=customer_name,
+            email=customer["email"],
+            nursery_id=req.nursery_id,
+        )
+
+        # Build line items
+        lines = []
+        for item in items:
+            plant = item["plants"]
+            description = f"{plant.get('common_name') or plant['species']} — {plant['current_container']}"
+            lines.append({
+                "Description": description,
+                "Amount": round(float(item["subtotal"]), 2),
+                "DetailType": "SalesItemLineDetail",
+                "SalesItemLineDetail": {
+                    "UnitPrice": round(float(item["unit_price"]), 2),
+                    "Qty": item["quantity"],
+                },
+            })
+
+        for oa in order_addons:
+            addon = oa["addons"]
+            lines.append({
+                "Description": f"{addon['name']} × {oa['quantity']}",
+                "Amount": round(float(oa["subtotal"]), 2),
+                "DetailType": "SalesItemLineDetail",
+                "SalesItemLineDetail": {
+                    "UnitPrice": round(float(oa["unit_price"]), 2),
+                    "Qty": oa["quantity"],
+                },
+            })
+
+        # Tax as a line item (simplest sandbox approach — avoids TaxCode setup)
+        lines.append({
+            "Description": "Texas Sales Tax (8.25%)",
+            "Amount": round(float(order["tax_amount"]), 2),
+            "DetailType": "SalesItemLineDetail",
+            "SalesItemLineDetail": {
+                "UnitPrice": round(float(order["tax_amount"]), 2),
+                "Qty": 1,
+            },
+        })
+
+        invoice_payload = {
+            "CustomerRef": {"value": qb_customer_id},
+            "BillEmail": {"Address": customer["email"]},
+            "DocNumber": order.get("notes", ""),  # CLV-YYYYMMDD-NNN
+            "Line": lines,
+            "CustomerMemo": {"value": order.get("transport_note", "")[:999]},
+        }
+
+        # Push invoice
+        realm = qbo_tokens["realm_id"]
+        url = f"{QBO_API_BASE}/{realm}/invoice?minorversion=65"
+        auth_headers = {
+            "Authorization": f"Bearer {qbo_tokens['access_token']}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(url, headers=auth_headers, json=invoice_payload)
+
+        if resp.status_code == 401:
+            refreshed = await _refresh_qbo_token(req.nursery_id)
+            if refreshed:
+                auth_headers["Authorization"] = f"Bearer {qbo_tokens['access_token']}"
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(url, headers=auth_headers, json=invoice_payload)
+
+        if resp.status_code not in (200, 201):
+            print(f"[QB] invoice push failed {resp.status_code}: {resp.text[:400]}")
+            return {"qb_status": "error", "detail": resp.text[:200], "qb_invoice_id": None, "qb_invoice_number": None, "qb_invoice_url": None}
+
+        invoice = resp.json().get("Invoice", {})
+        qb_invoice_id = str(invoice.get("Id", ""))
+        qb_invoice_number = invoice.get("DocNumber", "")
+
+        # QB invoice view URL (sandbox vs. production)
+        if QBO_ENVIRONMENT == "sandbox":
+            qb_invoice_url = f"https://sandbox.qbo.intuit.com/app/invoice?txnId={qb_invoice_id}"
+        else:
+            qb_invoice_url = f"https://qbo.intuit.com/app/invoice?txnId={qb_invoice_id}"
+
+        # Update order with QB IDs
+        db.table("orders").update({
+            "qb_invoice_id": qb_invoice_id,
+            "qb_invoice_url": qb_invoice_url,
+            "status": "invoiced",
+        }).eq("id", req.order_id).execute()
+
+        return {
+            "qb_status": "success",
+            "qb_invoice_id": qb_invoice_id,
+            "qb_invoice_number": qb_invoice_number,
+            "qb_invoice_url": qb_invoice_url,
+        }
+
+    except Exception as e:
+        print(f"[QB] cultivar_create_invoice threw: {e}")
+        return {"qb_status": "error", "detail": str(e)[:200], "qb_invoice_id": None, "qb_invoice_number": None, "qb_invoice_url": None}
 
 
 def _build_transport_lines(

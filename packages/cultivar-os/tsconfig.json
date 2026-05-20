@@ -17,5 +17,6 @@
       "@trace/shared/*": ["../shared/src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/lib/shared"]
 }

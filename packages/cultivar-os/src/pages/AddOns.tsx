@@ -102,18 +102,6 @@ export function AddOns() {
         <TransportToggle value={transport} onChange={setTransport} />
       </div>
 
-      {/* Netting prompt — shows whenever transport=self, regardless of DB state */}
-      {isSelfTransport && (
-        <div className="section" style={{ paddingTop: 0 }}>
-          <NettingPrompt
-            selected={nettingSelected}
-            onToggle={handleNettingToggle}
-            pricePerPlant={nettingPrice}
-            quantity={quantity}
-          />
-        </div>
-      )}
-
       {/* Always-on add-ons */}
       {loading && (
         <div className="section">
@@ -136,7 +124,7 @@ export function AddOns() {
       )}
 
       {!loading && !error && alwaysAddons.length > 0 && (
-        <div className="section" style={{ paddingTop: 0 }}>
+        <div className="section">
           <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#4b5563', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
             Optional add-ons
           </p>
@@ -151,6 +139,18 @@ export function AddOns() {
               />
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Netting prompt — pinned above CTA so user must scroll through it */}
+      {isSelfTransport && (
+        <div className="section">
+          <NettingPrompt
+            selected={nettingSelected}
+            onToggle={handleNettingToggle}
+            pricePerPlant={nettingPrice}
+            quantity={quantity}
+          />
         </div>
       )}
 

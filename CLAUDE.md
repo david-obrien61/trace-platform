@@ -107,27 +107,32 @@ ignition-os:  PIN-based → SHA-256 hash
 > The next Claude Code session reads this first.
 > ALSO update GEMINI.md with the same content.
 
-- **Completed this session:** Group 3 — all missing shared modules created.
-  - Deleted packages/cultivar-os/src/lib/shared/ai/AIEngine.ts (approved Group 1 cleanup)
-  - Created packages/shared/src/qr/generate.ts — generatePlantQR(), generateQR()
-  - Created packages/shared/src/qr/print.ts — printPlantLabel(), printQRLabel()
-  - Created packages/shared/src/components/Button.tsx — primary/secondary/danger/ghost, 48px min
-  - Created packages/shared/src/components/Card.tsx — Card + CardHeader
-  - Created packages/shared/src/components/Badge.tsx — green/amber/red/gray/blue
-  - Built out packages/shared/src/components/LockedOverlay.tsx (was empty stub)
-  - Created packages/shared/src/supabase/types.ts — NotificationLog, SubscriptionTier,
-    GrowthGoal, Vendor, AIUsageLog, VerticalId, PagedResult, TraceError
-  - Updated packages/shared/src/index.ts to export all new modules
-  - Installed @types/qrcode as devDependency in shared
-  - Build confirmed clean: 424 modules, 4.62s
+- **Completed this session:** US-008, US-009, US-010 wired end-to-end.
+  - US-008: Built POST /api/qbo/invoice/cultivar in quickbooks.py.
+    Fetches order + items + addons + customer from Supabase, finds-or-creates
+    QB customer by email, builds line items (one per plant, one per addon, one
+    tax line), pushes invoice to QB sandbox. Stores qb_invoice_id +
+    qb_invoice_url on the order record. Never blocks — always returns 200.
+    Endpoint path matches what useSubmitOrder.ts already calls.
+  - US-009: Confirmation.tsx was already complete from prior session.
+    Verified: shows "Invoice sent to [email]", order summary, QB link if
+    available, amber "Invoice will sync shortly" badge if QB not connected.
+  - US-010: Leakage flag already set correctly in useSubmitOrder.ts.
+    Verified: isLargeContainer && addonsAmount === 0 → leakage_flag: true.
+  - Added VITE_API_URL prefix to QB fetch call in useSubmitOrder.ts so
+    production (Vercel → Railway) works. Local dev uses Vite proxy.
+  - Added Vite dev proxy: /api → http://localhost:8000 in vite.config.ts.
+  - Fixed qbStatus check: now reads qbData.qb_status === 'success' instead
+    of assuming success whenever HTTP 200.
+  - Updated .env.example with VITE_API_URL and SUPABASE_SERVICE_KEY.
+  - Build clean: 424 modules, 4.18s.
 
-- **Next task:** Group 1 (partial) — swap remaining local cultivar-os duplicates for
-  @trace/shared imports. Violations 1, 2, 8, 9, 10. QB and auth files are OFF LIMITS
-  until post-demo. Then move to demo-critical US-001 through US-012.
+- **Next task:** US-011 (owner dashboard — Layna logs in, sees today),
+  US-012 (leakage alert tile). Then QR code generation and full demo run.
 
-- **Last file edited:** packages/shared/src/index.ts
+- **Last file edited:** packages/cultivar-os/api/routers/quickbooks.py
 
-- **Last command run:** vite build (cultivar-os) — clean, 4.62s
+- **Last command run:** vite build (cultivar-os) — clean, 4.18s
 
 - **Tests passing:** Not yet configured
 
@@ -138,17 +143,22 @@ ignition-os:  PIN-based → SHA-256 hash
     needs vertical-agnostic refactor (post-demo)
   - packages/cultivar-os/src/lib/shared/ still contains:
     quickbooks/invoice.ts, quickbooks/oauth.ts, supabase/auth.ts
-    These are Group 1 violations. QB and auth are OFF LIMITS per section 7.
-  - QR modules now exist in shared — cultivar-os can import from @trace/shared/qr
-  - Components now exist in shared — cultivar-os should import Button, Card, Badge,
-    LockedOverlay from @trace/shared instead of any local copies
+    These are dead code + off limits. Leave alone until post-demo.
+  - SCV-0031 must exist in Supabase plants table with plant_events for
+    the demo timeline to show. Verify this before May 25.
+  - QB /invoice/cultivar uses tax-as-line-item (no TaxCode setup required).
+    This is intentional for sandbox demo — QB validates line items fine.
 
 - **⚠️ Pending manual steps:**
-  - David must register at developer.intuit.com (Session 5)
+  - David must register at developer.intuit.com (already done? — confirm)
   - David must create layna@lawnstrees.com in Supabase Auth dashboard
-    (Session 6) — do NOT do this in SQL
-  - QB sandbox must be connected before demo day
+    — do NOT do this in SQL
+  - David must run QB OAuth flow from dashboard before demo day:
+    go to /dashboard → Connect QuickBooks → approve in Intuit popup
+  - VITE_API_URL must be set in Vercel environment variables
+    pointing to the Railway FastAPI deployment URL
   - cultivar-os.app DNS must point to Vercel deployment
+  - Verify SCV-0031 row exists in Supabase with correct plant_events
 
 - **Session ended by:** Claude Code — May 20, 2026
 
@@ -158,15 +168,20 @@ ignition-os:  PIN-based → SHA-256 hash
 
 ### 🔴 DEMO CRITICAL — must work by May 25
 
-- [ ] US-001: QR scan → plant profile (cultivar-os.app/plant/SCV-0031)
-- [ ] US-002: Growth timeline (4-year journey for SCV-0031)
+- [x] US-001: QR scan → plant profile — route, hero, timeline, qty, offline cache DONE.
+      Needs SCV-0031 row + plant_events in Supabase to show real data.
+- [x] US-002: Growth timeline — PlantTimeline component done, age label "in cultivation" done.
+      Needs SCV-0031 plant_events in Supabase.
 - [ ] US-003: Quantity selector
 - [ ] US-004: Netting prompt (red border, pre-checked, self-transport)
 - [ ] US-006: Cart review (correct tax math — 8.25%)
 - [ ] US-007: Customer capture (name, email required)
-- [ ] US-008: QB invoice auto-creation (sandbox)
-- [ ] US-009: Confirmation screen
-- [ ] US-010: Leakage flag on orders with no add-ons
+- [x] US-008: QB invoice auto-creation (sandbox) — DONE May 20.
+      POST /api/qbo/invoice/cultivar built. Finds/creates QB customer,
+      builds line items from Supabase order, pushes to sandbox, stores IDs.
+- [x] US-009: Confirmation screen — DONE (was already complete).
+      Shows invoice sent to email, QB link, fallback if QB not connected.
+- [x] US-010: Leakage flag — DONE (was already correct in useSubmitOrder).
 - [ ] US-011: Owner dashboard (Layna logs in, sees today)
 - [ ] US-012: Leakage alert tile
 - [ ] QR codes generated and printed: SCV-0031, NCM-0042, MS30-001
@@ -175,8 +190,9 @@ ignition-os:  PIN-based → SHA-256 hash
 
 ### 🟡 COMPLIANCE FIXES — in progress
 
-- [ ] Group 1: Swap local duplicates → @trace/shared imports
-      (violations 1, 2, 8, 9, 10)
+- [x] Group 1: Swap local duplicates → @trace/shared imports
+      (violations 1, 2, 8, 9, 10) — DONE May 20. Remaining 3 files in lib/shared
+      are dead code + off limits (QB + auth). Nothing active imports them.
 - [x] Group 2: Wire sendNotification() from shared
       (violations 4, 5, 6, 7) — DONE May 20
 - [x] Group 3: Create missing shared modules

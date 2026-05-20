@@ -61,7 +61,7 @@ function Field({
 
 export function CustomerCapture() {
   const navigate = useNavigate();
-  const { setCustomer, customer: saved } = useCart();
+  const { setCustomer, customer: saved, item } = useCart();
 
   const [firstName, setFirstName] = useState(saved?.first_name ?? '');
   const [lastName,  setLastName]  = useState(saved?.last_name ?? '');
@@ -104,7 +104,28 @@ export function CustomerCapture() {
   return (
     <div className="page">
       {/* Header */}
-      <div style={{ padding: '20px 16px 4px' }}>
+      <div style={{ padding: '16px 16px 0' }}>
+        {item && (
+          <button
+            onClick={() => navigate(`/plant/${item.plant.tag_id}/addons`)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#27500A',
+              fontSize: '0.9375rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              padding: '4px 0',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            ← Back
+          </button>
+        )}
+      </div>
+      <div style={{ padding: '12px 16px 4px' }}>
         <h1 style={{ fontSize: '1.375rem', fontWeight: 700, color: '#1f2937', lineHeight: 1.3 }}>
           Almost done — who are we sending this to?
         </h1>

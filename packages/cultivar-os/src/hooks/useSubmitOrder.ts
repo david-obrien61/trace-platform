@@ -222,17 +222,18 @@ export function useSubmitOrder() {
       let qbStatus: 'success' | 'pending' = 'pending';
 
       try {
-        const qbRes = await fetch('/api/qbo/invoice/cultivar', {
+        const apiBase = (import.meta.env.VITE_API_URL as string) ?? '';
+        const qbRes = await fetch(`${apiBase}/api/qbo/invoice/cultivar`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ order_id: orderId, nursery_id: nurseryId }),
         });
         if (qbRes.ok) {
           const qbData = await qbRes.json();
-          qbInvoiceId     = qbData.qb_invoice_id;
-          qbInvoiceNumber = qbData.qb_invoice_number;
-          qbInvoiceUrl    = qbData.qb_invoice_url;
-          qbStatus        = 'success';
+          qbInvoiceId     = qbData.qb_invoice_id ?? undefined;
+          qbInvoiceNumber = qbData.qb_invoice_number ?? undefined;
+          qbInvoiceUrl    = qbData.qb_invoice_url ?? undefined;
+          qbStatus        = qbData.qb_status === 'success' ? 'success' : 'pending';
         } else {
           console.warn('[QB] invoice creation failed:', await qbRes.text());
         }

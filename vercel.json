@@ -1,0 +1,5 @@
+{
+  "buildCommand": "cd packages/cultivar-os && npm install && npm run build",
+  "outputDirectory": "packages/cultivar-os/dist",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}

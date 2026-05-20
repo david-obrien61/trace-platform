@@ -10,4 +10,12 @@ export default defineConfig({
       '@trace/shared': path.resolve(__dirname, '../shared/src'),
     },
   },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+    },
+  },
 });

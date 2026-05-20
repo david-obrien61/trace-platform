@@ -40,7 +40,7 @@ export function CartReview() {
     setPayOnline(online);
     try {
       const result = await submit({
-        customer,
+        customer: customer!,
         plant,
         quantity,
         addons,
@@ -55,7 +55,7 @@ export function CartReview() {
           total:            result.total,
           subtotal:         result.subtotal,
           taxAmount:        result.taxAmount,
-          email:            customer.email,
+          email:            customer!.email,
           payOnline:        online,
           qbInvoiceId:      result.qbInvoiceId,
           qbInvoiceNumber:  result.qbInvoiceNumber,
@@ -71,7 +71,26 @@ export function CartReview() {
   return (
     <div className="page">
       {/* Header */}
-      <div style={{ padding: '20px 16px 0' }}>
+      <div style={{ padding: '16px 16px 0' }}>
+        <button
+          onClick={() => navigate('/checkout/customer')}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#27500A',
+            fontSize: '0.9375rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+            padding: '4px 0',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+          }}
+        >
+          ← Back
+        </button>
+      </div>
+      <div style={{ padding: '12px 16px 0' }}>
         <h1 style={{ fontSize: '1.375rem', fontWeight: 700, color: '#1f2937' }}>
           Review your order
         </h1>

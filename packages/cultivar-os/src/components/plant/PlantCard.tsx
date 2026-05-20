@@ -23,7 +23,7 @@ export function PlantCard({ plant }: PlantCardProps) {
           🌳
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: '0.9375rem', truncate: true }}>
+          <div style={{ fontWeight: 600, fontSize: '0.9375rem', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
             {plant.common_name ?? plant.species}
           </div>
           <div style={{ fontSize: '0.8125rem', color: 'var(--gray-600)' }}>
