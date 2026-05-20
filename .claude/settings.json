@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//tmp/cai-audit/**)",
+      "Read(//private/tmp/cai-audit/**)",
+      "Read(//tmp/cai-audit/modules/**)",
+      "Read(//private/tmp/cai-audit/modules/**)",
+      "Bash(mkdir -p /Users/terrenceobrien/Desktop/trace-platform/packages/shared/src/supabase)",
+      "Bash(mkdir -p /Users/terrenceobrien/Desktop/trace-platform/packages/shared/src/quickbooks)",
+      "Bash(mkdir -p /Users/terrenceobrien/Desktop/trace-platform/packages/shared/src/components)",
+      "Bash(mkdir -p /Users/terrenceobrien/Desktop/trace-platform/packages/shared/src/ai)",
+      "Bash(mkdir -p /Users/terrenceobrien/Desktop/trace-platform/packages/ignition-os/modules)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(npm install *)",
+      "Bash(git push *)",
+      "Bash(npm run *)",
+      "Bash(npx tsc *)",
+      "Bash(vercel --prod)",
+      "Bash(ls /Users/terrenceobrien/Desktop/)",
+      "Read(//Users/terrenceobrien/Desktop/**)"
+    ]
+  }
+}
