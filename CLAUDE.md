@@ -107,32 +107,36 @@ ignition-os:  PIN-based → SHA-256 hash
 > The next Claude Code session reads this first.
 > ALSO update GEMINI.md with the same content.
 
-- **Completed this session:** Initial CLAUDE.md created.
-  Shared module compliance audit completed (10 violations found).
-  Group 1 fixes approved (violations 1, 2, 8, 9, 10 — swap local
-  duplicates for @trace/shared imports, delete local AIEngine copy).
-  Post-demo reference comments added to packages/shared/src/.
+- **Completed this session:** Group 2 compliance fixes complete.
+  Violations 4, 5, 6, 7 resolved:
+  - useSubmitOrder.ts now imports sendSilently from @trace/shared/notifications
+  - sendSilently call converted to shared template payload format
+    (vertical: 'cultivar', templateId: 'order_confirmation', data: {...})
+  - Deleted packages/cultivar-os/src/lib/shared/notifications/send.ts (violation 4)
+  - Deleted packages/cultivar-os/src/lib/orderEmail.ts (violation 5)
+  - Fixed vite.config.ts alias: ../../shared/src → ../shared/src (was broken)
+  - Added packages/cultivar-os/tsconfig.json with @trace/shared path mapping
+  - Build confirmed clean: 424 modules, no errors
 
-- **Next task:** Continue shared module compliance fixes.
-  Group 2: Fix violations 4, 5, 6, 7 — wire sendNotification()
-  from shared using existing order_confirmation template.
-  Then Group 3: Create missing shared modules (qr, notifications,
-  components, types).
-  Auth design (violation 3) held — needs configureAuth() wrapper
-  design before touching.
+- **Next task:** Group 3 — create missing shared modules:
+  - packages/shared/src/qr/generate.ts
+  - packages/shared/src/qr/print.ts
+  - packages/shared/src/components/ (Button, Card, Badge, LockedOverlay)
+  - packages/shared/src/supabase/types.ts
+  Note: notifications/email.ts and notifications/sms.ts were already
+  present as send.ts and queue.ts in packages/shared/src/notifications/.
+  The shared notifications module is complete — no new files needed there.
 
-- **Last file edited:** packages/cultivar-os/src/ (compliance fixes)
+- **Last file edited:** packages/cultivar-os/tsconfig.json
 
-- **Last command run:** None recorded — update this each session
+- **Last command run:** vite build (cultivar-os) — clean, 3.42s
 
 - **Tests passing:** Not yet configured
 
 - **Blockers / Notes:**
   - packages/shared/src/qr/generate.ts — MISSING, needs to be built
   - packages/shared/src/qr/print.ts — MISSING
-  - packages/shared/src/notifications/email.ts — MISSING
-  - packages/shared/src/notifications/sms.ts — MISSING
-  - packages/shared/src/components/ — ALL MISSING
+  - packages/shared/src/components/ — ALL MISSING (Button, Card, Badge, LockedOverlay)
   - packages/shared/src/supabase/types.ts — MISSING
   - Auth violation 3: shared auth is PIN-based (Ignition OS),
     cultivar-os needs email/password. configureAuth() wrapper
@@ -140,6 +144,11 @@ ignition-os:  PIN-based → SHA-256 hash
     until wrapper is built.
   - QB oauth.ts hardcodes IGNITION_OS_DATA storage key —
     needs vertical-agnostic refactor (post-demo)
+  - packages/cultivar-os/src/lib/shared/ still contains:
+    quickbooks/invoice.ts, quickbooks/oauth.ts, supabase/auth.ts,
+    ai/AIEngine.ts — these are Group 1 violations, QB and auth are
+    OFF LIMITS per section 7, AIEngine delete was approved in Group 1
+    but not yet executed. Handle in next Group 1 cleanup pass.
 
 - **⚠️ Pending manual steps:**
   - David must register at developer.intuit.com (Session 5)
@@ -148,7 +157,7 @@ ignition-os:  PIN-based → SHA-256 hash
   - QB sandbox must be connected before demo day
   - cultivar-os.app DNS must point to Vercel deployment
 
-- **Session ended by:** Claude.ai strategy session — May 20, 2026
+- **Session ended by:** Claude Code — May 20, 2026
 
 ---
 
@@ -175,8 +184,8 @@ ignition-os:  PIN-based → SHA-256 hash
 
 - [ ] Group 1: Swap local duplicates → @trace/shared imports
       (violations 1, 2, 8, 9, 10)
-- [ ] Group 2: Wire sendNotification() from shared
-      (violations 4, 5, 6, 7)
+- [x] Group 2: Wire sendNotification() from shared
+      (violations 4, 5, 6, 7) — DONE May 20
 - [ ] Group 3: Create missing shared modules
       (qr, notifications/email, notifications/sms, components, types)
 - [ ] Group 4: configureAuth() wrapper design — HOLD until post-demo
@@ -244,6 +253,10 @@ being worked on. Clear it at the end of each session.
   configureAuth() wrapper is designed (post-demo)
 - packages/shared/src/quickbooks/oauth.ts — DO NOT MODIFY until
   post-demo refactor (IGNITION_OS_DATA hardcoding — known issue)
+- packages/cultivar-os/src/lib/shared/supabase/auth.ts — DO NOT MODIFY,
+  same reason as above
+- packages/cultivar-os/src/lib/shared/quickbooks/ — DO NOT MODIFY,
+  same reason as above
 - Any already-run Supabase migrations — append only
 
 ---
