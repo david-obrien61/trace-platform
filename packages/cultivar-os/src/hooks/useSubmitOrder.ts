@@ -25,6 +25,10 @@ export interface OrderResult {
   total: number;
   subtotal: number;
   taxAmount: number;
+  qbInvoiceId?: string;
+  qbInvoiceNumber?: string;
+  qbInvoiceUrl?: string;
+  qbStatus: 'success' | 'pending';
 }
 
 export function useSubmitOrder() {
@@ -204,7 +208,32 @@ export function useSubmitOrder() {
         entityId: orderId,
       });
 
-      return { orderId, invoiceNumber, total, subtotal, taxAmount };
+      // ── QB invoice — non-blocking, never throws ────────────────────────────
+      let qbInvoiceId: string | undefined;
+      let qbInvoiceNumber: string | undefined;
+      let qbInvoiceUrl: string | undefined;
+      let qbStatus: 'success' | 'pending' = 'pending';
+
+      try {
+        const qbRes = await fetch('/api/qbo/invoice/cultivar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order_id: orderId, nursery_id: nurseryId }),
+        });
+        if (qbRes.ok) {
+          const qbData = await qbRes.json();
+          qbInvoiceId     = qbData.qb_invoice_id;
+          qbInvoiceNumber = qbData.qb_invoice_number;
+          qbInvoiceUrl    = qbData.qb_invoice_url;
+          qbStatus        = 'success';
+        } else {
+          console.warn('[QB] invoice creation failed:', await qbRes.text());
+        }
+      } catch (qbErr) {
+        console.warn('[QB] invoice call threw:', qbErr);
+      }
+
+      return { orderId, invoiceNumber, total, subtotal, taxAmount, qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus };
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Submission failed';

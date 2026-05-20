@@ -7,6 +7,7 @@ import { CartReview }      from './pages/CartReview';
 import { Confirmation }    from './pages/Confirmation';
 import { Login }           from './pages/Login';
 import { Dashboard }       from './pages/Dashboard';
+import { DemoQBInvoice }   from './pages/DemoQBInvoice';
 
 export function AppRouter() {
   return (
@@ -23,6 +24,9 @@ export function AppRouter() {
       <Route element={<PrivateRoute />}>
         <Route path="/dashboard" element={<Dashboard />} />
       </Route>
+
+      {/* DEMO — QB invoice preview (no auth, for demo fallback) */}
+      <Route path="/demo/quickbooks-invoice" element={<DemoQBInvoice />} />
 
       {/* DEFAULT */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

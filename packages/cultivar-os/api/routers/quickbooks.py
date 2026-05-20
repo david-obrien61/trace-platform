@@ -53,15 +53,22 @@ def _supabase():
 
 
 def load_qbo_tokens(nursery_id: str = None):
-    """Load QB tokens from Supabase nurseries table into the in-memory cache."""
+    """Load QB tokens from Supabase nurseries table (individual columns) into the in-memory cache."""
     global qbo_tokens
     if not nursery_id:
         return
     try:
         db = _supabase()
-        res = db.table("nurseries").select("qbo_tokens").eq("id", nursery_id).maybe_single().execute()
-        if res.data and res.data.get("qbo_tokens"):
-            qbo_tokens = res.data["qbo_tokens"]
+        res = db.table("nurseries").select(
+            "qb_access_token, qb_refresh_token, qb_realm_id"
+        ).eq("id", nursery_id).maybe_single().execute()
+        if res.data and res.data.get("qb_realm_id"):
+            qbo_tokens = {
+                "access_token":  res.data.get("qb_access_token", ""),
+                "refresh_token": res.data.get("qb_refresh_token", ""),
+                "realm_id":      res.data.get("qb_realm_id", ""),
+                "connected":     True,
+            }
         else:
             qbo_tokens = {}
     except Exception as e:
@@ -70,12 +77,16 @@ def load_qbo_tokens(nursery_id: str = None):
 
 
 def save_qbo_tokens(nursery_id: str = None):
-    """Persist in-memory QB tokens to Supabase nurseries table."""
+    """Persist in-memory QB tokens to Supabase nurseries table (individual columns)."""
     if not nursery_id:
         return
     try:
         db = _supabase()
-        db.table("nurseries").update({"qbo_tokens": qbo_tokens}).eq("id", nursery_id).execute()
+        db.table("nurseries").update({
+            "qb_access_token":  qbo_tokens.get("access_token", ""),
+            "qb_refresh_token": qbo_tokens.get("refresh_token", ""),
+            "qb_realm_id":      qbo_tokens.get("realm_id", ""),
+        }).eq("id", nursery_id).execute()
     except Exception as e:
         print(f"[QBO] save_qbo_tokens failed (non-fatal): {e}")
 

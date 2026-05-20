@@ -1,0 +1,7 @@
+# Exclude Railway FastAPI backend from Vercel deployment.
+# These files run on Railway. Vercel uses the TypeScript files in api/qbo/.
+api/main.py
+api/routers/
+api/__pycache__/
+api/**/__pycache__/
+api/requirements.txt

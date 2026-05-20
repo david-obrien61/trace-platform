@@ -50,13 +50,17 @@ export function CartReview() {
       });
       navigate('/checkout/confirm', {
         state: {
-          orderId:       result.orderId,
-          invoiceNumber: result.invoiceNumber,
-          total:         result.total,
-          subtotal:      result.subtotal,
-          taxAmount:     result.taxAmount,
-          email:         customer.email,
-          payOnline:     online,
+          orderId:          result.orderId,
+          invoiceNumber:    result.invoiceNumber,
+          total:            result.total,
+          subtotal:         result.subtotal,
+          taxAmount:        result.taxAmount,
+          email:            customer.email,
+          payOnline:        online,
+          qbInvoiceId:      result.qbInvoiceId,
+          qbInvoiceNumber:  result.qbInvoiceNumber,
+          qbInvoiceUrl:     result.qbInvoiceUrl,
+          qbStatus:         result.qbStatus,
         },
       });
     } catch {
