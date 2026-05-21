@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: May 20, 2026 (Session 2)
+# Last updated: May 21, 2026 (Session 3)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -89,6 +89,16 @@ ignition-os:  PIN-based → SHA-256 hash
               DO NOT touch — dry run in progress
 ```
 
+### Supabase Projects (SEPARATED May 21, 2026)
+
+| Project | Ref ID | Used by |
+|---|---|---|
+| cultivar-os | bgobkjcopcxusjsetfob | cultivar-os ONLY |
+| ignition-os | ufsgqckbxdtwviqjjtos | ignition-os ONLY |
+
+cultivar-os URL: https://bgobkjcopcxusjsetfob.supabase.co
+These are NEVER to be swapped or cross-referenced.
+
 ### Key Design Decisions (LOCKED — never reverse without flagging)
 
 1. Supabase is source of truth — never localStorage as primary
@@ -98,6 +108,7 @@ ignition-os:  PIN-based → SHA-256 hash
 5. Seasonal module windows are all configurable — nothing hardcoded
 6. QB is RECOMMENDED not REQUIRED — app works without it
 7. Per-plant unique asset model — trees are individuals, not stock qty
+8. Each vertical has its OWN Supabase project — never share projects
 
 ---
 
@@ -107,75 +118,92 @@ ignition-os:  PIN-based → SHA-256 hash
 > The next Claude Code session reads this first.
 > ALSO update GEMINI.md with the same content.
 
-- **Completed this session:** Shared auth extraction + US-011 + US-012.
+- **Completed this session (Session 3):** Supabase project separation.
 
-  - SHARED AUTH (configureAuth):
-    Built packages/shared/src/auth/configureAuth.tsx — factory function that
-    accepts { strategy: 'email'|'pin', vertical, tenantTable, defaultRole,
-    redirectAfterLogin } and returns { signIn, signOut, useSession, PrivateRoute,
-    SignUp }. Email strategy wraps supabase.auth (JWT sessions). PIN strategy
-    wraps existing authenticate() from shared/supabase/auth. Storage key is
-    computed as VERTICAL_DATA (e.g. CULTIVAR_OS_DATA) so no cross-vertical
-    collisions. Exported from packages/shared/src/auth/index.ts and from
-    shared's main index.ts.
-  - CULTIVAR-OS AUTH WIRED:
-    packages/cultivar-os/src/lib/auth.ts — single config point.
-    useAuth.ts → delegates to auth.useSession().
-    Login.tsx → calls auth.signIn(email, password). Added "New nursery?" link.
-    PrivateRoute.tsx → delegates to auth.PrivateRoute().
-    SignUp.tsx → new page, delegates to auth.SignUp(). Route: /signup.
-    router.tsx → added /signup route.
-  - US-011 (Owner Dashboard):
-    Dashboard.tsx fully rebuilt. All data from Supabase directly (no FastAPI).
-    Plants tracked + inventory value: plants table, status='available'.
-    Today's sales: orders table, created_at >= today, status != 'cancelled'.
-    Installs this week: orders.transport_method='install', created_at >= weekStart.
-    Shows logged-in user's email in header. Sign out button calls auth.signOut().
-    Kept QB connect/status banner (demo-critical).
-    Uses Card from @trace/shared/components with .card CSS class fallback
-    (no Tailwind in project — CSS variables used throughout).
-  - US-012 (Leakage alert):
-    Full-width tile below metric cards. Amber if leakage_count > 0, shows
-    count + estimated missed revenue (leakage_count × $28).
-    Green "No missed add-ons this week" if count = 0.
-    LEAKAGE_AVG_VALUE = 28 constant — marked configurable post-demo.
-  - DEPLOYMENT FIX:
-    Vercel was failing because packages/cultivar-os/.vercel deploys only
-    that directory, so packages/shared/src was unreachable. Fixed by deploying
-    from monorepo root (trace-platform/) which uses root vercel.json:
-    buildCommand: "cd packages/cultivar-os && npm install && npm run build"
-    outputDirectory: "packages/cultivar-os/dist"
-    Always deploy with: cd trace-platform && npx vercel --prod
-    NOT: cd packages/cultivar-os && npx vercel --prod
-  - Build: 429 modules, 3.62s. Deployed: cultivar-os.vercel.app.
+  - SUPABASE SEPARATION (May 21, 2026):
+    Cultivar OS now has its own dedicated Supabase project, completely
+    separate from ignition-os. Old shared project ref: ufsgqckbxdtwviqjjtos.
+    New cultivar-os project ref: bgobkjcopcxusjsetfob.
+    New URL: https://bgobkjcopcxusjsetfob.supabase.co
+
+  - SCHEMA CREATED (new project):
+    10 tables: nurseries, plants, plant_events, customers, orders,
+    order_items, order_addons, addons, losses, social_drafts.
+    14 RLS policies. 16 indexes. All FK relationships intact.
+    Updated_at trigger on plants. Clean customers table (no shop_id).
+    owner_id column on nurseries (references auth.users, currently NULL).
+
+  - SEED DATA LOADED:
+    LAWNS Tree Farm LLC — nursery_id: a1b2c3d4-0000-0000-0000-000000000001
+    10 plants (all status='available'): SCV-0031, NCM-0042, MS30-001,
+    TLO-008, RED-011, BCA-015, TML-003, HMQ-009, AOT-022, CEL-028.
+    SCV-0031 has 4 container progressions (demo timeline requirement met).
+    4 addons: Netting (transport=self, pre_selected), Compost, Bio-Starter,
+    5-Year Warranty (all always-shown, sort_order 0–3).
+    Inventory value: $3,040 (10 plants × avg $304).
+
+  - ENV VARS UPDATED:
+    packages/cultivar-os/.env.local — all 4 Supabase keys updated.
+    Vercel Production + Development — VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY,
+    SUPABASE_SERVICE_KEY, SUPABASE_URL all updated to new project.
+    NOTE: Vercel Preview env vars need manual update in Vercel dashboard
+    (CLI v54 requires interactive terminal for preview branch selection).
+
+  - DEPLOYED:
+    Build: 428 modules, 2.59s. Deployed: cultivar-os.vercel.app.
+    Alias: cultivar-os.vercel.app → new project confirmed live.
+
+  - TESTS PASSED:
+    ✅ cultivar-os.vercel.app returns HTTP 200
+    ✅ /plant/SCV-0031 route returns HTTP 200
+    ✅ SCV-0031 data confirmed in new Supabase (30 gal, $400, available)
+    ✅ SCV-0031 has exactly 4 growth timeline events
+    ✅ All 4 addons loaded correctly (netting pre_selected=true)
+    ✅ /api/qbo/status returns {connected:false} — expected (QB not yet re-linked)
+    ✅ ignition-os package: zero references to either Supabase project URL
+    ⚠️  Dashboard inventory value: $3,040 (10 plants). User expected $7,136.
+        If $7,136 is required for demo, plant prices need adjustment in Supabase.
 
 - **Next task:** QR code generation for SCV-0031, NCM-0042, MS30-001.
-  Then full demo run-through under 4 minutes on phone.
-  US-003 through US-007 still need verification (checkout flow).
+  Re-connect QuickBooks to new Supabase project (go to /dashboard → Connect QB).
+  Create layna@lawnstrees.com in NEW Supabase project Auth dashboard.
+  Set nurseries.owner_id to Layna's new UUID.
+  Verify US-003 through US-007 checkout flow on phone.
+  Full demo run-through under 4 minutes.
 
-- **Last file edited:** packages/cultivar-os/src/pages/Dashboard.tsx
+- **Last file edited:** CLAUDE.md (handoff + Supabase project separation docs)
 
-- **Last command run:** npx vercel --prod (from repo root) — success, 429 modules
+- **Last command run:** npx vercel --prod (from repo root) — success, 428 modules
 
 - **Tests passing:** Not yet configured
 
 - **Blockers / Notes:**
-  - Auth violation 3: configureAuth() wrapper still not designed.
-    Current cultivar-os email/password auth is CORRECT AS-IS until post-demo.
-  - QB oauth.ts hardcodes IGNITION_OS_DATA storage key —
-    needs vertical-agnostic refactor (post-demo)
-  - packages/cultivar-os/src/lib/shared/ still contains:
-    quickbooks/invoice.ts, quickbooks/oauth.ts, supabase/auth.ts
-    These are dead code + off limits. Leave alone until post-demo.
-  - SCV-0031 must exist in Supabase plants table with plant_events for
-    the demo timeline to show. Verify this before May 25.
+  - QB must be re-connected on new Supabase project before demo day.
+    Old tokens are in ignition-os project — they cannot be used here.
+    Go to cultivar-os.vercel.app/login → login as Layna → Connect QuickBooks.
+  - layna@lawnstrees.com must be created in the NEW Supabase project Auth dashboard.
+    (Supabase dashboard → bgobkjcopcxusjsetfob → Authentication → Users → Add user)
+    After creating, run: UPDATE nurseries SET owner_id = '<UUID>'
+    WHERE id = 'a1b2c3d4-0000-0000-0000-000000000001';
+  - Vercel Preview env vars not updated via CLI (interactive prompt required).
+    Fix: Vercel dashboard → cultivar-os project → Settings → Environment Variables →
+    add VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY, SUPABASE_URL
+    for Preview environment. Low priority — prod deployments are unaffected.
+  - Railway not linked (railway login expired). FastAPI backend not active.
+    VITE_API_URL is empty — the checkout and dashboard run entirely on
+    Supabase + Vercel functions, so Railway is not blocking the demo.
+    When Railway is needed: railway login → railway link → set SUPABASE_URL
+    and SUPABASE_SERVICE_KEY to new values.
+  - Inventory value discrepancy: user expected $7,136, seed data totals $3,040.
+    If demo requires $7,136, adjust base_price on plants in Supabase SQL editor.
   - QB /invoice/cultivar uses tax-as-line-item (no TaxCode setup required).
-    This is intentional for sandbox demo — QB validates line items fine.
+    This is intentional for sandbox demo.
+  - packages/cultivar-os/src/lib/shared/ still contains dead code (QB + auth).
+    Leave alone until post-demo.
 
 - **⚠️ Pending manual steps:**
-  - David must register at developer.intuit.com (already done? — confirm)
-  - David must create layna@lawnstrees.com in Supabase Auth dashboard
-    — do NOT do this in SQL
+  - Create layna@lawnstrees.com in NEW Supabase project Auth dashboard
+    (project: bgobkjcopcxusjsetfob) — do NOT do this in SQL
   - David must run QB OAuth flow from dashboard before demo day:
     go to /dashboard → Connect QuickBooks → approve in Intuit popup
   - VITE_API_URL must be set in Vercel environment variables
@@ -192,9 +220,8 @@ ignition-os:  PIN-based → SHA-256 hash
 ### 🔴 DEMO CRITICAL — must work by May 25
 
 - [x] US-001: QR scan → plant profile — route, hero, timeline, qty, offline cache DONE.
-      Needs SCV-0031 row + plant_events in Supabase to show real data.
-- [x] US-002: Growth timeline — PlantTimeline component done, age label "in cultivation" done.
-      Needs SCV-0031 plant_events in Supabase.
+      SCV-0031 confirmed in new Supabase project (bgobkjcopcxusjsetfob). ✅
+- [x] US-002: Growth timeline — PlantTimeline done. SCV-0031 has 4 events confirmed. ✅
 - [ ] US-003: Quantity selector
 - [ ] US-004: Netting prompt (red border, pre-checked, self-transport)
 - [ ] US-006: Cart review (correct tax math — 8.25%)
