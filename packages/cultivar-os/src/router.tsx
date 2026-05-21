@@ -6,6 +6,7 @@ import { CustomerCapture } from './pages/CustomerCapture';
 import { CartReview }      from './pages/CartReview';
 import { Confirmation }    from './pages/Confirmation';
 import { Login }           from './pages/Login';
+import { SignUp }          from './pages/SignUp';
 import { Dashboard }       from './pages/Dashboard';
 import { DemoQBInvoice }   from './pages/DemoQBInvoice';
 
@@ -19,8 +20,11 @@ export function AppRouter() {
       <Route path="/checkout/review"     element={<CartReview />} />
       <Route path="/checkout/confirm"    element={<Confirmation />} />
 
+      {/* AUTH */}
+      <Route path="/login"  element={<Login />} />
+      <Route path="/signup" element={<SignUp />} />
+
       {/* PRIVATE — nursery owner/staff */}
-      <Route path="/login" element={<Login />} />
       <Route element={<PrivateRoute />}>
         <Route path="/dashboard" element={<Dashboard />} />
       </Route>

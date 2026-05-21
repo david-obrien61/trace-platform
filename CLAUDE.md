@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: May 20, 2026
+# Last updated: May 20, 2026 (Session 2)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -107,32 +107,55 @@ ignition-os:  PIN-based → SHA-256 hash
 > The next Claude Code session reads this first.
 > ALSO update GEMINI.md with the same content.
 
-- **Completed this session:** US-008, US-009, US-010 wired end-to-end.
-  - US-008: Built POST /api/qbo/invoice/cultivar in quickbooks.py.
-    Fetches order + items + addons + customer from Supabase, finds-or-creates
-    QB customer by email, builds line items (one per plant, one per addon, one
-    tax line), pushes invoice to QB sandbox. Stores qb_invoice_id +
-    qb_invoice_url on the order record. Never blocks — always returns 200.
-    Endpoint path matches what useSubmitOrder.ts already calls.
-  - US-009: Confirmation.tsx was already complete from prior session.
-    Verified: shows "Invoice sent to [email]", order summary, QB link if
-    available, amber "Invoice will sync shortly" badge if QB not connected.
-  - US-010: Leakage flag already set correctly in useSubmitOrder.ts.
-    Verified: isLargeContainer && addonsAmount === 0 → leakage_flag: true.
-  - Added VITE_API_URL prefix to QB fetch call in useSubmitOrder.ts so
-    production (Vercel → Railway) works. Local dev uses Vite proxy.
-  - Added Vite dev proxy: /api → http://localhost:8000 in vite.config.ts.
-  - Fixed qbStatus check: now reads qbData.qb_status === 'success' instead
-    of assuming success whenever HTTP 200.
-  - Updated .env.example with VITE_API_URL and SUPABASE_SERVICE_KEY.
-  - Build clean: 424 modules, 4.18s.
+- **Completed this session:** Shared auth extraction + US-011 + US-012.
 
-- **Next task:** US-011 (owner dashboard — Layna logs in, sees today),
-  US-012 (leakage alert tile). Then QR code generation and full demo run.
+  - SHARED AUTH (configureAuth):
+    Built packages/shared/src/auth/configureAuth.tsx — factory function that
+    accepts { strategy: 'email'|'pin', vertical, tenantTable, defaultRole,
+    redirectAfterLogin } and returns { signIn, signOut, useSession, PrivateRoute,
+    SignUp }. Email strategy wraps supabase.auth (JWT sessions). PIN strategy
+    wraps existing authenticate() from shared/supabase/auth. Storage key is
+    computed as VERTICAL_DATA (e.g. CULTIVAR_OS_DATA) so no cross-vertical
+    collisions. Exported from packages/shared/src/auth/index.ts and from
+    shared's main index.ts.
+  - CULTIVAR-OS AUTH WIRED:
+    packages/cultivar-os/src/lib/auth.ts — single config point.
+    useAuth.ts → delegates to auth.useSession().
+    Login.tsx → calls auth.signIn(email, password). Added "New nursery?" link.
+    PrivateRoute.tsx → delegates to auth.PrivateRoute().
+    SignUp.tsx → new page, delegates to auth.SignUp(). Route: /signup.
+    router.tsx → added /signup route.
+  - US-011 (Owner Dashboard):
+    Dashboard.tsx fully rebuilt. All data from Supabase directly (no FastAPI).
+    Plants tracked + inventory value: plants table, status='available'.
+    Today's sales: orders table, created_at >= today, status != 'cancelled'.
+    Installs this week: orders.transport_method='install', created_at >= weekStart.
+    Shows logged-in user's email in header. Sign out button calls auth.signOut().
+    Kept QB connect/status banner (demo-critical).
+    Uses Card from @trace/shared/components with .card CSS class fallback
+    (no Tailwind in project — CSS variables used throughout).
+  - US-012 (Leakage alert):
+    Full-width tile below metric cards. Amber if leakage_count > 0, shows
+    count + estimated missed revenue (leakage_count × $28).
+    Green "No missed add-ons this week" if count = 0.
+    LEAKAGE_AVG_VALUE = 28 constant — marked configurable post-demo.
+  - DEPLOYMENT FIX:
+    Vercel was failing because packages/cultivar-os/.vercel deploys only
+    that directory, so packages/shared/src was unreachable. Fixed by deploying
+    from monorepo root (trace-platform/) which uses root vercel.json:
+    buildCommand: "cd packages/cultivar-os && npm install && npm run build"
+    outputDirectory: "packages/cultivar-os/dist"
+    Always deploy with: cd trace-platform && npx vercel --prod
+    NOT: cd packages/cultivar-os && npx vercel --prod
+  - Build: 429 modules, 3.62s. Deployed: cultivar-os.vercel.app.
 
-- **Last file edited:** packages/cultivar-os/api/routers/quickbooks.py
+- **Next task:** QR code generation for SCV-0031, NCM-0042, MS30-001.
+  Then full demo run-through under 4 minutes on phone.
+  US-003 through US-007 still need verification (checkout flow).
 
-- **Last command run:** vite build (cultivar-os) — clean, 4.18s
+- **Last file edited:** packages/cultivar-os/src/pages/Dashboard.tsx
+
+- **Last command run:** npx vercel --prod (from repo root) — success, 429 modules
 
 - **Tests passing:** Not yet configured
 
@@ -182,8 +205,12 @@ ignition-os:  PIN-based → SHA-256 hash
 - [x] US-009: Confirmation screen — DONE (was already complete).
       Shows invoice sent to email, QB link, fallback if QB not connected.
 - [x] US-010: Leakage flag — DONE (was already correct in useSubmitOrder).
-- [ ] US-011: Owner dashboard (Layna logs in, sees today)
-- [ ] US-012: Leakage alert tile
+- [x] US-011: Owner dashboard — DONE May 20 (session 2).
+      Plants tracked, inventory value, today's sales, installs this week.
+      All queries direct to Supabase. Auth via configureAuth email strategy.
+- [x] US-012: Leakage alert tile — DONE May 20 (session 2).
+      Full-width amber tile (count > 0) or green tile (count = 0).
+      Shows estimated missed revenue at $28/tree.
 - [ ] QR codes generated and printed: SCV-0031, NCM-0042, MS30-001
 - [ ] Full demo run-through under 4 minutes
 - [ ] Mobile tested on iPhone
@@ -197,7 +224,9 @@ ignition-os:  PIN-based → SHA-256 hash
       (violations 4, 5, 6, 7) — DONE May 20
 - [x] Group 3: Create missing shared modules
       (qr, components, supabase/types) — DONE May 20
-- [ ] Group 4: configureAuth() wrapper design — HOLD until post-demo
+- [x] Group 4: configureAuth() factory — DONE May 20 (session 2).
+      packages/shared/src/auth/configureAuth.tsx. Supports 'email' and 'pin'
+      strategies. Cultivar-os wired with email strategy.
 
 ### 🟢 POST-DEMO (Phase 1 — after May 25)
 
@@ -268,7 +297,8 @@ being worked on. Clear it at the end of each session.
   same reason as above
 - Any already-run Supabase migrations — append only
 
-Session cleared. Next session: Group 1 partial cleanup + demo-critical US-001 through US-012.
+Session cleared. Next session: QR code generation (SCV-0031, NCM-0042, MS30-001),
+verify checkout flow US-003 through US-007 on phone, full demo run-through.
 
 ---
 

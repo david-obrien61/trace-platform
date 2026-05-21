@@ -1,21 +1,21 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { auth } from '../lib/auth';
 
 export function Login() {
   const navigate = useNavigate();
-  const [email, setEmail]     = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError]     = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError('');
-    const { error: authErr } = await supabase.auth.signInWithPassword({ email, password });
+    const { error: authErr } = await auth.signIn(email, password);
     if (authErr) {
-      setError(authErr.message);
+      setError(authErr);
       setLoading(false);
     } else {
       navigate('/dashboard');
@@ -37,7 +37,7 @@ export function Login() {
           type="email"
           placeholder="Email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={e => setEmail(e.target.value)}
           required
           style={inputStyle}
         />
@@ -45,7 +45,7 @@ export function Login() {
           type="password"
           placeholder="Password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={e => setPassword(e.target.value)}
           required
           style={inputStyle}
         />
@@ -60,6 +60,13 @@ export function Login() {
           {loading ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
+
+      <p style={{ textAlign: 'center', marginTop: 16, fontSize: '0.875rem', color: 'var(--gray-600)' }}>
+        New nursery?{' '}
+        <a href="/signup" style={{ color: 'var(--green-primary)', textDecoration: 'none', fontWeight: 600 }}>
+          Create account
+        </a>
+      </p>
     </div>
   );
 }

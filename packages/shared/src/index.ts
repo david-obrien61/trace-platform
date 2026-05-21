@@ -3,6 +3,9 @@ export { supabase } from './supabase/client';
 export * from './supabase/auth';
 export * from './supabase/types';
 
+// Auth factory
+export * from './auth';
+
 // QuickBooks
 export * from './quickbooks/oauth';
 export * from './quickbooks/customer';
