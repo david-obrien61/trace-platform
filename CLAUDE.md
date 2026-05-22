@@ -171,6 +171,22 @@ TRACE email:   david@trace-enterprises.com
   - Build clean: 2156 modules, zero TypeScript errors ✅
   - Deployed: cultivar-os.vercel.app ✅
 
+- **Completed this session (May 22 — social_drafts bug fix):**
+  - Root cause diagnosed: generate-posts.ts inserted `generated_at`
+    (column doesn't exist), `order_id` (didn't exist), `post_type`
+    (didn't exist). Postgres rejected every insert silently.
+  - Migration written: 20260522_social_drafts_add_order_post_type.sql
+    Adds order_id uuid REFERENCES orders(id) ON DELETE SET NULL
+    Adds post_type text CHECK IN ('educational','customer_story','seasonal')
+    ⚠️ MUST be run manually in Supabase SQL editor — see pending steps
+  - generate-posts.ts fixed:
+    Removed generated_at from both inserts (success + failure paths)
+    created_at is auto-populated by Supabase — never set manually
+    order_id and post_type now correctly included in both inserts
+  - No generated_at references remain anywhere in codebase
+  - Build clean: 2156 modules, zero TypeScript errors ✅
+  - Deployed: cultivar-os.vercel.app ✅
+
 - **Current tile states:**
   - QR Checkout: active ✅
   - QuickBooks: active ✅
@@ -195,36 +211,32 @@ TRACE email:   david@trace-enterprises.com
      Mobile: core metrics + bottom nav only
 
 - **Last files edited:**
-  packages/cultivar-os/src/pages/SocialSetup.tsx (new)
-  packages/cultivar-os/api/social/enable.ts (new)
-  packages/cultivar-os/api/social/generate-posts.ts (new)
-  api/social/enable.ts (new re-export)
-  api/social/generate-posts.ts (new re-export)
-  packages/shared/src/components/tiles/Tile.tsx (count badge)
-  packages/cultivar-os/src/pages/Dashboard.tsx (count wiring)
-  packages/cultivar-os/src/hooks/useSubmitOrder.ts (social call)
-  packages/cultivar-os/src/router.tsx (/social/setup route)
-  supabase/migrations/20260522_social_drafts_rls.sql (new)
+  packages/cultivar-os/api/social/generate-posts.ts (bug fix — generated_at removed)
+  supabase/migrations/20260522_social_drafts_add_order_post_type.sql (new)
 - **Last command run:** npx vercel --prod from repo root — deployed ✅
   NOTE: always deploy from repo root (/trace-platform/), not from
   packages/cultivar-os/ — the @trace/shared alias breaks otherwise
 - **Build status:** Clean — 2156 modules, zero TS errors
 
 - **Blockers / Notes:**
-  - ANTHROPIC_API_KEY NOT in Vercel — post generation silently
-    skips (ok:false, reason:'api_key_missing'). Must add before
-    post generation will work in production.
-  - social_drafts RLS migration needs to be run in Supabase
-    dashboard: supabase/migrations/20260522_social_drafts_rls.sql
+  - social_drafts schema migration NOT yet applied in Supabase —
+    inserts will still fail until David runs the migration below
+  - ANTHROPIC_API_KEY confirmed in Vercel ✅ (David added this session)
   - Blotato publish flow (STEP 4) blocked pending David approval
   - QB tokens stored in nursery.qb_access_token on new project ✅
   - BLOTATO_API_KEY in Vercel ✅
 
 - **⚠️ Pending manual steps (David):**
-  - Add ANTHROPIC_API_KEY to Vercel env vars
-    (copy from Railway passionate-tenderness) — REQUIRED for posts
-  - Run migration 20260522_social_drafts_rls.sql in Supabase
-    dashboard (SQL editor) — REQUIRED for dashboard count to work
+  - ⚠️ BLOCKER: Run migration in Supabase SQL editor (bgobkjcopcxusjsetfob):
+    supabase/migrations/20260522_social_drafts_add_order_post_type.sql
+    SQL:
+      ALTER TABLE social_drafts
+        ADD COLUMN order_id  uuid REFERENCES orders(id) ON DELETE SET NULL,
+        ADD COLUMN post_type text CHECK (post_type IN ('educational','customer_story','seasonal'));
+    THEN test: place order at cultivar-os.vercel.app/plant/SCV-0031
+    THEN query:
+      SELECT id, post_type, status, content FROM social_drafts ORDER BY created_at DESC LIMIT 10;
+    Expect 3 rows: educational, customer_story, seasonal — all status=pending
   - Approve Blotato publish API structure to unblock STEP 4
   - Print QR tags: SCV-0031, NCM-0042, MS30-001
   - Print invoice #3648.380

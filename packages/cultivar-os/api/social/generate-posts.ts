@@ -116,11 +116,10 @@ Generate:
     const inserts = parsed.posts.map(post => ({
       nursery_id,
       order_id,
-      platform:     'instagram',
-      content:      post.content,
-      post_type:    post.type,
-      status:       'pending',
-      generated_at: new Date().toISOString(),
+      platform:  'instagram',
+      content:   post.content,
+      post_type: post.type,
+      status:    'pending',
     }));
 
     await db.from('social_drafts').insert(inserts);
@@ -134,11 +133,10 @@ Generate:
       await db.from('social_drafts').insert({
         nursery_id,
         order_id,
-        platform:     'instagram',
-        content:      null,
-        post_type:    null,
-        status:       'failed',
-        generated_at: new Date().toISOString(),
+        platform:  'instagram',
+        content:   null,
+        post_type: null,
+        status:    'failed',
       });
     } catch { /* non-fatal */ }
 
