@@ -31,3 +31,7 @@ export { Badge } from './components/Badge';
 export type { BadgeProps, BadgeVariant } from './components/Badge';
 export { LockedOverlay } from './components/LockedOverlay';
 export type { LockedOverlayProps } from './components/LockedOverlay';
+export { TileGrid } from './components/tiles/TileGrid';
+export type { TileGridProps } from './components/tiles/TileGrid';
+export { Tile } from './components/tiles/Tile';
+export type { TileProps, TileState } from './components/tiles/Tile';

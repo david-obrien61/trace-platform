@@ -4,6 +4,9 @@ import { Card } from '@trace/shared/components/Card';
 import { supabase } from '../lib/supabase';
 import { auth } from '../lib/auth';
 import { DEMO_NURSERY_ID } from '../lib/constants';
+import { useModules } from '../hooks/useModules';
+import { TileGrid } from '@trace/shared/components/tiles/TileGrid';
+import { Tile } from '@trace/shared/components/tiles/Tile';
 
 // Configurable — will move to verticalConfig post-demo
 const LEAKAGE_AVG_VALUE = 28;
@@ -72,7 +75,9 @@ export function Dashboard() {
   const [qbConnected, setQbConnected] = useState(false);
   const [qbCompany, setQbCompany]     = useState('');
   const [connecting, setConnecting]   = useState(false);
+  const [qbError, setQbError]         = useState('');
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { modules } = useModules(DEMO_NURSERY_ID);
 
   // ── Data loading ─────────────────────────────────────────────────────────
 
@@ -151,12 +156,45 @@ export function Dashboard() {
 
   async function handleConnect() {
     setConnecting(true);
-    try {
-      const res = await fetch(`/api/qbo/auth-url?nursery_id=${DEMO_NURSERY_ID}`);
-      if (!res.ok) throw new Error('Could not get auth URL');
-      const { url } = await res.json();
-      const popup = window.open(url, 'qb-connect', 'width=720,height=640,left=200,top=100');
+    setQbError('');
 
+    let popup: Window | null = null;
+    let step = 'init';
+
+    try {
+      // Step 1 — open popup synchronously before any await (browser requires user-gesture chain)
+      step = 'open-popup';
+      popup = window.open('', 'qb-connect', 'width=720,height=640,left=200,top=100');
+
+      // Step 2 — fetch OAuth URL from Vercel function
+      step = 'fetch';
+      const res = await fetch(`/api/qbo/auth-url?nursery_id=${DEMO_NURSERY_ID}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(`[step:${step}] ` + (body.error || `Server error ${res.status}`));
+      }
+
+      // Step 3 — parse response
+      step = 'parse';
+      const { url } = await res.json();
+
+      // Step 4 — validate URL is parseable before handing to browser
+      step = 'validate-url';
+      try { new URL(url); } catch {
+        throw new Error(`[step:${step}] Malformed URL returned by server — check QBO env vars`);
+      }
+
+      // Step 5 — navigate popup (or fall back to same-tab)
+      step = 'navigate';
+      if (popup && !popup.closed) {
+        popup.location.href = url;
+      } else {
+        window.location.href = url;
+        return;
+      }
+
+      // Step 6 — poll until popup closes or QB confirms connected
+      step = 'poll';
       pollingRef.current = setInterval(async () => {
         const connected = await checkQbStatus();
         if (connected) {
@@ -171,7 +209,11 @@ export function Dashboard() {
           setConnecting(false);
         }
       }, 2000);
-    } catch {
+    } catch (err: any) {
+      popup?.close();
+      const msg = String(err?.message || err || 'Unknown error');
+      // Prefix with step if not already tagged
+      setQbError(msg.startsWith('[step:') ? msg : `[step:${step}] ${msg}`);
       setConnecting(false);
     }
   }
@@ -181,6 +223,14 @@ export function Dashboard() {
   async function handleSignOut() {
     await auth.signOut();
     navigate('/login');
+  }
+
+  function handleEnable(key: string) {
+    console.log('[Cultivar OS] Enable module:', key);
+  }
+
+  function handleNavigate(key: string) {
+    console.log('[Cultivar OS] Navigate to module:', key);
   }
 
   // ── Effects ───────────────────────────────────────────────────────────────
@@ -258,6 +308,11 @@ export function Dashboard() {
             >
               {connecting ? 'Opening QuickBooks…' : 'Connect QuickBooks'}
             </button>
+            {qbError && (
+              <p style={{ fontSize: '0.8125rem', color: 'var(--red-border)', marginTop: 10 }}>
+                Error: {qbError}
+              </p>
+            )}
           </div>
         ) : (
           <div style={{
@@ -384,6 +439,36 @@ export function Dashboard() {
             )}
           </>
         )}
+
+        {/* ── Modules ── */}
+        <section style={{ marginTop: '2rem' }}>
+          <h2 style={{
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            letterSpacing: '0.1em',
+            color: 'var(--gray-400, #9ca3af)',
+            textTransform: 'uppercase',
+            margin: '0 0 1.5rem',
+          }}>
+            Your Modules
+          </h2>
+          <TileGrid>
+            {modules.map(mod => (
+              <Tile
+                key={mod.key}
+                id={mod.key}
+                label={mod.name}
+                icon={mod.icon}
+                color={mod.color}
+                bg={mod.bg}
+                state={mod.state}
+                onEnable={() => handleEnable(mod.key)}
+                onNavigate={() => handleNavigate(mod.key)}
+                tierRequired={mod.tier_required ?? undefined}
+              />
+            ))}
+          </TileGrid>
+        </section>
 
         {/* ── Refresh ── */}
         <button
