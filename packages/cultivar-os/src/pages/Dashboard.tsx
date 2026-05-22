@@ -146,7 +146,7 @@ export function Dashboard() {
       .from('social_drafts')
       .select('id', { count: 'exact', head: true })
       .eq('nursery_id', DEMO_NURSERY_ID)
-      .eq('status', 'pending');
+      .eq('status', 'draft');
     setPendingSocialCount(count ?? 0);
   }
 

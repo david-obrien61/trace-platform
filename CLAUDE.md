@@ -187,6 +187,17 @@ TRACE email:   david@trace-enterprises.com
   - Build clean: 2156 modules, zero TypeScript errors ✅
   - Deployed: cultivar-os.vercel.app ✅
 
+- **Completed this session (May 22 — social_drafts status constraint fix):**
+  - Bug: inserts failing with social_drafts_status_check constraint violation
+    Root cause: code inserted status='pending' but social_drafts table
+    CHECK constraint only allows 'draft' (not 'pending') as initial state
+  - generate-posts.ts fixed: status 'pending' → 'draft' in success inserts
+  - Dashboard.tsx fixed: loadSocialCount query .eq('status','pending')
+    → .eq('status','draft') so badge count reflects actual rows
+  - social_drafts status lifecycle: 'draft' → 'published' | 'failed'
+  - Build clean: 2156 modules, zero TypeScript errors ✅
+  - Deployed: cultivar-os.vercel.app ✅
+
 - **Current tile states:**
   - QR Checkout: active ✅
   - QuickBooks: active ✅
@@ -211,20 +222,22 @@ TRACE email:   david@trace-enterprises.com
      Mobile: core metrics + bottom nav only
 
 - **Last files edited:**
-  packages/cultivar-os/api/social/generate-posts.ts (bug fix — generated_at removed)
-  supabase/migrations/20260522_social_drafts_add_order_post_type.sql (new)
+  packages/cultivar-os/api/social/generate-posts.ts (status 'pending'→'draft')
+  packages/cultivar-os/src/pages/Dashboard.tsx (loadSocialCount 'pending'→'draft')
 - **Last command run:** npx vercel --prod from repo root — deployed ✅
   NOTE: always deploy from repo root (/trace-platform/), not from
   packages/cultivar-os/ — the @trace/shared alias breaks otherwise
 - **Build status:** Clean — 2156 modules, zero TS errors
 
 - **Blockers / Notes:**
-  - social_drafts schema migration NOT yet applied in Supabase —
-    inserts will still fail until David runs the migration below
-  - ANTHROPIC_API_KEY confirmed in Vercel ✅ (David added this session)
+  - social_drafts schema migration (order_id + post_type columns) NOT yet
+    applied in Supabase — inserts will still fail until David runs it
+  - ANTHROPIC_API_KEY confirmed in Vercel ✅
   - Blotato publish flow (STEP 4) blocked pending David approval
   - QB tokens stored in nursery.qb_access_token on new project ✅
   - BLOTATO_API_KEY in Vercel ✅
+  - social_drafts status constraint: allowed values are 'draft','published','failed'
+    (confirmed by constraint rejection of 'pending')
 
 - **⚠️ Pending manual steps (David):**
   - ⚠️ BLOCKER: Run migration in Supabase SQL editor (bgobkjcopcxusjsetfob):
@@ -236,7 +249,7 @@ TRACE email:   david@trace-enterprises.com
     THEN test: place order at cultivar-os.vercel.app/plant/SCV-0031
     THEN query:
       SELECT id, post_type, status, content FROM social_drafts ORDER BY created_at DESC LIMIT 10;
-    Expect 3 rows: educational, customer_story, seasonal — all status=pending
+    Expect 3 rows: educational, customer_story, seasonal — all status='draft'
   - Approve Blotato publish API structure to unblock STEP 4
   - Print QR tags: SCV-0031, NCM-0042, MS30-001
   - Print invoice #3648.380

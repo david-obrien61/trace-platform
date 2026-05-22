@@ -28,13 +28,16 @@ Return ONLY a JSON object. No markdown, no explanation, no preamble. Exactly thi
 {"posts":[{"type":"educational","content":"..."},{"type":"customer_story","content":"..."},{"type":"seasonal","content":"..."}]}`;
 
 export default async function handler(req: any, res: any) {
+  console.log('[generate-posts] ENTRY method:', req.method, 'body:', JSON.stringify(req.body));
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    console.warn('[social/generate-posts] ANTHROPIC_API_KEY not set — skipping post generation');
+    console.warn('[generate-posts] EARLY EXIT — ANTHROPIC_API_KEY not set');
     return res.status(200).json({ ok: false, reason: 'api_key_missing' });
   }
+  console.log('[generate-posts] API key present ✓');
 
   const {
     nursery_id,
@@ -47,22 +50,28 @@ export default async function handler(req: any, res: any) {
   } = req.body;
 
   if (!nursery_id || !order_id) {
+    console.warn('[generate-posts] EARLY EXIT — missing nursery_id or order_id', { nursery_id, order_id });
     return res.status(400).json({ error: 'Missing nursery_id or order_id' });
   }
+  console.log('[generate-posts] IDs present — nursery_id:', nursery_id, 'order_id:', order_id);
 
   const db = adminDb();
 
   // Check social_media module is enabled + configured for this nursery
-  const { data: nm } = await db
+  const { data: nm, error: nmErr } = await db
     .from('nursery_modules')
     .select('enabled, configured')
     .eq('nursery_id', nursery_id)
     .eq('module_key', 'social_media')
     .single();
 
+  console.log('[generate-posts] nursery_modules row:', JSON.stringify(nm), 'error:', nmErr?.message ?? null);
+
   if (!nm?.enabled || !nm?.configured) {
+    console.warn('[generate-posts] EARLY EXIT — module_not_enabled. enabled:', nm?.enabled, 'configured:', nm?.configured);
     return res.status(200).json({ ok: false, reason: 'module_not_enabled' });
   }
+  console.log('[generate-posts] module enabled+configured ✓');
 
   // Get nursery name for the posts
   const { data: nursery } = await db
@@ -95,6 +104,7 @@ Generate:
   const anthropic = new Anthropic({ apiKey });
 
   try {
+    console.log('[generate-posts] calling Claude API...');
     const message = await anthropic.messages.create({
       model:      'claude-sonnet-4-6',
       max_tokens: 600,
@@ -108,9 +118,11 @@ Generate:
       ],
       messages: [{ role: 'user', content: userPrompt }],
     });
+    console.log('[generate-posts] Claude API returned. stop_reason:', message.stop_reason);
 
     const raw  = message.content.find(b => b.type === 'text');
     const text = raw?.type === 'text' ? raw.text.trim() : '';
+    console.log('[generate-posts] raw text from Claude:', text.slice(0, 200));
     const parsed = JSON.parse(text) as { posts: Array<{ type: string; content: string }> };
 
     const inserts = parsed.posts.map(post => ({
@@ -119,18 +131,20 @@ Generate:
       platform:  'instagram',
       content:   post.content,
       post_type: post.type,
-      status:    'pending',
+      status:    'draft',
     }));
 
-    await db.from('social_drafts').insert(inserts);
+    console.log('[generate-posts] inserting', inserts.length, 'rows into social_drafts...');
+    const { error: insertErr } = await db.from('social_drafts').insert(inserts);
+    console.log('[generate-posts] insert complete. error:', insertErr?.message ?? null);
 
     return res.status(200).json({ ok: true, count: inserts.length });
   } catch (err: any) {
-    console.error('[social/generate-posts] generation error:', err?.message ?? err);
+    console.error('[generate-posts] generation error:', err?.message ?? err);
 
     // Insert a single failed row so the dashboard can show it
     try {
-      await db.from('social_drafts').insert({
+      const { error: failErr } = await db.from('social_drafts').insert({
         nursery_id,
         order_id,
         platform:  'instagram',
@@ -138,6 +152,7 @@ Generate:
         post_type: null,
         status:    'failed',
       });
+      console.log('[generate-posts] failed-row insert error:', failErr?.message ?? null);
     } catch { /* non-fatal */ }
 
     return res.status(200).json({ ok: false, reason: 'generation_failed' });
