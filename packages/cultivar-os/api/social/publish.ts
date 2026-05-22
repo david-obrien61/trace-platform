@@ -38,14 +38,16 @@ export default async function handler(req: any, res: any) {
   const accountId = String((nm?.config as any)?.blotato_account_id ?? '');
   if (!accountId) {
     console.warn('[social/publish] no blotato_account_id for nursery', (draft as any).nursery_id);
-    await db.from('social_drafts').update({ status: 'failed' }).eq('id', draft_id);
+    const { error: e1 } = await db.from('social_drafts').update({ status: 'failed' }).eq('id', draft_id);
+    if (e1) console.error('[social/publish] status update failed:', e1.message);
     return res.status(200).json({ ok: false, reason: 'no_account_id' });
   }
 
   const blotatoKey = process.env.BLOTATO_API_KEY;
   if (!blotatoKey) {
     console.warn('[social/publish] BLOTATO_API_KEY not set');
-    await db.from('social_drafts').update({ status: 'failed' }).eq('id', draft_id);
+    const { error: e2 } = await db.from('social_drafts').update({ status: 'failed' }).eq('id', draft_id);
+    if (e2) console.error('[social/publish] status update failed:', e2.message);
     return res.status(200).json({ ok: false, reason: 'no_api_key' });
   }
 
@@ -76,17 +78,20 @@ export default async function handler(req: any, res: any) {
     if (!blotatoRes.ok) {
       const errText = await blotatoRes.text().catch(() => '');
       console.error('[social/publish] Blotato error:', blotatoRes.status, errText);
-      await db.from('social_drafts').update({ status: 'failed' }).eq('id', draft_id);
+      const { error: e3 } = await db.from('social_drafts').update({ status: 'failed' }).eq('id', draft_id);
+      if (e3) console.error('[social/publish] status update failed:', e3.message);
       return res.status(200).json({ ok: false, reason: 'blotato_error', detail: errText });
     }
 
     const blotatoData = await blotatoRes.json().catch(() => ({}));
-    await db.from('social_drafts').update({ status: 'published' }).eq('id', draft_id);
+    const { error: e4 } = await db.from('social_drafts').update({ status: 'published' }).eq('id', draft_id);
+    if (e4) console.error('[social/publish] published update failed:', e4.message);
     return res.status(200).json({ ok: true, postSubmissionId: blotatoData.postSubmissionId });
 
   } catch (err: any) {
     console.error('[social/publish] fetch error:', err?.message ?? err);
-    await db.from('social_drafts').update({ status: 'failed' }).eq('id', draft_id);
+    const { error: e5 } = await db.from('social_drafts').update({ status: 'failed' }).eq('id', draft_id);
+    if (e5) console.error('[social/publish] status update failed:', e5.message);
     return res.status(200).json({ ok: false, reason: 'fetch_error' });
   }
 }

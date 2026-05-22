@@ -245,10 +245,20 @@ TRACE email:   david@trace-enterprises.com
      Tile grid tablet/desktop only (768px+)
      Mobile: core metrics + bottom nav only
 
+- **Completed this session (May 22 — publish status='failed' constraint fix):**
+  - Root cause: social_drafts CHECK constraint only allowed 'draft'+'published',
+    not 'failed'. Supabase JS returns { error } silently (no throw), so all
+    status='failed' writes in publish.ts were dropped without logging.
+  - Migration written: supabase/migrations/20260522_social_drafts_add_failed_status.sql
+    DROP CONSTRAINT + ADD CONSTRAINT with ('draft','published','failed')
+    ⚠️ MUST be run manually in Supabase SQL editor — see pending steps
+  - publish.ts: added error logging on all 5 status update calls
+    (was: silently ignored; now: logs constraint violations to Vercel logs)
+  - Deployed: cultivar-os.vercel.app ✅
+
 - **Last files edited:**
-  packages/cultivar-os/api/social/publish.ts (new — Blotato publish endpoint)
-  api/social/publish.ts (new — Vercel routing re-export)
-  packages/cultivar-os/src/pages/Dashboard.tsx (publish flow + drafts panel)
+  packages/cultivar-os/api/social/publish.ts (error logging on status updates)
+  supabase/migrations/20260522_social_drafts_add_failed_status.sql (new)
 - **Last command run:** npx vercel --prod from repo root — deployed ✅
   NOTE: always deploy from repo root (/trace-platform/), not from
   packages/cultivar-os/ — the @trace/shared alias breaks otherwise
@@ -257,13 +267,15 @@ TRACE email:   david@trace-enterprises.com
 - **Blockers / Notes:**
   - social_drafts schema migration (order_id + post_type columns) NOT yet
     applied in Supabase — generate-posts inserts will fail until David runs it
+  - social_drafts status constraint migration NOT yet applied —
+    status='failed' writes will still fail until David runs it (see pending steps)
   - ANTHROPIC_API_KEY confirmed in Vercel ✅
   - BLOTATO_API_KEY in Vercel ✅
   - QB tokens stored in nursery.qb_access_token on new project ✅
   - social_drafts status lifecycle: 'draft' → 'published' | 'failed'
 
 - **⚠️ Pending manual steps (David):**
-  - ⚠️ BLOCKER: Run migration in Supabase SQL editor (bgobkjcopcxusjsetfob):
+  - ⚠️ BLOCKER #1: Run in Supabase SQL editor (bgobkjcopcxusjsetfob):
     supabase/migrations/20260522_social_drafts_add_order_post_type.sql
     SQL:
       ALTER TABLE social_drafts
@@ -273,7 +285,14 @@ TRACE email:   david@trace-enterprises.com
     THEN query:
       SELECT id, post_type, status, content FROM social_drafts ORDER BY created_at DESC LIMIT 10;
     Expect 3 rows: educational, customer_story, seasonal — all status='draft'
-  - Approve Blotato publish API structure to unblock STEP 4
+  - ⚠️ BLOCKER #2: Run in Supabase SQL editor (bgobkjcopcxusjsetfob):
+    supabase/migrations/20260522_social_drafts_add_failed_status.sql
+    SQL:
+      ALTER TABLE social_drafts DROP CONSTRAINT IF EXISTS social_drafts_status_check;
+      ALTER TABLE social_drafts ADD CONSTRAINT social_drafts_status_check
+        CHECK (status IN ('draft', 'published', 'failed'));
+    Required for publish errors to be recorded — without this, failed
+    publishes stay as status='draft' and Lauren can't see what needs attention.
   - Print QR tags: SCV-0031, NCM-0042, MS30-001
   - Print invoice #3648.380
   - Print FOUNDING_CUSTOMER_AGREEMENT.md
