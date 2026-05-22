@@ -192,9 +192,38 @@ TRACE email:   david@trace-enterprises.com
     Root cause: code inserted status='pending' but social_drafts table
     CHECK constraint only allows 'draft' (not 'pending') as initial state
   - generate-posts.ts fixed: status 'pending' → 'draft' in success inserts
-  - Dashboard.tsx fixed: loadSocialCount query .eq('status','pending')
-    → .eq('status','draft') so badge count reflects actual rows
+  - Dashboard.tsx fixed: badge count query updated to match
   - social_drafts status lifecycle: 'draft' → 'published' | 'failed'
+  - Build clean: 2156 modules, zero TypeScript errors ✅
+  - Deployed: cultivar-os.vercel.app ✅
+
+- **Completed this session (May 22 — Social Media STEP 4 — Blotato publish flow):**
+  - STEP 4 COMPLETE ✅
+  - api/social/publish.ts — new endpoint
+    Accepts: draft_id
+    Reads social_drafts row (content, platform)
+    Reads nursery_modules.config.blotato_account_id
+    POSTs to https://backend.blotato.com/v2/posts
+    Header: blotato-api-key (from BLOTATO_API_KEY env var)
+    Payload: {post:{accountId, content:{text,mediaUrls:[],platform},
+              target:{targetType}}} — platform=targetType='instagram'
+    On success: updates status='published', returns postSubmissionId
+    On failure: updates status='failed', returns ok:false reason
+    Never throws — always 200
+  - api/social/publish.ts (root re-export) — wires Vercel routing
+  - Dashboard.tsx refactored:
+    pendingSocialCount + loadSocialCount() → socialDrafts[] + loadSocialDrafts()
+    Single query for both badge count and panel content
+    Social Drafts panel: appears below tile grid when drafts exist
+    Each draft: post_type chip (Educational/Customer Story/Seasonal)
+    Content preview (3-line clamp) + Publish button
+    handlePublish(): calls /api/social/publish, removes from list on success
+    publishingId state: disables button + shows 'Posting…' during in-flight
+    Badge auto-decrements as drafts are published (derived from array length)
+  - Blotato API confirmed at help.blotato.com/api/llm.md:
+    platform and targetType must match exactly
+    Instagram requires no extra fields (no pageId, no privacyLevel)
+    Response: { postSubmissionId: uuid }
   - Build clean: 2156 modules, zero TypeScript errors ✅
   - Deployed: cultivar-os.vercel.app ✅
 
@@ -208,12 +237,7 @@ TRACE email:   david@trace-enterprises.com
   - Contractors/Seasonal/Insights/Inventory: locked
 
 - **Next tasks in order:**
-  1. STEP 4 — Social Media publish flow (Blotato)
-     Wait for David approval on Blotato API structure above
-     Build: social_drafts list view on Dashboard or /social page
-     [Publish] button → POST backend.blotato.com/v2/posts
-     On success → update social_drafts status='published'
-  2. Online Shop (/shop):
+  1. Online Shop (/shop):
      All available plants, filterable
      Same checkout flow
      Delivery radius check at address entry
@@ -222,8 +246,9 @@ TRACE email:   david@trace-enterprises.com
      Mobile: core metrics + bottom nav only
 
 - **Last files edited:**
-  packages/cultivar-os/api/social/generate-posts.ts (status 'pending'→'draft')
-  packages/cultivar-os/src/pages/Dashboard.tsx (loadSocialCount 'pending'→'draft')
+  packages/cultivar-os/api/social/publish.ts (new — Blotato publish endpoint)
+  api/social/publish.ts (new — Vercel routing re-export)
+  packages/cultivar-os/src/pages/Dashboard.tsx (publish flow + drafts panel)
 - **Last command run:** npx vercel --prod from repo root — deployed ✅
   NOTE: always deploy from repo root (/trace-platform/), not from
   packages/cultivar-os/ — the @trace/shared alias breaks otherwise
@@ -231,13 +256,11 @@ TRACE email:   david@trace-enterprises.com
 
 - **Blockers / Notes:**
   - social_drafts schema migration (order_id + post_type columns) NOT yet
-    applied in Supabase — inserts will still fail until David runs it
+    applied in Supabase — generate-posts inserts will fail until David runs it
   - ANTHROPIC_API_KEY confirmed in Vercel ✅
-  - Blotato publish flow (STEP 4) blocked pending David approval
-  - QB tokens stored in nursery.qb_access_token on new project ✅
   - BLOTATO_API_KEY in Vercel ✅
-  - social_drafts status constraint: allowed values are 'draft','published','failed'
-    (confirmed by constraint rejection of 'pending')
+  - QB tokens stored in nursery.qb_access_token on new project ✅
+  - social_drafts status lifecycle: 'draft' → 'published' | 'failed'
 
 - **⚠️ Pending manual steps (David):**
   - ⚠️ BLOCKER: Run migration in Supabase SQL editor (bgobkjcopcxusjsetfob):
@@ -287,7 +310,7 @@ TRACE email:   david@trace-enterprises.com
 
 - [x] Fix QR Checkout tile state bug ✅ (RLS migration May 22)
 - [x] Social Media module Steps 1-3 ✅ (wizard, post gen, count badge)
-- [ ] Social Media Step 4 — Blotato publish flow (on hold, needs approval)
+- [x] Social Media Step 4 — Blotato publish flow ✅
 - [ ] Online Shop (/shop page)
 - [ ] Customer follow-up engine
 - [ ] Delivery routing (after Lauren answers questions)

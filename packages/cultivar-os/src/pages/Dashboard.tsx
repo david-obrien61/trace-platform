@@ -57,6 +57,12 @@ function SkeletonCard() {
   return <div className="skeleton" style={{ flex: 1, minWidth: 0, height: 88, borderRadius: 12 }} />;
 }
 
+const POST_TYPE_LABELS: Record<string, string> = {
+  educational:    'Educational',
+  customer_story: 'Customer Story',
+  seasonal:       'Seasonal',
+};
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 export function Dashboard() {
@@ -72,7 +78,16 @@ export function Dashboard() {
   const [leakageCount, setLeakageCount]       = useState(0);
   const [loading, setLoading]                 = useState(true);
 
-  const [pendingSocialCount, setPendingSocialCount] = useState(0);
+  interface SocialDraft {
+    id: string;
+    post_type: string | null;
+    content: string | null;
+    platform: string;
+  }
+
+  const [socialDrafts, setSocialDrafts]       = useState<SocialDraft[]>([]);
+  const [publishingId, setPublishingId]       = useState<string | null>(null);
+  const [publishedIds, setPublishedIds]       = useState<Set<string>>(new Set());
 
   const [qbConnected, setQbConnected] = useState(false);
   const [qbCompany, setQbCompany]     = useState('');
@@ -139,15 +154,38 @@ export function Dashboard() {
     setLoading(false);
   }
 
-  // ── Social drafts count ───────────────────────────────────────────────────
+  // ── Social drafts ─────────────────────────────────────────────────────────
 
-  async function loadSocialCount() {
-    const { count } = await supabase
+  async function loadSocialDrafts() {
+    const { data } = await supabase
       .from('social_drafts')
-      .select('id', { count: 'exact', head: true })
+      .select('id, post_type, content, platform')
       .eq('nursery_id', DEMO_NURSERY_ID)
-      .eq('status', 'draft');
-    setPendingSocialCount(count ?? 0);
+      .eq('status', 'draft')
+      .order('created_at', { ascending: true });
+    setSocialDrafts((data as SocialDraft[]) ?? []);
+  }
+
+  async function handlePublish(draftId: string) {
+    setPublishingId(draftId);
+    try {
+      const res = await fetch('/api/social/publish', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ draft_id: draftId }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setPublishedIds(prev => new Set([...prev, draftId]));
+        setSocialDrafts(prev => prev.filter(d => d.id !== draftId));
+      } else {
+        console.warn('[publish] failed:', data.reason);
+      }
+    } catch (err) {
+      console.warn('[publish] fetch error:', err);
+    } finally {
+      setPublishingId(null);
+    }
   }
 
   // ── QB helpers ────────────────────────────────────────────────────────────
@@ -253,7 +291,7 @@ export function Dashboard() {
   useEffect(() => {
     loadMetrics();
     checkQbStatus();
-    loadSocialCount();
+    loadSocialDrafts();
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
   }, []);
 
@@ -481,11 +519,74 @@ export function Dashboard() {
                 onEnable={() => handleEnable(mod.key)}
                 onNavigate={() => handleNavigate(mod.key)}
                 tierRequired={mod.tier_required ?? undefined}
-                count={mod.key === 'social_media' ? pendingSocialCount : undefined}
+                count={mod.key === 'social_media' ? socialDrafts.length : undefined}
               />
             ))}
           </TileGrid>
         </section>
+
+        {/* ── Social Drafts ── */}
+        {socialDrafts.length > 0 && (
+          <section style={{ marginTop: '0.5rem' }}>
+            <h2 style={{
+              fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.1em',
+              color: 'var(--gray-400, #9ca3af)', textTransform: 'uppercase',
+              margin: '0 0 1rem',
+            }}>
+              Social Media — Ready to Publish
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {socialDrafts.map(draft => (
+                <div key={draft.id} style={{
+                  background: '#fff',
+                  border: '1.5px solid #e5e7eb',
+                  borderRadius: 12,
+                  padding: '14px 16px',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{
+                        display: 'inline-block',
+                        background: 'var(--sage-bg, #EAF3DE)',
+                        color: 'var(--green-primary, #27500A)',
+                        fontSize: '0.6875rem', fontWeight: 700,
+                        letterSpacing: '0.06em', textTransform: 'uppercase',
+                        padding: '2px 8px', borderRadius: 6,
+                        marginBottom: 8,
+                      }}>
+                        {POST_TYPE_LABELS[draft.post_type ?? ''] ?? draft.post_type ?? 'Post'}
+                      </span>
+                      <p style={{
+                        fontSize: '0.875rem', color: 'var(--gray-800, #1f2937)',
+                        lineHeight: 1.5, margin: 0,
+                        display: '-webkit-box', WebkitLineClamp: 3,
+                        WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                      }}>
+                        {draft.content}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handlePublish(draft.id)}
+                      disabled={publishingId === draft.id}
+                      style={{
+                        flexShrink: 0,
+                        background: publishingId === draft.id ? '#e5e7eb' : 'var(--green-primary, #27500A)',
+                        color: publishingId === draft.id ? 'var(--gray-600)' : '#fff',
+                        border: 'none', borderRadius: 8,
+                        padding: '10px 16px',
+                        fontSize: '0.875rem', fontWeight: 600,
+                        cursor: publishingId === draft.id ? 'not-allowed' : 'pointer',
+                        minWidth: 90,
+                      }}
+                    >
+                      {publishingId === draft.id ? 'Posting…' : 'Publish'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* ── Refresh ── */}
         <button
