@@ -72,6 +72,8 @@ export function Dashboard() {
   const [leakageCount, setLeakageCount]       = useState(0);
   const [loading, setLoading]                 = useState(true);
 
+  const [pendingSocialCount, setPendingSocialCount] = useState(0);
+
   const [qbConnected, setQbConnected] = useState(false);
   const [qbCompany, setQbCompany]     = useState('');
   const [connecting, setConnecting]   = useState(false);
@@ -135,6 +137,17 @@ export function Dashboard() {
     setLeakageCount((leakageRes.data ?? []).length);
 
     setLoading(false);
+  }
+
+  // ── Social drafts count ───────────────────────────────────────────────────
+
+  async function loadSocialCount() {
+    const { count } = await supabase
+      .from('social_drafts')
+      .select('id', { count: 'exact', head: true })
+      .eq('nursery_id', DEMO_NURSERY_ID)
+      .eq('status', 'pending');
+    setPendingSocialCount(count ?? 0);
   }
 
   // ── QB helpers ────────────────────────────────────────────────────────────
@@ -226,11 +239,13 @@ export function Dashboard() {
   }
 
   function handleEnable(key: string) {
-    console.log('[Cultivar OS] Enable module:', key);
+    if (key === 'social_media') {
+      navigate('/social/setup');
+    }
   }
 
-  function handleNavigate(key: string) {
-    console.log('[Cultivar OS] Navigate to module:', key);
+  function handleNavigate(_key: string) {
+    // post-demo: route to module-specific pages
   }
 
   // ── Effects ───────────────────────────────────────────────────────────────
@@ -238,6 +253,7 @@ export function Dashboard() {
   useEffect(() => {
     loadMetrics();
     checkQbStatus();
+    loadSocialCount();
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
   }, []);
 
@@ -465,6 +481,7 @@ export function Dashboard() {
                 onEnable={() => handleEnable(mod.key)}
                 onNavigate={() => handleNavigate(mod.key)}
                 tierRequired={mod.tier_required ?? undefined}
+                count={mod.key === 'social_media' ? pendingSocialCount : undefined}
               />
             ))}
           </TileGrid>

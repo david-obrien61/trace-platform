@@ -14,6 +14,7 @@ export interface TileProps {
   onEnable?: () => void;
   onNavigate?: () => void;
   tierRequired?: string;
+  count?: number;
 }
 
 export function Tile({
@@ -25,6 +26,7 @@ export function Tile({
   onEnable,
   onNavigate,
   tierRequired,
+  count,
 }: TileProps) {
   const isLocked    = state === 'locked';
   const isAvailable = state === 'available';
@@ -71,6 +73,28 @@ export function Tile({
         }}>
           <Icon size={28} color={isLocked ? '#9ca3af' : color} />
         </div>
+
+        {/* Active + count → amber notification badge top-left */}
+        {isActive && count != null && count > 0 && (
+          <div style={{
+            position: 'absolute',
+            top: -4,
+            left: -4,
+            minWidth: 16,
+            height: 16,
+            borderRadius: 8,
+            background: '#f59e0b',
+            border: '2px solid #fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0 3px',
+          }}>
+            <span style={{ fontSize: '0.5rem', fontWeight: 700, color: '#fff', lineHeight: 1 }}>
+              {count > 99 ? '99+' : count}
+            </span>
+          </div>
+        )}
 
         {/* Active → green status dot */}
         {isActive && (

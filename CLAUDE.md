@@ -142,50 +142,90 @@ TRACE email:   david@trace-enterprises.com
     authenticated_select_nursery_modules policies.
     No code changes — useModules.ts logic was correct.
 
-- **Current tile states (verified via authenticated API — May 22):**
-  - QR Checkout: active (green dot) ✅ FIXED
-  - QuickBooks: active (green dot) ✅
-  - Online Shop: available (Enable) ✅
-  - Social Media: available (Enable) ✅
-  - Follow-Up: available (Enable) ✅
-  - Delivery: available (Enable) ✅
-  - Contractors/Seasonal/Insights/Inventory: locked ✅
+- **Completed this session (May 22 — Social Media module COMPLETE):**
+  - Social Media module STEPS 1-3 COMPLETE ✅
+  - STEP 1: Enable → wizard ✅
+    SocialSetup.tsx — platform checkboxes (Instagram, Facebook,
+    TikTok, Twitter/X) + Blotato Account ID input
+    api/social/enable.ts — upserts nursery_modules enabled+configured
+    Social tile: Enable → /social/setup → save → tile goes active
+  - STEP 2: Post generation on order complete ✅
+    api/social/generate-posts.ts — claude-sonnet-4-6
+    System prompt cached via cache_control ephemeral
+    Generates 3 posts: educational, customer_story, seasonal
+    Writes to social_drafts (status='pending')
+    On API failure: writes status='failed', never blocks order
+    Guards ANTHROPIC_API_KEY missing — returns ok:false silently
+    useSubmitOrder.ts — fire-and-forget after QB call
+  - STEP 3: Dashboard pending count badge ✅
+    Tile.tsx — amber notification badge (top-left) when count > 0
+    Dashboard.tsx — pendingSocialCount state, loadSocialCount(),
+    count prop wired to Social tile
+    RLS migration: supabase/migrations/20260522_social_drafts_rls.sql
+  - STEP 4 (Publish flow): ON HOLD — Blotato API structure confirmed
+    POST https://backend.blotato.com/v2/posts
+    Header: blotato-api-key: KEY
+    Payload: {post: {accountId, content: {text, platform},
+             target: {targetType}}}
+    Do NOT build until David approves
+  - Build clean: 2156 modules, zero TypeScript errors ✅
+  - Deployed: cultivar-os.vercel.app ✅
 
-- **Next task — TODAY in order:**
-  1. Social Media module setup wizard + Blotato:
-     Enable button → setup wizard
-     Wizard: enter Blotato API key → verify → save
-     On order complete → Claude API generates 3 posts
-     Posts stored in social_drafts table
-     Dashboard shows "X posts ready to publish"
-     [ Post ] → Blotato REST API publishes
+- **Current tile states:**
+  - QR Checkout: active ✅
+  - QuickBooks: active ✅
+  - Social Media: available → becomes active after setup wizard ✅
+  - Online Shop: available
+  - Follow-Up: available
+  - Delivery: available
+  - Contractors/Seasonal/Insights/Inventory: locked
 
-  3. Online Shop (/shop):
+- **Next tasks in order:**
+  1. STEP 4 — Social Media publish flow (Blotato)
+     Wait for David approval on Blotato API structure above
+     Build: social_drafts list view on Dashboard or /social page
+     [Publish] button → POST backend.blotato.com/v2/posts
+     On success → update social_drafts status='published'
+  2. Online Shop (/shop):
      All available plants, filterable
      Same checkout flow
      Delivery radius check at address entry
-
-  4. Mobile responsive fix:
-     Tile grid on tablet/desktop only (768px+)
+  3. Mobile responsive fix:
+     Tile grid tablet/desktop only (768px+)
      Mobile: core metrics + bottom nav only
 
-- **Last files edited:** Privacy.tsx, Terms.tsx, router.tsx
+- **Last files edited:**
+  packages/cultivar-os/src/pages/SocialSetup.tsx (new)
+  packages/cultivar-os/api/social/enable.ts (new)
+  packages/cultivar-os/api/social/generate-posts.ts (new)
+  api/social/enable.ts (new re-export)
+  api/social/generate-posts.ts (new re-export)
+  packages/shared/src/components/tiles/Tile.tsx (count badge)
+  packages/cultivar-os/src/pages/Dashboard.tsx (count wiring)
+  packages/cultivar-os/src/hooks/useSubmitOrder.ts (social call)
+  packages/cultivar-os/src/router.tsx (/social/setup route)
+  supabase/migrations/20260522_social_drafts_rls.sql (new)
 - **Last command run:** npx vercel --prod from repo root — deployed ✅
   NOTE: always deploy from repo root (/trace-platform/), not from
   packages/cultivar-os/ — the @trace/shared alias breaks otherwise
-- **Build status:** Clean — 2155 modules
+- **Build status:** Clean — 2156 modules, zero TS errors
 
 - **Blockers / Notes:**
-  - QB tokens stored in nursery.qb_access_token
-    on new Supabase project ✅
-  - social_drafts table exists but no data yet
-  - Blotato API key in Vercel: BLOTATO_API_KEY ✅
-  - ANTHROPIC_API_KEY needed in Vercel for
-    Claude post generation — add before Task 2
+  - ANTHROPIC_API_KEY NOT in Vercel — post generation silently
+    skips (ok:false, reason:'api_key_missing'). Must add before
+    post generation will work in production.
+  - social_drafts RLS migration needs to be run in Supabase
+    dashboard: supabase/migrations/20260522_social_drafts_rls.sql
+  - Blotato publish flow (STEP 4) blocked pending David approval
+  - QB tokens stored in nursery.qb_access_token on new project ✅
+  - BLOTATO_API_KEY in Vercel ✅
 
 - **⚠️ Pending manual steps (David):**
   - Add ANTHROPIC_API_KEY to Vercel env vars
-    (copy from Railway passionate-tenderness)
+    (copy from Railway passionate-tenderness) — REQUIRED for posts
+  - Run migration 20260522_social_drafts_rls.sql in Supabase
+    dashboard (SQL editor) — REQUIRED for dashboard count to work
+  - Approve Blotato publish API structure to unblock STEP 4
   - Print QR tags: SCV-0031, NCM-0042, MS30-001
   - Print invoice #3648.380
   - Print FOUNDING_CUSTOMER_AGREEMENT.md
@@ -193,7 +233,7 @@ TRACE email:   david@trace-enterprises.com
   - Full demo run-through timed — Sunday
   - Practice Regina story out loud 3 times
 
-- **Session ended by:** Claude.ai strategy — May 22, 2026
+- **Session ended by:** Claude Code — May 22, 2026
 
 ---
 
@@ -221,7 +261,8 @@ TRACE email:   david@trace-enterprises.com
 ### 🔴 BUILDING THIS WEEK (before meeting)
 
 - [x] Fix QR Checkout tile state bug ✅ (RLS migration May 22)
-- [ ] Social Media module + Blotato integration
+- [x] Social Media module Steps 1-3 ✅ (wizard, post gen, count badge)
+- [ ] Social Media Step 4 — Blotato publish flow (on hold, needs approval)
 - [ ] Online Shop (/shop page)
 - [ ] Customer follow-up engine
 - [ ] Delivery routing (after Lauren answers questions)

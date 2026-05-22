@@ -11,6 +11,7 @@ import { Dashboard }       from './pages/Dashboard';
 import { DemoQBInvoice }   from './pages/DemoQBInvoice';
 import { Privacy }         from './pages/Privacy';
 import { Terms }           from './pages/Terms';
+import { SocialSetup }     from './pages/SocialSetup';
 
 export function AppRouter() {
   return (
@@ -30,7 +31,8 @@ export function AppRouter() {
 
       {/* PRIVATE — nursery owner/staff */}
       <Route element={<PrivateRoute />}>
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/dashboard"    element={<Dashboard />} />
+        <Route path="/social/setup" element={<SocialSetup />} />
       </Route>
 
       {/* DEMO — QB invoice preview (no auth, for demo fallback) */}

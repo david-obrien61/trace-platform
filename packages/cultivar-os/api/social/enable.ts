@@ -1,0 +1,40 @@
+import { createClient } from '@supabase/supabase-js';
+
+function adminDb() {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL!;
+  const key = process.env.SUPABASE_SERVICE_KEY!;
+  return createClient(url, key);
+}
+
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const { nursery_id, blotato_account_id, platforms } = req.body;
+
+  if (!nursery_id || !blotato_account_id || !Array.isArray(platforms) || platforms.length === 0) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  const db = adminDb();
+
+  const { error } = await db
+    .from('nursery_modules')
+    .upsert(
+      {
+        nursery_id,
+        module_key:  'social_media',
+        enabled:     true,
+        configured:  true,
+        config:      { blotato_account_id: String(blotato_account_id), platforms },
+        updated_at:  new Date().toISOString(),
+      },
+      { onConflict: 'nursery_id,module_key' },
+    );
+
+  if (error) {
+    console.error('[social/enable]', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+
+  return res.status(200).json({ ok: true });
+}
