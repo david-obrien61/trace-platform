@@ -124,6 +124,15 @@ TRACE email:   david@trace-enterprises.com
   - social_drafts table created ✅
 
 - **Completed this session (May 22 continued):**
+  - QB OAuth audit complete — no Grove-OS hardcoding found,
+    sandbox→production is env var only (flip QBO_ENVIRONMENT,
+    swap client ID/secret). One cosmetic: 'QuickBooks Sandbox'
+    fallback string in callback.ts — non-blocking.
+  - /privacy page live: cultivar-os.vercel.app/privacy ✅
+  - /terms page live: cultivar-os.vercel.app/terms ✅
+    Required for Intuit production app approval.
+    Both use #27500A / #EAF3DE branding, mention QB integration,
+    data storage (Supabase), user rights, contact email.
   - QR Checkout tile state bug FIXED ✅
     Root cause: modules + nursery_modules tables had RLS
     enabled but no SELECT policy for authenticated role.
@@ -160,9 +169,11 @@ TRACE email:   david@trace-enterprises.com
      Tile grid on tablet/desktop only (768px+)
      Mobile: core metrics + bottom nav only
 
-- **Last file edited:** Dashboard.tsx (tile grid added)
-- **Last command run:** npx vercel --prod — deployed ✅
-- **Build status:** Clean — 429+ modules
+- **Last files edited:** Privacy.tsx, Terms.tsx, router.tsx
+- **Last command run:** npx vercel --prod from repo root — deployed ✅
+  NOTE: always deploy from repo root (/trace-platform/), not from
+  packages/cultivar-os/ — the @trace/shared alias breaks otherwise
+- **Build status:** Clean — 2155 modules
 
 - **Blockers / Notes:**
   - QB tokens stored in nursery.qb_access_token
