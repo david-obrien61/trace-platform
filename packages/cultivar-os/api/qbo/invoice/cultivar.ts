@@ -1,8 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import { refreshQBToken } from '../../../../shared/src/quickbooks/refresh';
 
-const QBO_CLIENT_ID = process.env.QBO_CLIENT_ID!;
-const QBO_CLIENT_SECRET = process.env.QBO_CLIENT_SECRET!;
-const QBO_TOKEN_URL = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
 const QBO_ENVIRONMENT = process.env.QBO_ENVIRONMENT || 'sandbox';
 const QBO_API_BASE =
   QBO_ENVIRONMENT === 'sandbox'
@@ -37,24 +35,6 @@ async function qbPost(realm: string, token: string, path: string, body: unknown)
   });
 }
 
-async function doRefresh(refreshTok: string, nurseryId: string, db: any): Promise<string | null> {
-  const creds = Buffer.from(`${QBO_CLIENT_ID}:${QBO_CLIENT_SECRET}`).toString('base64');
-  const resp = await fetch(QBO_TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Basic ${creds}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshTok }).toString(),
-  });
-  if (!resp.ok) return null;
-  const data = await resp.json();
-  await db.from('nurseries').update({
-    qb_access_token: data.access_token,
-    qb_refresh_token: data.refresh_token || refreshTok,
-  }).eq('id', nurseryId);
-  return data.access_token;
-}
 
 async function findOrCreateQBCustomer(
   realm: string,
@@ -119,7 +99,7 @@ export default async function handler(req: any, res: any) {
     // Fetch nursery QB tokens
     const { data: nursery, error: nurseryErr } = await db
       .from('nurseries')
-      .select('qb_access_token, qb_refresh_token, qb_realm_id, tax_rate')
+      .select('qb_access_token, qb_refresh_token, qb_token_expires_at, qb_realm_id, tax_rate')
       .eq('id', nursery_id)
       .single();
 
@@ -127,7 +107,10 @@ export default async function handler(req: any, res: any) {
       return res.status(503).json({ error: 'QuickBooks not connected — connect from dashboard first' });
     }
 
-    let token: string = nursery.qb_access_token;
+    const token = await refreshQBToken(nursery_id, nursery);
+    if (!token) {
+      return res.status(503).json({ error: 'qb_token_expired' });
+    }
     const realm: string = nursery.qb_realm_id;
 
     // Fetch order with customer
@@ -152,24 +135,12 @@ export default async function handler(req: any, res: any) {
       .select('*, addons(*)')
       .eq('order_id', order_id);
 
-    // Find or create QB customer (retry with refreshed token on failure)
+    // Find or create QB customer
     let qbCustomerId: string = customer.qb_customer_id;
     if (!qbCustomerId) {
-      try {
-        qbCustomerId = await findOrCreateQBCustomer(
-          realm, token, customer.email, customer.first_name, customer.last_name, customer.id, db,
-        );
-      } catch {
-        if (nursery.qb_refresh_token) {
-          const newToken = await doRefresh(nursery.qb_refresh_token, nursery_id, db);
-          if (newToken) {
-            token = newToken;
-            qbCustomerId = await findOrCreateQBCustomer(
-              realm, token, customer.email, customer.first_name, customer.last_name, customer.id, db,
-            );
-          }
-        }
-      }
+      qbCustomerId = await findOrCreateQBCustomer(
+        realm, token, customer.email, customer.first_name, customer.last_name, customer.id, db,
+      );
     }
 
     // Build QB line items
@@ -268,16 +239,8 @@ export default async function handler(req: any, res: any) {
       PrivateNote: `Cultivar OS Order ${invoiceNumber}. Netting declined: ${order.netting_declined ?? false}. Source: QR scan.`,
     };
 
-    // Push invoice (auto-refresh on 401)
-    let invoiceResp = await qbPost(realm, token, 'invoice?minorversion=65', invoicePayload);
-
-    if (invoiceResp.status === 401 && nursery.qb_refresh_token) {
-      const newToken = await doRefresh(nursery.qb_refresh_token, nursery_id, db);
-      if (newToken) {
-        token = newToken;
-        invoiceResp = await qbPost(realm, token, 'invoice?minorversion=65', invoicePayload);
-      }
-    }
+    // Push invoice
+    const invoiceResp = await qbPost(realm, token, 'invoice?minorversion=65', invoicePayload);
 
     if (!invoiceResp.ok) {
       const errText = await invoiceResp.text();

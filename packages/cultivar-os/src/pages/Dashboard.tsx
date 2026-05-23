@@ -89,10 +89,11 @@ export function Dashboard() {
   const [publishingId, setPublishingId]       = useState<string | null>(null);
   const [publishedIds, setPublishedIds]       = useState<Set<string>>(new Set());
 
-  const [qbConnected, setQbConnected] = useState(false);
-  const [qbCompany, setQbCompany]     = useState('');
-  const [connecting, setConnecting]   = useState(false);
-  const [qbError, setQbError]         = useState('');
+  const [qbConnected, setQbConnected]         = useState(false);
+  const [qbCompany, setQbCompany]             = useState('');
+  const [connecting, setConnecting]           = useState(false);
+  const [qbError, setQbError]                 = useState('');
+  const [qbNeedsReconnect, setQbNeedsReconnect] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { modules } = useModules(DEMO_NURSERY_ID);
 
@@ -106,7 +107,7 @@ export function Dashboard() {
     const [nurseryRes, plantsRes, todayRes, installsRes, leakageRes] = await Promise.all([
       supabase
         .from('nurseries')
-        .select('name')
+        .select('name, qb_needs_reconnect')
         .eq('id', DEMO_NURSERY_ID)
         .single(),
 
@@ -138,7 +139,10 @@ export function Dashboard() {
         .gte('created_at', week),
     ]);
 
-    if (nurseryRes.data) setNurseryName(nurseryRes.data.name);
+    if (nurseryRes.data) {
+      setNurseryName(nurseryRes.data.name);
+      setQbNeedsReconnect(nurseryRes.data.qb_needs_reconnect ?? false);
+    }
 
     const plants = plantsRes.data ?? [];
     setPlantCount(plants.length);
@@ -492,6 +496,23 @@ export function Dashboard() {
               </div>
             )}
           </>
+        )}
+
+        {/* ── QB reconnect warning ── */}
+        {qbNeedsReconnect && (
+          <div style={{
+            background: 'var(--amber-bg)',
+            border: '1.5px solid var(--amber-border)',
+            borderRadius: 12,
+            padding: '16px',
+          }}>
+            <p style={{ fontWeight: 700, fontSize: '1rem', color: '#92400e', margin: '0 0 6px' }}>
+              ⚠ QuickBooks needs reconnection
+            </p>
+            <p style={{ fontSize: '0.875rem', color: '#b45309', lineHeight: 1.5, margin: 0 }}>
+              Invoices are paused. Reconnect from the QuickBooks tile above.
+            </p>
+          </div>
         )}
 
         {/* ── Modules ── */}

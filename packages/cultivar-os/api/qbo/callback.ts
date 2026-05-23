@@ -75,9 +75,11 @@ export default async function handler(req: any, res: any) {
       await db
         .from('nurseries')
         .update({
-          qb_access_token: tokens.access_token,
-          qb_refresh_token: tokens.refresh_token,
-          qb_realm_id: realmId,
+          qb_access_token:     tokens.access_token,
+          qb_refresh_token:    tokens.refresh_token,
+          qb_realm_id:         realmId,
+          qb_token_expires_at: new Date(Date.now() + (tokens.expires_in ?? 3600) * 1000).toISOString(),
+          qb_needs_reconnect:  false,
         })
         .eq('id', nurseryId);
     } catch (e) {

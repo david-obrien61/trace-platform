@@ -300,6 +300,32 @@ TRACE email:   david@trace-enterprises.com
   - Full demo run-through timed — Sunday
   - Practice Regina story out loud 3 times
 
+- **Completed this session (May 23 — QB token refresh):**
+  - QB token refresh COMPLETE ✅ — demo-critical, blocks invoice creation after 60 min
+  - Migration: supabase/migrations/20260523_qb_token_expires_at.sql APPLIED ✅
+    ALTER TABLE nurseries
+      ADD COLUMN qb_token_expires_at timestamptz,
+      ADD COLUMN qb_needs_reconnect  boolean NOT NULL DEFAULT false;
+  - packages/shared/src/quickbooks/refresh.ts — new server-side shared utility
+    refreshQBToken(nurseryId, tokens) — proactive check: refreshes if missing
+    or within 10 min of expiry. Writes new token + expires_at back to nurseries.
+    Sets qb_needs_reconnect=true and returns null if refresh token is dead.
+  - packages/cultivar-os/api/qbo/callback.ts updated:
+    Now stamps qb_token_expires_at + qb_needs_reconnect=false on every connect.
+    Ensures tokens are always tracked from first OAuth handshake.
+  - packages/cultivar-os/api/qbo/invoice/cultivar.ts updated:
+    Imports refreshQBToken from shared. Calls it proactively at handler start.
+    Returns 503 { error: 'qb_token_expired' } if refresh fails (non-blocking —
+    useSubmitOrder.ts catches this; order completes, invoice skipped).
+    Removed doRefresh() function and both reactive 401 retry blocks.
+    Removed now-unused QBO_CLIENT_ID / QBO_CLIENT_SECRET / QBO_TOKEN_URL constants.
+  - packages/cultivar-os/src/pages/Dashboard.tsx updated:
+    Reads qb_needs_reconnect from nurseries row in loadMetrics().
+    Shows amber warning banner above tile grid when true:
+    "QuickBooks needs reconnection — reconnect from the QuickBooks tile above."
+  - Build clean: 2156 modules, zero TypeScript errors ✅
+  - Deployed: cultivar-os.vercel.app ✅ (Vercel compiled all 9 API routes cleanly)
+
 - **Completed this session (May 23 — install price bug fix):**
   - Bug: transport='install' never added install_price to cart total
     Root cause: all four calculation points (CartReview, submit API,
@@ -341,10 +367,16 @@ TRACE email:   david@trace-enterprises.com
   - No code changes — audit only
 
 - **Last files edited:**
-  TRACE_PLATFORM_AUDIT.md (new — created at repo root)
+  supabase/migrations/20260523_qb_token_expires_at.sql (new — applied ✅)
+  packages/shared/src/quickbooks/refresh.ts (new)
+  packages/cultivar-os/api/qbo/callback.ts (qb_token_expires_at + qb_needs_reconnect)
+  packages/cultivar-os/api/qbo/invoice/cultivar.ts (proactive refresh, removed doRefresh)
+  packages/cultivar-os/src/pages/Dashboard.tsx (amber reconnect banner)
   CLAUDE.md (this update)
-- **Last command run:** None — report-only session
-- **Build status:** No build run this session (no code changes)
+- **Last command run:** npx vercel --prod from repo root — deployed ✅
+  NOTE: always deploy from repo root (/trace-platform/), not from
+  packages/cultivar-os/ — the @trace/shared alias breaks otherwise
+- **Build status:** Clean — 2156 modules, zero TS errors
 
 - **Session ended by:** Claude Code — May 23, 2026
 
@@ -376,6 +408,7 @@ TRACE email:   david@trace-enterprises.com
 - [x] Fix QR Checkout tile state bug ✅ (RLS migration May 22)
 - [x] Social Media module Steps 1-3 ✅ (wizard, post gen, count badge)
 - [x] Social Media Step 4 — Blotato publish flow ✅
+- [x] QB token refresh — proactive, never blocks orders ✅ (May 23)
 - [ ] Online Shop (/shop page)
 - [ ] Customer follow-up engine
 - [ ] Delivery routing (after Lauren answers questions)
@@ -436,7 +469,8 @@ packages/shared/src/
     auth.ts              ✅ (PIN — ignition-os)
     types.ts             ✅
   quickbooks/
-    oauth.ts             ✅ (known: IGNITION_OS_DATA hardcoded)
+    oauth.ts             ✅ (known: IGNITION_OS_DATA hardcoded — browser-side only)
+    refresh.ts           ✅ refreshQBToken() — server-side, proactive token refresh
     invoice.ts           ✅
     customer.ts          ✅
 ```
