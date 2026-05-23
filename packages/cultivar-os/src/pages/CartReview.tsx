@@ -21,6 +21,7 @@ export function CartReview() {
 
   const { plant, quantity } = item;
   const isSelf = transport === TRANSPORT_OPTIONS.SELF;
+  const isInstall = transport === TRANSPORT_OPTIONS.INSTALL;
   const nettingActive = isSelf && !nettingDeclined;
 
   const nettingDbAddon = addons.find((a) => a.addon.trigger_rule === 'transport=self');
@@ -30,8 +31,10 @@ export function CartReview() {
   const alwaysAddons = addons.filter((a) => a.selected && a.addon.trigger_rule === 'always');
   const alwaysTotal = alwaysAddons.reduce((sum, a) => sum + a.addon.price_per_plant * quantity, 0);
 
+  const installAmount = isInstall ? plant.install_price * quantity : 0;
+
   const plantSubtotal = plant.base_price * quantity;
-  const addonsAmount = nettingTotal + alwaysTotal;
+  const addonsAmount = nettingTotal + alwaysTotal + installAmount;
   const subtotal = plantSubtotal + addonsAmount;
   const taxAmount = Math.round(subtotal * TAX_RATE * 100) / 100;
   const total = subtotal + taxAmount;
@@ -138,7 +141,15 @@ export function CartReview() {
           )
         )}
 
-        {!isSelf && (
+        {isInstall && (
+          <OrderLine
+            label={`Installation service · ${quantity} plant${quantity > 1 ? 's' : ''}`}
+            amount={installAmount}
+            prefix="✓ "
+          />
+        )}
+
+        {!isSelf && !isInstall && (
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem', color: '#27500A', marginBottom: 10, fontWeight: 500 }}>
             <span>✓ LAWNS handling transport</span>
             <span>—</span>

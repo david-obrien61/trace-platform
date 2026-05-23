@@ -82,13 +82,15 @@ export function useSubmitOrder() {
 
       // ── Order confirmation email — non-blocking, never throws ──────────────
       const isSelf = transport === 'self';
+      const isInstall = transport === 'install';
       const nettingDbAddon = addons.find((a) => a.addon.trigger_rule === 'transport=self');
       const nettingActive = isSelf && !nettingDeclined;
       const nettingUnitPrice = nettingDbAddon?.addon.price_per_plant ?? nettingPrice;
       const nettingTotal = nettingActive ? nettingUnitPrice * quantity : 0;
       const alwaysAddons = addons.filter((a) => a.selected && a.addon.trigger_rule === 'always');
       const alwaysTotal = alwaysAddons.reduce((sum, a) => sum + a.addon.price_per_plant * quantity, 0);
-      const addonsAmount = nettingTotal + alwaysTotal;
+      const installAmount = isInstall ? (plant.install_price ?? 0) * quantity : 0;
+      const addonsAmount = nettingTotal + alwaysTotal + installAmount;
       const plantSubtotal = plant.base_price * quantity;
 
       sendSilently({

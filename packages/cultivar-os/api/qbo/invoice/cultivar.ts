@@ -215,15 +215,31 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // Transport line if LAWNS delivering (and no netting addon was in the list)
+    // Transport / installation line
     const hasNettingAddon = (orderAddons || []).some((oa: any) => oa.addons?.trigger_rule === 'transport=self');
     if (!hasNettingAddon && order.transport_method !== 'self') {
-      lines.push({
-        Description: 'LAWNS Tree Farm staff transport/installation',
-        Amount: 0,
-        DetailType: 'SalesItemLineDetail',
-        SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
-      });
+      if (order.transport_method === 'install') {
+        const installPlant = (orderItems || [])[0]?.plants;
+        const installUnitPrice = Number(installPlant?.install_price ?? 0);
+        const installQty = (orderItems || [])[0]?.quantity ?? 1;
+        lines.push({
+          Description: `Installation service · ${installQty} plant${installQty > 1 ? 's' : ''}`,
+          Amount: installUnitPrice * installQty,
+          DetailType: 'SalesItemLineDetail',
+          SalesItemLineDetail: {
+            UnitPrice: installUnitPrice,
+            Qty: installQty,
+            ItemRef: { value: '1', name: 'Services' },
+          },
+        });
+      } else {
+        lines.push({
+          Description: 'LAWNS Tree Farm staff transport',
+          Amount: 0,
+          DetailType: 'SalesItemLineDetail',
+          SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
+        });
+      }
     }
 
     // Tax line

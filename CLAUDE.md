@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: May 22, 2026
+# Last updated: May 23, 2026
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -300,7 +300,37 @@ TRACE email:   david@trace-enterprises.com
   - Full demo run-through timed — Sunday
   - Practice Regina story out loud 3 times
 
-- **Session ended by:** Claude Code — May 22, 2026
+- **Completed this session (May 23 — install price bug fix):**
+  - Bug: transport='install' never added install_price to cart total
+    Root cause: all four calculation points (CartReview, submit API,
+    useSubmitOrder email calc, QB invoice builder) ignored install_price.
+  - Fix applied across 4 files, no migration needed:
+    CartReview.tsx: isInstall + installAmount = install_price × qty;
+      added "✓ Installation service · N plant(s)  $225.00" OrderLine;
+      plain delivery still shows "✓ LAWNS handling transport — " with dash
+    api/orders/submit.ts: installAmount folded into addonsAmount;
+      correct subtotal/tax/total written to DB; leakageFlag
+      correctly false when install selected (addonsAmount > 0)
+    useSubmitOrder.ts: installAmount included in email addonsTotal
+    api/qbo/invoice/cultivar.ts: transport='install' → priced QB line
+      "Installation service · N plant(s)" at install_price per plant;
+      transport='delivery' → keeps existing $0 "LAWNS staff transport" line
+  - install_price read from plants.install_price (already in Plant type)
+  - SCV-0031 install_price = $225.00 (set in seed data)
+  - Build clean: 2156 modules, zero TypeScript errors ✅
+  - Deployed: cultivar-os.vercel.app ✅
+
+- **Last files edited:**
+  packages/cultivar-os/src/pages/CartReview.tsx
+  packages/cultivar-os/api/orders/submit.ts
+  packages/cultivar-os/src/hooks/useSubmitOrder.ts
+  packages/cultivar-os/api/qbo/invoice/cultivar.ts
+- **Last command run:** npx vercel --prod from repo root — deployed ✅
+  NOTE: always deploy from repo root (/trace-platform/), not from
+  packages/cultivar-os/ — the @trace/shared alias breaks otherwise
+- **Build status:** Clean — 2156 modules, zero TS errors
+
+- **Session ended by:** Claude Code — May 23, 2026
 
 ---
 
@@ -337,6 +367,11 @@ TRACE email:   david@trace-enterprises.com
 
 ### 🟢 POST-DEMO (Phase 1 — after signing)
 
+- [ ] Settings page: Lauren can set default install price at nursery level
+      (nurseries.default_install_price column + /settings UI)
+      Install price currently hardcoded per plant in seed data at $225
+- [ ] Per-plant install price override on plant detail page
+      (plants.install_price editable in plant profile UI)
 - [ ] Tighten nursery_modules RLS policy — replace
       authenticated_select_nursery_modules with owner_id join:
       EXISTS (SELECT 1 FROM nurseries WHERE id = nursery_id
