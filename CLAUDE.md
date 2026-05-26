@@ -118,6 +118,27 @@ TRACE phone:   (512) 456-3632
 TRACE email:   david@trace-enterprises.com
 ```
 
+### Registered Domains (as of 2026-05-26)
+
+All domains registered at GoDaddy under David's account.
+
+| Domain | Protection | Status / Use |
+|---|---|---|
+| trace-enterprises.com | None | Parent company domain |
+| builtwithcai.com | Full Protection | Methodology brand; hosts discovery.builtwithcai.com (planned subdomain) |
+| cultivar-os.com | None | Cultivar OS (nursery vertical) — currently forwards to cultivar-os.app |
+| cultivar-os.app | None | Cultivar OS production app (live) |
+| ignition-os.com | Full Protection | Ignition OS (diesel/auto vertical) |
+| ignition-os.app | None | Ignition OS (alternate TLD) |
+| conduit-os.com | None | Conduit OS (HVAC/electrical vertical) |
+| conduit-os.app | None | Conduit OS (alternate TLD) |
+| kinna-os.com | None | KINNA-OS (faith-based and direct-service nonprofit vertical) |
+| kinna-os.app | None | KINNA-OS (alternate TLD) |
+
+**WHOIS privacy status:** Domains marked "None" do NOT have WHOIS privacy enabled, meaning David's registration address is publicly queryable. Plan: defer privacy upgrades to the Cloudflare transfer window opening July 1-2, 2026, which provides free WHOIS privacy as a benefit of the transfer. Current annual cost of GoDaddy WHOIS privacy across the unprotected domains would be approximately $13/yr each.
+
+**Open: which domain hosts the KINNA-OS production app when Phase 1 ships.** Options include kinna-os.app (matches Cultivar's pattern), kinna-os.com (matches Ignition's pattern), or a subdomain of builtwithcai.com (matches the discovery surface pattern). Decision deferred to pre-build.
+
 ---
 
 ## 3. HANDOFF
