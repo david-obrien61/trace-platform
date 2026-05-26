@@ -404,6 +404,48 @@ PMI (Phase 1 — from Ignition OS shared)
 
 ---
 
+## KINNA-OS — Identity and Definition
+
+**KINNA-OS** is the TRACE vertical for faith-based and direct-service community nonprofits. It replaces the prior placeholder name "Pantry OS," which incorrectly anchored the vertical to food distribution when the actual work spans pastoral care, financial assistance, prayer follow-up, clothing, dreams, and a dozen other services.
+
+### KINNA *(noun, verb)*
+
+A coined word naming both a person and a posture.
+
+**A kinna** *(n.)* — a person held as kin. Not a client, not a case, not a recipient. Someone known by name, met at the door as family, remembered between visits.
+
+**To kinna** *(v.)* — to treat someone as kin. To remember their name. To remember their hopes and their dreams and their problems. To support without judgment. To forgive the way God forgives. To walk alongside them across years rather than transactions.
+
+### Etymology
+
+From the Old English *cynn* — kindred, those belonging together, family by blood or by covenant — with a soft trailing *-na* that turns it into something ongoing. Family as continuous action. Kin as a verb.
+
+The word also reaches into the language scripture uses for the church — *brother and sister in Christ*, *the household of faith*, *love your neighbor as yourself.* When Jesus was asked who his family was, he gestured at the crowd: *whoever does the will of my Father is my brother and sister.* That's the posture. KINNA gives it a verb.
+
+### What KINNA-OS is in the brand architecture
+
+KINNA-OS is the engine underneath. It is not customer-facing branding. OLH stays OLH. The intake form says OLH. The thank-you letter says OLH. Volunteer training says OLH. KINNA-OS is the credential — "Powered by KINNA" — a quiet marker visible to other nonprofits, funders, and tank partners that signals "this organization runs on a real platform."
+
+Customers of TRACE who run on KINNA-OS keep their own identity. KINNA is the system that connects their existing tools (Neon One, QuickBooks, MealConnect, Volgistics, etc.) and fills the gaps no existing nonprofit software fills.
+
+### Why the name matters even though it stays mostly invisible
+
+The definition does the philosophical work even when the word stays behind the scenes. When designing a new feature, the design test is "which choice is more *kinna*?" Every feature gets measured against whether it treats people as kin or as cases.
+
+When another nonprofit evaluates the platform and asks "what makes this different from a regular CRM," the answer is the definition. *We built it on the assumption that the people walking through your door are kin, not cases. Everything else follows from that.*
+
+### Tagline
+
+*KINNA — powering nonprofits to soar upon wings of grace.*
+
+OLH is the wings. KINNA is what lets them lift.
+
+### Status of name approval
+
+The name and definition above have been drafted and shared with Regina (OLH Program Director, anchor pilot customer). As of this session, Regina has not yet formally responded. If Regina suggests refinements, those land as follow-up commits to this section. The structural choice — KINNA-OS as the vertical name — is locked.
+
+---
+
 ## PART 6 — PLATFORM AUDIT FINDINGS
 *(From TRACE_PLATFORM_AUDIT.md — May 23, 2026)*
 

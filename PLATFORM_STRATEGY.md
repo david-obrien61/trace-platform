@@ -50,7 +50,7 @@ code is written.
 | Auto/Diesel Repair | Ignition OS | ignition-os.com | 1-5 bay owner-operator shops | 🟡 Pilot ready | Margin engine, job lifecycle, tool tracking |
 | Nursery/Garden | Cultivar OS | cultivar-os.app | Independent nurseries, garden centers | 🔴 Demo May 25 | Plant timeline, QR per-plant, add-on leakage |
 | HVAC/Plumbing/Electrical | Conduit OS | conduit-os.com | 1-3 truck owner-operators | 🟢 Strategy written | Refrigerant compliance, maintenance agreements, equipment registry |
-| Food Pantry/Nonprofit | Pantry OS | pantry-os.app (TBD) | Food pantries, direct service nonprofits | 🟢 Strategy written | TEFAP eligibility, voice receiving, pastoral care, distribution menu |
+| Food Pantry/Nonprofit | KINNA-OS | kinna-os.app (TBD) | Food pantries, direct service nonprofits | 🟢 Strategy written | TEFAP eligibility, voice receiving, pastoral care, distribution menu |
 | Home Automation | CoolRunnings | coolrunnings.app (TBD) | Rural/suburban homeowners, STR operators | 🟡 Live pilot | Local-first, zero cloud, presence detection, vineyard/garden automation |
 
 **Next vertical candidates** (informed by onboarding "Other" selections):
@@ -113,7 +113,7 @@ trace-platform/                          ← GitHub: david-obrien61/trace-platfo
 │   ├── ignition-os/                    ← Auto/Diesel vertical only
 │   ├── cultivar-os/                    ← Nursery vertical only
 │   ├── conduit-os/                     ← HVAC vertical only (fork of ignition)
-│   ├── pantry-os/                      ← Nonprofit vertical only
+│   ├── kinna-os/                      ← Nonprofit vertical only
 │   └── coolrunnings/                   ← Home automation (different model)
 │
 ├── docs/
@@ -181,7 +181,7 @@ export type VerticalId =
   | 'ignition-os'
   | 'cultivar-os'
   | 'conduit-os'
-  | 'pantry-os'
+  | 'kinna-os'
   | 'coolrunnings'
 
 export const VERTICAL_CONFIG = {
@@ -272,10 +272,10 @@ export const VERTICAL_CONFIG = {
     ],
   },
 
-  'pantry-os': {
-    appName: 'Pantry OS',
+  'kinna-os': {
+    appName: 'KINNA-OS',
     tagline: 'The technology handles the mechanical. You handle the human.',
-    tenantTable: 'pantries',
+    tenantTable: 'organizations',
     tenantIdField: 'pantry_id',
     itemLabel: 'Client',
     itemLabelPlural: 'Clients',
@@ -291,7 +291,7 @@ export const VERTICAL_CONFIG = {
       pro: 299,
     },
     colors: {
-      primary: '#5B4FCF',                  // Pantry purple (TBD — placeholder)
+      primary: '#5B4FCF',                  // KINNA-OS purple (TBD — placeholder)
       background: '#F5F4FF',
     },
     activeTiles: [
@@ -301,7 +301,7 @@ export const VERTICAL_CONFIG = {
       'broadcast_composer', 'social_composer', 'command_center',
       'grant_generator', 'sop_pipeline',
     ],
-    // Pantry OS unique flags
+    // KINNA-OS unique flags
     bilingualRequired: true,
     offlineRequired: true,                 // Distribution day must work offline
     legalComplianceModule: 'tefap',
@@ -343,7 +343,7 @@ export const VERTICAL_CONFIG = {
 ### The Problem Being Solved
 
 Ignition OS uses PIN-based auth (kiosk, shop floor, no keyboard).
-Cultivar OS and Pantry OS use email/password (owner on desktop/tablet).
+Cultivar OS and KINNA-OS use email/password (owner on desktop/tablet).
 CoolRunnings uses email/password (homeowner on phone).
 Conduit OS uses PIN (field tech on tablet).
 
@@ -390,8 +390,8 @@ export function configureAuth(config: AuthConfig) {
 | View financial data | ❌ | ✅ | ✅ | ✅ |
 | Override caps/limits | ❌ | ❌ | ❌ | ✅ |
 | Connect QB / billing | ❌ | ❌ | ✅ | ✅ |
-| Pastoral care access | ❌ | ❌ | ❌ | ✅ (Pantry OS only) |
-| Grant tools | ❌ | ❌ | ❌ | ✅ (Pantry OS only) |
+| Pastoral care access | ❌ | ❌ | ❌ | ✅ (KINNA-OS only) |
+| Grant tools | ❌ | ❌ | ❌ | ✅ (KINNA-OS only) |
 | Admin / settings | ❌ | ❌ | ✅ | ✅ |
 
 ---
@@ -537,10 +537,10 @@ CREATE POLICY "[table] scoped to tenant" ON [table_name]
 - Ignition OS: shops, employees, repair_orders, parts, tools
 - Cultivar OS: nurseries, plants, plant_events, orders, addons
 - Conduit OS: shops, employees, service_tickets, equipment, refrigerant_log
-- Pantry OS: pantries, clients, households, distributions, financial_assistance, prayer_requests
+- KINNA-OS: organizations, clients, households, distributions, financial_assistance, prayer_requests
 - CoolRunnings: properties, zones, devices, automations, sensor_readings
 
-### LLM Placement Rules (from Pantry OS — applies platform-wide)
+### LLM Placement Rules (from KINNA-OS — applies platform-wide)
 
 ```
 Zone 1 — NO LLM (deterministic code only):
@@ -597,7 +597,7 @@ Zone 3 — ASYNC BACKGROUND AI (batch, non-blocking):
 - **Close hook:** "An EPA 608 violation starts at $44,539 per day per violation.
   Our log costs $299/month."
 
-### Pantry OS — Food Pantry/Nonprofit
+### KINNA-OS — Food Pantry/Nonprofit
 - **Pilot status:** Strategy and all SOPs written — OLH Phase 1 targets August 1
 - **Pilot org:** Operation Liberty Hill, Liberty Hill TX
   Contact: Regina O'Brien (Program Director — David's wife)
@@ -632,7 +632,7 @@ Zone 3 — ASYNC BACKGROUND AI (batch, non-blocking):
 
 ### What Every Vertical Inherits (Zero New Code)
 
-| Module | Ignition | Cultivar | Conduit | Pantry | CoolRunnings |
+| Module | Ignition | Cultivar | Conduit | KINNA  | CoolRunnings |
 |---|---|---|---|---|---|
 | Supabase client | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Auth (configureAuth) | ✅ PIN | ✅ Email | ✅ PIN | ✅ Email | ✅ Email |
@@ -650,9 +650,9 @@ Zone 3 — ASYNC BACKGROUND AI (batch, non-blocking):
 | Module | Lives In | Notes |
 |---|---|---|
 | Plant profile + timeline | cultivar-os | Unique to nursery |
-| TEFAP eligibility engine | pantry-os | Federal income table, govt compliance |
-| Voice receiving | pantry-os | Web Speech API + Claude parsing |
-| Pastoral care | pantry-os | Privacy-critical, never shared |
+| TEFAP eligibility engine | kinna-os | Federal income table, govt compliance |
+| Voice receiving | kinna-os | Web Speech API + Claude parsing |
+| Pastoral care | kinna-os | Privacy-critical, never shared |
 | Refrigerant tracker | conduit-os | EPA 608 compliance |
 | Maintenance agreements | conduit-os | HVAC recurring revenue |
 | Equipment registry | conduit-os | Replaces vehicle database |
@@ -699,7 +699,7 @@ JUNE 15 – JULY 15 — IGNITION OS STABILIZATION
   First Ignition OS pilot shop install
   Trial engine validated end-to-end
 
-JULY 15 – AUGUST 1 — PANTRY OS PHASE 1
+JULY 15 – AUGUST 1 — KINNA-OS PHASE 1
   August 1 hard deadline — Back to School event at OLH
   QR check-in, client intake, TEFAP eligibility
   Digital distribution menu (replaces green paper form)
@@ -733,11 +733,11 @@ written justification added to this log.
 | 3 | Monorepo (trace-platform) — one repo, all verticals | Shared code written once, imported everywhere | May 2026 | Separate repos per vertical |
 | 4 | verticalConfig.ts drives all variation | One file to add a vertical | May 2026 | Per-vertical config scattered in code |
 | 5 | No vertical duplicates a shared module | Compliance audits enforced before merge | May 2026 | Local copies of auth, QB, QR, etc. |
-| 6 | Pantry OS: relief is a legitimate outcome | Pathway module staff-initiated only, never auto-triggered | May 2026 | Auto-pushing pathway to any client |
-| 7 | Pantry OS: LLM in Zone 1 is forbidden | Eligibility and unit calc are deterministic — no hallucination risk | May 2026 | AI on TEFAP eligibility path |
+| 6 | KINNA-OS: relief is a legitimate outcome | Pathway module staff-initiated only, never auto-triggered | May 2026 | Auto-pushing pathway to any client |
+| 7 | KINNA-OS: LLM in Zone 1 is forbidden | Eligibility and unit calc are deterministic — no hallucination risk | May 2026 | AI on TEFAP eligibility path |
 | 8 | CoolRunnings: local-first, zero cloud dependency | Works offline, survives vendor sunset | May 2026 | Cloud-dependent home automation |
 | 9 | QB is RECOMMENDED not REQUIRED at onboarding | Checkout works without QB — just no auto-invoice | May 2026 | Blocking users who haven't set up QB |
-| 10 | Pantry OS integrates with Oasis/QBO/MealConnect/Neon — does not replace them | Each system serves a different constituency | May 2026 | Building donor CRM or TEFAP reporting in-house |
+| 10 | KINNA-OS integrates with Oasis/QBO/MealConnect/Neon — does not replace them | Each system serves a different constituency | May 2026 | Building donor CRM or TEFAP reporting in-house |
 
 ---
 
@@ -748,14 +748,14 @@ Items that need a decision before the relevant vertical builds.
 | # | Question | Vertical | Deadline | Owner |
 |---|---|---|---|---|
 | 1 | configureAuth() PIN vs email — exact interface design | All | June 1 | David + Claude |
-| 2 | Oasis API access — Network Admin elevation | Pantry OS | May 27 | Regina (phone call to CTFB) |
-| 3 | Financial assistance policy POL-001 signed | Pantry OS | June 6 | Regina + ED |
-| 4 | QB plan confirmation for OLH — Simple Start or above | Pantry OS | June 6 | Regina |
-| 5 | Dignity Dollar — definition and workflow | Pantry OS | June 6 | Pantry manager session |
-| 6 | Back to School scope Q22–Q28 | Pantry OS | June 6 | Regina |
+| 2 | Oasis API access — Network Admin elevation | KINNA-OS | May 27 | Regina (phone call to CTFB) |
+| 3 | Financial assistance policy POL-001 signed | KINNA-OS | June 6 | Regina + ED |
+| 4 | QB plan confirmation for OLH — Simple Start or above | KINNA-OS | June 6 | Regina |
+| 5 | Dignity Dollar — definition and workflow | KINNA-OS | June 6 | Pantry manager session |
+| 6 | Back to School scope Q22–Q28 | KINNA-OS | June 6 | Regina |
 | 7 | SOS amendment filed — technology/software services | All | Before first subscription | David |
 | 8 | WHOIS privacy on conduit-os.com, trace-enterprises.com | Platform | July 1 or immediate | David |
-| 9 | Pantry OS domain — pantry-os.app or similar | Pantry OS | Before Phase 1 build | David |
+| 9 | KINNA-OS domain — kinna-os.app or similar | KINNA-OS | Before Phase 1 build | David |
 | 10 | Ignition OS DataBridge full Supabase audit results | Ignition OS | May 26 | Claude Code |
 
 ---
@@ -767,7 +767,7 @@ Items that need a decision before the relevant vertical builds.
 ```
 Read PLATFORM_STRATEGY.md and CLAUDE.md before we begin.
 
-Current vertical: [ignition-os / cultivar-os / conduit-os / pantry-os]
+Current vertical: [ignition-os / cultivar-os / conduit-os / kinna-os]
 Current session: [session number or description]
 Today's goal: [specific deliverable]
 
@@ -816,7 +816,7 @@ the adapter interface — no changes to vertical code required.
 **Accounting:**
 - QuickBooks: 82% US small business market share — default
 - Xero: strongest challenger, better UI, growing US share
-- Wave: free tier — important for nonprofits (Pantry OS)
+- Wave: free tier — important for nonprofits (KINNA-OS)
 - FreshBooks: service businesses, freelancers
 - QuickBooks Desktop: being discontinued — forced migration
   opportunity for competitors
@@ -831,7 +831,7 @@ the adapter interface — no changes to vertical code required.
 - Ignition OS: QB ~90%, no POS (invoice-based)
 - Cultivar OS: QB ~70%, Square most common POS
 - Conduit OS: QB ~80%, no POS (invoice-based)
-- Pantry OS: QB Nonprofit ~60%, Wave ~25%, no POS
+- KINNA-OS: QB Nonprofit ~60%, Wave ~25%, no POS
 - CoolRunnings: not applicable (install + monitoring)
 
 ### The Adapter Interface
@@ -871,13 +871,13 @@ interface POSAdapter {
 export const ACCOUNTING_ADAPTERS = {
   'quickbooks': { label: 'QuickBooks Online', recommended: true,  verticals: ['all'] },
   'xero':       { label: 'Xero',              recommended: false, verticals: ['all'] },
-  'wave':       { label: 'Wave (free)',        recommended: false, verticals: ['pantry-os','cultivar-os'] },
+  'wave':       { label: 'Wave (free)',        recommended: false, verticals: ['kinna-os','cultivar-os'] },
   'freshbooks': { label: 'FreshBooks',         recommended: false, verticals: ['conduit-os','ignition-os'] },
   'none':       { label: 'Not yet',            recommended: false, verticals: ['all'] },
 }
 
 export const POS_ADAPTERS = {
-  'square':   { label: 'Square',       recommended: true,  verticals: ['cultivar-os','pantry-os'] },
+  'square':   { label: 'Square',       recommended: true,  verticals: ['cultivar-os','kinna-os'] },
   'clover':   { label: 'Clover',       recommended: false, verticals: ['cultivar-os'] },
   'shopify':  { label: 'Shopify POS',  recommended: false, verticals: ['cultivar-os'] },
   'none':     { label: 'No POS',       recommended: false, verticals: ['all'] },
@@ -944,7 +944,7 @@ Phase 1 (post-demo):
 
 Phase 2 (first non-QB customer):
   XeroAdapter
-  WaveAdapter (Pantry OS)
+  WaveAdapter (KINNA-OS)
   SquareAdapter (nursery checkout)
 
 Phase 3 (contractor portal):
