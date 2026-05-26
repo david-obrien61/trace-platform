@@ -592,12 +592,7 @@ The tile grid is decorative when tiles are active. Tapping an active QR Checkout
 
 **Tile grid — active tiles (QR Checkout, QuickBooks, Social Media when enabled)**
 - File: [Tile.tsx:36](packages/shared/src/components/tiles/Tile.tsx#L36), [Dashboard.tsx:289](packages/cultivar-os/src/pages/Dashboard.tsx#L289)
-- Handler chain: `handleClick()` → `onNavigate()` → `handleNavigate(key)` → **empty function**
-```js
-function handleNavigate(_key: string) {
-  // post-demo: route to module-specific pages
-}
-```
+- Handler chain: `handleClick()` → `onNavigate()` → `handleNavigate(key)` → empty stub (`// post-demo: route to module-specific pages`)
 - State: **STUB**
 - Note: Tapping an active tile does nothing visible. No error, no navigation.
 
