@@ -691,7 +691,7 @@ Lauren IS the Regina story. She's the one who ran out to the parking lot. The sy
 ```
 Subject: Your plants are live
 
-Layna,
+Lauren,
 
 cultivar-os.app/plant/SCV-0031
 cultivar-os.app/plant/NCM-0042

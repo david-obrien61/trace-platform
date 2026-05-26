@@ -45,6 +45,17 @@ instance of the same shared platform.
 
 ## 2. STATUS & ARCHITECTURE
 
+### Key Contacts
+
+**LAWNS Tree Farm (Leander, TX)** — Cultivar OS prospect, prototype demo customer
+- Terry: owner, 65, retiring soon, tech-shy, approval gatekeeper
+- Lauren Bishop: manager, the real operational buyer, the champion who feels the pain
+- "Layna" was a miscommunication and is not a real contact. Do not reintroduce.
+
+**Operation Liberty Hill (Liberty Hill, TX)** — KINNA-OS anchor pilot customer
+- Regina O'Brien: Program Director, anchor pilot user. Holds active job offer; planning graceful exit. David's wife.
+- Hard target: Back to School distribution, Saturday August 1, 2026
+
 - **Current phase:** Phase 0 — Cultivar OS demo prep
 - **Demo meeting:** Next week — LAWNS Tree Farm LLC, Leander TX
 - **Key contacts:** Terry (owner), Lauren (manager)

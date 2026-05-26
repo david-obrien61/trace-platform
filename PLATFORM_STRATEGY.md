@@ -575,7 +575,7 @@ Zone 3 — ASYNC BACKGROUND AI (batch, non-blocking):
 
 ### Cultivar OS — Nursery/Garden Center
 - **Pilot status:** Demo May 25 — LAWNS Tree Farm LLC, Leander TX
-- **Contacts:** Layna Copeland (owner), Lauren Bishop (manager)
+- **Contacts:** Terry (owner), Lauren Bishop (manager)
 - **Pitch hook:** "Regina drove 40 minutes home at 25mph because the $20 netting
   was offered two minutes after she said goodbye."
 - **Target close:** $149/mo founding beta, locked forever
@@ -980,7 +980,7 @@ Phase 3 (contractor portal):
 | # | Decision | Rationale |
 |---|---|---|
 | 1 | Per-plant unique asset model (not qty stock) | Trees are individuals — each has a history, a tag, a journey |
-| 2 | Seasonal module uses configurable windows — nothing hardcoded | Layna's operation may differ from any default |
+| 2 | Seasonal module uses configurable windows — nothing hardcoded | Lauren's operation may differ from any default |
 | 3 | Follow-up triggers configured by manager, not developer | Lauren owns the service business — no IT required |
 | 4 | Integration failure never blocks checkout | A nursery can't lose a sale because QB is down |
 | 5 | Netting prompt pre-checked when self-transport | The default must be protection — opt-out, not opt-in |
