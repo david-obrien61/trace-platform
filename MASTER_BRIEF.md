@@ -1,7 +1,20 @@
 # MASTER_BRIEF.md
+
+## Scope & Hierarchy
+
+This document owns strategy, demo plan, revenue, philosophy, team, contacts, and the customer roster. When a question is about "what TRACE wants to be" or "what we're selling to whom," this doc answers it.
+
+When this doc conflicts with another:
+- For current code state, defer to TRACE_PLATFORM_AUDIT.md
+- For target architecture, defer to PLATFORM_STRATEGY.md
+- For session-by-session handoff state, defer to CLAUDE.md
+- For the discovery module specifically, defer to DISCOVERY_MODULE_BRIEF.md (created Session 1b)
+
+The source of truth is the repo on David's desktop. GitHub is backup. claude.ai chat memory is reference, never authoritative.
+
 > **TRACE Enterprises — Built with CAI**
-> Last updated: 2026-05-12
-> Maintained by: [Owner] | Shared with: Development team
+> Last updated: 2026-05-23
+> Maintained by: David O'Brien
 > **Purpose:** Single source of truth for strategy, build priorities, and competitive positioning.
 > Both Claude.ai (strategy) and Claude Code (build) read this file at the start of every session.
 
@@ -17,33 +30,48 @@ Start every session with:
 Upload or paste this file and say:
 > *"Here is the current MASTER_BRIEF. [Ask your question or describe your task]."*
 
-### For team members (sons / collaborators):
+### For team members / collaborators:
 This file is the operating manual. Before touching any code or making any architectural decision, read the **Current Status**, **Active Decisions**, and **Plan of Action** sections. Update the **Changelog** at the bottom when you complete a milestone.
 
 ---
 
-## PART 1 — THE COMPANY
+## PART 1 — THE COMPANY & PHILOSOPHY
 
 ### What We Are
-TRACE Enterprises builds **Built with CAI** — a composable AI platform for small businesses. We build once, deploy everywhere. Each vertical is a re-skin of the same core stack. The infrastructure cost is already paid for.
+TRACE Enterprises builds **Built with CAI** — a loosely-coupled business intelligence layer for owner-operated small businesses. We connect what they already have. We fill what their tools can't give them. We show the whole business in one dashboard.
 
 ### The One-Paragraph Version
-Built with CAI is a composable AI operating system for owner-operated small businesses. Version 1 — **Ignition OS** — runs live for diesel and automotive repair shops. Every component is industry-agnostic by design. Each new vertical is a re-skin of the same stack: new tiles, new AI prompts, new integration hooks. Nothing rebuilt. The same $38–50 hardware kit, the same 14-day trial engine, the same sub-$50 customer acquisition cost. The beachhead is auto repair. The platform is everything else.
+TRACE is not a software replacement company. We don't ask businesses to abandon QuickBooks, Instagram, or their phone. We connect those tools, surface what's falling through the cracks, and fill the gaps no existing tool covers. Each capability is either a CONNECTOR (links to a tool they already use) or a GAP-FILLER (adds what no tool gives them). Every connector and gap-filler is a tile on their dashboard — enabled when they're ready, billed only when active.
+
+### The Core Philosophy
+```
+TIGHT COUPLING (what we avoid):
+"You must use our invoicing system"
+"You must migrate your data to us"
+→ High friction, high risk, slow adoption
+
+LOOSE COUPLING (what we build):
+"Connect your QB — we write invoices to it"
+"Connect your Instagram — we draft posts for it"
+"Connect your calendar — we schedule from it"
+→ Low friction, low risk, fast adoption
+→ They keep their tools, we add intelligence
+```
 
 ### Mission
 Replace paper, gut-feel pricing, and lost margin with AI-native workflows — for the business owner who doesn't have an IT department.
 
 ### The Two Pitches
 
-**To the shop owner / operator:**
-> "Stop losing margin on parts, tools, and labor. 14 days free, no card. We'll set it up while you watch."
-> Close with: the savings number from their own jobs during the trial.
+**To the business owner / operator:**
+> "You already have QuickBooks. You already have Instagram. You already have a phone. We don't replace any of that. We connect it all and show you what's falling through the cracks."
+> Close with: the specific gap their business has today — the Regina moment.
 
 **To the investor / partner / acquirer:**
-> "We built a composable AI platform and proved it in the highest-friction SMB vertical on earth. The architecture re-skins to any industry in 60 days. Auto shops are the beachhead. The platform is the business."
+> "We built a composable AI platform and proved it in the highest-friction SMB vertical on earth. The architecture re-skins to any industry in 60 days. Each vertical is a new revenue stream. The platform is the business."
 > Close with: vertical expansion roadmap + 80% code reuse proof + CAC/LTV math.
 
-**Rule:** Never lead with the platform story to a shop owner. They don't care. Lead with the dollar they're losing today.
+**Rule:** Never lead with the platform story to a business owner. Lead with the dollar they're losing today.
 
 ---
 
@@ -54,44 +82,57 @@ Replace paper, gut-feel pricing, and lost margin with AI-native workflows — fo
 | Layer | What It Is | Reusable? |
 |---|---|---|
 | Database | Supabase PostgreSQL — multi-tenant UUID isolation, Row Level Security | ✅ Yes |
-| Data layer | DataBridge.js — local-first + cloud sync, offline queue, trial clock | ✅ Yes |
+| Auth | configureAuth() factory — email + PIN strategies, role-based routing | ✅ Yes |
 | AI layer | AIEngine.js + ai_router.py — routes tasks to Claude/Gemini/Whisper by type | ✅ Yes |
-| Auth | PIN keypad, SHA-256 hash, session guard, role-based routing | ✅ Yes |
-| Backend | FastAPI on Railway — AI router, QuickBooks bridge, AI usage logging | ✅ Yes |
-| Billing engine | Tier subscription system, trial clock + data blur, savings report trigger | ✅ Yes |
-| Margin engine | MarginEngine.js — slab pricing, override audit, parts markup calculator | ✅ Yes |
+| Tile system | TileGrid + Tile — 3 states (active/available/locked), per-tenant config | ✅ Yes |
+| QB integration | OAuth + invoice + customer — vertical-agnostic | ✅ Yes |
+| Notifications | send.ts + queue.ts — provider-agnostic (Resend + Twilio) | ✅ Yes |
+| Social posts | generate-posts.ts + templates/ — vertical prompt templates | ✅ Yes |
+| QR system | generate.ts + print.ts — asset tagging | ✅ Yes |
 | Frontend | Vercel deployment, modular tile system, tier gating | ✅ Yes |
 
-### Platform IP Summary
+### Integration Registry — All Connectors
 
-| Asset | Description | Status |
+| Connector | What it does | Cultivar | Ignition | Priority |
+|---|---|---|---|---|
+| QuickBooks Online | Invoice creation, customer sync, OAuth | ✅ Live | 🟡 Partial | P1 |
+| Blotato | Social media post publishing | ✅ Live | ❌ | P2 |
+| Anthropic Claude | AI post generation, analysis, suggestions | ✅ Live | 🟡 Routed | P1 |
+| Supabase | Database, auth, storage | ✅ Live | 🟡 Partial | P1 |
+| Resend | Transactional email | 🟡 Wired | ❌ | P1 |
+| Twilio | SMS notifications | 🟡 Wired | ❌ | P1 |
+| Stripe | Billing + subscriptions | ❌ | ❌ | P1 |
+| Google Maps | Delivery routing, geocoding | ❌ | ❌ | P2 |
+| Google Calendar | Scheduling, installs, service | ❌ | ❌ | P2 |
+| Gemini | Vision AI (invoice scan, VIN) | ❌ | 🟡 Routed | P2 |
+| OpenAI/Whisper | Voice transcription | ❌ | 🟡 Routed | P3 |
+| Samsara/Geotab | Fleet telematics | ❌ | 🟡 UI only | P3 |
+
+### Gap-Filler Registry — Capabilities We Own
+
+These are TRACE-owned capabilities with no external dependency. Each is a competitive moat.
+
+| Capability | Description | Status |
 |---|---|---|
-| Multi-tenant SaaS architecture | Supabase RLS, shop_id scoping, UUID isolation | ✅ Live |
-| Unified AI router | AIEngine.js + ai_router.py — 3 providers, best model per task | ✅ Live |
-| Modular tile system | Tier gating, composable blocks, add/remove per vertical | ✅ Live |
-| Local-first + cloud sync | Works offline in a shop with spotty WiFi | ✅ Live |
-| Physical GTM system | Hardware kit creates habit before first invoice | ✅ Validated |
-| Trial-to-paid engine | Day 12 savings report, data blur, archive trigger | ✅ Live |
-| Margin engine | Slab pricing + override audit, 5-level markup calculator | ✅ Live |
-| Tool PMI system | Barcode chain of custody, PMI schedules, bypass log | ✅ Live |
-| Job lifecycle state machine | 13-state RO flow: intake → closed | ✅ Live |
-| Customer e-sign portal | Auth snapshot (legal-grade), approved/declined line items frozen | ✅ Live |
+| Missed revenue detection | Flags declined add-ons, skipped upgrades | ✅ Live (Cultivar) |
+| Asset growth timeline | Visual history from creation to sale | ✅ Live (Cultivar plants) |
+| Urgency copy engine | Regina Rule — time-sensitive add-on prompts | ✅ Live (Cultivar) |
+| QR → checkout → QB invoice | Full flow, one scan, no typing | ✅ Live (Cultivar) |
+| AI social post generation | 3 posts per order, vertical templates | ✅ Live (Cultivar) |
+| Multi-provider AI router | Claude/Gemini/Whisper by task type | ✅ Live (shared) |
+| Module tile system | 3-state per-tenant tile grid | ✅ Live (both) |
+| Invoice audit AI | Photo → Claude flags uncaptured charges | ✅ Concept (Ignition) |
+| ROI / savings report | Dollar value of TRACE to this business | 🟡 Built (shared) |
+| Suggestion engine | Post-transaction upsell + scheduling | 🟡 Partial (Cultivar addons) |
 
-### Domain & Infrastructure Architecture
+### Domain & Infrastructure
 
 ```
-builtwithcai.com                    ← Platform home. Lists all products. Investor story.
-├── ignition-os.builtwithcai.com    ← Auto shop product page
-├── conduit-os.builtwithcai.com     ← HVAC product page (next)
-└── docs.builtwithcai.com           ← Developer / partner documentation
+builtwithcai.com                    ← Platform home. Investor story.
+├── cultivar-os.vercel.app          ← Nursery vertical (active)
+├── ignition-os.builtwithcai.com    ← Auto shop vertical (dry run)
+└── conduit-os.builtwithcai.com     ← HVAC vertical (next)
 ```
-
-**Owned domains:**
-- `builtwithcai.com` — Purchased. Platform landing + investor story.
-- `ignition-os.com` — Purchased. Auto/diesel domain → redirects to subdomain.
-- `conduit-os.com` — Next purchase (~$0.01/yr, 3-yr term). HVAC domain.
-
-**Why this structure:** One Railway project, one SSL wildcard cert (`*.builtwithcai.com`), one deployment pipeline. Product `.com` domains are for cold-call sales cards. Platform domain is for investors.
 
 ---
 
@@ -101,428 +142,587 @@ builtwithcai.com                    ← Platform home. Lists all products. Inves
 
 | Day | Event |
 |---|---|
-| Day 1 | Kit installed. Trial starts. Full PREMIER access, no card. |
-| Day 7 | In-app nudge: "X jobs processed, $Y in margin tracked" |
+| Day 1 | Onboarding complete. Trial starts. Full access, no card. |
+| Day 7 | In-app nudge: "X transactions processed, $Y in value tracked" |
 | Day 12 | Auto-generated savings report. Owner gets a call. |
 | Day 14 | Trial expiry warning. Tiles gray at midnight. |
 | Day 15 | Data visible but blurred. Subscribe button prominent. |
 | Day 30 | Data archived (not deleted). Retrieval triggers subscription. |
 
-**The psychology:** The shop has real data — real jobs, real parts, real tool history — in the system by day 14. Losing that data feels worse than $299/mo.
+### Subscription Tiers
 
-### Subscription Tiers (Ignition OS — Same Structure Across Verticals)
+| Tier | Price | Target |
+|---|---|---|
+| STARTER | $149/mo | Getting off paper, first connection |
+| PROFESSIONAL | $299/mo | AI-first workflow, multiple integrations |
+| PREMIER | $499/mo | Multi-location, full module suite |
+| FOUNDING | $149/mo locked | First customers per vertical — forever |
 
-| Tier | Price | Users | AI | Target |
-|---|---|---|---|---|
-| STARTER | $149/mo | 3 | None | Getting off paper |
-| PROFESSIONAL | $299/mo | 8 | Gemini + Claude + Whisper | AI-first workflow |
-| PREMIER | $499/mo | Unlimited | All three, full usage | Fleet, multi-location |
+### Module Economy — Add-On Billing
 
-### À La Carte Add-Ons
-- Extra location: +$99/mo
-- Extra user block (5 users): +$49/mo
-- SMS / Twilio integration: +$29/mo
-- API access (fleet integrations): +$99/mo
+Every tile beyond core is a billable module. Owner enables/disables from dashboard. Stripe adjusts automatically.
+
+**Core (included in base subscription):**
+- QR Checkout
+- QuickBooks integration
+- Owner dashboard
+- Basic inventory / asset tracking
+- Customer records
+
+**Add-on modules (per month):**
+
+| Module | Price | Vertical |
+|---|---|---|
+| Social Media + AI posts | $19/mo | All |
+| Follow-Up Engine | $19/mo | All |
+| Online Shop | $19/mo | All |
+| Business Insights | $19/mo | All |
+| Equipment Tracking | $19/mo | All |
+| Delivery Routing | $29/mo | All |
+| GPS Tracking | $29/mo | All |
+| Seasonal Module | $29/mo | Cultivar |
+| Water System Module | $29/mo | Cultivar |
+| Greenhouse Module | $29/mo | Cultivar |
+| PMI — Preventive Maintenance | $29/mo | All |
+| Contractor Portal | $49/mo | All |
+| EPA Section 608 | $29/mo | Conduit |
+| DOT Compliance | $29/mo | Ignition |
+
+**Bundle: all modules = $149/mo add-on**
+(doubles MRR per customer at Professional tier)
+
+**MRR potential per customer:**
+- Base only: $299/mo
+- Base + all modules: ~$450/mo
+- Founding: $149 + modules at standard cost
 
 ### Unit Economics
 
 | Metric | Value |
 |---|---|
-| Hardware kit per shop | ~$35 |
+| Hardware kit per pilot | ~$35 |
 | AI API cost during trial | ~$3–5 |
-| Total CAC per pilot shop | ~$40–50 |
-| Monthly revenue if converts (PRO) | $299 |
+| Total CAC per pilot | ~$40–50 |
+| Monthly revenue (PRO) | $299 |
 | Payback period | < 1 month |
-| LTV at 12-month retention (PRO) | $3,588 |
 | LTV at 24-month retention (PRO) | $7,176 |
 | Gross margin (software only) | ~80%+ |
 
-### MRR Projections (Conservative)
-
-| Month | Converted Shops | MRR | Notes |
-|---|---|---|---|
-| Month 1 | 1 | $299 | First pilot converts |
-| Month 3 | 5 | $1,495 | Local beachhead shops |
-| Month 6 | 15 | $4,485 | Conduit OS launches |
-| Month 12 | 40 | $11,960 | Two verticals active |
-| Month 18 | 100 | $29,900 | Three verticals, add-ons growing |
-| Month 24 | 200 | $59,800+ | Platform story provable to investors |
-
-*These assume PROFESSIONAL tier only. PREMIER and add-ons push this materially higher.*
-
 ---
 
-## PART 4 — THE AI ASSESSMENT INTEGRATION STRATEGY
+## PART 4 — THE SUGGESTION ENGINE
 
-### What Gemini Proposed vs. What We're Building
+Every completed transaction is a revenue opportunity. The suggestion engine fires after every order, service, or interaction.
 
-The Gemini-generated "AI Assessment Consultancy" concept — a $999 paid assessment identifying AI automation opportunities for small businesses — is not a standalone business. **It is a sales motion that feeds Built with CAI.**
+### Three Suggestion Types
 
-### How It Works as a Funnel
+**1. IMMEDIATE ADD-ONS (during checkout)**
+Items that must be added now or never.
+Pre-selected, urgency copy, high prominence.
+→ Add to current invoice immediately.
+
+**2. SCHEDULED SERVICES (post-checkout)**
+Future services with configured intervals.
+No charge today — reminder fires at interval.
+→ Queue in follow-up engine.
+→ New invoice created when booked.
+
+**3. REORDER REMINDERS**
+Consumables that need periodic replacement.
+→ SMS/email at configured interval.
+→ Customer self-books or staff follows up.
+
+### Cross-Vertical Examples
 
 ```
-Cold outreach / LinkedIn / referral
-         ↓
-$999 AI Assessment (45-min interview → custom automation roadmap)
-         ↓
-Report identifies: "You're losing $X/mo in margin gaps, unbilled labor, parts markup"
-         ↓
-Offer: "We already built the system that fixes this. 14-day free trial, no card."
-         ↓
-Hardware kit installed → Trial engine runs → Converts to subscription
+Ignition OS:
+  Oil change → "Add crush washer?" (pre-selected, $2.50)
+  Brake job → "Brake fluid flush recommended — add it?"
+  Service complete → "Schedule next oil change in 90 days?"
+
+Cultivar OS:
+  Tree purchased → "Fertilizer in 30 days?"
+  Installation booked → "Spring mulch refresh in 180 days?"
+  Netting declined → "Drive carefully reminder" (free)
+
+Conduit OS:
+  AC service → "Filter replacement in 30 days?"
+  Refrigerant topped → "Schedule follow-up in 60 days?"
 ```
 
-### Why This Is Powerful
-- The $999 assessment **pays for itself** (covers 20+ hardware kits)
-- The shop owner is now **educated and pre-sold** before the trial starts
-- Conversion rate from paid assessment → trial should be 80%+
-- Assessment revenue offsets CAC to near zero for those accounts
-- The assessment is also a **content machine** — every anonymized case study becomes LinkedIn authority content
+### The Rule Structure
 
-### Assessment Workflow (Using Existing Stack)
-1. **45-min interview** — recorded via Fathom on Google Meet. Focus: "what tasks do you hate that you can't delegate?"
-2. **AI synthesis** — transcript fed to Claude via AIEngine.js. Custom prompts identify margin gaps and map to Ignition OS tiles.
-3. **Report generation** — Gamma-produced impact/effort matrix + 4-day quick-win plan.
-4. **Close** — "Here's exactly what Ignition OS solves. Want to see it live in your shop?"
+```typescript
+interface SuggestionRule {
+  trigger: {
+    event: 'order_complete' | 'item_purchased' | 
+           'item_skipped' | 'service_complete'
+    item_category?: string
+  }
+  suggestion: {
+    type: 'add_to_invoice' | 'schedule_service' | 
+          'reorder_reminder'
+    name: string
+    price?: number        // null = free reminder
+    interval_days?: number
+    urgency_copy?: string
+  }
+  display: {
+    timing: 'during_checkout' | 'post_checkout' | 
+            'scheduled_reminder'
+    pre_selected: boolean
+    prominence: 'normal' | 'high' | 'urgent'
+  }
+}
+```
 
-### Pricing for the Combined Offer
+### Platform Location
+```
+packages/shared/src/suggestions/
+  engine.ts       ← core logic
+  scheduler.ts    ← recurring service scheduling
+  templates/
+    automotive.ts ← ignition-os rules
+    nursery.ts    ← cultivar-os rules
+    hvac.ts       ← conduit-os rules
+```
 
-| Entry Point | Price | Outcome |
-|---|---|---|
-| AI Assessment only | $999 | Roadmap + tool recommendations |
-| Assessment + Trial | $999 + free 14-day trial | Assessment leads directly to pilot |
-| Assessment + Setup | $1,499 | Assessment + we install and configure the kit |
-| Skip assessment, trial only | Free (14 days) | Standard GTM motion |
-
----
-
-## PART 5 — COMPETITIVE LANDSCAPE
-
-### Ignition OS / Built with CAI Competitors
-
-#### Tier 1 — Direct Vertical SaaS (Most Dangerous)
-
-| Competitor | Price | Strengths | Weaknesses | Our Angle |
-|---|---|---|---|---|
-| **Tekmetric** | $199–$599/mo | Deep auto shop features, strong market share | No AI, no physical GTM, setup takes weeks | AI-native from day one; we're in their shop before they know we're a threat |
-| **Shop-Ware** | $299–$799/mo | Modern UI, parts ordering integration | Expensive, no trial, no offline mode | Half the price, same output quality, 14-day free trial |
-| **Mitchell 1 Manager SE** | $150–$400/mo | Industry legacy, deep DMS integration | Legacy software feel, no AI, no mobile kiosk | "Your current software is a spreadsheet with branding. Ours learns." |
-| **ServiceTitan** | $398–$1,198/mo | Enterprise-grade, HVAC + plumbing | Priced for 20+ employees, 12-month contracts, requires implementation consultant | "Enterprise-grade AI, SMB price, no contract, 14-day trial" |
-| **Housecall Pro** | $65–$299/mo | Easy to use, good mobile app | No AI, no margin engine, no tool tracking | Same price band, but we do the thinking for you |
-| **Jobber** | $49–$249/mo | Clean UI, wide adoption | No AI, generic workflows, no physical moat | Jobber is a digital notepad. We're an operating system. |
-
-#### Tier 2 — Generic AI Tools (Indirect)
-
-| Competitor | Strengths | Weaknesses | Our Angle |
-|---|---|---|---|
-| **ChatGPT / Copilot** | Brand awareness, versatile | No vertical context, owner must know what to ask, no integration with jobs/parts/customers | "CAI knows what your business needs. You don't have to explain it." |
-| **Zapier / Make** | Powerful automation | Requires technical setup, no SMB-friendly UI, no AI native | We use these as integration layers, not competitors |
-| **QuickBooks** | Accounting standard | Not a shop management tool; we integrate with it | "We feed QuickBooks. We don't replace it." |
-
-#### Tier 3 — Enterprise (Not a Real Threat Yet)
-
-| Competitor | Why They're Not a Threat Now |
-|---|---|
-| SAP Business One | $1,500+/mo, requires implementation partner, 50+ employee target |
-| Salesforce Field Service | Same — priced and designed for enterprise |
-| Microsoft Dynamics | Not SMB-accessible, requires IT infrastructure |
-
-### AI Assessment Consultancy Competitors
-
-| Competitor | Model | Weakness | Our Angle |
-|---|---|---|---|
-| **McKinsey / Deloitte AI practices** | $50k–$500k engagements | Priced for Fortune 500, no SMB relevance | We're the $999 version that actually gets implemented |
-| **Freelance AI consultants (Upwork/Fiverr)** | $50–$200/hr, generic advice | No productized system, no follow-through, no software to back it up | We don't just tell you what to do — we hand you the tool that does it |
-| **Local IT consultants** | One-off projects, hourly billing | No recurring value, no AI expertise, no vertical depth | We're vertical-specific and backed by a live platform |
-| **AI tool vendors (HubSpot, Monday.com)** | Sell their own tools as "AI solutions" | Self-serving recommendations, no honest assessment | We're tool-agnostic in the assessment; we recommend what's right for the shop |
-
-### Our Defensible Moats (What Can't Be Copied Quickly)
-
-1. **Physical hardware moat** — Tools are barcoded, PMI schedules running, job history in Supabase. Leaving means losing everything. Copying the software doesn't copy the data.
-2. **Multi-vertical architecture** — Competitors are monolithic. We're in 5 verticals before they can build a second one.
-3. **Trial engine psychology** — By day 14, the shop has real operational data. The switching cost is emotional, not just financial.
-4. **AI router** — Three AI providers (Claude, Gemini, Whisper) routing to the best model per task. No competitor has this in the SMB space.
-5. **Sub-$50 CAC** — Our physical GTM (hardware kit) creates habit before the first invoice. Most SaaS competitors spend $300–$1,000+ to acquire a customer.
+Every decline is tracked. Dashboard shows: "X customers declined mulch refresh this month — est. $Y missed."
 
 ---
 
-## PART 6 — VERTICAL ROADMAP
+## PART 5 — VERTICAL ROADMAP
 
-### V1 — Ignition OS (Auto / Diesel Repair) — NOW
-**Status:** End-to-end dry run in progress. Production Supabase live. Full job lifecycle built and deployed to Vercel.
+### V1 — Cultivar OS (Nursery) — ACTIVE
+**Status:** Demo-ready. LAWNS Tree Farm LLC meeting May 25, 2026.
+**Domain:** cultivar-os.vercel.app
+**First customer target:** LAWNS Tree Farm LLC, Leander TX
+**Contacts:** Terry (owner, 65), Lauren Bishop (manager)
+**Hook:** QR scan → QB invoice in one flow. Missed upsell visibility.
+
+**Full Cultivar OS Asset Scope:**
+```
+PLANTS (live)
+  Trees, shrubs, perennials, annuals
+  Container progression, QR tags, growth timeline
+  Buy/sell/install workflow
+
+EQUIPMENT (Phase 1)
+  Tractors, skid steers, trailers
+  Mowers, tillers, chippers, spray rigs
+  PMI schedules, service history
+
+WATER SYSTEMS (Phase 1)
+  Filters (sediment, UV, carbon) — replacement intervals
+  Water lines, manifolds, irrigation zones
+  Flush schedules, water quality log
+
+GREENHOUSES (Phase 1)
+  Individual greenhouse tracking
+  Temperature/humidity logs
+  Capacity management, crop rotation
+
+PMI (Phase 1 — from Ignition OS shared)
+  All asset types: equipment + water + greenhouse
+  Service schedules, overdue alerts
+  Bypass log, service history per asset
+```
+
+**Cultivar OS Tile Inventory:**
+- QR Checkout ✅ active
+- QuickBooks ✅ active
+- Online Shop — available (Phase 1)
+- Social Media ✅ active
+- Follow-Up — available (Phase 1)
+- Delivery — available (Phase 1)
+- Contractors — locked (Phase 2)
+- Seasonal — locked (Phase 1)
+- Insights — locked (Phase 1)
+- Inventory — locked (Phase 1)
+- Equipment PMI — locked (Phase 1)
+- Water System — locked (Phase 1)
+- Greenhouse — locked (Phase 1)
+
+---
+
+### V2 — Ignition OS (Auto / Diesel Repair) — DRY RUN
+**Status:** End-to-end dry run in progress.
 **Domain:** ignition-os.com
-**Beachhead region:** Liberty Hill / Georgetown / Round Rock / North Austin TX
 **Target:** Independent diesel/auto shops, 3–8 bays, $500K–$3M/yr
 **Hook:** Margin engine — "what you charge vs. what the slab recommends"
-**Physical moat:** Tools barcoded, PMI schedules running, job history in Supabase = leaving means losing everything
-**Why first:** Highest friction SMB vertical. If the platform survives here, it survives anywhere.
 
-**Ignition OS Tile Inventory (Built):**
-- Customer intake + approval portal (e-sign, legal-grade auth snapshot)
+**Ignition OS Tiles (Built):**
+- Customer intake + approval portal
 - Tech kiosk (mobile, PIN-based)
-- Tool tracking + barcode (chain of custody, PMI schedules, bypass log)
-- Margin engine (slab pricing, 5-level markup, override audit)
+- Tool tracking + barcode (PMI, chain of custody)
+- Margin engine (slab pricing, override audit)
 - Labor clock + time ledger
 - Invoice + payment
 - OMNI analytics + velocity leaderboard
-- Admin + billing (trial clock, data blur, archive trigger)
-- Job lifecycle state machine (13 states: intake → closed)
+- Job lifecycle state machine (13 states)
+- Admin + billing (trial clock, data blur)
+
+**Pending before first customer:**
+- Intuit production approval (separate app)
+  Use INTUIT_PRODUCTION_APPROVAL_GUIDE.md
+- Stripe billing integration
+- Trial engine validation
 
 ---
 
-### V2 — Conduit OS (HVAC / Plumbing / Electrical) — NEXT (60 days)
-**Status:** Pre-build planning complete
-**Domain:** conduit-os.com (purchase pending)
+### V3 — Conduit OS (HVAC / Plumbing / Electrical) — NEXT
+**Status:** Pre-build planning complete.
+**Domain:** conduit-os.com
 **Target:** 1–3 truck owner-operators, $300K–$2M/yr
-**Market size:** $180B HVAC + $130B Plumbing + $210B Electrical = $520B total; 94% SMB owner-operators
-**Hook:** Parts markup gap — "what you charge for refrigerant vs. what you paid"
-**Regulatory add-on:** EPA Section 608 refrigerant tracking — compliance tile, immediate PREMIER differentiator
-**New tile needed:** Service Agreement Manager (recurring maintenance contracts)
-**Build estimate:** 25–34 hours. Fork Ignition OS → rename UI labels → new compliance tile → new AI prompts.
-**Carry-over modules (zero code change):** Customer intake, tech kiosk, tool tracking, margin engine, labor clock, invoice, OMNI analytics, admin + billing
+**Hook:** Parts markup gap. EPA Section 608 compliance.
+**Build estimate:** 25–34 hours. Fork + configure.
+**Asset shape:** Equipment (units, loads, vehicles)
 
 ---
 
-### V3 — Anchor OS (Food Service / Restaurant) — 60 days post-Conduit
-**Status:** Planning
-**Target:** Restaurant owners, food trucks, catering — 1–3 locations
-**Market size:** $997B US restaurant industry; ~80% independent operators
-**Hook:** Recipe cost vs. menu price — the food cost margin engine
-**New tiles:** Recipe Cost Calculator, Waste Log, Shift Scheduling, Health Inspection Checklist
-**Key reuse:** Inventory (IgnitionSTOK → ingredient tracking), Vendor PO, Customer CRM
-**Domain pattern:** anchor-os.com → anchor-os.builtwithcai.com
-**Entry angle:** Food trucks first (lower complexity, high pain, owner is always on-site)
+### V4 — Anchor OS (Food Service / Restaurant)
+**Status:** Planning.
+**Target:** Independent restaurants, food trucks, catering.
+**Hook:** Recipe cost vs. menu price — the food cost margin engine.
 
 ---
 
-### V4 — FieldOS (Home Services Expansion)
-**Status:** Future planning
-**Target:** Larger HVAC, landscaping, pool service, pest control — 5–20 trucks
-**Differentiator from Conduit OS:** Route optimization, GPS dispatch, fleet compliance, predictive maintenance
-**Key reuse:** HUB dispatch module, tool PMI, DOT compliance forms
-**Revenue angle:** Fleet tracking add-on at +$99/mo per truck
+### V5 — FieldOS (Home Services — Larger Scale)
+**Status:** Future.
+**Target:** Landscaping, pool service, pest control — 5–20 trucks.
 
 ---
 
-### V5 — StockOS (Retail / Boutique / Consignment)
-**Status:** Future planning
-**Target:** Independent retail, boutiques, consignment shops
-**Market size:** 1M+ independent retail locations in US
-**Hook:** Inventory turns + dead stock report — "you have $12,000 sitting that hasn't moved in 90 days"
-**New tiles:** POS sync, VIP CRM, Dynamic Merchandising, Consignment Tracker
-**Key reuse:** Inventory module, CRM, Invoice, OMNI analytics
+### V6 — StockOS (Retail / Boutique / Consignment)
+**Status:** Future.
+**Target:** Independent retail, boutiques, consignment shops.
 
 ---
 
-## PART 7 — THE PHYSICAL GTM SYSTEM
+## PART 6 — PLATFORM AUDIT FINDINGS
+*(From TRACE_PLATFORM_AUDIT.md — May 23, 2026)*
 
-### Hardware Kit (Target: Under $50 Per Shop)
+### Top 10 Things to Extract to shared/ Before Conduit OS
 
-| Item | Model | Purpose | Cost |
+Ranked by: needed by 2+ verticals, hard to rebuild, highest strategic value.
+
+| # | What | Why | Target Location |
 |---|---|---|---|
-| Magnetic mount | RAM Mounts neodymium base | Phone at workstation — always on app | ~$25 |
-| Charging cable | Anker PowerLine III USB-C | Survives shop abuse | ~$10 |
-| Voice cheat sheet | Print + laminate locally | Taped to toolbox — instant command reference | ~$1 |
-| Branded sticker | Custom (Sticker Mule) | Logo visible daily — brand reinforcement | ~$2 |
+| 1 | OnboardingWizard shell | Universal acquisition mechanic — Welcome→Setup→Path→TeamQR | `shared/src/onboarding/WizardShell.tsx` |
+| 2 | Trial clock + data blur | Ignition has it, Cultivar has the seam but no enforcement. Neither has Stripe. | `shared/src/billing/useTrial.ts` |
+| 3 | Abstract asset model | Plants + vehicles + loads = same shape: QR→record→event history | `shared/src/assets/` |
+| 4 | Customer record + history | Cultivar creates duplicates; no directory; Conduit needs shippers | `shared/src/customers/` |
+| 5 | Integration registry + OAuth UI | Both verticals need connect→health→disconnect pattern | `shared/src/integrations/` |
+| 6 | Form component library | Severe duplication across both verticals already | `shared/src/components/forms/` |
+| 7 | Settings page pattern | Every vertical needs: business info, tax/pricing, modules, integrations | `shared/src/settings/` |
+| 8 | Dashboard metrics pattern | `api/dashboard.ts` in Cultivar is the right template — parameterize | `shared/src/dashboard/` |
+| 9 | Notification log + history | Type exists in shared types.ts but no migration or UI | `shared/src/notifications/` |
+| 10 | RLS policy templates | Two-phase approach: loose for demo → tight (owner_id) post-demo | `shared/docs/rls-pattern.md` |
 
-**For demos:** Brother QL-820NWB (~$200) — WiFi/Bluetooth, prints barcodes wirelessly in 3 seconds. The demo close.
-**Pilot loaner:** Brother QL-800 (~$120, USB) — leave with converting shops. Recover after trial if they don't convert.
+### Known Technical Debt (Fix Before Conduit OS)
 
-**The play:** Leave hardware at the shop on day one. Once tools are barcoded, PMI schedules running, and job history is live — leaving means losing everything. The hardware creates switching cost before the first invoice.
+| Item | Location | Priority |
+|---|---|---|
+| `IGNITION_OS_DATA` hardcoded in QB oauth.ts | `shared/src/quickbooks/oauth.ts` | P1 — fix with integration registry |
+| QB token refresh missing | `api/qbo/invoice/cultivar.ts` | P1 — demo critical |
+| Customer deduplication | `CustomerCapture.tsx` | P1 — creates duplicates now |
+| `nurseryPlan` hardcoded in useModules.ts | `cultivar-os/src/hooks/useModules.ts` | P2 |
+| Resend + Twilio env vars unconfirmed | `shared/src/notifications/send.ts` | P2 |
+| Stripe not wired in either vertical | Both | P1 — before first paid customer |
+| `owner_id` null on demo nursery row | Supabase nurseries table | P2 — tighten RLS post-demo |
+
+### Open Questions Before Conduit OS
+
+1. **Resend + Twilio** — are they actually wired with working API keys?
+2. **Multi-nursery / multi-tenant** — what does auth→nursery_id lookup look like when LAWNS has a second location?
+3. **Lauren staff roles** — configureAuth email strategy needs role from DB for manager vs owner access.
+4. **QB token refresh** — 60-min expiry, no refresh logic. Fix before demo.
+5. **Conduit asset shape** — what is Conduit's equivalent of a "plant"? Abstract asset model can't be extracted until the second vertical's asset shape is known.
 
 ---
 
-## PART 8 — TEAM & ROLES
+## PART 7 — COMPETITIVE LANDSCAPE
 
-### Current Team Structure
+### Tier 1 — Direct Vertical SaaS
 
-| Role | Person | Primary Responsibility |
+| Competitor | Price | Our Angle |
 |---|---|---|
-| Founder / Strategy | [Owner] | Vision, sales, investor relations, strategic decisions |
-| Developer 1 | [Son 1] | [Define: frontend / backend / full-stack?] |
-| Developer 2 | [Son 2] | [Define: frontend / backend / full-stack?] |
+| Tekmetric | $199–$599/mo | AI-native from day one; physical GTM |
+| Shop-Ware | $299–$799/mo | Half the price, 14-day free trial |
+| ServiceTitan | $398–$1,198/mo | SMB price, no contract, 14-day trial |
+| Housecall Pro | $65–$299/mo | Same price band, but we do the thinking |
+| Jobber | $49–$249/mo | Jobber is a notepad. We're an OS. |
 
-### How We Work Together
-- **This file** (`MASTER_BRIEF.md`) is the handoff document. Update it when milestones are completed.
-- **Claude Code** handles build tasks. Start every session: *"Read MASTER_BRIEF.md. Current task: [X]."*
-- **Claude.ai** handles strategy, writing, investor materials, and planning. Upload this file each session.
-- **GitHub** is the source of truth for code. This file lives in the root of the repo.
+### Our Defensible Moats
 
-### Decision Authority
-| Decision Type | Who Decides |
-|---|---|
-| Architecture changes | All three — consensus required |
-| New vertical launch | Founder |
-| Pricing changes | Founder |
-| UI/UX within existing tile | Developer assigned |
-| New tile build | Founder approves, developer executes |
+1. **Physical GTM** — hardware creates habit before first invoice
+2. **Multi-vertical architecture** — competitors are monolithic
+3. **Trial engine psychology** — real data by day 14, switching cost is emotional
+4. **AI router** — three AI providers routing to best model per task
+5. **Sub-$50 CAC** — hardware kit creates switching cost before first invoice
+6. **Loose coupling** — we enhance existing tools, not replace them
+
+---
+
+## PART 8 — THE PHYSICAL GTM SYSTEM
+
+### Hardware Kit (Target: Under $50 Per Business)
+
+| Item | Purpose | Cost |
+|---|---|---|
+| Magnetic mount | Phone at workstation — always on app | ~$25 |
+| Charging cable | Survives shop/nursery abuse | ~$10 |
+| Voice cheat sheet | Printed + laminated — instant reference | ~$1 |
+| Branded sticker | Logo visible daily | ~$2 |
+
+**For demos:** Brother QL-820NWB — prints QR tags wirelessly in 3 seconds. The demo close.
 
 ---
 
 ## PART 9 — PLAN OF ACTION
 
-### Phase 0 — Complete the Beachhead (NOW — Next 2 Weeks)
+### Phase 0 — Cultivar OS Demo (NOW)
+**Goal:** Close LAWNS Tree Farm LLC as founding customer. May 25, 2026.
 
-**Goal:** Ignition OS end-to-end dry run on a real repair order. First customer walk-in ready.
+| Priority | Task | Status |
+|---|---|---|
+| 🔴 P1 | QB token refresh fix | In progress (Claude Code) |
+| 🔴 P1 | Transport options → database (configurable) | In progress |
+| 🔴 P1 | Demo run-through timed under 5 min | This weekend |
+| 🔴 P1 | Print QR tags + invoice + agreement | This weekend |
+| 🔴 P1 | Practice Regina story out loud 3 times | Before May 25 |
+| 🟡 P2 | Settings page (tax rate, install price UI) | Post-demo |
+| 🟡 P2 | Lauren manager role implementation | Post-demo |
 
-| Priority | Task | Owner | Status |
-|---|---|---|---|
-| 🔴 P1 | Complete end-to-end dry run on real RO | Dev team | In progress |
-| 🔴 P1 | Validate trial clock + data blur on expiry | Dev team | Pending |
-| 🔴 P1 | Validate savings report auto-generation (Day 12) | Dev team | Pending |
-| 🔴 P1 | Test barcode print + tool scan full loop | Dev team | Pending |
-| 🟡 P2 | Build ignition-os.builtwithcai.com landing page | Dev team | Pending |
-| 🟡 P2 | Prepare hardware kit for first pilot shop | Founder | Pending |
-| 🟡 P2 | Identify and contact 3 pilot shops in beachhead area | Founder | Pending |
-| 🟢 P3 | Document dry run results in this file (Changelog) | All | Pending |
+### Phase 1 — After LAWNS Signs (Weeks 1–4)
+**Goal:** LAWNS live on real data. Ignition OS first pilot shop.
 
----
+| Priority | Task |
+|---|---|
+| 🔴 P1 | Connect LAWNS real QB (not sandbox) |
+| 🔴 P1 | Lauren invited as manager role |
+| 🔴 P1 | Settings page: tax rate, pricing, nursery info |
+| 🔴 P1 | Transport options configurable by Lauren |
+| 🔴 P1 | Customer deduplication at checkout |
+| 🔴 P1 | Follow-up engine (post-sale service scheduling) |
+| 🔴 P1 | Stripe billing integration |
+| 🟡 P2 | Equipment PMI module |
+| 🟡 P2 | Water system module |
+| 🟡 P2 | Greenhouse module |
+| 🟡 P2 | Online shop (/shop page) |
+| 🟡 P2 | QR onboarding flow (new nursery signup) |
+| 🟡 P2 | Ignition OS — Intuit production approval |
+| 🟡 P2 | Ignition OS — first pilot shop install |
 
-### Phase 1 — First Paying Customer (Weeks 3–6)
+### Phase 2 — Platform Extraction (Before Conduit OS)
+**Goal:** Extract top 10 shared modules. Conduit OS ready to build.
 
-**Goal:** One shop on a paid subscription. Proof the trial-to-paid engine works.
+| Priority | Task |
+|---|---|
+| 🔴 P1 | Stripe trial engine extracted to shared |
+| 🔴 P1 | Abstract asset model extracted to shared |
+| 🔴 P1 | Integration registry extracted to shared |
+| 🔴 P1 | Fix IGNITION_OS_DATA hardcode in QB oauth |
+| 🔴 P1 | OnboardingWizard shell extracted to shared |
+| 🔴 P1 | Settings page pattern extracted to shared |
+| 🟡 P2 | Customer record + dedup extracted to shared |
+| 🟡 P2 | Form component library extracted to shared |
+| 🟡 P2 | Suggestion engine built in shared |
+| 🟡 P2 | Notification log + communication history |
 
-| Priority | Task | Owner | Notes |
-|---|---|---|---|
-| 🔴 P1 | Install kit at pilot shop #1 | Founder | Day 1 of trial clock |
-| 🔴 P1 | Monitor Day 7 nudge, Day 12 savings report | Dev team | Validate automation |
-| 🔴 P1 | Owner call on Day 12 — review savings report | Founder | Sales call |
-| 🟡 P2 | Install at pilot shops #2 and #3 | Founder | Stagger by 1 week each |
-| 🟡 P2 | Document conversion objections | Founder | Feed into pricing/messaging |
-| 🟢 P3 | Build first LinkedIn case study (anonymized) | Founder | AI Assessment funnel seed |
+### Phase 3 — Conduit OS Build (60 days post-Phase 2)
+**Goal:** Fork platform → HVAC vertical. First pilot operator.
 
----
-
-### Phase 2 — AI Assessment Sales Funnel (Weeks 4–8, runs parallel)
-
-**Goal:** Run 3 paid AI Assessments. Use at least 2 as direct pipeline into Ignition OS trials.
-
-| Priority | Task | Owner | Notes |
-|---|---|---|---|
-| 🔴 P1 | Define the 45-min interview script | Founder | Focus on "bottleneck" tasks |
-| 🔴 P1 | Build Claude prompt for transcript → roadmap synthesis | Dev team | Uses AIEngine.js |
-| 🟡 P2 | Create Gamma report template for assessment deliverable | Founder | Reusable for each client |
-| 🟡 P2 | Set up Fathom for recording + transcription | Founder | Free tier available |
-| 🟡 P2 | Post first "Invisible Leak" case study on LinkedIn | Founder | Drives inbound |
-| 🟡 P2 | Price and launch: $999 assessment / $1,499 assessment + setup | Founder | Test both |
-| 🟢 P3 | Track: how many assessments → Ignition OS trials | Founder | Validate funnel |
-
----
-
-### Phase 3 — Conduit OS Build (Weeks 8–14)
-
-**Goal:** Fork Ignition OS into Conduit OS. Deploy to conduit-os.builtwithcai.com. First HVAC pilot.
-
-| Priority | Task | Owner | Notes |
-|---|---|---|---|
-| 🔴 P1 | Purchase conduit-os.com domain | Founder | ~$0.01/yr, 3-yr term |
-| 🔴 P1 | Fork Ignition OS codebase into conduit-os branch | Dev team | Do not modify Ignition OS main |
-| 🔴 P1 | Rename UI labels: vehicle→equipment, RO→service ticket | Dev team | ~2 hours |
-| 🔴 P1 | Build EPA Section 608 compliance tile | Dev team | PREMIER differentiator |
-| 🔴 P1 | Build Service Agreement Manager tile | Dev team | Their recurring revenue tool |
-| 🟡 P2 | Update AI prompts for HVAC fault codes | Dev team | AIEngine.js update |
-| 🟡 P2 | Deploy conduit-os.builtwithcai.com | Dev team | Same Railway project |
-| 🟡 P2 | Identify 3 HVAC pilot operators in beachhead region | Founder | 1–3 truck owner-operators |
-| 🟢 P3 | Update builtwithcai.com to list both products | Dev team | Platform story begins |
-
----
-
-### Phase 4 — Platform Story & Investor Readiness (Months 4–6)
-
-**Goal:** 10+ paying shops across 2 verticals. MRR visible. Investor deck ready.
-
-| Priority | Task | Owner | Notes |
-|---|---|---|---|
-| 🔴 P1 | Hit 10 paying shops (any tier, any vertical) | Founder + Dev | Proof of repeatability |
-| 🔴 P1 | Build builtwithcai.com investor landing page | Dev team | Platform story, not product story |
-| 🟡 P2 | Produce investor one-pager (from this brief) | Founder + Claude.ai | Upload MASTER_BRIEF.md to Claude.ai |
-| 🟡 P2 | Document 80% code reuse proof with metrics | Dev team | Investor credibility |
-| 🟡 P2 | Begin Anchor OS planning (food service) | Founder | V3 pre-build |
-| 🟢 P3 | Apply to 1–2 Texas-based startup programs or accelerators | Founder | SXSW ecosystem, Capital Factory |
+| Priority | Task |
+|---|---|
+| 🔴 P1 | Define Conduit asset shape (equipment/loads) |
+| 🔴 P1 | Fork platform → conduit-os branch |
+| 🔴 P1 | Rename UI labels for HVAC context |
+| 🔴 P1 | EPA Section 608 compliance tile |
+| 🔴 P1 | Service Agreement Manager tile |
+| 🟡 P2 | Conduit suggestion templates |
+| 🟡 P2 | Conduit Intuit app + production approval |
+| 🟡 P2 | First HVAC pilot operator |
 
 ---
 
 ## PART 10 — OPEN QUESTIONS & ACTIVE DECISIONS
 
-These are unresolved items. Do not make unilateral decisions on these without team alignment.
-
-| # | Question | Context | Status |
-|---|---|---|---|
-| 1 | Do we charge for the AI Assessment separately or bundle it as a premium trial entry? | Assessment-as-funnel vs. assessment-as-revenue | Open |
-| 2 | What is the developer role split between the two sons? | Need clear ownership per module to avoid conflicts | Open — define in team section |
-| 3 | Do we pursue outside funding at the 10-shop milestone or bootstrap to 25? | Affects how aggressively we build Conduit OS | Open |
-| 4 | Do we hire a part-time salesperson for the beachhead region at Phase 2? | Founder bandwidth is the bottleneck for installs | Open |
-| 5 | QuickBooks integration — which tier does it unlock? | Currently planned for PROFESSIONAL, but shops may expect it at STARTER | Open |
-| 6 | Do we white-label the platform for other consultants / resellers? | High leverage but adds support burden | Future decision |
+| # | Question | Status |
+|---|---|---|
+| 1 | Resend + Twilio — actually wired with working keys? | Open — verify |
+| 2 | Multi-nursery auth pattern | Open — design before Phase 1 |
+| 3 | Lauren manager role in configureAuth | Open — Phase 1 |
+| 4 | QB token refresh | In progress — demo critical |
+| 5 | Conduit asset shape | Open — answer before Phase 3 |
+| 6 | Stripe — which tier unlocks which modules? | Open |
+| 7 | White-label platform for resellers? | Future decision |
+| 8 | Outside funding at 10-shop milestone or bootstrap to 25? | Open |
 
 ---
 
-## PART 11 — GAPS TO CLOSE (Previously Identified)
+## PART 11 — INTUIT PRODUCTION APPROVAL
 
-These were identified during the Claude.ai strategy review on 2026-05-12:
+See: `INTUIT_PRODUCTION_APPROVAL_GUIDE.md` in repo root.
 
-| Gap | Priority | Assigned To |
+**Vertical status:**
+
+| Vertical | App Name | Submitted | Approved | Production Live |
+|---|---|---|---|---|
+| Cultivar-OS | Cultivar-OS | ✅ May 22, 2026 | ✅ May 22, 2026 | ✅ |
+| Ignition-OS | TBD | ❌ | ❌ | ❌ |
+| Conduit-OS | TBD | ❌ | ❌ | ❌ |
+
+**Rule:** Each vertical needs its own Intuit app and separate production approval. Use the guide — takes 20 minutes with it.
+
+---
+
+## PART 12 — SECURITY & KEY MANAGEMENT
+
+### API Key Locations
+
+| Key | Location | Notes |
 |---|---|---|
-| Financial model — MRR targets, break-even, runway (now in Part 3) | ✅ Done | Claude.ai |
-| Competitive landscape (now in Part 5) | ✅ Done | Claude.ai |
-| Team / founder section (partially done — needs role definitions) | 🟡 In progress | Founder |
-| GTM timeline with milestones (now in Part 9) | ✅ Done | Claude.ai |
-| Risk register | 🟡 Needed | Founder + Claude.ai |
-| Investor one-pager (separate document) | 🟢 Phase 4 | Founder + Claude.ai |
+| ANTHROPIC_API_KEY | Vercel (cultivar-os) + Railway (ignition-os) | Rotate both when rotating one |
+| QBO_CLIENT_ID (production) | Vercel (cultivar-os) | ABuTb3EU... |
+| QBO_CLIENT_SECRET (production) | Vercel (cultivar-os) | d9mctADc... |
+| QBO_CLIENT_ID (dev/sandbox) | Vercel (cultivar-os) | ABmD6ELs... |
+| BLOTATO_API_KEY | Vercel (cultivar-os) | blt_Wq7U... |
+| SUPABASE_SERVICE_KEY | Vercel (cultivar-os) | Never expose to frontend |
 
-### Risk Register (Initial Draft)
+### Key Management Rules
+- Never paste API keys into any chat interface
+- Copy directly from source dashboard → paste directly into destination
+- When rotating ANTHROPIC_API_KEY: update Vercel AND Railway in same session
+- Production QB keys: never use for development/testing
+- Sandbox QB keys: never use for production/demo with real customer data
+
+---
+
+## PART 13 — DEMO PLAYBOOK (LAWNS TREE FARM — MAY 25, 2026)
+
+### Key Contacts
+- **Terry** — owner, 65, male. Wants to retire. Approves if Lauren is confident.
+- **Lauren Bishop** — manager. Overwhelmed. Wants the tech. The real buyer.
+- **Address:** 400 Honeycomb Mesa, Leander TX 78641
+
+### The Emotional Core
+Lauren IS the Regina story. She's the one who ran out to the parking lot. The system doesn't just capture $20 in netting — it gives Lauren her afternoon back.
+
+**The numbers that close Lauren:**
+- 29 hours/month in manual work eliminated
+- $149/month cost
+- Net benefit: $1,906/month month 1
+
+**The numbers that close Terry:**
+- Investment protected
+- Lauren stays sane
+- Business runs without him
+
+### Physical Items to Bring
+- ✅ Laptop — QB connected, invoices visible
+- ✅ Phone — cultivar-os.app loaded
+- ✅ 3 printed QR tags: SCV-0031, NCM-0042, MS30-001
+- ✅ Invoice #3648.380 — Regina & David O'Brien — $920.13 PAID
+- ✅ Founding customer agreement (1 page)
+- ✅ ROI one-pager
+
+### Demo Flow (target: under 12 minutes)
+1. Opening + invoice on table (2 min)
+2. QR scan + plant timeline (1 min)
+3. Regina story + netting moment (2 min) ← emotional peak
+4. Checkout flow (1 min)
+5. QB invoice appears (30 sec) ← magic moment
+6. Lauren's dashboard (1 min)
+7. Future features — one sentence each (1 min)
+8. The close (1 min)
+
+### The Close
+> "$149 a month. Locked forever — that price never goes up. You're the business that shapes how this gets built."
+
+### Post-Demo Follow-Up Email (if they ask to think)
+```
+Subject: Your plants are live
+
+Layna,
+
+cultivar-os.app/plant/SCV-0031
+cultivar-os.app/plant/NCM-0042
+cultivar-os.app/plant/MS30-001
+
+Show anyone who picks up a plant tag this week.
+
+David
+```
+
+---
+
+## PART 14 — RISK REGISTER
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| First pilot shop doesn't convert | Medium | High | Have 3 pilots running simultaneously; one loss isn't fatal |
-| Tekmetric / competitor drops price to compete | Low | Medium | Our moat is data lock-in + physical GTM, not price |
-| AI API costs spike during scale | Medium | Medium | Usage logging already built; set per-tier caps |
-| Founder bandwidth limits installs | High | Medium | Define a referral/installer partner program by Phase 2 |
-| One developer leaves or is unavailable | Medium | High | Document all architecture decisions; Claude Code is the institutional memory |
-| Trial engine doesn't convert at target rate | Medium | High | A/B test Day 12 savings report format; adjust pricing |
+| LAWNS doesn't close May 25 | Medium | High | Leave QR tags, set follow-up date |
+| QB token expires during demo | Medium | High | Token refresh fix in progress |
+| Intuit production issue day of demo | Low | High | Sandbox as fallback — still impressive |
+| First pilot shop doesn't convert (Ignition) | Medium | High | 3 pilots simultaneously |
+| Stripe not wired before first paid customer | High | High | Wire Stripe in Phase 1 immediately |
+| Founder bandwidth limits installs | High | Medium | Define referral/installer partner program |
+| Claude Code is institutional memory | Medium | High | All architecture in CLAUDE.md + this doc |
 
 ---
 
-## PART 12 — CHANGELOG
-
-*Update this section every time a milestone is completed. Include date, what was done, and who did it.*
+## PART 15 — CHANGELOG
 
 | Date | Milestone | Who |
 |---|---|---|
-| 2026-05-12 | MASTER_BRIEF.md created. Strategy session with Claude.ai. Competitive landscape, financial model, AI Assessment integration strategy, and plan of action added. | Founder + Claude.ai |
-| | | |
-| | | |
+| 2026-05-12 | MASTER_BRIEF.md v1 created. Strategy session. | David + Claude.ai |
+| 2026-05-22 | Cultivar OS demo-ready. QB production approved. Social module complete. Full checkout → QB invoice verified with real QB account. | David + Claude Code |
+| 2026-05-23 | MASTER_BRIEF.md v2. TRACE_PLATFORM_AUDIT.md complete. Platform philosophy, module economy, suggestion engine, vertical roadmap documented. | David + Claude.ai |
 
 ---
 
-## APPENDIX A — HOW TO START A CLAUDE CODE SESSION
+## APPENDIX A — SESSION STARTERS
 
-Copy and paste this at the start of every Claude Code terminal session:
-
+### Claude Code session:
 ```
-Read MASTER_BRIEF.md in the root of this repo before we begin.
+Read MASTER_BRIEF.md and CLAUDE.md before we begin.
 
-Current phase: [Phase 0 / 1 / 2 / 3 / 4]
-Current focus: [specific task from the Plan of Action]
-Today's goal: [what you want to accomplish this session]
+Current phase: [Phase 0 / 1 / 2 / 3]
+Current focus: [specific task]
+Today's goal: [deliverable]
 
-Do not make architectural changes outside the current focus area without flagging them first.
+Do not make architectural changes outside 
+the current focus without flagging first.
 ```
 
----
-
-## APPENDIX B — HOW TO START A CLAUDE.AI SESSION
-
-Upload MASTER_BRIEF.md and say:
-
+### Claude.ai session:
 ```
-Here is the current MASTER_BRIEF for Built with CAI / TRACE Enterprises.
-Today I need help with: [strategy / writing / investor materials / competitive research / etc.]
-Current status: [what phase you're in, what's been completed]
+Here is the current MASTER_BRIEF for TRACE Enterprises.
+Today I need help with: [strategy / writing / planning]
+Current status: [phase, what's been completed]
 ```
 
 ---
 
-*Built with CAI — A TRACE Enterprises Platform*
-*ignition-os.com · builtwithcai.com*
-*MASTER_BRIEF.md — Keep this file updated. It is the memory of the company.*
+## APPENDIX B — KEY URLS & CONTACTS
+
+```
+Platform:         builtwithcai.com
+Cultivar OS:      cultivar-os.vercel.app
+Repo:             github.com/david-obrien61/trace-platform
+Supabase:         bgobkjcopcxusjsetfob (cultivar-os)
+Intuit app:       Cultivar-OS (TRACE workspace)
+App ID:           c638ea14-22d0-4edb-a013-0c3a9aed535c
+
+TRACE phone:      (512) 456-3632
+TRACE email:      david@trace-enterprises.com
+Demo nursery ID:  a1b2c3d4-0000-0000-0000-000000000001
+Blotato user ID:  269df7e1-351d-4add-9111-3d42564b1fc6
+```
+
+---
+
+*TRACE Enterprises · Built with CAI*
+*cultivar-os.vercel.app · builtwithcai.com*
+*MASTER_BRIEF.md v2 — May 23, 2026*
+*Update this file every session. No exceptions.*

@@ -9,6 +9,20 @@
 
 ---
 
+## Scope & Hierarchy
+
+This document owns session-by-session handoff state, current infrastructure specifics, and the active task list. Read this first at the start of every Claude Code session.
+
+When this doc conflicts with another:
+- For strategy, demo plan, or revenue questions, see MASTER_BRIEF.md
+- For architecture or where things should live, see PLATFORM_STRATEGY.md
+- For what's actually built in code, see TRACE_PLATFORM_AUDIT.md
+- For the discovery module, see DISCOVERY_MODULE_BRIEF.md (created Session 1b)
+
+Update the handoff section at the end of every session.
+
+---
+
 ## 1. CORE MANDATE
 
 You are building the TRACE platform — a composable AI operating

@@ -1,4 +1,17 @@
 # TRACE Platform Baseline Audit
+
+## Scope & Hierarchy
+
+This document owns current code state — what exists, what's stubbed, what needs extracting. This doc is the source of truth for any question about what is actually built right now.
+
+When this doc conflicts with another:
+- For target state and architectural intent, see PLATFORM_STRATEGY.md
+- For strategy, revenue, and demo plan, see MASTER_BRIEF.md
+- For current infrastructure specifics (Supabase projects, env vars, deployment URLs, recent session work), see CLAUDE.md
+- For the discovery module's specification, see DISCOVERY_MODULE_BRIEF.md (created Session 1b)
+
+When this audit says X exists and another doc says Y exists, the audit wins. Other docs are intent; this doc is reality.
+
 **Date:** May 23, 2026  
 **Scope:** ignition-os · cultivar-os · packages/shared  
 **Purpose:** Blueprint for shared/ before Conduit OS is built  

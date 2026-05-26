@@ -1,12 +1,20 @@
 # TRACE Platform — Multi-Vertical Strategy & Architecture
+
+## Scope & Hierarchy
+
+This document owns target architecture — what packages/shared/ and the vertical apps should look like when complete. Every table and section here describes target state, not current state.
+
+When this doc conflicts with another:
+- For current state, see TRACE_PLATFORM_AUDIT.md (audit wins on what is built)
+- For strategy, revenue, and contacts, see MASTER_BRIEF.md
+- For session handoff and infrastructure specifics, see CLAUDE.md
+- For the discovery module's product brief, see DISCOVERY_MODULE_BRIEF.md (created Session 1b)
+
+When code reality and architectural ideal disagree about what exists, the audit wins. This doc describes where we're going.
+
 **Built with CAI · TRACE Enterprises · David OBrien**
 **Document version: 1.0 · May 2026**
 **Status: Authoritative — supersedes scattered references in all other briefs**
-
-> This is the single document that answers: "How does TRACE build one platform
-> that serves infinite verticals?" Read this before any brief, any session, 
-> any architectural decision. If something in another document conflicts with 
-> this one, this one wins.
 
 ---
 
