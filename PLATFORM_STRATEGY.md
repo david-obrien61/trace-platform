@@ -587,8 +587,10 @@ CREATE POLICY "[table] scoped to tenant" ON [table_name]
 - Ignition OS: shops, employees, repair_orders, parts, tools
 - Cultivar OS: nurseries, plants, plant_events, orders, addons
 - Conduit OS: shops, employees, service_tickets, equipment, refrigerant_log
-- KINNA-OS: organizations, clients, households, distributions, financial_assistance, prayer_requests
+- KINNA-OS: organizations, people, households, distributions, financial_assistance, prayer_requests
 - CoolRunnings: properties, zones, devices, automations, sensor_readings
+
+**Note:** The primary person-record table is `people` rather than `clients`. The KINNA philosophy explicitly states that the people walking through the door are "not clients, not cases, not recipients" — naming the table `clients` would contradict that at the data layer. `people` is broader (accommodates volunteers, donors, pastoral contacts, staff, and service recipients alike) and doesn't pre-commit the schema to any one role taxonomy.
 
 ### LLM Placement Rules (from KINNA-OS — applies platform-wide)
 
