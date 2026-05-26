@@ -487,6 +487,31 @@ Noticed but not touched (log only):
 
 Next session: Session 1b (net-new content + button audit + discovery brief).
 
+### 2026-05-26 — Session 1b: Net-New Content Reconciliation
+
+Completed:
+- PART 1: DISCOVERY_MODULE_BRIEF.md created (placeholder; detailed UX, question schema, and full build plan deferred to dedicated session)
+- PART 2: Surface Honesty AND Honest Friction principles added to PLATFORM_STRATEGY.md (both names provisional)
+- PART 3: BUTTON_AUDIT_DEMO findings folded into TRACE_PLATFORM_AUDIT.md as UI Surface State section
+- PART 4: BUTTON_AUDIT_DEMO.md relocated to docs/audits/2026-05-25_BUTTON_AUDIT_DEMO.md as dated artifact
+- PART 5: KINNA-OS schema clients → people with rationale note
+- PART 6: Domain inventory added to CLAUDE.md infrastructure section
+- PART 7: Open Architecture Decisions + Tech Debt Log sections added to CLAUDE.md
+
+Decisions locked:
+- KINNA-OS approved by Regina O'Brien on 2026-05-26 (name and definition both)
+- KINNA-OS person-record table named `people` (not `clients`, not `kinna`, not `kinna_customer`)
+- Surface Honesty principle (provisional name) is in force; existing dead-button states are technical debt
+- Honest Friction principle (provisional name) is in force; this session enforced it on itself
+- Discovery v0 timing: three weeks from 2026-05-26 (pre-Aug-1), scope is Layers 1+4 plus /admin transcript review
+- Discovery brief is a placeholder; dedicated session needed for detailed UX, question bank, build plan beyond v0
+
+Noticed but not touched (log only):
+- PLATFORM_STRATEGY.md verticalConfig (Part 5) still has `itemLabel: 'Client'`, `itemLabelPlural: 'Clients'`, and `trialReportFocus: 'clients_served_and_units_distributed'` for kinna-os — these are config strings, not table names; flagged per David's instruction, not changed here
+- BUTTON_AUDIT_DEMO.md was untracked in git (never previously committed), so PART 4 used `mv` + `git add` rather than `git mv` — functionally equivalent; noted for the record
+
+Next session: TBD. Likely candidates: task inventory + master list, LAWNS prototype Terry-readiness polish, KINNA-OS Phase 1 scoping, or the dedicated discovery session.
+
 ---
 
 ## 4. ACTIVE TASKS
