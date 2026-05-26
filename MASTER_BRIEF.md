@@ -12,6 +12,14 @@ When this doc conflicts with another:
 
 The source of truth is the repo on David's desktop. GitHub is backup. claude.ai chat memory is reference, never authoritative.
 
+## TRACE Philosophy
+
+TRACE is not a software replacement company. TRACE is a business intelligence layer for owner-operated small businesses. We connect what they have. We fill what they're missing. We show them their whole business in one place. The business never loses their existing tools. The switching cost is near zero. The value is immediate and visible.
+
+Each tile on the dashboard is either a CONNECTOR (links to a tool the customer already uses) or a GAP-FILLER (adds a capability no existing tool provides). Every tile has three states: Active, Available (trial-eligible), or Locked (tier upgrade required). Customers see what's available without being sold to. The trial mechanic proves the value before the charge.
+
+The one-sentence version: "We don't replace your systems. We connect them, surface what matters, and fill the gaps you couldn't fill yourself."
+
 > **TRACE Enterprises — Built with CAI**
 > Last updated: 2026-05-23
 > Maintained by: David O'Brien
@@ -40,10 +48,7 @@ This file is the operating manual. Before touching any code or making any archit
 ### What We Are
 TRACE Enterprises builds **Built with CAI** — a loosely-coupled business intelligence layer for owner-operated small businesses. We connect what they already have. We fill what their tools can't give them. We show the whole business in one dashboard.
 
-### The One-Paragraph Version
-TRACE is not a software replacement company. We don't ask businesses to abandon QuickBooks, Instagram, or their phone. We connect those tools, surface what's falling through the cracks, and fill the gaps no existing tool covers. Each capability is either a CONNECTOR (links to a tool they already use) or a GAP-FILLER (adds what no tool gives them). Every connector and gap-filler is a tile on their dashboard — enabled when they're ready, billed only when active.
-
-### The Core Philosophy
+### Loose Coupling — Illustrated
 ```
 TIGHT COUPLING (what we avoid):
 "You must use our invoicing system"

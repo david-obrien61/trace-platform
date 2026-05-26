@@ -12,6 +12,14 @@ When this doc conflicts with another:
 
 When this audit says X exists and another doc says Y exists, the audit wins. Other docs are intent; this doc is reality.
 
+## TRACE Philosophy
+
+TRACE is not a software replacement company. TRACE is a business intelligence layer for owner-operated small businesses. We connect what they have. We fill what they're missing. We show them their whole business in one place. The business never loses their existing tools. The switching cost is near zero. The value is immediate and visible.
+
+Each tile on the dashboard is either a CONNECTOR (links to a tool the customer already uses) or a GAP-FILLER (adds a capability no existing tool provides). Every tile has three states: Active, Available (trial-eligible), or Locked (tier upgrade required). Customers see what's available without being sold to. The trial mechanic proves the value before the charge.
+
+The one-sentence version: "We don't replace your systems. We connect them, surface what matters, and fill the gaps you couldn't fill yourself."
+
 **Date:** May 23, 2026  
 **Scope:** ignition-os · cultivar-os · packages/shared  
 **Purpose:** Blueprint for shared/ before Conduit OS is built  
