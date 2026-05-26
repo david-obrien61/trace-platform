@@ -168,6 +168,56 @@ This is the hard rule. Violation creates drift and breaks the platform:
 
 ---
 
+## Design Principles
+
+These principles govern how TRACE products are built and how TRACE AI sessions are conducted. They are listed here — in the architecture document — because they have architectural consequences. Both are provisionally named; names are open for revision after 30–60 days of use (see CLAUDE.md Open Architecture Decisions).
+
+### **Surface Honesty** *(name provisional)*
+
+Every visible UI element in any TRACE product must do something meaningful when interacted with. A button that looks active and produces only a flash on click is a credibility leak — the customer doesn't think "that button isn't done yet," they think "this product doesn't work."
+
+The pitch to small business owners is that TRACE is the connective tissue that *works*. The first dead button a prospect clicks is the first crack in that pitch. Every silent button compounds the credibility tax across the entire demo.
+
+**Three legal states for any UI element:**
+
+1. **WORKS** — the action does what its label implies
+2. **LABELED** — visible state shows "coming soon," "configure first," or similar; clicking shows an honest modal explaining the state ("This feature is in setup. Want to configure it now?")
+3. **HIDDEN** — if neither WORKS nor LABELED is achievable, the element is not in the UI
+
+**What's forbidden:** the fourth state — looks active, clicks, does nothing. This state is the default when developers (human or AI) build a UI element ahead of its backing logic. Surface Honesty inverts that default. Build the LABELED modal first if necessary, or hide the element until WORKS is achievable.
+
+**Application:** Every new UI element gets reviewed against this rule before merge. Existing dead-button states (see TRACE_PLATFORM_AUDIT.md's "UI Surface State — Cultivar OS (May 25 snapshot)" section) are technical debt to be cleared before any next demo.
+
+**On the name:** "Surface Honesty" is a provisional label. The principle is locked; the name may be revised after 30-60 days of use. See CLAUDE.md Open Architecture Decisions.
+
+---
+
+### **Honest Friction** *(name provisional)*
+
+When David gives an instruction that conflicts with something already settled in the docs — strategy, architecture, vertical naming, customer state, schema decisions, design principles — neither Claude.ai nor Claude Code may silently comply. The conflict is surfaced, discussed, and resolved deliberately.
+
+Silent compliance with contradictory instructions is how three failure modes compound invisibly:
+
+1. **Drift** — a decision made in conversation today and a decision documented in the repo from last week disagree, and the disagreement only surfaces months later when both have produced downstream consequences.
+2. **Hidden debt** — workarounds get implemented for legitimate reasons (urgent demo, customer pressure, time constraint), but the workaround status is forgotten and the code is treated as the intended architecture.
+3. **Lost reasoning** — when instruction X conflicts with decision Y, there's usually a *reason* X is being requested. If the conflict isn't surfaced, the reason disappears with it.
+
+**The behavior:** When a conflict is detected, pause before complying. Surface the conflict to David in clear terms — what's being asked, what's already settled, where they disagree. Wait for explicit resolution.
+
+**The three legal resolutions:**
+
+1. **Update the docs.** The new instruction is correct; the existing decision was outdated or wrong. Update the canonical doc to reflect the new truth in the same session.
+2. **Defer the decision.** The conflict is real but not resolvable right now. Add an entry to CLAUDE.md's Open Architecture Decisions list with a target resolution window.
+3. **Acknowledge as tech debt.** The new instruction is a workaround that intentionally violates the architectural intent for a real-world reason. Execute it, but add an entry to CLAUDE.md's Tech Debt Log describing the workaround, the correct architecture, and what triggers the repair.
+
+**What's forbidden:** silent execution of an instruction that contradicts a documented decision, with no record of the contradiction. This is the failure mode Honest Friction exists to prevent.
+
+**Application:** This principle applies to Claude.ai (strategy and chat sessions), Claude Code (build sessions), and David (when reading code or docs that contradict what was said in conversation). All three parties are accountable for the friction.
+
+**On the name:** "Honest Friction" is a provisional label. The principle is locked; the name may be revised after 30-60 days of use. See CLAUDE.md Open Architecture Decisions.
+
+---
+
 ## PART 5 — VERTICAL CONFIG — THE MASTER SWITCH
 
 This is the file that makes the platform work. One entry per vertical.
