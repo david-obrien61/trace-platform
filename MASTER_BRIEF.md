@@ -704,6 +704,39 @@ David
 
 ---
 
+## Current Customer State (as of 2026-05-26)
+
+This section is the live snapshot of where each near-term customer relationship sits. Update this section at the start of any session where customer state has changed. If this section disagrees with anything else in this doc about a customer, this section wins because it is dated and intentionally maintained as ground truth.
+
+### LAWNS Tree Farm (Cultivar OS prospect)
+
+- **Stage:** Prototype demo pending. Demo was informally targeted for May 25 (passed). David texted Lauren morning of May 26 asking if she and Terry have connected internally. No response as of this session.
+- **Prototype status:** Built but rough. Multi-pain mini-suite covering the netting upsell story, inventory lookup, and post-sale follow-up. Not Terry-ready; rough edges visible. Not yet polished to "approver demo" standard.
+- **Buyer dynamic:** Lauren is the champion (feels the pain, drowning operationally). Terry is the approver (tech-shy, retirement-bound). Lauren will not move without Terry's approval.
+- **Centerpiece narrative:** The netting upsell story — Regina bought trees at LAWNS, protective netting was offered after the sale had already closed, resulting in a regretful 40-minute slow drive home. Price discrepancy in offer: $20 actual, $36 quoted. The missed-upsell moment is the demo's emotional anchor.
+- **Secondary narrative:** The stone-mason flowerbed story — David asked a local stone mason for an estimate. Mason came out, measured, took photos, promised the estimate that evening. Four days later the estimate never arrived; David hired someone else. The mason lost a job he wanted because his front-office workflow couldn't keep up with his hands. This is the TRACE thesis in one anecdote — the gap is "estimate didn't go out, deal died." A connector tile or gap-filler catches this.
+- **Next move:** Hold demo until prototype is polished to Terry-ready on the single core flow (the netting story). Cut the mini-suite for the first demo. Demo champions early; demo approvers late.
+- **Pricing/contract status:** Founding customer agreement template exists but not yet pitched to LAWNS.
+
+### Operation Liberty Hill (KINNA-OS anchor pilot)
+
+- **Stage:** Anchor pilot. Customer relationship established via Regina (David's wife, OLH Program Director).
+- **Hard deadline:** Back to School distribution — Saturday, August 1, 2026, 9:00 AM – 12:00 PM at Cross Tracks Church. Registration window is already open and closes July 26. This date is fixed; it is not a soft target.
+- **Phase 1 must-haves (for Aug 1):** Campaign engine + scheduler, Back to School campaign template seeded from Regina's 12-week cadence, registration form replacement (lift 4-child cap, structured shoe-size picker), shoe-size auto-tally engine, social composer driving Back to School campaign, donor thank-you queue (Neon One lookup + email/SMS routing), donation attribution from Neon One to active campaign.
+- **Phase 1 should-haves:** Page content sync to Wix BTS page, job coaching intake form (New Beginnings — surfaces the hidden service), volunteer coordination read-only view (Volgistics + SignUpGenius).
+- **Customer-side situation:** Regina has a firm job offer at another organization. She is trying to leave OLH gracefully without it failing. KINNA-OS Phase 1 is partly her transition gift — the system that lets her replacement run OLH without her. This shapes design priorities: anything that requires Regina's personal knowledge to operate is a Phase 2 concern; anything that captures her knowledge for her successor is Phase 1 critical.
+- **Discovery module:** Discovery v1 build is pre-Aug-1, not post-Aug-1. See DISCOVERY_MODULE_BRIEF.md (created Session 1b). For Regina's onboarding specifically, voice-recorded conversation (Apple Voice Memos → Claude transcription) is acceptable in lieu of the built discovery surface. Flag this for further follow up reference David Said
+
+### Ignition OS (diesel/auto shop pilot pipeline)
+
+- **Stage:** Near-ready for diesel/auto shop demo. Most mature codebase in the portfolio. Pilot-ready features built. Final walkthrough still needed.
+- **Status:** Not currently in front of a named prospect. Demo-ready inventory exists but cold outreach has not started.
+- **Strategic position:** Ignition OS is the highest-leverage second iron in the fire. If LAWNS slows down or stalls, Ignition OS pipeline is the move because the diesel shop market is larger and the product is closer to ready than Cultivar's polish gap.
+- **Next move:** Final walkthrough and demo-readiness audit (deferred until LAWNS pace clarifies, or when David has a 1-day block to focus on it).
+- **Pricing/contract status:** Same founding customer agreement template as Cultivar; not pitched.
+
+---
+
 ## PART 14 — RISK REGISTER
 
 | Risk | Likelihood | Impact | Mitigation |
