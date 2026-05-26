@@ -141,6 +141,37 @@ All domains registered at GoDaddy under David's account.
 
 ---
 
+## Open Architecture Decisions
+
+Decisions that have been deferred but must be resolved before specific build milestones. Update this list when decisions are made or new ones are deferred.
+
+| # | Decision | Deferred From | Resolve Before | Notes |
+|---|---|---|---|---|
+| 1 | "Surface Honesty" principle name | 2026-05-26 (Session 1b) | 60 days of use, then review | Substance is locked; only the name is provisional |
+| 2 | "Honest Friction" principle name | 2026-05-26 (Session 1b) | 60 days of use, then review | Substance is locked; only the name is provisional |
+| 3 | KINNA-OS production app domain | 2026-05-26 | KINNA-OS Phase 1 build | Options: kinna-os.app, kinna-os.com, subdomain of builtwithcai.com |
+| 4 | The `### KINNA-OS — Food Pantry/Nonprofit` subtitle in PLATFORM_STRATEGY.md | 2026-05-26 (Session 1a noticed-but-not-touched) | Next PLATFORM_STRATEGY edit pass | Should be renamed to "Faith-Based and Direct-Service Nonprofits" to match the broader KINNA-OS definition |
+| 5 | PLATFORM_STRATEGY.md file metadata claiming to be authoritative | 2026-05-26 (Session 1a noticed-but-not-touched) | Next PLATFORM_STRATEGY edit pass | Mildly inconsistent with the new Scope & Hierarchy preamble; soften or remove |
+| 6 | PANTRY_OS.md file rename (if file is re-created) | 2026-05-26 | If/when a Pantry OS-named file is re-created in the repo | File was not found in the repo at Session 1a, but the question of its potential return is logged |
+
+---
+
+## Tech Debt Log
+
+Intentional workarounds that violate architectural intent for a real-world reason. Each entry documents the workaround, the correct architecture, and what triggers the repair. Tech debt is acknowledged here so it doesn't become silent debt.
+
+This log is created and maintained per the Honest Friction principle (see PLATFORM_STRATEGY.md Design Principles).
+
+| # | Workaround | Introduced | Correct Architecture | Trigger for Repair |
+|---|---|---|---|---|
+| 1 | Cultivar OS dashboard tiles show active state but `handleNavigate(_key)` is an empty stub (flash and nothing) | Pre-2026-05-25 (inherited from build sessions) | Per Surface Honesty: each tile is WORKS, LABELED, or HIDDEN — never flash-and-nothing | Before any next prospect demo of Cultivar OS |
+| 2 | QB integration is hardcoded with `IGNITION_OS_DATA` reference | Pre-2026-05-23 (per Session 1a audit findings) | AccountingAdapter interface per PLATFORM_STRATEGY.md target architecture; vertical-agnostic | When second vertical (KINNA-OS Phase 1) needs QB or alternative accounting connector |
+| 3 | Social module lives in cultivar-os/api/, not packages/shared/ | Pre-2026-05-23 (per audit findings, Cultivar-only by accident) | Per PLATFORM_STRATEGY.md target: extract to packages/shared/src/social/ | Before Conduit OS or KINNA-OS need social composer |
+
+**Initial entries above are seeded from the Session 1a audit findings and the button audit folded into TRACE_PLATFORM_AUDIT.md in this session (1b). Future entries are added by Claude Code or David whenever Honest Friction surfaces a workaround that is intentionally executed against architectural intent.**
+
+---
+
 ## 3. HANDOFF
 
 > Rewritten at the end of every session.
