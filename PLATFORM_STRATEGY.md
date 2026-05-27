@@ -16,7 +16,7 @@ When code reality and architectural ideal disagree about what exists, the audit 
 
 TRACE is a family. Terrence, Regina, Andrew, Connor, Erin. We named the company after ourselves around a kitchen table, because what we are building is meant to last longer than any one of us and meant to belong to all of us.
 
-Who builds it today. David O'Brien — Terrence — is the builder today. 23 years 9 months military, 30 years federal service in knowledge management, a lifetime as an electrician, mechanic, and builder. He writes the platform working with Claude and Claude Code as engineering partners. Andrew lives in the house and builds his own products alongside David; he set up the foundation TRACE runs on — GitHub, Supabase, Railway. Erin also lives in the house when she's not on travel nursing assignments; she's currently on an ER rotation in California. Connor visits regularly from out of state and is on call by video any time the work needs him. Regina is the program director at Operation Liberty Hill, the anchor pilot customer for KINNA-OS, and the voice the platform answers to on what it means to treat people as kin.
+Who builds it today. David O'Brien — Terrence — is the builder today. 23 years 9 months military service, 30 years federal service in knowledge management, a lifetime as an electrician, mechanic, and builder. He writes the platform working with Claude and Claude Code as engineering partners. Andrew lives in the house and builds his own products alongside David. He established TRACE's foundation — set up Git, GitHub, Supabase, and Railway, and the working stack TRACE runs on. Before that setup, code was being lost. After it, every commit was preserved. The velocity that followed is built on the substrate Andrew laid down. Erin also lives in the house when she's not on travel nursing assignments; she's currently on an ER rotation in California. Connor visits regularly from out of state and is on call by video any time the work needs him. Regina is the program director at Operation Liberty Hill, the anchor pilot customer for KINNA-OS, and the voice the platform answers to on what it means to treat people as kin.
 
 The five of us are not yet all on payroll. We are a family company in formation. The founder builds; the family is within reach; the runway to bring everyone in is what we are building toward.
 
@@ -218,6 +218,30 @@ Silent compliance with contradictory instructions is how three failure modes com
 **Application:** This principle applies to Claude.ai (strategy and chat sessions), Claude Code (build sessions), and David (when reading code or docs that contradict what was said in conversation). All three parties are accountable for the friction.
 
 **On the name:** "Honest Friction" is a provisional label. The principle is locked; the name may be revised after 30-60 days of use. See CLAUDE.md Open Architecture Decisions.
+
+---
+
+### **Honest Velocity** *(name provisional)*
+
+TRACE prioritizes forward motion. We ship before things are polished. We let customer contact reveal what we couldn't have learned from inside the building. When something breaks, we acknowledge it, fix it, learn from it, and move on. We do not optimize for perfection because perfection is a stall mechanism dressed up as virtue.
+
+This principle is balanced against, not opposed to, Surface Honesty (we don't ship dead surfaces and call them done) and Honest Friction (we don't move forward over the top of unresolved contradictions). All three principles apply together: move forward, surface what's broken, resolve conflicts deliberately, don't stop.
+
+**Application:** When a decision presents itself as "ship now imperfect vs. defer until polished," the default is ship — paired with honest documentation of what's still rough. The trade debt is captured in CLAUDE.md's Tech Debt Log, not hidden. Forward motion is the default; deferral requires justification.
+
+**On the name:** "Honest Velocity" is a provisional label. The principle is locked; the name may be revised after 30-60 days of use. See CLAUDE.md Open Architecture Decisions.
+
+---
+
+### **Epistemic Humility** *(name provisional)*
+
+TRACE acknowledges what it does not know. Decisions are documented as decisions, not as truths. Standards are versioned with Draft / Active / Superseded states because we expect to be wrong sometimes. Open Architecture Decisions are tracked with target resolution windows because we know we're deciding under uncertainty. The Tech Debt Log exists because we know workarounds will happen and we want to admit them.
+
+The discovery surface itself is built on this principle: synthesis output includes a "Questions we should have asked but didn't" section, because the conversation has limits we won't always recognize in the moment.
+
+**Application:** When drafting documentation, code comments, customer copy, or operational claims, prefer language that admits uncertainty over language that performs certainty. "We believe this is correct as of date X" is stronger than "this is correct." When we don't know, we say so.
+
+**On the name:** "Epistemic Humility" is a provisional label. The principle is locked; the name may be revised after 30-60 days of use. See CLAUDE.md Open Architecture Decisions.
 
 ---
 

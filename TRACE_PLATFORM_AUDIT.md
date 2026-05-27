@@ -12,13 +12,23 @@ When this doc conflicts with another:
 
 When this audit says X exists and another doc says Y exists, the audit wins. Other docs are intent; this doc is reality.
 
-## TRACE Philosophy
+## TRACE — Who We Are
 
-TRACE is not a software replacement company. TRACE is a business intelligence layer for owner-operated small businesses. We connect what they have. We fill what they're missing. We show them their whole business in one place. The business never loses their existing tools. The switching cost is near zero. The value is immediate and visible.
+TRACE is a family. Terrence, Regina, Andrew, Connor, Erin. We named the company after ourselves around a kitchen table, because what we are building is meant to last longer than any one of us and meant to belong to all of us.
 
-Each tile on the dashboard is either a CONNECTOR (links to a tool the customer already uses) or a GAP-FILLER (adds a capability no existing tool provides). Every tile has three states: Active, Available (trial-eligible), or Locked (tier upgrade required). Customers see what's available without being sold to. The trial mechanic proves the value before the charge.
+Who builds it today. David O'Brien — Terrence — is the builder today. 23 years 9 months military service, 30 years federal service in knowledge management, a lifetime as an electrician, mechanic, and builder. He writes the platform working with Claude and Claude Code as engineering partners. Andrew lives in the house and builds his own products alongside David. He established TRACE's foundation — set up Git, GitHub, Supabase, and Railway, and the working stack TRACE runs on. Before that setup, code was being lost. After it, every commit was preserved. The velocity that followed is built on the substrate Andrew laid down. Erin also lives in the house when she's not on travel nursing assignments; she's currently on an ER rotation in California. Connor visits regularly from out of state and is on call by video any time the work needs him. Regina is the program director at Operation Liberty Hill, the anchor pilot customer for KINNA-OS, and the voice the platform answers to on what it means to treat people as kin.
 
-The one-sentence version: "We don't replace your systems. We connect them, surface what matters, and fill the gaps you couldn't fill yourself."
+The five of us are not yet all on payroll. We are a family company in formation. The founder builds; the family is within reach; the runway to bring everyone in is what we are building toward.
+
+The craft. Every TRACE product is Built with CAI — our signature on the work. The signature is literal: this software is built with composable AI as the engineering partner, used carefully, used well, used by people who know what good work looks like because they've done it with their hands for forty years.
+
+The product line. We don't sell platforms. We sell the operating system for your kind of business: Cultivar OS for nurseries and garden centers, Ignition OS for diesel and auto repair shops, Conduit OS for HVAC, plumbing, and electrical, KINNA-OS for community nonprofits, CoolRunnings for homes. Each is its own product. Each is also part of the same family of software underneath — the way a small dedicated family ships fast and stays consistent.
+
+The silent partner. We are not here to replace what you have. You already have QuickBooks, or Square, or Neon One, or a notebook full of phone numbers. You already have a business that works. What you don't have is enough hours in the day, and the gaps between your tools are where your time and your money are leaking out.
+
+We come alongside, quietly. We connect what you already use. We fill the gaps no one else fills. We give you back your evenings. Your customers see you — not us. We are the silent partner that powers you to soar. For nonprofits, that partnership often shows up as "Powered by KINNA" — a quiet credential visible to funders and peers. For commercial businesses, it usually doesn't need a label at all. The OS is just the tool you use to run your day, made by a family who built it because they needed it themselves.
+
+The one-sentence version: We don't replace your systems. We connect them, surface what matters, and fill the gaps you couldn't fill yourself.
 
 **Date:** May 23, 2026  
 **Scope:** ignition-os · cultivar-os · packages/shared  

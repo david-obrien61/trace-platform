@@ -16,7 +16,7 @@ The source of truth is the repo on David's desktop. GitHub is backup. claude.ai 
 
 TRACE is a family. Terrence, Regina, Andrew, Connor, Erin. We named the company after ourselves around a kitchen table, because what we are building is meant to last longer than any one of us and meant to belong to all of us.
 
-Who builds it today. David O'Brien — Terrence — is the builder today. 23 years 9 months military, 30 years federal service in knowledge management, a lifetime as an electrician, mechanic, and builder. He writes the platform working with Claude and Claude Code as engineering partners. Andrew lives in the house and builds his own products alongside David; he set up the foundation TRACE runs on — GitHub, Supabase, Railway. Erin also lives in the house when she's not on travel nursing assignments; she's currently on an ER rotation in California. Connor visits regularly from out of state and is on call by video any time the work needs him. Regina is the program director at Operation Liberty Hill, the anchor pilot customer for KINNA-OS, and the voice the platform answers to on what it means to treat people as kin.
+Who builds it today. David O'Brien — Terrence — is the builder today. 23 years 9 months military service, 30 years federal service in knowledge management, a lifetime as an electrician, mechanic, and builder. He writes the platform working with Claude and Claude Code as engineering partners. Andrew lives in the house and builds his own products alongside David. He established TRACE's foundation — set up Git, GitHub, Supabase, and Railway, and the working stack TRACE runs on. Before that setup, code was being lost. After it, every commit was preserved. The velocity that followed is built on the substrate Andrew laid down. Erin also lives in the house when she's not on travel nursing assignments; she's currently on an ER rotation in California. Connor visits regularly from out of state and is on call by video any time the work needs him. Regina is the program director at Operation Liberty Hill, the anchor pilot customer for KINNA-OS, and the voice the platform answers to on what it means to treat people as kin.
 
 The five of us are not yet all on payroll. We are a family company in formation. The founder builds; the family is within reach; the runway to bring everyone in is what we are building toward.
 
@@ -93,13 +93,13 @@ Replace paper, gut-feel pricing, and lost margin with AI-native workflows — fo
 ## PART 1.5 — THE OPERATING MODEL
 
 ### Velocity as Evidence
-TRACE Cultivar OS reached demo-ready status six weeks from project start, built by a solo founder working with Claude and Claude Code as engineering partners and Andrew O'Brien on initial stack setup. Ignition OS reached pilot-ready status in the same window, KINNA-OS strategy locked, CoolRunnings live pilot operating, four canonical docs synced across the repo. The pace is the demonstration: an AI-augmented owner-operator family can ship at venture-team velocity without venture-team overhead. The unit economics of this model are the strategic asset.
+TRACE Cultivar OS reached demo-ready status in approximately two weeks of focused work, built on top of earlier exploration in Ignition OS that surfaced platform patterns later extracted to the shared layer. The work was performed by a solo founder operating with Claude and Claude Code as engineering partners, on the substrate Andrew O'Brien established (Git, GitHub, Supabase, Railway). The pace is the demonstration: an AI-augmented owner-operator family can ship at venture-team velocity without venture-team overhead. The unit economics of this model are the strategic asset. Exact founding timeline is captured in docs/trace-founding-timeline-2026-05-27.md (pending) and updated as ground truth from Git history.
 
 ### Geographic Freedom — The Underlying Why
 TRACE is being built to be operated from anywhere with connectivity. David and Regina intend to live in Europe. The children — Andrew, Connor, Erin — are free to operate from wherever life takes them. The architecture, the processes, and the team rhythms all serve this end. This is the why behind the what. Every product decision and every operating decision is evaluated against the question: does this work when the founder is in Europe, the developer is in Texas, the nurse is on a travel assignment in California, and the customer is in Leander? When the answer is no, the decision is wrong.
 
 ### Resilience — The Bus Problem
-Andrew and Connor both have GitHub access, both know the laptop password, both have working understanding of the stack. If David were unavailable for an extended period, TRACE could continue to operate. This is mitigation by family, not by process. The family being a family is the resilience plan.
+Andrew and Connor both have GitHub access. Both know the laptop password. Both have working understanding of the stack. If David were unavailable for an extended period, TRACE could continue to operate. This is mitigation by family, not by process. The family being a family is the resilience plan.
 
 ---
 
@@ -782,6 +782,7 @@ This section is the live snapshot of where each near-term customer relationship 
 | 2026-05-22 | Cultivar OS demo-ready. QB production approved. Social module complete. Full checkout → QB invoice verified with real QB account. | David + Claude Code |
 | 2026-05-23 | MASTER_BRIEF.md v2. TRACE_PLATFORM_AUDIT.md complete. Platform philosophy, module economy, suggestion engine, vertical roadmap documented. | David + Claude.ai |
 | 2026-05-27 | Brand framing rewrite: TRACE family architecture, Built with CAI as craft signature, silent partner philosophy made primary. | David + Claude.ai |
+| 2026-05-27 | Brand framing committed: TRACE family architecture (Terrence, Regina, Andrew, Connor, Erin), Built with CAI as craft signature, silent partner philosophy as center, two new Design Principles (Honest Velocity, Epistemic Humility) added to PLATFORM_STRATEGY.md. The "TRACE — Who We Are" block is now synchronized across MASTER_BRIEF, PLATFORM_STRATEGY, DISCOVERY_MODULE_BRIEF, and TRACE_PLATFORM_AUDIT. Three new Open Architecture Decisions logged (provisional names, family-member sign-off). | David + Claude.ai |
 
 ---
 
