@@ -93,7 +93,7 @@ Replace paper, gut-feel pricing, and lost margin with AI-native workflows — fo
 ## PART 1.5 — THE OPERATING MODEL
 
 ### Velocity as Evidence
-TRACE Cultivar OS reached demo-ready status in approximately two weeks of focused work, built on top of earlier exploration in Ignition OS that surfaced platform patterns later extracted to the shared layer. The work was performed by a solo founder operating with Claude and Claude Code as engineering partners, on the substrate Andrew O'Brien established (Git, GitHub, Supabase, Railway). The pace is the demonstration: an AI-augmented owner-operator family can ship at venture-team velocity without venture-team overhead. The unit economics of this model are the strategic asset. Exact founding timeline is captured in docs/trace-founding-timeline-2026-05-27.md (pending) and updated as ground truth from Git history.
+TRACE Cultivar OS reached feature-complete status in five calendar days of focused work — first commit to packages/cultivar-os/ on May 18, 2026 at 10:35 AM; demo-hardened by May 22-23. The work was performed by a solo founder operating with Claude and Claude Code as engineering partners, on the substrate Andrew O'Brien established (Git, GitHub, Supabase, Railway). Ignition OS prework preceded it — 54 commits across 12 days in April 2026 in a separate repo (CAI), which surfaced platform patterns later extracted to the shared layer when Cultivar OS work began. The exact founding timeline is captured in docs/trace-founding-timeline-2026-05-27.md. The earliest verifiable TRACE timestamp is the GitHub account creation date of April 11, 2026.
 
 ### Geographic Freedom — The Underlying Why
 TRACE is being built to be operated from anywhere with connectivity. David and Regina intend to live in Europe. The children — Andrew, Connor, Erin — are free to operate from wherever life takes them. The architecture, the processes, and the team rhythms all serve this end. This is the why behind the what. Every product decision and every operating decision is evaluated against the question: does this work when the founder is in Europe, the developer is in Texas, the nurse is on a travel assignment in California, and the customer is in Leander? When the answer is no, the decision is wrong.
@@ -373,8 +373,8 @@ PMI (Phase 1 — from Ignition OS shared)
 
 ---
 
-### V2 — Ignition OS (Auto / Diesel Repair) — DRY RUN
-**Status:** End-to-end dry run in progress.
+### V2 — Ignition OS (Auto / Diesel Repair) — PAUSED
+**Status:** Feature-complete; development paused. 54 commits across April 26 – May 8, 2026, in the CAI repository. Code was imported into trace-platform as a single 19,870-line snapshot commit on May 18, 2026. No Ignition OS code has been written since the import; the vertical has been paused while Cultivar OS work proceeded. The codebase is functional but unaudited. The voice subsystem has been verified non-functional per docs/ignition-os-voice-audit-2026-05-27.md and requires remediation before any next demo. Ignition OS will be reassessed for pilot-readiness when it becomes the active vertical.
 **Domain:** ignition-os.com
 **Target:** Independent diesel/auto shops, 3–8 bays, $500K–$3M/yr
 **Hook:** Margin engine — "what you charge vs. what the slab recommends"
@@ -752,7 +752,7 @@ This section is the live snapshot of where each near-term customer relationship 
 
 ### Ignition OS (diesel/auto shop pilot pipeline)
 
-- **Stage:** Near-ready for diesel/auto shop demo. Most mature codebase in the portfolio. Pilot-ready features built. Final walkthrough still needed.
+- **Stage:** Ignition OS — feature-complete, development paused, requires audit before next demo.
 - **Status:** Not currently in front of a named prospect. Demo-ready inventory exists but cold outreach has not started.
 - **Strategic position:** Ignition OS is the highest-leverage second iron in the fire. If LAWNS slows down or stalls, Ignition OS pipeline is the move because the diesel shop market is larger and the product is closer to ready than Cultivar's polish gap.
 - **Next move:** Final walkthrough and demo-readiness audit (deferred until LAWNS pace clarifies, or when David has a 1-day block to focus on it).
@@ -783,6 +783,7 @@ This section is the live snapshot of where each near-term customer relationship 
 | 2026-05-23 | MASTER_BRIEF.md v2. TRACE_PLATFORM_AUDIT.md complete. Platform philosophy, module economy, suggestion engine, vertical roadmap documented. | David + Claude.ai |
 | 2026-05-27 | Brand framing rewrite: TRACE family architecture, Built with CAI as craft signature, silent partner philosophy made primary. | David + Claude.ai |
 | 2026-05-27 | Brand framing committed: TRACE family architecture (Terrence, Regina, Andrew, Connor, Erin), Built with CAI as craft signature, silent partner philosophy as center, two new Design Principles (Honest Velocity, Epistemic Humility) added to PLATFORM_STRATEGY.md. The "TRACE — Who We Are" block is now synchronized across MASTER_BRIEF, PLATFORM_STRATEGY, DISCOVERY_MODULE_BRIEF, and TRACE_PLATFORM_AUDIT. Three new Open Architecture Decisions logged (provisional names, family-member sign-off). | David + Claude.ai |
+| 2026-05-27 | Session L: Factual corrections from founding timeline audit — Cultivar velocity language, Ignition status, founding doc reference. | David + Claude Code |
 
 ---
 
