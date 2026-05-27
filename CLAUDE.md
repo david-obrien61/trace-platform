@@ -96,7 +96,7 @@ SUPABASE_URL           = https://bgobkjcopcxusjsetfob.supabase.co
 QBO_CLIENT_ID          = set ✅
 QBO_CLIENT_SECRET      = set ✅
 QBO_REDIRECT_URI       = https://cultivar-os.vercel.app/api/qbo/callback
-QBO_ENVIRONMENT        = sandbox
+QBO_ENVIRONMENT        = production    # Updated 2026-05-22 when Cultivar-OS received Intuit production approval (see MASTER_BRIEF Part 11). CLAUDE.md was not updated at the time; Session K audit on 2026-05-27 surfaced the stale doc by checking Vercel dashboard directly.
 BLOTATO_API_KEY        = blt_Wq7URDauPd5CdJzJfvRWgJSGrBdjZYIuOXNLb/ePic8=
 VITE_DEMO_NURSERY_ID   = a1b2c3d4-0000-0000-0000-000000000001
 VITE_TAX_RATE          = 0.0825
@@ -155,6 +155,7 @@ Decisions that have been deferred but must be resolved before specific build mil
 | 7 | "Honest Velocity" principle name | 2026-05-27 (Brand framing session) | 60 days of use, then review | Substance is locked; only the name is provisional. Joins Surface Honesty and Honest Friction as a coherent family of design principles. |
 | 8 | "Epistemic Humility" principle name | 2026-05-27 (Brand framing session) | 60 days of use, then review | Substance is locked; only the name is provisional. Fourth design principle. |
 | 9 | Family-member role descriptions in canonical docs | 2026-05-27 (Brand framing session) | Before any public-facing copy uses them | Andrew, Connor, Erin, Regina each get to review and edit their own paragraph in the TRACE — Who We Are block. David sends each their section. |
+| 10 | Surface Honesty principle scope — does it cover data values, not just UI elements? | 2026-05-27 (Session K audit findings + nurseries row placeholder data discovery) | Within 30 days of use of the principle | Tonight's work revealed the data layer was lying (fake "Layna" email, 555-prefix fake phone, wrong address) while the UI hardcoded over it with correct values. The principle as committed addresses UI surfaces; the actual failure mode crossed layers. Likely outcome: extend the principle wording in PLATFORM_STRATEGY.md to explicitly cover all data values the system displays, not only UI elements. |
 
 ---
 
@@ -169,6 +170,7 @@ This log is created and maintained per the Honest Friction principle (see PLATFO
 | 1 | Cultivar OS dashboard tiles show active state but `handleNavigate(_key)` is an empty stub (flash and nothing) | Pre-2026-05-25 (inherited from build sessions) | Per Surface Honesty: each tile is WORKS, LABELED, or HIDDEN — never flash-and-nothing | Before any next prospect demo of Cultivar OS |
 | 2 | QB integration is hardcoded with `IGNITION_OS_DATA` reference | Pre-2026-05-23 (per Session 1a audit findings) | AccountingAdapter interface per PLATFORM_STRATEGY.md target architecture; vertical-agnostic | When second vertical (KINNA-OS Phase 1) needs QB or alternative accounting connector |
 | 3 | Social module lives in cultivar-os/api/, not packages/shared/ | Pre-2026-05-23 (per audit findings, Cultivar-only by accident) | Per PLATFORM_STRATEGY.md target: extract to packages/shared/src/social/ | Before Conduit OS or KINNA-OS need social composer |
+| 4 | Hardcoded nursery footer in PlantProfile.tsx line 108 — `LAWNS Tree Farm, LLC · Leander, TX · (512) 450-3336` — bypasses the nurseries table row that contains the same data | Pre-2026-05-27 (surfaced by Session K subsystem audit) | Component should read from the nursery object loaded via existing hooks; eliminate the literal string | Before next nursery customer onboarding (would display LAWNS data for the wrong nursery) |
 
 **Initial entries above are seeded from the Session 1a audit findings and the button audit folded into TRACE_PLATFORM_AUDIT.md in this session (1b). Future entries are added by Claude Code or David whenever Honest Friction surfaces a workaround that is intentionally executed against architectural intent.**
 
@@ -536,6 +538,15 @@ Decisions locked:
 
 Pending:
 - Family member personal sign-off on their individual descriptions in "TRACE — Who We Are" before any external publication (tracked as Open Architecture Decision #7)
+
+### 2026-05-27 — Session K / Session I / Session L: Subsystem audit, founding timeline, MASTER_BRIEF corrections, LAWNS data ingestion
+
+Completed:
+- Session K (pre-LAWNS subsystem verification audit) completed; report at docs/pre-lawns-subsystem-audit-2026-05-27.md. GO-WITH-CAVEATS verdict. HIGH-3 finding (QB sandbox) overturned by Vercel inspection — env is production. Customer dedup confirmed working (TRACE_PLATFORM_AUDIT.md line 135 is stale and should be refreshed).
+- Session I (founding timeline audit) completed; report at docs/trace-founding-timeline-2026-05-27.md. Earliest verifiable TRACE timestamp: GitHub account creation April 11, 2026. Cultivar OS feature-complete in 5 calendar days (May 18 first commit → May 22-23 demo-hardened). Ignition OS status corrected to "feature-complete, development paused."
+- Session L (MASTER_BRIEF factual corrections) completed; velocity numbers, Ignition status, founding doc reference all updated.
+- Nurseries row for LAWNS populated with real data sourced from LAWNS website ingestion (lawnstrees.com). Placeholder values (fake phone, fake Layna email, wrong address) replaced. Address corrected from "Honey Comb Mesa" to "Honeycomb Mesa" matching the LAWNS site spelling. Website populated. Email remains null pending direct input from Lauren or Terry during onboarding.
+- LAWNS website ingest JSON saved to docs/customer-ingests/lawns-ingest-2026-05-27.json — captures full structured data plus stale-content observations (October 2025 most recent news post, 2024 year references, 2019 copyright) to inform onboarding conversation.
 
 ---
 
