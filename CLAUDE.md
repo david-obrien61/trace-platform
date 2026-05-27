@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: May 23, 2026
+# Last updated: May 27, 2026
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -150,9 +150,9 @@ Decisions that have been deferred but must be resolved before specific build mil
 | 1 | "Surface Honesty" principle name | 2026-05-26 (Session 1b) | 60 days of use, then review | Substance is locked; only the name is provisional |
 | 2 | "Honest Friction" principle name | 2026-05-26 (Session 1b) | 60 days of use, then review | Substance is locked; only the name is provisional |
 | 3 | KINNA-OS production app domain | 2026-05-26 | KINNA-OS Phase 1 build | Options: kinna-os.app, kinna-os.com, subdomain of builtwithcai.com |
-| 4 | The `### KINNA-OS — Food Pantry/Nonprofit` subtitle in PLATFORM_STRATEGY.md | 2026-05-26 (Session 1a noticed-but-not-touched) | Next PLATFORM_STRATEGY edit pass | Should be renamed to "Faith-Based and Direct-Service Nonprofits" to match the broader KINNA-OS definition |
 | 5 | PLATFORM_STRATEGY.md file metadata claiming to be authoritative | 2026-05-26 (Session 1a noticed-but-not-touched) | Next PLATFORM_STRATEGY edit pass | Mildly inconsistent with the new Scope & Hierarchy preamble; soften or remove |
 | 6 | PANTRY_OS.md file rename (if file is re-created) | 2026-05-26 | If/when a Pantry OS-named file is re-created in the repo | File was not found in the repo at Session 1a, but the question of its potential return is logged |
+| 7 | Connor, Andrew, Erin, and Regina role descriptions in "TRACE — Who We Are" | 2026-05-27 | Before publishing externally | Descriptions drafted in 2026-05-27 Claude.ai strategy session; each family member should personally review and sign off before the text appears in any external-facing material |
 
 ---
 
@@ -511,6 +511,29 @@ Noticed but not touched (log only):
 - BUTTON_AUDIT_DEMO.md was untracked in git (never previously committed), so PART 4 used `mv` + `git add` rather than `git mv` — functionally equivalent; noted for the record
 
 Next session: TBD. Likely candidates: task inventory + master list, LAWNS prototype Terry-readiness polish, KINNA-OS Phase 1 scoping, or the dedicated discovery session.
+
+### 2026-05-27 — Brand framing update (doc-only session)
+
+Completed:
+- MASTER_BRIEF.md: "TRACE Philosophy" block replaced with "TRACE — Who We Are" (family architecture, built with CAI as craft signature, silent partner philosophy as primary)
+- MASTER_BRIEF.md: "What We Are" subsection updated to match new framing
+- MASTER_BRIEF.md: PART 1.5 — THE OPERATING MODEL added (Velocity as Evidence, Geographic Freedom, Resilience)
+- MASTER_BRIEF.md: Changelog entry added; version bumped to v3
+- PLATFORM_STRATEGY.md: Same "TRACE — Who We Are" block synced
+- PLATFORM_STRATEGY.md: PART 1 paragraph updated (beachhead now nursery vertical, Built with CAI as craft signature)
+- PLATFORM_STRATEGY.md: `### KINNA-OS — Food Pantry/Nonprofit` → `### KINNA-OS — Faith-Based and Direct-Service Nonprofits` (resolves Open Architecture Decision #4)
+- DISCOVERY_MODULE_BRIEF.md: Same "TRACE — Who We Are" block synced (replaces the "Inherited from…" placeholder reference)
+- CLAUDE.md Open Architecture Decisions: Item #4 resolved and removed; item #7 added (family member sign-off on role descriptions pending)
+
+Decisions locked:
+- "TRACE — Who We Are" is the canonical name for the philosophy/identity block across all docs, replacing "TRACE Philosophy"
+- Built with CAI is positioned as craft signature, not the company name — TRACE is the company
+- Silent partner framing is the primary commercial pitch positioning
+- Family architecture (Terrence, Regina, Andrew, Connor, Erin) is in the canonical docs
+- KINNA-OS subtitle in PLATFORM_STRATEGY.md is now "Faith-Based and Direct-Service Nonprofits" — decision #4 resolved
+
+Pending:
+- Family member personal sign-off on their individual descriptions in "TRACE — Who We Are" before any external publication (tracked as Open Architecture Decision #7)
 
 ---
 

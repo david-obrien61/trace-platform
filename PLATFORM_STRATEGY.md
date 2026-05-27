@@ -12,13 +12,23 @@ When this doc conflicts with another:
 
 When code reality and architectural ideal disagree about what exists, the audit wins. This doc describes where we're going.
 
-## TRACE Philosophy
+## TRACE — Who We Are
 
-TRACE is not a software replacement company. TRACE is a business intelligence layer for owner-operated small businesses. We connect what they have. We fill what they're missing. We show them their whole business in one place. The business never loses their existing tools. The switching cost is near zero. The value is immediate and visible.
+TRACE is a family. Terrence, Regina, Andrew, Connor, Erin. We named the company after ourselves around a kitchen table, because what we are building is meant to last longer than any one of us and meant to belong to all of us.
 
-Each tile on the dashboard is either a CONNECTOR (links to a tool the customer already uses) or a GAP-FILLER (adds a capability no existing tool provides). Every tile has three states: Active, Available (trial-eligible), or Locked (tier upgrade required). Customers see what's available without being sold to. The trial mechanic proves the value before the charge.
+Who builds it today. David O'Brien — Terrence — is the builder today. 23 years 9 months military, 30 years federal service in knowledge management, a lifetime as an electrician, mechanic, and builder. He writes the platform working with Claude and Claude Code as engineering partners. Andrew lives in the house and builds his own products alongside David; he set up the foundation TRACE runs on — GitHub, Supabase, Railway. Erin also lives in the house when she's not on travel nursing assignments; she's currently on an ER rotation in California. Connor visits regularly from out of state and is on call by video any time the work needs him. Regina is the program director at Operation Liberty Hill, the anchor pilot customer for KINNA-OS, and the voice the platform answers to on what it means to treat people as kin.
 
-The one-sentence version: "We don't replace your systems. We connect them, surface what matters, and fill the gaps you couldn't fill yourself."
+The five of us are not yet all on payroll. We are a family company in formation. The founder builds; the family is within reach; the runway to bring everyone in is what we are building toward.
+
+The craft. Every TRACE product is Built with CAI — our signature on the work. The signature is literal: this software is built with composable AI as the engineering partner, used carefully, used well, used by people who know what good work looks like because they've done it with their hands for forty years.
+
+The product line. We don't sell platforms. We sell the operating system for your kind of business: Cultivar OS for nurseries and garden centers, Ignition OS for diesel and auto repair shops, Conduit OS for HVAC, plumbing, and electrical, KINNA-OS for community nonprofits, CoolRunnings for homes. Each is its own product. Each is also part of the same family of software underneath — the way a small dedicated family ships fast and stays consistent.
+
+The silent partner. We are not here to replace what you have. You already have QuickBooks, or Square, or Neon One, or a notebook full of phone numbers. You already have a business that works. What you don't have is enough hours in the day, and the gaps between your tools are where your time and your money are leaking out.
+
+We come alongside, quietly. We connect what you already use. We fill the gaps no one else fills. We give you back your evenings. Your customers see you — not us. We are the silent partner that powers you to soar. For nonprofits, that partnership often shows up as "Powered by KINNA" — a quiet credential visible to funders and peers. For commercial businesses, it usually doesn't need a label at all. The OS is just the tool you use to run your day, made by a family who built it because they needed it themselves.
+
+The one-sentence version: We don't replace your systems. We connect them, surface what matters, and fill the gaps you couldn't fill yourself.
 
 **Built with CAI · TRACE Enterprises · David OBrien**
 **Document version: 1.0 · May 2026**
@@ -28,14 +38,7 @@ The one-sentence version: "We don't replace your systems. We connect them, surfa
 
 ## PART 1 — THE PLATFORM IN ONE PARAGRAPH
 
-Built with CAI is a composable AI operating system for owner-operated small
-businesses and nonprofits. The platform is built once. Each vertical is a
-configured instance — new question sets, new tiles, new AI prompts, new
-integration hooks. Nothing is rebuilt. The same Supabase schema, the same
-auth system, the same QuickBooks bridge, the same trial engine, the same
-onboarding shell. The beachhead is auto repair. The platform is everything
-else. The unfair advantage is 40 years of knowledge management expertise
-delivered at SMB price points by a family team.
+TRACE builds an operating system for owner-operated small businesses and nonprofits — one product per vertical, all sharing one platform underneath. The platform is built once. Each vertical is a configured instance — new question sets, new tiles, new AI prompts, new integration hooks. Nothing is rebuilt. The same Supabase schema, the same auth system, the same QuickBooks bridge, the same trial engine, the same onboarding shell. The beachhead is the nursery vertical (Cultivar OS, LAWNS Tree Farm). The platform is everything else. Our craft signature is Built with CAI — every TRACE product is built with composable AI as the engineering partner. The unfair advantage is 40 years of knowledge management and trades experience, delivered at SMB price points by a family team.
 
 ---
 
@@ -649,7 +652,7 @@ Zone 3 — ASYNC BACKGROUND AI (batch, non-blocking):
 - **Close hook:** "An EPA 608 violation starts at $44,539 per day per violation.
   Our log costs $299/month."
 
-### KINNA-OS — Food Pantry/Nonprofit
+### KINNA-OS — Faith-Based and Direct-Service Nonprofits
 - **Pilot status:** Strategy and all SOPs written — OLH Phase 1 targets August 1
 - **Pilot org:** Operation Liberty Hill, Liberty Hill TX
   Contact: Regina O'Brien (Program Director — David's wife)

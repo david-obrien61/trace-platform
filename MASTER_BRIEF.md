@@ -12,13 +12,23 @@ When this doc conflicts with another:
 
 The source of truth is the repo on David's desktop. GitHub is backup. claude.ai chat memory is reference, never authoritative.
 
-## TRACE Philosophy
+## TRACE — Who We Are
 
-TRACE is not a software replacement company. TRACE is a business intelligence layer for owner-operated small businesses. We connect what they have. We fill what they're missing. We show them their whole business in one place. The business never loses their existing tools. The switching cost is near zero. The value is immediate and visible.
+TRACE is a family. Terrence, Regina, Andrew, Connor, Erin. We named the company after ourselves around a kitchen table, because what we are building is meant to last longer than any one of us and meant to belong to all of us.
 
-Each tile on the dashboard is either a CONNECTOR (links to a tool the customer already uses) or a GAP-FILLER (adds a capability no existing tool provides). Every tile has three states: Active, Available (trial-eligible), or Locked (tier upgrade required). Customers see what's available without being sold to. The trial mechanic proves the value before the charge.
+Who builds it today. David O'Brien — Terrence — is the builder today. 23 years 9 months military, 30 years federal service in knowledge management, a lifetime as an electrician, mechanic, and builder. He writes the platform working with Claude and Claude Code as engineering partners. Andrew lives in the house and builds his own products alongside David; he set up the foundation TRACE runs on — GitHub, Supabase, Railway. Erin also lives in the house when she's not on travel nursing assignments; she's currently on an ER rotation in California. Connor visits regularly from out of state and is on call by video any time the work needs him. Regina is the program director at Operation Liberty Hill, the anchor pilot customer for KINNA-OS, and the voice the platform answers to on what it means to treat people as kin.
 
-The one-sentence version: "We don't replace your systems. We connect them, surface what matters, and fill the gaps you couldn't fill yourself."
+The five of us are not yet all on payroll. We are a family company in formation. The founder builds; the family is within reach; the runway to bring everyone in is what we are building toward.
+
+The craft. Every TRACE product is Built with CAI — our signature on the work. The signature is literal: this software is built with composable AI as the engineering partner, used carefully, used well, used by people who know what good work looks like because they've done it with their hands for forty years.
+
+The product line. We don't sell platforms. We sell the operating system for your kind of business: Cultivar OS for nurseries and garden centers, Ignition OS for diesel and auto repair shops, Conduit OS for HVAC, plumbing, and electrical, KINNA-OS for community nonprofits, CoolRunnings for homes. Each is its own product. Each is also part of the same family of software underneath — the way a small dedicated family ships fast and stays consistent.
+
+The silent partner. We are not here to replace what you have. You already have QuickBooks, or Square, or Neon One, or a notebook full of phone numbers. You already have a business that works. What you don't have is enough hours in the day, and the gaps between your tools are where your time and your money are leaking out.
+
+We come alongside, quietly. We connect what you already use. We fill the gaps no one else fills. We give you back your evenings. Your customers see you — not us. We are the silent partner that powers you to soar. For nonprofits, that partnership often shows up as "Powered by KINNA" — a quiet credential visible to funders and peers. For commercial businesses, it usually doesn't need a label at all. The OS is just the tool you use to run your day, made by a family who built it because they needed it themselves.
+
+The one-sentence version: We don't replace your systems. We connect them, surface what matters, and fill the gaps you couldn't fill yourself.
 
 > **TRACE Enterprises — Built with CAI**
 > Last updated: 2026-05-23
@@ -46,7 +56,7 @@ This file is the operating manual. Before touching any code or making any archit
 ## PART 1 — THE COMPANY & PHILOSOPHY
 
 ### What We Are
-TRACE Enterprises builds **Built with CAI** — a loosely-coupled business intelligence layer for owner-operated small businesses. We connect what they already have. We fill what their tools can't give them. We show the whole business in one dashboard.
+TRACE Enterprises is a family-run software company building operating systems for owner-operated small businesses and nonprofits. Our products — Cultivar OS, Ignition OS, Conduit OS, KINNA-OS, CoolRunnings — are each built for one kind of business. Underneath, they share a single platform we call simply the shared layer, built once, inherited by every vertical. Our craft signature is Built with CAI: every TRACE product is built with composable AI as the engineering partner, used disciplined, used well.
 
 ### Loose Coupling — Illustrated
 ```
@@ -77,6 +87,19 @@ Replace paper, gut-feel pricing, and lost margin with AI-native workflows — fo
 > Close with: vertical expansion roadmap + 80% code reuse proof + CAC/LTV math.
 
 **Rule:** Never lead with the platform story to a business owner. Lead with the dollar they're losing today.
+
+---
+
+## PART 1.5 — THE OPERATING MODEL
+
+### Velocity as Evidence
+TRACE Cultivar OS reached demo-ready status six weeks from project start, built by a solo founder working with Claude and Claude Code as engineering partners and Andrew O'Brien on initial stack setup. Ignition OS reached pilot-ready status in the same window, KINNA-OS strategy locked, CoolRunnings live pilot operating, four canonical docs synced across the repo. The pace is the demonstration: an AI-augmented owner-operator family can ship at venture-team velocity without venture-team overhead. The unit economics of this model are the strategic asset.
+
+### Geographic Freedom — The Underlying Why
+TRACE is being built to be operated from anywhere with connectivity. David and Regina intend to live in Europe. The children — Andrew, Connor, Erin — are free to operate from wherever life takes them. The architecture, the processes, and the team rhythms all serve this end. This is the why behind the what. Every product decision and every operating decision is evaluated against the question: does this work when the founder is in Europe, the developer is in Texas, the nurse is on a travel assignment in California, and the customer is in Leander? When the answer is no, the decision is wrong.
+
+### Resilience — The Bus Problem
+Andrew and Connor both have GitHub access, both know the laptop password, both have working understanding of the stack. If David were unavailable for an extended period, TRACE could continue to operate. This is mitigation by family, not by process. The family being a family is the resilience plan.
 
 ---
 
@@ -758,6 +781,7 @@ This section is the live snapshot of where each near-term customer relationship 
 | 2026-05-12 | MASTER_BRIEF.md v1 created. Strategy session. | David + Claude.ai |
 | 2026-05-22 | Cultivar OS demo-ready. QB production approved. Social module complete. Full checkout → QB invoice verified with real QB account. | David + Claude Code |
 | 2026-05-23 | MASTER_BRIEF.md v2. TRACE_PLATFORM_AUDIT.md complete. Platform philosophy, module economy, suggestion engine, vertical roadmap documented. | David + Claude.ai |
+| 2026-05-27 | Brand framing rewrite: TRACE family architecture, Built with CAI as craft signature, silent partner philosophy made primary. | David + Claude.ai |
 
 ---
 
@@ -804,5 +828,5 @@ Blotato user ID:  269df7e1-351d-4add-9111-3d42564b1fc6
 
 *TRACE Enterprises · Built with CAI*
 *cultivar-os.vercel.app · builtwithcai.com*
-*MASTER_BRIEF.md v2 — May 23, 2026*
+*MASTER_BRIEF.md v3 — May 27, 2026*
 *Update this file every session. No exceptions.*
