@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import type { Addon } from '../types/plant';
-import { DEMO_NURSERY_ID } from '../lib/constants';
 
 interface UseAddonsResult {
   addons: Addon[];
@@ -9,7 +8,7 @@ interface UseAddonsResult {
   error: string | null;
 }
 
-export function useAddons(): UseAddonsResult {
+export function useAddons(nurseryId: string): UseAddonsResult {
   const [addons, setAddons] = useState<Addon[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +23,7 @@ export function useAddons(): UseAddonsResult {
       const { data, error: err } = await supabase
         .from('addons')
         .select('*')
-        .eq('nursery_id', DEMO_NURSERY_ID)
+        .eq('nursery_id', nurseryId)
         .eq('active', true)
         .order('sort_order', { ascending: true });
 
@@ -42,7 +41,7 @@ export function useAddons(): UseAddonsResult {
 
     fetch();
     return () => { cancelled = true; };
-  }, []);
+  }, [nurseryId]);
 
   return { addons, loading, error };
 }

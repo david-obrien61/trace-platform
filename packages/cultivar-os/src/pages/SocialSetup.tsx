@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DEMO_NURSERY_ID } from '../lib/constants';
+import { useNursery } from '../context/NurseryProvider';
 
 const PLATFORMS = [
   { key: 'instagram', label: 'Instagram' },
@@ -11,6 +11,7 @@ const PLATFORMS = [
 
 export function SocialSetup() {
   const navigate = useNavigate();
+  const { nurseryId } = useNursery();
 
   const [accountId, setAccountId] = useState('');
   const [platforms, setPlatforms] = useState<string[]>(['instagram']);
@@ -41,7 +42,7 @@ export function SocialSetup() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          nursery_id:         DEMO_NURSERY_ID,
+          nursery_id:         nurseryId!,
           blotato_account_id: accountId.trim(),
           platforms,
         }),

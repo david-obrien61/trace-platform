@@ -50,6 +50,7 @@ export function CartReview() {
         transport,
         nettingDeclined,
         nettingPrice: nettingUnitPrice,
+        nurseryId: plant.nursery_id,
       });
       navigate('/checkout/confirm', {
         state: {

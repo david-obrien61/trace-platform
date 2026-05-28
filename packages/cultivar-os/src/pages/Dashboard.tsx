@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from '@trace/shared/components/Card';
 import { supabase } from '../lib/supabase';
 import { auth } from '../lib/auth';
-import { DEMO_NURSERY_ID } from '../lib/constants';
+import { useNursery } from '../context/NurseryProvider';
 import { useModules } from '../hooks/useModules';
 import { TileGrid } from '@trace/shared/components/tiles/TileGrid';
 import { Tile } from '@trace/shared/components/tiles/Tile';
@@ -68,8 +68,9 @@ const POST_TYPE_LABELS: Record<string, string> = {
 export function Dashboard() {
   const { user } = auth.useSession();
   const navigate  = useNavigate();
+  const { nurseryId, loading: nurseryLoading, error: nurseryError } = useNursery();
 
-  const [nurseryName, setNurseryName]         = useState('LAWNS Tree Farm');
+  const [nurseryName, setNurseryName]         = useState('');
   const [plantCount, setPlantCount]           = useState(0);
   const [inventoryValue, setInventoryValue]   = useState(0);
   const [todayOrderCount, setTodayOrderCount] = useState(0);
@@ -95,7 +96,7 @@ export function Dashboard() {
   const [qbError, setQbError]                 = useState('');
   const [qbNeedsReconnect, setQbNeedsReconnect] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { modules } = useModules(DEMO_NURSERY_ID);
+  const { modules } = useModules(nurseryId ?? '');
 
   // ── Data loading ─────────────────────────────────────────────────────────
 
@@ -108,33 +109,33 @@ export function Dashboard() {
       supabase
         .from('nurseries')
         .select('name, qb_needs_reconnect')
-        .eq('id', DEMO_NURSERY_ID)
+        .eq('id', nurseryId!)
         .single(),
 
       supabase
         .from('plants')
         .select('id, base_price')
-        .eq('nursery_id', DEMO_NURSERY_ID)
+        .eq('nursery_id', nurseryId!)
         .eq('status', 'available'),
 
       supabase
         .from('orders')
         .select('id, total_amount')
-        .eq('nursery_id', DEMO_NURSERY_ID)
+        .eq('nursery_id', nurseryId!)
         .neq('status', 'cancelled')
         .gte('created_at', today),
 
       supabase
         .from('orders')
         .select('id')
-        .eq('nursery_id', DEMO_NURSERY_ID)
+        .eq('nursery_id', nurseryId!)
         .eq('transport_method', 'install')
         .gte('created_at', week),
 
       supabase
         .from('orders')
         .select('id')
-        .eq('nursery_id', DEMO_NURSERY_ID)
+        .eq('nursery_id', nurseryId!)
         .eq('leakage_flag', true)
         .gte('created_at', week),
     ]);
@@ -164,7 +165,7 @@ export function Dashboard() {
     const { data } = await supabase
       .from('social_drafts')
       .select('id, post_type, content, platform')
-      .eq('nursery_id', DEMO_NURSERY_ID)
+      .eq('nursery_id', nurseryId!)
       .eq('status', 'draft')
       .order('created_at', { ascending: true });
     setSocialDrafts((data as SocialDraft[]) ?? []);
@@ -196,7 +197,7 @@ export function Dashboard() {
 
   async function checkQbStatus(): Promise<boolean> {
     try {
-      const res = await fetch(`/api/qbo/status?nursery_id=${DEMO_NURSERY_ID}`);
+      const res = await fetch(`/api/qbo/status?nursery_id=${nurseryId!}`);
       if (res.ok) {
         const data = await res.json();
         if (data.connected) {
@@ -223,7 +224,7 @@ export function Dashboard() {
 
       // Step 2 — fetch OAuth URL from Vercel function
       step = 'fetch';
-      const res = await fetch(`/api/qbo/auth-url?nursery_id=${DEMO_NURSERY_ID}`);
+      const res = await fetch(`/api/qbo/auth-url?nursery_id=${nurseryId!}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(`[step:${step}] ` + (body.error || `Server error ${res.status}`));
@@ -293,17 +294,44 @@ export function Dashboard() {
   // ── Effects ───────────────────────────────────────────────────────────────
 
   useEffect(() => {
+    if (!nurseryId) return;
     loadMetrics();
     checkQbStatus();
     loadSocialDrafts();
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
-  }, []);
+  }, [nurseryId]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
   const missedRevenue = leakageCount * LEAKAGE_AVG_VALUE;
 
   // ── Render ────────────────────────────────────────────────────────────────
+
+  if (nurseryLoading) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--sage-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="skeleton" style={{ width: 160, height: 20, borderRadius: 4 }} />
+      </div>
+    );
+  }
+
+  if (nurseryError || !nurseryId) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--sage-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div style={{ textAlign: 'center', maxWidth: 360 }}>
+          <p style={{ fontWeight: 700, color: 'var(--red-border)', marginBottom: 8 }}>
+            Account not linked to a nursery
+          </p>
+          <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', lineHeight: 1.5 }}>
+            {nurseryError ?? 'No nursery record found for this login. Contact support.'}
+          </p>
+          <button onClick={() => auth.signOut().then(() => navigate('/login'))} className="btn btn-primary" style={{ marginTop: 16 }}>
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--sage-bg)' }}>

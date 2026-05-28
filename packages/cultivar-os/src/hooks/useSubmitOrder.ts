@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { DEMO_NURSERY_ID } from '../lib/constants';
 import { sendSilently } from '@trace/shared/notifications';
 import type { CartAddon } from '../types/order';
 import type { CustomerInput } from '../types/customer';
@@ -14,6 +13,7 @@ export interface SubmitPayload {
   transport: TransportOption;
   nettingDeclined: boolean;
   nettingPrice: number;
+  nurseryId: string;
 }
 
 export interface OrderResult {
@@ -37,8 +37,7 @@ export function useSubmitOrder() {
     setError(null);
 
     try {
-      const { customer, plant, quantity, addons, transport, nettingDeclined, nettingPrice } = payload;
-      const nurseryId = DEMO_NURSERY_ID;
+      const { customer, plant, quantity, addons, transport, nettingDeclined, nettingPrice, nurseryId } = payload;
 
       // ── DB writes via service-role serverless function ─────────────────────
       const res = await fetch('/api/orders/submit', {

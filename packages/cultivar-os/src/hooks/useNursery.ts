@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { DEMO_NURSERY_ID } from '../lib/constants';
 import type { Nursery } from '../types/nursery';
 
-export function useNursery(nurseryId = DEMO_NURSERY_ID) {
+export function useNursery(nurseryId: string) {
   const [nursery, setNursery] = useState<Nursery | null>(null);
   const [loading, setLoading] = useState(true);
 

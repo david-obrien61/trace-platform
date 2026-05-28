@@ -12,7 +12,7 @@ export function AddOns() {
   const navigate = useNavigate();
 
   const { item, addons: cartAddons, transport, setTransport, setAddons, toggleAddon, setNettingDeclined } = useCart();
-  const { addons: dbAddons, loading, error } = useAddons();
+  const { addons: dbAddons, loading, error } = useAddons(item?.plant.nursery_id ?? '');
 
   // Local state for netting when DB addon isn't loaded yet
   const [localNettingSelected, setLocalNettingSelected] = useState(true);
@@ -102,6 +102,18 @@ export function AddOns() {
         <TransportToggle value={transport} onChange={setTransport} />
       </div>
 
+      {/* Netting prompt — immediately after transport toggle, above optional add-ons */}
+      {isSelfTransport && (
+        <div className="section">
+          <NettingPrompt
+            selected={nettingSelected}
+            onToggle={handleNettingToggle}
+            pricePerPlant={nettingPrice}
+            quantity={quantity}
+          />
+        </div>
+      )}
+
       {/* Always-on add-ons */}
       {loading && (
         <div className="section">
@@ -139,18 +151,6 @@ export function AddOns() {
               />
             ))}
           </div>
-        </div>
-      )}
-
-      {/* Netting prompt — pinned above CTA so user must scroll through it */}
-      {isSelfTransport && (
-        <div className="section">
-          <NettingPrompt
-            selected={nettingSelected}
-            onToggle={handleNettingToggle}
-            pricePerPlant={nettingPrice}
-            quantity={quantity}
-          />
         </div>
       )}
 

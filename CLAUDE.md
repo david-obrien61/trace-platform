@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: May 27, 2026
+# Last updated: May 28, 2026
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -18,6 +18,7 @@ When this doc conflicts with another:
 - For architecture or where things should live, see PLATFORM_STRATEGY.md
 - For what's actually built in code, see TRACE_PLATFORM_AUDIT.md
 - For the discovery module, see DISCOVERY_MODULE_BRIEF.md (created Session 1b)
+- For reuse ratio figures, see TRACE_PLATFORM_AUDIT.md "Reuse ratio — corrected ground truth (2026-05-28)"; the 68/78/80% figures cited in prior sessions are retired.
 
 Update the handoff section at the end of every session.
 
@@ -141,6 +142,14 @@ All domains registered at GoDaddy under David's account.
 
 ---
 
+### Auth Architecture — Locked Rule (2026-05-28)
+
+**Auth: PIN/face are unlock gestures layered on top of a real Supabase session (`auth.uid()` must be non-null) — never a replacement. Tenant isolation and RLS depend on this. Do not introduce PIN-only auth for any vertical handling multi-tenant customer data.**
+
+Context: Cultivar OS uses email/password → Supabase Auth → `auth.uid()` → `nurseries.owner_id` lookup (via `NurseryProvider`). The Ignition OS PIN model is explicitly local-first and intentionally bypasses Supabase Auth — it is a separate, known exception for that vertical's single-device use case, not a pattern to reuse in multi-tenant contexts.
+
+---
+
 ## Open Architecture Decisions
 
 Decisions that have been deferred but must be resolved before specific build milestones. Update this list when decisions are made or new ones are deferred.
@@ -157,6 +166,7 @@ Decisions that have been deferred but must be resolved before specific build mil
 | 9 | Family-member role descriptions in canonical docs | 2026-05-27 (Brand framing session) | Before any public-facing copy uses them | Andrew, Connor, Erin, Regina each get to review and edit their own paragraph in the TRACE — Who We Are block. David sends each their section. |
 | 10 | Surface Honesty principle scope — does it cover data values, not just UI elements? | 2026-05-27 (Session K audit findings + nurseries row placeholder data discovery) | Within 30 days of use of the principle | Tonight's work revealed the data layer was lying (fake "Layna" email, 555-prefix fake phone, wrong address) while the UI hardcoded over it with correct values. The principle as committed addresses UI surfaces; the actual failure mode crossed layers. Likely outcome: extend the principle wording in PLATFORM_STRATEGY.md to explicitly cover all data values the system displays, not only UI elements. |
 | 11 | Missing-SELECT-RLS-policy pattern — needs systemic prevention | 2026-05-27 (third occurrence of the same root cause: modules May 22, nursery_modules May 22, orders May 27) | Within 30 days OR before any new table is added to Cultivar OS | Three separate instances of the same bug indicate a process gap. Options: (a) Add a checklist item to migration templates requiring a SELECT policy. (b) Build a Claude Code audit that scans schema for tables-without-SELECT-policies and reports them. (c) Add to the standards seed list as STD-NNN "Every table needs RLS policies." Likely outcome: a combination — the standard plus the audit. Worth a focused session post-LAWNS. |
+| 12 | "Honest Debt" principle name | 2026-05-28 | 60 days of use, then review | Substance is locked; only the name is provisional. Fifth design principle in PLATFORM_STRATEGY.md. |
 
 ---
 
@@ -173,6 +183,7 @@ This log is created and maintained per the Honest Friction principle (see PLATFO
 | 3 | Social module lives in cultivar-os/api/, not packages/shared/ | Pre-2026-05-23 (per audit findings, Cultivar-only by accident) | Per PLATFORM_STRATEGY.md target: extract to packages/shared/src/social/ | Before Conduit OS or KINNA-OS need social composer |
 | 4 | Hardcoded nursery footer in PlantProfile.tsx line 108 — `LAWNS Tree Farm, LLC · Leander, TX · (512) 450-3336` — bypasses the nurseries table row that contains the same data | Pre-2026-05-27 (surfaced by Session K subsystem audit) | Component should read from the nursery object loaded via existing hooks; eliminate the literal string | Before next nursery customer onboarding (would display LAWNS data for the wrong nursery) |
 | 7 | orders table had no SELECT RLS policy from May 17 (table creation) until May 27. Dashboard read path uses anon key (subject to RLS); write path uses service key (bypasses RLS). Result: orders saved successfully but were invisible to the dashboard's Today's Sales, Installs, and Leakage metric tiles. Same root cause as modules/nursery_modules bug fixed May 22. | 2026-05-17 (orders table creation) through 2026-05-27 (fix) | Every Supabase table read from the frontend needs at least one SELECT policy for the authenticated role. Currently loose (USING true); will be tightened to owner_id join post-demo per existing pattern. Migration: 20260527_orders_authenticated_select_policy.sql. | Resolved 2026-05-27 (policy applied manually for demo Supabase project; migration committed for future projects). |
+| 8 | 🟡 nurseries, plants, plant_events, addons — RLS policies exist on these tables (migrations were run) but authenticated SELECT has never been explicitly confirmed via a frontend read in the bgobkjcopcxusjsetfob project. They work in practice for the demo flow, but "it worked once" is not VERIFIED. Same root cause pattern as #7 has struck three times already. | Pre-2026-05-22 (tables predate project separation; RLS migrations ported but not spot-checked post-move) | Each table needs a confirmed authenticated SELECT verified by watching the frontend read succeed after login — not just a migration in the log. Owner: David. | Before next vertical ships OR on next RLS-related change, whichever comes first. Resolve to 🟢 (spot-check passes) or promote to 🔴 (document the gap and add SELECT policies). |
 
 **Initial entries above are seeded from the Session 1a audit findings and the button audit folded into TRACE_PLATFORM_AUDIT.md in this session (1b). Future entries are added by Claude Code or David whenever Honest Friction surfaces a workaround that is intentionally executed against architectural intent.**
 
@@ -183,7 +194,52 @@ This log is created and maintained per the Honest Friction principle (see PLATFO
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
-- **Completed this session:** Major infrastructure work May 21-22:
+### 2026-05-28 — Tenant isolation leak: diagnosis and fix
+
+**Root cause confirmed:** The committed production code hardcoded `DEMO_NURSERY_ID`
+(`a1b2c3d4-0000-0000-0000-000000000001`) in 4 frontend files. Every authenticated user —
+regardless of identity — was resolved to the LAWNS nursery. Triggered when trace_ent@outlook.com
+(no nursery row) logged in and saw LAWNS data ($6,161, 9 plants).
+
+**Files fixed:**
+- `packages/cultivar-os/src/context/NurseryProvider.tsx` (NEW)
+  Auth-to-nursery resolution: `owner_id = auth.uid()` → explicit error state on 0 rows.
+  No fallback. Loud "Account not linked" UI for unmatched users.
+- `packages/cultivar-os/src/pages/Dashboard.tsx`
+  Removed `DEMO_NURSERY_ID`. Uses `useNursery()` context. Guards: `if (!nurseryId) return`
+  in useEffect; `if (nurseryError || !nurseryId)` renders error screen before any data query.
+- `packages/cultivar-os/src/pages/SocialSetup.tsx` — uses `useNursery()` context
+- `packages/cultivar-os/src/hooks/useSubmitOrder.ts` — `nurseryId` now required in payload
+- `packages/cultivar-os/src/hooks/useAddons.ts` — `nurseryId` now a function argument
+- `packages/cultivar-os/src/pages/CartReview.tsx` — passes `plant.nursery_id` to submit
+- `packages/cultivar-os/src/pages/AddOns.tsx` — passes `item.plant.nursery_id` to useAddons
+
+**RLS migration also committed:**
+`supabase/migrations/20260528_per_tenant_rls_isolation.sql`
+Replaces all `USING(true)` policies with `owner_id`-scoped expressions on all Cultivar OS
+tenant tables. Run manually in Supabase SQL editor before next cross-tenant onboarding.
+
+**Open gap (not fixed here — Gap A):**
+Signup does not create a nursery row for new users. New accounts correctly see a "no nursery"
+error state after this fix. Nursery creation flow is BUILD-NEW (dedicated session needed).
+Until built: manually insert a nurseries row with `owner_id` = new user's UID.
+
+**Deploy status:** NOT YET DEPLOYED. Run `npx vercel --prod` from repo root to ship.
+
+**Last files edited:**
+packages/cultivar-os/src/context/NurseryProvider.tsx (new)
+packages/cultivar-os/src/pages/Dashboard.tsx
+packages/cultivar-os/src/pages/SocialSetup.tsx
+packages/cultivar-os/src/hooks/useSubmitOrder.ts
+packages/cultivar-os/src/hooks/useAddons.ts
+packages/cultivar-os/src/pages/CartReview.tsx
+packages/cultivar-os/src/pages/AddOns.tsx
+supabase/migrations/20260528_per_tenant_rls_isolation.sql
+**Build status:** Not verified locally — deploy to Vercel to confirm.
+
+---
+
+- **Completed this session (prior — May 21-22):** Major infrastructure work May 21-22:
   - Supabase project separation COMPLETE
     cultivar-os now on separate project bgobkjco
     ignition-os project untouched
