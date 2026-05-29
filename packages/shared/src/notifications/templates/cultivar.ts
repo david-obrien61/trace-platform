@@ -203,10 +203,34 @@ const seasonalOffer: TemplateDef<SeasonalOfferData> = {
     `Reply STOP to unsubscribe.`,
 };
 
+// ── owner_leakage_alert ───────────────────────────────────────────────────────
+// Internal alert to the business owner when a large-container order closes
+// with zero add-ons. Status type — no opt-in required (operator notification).
+
+interface OwnerLeakageData extends Record<string, unknown> {
+  customerName:  string;
+  plantName:     string;
+  container:     string;
+  invoiceNumber: string;
+  quantity:      number;
+}
+
+const ownerLeakageAlert: TemplateDef<OwnerLeakageData> = {
+  id:       'owner_leakage_alert',
+  vertical: 'cultivar',
+  channel:  'sms',
+  type:     'status',
+
+  text: (d) =>
+    `Missed add-on — ${d.customerName} picked up ${d.quantity > 1 ? `${d.quantity}x ` : ''}` +
+    `${d.container} ${d.plantName} with no services. Invoice ${d.invoiceNumber}.`,
+};
+
 export const cultivarTemplates = [
   orderConfirmation,
   nettingWaiverReminder,
   deliveryScheduled,
   careTips30d,
   seasonalOffer,
+  ownerLeakageAlert,
 ] as TemplateDef[];

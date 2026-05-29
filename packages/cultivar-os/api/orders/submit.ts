@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { sendNotification } from '@trace/shared/notifications/send';
 
 const TAX_RATE        = 0.0825;
 const LARGE_CONTAINERS = ['15 gal', '30 gal', '45 gal', '60 gal', '100 gal'];
@@ -241,6 +242,36 @@ export default async function handler(req: any, res: any) {
       .from('plants')
       .update({ status: 'reserved', updated_at: new Date().toISOString() })
       .eq('id', plant.id);
+
+    // ── 11. Leakage alert to business owner (fire-and-forget) ──────────────
+    if (leakageFlag) {
+      const { data: biz } = await db
+        .from('businesses')
+        .select('phone, email')
+        .eq('id', businessId)
+        .single();
+
+      if (biz?.phone || biz?.email) {
+        sendNotification({
+          vertical:   'cultivar',
+          templateId: 'owner_leakage_alert',
+          entityId:   orderId,
+          channel:    'sms',
+          to: {
+            phone:     biz.phone  ?? undefined,
+            email:     biz.email  ?? undefined,
+            smsOptIn:  true,
+          },
+          data: {
+            customerName:  `${customer.first_name} ${customer.last_name}`.trim(),
+            plantName:     plant.common_name ?? plant.species,
+            container:     plant.current_container,
+            invoiceNumber,
+            quantity,
+          },
+        }).catch((err: any) => console.error('[leakage-alert]', err.message));
+      }
+    }
 
     res.json({ orderId, invoiceNumber, total, subtotal, taxAmount });
 
