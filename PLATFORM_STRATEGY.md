@@ -1065,7 +1065,108 @@ Phase 3 (contractor portal):
 
 ---
 
-## PART 16 — CULTIVAR OS MODULE REGISTRY
+## PART 16 — TILE SYSTEM STANDARD (Platform-Wide)
+
+> Decision locked 2026-05-29: The shared tile system is the standard module navigation pattern for ALL TRACE verticals. No vertical builds its own navigation component for modules. Ignition OS's current hardcoded tab system is tech debt to be converted.
+
+### What a Tile Is
+
+A tile is a tappable card representing one module or integration. It has exactly three states:
+
+| State | Meaning | User action |
+|---|---|---|
+| `active` | Module is enabled AND configured | Tap → navigate to module page |
+| `available` | Module exists but not yet enabled/configured | Tap → enable/setup flow |
+| `locked` | Module requires a higher subscription tier | Tap → no-op (tier copy shown) |
+
+### Shared Implementation
+
+| File | Role |
+|---|---|
+| `packages/shared/src/components/tiles/Tile.tsx` | Single tile — icon, label, state badge, count badge, click dispatch |
+| `packages/shared/src/components/tiles/TileGrid.tsx` | Responsive grid container |
+| `packages/shared/src/context/BusinessProvider.tsx` | Provides `businessId` consumed by `useModules` |
+
+**Tile props contract:**
+```typescript
+interface TileProps {
+  id: string;
+  label: string;
+  icon: ComponentType<LucideProps>;
+  color: string;              // icon color
+  bg: string;                 // card background
+  state: 'active' | 'available' | 'locked';
+  onEnable?: () => void;      // fires when available tile tapped
+  onNavigate?: () => void;    // fires when active tile tapped
+  tierRequired?: string;      // shown on locked tiles
+  count?: number;             // amber badge (social drafts, alerts)
+}
+```
+
+### DB Schema Required per Vertical
+
+Every vertical must have two tables in its own Supabase project:
+
+```sql
+-- System registry (seeded once, read-only at runtime)
+CREATE TABLE modules (
+  key            text PRIMARY KEY,
+  name           text NOT NULL,
+  description    text,
+  tier_required  text   -- null = all tiers, 'growth' = paid only
+);
+
+-- Per-business enable/config state
+CREATE TABLE business_modules (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL REFERENCES businesses(id),
+  module_key  text NOT NULL REFERENCES modules(key),
+  enabled     boolean NOT NULL DEFAULT false,
+  configured  boolean NOT NULL DEFAULT false,
+  config      jsonb,
+  updated_at  timestamptz,
+  UNIQUE(business_id, module_key)
+);
+```
+
+> Note: Cultivar OS currently uses the table name `nursery_modules` for backward compat. New verticals should use `business_modules`. Cultivar will rename post-demo.
+
+### Pain Point → Tile Activation (Onboarding Contract)
+
+The onboarding wizard records which pain points the owner selected. These drive which tiles appear `active` vs `available` on first login:
+
+| Pain Point | Primary Tile Surfaced First |
+|---|---|
+| Missed sales / add-ons | `qr_checkout` (leakage tracking) |
+| Invoicing takes too long | `qb_invoicing` |
+| Social media | `social_media` |
+| Delivery logistics | `delivery_routing` |
+| Customer follow-up | `followup_engine` |
+
+### Ignition OS Conversion — Required Work
+
+Ignition currently uses hardcoded navigation tabs (IgnitionOmniDashboard.jsx) and a localStorage-based module trial system (AdminSubscription.jsx / DataBridge). This is the tech debt to convert.
+
+**Conversion scope:**
+
+| Step | Work | Effort |
+|---|---|---|
+| 1 | Create `modules` + `business_modules` tables in Ignition Supabase project | Small — SQL migration |
+| 2 | Seed module rows: FLUX, PREDICTIVE, ESTIMATOR, HUB, STOK, PROT, CODE, PROC | Small — seed SQL |
+| 3 | Port `AdminSubscription.jsx` trial state from `DataBridge.load('system_subscriptions')` → Supabase `business_modules` | Medium — rewrites trial logic |
+| 4 | Build `useIgnitionModules()` hook (or parameterize shared `useModules()` with vertical key) | Small |
+| 5 | Replace IgnitionOmniDashboard hardcoded TABS with `TileGrid` + `Tile` from shared | Medium |
+| 6 | Wire `handleNavigate(key)` per Ignition module key | Small |
+| 7 | Port data-blur trial expiry pattern from `IgnitionHub.jsx` → shared `LockedOverlay` | Medium |
+| 8 | Replace `DataBridge` reads in each module with Supabase queries | Large — 28+ module files |
+
+**Total estimate:** 2–3 dedicated sessions. Steps 1–6 can ship without step 8 (DataBridge can coexist with Supabase temporarily). Step 8 is the full DataBridge → Supabase migration from the June 15–July 15 roadmap window.
+
+**Triggers this work:** First Ignition OS pilot shop install (June 15–July 15 window per roadmap).
+
+---
+
+## PART 17 — CULTIVAR OS MODULE REGISTRY
 
 ### Modules and Phase
 

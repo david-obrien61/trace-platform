@@ -217,7 +217,7 @@ Ground truth: current extracted reuse is ~19%, with a large (~41%) BUILD NEW bac
 
 | Feature | Ignition OS | Cultivar OS | Shared | Action |
 |---|---|---|---|---|
-| Tile system | ✅ Extracted from CAI (`IgnitionHub.jsx`) — dark theme (slate-950) | ✅ Extracted → `useModules.ts` + `TileGrid.tsx` | ✅ `tiles/TileGrid.tsx` + `tiles/Tile.tsx` — 3 states + count badge | CONFIGURE ✅ |
+| Tile system | ✅ Extracted from CAI — dark tabs (NOT tiles); conversion to shared tile standard is scheduled tech debt (see PLATFORM_STRATEGY.md Part 16) | ✅ Platform standard — `useModules.ts` + `TileGrid.tsx` + `Tile.tsx`, 3 states, count badge, all 10 handlers wired | ✅ `tiles/TileGrid.tsx` + `tiles/Tile.tsx` — canonical implementation | STANDARD ✅ |
 | Mobile navigation | Bottom tab nav in Ignition Native (`.native.js` files) | ❌ (post-demo task) | None | BUILD NEW |
 | Desktop layout | Dark sidebar + content area pattern | Green top navbar + content | None | IGNORE (theme-specific) |
 | Form component library | `Input`, `ProgressBar`, `ResultCard` inline in OnboardingWizard | Inline in each page (no shared form components) | `Button.tsx`, `Card.tsx`, `Badge.tsx`, `LockedOverlay.tsx` | EXTRACT |
