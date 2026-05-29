@@ -15,7 +15,8 @@ import { SocialSetup }     from './pages/SocialSetup';
 import { Orders }            from './pages/Orders';
 import { OnboardingWizard } from './pages/OnboardingWizard';
 import { DeliveryRoute }    from './pages/DeliveryRoute';
-import { Settings }         from './pages/Settings';
+import { Settings }          from './pages/Settings';
+import { DiscoveryInspect }  from './pages/DiscoveryInspect';
 
 export function AppRouter() {
   return (
@@ -45,6 +46,9 @@ export function AppRouter() {
 
       {/* DEMO — QB invoice preview (no auth, for demo fallback) */}
       <Route path="/demo/quickbooks-invoice" element={<DemoQBInvoice />} />
+
+      {/* INTERNAL — discovery inspect tool (no auth — David-only, URL is the gate) */}
+      <Route path="/discovery/inspect" element={<DiscoveryInspect />} />
 
       {/* DEFAULT */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
