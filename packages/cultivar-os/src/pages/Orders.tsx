@@ -12,8 +12,8 @@ interface OrderRow {
   leakage_flag: boolean;
   notes: string | null;
   status: string;
-  customers: { name: string; email: string } | null;
-  order_items: { quantity: number; plants: { tag_id: string; name: string } | null }[];
+  customers: { first_name: string; last_name: string; email: string } | null;
+  order_items: { quantity: number; plants: { tag_id: string; common_name: string | null; species: string } | null }[];
 }
 
 const TRANSPORT_ICON: Record<string, React.ReactNode> = {
@@ -47,8 +47,8 @@ export function Orders() {
       .select(`
         id, created_at, total_amount, transport_method,
         leakage_flag, notes, status,
-        customers ( name, email ),
-        order_items ( quantity, plants ( tag_id, name ) )
+        customers ( first_name, last_name, email ),
+        order_items ( quantity, plants ( tag_id, common_name, species ) )
       `)
       .eq('business_id', businessId)
       .order('created_at', { ascending: false })
@@ -113,7 +113,7 @@ export function Orders() {
           const plant   = item?.plants;
           const qty     = item?.quantity ?? 1;
           const tagId   = plant?.tag_id ?? '—';
-          const plantName = plant?.name ?? 'Unknown plant';
+          const plantName = plant?.common_name ?? plant?.species ?? 'Unknown plant';
 
           return (
             <div
@@ -130,7 +130,7 @@ export function Orders() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <p style={{ margin: 0, fontWeight: 700, fontSize: '0.9375rem', color: '#111827' }}>
-                    {order.customers?.name ?? 'Unknown customer'}
+                    {order.customers ? `${order.customers.first_name} ${order.customers.last_name}` : 'Unknown customer'}
                   </p>
                   <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#6b7280' }}>
                     {order.customers?.email ?? ''}
