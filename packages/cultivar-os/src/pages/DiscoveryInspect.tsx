@@ -251,6 +251,23 @@ export function DiscoveryInspect() {
               What we found — {profile.businessName ?? url}
             </p>
 
+            {profile.statedPainPoint && (
+              <div style={{ background: '#fef9ee', border: '1.5px solid #f59e0b', borderRadius: 9, padding: '10px 12px', marginBottom: 14, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <span style={{ fontSize: '0.75rem', flexShrink: 0, marginTop: 1 }}>💬</span>
+                <div>
+                  <p style={{ margin: 0, fontSize: '0.6875rem', fontWeight: 700, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>
+                    You told us
+                  </p>
+                  <p style={{ margin: 0, fontSize: '0.875rem', color: '#78350f', fontStyle: 'italic' }}>
+                    "{profile.statedPainPoint}"
+                  </p>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: '#92400e' }}>
+                    The analysis and email are shaped around this.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', marginBottom: 14, fontSize: '0.8125rem' }}>
               {[
                 ['Location',    profile.location        ?? '—'],

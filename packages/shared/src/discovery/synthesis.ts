@@ -27,8 +27,16 @@ export async function runSynthesis(
     : 'They are an established business.';
 
   const painLine = profile.statedPainPoint
-    ? `They told us their main pain point is: "${profile.statedPainPoint}".`
-    : 'No specific pain point was stated — infer from their profile.';
+    ? `STATED PAIN POINT (they told us this directly): "${profile.statedPainPoint}"`
+    : 'No specific pain point was stated — infer the most likely one from their profile.';
+
+  const painInstruction = profile.statedPainPoint
+    ? `CRITICAL: They told us their pain point is "${profile.statedPainPoint}". The email MUST echo this back to them in the second paragraph using language close to what they said. They need to feel heard — this is the moment the email earns trust. Do not bury it. Do not skip it. Name it.`
+    : `Identify the most likely pain point from the gaps and content freshness signals, and name it with empathy.`;
+
+  const offeringsNote = profile.statedPainPoint
+    ? `Lead with the 1-2 suggested offerings most directly connected to their stated pain point ("${profile.statedPainPoint}"). Then offer 1 additional amplifier from other gaps.`
+    : `Lead with the 2-3 most impactful suggested offerings from the list below.`;
 
   const prompt = `Write a silent partner analysis email for this business.
 
@@ -50,11 +58,11 @@ Suggested service offerings we identified:
 ${profile.suggestedOfferings.map(o => `- ${o.name}: ${o.rationale}`).join('\n') || 'none'}
 
 Write the email. It should:
-1. Open by acknowledging what they built — reference something specific from their strengths
-2. Acknowledge their pain point (or the most likely one from their profile) with empathy, not alarm
-3. Offer 2-3 specific opportunities framed as amplifiers — each tied to a business outcome
-4. Close warmly with a soft, no-pressure invitation to learn more
-5. Feel like it came from a person who actually read their website, not a template
+1. Open by acknowledging what they built — reference something specific from their strengths. One paragraph.
+2. ${painInstruction}
+3. ${offeringsNote} Frame each as "here is what this could do for you" — tied to a real business outcome (time saved, revenue captured, customers retained). No jargon.
+4. Close warmly with a soft, no-pressure invitation to learn more.
+5. Feel like it came from a person who actually read their website, not a template — because we did.
 
 Return JSON:
 {
