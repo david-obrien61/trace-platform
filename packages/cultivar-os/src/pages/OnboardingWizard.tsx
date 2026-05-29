@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight, ArrowLeft, Leaf, QrCode, DollarSign,
   CheckCircle, BarChart2, Layers, AlertTriangle, ChevronRight, TrendingDown,
+  Truck, Navigation, Send, Copy, X, Plus,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -297,9 +298,117 @@ function SetupPath({ onFinalize, finalizing, finalizeError, onBack, nurseryInfo 
   );
 }
 
+// ─── Delivery wizard path ────────────────────────────────────────────────────
+
+const DEMO_STOPS = [
+  { id: '1', name: 'Johnson Family', address: '400 Honeycomb Mesa, Leander, TX 78641' },
+  { id: '2', name: 'Martinez Residence', address: '1234 Oak Tree Ln, Cedar Park, TX 78613' },
+  { id: '3', name: 'Williams Property', address: '567 Elm Creek Dr, Round Rock, TX 78664' },
+];
+
+function DeliveryWizardPath({ onFinalize, finalizing, finalizeError, onBack }: PathProps) {
+  const [stops, setStops]   = useState(DEMO_STOPS);
+  const [routeUrl, setRouteUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  function buildRoute() {
+    const addresses = stops.filter(s => s.address.trim()).map(s => encodeURIComponent(s.address));
+    setRouteUrl(`https://www.google.com/maps/dir/${addresses.join('/')}/`);
+  }
+
+  function textDriver() {
+    if (!routeUrl) return;
+    const body = `Today's nursery delivery route (${stops.length} stops):\n${routeUrl}`;
+    window.open(`sms:?body=${encodeURIComponent(body)}`);
+  }
+
+  return (
+    <div>
+      <h2 style={{ margin: '0 0 4px', fontSize: '1.375rem', fontWeight: 800, color: GREEN }}>Delivery Route Builder</h2>
+      <p style={{ margin: '0 0 20px', fontSize: '0.8125rem', color: GRAY }}>
+        Add your stops for today — we'll build the optimized route and send it to your driver.
+      </p>
+
+      {!routeUrl ? (
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+            {stops.map((stop, i) => (
+              <div key={stop.id} style={{ background: '#fff', borderRadius: 12, padding: '12px 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.07)', display: 'flex', gap: 10, alignItems: 'center' }}>
+                <span style={{ width: 24, height: 24, borderRadius: '50%', background: GREEN, color: '#fff', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <input
+                    value={stop.name}
+                    onChange={e => setStops(ss => ss.map(s => s.id === stop.id ? { ...s, name: e.target.value } : s))}
+                    placeholder="Customer name"
+                    style={{ border: 'none', outline: 'none', fontWeight: 600, fontSize: '0.875rem', color: DARK, background: 'transparent', padding: 0 }}
+                  />
+                  <input
+                    value={stop.address}
+                    onChange={e => { setStops(ss => ss.map(s => s.id === stop.id ? { ...s, address: e.target.value } : s)); setRouteUrl(null); }}
+                    placeholder="Delivery address"
+                    style={{ border: 'none', borderTop: '1px solid #f3f4f6', outline: 'none', fontSize: '0.8125rem', color: GRAY, background: 'transparent', padding: '4px 0 0', width: '100%' }}
+                  />
+                </div>
+                <button onClick={() => setStops(ss => ss.filter(s => s.id !== stop.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d1d5db' }}>
+                  <X size={15} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={() => setStops(ss => [...ss, { id: Date.now().toString(), name: '', address: '' }])}
+            style={{ width: '100%', background: 'none', border: '1.5px dashed #d1d5db', borderRadius: 12, padding: '12px', color: GRAY, fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 16 }}
+          >
+            <Plus size={15} /> Add Stop
+          </button>
+
+          <PrimaryBtn onClick={buildRoute} disabled={stops.filter(s => s.address.trim()).length === 0}>
+            <Navigation size={16} /> Build Route · {stops.length} Stop{stops.length !== 1 ? 's' : ''}
+          </PrimaryBtn>
+        </>
+      ) : (
+        <div style={{ background: '#fff', borderRadius: 16, padding: '20px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.08)', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+            <Navigation size={18} color={GREEN} />
+            <span style={{ fontWeight: 700, color: GREEN }}>Route ready — {stops.length} stops</span>
+          </div>
+          {stops.map((s, i) => (
+            <div key={s.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
+              <span style={{ width: 22, height: 22, borderRadius: '50%', background: GREEN, color: '#fff', fontSize: '0.6875rem', fontWeight: 700, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{i + 1}</span>
+              <div>
+                <p style={{ margin: 0, fontWeight: 600, fontSize: '0.875rem', color: DARK }}>{s.name}</p>
+                <p style={{ margin: 0, fontSize: '0.75rem', color: GRAY }}>{s.address}</p>
+              </div>
+            </div>
+          ))}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
+            <a href={routeUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px 20px', background: GREEN, color: '#fff', fontWeight: 700, fontSize: '0.9375rem', borderRadius: 12, textDecoration: 'none' }}>
+              <Navigation size={16} /> Open in Google Maps
+            </a>
+            <button onClick={textDriver} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px 20px', background: '#eff6ff', border: '1.5px solid #93c5fd', color: '#1d4ed8', fontWeight: 700, fontSize: '0.9375rem', borderRadius: 12, cursor: 'pointer' }}>
+              <Send size={16} /> Text Route to Driver
+            </button>
+            <button onClick={() => { navigator.clipboard.writeText(routeUrl!); setCopied(true); setTimeout(() => setCopied(false), 2000); }} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 20px', background: '#f9fafb', border: '1.5px solid #e5e7eb', color: DARK, fontWeight: 600, fontSize: '0.875rem', borderRadius: 12, cursor: 'pointer' }}>
+              <Copy size={14} /> {copied ? 'Copied!' : 'Copy Route Link'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <PrimaryBtn onClick={onFinalize} disabled={finalizing}>
+        {finalizing ? 'Setting up…' : <><span>Open My Dashboard</span><ArrowRight size={16} /></>}
+      </PrimaryBtn>
+      {finalizeError && <p style={{ fontSize: '0.8125rem', color: RED, marginTop: 8, textAlign: 'center' }}>{finalizeError}</p>}
+      <BackBtn onClick={onBack} />
+    </div>
+  );
+}
+
 // ─── Main wizard ──────────────────────────────────────────────────────────────
 
-type Path = 'LEAKAGE' | 'CHECKOUT' | 'SETUP';
+type Path = 'LEAKAGE' | 'CHECKOUT' | 'SETUP' | 'DELIVERY';
 
 const STEPS = ['WELCOME', 'NURSERY_SETUP', 'CHOOSE_PATH', 'PATH_EXPERIENCE', 'DONE'] as const;
 
@@ -446,6 +555,14 @@ export function OnboardingWizard() {
             sub: 'Connect QuickBooks, review your inventory, and get ready for the first scan',
             badge: 'Full setup',
           },
+          {
+            id: 'DELIVERY' as Path,
+            icon: <Truck size={22} color="#d97706" />,
+            bg: '#fffbeb', border: '#fcd34d', badgeColor: '#d97706',
+            title: 'Route my deliveries',
+            sub: 'Enter stops, build an optimized route, and text it to your driver in one tap',
+            badge: 'New',
+          },
         ] as const).map(({ id, icon, bg, border, badgeColor, title, sub, badge }) => (
           <button
             key={id}
@@ -521,6 +638,7 @@ export function OnboardingWizard() {
         if (path === 'LEAKAGE')  return <LeakagePath {...pathProps} />;
         if (path === 'CHECKOUT') return <CheckoutPath {...pathProps} />;
         if (path === 'SETUP')    return <SetupPath {...pathProps} nurseryInfo={nurseryInfo} />;
+        if (path === 'DELIVERY') return <DeliveryWizardPath {...pathProps} />;
         return null;
       case 'DONE':          return renderDone();
       default:              return null;

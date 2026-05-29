@@ -292,6 +292,7 @@ export function Dashboard() {
       case 'qr_checkout':   return navigate('/orders');
       case 'qb_invoicing':  return document.getElementById('qb-section')?.scrollIntoView({ behavior: 'smooth' });
       case 'social_media':  return navigate('/social/setup');
+      case 'delivery':      return navigate('/deliveries');
     }
   }
 

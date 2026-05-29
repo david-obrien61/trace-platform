@@ -14,6 +14,7 @@ import { Terms }           from './pages/Terms';
 import { SocialSetup }     from './pages/SocialSetup';
 import { Orders }            from './pages/Orders';
 import { OnboardingWizard } from './pages/OnboardingWizard';
+import { DeliveryRoute }    from './pages/DeliveryRoute';
 
 export function AppRouter() {
   return (
@@ -35,6 +36,7 @@ export function AppRouter() {
       <Route element={<PrivateRoute />}>
         <Route path="/dashboard"    element={<Dashboard />} />
         <Route path="/orders"       element={<Orders />} />
+        <Route path="/deliveries"   element={<DeliveryRoute />} />
         <Route path="/social/setup" element={<SocialSetup />} />
         <Route path="/onboarding"   element={<OnboardingWizard />} />
       </Route>
