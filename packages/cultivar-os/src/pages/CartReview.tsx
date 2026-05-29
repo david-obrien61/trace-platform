@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
 import { useSubmitOrder } from '../hooks/useSubmitOrder';
+import { useBusinessContext } from '@trace/shared/context';
 import { TRANSPORT_OPTIONS, TAX_RATE } from '../lib/constants';
 
 export function CartReview() {
   const navigate = useNavigate();
   const { item, addons, transport, nettingDeclined, customer, clear } = useCart();
   const { submit, submitting, error: submitError } = useSubmitOrder();
+  const { business } = useBusinessContext();
   const [payOnline, setPayOnline] = useState<boolean | null>(null);
 
   if (!item) {
@@ -152,7 +154,7 @@ export function CartReview() {
 
         {!isSelf && !isInstall && (
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem', color: '#27500A', marginBottom: 10, fontWeight: 500 }}>
-            <span>✓ LAWNS handling transport</span>
+            <span>✓ {business?.name ?? 'Staff'} handling transport</span>
             <span>—</span>
           </div>
         )}

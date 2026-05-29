@@ -276,8 +276,7 @@ export function Dashboard() {
   }
 
   function showComingSoon(label: string) {
-    setComingSoonMsg(`${label} — coming soon`);
-    setTimeout(() => setComingSoonMsg(null), 3000);
+    setComingSoonMsg(label);
   }
 
   function handleEnable(key: string) {
@@ -378,12 +377,40 @@ export function Dashboard() {
       </div>
 
       {comingSoonMsg && (
-        <div style={{
-          background: '#1e293b', color: '#fff',
-          textAlign: 'center', padding: '10px 16px',
-          fontSize: '0.875rem', fontWeight: 600,
-        }}>
-          {comingSoonMsg}
+        <div
+          onClick={() => setComingSoonMsg(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 999,
+            background: 'rgba(0,0,0,0.55)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#fff', borderRadius: 16, padding: '32px 28px',
+              maxWidth: 320, width: '90%', textAlign: 'center',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
+            }}
+          >
+            <p style={{ fontSize: '2rem', marginBottom: 12 }}>🔧</p>
+            <p style={{ fontWeight: 700, fontSize: '1.125rem', color: '#111827', marginBottom: 8 }}>
+              {comingSoonMsg}
+            </p>
+            <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: 24, lineHeight: 1.5 }}>
+              This module is in development. It will be available in a future release.
+            </p>
+            <button
+              onClick={() => setComingSoonMsg(null)}
+              style={{
+                width: '100%', padding: '12px', borderRadius: 10, border: 'none',
+                background: '#27500A', color: '#fff', fontWeight: 700,
+                fontSize: '0.9375rem', cursor: 'pointer',
+              }}
+            >
+              Got it
+            </button>
+          </div>
         </div>
       )}
 
