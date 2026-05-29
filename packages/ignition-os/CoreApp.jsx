@@ -8,7 +8,8 @@
 import React, { useState, useEffect } from 'react';
 import DataBridge from './DataBridge';
 import { supabase } from './supabase';
-import OnboardingWizard from './OnboardingWizard';
+import OnboardingWizard from './modules/OnboardingWizard';
+import { useBusinessContext } from '@trace/shared/context';
 import IgnitionFlux from './modules/IgnitionFlux';
 import PredictiveKey from './modules/PredictiveKey';
 import AdminSubscription from './modules/AdminSubscription';
@@ -711,6 +712,9 @@ const IdentityMatrix = ({ onLogin, shopName }) => {
 };
 
 const CoreApp = () => {
+  // MULTI-TENANT: owner identity from Supabase auth → businesses table
+  const { businessId: ownerBusinessId } = useBusinessContext();
+
   // 1. FIRST-RUN GATE
   const [onboardingDone, setOnboardingDone] = useState(() => {
     const policy = DataBridge.load('shop_policy');
@@ -748,7 +752,20 @@ const CoreApp = () => {
     const latestSubs = DataBridge.load('system_subscriptions');
     if (latestSubs) setSubscriptions(latestSubs);
   }, [activeModule]);
-  
+
+  // OWNER SYNC: when owner logs in on a new device, businessId arrives via BusinessProvider.
+  // Seed DataBridge so the existing staff-access flow knows which shop this is.
+  useEffect(() => {
+    if (!ownerBusinessId) return;
+    if (DataBridge.getShopId()) return; // already known
+    DataBridge.setShopId(ownerBusinessId);
+    supabase.from('shops').select('name').eq('id', ownerBusinessId).single()
+      .then(({ data }) => {
+        if (data?.name) { DataBridge.setShopName(data.name); setShopName(data.name); }
+        setShopReady(true);
+      });
+  }, [ownerBusinessId]);
+
   // REUSABLE SYNC FUNCTION
   const fetchCloudData = () => {
     DataBridge.pullCloudSync().then(serverJobs => {
