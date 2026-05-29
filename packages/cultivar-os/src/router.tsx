@@ -12,6 +12,7 @@ import { DemoQBInvoice }   from './pages/DemoQBInvoice';
 import { Privacy }         from './pages/Privacy';
 import { Terms }           from './pages/Terms';
 import { SocialSetup }     from './pages/SocialSetup';
+import { Orders }          from './pages/Orders';
 
 export function AppRouter() {
   return (
@@ -32,6 +33,7 @@ export function AppRouter() {
       {/* PRIVATE — nursery owner/staff */}
       <Route element={<PrivateRoute />}>
         <Route path="/dashboard"    element={<Dashboard />} />
+        <Route path="/orders"       element={<Orders />} />
         <Route path="/social/setup" element={<SocialSetup />} />
       </Route>
 

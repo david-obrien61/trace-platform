@@ -287,8 +287,12 @@ export function Dashboard() {
     }
   }
 
-  function handleNavigate(_key: string) {
-    // post-demo: route to module-specific pages
+  function handleNavigate(key: string) {
+    switch (key) {
+      case 'qr_checkout':   return navigate('/orders');
+      case 'qb_invoicing':  return document.getElementById('qb-section')?.scrollIntoView({ behavior: 'smooth' });
+      case 'social_media':  return navigate('/social/setup');
+    }
   }
 
   // ── Effects ───────────────────────────────────────────────────────────────
@@ -373,7 +377,7 @@ export function Dashboard() {
 
         {/* ── QB status banner ── */}
         {!qbConnected ? (
-          <div style={{ background: '#fff', border: '2px solid var(--green-primary)', borderRadius: 12, padding: '16px' }}>
+          <div id="qb-section" style={{ background: '#fff', border: '2px solid var(--green-primary)', borderRadius: 12, padding: '16px' }}>
             <p style={{
               fontSize: '0.6875rem', fontWeight: 600, color: 'var(--green-primary)',
               textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6,
@@ -401,7 +405,7 @@ export function Dashboard() {
             )}
           </div>
         ) : (
-          <div style={{
+          <div id="qb-section" style={{
             background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: 12,
             padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}>
