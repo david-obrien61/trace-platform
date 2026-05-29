@@ -257,8 +257,8 @@ Discovery module fixes:
 **Build status:** cultivar 2166 modules ✅ · ignition 1828 modules ✅
 
 **⚠️ David — still pending:**
-1. Run `supabase/migrations/20260529_campaigns.sql` in bgobkjcopcxusjsetfob (campaigns feature)
-2. Add `VITE_DEMO_BUSINESS_ID = a1b2c3d4-0000-0000-0000-000000000001` to Vercel cultivar-os env vars (+ migrate A–E if not yet done)
+1. ~~Run `supabase/migrations/20260529_campaigns.sql` in bgobkjcopcxusjsetfob~~ ✅ Applied 2026-05-29
+2. Add `VITE_DEMO_BUSINESS_ID = a1b2c3d4-0000-0000-0000-000000000001` to Vercel cultivar-os env vars (if not yet done)
 
 **Ignition OS is now correctly structured:**
 - owner: email/password Supabase auth → businesses table → businessId
