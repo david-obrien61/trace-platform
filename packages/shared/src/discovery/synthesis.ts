@@ -73,19 +73,26 @@ Return JSON:
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 1500,
+    max_tokens: 2000,
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: prompt }],
   });
 
   const raw = (response.content[0] as any).text?.trim() ?? '{}';
-  const cleaned = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
 
   let parsed: any;
   try {
-    parsed = JSON.parse(cleaned);
-  } catch {
-    throw new Error('Synthesis returned unparseable JSON');
+    // Try clean parse first, then fall back to extracting the first {...} block
+    const stripped = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+    try {
+      parsed = JSON.parse(stripped);
+    } catch {
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error('no JSON object found');
+      parsed = JSON.parse(match[0]);
+    }
+  } catch (e: any) {
+    throw new Error(`Synthesis returned unparseable JSON: ${e.message}`);
   }
 
   return {
