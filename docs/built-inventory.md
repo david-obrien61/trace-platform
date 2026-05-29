@@ -12,8 +12,8 @@
 **What:** Unified multi-provider AI router. Single interface for all AI tasks across all verticals.  
 **Status:** ✅ Built — TypeScript  
 **Location:** `packages/shared/src/ai/AIEngine.ts`  
-**Original source:** `CAI/AIEngine.js` (JavaScript — read-only reference)  
-**Backend:** `CAI/ai_router.py` (FastAPI, Railway) — required for calls to reach providers  
+**Original source:** `CAI/AIEngine.js` (archive — do not edit)  
+**Backend:** `CAI/ai_router.py` (FastAPI, Railway) — **LEGACY for web builds.** AIEngine.call() fails gracefully (`{ ok: false }`) when no backend is reachable. Port to Vercel serverless functions when activating AI features. See Tech Debt #12 in CLAUDE.md.  
 **Import:** `import AIEngine from '@trace/shared/ai/AIEngine'`
 
 **13 tasks:**
@@ -52,14 +52,13 @@
 
 ---
 
-## FastAPI AI Backend (ai_router.py)
+## FastAPI AI Backend (ai_router.py) — LEGACY
 
-**What:** FastAPI router that handles all actual AI provider API calls. AIEngine.ts routes to this.  
-**Status:** ✅ Built — Python  
-**Location:** `CAI/ai_router.py`  
-**Deployed:** Railway (Ignition OS deployment) — NOT Vercel  
-**Scope:** Ignition OS only for now. Cultivar OS calls Claude directly from Vercel functions.  
-**Mount point:** `shop_estimate.py` (per file header)
+**What:** FastAPI router that handles all actual AI provider API calls.  
+**Status:** ⚠️ Legacy — built for the React Native mobile app where API keys couldn't live in the bundle. Now that Ignition OS is a Vercel web app, keys live in Vercel env vars and functions handle them server-side. Railway is not needed.  
+**Location:** `CAI/ai_router.py` (archive)  
+**Forward path:** Port the 11 endpoints to TypeScript Vercel functions under `packages/ignition-os/api/`. Start with `dtc_decode` and `estimate_draft` (text-only, no vision complexity). See Tech Debt #12 in CLAUDE.md.  
+**Exception:** `voice_transcribe` sends audio files — Vercel's 4.5MB payload limit needs evaluation before porting.
 
 **Endpoints:**
 - Gemini: `POST /ai/vin_decode`, `/ai/invoice_scan`, `/ai/label_read`, `/ai/part_photo_id`
@@ -102,7 +101,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** Owner-facing module marketplace. Shows all modules, trial status, pricing. Admin can start trials, see days remaining, configure umbrella subscription price.  
 **Status:** ✅ Built (JSX, Ignition OS only — not yet in shared or Cultivar)  
-**Location:** `CAI/modules/AdminSubscription.jsx`  
+**Location:** `packages/ignition-os/modules/AdminSubscription.jsx`  
 **Default umbrella price:** $299/mo (state variable, admin-adjustable in UI)
 
 **Module keys and display names:**
@@ -143,7 +142,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** localStorage-first data layer for Ignition OS. Single key `IGNITION_OS_DATA` stores all shop state: profiles, jobs, modules, trial clocks, integrations.  
 **Status:** ✅ Built (JavaScript, Ignition OS only — intentionally not shared)  
-**Location:** `CAI/DataBridge.js`
+**Location:** `packages/ignition-os/DataBridge.js`
 
 **Key methods:**
 - `DataBridge.save(key, value)` — persist to localStorage
@@ -249,7 +248,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** 5-step new account setup. Welcome → ShopSetup → ChoosePath (3 paths) → PathExperience → TeamQR. Proves value within 30 min before asking for commitment. Sets trial clock.  
 **Status:** ✅ Built (Ignition OS only — not yet extracted to shared)  
-**Location:** `packages/ignition-os/OnboardingWizard.jsx` (or `CAI/modules/OnboardingWizard.jsx`)
+**Location:** `packages/ignition-os/OnboardingWizard.jsx`
 
 **3 paths:**
 - Margin leak — shows annual revenue loss estimate
@@ -277,8 +276,8 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 | Desktop Folder | GitHub Repo | What's in it | Status |
 |---|---|---|---|
-| `~/Desktop/trace-platform/` | `david-obrien61/trace-platform` | Cultivar OS (active) · ignition-os (planned) | Active — primary monorepo. Only folder that deploys to Vercel. |
-| `~/Desktop/CAI/` | `david-obrien61/CAI` | Ignition OS (original JavaScript source) | Active reference — not yet migrated. Read-only. |
+| `~/Desktop/trace-platform/` | `david-obrien61/trace-platform` | Cultivar OS (active) · ignition-os (active — web build complete 2026-05-28) | Active — primary monorepo. Only folder that deploys to Vercel. Both verticals deploy from here. |
+| `~/Desktop/CAI/` | `david-obrien61/CAI` | Ignition OS (original JavaScript source) | **Archive (2026-05-28)** — web build migrated to `packages/ignition-os/`. Read-only. Keep for `ai_router.py` reference until Railway is decommissioned. |
 | `~/Desktop/CoolRunning/` | `david-obrien61/CoolRunning` | CoolRunnings vertical | Active — separate vertical. |
 | `~/Desktop/IgnitionMobile/` | `david-obrien61/ignition` (archived) | Ignition OS mobile prototype | Archive — rename folder to `IgnitionMobile-archive`. |
 | `~/Desktop/Cultivar-os/` | (none) | Empty | Safe to delete. |

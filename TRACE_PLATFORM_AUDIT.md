@@ -394,8 +394,8 @@ Ground truth: current extracted reuse is ~19%, with a large (~41%) BUILD NEW bac
 ## 16. AIENGINE — SHARED AI ROUTER
 
 **File:** `packages/shared/src/ai/AIEngine.ts`  
-**Status:** ✅ Built and ready — TypeScript port of `CAI/AIEngine.js`  
-**Backend:** `CAI/ai_router.py` — FastAPI, hosted on Railway (Ignition OS deployment)  
+**Status:** ✅ Built and ready — TypeScript port of `CAI/AIEngine.js` (archive)  
+**Backend:** `CAI/ai_router.py` — **LEGACY.** Was Railway FastAPI for mobile build. Web build uses Vercel serverless functions. Port endpoints before activating AI features. See Tech Debt #12 in CLAUDE.md.  
 **Cultivar OS use:** Not wired yet — social post generation uses Claude directly in `api/social/generate-posts.ts`  
 **Import path for any vertical:** `import AIEngine from '@trace/shared/ai/AIEngine'`
 
@@ -446,27 +446,22 @@ If a Claude Sonnet call fails and `options.fallback = true`, AIEngine retries wi
 
 ### Backend dependency
 
-The FastAPI backend (`CAI/ai_router.py`, Railway) must be running for any AIEngine call to succeed. It exposes endpoints at `${VITE_API_URL}/ai/${task}`. Routes by provider:
+**AIEngine fails gracefully** — `catch` block returns `{ ok: false, error: message }` and logs to console. Never throws. App continues working; AI features show error states.
 
-- **Gemini:** `/ai/vin_decode`, `/ai/invoice_scan`, `/ai/label_read`, `/ai/part_photo_id`
-- **Claude:** `/ai/dtc_decode`, `/ai/estimate_draft`, `/ai/pmi_suggest`, `/ai/invoice_audit`, `/ai/savings_report`
-- **OpenAI:** `/ai/voice_transcribe`, `/ai/parts_nlp`, `/ai/intent_classify`
+**For web builds (current):** Do NOT set `VITE_API_URL`. AI features return `ok: false` silently. Activate by porting `ai_router.py` endpoints to Vercel serverless functions under `packages/ignition-os/api/`. See Tech Debt #12 in CLAUDE.md.
 
-The backend logs every call to `ai_usage` (cost tracked in `cost_usd`) and errors to `error_events` (non-fatal). Cost visibility exists from day one.
+The backend (when active) logs every call to `ai_usage` (cost tracked in `cost_usd`) and errors to `error_events` (non-fatal). Cost visibility exists from day one.
 
-### What's missing before Ignition OS modules can use it
+### What's missing before Ignition OS AI features go live
 
-1. `VITE_API_URL` env var must point to the Railway FastAPI deployment
-2. Each Ignition module that calls AIEngine must change its import from `../AIEngine` → `@trace/shared/ai/AIEngine`
-3. `SavingsReport.jsx` — the React display component for `savings_report` task output — is still missing (API task is complete; display work only remains)
+1. Port `ai_router.py` endpoints to TypeScript Vercel functions — `dtc_decode` and `estimate_draft` first (text-only)
+2. `SavingsReport.jsx` — React display component for `savings_report` task output — still missing (API task is complete; display work only)
+
+Steps 1 and 2 in CLAUDE.md "What's missing" (items 2 and 3) are now complete: import paths fixed, `../AIEngine` → `@trace/shared/ai/AIEngine` in all 3 modules.
 
 ### Cultivar OS path when AI is needed
 
-Cultivar OS should NOT use `CAI/ai_router.py` directly — that backend is scoped to Ignition OS. For Cultivar OS AI needs (e.g., plant identification, equipment PMI suggestions), either:
-- (a) Extract the relevant `ai_router.py` endpoints to a shared FastAPI module, or
-- (b) Call Claude / Gemini directly from Vercel serverless functions (the pattern already used in `api/social/generate-posts.ts`)
-
-Decision deferred until Cultivar OS needs a second AI task beyond social post generation.
+Call Claude / Gemini directly from Vercel serverless functions — the pattern already used in `api/social/generate-posts.ts`. Do not route through `ai_router.py`.
 
 ---
 

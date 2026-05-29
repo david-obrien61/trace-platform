@@ -81,7 +81,7 @@ Everything else inherits automatically.
 | Database | Supabase PostgreSQL, RLS, multi-tenant UUID | packages/shared/src/supabase/ | ✅ Live (Ignition OS) |
 | Auth | configureAuth() — PIN or email/password, role-based routing | packages/shared/src/supabase/auth.ts | ⚠️ PIN only — needs configureAuth() wrapper |
 | Data sync | DataBridge.js — local-first, offline queue, trial clock | packages/shared/src/supabase/bridge.ts | ⚠️ localStorage only — Supabase migration needed |
-| AI router | AIEngine.js + ai_router.py — Claude/Gemini/Whisper by task | packages/shared/src/ai/ | ✅ Live (Ignition OS) |
+| AI router | AIEngine.ts — Claude/Gemini/Whisper by task. ai_router.py is legacy (Railway, mobile-era). Forward path: Vercel serverless functions. | packages/shared/src/ai/ | ✅ Built · ⚠️ Backend needs porting before AI features go live |
 | QuickBooks | OAuth 2.0 + invoice creation + customer sync | packages/shared/src/quickbooks/ | ⚠️ Ignition hardcoded — needs vertical-agnostic wrapper |
 | Billing | Stripe subscription + trial clock + data blur | packages/shared/src/stripe/ | ✅ Live (Ignition OS) |
 | Notifications | Twilio SMS + Resend email + templates | packages/shared/src/notifications/ | ⚠️ Partial — needs vertical template system |

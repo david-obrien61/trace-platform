@@ -410,8 +410,8 @@ PMI (Phase 1 — from Ignition OS shared)
 
 ---
 
-### V2 — Ignition OS (Auto / Diesel Repair) — PAUSED
-**Status:** Feature-complete; development paused. 54 commits across April 26 – May 8, 2026, in the CAI repository. Code was imported into trace-platform as a single 19,870-line snapshot commit on May 18, 2026. No Ignition OS code has been written since the import; the vertical has been paused while Cultivar OS work proceeded. The codebase is functional but unaudited. The voice subsystem has been verified non-functional per docs/ignition-os-voice-audit-2026-05-27.md and requires remediation before any next demo. Ignition OS will be reassessed for pilot-readiness when it becomes the active vertical.
+### V2 — Ignition OS (Auto / Diesel Repair)
+**Status:** Web build infrastructure complete (2026-05-28). `packages/ignition-os/` is now the canonical source — web build verified at 1825 modules, zero errors. `CAI/` is archive. Vercel auto-deploy project ready to configure. Business logic is feature-complete; the voice subsystem is non-functional per docs/ignition-os-voice-audit-2026-05-27.md and requires remediation before any next demo. AI features (AIEngine tasks) require porting `ai_router.py` endpoints to Vercel functions before activation — app functions fully without them. Nine mobile-only modules remain renamed to `-delete.jsx` pending final deletion.
 **Domain:** ignition-os.com
 **Target:** Independent diesel/auto shops, 3–8 bays, $500K–$3M/yr
 **Hook:** Margin engine — "what you charge vs. what the slab recommends"
@@ -690,7 +690,7 @@ See: `INTUIT_PRODUCTION_APPROVAL_GUIDE.md` in repo root.
 
 | Key | Location | Notes |
 |---|---|---|
-| ANTHROPIC_API_KEY | Vercel (cultivar-os) + Railway (ignition-os) | Rotate both when rotating one |
+| ANTHROPIC_API_KEY | Vercel (cultivar-os) + Vercel (ignition-os, when AI features are activated) | Railway is decommissioned for web builds |
 | QBO_CLIENT_ID (production) | Vercel (cultivar-os) | ABuTb3EU... |
 | QBO_CLIENT_SECRET (production) | Vercel (cultivar-os) | d9mctADc... |
 | QBO_CLIENT_ID (dev/sandbox) | Vercel (cultivar-os) | ABmD6ELs... |
@@ -700,7 +700,7 @@ See: `INTUIT_PRODUCTION_APPROVAL_GUIDE.md` in repo root.
 ### Key Management Rules
 - Never paste API keys into any chat interface
 - Copy directly from source dashboard → paste directly into destination
-- When rotating ANTHROPIC_API_KEY: update Vercel AND Railway in same session
+- When rotating ANTHROPIC_API_KEY: update both Vercel projects (cultivar-os and ignition-os)
 - Production QB keys: never use for development/testing
 - Sandbox QB keys: never use for production/demo with real customer data
 
@@ -789,7 +789,7 @@ This section is the live snapshot of where each near-term customer relationship 
 
 ### Ignition OS (diesel/auto shop pilot pipeline)
 
-- **Stage:** Ignition OS — feature-complete, development paused, requires audit before next demo.
+- **Stage:** Web build infrastructure complete (2026-05-28). Vercel project ready to configure. AI features need Vercel function ports before activation; all other functionality works now.
 - **Status:** Not currently in front of a named prospect. Demo-ready inventory exists but cold outreach has not started.
 - **Strategic position:** Ignition OS is the highest-leverage second iron in the fire. If LAWNS slows down or stalls, Ignition OS pipeline is the move because the diesel shop market is larger and the product is closer to ready than Cultivar's polish gap.
 - **Next move:** Final walkthrough and demo-readiness audit (deferred until LAWNS pace clarifies, or when David has a 1-day block to focus on it).
