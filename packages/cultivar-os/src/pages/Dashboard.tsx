@@ -89,6 +89,7 @@ export function Dashboard() {
   const [socialDrafts, setSocialDrafts]       = useState<SocialDraft[]>([]);
   const [publishingId, setPublishingId]       = useState<string | null>(null);
   const [publishedIds, setPublishedIds]       = useState<Set<string>>(new Set());
+  const [comingSoonMsg, setComingSoonMsg]     = useState<string | null>(null);
 
   const [qbConnected, setQbConnected]         = useState(false);
   const [qbCompany, setQbCompany]             = useState('');
@@ -274,18 +275,28 @@ export function Dashboard() {
     navigate('/login');
   }
 
+  function showComingSoon(label: string) {
+    setComingSoonMsg(`${label} — coming soon`);
+    setTimeout(() => setComingSoonMsg(null), 3000);
+  }
+
   function handleEnable(key: string) {
-    if (key === 'social_media') {
-      navigate('/social/setup');
+    switch (key) {
+      case 'social_media':    return navigate('/social/setup');
+      case 'delivery_routing': return navigate('/deliveries');
+      case 'online_shop':     return showComingSoon('Online Shop');
+      case 'followup_engine': return showComingSoon('Follow-Up Engine');
+      default:                return showComingSoon(key.replace(/_/g, ' '));
     }
   }
 
   function handleNavigate(key: string) {
     switch (key) {
-      case 'qr_checkout':   return navigate('/orders');
-      case 'qb_invoicing':  return document.getElementById('qb-section')?.scrollIntoView({ behavior: 'smooth' });
-      case 'social_media':  return navigate('/social/setup');
-      case 'delivery':      return navigate('/deliveries');
+      case 'qr_checkout':     return navigate('/orders');
+      case 'qb_invoicing':    return navigate('/settings');
+      case 'social_media':    return navigate('/social/setup');
+      case 'delivery_routing': return navigate('/deliveries');
+      default:                return showComingSoon(key.replace(/_/g, ' '));
     }
   }
 
@@ -365,6 +376,16 @@ export function Dashboard() {
           </button>
         </div>
       </div>
+
+      {comingSoonMsg && (
+        <div style={{
+          background: '#1e293b', color: '#fff',
+          textAlign: 'center', padding: '10px 16px',
+          fontSize: '0.875rem', fontWeight: 600,
+        }}>
+          {comingSoonMsg}
+        </div>
+      )}
 
       <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 640, margin: '0 auto' }}>
 
