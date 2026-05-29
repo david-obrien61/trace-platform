@@ -1,86 +1,208 @@
 # DISCOVERY_MODULE_BRIEF.md
 
-> *Placeholder document. The discovery surface needs dedicated thinking that hasn't happened yet. This file captures what's settled as of 2026-05-26 and explicitly lists what's not.*
+> Status: Living document. Updated 2026-05-29 with founding story, design decisions, and architecture. Prior version was a placeholder.
+> When this doc conflicts with another: see CLAUDE.md Scope & Hierarchy.
 
-## Scope & Hierarchy
+---
 
-This document is the canonical home for the discovery module — TRACE's customer-acquisition front door. Right now it is intentionally a placeholder: enough to anchor the file in the repo, name what's settled, and flag what isn't.
+## Why This Exists — The Founding Story
 
-When this doc conflicts with another:
-- For platform architecture, see PLATFORM_STRATEGY.md
-- For strategy, philosophy, revenue, see MASTER_BRIEF.md
-- For current code state, see TRACE_PLATFORM_AUDIT.md
-- For session handoff and infrastructure, see CLAUDE.md
+The discovery tool was born in a real session with Regina O'Brien, Program Director at Operation Liberty Hill and the anchor pilot user for KINNA-OS. David was walking her through a discovery conversation — the questions that would shape what KINNA-OS needed to do for her organization.
 
-The dedicated discovery session — whenever it happens — opens with this file, confirms the settled items still hold (or makes small modifications), and then builds out the deferred items.
+Regina hand-wrote her answers.
 
-## TRACE — Who We Are
+David took a photo of the handwritten notes and uploaded them to Claude.ai. The AI processed them immediately. Regina's response was instant regret — she had spent 20 minutes writing answers that the AI consumed in seconds. David had offered Otter (voice transcription) before they started. She had declined.
 
-TRACE is a family. Terrence, Regina, Andrew, Connor, Erin. We named the company after ourselves around a kitchen table, because what we are building is meant to last longer than any one of us and meant to belong to all of us.
+That moment is the design specification for this tool:
 
-Who builds it today. David O'Brien — Terrence — is the builder today. 23 years 9 months military service, 30 years federal service in knowledge management, a lifetime as an electrician, mechanic, and builder. He writes the platform working with Claude and Claude Code as engineering partners. Andrew lives in the house and builds his own products alongside David. He established TRACE's foundation — set up Git, GitHub, Supabase, and Railway, and the working stack TRACE runs on. Before that setup, code was being lost. After it, every commit was preserved. The velocity that followed is built on the substrate Andrew laid down. Erin also lives in the house when she's not on travel nursing assignments; she's currently on an ER rotation in California. Connor visits regularly from out of state and is on call by video any time the work needs him. Regina is the program director at Operation Liberty Hill, the anchor pilot customer for KINNA-OS, and the voice the platform answers to on what it means to treat people as kin.
+- Voice is not a feature preference. It is the correct input method. Written intake creates friction that feels like work, not collaboration.
+- The AI response is fast enough that the bottleneck is always the input method, never the processing.
+- The friction was visible, real, and personal — and it happened to the person the tool was built for.
 
-The five of us are not yet all on payroll. We are a family company in formation. The founder builds; the family is within reach; the runway to bring everyone in is what we are building toward.
+This tool exists to make sure no one else hand-writes those answers.
 
-The craft. Every TRACE product is Built with CAI — our signature on the work. The signature is literal: this software is built with composable AI as the engineering partner, used carefully, used well, used by people who know what good work looks like because they've done it with their hands for forty years.
+---
 
-The product line. We don't sell platforms. We sell the operating system for your kind of business: Cultivar OS for nurseries and garden centers, Ignition OS for diesel and auto repair shops, Conduit OS for HVAC, plumbing, and electrical, KINNA-OS for community nonprofits, CoolRunnings for homes. Each is its own product. Each is also part of the same family of software underneath — the way a small dedicated family ships fast and stays consistent.
+## What This Tool Is
 
-The silent partner. We are not here to replace what you have. You already have QuickBooks, or Square, or Neon One, or a notebook full of phone numbers. You already have a business that works. What you don't have is enough hours in the day, and the gaps between your tools are where your time and your money are leaking out.
+**builtwithcai.com is TRACE's no-pressure front door.**
 
-We come alongside, quietly. We connect what you already use. We fill the gaps no one else fills. We give you back your evenings. Your customers see you — not us. We are the silent partner that powers you to soar. For nonprofits, that partnership often shows up as "Powered by KINNA" — a quiet credential visible to funders and peers. For commercial businesses, it usually doesn't need a label at all. The OS is just the tool you use to run your day, made by a family who built it because they needed it themselves.
+A prospect arrives with a pain point — "I have an HVAC business and accounting is killing me." The discovery tool has a conversation with them about that specific pain. It listens. It asks follow-up questions. At the end, it sends them a genuine analysis of their own business — what they are doing well, what could be amplified — framed as a silent partner looking at their operation with fresh eyes, not a vendor telling them what's broken.
 
-The one-sentence version: We don't replace your systems. We connect them, surface what matters, and fill the gaps you couldn't fill yourself.
+They leave with something real, regardless of whether they ever sign up for anything.
 
-*The discovery surface exists in service of this philosophy.*
+TRACE keeps a copy of every session internally. That copy is product intelligence — it tells us what verticals are underserved, what pain points recur, what questions reveal the most signal. Every conversation makes the tool smarter.
 
-## What's Settled (as of 2026-05-26)
+**builtwithcai.com is a demonstration of capability, not a sales pitch.** The prospect experiences composable AI working on their actual business before they are ever asked to pay for anything. That is the hook. That is what no competitor does.
 
-These items are settled enough to commit to writing. They are open to small modifications in the dedicated discovery session but the structure is intentional.
+---
 
-**Thesis.** Discovery is TRACE's front door. The hook is composable AI; if the first thing a prospect experiences is a static intake form, the hook fails on contact. The discovery surface must demonstrate composable AI on contact, not describe it.
+## Core Design Principles
 
-**Reciprocity.** Most B2B SaaS discovery experiences are extractive — they take information and disappear. This one is reciprocal: the customer leaves with concrete insight about their own operation, regardless of whether they engage further with TRACE.
+**Pain-point-first.** The conversation starts with the prospect's stated problem, not a generic intake sequence. "I have an HVAC business and accounting is killing me" drives the entire rest of the session — questions, synthesis, suggested services, the analysis email all reflect that specific pain. The system never pivots to a product walkthrough.
 
-**Five-layer architecture (named, not specified).**
-1. Customer Surface — `packages/discovery-surface/`
-2. Question Bank — `packages/discovery-config/`
-3. Conversation Orchestrator — `packages/discovery-engine/`
-4. Voice Pipeline — `packages/discovery-voice/`
-5. Synthesis — within the orchestrator package
+**Voice primary, text fallback.** Regina's story is the proof. Voice is the default. Text is available via toggle for situations where voice isn't practical (open office, commute, preference). Written forms are not offered.
 
-Detailed layer specifications, package contents, and inter-layer contracts are deferred to the dedicated discovery session.
+**Reciprocity.** The prospect leaves with a concrete, personalized analysis of their own business regardless of whether they engage further with TRACE. The value exchange is unconditional.
 
-**Deployment.** discovery.builtwithcai.com (subdomain of existing domain, no new purchase needed).
+**Silent partner tone.** The analysis is not a grading rubric. It does not score, rank, or identify failures. The tone is: "Here is what we see in your business. Here is what is already working. Here is what could amplify it." Established businesses — someone who has run a nursery for 15 years — do not need to be told what is wrong. They need a partner who notices what they've built.
 
-**v0 scope and timing.** Three weeks from 2026-05-26. Layers 1 and 4 only, plus a basic founder review surface at /admin where David can see transcripts. No question bank, no orchestrator beyond a hardcoded flow, no synthesis. The point of v0 is to prove the voice-record-transcribe-and-review loop works end-to-end before investing in the more sophisticated layers.
+**Honest friction at the gate.** The tool is gated behind account creation. This is intentional friction — it filters out non-serious browsers, gives TRACE a verified contact for every session, and the account created becomes their TRACE platform account if they convert. The gate is minimal; the hook is immediate. The first thing they experience after creating an account is the AI responding to their stated pain — not a product tour.
 
-**v0 user.** Regina O'Brien is the intended v0 user *if her exit timeline at OLH and the v0's quality align*. If either condition isn't met, v0 is internal testing only and Regina sees a later version.
+---
 
-**Voice primary, text fallback.** Voice is the default input mode. Text input is available via a toggle for situations where voice isn't practical.
+## Account Creation Requirements
 
-## What's Deferred to the Dedicated Discovery Session
+A prospect cannot reach the discovery conversation until they have:
 
-Everything below needs deep thinking that hasn't happened yet. Listing it here so it doesn't get lost.
+1. **Valid email** — confirmed via Supabase email verification
+2. **Valid phone number** — confirmed via SMS code
+3. **Business presence signal** — at least one of:
+   - Valid website URL (system attempts fetch — rejected if unreachable or returns no content)
+   - Geocodable business address (street + city + state — P.O. boxes rejected)
+   - Active social media URL (Facebook Business, Google My Business, Instagram Business)
 
-- Question bank content for KINNA-OS (the ~30 questions for community-nonprofit vertical)
-- Question schema (YAML structure: id, intent, naturalLanguagePrompt, followUpHeuristics, contributesTo, skipIf, etc.)
-- Detailed UX specifications (screen layouts, interaction patterns, exact copy)
-- Output artifact format (the "what we learned" customer summary)
-- Founder review surface beyond v0 (the full /admin/sessions/[session-id] view)
-- The Neon One connector demonstration moment ("show them their own data" inside the session)
-- Synthesis prompt patterns (how Claude turns session state into the customer summary and founder config)
-- Build plan beyond v0 (when Layers 2, 3, 5 come online; what triggers each)
-- Success criteria for v0, v1, and beyond
-- How v1 question banks coordinate across verticals (shared questions vs vertical-specific)
-- Connector pluggability architecture (the interface that lets Neon One be swapped for QuickBooks or another platform in future verticals)
-- v1 stack choices that go beyond v0 (whether Whisper API stays primary, Claude synthesis details, Supabase schema for sessions, magic-link auth flow)
+Businesses without a website are common and valid — a sole-proprietor HVAC tech, a food truck, a small nonprofit. The presence signal requirement exists to confirm they are operating a real business, not to exclude them for lacking a website. Two presence signals without a website are accepted.
 
-## Cross-References
+---
 
-The discovery surface fits into the broader TRACE platform. Decisions affecting it should be made with awareness of:
+## The Output: Silent Partner Analysis
 
-- **MASTER_BRIEF.md** — for the strategic role of discovery as a customer-acquisition surface and the relationship to the customer roster
-- **PLATFORM_STRATEGY.md** — for how the discovery packages fit into the broader monorepo architecture and the Surface Honesty and Honest Friction design principles that apply to its UI and development workflow
-- **TRACE_PLATFORM_AUDIT.md** — for current code state of any discovery-related work
-- **CLAUDE.md** — for current infrastructure (Supabase project, env vars, domains) and open architecture decisions affecting discovery
+At the end of every discovery session, the prospect receives an email. TRACE retains a copy.
+
+**What the email contains:**
+- A brief acknowledgment of the pain point they started with
+- Two or three specific things the business is already doing well (drawn from the conversation and, if provided, website/social analysis)
+- Two or three opportunities — specific, actionable, framed as amplifiers not corrections
+- Each opportunity attached to a business outcome (more time, more revenue, more repeat customers) — not a technical fix
+- A note that TRACE can help with some or all of this, with a soft CTA to explore what that looks like
+
+**What the email does not contain:**
+- A score or grade
+- A list of problems
+- Generic advice that could apply to any business
+- A hard sales pitch
+
+**What TRACE retains internally:**
+- Full session transcript
+- The structured business profile extracted from the session
+- The analysis output
+- Vertical classification, pain points identified, services suggested
+- Used for: product roadmap decisions, vertical schema improvement, identifying underserved markets
+
+---
+
+## Website and Business Inspection
+
+When a prospect provides a website URL, the system fetches and analyzes it automatically. This is an input to the discovery engine — it contributes to the analysis alongside the conversation, it does not replace it.
+
+**What the engine extracts, vertical-aware:**
+
+For a nursery: plant types mentioned, container sizes, delivery/installation offerings, warranty language, seasonal events, price signals, staff references.
+
+For an auto shop: service types listed, fleet account language, oil change intervals, tire brands carried, warranty terms, emergency/after-hours availability.
+
+For HVAC: service contract language, emergency service, seasonal maintenance offers, equipment brands, residential vs. commercial focus.
+
+For a nonprofit: programs offered, population served, intake language, volunteer mentions, donor-facing copy, compliance references (TEFAP, SNAP, etc.).
+
+The vertical schema is a configuration — adding a new vertical means writing a new extraction schema, not modifying the engine.
+
+**What happens with the extracted data:**
+
+It feeds the silent partner analysis (specific observations grounded in what their actual website says) and it pre-populates their `service_offerings` when they create a TRACE platform account. If the website says "we offer delivery, fertilizer service, and tree warranty" — those appear as service offerings in their account, ready to configure.
+
+---
+
+## One Auth, Two Products
+
+The account created at `discovery.builtwithcai.com` is the same Supabase auth account as their vertical OS login.
+
+Flow:
+1. Prospect creates account at discovery.builtwithcai.com → `auth.users` row created
+2. Discovery session runs → `business_discovery_profiles` row created (linked to auth.uid)
+3. They pick a vertical (Cultivar OS, Ignition OS, etc.) → `businesses` row created from discovery profile
+4. `service_offerings` seeded from discovery profile → they log in and it is already about them
+
+The "wow moment" is that first login. They didn't fill out a setup wizard. The system already knew — because they told it, in their own words, in a conversation.
+
+---
+
+## Architecture
+
+```
+packages/shared/src/discovery/
+  adapters/
+    website.ts          ← v0: fetch URL → structured business profile
+    voice.ts            ← v1: voice transcription → same output (Whisper or Otter API)
+    text.ts             ← v0 fallback: text conversation → same output
+  verticals/
+    nursery.ts          ← extraction schema: what signals to look for
+    ignition.ts         ← auto shop signals
+    hvac.ts             ← HVAC signals
+    kinna.ts            ← nonprofit signals
+  engine.ts             ← adapter output + vertical schema → BusinessDiscoveryProfile
+  synthesis.ts          ← BusinessDiscoveryProfile → SilentPartnerAnalysis (the email)
+  seed.ts               ← BusinessDiscoveryProfile → service_offerings rows on account creation
+
+packages/discovery-surface/     ← Layer 1: the builtwithcai.com front-end (future package)
+packages/discovery-config/      ← Layer 2: question banks, vertical schemas (future)
+packages/discovery-engine/      ← Layer 3: conversation orchestrator (future — wraps engine.ts)
+packages/discovery-voice/       ← Layer 4: voice pipeline (v1)
+
+Supabase tables:
+  discovery_sessions              ← session record, linked to auth.uid
+  business_discovery_profiles     ← structured output, used to seed businesses table
+  discovery_session_transcripts   ← full transcript copy (internal only)
+```
+
+The five-layer naming from the prior brief is preserved. The website adapter and synthesis email are the v0-buildable pieces. The voice pipeline is v1.
+
+---
+
+## Build Phases
+
+**v0 — Website inspection + silent partner analysis email (build now)**
+- Website adapter: fetch URL, extract profile, vertical-aware
+- Synthesis: produce silent partner analysis email
+- LAWNS and Backbone Valley Nursery as the first two trial runs
+- Internal admin view: David can see the analysis output before sending
+- The email goes to the prospect; TRACE keeps the copy
+
+**v1 — Voice intake (after v0 validated)**
+- Voice pipeline: Whisper or Otter API → transcript → same engine.ts input
+- Question bank for at least one vertical (nursery or KINNA-OS)
+- discovery.builtwithcai.com front-end with voice UI
+- The full session replaces or supplements the website-only analysis
+
+**v2 — Gated discovery surface + one-auth account creation**
+- Login gate at discovery.builtwithcai.com
+- Account creation with verification (email + SMS + presence signal)
+- Pre-populated account on first vertical OS login
+- /admin/sessions review surface for David
+
+---
+
+## Origin Context
+
+The first discovery sessions were for KINNA-OS — Regina O'Brien's nonprofit vertical. The written-answer friction story (above) happened in that context. The tool is named and shaped by that experience.
+
+The commercial verticals (Cultivar OS, Ignition OS) were built first because the demo timeline required it. The discovery tool predates them conceptually — it was the original question-and-answer intake that revealed what each vertical needed. It will now be built as a product that does for every prospect what those early conversations did for TRACE.
+
+---
+
+## What Is Still Deferred
+
+- Question bank content for KINNA-OS (the ~30 questions, YAML schema)
+- Detailed UX specifications for the discovery surface front-end
+- The Otter vs. Whisper decision for voice transcription
+- Magic-link auth vs. email/password for discovery sessions
+- How question banks coordinate across verticals (shared vs. vertical-specific questions)
+- Success criteria for v0 and v1
+- The /admin/sessions full review surface (beyond a simple list view)
+- Connector demonstration during session (show them their QuickBooks data or Neon One data in real time)
+
+---
+
+*TRACE Enterprises · Built with CAI*
+*Update this file when decisions are made. Never let it fall back to a placeholder.*
