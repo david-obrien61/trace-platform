@@ -138,7 +138,7 @@ export function Settings({ onBack, verticalSection, accountingConnectUrl }: Sett
   const [offerings, setOfferings]         = useState<ServiceOffering[]>([]);
   const [offeringsLoading, setOfferingsLoading] = useState(true);
   const [editingId, setEditingId]         = useState<string | null>(null);
-  const [editForm, setEditForm]           = useState({ name: '', description: '', price: '' });
+  const [editForm, setEditForm]           = useState({ name: '', description: '', price: '', compliance_title: '', compliance_body: '', service_note: '' });
   const [savingOffering, setSavingOffering] = useState(false);
 
   // Add-new form
@@ -174,7 +174,14 @@ export function Settings({ onBack, verticalSection, accountingConnectUrl }: Sett
 
   function startEdit(o: ServiceOffering) {
     setEditingId(o.id);
-    setEditForm({ name: o.name, description: o.description ?? '', price: String(o.price) });
+    setEditForm({
+      name:              o.name,
+      description:       o.description       ?? '',
+      price:             String(o.price),
+      compliance_title:  (o as any).compliance_title  ?? '',
+      compliance_body:   (o as any).compliance_body   ?? '',
+      service_note:      (o as any).service_note      ?? '',
+    });
   }
 
   async function saveEdit() {
@@ -183,9 +190,12 @@ export function Settings({ onBack, verticalSection, accountingConnectUrl }: Sett
     const price = parseFloat(editForm.price);
     if (isNaN(price)) { setSavingOffering(false); return; }
     await supabase.from('service_offerings').update({
-      name:        editForm.name.trim(),
-      description: editForm.description.trim() || null,
+      name:             editForm.name.trim(),
+      description:      editForm.description.trim()      || null,
       price,
+      compliance_title: editForm.compliance_title.trim() || null,
+      compliance_body:  editForm.compliance_body.trim()  || null,
+      service_note:     editForm.service_note.trim()     || null,
     }).eq('id', editingId);
     setOfferings(prev => prev.map(o =>
       o.id === editingId
@@ -227,6 +237,50 @@ export function Settings({ onBack, verticalSection, accountingConnectUrl }: Sett
       setShowAddForm(false);
     }
     setAddingOffering(false);
+  }
+
+  // ── Customer match (AI) ───────────────────────────────────────────────────
+  interface MatchResult {
+    customerId: string;
+    customerName: string;
+    fitScore: number;
+    fitReason: string;
+    suggestedMessage: string;
+    email: string | null;
+    phone: string | null;
+  }
+  const [matchOfferingId, setMatchOfferingId]         = useState<string | null>(null);
+  const [matchOfferingName, setMatchOfferingName]     = useState('');
+  const [matchResults, setMatchResults]               = useState<MatchResult[]>([]);
+  const [matchLoading, setMatchLoading]               = useState(false);
+  const [matchError, setMatchError]                   = useState('');
+  const [copiedIdx, setCopiedIdx]                     = useState<number | null>(null);
+
+  async function findCustomers(offering: ServiceOffering) {
+    setMatchOfferingId(offering.id);
+    setMatchOfferingName(offering.name);
+    setMatchResults([]);
+    setMatchError('');
+    setMatchLoading(true);
+    try {
+      const resp = await fetch('/api/services/customer-match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessId, offeringId: offering.id }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error ?? 'Unknown error');
+      setMatchResults(data.matches ?? []);
+    } catch (err: any) {
+      setMatchError(err.message ?? 'Failed to load matches');
+    }
+    setMatchLoading(false);
+  }
+
+  function copyMessage(text: string, idx: number) {
+    navigator.clipboard.writeText(text).catch(() => {});
+    setCopiedIdx(idx);
+    setTimeout(() => setCopiedIdx(null), 2000);
   }
 
   // Group offerings for display
@@ -343,7 +397,8 @@ export function Settings({ onBack, verticalSection, accountingConnectUrl }: Sett
                   onEdit={startEdit}
                   onSaveEdit={saveEdit}
                   onCancelEdit={() => setEditingId(null)}
-                  onDelete={null}  // transport options are structural — toggle off instead
+                  onDelete={null}
+                  onFindCustomers={null}
                 />
               )}
 
@@ -361,6 +416,7 @@ export function Settings({ onBack, verticalSection, accountingConnectUrl }: Sett
                   onSaveEdit={saveEdit}
                   onCancelEdit={() => setEditingId(null)}
                   onDelete={deleteOffering}
+                  onFindCustomers={findCustomers}
                 />
               )}
 
@@ -378,6 +434,7 @@ export function Settings({ onBack, verticalSection, accountingConnectUrl }: Sett
                   onSaveEdit={saveEdit}
                   onCancelEdit={() => setEditingId(null)}
                   onDelete={deleteOffering}
+                  onFindCustomers={findCustomers}
                 />
               )}
 
@@ -439,6 +496,91 @@ export function Settings({ onBack, verticalSection, accountingConnectUrl }: Sett
           )}
         </SectionCard>
 
+        {/* ── Find Customers (AI match results) ── */}
+        {matchOfferingId && (
+          <SectionCard title={`Expand — ${matchOfferingName}`}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <p style={{ fontSize: '0.8125rem', color: GRAY, margin: 0, lineHeight: 1.5 }}>
+                Customers from your order history who are the best candidates for this service.
+              </p>
+              <button
+                onClick={() => { setMatchOfferingId(null); setMatchResults([]); setMatchError(''); }}
+                style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: '1.1rem', cursor: 'pointer', padding: '0 0 0 12px', lineHeight: 1 }}
+              >
+                ×
+              </button>
+            </div>
+
+            {matchLoading && (
+              <p style={{ fontSize: '0.875rem', color: '#9ca3af', textAlign: 'center', padding: '20px 0' }}>
+                Finding the best candidates…
+              </p>
+            )}
+
+            {matchError && (
+              <p style={{ fontSize: '0.875rem', color: RED }}>{matchError}</p>
+            )}
+
+            {!matchLoading && !matchError && matchResults.length === 0 && (
+              <p style={{ fontSize: '0.875rem', color: '#9ca3af', textAlign: 'center', padding: '12px 0' }}>
+                No customers found yet — place a few orders first.
+              </p>
+            )}
+
+            {!matchLoading && matchResults.map((m, idx) => (
+              <div key={m.customerId} style={{
+                background: '#f9fafb', borderRadius: 10, padding: '12px 14px',
+                border: '1px solid #e5e7eb', marginBottom: 8,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '0.9375rem', color: DARK }}>
+                    {m.customerName}
+                  </p>
+                  <span style={{
+                    background: m.fitScore >= 8 ? '#dcfce7' : m.fitScore >= 6 ? '#fef9c3' : '#f3f4f6',
+                    color:      m.fitScore >= 8 ? '#166534' : m.fitScore >= 6 ? '#854d0e' : GRAY,
+                    fontWeight: 700, fontSize: '0.75rem', borderRadius: 20, padding: '2px 10px',
+                  }}>
+                    {m.fitScore}/10
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 8px', fontSize: '0.8125rem', color: GRAY, lineHeight: 1.5 }}>
+                  {m.fitReason}
+                </p>
+                <div style={{ background: '#fff', borderRadius: 8, padding: '8px 12px', border: '1px solid #e5e7eb', marginBottom: 8 }}>
+                  <p style={{ margin: 0, fontSize: '0.8125rem', color: DARK, lineHeight: 1.6, fontStyle: 'italic' }}>
+                    "{m.suggestedMessage}"
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    onClick={() => copyMessage(m.suggestedMessage, idx)}
+                    style={{ flex: 1, padding: '7px 10px', borderRadius: 7, border: '1px solid #e5e7eb', cursor: 'pointer', background: copiedIdx === idx ? '#f0fdf4' : '#fff', color: copiedIdx === idx ? '#166534' : DARK, fontWeight: 600, fontSize: '0.75rem' }}
+                  >
+                    {copiedIdx === idx ? 'Copied' : 'Copy'}
+                  </button>
+                  {m.phone && (
+                    <a
+                      href={`sms:${m.phone}?body=${encodeURIComponent(m.suggestedMessage)}`}
+                      style={{ flex: 1, padding: '7px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: GREEN, color: '#fff', fontWeight: 600, fontSize: '0.75rem', textDecoration: 'none', textAlign: 'center' }}
+                    >
+                      Text
+                    </a>
+                  )}
+                  {m.email && !m.phone && (
+                    <a
+                      href={`mailto:${m.email}?subject=A service we think you'll love&body=${encodeURIComponent(m.suggestedMessage)}`}
+                      style={{ flex: 1, padding: '7px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: GREEN, color: '#fff', fontWeight: 600, fontSize: '0.75rem', textDecoration: 'none', textAlign: 'center' }}
+                    >
+                      Email
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </SectionCard>
+        )}
+
         {/* ── Vertical-specific section ── */}
         {verticalSection}
 
@@ -453,19 +595,20 @@ interface OfferingGroupProps {
   label: string;
   offerings: ServiceOffering[];
   editingId: string | null;
-  editForm: { name: string; description: string; price: string };
-  setEditForm: (f: { name: string; description: string; price: string }) => void;
+  editForm: { name: string; description: string; price: string; compliance_title: string; compliance_body: string; service_note: string };
+  setEditForm: (f: { name: string; description: string; price: string; compliance_title: string; compliance_body: string; service_note: string }) => void;
   savingOffering: boolean;
   onToggle: (id: string, current: boolean) => void;
   onEdit: (o: ServiceOffering) => void;
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onDelete: ((id: string) => void) | null;
+  onFindCustomers: ((o: ServiceOffering) => void) | null;
 }
 
 function OfferingGroup({
   label, offerings, editingId, editForm, setEditForm, savingOffering,
-  onToggle, onEdit, onSaveEdit, onCancelEdit, onDelete,
+  onToggle, onEdit, onSaveEdit, onCancelEdit, onDelete, onFindCustomers,
 }: OfferingGroupProps) {
   return (
     <div style={{ marginBottom: 16 }}>
@@ -496,8 +639,29 @@ function OfferingGroup({
                 <input
                   value={editForm.description}
                   onChange={e => setEditForm({ ...editForm, description: e.target.value })}
-                  style={{ ...inputStyle, marginBottom: 8, padding: '8px 10px' }}
+                  style={{ ...inputStyle, marginBottom: 6, padding: '8px 10px' }}
                   placeholder="Description (optional)"
+                />
+                <p style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '8px 0 4px' }}>
+                  Compliance notice (optional)
+                </p>
+                <input
+                  value={editForm.compliance_title}
+                  onChange={e => setEditForm({ ...editForm, compliance_title: e.target.value })}
+                  style={{ ...inputStyle, marginBottom: 6, padding: '8px 10px' }}
+                  placeholder="Title (e.g. Texas law requires securing your load)"
+                />
+                <textarea
+                  value={editForm.compliance_body}
+                  onChange={e => setEditForm({ ...editForm, compliance_body: e.target.value })}
+                  style={{ ...inputStyle, marginBottom: 6, padding: '8px 10px', resize: 'vertical', minHeight: 72 }}
+                  placeholder="Full legal notice text shown to customer at checkout"
+                />
+                <input
+                  value={editForm.service_note}
+                  onChange={e => setEditForm({ ...editForm, service_note: e.target.value })}
+                  style={{ ...inputStyle, marginBottom: 8, padding: '8px 10px' }}
+                  placeholder="Staff note (e.g. Applied by staff before you leave)"
                 />
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button onClick={onSaveEdit} disabled={savingOffering} style={{ flex: 1, padding: '8px', borderRadius: 7, border: 'none', cursor: 'pointer', background: GREEN, color: '#fff', fontWeight: 700, fontSize: '0.8125rem' }}>
@@ -510,37 +674,47 @@ function OfferingGroup({
               </div>
             ) : (
               /* View mode */
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontWeight: 600, fontSize: '0.875rem', color: DARK }}>{o.name}</p>
-                  <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: GRAY }}>
-                    {o.price === 0 ? 'No charge' : o.price_type === 'per_unit' ? `$${Number(o.price).toFixed(2)}/${o.price_unit}` : `$${Number(o.price).toFixed(2)} flat`}
-                    {' · '}{TIMING_LABEL[o.timing] ?? o.timing}
-                    {o.trigger_transport_mode ? ` · when ${o.trigger_transport_mode}-transport` : ''}
-                  </p>
-                </div>
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  <button
-                    onClick={() => onToggle(o.id, o.is_active)}
-                    style={{ padding: '4px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, border: 'none', cursor: 'pointer', background: o.is_active ? '#f0fdf4' : '#f3f4f6', color: o.is_active ? '#166534' : GRAY }}
-                  >
-                    {o.is_active ? 'On' : 'Off'}
-                  </button>
-                  <button
-                    onClick={() => onEdit(o)}
-                    style={{ padding: '4px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, border: '1px solid #e5e7eb', cursor: 'pointer', background: '#fff', color: DARK }}
-                  >
-                    Edit
-                  </button>
-                  {onDelete && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontWeight: 600, fontSize: '0.875rem', color: DARK }}>{o.name}</p>
+                    <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: GRAY }}>
+                      {o.price === 0 ? 'No charge' : o.price_type === 'per_unit' ? `$${Number(o.price).toFixed(2)}/${o.price_unit}` : `$${Number(o.price).toFixed(2)} flat`}
+                      {' · '}{TIMING_LABEL[o.timing] ?? o.timing}
+                      {o.trigger_transport_mode ? ` · when ${o.trigger_transport_mode}-transport` : ''}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                     <button
-                      onClick={() => onDelete(o.id)}
-                      style={{ padding: '4px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, border: 'none', cursor: 'pointer', background: '#fef2f2', color: RED }}
+                      onClick={() => onToggle(o.id, o.is_active)}
+                      style={{ padding: '4px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, border: 'none', cursor: 'pointer', background: o.is_active ? '#f0fdf4' : '#f3f4f6', color: o.is_active ? '#166534' : GRAY }}
                     >
-                      ✕
+                      {o.is_active ? 'On' : 'Off'}
                     </button>
-                  )}
+                    <button
+                      onClick={() => onEdit(o)}
+                      style={{ padding: '4px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, border: '1px solid #e5e7eb', cursor: 'pointer', background: '#fff', color: DARK }}
+                    >
+                      Edit
+                    </button>
+                    {onDelete && (
+                      <button
+                        onClick={() => onDelete(o.id)}
+                        style={{ padding: '4px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, border: 'none', cursor: 'pointer', background: '#fef2f2', color: RED }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
                 </div>
+                {onFindCustomers && o.is_active && (
+                  <button
+                    onClick={() => onFindCustomers(o)}
+                    style={{ marginTop: 8, width: '100%', padding: '7px 10px', borderRadius: 7, border: '1.5px solid #d1fae5', cursor: 'pointer', background: '#f0fdf4', color: '#166534', fontWeight: 600, fontSize: '0.75rem', textAlign: 'left' }}
+                  >
+                    ✦ Find customers who might want this
+                  </button>
+                )}
               </div>
             )}
           </div>

@@ -72,4 +72,7 @@ export interface ServiceOffering {
   pre_selected: boolean;
   is_active: boolean;
   sort_order: number;
+  compliance_title: string | null;
+  compliance_body: string | null;
+  service_note: string | null;
 }

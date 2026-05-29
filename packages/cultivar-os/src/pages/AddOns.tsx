@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
 import { useServices } from '../hooks/useServices';
 import { TransportToggle } from '../components/checkout/TransportToggle';
-import { NettingPrompt } from '../components/checkout/NettingPrompt';
+import { CompliancePrompt } from '../components/checkout/CompliancePrompt';
 import { AddonCard } from '../components/checkout/AddonCard';
 
 export function AddOns() {
@@ -110,19 +110,36 @@ export function AddOns() {
         )}
       </div>
 
-      {/* Netting prompt — only when self-transport is selected */}
-      {isSelfTransport && !loading && (
-        <div className="section">
-          <NettingPrompt
-            selected={nettingActive}
-            onToggle={() => {
-              const willBeDeclined = nettingActive;
-              setNettingDeclined(willBeDeclined);
-            }}
-            pricePerPlant={nettingPrice}
-            quantity={quantity}
-          />
-        </div>
+      {/* Compliance prompt — any self-transport addon with a compliance notice */}
+      {isSelfTransport && !loading && nettingSelection && (
+        nettingSelection.offering.compliance_title ? (
+          <div className="section">
+            <CompliancePrompt
+              title={nettingSelection.offering.compliance_title}
+              body={nettingSelection.offering.compliance_body ?? ''}
+              serviceNote={nettingSelection.offering.service_note ?? 'Applied by staff'}
+              pricePerUnit={nettingPrice}
+              unitLabel={nettingSelection.offering.price_unit === 'plant' ? 'plant' : 'unit'}
+              quantity={quantity}
+              selected={nettingActive}
+              onToggle={() => setNettingDeclined(nettingActive)}
+            />
+          </div>
+        ) : (
+          /* Fallback if compliance text not yet seeded */
+          <div className="section">
+            <CompliancePrompt
+              title="Protective netting required"
+              body="Protective travel netting secures branches and prevents wind damage during transport."
+              serviceNote="Applied by staff before you leave"
+              pricePerUnit={nettingPrice}
+              unitLabel="plant"
+              quantity={quantity}
+              selected={nettingActive}
+              onToggle={() => setNettingDeclined(nettingActive)}
+            />
+          </div>
+        )
       )}
 
       {/* Always-on add-ons */}

@@ -214,7 +214,29 @@ export default async function handler(req: any, res: any) {
       if (selErr) throw new Error(`Service selections: ${selErr.message}`);
     }
 
-    // ── 9. Reserve plant ───────────────────────────────────────────────────
+    // ── 9. Compliance audit records ────────────────────────────────────────
+    // Immutable log: any service offering with a compliance notice gets a record
+    // regardless of whether the customer accepted or declined.
+    const complianceRows: any[] = [];
+    for (const s of (services ?? [])) {
+      const o = s.offering;
+      if (!o?.compliance_title) continue;
+      const isNettingOffering = o.trigger_transport_mode === 'self' && o.category === 'addon';
+      const accepted = isNettingOffering ? nettingActive : s.selected;
+      complianceRows.push({
+        order_id:               orderId,
+        service_offering_id:    o.id,
+        business_id:            businessId,
+        compliance_title_shown: o.compliance_title,
+        compliance_body_shown:  o.compliance_body ?? null,
+        decision:               accepted ? 'accepted' : 'declined',
+      });
+    }
+    if (complianceRows.length > 0) {
+      await db.from('order_compliance_records').insert(complianceRows);
+    }
+
+    // ── 10. Reserve plant ──────────────────────────────────────────────────
     await db
       .from('plants')
       .update({ status: 'reserved', updated_at: new Date().toISOString() })
