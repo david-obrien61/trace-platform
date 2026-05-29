@@ -16,6 +16,8 @@ import { Orders }            from './pages/Orders';
 import { OnboardingWizard } from './pages/OnboardingWizard';
 import { DeliveryRoute }    from './pages/DeliveryRoute';
 import { Settings }          from './pages/Settings';
+import { Campaigns }         from './pages/Campaigns';
+import { CampaignDetail }    from './pages/CampaignDetail';
 import { DiscoveryInspect }  from './pages/DiscoveryInspect';
 
 export function AppRouter() {
@@ -40,8 +42,10 @@ export function AppRouter() {
         <Route path="/orders"       element={<Orders />} />
         <Route path="/deliveries"   element={<DeliveryRoute />} />
         <Route path="/social/setup" element={<SocialSetup />} />
-        <Route path="/settings"     element={<Settings />} />
-        <Route path="/onboarding"   element={<OnboardingWizard />} />
+        <Route path="/settings"          element={<Settings />} />
+        <Route path="/onboarding"        element={<OnboardingWizard />} />
+        <Route path="/campaigns"         element={<Campaigns />} />
+        <Route path="/campaigns/:id"     element={<CampaignDetail />} />
       </Route>
 
       {/* DEMO — QB invoice preview (no auth, for demo fallback) */}

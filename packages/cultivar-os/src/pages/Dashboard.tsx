@@ -87,6 +87,7 @@ export function Dashboard() {
   }
 
   const [socialDrafts, setSocialDrafts]       = useState<SocialDraft[]>([]);
+  const [campaignDraftCount, setCampaignDraftCount] = useState(0);
   const [publishingId, setPublishingId]       = useState<string | null>(null);
   const [publishedIds, setPublishedIds]       = useState<Set<string>>(new Set());
   const [comingSoonMsg, setComingSoonMsg]     = useState<string | null>(null);
@@ -161,6 +162,15 @@ export function Dashboard() {
   }
 
   // ── Social drafts ─────────────────────────────────────────────────────────
+
+  async function loadCampaignDrafts() {
+    const { count } = await supabase
+      .from('campaign_posts')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId!)
+      .eq('status', 'draft');
+    setCampaignDraftCount(count ?? 0);
+  }
 
   async function loadSocialDrafts() {
     const { data } = await supabase
@@ -306,6 +316,7 @@ export function Dashboard() {
     loadMetrics();
     checkQbStatus();
     loadSocialDrafts();
+    loadCampaignDrafts();
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
   }, [businessId]);
 
@@ -681,6 +692,30 @@ export function Dashboard() {
             </div>
           </section>
         )}
+
+        {/* ── Campaign Scheduler ── */}
+        <section style={{ marginTop: '0.75rem' }}>
+          <div
+            onClick={() => navigate('/campaigns')}
+            style={{
+              background: '#fff', border: campaignDraftCount > 0 ? '1.5px solid #27500A' : '1px solid #e5e7eb',
+              borderRadius: 12, padding: '14px 16px', cursor: 'pointer',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}
+          >
+            <div>
+              <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#111827' }}>
+                📅 Campaign Scheduler
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: '0.8125rem', color: '#6b7280' }}>
+                {campaignDraftCount > 0
+                  ? `${campaignDraftCount} post${campaignDraftCount !== 1 ? 's' : ''} ready to review`
+                  : 'Plan seasonal and holiday content'}
+              </p>
+            </div>
+            <span style={{ fontSize: '0.875rem', color: '#27500A', fontWeight: 700 }}>→</span>
+          </div>
+        </section>
 
         {/* ── Refresh ── */}
         <button
