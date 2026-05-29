@@ -25,6 +25,8 @@ function readCache(tagId: string): PlantCache | null {
     if (!raw) return null;
     const entry: PlantCache = JSON.parse(raw);
     if (Date.now() - entry.cachedAt > CACHE_TTL_MS) return null;
+    // Invalidate caches written before the business_id migration
+    if (!entry.plant?.business_id) return null;
     return entry;
   } catch {
     return null;

@@ -20,7 +20,8 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { customer, plant, quantity, addons, transport, nettingDeclined, nettingPrice, businessId } = req.body;
+  const { customer, plant, quantity, addons, transport, nettingDeclined, nettingPrice } = req.body;
+  const businessId: string = req.body.businessId || plant?.business_id;
 
   if (!customer || !plant || !quantity || !businessId) {
     return res.status(400).json({ error: 'Missing required fields' });
