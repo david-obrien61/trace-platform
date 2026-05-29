@@ -12,7 +12,8 @@ import { DemoQBInvoice }   from './pages/DemoQBInvoice';
 import { Privacy }         from './pages/Privacy';
 import { Terms }           from './pages/Terms';
 import { SocialSetup }     from './pages/SocialSetup';
-import { Orders }          from './pages/Orders';
+import { Orders }            from './pages/Orders';
+import { OnboardingWizard } from './pages/OnboardingWizard';
 
 export function AppRouter() {
   return (
@@ -35,6 +36,7 @@ export function AppRouter() {
         <Route path="/dashboard"    element={<Dashboard />} />
         <Route path="/orders"       element={<Orders />} />
         <Route path="/social/setup" element={<SocialSetup />} />
+        <Route path="/onboarding"   element={<OnboardingWizard />} />
       </Route>
 
       {/* DEMO — QB invoice preview (no auth, for demo fallback) */}

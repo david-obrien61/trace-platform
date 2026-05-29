@@ -319,22 +319,9 @@ export function Dashboard() {
     );
   }
 
-  if (nurseryError || !nurseryId) {
-    return (
-      <div style={{ minHeight: '100vh', background: 'var(--sage-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <div style={{ textAlign: 'center', maxWidth: 360 }}>
-          <p style={{ fontWeight: 700, color: 'var(--red-border)', marginBottom: 8 }}>
-            Account not linked to a nursery
-          </p>
-          <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', lineHeight: 1.5 }}>
-            {nurseryError ?? 'No nursery record found for this login. Contact support.'}
-          </p>
-          <button onClick={() => auth.signOut().then(() => navigate('/login'))} className="btn btn-primary" style={{ marginTop: 16 }}>
-            Sign out
-          </button>
-        </div>
-      </div>
-    );
+  if (!nurseryLoading && (nurseryError || !nurseryId)) {
+    navigate('/onboarding', { replace: true });
+    return null;
   }
 
   return (
