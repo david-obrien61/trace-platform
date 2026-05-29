@@ -54,3 +54,22 @@ export interface Addon {
   active: boolean;
   sort_order: number;
 }
+
+export interface ServiceOffering {
+  id: string;
+  business_id: string;
+  name: string;
+  description: string | null;
+  category: 'transport' | 'addon' | 'maintenance' | 'inspection' | 'subscription';
+  timing: 'at_checkout' | 'post_purchase' | 'recurring';
+  price_type: 'flat' | 'per_unit';
+  price_unit: 'order' | 'plant' | 'vehicle' | 'visit';
+  price: number;
+  transport_mode: 'self' | 'staff' | null;
+  trigger_transport_mode: 'self' | 'staff' | null;
+  recurrence_days: number | null;
+  requires_address: boolean;
+  pre_selected: boolean;
+  is_active: boolean;
+  sort_order: number;
+}

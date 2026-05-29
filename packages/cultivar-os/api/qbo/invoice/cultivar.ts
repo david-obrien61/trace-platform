@@ -134,10 +134,18 @@ export default async function handler(req: any, res: any) {
       .select('*, plants(*)')
       .eq('order_id', order_id);
 
+    // Try new service_selections model first; fall back to legacy order_addons
+    const { data: serviceSelections } = await db
+      .from('order_service_selections')
+      .select('*, service_offerings(*)')
+      .eq('order_id', order_id);
+
     const { data: orderAddons } = await db
       .from('order_addons')
       .select('*, addons(*)')
       .eq('order_id', order_id);
+
+    const useNewModel = (serviceSelections ?? []).length > 0;
 
     // Find or create QB customer
     let qbCustomerId: string = customer.qb_customer_id;
@@ -164,56 +172,98 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    for (const oa of orderAddons || []) {
-      const addon = oa.addons;
-      const isNetting = addon.trigger_rule === 'transport=self';
-      const declined = isNetting && order.netting_declined;
+    if (useNewModel) {
+      // ── New model: service_offerings lines ────────────────────────────────
+      for (const sel of serviceSelections || []) {
+        const offering = sel.service_offerings;
+        if (!offering) continue;
 
-      if (declined) {
-        lines.push({
-          Description: 'Protective travel netting — DECLINED by customer (TX TCC Ch.725 waiver signed)',
-          Amount: 0,
-          DetailType: 'SalesItemLineDetail',
-          SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
-        });
-      } else {
-        lines.push({
-          Description: `${addon.name} × ${oa.quantity}`,
-          Amount: Number(oa.subtotal),
-          DetailType: 'SalesItemLineDetail',
-          SalesItemLineDetail: {
-            UnitPrice: Number(oa.unit_price),
-            Qty: oa.quantity,
-            ItemRef: { value: '1', name: 'Services' },
-          },
-        });
+        const isNetting  = offering.trigger_transport_mode === 'self' && offering.category === 'addon';
+        const isTransport = offering.category === 'transport';
+
+        if (isNetting && order.netting_declined) {
+          lines.push({
+            Description: 'Protective travel netting — DECLINED by customer (TX TCC Ch.725 waiver signed)',
+            Amount: 0,
+            DetailType: 'SalesItemLineDetail',
+            SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
+          });
+        } else if (isTransport && Number(sel.subtotal) === 0) {
+          if (offering.transport_mode !== 'self') {
+            lines.push({
+              Description: `${business.name} — ${offering.name}`,
+              Amount: 0,
+              DetailType: 'SalesItemLineDetail',
+              SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
+            });
+          }
+          // self-transport with $0 price → no line item needed
+        } else if (Number(sel.subtotal) > 0) {
+          lines.push({
+            Description: `${offering.name} × ${sel.quantity}`,
+            Amount: Number(sel.subtotal),
+            DetailType: 'SalesItemLineDetail',
+            SalesItemLineDetail: {
+              UnitPrice: Number(sel.unit_price_at_time),
+              Qty: sel.quantity,
+              ItemRef: { value: '1', name: 'Services' },
+            },
+          });
+        }
       }
-    }
+    } else {
+      // ── Legacy model: order_addons fallback ───────────────────────────────
+      for (const oa of orderAddons || []) {
+        const addon     = oa.addons;
+        const isNetting = addon.trigger_rule === 'transport=self';
+        const declined  = isNetting && order.netting_declined;
 
-    // Transport / installation line
-    const hasNettingAddon = (orderAddons || []).some((oa: any) => oa.addons?.trigger_rule === 'transport=self');
-    if (!hasNettingAddon && order.transport_method !== 'self') {
-      if (order.transport_method === 'install') {
-        const installPlant = (orderItems || [])[0]?.plants;
-        const installUnitPrice = Number(installPlant?.install_price ?? 0);
-        const installQty = (orderItems || [])[0]?.quantity ?? 1;
-        lines.push({
-          Description: `Installation service · ${installQty} plant${installQty > 1 ? 's' : ''}`,
-          Amount: installUnitPrice * installQty,
-          DetailType: 'SalesItemLineDetail',
-          SalesItemLineDetail: {
-            UnitPrice: installUnitPrice,
-            Qty: installQty,
-            ItemRef: { value: '1', name: 'Services' },
-          },
-        });
-      } else {
-        lines.push({
-          Description: `${business.name} staff transport`,
-          Amount: 0,
-          DetailType: 'SalesItemLineDetail',
-          SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
-        });
+        if (declined) {
+          lines.push({
+            Description: 'Protective travel netting — DECLINED by customer (TX TCC Ch.725 waiver signed)',
+            Amount: 0,
+            DetailType: 'SalesItemLineDetail',
+            SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
+          });
+        } else {
+          lines.push({
+            Description: `${addon.name} × ${oa.quantity}`,
+            Amount: Number(oa.subtotal),
+            DetailType: 'SalesItemLineDetail',
+            SalesItemLineDetail: {
+              UnitPrice: Number(oa.unit_price),
+              Qty: oa.quantity,
+              ItemRef: { value: '1', name: 'Services' },
+            },
+          });
+        }
+      }
+
+      // Legacy transport line
+      const hasNettingAddon = (orderAddons || []).some((oa: any) => oa.addons?.trigger_rule === 'transport=self');
+      if (!hasNettingAddon && order.transport_method !== 'self') {
+        if (order.transport_method === 'install') {
+          const installPlant     = (orderItems || [])[0]?.plants;
+          const installUnitPrice = Number(installPlant?.install_price ?? 0);
+          const installQty       = (orderItems || [])[0]?.quantity ?? 1;
+          lines.push({
+            Description: `Installation service · ${installQty} plant${installQty > 1 ? 's' : ''}`,
+            Amount: installUnitPrice * installQty,
+            DetailType: 'SalesItemLineDetail',
+            SalesItemLineDetail: {
+              UnitPrice: installUnitPrice,
+              Qty: installQty,
+              ItemRef: { value: '1', name: 'Services' },
+            },
+          });
+        } else {
+          lines.push({
+            Description: `${business.name} staff transport`,
+            Amount: 0,
+            DetailType: 'SalesItemLineDetail',
+            SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
+          });
+        }
       }
     }
 

@@ -1,27 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
-import { useAddons } from '../hooks/useAddons';
+import { useServices } from '../hooks/useServices';
 import { TransportToggle } from '../components/checkout/TransportToggle';
 import { NettingPrompt } from '../components/checkout/NettingPrompt';
 import { AddonCard } from '../components/checkout/AddonCard';
-import { TRANSPORT_OPTIONS } from '../lib/constants';
 
 export function AddOns() {
   const { tagId } = useParams<{ tagId: string }>();
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
 
-  const { item, addons: cartAddons, transport, setTransport, setAddons, toggleAddon, setNettingDeclined } = useCart();
-  const { addons: dbAddons, loading, error } = useAddons(item?.plant.business_id ?? '');
+  const {
+    item, selectedTransport, services,
+    setTransport, setServices, toggleService, setNettingDeclined, nettingDeclined,
+  } = useCart();
 
-  // Local state for netting when DB addon isn't loaded yet
-  const [localNettingSelected, setLocalNettingSelected] = useState(true);
+  const { transportOfferings, addonOfferings, loading, error } = useServices(
+    item?.plant.business_id ?? '',
+  );
 
+  // Load service offerings into cart once fetched
   useEffect(() => {
-    if (dbAddons.length > 0) {
-      setAddons(dbAddons);
+    if (transportOfferings.length > 0 || addonOfferings.length > 0) {
+      setServices(transportOfferings, addonOfferings);
     }
-  }, [dbAddons, setAddons]);
+  }, [transportOfferings, addonOfferings]);
 
   if (!item) {
     navigate(`/plant/${tagId}`, { replace: true });
@@ -29,41 +32,43 @@ export function AddOns() {
   }
 
   const { plant, quantity } = item;
-  const isSelfTransport = transport === TRANSPORT_OPTIONS.SELF;
+  const isSelfTransport = selectedTransport?.transport_mode === 'self';
 
-  const nettingCartAddon = cartAddons.find((a) => a.addon.trigger_rule === 'transport=self');
-  const alwaysAddons = cartAddons.filter((a) => a.addon.trigger_rule === 'always');
+  // Find netting in the services list
+  const nettingSelection = services.find(
+    s => s.offering.trigger_transport_mode === 'self' && s.offering.category === 'addon',
+  );
+  const nettingPrice  = nettingSelection?.offering.price ?? 10;
+  const nettingActive = isSelfTransport && (nettingSelection?.selected ?? true);
 
-  // Netting prompt shows whenever transport=self, with DB data if available or a hardcoded fallback
-  const nettingSelected = nettingCartAddon ? nettingCartAddon.selected : localNettingSelected;
-  const nettingPrice = nettingCartAddon?.addon.price_per_plant ?? 10;
-  const nettingId = nettingCartAddon?.addon.id ?? '__netting__';
+  // Other always-shown addons (no transport trigger)
+  const alwaysAddons = services.filter(
+    s => s.offering.category === 'addon' && !s.offering.trigger_transport_mode,
+  );
 
-  function handleNettingToggle() {
-    const willBeSelected = !nettingSelected;
-    setNettingDeclined(!willBeSelected);
-    if (nettingCartAddon) {
-      toggleAddon(nettingId);
-    } else {
-      setLocalNettingSelected(willBeSelected);
-    }
-  }
+  // Running subtotal for the summary bar
+  const transportAmount = selectedTransport
+    ? selectedTransport.price_type === 'per_unit'
+      ? selectedTransport.price * quantity
+      : selectedTransport.price
+    : 0;
 
-  const dbAddonsTotal = cartAddons
-    .filter((a) => {
-      if (a.addon.trigger_rule === 'transport=self') return isSelfTransport && a.selected;
-      return a.selected;
-    })
-    .reduce((sum, a) => sum + a.addon.price_per_plant * quantity, 0);
+  const addonAmount = services
+    .filter(s => s.selected && s.offering.category === 'addon')
+    .reduce((sum, s) => {
+      const p = s.offering.price_type === 'per_unit'
+        ? s.offering.price * quantity
+        : s.offering.price;
+      return sum + p;
+    }, 0);
 
-  // If netting isn't in DB yet, include fallback price when selected + self-transport
-  const fallbackNettingTotal =
-    !nettingCartAddon && isSelfTransport && nettingSelected ? nettingPrice * quantity : 0;
-
-  const addonsTotal = dbAddonsTotal + fallbackNettingTotal;
+  // Netting amount is already included in addonAmount via services state,
+  // but if cart hasn't loaded the netting service yet fall back to manual calc
+  const nettingFallback =
+    !nettingSelection && isSelfTransport && !nettingDeclined ? nettingPrice * quantity : 0;
 
   const plantSubtotal = plant.base_price * quantity;
-  const grandTotal = plantSubtotal + addonsTotal;
+  const grandTotal    = plantSubtotal + transportAmount + addonAmount + nettingFallback;
 
   return (
     <div className="page">
@@ -72,16 +77,9 @@ export function AddOns() {
         <button
           onClick={() => navigate(`/plant/${tagId}`)}
           style={{
-            background: 'none',
-            border: 'none',
-            color: '#27500A',
-            fontSize: '0.9375rem',
-            fontWeight: 600,
-            cursor: 'pointer',
-            padding: '4px 0',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
+            background: 'none', border: 'none', color: '#27500A',
+            fontSize: '0.9375rem', fontWeight: 600, cursor: 'pointer',
+            padding: '4px 0', display: 'flex', alignItems: 'center', gap: 4,
           }}
         >
           ← Back
@@ -90,7 +88,7 @@ export function AddOns() {
 
       <div style={{ padding: '12px 16px 4px' }}>
         <h1 style={{ fontSize: '1.375rem', fontWeight: 700, color: '#1f2937' }}>
-          Add-ons & transport
+          Services & add-ons
         </h1>
         <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: 4 }}>
           {plant.common_name ?? plant.species} · {quantity} plant{quantity !== 1 ? 's' : ''}
@@ -99,15 +97,28 @@ export function AddOns() {
 
       {/* Transport */}
       <div className="section">
-        <TransportToggle value={transport} onChange={setTransport} />
+        {loading ? (
+          <div className="skeleton" style={{ height: 140, borderRadius: 10 }} />
+        ) : error ? (
+          <p style={{ fontSize: '0.875rem', color: '#9ca3af' }}>Services unavailable — {error}</p>
+        ) : (
+          <TransportToggle
+            offerings={transportOfferings}
+            selected={selectedTransport}
+            onChange={setTransport}
+          />
+        )}
       </div>
 
-      {/* Netting prompt — immediately after transport toggle, above optional add-ons */}
-      {isSelfTransport && (
+      {/* Netting prompt — only when self-transport is selected */}
+      {isSelfTransport && !loading && (
         <div className="section">
           <NettingPrompt
-            selected={nettingSelected}
-            onToggle={handleNettingToggle}
+            selected={nettingActive}
+            onToggle={() => {
+              const willBeDeclined = nettingActive;
+              setNettingDeclined(willBeDeclined);
+            }}
             pricePerPlant={nettingPrice}
             quantity={quantity}
           />
@@ -115,39 +126,33 @@ export function AddOns() {
       )}
 
       {/* Always-on add-ons */}
-      {loading && (
-        <div className="section">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="skeleton"
-              style={{ height: 72, borderRadius: 10, marginBottom: 8 }}
-            />
-          ))}
-        </div>
-      )}
-
-      {!loading && error && (
-        <div className="section">
-          <p style={{ fontSize: '0.875rem', color: '#9ca3af', textAlign: 'center' }}>
-            Add-ons unavailable — {error}
-          </p>
-        </div>
-      )}
-
       {!loading && !error && alwaysAddons.length > 0 && (
         <div className="section">
-          <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#4b5563', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
+          <p style={{
+            fontSize: '0.8125rem', fontWeight: 600, color: '#4b5563',
+            textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12,
+          }}>
             Optional add-ons
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {alwaysAddons.map((ca) => (
+            {alwaysAddons.map((sel) => (
               <AddonCard
-                key={ca.addon.id}
-                addon={ca.addon}
-                selected={ca.selected}
+                key={sel.offering.id}
+                addon={{
+                  id:              sel.offering.id,
+                  nursery_id:      '',
+                  business_id:     sel.offering.business_id,
+                  name:            sel.offering.name,
+                  description:     sel.offering.description,
+                  price_per_plant: sel.offering.price,
+                  trigger_rule:    null,
+                  pre_selected:    sel.offering.pre_selected,
+                  active:          sel.offering.is_active,
+                  sort_order:      sel.offering.sort_order,
+                }}
+                selected={sel.selected}
                 quantity={quantity}
-                onToggle={() => toggleAddon(ca.addon.id)}
+                onToggle={() => toggleService(sel.offering.id)}
               />
             ))}
           </div>
@@ -161,13 +166,16 @@ export function AddOns() {
             <span>Plants ({quantity})</span>
             <span>${plantSubtotal.toFixed(2)}</span>
           </div>
-          {addonsTotal > 0 && (
+          {(addonAmount + nettingFallback + transportAmount) > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#6b7280' }}>
-              <span>Add-ons</span>
-              <span>+${addonsTotal.toFixed(2)}</span>
+              <span>Services</span>
+              <span>+${(addonAmount + nettingFallback + transportAmount).toFixed(2)}</span>
             </div>
           )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '1.0625rem', color: '#1f2937', paddingTop: 8, borderTop: '1px solid #e5e7eb' }}>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', fontWeight: 700,
+            fontSize: '1.0625rem', color: '#1f2937', paddingTop: 8, borderTop: '1px solid #e5e7eb',
+          }}>
             <span>Subtotal</span>
             <span>${grandTotal.toFixed(2)}</span>
           </div>

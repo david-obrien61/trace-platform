@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-const TAX_RATE = 0.0825;
+const TAX_RATE        = 0.0825;
 const LARGE_CONTAINERS = ['15 gal', '30 gal', '45 gal', '60 gal', '100 gal'];
 
 function adminDb() {
@@ -9,8 +9,16 @@ function adminDb() {
   return createClient(url, key);
 }
 
-function buildTransportNote(transport: string, nettingDeclined: boolean, nettingActive: boolean): string {
-  if (transport !== 'self') return 'Staff transport';
+// Derive the legacy transport_method value from a service offering.
+// Kept for backward compat with delivery routing query and historical data.
+function deriveTransportMethod(t: any): string {
+  if (t.transport_mode === 'self') return 'self';
+  if (t.transport_mode === 'staff' && t.price_type === 'per_unit') return 'install';
+  return 'delivery';
+}
+
+function buildTransportNote(transportMode: string, nettingDeclined: boolean, nettingActive: boolean): string {
+  if (transportMode !== 'self') return 'Staff transport';
   if (nettingActive && !nettingDeclined) return 'Customer self-transport — netting purchased';
   return 'Customer self-transport — netting declined, Texas TCC Ch.725 waiver acknowledged';
 }
@@ -20,7 +28,12 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { customer, plant, quantity, addons, transport, nettingDeclined, nettingPrice } = req.body;
+  const {
+    customer, plant, quantity,
+    services,          // ServiceSelection[] — from the new service_offerings model
+    selectedTransport, // ServiceOffering | null
+    nettingDeclined,
+  } = req.body;
   const businessId: string = req.body.businessId || plant?.business_id;
 
   if (!customer || !plant || !quantity || !businessId) {
@@ -45,11 +58,11 @@ export default async function handler(req: any, res: any) {
       await db.from('customers').update({
         first_name:       customer.first_name,
         last_name:        customer.last_name,
-        phone:            customer.phone ?? null,
+        phone:            customer.phone    ?? null,
         address_line1:    customer.address_line1 ?? null,
-        city:             customer.city ?? null,
-        state:            customer.state ?? 'TX',
-        zip:              customer.zip ?? null,
+        city:             customer.city     ?? null,
+        state:            customer.state    ?? 'TX',
+        zip:              customer.zip      ?? null,
         marketing_opt_in: customer.marketing_opt_in ?? true,
       }).eq('id', customerId);
     } else {
@@ -60,11 +73,11 @@ export default async function handler(req: any, res: any) {
           first_name:       customer.first_name,
           last_name:        customer.last_name,
           email:            customer.email,
-          phone:            customer.phone ?? null,
+          phone:            customer.phone    ?? null,
           address_line1:    customer.address_line1 ?? null,
-          city:             customer.city ?? null,
-          state:            customer.state ?? 'TX',
-          zip:              customer.zip ?? null,
+          city:             customer.city     ?? null,
+          state:            customer.state    ?? 'TX',
+          zip:              customer.zip      ?? null,
           marketing_opt_in: customer.marketing_opt_in ?? true,
           source:           'qr-scan',
         })
@@ -76,42 +89,53 @@ export default async function handler(req: any, res: any) {
     }
 
     // ── 2. Calculate totals ────────────────────────────────────────────────
-    const isSelf = transport === 'self';
-    const isInstall = transport === 'install';
-    const nettingActive = isSelf && !nettingDeclined;
+    const transportMode = selectedTransport?.transport_mode ?? 'self';
 
-    const nettingDbAddon = addons.find((a: any) => a.addon.trigger_rule === 'transport=self');
-    const nettingUnitPrice = nettingDbAddon?.addon.price_per_plant ?? nettingPrice;
-    const nettingTotal = nettingActive ? nettingUnitPrice * quantity : 0;
+    // Transport amount (flat or per-unit)
+    const transportAmount = selectedTransport
+      ? selectedTransport.price_type === 'per_unit'
+        ? Number(selectedTransport.price) * quantity
+        : Number(selectedTransport.price)
+      : 0;
 
-    const alwaysAddons = addons.filter(
-      (a: any) => a.selected && a.addon.trigger_rule === 'always',
+    // Netting
+    const nettingSelection = (services ?? []).find(
+      (s: any) => s.offering?.trigger_transport_mode === 'self' && s.offering?.category === 'addon',
     );
-    const alwaysTotal = alwaysAddons.reduce(
-      (sum: number, a: any) => sum + a.addon.price_per_plant * quantity,
-      0,
+    const nettingActive    = transportMode === 'self' && (nettingSelection?.selected ?? false);
+    const nettingUnitPrice = nettingSelection?.offering?.price ?? 10;
+    const nettingTotal     = nettingActive ? nettingUnitPrice * quantity : 0;
+
+    // Other addons
+    const otherAddons = (services ?? []).filter(
+      (s: any) => s.selected && s.offering?.category === 'addon' && !s.offering?.trigger_transport_mode,
     );
+    const otherTotal = otherAddons.reduce((sum: number, s: any) => {
+      const p = s.offering.price_type === 'per_unit'
+        ? Number(s.offering.price) * quantity
+        : Number(s.offering.price);
+      return sum + p;
+    }, 0);
 
-    const installAmount = isInstall ? (plant.install_price ?? 0) * quantity : 0;
-
-    const plantSubtotal = plant.base_price * quantity;
-    const addonsAmount  = nettingTotal + alwaysTotal + installAmount;
+    const plantSubtotal = Number(plant.base_price) * quantity;
+    const addonsAmount  = transportAmount + nettingTotal + otherTotal;
     const subtotal      = plantSubtotal + addonsAmount;
     const taxAmount     = Math.round(subtotal * TAX_RATE * 100) / 100;
     const total         = subtotal + taxAmount;
 
-    // ── 3. Leakage flag ────────────────────────────────────────────────────
+    // ── 3. Leakage flag (missed add-on opportunities) ──────────────────────
     const isLargeContainer = LARGE_CONTAINERS.includes(plant.current_container);
-    const leakageFlag = isLargeContainer && addonsAmount === 0;
+    const leakageFlag      = isLargeContainer && (nettingTotal + otherTotal) === 0;
 
-    // ── 4. Transport note ──────────────────────────────────────────────────
-    const transportNote = buildTransportNote(transport, nettingDeclined, nettingActive);
+    // ── 4. Transport metadata ──────────────────────────────────────────────
+    const transportMethod = deriveTransportMethod(selectedTransport ?? { transport_mode: 'self', price_type: 'flat' });
+    const transportNote   = buildTransportNote(transportMode, nettingDeclined, nettingActive);
 
     // ── 5. Invoice number ──────────────────────────────────────────────────
-    const now = new Date();
-    const datePart = now.toISOString().slice(0, 10).replace(/-/g, '');
-    const seq = String(now.getMinutes() * 60 + now.getSeconds()).padStart(3, '0');
-    const invoiceNumber = `CLV-${datePart}-${seq}`;
+    const now  = new Date();
+    const dp   = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const seq  = String(now.getMinutes() * 60 + now.getSeconds()).padStart(3, '0');
+    const invoiceNumber = `CLV-${dp}-${seq}`;
 
     // ── 6. Create order ────────────────────────────────────────────────────
     const { data: order, error: orderErr } = await db
@@ -119,7 +143,7 @@ export default async function handler(req: any, res: any) {
       .insert({
         business_id:      businessId,
         customer_id:      customerId,
-        transport_method: transport,
+        transport_method: transportMethod,   // backward compat for delivery routing
         transport_note:   transportNote,
         netting_declined: nettingDeclined,
         subtotal,
@@ -146,24 +170,48 @@ export default async function handler(req: any, res: any) {
     });
     if (itemErr) throw new Error(`Order item: ${itemErr.message}`);
 
-    // ── 8. Order addons ────────────────────────────────────────────────────
-    if (nettingActive && nettingDbAddon) {
-      await db.from('order_addons').insert({
-        order_id:   orderId,
-        addon_id:   nettingDbAddon.addon.id,
-        quantity,
-        unit_price: nettingUnitPrice,
-        subtotal:   nettingTotal,
+    // ── 8. Order service selections (new model) ────────────────────────────
+    const selectionRows: any[] = [];
+
+    // Transport offering
+    if (selectedTransport) {
+      selectionRows.push({
+        order_id:              orderId,
+        service_offering_id:   selectedTransport.id,
+        quantity:              selectedTransport.price_type === 'per_unit' ? quantity : 1,
+        unit_price_at_time:    selectedTransport.price,
+        subtotal:              transportAmount,
       });
     }
-    for (const ca of alwaysAddons) {
-      await db.from('order_addons').insert({
-        order_id:   orderId,
-        addon_id:   ca.addon.id,
+
+    // Netting
+    if (nettingActive && nettingSelection?.offering?.id) {
+      selectionRows.push({
+        order_id:              orderId,
+        service_offering_id:   nettingSelection.offering.id,
         quantity,
-        unit_price: ca.addon.price_per_plant,
-        subtotal:   ca.addon.price_per_plant * quantity,
+        unit_price_at_time:    nettingUnitPrice,
+        subtotal:              nettingTotal,
       });
+    }
+
+    // Other addons
+    for (const s of otherAddons) {
+      const amt = s.offering.price_type === 'per_unit'
+        ? Number(s.offering.price) * quantity
+        : Number(s.offering.price);
+      selectionRows.push({
+        order_id:              orderId,
+        service_offering_id:   s.offering.id,
+        quantity:              s.offering.price_type === 'per_unit' ? quantity : 1,
+        unit_price_at_time:    s.offering.price,
+        subtotal:              amt,
+      });
+    }
+
+    if (selectionRows.length > 0) {
+      const { error: selErr } = await db.from('order_service_selections').insert(selectionRows);
+      if (selErr) throw new Error(`Service selections: ${selErr.message}`);
     }
 
     // ── 9. Reserve plant ───────────────────────────────────────────────────
@@ -173,6 +221,7 @@ export default async function handler(req: any, res: any) {
       .eq('id', plant.id);
 
     res.json({ orderId, invoiceNumber, total, subtotal, taxAmount });
+
   } catch (err: any) {
     console.error('[orders/submit]', err.message);
     res.status(500).json({ error: err.message });

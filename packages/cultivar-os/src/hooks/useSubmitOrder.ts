@@ -1,48 +1,53 @@
 import { useState } from 'react';
 import { sendSilently } from '@trace/shared/notifications';
-import type { CartAddon } from '../types/order';
+import type { ServiceSelection } from '../types/order';
+import type { ServiceOffering } from '../types/plant';
 import type { CustomerInput } from '../types/customer';
 import type { Plant } from '../types/plant';
-import type { TransportOption } from '../lib/constants';
 
 export interface SubmitPayload {
-  customer: CustomerInput;
-  plant: Plant;
-  quantity: number;
-  addons: CartAddon[];
-  transport: TransportOption;
-  nettingDeclined: boolean;
-  nettingPrice: number;
-  businessId: string;
+  customer:          CustomerInput;
+  plant:             Plant;
+  quantity:          number;
+  services:          ServiceSelection[];
+  selectedTransport: ServiceOffering | null;
+  nettingDeclined:   boolean;
+  businessId:        string;
 }
 
 export interface OrderResult {
-  orderId: string;
-  invoiceNumber: string;
-  total: number;
-  subtotal: number;
-  taxAmount: number;
-  qbInvoiceId?: string;
+  orderId:         string;
+  invoiceNumber:   string;
+  total:           number;
+  subtotal:        number;
+  taxAmount:       number;
+  qbInvoiceId?:    string;
   qbInvoiceNumber?: string;
-  qbInvoiceUrl?: string;
-  qbStatus: 'success' | 'pending';
+  qbInvoiceUrl?:   string;
+  qbStatus:        'success' | 'pending';
 }
 
 export function useSubmitOrder() {
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]           = useState<string | null>(null);
 
   async function submit(payload: SubmitPayload): Promise<OrderResult> {
     setSubmitting(true);
     setError(null);
 
     try {
-      const { customer, plant, quantity, addons, transport, nettingDeclined, nettingPrice, businessId } = payload;
+      const {
+        customer, plant, quantity, services, selectedTransport,
+        nettingDeclined, businessId,
+      } = payload;
 
       const res = await fetch('/api/orders/submit', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customer, plant, quantity, addons, transport, nettingDeclined, nettingPrice, businessId }),
+        body:    JSON.stringify({
+          customer, plant, quantity, services, selectedTransport,
+          nettingDeclined, businessId,
+        }),
       });
 
       if (!res.ok) {
@@ -52,24 +57,23 @@ export function useSubmitOrder() {
 
       const { orderId, invoiceNumber, total, subtotal, taxAmount } = await res.json();
 
-      // ── QB invoice — non-blocking, never throws ────────────────────────────
+      // ── QB invoice — non-blocking ────────────────────────────────────────
       let qbInvoiceId: string | undefined;
       let qbInvoiceNumber: string | undefined;
       let qbInvoiceUrl: string | undefined;
       let qbStatus: 'success' | 'pending' = 'pending';
 
       try {
-        const apiBase = (import.meta.env.VITE_API_URL as string) ?? '';
-        const qbRes = await fetch(`${apiBase}/api/qbo/invoice/cultivar`, {
-          method: 'POST',
+        const qbRes = await fetch('/api/qbo/invoice/cultivar', {
+          method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ order_id: orderId, business_id: businessId }),
+          body:    JSON.stringify({ order_id: orderId, business_id: businessId }),
         });
         if (qbRes.ok) {
-          const qbData = await qbRes.json();
-          qbInvoiceId     = qbData.qb_invoice_id ?? undefined;
+          const qbData    = await qbRes.json();
+          qbInvoiceId     = qbData.qb_invoice_id   ?? undefined;
           qbInvoiceNumber = qbData.qb_invoice_number ?? undefined;
-          qbInvoiceUrl    = qbData.qb_invoice_url ?? undefined;
+          qbInvoiceUrl    = qbData.qb_invoice_url   ?? undefined;
           qbStatus        = qbData.success === true ? 'success' : 'pending';
         } else {
           console.warn('[QB] invoice creation failed:', await qbRes.text());
@@ -78,18 +82,26 @@ export function useSubmitOrder() {
         console.warn('[QB] invoice call threw:', qbErr);
       }
 
-      // ── Order confirmation email — non-blocking, never throws ──────────────
-      const isSelf = transport === 'self';
-      const isInstall = transport === 'install';
-      const nettingDbAddon = addons.find((a) => a.addon.trigger_rule === 'transport=self');
-      const nettingActive = isSelf && !nettingDeclined;
-      const nettingUnitPrice = nettingDbAddon?.addon.price_per_plant ?? nettingPrice;
-      const nettingTotal = nettingActive ? nettingUnitPrice * quantity : 0;
-      const alwaysAddons = addons.filter((a) => a.selected && a.addon.trigger_rule === 'always');
-      const alwaysTotal = alwaysAddons.reduce((sum, a) => sum + a.addon.price_per_plant * quantity, 0);
-      const installAmount = isInstall ? (plant.install_price ?? 0) * quantity : 0;
-      const addonsAmount = nettingTotal + alwaysTotal + installAmount;
-      const plantSubtotal = plant.base_price * quantity;
+      // ── Order confirmation email — non-blocking ──────────────────────────
+      const isSelf          = selectedTransport?.transport_mode === 'self';
+      const nettingSelection = services.find(
+        s => s.offering.trigger_transport_mode === 'self' && s.offering.category === 'addon',
+      );
+      const nettingActive  = isSelf && (nettingSelection?.selected ?? false);
+      const servicesAmount = services
+        .filter(s => s.selected)
+        .reduce((sum, s) => {
+          const p = s.offering.price_type === 'per_unit'
+            ? s.offering.price * quantity
+            : s.offering.price;
+          return sum + p;
+        }, 0);
+      const transportAmount = selectedTransport
+        ? selectedTransport.price_type === 'per_unit'
+          ? selectedTransport.price * quantity
+          : selectedTransport.price
+        : 0;
+      const addonsAmount = servicesAmount + transportAmount;
 
       sendSilently({
         vertical:   'cultivar',
@@ -105,12 +117,12 @@ export function useSubmitOrder() {
           plantName:     plant.common_name ?? plant.species,
           container:     plant.current_container,
           quantity,
-          plantTotal:    `$${plantSubtotal.toFixed(2)}`,
+          plantTotal:    `$${(plant.base_price * quantity).toFixed(2)}`,
           addonsTotal:   `$${addonsAmount.toFixed(2)}`,
           subtotal:      `$${subtotal.toFixed(2)}`,
           tax:           `$${taxAmount.toFixed(2)}`,
           total:         `$${total.toFixed(2)}`,
-          transport,
+          transport:     selectedTransport?.transport_mode ?? 'self',
           nettingActive,
           payOnline:     false,
           payUrl:        '',
@@ -119,9 +131,9 @@ export function useSubmitOrder() {
         tenantId: businessId,
       });
 
-      // ── Social post generation — non-blocking, never throws ───────────────
+      // ── Social post generation — non-blocking ────────────────────────────
       fetch('/api/social/generate-posts', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           business_id:         businessId,
@@ -130,9 +142,9 @@ export function useSubmitOrder() {
           plant_common_name:   plant.common_name ?? undefined,
           plant_container:     plant.current_container,
           customer_first_name: customer.first_name,
-          addons_purchased:    addons
-            .filter((a) => a.selected)
-            .map((a) => a.addon.name),
+          addons_purchased:    services
+            .filter(s => s.selected)
+            .map(s => s.offering.name),
         }),
       }).catch(() => {});
 

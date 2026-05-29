@@ -1,6 +1,8 @@
-import type { Plant, Addon } from './plant';
+import type { Plant, Addon, ServiceOffering } from './plant';
 import type { CustomerInput } from './customer';
 import type { TransportOption } from '../lib/constants';
+
+export type { ServiceOffering };
 
 export interface CartItem {
   plant: Plant;
@@ -9,6 +11,11 @@ export interface CartItem {
 
 export interface CartAddon {
   addon: Addon;
+  selected: boolean;
+}
+
+export interface ServiceSelection {
+  offering: ServiceOffering;
   selected: boolean;
 }
 

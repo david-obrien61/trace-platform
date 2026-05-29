@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
 import { useSubmitOrder } from '../hooks/useSubmitOrder';
 import { useBusinessContext } from '@trace/shared/context';
-import { TRANSPORT_OPTIONS, TAX_RATE } from '../lib/constants';
+import { TAX_RATE } from '../lib/constants';
 
 export function CartReview() {
   const navigate = useNavigate();
-  const { item, addons, transport, nettingDeclined, customer, clear } = useCart();
+  const { item, services, selectedTransport, nettingDeclined, customer, clear } = useCart();
   const { submit, submitting, error: submitError } = useSubmitOrder();
   const { business } = useBusinessContext();
   const [payOnline, setPayOnline] = useState<boolean | null>(null);
@@ -22,24 +22,39 @@ export function CartReview() {
   }
 
   const { plant, quantity } = item;
-  const isSelf = transport === TRANSPORT_OPTIONS.SELF;
-  const isInstall = transport === TRANSPORT_OPTIONS.INSTALL;
-  const nettingActive = isSelf && !nettingDeclined;
 
-  const nettingDbAddon = addons.find((a) => a.addon.trigger_rule === 'transport=self');
-  const nettingUnitPrice = nettingDbAddon?.addon.price_per_plant ?? 10;
-  const nettingTotal = nettingActive ? nettingUnitPrice * quantity : 0;
+  // Transport
+  const transportAmount = selectedTransport
+    ? selectedTransport.price_type === 'per_unit'
+      ? selectedTransport.price * quantity
+      : selectedTransport.price
+    : 0;
 
-  const alwaysAddons = addons.filter((a) => a.selected && a.addon.trigger_rule === 'always');
-  const alwaysTotal = alwaysAddons.reduce((sum, a) => sum + a.addon.price_per_plant * quantity, 0);
+  // Netting
+  const nettingSelection = services.find(
+    s => s.offering.trigger_transport_mode === 'self' && s.offering.category === 'addon',
+  );
+  const isSelf        = selectedTransport?.transport_mode === 'self';
+  const nettingActive = isSelf && (nettingSelection?.selected ?? false);
+  const nettingPrice  = nettingSelection?.offering.price ?? 10;
+  const nettingTotal  = nettingActive ? nettingPrice * quantity : 0;
 
-  const installAmount = isInstall ? plant.install_price * quantity : 0;
+  // Other addons (no transport trigger)
+  const otherAddons = services.filter(
+    s => s.selected && s.offering.category === 'addon' && !s.offering.trigger_transport_mode,
+  );
+  const otherTotal = otherAddons.reduce((sum, s) => {
+    const p = s.offering.price_type === 'per_unit'
+      ? s.offering.price * quantity
+      : s.offering.price;
+    return sum + p;
+  }, 0);
 
   const plantSubtotal = plant.base_price * quantity;
-  const addonsAmount = nettingTotal + alwaysTotal + installAmount;
-  const subtotal = plantSubtotal + addonsAmount;
-  const taxAmount = Math.round(subtotal * TAX_RATE * 100) / 100;
-  const total = subtotal + taxAmount;
+  const addonsAmount  = transportAmount + nettingTotal + otherTotal;
+  const subtotal      = plantSubtotal + addonsAmount;
+  const taxAmount     = Math.round(subtotal * TAX_RATE * 100) / 100;
+  const total         = subtotal + taxAmount;
 
   async function handleSubmit(online: boolean) {
     setPayOnline(online);
@@ -48,25 +63,24 @@ export function CartReview() {
         customer: customer!,
         plant,
         quantity,
-        addons,
-        transport,
+        services,
+        selectedTransport,
         nettingDeclined,
-        nettingPrice: nettingUnitPrice,
         businessId: plant.business_id,
       });
       navigate('/checkout/confirm', {
         state: {
-          orderId:          result.orderId,
-          invoiceNumber:    result.invoiceNumber,
-          total:            result.total,
-          subtotal:         result.subtotal,
-          taxAmount:        result.taxAmount,
-          email:            customer!.email,
-          payOnline:        online,
-          qbInvoiceId:      result.qbInvoiceId,
-          qbInvoiceNumber:  result.qbInvoiceNumber,
-          qbInvoiceUrl:     result.qbInvoiceUrl,
-          qbStatus:         result.qbStatus,
+          orderId:         result.orderId,
+          invoiceNumber:   result.invoiceNumber,
+          total:           result.total,
+          subtotal:        result.subtotal,
+          taxAmount:       result.taxAmount,
+          email:           customer!.email,
+          payOnline:       online,
+          qbInvoiceId:     result.qbInvoiceId,
+          qbInvoiceNumber: result.qbInvoiceNumber,
+          qbInvoiceUrl:    result.qbInvoiceUrl,
+          qbStatus:        result.qbStatus,
         },
       });
     } catch {
@@ -81,16 +95,9 @@ export function CartReview() {
         <button
           onClick={() => navigate('/checkout/customer')}
           style={{
-            background: 'none',
-            border: 'none',
-            color: '#27500A',
-            fontSize: '0.9375rem',
-            fontWeight: 600,
-            cursor: 'pointer',
-            padding: '4px 0',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
+            background: 'none', border: 'none', color: '#27500A',
+            fontSize: '0.9375rem', fontWeight: 600, cursor: 'pointer',
+            padding: '4px 0', display: 'flex', alignItems: 'center', gap: 4,
           }}
         >
           ← Back
@@ -104,7 +111,10 @@ export function CartReview() {
 
       {/* Order lines */}
       <div className="section">
-        <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
+        <p style={{
+          fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af',
+          textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12,
+        }}>
           Order summary
         </p>
 
@@ -114,12 +124,12 @@ export function CartReview() {
           amount={plantSubtotal}
         />
 
-        {/* Always addons */}
-        {alwaysAddons.map((ca) => (
+        {/* Other addons */}
+        {otherAddons.map(s => (
           <OrderLine
-            key={ca.addon.id}
-            label={`${ca.addon.name} × ${quantity}`}
-            amount={ca.addon.price_per_plant * quantity}
+            key={s.offering.id}
+            label={`${s.offering.name} × ${quantity}`}
+            amount={s.offering.price_type === 'per_unit' ? s.offering.price * quantity : s.offering.price}
           />
         ))}
 
@@ -144,21 +154,28 @@ export function CartReview() {
           )
         )}
 
-        {isInstall && (
-          <OrderLine
-            label={`Installation service · ${quantity} plant${quantity > 1 ? 's' : ''}`}
-            amount={installAmount}
-            prefix="✓ "
-          />
+        {/* Transport */}
+        {selectedTransport && (
+          selectedTransport.transport_mode === 'self' ? null : (
+            transportAmount > 0 ? (
+              <OrderLine
+                label={`${selectedTransport.name} · ${quantity} plant${quantity > 1 ? 's' : ''}`}
+                amount={transportAmount}
+                prefix="✓ "
+              />
+            ) : (
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem',
+                color: '#27500A', marginBottom: 10, fontWeight: 500,
+              }}>
+                <span>✓ {business?.name ?? 'Staff'} — {selectedTransport.name.toLowerCase()}</span>
+                <span>—</span>
+              </div>
+            )
+          )
         )}
 
-        {!isSelf && !isInstall && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem', color: '#27500A', marginBottom: 10, fontWeight: 500 }}>
-            <span>✓ {business?.name ?? 'Staff'} handling transport</span>
-            <span>—</span>
-          </div>
-        )}
-
+        {/* Totals */}
         <div style={{ borderTop: '1px solid #f3f4f6', marginTop: 8, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#6b7280' }}>
             <span>Subtotal</span>
@@ -168,7 +185,10 @@ export function CartReview() {
             <span>Tax (8.25%)</span>
             <span>${taxAmount.toFixed(2)}</span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.0625rem', fontWeight: 700, color: '#1f2937', paddingTop: 6, borderTop: '1px solid #e5e7eb' }}>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', fontSize: '1.0625rem',
+            fontWeight: 700, color: '#1f2937', paddingTop: 6, borderTop: '1px solid #e5e7eb',
+          }}>
             <span>Total</span>
             <span>${total.toFixed(2)}</span>
           </div>
@@ -191,13 +211,9 @@ export function CartReview() {
         <p style={{ fontSize: '0.9375rem', fontWeight: 600, color: '#1f2937' }}>
           {customer.first_name} {customer.last_name}
         </p>
-        <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: 2 }}>
-          {customer.email}
-        </p>
+        <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: 2 }}>{customer.email}</p>
         {customer.phone && (
-          <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: 2 }}>
-            {customer.phone}
-          </p>
+          <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: 2 }}>{customer.phone}</p>
         )}
       </div>
 
@@ -231,19 +247,16 @@ export function CartReview() {
 }
 
 function OrderLine({
-  label,
-  amount,
-  prefix = '',
+  label, amount, prefix = '',
 }: {
-  label: string;
-  amount: number;
-  prefix?: string;
+  label: string; amount: number; prefix?: string;
 }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.9375rem', color: '#374151', marginBottom: 10 }}>
-      <span style={{ flex: 1, paddingRight: 8 }}>
-        {prefix}{label}
-      </span>
+    <div style={{
+      display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+      fontSize: '0.9375rem', color: '#374151', marginBottom: 10,
+    }}>
+      <span style={{ flex: 1, paddingRight: 8 }}>{prefix}{label}</span>
       <span style={{ fontWeight: 500, flexShrink: 0 }}>${amount.toFixed(2)}</span>
     </div>
   );
