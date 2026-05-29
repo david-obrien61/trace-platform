@@ -12,7 +12,6 @@ const MONTH_NAMES = [
   'July','August','September','October','November','December',
 ];
 
-// Cached system prompt — stable instructions that never change per-request
 const SYSTEM_PROMPT = `You are a social media writer for small owner-operated plant nurseries in Texas.
 Your job is to write short, warm, friendly social media posts after a sale.
 
@@ -37,10 +36,9 @@ export default async function handler(req: any, res: any) {
     console.warn('[generate-posts] EARLY EXIT — ANTHROPIC_API_KEY not set');
     return res.status(200).json({ ok: false, reason: 'api_key_missing' });
   }
-  console.log('[generate-posts] API key present ✓');
 
   const {
-    nursery_id,
+    business_id,
     order_id,
     plant_species,
     plant_common_name,
@@ -49,37 +47,35 @@ export default async function handler(req: any, res: any) {
     addons_purchased,
   } = req.body;
 
-  if (!nursery_id || !order_id) {
-    console.warn('[generate-posts] EARLY EXIT — missing nursery_id or order_id', { nursery_id, order_id });
-    return res.status(400).json({ error: 'Missing nursery_id or order_id' });
+  if (!business_id || !order_id) {
+    console.warn('[generate-posts] EARLY EXIT — missing business_id or order_id', { business_id, order_id });
+    return res.status(400).json({ error: 'Missing business_id or order_id' });
   }
-  console.log('[generate-posts] IDs present — nursery_id:', nursery_id, 'order_id:', order_id);
 
   const db = adminDb();
 
-  // Check social_media module is enabled + configured for this nursery
+  // Check social_media module is enabled + configured for this business
   const { data: nm, error: nmErr } = await db
     .from('nursery_modules')
     .select('enabled, configured')
-    .eq('nursery_id', nursery_id)
+    .eq('business_id', business_id)
     .eq('module_key', 'social_media')
     .single();
 
   console.log('[generate-posts] nursery_modules row:', JSON.stringify(nm), 'error:', nmErr?.message ?? null);
 
   if (!nm?.enabled || !nm?.configured) {
-    console.warn('[generate-posts] EARLY EXIT — module_not_enabled. enabled:', nm?.enabled, 'configured:', nm?.configured);
+    console.warn('[generate-posts] EARLY EXIT — module_not_enabled');
     return res.status(200).json({ ok: false, reason: 'module_not_enabled' });
   }
-  console.log('[generate-posts] module enabled+configured ✓');
 
-  // Get nursery name for the posts
-  const { data: nursery } = await db
-    .from('nurseries')
+  // Get business name for the posts
+  const { data: biz } = await db
+    .from('businesses')
     .select('name')
-    .eq('id', nursery_id)
+    .eq('id', business_id)
     .single();
-  const nurseryName = (nursery as any)?.name ?? 'LAWNS Tree Farm';
+  const businessName = (biz as any)?.name ?? 'Our Nursery';
 
   const currentMonth   = MONTH_NAMES[new Date().getMonth()];
   const commonName     = plant_common_name ?? plant_species ?? 'tree';
@@ -87,7 +83,7 @@ export default async function handler(req: any, res: any) {
     ? addons_purchased.join(', ')
     : 'none';
 
-  const userPrompt = `Write 3 social media posts for ${nurseryName}.
+  const userPrompt = `Write 3 social media posts for ${businessName}.
 
 Sale details:
 - Plant: ${commonName}${plant_species ? ` (${plant_species})` : ''}
@@ -112,7 +108,6 @@ Generate:
         {
           type:          'text',
           text:          SYSTEM_PROMPT,
-          // Stable system prompt — cached after first request per region
           cache_control: { type: 'ephemeral' },
         },
       ],
@@ -122,11 +117,10 @@ Generate:
 
     const raw  = message.content.find(b => b.type === 'text');
     const text = raw?.type === 'text' ? raw.text.trim() : '';
-    console.log('[generate-posts] raw text from Claude:', text.slice(0, 200));
     const parsed = JSON.parse(text) as { posts: Array<{ type: string; content: string }> };
 
     const inserts = parsed.posts.map(post => ({
-      nursery_id,
+      business_id,
       order_id,
       platform:  'instagram',
       content:   post.content,
@@ -142,10 +136,9 @@ Generate:
   } catch (err: any) {
     console.error('[generate-posts] generation error:', err?.message ?? err);
 
-    // Insert a single failed row so the dashboard can show it
     try {
       const { error: failErr } = await db.from('social_drafts').insert({
-        nursery_id,
+        business_id,
         order_id,
         platform:  'instagram',
         content:   null,

@@ -5,7 +5,7 @@ import {
   CheckSquare, Square, Plus, X, Phone,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useNursery } from '../context/NurseryProvider';
+import { useBusinessContext } from '@trace/shared/context';
 
 interface DeliveryOrder {
   id: string;
@@ -41,7 +41,7 @@ function buildMapsUrl(addresses: string[]): string {
 
 export function DeliveryRoute() {
   const navigate = useNavigate();
-  const { nurseryId } = useNursery();
+  const { businessId } = useBusinessContext();
 
   const [orders, setOrders]     = useState<DeliveryOrder[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -58,9 +58,9 @@ export function DeliveryRoute() {
   const [copied, setCopied]     = useState(false);
 
   useEffect(() => {
-    if (!nurseryId) return;
+    if (!businessId) return;
     load();
-  }, [nurseryId]);
+  }, [businessId]);
 
   async function load() {
     setLoading(true);
@@ -71,7 +71,7 @@ export function DeliveryRoute() {
         customers ( first_name, last_name, phone, address_line1, city, state, zip ),
         order_items ( plants ( name ) )
       `)
-      .eq('nursery_id', nurseryId!)
+      .eq('business_id', businessId!)
       .eq('transport_method', 'delivery')
       .neq('status', 'cancelled')
       .order('created_at', { ascending: false })

@@ -29,7 +29,7 @@ export default function handler(req: any, res: any) {
     return res.status(500).json({ error: 'QBO_REDIRECT_URI not configured' });
   }
 
-  const nurseryId = (req.query.nursery_id as string) || 'demo';
+  const nurseryId = (req.query.business_id as string) || (req.query.nursery_id as string) || 'demo';
   const random = crypto.randomBytes(16).toString('hex');
   const state = `${nurseryId}__${random}`;
 

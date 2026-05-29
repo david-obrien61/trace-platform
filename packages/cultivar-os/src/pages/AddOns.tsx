@@ -12,7 +12,7 @@ export function AddOns() {
   const navigate = useNavigate();
 
   const { item, addons: cartAddons, transport, setTransport, setAddons, toggleAddon, setNettingDeclined } = useCart();
-  const { addons: dbAddons, loading, error } = useAddons(item?.plant.nursery_id ?? '');
+  const { addons: dbAddons, loading, error } = useAddons(item?.plant.business_id ?? '');
 
   // Local state for netting when DB addon isn't loaded yet
   const [localNettingSelected, setLocalNettingSelected] = useState(true);

@@ -10,7 +10,7 @@ function adminDb() {
 }
 
 function buildTransportNote(transport: string, nettingDeclined: boolean, nettingActive: boolean): string {
-  if (transport !== 'self') return 'LAWNS staff transport';
+  if (transport !== 'self') return 'Staff transport';
   if (nettingActive && !nettingDeclined) return 'Customer self-transport — netting purchased';
   return 'Customer self-transport — netting declined, Texas TCC Ch.725 waiver acknowledged';
 }
@@ -20,9 +20,9 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { customer, plant, quantity, addons, transport, nettingDeclined, nettingPrice, nurseryId } = req.body;
+  const { customer, plant, quantity, addons, transport, nettingDeclined, nettingPrice, businessId } = req.body;
 
-  if (!customer || !plant || !quantity || !nurseryId) {
+  if (!customer || !plant || !quantity || !businessId) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
@@ -35,7 +35,7 @@ export default async function handler(req: any, res: any) {
     const { data: existing } = await db
       .from('customers')
       .select('id')
-      .eq('nursery_id', nurseryId)
+      .eq('business_id', businessId)
       .eq('email', customer.email)
       .limit(1);
 
@@ -55,7 +55,7 @@ export default async function handler(req: any, res: any) {
       const { data: newCustomer, error: custErr } = await db
         .from('customers')
         .insert({
-          nursery_id:       nurseryId,
+          business_id:      businessId,
           first_name:       customer.first_name,
           last_name:        customer.last_name,
           email:            customer.email,
@@ -116,7 +116,7 @@ export default async function handler(req: any, res: any) {
     const { data: order, error: orderErr } = await db
       .from('orders')
       .insert({
-        nursery_id:       nurseryId,
+        business_id:      businessId,
         customer_id:      customerId,
         transport_method: transport,
         transport_note:   transportNote,

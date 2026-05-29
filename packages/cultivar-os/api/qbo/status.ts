@@ -7,22 +7,22 @@ function supabase() {
 }
 
 export default async function handler(req: any, res: any) {
-  const nurseryId = req.query.nursery_id as string;
-  if (!nurseryId) return res.json({ connected: false });
+  const businessId = (req.query.business_id as string) || (req.query.nursery_id as string);
+  if (!businessId) return res.json({ connected: false });
 
   try {
     const db = supabase();
     const { data } = await db
-      .from('nurseries')
-      .select('qb_realm_id, name')
-      .eq('id', nurseryId)
+      .from('businesses')
+      .select('accounting_company_id, name')
+      .eq('id', businessId)
       .single();
 
-    if (!data?.qb_realm_id) return res.json({ connected: false });
+    if (!data?.accounting_company_id) return res.json({ connected: false });
 
     return res.json({
       connected: true,
-      realmId: data.qb_realm_id,
+      realmId: data.accounting_company_id,
       companyName: data.name,
     });
   } catch {

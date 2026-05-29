@@ -1,6 +1,7 @@
 export interface Plant {
   id: string;
   nursery_id: string;
+  business_id: string;
   tag_id: string;
   species: string;
   common_name: string | null;
@@ -22,6 +23,7 @@ export interface PlantEvent {
   id: string;
   plant_id: string;
   nursery_id: string;
+  business_id: string;
   event_type:
     | 'arrived'
     | 'repotted'
@@ -43,6 +45,7 @@ export interface PlantEvent {
 export interface Addon {
   id: string;
   nursery_id: string;
+  business_id: string;
   name: string;
   description: string | null;
   price_per_plant: number;

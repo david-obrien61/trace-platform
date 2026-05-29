@@ -1,14 +1,14 @@
 import { BrowserRouter } from 'react-router-dom';
 import { AppRouter } from './router';
-import { NurseryProvider } from './context/NurseryProvider';
+import { BusinessProvider } from '@trace/shared/context';
 import './styles/globals.css';
 
 export function App() {
   return (
     <BrowserRouter>
-      <NurseryProvider>
+      <BusinessProvider businessType="nursery">
         <AppRouter />
-      </NurseryProvider>
+      </BusinessProvider>
     </BrowserRouter>
   );
 }

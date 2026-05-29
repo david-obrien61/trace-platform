@@ -63,7 +63,7 @@ interface ModuleRow {
   tier_required: string | null;
 }
 
-export function useModules(nurseryId: string) {
+export function useModules(businessId: string) {
   const [modules, setModules] = useState<ModuleData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
@@ -76,17 +76,17 @@ export function useModules(nurseryId: string) {
       setError(null);
 
       try {
-        const [nurseryRes, nmRes, modsRes] = await Promise.all([
+        const [businessRes, nmRes, modsRes] = await Promise.all([
           supabase
-            .from('nurseries')
-            .select('qb_realm_id')
-            .eq('id', nurseryId)
+            .from('businesses')
+            .select('accounting_company_id')
+            .eq('id', businessId)
             .single(),
 
           supabase
             .from('nursery_modules')
             .select('module_key, enabled, configured, config')
-            .eq('nursery_id', nurseryId),
+            .eq('business_id', businessId),
 
           supabase
             .from('modules')
@@ -96,8 +96,8 @@ export function useModules(nurseryId: string) {
         if (cancelled) return;
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const qbRealmId   = (nurseryRes.data as any)?.qb_realm_id ?? null;
-        const nurseryPlan = 'starter'; // post-demo: fetch from subscription table
+        const accountingCompanyId = (businessRes.data as any)?.accounting_company_id ?? null;
+        const businessPlan = 'starter'; // post-demo: fetch from subscription table
 
         const nmByKey: Record<string, NurseryModuleRow> = {};
         for (const row of (nmRes.data ?? []) as NurseryModuleRow[]) {
@@ -123,13 +123,13 @@ export function useModules(nurseryId: string) {
 
           const base = { key, name, description, icon: meta.icon, color: meta.color, bg: meta.bg, tier_required, enabled, configured, config };
 
-          // QB: active if nursery has a connected realm ID
+          // QB: active if business has a connected accounting company
           if (key === 'qb_invoicing') {
-            return { ...base, state: (qbRealmId ? 'active' : 'available') as TileState };
+            return { ...base, state: (accountingCompanyId ? 'active' : 'available') as TileState };
           }
 
           // Growth-tier module on starter plan → locked
-          if (tier_required === 'growth' && nurseryPlan === 'starter') {
+          if (tier_required === 'growth' && businessPlan === 'starter') {
             return { ...base, state: 'locked' as TileState };
           }
 
@@ -153,7 +153,7 @@ export function useModules(nurseryId: string) {
 
     load();
     return () => { cancelled = true; };
-  }, [nurseryId]);
+  }, [businessId]);
 
   return { modules, loading, error };
 }

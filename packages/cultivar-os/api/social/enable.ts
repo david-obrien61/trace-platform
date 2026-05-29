@@ -9,9 +9,9 @@ function adminDb() {
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { nursery_id, blotato_account_id, platforms } = req.body;
+  const { business_id, blotato_account_id, platforms } = req.body;
 
-  if (!nursery_id || !blotato_account_id || !Array.isArray(platforms) || platforms.length === 0) {
+  if (!business_id || !blotato_account_id || !Array.isArray(platforms) || platforms.length === 0) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
@@ -21,14 +21,14 @@ export default async function handler(req: any, res: any) {
     .from('nursery_modules')
     .upsert(
       {
-        nursery_id,
+        business_id,
         module_key:  'social_media',
         enabled:     true,
         configured:  true,
         config:      { blotato_account_id: String(blotato_account_id), platforms },
         updated_at:  new Date().toISOString(),
       },
-      { onConflict: 'nursery_id,module_key' },
+      { onConflict: 'business_id,module_key' },
     );
 
   if (error) {

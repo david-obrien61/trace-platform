@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, AlertTriangle, Truck, Package, Wrench } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useNursery } from '../context/NurseryProvider';
+import { useBusinessContext } from '@trace/shared/context';
 
 interface OrderRow {
   id: string;
@@ -30,15 +30,15 @@ const TRANSPORT_LABEL: Record<string, string> = {
 
 export function Orders() {
   const navigate              = useNavigate();
-  const { nurseryId }         = useNursery();
+  const { businessId }        = useBusinessContext();
   const [orders, setOrders]   = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
 
   useEffect(() => {
-    if (!nurseryId) return;
+    if (!businessId) return;
     load();
-  }, [nurseryId]);
+  }, [businessId]);
 
   async function load() {
     setLoading(true);
@@ -50,7 +50,7 @@ export function Orders() {
         customers ( name, email ),
         order_items ( quantity, plants ( tag_id, name ) )
       `)
-      .eq('nursery_id', nurseryId)
+      .eq('business_id', businessId)
       .order('created_at', { ascending: false })
       .limit(50);
 

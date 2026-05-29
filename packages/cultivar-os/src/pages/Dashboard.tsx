@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from '@trace/shared/components/Card';
 import { supabase } from '../lib/supabase';
 import { auth } from '../lib/auth';
-import { useNursery } from '../context/NurseryProvider';
+import { useBusinessContext } from '@trace/shared/context';
 import { useModules } from '../hooks/useModules';
 import { TileGrid } from '@trace/shared/components/tiles/TileGrid';
 import { Tile } from '@trace/shared/components/tiles/Tile';
@@ -68,9 +68,9 @@ const POST_TYPE_LABELS: Record<string, string> = {
 export function Dashboard() {
   const { user } = auth.useSession();
   const navigate  = useNavigate();
-  const { nurseryId, loading: nurseryLoading, error: nurseryError } = useNursery();
+  const { businessId, loading: businessLoading, businessError } = useBusinessContext();
 
-  const [nurseryName, setNurseryName]         = useState('');
+  const [businessName, setBusinessName]       = useState('');
   const [plantCount, setPlantCount]           = useState(0);
   const [inventoryValue, setInventoryValue]   = useState(0);
   const [todayOrderCount, setTodayOrderCount] = useState(0);
@@ -94,9 +94,9 @@ export function Dashboard() {
   const [qbCompany, setQbCompany]             = useState('');
   const [connecting, setConnecting]           = useState(false);
   const [qbError, setQbError]                 = useState('');
-  const [qbNeedsReconnect, setQbNeedsReconnect] = useState(false);
+  const [accountingNeedsReconnect, setAccountingNeedsReconnect] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { modules } = useModules(nurseryId ?? '');
+  const { modules } = useModules(businessId ?? '');
 
   // ── Data loading ─────────────────────────────────────────────────────────
 
@@ -105,44 +105,44 @@ export function Dashboard() {
     const today = todayStart();
     const week  = weekStart();
 
-    const [nurseryRes, plantsRes, todayRes, installsRes, leakageRes] = await Promise.all([
+    const [businessRes, plantsRes, todayRes, installsRes, leakageRes] = await Promise.all([
       supabase
-        .from('nurseries')
-        .select('name, qb_needs_reconnect')
-        .eq('id', nurseryId!)
+        .from('businesses')
+        .select('name, accounting_needs_reconnect')
+        .eq('id', businessId!)
         .single(),
 
       supabase
         .from('plants')
         .select('id, base_price')
-        .eq('nursery_id', nurseryId!)
+        .eq('business_id', businessId!)
         .eq('status', 'available'),
 
       supabase
         .from('orders')
         .select('id, total_amount')
-        .eq('nursery_id', nurseryId!)
+        .eq('business_id', businessId!)
         .neq('status', 'cancelled')
         .gte('created_at', today),
 
       supabase
         .from('orders')
         .select('id')
-        .eq('nursery_id', nurseryId!)
+        .eq('business_id', businessId!)
         .eq('transport_method', 'install')
         .gte('created_at', week),
 
       supabase
         .from('orders')
         .select('id')
-        .eq('nursery_id', nurseryId!)
+        .eq('business_id', businessId!)
         .eq('leakage_flag', true)
         .gte('created_at', week),
     ]);
 
-    if (nurseryRes.data) {
-      setNurseryName(nurseryRes.data.name);
-      setQbNeedsReconnect(nurseryRes.data.qb_needs_reconnect ?? false);
+    if (businessRes.data) {
+      setBusinessName(businessRes.data.name);
+      setAccountingNeedsReconnect(businessRes.data.accounting_needs_reconnect ?? false);
     }
 
     const plants = plantsRes.data ?? [];
@@ -165,7 +165,7 @@ export function Dashboard() {
     const { data } = await supabase
       .from('social_drafts')
       .select('id, post_type, content, platform')
-      .eq('nursery_id', nurseryId!)
+      .eq('business_id', businessId!)
       .eq('status', 'draft')
       .order('created_at', { ascending: true });
     setSocialDrafts((data as SocialDraft[]) ?? []);
@@ -197,7 +197,7 @@ export function Dashboard() {
 
   async function checkQbStatus(): Promise<boolean> {
     try {
-      const res = await fetch(`/api/qbo/status?nursery_id=${nurseryId!}`);
+      const res = await fetch(`/api/qbo/status?business_id=${businessId!}`);
       if (res.ok) {
         const data = await res.json();
         if (data.connected) {
@@ -218,29 +218,24 @@ export function Dashboard() {
     let step = 'init';
 
     try {
-      // Step 1 — open popup synchronously before any await (browser requires user-gesture chain)
       step = 'open-popup';
       popup = window.open('', 'qb-connect', 'width=720,height=640,left=200,top=100');
 
-      // Step 2 — fetch OAuth URL from Vercel function
       step = 'fetch';
-      const res = await fetch(`/api/qbo/auth-url?nursery_id=${nurseryId!}`);
+      const res = await fetch(`/api/qbo/auth-url?business_id=${businessId!}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(`[step:${step}] ` + (body.error || `Server error ${res.status}`));
       }
 
-      // Step 3 — parse response
       step = 'parse';
       const { url } = await res.json();
 
-      // Step 4 — validate URL is parseable before handing to browser
       step = 'validate-url';
       try { new URL(url); } catch {
         throw new Error(`[step:${step}] Malformed URL returned by server — check QBO env vars`);
       }
 
-      // Step 5 — navigate popup (or fall back to same-tab)
       step = 'navigate';
       if (popup && !popup.closed) {
         popup.location.href = url;
@@ -249,7 +244,6 @@ export function Dashboard() {
         return;
       }
 
-      // Step 6 — poll until popup closes or QB confirms connected
       step = 'poll';
       pollingRef.current = setInterval(async () => {
         const connected = await checkQbStatus();
@@ -268,7 +262,6 @@ export function Dashboard() {
     } catch (err: any) {
       popup?.close();
       const msg = String(err?.message || err || 'Unknown error');
-      // Prefix with step if not already tagged
       setQbError(msg.startsWith('[step:') ? msg : `[step:${step}] ${msg}`);
       setConnecting(false);
     }
@@ -299,12 +292,12 @@ export function Dashboard() {
   // ── Effects ───────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!nurseryId) return;
+    if (!businessId) return;
     loadMetrics();
     checkQbStatus();
     loadSocialDrafts();
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
-  }, [nurseryId]);
+  }, [businessId]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
@@ -312,7 +305,7 @@ export function Dashboard() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  if (nurseryLoading) {
+  if (businessLoading) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--sage-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div className="skeleton" style={{ width: 160, height: 20, borderRadius: 4 }} />
@@ -320,7 +313,7 @@ export function Dashboard() {
     );
   }
 
-  if (!nurseryLoading && (nurseryError || !nurseryId)) {
+  if (!businessLoading && (businessError || !businessId)) {
     navigate('/onboarding', { replace: true });
     return null;
   }
@@ -342,23 +335,35 @@ export function Dashboard() {
             fontSize: '0.6875rem', color: '#a8c890', marginBottom: 2,
             letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase',
           }}>
-            {nurseryName}
+            {businessName}
           </p>
           <h1 style={{ fontSize: '1.375rem', fontWeight: 700, margin: 0 }}>Owner Dashboard</h1>
           {user?.email && (
             <p style={{ fontSize: '0.75rem', color: '#a8c890', marginTop: 4 }}>{user.email}</p>
           )}
         </div>
-        <button
-          onClick={handleSignOut}
-          style={{
-            background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8,
-            padding: '8px 12px', color: '#fff', fontSize: '0.8125rem',
-            fontWeight: 600, cursor: 'pointer', marginTop: 2,
-          }}
-        >
-          Sign out
-        </button>
+        <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+          <button
+            onClick={() => navigate('/settings')}
+            style={{
+              background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8,
+              padding: '8px 12px', color: '#fff', fontSize: '0.8125rem',
+              fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            Settings
+          </button>
+          <button
+            onClick={handleSignOut}
+            style={{
+              background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8,
+              padding: '8px 12px', color: '#fff', fontSize: '0.8125rem',
+              fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            Sign out
+          </button>
+        </div>
       </div>
 
       <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 640, margin: '0 auto' }}>
@@ -470,7 +475,7 @@ export function Dashboard() {
               </div>
             </div>
 
-            {/* ── US-012: Leakage alert tile ── */}
+            {/* ── Leakage alert tile ── */}
             {leakageCount > 0 ? (
               <div style={{
                 background: 'var(--amber-bg)',
@@ -518,8 +523,8 @@ export function Dashboard() {
           </>
         )}
 
-        {/* ── QB reconnect warning ── */}
-        {qbNeedsReconnect && (
+        {/* ── Accounting reconnect warning ── */}
+        {accountingNeedsReconnect && (
           <div style={{
             background: 'var(--amber-bg)',
             border: '1.5px solid var(--amber-border)',

@@ -16,7 +16,7 @@ export default async function handler(req: any, res: any) {
 
   const { data: draft, error: draftErr } = await db
     .from('social_drafts')
-    .select('id, nursery_id, content, platform, status')
+    .select('id, business_id, content, platform, status')
     .eq('id', draft_id)
     .single();
 
@@ -31,7 +31,7 @@ export default async function handler(req: any, res: any) {
   const { data: nm } = await db
     .from('nursery_modules')
     .select('config')
-    .eq('nursery_id', (draft as any).nursery_id)
+    .eq('business_id', (draft as any).business_id)
     .eq('module_key', 'social_media')
     .single();
 

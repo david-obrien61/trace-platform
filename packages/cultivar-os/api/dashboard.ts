@@ -7,17 +7,17 @@ function supabase() {
 }
 
 export default async function handler(req: any, res: any) {
-  const nurseryId = req.query.nursery_id as string | undefined;
-  if (!nurseryId) return res.status(400).json({ error: 'nursery_id required' });
+  const businessId = (req.query.business_id as string) || (req.query.nursery_id as string);
+  if (!businessId) return res.status(400).json({ error: 'business_id required' });
 
   try {
     const db = supabase();
     const todayStr = new Date().toISOString().slice(0, 10);
 
-    const [ordersRes, plantsRes, nurseryRes] = await Promise.all([
-      db.from('orders').select('id, total_amount, leakage_flag, created_at, status').eq('nursery_id', nurseryId),
-      db.from('plants').select('base_price, status').eq('nursery_id', nurseryId),
-      db.from('nurseries').select('qb_realm_id, name').eq('id', nurseryId).single(),
+    const [ordersRes, plantsRes, businessRes] = await Promise.all([
+      db.from('orders').select('id, total_amount, leakage_flag, created_at, status').eq('business_id', businessId),
+      db.from('plants').select('base_price, status').eq('business_id', businessId),
+      db.from('businesses').select('accounting_company_id, name').eq('id', businessId).single(),
     ]);
 
     const orders = ordersRes.data || [];
@@ -37,7 +37,7 @@ export default async function handler(req: any, res: any) {
       plant_count: plants.length,
       available_count: plants.filter((p: any) => p.status === 'available').length,
       leakage_count: leakageCount,
-      qb_connected: !!nurseryRes.data?.qb_realm_id,
+      qb_connected: !!businessRes.data?.accounting_company_id,
     });
   } catch (err: any) {
     console.error('[dashboard]', err);

@@ -230,6 +230,90 @@ This log is created and maintained per the Honest Friction principle (see PLATFO
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-05-29 — businesses migration + BusinessProvider + Settings page (multi-tenant Phase 1)
+
+**Decisions made:**
+- `businesses` replaces `nurseries` as the universal tenant anchor. `nurseries.id = businesses.id` — same UUID, safe backfill.
+- `opportunity_items` table replaces hardcoded `netting_price` field with a generic per-business add-on catalog.
+- `nursery_profiles` holds thin vertical-specific config (default_install_price).
+- QB token columns generalized: `qb_*` → `accounting_type/token/refresh_token/token_expires_at/needs_reconnect/company_id`.
+- `BusinessProvider` lives in `packages/shared/src/context/` — replaces NurseryProvider. NurseryProvider.tsx is now a re-export shim.
+- Settings page lives in `packages/shared/src/pages/Settings.tsx` — vertical-specific config injected via `verticalSection` prop.
+
+**What was built:**
+
+SQL Migrations (to run manually in Supabase SQL editor, bgobkjcopcxusjsetfob):
+- `supabase/migrations/20260529_businesses_a_create_tables.sql` — creates businesses, nursery_profiles tables + RLS
+- `supabase/migrations/20260529_businesses_b_opportunity_items.sql` — creates opportunity_items + RLS
+- `supabase/migrations/20260529_businesses_c_add_business_id.sql` — backfills business_id on all operational tables, inserts LAWNS row into businesses, seeds netting as opportunity_item
+- `supabase/migrations/20260529_businesses_d_update_rls.sql` — replaces all RLS policies to use business_id; adds UNIQUE(business_id, module_key) on nursery_modules
+- `supabase/migrations/20260529_businesses_e_cleanup.sql` — drops nursery_id columns (run ONLY after smoke test passes)
+
+Shared code (new files):
+- `packages/shared/src/context/BusinessProvider.tsx` — auth.uid() → businesses table → businessId
+- `packages/shared/src/context/index.ts` — exports BusinessProvider, useBusinessContext, Business type
+- `packages/shared/src/pages/Settings.tsx` — Business Profile + Accounting + Sales Prompts + verticalSection injection
+
+Cultivar OS updates (all 31+ consumer files):
+- `packages/cultivar-os/src/App.tsx` — BusinessProvider businessType="nursery"
+- `packages/cultivar-os/src/context/NurseryProvider.tsx` — thin re-export shim
+- `packages/cultivar-os/src/hooks/useBusiness.ts` — new hook, queries businesses table
+- `packages/cultivar-os/src/pages/Settings.tsx` — wrapper with NurserySection (default_install_price → nursery_profiles)
+- All pages/hooks: useNursery() → useBusinessContext(), nurseryId → businessId, nursery_id → business_id queries
+- All API handlers: business_id everywhere, businesses table, accounting_* columns
+
+**⚠️ David — pending manual steps (run in this order):**
+1. Run migration A in Supabase SQL editor (bgobkjcopcxusjsetfob): `20260529_businesses_a_create_tables.sql`
+2. Run migration B: `20260529_businesses_b_opportunity_items.sql`
+3. Run migration C: `20260529_businesses_c_add_business_id.sql` — backfills LAWNS data
+4. Run migration D: `20260529_businesses_d_update_rls.sql` — brief downtime OK
+5. In Vercel cultivar-os project settings → Environment Variables: add `VITE_DEMO_BUSINESS_ID = a1b2c3d4-0000-0000-0000-000000000001`
+6. Deploy (git push → auto-deploys via Vercel GitHub integration)
+7. Smoke test: login → dashboard loads → QR checkout → QB invoice → orders visible → /settings shows LAWNS data
+8. If smoke test passes, run migration E: `20260529_businesses_e_cleanup.sql` (drops nursery_id columns)
+
+**Build status:** Clean — 2163 modules, zero TS errors ✅
+
+**Last files edited this session:**
+  supabase/migrations/20260529_businesses_a_create_tables.sql (new)
+  supabase/migrations/20260529_businesses_b_opportunity_items.sql (new)
+  supabase/migrations/20260529_businesses_c_add_business_id.sql (new)
+  supabase/migrations/20260529_businesses_d_update_rls.sql (new — unique index added)
+  supabase/migrations/20260529_businesses_e_cleanup.sql (new)
+  packages/shared/src/context/BusinessProvider.tsx (new)
+  packages/shared/src/context/index.ts (new)
+  packages/shared/src/pages/Settings.tsx (new)
+  packages/shared/src/quickbooks/refresh.ts (updated — businesses table, accounting_* columns)
+  packages/cultivar-os/src/App.tsx (BusinessProvider)
+  packages/cultivar-os/src/context/NurseryProvider.tsx (re-export shim)
+  packages/cultivar-os/src/types/nursery.ts (Business type export added)
+  packages/cultivar-os/src/types/plant.ts (business_id field added)
+  packages/cultivar-os/src/hooks/useBusiness.ts (new)
+  packages/cultivar-os/src/hooks/useModules.ts (businessId param)
+  packages/cultivar-os/src/hooks/useAddons.ts (businessId param)
+  packages/cultivar-os/src/hooks/useSubmitOrder.ts (businessId in payload)
+  packages/cultivar-os/src/hooks/usePlant.ts (business_id query)
+  packages/cultivar-os/src/pages/Settings.tsx (new — wrapper with NurserySection)
+  packages/cultivar-os/src/pages/Dashboard.tsx (businessId, Settings button in header)
+  packages/cultivar-os/src/pages/SocialSetup.tsx (businessId)
+  packages/cultivar-os/src/pages/DeliveryRoute.tsx (businessId)
+  packages/cultivar-os/src/pages/Orders.tsx (businessId)
+  packages/cultivar-os/src/pages/OnboardingWizard.tsx (writes to businesses + nursery_profiles)
+  packages/cultivar-os/src/pages/AddOns.tsx (business_id)
+  packages/cultivar-os/src/pages/CartReview.tsx (businessId)
+  packages/cultivar-os/src/router.tsx (/settings route added)
+  packages/cultivar-os/api/orders/submit.ts (business_id)
+  packages/cultivar-os/api/qbo/callback.ts (businesses table, accounting_* columns)
+  packages/cultivar-os/api/qbo/auth-url.ts (business_id param)
+  packages/cultivar-os/api/qbo/invoice/cultivar.ts (businesses table, dynamic tax_rate + name)
+  packages/cultivar-os/api/qbo/status.ts (business_id, businesses table)
+  packages/cultivar-os/api/social/generate-posts.ts (business_id)
+  packages/cultivar-os/api/social/publish.ts (business_id)
+  packages/cultivar-os/api/social/enable.ts (business_id)
+  packages/cultivar-os/api/dashboard.ts (business_id, businesses table)
+
+---
+
 ### 2026-05-29 — OnboardingWizard, Delivery Routing, Dead Tile Fix
 
 **What was built:**

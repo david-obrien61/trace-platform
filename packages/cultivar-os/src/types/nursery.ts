@@ -1,3 +1,5 @@
+export type { Business } from '@trace/shared/context';
+
 export interface Nursery {
   id: string;
   name: string;

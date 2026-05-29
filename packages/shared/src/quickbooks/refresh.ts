@@ -10,30 +10,24 @@ function adminDb() {
   return createClient(url, key);
 }
 
-export interface NurseryQBTokens {
-  qb_access_token:     string | null;
-  qb_refresh_token:    string | null;
-  qb_token_expires_at: string | null;
+export interface BusinessQBTokens {
+  accounting_token:           string | null;
+  accounting_refresh_token:   string | null;
+  accounting_token_expires_at: string | null;
 }
 
-/**
- * Returns a valid QB access token for nurseryId.
- * Refreshes proactively if the token is missing or within 10 minutes of expiry.
- * Sets qb_needs_reconnect = true and returns null if the refresh token is dead.
- * Caller must handle null gracefully (skip invoice, never block the order).
- */
 export async function refreshQBToken(
-  nurseryId: string,
-  tokens: NurseryQBTokens,
+  businessId: string,
+  tokens: BusinessQBTokens,
 ): Promise<string | null> {
-  const { qb_access_token, qb_refresh_token, qb_token_expires_at } = tokens;
+  const { accounting_token, accounting_refresh_token, accounting_token_expires_at } = tokens;
 
   const tenMinutesFromNow = Date.now() + 10 * 60 * 1000;
-  const expiresAt = qb_token_expires_at ? new Date(qb_token_expires_at).getTime() : 0;
-  const needsRefresh = !qb_access_token || !qb_token_expires_at || expiresAt < tenMinutesFromNow;
+  const expiresAt = accounting_token_expires_at ? new Date(accounting_token_expires_at).getTime() : 0;
+  const needsRefresh = !accounting_token || !accounting_token_expires_at || expiresAt < tenMinutesFromNow;
 
-  if (!needsRefresh) return qb_access_token!;
-  if (!qb_refresh_token) return null;
+  if (!needsRefresh) return accounting_token!;
+  if (!accounting_refresh_token) return null;
 
   const db = adminDb();
   const creds = Buffer.from(`${QBO_CLIENT_ID}:${QBO_CLIENT_SECRET}`).toString('base64');
@@ -46,26 +40,26 @@ export async function refreshQBToken(
     },
     body: new URLSearchParams({
       grant_type:    'refresh_token',
-      refresh_token: qb_refresh_token,
+      refresh_token: accounting_refresh_token,
     }).toString(),
   });
 
   if (!resp.ok) {
-    await db.from('nurseries')
-      .update({ qb_needs_reconnect: true })
-      .eq('id', nurseryId);
+    await db.from('businesses')
+      .update({ accounting_needs_reconnect: true })
+      .eq('id', businessId);
     return null;
   }
 
   const data = await resp.json();
   const newExpiresAt = new Date(Date.now() + (data.expires_in ?? 3600) * 1000).toISOString();
 
-  await db.from('nurseries').update({
-    qb_access_token:     data.access_token,
-    qb_refresh_token:    data.refresh_token || qb_refresh_token,
-    qb_token_expires_at: newExpiresAt,
-    qb_needs_reconnect:  false,
-  }).eq('id', nurseryId);
+  await db.from('businesses').update({
+    accounting_token:           data.access_token,
+    accounting_refresh_token:   data.refresh_token || accounting_refresh_token,
+    accounting_token_expires_at: newExpiresAt,
+    accounting_needs_reconnect:  false,
+  }).eq('id', businessId);
 
   return data.access_token;
 }

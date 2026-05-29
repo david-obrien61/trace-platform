@@ -13,7 +13,7 @@ export interface SubmitPayload {
   transport: TransportOption;
   nettingDeclined: boolean;
   nettingPrice: number;
-  nurseryId: string;
+  businessId: string;
 }
 
 export interface OrderResult {
@@ -37,13 +37,12 @@ export function useSubmitOrder() {
     setError(null);
 
     try {
-      const { customer, plant, quantity, addons, transport, nettingDeclined, nettingPrice, nurseryId } = payload;
+      const { customer, plant, quantity, addons, transport, nettingDeclined, nettingPrice, businessId } = payload;
 
-      // ── DB writes via service-role serverless function ─────────────────────
       const res = await fetch('/api/orders/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customer, plant, quantity, addons, transport, nettingDeclined, nettingPrice, nurseryId }),
+        body: JSON.stringify({ customer, plant, quantity, addons, transport, nettingDeclined, nettingPrice, businessId }),
       });
 
       if (!res.ok) {
@@ -64,7 +63,7 @@ export function useSubmitOrder() {
         const qbRes = await fetch(`${apiBase}/api/qbo/invoice/cultivar`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ order_id: orderId, nursery_id: nurseryId }),
+          body: JSON.stringify({ order_id: orderId, business_id: businessId }),
         });
         if (qbRes.ok) {
           const qbData = await qbRes.json();
@@ -117,7 +116,7 @@ export function useSubmitOrder() {
           payUrl:        '',
         },
         entityId: orderId,
-        tenantId: nurseryId,
+        tenantId: businessId,
       });
 
       // ── Social post generation — non-blocking, never throws ───────────────
@@ -125,7 +124,7 @@ export function useSubmitOrder() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          nursery_id:          nurseryId,
+          business_id:         businessId,
           order_id:            orderId,
           plant_species:       plant.species,
           plant_common_name:   plant.common_name ?? undefined,

@@ -432,12 +432,14 @@ export function OnboardingWizard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { navigate('/login'); return; }
 
-      const { error } = await supabase.from('nurseries').insert({
-        id: crypto.randomUUID(),
+      const newBusinessId = crypto.randomUUID();
+      const { error } = await supabase.from('businesses').insert({
+        id: newBusinessId,
         owner_id: user.id,
         name: nurseryInfo.name.trim(),
         phone: nurseryInfo.phone.trim() || null,
         address: nurseryInfo.address.trim() || null,
+        business_type: 'nursery',
         trial_started_at: new Date().toISOString(),
       });
 
@@ -446,6 +448,8 @@ export function OnboardingWizard() {
         setFinalizing(false);
         return;
       }
+
+      await supabase.from('nursery_profiles').insert({ business_id: newBusinessId });
       setStepIndex(STEPS.indexOf('DONE'));
     } catch {
       setFinalizeError('Something went wrong. Please try again.');

@@ -82,7 +82,7 @@ export function usePlant(tagId: string | undefined): UsePlantResult {
       const { count } = await supabase
         .from('plants')
         .select('*', { count: 'exact', head: true })
-        .eq('nursery_id', plantData.nursery_id)
+        .eq('business_id', plantData.business_id)
         .eq('species', plantData.species)
         .eq('current_container', plantData.current_container)
         .eq('status', 'available');

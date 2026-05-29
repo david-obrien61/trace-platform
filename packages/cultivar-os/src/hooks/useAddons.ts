@@ -8,7 +8,7 @@ interface UseAddonsResult {
   error: string | null;
 }
 
-export function useAddons(nurseryId: string): UseAddonsResult {
+export function useAddons(businessId: string): UseAddonsResult {
   const [addons, setAddons] = useState<Addon[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +23,7 @@ export function useAddons(nurseryId: string): UseAddonsResult {
       const { data, error: err } = await supabase
         .from('addons')
         .select('*')
-        .eq('nursery_id', nurseryId)
+        .eq('business_id', businessId)
         .eq('active', true)
         .order('sort_order', { ascending: true });
 
@@ -41,7 +41,7 @@ export function useAddons(nurseryId: string): UseAddonsResult {
 
     fetch();
     return () => { cancelled = true; };
-  }, [nurseryId]);
+  }, [businessId]);
 
   return { addons, loading, error };
 }

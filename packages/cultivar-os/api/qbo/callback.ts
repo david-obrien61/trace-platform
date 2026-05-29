@@ -24,7 +24,7 @@ export default async function handler(req: any, res: any) {
     return res.status(400).send('<h2>Missing OAuth parameters. Please try connecting again.</h2>');
   }
 
-  const nurseryId = state.split('__')[0] || '';
+  const businessId = state.split('__')[0] || '';
 
   // Exchange code for tokens
   const credentials = Buffer.from(`${QBO_CLIENT_ID}:${QBO_CLIENT_SECRET}`).toString('base64');
@@ -50,8 +50,8 @@ export default async function handler(req: any, res: any) {
 
   const tokens = await tokenResp.json();
 
-  // Fetch sandbox company name
-  let companyName = 'QuickBooks Sandbox';
+  // Fetch company name
+  let companyName = 'QuickBooks';
   try {
     const infoResp = await fetch(
       `${QBO_API_BASE}/${realmId}/companyinfo/${realmId}?minorversion=65`,
@@ -68,20 +68,21 @@ export default async function handler(req: any, res: any) {
     }
   } catch {}
 
-  // Store tokens in Supabase nurseries table
-  if (nurseryId) {
+  // Store tokens in businesses table
+  if (businessId) {
     try {
       const db = supabase();
       await db
-        .from('nurseries')
+        .from('businesses')
         .update({
-          qb_access_token:     tokens.access_token,
-          qb_refresh_token:    tokens.refresh_token,
-          qb_realm_id:         realmId,
-          qb_token_expires_at: new Date(Date.now() + (tokens.expires_in ?? 3600) * 1000).toISOString(),
-          qb_needs_reconnect:  false,
+          accounting_type:            'quickbooks',
+          accounting_token:           tokens.access_token,
+          accounting_refresh_token:   tokens.refresh_token,
+          accounting_company_id:      realmId,
+          accounting_token_expires_at: new Date(Date.now() + (tokens.expires_in ?? 3600) * 1000).toISOString(),
+          accounting_needs_reconnect:  false,
         })
-        .eq('id', nurseryId);
+        .eq('id', businessId);
     } catch (e) {
       console.error('[QB callback] Supabase write failed:', e);
     }

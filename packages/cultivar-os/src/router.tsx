@@ -15,6 +15,7 @@ import { SocialSetup }     from './pages/SocialSetup';
 import { Orders }            from './pages/Orders';
 import { OnboardingWizard } from './pages/OnboardingWizard';
 import { DeliveryRoute }    from './pages/DeliveryRoute';
+import { Settings }         from './pages/Settings';
 
 export function AppRouter() {
   return (
@@ -38,6 +39,7 @@ export function AppRouter() {
         <Route path="/orders"       element={<Orders />} />
         <Route path="/deliveries"   element={<DeliveryRoute />} />
         <Route path="/social/setup" element={<SocialSetup />} />
+        <Route path="/settings"     element={<Settings />} />
         <Route path="/onboarding"   element={<OnboardingWizard />} />
       </Route>
 

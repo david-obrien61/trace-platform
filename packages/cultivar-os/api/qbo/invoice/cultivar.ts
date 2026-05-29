@@ -88,30 +88,34 @@ async function findOrCreateQBCustomer(
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
-  const { order_id, nursery_id } = req.body as { order_id: string; nursery_id: string };
-  if (!order_id || !nursery_id) {
-    return res.status(400).json({ error: 'order_id and nursery_id required' });
+  const { order_id, business_id } = req.body as { order_id: string; business_id: string };
+  if (!order_id || !business_id) {
+    return res.status(400).json({ error: 'order_id and business_id required' });
   }
 
   const db = supabase();
 
   try {
-    // Fetch nursery QB tokens
-    const { data: nursery, error: nurseryErr } = await db
-      .from('nurseries')
-      .select('qb_access_token, qb_refresh_token, qb_token_expires_at, qb_realm_id, tax_rate')
-      .eq('id', nursery_id)
+    // Fetch business accounting tokens
+    const { data: business, error: bizErr } = await db
+      .from('businesses')
+      .select('accounting_token, accounting_refresh_token, accounting_token_expires_at, accounting_company_id, tax_rate, name')
+      .eq('id', business_id)
       .single();
 
-    if (nurseryErr || !nursery?.qb_realm_id) {
+    if (bizErr || !business?.accounting_company_id) {
       return res.status(503).json({ error: 'QuickBooks not connected — connect from dashboard first' });
     }
 
-    const token = await refreshQBToken(nursery_id, nursery);
+    const token = await refreshQBToken(business_id, {
+      accounting_token:            business.accounting_token,
+      accounting_refresh_token:    business.accounting_refresh_token,
+      accounting_token_expires_at: business.accounting_token_expires_at,
+    });
     if (!token) {
       return res.status(503).json({ error: 'qb_token_expired' });
     }
-    const realm: string = nursery.qb_realm_id;
+    const realm: string = business.accounting_company_id;
 
     // Fetch order with customer
     const { data: order } = await db
@@ -205,7 +209,7 @@ export default async function handler(req: any, res: any) {
         });
       } else {
         lines.push({
-          Description: 'LAWNS Tree Farm staff transport',
+          Description: `${business.name} staff transport`,
           Amount: 0,
           DetailType: 'SalesItemLineDetail',
           SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
@@ -216,8 +220,9 @@ export default async function handler(req: any, res: any) {
     // Tax line
     const taxAmount = Number(order.tax_amount);
     if (taxAmount > 0) {
+      const taxPct = Math.round((business.tax_rate ?? 0.0825) * 10000) / 100;
       lines.push({
-        Description: 'Texas Sales Tax (8.25%)',
+        Description: `Sales Tax (${taxPct}%)`,
         Amount: taxAmount,
         DetailType: 'SalesItemLineDetail',
         SalesItemLineDetail: {
