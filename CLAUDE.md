@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: May 28, 2026
+# Last updated: May 29, 2026
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -208,7 +208,7 @@ This log is created and maintained per the Honest Friction principle (see PLATFO
 
 | # | Workaround | Introduced | Correct Architecture | Trigger for Repair |
 |---|---|---|---|---|
-| 1 | Cultivar OS dashboard tiles show active state but `handleNavigate(_key)` is an empty stub (flash and nothing) | Pre-2026-05-25 (inherited from build sessions) | Per Surface Honesty: each tile is WORKS, LABELED, or HIDDEN — never flash-and-nothing | Before any next prospect demo of Cultivar OS |
+| 1 | 🟢 Cultivar OS dashboard tiles — handleNavigate() was an empty stub. Fixed 2026-05-29: qr_checkout → /orders, qb_invoicing → scroll to #qb-section, social_media → /social/setup, delivery → /deliveries. All active tiles now navigate correctly. | Resolved 2026-05-29 | n/a | — |
 | 2 | QB integration is hardcoded with `IGNITION_OS_DATA` reference | Pre-2026-05-23 (per Session 1a audit findings) | AccountingAdapter interface per PLATFORM_STRATEGY.md target architecture; vertical-agnostic | When second vertical (KINNA-OS Phase 1) needs QB or alternative accounting connector |
 | 3 | Social module lives in cultivar-os/api/, not packages/shared/ | Pre-2026-05-23 (per audit findings, Cultivar-only by accident) | Per PLATFORM_STRATEGY.md target: extract to packages/shared/src/social/ | Before Conduit OS or KINNA-OS need social composer |
 | 4 | Hardcoded nursery footer in PlantProfile.tsx line 108 — `LAWNS Tree Farm, LLC · Leander, TX · (512) 450-3336` — bypasses the nurseries table row that contains the same data | Pre-2026-05-27 (surfaced by Session K subsystem audit) | Component should read from the nursery object loaded via existing hooks; eliminate the literal string | Before next nursery customer onboarding (would display LAWNS data for the wrong nursery) |
@@ -229,6 +229,58 @@ This log is created and maintained per the Honest Friction principle (see PLATFO
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-05-29 — OnboardingWizard, Delivery Routing, Dead Tile Fix
+
+**What was built:**
+- `packages/cultivar-os/src/pages/Orders.tsx` (new)
+  Last 50 orders, green/red border by leakage_flag, transport icons, customer + amount.
+- `packages/cultivar-os/src/pages/OnboardingWizard.tsx` (new)
+  5-step first-run experience: WELCOME → NURSERY_SETUP → CHOOSE_PATH → PATH_EXPERIENCE → DONE
+  4 paths — LEAKAGE (leakage calculator, annual missed add-on revenue), CHECKOUT (4-slide
+  visual walkthrough), SETUP (QB teaser), DELIVERY (demo stops → Google Maps route → SMS).
+  finalize() inserts a nurseries row (owner_id = auth.uid()) — **resolves Gap A**.
+- `packages/cultivar-os/src/pages/DeliveryRoute.tsx` (new)
+  Live at /deliveries. Pulls all pending delivery orders joined with customer addresses.
+  Checkbox selection per stop, inline address entry for missing addresses, numbered stops,
+  generates Google Maps multi-stop URL. Actions: Open in Maps, Text to Driver (native SMS),
+  Copy Route Link.
+- `packages/cultivar-os/src/pages/Dashboard.tsx` — handleNavigate fixed (Tech Debt #1 resolved)
+  qr_checkout → /orders, qb_invoicing → scroll to #qb-section, social_media → /social/setup,
+  delivery → /deliveries. Dead tiles are now live.
+- `packages/cultivar-os/src/router.tsx` — added /orders, /deliveries, /onboarding routes
+- Dashboard now redirects to /onboarding (replace: true) when nursery resolves with no row,
+  instead of showing an error wall.
+
+**Commits this session:**
+- ce5745b — Dead tile fix (Orders page + handleNavigate)
+- 0720ba8 — OnboardingWizard (4 paths, Gap A resolved)
+- 0d09963 — DeliveryRoute + 4th wizard path (DELIVERY)
+
+**All deployed to cultivar-os.vercel.app ✅**
+
+**Tech Debt #1 resolved:** Dashboard tiles no longer flash-and-nothing.
+  QR Checkout → /orders ✅, QB → scroll to section ✅, Social → /social/setup ✅, Delivery → /deliveries ✅
+
+**Gap A resolved:** New signups auto-redirect to /onboarding. OnboardingWizard.finalize()
+creates the nurseries row. No more "Account not linked" error wall for fresh accounts.
+
+**Open gap (delivery feature):**
+  Delivery orders use customer.address_line1 as the delivery address. If a customer didn't
+  enter an address at checkout, the route page shows an inline override field (local state only).
+  To persist delivery addresses: add delivery_address text column to orders + capture at checkout
+  for transport_method = 'delivery'. No migration written yet — defer to post-demo.
+  delivery_date column also deferred (orders currently have no scheduled delivery date).
+
+**Last files edited:**
+  packages/cultivar-os/src/pages/Orders.tsx (new)
+  packages/cultivar-os/src/pages/OnboardingWizard.tsx (new)
+  packages/cultivar-os/src/pages/DeliveryRoute.tsx (new)
+  packages/cultivar-os/src/pages/Dashboard.tsx (handleNavigate + /onboarding redirect)
+  packages/cultivar-os/src/router.tsx (/orders, /deliveries, /onboarding routes)
+**Build status:** Clean — 2160 modules, zero TS errors
+
+---
 
 ### 2026-05-28 (continued) — Ignition OS web build + Vercel automation
 
@@ -709,9 +761,11 @@ Completed:
 - [x] Social Media module Steps 1-3 ✅ (wizard, post gen, count badge)
 - [x] Social Media Step 4 — Blotato publish flow ✅
 - [x] QB token refresh — proactive, never blocks orders ✅ (May 23)
+- [x] Dead tile navigation fix ✅ (handleNavigate — May 29)
+- [x] Delivery routing MVP ✅ (/deliveries page + 4th wizard path — May 29)
+- [x] OnboardingWizard (4-path first-run experience) ✅ (May 29)
 - [ ] Online Shop (/shop page)
 - [ ] Customer follow-up engine
-- [ ] Delivery routing (after Lauren answers questions)
 - [ ] Mobile responsive fix (tile grid desktop only)
 
 ### 🟢 POST-DEMO (Phase 1 — after signing)
