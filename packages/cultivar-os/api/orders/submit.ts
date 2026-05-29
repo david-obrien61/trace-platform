@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { sendNotification } from '@trace/shared/notifications/send';
+import { sendNotification } from '../../../shared/src/notifications/send';
 
 const TAX_RATE        = 0.0825;
 const LARGE_CONTAINERS = ['15 gal', '30 gal', '45 gal', '60 gal', '100 gal'];

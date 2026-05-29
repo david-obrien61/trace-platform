@@ -1,8 +1,8 @@
-import { fetchWebsiteContent } from '@trace/shared/discovery/adapters/website';
-import { runEngine } from '@trace/shared/discovery/engine';
-import { runSynthesis } from '@trace/shared/discovery/synthesis';
-import { nurserySchema } from '@trace/shared/discovery/verticals/nursery';
-import type { VerticalSchema } from '@trace/shared/discovery/types';
+import { fetchWebsiteContent } from '../../../shared/src/discovery/adapters/website';
+import { runEngine } from '../../../shared/src/discovery/engine';
+import { runSynthesis } from '../../../shared/src/discovery/synthesis';
+import { nurserySchema } from '../../../shared/src/discovery/verticals/nursery';
+import type { VerticalSchema } from '../../../shared/src/discovery/types';
 
 const VERTICAL_SCHEMAS: Record<string, VerticalSchema> = {
   nursery: nurserySchema,
