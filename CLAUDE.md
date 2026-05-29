@@ -230,6 +230,44 @@ This log is created and maintained per the Honest Friction principle (see PLATFO
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-05-29 — Ignition OS multi-tenant conversion + Campaign Scheduler
+
+**What was built:**
+
+Ignition OS — multi-tenant BusinessProvider conversion:
+- `packages/ignition-os/supabase/migrations/20260529_ignition_businesses.sql` — businesses table, owner_id on shops, business_id on all operational tables, RLS via businesses chain. **Applied ✅ 2026-05-29 (ufsgqckbxdtwviqjjtos)**
+- `packages/ignition-os/modules/OnboardingWizard.jsx` — new (was imported but missing). Owner email/password signup → creates businesses + shops rows (shared UUID), seeds DataBridge, marks onboarding complete.
+- `packages/ignition-os/main.jsx` — wraps CoreApp in `<BusinessProvider businessType="shop">`
+- `packages/ignition-os/CoreApp.jsx` — imports useBusinessContext; adds ownerBusinessId sync effect (new device: auth.uid() → businessId → DataBridge); fixes OnboardingWizard import path to `./modules/OnboardingWizard`
+
+Campaign Scheduler (shared feature, cultivar-only for now):
+- `supabase/migrations/20260529_campaigns.sql` — campaigns, campaign_posts, campaign_tone_samples tables + RLS + LAWNS seed data. **Pending: David must run in bgobkjcopcxusjsetfob**
+- `packages/shared/src/campaigns/types.ts` + `generate.ts` — shared campaign post generation (claude-sonnet-4-6, tone samples as few-shot examples)
+- `packages/cultivar-os/api/campaigns/generate.ts` + `publish-post.ts` — Vercel handlers
+- `packages/cultivar-os/src/pages/Campaigns.tsx` + `CampaignDetail.tsx` — full UI
+- Dashboard: "Campaign Scheduler" card with green border when drafts pending
+- Router: /campaigns + /campaigns/:id behind PrivateRoute
+- Tone learning: publish-post auto-saves (original, edited) pairs → feeds future generation
+
+Discovery module fixes:
+- synthesis.ts: CRITICAL pain point instruction + two-pass JSON extraction + max_tokens 2000
+- DiscoveryInspect.tsx: amber "You told us" echo card at top of results
+- website.ts: full Chrome/Mac browser headers, 15s timeout, 429 retry + /about + /about-us fallback
+
+**Build status:** cultivar 2166 modules ✅ · ignition 1828 modules ✅
+
+**⚠️ David — still pending:**
+1. Run `supabase/migrations/20260529_campaigns.sql` in bgobkjcopcxusjsetfob (campaigns feature)
+2. Add `VITE_DEMO_BUSINESS_ID = a1b2c3d4-0000-0000-0000-000000000001` to Vercel cultivar-os env vars (+ migrate A–E if not yet done)
+
+**Ignition OS is now correctly structured:**
+- owner: email/password Supabase auth → businesses table → businessId
+- staff: PIN via DataBridge (unchanged, still works)
+- businesses.id = shops.id (same UUID, DataBridge queries shops by ID seamlessly)
+- New shop owners: OnboardingWizard creates both rows, seeds DataBridge, marks complete
+
+---
+
 ### 2026-05-29 — businesses migration + BusinessProvider + Settings page (multi-tenant Phase 1)
 
 **Decisions made:**
