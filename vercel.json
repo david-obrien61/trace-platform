@@ -1,5 +1,3 @@
 {
-  "buildCommand": "npm run build:cultivar",
-  "outputDirectory": "packages/cultivar-os/dist",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
