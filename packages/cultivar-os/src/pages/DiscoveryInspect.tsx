@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { BusinessDiscoveryProfile, SilentPartnerAnalysis, SuggestedOffering } from '@trace/shared/discovery/types';
 
 const GREEN = '#27500A';
@@ -13,6 +13,21 @@ const inputStyle: React.CSSProperties = {
   outline: 'none', fontFamily: 'inherit', color: DARK, background: '#fff',
 };
 
+// Timed messages that progress through the ~45 second analysis window
+const LOADING_STAGES = [
+  { at:  0, text: 'Connecting to the website…' },
+  { at:  3, text: 'Reading through the site content…' },
+  { at:  8, text: 'Scanning for services, pricing, and tone…' },
+  { at: 14, text: 'Looking for what makes this business stand out…' },
+  { at: 19, text: 'Checking for gaps common to this vertical…' },
+  { at: 24, text: 'Running the AI analysis — this is the deep work…' },
+  { at: 30, text: 'Building the discovery profile…' },
+  { at: 36, text: 'Identifying suggested service offerings…' },
+  { at: 41, text: 'Writing the silent partner analysis email…' },
+  { at: 47, text: 'Crafting something worth reading…' },
+  { at: 54, text: 'Still working — complex sites take longer…' },
+];
+
 const VERTICALS = [
   { value: 'nursery',  label: 'Nursery / Garden Center' },
   { value: 'ignition', label: 'Auto / Diesel Shop' },
@@ -24,12 +39,33 @@ export function DiscoveryInspect() {
   const [url, setUrl]             = useState('');
   const [vertical, setVertical]   = useState('nursery');
   const [painPoint, setPainPoint] = useState('');
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState('');
-  const [profile, setProfile]     = useState<BusinessDiscoveryProfile | null>(null);
-  const [analysis, setAnalysis]   = useState<SilentPartnerAnalysis | null>(null);
-  const [copied, setCopied]       = useState(false);
-  const [step, setStep]           = useState('');
+  const [loading, setLoading]           = useState(false);
+  const [error, setError]               = useState('');
+  const [profile, setProfile]           = useState<BusinessDiscoveryProfile | null>(null);
+  const [analysis, setAnalysis]         = useState<SilentPartnerAnalysis | null>(null);
+  const [copied, setCopied]             = useState(false);
+  const [currentStage, setCurrentStage] = useState(0);
+  const [elapsed, setElapsed]           = useState(0);
+  const timerRef                        = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTimeRef                    = useRef<number>(0);
+
+  useEffect(() => {
+    if (!loading) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      setCurrentStage(0);
+      setElapsed(0);
+      return;
+    }
+    startTimeRef.current = Date.now();
+    timerRef.current = setInterval(() => {
+      const secs = Math.floor((Date.now() - startTimeRef.current) / 1000);
+      setElapsed(secs);
+      // Advance to the latest stage whose `at` threshold has been passed
+      const stage = [...LOADING_STAGES].reverse().find(s => secs >= s.at);
+      if (stage) setCurrentStage(LOADING_STAGES.indexOf(stage));
+    }, 500);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [loading]);
 
   async function runInspection() {
     if (!url.trim()) return;
@@ -37,7 +73,6 @@ export function DiscoveryInspect() {
     setError('');
     setProfile(null);
     setAnalysis(null);
-    setStep('Fetching website…');
 
     try {
       const resp = await fetch('/api/discovery/ingest', {
@@ -45,12 +80,8 @@ export function DiscoveryInspect() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: url.trim(), vertical, painPoint: painPoint.trim() || undefined }),
       });
-
-      setStep('Analyzing with AI…');
       const data = await resp.json();
-
       if (!resp.ok) throw new Error(data.error ?? 'Unknown error');
-
       setProfile(data.profile);
       setAnalysis(data.analysis);
       if (data.fetchError) {
@@ -61,7 +92,6 @@ export function DiscoveryInspect() {
     }
 
     setLoading(false);
-    setStep('');
   }
 
   function copyEmail() {
@@ -141,7 +171,7 @@ export function DiscoveryInspect() {
               fontWeight: 700, fontSize: '0.9375rem', cursor: (loading || !url.trim()) ? 'default' : 'pointer',
             }}
           >
-            {loading ? step || 'Analyzing…' : 'Run Inspection'}
+            {loading ? 'Analyzing…' : 'Run Inspection'}
           </button>
 
           {error && (
@@ -150,6 +180,69 @@ export function DiscoveryInspect() {
             </p>
           )}
         </div>
+
+        {/* Loading panel */}
+        {loading && (
+          <div style={{ background: '#fff', borderRadius: 14, padding: '28px 20px', border: `2px solid ${GREEN}`, marginBottom: 16 }}>
+
+            {/* Pulsing dot + stage label */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+              <div style={{
+                width: 12, height: 12, borderRadius: '50%', background: GREEN, flexShrink: 0,
+                animation: 'pulse 1.4s ease-in-out infinite',
+              }} />
+              <p style={{ margin: 0, fontWeight: 700, fontSize: '1rem', color: DARK }}>
+                {LOADING_STAGES[currentStage].text}
+              </p>
+            </div>
+
+            {/* Progress bar */}
+            <div style={{ background: '#e5e7eb', borderRadius: 4, height: 4, marginBottom: 16, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: 4, background: GREEN,
+                width: `${Math.min(98, (elapsed / 58) * 100)}%`,
+                transition: 'width 0.5s ease',
+              }} />
+            </div>
+
+            {/* Stage log — all messages up to current */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {LOADING_STAGES.slice(0, currentStage + 1).map((s, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{
+                    fontSize: '0.6875rem', color: i === currentStage ? GREEN : '#9ca3af',
+                    flexShrink: 0, fontWeight: i === currentStage ? 700 : 400,
+                  }}>
+                    {i === currentStage ? '▶' : '✓'}
+                  </span>
+                  <span style={{
+                    fontSize: '0.8125rem',
+                    color: i === currentStage ? DARK : '#9ca3af',
+                    fontWeight: i === currentStage ? 600 : 400,
+                  }}>
+                    {s.text}
+                  </span>
+                  {i < currentStage && (
+                    <span style={{ fontSize: '0.6875rem', color: '#9ca3af', marginLeft: 'auto' }}>
+                      ~{LOADING_STAGES[i + 1] ? LOADING_STAGES[i + 1].at - s.at : 6}s
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <p style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: 16, textAlign: 'center' }}>
+              {elapsed}s elapsed · typical analysis takes 40–55 seconds
+            </p>
+
+            <style>{`
+              @keyframes pulse {
+                0%, 100% { opacity: 1; transform: scale(1); }
+                50%       { opacity: 0.4; transform: scale(0.85); }
+              }
+            `}</style>
+          </div>
+        )}
 
         {/* Profile summary */}
         {profile && (
