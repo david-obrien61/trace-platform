@@ -11,6 +11,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@trace/shared': path.resolve(__dirname, '../shared/src'),
+      // Force single React instance — prevents duplicate-React hook crash when
+      // shared package resolves React from root node_modules but ignition-os
+      // has its own local copy in packages/ignition-os/node_modules/
+      'react':     path.resolve(__dirname, '../../node_modules/react'),
+      'react-dom': path.resolve(__dirname, '../../node_modules/react-dom'),
       'react-native': 'react-native-web',
       '@react-native-async-storage/async-storage': path.resolve(__dirname, './stubs/asyncStorage.js'),
       '@react-native-ml-kit/text-recognition': path.resolve(__dirname, './stubs/empty.js'),
