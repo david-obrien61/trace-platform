@@ -101,6 +101,7 @@ QBO_REDIRECT_URI       = https://cultivar-os.vercel.app/api/qbo/callback
 QBO_ENVIRONMENT        = production    # Updated 2026-05-22 when Cultivar-OS received Intuit production approval (see MASTER_BRIEF Part 11). CLAUDE.md was not updated at the time; Session K audit on 2026-05-27 surfaced the stale doc by checking Vercel dashboard directly.
 BLOTATO_API_KEY        = blt_Wq7URDauPd5CdJzJfvRWgJSGrBdjZYIuOXNLb/ePic8=
 VITE_DEMO_NURSERY_ID   = a1b2c3d4-0000-0000-0000-000000000001
+VITE_DEMO_BUSINESS_ID  = a1b2c3d4-0000-0000-0000-000000000001    # Added 2026-05-29
 VITE_TAX_RATE          = 0.0825
 ```
 
@@ -258,7 +259,7 @@ Discovery module fixes:
 
 **⚠️ David — still pending:**
 1. ~~Run `supabase/migrations/20260529_campaigns.sql` in bgobkjcopcxusjsetfob~~ ✅ Applied 2026-05-29
-2. Add `VITE_DEMO_BUSINESS_ID = a1b2c3d4-0000-0000-0000-000000000001` to Vercel cultivar-os env vars (if not yet done)
+2. ~~Add `VITE_DEMO_BUSINESS_ID = a1b2c3d4-0000-0000-0000-000000000001` to Vercel cultivar-os env vars~~ ✅ Added 2026-05-29
 
 **Ignition OS is now correctly structured:**
 - owner: email/password Supabase auth → businesses table → businessId
