@@ -18,7 +18,8 @@
       "Bash(npx tsc *)",
       "Bash(vercel --prod)",
       "Bash(ls /Users/terrenceobrien/Desktop/)",
-      "Read(//Users/terrenceobrien/Desktop/**)"
+      "Read(//Users/terrenceobrien/Desktop/**)",
+      "Bash(npx vite *)"
     ]
   }
 }

@@ -1,0 +1,25 @@
+{
+  "name": "@trace/ignition-os",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@trace/shared": "*",
+    "@supabase/supabase-js": "^2.105.1",
+    "lucide-react": "^1.8.0",
+    "prop-types": "^15.8.1",
+    "qrcode.react": "^4.2.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native-web": "^0.21.0",
+    "react-signature-canvas": "latest"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.1",
+    "vite": "^8.0.8"
+  }
+}

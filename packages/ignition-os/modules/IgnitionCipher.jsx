@@ -7,7 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Calculator, AlertTriangle, ArrowRight, Lock } from 'lucide-react';
 import DataBridge from '../DataBridge';
-import AIEngine from '../AIEngine';
+import AIEngine from '@trace/shared/ai/AIEngine';
 
 const IgnitionCipher = ({ activeJob, onUpdateJob, onNavigateToStok }) => {
   const [faultCode, setFaultCode] = useState('');

@@ -38,7 +38,7 @@ instance of the same shared platform.
 3. If it needs to be shared → build it IN shared/ first, then import
 4. Never hardcode a vertical name inside a shared module
 5. Never duplicate auth, QB, QR, notifications, or UI primitives
-6. Never modify packages/ignition-os without flagging it first
+6. packages/ignition-os is now an active build target — treat it like cultivar-os
 7. Never end a session without updating this Handoff section
 8. Commit after every completed task
 
@@ -87,8 +87,9 @@ ignition-os (OLD — do not touch):
   RULE: never modify from cultivar-os code
 ```
 
-### Vercel Environment Variables (cultivar-os project)
+### Vercel Environment Variables
 
+**cultivar-os project** (bgobkjcopcxusjsetfob Supabase):
 ```
 VITE_SUPABASE_URL      = https://bgobkjcopcxusjsetfob.supabase.co
 VITE_SUPABASE_ANON_KEY = eyJhbGc... (new project anon key)
@@ -102,6 +103,16 @@ BLOTATO_API_KEY        = blt_Wq7URDauPd5CdJzJfvRWgJSGrBdjZYIuOXNLb/ePic8=
 VITE_DEMO_NURSERY_ID   = a1b2c3d4-0000-0000-0000-000000000001
 VITE_TAX_RATE          = 0.0825
 ```
+
+**ignition-os project** (ufsgqckbxdtwviqjjtos Supabase — separate Vercel project, NEW):
+```
+VITE_SUPABASE_URL      = https://ufsgqckbxdtwviqjjtos.supabase.co
+VITE_SUPABASE_ANON_KEY = (from Supabase dashboard — ufsgqckbxdtwviqjjtos → Settings → API)
+VITE_API_URL           = NOT NEEDED — ai_router.py/Railway is legacy for web builds.
+                         Add this only when AI endpoints are ported to Vercel functions.
+```
+Build command (in Vercel dashboard, overrides vercel.json): `npm run build:ignition`
+Output directory: `packages/ignition-os/dist`
 
 ### Key Data — Demo
 
@@ -139,6 +150,25 @@ All domains registered at GoDaddy under David's account.
 **WHOIS privacy status:** Domains marked "None" do NOT have WHOIS privacy enabled, meaning David's registration address is publicly queryable. Plan: defer privacy upgrades to the Cloudflare transfer window opening July 1-2, 2026, which provides free WHOIS privacy as a benefit of the transfer. Current annual cost of GoDaddy WHOIS privacy across the unprotected domains would be approximately $13/yr each.
 
 **Open: which domain hosts the KINNA-OS production app when Phase 1 ships.** Options include kinna-os.app (matches Cultivar's pattern), kinna-os.com (matches Ignition's pattern), or a subdomain of builtwithcai.com (matches the discovery surface pattern). Decision deferred to pre-build.
+
+---
+
+### Desktop Folder → GitHub Repo Map (verified 2026-05-28)
+
+> Before starting any build session, confirm which desktop folder maps to the target vertical.
+> Do not edit a folder that is not linked to the active GitHub repo.
+
+| Desktop Folder | GitHub Repo | Deployed Vertical | Status |
+|---|---|---|---|
+| `~/Desktop/trace-platform/` | `david-obrien61/trace-platform` | Cultivar OS (active) · ignition-os (planned) | **Active — primary monorepo** |
+| `~/Desktop/CAI/` | `david-obrien61/CAI` | Ignition OS (original) | **Archive (2026-05-28)** — Ignition OS web build is now live in `trace-platform/packages/ignition-os/`. CAI/ is read-only. Keep for `ai_router.py` reference only until Railway is decommissioned. |
+| `~/Desktop/CoolRunning/` | `david-obrien61/CoolRunning` | CoolRunnings (home automation) | Active — separate vertical, separate repo |
+| `~/Desktop/IgnitionMobile/` | `david-obrien61/ignition` *(archived)* | Ignition OS mobile prototype | **Archive** — GitHub repo is archived. Rename desktop folder to `IgnitionMobile-archive`. Keep for migration reference until ignition-os web build is complete. |
+| `~/Desktop/Cultivar-os/` | *(none — no git)* | — | **Empty folder** — safe to delete. Real Cultivar OS is in `trace-platform/packages/cultivar-os/`. |
+| `~/Desktop/trace-assessment-app/` | *(none — no git)* | CoolRunnings assessment tool | Standalone app, no git. Contains `src/lib/AIEngine.js` (Claude Vision, device identification — different from Ignition AIEngine). |
+| `~/Desktop/CoolRunning/` | `david-obrien61/CoolRunning` | CoolRunnings | See above. |
+
+**Rule:** `trace-platform/` is the only folder that deploys to Vercel. All Cultivar OS work goes here. All Ignition OS work goes here — migration is complete as of 2026-05-28. CAI/ is archive.
 
 ---
 
@@ -184,6 +214,12 @@ This log is created and maintained per the Honest Friction principle (see PLATFO
 | 4 | Hardcoded nursery footer in PlantProfile.tsx line 108 — `LAWNS Tree Farm, LLC · Leander, TX · (512) 450-3336` — bypasses the nurseries table row that contains the same data | Pre-2026-05-27 (surfaced by Session K subsystem audit) | Component should read from the nursery object loaded via existing hooks; eliminate the literal string | Before next nursery customer onboarding (would display LAWNS data for the wrong nursery) |
 | 7 | orders table had no SELECT RLS policy from May 17 (table creation) until May 27. Dashboard read path uses anon key (subject to RLS); write path uses service key (bypasses RLS). Result: orders saved successfully but were invisible to the dashboard's Today's Sales, Installs, and Leakage metric tiles. Same root cause as modules/nursery_modules bug fixed May 22. | 2026-05-17 (orders table creation) through 2026-05-27 (fix) | Every Supabase table read from the frontend needs at least one SELECT policy for the authenticated role. Currently loose (USING true); will be tightened to owner_id join post-demo per existing pattern. Migration: 20260527_orders_authenticated_select_policy.sql. | Resolved 2026-05-27 (policy applied manually for demo Supabase project; migration committed for future projects). |
 | 8 | 🟡 nurseries, plants, plant_events, addons — RLS policies exist on these tables (migrations were run) but authenticated SELECT has never been explicitly confirmed via a frontend read in the bgobkjcopcxusjsetfob project. They work in practice for the demo flow, but "it worked once" is not VERIFIED. Same root cause pattern as #7 has struck three times already. | Pre-2026-05-22 (tables predate project separation; RLS migrations ported but not spot-checked post-move) | Each table needs a confirmed authenticated SELECT verified by watching the frontend read succeed after login — not just a migration in the log. Owner: David. | Before next vertical ships OR on next RLS-related change, whichever comes first. Resolve to 🟢 (spot-check passes) or promote to 🔴 (document the gap and add SELECT policies). |
+| 9 | 🟢 `packages/shared/src/ai/AIEngine.ts` EXISTS and is fully implemented. 3 modules in packages/ignition-os/ already import from `@trace/shared/ai/AIEngine` (IgnitionAudit, IgnitionCipher, PredictiveKey). AIEngine.call() fails gracefully — returns `{ ok: false }` on network error, never throws. AI features are non-blocking. | Resolved 2026-05-28 | AI features go live when Vercel serverless functions replace ai_router.py. No Railway dependency. | See Tech Debt #13. |
+| 10 | 🟡 `packages/ignition-os/modules/SavingsReport.jsx` is MISSING from the monorepo. The module ID `savings_report` is fully implemented in `AIEngine.ts` → `ai_router.py` (calls Claude Sonnet, analyzes shop job/margin data, returns flagged jobs + recoverable revenue). The React component that displays the output was not migrated from CAI. `IgnitionOmniDashboard.jsx` renders `<SavingsReport />` in the SAVINGS tab — that tab is broken until this component exists. | 2026-05-28 (discovered during web build attempt) | Build `packages/ignition-os/modules/SavingsReport.jsx` — React component that calls `AIEngine.savingsReport(shopId, tier)` and renders the result. The API contract is defined. This is display work, not AI work. | Before next Ignition OS demo or dry run. |
+| 11 | 🟢 Ignition OS web build COMPLETE. `packages/ignition-os/` is confirmed canonical source (diff with CAI/ was zero for all business logic). Build infrastructure added: `package.json`, `vite.config.js`, `index.html`, `main.jsx`, `stubs/` (5 files), `IgnitionVIN.jsx` web stub, `PriceField.js` re-export fix. Build verified: 1825 modules, zero errors. `CAI/` is now archive. Vercel project setup instructions documented in Section 2 above. | Resolved 2026-05-28 | n/a | — |
+
+| 12 | 🟡 `CAI/ai_router.py` (Railway FastAPI) was built to keep AI provider keys out of the React Native bundle. Now that Ignition OS is a Vercel web app, this is unnecessary — Vercel serverless functions hold keys server-side, same pattern cultivar-os uses for Claude calls today. Railway is still running but is legacy for the web build. AIEngine.ts currently points to `VITE_API_URL` which is unset in the ignition-os Vercel project — AI features fail gracefully. | 2026-05-28 (decision made) | Port the 11 `ai_router.py` endpoints to TypeScript Vercel functions under `packages/ignition-os/api/`. Then decommission Railway. Exception: `voice_transcribe` sends audio files — Vercel's 4.5MB payload limit needs evaluation before porting that one endpoint. | Before activating AI features in ignition-os web. |
+| 13 | 🟡 Vite build aliases for `react-native`, expo packages, and `lucide-react-native` exist in both `CAI/vite.config.js` AND `packages/ignition-os/vite.config.js` — duplicated. The stubs in `CAI/stubs/` and `packages/ignition-os/stubs/` are identical files in two places. | 2026-05-28 | Extract stubs to `packages/shared/stubs/` and reference from both vite configs. Low priority — only matters if stubs need to change. | If stubs ever need updating, deduplicate first. |
 
 **Initial entries above are seeded from the Session 1a audit findings and the button audit folded into TRACE_PLATFORM_AUDIT.md in this session (1b). Future entries are added by Claude Code or David whenever Honest Friction surfaces a workaround that is intentionally executed against architectural intent.**
 
@@ -193,6 +229,43 @@ This log is created and maintained per the Honest Friction principle (see PLATFO
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-05-28 (continued) — Ignition OS web build + Vercel automation
+
+**Decisions made this session:**
+- `CAI/` is now archive. `packages/ignition-os/` is the canonical Ignition OS source. Do not edit CAI/.
+- `ai_router.py` / Railway is legacy for the web build. AI features will be ported to Vercel serverless
+  functions (TypeScript) when needed. Do not set `VITE_API_URL` in the ignition-os Vercel project.
+- Vercel GitHub integration is the deployment path going forward. `npx vercel --prod` is retired.
+- Both Vercel projects (cultivar-os, ignition-os) deploy from `david-obrien61/trace-platform` on push to main.
+
+**What was built:**
+- `packages/ignition-os/` build infrastructure:
+  - `package.json` (@trace/ignition-os, web deps only — no expo/react-native packages)
+  - `vite.config.js` (react-native-web alias, expo stubs, lucide-react-native → lucide-react, @trace/shared alias)
+  - `index.html`, `main.jsx`
+  - `stubs/` — empty.js, asyncStorage.js, haptics.js, camera.js, audio.js
+  - `modules/IgnitionVIN.jsx` — web stub (camera scanning is mobile-only)
+  - `PriceField.js` — re-exports from PriceField.jsx (was empty file, shadowed the component)
+- `CAI/` build also restored (same fix pattern) — working but archive
+- Root `package.json`: added `build:cultivar` and `build:ignition` scripts
+- Root `vercel.json`: build command updated to `npm run build:cultivar`
+- Build verified: packages/ignition-os/ — 1825 modules, zero errors
+- 14 Ignition OS SQL migrations copied to `packages/ignition-os/supabase/migrations/`
+- 9 mobile-only .jsx files renamed to `-delete.jsx` in packages/ignition-os/modules/
+
+**Vercel setup still needed (David):**
+- cultivar-os Vercel project → Settings → Git → connect `david-obrien61/trace-platform`, branch `main`
+- Create new ignition-os Vercel project → Import same repo → override:
+  - Build Command: `npm run build:ignition`
+  - Output Directory: `packages/ignition-os/dist`
+  - Env vars: VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY (see Section 2 above)
+
+**Next AI session for ignition-os:**
+Port `ai_router.py` endpoints to TypeScript Vercel functions under `packages/ignition-os/api/`.
+Start with `dtc_decode` and `estimate_draft` (highest-value, text-only — no vision complexity).
+
+---
 
 ### 2026-05-28 — Tenant isolation leak: diagnosis and fix
 

@@ -179,12 +179,49 @@ builtwithcai.com                    ← Platform home. Investor story.
 
 ### Subscription Tiers
 
-| Tier | Price | Target |
-|---|---|---|
-| STARTER | $149/mo | Getting off paper, first connection |
-| PROFESSIONAL | $299/mo | AI-first workflow, multiple integrations |
-| PREMIER | $499/mo | Multi-location, full module suite |
-| FOUNDING | $149/mo locked | First customers per vertical — forever |
+| Tier | Price | Users | AI | Target |
+|---|---|---|---|---|
+| STARTER | $149/mo | 3 | None | Getting off paper, first connection |
+| PROFESSIONAL | $299/mo | 8 | AI Bundle (12 tasks) | AI-first workflow, multiple integrations |
+| PREMIER | $499/mo | Unlimited | Full AI (13 tasks) | Multi-location, full module suite |
+| FOUNDING | $149/mo locked | — | — | First customers per vertical — forever |
+| TRIAL | Free, 14 days | Unlimited | Full PREMIER | No card required, hardware kit included |
+
+**Official source:** `CAI/docs/pricing_sheet.html` (printable pricing doc — authoritative for Ignition OS)
+
+#### Per-Tier Module Availability (Ignition OS canonical)
+
+Modules marked ⚡ require AI (Claude, Gemini, or OpenAI via AIEngine).
+
+| Module | STARTER | PROFESSIONAL | PREMIER |
+|---|---|---|---|
+| Intake / Work Orders | ✅ | ✅ | ✅ |
+| Tech Kiosk | ✅ | ✅ | ✅ |
+| Estimates | ✅ | ✅ | ✅ |
+| Customer Portal | ✅ | ✅ | ✅ |
+| Tools Checklist | ✅ | ✅ | ✅ |
+| Admin | ✅ | ✅ | ✅ |
+| VIN Decode ⚡ | — | ✅ | ✅ |
+| Scribe AI ⚡ | — | ✅ | ✅ |
+| DTC Cipher ⚡ | — | ✅ | ✅ |
+| Parts & Manifest | — | ✅ | ✅ |
+| Procurement | — | ✅ | ✅ |
+| Stock AI ⚡ | — | ✅ | ✅ |
+| CRM | — | ✅ | ✅ |
+| OMNI Summary | — | ✅ | ✅ |
+| Full OMNI ⚡ | — | — | ✅ |
+| HUB Dispatch | — | — | ✅ |
+| DOT Compliance | — | — | ✅ |
+| Tools + PMI ⚡ | — | — | ✅ |
+| Predictive Maintenance ⚡ | — | — | ✅ |
+| Multi-Location | — | — | ✅ |
+| White-Label Portal | — | — | ✅ |
+
+**Add-ons (any tier):**
+- Extra Location: +$99/mo
+- 5-User Block: +$49/mo
+- SMS: +$29/mo
+- API Access: +$99/mo
 
 ### Module Economy — Add-On Billing
 

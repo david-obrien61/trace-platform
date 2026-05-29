@@ -7,7 +7,8 @@ function supabase() {
 }
 
 export default async function handler(req: any, res: any) {
-  const nurseryId = (req.query.nursery_id as string) || 'a1b2c3d4-0000-0000-0000-000000000001';
+  const nurseryId = req.query.nursery_id as string | undefined;
+  if (!nurseryId) return res.status(400).json({ error: 'nursery_id required' });
 
   try {
     const db = supabase();

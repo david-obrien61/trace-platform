@@ -13,7 +13,7 @@ import {
   Plus, ClipboardList, ChevronDown, ChevronUp, X
 } from 'lucide-react';
 import DataBridge from '../DataBridge';
-import AIEngine from '../AIEngine';
+import AIEngine from '@trace/shared/ai/AIEngine';
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 

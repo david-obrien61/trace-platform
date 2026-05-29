@@ -13,7 +13,7 @@ import {
   ChevronUp, X, ArrowRight, Camera, ThumbsDown
 } from 'lucide-react';
 import DataBridge from '../DataBridge';
-import AIEngine from '../AIEngine';
+import AIEngine from '@trace/shared/ai/AIEngine';
 import { supabase } from '../supabase';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

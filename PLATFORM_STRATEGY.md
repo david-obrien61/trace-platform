@@ -245,6 +245,36 @@ The discovery surface itself is built on this principle: synthesis output includ
 
 ---
 
+### **Honest Debt** *(name provisional)*
+
+Do it right by default. If we make an informed decision to deviate, we document it the SAME DAY in three places: (1) a loud, grep-able code marker at the deviation point, (2) a Tech Debt Log entry in CLAUDE.md, (3) a note in any affected canonical doc. Each entry states WHAT, WHY, and the sentence "We make this decision knowing we will need to fix it." Silent shortcuts are not permitted — only chosen, visible, documented ones.
+
+**The three documentation requirements for any deviation:**
+
+1. **Code marker** — placed at the deviation point in source the same session it is introduced:
+   ```
+   // 🔴 HONEST DEBT: <what> — <why> — "We make this decision knowing we will need to fix it." See Tech Debt #<N>
+   ```
+   Grep-able token: `HONEST DEBT`. Every deviation is discoverable via `grep -rn "HONEST DEBT" .`
+
+2. **Tech Debt Log entry** — added to CLAUDE.md's Tech Debt Log table the same session: what, when introduced, correct architecture, trigger for repair.
+
+3. **Canonical doc note** — a note in any doc that describes the area being deviated from, so future sessions don't treat the workaround as the intended design.
+
+**Status color convention** (used across all TRACE docs and Tech Debt Log entries):
+
+- 🔴 **RED** — Honest Debt. A chosen, documented deviation. Must carry the "we know we'll fix it" sentence. Not the same as an unexplained bug — an unexplained bug has no entry and no marker.
+- 🟢 **GREEN** — Done right. On-spec and VERIFIED — someone confirmed it works correctly end-to-end, not "probably fine."
+- 🟡 **YELLOW** — Unverified / known-risk / needs-eyes. Works but unconfirmed. A transition state, not a resting state: every yellow item has an owner and a decide-by, and resolves to 🟢 GREEN (verified) or is promoted to 🔴 RED (chosen debt). Yellow must not sit indefinitely — unattended caution is how silent bugs hide.
+
+**What's forbidden:** A deviation without same-day documentation. "I'll log it later" is a silent shortcut. The code marker and log entry happen at the same time as the decision to deviate, or the deviation does not happen.
+
+**Application:** This principle governs Claude Code sessions, Claude.ai sessions, and David when writing code directly. The Tech Debt Log entry and the code marker are both required — one without the other is insufficient. Existing entries in the Tech Debt Log that predate this principle are retroactively 🔴 RED; they already carry the substance of the principle (what, correct architecture, trigger), even without the explicit sentence.
+
+**On the name:** "Honest Debt" is a provisional label. The principle is locked; the name may be revised after 30-60 days of use. See CLAUDE.md Open Architecture Decisions.
+
+---
+
 ## PART 5 — VERTICAL CONFIG — THE MASTER SWITCH
 
 This is the file that makes the platform work. One entry per vertical.

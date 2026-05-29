@@ -37,6 +37,22 @@ The one-sentence version: We don't replace your systems. We connect them, surfac
 
 ---
 
+## Reuse ratio — corrected ground truth (2026-05-28)
+
+Reuse percentages cited in prior sessions (78% / 68% reuse, 12% refactor, 20% vertical) were verbal estimates that drifted across sessions and were never committed as counted results. Claude Code flagged the figure as aspirational as early as 2026-05-22. The counted breakdown from this audit's 135 feature rows is:
+
+| Label | Row count | Approximate % | Meaning |
+|---|---|---|---|
+| CONFIGURE (in shared/, needs config only) | 26 rows | ~19% | "already shared" |
+| EXTRACT (in one vertical, move to shared) | 33 rows | ~24% | "needs refactor" |
+| BUILD NEW (does not exist anywhere yet) | 56 rows | ~41% | "net-new" |
+| IGNORE (intentionally vertical-specific) | 17 rows | ~13% | — |
+| CONNECTOR (external integration) | 3 rows | — | — |
+
+Ground truth: current extracted reuse is ~19%, with a large (~41%) BUILD NEW backlog. The "75-80% reuse" target is the proven-platform **destination**, not the current state. Honest external framing: "platform thesis validated, ~20% extracted today, clear path to 75%+" — NOT "80% reuse proven across 3 verticals." This note is the single source of truth for reuse ratio; do not cite remembered figures.
+
+---
+
 ## HOW TO READ THIS DOCUMENT
 
 **Actions:**
@@ -128,11 +144,11 @@ The one-sentence version: We don't replace your systems. We connect them, surfac
 | Purchase history | Vehicle → jobs mapping in DataBridge | `orders` + `order_items` tables — no UI | None | BUILD NEW |
 | Follow-up queue | ❌ | `followup_engine` tile — available, not built | None | BUILD NEW |
 | Communication history | ❌ | ❌ | None | BUILD NEW |
-| Customer lookup at checkout | By name/phone in CRM | No lookup — always creates new record | None | BUILD NEW |
+| Customer lookup at checkout | By name/phone in CRM | ✅ Email-based dedup in `api/orders/submit.ts` (lines 34-75) — existing customer updated, new row only created on no match (updated 2026-05-28) | None | ✅ DONE |
 | Export | ❌ | ❌ | None | BUILD NEW |
 
 **Notes:**
-- Cultivar OS creates a new customer row every checkout with no deduplication. "Terry" from five purchases exists five times in the DB. A lookup + merge pattern is needed.
+- **(updated 2026-05-28)** Customer dedup is confirmed working: `api/orders/submit.ts` performs email-based lookup before insert — existing customers are updated, new rows only created when no email match is found. The prior note ("Terry exists five times in the DB") was written May 23 before Session K verified dedup on May 27. The customer directory UI gap (no browser for Lauren to view/search customers) remains open.
 - The `IgnitionCRM` pattern (directory view + onboarding form) maps cleanly to what Cultivar needs for Lauren to view customers.
 
 ---
@@ -224,7 +240,7 @@ The one-sentence version: We don't replace your systems. We connect them, surfac
 |---|---|---|---|---|
 | Integration registry | `ExternalBridge.js` — QB, CSV, Telematics, VIN OCR, Samsara/Geotab/Motive | No registry — direct API calls per endpoint | None | EXTRACT |
 | OAuth connect/disconnect flow | ✅ `ExternalBridge.qbo.initiateOAuth()` — opens popup, polls for connected state | ✅ `api/qbo/auth-url.ts` + `callback.ts` + `status.ts` | `quickbooks/oauth.ts` (has `IGNITION_OS_DATA` hardcode — OFF LIMITS) | EXTRACT |
-| Token refresh handling | ❌ | ❌ (QB tokens in `nurseries.qb_access_token` — no refresh logic) | None | BUILD NEW |
+| Token refresh handling | ❌ | ✅ `packages/shared/src/quickbooks/refresh.ts` — proactive check, wired into `api/qbo/invoice/cultivar.ts`; sets `qb_needs_reconnect=true` if refresh token is dead (updated 2026-05-28) | `quickbooks/refresh.ts` ✅ | ✅ DONE |
 | Integration health indicators | ❌ | QB status dot on tile (active/available) | None | BUILD NEW |
 | Webhook handling | ❌ | ❌ | None | BUILD NEW |
 | CSV import | ✅ `CSVImporter.jsx` + `ExternalBridge.csv.parse/map/import` | ❌ | None | EXTRACT |
@@ -235,7 +251,7 @@ The one-sentence version: We don't replace your systems. We connect them, surfac
 
 **Notes:**
 - The `ExternalBridge.js` pattern (a single object with `.qbo`, `.csv`, `.telematics` namespaces) is the right architecture for an integration registry. Extract the **pattern** to shared, not the file — it's deeply Ignition-specific.
-- Cultivar OS has no token refresh. QuickBooks access tokens expire in 60 minutes. This is a live production bug waiting to happen.
+- **(updated 2026-05-28)** Token refresh is resolved: `packages/shared/src/quickbooks/refresh.ts` (`refreshQBToken()`) performs a proactive check at the start of every invoice call — refreshes if tokens are missing or within 10 minutes of expiry, writes new token + `qb_token_expires_at` back to the `nurseries` row, sets `qb_needs_reconnect=true` and returns `null` if the refresh token is dead. Prior note ("live production bug") was accurate as of May 23; confirmed fixed by Session K audit May 27.
 
 ---
 
@@ -244,7 +260,7 @@ The one-sentence version: We don't replace your systems. We connect them, surfac
 | Feature | Ignition OS | Cultivar OS | Shared | Action |
 |---|---|---|---|---|
 | Tenancy model | Single shop: `shop_id` in localStorage | Single nursery: `VITE_DEMO_NURSERY_ID` env var | `tenant_id` on all shared type definitions | EXTRACT |
-| RLS pattern | ❌ (localStorage — no DB-enforced tenancy) | ✅ RLS on modules, nursery_modules, social_drafts | None | CONFIGURE |
+| RLS pattern | ❌ (localStorage — no DB-enforced tenancy) | ✅ RLS on modules, nursery_modules, social_drafts, orders (orders SELECT policy added 2026-05-27 — updated 2026-05-28) | None | CONFIGURE |
 | Audit logging | ❌ | ❌ | `NotificationLog`, `AIUsageLog` types defined | EXTRACT |
 | Soft delete | ❌ | ❌ | None | BUILD NEW |
 | Data export per tenant | ❌ | ❌ | None | BUILD NEW |
@@ -255,6 +271,7 @@ The one-sentence version: We don't replace your systems. We connect them, surfac
 **Notes:**
 - Cultivar OS currently enforces tenancy by `nursery_id` in queries, not by `auth.uid()` in RLS. The `authenticated_select_nursery_modules` policy allows ANY authenticated user to read ANY nursery's modules. This is intentionally loose (post-demo fix) but must be locked before going multi-tenant.
 - The `VITE_DEMO_NURSERY_ID` env var approach hard-wires a single nursery — fine for demo, breaks for multi-nursery. The right model is: nursery_id from authenticated user's profile row, not an env var.
+- **(updated 2026-05-28 — Area 10 reflects May 23 snapshot)** The orders table had no SELECT RLS policy from its creation (May 17) until May 27, when the missing policy was identified during a demo dry-run (dashboard "Today's Sales" showed 0 after a confirmed order). Policy was applied manually in the Supabase SQL editor; migration `20260527_orders_authenticated_select_policy.sql` committed for future projects. Full incident record in CLAUDE.md Tech Debt Log entry #7. This is the third occurrence of the same root cause (modules + nursery_modules fixed May 22; orders fixed May 27) — see Open Architecture Decision #11 in CLAUDE.md for systemic prevention options.
 
 ---
 
@@ -325,7 +342,7 @@ The one-sentence version: We don't replace your systems. We connect them, surfac
 |---|---|---|---|---|
 | **QuickBooks Online** | 🟡 In OnboardingWizard Migrate path (ExternalBridge stub) | ✅ Full OAuth, invoice creation, customer creation, status check | Active ✅ | DONE |
 | **Blotato (Social)** | ❌ | ✅ `api/social/publish.ts` — Instagram/Facebook/TikTok/Twitter | Active ✅ | DONE |
-| **Anthropic / Claude** | 🟡 `AIEngine.ts` routing — not used in production yet | ✅ `api/social/generate-posts.ts` — Claude Sonnet 4.6 with prompt caching | Active ✅ | DONE |
+| **Anthropic / Claude** | 🟡 `AIEngine.ts` routing — wired, backend ready, no live calls yet | ✅ `api/social/generate-posts.ts` — Claude Sonnet 4.6 with prompt caching | Active ✅ | DONE |
 | **Supabase** | 🟡 Referenced in `OnboardingWizard.finalize()` for `shops` upsert | ✅ Full Supabase-first architecture | Active ✅ | DONE |
 | **Resend (Email)** | 🟡 Referenced in `notifications/send.ts` | 🟡 Referenced, `order_confirmation` may be sending | Needs verification 🟡 | HIGH |
 | **Twilio (SMS)** | 🟡 Referenced in `notifications/send.ts` | 🟡 Referenced, `netting_waiver_reminder` not wired | Needs verification 🟡 | MEDIUM |
@@ -371,6 +388,85 @@ The one-sentence version: We don't replace your systems. We connect them, surfac
 - Disable module → cancel subscription item at period end
 - Founding rate lock: $149/mo forever, stored as `monthly_amount` in `SubscriptionTier`
 - `useModules.ts` is the right place to gate by tier — the `nurseryPlan` const at line 100 is the exact seam for Stripe integration
+
+---
+
+## 16. AIENGINE — SHARED AI ROUTER
+
+**File:** `packages/shared/src/ai/AIEngine.ts`  
+**Status:** ✅ Built and ready — TypeScript port of `CAI/AIEngine.js`  
+**Backend:** `CAI/ai_router.py` — FastAPI, hosted on Railway (Ignition OS deployment)  
+**Cultivar OS use:** Not wired yet — social post generation uses Claude directly in `api/social/generate-posts.ts`  
+**Import path for any vertical:** `import AIEngine from '@trace/shared/ai/AIEngine'`
+
+### What it does
+
+AIEngine is the single unified interface through which any TRACE vertical calls AI. Rather than each module importing a provider SDK directly, every AI call goes through AIEngine by task name. AIEngine routes to the correct provider, enforces tier gating, and returns a typed `AIResult`. Provider SDK details are invisible to callers.
+
+### Task registry (13 tasks)
+
+| Task key | Provider | Model | What it does |
+|---|---|---|---|
+| `vin_decode` | Gemini | gemini-2.0-flash | Photo of VIN plate → decoded vehicle info |
+| `invoice_scan` | Gemini | gemini-2.0-flash | Photo of shop invoice → structured line items |
+| `label_read` | Gemini | gemini-2.0-flash | Photo of tool/fluid label → part name + spec |
+| `part_photo_id` | Gemini | gemini-2.0-flash | Photo of part → identification + compatibility |
+| `invoice_audit` | Claude | claude-sonnet-4-6 | Invoice photo → flags missing charges (fluids, consumables, disposal) |
+| `dtc_decode` | Claude | claude-sonnet-4-6 | DTC code(s) → plain-language diagnosis + next steps |
+| `estimate_draft` | Claude | claude-sonnet-4-6 | Job description → draft line-item estimate |
+| `compliance_check` | Claude | claude-sonnet-4-6 | Document → DOT/regulatory flag summary |
+| `customer_summary` | Claude | claude-sonnet-4-6 | Customer history array → brief relationship summary |
+| `pmi_suggest` | Claude | claude-sonnet-4-6 | Tool/equipment data → suggested maintenance schedule |
+| `predictive_analysis` | Claude | claude-sonnet-4-6 | Job history → pattern summary + risk flags |
+| `savings_report` | Claude | claude-sonnet-4-6 | Shop job history → total jobs, flagged, recoverable margin, top leaks |
+| `voice_transcribe` | OpenAI | whisper-1 | Audio blob → transcript |
+| `parts_nlp` | OpenAI | gpt-4o | Free-text parts description → structured part list |
+| `intent_classify` | OpenAI | gpt-4o | Customer message → intent category |
+
+### Tier gating
+
+```
+TRIAL       → all 13 tasks unlocked
+STARTER     → [] (no AI tasks — STARTER is the no-AI tier)
+PROFESSIONAL→ 12 tasks (all except intent_classify)
+PREMIER     → all 13 tasks unlocked
+```
+
+`AIEngine.canUse(task, tier)` — returns `boolean`. Call before running any task to enforce tier gate in the UI.
+
+### Convenience wrappers
+
+`decodeVIN(payload)` · `decodeDTC(payload)` · `transcribeVoice(payload)` · `extractParts(payload)` · `readToolLabel(payload)` · `suggestPMI(payload)` · `auditInvoice(payload)` · `draftEstimate(payload)` · `savingsReport(payload)`
+
+Each wrapper calls the underlying task and returns `AIResult`. No provider knowledge required by the caller.
+
+### Haiku fallback
+
+If a Claude Sonnet call fails and `options.fallback = true`, AIEngine retries with `claude-haiku-4-5-20251001` before giving up. This is opt-in per call.
+
+### Backend dependency
+
+The FastAPI backend (`CAI/ai_router.py`, Railway) must be running for any AIEngine call to succeed. It exposes endpoints at `${VITE_API_URL}/ai/${task}`. Routes by provider:
+
+- **Gemini:** `/ai/vin_decode`, `/ai/invoice_scan`, `/ai/label_read`, `/ai/part_photo_id`
+- **Claude:** `/ai/dtc_decode`, `/ai/estimate_draft`, `/ai/pmi_suggest`, `/ai/invoice_audit`, `/ai/savings_report`
+- **OpenAI:** `/ai/voice_transcribe`, `/ai/parts_nlp`, `/ai/intent_classify`
+
+The backend logs every call to `ai_usage` (cost tracked in `cost_usd`) and errors to `error_events` (non-fatal). Cost visibility exists from day one.
+
+### What's missing before Ignition OS modules can use it
+
+1. `VITE_API_URL` env var must point to the Railway FastAPI deployment
+2. Each Ignition module that calls AIEngine must change its import from `../AIEngine` → `@trace/shared/ai/AIEngine`
+3. `SavingsReport.jsx` — the React display component for `savings_report` task output — is still missing (API task is complete; display work only remains)
+
+### Cultivar OS path when AI is needed
+
+Cultivar OS should NOT use `CAI/ai_router.py` directly — that backend is scoped to Ignition OS. For Cultivar OS AI needs (e.g., plant identification, equipment PMI suggestions), either:
+- (a) Extract the relevant `ai_router.py` endpoints to a shared FastAPI module, or
+- (b) Call Claude / Gemini directly from Vercel serverless functions (the pattern already used in `api/social/generate-posts.ts`)
+
+Decision deferred until Cultivar OS needs a second AI task beyond social post generation.
 
 ---
 
