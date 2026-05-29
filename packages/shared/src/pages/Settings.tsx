@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabase/client';
-import { useBusinessContext, type Business } from '../context/BusinessProvider';
+import { useBusinessContext } from '../context/BusinessProvider';
 
 const GREEN = '#27500A';
 const SAGE  = '#EAF3DE';
 const GRAY  = '#6b7280';
 const DARK  = '#111827';
+const RED   = '#A32D2D';
 
 const inputStyle: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box', padding: '11px 13px',
@@ -51,14 +52,36 @@ function Field({
   );
 }
 
-interface OpportunityItem {
+interface ServiceOffering {
   id: string;
   name: string;
   description: string | null;
+  category: string;
+  timing: string;
+  price_type: string;
+  price_unit: string;
   price: number;
+  transport_mode: string | null;
+  trigger_transport_mode: string | null;
+  requires_address: boolean;
+  pre_selected: boolean;
   is_active: boolean;
   sort_order: number;
 }
+
+const CATEGORY_LABEL: Record<string, string> = {
+  transport:    'Transport',
+  addon:        'Add-on',
+  maintenance:  'Maintenance',
+  inspection:   'Inspection',
+  subscription: 'Subscription',
+};
+
+const TIMING_LABEL: Record<string, string> = {
+  at_checkout:   'At checkout',
+  post_purchase: 'After sale',
+  recurring:     'Recurring',
+};
 
 interface SettingsProps {
   onBack: () => void;
@@ -69,42 +92,24 @@ interface SettingsProps {
 export function Settings({ onBack, verticalSection, accountingConnectUrl }: SettingsProps) {
   const { business, businessId, reload } = useBusinessContext();
 
+  // ── Business profile ───────────────────────────────────────────────────────
   const [form, setForm] = useState({
     name: '', phone: '', address: '', email: '', website: '', tax_rate: '',
   });
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving]   = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
-
-  const [items, setItems] = useState<OpportunityItem[]>([]);
-  const [itemsLoading, setItemsLoading] = useState(true);
-  const [newItemName, setNewItemName] = useState('');
-  const [newItemPrice, setNewItemPrice] = useState('');
-  const [addingItem, setAddingItem] = useState(false);
 
   useEffect(() => {
     if (!business) return;
     setForm({
       name:     business.name,
-      phone:    business.phone ?? '',
-      address:  business.address ?? '',
-      email:    business.email ?? '',
-      website:  business.website ?? '',
+      phone:    business.phone    ?? '',
+      address:  business.address  ?? '',
+      email:    business.email    ?? '',
+      website:  business.website  ?? '',
       tax_rate: String(business.tax_rate),
     });
   }, [business]);
-
-  useEffect(() => {
-    if (!businessId) return;
-    supabase
-      .from('opportunity_items')
-      .select('*')
-      .eq('business_id', businessId)
-      .order('sort_order', { ascending: true })
-      .then(({ data }) => {
-        setItems((data ?? []) as OpportunityItem[]);
-        setItemsLoading(false);
-      });
-  }, [businessId]);
 
   async function saveProfile() {
     if (!businessId) return;
@@ -112,13 +117,14 @@ export function Settings({ onBack, verticalSection, accountingConnectUrl }: Sett
     setSaveMsg('');
     const { error } = await supabase.from('businesses').update({
       name:     form.name.trim(),
-      phone:    form.phone.trim() || null,
-      address:  form.address.trim() || null,
-      email:    form.email.trim() || null,
-      website:  form.website.trim() || null,
+      phone:    form.phone.trim()    || null,
+      address:  form.address.trim()  || null,
+      email:    form.email.trim()    || null,
+      website:  form.website.trim()  || null,
       tax_rate: parseFloat(form.tax_rate) || 0.0825,
     }).eq('id', businessId);
 
+    setSaving(false);
     if (error) {
       setSaveMsg('Error: ' + error.message);
     } else {
@@ -126,39 +132,108 @@ export function Settings({ onBack, verticalSection, accountingConnectUrl }: Sett
       reload();
       setTimeout(() => setSaveMsg(''), 2000);
     }
-    setSaving(false);
   }
 
-  async function addItem() {
-    if (!businessId || !newItemName.trim() || !newItemPrice) return;
-    setAddingItem(true);
-    const price = parseFloat(newItemPrice);
-    if (isNaN(price)) { setAddingItem(false); return; }
-    const { data, error } = await supabase.from('opportunity_items').insert({
-      business_id: businessId,
-      name: newItemName.trim(),
+  // ── Service offerings ──────────────────────────────────────────────────────
+  const [offerings, setOfferings]         = useState<ServiceOffering[]>([]);
+  const [offeringsLoading, setOfferingsLoading] = useState(true);
+  const [editingId, setEditingId]         = useState<string | null>(null);
+  const [editForm, setEditForm]           = useState({ name: '', description: '', price: '' });
+  const [savingOffering, setSavingOffering] = useState(false);
+
+  // Add-new form
+  const [showAddForm, setShowAddForm]     = useState(false);
+  const [newName, setNewName]             = useState('');
+  const [newDesc, setNewDesc]             = useState('');
+  const [newPrice, setNewPrice]           = useState('');
+  const [newCategory, setNewCategory]     = useState('addon');
+  const [newTiming, setNewTiming]         = useState('at_checkout');
+  const [newPriceType, setNewPriceType]   = useState('per_unit');
+  const [addingOffering, setAddingOffering] = useState(false);
+
+  useEffect(() => {
+    if (!businessId) return;
+    loadOfferings();
+  }, [businessId]);
+
+  async function loadOfferings() {
+    setOfferingsLoading(true);
+    const { data } = await supabase
+      .from('service_offerings')
+      .select('*')
+      .eq('business_id', businessId!)
+      .order('sort_order', { ascending: true });
+    setOfferings((data ?? []) as ServiceOffering[]);
+    setOfferingsLoading(false);
+  }
+
+  async function toggleOffering(id: string, current: boolean) {
+    await supabase.from('service_offerings').update({ is_active: !current }).eq('id', id);
+    setOfferings(prev => prev.map(o => o.id === id ? { ...o, is_active: !current } : o));
+  }
+
+  function startEdit(o: ServiceOffering) {
+    setEditingId(o.id);
+    setEditForm({ name: o.name, description: o.description ?? '', price: String(o.price) });
+  }
+
+  async function saveEdit() {
+    if (!editingId) return;
+    setSavingOffering(true);
+    const price = parseFloat(editForm.price);
+    if (isNaN(price)) { setSavingOffering(false); return; }
+    await supabase.from('service_offerings').update({
+      name:        editForm.name.trim(),
+      description: editForm.description.trim() || null,
       price,
-      sort_order: items.length,
+    }).eq('id', editingId);
+    setOfferings(prev => prev.map(o =>
+      o.id === editingId
+        ? { ...o, name: editForm.name.trim(), description: editForm.description.trim() || null, price }
+        : o
+    ));
+    setEditingId(null);
+    setSavingOffering(false);
+  }
+
+  async function deleteOffering(id: string) {
+    await supabase.from('service_offerings').delete().eq('id', id);
+    setOfferings(prev => prev.filter(o => o.id !== id));
+  }
+
+  async function addOffering() {
+    if (!businessId || !newName.trim() || !newPrice) return;
+    setAddingOffering(true);
+    const price = parseFloat(newPrice);
+    if (isNaN(price)) { setAddingOffering(false); return; }
+    const { data, error } = await supabase.from('service_offerings').insert({
+      business_id:  businessId,
+      name:         newName.trim(),
+      description:  newDesc.trim() || null,
+      category:     newCategory,
+      timing:       newTiming,
+      price_type:   newPriceType,
+      price_unit:   newPriceType === 'per_unit' ? 'plant' : 'order',
+      price,
+      is_active:    true,
+      pre_selected: false,
+      sort_order:   offerings.length + 10,
     }).select('*').single();
+
     if (!error && data) {
-      setItems(prev => [...prev, data as OpportunityItem]);
-      setNewItemName('');
-      setNewItemPrice('');
+      setOfferings(prev => [...prev, data as ServiceOffering]);
+      setNewName(''); setNewDesc(''); setNewPrice('');
+      setNewCategory('addon'); setNewTiming('at_checkout'); setNewPriceType('per_unit');
+      setShowAddForm(false);
     }
-    setAddingItem(false);
+    setAddingOffering(false);
   }
 
-  async function toggleItem(id: string, current: boolean) {
-    await supabase.from('opportunity_items').update({ is_active: !current }).eq('id', id);
-    setItems(prev => prev.map(i => i.id === id ? { ...i, is_active: !current } : i));
-  }
+  // Group offerings for display
+  const transportOfferings = offerings.filter(o => o.category === 'transport');
+  const addonOfferings     = offerings.filter(o => o.category === 'addon');
+  const otherOfferings     = offerings.filter(o => o.category !== 'transport' && o.category !== 'addon');
 
-  async function deleteItem(id: string) {
-    await supabase.from('opportunity_items').delete().eq('id', id);
-    setItems(prev => prev.filter(i => i.id !== id));
-  }
-
-  const accountingType = business?.accounting_type;
   const accountingConnected = !!business?.accounting_company_id;
 
   return (
@@ -184,16 +259,14 @@ export function Settings({ onBack, verticalSection, accountingConnectUrl }: Sett
 
         {/* ── Business Profile ── */}
         <SectionCard title="Business Profile">
-          <Field label="Business name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="LAWNS Tree Farm, LLC" />
-          <Field label="Phone" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} placeholder="(512) 555-0100" type="tel" />
-          <Field label="Address" value={form.address} onChange={v => setForm(f => ({ ...f, address: v }))} placeholder="400 Honeycomb Mesa, Leander TX" />
-          <Field label="Email" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} placeholder="info@yourbusiness.com" type="email" />
-          <Field label="Website" value={form.website} onChange={v => setForm(f => ({ ...f, website: v }))} placeholder="https://yourbusiness.com" />
-          <Field label="Tax rate (decimal, e.g. 0.0825 for 8.25%)" value={form.tax_rate} onChange={v => setForm(f => ({ ...f, tax_rate: v }))} placeholder="0.0825" />
-
+          <Field label="Business name"    value={form.name}     onChange={v => setForm(f => ({ ...f, name: v }))}     placeholder="LAWNS Tree Farm, LLC" />
+          <Field label="Phone"            value={form.phone}    onChange={v => setForm(f => ({ ...f, phone: v }))}    placeholder="(512) 555-0100" type="tel" />
+          <Field label="Address"          value={form.address}  onChange={v => setForm(f => ({ ...f, address: v }))}  placeholder="400 Honeycomb Mesa, Leander TX" />
+          <Field label="Email"            value={form.email}    onChange={v => setForm(f => ({ ...f, email: v }))}    placeholder="info@yourbusiness.com" type="email" />
+          <Field label="Website"          value={form.website}  onChange={v => setForm(f => ({ ...f, website: v }))}  placeholder="https://yourbusiness.com" />
+          <Field label="Tax rate (e.g. 0.0825 = 8.25%)" value={form.tax_rate} onChange={v => setForm(f => ({ ...f, tax_rate: v }))} placeholder="0.0825" />
           <button
-            onClick={saveProfile}
-            disabled={saving}
+            onClick={saveProfile} disabled={saving}
             style={{
               width: '100%', padding: '13px 20px', marginTop: 8,
               background: saving ? '#e5e7eb' : GREEN, color: saving ? GRAY : '#fff',
@@ -204,7 +277,7 @@ export function Settings({ onBack, verticalSection, accountingConnectUrl }: Sett
             {saving ? 'Saving…' : 'Save Profile'}
           </button>
           {saveMsg && (
-            <p style={{ fontSize: '0.875rem', color: saveMsg.startsWith('Error') ? '#A32D2D' : GREEN, marginTop: 8, textAlign: 'center' }}>
+            <p style={{ fontSize: '0.875rem', color: saveMsg.startsWith('Error') ? RED : GREEN, marginTop: 8, textAlign: 'center' }}>
               {saveMsg}
             </p>
           )}
@@ -215,14 +288,10 @@ export function Settings({ onBack, verticalSection, accountingConnectUrl }: Sett
           {accountingConnected ? (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{
-                  width: 24, height: 24, borderRadius: '50%', background: GREEN,
-                  color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontWeight: 700, fontSize: '0.75rem', flexShrink: 0,
-                }}>✓</span>
+                <span style={{ width: 24, height: 24, borderRadius: '50%', background: GREEN, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.75rem', flexShrink: 0 }}>✓</span>
                 <div>
                   <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: '#166534', margin: 0 }}>
-                    {accountingType === 'quickbooks' ? 'QuickBooks' : accountingType ?? 'Accounting'} connected
+                    {business?.accounting_type === 'quickbooks' ? 'QuickBooks' : business?.accounting_type ?? 'Accounting'} connected
                   </p>
                   {business?.accounting_needs_reconnect && (
                     <p style={{ fontSize: '0.75rem', color: '#b45309', margin: '2px 0 0' }}>⚠ Reconnection needed</p>
@@ -241,100 +310,241 @@ export function Settings({ onBack, verticalSection, accountingConnectUrl }: Sett
                 Connect an accounting system to automatically create invoices after each sale.
               </p>
               {accountingConnectUrl ? (
-                <a
-                  href={accountingConnectUrl}
-                  style={{
-                    display: 'block', textAlign: 'center', padding: '13px 20px',
-                    background: GREEN, color: '#fff', fontWeight: 700, fontSize: '0.9375rem',
-                    borderRadius: 10, textDecoration: 'none',
-                  }}
-                >
+                <a href={accountingConnectUrl} style={{ display: 'block', textAlign: 'center', padding: '13px 20px', background: GREEN, color: '#fff', fontWeight: 700, fontSize: '0.9375rem', borderRadius: 10, textDecoration: 'none' }}>
                   Connect QuickBooks
                 </a>
               ) : (
-                <p style={{ fontSize: '0.8125rem', color: '#9ca3af' }}>
-                  Accounting connection available from the dashboard.
-                </p>
+                <p style={{ fontSize: '0.8125rem', color: '#9ca3af' }}>Accounting connection available from the dashboard.</p>
               )}
             </div>
           )}
         </SectionCard>
 
-        {/* ── Sales Prompts (opportunity_items) ── */}
-        <SectionCard title="Sales Prompts">
+        {/* ── Services ── */}
+        <SectionCard title="Services">
           <p style={{ fontSize: '0.8125rem', color: GRAY, marginBottom: 14, lineHeight: 1.5 }}>
-            Add items that your staff should offer at checkout. These appear as upsell prompts during every sale.
+            Everything you offer at checkout — transport options, add-ons, and future recurring services. Toggle off to hide from customers without deleting.
           </p>
 
-          {itemsLoading ? (
+          {offeringsLoading ? (
             <p style={{ fontSize: '0.875rem', color: '#9ca3af' }}>Loading…</p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-              {items.map(item => (
-                <div key={item.id} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  background: '#f9fafb', borderRadius: 9, padding: '10px 12px',
-                  opacity: item.is_active ? 1 : 0.5,
-                }}>
-                  <div>
-                    <p style={{ margin: 0, fontWeight: 600, fontSize: '0.875rem', color: DARK }}>{item.name}</p>
-                    <p style={{ margin: 0, fontSize: '0.75rem', color: GRAY }}>${Number(item.price).toFixed(2)}/unit</p>
+            <>
+              {/* Transport group */}
+              {transportOfferings.length > 0 && (
+                <OfferingGroup
+                  label="Transport"
+                  offerings={transportOfferings}
+                  editingId={editingId}
+                  editForm={editForm}
+                  setEditForm={setEditForm}
+                  savingOffering={savingOffering}
+                  onToggle={toggleOffering}
+                  onEdit={startEdit}
+                  onSaveEdit={saveEdit}
+                  onCancelEdit={() => setEditingId(null)}
+                  onDelete={null}  // transport options are structural — toggle off instead
+                />
+              )}
+
+              {/* Add-on group */}
+              {addonOfferings.length > 0 && (
+                <OfferingGroup
+                  label="Add-ons"
+                  offerings={addonOfferings}
+                  editingId={editingId}
+                  editForm={editForm}
+                  setEditForm={setEditForm}
+                  savingOffering={savingOffering}
+                  onToggle={toggleOffering}
+                  onEdit={startEdit}
+                  onSaveEdit={saveEdit}
+                  onCancelEdit={() => setEditingId(null)}
+                  onDelete={deleteOffering}
+                />
+              )}
+
+              {/* Other (maintenance, inspection, subscription) */}
+              {otherOfferings.length > 0 && (
+                <OfferingGroup
+                  label="Other Services"
+                  offerings={otherOfferings}
+                  editingId={editingId}
+                  editForm={editForm}
+                  setEditForm={setEditForm}
+                  savingOffering={savingOffering}
+                  onToggle={toggleOffering}
+                  onEdit={startEdit}
+                  onSaveEdit={saveEdit}
+                  onCancelEdit={() => setEditingId(null)}
+                  onDelete={deleteOffering}
+                />
+              )}
+
+              {/* Add new */}
+              {showAddForm ? (
+                <div style={{ marginTop: 8, padding: '14px', background: '#f9fafb', borderRadius: 10, border: '1px solid #e5e7eb' }}>
+                  <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: '0.875rem', color: DARK }}>New service</p>
+
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Name (e.g. Monthly Fertilizer)" style={{ ...inputStyle, flex: 2, marginBottom: 0 }} />
+                    <input value={newPrice} onChange={e => setNewPrice(e.target.value)} placeholder="Price" type="number" step="0.01" style={{ ...inputStyle, flex: 1, marginBottom: 0 }} />
                   </div>
+
+                  <input value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Description (optional)" style={{ ...inputStyle, marginBottom: 8 }} />
+
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                    <select value={newCategory} onChange={e => setNewCategory(e.target.value)} style={{ ...inputStyle, flex: 1, marginBottom: 0 }}>
+                      <option value="addon">Add-on</option>
+                      <option value="maintenance">Maintenance</option>
+                      <option value="inspection">Inspection</option>
+                      <option value="subscription">Subscription</option>
+                    </select>
+                    <select value={newTiming} onChange={e => setNewTiming(e.target.value)} style={{ ...inputStyle, flex: 1, marginBottom: 0 }}>
+                      <option value="at_checkout">At checkout</option>
+                      <option value="post_purchase">After sale</option>
+                      <option value="recurring">Recurring</option>
+                    </select>
+                    <select value={newPriceType} onChange={e => setNewPriceType(e.target.value)} style={{ ...inputStyle, flex: 1, marginBottom: 0 }}>
+                      <option value="per_unit">Per unit</option>
+                      <option value="flat">Flat fee</option>
+                    </select>
+                  </div>
+
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button
-                      onClick={() => toggleItem(item.id, item.is_active)}
-                      style={{
-                        padding: '5px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, border: 'none', cursor: 'pointer',
-                        background: item.is_active ? '#f0fdf4' : '#f3f4f6',
-                        color: item.is_active ? '#166534' : GRAY,
-                      }}
+                      onClick={addOffering}
+                      disabled={addingOffering || !newName.trim() || !newPrice}
+                      style={{ flex: 1, padding: '11px', borderRadius: 9, border: 'none', cursor: 'pointer', background: GREEN, color: '#fff', fontWeight: 700, fontSize: '0.875rem', opacity: (addingOffering || !newName.trim() || !newPrice) ? 0.5 : 1 }}
                     >
-                      {item.is_active ? 'Active' : 'Off'}
+                      {addingOffering ? 'Adding…' : 'Add Service'}
                     </button>
                     <button
-                      onClick={() => deleteItem(item.id)}
-                      style={{ padding: '5px 10px', borderRadius: 6, fontSize: '0.75rem', border: 'none', cursor: 'pointer', background: '#fef2f2', color: '#A32D2D', fontWeight: 600 }}
+                      onClick={() => { setShowAddForm(false); setNewName(''); setNewDesc(''); setNewPrice(''); }}
+                      style={{ padding: '11px 16px', borderRadius: 9, border: '1px solid #e5e7eb', cursor: 'pointer', background: '#fff', color: GRAY, fontWeight: 600, fontSize: '0.875rem' }}
                     >
-                      Remove
+                      Cancel
                     </button>
                   </div>
                 </div>
-              ))}
-            </div>
+              ) : (
+                <button
+                  onClick={() => setShowAddForm(true)}
+                  style={{ marginTop: 8, width: '100%', padding: '11px', borderRadius: 9, border: `1.5px dashed #d1d5db`, cursor: 'pointer', background: 'transparent', color: GREEN, fontWeight: 700, fontSize: '0.875rem' }}
+                >
+                  + Add service
+                </button>
+              )}
+            </>
           )}
-
-          {/* Add new item */}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input
-              value={newItemName}
-              onChange={e => setNewItemName(e.target.value)}
-              placeholder="Item name (e.g. Netting)"
-              style={{ ...inputStyle, flex: 2, marginBottom: 0 }}
-            />
-            <input
-              value={newItemPrice}
-              onChange={e => setNewItemPrice(e.target.value)}
-              placeholder="Price"
-              type="number"
-              style={{ ...inputStyle, flex: 1, marginBottom: 0 }}
-            />
-            <button
-              onClick={addItem}
-              disabled={addingItem || !newItemName.trim() || !newItemPrice}
-              style={{
-                padding: '11px 16px', borderRadius: 9, border: 'none', cursor: 'pointer',
-                background: GREEN, color: '#fff', fontWeight: 700, fontSize: '0.875rem', flexShrink: 0,
-                opacity: (addingItem || !newItemName.trim() || !newItemPrice) ? 0.5 : 1,
-              }}
-            >
-              Add
-            </button>
-          </div>
         </SectionCard>
 
-        {/* ── Vertical-specific section (injected by the consuming vertical) ── */}
+        {/* ── Vertical-specific section ── */}
         {verticalSection}
 
+      </div>
+    </div>
+  );
+}
+
+// ── OfferingGroup sub-component ───────────────────────────────────────────────
+
+interface OfferingGroupProps {
+  label: string;
+  offerings: ServiceOffering[];
+  editingId: string | null;
+  editForm: { name: string; description: string; price: string };
+  setEditForm: (f: { name: string; description: string; price: string }) => void;
+  savingOffering: boolean;
+  onToggle: (id: string, current: boolean) => void;
+  onEdit: (o: ServiceOffering) => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+  onDelete: ((id: string) => void) | null;
+}
+
+function OfferingGroup({
+  label, offerings, editingId, editForm, setEditForm, savingOffering,
+  onToggle, onEdit, onSaveEdit, onCancelEdit, onDelete,
+}: OfferingGroupProps) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <p style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
+        {label}
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {offerings.map(o => (
+          <div key={o.id} style={{ background: o.is_active ? '#f9fafb' : '#f3f4f6', borderRadius: 10, padding: '10px 12px', opacity: o.is_active ? 1 : 0.6, border: '1px solid #e5e7eb' }}>
+
+            {editingId === o.id ? (
+              /* Edit mode */
+              <div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                  <input
+                    value={editForm.name}
+                    onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                    style={{ ...inputStyle, flex: 2, marginBottom: 0, padding: '8px 10px' }}
+                    placeholder="Name"
+                  />
+                  <input
+                    value={editForm.price}
+                    onChange={e => setEditForm({ ...editForm, price: e.target.value })}
+                    style={{ ...inputStyle, flex: 1, marginBottom: 0, padding: '8px 10px' }}
+                    type="number" step="0.01" placeholder="Price"
+                  />
+                </div>
+                <input
+                  value={editForm.description}
+                  onChange={e => setEditForm({ ...editForm, description: e.target.value })}
+                  style={{ ...inputStyle, marginBottom: 8, padding: '8px 10px' }}
+                  placeholder="Description (optional)"
+                />
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={onSaveEdit} disabled={savingOffering} style={{ flex: 1, padding: '8px', borderRadius: 7, border: 'none', cursor: 'pointer', background: GREEN, color: '#fff', fontWeight: 700, fontSize: '0.8125rem' }}>
+                    {savingOffering ? 'Saving…' : 'Save'}
+                  </button>
+                  <button onClick={onCancelEdit} style={{ padding: '8px 12px', borderRadius: 7, border: '1px solid #e5e7eb', cursor: 'pointer', background: '#fff', color: GRAY, fontWeight: 600, fontSize: '0.8125rem' }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* View mode */
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontWeight: 600, fontSize: '0.875rem', color: DARK }}>{o.name}</p>
+                  <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: GRAY }}>
+                    {o.price === 0 ? 'No charge' : o.price_type === 'per_unit' ? `$${Number(o.price).toFixed(2)}/${o.price_unit}` : `$${Number(o.price).toFixed(2)} flat`}
+                    {' · '}{TIMING_LABEL[o.timing] ?? o.timing}
+                    {o.trigger_transport_mode ? ` · when ${o.trigger_transport_mode}-transport` : ''}
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button
+                    onClick={() => onToggle(o.id, o.is_active)}
+                    style={{ padding: '4px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, border: 'none', cursor: 'pointer', background: o.is_active ? '#f0fdf4' : '#f3f4f6', color: o.is_active ? '#166534' : GRAY }}
+                  >
+                    {o.is_active ? 'On' : 'Off'}
+                  </button>
+                  <button
+                    onClick={() => onEdit(o)}
+                    style={{ padding: '4px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, border: '1px solid #e5e7eb', cursor: 'pointer', background: '#fff', color: DARK }}
+                  >
+                    Edit
+                  </button>
+                  {onDelete && (
+                    <button
+                      onClick={() => onDelete(o.id)}
+                      style={{ padding: '4px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, border: 'none', cursor: 'pointer', background: '#fef2f2', color: RED }}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
