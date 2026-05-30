@@ -4,7 +4,7 @@
  * DESC: Inventory management synced to DTC fault codes and bin locations.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Search, Package, MapPin, AlertTriangle, ArrowRight, Lock } from 'lucide-react';
 import DataBridge from '../DataBridge';
 

@@ -6,7 +6,7 @@
  *       uncaptured consumables, and leakage patterns.
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   FileSearch, Upload, AlertTriangle, CheckCircle2, TrendingUp,
   Package, Droplets, Wrench, DollarSign, History, ChevronDown,
