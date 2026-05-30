@@ -19,6 +19,7 @@ import { Settings }          from './pages/Settings';
 import { Campaigns }         from './pages/Campaigns';
 import { CampaignDetail }    from './pages/CampaignDetail';
 import { DiscoveryInspect }  from './pages/DiscoveryInspect';
+import PMI                   from './pages/PMI';
 
 export function AppRouter() {
   return (
@@ -46,6 +47,7 @@ export function AppRouter() {
         <Route path="/onboarding"        element={<OnboardingWizard />} />
         <Route path="/campaigns"         element={<Campaigns />} />
         <Route path="/campaigns/:id"     element={<CampaignDetail />} />
+        <Route path="/pmi"               element={<PMI />} />
       </Route>
 
       {/* DEMO — QB invoice preview (no auth, for demo fallback) */}
