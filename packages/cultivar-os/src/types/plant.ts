@@ -1,6 +1,6 @@
 export interface Plant {
   id: string;
-  nursery_id: string;
+  nursery_id?: string;
   business_id: string;
   tag_id: string;
   species: string;
@@ -22,7 +22,7 @@ export interface Plant {
 export interface PlantEvent {
   id: string;
   plant_id: string;
-  nursery_id: string;
+  nursery_id?: string;
   business_id: string;
   event_type:
     | 'arrived'
@@ -44,7 +44,7 @@ export interface PlantEvent {
 
 export interface Addon {
   id: string;
-  nursery_id: string;
+  nursery_id?: string;
   business_id: string;
   name: string;
   description: string | null;

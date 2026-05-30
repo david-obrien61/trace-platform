@@ -1,6 +1,6 @@
 export interface Customer {
   id: string;
-  nursery_id: string;
+  nursery_id?: string;
   first_name: string;
   last_name: string;
   email: string | null;

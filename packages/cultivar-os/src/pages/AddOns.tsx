@@ -157,7 +157,6 @@ export function AddOns() {
                 key={sel.offering.id}
                 addon={{
                   id:              sel.offering.id,
-                  nursery_id:      '',
                   business_id:     sel.offering.business_id,
                   name:            sel.offering.name,
                   description:     sel.offering.description,

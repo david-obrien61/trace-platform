@@ -1,6 +1,6 @@
 export const TAX_RATE = 0.0825;
 
-export const DEMO_NURSERY_ID = 'a1b2c3d4-0000-0000-0000-000000000001';
+export const DEMO_BUSINESS_ID = 'a1b2c3d4-0000-0000-0000-000000000001';
 
 export const LARGE_CONTAINERS = ['15 gal', '30 gal', '45 gal', '60 gal', '100 gal'];
 

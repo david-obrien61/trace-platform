@@ -544,7 +544,7 @@ const IdentityMatrix = ({ onLogin, shopName }) => {
   }, []);
 
   const handleLogin = async () => {
-    if (pin.length !== 4) return;
+    if (pin.length < 4 || pin.length > 6) return;
     setLoading(true);
     setLoginError('');
     const user = await DataBridge.authenticate(pin);
@@ -868,8 +868,10 @@ const CoreApp = () => {
     return (
       <OnboardingWizard
         onComplete={() => {
+          const session = DataBridge.load('current_user');
           setOnboardingDone(true);
-          setCurrentUser(DataBridge.load('current_user'));
+          setShopReady(true);
+          if (session) setCurrentUser(session);
         }}
       />
     );

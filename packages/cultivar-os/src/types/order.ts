@@ -19,19 +19,9 @@ export interface ServiceSelection {
   selected: boolean;
 }
 
-export interface OrderPayload {
-  nursery_id:       string;
-  customer:         CustomerInput;
-  item:             CartItem;
-  addons:           CartAddon[];
-  transport:        TransportOption;
-  netting_declined: boolean;
-  transport_note:   string;
-}
-
 export interface Order {
   id:               string;
-  nursery_id:       string;
+  nursery_id?:      string;
   customer_id:      string;
   employee_id:      string | null;
   qb_invoice_id:    string | null;
