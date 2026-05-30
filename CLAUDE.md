@@ -221,6 +221,33 @@ This log is created and maintained per the Honest Friction principle (see PLATFO
 
 | 12 | 🟡 `CAI/ai_router.py` (Railway FastAPI) was built to keep AI provider keys out of the React Native bundle. Now that Ignition OS is a Vercel web app, this is unnecessary — Vercel serverless functions hold keys server-side, same pattern cultivar-os uses for Claude calls today. Railway is still running but is legacy for the web build. AIEngine.ts currently points to `VITE_API_URL` which is unset in the ignition-os Vercel project — AI features fail gracefully. | 2026-05-28 (decision made) | Port the 11 `ai_router.py` endpoints to TypeScript Vercel functions under `packages/ignition-os/api/`. Then decommission Railway. Exception: `voice_transcribe` sends audio files — Vercel's 4.5MB payload limit needs evaluation before porting that one endpoint. | Before activating AI features in ignition-os web. |
 | 13 | 🟡 Vite build aliases for `react-native`, expo packages, and `lucide-react-native` exist in both `CAI/vite.config.js` AND `packages/ignition-os/vite.config.js` — duplicated. The stubs in `CAI/stubs/` and `packages/ignition-os/stubs/` are identical files in two places. | 2026-05-28 | Extract stubs to `packages/shared/stubs/` and reference from both vite configs. Low priority — only matters if stubs need to change. | If stubs ever need updating, deduplicate first. |
+| 14 | 🟡 Tailwind CSS is loaded via CDN script tag in `packages/ignition-os/index.html` (`<script src="https://cdn.tailwindcss.com">`). No build dependency, no config, no purging — every Ignition module uses `className="..."` Tailwind utilities (~1923 lines across 27 files + 196 in CoreApp). Cultivar OS uses inline styles only. Shared modules use inline styles (required for Cultivar compat). Result: two styling systems that cannot share UI components without a rewrite. | 2026-05-29 (identified) | Remove CDN script tag + convert all Tailwind classNames to inline styles in Ignition OS modules. ~2100 lines of rework. | When an Ignition module is extracted to `packages/shared/` — convert at that time, not before. Never add new Tailwind `className` usage to any file. |
+
+---
+
+## Shared Extraction Roadmap
+
+Audit completed 2026-05-29. Full findings live in session context. Canonical priority order:
+
+**Immediate (LOW complexity, do next available session):**
+- `MarginEngine.js` → `packages/shared/src/business-logic/MarginEngine.ts` (copy-paste ready, no deps)
+- `statusColors` utility → `packages/shared/src/utils/statusColors.ts`
+- `FormField` component → `packages/shared/src/components/FormField.tsx`
+- `ProgressBar` component → `packages/shared/src/components/ProgressBar.tsx`
+- `dateHelpers` → `packages/shared/src/utils/dateHelpers.ts`
+- `formatCurrency` → `packages/shared/src/utils/formatCurrency.ts`
+- `Skeleton` → `packages/shared/src/components/Skeleton.tsx`
+
+**Before KINNA-OS Phase 1 (MEDIUM complexity, required):**
+- Trial/Subscription clock → `packages/shared/src/hooks/useTrialStatus.ts` + `TrialProvider.tsx`
+- Leakage detector → `packages/shared/src/business-logic/LeakageDetector.ts`
+- Module activation hook → `packages/shared/src/hooks/useModuleState.ts`
+- OnboardingWizard shell → `packages/shared/src/components/OnboardingShell.tsx`
+
+**Do NOT extract yet:**
+- `DataBridge.js` — monolith, too coupled to Ignition mobile/local-first. Extract pieces as needed.
+- QB invoice pattern — wait until KINNA-OS accounting requirements are clear.
+- CSV importer, hardware registry — Ignition-specific, no cross-vertical need yet.
 
 **Initial entries above are seeded from the Session 1a audit findings and the button audit folded into TRACE_PLATFORM_AUDIT.md in this session (1b). Future entries are added by Claude Code or David whenever Honest Friction surfaces a workaround that is intentionally executed against architectural intent.**
 

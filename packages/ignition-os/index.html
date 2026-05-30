@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ignition OS</title>
+    <!-- TECH DEBT #14: Tailwind loaded via CDN. ~1923 className lines across 27 modules.
+         Correct architecture: inline styles matching Cultivar/shared pattern.
+         Migration trigger: convert each module when it moves to packages/shared/.
+         Never add new className/Tailwind usage. Remove this tag last, after all modules converted. -->
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
   <body>
