@@ -205,3 +205,324 @@ The platform is not where we thought it was Friday night. It's further along. La
 ---
 
 End of 2026-05-30 entry.
+
+---
+
+## 2026-05-31 — Sunday strategy session (long thread, capture in full)
+
+A long thinking session with Claude on 2026-05-31 covering multiple substantive threads. Much of this conversation happened while David was walking, switching between mobile and desktop. The iterative thinking pattern was deliberate. Captured here in raw form so nothing evaporates. Tomorrow's deliberate work decides what graduates to other docs.
+
+### The faith conversation (morning)
+
+David started the day having wrestled most of Saturday night with whether TRACE is "really what God wants me to do." Forty years of preparation, retirement five months ago, now applying the prior work to a new context. The wrestle was not about strategy — it was about direction.
+
+Regina's counsel: "Step out in faith. If God doesn't want you to do this it will fall flat." The OKC house not selling is real financial pressure, but TRACE keeps unfolding — platform crossed a phase change this week, three real silent-partner analyses produced, family members aligned in their domains, doors that should open keep opening. The Regina principle generalizes: closed doors are direction, not loss. The OKC door is closed. The TRACE doors are open. Both data points point the same direction.
+
+David is 64, retired Dec 2025, supporting Andrew on food and shelter, won't dip into savings to fund TRACE operations. The faith question is real and the financial pressure is real and both are being held simultaneously without panic.
+
+The wrestle settled in the right direction. By afternoon David was articulating product principles with clarity, not doubt. Regina was right.
+
+### Cross-domain thinking — how Claude should operate
+
+Critical correction David surfaced: he expects Claude to do cross-domain analysis without being asked. Claude has been holding back, offering one-vertical observations and waiting for permission to extend across domains. That caution is friction.
+
+But the equally important constraint: David thinks iteratively (this is what I know → this is what I believe → this is possible → why isn't it done). He can't read or write at Claude's output speed. Walls of text displace iterative thinking with output.
+
+The correct mode for Claude: do the cross-domain analysis silently, surface ONE or TWO patterns per turn, let David push back or redirect, iterate. Tight observations, not comprehensive dumps. The capability is full-range; the delivery is iterative-paced. Fix me, fix them — mutual correction.
+
+### The time-suck inventory concept
+
+David named: "What sucks time is what we can identify and help, diesel techs greasy hands, copy paste into other apps, the list goes on we should just list them all, all possible time sucks and see if we are adding value."
+
+The principle: most product roadmaps start from "what features make sense" or "what would competitors copy." David's principle starts from "what specifically is wasting people's time right now, in the actual work they do, in the actual conditions they do it under."
+
+If TRACE lists every time-suck across every vertical, role, and moment, the result is a roadmap grounded in real human friction, not product imagination. Each item is anchored to a specific person in a specific job at a specific moment. The roadmap orders itself by time-back-delivered per attention-spent.
+
+The diesel tech with greasy hands generalizes: across domains, there's a class of worker whose hands aren't available for screens. Diesel techs (grease), nursery staff (dirt), HVAC techs (insulation, refrigerant), painters (paint), bakers (flour). Each one has the same window between observation and recording where information leaks. Different domains need different solutions (voice in some, structured prompts at job completion in others, photos in others).
+
+The deeper insight: most SaaS companies don't list every time-suck because doing so would force them to admit some time-sucks they could address aren't profitable to address. The list-everything approach exposes the gap between what could help users and what makes business sense to build. Most companies prefer feature roadmaps because feature roadmaps don't ask "did we choose to help with this or not." David's family-company structure lets him list everything and honestly say about the ones outside scope: "this is outside our scope, we don't help with this." That's the family-company posture in action.
+
+### Discovery engine — major architectural conversation
+
+The most substantive design thread of the day. Multiple pieces converged.
+
+**The engine sits at builtwithcai.com as the unified centerpiece.** Vertical-agnostic at the door. Each vertical OS (Cultivar, Ignition, Conduit, KINNA, CoolRunnings) hosts a focused widget — same engine, pre-filtered for that vertical's vocabulary and pain points. Same code in packages/shared/src/discovery/, different consent contexts and front-ends.
+
+**Pain-first discovery instead of website-first.** The current /discovery/inspect takes a URL and produces analysis. The new design starts with the prospect's pain in their own words. Engine listens, restates, iterates until confirmed. Website becomes secondary or optional.
+
+**Three paths after pain-point confirmation:**
+
+1. *Match found in library.* Demo runs from existing pain-point demo, using inspection data if website provided.
+
+2. *No match in library — hollow shell with visual.* Engine generates a mockup of how TRACE WOULD address the pain, with the prospect's business name rendered in. Visual + prose together: "We haven't built this yet, but here's how we'd think about it for your business." Honest about state (labeled "Proposed Feature — Not Yet Built"), ambitious about design. The same generation that produces the user-facing hollow shell also produces an internal Claude Code build spec for David. Invites prospect to be first.
+
+3. *Out of scope entirely.* Engine refuses honestly. "This isn't software-shaped. We're not the right tool. Here's an adjacent thing we could help with, or here's an honest acknowledgment that this is a hard problem without a clean solution." Path 3 captures pain points that should become explicit non-features — recorded as "won't touch" with reasoning.
+
+The three paths together establish TRACE's operating posture: Path 1 demonstrates capability where we have it, Path 2 demonstrates listening and intent where we don't have it yet, Path 3 demonstrates honest refusal where we shouldn't be. Each prospect gets the response appropriate to their actual pain.
+
+**The iteration loop is the quality gate.** The engine restates the pain. The prospect confirms or corrects. Iterate until both agree. Path selection only happens after agreement. The conversation pattern is Doug's verify-before-acting applied to discovery.
+
+**Two-pass inspection (refined from Saturday).** Pass 1 fast (3-5 sec, identity) at signup if website provided. Pass 2 deep (30-90 sec) runs in background during pain-point conversation. By the time the user finishes the demo, deep analysis is ready to offer.
+
+**Progressive consent across multiple gates.** Gate 1 at signup (provide URL?). Gate 2 post-demo (warming gate if they declined at signup). Gate 3 post-glimpse (final gate if they engaged with the glimpse). Decline at any gate is never a dead end. The user can re-consent later when they have more context.
+
+**The glimpse mechanic.** If user volunteers URL after declining initially, run a light pass (~30 sec). Output two specific observations that prove TRACE is paying attention. Offer the deeper look as continuation. The glimpse establishes value before asking for full inspection consent.
+
+**The minimum gate.** Three required fields: business name, email, owner name. Plus a second screen asking about website (yes/no/URL) and optional free-text pain. The gate is what makes the unconditional follow-through possible — every prospect who reaches the demo has earned the email-regardless promise and given TRACE the means to deliver it.
+
+**Email-regardless principle (continued from Saturday).** 24-hour silent-partner email goes out whether user continued, declined, or walked away. Different content per branch:
+- Full deep-dive user: rich silent-partner analysis
+- Glimpse-then-stopped: two observations expanded plus invitation
+- No-website user: pain-grounded reflection
+- Total walkaway: brief acknowledgment with one thought
+- Out-of-scope (Path 3): honest "not us" with referral if appropriate
+
+**Login transition from builtwithcai.com to vertical.** When a user completes discovery and continues to a vertical, the discovery session is the bridge. System creates Supabase auth account using email, creates businesses row from session data, seeds service_offerings rows from Pass 2 suggestions (in "suggested but not active" state), creates business_member row as ADMIN. User lands in vertical OS that already knows them. No wizard. Setup happened during discovery.
+
+**For inside-vertical-OS users running discovery (the "want to see us use your data?" widget):** Already authenticated. Discovery results populate or update existing business row with consent. Clean button reverses if they change their mind.
+
+### The pain-point library structure
+
+Captured in conversation. Each library entry has:
+- pain_point_id
+- vertical
+- pain_category (time leak, revenue leak, visibility leak, knowledge leak, app sprawl)
+- short_title (e.g. "Customers leave without netting on their plants")
+- description (canonical statement)
+- typical_business_size
+- related_business_signals (what to look for in website or data)
+- demo_component (which vertical-OS component demonstrates it)
+- demo_inputs (minimum/preferred/full data)
+- built_status (in production, in progress, spec only)
+- first_surfaced_session_id
+- sessions_matched (incremented every time prospects hit this pain)
+
+The library grows from real prospect conversations. Every unmatched session is a candidate for a new library entry. The sessions_matched count is product intelligence — after a month, it tells you which pains are most common without interpretation.
+
+### The four pain-point paths already in Cultivar
+
+Yesterday's audit located them in packages/cultivar-os/src/pages/OnboardingWizard.tsx lines 530-602:
+
+1. LEAKAGE — "Show me what I'm losing" — netting price × trees/week math
+2. CHECKOUT — "Show me how checkout works" — 4 hardcoded slides
+3. SETUP — "Set up my nursery" — QB teaser with user-entered info
+4. DELIVERY — "Route my deliveries" — demo stops → Google Maps → SMS
+
+None use ingested website data. All static or user-entered. They're the scaffolding for the pain-point demo experience but not yet wired to inspection data.
+
+Priority order for inspection-wiring: LEAKAGE first (pre-populate from website analysis), DELIVERY second (service area from inspection), SETUP third (already has the data pattern, just needs different source), CHECKOUT last (mostly static is fine).
+
+### Design standards philosophy
+
+David articulated a real operating principle: shared structural design across all surfaces (TRACE, CAI, every vertical), vertical-specific color only. Same component sizes, same validation patterns, same tile shapes, same form behavior, same loading patterns. The structure is one design language; the palette is what changes per vertical.
+
+"Color is just a number." A variable, not a decision that has to be made every time. Cultivar green, Ignition industrial, KINNA whatever fits a nonprofit, bakery warm. Encode as design tokens, let the rest of the system render. Don't overthink it.
+
+The Tailwind-vs-inline question (Tech Debt #14) doesn't deserve recurring conversation. Decide, document, follow the policy, never relitigate. The decision is already made — inline canonical, convert when modules move to shared, never add new Tailwind. David's response to Claude Code raising it again: "if it's a problem, solve it; if not, stop bringing it up."
+
+**Standards as load-bearing infrastructure:** The standards document isn't decoration. It's the *infrastructure of settled decisions* that lets the team move at the speed of ideas instead of relitigating basics. Components reference tokens, not raw values. Change a token, the whole system updates. Tight standards beat sprawling design systems.
+
+**Settled decisions, executed against, not relitigated.** Most teams relitigate the same questions repeatedly because they never settle them. Each new screen reopens decisions that should be closed. Energy bleeds into meta-conversation. The discipline is recognizing when you're making a decision that deserves to be permanent, making it deliberately, documenting it, and stopping.
+
+**Living standards discipline:** Document captures what's already been decided implicitly. As you build, new patterns surface. Discipline is catching them when they appear, naming them, deciding, documenting, moving on. Three-question session-end protocol:
+1. What did you do? (already in summary)
+2. Did you notice anything that should be a standard?
+3. If yes, what does it connect to, work estimate, settle now/later/one-off?
+
+The session-end discipline from yesterday's drift audit catches new files. This three-question discipline catches new patterns. Both keep the canonical docs current.
+
+**Two-hour tidying sessions.** When drift accumulates or David gets frustrated, sit down for two hours and clean up. Not scheduled. Just when it's time. The tidying is its own discipline — recognizing when the codebase has accumulated friction and deliberately removing it.
+
+### "Good enough is good enough" as design principle
+
+David named explicitly: "We are good enough on the documents to create standards. We are good enough on all the other pieces to put those into documents. We can keep iterating through these things as we go through."
+
+Document what you know, document what you don't, document what you're guessing, iterate. Don't wait for complete. Most teams either don't document until everything is settled (so docs are always stale) or try to document comprehensively upfront (so docs are aspirational fiction). The third way: document current state, mark what's uncertain, update as you learn, accept evolution.
+
+Belongs as a working principle alongside Surface Honesty, Honest Friction, Honest Velocity, Epistemic Humility, Honest Debt. Provisional names: Working Documentation, Incremental Truth, Good Enough.
+
+### The Jarvis vs HAL posture
+
+The conversation around BuiltwithCAI's tone surfaced three references David named:
+
+HAL (2001) — perceived as the threat. Cold, all-knowing, with its own agenda. The user is the suspect. "I'm sorry Dave, I'm afraid I can't do that."
+
+I, Robot — paternalism dressed as intelligence. Decisions made on the user's behalf without consent. The system "knows better."
+
+Jarvis (Iron Man) — clearly intelligent, clearly capable, clearly serving Tony. Tony asks; Jarvis acts. Tony makes the calls. Jarvis brings the depth.
+
+The difference isn't intelligence level — all three are capable. The difference is who's in charge. TRACE's design choices map to Jarvis: the covenant, clean button, silent partner posture, "we don't audit the customer." Capability serving the user, not overriding them.
+
+Design implications: TRACE shows what it knows but never decides on the prospect's behalf. Every observation offered, every action invited. Capability shown through what we notice, not through what we generate without consent. Interaction feels like talking with someone who's done the homework, not being processed by a system.
+
+The Jarvis moment for a TRACE prospect can't be pre-decided. It emerges from iteration — running real prospects through, watching where they lean in. The pattern is probably the recognition moment ("they restated my pain exactly right, they understood me").
+
+### Warrior in the garden
+
+David named the saying: "It's better to be a warrior in a garden than a gardener in war."
+
+The warrior in the garden doesn't suddenly have to become something he wasn't. He already knows how to fight. He's choosing the garden. The choice is real because the alternative was available.
+
+Applied to TRACE: David trained for forty years. Military, federal, NATO Special Operations, leading PhDs, surviving leadership change that took apart his best work. He knows how to operate ruthlessly. He knows what extraction looks like from inside institutions that practice it. He's choosing the garden — the covenant, the clean button, the non-extractive defaults, the family-scale structure, the "if I make you successful then I'm successful" philosophy.
+
+The choice gives the values weight. A company founded by someone who couldn't be ruthless saying "we're ethical" is just describing their limit. A company founded by someone who could be ruthless saying "we're ethical" is making a commitment with cost. The commitment is real because the alternative was available.
+
+The ethics is also a competitive moat. Most SaaS can't refuse extractive paths because their business model requires extraction. TRACE can refuse because the scale chosen doesn't require it. The ethical posture isn't just morally correct — it's structurally distinctive. No VC-funded growth-at-all-costs company can match it without changing their whole company.
+
+### The auto shop story (added to Saturday's prior-work captures)
+
+David and Andrew were in negotiations to buy a small auto repair business. Signed documents, negotiated money. Andrew was positioned to learn the operation. The daughter who worked as the manager read the NDA, surfaced as buyer herself, the deal collapsed.
+
+Andrew then worked at the shop for three years — not as manager (she stayed as manager) but as part of the operation, learning the business because that was his job. When the daughter wanted to retire and have her son become manager, Andrew was eased out. He read it as God's plan that he moved on.
+
+The simple version: Andrew worked at an auto shop for three years. He learned how auto shops work. That knowledge is now part of what Ignition OS is built on.
+
+Significance for TRACE: Andrew gained three years of operational knowledge that wouldn't have come any other way. The path closure (not buying the shop, then being eased out) opened the path that became TRACE. He's now technically capable AND domain-credible. That combination is rarer than either piece alone.
+
+The pattern across the family — each member has real domain experience in the verticals TRACE serves. Not luck. Forty years of family members ending up in places that turned out to matter.
+
+### LAWNS Tree Farm — full strategic read (demonstration of "full-range Claude")
+
+David asked Claude to demonstrate what "full-range exploit" looks like on a real example. The result was a multi-section strategic analysis of LAWNS covering:
+
+1. **What LAWNS actually is** — not a nursery, a production farm with retail distribution. Different economic engine than retail nurseries. Most nursery software is built for the retail model and won't fit them well.
+
+2. **Structural strengths** — the soil blend (Bastrop Fire reclamation char-mulch + 11 mycorrhizal species) is a moat. The water monitor pipe + bamboo dipstick is a brilliant post-purchase touchpoint. The 40-year arc with deliberate model shift (Cedar Park retail → Leander production) shows strategic capacity. Williamson County growth is structural tailwind.
+
+3. **Blind spots** — no prices anywhere (probably 5-15 hours weekly of unnecessary phone time). No team page. No certifications listed. Blog stopped October 2025. Newsletter signup with no described content. Social media unlinked.
+
+4. **The succession problem** — Terry and Lauren probably haven't directly discussed who runs LAWNS in two years. Affects every business decision. TRACE's offer should explicitly name succession as part of value (operations become transferable when documented).
+
+5. **Eleven business opportunities not on current website** — Tree Concierge ($50-150 premium), Bastrop Story Marketing (referenceable origin), Trade Account Subscription ($200-500/mo recurring), Tree Sponsorship/Naming ($500-2K), Memorial/Legacy Trees (30-50% premium), Seasonal Container Subscription, Tree Care Diagnostic Visits, Wholesale Drop Routes, Heritage Tree Insurance, Educational Workshops, Land Stewardship Consultation, Online Tree Profile Pre-Sales.
+
+6. **Hard questions** — what does Terry's retirement look like, does Lauren want to OWN not just manage, financial structure for transition, what happens to customer relationships during transition, what happens to operational knowledge.
+
+7. **Six-month engagement structure** — Month 1 baseline, Month 2 fix website, Month 3 launch opportunities, Month 4 succession conversation, Month 5 document operational knowledge, Month 6 review.
+
+Significance: this analysis demonstrates what TRACE's intelligence layer can produce for a customer that traditional consulting channels can't afford to provide for a business this size. It's a competitive moat. It's also potentially overwhelming for a first-contact customer — the silent-partner email is calibrated for first contact, this depth is calibrated for six months in. The platform needs to know when to deliver which.
+
+### The brutal-honest risk assessment
+
+David asked Claude to apply the same full-range analysis to TRACE itself. Six real risks ranked:
+
+1. **Solo on the build, velocity bound by one person.** Andrew positioned but not active daily contributor. No resilience to interruption. Sustainable past 6 months is questionable at current pace.
+
+2. **LAWNS may not close.** Single prospect strategy is structurally fragile. Lauren's silence as of Saturday afternoon was concerning. No clear Plan B. (UPDATED 16:36L Sunday: Lauren responded — "I have not. We have been crazy busy. But we will talk tomorrow when he's back in the office." Engagement is warmer than the assessment treated it. LAWNS is more alive than the brutal-honest read suggested.)
+
+3. **Pain-point library is operationally fragile.** The math doesn't close — 6 unmatched sessions per week at 20 sessions/week × 30% requires 18-48 hours/week of build work just on library expansion. AI accelerates each task but doesn't reduce number of tasks. Bottleneck moves to David's decision/review speed.
+
+4. **The covenant is right but expensive.** Email-regardless costs $0.10-0.30 per declined session at scale. Locked-forever founding rate compounds over a decade. Non-extractive defaults leave real revenue lines on table. Math has to be verified, not assumed.
+
+5. **Doug pattern is harder to replicate than it looks.** In NATO Doug worked FOR David. In TRACE family members are sometimes MORE expert in their domains than David. Leadership-by-deference is different muscle than leadership-by-expertise. Each override costs trust; each deference builds it.
+
+6. **"Make you successful" may be harder to operationalize than to state.** Customer definition of success may not match David's. Terry might want stability, not growth. Building growth features for owner who wants to coast is I-Robot failure mode.
+
+**What's working that should continue:**
+- Discipline of audits catches real things
+- Covenant being structural not performative
+- Reading closed doors as direction (Regina pattern)
+- Willingness to deflate stories to truth (David corrected Claude 3x this weekend)
+- Four-step iteration rhythm
+- Pace of discovery this weekend is real compounding clarity
+
+**Urgent next 2 weeks:**
+- Resolve LAWNS question (now warmer — wait for Terry-and-Lauren conversation)
+- Identify 2 more potential founding customers (Backbone Valley + one more)
+- Decide founding agreement structure with actual financial math
+
+**Important not urgent:**
+- Financial sustainability math (customer count × ARPU × retention - costs)
+- Andrew's role made concrete
+- Pipeline of inbound interest
+
+**Watch carefully:**
+- David's own pace (Saturday night wrestle was a signal)
+- Succession-question parallel (Lauren/Terry haven't discussed; David/family haven't discussed what TRACE looks like if David can't run for 3 months)
+- Covenant's cost over time
+
+### Lauren response (16:36L Sunday)
+
+Screenshot received. Lauren's Friday morning response: "I have not. We have been crazy busy. But we will talk tomorrow when he's back in the office."
+
+Tuesday message was read same day. Friday response shows engagement, not avoidance. Specific plan ("tomorrow when he's back in the office" = Saturday). Warm tone. The succession question is implicitly already in the room — "when he's back in the office" suggests Terry isn't there full-time.
+
+If Terry and Lauren talked Saturday, response could come early this week. The brutal-honest "presume no by Friday" was premature. Revised: wait for Terry/Lauren conversation, hold response until at least mid-next-week, then gentle check-in if still silent.
+
+### The Andrew/monetization conversation
+
+David named the core financial constraint: Andrew lives with him, supported on food and shelter. Andrew can't work for free indefinitely. David won't dip into savings to bridge Andrew's income. TRACE has to monetize so Andrew can be paid from revenue.
+
+Honest math:
+- Andrew's minimum viable salary: $48-72K annual ($4-6K/month) plus payroll = $5-7.5K/month all-in
+- At $149/mo founding rate: 35-50 customers covers Andrew
+- At $299/mo standard rate: 17-25 customers covers Andrew
+- Current acquisition rate: 1 prospect (LAWNS) in 3+ weeks, not closed
+- Math doesn't close at current acquisition rate without acceleration
+
+Three real paths to address:
+1. Acquisition has to accelerate (marketing infrastructure, partnerships, referrals — none of which exist yet)
+2. Pricing has to change (premium tier, services revenue, professional services for first cohort)
+3. Revenue from elsewhere for first year (Andrew runs Ignition outreach in parallel, Connor's app, consulting, grants)
+
+Andrew option worth examining: Andrew owns Ignition OS for 90 days. Polishes to demo-ready, identifies 5-10 shops in Liberty Hill/Cedar Park, runs discovery, closes first Ignition customer. David pays him small but real monthly amount from current resources (not savings). Tests Ignition's market readiness while producing parallel revenue stream.
+
+This is for David and Regina and Andrew to decide, not for Claude.
+
+### Andrew's MicroGrant Sniper
+
+David surfaced that Andrew has built a real grant scraper called MicroGrant Sniper. Python application with SQLite database storing actual grant PDFs, CLI commands (validate, scrape, draft, export), JSON business profile feeding draft template, logging.
+
+May 26 code review session (in Claude Code, via prompt Claude in chat drafted) produced an IMPROVEMENT_PLAN.md prioritized: data integrity first, resilience to website changes, better drafting from business profile, CSV export, better logging. Andrew has been working through this list.
+
+Strategic significance: this is a near-term revenue path that doesn't depend on customer acquisition. Uses every family member from strength (Andrew on scraping/submission infrastructure, David on filtering/story direction, Regina on quality/authenticity review, Claude on volume/ranking/drafting). Produces revenue parallel to customer work without slowing it.
+
+The grant work fits TRACE's structure: Andrew owns the pipeline, David owns strategy, Regina owns quality gate, Claude integrates at filter + draft stages. The Doug pattern applied to a different domain.
+
+**The key insight:** Andrew's draft command currently uses a thin business profile JSON. The genuinely transformative move is enriching the profile with the depth of TRACE's story captured this weekend — founding philosophy, NATO Spec Ops, Grand Forks, Doug, the auto shop story, the covenant, the architecture, the family structure. Once that profile exists as structured data, every grant draft has access to the real TRACE story, calibrated per grant's specific focus. Same source, different emphasis per grant.
+
+Next concrete step: conversation with Andrew about where MicroGrant Sniper is now, what's been done on the May 26 plan, current business profile depth, where he wants Claude to integrate.
+
+### Operating principles captured across this Sunday
+
+1. **Settle decisions, execute against them, don't relitigate** (color is a number, Tailwind is decided)
+2. **Good enough is good enough** (capture what we have, iterate forward, don't wait for complete)
+3. **Catch the change when it happens** (living standards discipline, three-question session-end)
+4. **Periodic tidying when it's time** (two-hour cleanup sessions, not scheduled)
+5. **Visual demonstration matters more than words alone** (hollow shell mockups, not just descriptions)
+6. **Jarvis posture, not HAL** (capability serving the user, not overriding them)
+7. **Warrior in the garden** (capability declined, not absent)
+8. **Iterative pace, not output speed** (this is what I know → believe → possible → why isn't it done)
+9. **Exploit full Claude range silently, surface one or two patterns per turn** (cross-domain analysis as default, delivery as iteration)
+10. **If I make you successful then I'm successful** (40-year working philosophy, not aspiration)
+
+### Open items captured today
+
+For tomorrow's deliberate review and possibly later this week:
+
+1. Apply yesterday's drafted THOUGHTS.md captures plus today's (corrections to Grand Forks travel direction, Doug timeline as fifteen-plus-three, NATO Special Operations as foundational prior work) — both still uncommitted as of end-of-day Sunday
+2. Update built-inventory.md to reflect actual platform state (10+ undocumented additions from yesterday's audit)
+3. Add session-end discipline to CLAUDE.md Part 9 (git diff check + inventory grep + three-question protocol)
+4. Update DISCOVERY_MODULE_BRIEF.md with v1 architecture from today (three paths, hollow shell with visuals, library structure, login transition, glimpse mechanic)
+5. Three small fixes from verification sweep (DemoQBInvoice Layna comment, Confirmation env-aware QB link, PLATFORM_STRATEGY PART 11 numbering)
+6. Founding philosophy + Prior Work section in MASTER_BRIEF (NATO Spec Ops, Grand Forks, Doug, auto shop, "if I make you successful")
+7. Draft DESIGN.md / STANDARDS.md with tight visual and behavioral standards
+8. Decide LEAKAGE pain-point inspection wiring as first pain-point-path upgrade
+9. Wait for Terry/Lauren conversation outcome (probably early next week)
+10. Conversation with Andrew about MicroGrant Sniper current state and next integration phase
+11. Family conversation (David, Regina, Andrew) about TRACE financial timeline and Andrew's role/compensation
+12. Identify second prospect concretely (Backbone Valley Nursery + one more)
+13. Decide grant pipeline integration approach
+
+None of these are tonight. Captured here so nothing evaporates.
+
+### One observation worth keeping
+
+Sunday started with David wrestling whether TRACE is what God wants him to do. Sunday ended with David articulating product principles with genuine clarity, brutal-honest risk assessment of TRACE absorbed without panic, Lauren response received that warmed the LAWNS picture, and a near-term revenue path (grants) surfaced as parallel to customer acquisition.
+
+The wrestle settled. The doors that were open Saturday are still open Sunday evening. Regina was right.
+
+The platform is in a materially better strategic position than 24 hours ago, not because more code was shipped (none was) but because the design clarity, the risk awareness, the financial honesty, and the family roles all sharpened in coordinated ways.
+
+---
+
+End of 2026-05-31 entry.
