@@ -576,4 +576,52 @@ The platform is in a materially better strategic position than 24 hours ago, not
 
 ---
 
+## 2026-06-01 — Factual corrections surfaced through audit
+
+Two pieces of confidently-held wrong information surfaced today through the Railway / shared utilities audit. Capturing them so they don't get re-asserted in future sessions.
+
+### Correction 1 — SavingsReport.jsx is NOT a tile
+
+Claude (chat) yesterday accepted David's description of SavingsReport as "a tile for examining receipts." Claude then built recommendations on that interpretation.
+
+The audit revealed: SavingsReport.jsx is actually the 14-day trial savings report — the Day 12 conversion hook in Ignition's trial flow. Not a tile. Not for receipts. Not multi-vertical. All three of its imports (DataBridge, MarginEngine, ExternalBridge) resolve to Ignition-only paths.
+
+Correct action: move SavingsReport.jsx from packages/shared/src/components/ to packages/ignition-os/modules/. This also fixes Tech Debt #10 (IgnitionOmniDashboard's broken import).
+
+Lesson: when describing what an existing component does, audit the code rather than describing from memory. Memory drifts faster than expected on components that haven't been touched recently.
+
+### Correction 2 — Cultivar does NOT import QuickBooksConnector.jsx
+
+David asserted that QuickBooksConnector.jsx in packages/shared/ is used by Cultivar — "we made the actual connection in Cultivar." Claude (chat) accepted and reinforced this.
+
+The audit revealed: zero files in packages/cultivar-os/ import QuickBooksConnector.jsx. Cultivar has a working QB integration but it uses a different code path entirely. QuickBooksConnector.jsx is exclusively Ignition's QB connector, currently broken because it uses the ExternalBridge/Railway pattern that no longer resolves.
+
+Correct action: move QuickBooksConnector.jsx to packages/ignition-os/modules/. Cultivar's QB integration (which works) needs to be audited separately to determine the canonical TRACE pattern.
+
+Lesson: when two integrations exist for the same external service across verticals, audit before assuming which is canonical. Memory of "we built this in package X" can be wrong if the actual build happened in package Y.
+
+### The pattern
+
+Both corrections were surfaced by a single audit prompt. The audit took less than an hour of Claude Code time. Audits beat memory consistently. The discipline going forward:
+
+- When something would benefit from accurate factual grounding, write the audit prompt
+- Run it before building on the assumption
+- Capture corrections immediately in the doc that should hold the truth
+
+This is the Doug pattern at the documentation layer — verify rather than assert.
+
+### Immediate followup actions captured
+
+- Move SavingsReport.jsx to packages/ignition-os/modules/ (30 min)
+- Move QuickBooksConnector.jsx to packages/ignition-os/modules/ (30 min)
+- After move, update CLAUDE.md Part 9 step 9 to remove the obsolete reference to shared/ pre-existing Tailwind exception
+- After move, update docs/tailwind-conversion-progress.md to reflect that shared/ is now Tailwind-clean
+- Audit Cultivar's actual QB integration to determine canonical pattern (see docs/quickbooks-integration-audit-2026-06-01.md when produced)
+- Fix Tech Debt #10 (IgnitionOmniDashboard broken import) — auto-resolves once SavingsReport.jsx moves to expected location
+- Fix Tech Debt #12 (IgnitionEstimate.jsx localhost:8000 dead reference) — separate small fix when touching Ignition
+
+---
+
+End of 2026-06-01 corrections entry.
+
 End of 2026-05-31 entry.
