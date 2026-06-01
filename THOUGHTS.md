@@ -515,6 +515,57 @@ For tomorrow's deliberate review and possibly later this week:
 
 None of these are tonight. Captured here so nothing evaporates.
 
+---
+
+### Europe and the real timeline (clarification, end of day)
+
+The Europe trip in early August is real, dates roughly known. Daughter (Erin) is doing a three-week walk through the Alps. David and Regina meet her after, spend two weeks traveling. Total trip approximately 4-6 weeks.
+
+The trip is the test case for whether TRACE can operate without David for an extended period. If yes, the next rotation is longer. If no, the move plans contract.
+
+Long-term reality (not 2-3 years out — more imminent):
+
+- Europe move is a desire but visa logistics gate it
+- Realistic pattern is 3 months Europe / 3 months Texas, rotating
+- Regina wants to work 2 more years (OLH commitment), which anchors physical presence in Texas during her work cycles
+- The business has to generate enough income to fund the rotation — probably $80-150K/year recurring
+- That income target sharpens customer acquisition math: ~28-50 paying customers at $299/mo
+- 3/3 rotation can start as soon as TRACE is self-operating enough to survive 3-month absences
+
+The load-bearing principle that holds across all of this: **"I cannot visit every business."** Self-serve is not optional. It's required regardless of physical location.
+
+This makes "flexible and highly configurable" a real architectural commitment:
+- Settings page is load-bearing, not a footnote
+- Every business has a configuration object the UI reads
+- Sensible defaults but everything overrideable
+- Configuration changes don't require code changes
+- Customers in different regions, business types, sizes adapt the platform themselves
+
+Current platform has some of this. Doesn't yet have enough of it for self-serve customers who never talk to David to successfully configure their own setup. The gap is mostly UX work — clearer labels, sensible defaults, inline help, validation catching mistakes early.
+
+**Revised 60-day target (pre-August):**
+
+1. Self-serve signup works end-to-end for Cultivar OS (single vertical for now)
+2. Trial mechanics function (30 days, payment integration live)
+3. LAWNS paying or explicitly waiting for David's return
+4. Andrew positioned for operational support (runbook, monitoring, escalation path)
+5. MicroGrant Sniper has TRACE's real business profile (30-min session this week)
+6. Customer support has minimum viable answer (FAQ + monitored email queue)
+7. Critical bugs fixed (three verification sweep items + useNursery deprecation)
+8. One additional founding customer in active conversation
+
+What's deliberately deferred to post-August:
+- Multi-vertical discovery engine
+- All five verticals operating
+- Hollow shell with visual generation
+- builtwithcai.com polished marketing surface
+- Full pain-point library beyond Cultivar's current four
+- Comprehensive design standards doc
+
+Smaller scope than the full vision. That's correct. Full vision is the year, not August. Scoping honestly to the August deadline is the discipline that makes the year achievable.
+
+David's framing: "high risk work has high reward we just need to scope and scale accordingly." The scoping is the high-leverage decision.
+
 ### One observation worth keeping
 
 Sunday started with David wrestling whether TRACE is what God wants him to do. Sunday ended with David articulating product principles with genuine clarity, brutal-honest risk assessment of TRACE absorbed without panic, Lauren response received that warmed the LAWNS picture, and a near-term revenue path (grants) surfaced as parallel to customer acquisition.
