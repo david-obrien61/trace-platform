@@ -221,7 +221,7 @@ This log is created and maintained per the Honest Friction principle (see PLATFO
 
 | 12 | 🟡 `CAI/ai_router.py` (Railway FastAPI) was built to keep AI provider keys out of the React Native bundle. Now that Ignition OS is a Vercel web app, this is unnecessary — Vercel serverless functions hold keys server-side, same pattern cultivar-os uses for Claude calls today. Railway is still running but is legacy for the web build. AIEngine.ts currently points to `VITE_API_URL` which is unset in the ignition-os Vercel project — AI features fail gracefully. | 2026-05-28 (decision made) | Port the 11 `ai_router.py` endpoints to TypeScript Vercel functions under `packages/ignition-os/api/`. Then decommission Railway. Exception: `voice_transcribe` sends audio files — Vercel's 4.5MB payload limit needs evaluation before porting that one endpoint. | Before activating AI features in ignition-os web. |
 | 13 | 🟡 Vite build aliases for `react-native`, expo packages, and `lucide-react-native` exist in both `CAI/vite.config.js` AND `packages/ignition-os/vite.config.js` — duplicated. The stubs in `CAI/stubs/` and `packages/ignition-os/stubs/` are identical files in two places. | 2026-05-28 | Extract stubs to `packages/shared/stubs/` and reference from both vite configs. Low priority — only matters if stubs need to change. | If stubs ever need updating, deduplicate first. |
-| 14 | 🟡 Tailwind CSS is loaded via CDN script tag in `packages/ignition-os/index.html` (`<script src="https://cdn.tailwindcss.com">`). No build dependency, no config, no purging — every Ignition module uses `className="..."` Tailwind utilities (~1923 lines across 27 files + 196 in CoreApp). Cultivar OS uses inline styles only. Shared modules use inline styles (required for Cultivar compat). Result: two styling systems that cannot share UI components without a rewrite. | 2026-05-29 (identified) | Remove CDN script tag + convert all Tailwind classNames to inline styles in Ignition OS modules. ~2100 lines of rework. | When an Ignition module is extracted to `packages/shared/` — convert at that time, not before. Never add new Tailwind `className` usage to any file. |
+| 14 | 🟡 **UPGRADED 2026-05-31: Tailwind is officially deprecated platform-wide.** Tailwind CSS is loaded via CDN script tag in `packages/ignition-os/index.html`. Existing Tailwind surface: ignition-os (2,334 className= lines across 32 files) + packages/shared/src/components/SavingsReport.jsx (86 lines) + packages/shared/src/components/QuickBooksConnector.jsx (54 lines). Cultivar OS className= usages are custom CSS class names (page, section, btn, badge, etc.) — NOT Tailwind. **Policy:** NO new Tailwind anywhere. No new `className=` with Tailwind utilities in any file in any package. Inline styles via `style={{ ... }}` are canonical. The shared design token file (forthcoming: `packages/shared/src/design-system/tokens.ts`) is referenced by inline styles, not Tailwind config. **Scheduled conversion:** Ignition OS + shared Tailwind files → inline styles in a dedicated post-August 2026 work session (~50h). Approach: file-by-file, one module per Claude Code session, visual regression after each. Tracking at `docs/tailwind-conversion-progress.md`. | 2026-05-29 (identified) → 2026-05-31 (deprecated) | Post-August 2026: convert all 34 files (32 ignition-os + 2 shared) to inline styles. Trigger: dedicated conversion sessions after Europe trip. | See `docs/tailwind-conversion-progress.md`. |
 
 ---
 
@@ -1041,6 +1041,15 @@ MANDATORY before ending every session:
 6. git commit -m "Update CLAUDE.md — [date] [what was built]"
 7. git push
 8. Write 3-sentence plain English summary
+9. **Tailwind drift check** — run:
+   ```
+   git diff --name-only $SESSION_START_COMMIT HEAD -- 'packages/**/*.tsx' 'packages/**/*.jsx' | xargs grep -l 'className=' 2>/dev/null
+   ```
+   For each file in the output:
+   - If in `packages/ignition-os/`: pre-existing Tailwind is expected (deprecated, scheduled for conversion post-August)
+   - If in `packages/shared/src/components/SavingsReport.jsx` or `QuickBooksConnector.jsx`: same — pre-existing, scheduled
+   - If in any other file or package: `className=` with Tailwind utility classes is a policy violation
+   If new Tailwind is found outside the pre-existing Ignition/shared files, EITHER convert to inline styles before committing OR document explicitly in the commit message and add to `docs/tailwind-conversion-progress.md`
 
 ---
 

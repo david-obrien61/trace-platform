@@ -1197,6 +1197,60 @@ Ignition currently uses hardcoded navigation tabs (IgnitionOmniDashboard.jsx) an
 
 ---
 
+## PART 11 — CANONICAL PLATFORM VOCABULARY
+
+One name per concept. Used identically in UI labels, code identifiers, database table names, and all documentation. When a vertical uses a different name today, it is tech debt — migrate to the canonical term on next touch.
+
+### Module Names
+
+| Canonical Name | What It Does | Ignition Label | Cultivar Label | Status |
+|---|---|---|---|---|
+| **Market** | Activate / deactivate tiles; manage subscription tier | Marketplace | *(missing)* | Ignition live; Cultivar pending |
+| **PMI** | Preventive maintenance — asset registry, service schedule, service log | *(in Tools tab)* | Equipment *(new, 2026-05-29)* | Shared component built |
+| **Audit** | Analyze receipts and invoices; flag missed charges or undercharges | Audit | *(missing)* | Ignition live |
+| **Admin** | Settings, team, configuration | Admin | Settings | Rename Cultivar "Settings" → "Admin" on next touch |
+| **Assets** | Registry of owned physical things — tools, equipment, vehicles, units | Tools | *(missing)* | Ignition live as "Tools"; rename on next touch |
+| **Orders** | Customer transaction pipeline — pending, invoiced, paid, cancelled | Flux | Orders | Cultivar live; Ignition uses "Flux" (vertical-specific OK for now) |
+| **Team** | Staff roster, roles, permissions, invite links | *(in Admin)* | *(missing)* | Not yet extracted |
+| **Campaigns** | Social / marketing post scheduling and tone learning | *(missing)* | Campaigns | Cultivar live |
+| **Delivery** | Route planning, stop sequencing, driver dispatch | *(missing)* | Deliveries | Cultivar live |
+
+### Shared Data Concepts
+
+| Canonical Term | Definition | Old Term(s) |
+|---|---|---|
+| `business_id` | Universal tenant anchor — every row that belongs to a business carries this | `nursery_id`, `shop_id` |
+| `businesses` | Universal tenant table — one row per owner account per vertical | `nurseries`, `shops` (shops still exists for Ignition staff auth) |
+| `service_offerings` | Everything a business sells or offers at checkout — transport, addons, subscriptions | `addons`, `transport_method`, `netting_price` |
+| `pmi_assets` | Any physical asset that needs a maintenance schedule | `tools` (Ignition), *(none in Cultivar before 2026-05-29)* |
+| `pmi_service_logs` | Immutable log of service events on a pmi_asset | *(DataBridge only in Ignition)* |
+| `opportunity_items` | Business-level catalog of missed-sale prompts | `netting_price` (hardcoded), `addons` (partial) |
+| `leakage_flag` | Boolean on an order: was an upsell opportunity declined? | Same — keep |
+
+### Code Identifiers
+
+| Canonical Term | Meaning | Replace |
+|---|---|---|
+| `businessId` | The tenant UUID in all frontend hooks and API calls | `nurseryId`, `shopId` |
+| `useBusinessContext()` | The hook that resolves auth.uid() → business row | `useNursery()` |
+| `BusinessProvider` | The context wrapper at app root | `NurseryProvider` |
+| `DEMO_BUSINESS_ID` | The hardcoded demo tenant ID for read-only demos | `DEMO_NURSERY_ID` |
+| `accounting_type` | Which accounting connector is active ('quickbooks' \| null) | `qb_realm_id` presence check |
+| `accounting_token` | The OAuth access token for the accounting connector | `qb_access_token` |
+
+### Styling
+
+TRACE uses inline styles exclusively. Tailwind CSS is deprecated as of 2026-05-31 (see Tech Debt #14 in CLAUDE.md). Existing Tailwind in Ignition OS and two shared components (SavingsReport.jsx, QuickBooksConnector.jsx) is being converted to inline styles post-August 2026. All new code in any package uses `style={{ ... }}` inline styles, referencing shared design tokens where applicable (forthcoming: `packages/shared/src/design-system/tokens.ts`). The decision: one styling system across the platform, simple enough that any developer can understand any file without learning a separate framework.
+
+### Rules
+
+1. If you write a new module and it isn't in this table, add it here before shipping.
+2. If you see a non-canonical name in code, add it to the tech debt log.
+3. The canonical name is the one in the **Canonical Name** column — not what Ignition calls it, not what Cultivar calls it.
+4. No new Tailwind in any file in any package. Inline styles are canonical.
+
+---
+
 *TRACE Enterprises · Built with CAI*
 *builtwithcai.com · ignition-os.com · cultivar-os.app*
 *cultivar-os.com · conduit-os.com*
