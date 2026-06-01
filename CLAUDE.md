@@ -1067,6 +1067,29 @@ MANDATORY before ending every session:
 
    *Rationale: customer-facing documentation drifts the moment new functionality ships without a corresponding docs update. The cost of catching this at session end is minutes. The cost of catching it three months later is rebuilding the docs from scratch.*
 
+11. **Factual correction capture** — For any session that surfaced a factual correction — meaning either David or Claude was confidently wrong about something concrete that the codebase, the docs, or an audit revealed differently — the correction must be captured before the session ends.
+
+   Triggers for this step:
+   - An audit (read-only investigation) revealed something different from what was previously asserted
+   - Claude Code (during normal work) discovered a file in a different state than expected
+   - David said "I think X works this way" and Claude verified it works differently
+   - A user-facing description in any doc was found to be inaccurate after checking the code
+   - Tech Debt entries were found to be already-fixed or no-longer-relevant
+
+   When triggered:
+   1. Identify the specific wrong claim (quote it if possible)
+   2. Identify what's actually true (cite the file/line that proves it)
+   3. Update the source-of-truth document for that fact (`docs/built-inventory.md`, `PLATFORM_STRATEGY.md`, `CLAUDE.md`, or the specific doc holding the wrong claim)
+   4. Append a brief entry to `THOUGHTS.md` noting the correction with the date — this prevents re-derivation
+
+   If multiple corrections surfaced in one session, batch them into one `THOUGHTS.md` entry rather than separate entries.
+
+   This step is mandatory. The session is not considered complete until either:
+   - A correction was captured and documentation updated, OR
+   - The session explicitly states "no factual corrections surfaced in this session"
+
+   *Rationale: Memory drifts. Both human and AI memory. Conversations build confident assertions on previously-held information. When an audit corrects the information, the correction must propagate to docs or the next conversation will re-assert the wrong information. The audit catches it once; the documentation update prevents catching it again.*
+
 ---
 
 ## 10. SESSION STARTER
