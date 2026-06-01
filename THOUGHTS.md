@@ -666,4 +666,349 @@ This is the Doug pattern at multiple layers — verify rather than assert.
 
 End of 2026-06-01 corrections entry.
 
+---
+
+## 2026-06-01 — Comprehensive operating thesis (foundational document)
+
+After three days of substantive strategic conversation, capturing the full operating thesis for TRACE Enterprises as Claude understands it. Long-form deliberately. Future Claude conversations should be able to read this and operate from sound ground without David re-explaining context. Compression to a six-line version can happen later (Colonel Binder discipline) — for now, capture comprehensively.
+
+### What TRACE Enterprises is
+
+TRACE Enterprises is a multi-vertical small-business operating platform being built by David and Regina O'Brien with three adult children (Andrew, Connor, Erin) potentially contributing at varying commitments. Family-owned, owner-direct sold, deliberately scaled to ~500-2,000 customers over a decade, serving the underserved owner-operator tier of small businesses across five vertical domains where the family has standing.
+
+The five verticals are:
+- Cultivar OS (nurseries, tree farms, growing establishments) — currently active development, LAWNS Tree Farm as founding customer prospect
+- Ignition OS (single-owner-operator auto/diesel shops, 1-3 bay shops, the underserved small end of the market) — demo-ready, built by David from Andrew's concept and his three years of operational experience at JBA
+- Conduit OS (HVAC and trades) — concept stage
+- KINNA-OS (nonprofits) — concept stage, Regina's domain
+- CoolRunnings (home automation, aging-in-place) — David's house as live demo environment, Erin positioned as domain-relevant contributor
+
+The closest historical analogs are Basecamp/37signals (small intentional scale, owner-controlled, profitable), Pinboard (single-founder discipline, decade-plus operation, customer-funded), and Stripe brothers' early pre-funding architecture. TRACE is NOT a VC-funded vertical SaaS — that would produce different decisions across the board.
+
+### Why TRACE exists and where it comes from
+
+TRACE is David's attempt to reconstruct the rare effectiveness-and-efficiency Utopia he recognized at NATO Special Operations between 2009 and approximately 2016.
+
+David's career arc: 23 years military, retired in the Netherlands in 2009. Took the NATO Special Operations job to stay in Europe. The hiring team interviewed him for a Policy and Programs position, then redirected him mid-interview to a knowledge management role they recognized fit his actual capability. They told him "we don't know what utopia looks like, but you might — show us." They gave him blank paper. He drew.
+
+What he built at NATO Special Operations was a real Utopia for a working organization: high effectiveness AND high efficiency simultaneously, in a flexible organizational culture that supported the architecture. Approximately 40 people growing. Real startup culture inside the government. Everybody rowing. Information flowing across classification levels properly. Systems integrated. Discipline maintained.
+
+It was dismantled when leadership changed. Not because it didn't work — because new leadership couldn't tolerate operating inside a vision they hadn't authored. That's a structural failure mode about ego over authorship, not judgment about merit. David spent the rest of his federal career (an additional 6+ years at NATO Spec Ops; total approximately 30 years federal across various roles) carrying the lessons forward in less-flexible contexts.
+
+David's prior work also includes Grand Forks AFB, where he built a knowledge management system that scaled to the numbered Air Force after David flew to St. Louis to demonstrate it. The architecture pattern (loose coupling, multi-tenant scaling, connector philosophy) is the same one TRACE applies. David did NOT invent this pattern — he recognized it at NATO Spec Ops, validated it at Grand Forks, and is now applying it deliberately for the first time at TRACE.
+
+The Utopia is not theory. It is memory. *Most founders are operating on conviction without precedent ("I think this will work"). David is operating on memory ("I have seen this work, I am rebuilding it under different conditions").*
+
+### The Kaitlyn context (foundational, non-negotiable)
+
+David's daughter Kaitlyn died at some point in the past. David "died" when she did — went into a period of years of going through the motions rather than being alive in his work. Seven weeks ago, when David started building Ignition OS, something turned back on. Regina and Andrew noticed. They had been waiting.
+
+The work animating TRACE is not optimism. It is the renewed capacity to care about outcomes. Different physics than typical founder energy. More stable against setbacks (David has already survived worse than business failure). More fragile in dependence on the work staying alive for him.
+
+The operational constraint that flows from this: **TRACE cannot recreate the "all go no stop" pattern that David operated under during his military career and that left Regina effectively unseen for thirty-plus years.** Regina has explicitly stated she will divorce David if that pattern returns. David survived 23 years of military deployment intensity and decided in the year following his thumb injury (approximately mid-2025) that the pattern absolutely will not happen again.
+
+This means: TRACE's design must accommodate a sustainable pace, regular Regina presence, deliberate drift-correction with her as a structural feature rather than an exception, and willingness to scope work down rather than expand it when the trade is between TRACE progress and Regina being seen.
+
+The September 2025 thumb injury was the forcing function. Forced stillness produced reflection. Reflection produced different choices. Including the choice that TRACE will be built differently than the military career was lived.
+
+### The Doug pattern (foundational)
+
+David's most important mentor was Doug, a scientist who worked FOR David at NATO Special Operations. Doug was a PhD from DARPA, retired military. He said to David: "I'm really really smart about one very particular thing. That PhD doesn't mean I'm smart about everything."
+
+That sentence changed David's understanding of credentials versus capability. David has an Air Force associate's degree in information systems. Across approximately 18 years (15 across federal roles plus 3 at NATO with Doug) he led PhDs and credentialed scientists. Doug's lesson — narrowing confidence to actual expertise rather than letting credentials inflate it — became operational.
+
+How Doug worked: David would propose a theory about how systems should connect. Doug would not validate it. Doug would *demonstrate whether it was correct*. Verification, not flattery. That's the pattern TRACE is built on at multiple layers: silent partner posture with customers (verify their reality, don't tell them what to do), audit discipline with the codebase (verify before asserting), the warrior-in-garden ethic (verify capability is real before choosing restraint).
+
+The family working relationship David is trying to build is the Doug pattern propagated. Each family member is "the Doug" in their specific domain — Andrew on shop floor knowledge, Regina on nonprofit and culinary, Erin on clinical, Connor on architecture. David's role is leadership that respects expertise without being intimidated by it.
+
+### The Darren Kay model (how work happens)
+
+David's most important operational influence was Darren Kay, who worked for David at NATO. Sarcastic, Jewish, direct. Darren would call you an idiot — not meanly, observationally. "Why do you have so many database calls? Why didn't you just do one call and run through an array?" No social cushioning.
+
+The standard David ran NATO with: "It's not called Fun. It's called Work. We're here to work. Give people everything they need to succeed and hold them accountable for outcomes. The barrier to success cannot be the tools or environment — it has to be on them."
+
+The Maurice story (German developer at NATO whose computer was underpowered): David emailed his contracting company: "You're hiring me to perform. What you've given me is not a performance machine. You gave me a guy who wants to perform but his machine is shite. Solve the problem." Fix the tools or remove yourself from the contract.
+
+The German contractor story (Logica): contractors who couldn't meet the standard were fired same-day. Darren would run them through technical bits Monday morning, declare them unfit, David would call the company by noon. "Don't come back from lunch." No apology for the standard.
+
+That's how David operates when the work matters. *The standard is the standard. Performance against the standard is the only measure. The relationship is adult.* This is exactly what TRACE's covenant enforces at platform scale: documented standards, customer data is theirs, honest pricing, clean button exists. Tell them the deal. They meet it or they don't. The system acts on the result. No hedging.
+
+### The 80/20 architecture principle
+
+TRACE's core architectural commitment: approximately 80% of code is shared across verticals, approximately 20% is vertical-specific. The Pareto distribution is invoked deliberately — the math bears out empirically in software domains TRACE operates in.
+
+Shared code (the 80%) must be optimized for *runtime efficiency* because it scales across every vertical, every customer, every transaction. Inefficiency there compounds.
+
+Vertical code (the 20%) must be optimized for *change efficiency and domain effectiveness* — because each vertical evolves independently and customer-facing accuracy in domain language matters.
+
+Effectiveness is table stakes everywhere. Both layers must do the right thing. Efficiency takes different forms at each layer.
+
+The implication for adding new verticals: a new vertical is mostly a content exercise (the 20%) once the shared layer is mature. By vertical #3 or #4, marginal cost of new verticals approaches zero. This is why TRACE can credibly plan five verticals at family scale — economics get better with each addition, not worse.
+
+The implication for design: "Shared Structure, Vertical Content" became an explicit platform principle on 2026-06-01 (in PLATFORM_STRATEGY.md). Most user-facing surfaces (help, onboarding, settings, navigation, common error messages, support flows) are built in packages/shared/ with vertical-content injection points. The Help.tsx refactor scoping document at docs/help-refactor-scoping-2026-06-01.md is the first concrete application.
+
+### The covenant (TRACE's operating ethic, tested under pressure)
+
+The non-negotiable design commitments:
+
+- **Family ownership** — protection against the leadership-change failure mode that destroyed NATO Spec Ops Utopia
+- **Locked-forever founding customer rates** — reward early risk-takers; LAWNS at $149/month is the prototype, though the structure may need tiering ($149 for first 10, $199 for next 15, $249 for next 25, $299 standard after) so the math works at self-serve scale
+- **Non-extractive defaults** — TRACE doesn't sell aggregated customer data, doesn't charge marketplace fees on customer transactions, doesn't drive upsells from usage data without consent
+- **Email-regardless promise** — silent partner analysis is delivered whether the prospect signs up, declines, or walks away mid-flow
+- **Clean button** — customer can wipe operational data on demand with retention only of anonymized analysis for product improvement
+- **Data covenant** — customer's data stays customer's data; TRACE doesn't audit them, TRACE prepares the ground so they can audit themselves
+
+The covenant is tested operating discipline, not marketing. David has the capability to be ruthless and has chosen the garden under real pressure:
+
+- **JBA story**: Auto repair business negotiation where Vanessa (the daughter who worked as manager) collapsed the deal after signing was complete and waffled multiple times. David had a complete plan to crush them. Regina asked "how would you do it?" He had means and motive mapped out. He chose to walk away. *The choice was made when ruthless was available.*
+
+- **Forty-year warrior pattern**: David has been shot at age 19 while hunting, returned fire instinctively, doesn't know what happened to the shooter, still doesn't care. Twenty-three years military with documented capability for violence under authorization. The warrior-in-the-garden choice is not theoretical for him. The garden is where he is choosing to operate. The capability remains real.
+
+The covenant works as competitive moat because no VC-funded competitor can match it without changing their entire business model. TRACE's restraint is structural, not marketing.
+
+### The "If I make you successful, then I'm successful" philosophy
+
+David's working philosophy across his entire 23-year military career and approximately 30 years of federal service: "If I make you successful, then I'm ultimately successful."
+
+This is not aspiration. It is forty years of operational evidence. Grand Forks AFB users got time back to do their actual jobs. NATO Spec Ops became a place external contractors described as the best they'd ever worked because David gave them everything they needed and held them accountable. The pattern is propagated into TRACE: customer success becomes TRACE's success. Make small business owners more effective at their actual work. Their thriving compounds into TRACE's sustainability.
+
+The economic argument flowing from this: small businesses overcharge their customers because they're not optimized internally — they pass their inefficiency through pricing. TRACE makes the inefficiency visible so they can fix it, which means their customers get better prices AND their margins improve. Win-win in a way most SaaS cannot be because most SaaS is itself extractive.
+
+### What's working currently (assessment as of 2026-06-01)
+
+- **The architecture.** Loose coupling, shared infrastructure, vertical-specific content. Multi-tenant work landed last week. Discovery engine is the right concept. Design standards philosophy articulated 2026-05-31 is rare and correct.
+
+- **The covenant as differentiator.** No competitor in any of TRACE's five verticals has anything equivalent. Genuine moat.
+
+- **Family domain knowledge.** Andrew on shops (3 years at JBA), Regina on nonprofits and culinary, Erin on clinical, Connor on architecture, David on military/federal systems. Each vertical has someone in the family who genuinely knows that world.
+
+- **Audit discipline.** Most founders don't audit. David does. Friday's RLS bug catch, Saturday's drift audit (10+ undocumented features surfaced), Sunday's QB integration corrections — the discipline is producing real protective value.
+
+- **Willingness to deflate stories to truth.** David has corrected Claude's framing repeatedly this weekend (Grand Forks travel direction, Doug timeline, SavingsReport purpose, Cultivar QB import path). Most founders inflate; David deflates to accuracy. That discipline applied to his own claims is what makes the rest credible.
+
+- **The pacing instinct.** Iterative thinking pattern (this is what I know → believe → possible → why isn't it done). Walking conversations. Periodic tidying sessions. "Good enough is good enough." Sustainable operating practices most founders abandon under pressure.
+
+- **The European async work model is proven.** David and Erin tested it two years ago intentionally, with Regina planning days. Six-hour time zone advantage works for asynchronous output. Three to four hours of focused morning work, then day belongs to the family.
+
+### What's not working or at risk (honest assessment)
+
+**Risk 1: Velocity collapse from misallocated family roles (most probable failure mode, ~60% probability without changes).**
+
+Andrew is positioned but not active daily contributor. He has ADHD, hyperfocus when work is chosen, executes literally on instructions. Sleepwalked for a week during Torque app publication stress. The "tell me what to do" posture is genuine — he's literally trying to comply with what he's been told. "Figure it out" was the prior instruction, which he heard as "I have been told to figure it out alone." The fix is replacing it with literal new instructions: "Bring me decisions, not questions. When you have a question, make the decision you think is right and tell me what you decided."
+
+Connor lives in Colorado, wrestling with imposter syndrome at Home Depot where he was chosen 1 of 6000 for AI architecture role. Has been building a garden visualization app he pitched to nurseries. Wants Europe, mission trips, marriage, business that produces remote income. TRACE-Connor alignment is real but needs concrete-problem framing, not "join the family business." Specifically: collaborate on Cultivar's seasonal inventory modeling using his Home Depot domain knowledge.
+
+Erin has the strongest commitment posture of the three children: "What do I need to learn to make this work?" She's adaptive. CoolRunnings is her natural vertical (ER nursing maps to aging-in-place; David's house is demo environment). She needs a learning curriculum, not just an invitation.
+
+Regina wants to work with David as partner, not just spouse-in-background. The "your money / my money / our money" exchange demonstrated she's pushing for partnership more than David has been receiving. Operational pattern issue: she asks questions to learn; David receives them as interrogation. This is specific to David-Regina dynamic, not present with Erin or others. *This is the deeper work that happens at its own pace, separate from TRACE's structure but affecting it.* TRACE should be structured to minimize the trigger pattern while the deeper work happens — meaning Regina contributes in modes where she works from her authority (grants, KINNA, content review, customer communications she drafts for David's approval) rather than asking him to walk her through his.
+
+**Mitigations needed:**
+- Andrew literal-instructions reframe tested
+- Connor concrete-collaboration offer on seasonal inventory
+- Erin learning curriculum drafted for CoolRunnings
+- Regina partnership structure that respects current David-Regina dynamic
+
+**Risk 2: LAWNS doesn't close and no second prospect emerges (20% probability after Lauren's Friday 2026-05-29 response warmed the picture).**
+
+LAWNS Tree Farm in Leander, TX. Manager Lauren, owner Terry. Terry approaching retirement. Lauren read Tuesday outreach immediately, responded Friday: "We have been crazy busy. But we will talk tomorrow when he's back in the office." Engagement is warmer than the brutal-honest read of 2026-05-30 suggested. Terry/Lauren conversation likely happened Saturday 2026-05-30. Response could come early week of 2026-06-01.
+
+Mitigations:
+- Backbone Valley Nursery contacted this week with personalized silent partner analysis
+- One more nursery identified by end of next week
+- LAWNS deal must be structured so it survives David being away in August (signed before August, or explicitly waiting for David's return)
+
+**Risk 3: Self-serve doesn't actually work (30% probability).**
+
+TRACE's customer acquisition model is fundamentally self-serve. David cannot visit every small business. The discovery engine + pain-point library + three-paths design is the only acquisition channel that scales to TRACE's intended size. Self-serve B2B at TRACE's price points is unproven for TRACE specifically.
+
+Mitigations:
+- Trial mechanics designed against specific conversion targets, not "see if it works"
+- First 5 self-serve customers analyzed individually for friction
+- Willingness to introduce SOME white-glove onboarding for first cohort to learn what self-serve needs to replicate
+
+**Risk 4: Covenant economics don't close (15% probability, most consequential if it materializes).**
+
+Locked-forever founding rates combined with non-extractive defaults may produce unit economics that don't close even at scale. By customer 100, TRACE could be generating $20K/mo but costing $25K/mo to operate.
+
+Mitigation:
+- Real financial model built within 30 days
+- Per-customer cost projection
+- Tiered founding rate structure (first 10 at $149, next 15 at $199, next 25 at $249, $299 standard) considered
+
+**Risk 5: External shock (25% probability over 24 months).**
+
+OKC house remains unsold, financial pressure compounds. Regina's OLH commitment intensifies. Family member needs sustained help. David's energy at 64.
+
+The OKC house is the residual psychological weight of a previous plan that didn't work. David spent a year in Oklahoma working on a renovation alone, contractor having taken money and fled to Dominican Republic. The year drew David apart from Regina, tested the marriage. The house sale (whenever it closes) will be a real psychological inflection point for TRACE's pace.
+
+Mitigation: TRACE must operate without David for stretches; structural protection against unplanned absence is the same as protection against the European trip absence.
+
+### What success looks like, concretely
+
+**By August 1, 2026 (60 days):**
+- Cultivar OS handles self-serve trial customers end-to-end without David's involvement (per docs/self-serve-readiness-plan-2026-05-31.md, Tier 1 work items, ~64 hours)
+- LAWNS Tree Farm signed or explicitly waiting
+- Andrew has defined role and structured compensation path
+- Erin engaged with CoolRunnings curriculum
+- Connor invited to seasonal inventory collaboration
+- MicroGrant Sniper produces submittable drafts with Regina's review (David's real business profile written into Andrew's JSON)
+- 1-2 additional founding customers in active conversation
+- European async work model operationally tested during August trip
+
+**By December 2026 (one year):**
+- 15-30 paying Cultivar customers, $4K-9K/mo recurring
+- Ignition OS demo-ready, 1-2 founding shop customers signed
+- Andrew earning structured income from TRACE work
+- Grant pipeline producing $10K-30K cumulative
+- David and Regina completed at least one extended rotation away from Texas
+- CoolRunnings first home assessment scheduled or completed
+
+**By December 2027 (two years):**
+- 60-150 paying customers across 2-3 active verticals
+- $20K-50K/mo recurring revenue
+- TRACE operable from Europe during Regina's non-work periods
+- Connor active on platform (post-K8s cert)
+- KINNA in pilot with at least one nonprofit
+- Family income from TRACE supplements (not replaces) Regina's OLH work
+
+**By December 2030 (five years):**
+- 300-800 customers across all five verticals
+- $80K-250K/mo recurring revenue
+- Family-distributed operations (Texas + Europe)
+- David and Regina living the 3/3 Texas-Europe rotation as default
+- TRACE recognized within niches as platform that respects owner-operators
+
+These numbers are modest by SaaS standards. They are correct for TRACE's structure.
+
+### The European return (timeline and structure)
+
+The O'Brien family is multilingual and European-acclimatized. Regina speaks five languages, Connor and Erin French and Italian, Andrew fluent Italian and understands Spanish and French. David is the language-limited member of the family. The family lived in Belgium during David's NATO Spec Ops years. The kids love the culture, food, style. Texas summer heat is the active push factor away.
+
+Plan: 3 months Europe / 3 months Texas rotating until visa logistics allow more. Regina wants to work 2 more years (OLH commitment). Business needs to generate income to fund rotation (~$80-150K/year recurring).
+
+The August 2026 trip is the test. Approximately 4-6 weeks. Erin doing 3-week Alps walk first; David and Regina meet her after for 2 weeks travel. Multiple purposes:
+- Operational test (can TRACE survive 4-6 weeks without David)
+- Relationship test (Regina-and-David work, not just chaperoning Erin)
+- Validation of the European async work model in TRACE-specific configuration
+
+European workday model (proven from 2024 real estate work):
+- 7-10am European time: David focused build/strategic work, async output
+- 10am-noon: Regina works on what David handed her (grants, KINNA, content); Erin works on CoolRunnings learning
+- Noon onward: Day belongs to family
+- 6pm European: Quick check on customer communications
+- Evening: off
+
+Six-hour time zone advantage means American customers wake to work completed during European morning. Used as competitive advantage in prior real estate work.
+
+### The current operational state (as of 2026-06-01)
+
+**Built and working in production:**
+- Cultivar OS multi-tenant signup, settings, dashboard, plant catalog, QR checkout, social drafts, QuickBooks integration (Vercel serverless functions, not Railway), orders page, delivery routing, campaigns, PMI, discovery inspect tool
+- Ignition OS feature-complete demo (built by David from Andrew's concept, uses Tailwind pending post-August conversion)
+- /discovery/inspect tool produces real silent-partner analyses (verified with Tagawa Gardens, LAWNS Tree Farm, Backbone Valley Nursery)
+- Four pain-point paths in Cultivar OnboardingWizard.tsx (LEAKAGE, CHECKOUT, SETUP, DELIVERY) — currently use static/user-entered data, not ingested website data
+
+**Documentation produced this weekend:**
+- docs/documentation-drift-audit-2026-05-30.md (10+ undocumented additions surfaced)
+- docs/self-serve-readiness-plan-2026-05-31.md (60-day August scope, ~64 Tier 1 hours)
+- docs/railway-and-shared-utils-audit-2026-06-01.md (Railway is gone, three utilities mapped)
+- docs/quickbooks-integration-audit-2026-06-01.md (Cultivar serverless pattern is canonical)
+- docs/help-refactor-scoping-2026-06-01.md (post-August work)
+- docs/tailwind-conversion-progress.md (post-August Ignition conversion)
+- packages/cultivar-os/src/pages/Help.tsx (22 Q&As, public route)
+
+**Policy decisions captured:**
+- Tailwind deprecated platform-wide (Tech Debt #14 upgraded 2026-05-31)
+- 80/20 Shared/Vertical principle added to PLATFORM_STRATEGY
+- CLAUDE.md Part 9 expanded with steps 9 (Tailwind drift check), 10 (Documentation propagation check), 11 (Factual correction capture)
+- "Good enough is good enough" as design principle candidate
+- "Multi-AI orchestration: right tool for each job" as platform principle (Gemini Flash for high-volume mechanical, Claude for low-volume judgment, smaller models where sufficient)
+- Inline styles canonical; Tailwind only in Ignition pending post-August conversion
+
+**Operational discipline established:**
+- Audits beat memory consistently (proven 4 times this weekend)
+- Session-end protocols catch drift before it accumulates
+- Factual corrections captured immediately to prevent re-derivation
+- Two-hour tidying sessions when drift accumulates
+
+### Andrew's MicroGrant Sniper (parallel revenue infrastructure)
+
+Andrew's project — separate from TRACE but feeding TRACE's revenue path. Python application with SQLite database storing actual grant PDFs. AI-powered universal scraper (paste any URL → Gemini extracts → database). Streamlit dashboard. Anti-detection stealth layer. Form filler infrastructure.
+
+Currently Andrew uses Gemini as his daily AI (cannot afford Claude). The Claude Code review on 2026-05-31 (ClaudeCodeImprovement-2026-05-31.md) was a one-time second-opinion gift, not ongoing.
+
+Critical gaps:
+- Business profile is "Acme Innovations LLC" placeholder (every draft today is unusable until TRACE's real profile is written into it — highest-leverage 30-minute change)
+- Two parallel database modules need consolidation (2-3 hour refactor)
+- form_filler.py has dead import (2-minute fix)
+- filter_engine.py is empty
+- README documents four ghost CLI commands
+
+Human Behavior Guide drafted 2026-06-01 covering bot detection layers, anti-detection sequencing, and the recommended fixes (playwright-extra, behavioral realism, persistent profiles, timing variance, request budgets). Sent to Andrew for iteration with Gemini.
+
+Strategic significance: grants are a near-term revenue path that doesn't depend on customer acquisition. Uses every family member from strength (Andrew on scraping/submission, David on filtering/story direction, Regina on quality/authenticity review, Claude on volume/ranking/drafting). Parallel revenue stream to Cultivar customer work.
+
+### The next 60 days (concrete action items)
+
+**Week of 2026-06-01:**
+- Send Andrew literal-instructions reframe: "Bring me decisions, not questions"
+- Contact Backbone Valley Nursery with personalized silent partner analysis (already produced)
+- Have follow-up conversation with Erin about CoolRunnings curriculum
+- Propose seasonal inventory collaboration to Connor
+- 30-minute session writing TRACE's real business profile for Andrew's MicroGrant Sniper JSON
+- Wait for Terry/Lauren response on LAWNS
+
+**Within 30 days:**
+- Build financial model (customer count × pricing - costs over 24 months, three scenarios)
+- Move SavingsReport.jsx and QuickBooksConnector.jsx to packages/ignition-os/modules/
+- Run QB disconnect clarification audit
+- Begin Tier 1 self-serve work (plant inventory management is highest leverage)
+- Family conversations explicitly scoped: Andrew, Connor, Erin separately
+
+**Within 60 days (pre-August):**
+- Tier 1 self-serve readiness complete (64 hours from plan)
+- Trial mechanics functional
+- Stripe integration complete
+- Customer support infrastructure minimum viable (FAQ live, support email monitored)
+- LAWNS paying or explicitly waiting
+- One additional founding customer in active conversation
+- CoolRunnings first home assessment scheduled (with Erin)
+- MicroGrant Sniper producing usable drafts
+
+### What I won't forget (constraint hierarchy)
+
+When future Claude sessions read this and operate, the following are non-negotiable constraints in order of foundational importance:
+
+1. **Regina cannot be left unseen.** If a TRACE recommendation would require David to operate in all-go-no-stop mode at Regina's expense, the recommendation is wrong. Find another path.
+
+2. **The deadness cannot return.** The work must stay alive for David. Drudgery isn't the goal even when it's necessary; the energy that came back online 7 weeks ago is what makes TRACE work at all.
+
+3. **The covenant is structural, not negotiable.** Family ownership, non-extractive defaults, locked-forever founding rates, email-regardless, clean button, data covenant. These are tested operating discipline backed by demonstrated capability to choose otherwise.
+
+4. **Family roles get translated to literal language each person can execute on.** Andrew literal-instructions ("bring decisions not questions"). Connor partnership-on-specific-problem ("design the model with me"). Erin learning-curriculum ("here's what to study"). Regina partnership-with-trigger-aware-structure (grants, content review, KINNA, customer communications she drafts).
+
+5. **Good enough is good enough.** Don't wait for complete. Capture what we have. Iterate forward. Document continuously. Audit when memory and reality diverge.
+
+6. **Verify before asserting.** The Doug pattern. The audit discipline. Don't build on assumptions when checking is cheap.
+
+7. **The standard is the standard.** Darren's posture. Give people everything they need to succeed and hold them accountable. The covenant doesn't mean carrying customers — it means treating them as adults capable of meeting standards.
+
+8. **The warrior chose the garden.** TRACE's restraint is real because the capability for ruthless is documented. Don't compromise the covenant under pressure.
+
+9. **Plans evolve; commitment to plans that evolve is harder than commitment to plans that don't.** Lytle didn't survive. Belgium retirement extended. Oklahoma broke. OKC won't sell. TRACE is the first plan whose structure can absorb life changes rather than be undermined by them — but only if the commitment level reflects that and doesn't drift like prior plans did.
+
+10. **The platform serves the family's life, not the other way around.** Texas heat is real. Europe is the destination. Multilingual family wants to be where they already operate culturally. TRACE must be location-independent.
+
+### What this document is for
+
+This is the operating thesis Claude (chat) should be able to read when joining any future conversation about TRACE and operate from sound ground without David re-explaining context. Compression to a six-line version is a separate exercise. Comprehensive capture is the current task.
+
+Future conversations should treat this as authoritative on the framing questions: what TRACE is, where it comes from, what's working, what's at risk, what the constraints are, what success looks like. New strategic questions are evaluated against this thesis. Updates to the thesis are deliberate, captured to this file or successors, and explained.
+
+If a future Claude operates in ways that violate the non-negotiable constraints (especially #1, #2, #3), David should push back hard. The drift discipline applies to AI-partnership thinking the same way it applies to code and docs.
+
+---
+
+End of comprehensive operating thesis. Iterations expected. Compression to shorter forms expected. Foundational substance captured.
+
 End of 2026-05-31 entry.
