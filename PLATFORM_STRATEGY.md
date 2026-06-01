@@ -275,6 +275,29 @@ Do it right by default. If we make an informed decision to deviate, we document 
 
 ---
 
+### **Shared Structure, Vertical Content (80/20 Pattern)**
+
+Most user-facing surfaces in TRACE — help, onboarding, settings, navigation, common workflows, error messages, customer support flows — are approximately 80% the same across verticals. They serve the same kinds of users (small business owners) solving the same kinds of problems (configuration, payment, support, getting started) using the same connected systems (QuickBooks, Stripe, email).
+
+The vertical-specific 20% is domain language and specialized workflows. A nursery's first-run experience involves QR-tagging plants; an auto shop's involves logging a work order. The structure is identical; the content differs.
+
+This is not a coincidence or a temporary property of the current two verticals. It reflects something true about the customer type: owner-operators of small businesses share nearly identical needs at the operational layer, regardless of their industry. The platform earns its name by encoding that shared layer once and letting domain specialists focus on what actually differs.
+
+**This principle requires:**
+
+1. **User-facing surfaces are built in `packages/shared/`** with a vertical-content injection point — a configuration object, a typed content file, or a prop that supplies the 20%.
+2. **Each vertical owns only its 20% of specialized content.** A vertical's help page, for example, is a content file and a wrapper — not a rebuilt component.
+3. **New verticals can stand up new surfaces as primarily content work, not rebuild work.** The structural investment is made once. Each new vertical is a multiplier.
+4. **The shared surface enforces consistency; the vertical content provides domain authenticity.** Both matter. A help page that says "repair order" to a nursery owner fails. A help page that was rebuilt from scratch for each vertical diverges in ways that are never tracked.
+
+**Application:** Every time a new user-facing surface is built, the first question is: does an equivalent already exist in `packages/shared/src/pages/` or `packages/shared/src/components/`? If yes, extend the content interface rather than building a parallel component. If no, build the new surface in shared with a content injection point from day one — even if only one vertical needs it today.
+
+**Consequence:** Adding a new vertical's Help page should be approximately 30 minutes of content work, not days of component building. The same applies to onboarding shells, settings pages, error boundaries, and support flows. If it takes longer than an hour, the shared layer is missing something worth extracting.
+
+**What this is not:** This principle does not mean every line of every page must be shared. The 20% that is genuinely domain-specific (leakage metrics for nurseries, refrigerant logs for HVAC, TEFAP eligibility for food pantries) lives in the vertical and stays there. The principle governs the container, not every piece of content inside it.
+
+---
+
 ## PART 5 — VERTICAL CONFIG — THE MASTER SWITCH
 
 This is the file that makes the platform work. One entry per vertical.
