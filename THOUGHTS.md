@@ -578,47 +578,89 @@ The platform is in a materially better strategic position than 24 hours ago, not
 
 ## 2026-06-01 — Factual corrections surfaced through audit
 
-Two pieces of confidently-held wrong information surfaced today through the Railway / shared utilities audit. Capturing them so they don't get re-asserted in future sessions.
+Multiple pieces of confidently-held wrong information surfaced today through audits and conversational pushback. Capturing them so future sessions don't re-derive incorrect framings.
 
-### Correction 1 — SavingsReport.jsx is NOT a tile
+### Correction 1 — SavingsReport.jsx implementation vs concept
 
-Claude (chat) yesterday accepted David's description of SavingsReport as "a tile for examining receipts." Claude then built recommendations on that interpretation.
+Claude (chat) yesterday accepted David's description of SavingsReport as "a tile for examining receipts." The Railway/shared-utils audit revealed it's actually the 14-day trial savings report — the Day 12 conversion hook in Ignition's trial flow. Its three imports (DataBridge, MarginEngine, ExternalBridge) resolve to Ignition-only paths.
 
-The audit revealed: SavingsReport.jsx is actually the 14-day trial savings report — the Day 12 conversion hook in Ignition's trial flow. Not a tile. Not for receipts. Not multi-vertical. All three of its imports (DataBridge, MarginEngine, ExternalBridge) resolve to Ignition-only paths.
+Initial recommendation: move SavingsReport.jsx to packages/ignition-os/modules/.
 
-Correct action: move SavingsReport.jsx from packages/shared/src/components/ to packages/ignition-os/modules/. This also fixes Tech Debt #10 (IgnitionOmniDashboard's broken import).
+David's correction on the bigger pattern: SavingsReport as a *concept* belongs in every vertical. The narrative "here's what you saved by accepting our help, here's the cost of not accepting" is a universal conversion hook, not Ignition-specific. The current implementation is Ignition-bound because of its data dependencies, but the architectural pattern is shared.
 
-Lesson: when describing what an existing component does, audit the code rather than describing from memory. Memory drifts faster than expected on components that haven't been touched recently.
+Correct action sequencing:
+- Now: move SavingsReport.jsx to packages/ignition-os/modules/ because the current code is Ignition-bound
+- Post-August (or when a second vertical needs a trial savings report): extract the shared structure (narrative, conversion hook, visual treatment) into packages/shared/, with vertical-specific content injection
+- The 80/20 pattern applies — shared structure, vertical-specific content (what specifically the customer saved on, in their domain language)
 
-### Correction 2 — Cultivar does NOT import QuickBooksConnector.jsx
+Don't build the shared abstraction prematurely from one concrete case. Wait for a second concrete need; extract from both.
 
-David asserted that QuickBooksConnector.jsx in packages/shared/ is used by Cultivar — "we made the actual connection in Cultivar." Claude (chat) accepted and reinforced this.
+Lesson: distinguish between "this code is Ignition-specific" (true of the current implementation) and "this capability is Ignition-only" (false — every vertical will need it eventually).
 
-The audit revealed: zero files in packages/cultivar-os/ import QuickBooksConnector.jsx. Cultivar has a working QB integration but it uses a different code path entirely. QuickBooksConnector.jsx is exclusively Ignition's QB connector, currently broken because it uses the ExternalBridge/Railway pattern that no longer resolves.
+### Correction 2 — Cultivar's QB integration
 
-Correct action: move QuickBooksConnector.jsx to packages/ignition-os/modules/. Cultivar's QB integration (which works) needs to be audited separately to determine the canonical TRACE pattern.
+David asserted yesterday that QuickBooksConnector.jsx in packages/shared/ is used by Cultivar. The Railway/shared-utils audit revealed zero Cultivar imports of that file.
 
-Lesson: when two integrations exist for the same external service across verticals, audit before assuming which is canonical. Memory of "we built this in package X" can be wrong if the actual build happened in package Y.
+The QB integration audit (also 2026-06-01) revealed Cultivar's actual QB pattern:
+- Pure Vercel serverless functions in packages/cultivar-os/api/qbo/
+- Four functions: auth-url, callback, refresh, invoice creation
+- Tokens stored in businesses.accounting_* columns
+- No Railway, no VITE_API_URL, no external process
 
-### The pattern
+This is the canonical TRACE QB pattern. QuickBooksConnector.jsx is Ignition's broken legacy pattern (Railway-era, expects VITE_API_URL pointing to a running server).
 
-Both corrections were surfaced by a single audit prompt. The audit took less than an hour of Claude Code time. Audits beat memory consistently. The discipline going forward:
+Three legacy files in packages/shared/src/quickbooks/ (oauth.ts, invoice.ts, customer.ts) are also Railway-era dead code — Cultivar doesn't import them. Post-August cleanup.
 
+Correct action:
+- Move QuickBooksConnector.jsx to packages/ignition-os/modules/ when convenient
+- Post-August: refactor Ignition's QB integration to use Cultivar's serverless pattern (estimated 2-3 hours per the audit)
+- Post-August: delete the three dead files in packages/shared/src/quickbooks/
+
+Lesson: when two integrations exist for the same external service across verticals, audit before assuming which is canonical. Two integrations can both exist; only one is currently working in production.
+
+### Correction 3 — QB disconnect/reconnect behavior (pending verification)
+
+The QB integration audit stated "QB disconnect has no endpoint and no UI button in Cultivar." David has used a disconnect/reconnect flow, suggesting either the audit missed something or disconnect works through a different mechanism (overwrite on reconnect, Settings page action not labeled "disconnect," etc).
+
+Status: pending the clarification audit at docs/qb-disconnect-clarification-2026-06-01.md.
+
+Lesson: when an audit makes a negative claim ("X doesn't exist"), verify against actual usage memory before accepting. Negative claims are easy to make and hard to verify exhaustively.
+
+### Correction 4 — Prompt formatting (meta-correction)
+
+Twice today, Claude-generated prompts have arrived in Claude Code with the leading verb stripped from shell commands. The pattern: a sentence like "Run this command: `grep ...`" arrives as just `grep ...` without the "Run" word.
+
+Root cause: markdown rendering between Claude's output and Claude Code's input occasionally strips text immediately preceding fenced code blocks. Possibly a copy-paste artifact, possibly a display rendering issue.
+
+Fix: Claude (chat) will structure future prompts so commands stand alone without depending on a preceding verb. Instead of "Run: `command`" use "Execute the following:" on its own line, then the code block, then the next instruction on a new line.
+
+Lesson: working-relationship issues benefit from the same audit-then-fix discipline as code issues. David noticed the pattern twice; the fix is on Claude's side of the prompt construction.
+
+### The pattern across all four corrections
+
+Each correction came from one of two sources:
+- Audit (read-only investigation of code) revealing something different from what was asserted
+- David pushing back on an audit finding based on actual usage memory
+
+Audits beat memory consistently. Memory beats incomplete audits. Both directions matter. The discipline:
 - When something would benefit from accurate factual grounding, write the audit prompt
-- Run it before building on the assumption
+- When an audit finding contradicts lived experience, verify with a targeted follow-up audit
 - Capture corrections immediately in the doc that should hold the truth
 
-This is the Doug pattern at the documentation layer — verify rather than assert.
+This is the Doug pattern at multiple layers — verify rather than assert.
 
 ### Immediate followup actions captured
 
-- Move SavingsReport.jsx to packages/ignition-os/modules/ (30 min)
+- Move SavingsReport.jsx to packages/ignition-os/modules/ (30 min) — current code only, not the future shared abstraction
 - Move QuickBooksConnector.jsx to packages/ignition-os/modules/ (30 min)
-- After move, update CLAUDE.md Part 9 step 9 to remove the obsolete reference to shared/ pre-existing Tailwind exception
-- After move, update docs/tailwind-conversion-progress.md to reflect that shared/ is now Tailwind-clean
-- Audit Cultivar's actual QB integration to determine canonical pattern (see docs/quickbooks-integration-audit-2026-06-01.md when produced)
-- Fix Tech Debt #10 (IgnitionOmniDashboard broken import) — auto-resolves once SavingsReport.jsx moves to expected location
-- Fix Tech Debt #12 (IgnitionEstimate.jsx localhost:8000 dead reference) — separate small fix when touching Ignition
+- Run the QB disconnect clarification audit
+- After move: update CLAUDE.md Part 9 step 9 to remove obsolete shared/ Tailwind exception
+- After move: update docs/tailwind-conversion-progress.md to reflect shared/ Tailwind-clean
+- Fix Tech Debt #10 (IgnitionOmniDashboard broken import) — auto-resolves once SavingsReport.jsx moves
+- Fix Tech Debt #12 (IgnitionEstimate.jsx localhost:8000) — separate small fix when touching Ignition
+- Post-August: extract shared SavingsReport pattern when second vertical needs trial savings report
+- Post-August: refactor Ignition QB to Cultivar serverless pattern
+- Post-August: delete dead packages/shared/src/quickbooks/ files
 
 ---
 
