@@ -1051,6 +1051,22 @@ MANDATORY before ending every session:
    - If in any other file or package: `className=` with Tailwind utility classes is a policy violation
    If new Tailwind is found outside the pre-existing Ignition/shared files, EITHER convert to inline styles before committing OR document explicitly in the commit message and add to `docs/tailwind-conversion-progress.md`
 
+10. **Documentation propagation check** — For any session that built, modified, or removed a customer-facing widget, page, or feature, answer all five questions before closing:
+
+   1. Does the customer-facing FAQ (`packages/cultivar-os/src/pages/Help.tsx`, and any equivalent in other verticals) need a new Q&A or an update to an existing one?
+   2. Does the onboarding flow (signup, post-signup welcome, first-run experience) reference this widget or feature, and is that reference accurate?
+   3. Does `docs/built-inventory.md` reflect this widget or feature's current state?
+   4. Are there any `// FLAG:` placeholders in customer-facing content (Help.tsx uses this convention) that this session's work now fulfills? If so, replace the placeholder with real content and remove the FLAG comment.
+   5. Does any error message, validation message, or in-app help text need to be added or updated because of this change?
+
+   **If yes to any of the above:** propose and make the updates as part of this session's commit. Do not defer documentation updates to a separate task. Propagation is part of the work, not separate from it.
+
+   **If no to all:** state explicitly in the session summary: "No customer-facing documentation propagation needed for this session."
+
+   This step is mandatory. The session is not considered complete until it has been answered explicitly — either with updates made, or with a stated "no" and brief reasoning.
+
+   *Rationale: customer-facing documentation drifts the moment new functionality ships without a corresponding docs update. The cost of catching this at session end is minutes. The cost of catching it three months later is rebuilding the docs from scratch.*
+
 ---
 
 ## 10. SESSION STARTER
