@@ -365,6 +365,16 @@ export function Dashboard() {
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
           <button
+            onClick={() => navigate('/help')}
+            style={{
+              background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8,
+              padding: '8px 12px', color: '#fff', fontSize: '0.8125rem',
+              fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            Help
+          </button>
+          <button
             onClick={() => navigate('/settings')}
             style={{
               background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8,

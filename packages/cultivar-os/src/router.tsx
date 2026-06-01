@@ -11,6 +11,7 @@ import { Dashboard }       from './pages/Dashboard';
 import { DemoQBInvoice }   from './pages/DemoQBInvoice';
 import { Privacy }         from './pages/Privacy';
 import { Terms }           from './pages/Terms';
+import { Help }            from './pages/Help';
 import { SocialSetup }     from './pages/SocialSetup';
 import { Orders }            from './pages/Orders';
 import { OnboardingWizard } from './pages/OnboardingWizard';
@@ -36,6 +37,7 @@ export function AppRouter() {
       <Route path="/signup"  element={<SignUp />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms"   element={<Terms />} />
+      <Route path="/help"    element={<Help />} />
 
       {/* PRIVATE — nursery owner/staff */}
       <Route element={<PrivateRoute />}>
