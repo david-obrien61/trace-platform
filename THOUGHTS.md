@@ -976,6 +976,61 @@ This is probably the single most distinctive structural feature of the TRACE mod
 
 ---
 
+### Operating Policy — Pay for What You Use, Keep What You Paid For
+
+A refinement of the trial/fuzz/pricing mechanic that makes the specific rules explicit, including what happens to data on departure.
+
+**Days 1–14 (trial):** Customer sees everything. All tiles active. Full data visible. Full operational intelligence. Full savings calculations. The "everything" experience.
+
+**Day 15+ without commitment:** Data gets fuzzed. They see the system is working but can't see specific values. The audit continues running in the background.
+
+**Day 15+ with commitment to specific tiles:** They see what they paid for in full detail. Tiles they didn't activate get fuzzed in a specific way — the detail outputs are hidden, but the aggregate dollar estimate is visible and updates continuously.
+
+**The key example — Lauren's dashboard:**
+
+Lauren pays for base + SM tile + Delivery Routing. The New Business Generation tile shows on her dashboard with:
+- Tile name and brief description
+- "Estimated value if activated this month: $1,400"
+- Updated monthly using her real data and TRACE's pattern knowledge
+- Activate button
+
+The $1,400 is not a marketing claim. It's calculated from her actual inventory, her actual customer base, her actual business patterns, using the same calculation logic that would run if she activated the tile. The fuzz applies to which specific customers and which specific opportunities — not to the aggregate dollar estimate. She can see the "how much" but not the "exactly who and when."
+
+**On departure:**
+
+Customer takes:
+- All their raw data (uploads, customer records, order history)
+- Full work product from every tile they paid for during the relationship
+- Audit history for tiles they paid for
+
+Customer doesn't take:
+- Work product from tiles they never activated — they never had access to it, there's nothing to give
+
+TRACE removes from its systems:
+- All identifiable customer data
+- All work product specific to that customer
+
+TRACE retains:
+- Anonymized patterns derived from the customer base in aggregate — population-level facts, not individual-level data
+
+**The underlying principle:** You pay for what you use. You keep what you paid for. No bundling. No hostage-taking. No pretending customers get things they didn't buy. But continuous honest display of what they could be getting — in real dollars from their own business — so they have full information to decide.
+
+**Why the lost-revenue display is the right upsell mechanic:**
+
+Standard SaaS upsell: "you should buy this feature because it has value." TRACE upsell: "here's the specific dollar value you would have captured this month if you'd activated this tile, calculated from your actual data." That's not marketing — it's an honest accounting of opportunity cost. Customer makes their own decision based on real numbers. No sales pressure. No discount tactics. No bundles that obscure what's worth what.
+
+**Architectural implication:**
+
+Every tile must operate in two modes — **active** (full output) and **estimate** (aggregate dollar value calculated, detail hidden). The estimate calculation runs continuously for every customer regardless of activation status. This increases infrastructure cost but is what makes the upsell mechanic honest rather than aspirational. Each tile must define its value calculation methodology from day one. The calculation must be defensible — TRACE must be able to show the math behind any displayed estimate to any customer who asks.
+
+**Audit implication:**
+
+The quarterly audit becomes more powerful when it includes both realized value (activated tiles) and foregone value (estimates on non-activated tiles). Customer sees the complete picture: what they captured and what they left on the table. This is genuinely different from competitor audits (when those exist) that only show positive outcomes. Showing foregone value is uncomfortable — it requires TRACE to tell the customer "you left $1,400 on the table this month." The covenant requires doing it anyway.
+
+*Note: The pros and cons analysis from the earlier conversation wasn't included in this capture. If that analysis exists elsewhere, it should be referenced or pulled in here.*
+
+---
+
 End of 2026-06-02 entry.
 
 ---
