@@ -937,6 +937,35 @@ Typical customer: $149 base + 2–4 tiles + possibly one volume add-on = $200–
 
 ---
 
+### Operating principle — Time Back as Quantifiable Value
+
+TRACE's promise is not "AI integration" or "connecting your systems." Those describe activity, not outcome. The promise is **measurable time given back to the customer, audited honestly**.
+
+**The distinction from competitor positioning:**
+- Competitors sell access to tools, then leave the customer to figure out if the tools worked
+- TRACE sells outcomes — time saved, revenue generated, errors prevented — and measures whether they were delivered
+- The savings widget makes value visible in real time, per tile, using the customer's own data
+- The quarterly audit verifies the savings widget's claims and reports honestly
+
+**This is covenant-aligned in a specific way.** Most SaaS sells the promise of value and never measures whether it delivered. TRACE measures, reports, and stakes the customer relationship on actual delivery. If the audit shows TRACE isn't delivering net positive value for a customer, that's a signal to both sides. The honest response is fix the gap or acknowledge the platform isn't right for that customer — not hide the number.
+
+This connects directly to the broader doctrine: "wildly successful business by being inherently good." Being good means measuring whether the customer actually benefited, not just whether the customer paid.
+
+**Connection to the trial/fuzz mechanic:** During trial, customer sees full audit-level data. Post-trial without commitment, the audit is fuzzed — they see that value is being delivered but can't see the specific numbers. Post-trial with commitment, full transparency continues forever. The fuzz isn't punitive; it's the covenant inverted: "we're still watching your business, still calculating. You can see exactly what we're finding when you join us."
+
+**Implementation requirements (build specs, not just principles):**
+- Savings widget calculates hours saved per tile using real timestamps and real task data — not estimates
+- Quarterly audit report generated automatically per customer
+- Customer's documented labor rate (or industry average if not provided) used for dollar conversion
+- Revenue attribution tracked for platform-driven opportunities (New Business Generation tile especially)
+- Net value calculated honestly: savings minus what the customer paid TRACE — if this number is negative, TRACE knows before the customer does
+
+**The competitive moat this creates:** Competitors who don't measure outcomes can't honestly claim them. Customers who experience TRACE's audit cycle won't want to switch to a vendor who doesn't have one — the audit is itself a switching cost, in the right direction. A customer switching away from TRACE gives up ongoing independent verification of whether their tools are working.
+
+This is probably the single most distinctive structural feature of the TRACE model. Most SaaS treats "did the customer get value?" as the customer's problem. TRACE treats it as TRACE's problem. That's not a marketing claim — it requires the savings widget to actually be accurate and the quarterly audit to actually be generated. Build accordingly.
+
+---
+
 End of 2026-06-02 entry.
 
 ---
