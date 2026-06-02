@@ -843,6 +843,100 @@ The 80/20 architecture section is already accurate and needs no changes. The mul
 
 ---
 
+### Pricing philosophy and trial mechanic
+
+The canonical TRACE pricing model is **outcome-anchored**, not tier-based. This emerged as a clarification of what makes the model coherent.
+
+**Trial period (Days 1–14):** Customer gets full access to all tiles. Real data flows. The savings widget shows actual dollar value of all tiles including ones not actively in use.
+
+**Decision point at Day 14:** Customer commits to a tier or doesn't.
+
+**Post-trial with commitment:** Locked at chosen rate forever (covenant). Full data visible. Add-on tiles available as volume scales.
+
+**Post-trial without commitment:** Customer drops to base/free state. Data continues flowing into the system. Savings widget continues calculating. But specific values are fuzzed — customer sees that the system is working but can't see the actual numbers. The fuzz is the conversion mechanic. Customer can stay in fuzz mode indefinitely without being kicked out (non-extractive).
+
+**Why fuzz instead of hard gate:**
+- Preserves the relationship even when customer declines to commit at Day 14
+- Customer sees ongoing proof that the system is doing work — they're being shown something real, just not shown the exact number
+- Commitment decision becomes: "do I want to see what's being hidden?" rather than "do I want to buy features I can't evaluate?"
+- Conversion is earned through demonstrated value, not forced through access denial
+
+**Tile pricing ratio:** 1/3 to 1/5 of demonstrated customer savings. If a tile saves a customer $300/month, it prices at $60–100/month. Easy value prop at any position in that range; healthy margin for TRACE at the low end of it.
+
+**Savings widget design (currently in Ignition, scheduled for move to packages/ignition-os/modules/, shared abstraction post-August):**
+- Shows dollar value captured by tiles in use
+- Shows dollar value being left on the table by tiles not in use
+- This is the natural upsell engine — customer sees what they could be saving, expressed in their own data
+
+**Cross-vertical applicability:** Same mechanic across all five verticals. Implementation varies (different tiles, different savings calculations) but the trial/fuzz/commit structure is identical and belongs in packages/shared/.
+
+**Open work:** Per-tile cost analysis — approximately 4–6 hours, using the SM tile/Blotato cost as the template. Not yet done as of 2026-06-02. This is the validation step that confirms each price point clears TRACE's delivery cost.
+
+---
+
+### Pricing structure refinement — core vs. tiles, unit economics
+
+The pricing architecture clarified further with a concrete tile example.
+
+**Plant inventory is core, not a tile.** Customer database, order management, QR checkout are also core. These are the operating system that makes everything else possible. Included in the base price. No tile should depend on these being "unlocked" — they're the foundation.
+
+**Tiles read from core to generate dollar outcomes.** New Business Generation, AI Campaigns, Advanced Customer Match, Delivery Optimization — these are tiles that produce measurable savings or revenue by cross-referencing core data against external context (timing, routing, customer history, market signals). The tile value is in the cross-referencing, not in the data itself.
+
+**Tile price range:** $9.99–$29.99 with high activation rates, rather than fewer expensive tiles with lower activation. Reasoning: at $14.99, no owner-operator does mental math — they just activate. Mental math is friction. Friction is revenue left on the table. The covenant of low friction and obvious value matches the unit economics of high activation.
+
+**Value math — AI Campaigns tile at $14.99:**
+- Without TRACE: 4 platforms × 10 min avg + formatting/login overhead = ~1 hour/week
+- Per month: ~4 hours
+- At realistic owner-operator value of $75/hr: $300/month time cost
+- With TRACE: ~5 min per cycle = 20 min/month = $25/month time cost
+- Net time savings: $275/month
+- Tile price: $14.99
+- Value ratio: 18x — before accounting for tracking improvements, style-learning over time, or A/B testing quality improvements
+- Full value ratio is materially higher than 18x
+
+**Value math — New Business Generation tile (the "fert" example):**
+- Tile reads plant inventory + customer database
+- Cross-references with horticultural timing (when fertilizer should be applied per plant species)
+- Identifies customers on existing delivery routes who could be offered the service
+- Estimates revenue at typical acceptance rates
+- Surfaces to owner: "23 customers on Tuesday route could yield $1,400 this week at 25% acceptance"
+- Savings widget records: "New Business tile generated $1,400 this week"
+- That's not marketing language — it's the platform reading the customer's own data and expressing opportunity in dollars
+
+**Restructured pricing model (Cultivar OS as template):**
+
+Base ($149/mo, locked forever):
+- Plant inventory (core)
+- Customer database (core)
+- Order management (core)
+- QR checkout (core)
+- Basic delivery routing
+- Basic campaigns
+
+Add-on tiles ($9.99–$29.99 each):
+- AI Campaigns
+- New Business Generation
+- Advanced Customer Match
+- Multi-location delivery routing
+- Compliance/Pest reporting
+
+Volume add-ons (triggered by scaling):
+- Additional plants: +$25/500
+- Additional customers: +$15/250
+- Additional location: +$75
+
+One-time:
+- Hardware Hub: $499
+- White-glove onboarding: $500
+
+Typical customer: $149 base + 2–4 tiles + possibly one volume add-on = $200–250/month. Each component obviously worth its price before the customer finishes activating it.
+
+**The fuzz-after-non-commitment mechanic is the canonical conversion path.** Customer gets full access including savings widget during trial. Post-trial without commitment: data flows, widget calculates, values are fuzzed. Conversion is decided by customer experience of value during trial, not by feature gates after. The locked-forever rate is the reward for committing — the covenant applies to those who do.
+
+**Per-tile cost analysis is the open work item.** Needed to validate that each tile's price point clears TRACE's delivery cost while preserving the 1/3–1/5 value ratio. Approximately 4–6 hours. SM tile / Blotato cost is the first complete example and the template for the others.
+
+---
+
 End of 2026-06-02 entry.
 
 ---
