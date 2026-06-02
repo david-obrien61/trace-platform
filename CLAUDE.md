@@ -258,6 +258,42 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-02 — Prompt 3: Cultivar consumes shared auth; TeamSection in Settings; /join route live
+
+**Branch:** `multi-tenant-extraction` — DO NOT MERGE to main.
+
+**What was built:**
+- `packages/cultivar-os/src/auth/roles.ts` — OWNER / MANAGER / STAFF roles with permission bundles. OWNER is full access. MANAGER is day-to-day ops (no settings). STAFF is QR checkout and orders only.
+- `packages/cultivar-os/api/members/preview-invite.ts` — Vercel GET handler, calls `previewInvitation` from shared
+- `packages/cultivar-os/api/members/accept-invite.ts` — Vercel POST handler, calls `acceptInvitation` from shared
+- `packages/cultivar-os/src/pages/Settings.tsx` — `TeamSection` added below NurserySection: shows active members, pending invitations, invite form (name/email/role), and invite link display with Copy button
+- `packages/cultivar-os/src/pages/OnboardingWizard.tsx` — `finalize()` now inserts OWNER `business_members` row after creating `businesses` row (non-fatal if migration not applied yet)
+- `packages/cultivar-os/src/router.tsx` — `/join` public route added, renders `AcceptInvite` from shared with `auth.signIn` and `/dashboard` redirect
+
+**Builds:** Cultivar 2174 ✓ · Ignition 1823 ✓ · zero TypeScript errors
+
+**⚠️ BLOCKER — Migrations still NOT applied to live DB:**
+Same blocker as Prompt 2. Tables don't exist yet. Team management UI shows graceful amber warning when tables are missing.
+
+**⚠️ CRITICAL — Member login doesn't work yet (Prompt 4 fix):**
+`BusinessProvider` resolves business via `owner_id = auth.uid()`. Erin is a member, not an owner. She'll see "Account not linked" after accepting the invite. Fix: update BusinessProvider to fall back to `business_members` lookup when owner query returns null. Full code spec in runbook `docs/runbooks/multi-tenant-extraction-cultivar-integration-2026-06-02.md` section "Member Login: Unblocked Path".
+
+**Pre-Prompt-4 checklist (David must do before next session):**
+1. Get PAT: https://supabase.com/dashboard/account/tokens → Generate → "trace-migrations"
+2. `SUPABASE_PAT=sbp_your_token node scripts/apply-migrations.mjs`
+3. `node scripts/test-shared-auth.mjs` — all steps must pass, exit 0
+4. Deploy: `git push` on multi-tenant-extraction branch → Vercel auto-deploys from main (NOTE: need to push to main or deploy manually)
+
+**Prompt 4 work (next session — must do in order):**
+1. Fix `BusinessProvider` (see runbook "Member Login: Unblocked Path" for exact code)
+2. Insert David's OWNER row manually in LAWNS business_members (see runbook SQL)
+3. End-to-end: David invites Erin → Erin accepts → Erin sees LAWNS dashboard
+4. Optional: Add QR code display for invite link (David copies link today; nice-to-have)
+
+**Runbook:** `docs/runbooks/multi-tenant-extraction-cultivar-integration-2026-06-02.md`
+
+---
+
 ### 2026-06-02 — Prompt 2: Shared auth package extracted, AcceptInvite built, migrations blocked on PAT
 
 **Branch:** `multi-tenant-extraction` — DO NOT MERGE to main.
