@@ -527,7 +527,15 @@ function TeamSection({ businessId }: { businessId: string }) {
 
 export function Settings() {
   const navigate = useNavigate();
-  const { businessId } = useBusinessContext();
+  const { businessId, isOwner, userPermissions } = useBusinessContext();
+
+  const canManageSettings = isOwner || (userPermissions ?? []).includes('manage_settings');
+
+  // Redirect members without settings permission back to dashboard
+  if (businessId && !canManageSettings) {
+    navigate('/dashboard', { replace: true });
+    return null;
+  }
 
   const accountingConnectUrl = businessId
     ? `/api/qbo/auth-url?business_id=${businessId}`

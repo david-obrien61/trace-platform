@@ -19,12 +19,15 @@ export interface Business {
   created_at: string;
 }
 
-interface BusinessContextValue {
+export interface BusinessContextValue {
   business: Business | null;
   businessId: string | null;
   businessError: string | null;
   loading: boolean;
   reload: () => void;
+  // null = owner (full access implied). string[] = member's explicit permission list.
+  userPermissions: string[] | null;
+  isOwner: boolean;
 }
 
 const BusinessContext = createContext<BusinessContextValue>({
@@ -33,6 +36,8 @@ const BusinessContext = createContext<BusinessContextValue>({
   businessError: null,
   loading: true,
   reload: () => {},
+  userPermissions: null,
+  isOwner: false,
 });
 
 export function BusinessProvider({
@@ -46,6 +51,8 @@ export function BusinessProvider({
   const [businessError, setBusinessError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
+  const [userPermissions, setUserPermissions] = useState<string[] | null>(null);
+  const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,21 +72,44 @@ export function BusinessProvider({
         return;
       }
 
-      const { data, error } = await supabase
+      // 1. Try owner lookup (fast path — covers 99% of logins)
+      let { data: biz } = await supabase
         .from('businesses')
         .select('*')
         .eq('owner_id', user.id)
         .eq('business_type', businessType)
         .single();
 
+      let resolvedPerms: string[] | null = null; // null = owner (full access)
+      let resolvedIsOwner = true;
+
+      // 2. If not an owner, check business_members (member path)
+      if (!biz) {
+        const { data: member } = await supabase
+          .from('business_members')
+          .select('business_id, role, permissions, businesses(*)')
+          .eq('user_id', user.id)
+          .eq('active', true)
+          .single();
+        biz = (member?.businesses as any) ?? null;
+        if (member) {
+          resolvedPerms = (member.permissions as string[]) ?? [];
+          resolvedIsOwner = false;
+        }
+      }
+
       if (cancelled) return;
 
-      if (error || !data) {
+      if (!biz) {
         setBusinessError('no_business');
         setBusiness(null);
+        setUserPermissions(null);
+        setIsOwner(false);
       } else {
-        setBusiness(data as Business);
+        setBusiness(biz as Business);
         setBusinessError(null);
+        setUserPermissions(resolvedPerms);
+        setIsOwner(resolvedIsOwner);
       }
       setLoading(false);
     }
@@ -103,6 +133,8 @@ export function BusinessProvider({
       businessError,
       loading,
       reload: () => setTick(t => t + 1),
+      userPermissions,
+      isOwner,
     }}>
       {children}
     </BusinessContext.Provider>

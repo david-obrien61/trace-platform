@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: May 29, 2026
+# Last updated: June 2, 2026
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -258,6 +258,40 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-02 — Prompt 4: BusinessProvider member-path fallback; full invite flow verified ✅
+
+**Branch:** `multi-tenant-extraction` — DO NOT MERGE to main.
+
+**What was built:**
+- `packages/shared/src/context/BusinessProvider.tsx` — two-path resolution: owner fast-path (businesses.owner_id), member fallback (business_members → businesses join). Exposes `userPermissions: string[] | null` and `isOwner: boolean` in context. `null` perms = owner (full access implied). `string[]` = member's explicit permission list.
+- `packages/shared/src/context/index.ts` — `BusinessContextValue` added to exports (was missing; caused TS error)
+- `packages/cultivar-os/src/pages/Dashboard.tsx` — Settings button gated on `canManageSettings = isOwner || perms.includes('manage_settings')`. Title "Owner Dashboard" for owners, "Dashboard" for members.
+- `packages/cultivar-os/src/pages/Settings.tsx` — permission gate: redirects to `/dashboard` if member without `manage_settings`
+- `scripts/test-member-login.mjs` — 8-section E2E test; fixed `.mjs`-incompatible TypeScript syntax (`as any` stripped)
+- `docs/runbooks/multi-tenant-extraction-member-path-fix-2026-06-02.md` — fix details, all 29 test assertions, David's step-by-step for inviting Erin tomorrow morning, rough edges
+
+**Test results:** 29/29 assertions passed. All cleanup completed.
+
+**Builds:** Cultivar 2174 ✓ · zero TypeScript errors
+
+**⚠️ DEPLOY REQUIRED — Prompt 4 changes are NOT yet live:**
+Multi-tenant-extraction branch must be merged to main (or force-deployed) for Vercel to pick up the BusinessProvider fix. Until deployed, Erin's login still hits the "Account not linked" wall.
+
+**Remaining blockers before Erin demo Wednesday morning:**
+1. **Merge branch or deploy manually**: `git push` → merge multi-tenant-extraction → main → Vercel auto-deploys
+2. **David's OWNER row** in business_members for LAWNS (see runbook SQL — insert once, then done)
+3. **Invite Erin**: Settings → Team section → Send Invite → copy link → share with Erin
+
+**What Erin sees after accepting invite (MANAGER role):**
+- ✅ Dashboard (LAWNS metrics)
+- ✅ QR Checkout, Orders, Deliveries, Campaigns tiles
+- ❌ NO Settings button
+- ❌ /settings auto-redirects to /dashboard
+
+**Runbook:** `docs/runbooks/multi-tenant-extraction-member-path-fix-2026-06-02.md`
+
+---
+
 ### 2026-06-02 — Prompt 3: Cultivar consumes shared auth; TeamSection in Settings; /join route live
 
 **Branch:** `multi-tenant-extraction` — DO NOT MERGE to main.
@@ -271,24 +305,6 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 - `packages/cultivar-os/src/router.tsx` — `/join` public route added, renders `AcceptInvite` from shared with `auth.signIn` and `/dashboard` redirect
 
 **Builds:** Cultivar 2174 ✓ · Ignition 1823 ✓ · zero TypeScript errors
-
-**⚠️ BLOCKER — Migrations still NOT applied to live DB:**
-Same blocker as Prompt 2. Tables don't exist yet. Team management UI shows graceful amber warning when tables are missing.
-
-**⚠️ CRITICAL — Member login doesn't work yet (Prompt 4 fix):**
-`BusinessProvider` resolves business via `owner_id = auth.uid()`. Erin is a member, not an owner. She'll see "Account not linked" after accepting the invite. Fix: update BusinessProvider to fall back to `business_members` lookup when owner query returns null. Full code spec in runbook `docs/runbooks/multi-tenant-extraction-cultivar-integration-2026-06-02.md` section "Member Login: Unblocked Path".
-
-**Pre-Prompt-4 checklist (David must do before next session):**
-1. Get PAT: https://supabase.com/dashboard/account/tokens → Generate → "trace-migrations"
-2. `SUPABASE_PAT=sbp_your_token node scripts/apply-migrations.mjs`
-3. `node scripts/test-shared-auth.mjs` — all steps must pass, exit 0
-4. Deploy: `git push` on multi-tenant-extraction branch → Vercel auto-deploys from main (NOTE: need to push to main or deploy manually)
-
-**Prompt 4 work (next session — must do in order):**
-1. Fix `BusinessProvider` (see runbook "Member Login: Unblocked Path" for exact code)
-2. Insert David's OWNER row manually in LAWNS business_members (see runbook SQL)
-3. End-to-end: David invites Erin → Erin accepts → Erin sees LAWNS dashboard
-4. Optional: Add QR code display for invite link (David copies link today; nice-to-have)
 
 **Runbook:** `docs/runbooks/multi-tenant-extraction-cultivar-integration-2026-06-02.md`
 

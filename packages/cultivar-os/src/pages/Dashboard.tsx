@@ -68,7 +68,8 @@ const POST_TYPE_LABELS: Record<string, string> = {
 export function Dashboard() {
   const { user } = auth.useSession();
   const navigate  = useNavigate();
-  const { businessId, loading: businessLoading, businessError } = useBusinessContext();
+  const { businessId, loading: businessLoading, businessError, userPermissions, isOwner } = useBusinessContext();
+  const canManageSettings = isOwner || (userPermissions ?? []).includes('manage_settings');
 
   const [businessName, setBusinessName]       = useState('');
   const [plantCount, setPlantCount]           = useState(0);
@@ -358,7 +359,7 @@ export function Dashboard() {
           }}>
             {businessName}
           </p>
-          <h1 style={{ fontSize: '1.375rem', fontWeight: 700, margin: 0 }}>Owner Dashboard</h1>
+          <h1 style={{ fontSize: '1.375rem', fontWeight: 700, margin: 0 }}>{isOwner ? 'Owner Dashboard' : 'Dashboard'}</h1>
           {user?.email && (
             <p style={{ fontSize: '0.75rem', color: '#a8c890', marginTop: 4 }}>{user.email}</p>
           )}
@@ -374,16 +375,18 @@ export function Dashboard() {
           >
             Help
           </button>
-          <button
-            onClick={() => navigate('/settings')}
-            style={{
-              background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8,
-              padding: '8px 12px', color: '#fff', fontSize: '0.8125rem',
-              fontWeight: 600, cursor: 'pointer',
-            }}
-          >
-            Settings
-          </button>
+          {canManageSettings && (
+            <button
+              onClick={() => navigate('/settings')}
+              style={{
+                background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8,
+                padding: '8px 12px', color: '#fff', fontSize: '0.8125rem',
+                fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              Settings
+            </button>
+          )}
           <button
             onClick={handleSignOut}
             style={{
