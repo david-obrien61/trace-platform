@@ -79,7 +79,7 @@ Everything else inherits automatically.
 | Layer | Module | Location | Status |
 |---|---|---|---|
 | Database | Supabase PostgreSQL, RLS, multi-tenant UUID | packages/shared/src/supabase/ | ✅ Live (Ignition OS) |
-| Auth | configureAuth() — PIN or email/password, role-based routing | packages/shared/src/supabase/auth.ts | ⚠️ PIN only — needs configureAuth() wrapper |
+| Auth | Shared auth package — email/password + member invite/accept flow, role-based routing, two-path BusinessProvider (owner + member fallback). Gesture layer (PIN, biometric) is vertical-specific on top of shared Supabase session. | packages/shared/src/auth/ | ✅ Live (Cultivar OS, 2026-06-02) — business_members, invitations, member_devices with real RLS; 29/29 E2E assertions passing |
 | Data sync | DataBridge.js — local-first, offline queue, trial clock | packages/shared/src/supabase/bridge.ts | ⚠️ localStorage only — Supabase migration needed |
 | AI router | AIEngine.ts — Claude/Gemini/Whisper by task. ai_router.py is legacy (Railway, mobile-era). Forward path: Vercel serverless functions. | packages/shared/src/ai/ | ✅ Built · ⚠️ Backend needs porting before AI features go live |
 | QuickBooks | OAuth 2.0 + invoice creation + customer sync | packages/shared/src/quickbooks/ | ⚠️ Ignition hardcoded — needs vertical-agnostic wrapper |
@@ -295,6 +295,40 @@ This is not a coincidence or a temporary property of the current two verticals. 
 **Consequence:** Adding a new vertical's Help page should be approximately 30 minutes of content work, not days of component building. The same applies to onboarding shells, settings pages, error boundaries, and support flows. If it takes longer than an hour, the shared layer is missing something worth extracting.
 
 **What this is not:** This principle does not mean every line of every page must be shared. The 20% that is genuinely domain-specific (leakage metrics for nurseries, refrigerant logs for HVAC, TEFAP eligibility for food pantries) lives in the vertical and stays there. The principle governs the container, not every piece of content inside it.
+
+---
+
+### **Auth Layer vs. Gesture Layer**
+
+Authentication is one layer — a single Supabase auth account per person, tied to email, holding the actual security boundary. Gestures are convenience layers on top — PIN, facial recognition, biometric, passkey — that can vary per device for the same authenticated identity.
+
+The design driver is the **"hands not available" case**: a diesel mechanic with greasy hands cannot reliably type a password. A gardener wearing gloves cannot use a touchscreen keyboard. A nurse in PPE cannot scan a fingerprint. Each of these customers needs to authenticate quickly without their hands being available for typing.
+
+**The pattern that solves this:**
+- Personal phone: passkey using Face ID or fingerprint
+- Shop tablet: passkey using whatever biometric the tablet supports, or PIN fallback
+- Shop kiosk: PIN only (no biometric hardware)
+
+Same auth account. Different gestures per device. The authentication is one. The conveniences are many.
+
+**This is why authentication infrastructure is shared** (`packages/shared/src/auth/`) while gesture implementations are vertical-specific. The shared layer enforces real security via Supabase auth — `auth.uid()` must be non-null for any query that touches customer data. The verticals add gestures appropriate to their customer's working environment.
+
+| Vertical | Auth layer | Gesture layer |
+|---|---|---|
+| Cultivar OS (nurseries) | Shared Supabase auth | Email/password initially; WebAuthn passkey for return visits |
+| Ignition OS (auto/diesel) | Shared Supabase auth | PIN preserved as Ignition-specific gesture on top of shared auth |
+| CoolRunnings (home automation) | Shared Supabase auth | Biometric-first via mobile device passkey |
+| Future verticals | Shared Supabase auth | Gesture choice driven by customer's working context |
+
+**The principle prevents both failure modes:**
+- *Single global gesture* = broken UX for hands-not-available cases (the mechanic cannot type, the gesture fails them)
+- *Per-vertical custom auth* = security fragmentation, code duplication, impossible to share customer accounts across verticals
+
+Standard auth, vertical-specific gestures. One identity, many ways to prove it.
+
+**Application:** When a new vertical is built, authentication is not rebuilt — it is configured via the shared auth package. When a new gesture is needed for an existing vertical, it is added as a gesture layer that wraps a Supabase auth session, not as a replacement for it. No vertical is ever allowed to gate data access using only a PIN or biometric without an underlying `auth.uid()` — the gesture unlocks the UX, but RLS and tenant isolation always run against the Supabase session.
+
+*Note: Ignition OS's current PIN model predates this principle and is a documented exception — its single-device, local-first architecture intentionally operates without a live Supabase session. This is Honest Debt, not a pattern to extend.*
 
 ---
 
