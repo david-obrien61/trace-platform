@@ -964,6 +964,16 @@ This connects directly to the broader doctrine: "wildly successful business by b
 
 This is probably the single most distinctive structural feature of the TRACE model. Most SaaS treats "did the customer get value?" as the customer's problem. TRACE treats it as TRACE's problem. That's not a marketing claim — it requires the savings widget to actually be accurate and the quarterly audit to actually be generated. Build accordingly.
 
+**Connection to family compensation structure:** When Erin runs her ad workflow service for nurseries, her pricing logic (charging $14.99 against $275/month in customer time savings) only works because the time savings are real and measurable. The same audit principle applies to her service — it's not "we help with social media," it's "we save you 3.75 hours per month at your effective rate, audited quarterly." This gives every family contractor a defensible value statement built on measurement, not marketing. The audit principle scales across the whole family's service delivery model, not just the TRACE platform itself.
+
+**Operational implications (build requirements for future tiles and onboarding):**
+- All future tile development must include a savings calculation — real timestamps, before/after task duration, not estimates
+- Customer onboarding must capture their effective labor rate (or use industry default if they don't provide one)
+- Quarterly audit generation is a planned post-August development item — not yet in scope
+- "We'll show you in 90 days whether this is working" is the sales talking point that the audit infrastructure makes possible
+
+**Propagation note:** This principle should be added to PLATFORM_STRATEGY.md as a named design principle alongside Auth Layer vs. Gesture Layer. Provisional names: "Measured Value" or "Audit-Anchored Pricing." The naming convention in PLATFORM_STRATEGY favors descriptive phrases over abstract nouns — "Measured Value" fits the pattern better. Not yet added as of 2026-06-02; post-August work.
+
 ---
 
 End of 2026-06-02 entry.
