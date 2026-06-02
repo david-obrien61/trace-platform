@@ -1,0 +1,135 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { AcceptInviteResult, InvitePreview } from './types';
+
+// Server-side functions. Must be called from a Vercel serverless function
+// that initialises Supabase with the service role key (bypasses RLS).
+// The accepting user has no session yet — they don't exist in auth.users.
+
+// Validates a token and returns enough info to render the AcceptInvite page.
+// Use this in a GET handler: GET /api/members/preview-invite?token={token}
+export async function previewInvitation(
+  serviceSupabase: SupabaseClient,
+  token: string
+): Promise<InvitePreview> {
+  const now = new Date().toISOString();
+
+  const { data, error } = await serviceSupabase
+    .from('invitations')
+    .select('name, role, used, expires_at, businesses(name)')
+    .eq('token', token)
+    .single();
+
+  if (error || !data) return { valid: false, reason: 'invalid' };
+  if (data.used) return { valid: false, reason: 'used' };
+  if (data.expires_at < now) return { valid: false, reason: 'expired' };
+
+  const biz = data.businesses as unknown as { name: string } | null;
+  return {
+    valid: true,
+    businessName: biz?.name ?? 'Unknown Business',
+    invitedName: data.name,
+    role: data.role,
+  };
+}
+
+export interface AcceptInvitationInput {
+  token: string;
+  email: string;          // the accepting user's email for Supabase auth account
+  password: string;       // chosen password for the new account
+  displayName?: string;   // overrides the pre-filled invited name if provided
+}
+
+// Validates token, creates Supabase auth account (or finds existing), activates member.
+// Use this in a POST handler: POST /api/members/accept-invite
+// Body: { token, email, password, displayName? }
+//
+// Error strings thrown (catch and return appropriate HTTP status):
+//   INVALID_TOKEN    — token not found, already used, or expired
+//   MEMBER_ROW_NOT_FOUND — invite exists but business_members row is missing (data integrity issue)
+//   AUTH_CREATE_FAILED   — Supabase auth error during user creation
+//   USER_LOOKUP_FAILED   — user already registered but couldn't look up their ID
+//   ACTIVATE_FAILED      — business_members update failed
+export async function acceptInvitation(
+  serviceSupabase: SupabaseClient,
+  input: AcceptInvitationInput
+): Promise<AcceptInviteResult> {
+  const now = new Date().toISOString();
+
+  // 1. Validate token — single query with business name join
+  const { data: invitation, error: invErr } = await serviceSupabase
+    .from('invitations')
+    .select('id, business_id, name, role, used, expires_at, businesses(id, name)')
+    .eq('token', input.token)
+    .single();
+
+  if (invErr || !invitation) throw new Error('INVALID_TOKEN');
+  if (invitation.used) throw new Error('INVALID_TOKEN');
+  if (invitation.expires_at < now) throw new Error('INVALID_TOKEN');
+
+  // 2. Find the pre-created inactive business_members row
+  const { data: member, error: memErr } = await serviceSupabase
+    .from('business_members')
+    .select('id, permissions, role')
+    .eq('invite_id', invitation.id)
+    .eq('active', false)
+    .single();
+
+  if (memErr || !member) throw new Error('MEMBER_ROW_NOT_FOUND');
+
+  // 3. Create or find Supabase auth account
+  let userId: string;
+
+  const { data: created, error: createErr } = await serviceSupabase.auth.admin.createUser({
+    email: input.email,
+    password: input.password,
+    email_confirm: true,
+    user_metadata: { name: input.displayName ?? invitation.name },
+  });
+
+  if (createErr) {
+    const alreadyExists =
+      createErr.message.includes('already been registered') ||
+      createErr.message.includes('already exists') ||
+      createErr.message.includes('already registered');
+
+    if (alreadyExists) {
+      // User has an existing account — find their ID
+      const { data: list } = await serviceSupabase.auth.admin.listUsers({ perPage: 1000 });
+      const existing = list?.users?.find(u => u.email === input.email);
+      if (!existing) throw new Error('USER_LOOKUP_FAILED');
+      userId = existing.id;
+    } else {
+      throw new Error(`AUTH_CREATE_FAILED: ${createErr.message}`);
+    }
+  } else {
+    userId = created.user.id;
+  }
+
+  // 4. Activate the business_members row
+  const { error: activateErr } = await serviceSupabase
+    .from('business_members')
+    .update({
+      user_id: userId,
+      active: true,
+      name: input.displayName ?? invitation.name,
+    })
+    .eq('id', member.id);
+
+  if (activateErr) throw new Error(`ACTIVATE_FAILED: ${activateErr.message}`);
+
+  // 5. Mark invitation used (do this after activation so partial failures don't consume the token)
+  await serviceSupabase
+    .from('invitations')
+    .update({ used: true })
+    .eq('id', invitation.id);
+
+  const biz = invitation.businesses as unknown as { id: string; name: string } | null;
+
+  return {
+    businessId: invitation.business_id,
+    businessName: biz?.name ?? 'Unknown Business',
+    memberId: member.id,
+    role: member.role as string,
+    permissions: (member.permissions as string[]) ?? [],
+  };
+}
