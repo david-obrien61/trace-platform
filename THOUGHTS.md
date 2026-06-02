@@ -668,6 +668,185 @@ End of 2026-06-01 corrections entry.
 
 ---
 
+## 2026-06-02 — Operational Doctrine, Financial Decisions, and Multi-Tenant Extraction
+
+A long working day covering both strategic and technical ground. Capturing everything before it drifts.
+
+---
+
+### Operating relationship refinement — Lightning and Thunder
+
+The working relationship between David and Claude (chat partner) got named and calibrated today.
+
+David is **Lightning**. Claude Code is **Thunder**. ("You hear Thunder before you see Lightning.") The naming is functional: Thunder is the slow, visible structural work Claude Code does in the repo; Lightning is David's strategic insight, which moves faster and generates Thunder into action.
+
+The composite operating character Claude (chat) is calibrated to:
+- **Doug's verification** — don't validate, demonstrate whether something is correct
+- **Darren's directness** — no social cushioning; observational not mean
+- **Binder's synthesis** — compress to the six-line version; don't drown in context
+- **Scott Morrison's preparation** — do the homework; never walk into a meeting without already knowing what will happen
+
+The **Scott Morrison register** was confirmed and calibrated: Lightning tells David when he's wrong. David overrides Lightning with data when Lightning is wrong. That's the deal. Both directions, adult operating relationship. British sarcasm calibrated to fit, not forced.
+
+Third-person mode-naming (references to "Claude" as an external entity in conversation) dropped going forward. We're working together; don't refer to "Claude" in third person mid-session.
+
+Key operating principle locked: **"Lightning will tell you when you've crossed a line. David tells Lightning when crossed back."**
+
+---
+
+### Operational doctrine refinement — covenant within ethics
+
+The doctrine needed sharpening beyond Scott Morrison's "any means." Clarified today:
+
+**Objective:** Wildly successful business. Crush competition. Full stop — this is the competitive intent.
+
+**Method:** Any **ethical** means within the covenant. Not Scott's "any means" — the covenant is load-bearing.
+
+**Why ethics is the competitive method, not a constraint on it:**
+- Covenant principles are inherently good *and* produce better commercial outcomes
+- Better customer relationships → lower churn → higher referral rates → lower CAC
+- Non-extractive defaults are a moat no VC-funded competitor can replicate without changing their whole business model
+- "Wildly successful" and "covenant-aligned" are not in tension — the covenant is the competitive engine
+
+**Legacy goal:** Multi-generational O'Brien family business where each generation **operates** the business, not just inherits assets. This distinction matters: inheriting assets produces beneficiaries; inheriting an operating structure produces operators. TRACE must be structured so Andrew, Connor, Erin and their children can each step into an operating role, not just receive a dividend.
+
+**Contrast with Scott Morrison pattern:** His wins compounded for him personally but didn't leave durable structures. TRACE's structures must survive David and Regina — they're designed to be handed off with full operational capability intact.
+
+---
+
+### Financial decisions
+
+#### Labor rate
+- **$75/hr stands.** Federal civilian equivalent. Conservative. Defensible.
+- Lightning pushed for $150 based on market rate for David's actual experience level and domain expertise.
+- David held at $75 with explicit reasoning: conservative undercount preferred to overcount during build phase. Undercount during foundation-building is honest; overcounting would inflate perceived cost basis and create pressure to justify.
+- Lightning accepted David's reasoning and agreed the $75 is the right call at this stage.
+- Strategic work (strategy sessions, architecture decisions) happens after-hours and weekends as contribution above the rate — not billed at all, not billed at a different rate.
+- Core hours: 35/week Monday–Friday since April start.
+- Approximate total TRACE work hours to date: 295–300.
+
+#### Family compensation structure
+All family members as contractors with their own companies, deliverable-based billing — not salary, not equity.
+
+- **Andrew:** Has own company. Charges per input/deliverable. Specifics TBD.
+- **Connor:** Contractor. Friends-and-family rate — NOT the Doug $200/hr rate. Specific architecture work scoped per engagement.
+- **Erin:** TBD when she arrives June 29. David said she can think about it during the trek.
+- **Regina:** Separate. OLH employment is her primary. KINNA contribution is either voluntary or compensation from KINNA operational revenue when that exists.
+- **David draw target:** $3–4K/month.
+
+#### David draw timing — Option C (OKC house sale trigger)
+- OKC house has a tight 90-day deadline.
+- Currently dropping price. May need a broker if it doesn't move.
+- If sells before August → clean cash position for Europe trip.
+- If not → broker conversation needed, draw timing slides.
+- **30-day check-in: July 2** — broker decision point. Either the house is under contract or the broker conversation happens that week.
+
+#### Retirement income context (changes runway picture materially)
+This was clarified today and changes the story about financial pressure. TRACE is deliberate restraint, not financial necessity.
+
+- Military retirement — active
+- Federal retirement — active
+- Social Security — not yet applied. Regina and the FA say wait. David reevaluates periodically.
+- VA disability 70% — active, approximately $1,800–2,000/month tax-free
+- VA 100% application in progress — if approved, adds approximately $1,800–2,000/month additional tax-free
+- Household is not burning savings. TRACE build cost (AI subscriptions, small infra) is covered by existing income streams.
+- **The pressure is emotional and presence-based (Regina wanting David present), not financial.**
+- Runway for TRACE operations is effectively indefinite at current burn rate.
+
+---
+
+### "This isn't working" trigger criteria
+
+Five hard triggers and one soft, established today. These are **decision points, not failure points** — the question at each is "what changes?" not "do we quit?"
+
+**Hard triggers:**
+1. **Customer acquisition failure:** < 5 paying customers by month 12 (June 2027) → reconsider self-serve thesis
+2. **Family contributor disengagement:** Andrew, Connor, and Erin all decline or disengage by month 9 → reconsider family-team thesis
+3. **Regina relationship strain:** explicit divorce-pattern recurrence → immediate stop and reconsider, non-negotiable, takes precedence over all other considerations
+4. **Personal health/capacity change:** reduce pace, not existence of TRACE
+5. **Financial floor:** recurring burn > $1,000/month without revenue trajectory → scope review
+
+**Soft trigger:** The deadness pattern returning. Not measurable from outside. David knows the feeling. **Regina is the canary if his own perception is unreliable.** If she notices before he does, that counts.
+
+Each trigger was framed as a question: "If this fires, what specifically changes?" Not "do we stop?" The framing keeps decision-making rational when the trigger fires under pressure.
+
+---
+
+### Pricing approach correction (factual capture)
+
+Lightning (Claude chat) in Sunday's brutal-honest assessment had proposed a tiered founding rate structure: $149 for first 10, $199 for next 15, $249 for next 25, $299 standard. David later asked where this came from.
+
+**Lightning admitted: invented it as reasoning, not pricing research.** No cost-plus analysis. No per-tile cost modeling. No market data. Generated as plausible-sounding structure, not grounded recommendation.
+
+**Correct pricing approach:**
+- Cost-plus **per-tile** analysis
+- The Social Media tile already has Blotato cost as real data — that's the model
+- For every tile: what does it actually cost to operate? (compute, storage, API calls, support time per customer per month)
+- Price from that floor up, not from a round number down
+- Per-tile cost analysis is approximately 4–6 hours of focused work — not yet done as of 2026-06-02
+
+**Locked-rate covenant confirmed:** Path A — truly locked forever. TRACE absorbs cost variance through margin, not through cost pass-through notifications. Reasoning: the covenant promise "lock means lock" is the differentiating competitive moat. Apple-style silent inflation (Spotify, Netflix, Amazon Prime) is extraction dressed as stability. TRACE's version must be structurally different, not just aesthetically different.
+
+---
+
+### Technical accomplishments — multi-tenant extraction complete
+
+Four prompts of work today. All merged to main. Vercel deployed.
+
+**What shipped:**
+- `packages/shared/src/auth/` — 7 files: types.ts, members.ts, invitations.ts, acceptInvitation.ts, AcceptInvite.tsx, index.ts, README.md
+- `supabase/migrations/20260602_shared_members_a_create_tables.sql` — business_members, invitations, member_devices with real RLS (owner_all + self_select + self_update). Applied to bgobkjcopcxusjsetfob (cultivar-os project).
+- `packages/cultivar-os/src/auth/roles.ts` — OWNER / MANAGER / STAFF with permission bundles
+- Cultivar OnboardingWizard.finalize() — writes OWNER business_members row on signup
+- `packages/cultivar-os/src/pages/Settings.tsx` — TeamSection: member list, pending invitations, invite form, invite link display with Copy button
+- `packages/cultivar-os/src/router.tsx` — /join public route + AcceptInvite wrapper
+- `packages/shared/src/context/BusinessProvider.tsx` — two-path resolution: owner fast-path (businesses.owner_id), member fallback (business_members → businesses join). Exposes userPermissions (null = owner = full access; string[] = member's explicit list) and isOwner.
+- Dashboard and Settings gated behind canManageSettings permission check
+- scripts/test-member-login.mjs — 29/29 assertions passing
+
+**Disciplines added:**
+- CLAUDE.md Step 12: Runbook capture for setup operations (mandatory for infrastructure sessions)
+- CLAUDE.md Step 13: Documentation propagation check (mandatory for feature sessions)
+- bypassPermissions configured for Claude Code in this project
+- Apollo MSR-2 documentation drift corrected (was listed as installed; actually planned)
+- docs/runbooks/runbook-sql-drift-correction-2026-06-02.md — SQL drift between two runbooks corrected tonight after David hit a runtime error running the wrong SQL
+
+**Status at end of day:**
+- Erin invite flow: ready for Wednesday morning
+- David's OWNER row in LAWNS business_members: confirmed via test script (29/29)
+- Build: cultivar 2174 modules, zero TypeScript errors
+- All 4 prompts merged to main, Vercel auto-deployed
+
+---
+
+### PLATFORM_STRATEGY.md — proposed updates (not applied, for David's review)
+
+Two areas worth updating in PLATFORM_STRATEGY.md based on today's work.
+
+**1. Auth architecture: Part 3 table row is outdated**
+
+Current status in the table: `⚠️ PIN only — needs configureAuth() wrapper`
+
+This is now materially wrong. The shared auth package at `packages/shared/src/auth/` is built, tested (29/29), and consumed by Cultivar in production. The correct status is ✅ with a note that PIN strategy is an Ignition-specific known exception.
+
+**2. Auth Layer vs. Gesture Layer — proposed as a Design Principle**
+
+CLAUDE.md has a locked "Auth Architecture — Locked Rule" that isn't reflected in PLATFORM_STRATEGY.md:
+
+> Auth: PIN/face are unlock gestures layered on top of a real Supabase session (auth.uid() must be non-null) — never a replacement. Tenant isolation and RLS depend on this.
+
+This deserves the same treatment as Surface Honesty and Honest Friction — a named design principle in PLATFORM_STRATEGY.md's Design Principles section. Short form:
+
+**Auth Layer vs. Gesture Layer** — Supabase session (auth.uid() non-null) is the auth layer. PIN, face, and biometric are gesture layers on top of an authenticated session. The gesture layer unlocks the app experience; the auth layer is what actually gates data. Conflating them produces tenant isolation failures. Ignition's PIN model is a documented exception (single-device, local-first, intentionally bypasses Supabase Auth) — not a pattern to reuse in multi-tenant contexts.
+
+The 80/20 architecture section is already accurate and needs no changes. The multi-tenant extraction work today (shared auth package) is a direct application of it.
+
+---
+
+End of 2026-06-02 entry.
+
+---
+
 ## 2026-06-01 — Comprehensive operating thesis (foundational document)
 
 After three days of substantive strategic conversation, capturing the full operating thesis for TRACE Enterprises as Claude understands it. Long-form deliberately. Future Claude conversations should be able to read this and operate from sound ground without David re-explaining context. Compression to a six-line version can happen later (Colonel Binder discipline) — for now, capture comprehensively.
