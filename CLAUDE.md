@@ -258,6 +258,44 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-02 — Multi-tenant extraction foundation: branch, Step 12, shared schema
+
+**Branch:** `multi-tenant-extraction` — DO NOT MERGE to main. David reviews and merges deliberately after all sessions in this series are complete.
+
+**What was built:**
+- `CLAUDE.md` Part 9 Step 12 added — Runbook capture for setup operations (mandatory for any session with environment/deployment/infrastructure work)
+- `supabase/migrations/20260602_shared_members_a_create_tables.sql` — new shared tables: `business_members`, `invitations`, `member_devices` with real RLS (owner_all + self_select + self_update). Replaces Ignition's PIN-centric shop_members/shop_invites pattern with email/Supabase-auth pattern.
+- `packages/ignition-os/supabase/migrations/20260602_ignition_drop_team_tables.sql` — drops old Ignition team tables (shop_members, shop_invites, teams, member_devices, pin_resets) from ufsgqckbxdtwviqjjtos
+- `docs/runbooks/multi-tenant-extraction-foundation-2026-06-02.md` — full runbook with schema design decisions, verification queries, gotchas
+
+**⚠️ David — required manual steps before continuing:**
+
+1. Apply shared tables migration to **cultivar-os project** (bgobkjcopcxusjsetfob):
+   - Open: https://supabase.com/dashboard/project/bgobkjcopcxusjsetfob/sql/new
+   - Paste: `supabase/migrations/20260602_shared_members_a_create_tables.sql`
+   - Run verification queries from runbook Step 2b
+
+2. Drop old Ignition tables from **ignition-os project** (ufsgqckbxdtwviqjjtos):
+   - Open: https://supabase.com/dashboard/project/ufsgqckbxdtwviqjjtos/sql/new
+   - Paste: `packages/ignition-os/supabase/migrations/20260602_ignition_drop_team_tables.sql`
+   - Run verification query from runbook Step 2c
+
+3. Before next session: confirm `git branch --show-current` = `multi-tenant-extraction`
+
+**Schema decisions (locked):**
+- `business_members` (not shop_members) — anchors to businesses table, vertical-agnostic
+- `invitations` (not shop_invites) — 7-day expiry added (email invites need expiration)
+- `member_devices` — denormalized `business_id` for clean RLS without join overhead
+- No `pin_resets` in shared — Cultivar uses email/password auth (CLAUDE.md locked auth rule)
+- No `teams` in v1 — premature abstraction, add when a vertical explicitly needs it
+- RLS v1: owner has full access, member can see/update own row. Cross-member reads use service key. Tighten to SECURITY DEFINER in v2.
+
+**Build status:** Not re-verified (no frontend code changed). Pre-session build was cultivar 2166 ✅ · ignition 1828 ✅. Migration files are SQL only.
+
+**Next session in this series:** BusinessMembersProvider + useMembers hook + invite/accept API endpoints in packages/shared/. Then consume in Cultivar's Settings page (TeamSection).
+
+---
+
 ### 2026-05-29 — Ignition OS multi-tenant conversion + Campaign Scheduler
 
 **What was built:**
@@ -1000,18 +1038,19 @@ packages/shared/src/
 
 ## 7. OFF LIMITS THIS SESSION
 
-- packages/ignition-os/ — DO NOT MODIFY
 - packages/shared/src/quickbooks/oauth.ts
   (IGNITION_OS_DATA hardcoding — post-demo fix)
 - packages/shared/src/supabase/auth.ts
   (PIN auth — post-demo refactor)
 - Old Supabase project ufsgqckbxdtwviqjjtos
-  — never reference in cultivar-os code
+  — never reference in cultivar-os code (exception: the drop migration
+  20260602_ignition_drop_team_tables.sql targets this project intentionally)
 - Any already-run Supabase migrations
 - nursery_modules RLS policy authenticated_select_nursery_modules
   (intentionally loose — allows any authenticated user to read;
   tighten to owner_id join post-demo once nurseries.owner_id
   is populated. See Part 4 post-demo tasks.)
+- main branch — all multi-tenant extraction work stays on multi-tenant-extraction branch until David merges deliberately
 
 ---
 
@@ -1089,6 +1128,24 @@ MANDATORY before ending every session:
    - The session explicitly states "no factual corrections surfaced in this session"
 
    *Rationale: Memory drifts. Both human and AI memory. Conversations build confident assertions on previously-held information. When an audit corrects the information, the correction must propagate to docs or the next conversation will re-assert the wrong information. The audit catches it once; the documentation update prevents catching it again.*
+
+12. **Runbook capture for setup operations** — For any session that performed environment setup, deployment configuration, repository migration, package installation sequences, database migrations, infrastructure changes, or any multi-step manual-feeling configuration: produce a runbook document at the end of the session.
+
+   The runbook lives in `docs/runbooks/` (create if it doesn't exist). Filename: `{operation-name}-{YYYY-MM-DD}.md`.
+
+   The runbook captures:
+   - What was being done and why
+   - The sequence of steps actually taken
+   - What to verify at each step
+   - What failed and how it was resolved
+   - How a future person (David, Andrew, Connor, future Claude) could replicate this
+   - What gotchas to watch for
+
+   The runbook is for **replay, not narrative**. Write it as if the next person doing this for a different reason needs to follow it successfully.
+
+   If the session was purely code changes (no environment/deployment/infrastructure work), state "No runbook needed — pure code session" and skip.
+
+   This step is mandatory for setup operations and the session is not complete until either a runbook exists or the no-runbook-needed declaration is made.
 
 ---
 
