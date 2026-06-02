@@ -188,14 +188,20 @@ SUPABASE_PAT=sbp_your_token node scripts/apply-migrations.mjs
 ### David's OWNER row in business_members
 The test verified that LAWNS business row exists (name: "LAWNS Tree Farm LLC"). For the invite flow to work correctly, David also needs an OWNER row in `business_members` for LAWNS. This was added in Prompt 3 via OnboardingWizard. If OnboardingWizard was never run for David's account, insert manually:
 
+**Schema requirements — read before running:**
+- `name` is NOT NULL — must be included in the column list and provided a value
+- `permissions` is `jsonb`, not `text[]` — use `'[...]'::jsonb` syntax, NOT `ARRAY[...]`
+- Apostrophes in names require SQL escaping: `O''Brien` (double single-quote), not `O'Brien`
+
 ```sql
-INSERT INTO business_members (business_id, user_id, role, permissions, active)
+INSERT INTO business_members (business_id, user_id, name, email, role, permissions, active)
 VALUES (
   'a1b2c3d4-0000-0000-0000-000000000001',
   (SELECT id FROM auth.users WHERE email = 'david_obrien2016@outlook.com'),
+  'David O''Brien',
+  'david_obrien2016@outlook.com',
   'OWNER',
-  ARRAY['manage_settings','manage_team','view_dashboard','qr_checkout',
-        'view_orders','manage_deliveries','manage_campaigns','manage_customers'],
+  '["manage_settings","manage_team","view_dashboard","qr_checkout","view_orders","manage_deliveries","manage_campaigns","manage_customers","view_reports"]'::jsonb,
   true
 )
 ON CONFLICT DO NOTHING;
