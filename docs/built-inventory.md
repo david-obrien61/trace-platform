@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-05-28
+# Last updated: 2026-06-02
 
 **Purpose:** Sessions keep rebuilding things that exist. This document is the single answer to "was X ever built?" Organized by capability, not by file. For file locations, see TRACE_PLATFORM_AUDIT.md.
 
@@ -182,6 +182,68 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 ---
 
+## Multi-Tenant Auth System (Shared)
+
+**What:** Full invite-based team management for any vertical. Owner invites members by email; member receives a `/join?token=...` link, creates a Supabase account, and is linked to the owner's business.  
+**Status:** ✅ Built — TypeScript (branch: multi-tenant-extraction — not yet merged to main as of 2026-06-02)  
+**Location:** `packages/shared/src/auth/`
+
+**Schema (cultivar-os Supabase project — bgobkjcopcxusjsetfob):**
+- `business_members` — links `auth.uid()` to a `businesses.id`. Columns: `role`, `permissions` (text[]), `active`. RLS: owner full access, member reads own row.
+- `invitations` — pending invite tokens. 7-day expiry. `used` flag prevents replay. RLS: owner full access.
+- `member_devices` — optional device tracking (denormalized `business_id` for RLS without join).
+
+**Shared TypeScript modules:**
+- `auth/types.ts` — `Member`, `Invitation`, `Role`, `VerticalAdapter`, `AcceptInviteResult`, `InvitePreview`
+- `auth/members.ts` — `getMembersByBusiness`, `updateMemberRole`, `removeMember`, `checkPermission`
+- `auth/invitations.ts` — `createInvitation`, `revokeInvitation`, `getPendingInvitations`, `expireInvitations`
+- `auth/acceptInvitation.ts` — `previewInvitation`, `acceptInvitation` (service-key server functions)
+- `auth/AcceptInvite.tsx` — React accept-invite page component (inline styles, TRACE green)
+- `auth/index.ts` — barrel export
+
+**Cultivar OS integration:**
+- `api/members/preview-invite.ts` — Vercel GET handler (reads token, returns business name + role)
+- `api/members/accept-invite.ts` — Vercel POST handler (activates member row, marks invitation used)
+- `src/pages/Settings.tsx` TeamSection — invite form, member list, pending invitations, copy-link UI
+- `src/router.tsx` — public `/join` route → `AcceptInvite` component
+- `src/auth/roles.ts` — OWNER / MANAGER / STAFF role definitions with permission arrays
+
+**Permission model:**
+- `null` permissions = owner (full access implied)
+- `string[]` permissions = member's explicit permission list from the DB column
+- Gate expression: `const canX = isOwner || (userPermissions ?? []).includes('permission_key')`
+- MANAGER excludes `manage_settings` by design — cannot reach Settings page
+
+**Test coverage:** `scripts/test-member-login.mjs` — 8 sections, 29 assertions against live DB. Verified: owner path, member path, MANAGER permission exclusions, LAWNS-specific invite flow.
+
+---
+
+## BusinessProvider (Shared Context)
+
+**What:** React context that resolves the logged-in user's business and exposes it across the app. Two-path resolution: owner fast-path, member fallback.  
+**Status:** ✅ Built — TypeScript  
+**Location:** `packages/shared/src/context/BusinessProvider.tsx`  
+**Exports:** `BusinessProvider`, `useBusinessContext`, `Business`, `BusinessContextValue` (from `packages/shared/src/context/index.ts`)
+
+**Resolution logic:**
+1. Owner path (fast): `businesses WHERE owner_id = auth.uid() AND business_type = $type`
+2. Member fallback (if owner returns null): `business_members WHERE user_id = auth.uid() AND active = true` with `businesses(*)` PostgREST join
+
+**Context values:**
+- `business: Business | null` — full businesses row
+- `businessId: string | null`
+- `businessError: string | null` — `'no_business'` when neither path resolves
+- `loading: boolean`
+- `reload: () => void`
+- `userPermissions: string[] | null` — null = owner, string[] = member's DB-stored permissions
+- `isOwner: boolean`
+
+**Consumed by:** `packages/cultivar-os/src/App.tsx` (`<BusinessProvider businessType="nursery">`), all Cultivar pages via `useBusinessContext()`.
+
+**Note:** Member-path does not filter by `business_type` — that filter is an owner-side concept. Members join a business directly. If a user is a member of multiple businesses, `.single()` will fail. Acceptable for v1.
+
+---
+
 ## QB Token Refresh
 
 **What:** Proactive QuickBooks token refresh. Checks expiry before any invoice call. Refreshes if missing or within 10 min of expiry. Sets `qb_needs_reconnect=true` and returns null if refresh token is dead.  
@@ -256,9 +318,86 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 - Data migration — QB pull / CSV / manual entry
 
 **TeamQR step:** Generates QR code + `/?join=<shopId>` link. Team members scan once to join.  
-**finalize():** Writes shop to Supabase `shops` table, sets `trial_started_at`.
+**finalize():** Writes to Supabase `businesses` table + `shops` (same UUID), seeds DataBridge, marks onboarding complete. Also inserts OWNER row into `business_members`.
 
 **Extraction target:** `packages/shared/src/onboarding/WizardShell.tsx` (see TRACE_PLATFORM_AUDIT.md Top 10 #1)
+
+---
+
+## OnboardingWizard (Cultivar OS)
+
+**What:** 4-path first-run experience. Welcome → NurserySetup → ChoosePath → PathExperience → Done. Proves value immediately; auto-creates the nursery record for new accounts.  
+**Status:** ✅ Built (Cultivar OS only — not yet extracted to shared)  
+**Location:** `packages/cultivar-os/src/pages/OnboardingWizard.tsx`  
+**Route:** `/onboarding` (public, redirected from Dashboard when business row is missing)
+
+**4 paths:**
+- LEAKAGE — leakage calculator: shows annual missed add-on revenue
+- CHECKOUT — 4-slide visual walkthrough of the QR checkout flow
+- SETUP — QuickBooks integration teaser
+- DELIVERY — demo delivery stops → Google Maps route → SMS driver link
+
+**finalize():** Inserts a `businesses` row (owner_id = auth.uid(), business_type = 'nursery') and a `nursery_profiles` row (default_install_price). Also inserts OWNER row into `business_members`. Resolves the "Account not linked" error wall for new accounts.
+
+---
+
+## Settings Page (Cultivar OS)
+
+**What:** Owner-facing settings. Business profile, accounting (QB connect/disconnect), sales prompts (netting, install price), and team management.  
+**Status:** ✅ Built — TypeScript  
+**Location:** `packages/cultivar-os/src/pages/Settings.tsx`  
+**Route:** `/settings` (private; members without `manage_settings` are auto-redirected to `/dashboard`)
+
+**Sections:**
+- **NurserySection** — nursery name, phone, address, email, website, tax rate. Reads from `businesses` table.
+- **AccountingSection** — QuickBooks connect/disconnect button. Shows connection status.
+- **SalesPromptsSection** — default install price (`nursery_profiles.default_install_price`), netting prompt toggle.
+- **TeamSection** — active member list, pending invitations, invite form (name/email/role), invite link copy button.
+
+**Permission gate:** `canManageSettings = isOwner || userPermissions.includes('manage_settings')`. MANAGER role does not include `manage_settings` by design.
+
+---
+
+## Orders Page (Cultivar OS)
+
+**What:** Last 50 orders with leakage highlighting. Shows transport icon, customer name, amount, leakage flag.  
+**Status:** ✅ Built — TypeScript  
+**Location:** `packages/cultivar-os/src/pages/Orders.tsx`  
+**Route:** `/orders` (private)
+
+**Features:** Green border = no leakage, red border = leakage flagged. Transport icons: 🚗 self / 🚚 delivery / 🌿 install. Queries `orders` joined with `customers`.
+
+---
+
+## Delivery Routing (Cultivar OS)
+
+**What:** Generate a multi-stop delivery route from pending delivery orders. Checkbox selection per stop, inline address override for missing addresses, numbered stops list, Google Maps URL, SMS-to-driver.  
+**Status:** ✅ Built — TypeScript  
+**Location:** `packages/cultivar-os/src/pages/DeliveryRoute.tsx`  
+**Route:** `/deliveries` (private)
+
+**Actions:** Open in Google Maps (multi-stop URL), Text to Driver (native SMS with route link), Copy Route Link.
+
+**Capability gap:** Delivery addresses use `customer.address_line1`. If a customer didn't provide an address at checkout, the page shows an inline override field (local state only — not persisted). Persisted delivery addresses require a `delivery_address` column on `orders` and capture at checkout for `transport_method = 'delivery'`. Migration not yet written.
+
+**Capability gap:** No `delivery_date` on orders. Route shows all pending delivery orders with no scheduled date filtering.
+
+---
+
+## Campaign Scheduler (Cultivar OS)
+
+**What:** Schedule, generate, and track social media campaigns. AI-generated post drafts with tone learning from published posts.  
+**Status:** ✅ Built — TypeScript (Cultivar OS only)  
+**Location:** `packages/cultivar-os/src/pages/Campaigns.tsx` + `CampaignDetail.tsx`  
+**Route:** `/campaigns` + `/campaigns/:id` (private)
+
+**Backend:**
+- `packages/cultivar-os/api/campaigns/generate.ts` — Claude Sonnet 4.6, generates posts using tone samples as few-shot examples
+- `packages/cultivar-os/api/campaigns/publish-post.ts` — marks published, auto-saves (original, edited) pairs as tone samples for future generation
+
+**Schema:** `campaigns`, `campaign_posts`, `campaign_tone_samples` tables + RLS + LAWNS seed data. Migration: `supabase/migrations/20260529_campaigns.sql`.
+
+**Dashboard integration:** "Campaign Scheduler" card shows green border when drafts are pending.
 
 ---
 
@@ -289,17 +428,28 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 | Capability | Who needs it | Notes |
 |---|---|---|
-| SavingsReport.jsx | Ignition OS | React display component for `savings_report` task. API complete. Display work only. |
-| Signup → nursery row creation | Cultivar OS | New accounts correctly show "no nursery" error after 2026-05-28 fix. Nursery creation flow is BUILD NEW. |
+| SavingsReport.jsx | Ignition OS | React display component for `savings_report` task. API complete. Display work only. (Tech Debt #10) |
 | Stripe billing | All verticals | Types exist in shared. No Stripe calls anywhere. localStorage placeholder in Ignition. |
-| Settings page | Cultivar OS | No UI for default install price, tax rate, nursery name/contact. Post-demo. |
 | Customer directory | Cultivar OS | `customers` table exists, no browse/search UI. Lauren needs this. |
 | Online Shop | Cultivar OS | Tile exists, "Enable" stub. Next roadmap item. |
-| Delivery routing | Cultivar OS | Tile exists, nothing built. Pending Lauren questions on radius + fee. |
 | Follow-Up engine | Cultivar OS | Tile exists, nothing built. |
 | Abstract asset model | Shared | QR→record→event pattern is identical in both verticals. Extract before Conduit OS. |
-| Onboarding wizard (shared) | Shared | OnboardingWizard.jsx is Ignition-only. Extract WizardShell before Conduit OS. |
+| Onboarding wizard (shared) | Shared | Two separate OnboardingWizard implementations (Ignition + Cultivar). Extract WizardShell to shared before Conduit OS. |
 | Trial clock enforcement | Cultivar OS | Seam exists in useModules.ts line 100 (`nurseryPlan = 'starter'`). No blur, no Stripe. |
+| Delivery address persistence | Cultivar OS | DeliveryRoute.tsx shows inline address override but does not persist it. Needs `delivery_address` column on `orders` and capture at checkout for delivery transport. |
+| Delivery date scheduling | Cultivar OS | No `delivery_date` on orders. Route shows all pending with no date filtering. |
+| Per-plant install price edit | Cultivar OS | `plants.install_price` read-only in UI. No edit surface. Post-demo. |
+| Tighten nursery_modules RLS | Cultivar OS | `authenticated_select_nursery_modules` allows any authenticated user to read any nursery's modules. Must restrict to owner_id join post-demo. (CLAUDE.md post-demo task) |
+| Port ai_router.py to Vercel functions | Ignition OS | Railway is legacy for web build. Port 11 endpoints to `packages/ignition-os/api/`. (Tech Debt #12) |
+
+## ✅ Resolved Gaps (previously listed as Not Yet Built)
+
+| Capability | Resolved | How |
+|---|---|---|
+| Signup → nursery row creation | 2026-05-29 | OnboardingWizard (Cultivar OS) creates `businesses` + `nursery_profiles` rows on finalize(). New accounts redirect to /onboarding. |
+| Settings page (Cultivar OS) | 2026-05-29 + 2026-06-02 | Settings.tsx built with NurserySection, AccountingSection, SalesPromptsSection, TeamSection. Permission gate added 2026-06-02. |
+| Delivery routing (Cultivar OS) | 2026-05-29 | DeliveryRoute.tsx at /deliveries. Multi-stop Google Maps URL, SMS-to-driver. |
+| Multi-tenant member login | 2026-06-02 | BusinessProvider two-path resolution. Members land on Dashboard, not "Account not linked" wall. |
 
 ---
 
