@@ -258,9 +258,68 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-03 — Merge to main; Vercel 12-function limit fixed; deployment live ✅
+
+**Branch:** `main` — multi-tenant-extraction was merged via GitHub PR #1 (4655c3d). All work now on main.
+
+**What happened this session:**
+
+The PR merge was confirmed complete (already done via GitHub before session start). Vercel auto-deploy triggered but failed with: _"No more than 12 Serverless Functions can be added to a Deployment on the Hobby plan."_
+
+**Root cause:** This error was pre-existing since May 29, 2026 — the GitHub auto-deploy integration had never successfully shipped to production. All previous successful deployments were via `npx vercel --prod` (CLI), which apparently went through before the function count was enforced, or before the 13th function was added. The merge did not cause the error; it exposed it.
+
+**Fix applied (dd7431d):**
+- Deleted `api/services/customer-match.ts` (unused — not called by any frontend page)
+- Removed `api/campaigns/generate.ts` + `api/campaigns/publish-post.ts` (2 files → 1)
+- Added `api/campaigns.ts` — combined handler with `action: 'generate' | 'publish-post'` in request body
+- Added `api/members/invite.ts` — combined GET (preview) + POST (accept) handler
+- Updated `packages/cultivar-os/src/pages/Campaigns.tsx` and `CampaignDetail.tsx` to call `/api/campaigns` with `action` param
+- Updated `packages/shared/src/auth/AcceptInvite.tsx` to call `/api/members/invite` for both GET and POST
+
+**Result:** Root `api/` is now exactly 12 functions (Hobby plan limit). Vercel deployment status: ● Ready (23s build time). First successful GitHub-triggered production deployment.
+
+**Verification:**
+- `node scripts/test-member-login.mjs` → 29/29 assertions passed ✅
+- `npm run build:cultivar` → 2175 modules, zero errors ✅
+- Vercel deploy → ● Ready ✅ (confirmed via `npx vercel ls`)
+- `bgobkjcopcxusjsetfob` DB: `business_members.pin_hash` column exists ✅
+- `ufsgqckbxdtwviqjjtos` DB: `shop_members` recreated — David must confirm manually (no local env file for that project)
+
+**Manual smoke tests still required (can't automate from CLI):**
+- Step 11: Fresh-email new-owner signup at cultivar-os.vercel.app/signup — confirm businesses + business_members rows created with pin_hash
+- Step 12: TeamSection renders in Settings for owner — this is what unblocks inviting Erin
+- Step 13: Invite Erin — Settings → Team → Send Invite → Share link with Erin
+
+**Vercel function map (12 functions, at Hobby limit):**
+
+| Function | Path | Notes |
+|---|---|---|
+| `api/campaigns.ts` | `/api/campaigns` | generate + publish-post via action param (consolidated) |
+| `api/dashboard.ts` | `/api/dashboard` | — |
+| `api/discovery/ingest.ts` | `/api/discovery/ingest` | — |
+| `api/members/invite.ts` | `/api/members/invite` | GET preview + POST accept (new — members invite flow) |
+| `api/orders/submit.ts` | `/api/orders/submit` | — |
+| `api/qbo/auth-url.ts` | `/api/qbo/auth-url` | — |
+| `api/qbo/callback.ts` | `/api/qbo/callback` | — |
+| `api/qbo/invoice/cultivar.ts` | `/api/qbo/invoice/cultivar` | — |
+| `api/qbo/status.ts` | `/api/qbo/status` | — |
+| `api/social/enable.ts` | `/api/social/enable` | — |
+| `api/social/generate-posts.ts` | `/api/social/generate-posts` | — |
+| `api/social/publish.ts` | `/api/social/publish` | — |
+
+**⚠️ Warning for next feature that adds a serverless function:** The platform is at the Hobby plan limit. Any new API endpoint requires either (a) upgrading to Vercel Pro ($20/mo, unlimited functions), or (b) consolidating another existing pair. Recommend upgrading Pro before adding the next API-backed feature.
+
+**No customer-facing documentation propagation needed for this session** — this was an infrastructure/deploy fix, not a feature build. The campaigns and members flows work identically from the user's perspective.
+
+**No factual corrections surfaced this session** — the pre-existing Vercel failure was new information, not a correction of a previously-stated fact.
+
+**No runbook needed for the Vercel fix** — the cause and fix are fully documented in this handoff entry and the commit message.
+
+---
+
 ### 2026-06-03 — Shared OwnerSignup with PIN gesture layer; Ignition signup restored; PLATFORM_STRATEGY corrected
 
-**Branch:** `multi-tenant-extraction` — DO NOT MERGE to main.
+**Branch:** ~~`multi-tenant-extraction` — DO NOT MERGE to main.~~ **MERGED to main 2026-06-03 via PR #1.**
 
 **What was built:**
 
@@ -1216,7 +1275,7 @@ packages/shared/src/
   (intentionally loose — allows any authenticated user to read;
   tighten to owner_id join post-demo once nurseries.owner_id
   is populated. See Part 4 post-demo tasks.)
-- main branch — all multi-tenant extraction work stays on multi-tenant-extraction branch until David merges deliberately
+- main branch — multi-tenant-extraction was merged 2026-06-03. All work now goes directly to main or feature branches as appropriate.
 
 ---
 
