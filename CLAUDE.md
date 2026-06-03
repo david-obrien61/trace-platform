@@ -262,19 +262,13 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 **Branch:** `main` — all commits on main. Two commits this session: `fc36c9a` (Item 3) and `5b630e1` (Items 4a/4b/4c).
 
-**Items 1 and 2 were diagnosed but NOT fixed (awaiting David go-ahead):**
+**All four items fully fixed (commit `a419bb8` covers Items 1+2):**
 
-**Item 1 — Ignition sign-in loop (DIAGNOSED, fix ready):**
-Root cause: `CoreApp.jsx` OWNER SYNC effect (lines ~757-767) calls `DataBridge.setShopId()` + `setShopReady(true)` when `ownerBusinessId` resolves, but never calls `setOnboardingDone(true)`. So returning owners on a new device hit the `onboardingDone = false` gate every login. Fix = add two lines to the OWNER SYNC effect:
-```js
-DataBridge.save('shop_policy', { ...(DataBridge.load('shop_policy') || {}), onboarding_complete: true });
-setOnboardingDone(true);
-```
-David: confirm go-ahead, then Claude adds these two lines to `packages/ignition-os/CoreApp.jsx`.
+**Item 1 — Ignition sign-in loop (FIXED commit a419bb8):**
+`CoreApp.jsx` OWNER SYNC effect now calls `setOnboardingDone(true)` + persists `shop_policy.onboarding_complete: true` after resolving `ownerBusinessId`. Returning owners on a new device no longer loop back to WELCOME.
 
-**Item 2 — Ignition signup color (PARTIALLY FIXED as part of Item 3):**
-Root cause: `OwnerSignup.tsx` hardcoded `BG = '#EAF3DE'` (container) and `'#fff'` (card). These are now config-driven (`backgroundColor` / `cardColor`). Ignition's config passes `backgroundColor: '#020617'`, `cardColor: '#0f172a'`. The dark→light→dark jump is FIXED as of this session.
-REMAINING gap: text colors inside the card (Field labels `#333`, body text `#555`) are hardcoded for light backgrounds. On Ignition's dark card, these will be hard to read. Fix = add `labelColor?: string` to config or a `darkMode?: boolean` flag. NOT done (gated per David's instructions).
+**Item 2 — Ignition signup color (FULLY FIXED commit a419bb8):**
+`OwnerSignup.tsx` now accepts `darkMode?: boolean` in config. When true: field labels → `#cbd5e1`, body text → `#94a3b8`, input borders/bg → dark slate, ghost buttons → `#64748b`. Ignition config sets `darkMode: true`. The full dark→light→dark jump is resolved — container, card, and all text are now cohesive dark navy throughout the Ignition signup flow.
 
 **What was built this session:**
 
@@ -302,10 +296,8 @@ Item 4c — Blotato abstraction (commit `5b630e1`):
 - Ignition: 1834 modules ✅
 
 **⚠️ David — manual steps still pending:**
-1. **Push to Vercel** — run `npx vercel --prod` or `git push` (GitHub auto-deploy). Items 3+4 are committed to main but not yet deployed.
-2. **Item 1 fix go-ahead** — confirm and Claude adds the two OWNER SYNC lines to CoreApp.jsx.
-3. **Item 2 text contrast** — after seeing Item 1 fixed, decide whether the text-on-dark-card issue needs addressing (add `darkMode` flag to OwnerSignup config).
-4. **Blotato API structure verification** — `fetchBlotatoAccountId()` assumes accounts array has `{ id, platform }` shape. If the actual Blotato `/v2/users/me/accounts` response uses a different shape, the server-side fetch will return `null` (social enable still works, but `blotato_account_id` will be null in DB). Verify by checking Blotato docs or logging the response from a test enable call.
+1. **Push to Vercel** — run `npx vercel --prod` or `git push` (GitHub auto-deploy). All four items are committed to main but not yet deployed.
+2. **Blotato API structure verification** — `fetchBlotatoAccountId()` assumes accounts array has `{ id, platform }` shape. If the actual Blotato `/v2/users/me/accounts` response uses a different shape, the server-side fetch will return `null` (social enable still works, but `blotato_account_id` will be null in DB). Verify by checking Blotato docs or logging the response from a test enable call.
 
 **Factual corrections captured in THOUGHTS.md:**
 1. Ignition OwnerSignup theme was never visually verified (dark→light jump existed from day one)
@@ -1239,8 +1231,8 @@ Completed:
 - [x] New-owner demo path through OnboardingWizard ✅ (signup → /onboarding — June 4)
 - [x] DiscoveryGlimpse as verticalStep in Cultivar signup ✅ (June 4)
 - [x] Blotato Account ID removed from SocialSetup; fetched server-side ✅ (June 4)
-- [ ] Ignition sign-in loop fix (READY — awaiting David go-ahead; two-line fix in CoreApp.jsx)
-- [ ] Ignition signup text-on-dark-card contrast (Item 2 remaining gap — darkMode flag)
+- [x] Ignition sign-in loop fix ✅ (CoreApp.jsx OWNER SYNC — June 4)
+- [x] Ignition signup text-on-dark-card contrast ✅ (darkMode config flag — June 4)
 - [ ] Blotato /v2/users/me/accounts response shape verification
 - [ ] Online Shop (/shop page)
 - [ ] Customer follow-up engine
