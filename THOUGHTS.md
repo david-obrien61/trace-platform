@@ -1035,6 +1035,160 @@ End of 2026-06-02 entry.
 
 ---
 
+## 2026-06-03 — Conduit Strategic Reframe and Address-as-Context Principle
+
+Wednesday morning back-porch thinking. Regina surfaced a customer pain point from lived experience; David developed it into a broader strategic position. Captured before it drifts.
+
+---
+
+### The Conduit reframe
+
+Conduit was originally scoped as HVAC-focused. Real scope: **operational intelligence for field service trades**. HVAC is one member of a larger category: roofing, painting, concrete, fencing, lawn care, landscaping, exterior cleaning, masonry, site prep, tree services, pool services — anywhere weather dictates schedule and location dictates context.
+
+The value proposition is NOT competing with specialized estimating tools. Roofers already have estimating software. The value proposition is solving the **operational orchestration layer** underneath specialized work: scheduling, weather-aware reshuffling, crew availability, customer communication, material coordination.
+
+Most trades businesses do this layer badly. It lives in heads, whiteboards, and frantic phone calls. The competition is chaos plus accumulated experience — a much weaker competitive position to challenge than sophisticated software.
+
+---
+
+### The Regina-sourced problem
+
+David and Regina hired a roofing contractor. Rain delayed start day. Contractor didn't communicate the reschedule. Regina had to chase him to understand new timing. She asked David: "Why can't this just be solved?"
+
+That question pushed David to consider what TRACE could actually solve in this space.
+
+**Worth recording:** Regina is not doing strategic synthesis for TRACE. She surfaces real customer pain points from lived experience and asks "why isn't this solved?" That question is itself a contribution — it gives David problems to evaluate strategically. David does the synthesis. Regina provides ground-truth customer perspective.
+
+This is a different role from "strategic advisor" and worth honoring as what it actually is. The distinction matters for how her contributions get credited and how her time gets structured going forward.
+
+---
+
+### Address-as-context principle
+
+Every trade job has an address. Every address unlocks public data that affects how the job actually gets done:
+
+- Weather forecast specific to that location (not regional)
+- Soil type and depth (Liberty Hill has 2 feet of limestone in many places — affects trenching, foundation, septic, deep planting)
+- Local building codes and permit requirements
+- HOA restrictions
+- School schedules (noise restrictions during school hours in residential neighborhoods)
+- Local water restrictions (landscaping)
+- Tree species native to area (nurseries, tree services)
+- Historical pest pressure (landscapers, pest control)
+- Property tax records
+- Average home age in the area (HVAC, roofing — what infrastructure era are we working in?)
+
+Most contractors don't use this data because pulling it for every job is too much manual work. A platform that auto-surfaces relevant location data for each job is solving a real problem.
+
+**Concrete example from David's own property:** Laying waterline hit 2 feet of limestone, required going back for a rock trencher. A platform that knew "this address has limestone at X depth" would have told the contractor before they showed up with the wrong equipment.
+
+This generalizes nationally:
+- Houston's clay
+- Florida's water table
+- Colorado's frost line
+- New England's bedrock
+- Texas Hill Country's limestone cap
+
+Every region has geological gotchas local contractors learn through painful experience. TRACE could surface them automatically by job address. Contractors who move into new service areas would start with the same local knowledge that took experienced local contractors years to accumulate.
+
+---
+
+### Calibrated weather intelligence
+
+Standard weather forecasts are probabilistic statements about regions, not deterministic statements about specific addresses. "50% chance of rain" is widely misinterpreted by contractors and homeowners.
+
+TRACE's weather intelligence would be calibrated to actual outcomes at specific locations:
+- Pull historical weather for each job address
+- Build a model of how forecasts correlated with actual rain at that micro-location
+- Generate location-calibrated rain probability
+- Let contractors override based on local knowledge (which becomes part of the model)
+- Track whether predictions matched outcomes — the audit principle applied to weather
+
+**The learning loop:** A contractor's local knowledge corrections become part of the model over time. After enough overrides, TRACE learns calibration: "When NOAA says 50% rain in Liberty Hill, actual rain occurred at this contractor's job sites 73% of the time historically — weight accordingly."
+
+This is smarter weather intelligence than any weather service provides because it's grounded in operational outcomes, not meteorological predictions. The local-knowledge audit loop is the TRACE differentiator — no weather service can build this because they don't have per-contractor per-address outcome data.
+
+---
+
+### Margin intelligence as separate capability
+
+Related but distinct from weather/location: helping contractors understand their actual unit economics.
+
+Most small trade contractors don't know their real costs. When material costs change (tariffs, supplier price increases, scarcity), they either eat the costs or pass them on without adjusting other pricing levers. They operate reactively without data.
+
+A platform that shows what's actually happening to margins — and offers three specific pricing adjustments to restore margin without losing customers — would be valuable independently of the scheduling/weather layer.
+
+This connects to the Time Back principle and audit cycle: customer sees what's actually happening in their business, not what they assume is happening.
+
+**David's real-world example:** A specific construction project where the contractor charged 10× material markup (typical is 30–50%). Either misunderstanding own costs, gouging, or both. A platform that shows actual costs versus what's being charged lets honest contractors price honestly and reveals bad actors — protecting the customer and giving honest contractors a leg up over dishonest ones.
+
+---
+
+### How Andrew's domain knowledge fits
+
+Andrew worked at Sherwin-Williams for 3–5 years. That's paint supplier-side knowledge — what painters buy, how often, in what quantities, what they substitute when out of stock.
+
+He has supplier-perspective intelligence on painting contractors: the complaints they surface, the patterns in their purchasing, the volume tiers and their economics. That's useful for Conduit's painting variant specifically.
+
+**Proposed role:** Andrew as discovery-and-design lead for painting trades within Conduit. Similar to how Erin's ER nursing experience maps to CoolRunnings' aging-in-place angle. Family domain knowledge becomes vertical-specific design input. Andrew doesn't have to be the operator — he has to be the domain translator.
+
+---
+
+### David's federal experience as Conduit asset
+
+Regina pushed David toward construction trades because she sees he has lingo and credibility in that world. His federal/military experience translates to:
+
+- How institutional operations actually run day to day under disruption
+- Trades and field service lingo from decades in facilities/infrastructure contexts
+- Understanding what breaks when scheduling and resources collide with real-world disruption
+- Operational orchestration thinking at scale (the NATO Spec Ops pattern in a smaller context)
+
+**Honest gap:** Deep supply chain knowledge for construction materials specifically. That's not in his background. The operational orchestration layer and weather/location intelligence don't require supply chain expertise. Material integration features can be deferred or built when a customer can teach the domain.
+
+---
+
+### Strategic position summary
+
+Conduit's competitive position: **"We give you intelligence about specific job sites before you start the job, so you can avoid the painful surprises that destroy schedules and margins."**
+
+Weather, geology, building codes, HOA rules, school schedules, neighborhood characteristics — all auto-surfaced by job address. The contractor's expertise gets augmented with structured data, not replaced. The audit then measures whether better inputs translated into better outcomes.
+
+This fits the TRACE covenant:
+- **Non-extractive** — using public data to help contractors operate better, not to surveil or capture their customer relationships
+- **Audit-anchored** — measuring whether intelligence actually improved outcomes
+- **Outcome-anchored pricing** — contractors see dollar value of disruptions prevented
+
+---
+
+### Implementation implications
+
+**Conduit MVP scope: scheduling and orchestration first, NOT material integration.**
+
+Material/supply integration deferred until a customer can teach the domain or someone with supply chain knowledge joins. Starting with material integration would require deep domain expertise TRACE doesn't have yet.
+
+**Proposed build order:**
+1. Painting (Andrew's domain from Sherwin-Williams)
+2. HVAC (David's original concept)
+3. Expansion to other trades as patterns emerge from customer use
+
+**Customer discovery worth doing:** Talk to 1–2 small trades operations from the Liberty Hill community board. Not the sophisticated ones (Vaquero Plumbing has invested in marketing systems already). Target smaller painting, fencing, or roofing operations. Discovery question: "When it rains and you have to reshuffle 3 jobs, what does that actually look like for you?" Listen to how they describe it. Don't lead with technology.
+
+---
+
+### Connection to existing TRACE principles
+
+- **80/20 architecture:** Operational orchestration core is shared; weather/location intelligence is vertical-specific content (job-address lookup, local calibration data)
+- **Auth Layer vs. Gesture Layer:** Trade contractors need WebAuthn-style biometric login — same greasy-hands / gloves-on case as gardeners and diesel techs. Conduit's gesture layer should default to biometric/PIN, never typing
+- **Time Back principle:** Schedule disruptions prevented = hours saved + revenue captured, measurable per contractor per season
+- **Audit anchor:** Weather/location predictions tracked against outcomes — did the calibrated forecast help, or did the contractor override correctly?
+- **Covenant:** Non-extractive use of public data; contractor's local knowledge corrections stay in their model, not sold to competitors
+
+---
+
+End of 2026-06-03 entry.
+
+---
+
 ## 2026-06-01 — Comprehensive operating thesis (foundational document)
 
 After three days of substantive strategic conversation, capturing the full operating thesis for TRACE Enterprises as Claude understands it. Long-form deliberately. Future Claude conversations should be able to read this and operate from sound ground without David re-explaining context. Compression to a six-line version can happen later (Colonel Binder discipline) — for now, capture comprehensively.
