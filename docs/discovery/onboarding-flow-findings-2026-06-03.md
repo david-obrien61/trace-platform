@@ -3,7 +3,7 @@
 **Type:** Discovery document — real user testing findings  
 **Tester:** David O'Brien  
 **Verticals tested:** Ignition OS (ignition-os.vercel.app), Cultivar OS (cultivar-os.vercel.app)  
-**Status:** Findings documented; fixes required
+**Status:** Engineering fixes shipped 2026-06-03 — see resolution notes in each section
 
 ---
 
@@ -52,6 +52,13 @@ The multi-tenant extraction work on June 2 dropped old Ignition team tables (`sh
 
 **Critical.** No new Ignition customer can sign up. The vertical is non-functional for new customer acquisition.
 
+### Resolution (2026-06-03) ✅
+
+- `packages/ignition-os/supabase/migrations/20260603_recreate_shop_members.sql` — recreates `shop_members` in ufsgqckbxdtwviqjjtos with `pin_hash`, `active`, `email` columns
+- `packages/ignition-os/modules/OnboardingWizard.jsx` — refactored to use shared `OwnerSignup` component (WELCOME and DONE steps retained; SHOP+ACCOUNT+PIN replaced with shared component)
+- **David must apply migration manually:** https://supabase.com/dashboard/project/ufsgqckbxdtwviqjjtos/sql/new
+- See `docs/runbooks/shared-signup-with-pin-2026-06-03.md` for full migration steps and test protocol.
+
 ---
 
 ## Section 3: Cultivar OS findings — existing owner login
@@ -86,6 +93,10 @@ Signed in successfully, taken directly to LAWNS dashboard. ✅
 ### Impact
 
 **High.** The multi-tenant team management feature shipped June 2 is not visible to the owner. Erin can't be invited through the UI. Fallback: share a direct `/join` URL with invite token, or use SQL insert.
+
+### Resolution status (2026-06-03) 🟡 Partially resolved
+
+TeamSection in Settings is built (June 2). The visibility issue is likely a deployment gap — the multi-tenant-extraction branch has not been merged to main yet (per CLAUDE.md: "DO NOT MERGE to main until David reviews"). Once the branch is merged and deployed to Vercel, TeamSection will be visible. No code changes needed; this resolves on merge.
 
 ---
 
@@ -135,6 +146,13 @@ A new owner completing the current signup will land in a dashboard with an empty
 
 1. Email collisions between verticals (and from failed partial signups) leave users stuck with no clear recovery path
 2. Cultivar signup doesn't collect the data needed to actually onboard a real nursery — owner lands in an empty state
+
+### Resolution (2026-06-03) ✅
+
+- `packages/cultivar-os/src/pages/SignUp.tsx` now uses shared `OwnerSignup` with full data collection: business name, owner name, email, password, phone (optional), address (optional), website (optional)
+- `OwnerSignup` has retry-aware logic: if "User already registered" → attempts signIn → if no businesses row → continues with business creation
+- Profile completion banner added to Cultivar Dashboard: shows amber warning when phone/address are null, links to Settings
+- Orphaned user cleanup: see `docs/runbooks/auth-cleanup-orphaned-users-2026-06-03.md`
 
 ### Recommended fixes (priority order)
 

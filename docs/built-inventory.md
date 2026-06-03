@@ -189,9 +189,10 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 **Location:** `packages/shared/src/auth/`
 
 **Schema (cultivar-os Supabase project — bgobkjcopcxusjsetfob):**
-- `business_members` — links `auth.uid()` to a `businesses.id`. Columns: `role`, `permissions` (text[]), `active`. RLS: owner full access, member reads own row.
+- `business_members` — links `auth.uid()` to a `businesses.id`. Columns: `role`, `permissions` (text[]), `active`, `pin_hash` (added 2026-06-03). RLS: owner full access, member reads own row.
 - `invitations` — pending invite tokens. 7-day expiry. `used` flag prevents replay. RLS: owner full access.
 - `member_devices` — optional device tracking (denormalized `business_id` for RLS without join).
+- **Migration pending (David):** `supabase/migrations/20260603_business_members_add_pin_hash.sql` adds `pin_hash` to business_members in bgobkjcopcxusjsetfob.
 
 **Shared TypeScript modules:**
 - `auth/types.ts` — `Member`, `Invitation`, `Role`, `VerticalAdapter`, `AcceptInviteResult`, `InvitePreview`
@@ -199,7 +200,9 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 - `auth/invitations.ts` — `createInvitation`, `revokeInvitation`, `getPendingInvitations`, `expireInvitations`
 - `auth/acceptInvitation.ts` — `previewInvitation`, `acceptInvitation` (service-key server functions)
 - `auth/AcceptInvite.tsx` — React accept-invite page component (inline styles, TRACE green)
+- `auth/OwnerSignup.tsx` — Multi-step signup with PIN: Owner Info → PIN Setup → Biometric (optional) → vertical steps. Config-driven. Added 2026-06-03.
 - `auth/index.ts` — barrel export
+- `supabase/auth.ts` — `authenticateMember(businessId, pin)` for platform-wide business_members PIN auth (added 2026-06-03). Also: `getMemberSession()`, `clearMemberSession()`.
 
 **Cultivar OS integration:**
 - `api/members/preview-invite.ts` — Vercel GET handler (reads token, returns business name + role)
@@ -306,30 +309,40 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 ---
 
+## OwnerSignup (Shared)
+
+**What:** Multi-step shared owner signup component with PIN gesture layer. Step 1: Owner Info (business name, owner name, email, password, phone, address, website). Step 2: PIN setup. Step 3: Biometric registration (optional, skippable). Optional vertical steps array.  
+**Status:** ✅ Built 2026-06-03 — shared, consumed by both Cultivar and Ignition  
+**Location:** `packages/shared/src/auth/OwnerSignup.tsx`
+
+**Config-driven:** Each vertical provides an `OwnerSignupConfig` specifying `memberTable`, `memberFKColumn`, `ownerRole`, `ownerPermissions`, `pinLength`, and an `onSuccess` callback. The vertical's `onSuccess` handles post-signup vertical-specific setup (e.g., Ignition creates the matching `shops` row and seeds DataBridge).
+
+**PIN hash:** SHA-256 of `{businessId}:{pin}` — consistent with `hashPin()` in `packages/shared/src/supabase/auth.ts`.
+
+**Retry-aware:** If "User already registered" → attempts signIn → if no businesses row → continues business creation. Handles orphaned auth users from partial prior signups.
+
+---
+
 ## OnboardingWizard (Ignition OS)
 
-**What:** 5-step new account setup. Welcome → ShopSetup → ChoosePath (3 paths) → PathExperience → TeamQR. Proves value within 30 min before asking for commitment. Sets trial clock.  
-**Status:** ✅ Built (Ignition OS only — not yet extracted to shared)  
-**Location:** `packages/ignition-os/OnboardingWizard.jsx`
+**What:** 3-step flow wrapping shared OwnerSignup. Welcome screen (dark Ignition theme) → OwnerSignup (TRACE green theme, full account + PIN setup) → Done screen (dark Ignition theme).  
+**Status:** ✅ Updated 2026-06-03 — uses shared OwnerSignup  
+**Location:** `packages/ignition-os/modules/OnboardingWizard.jsx`
 
-**3 paths:**
-- Margin leak — shows annual revenue loss estimate
-- Live diagnosis — live DTC/VIN demo
-- Data migration — QB pull / CSV / manual entry
+**onSuccess callback:** Creates matching `shops` row (same UUID as `businesses.id`) in ufsgqckbxdtwviqjjtos, seeds DataBridge with shopId + shopName + current_user session, marks onboarding_complete=true.
 
-**TeamQR step:** Generates QR code + `/?join=<shopId>` link. Team members scan once to join.  
-**finalize():** Writes to Supabase `businesses` table + `shops` (same UUID), seeds DataBridge, marks onboarding complete. Also inserts OWNER row into `business_members`.
+**Migration required:** `packages/ignition-os/supabase/migrations/20260603_recreate_shop_members.sql` must be applied to ufsgqckbxdtwviqjjtos before new Ignition signups work.
 
-**Extraction target:** `packages/shared/src/onboarding/WizardShell.tsx` (see TRACE_PLATFORM_AUDIT.md Top 10 #1)
+**Extraction target:** `packages/shared/src/onboarding/WizardShell.tsx` (see TRACE_PLATFORM_AUDIT.md Top 10 #1) — post-August
 
 ---
 
 ## OnboardingWizard (Cultivar OS)
 
-**What:** 4-path first-run experience. Welcome → NurserySetup → ChoosePath → PathExperience → Done. Proves value immediately; auto-creates the nursery record for new accounts.  
-**Status:** ✅ Built (Cultivar OS only — not yet extracted to shared)  
+**What:** 4-path first-run experience for new nursery owners who arrived via email invite or direct login (not via /signup). Welcome → NurserySetup → ChoosePath → PathExperience → Done. Proves value immediately.  
+**Status:** ✅ Built (Cultivar OS only)  
 **Location:** `packages/cultivar-os/src/pages/OnboardingWizard.tsx`  
-**Route:** `/onboarding` (public, redirected from Dashboard when business row is missing)
+**Route:** `/onboarding` (public, redirected from Dashboard when business row is missing AND user came from login rather than /signup)
 
 **4 paths:**
 - LEAKAGE — leakage calculator: shows annual missed add-on revenue
@@ -337,7 +350,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 - SETUP — QuickBooks integration teaser
 - DELIVERY — demo delivery stops → Google Maps route → SMS driver link
 
-**finalize():** Inserts a `businesses` row (owner_id = auth.uid(), business_type = 'nursery') and a `nursery_profiles` row (default_install_price). Also inserts OWNER row into `business_members`. Resolves the "Account not linked" error wall for new accounts.
+**Note:** New owner signup now goes through `/signup` (shared OwnerSignup) which creates the businesses row and OWNER member row as part of signup. The OnboardingWizard is triggered only when a user has a Supabase session but no businesses row (e.g., edge cases from prior incomplete signups before June 3).
 
 ---
 

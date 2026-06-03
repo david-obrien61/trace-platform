@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: June 2, 2026
+# Last updated: June 3, 2026
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -257,6 +257,76 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-03 — Shared OwnerSignup with PIN gesture layer; Ignition signup restored; PLATFORM_STRATEGY corrected
+
+**Branch:** `multi-tenant-extraction` — DO NOT MERGE to main.
+
+**What was built:**
+
+Shared signup architecture (platform-wide):
+- `packages/shared/src/auth/OwnerSignup.tsx` — multi-step signup: Owner Info → PIN Setup → Biometric (optional) → vertical steps array. Config-driven. Retry-aware (handles orphaned auth users from prior partial signups). No Tailwind — inline styles throughout.
+- `packages/shared/src/auth/index.ts` — exports `OwnerSignup`, `OwnerSignupConfig`, `VerticalStep`, `VerticalStepProps`
+- `packages/shared/src/supabase/auth.ts` — added `authenticateMember(businessId, pin)`, `getMemberSession()`, `clearMemberSession()` for platform-wide business_members PIN auth
+
+Cultivar OS:
+- `packages/cultivar-os/src/pages/SignUp.tsx` — now uses shared `OwnerSignup` with Cultivar config (memberTable: business_members, ownerRole: OWNER, collectPhone/Address/Website: true)
+- `packages/cultivar-os/src/pages/Dashboard.tsx` — amber profile completion banner when phone/address null; links to Settings
+
+Ignition OS:
+- `packages/ignition-os/modules/OnboardingWizard.jsx` — WELCOME + DONE steps retained (dark Ignition theme); SHOP+ACCOUNT+PIN steps replaced with shared `OwnerSignup`; onSuccess creates matching `shops` row + seeds DataBridge
+
+SQL Migrations:
+- `supabase/migrations/20260603_business_members_add_pin_hash.sql` — adds `pin_hash` column to business_members in bgobkjcopcxusjsetfob
+- `packages/ignition-os/supabase/migrations/20260603_recreate_shop_members.sql` — recreates shop_members in ufsgqckbxdtwviqjjtos with pin_hash, active, email columns (dropped by June 2 migration; Ignition signup was broken without it)
+
+Documentation:
+- `PLATFORM_STRATEGY.md` — corrected: PIN is platform-wide gesture layer standard (removed "Honest Debt" characterization for Ignition's PIN). Per-vertical gesture table updated (Cultivar now shows PIN as primary gesture).
+- `THOUGHTS.md` — new entry: "PIN as Platform Gesture Standard, and How the Partnership Actually Works" (10 sections including two-layer auth architecture and partnership correction dynamics)
+- `docs/discovery/onboarding-flow-findings-2026-06-03.md` — resolution notes added to Sections 2, 3, 3.5
+- `docs/built-inventory.md` — OwnerSignup (shared), OnboardingWizard (Ignition/Cultivar), auth modules updated
+- `docs/runbooks/shared-signup-with-pin-2026-06-03.md` — full runbook: migrations, config API, testing protocol, remaining gaps
+- `docs/runbooks/auth-cleanup-orphaned-users-2026-06-03.md` — how to clean up trace_ent@outlook.com and prevent re-occurrence
+
+**Builds:** Cultivar 2175 ✓ · Ignition 1834 ✓ · zero TypeScript errors
+
+**⚠️ David — required manual steps before new signups work:**
+
+1. **Apply business_members pin_hash migration (bgobkjcopcxusjsetfob):**
+   - Open: https://supabase.com/dashboard/project/bgobkjcopcxusjsetfob/sql/new
+   - Paste: `supabase/migrations/20260603_business_members_add_pin_hash.sql`
+   - Run + verify: `SELECT column_name FROM information_schema.columns WHERE table_name = 'business_members'` — expect `pin_hash` in list
+
+2. **Recreate shop_members (ufsgqckbxdtwviqjjtos):**
+   - Open: https://supabase.com/dashboard/project/ufsgqckbxdtwviqjjtos/sql/new
+   - Paste: `packages/ignition-os/supabase/migrations/20260603_recreate_shop_members.sql`
+   - Run + verify: `SELECT column_name FROM information_schema.columns WHERE table_name = 'shop_members'` — expect `pin_hash`, `active` in list
+
+3. **Clean up orphaned trace_ent@outlook.com auth user:**
+   - See `docs/runbooks/auth-cleanup-orphaned-users-2026-06-03.md`
+   - Or use a different email for further testing until cleaned up
+
+4. **Merge + deploy:** Multi-tenant-extraction branch must be merged to main for Vercel to pick up all changes. Until merged, new signups and TeamSection visibility are blocked.
+
+**What Cultivar new signup now looks like (after merge + migrations):**
+- `/signup` → shared OwnerSignup (3 steps: Owner Info → PIN → Biometric optional)
+- Collects: business name, owner name, email, password, phone, address, website
+- Creates: `auth.users` + `businesses` + `business_members` (with pin_hash, role=OWNER)
+- Navigates to `/dashboard` — no more empty state landing
+
+**What Ignition new signup now looks like:**
+- WELCOME screen → OwnerSignup → DONE screen
+- OwnerSignup onSuccess creates matching `shops` row + seeds DataBridge
+- CRITICAL FIX: shop_members now has pin_hash column; OnboardingWizard no longer crashes
+
+**What still needs to be built (not in this session):**
+- PIN daily login UI for Cultivar (Login page currently email/password only; `authenticateMember()` exists but no UI calls it)
+- Biometric credential persistence (WebAuthn credential ID not stored to DB — future enhancement)
+- Cultivar Login page with "Use PIN instead" option
+
+**Runbooks:** `docs/runbooks/shared-signup-with-pin-2026-06-03.md` + `docs/runbooks/auth-cleanup-orphaned-users-2026-06-03.md`
+
+---
 
 ### 2026-06-02 — Prompt 4: BusinessProvider member-path fallback; full invite flow verified ✅
 

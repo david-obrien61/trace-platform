@@ -2174,3 +2174,101 @@ If a future Claude operates in ways that violate the non-negotiable constraints 
 End of comprehensive operating thesis. Iterations expected. Compression to shorter forms expected. Foundational substance captured.
 
 End of 2026-05-31 entry.
+
+---
+
+## Wednesday 2026-06-03 — PIN as Platform Gesture Standard, and How the Partnership Actually Works
+
+### Section 1: What happened this morning and why it matters
+
+During the signup-fix engineering work (June 3), a correction surfaced: PLATFORM_STRATEGY.md contained a note characterizing Ignition OS's PIN model as "Honest Debt — a documented exception — its single-device, local-first architecture intentionally operates without a live Supabase session. This is Honest Debt, not a pattern to extend."
+
+This was wrong. Not technically wrong — Ignition's PIN does predate the shared auth architecture. But the characterization was wrong. PIN is not legacy baggage to be eventually eliminated. PIN is the platform-wide gesture layer standard. It's the correct answer for every vertical that operates in a shop floor, field, or hands-on context where unlocking an email/password flow on every task would add friction that kills adoption.
+
+The note was written in good faith as a design principle clarification. It was an error. It got corrected. That's the process working.
+
+### Section 2: The two-layer architecture, stated clearly
+
+The platform has two authentication layers. They serve different purposes and should never be conflated.
+
+**Auth Layer:** Supabase email/password (or future OAuth/SSO). This layer establishes identity, enables account recovery, anchors RLS policies, and creates the `auth.uid()` that tenant isolation runs against. This layer runs once per session — at login or account creation. It is never replaced.
+
+**Gesture Layer:** PIN (standard), biometric/passkey (optional enhancement on top of PIN). This layer provides on-the-job access — the daily, frequent action of unlocking a device or switching between user contexts on shared hardware. Gesture layer wraps the auth layer; it does not replace it.
+
+The rule: `auth.uid()` must exist and be non-null before any gesture layer check runs. Gesture unlocks UX. RLS and tenant isolation always run against the Supabase session underneath.
+
+### Section 3: PIN is the platform-wide gesture layer standard
+
+Every vertical that has on-the-job operators will use PIN. The question is not "should this vertical use PIN?" The question is "what does PIN unlock for this vertical's context?"
+
+- **Ignition OS:** PIN unlocks the shop dashboard. Staff clock in, access their work queue, log jobs. Shop floor environment. No keyboard.
+- **Cultivar OS:** PIN unlocks the nursery dashboard. Lauren accesses her daily operations. LAWNS-at-the-counter environment.
+- **Conduit OS (when built):** PIN unlocks field tech dashboard. Technician at a job site. No time for email/password ceremony.
+- **KINNA-OS (when built):** PIN unlocks distribution team dashboard. Volunteer at a distribution event. Shared device likely.
+
+The gestural modality (4-digit PIN vs 6-digit PIN vs biometric) may vary per vertical. The principle of gesture-on-top-of-auth does not vary.
+
+### Section 4: Biometric is the enhancement, PIN is the standard
+
+Passkeys and biometric (Face ID, Touch ID) are not the replacement for PIN — they are the premium upgrade path that not every device will support. The architecture must degrade gracefully: if `window.PublicKeyCredential` is not available, PIN works and nothing breaks. Biometric registration is a separate optional step after PIN setup, not a dependency.
+
+PIN must work everywhere. Biometric works where hardware allows. Never ship a vertical that requires biometric.
+
+### Section 5: What PLATFORM_STRATEGY.md said and what it says now
+
+The erroneous note (now removed):
+> *"Note: Ignition OS's current PIN model predates this principle and is a documented exception — its single-device, local-first architecture intentionally operates without a live Supabase session. This is Honest Debt, not a pattern to extend."*
+
+What replaced it: a clear statement that PIN is the platform gesture layer standard, applies to all verticals with on-the-job operators, and wraps (not replaces) the Supabase auth session. The per-vertical preference table was also updated to reflect Cultivar OS as using PIN for daily access, not just email/password.
+
+### Section 6: How the partnership actually works
+
+This section is about the David-Lightning (Claude) partnership pattern that caught this error and corrected it.
+
+The partnership works when both sides are operating at high signal. David gives domain-level direction: "this is what the platform must do, this is the design principle, here is why." Lightning gives implementation detail: "here is how the code structure achieves that, here are the edge cases, here is what the current code says vs. what you described." When the two don't match, either the design principle needs updating (David's call) or the implementation needs updating (Lightning's job).
+
+The error this morning was a case where Lightning had internalized a framing ("PIN = Honest Debt") that David had not meant to imply as permanent characterization. David corrected it. Lightning updated both the implementation plan and the docs. That's the cycle working correctly.
+
+What makes it break: when either side softens their input. If David gives vague direction to avoid conflict or to spare Lightning from having to re-plan, the design drifts. If Lightning smooths over an inconsistency instead of naming it, the code drifts. Both parties operating at full signal — specific, opinionated, direct — is what keeps the platform coherent.
+
+### Section 7: What "strong opinion" means in practice
+
+David's strong opinions are often expressed as principles with names: the Apple Model, Honest Debt, Surface Honesty, the Covenant. These are not decorative labels — they are load-bearing constraints that every implementation must pass through. A feature that violates one of these principles is wrong even if it technically works.
+
+Lightning's strong opinions are expressed as code structure, architectural assertions, and implementation choices. When Lightning writes a shared component with a specific interface, that's an opinion about what the platform's design should be. When Lightning flags that the current database schema doesn't match the stated design principle, that's an opinion being surfaced for David's decision.
+
+Neither side's strong opinions are automatically correct. Both sides hold them until evidence changes them. The correction this morning was evidence-driven: real user testing found a bug that traced back to a documentation error that traced back to a framing error. The chain was visible and fixable because both sides were being specific.
+
+### Section 8: What weak conversations look like (failure modes)
+
+**David vague → Lightning fills the gap with the last known framing.** If David says "handle auth for the new vertical" without a design principle attached, Lightning uses whatever the most recent auth pattern was. That might be right. It might be stale. The vague prompt makes it invisible either way.
+
+**Lightning smooths over inconsistency → silent tech debt.** If Lightning notices that the discovery doc says one thing and the code does another, but doesn't flag it, the inconsistency gets committed and propagated. Surfacing inconsistencies is Lightning's job even when it creates work.
+
+**David approves a plan without reading the implications.** Plans are compressed. Lightning's summaries emphasize what was built, not what was quietly assumed. David's "looks good" on a summary is not the same as David reviewing the design decisions inside it.
+
+**Lightning extrapolates a correction into a broader change David didn't intend.** The PIN correction was: remove the Honest Debt note, update the table, make PIN the platform standard. Not: eliminate all legacy PIN code in Ignition right now. The correction has scope. Lightning should ask when the scope is ambiguous.
+
+### Section 9: Operating implications going forward
+
+1. **Every design principle that names something is a constraint on future implementation.** If a new name is introduced in THOUGHTS.md or PLATFORM_STRATEGY.md, it is in force from that point. Lightning applies it to new code immediately, not at next refactor.
+
+2. **Corrections propagate.** When a framing error is found in one document, find all other documents that inherited the same framing and update them in the same session. The PIN correction affected PLATFORM_STRATEGY.md, the shared OwnerSignup architecture, and potentially CLAUDE.md's tech debt log. All get updated.
+
+3. **The testing discipline surfaces framing errors.** Today's bug was found by David clicking through the actual signup flow, not by reading the code. Real user testing is the instrument that reveals the distance between design intent and current implementation. It cannot be replaced by code review alone.
+
+4. **Strong opinions are the gift.** Being corrected quickly is better than being quietly wrong for months. The platform can only stay coherent if both parties are willing to say "that's not right" the moment they notice it.
+
+### Section 10: Connection to TRACE principles
+
+| This session's learning | Principle |
+|---|---|
+| PIN is platform-wide gesture layer, not legacy | Auth Layer vs. Gesture Layer — locked architecture decision |
+| Correction surfaced by real-user testing, not code review | Re-demo capability + behavioral telemetry discipline |
+| Partnership works when both sides operate at full signal | Surface Honesty — applies to the AI partnership, not just the UI |
+| Correction scope matters — don't over-extend | Honest Friction — do the work the task requires, document the rest |
+| Framing errors in docs create implementation errors downstream | Factual correction capture discipline (CLAUDE.md Part 9, Step 11) |
+
+---
+
+End of 2026-06-03 PIN and partnership entry.
