@@ -2272,3 +2272,24 @@ Neither side's strong opinions are automatically correct. Both sides hold them u
 ---
 
 End of 2026-06-03 PIN and partnership entry.
+
+---
+
+## 2026-06-04 — Factual corrections surfaced during smoke-test session
+
+**Correction 1: Ignition OwnerSignup theme was never visually verified**
+
+Prior docs and session notes said the shared OwnerSignup was "integrated into Ignition's OnboardingWizard" — implying the full flow was working. What was actually true: the shared component was wired up correctly, but the container and card backgrounds were hardcoded to Cultivar's sage/white palette (`#EAF3DE` / `#fff`). Ignition's WELCOME and DONE screens are dark navy; the middle signup step was light sage. Nobody caught this because the sign-in loop (Item 1 — separate bug) prevented reaching the SIGNUP step in real testing.
+
+Fix: OwnerSignup now accepts `backgroundColor` and `cardColor` in config. Ignition passes `#020617` / `#0f172a`. The "dark → light → dark" jump is now fixed.
+
+Lesson: "component is wired up" ≠ "component is visually correct on this vertical." Per-vertical visual smoke test is the only real verification.
+
+**Correction 2: "Blotato Account ID" was never a real user requirement**
+
+Help.tsx and SocialSetup.tsx both told the customer they needed a Blotato Account ID. In reality, TRACE owns the single Blotato account and API key — the customer-facing ID field was a misunderstanding of the integration from early development. Removed from UI and API. The `GET /v2/users/me/accounts` call fetches it server-side automatically.
+
+**Correction 3: New Cultivar owners post-signup hit /dashboard, not /onboarding**
+
+CLAUDE.md said "new signups redirect to /onboarding via the Dashboard businessError guard." The guard only fires when `businessError === 'no_business'`. After OwnerSignup creates the businesses row, BusinessProvider resolves successfully — so the guard never fires, and the user sees the empty Dashboard directly. The OnboardingWizard was unreachable for new owners who signed up via shared OwnerSignup. Fixed: SignUp.tsx now navigates directly to /onboarding; OnboardingWizard detects existing business and skips NURSERY_SETUP.
+

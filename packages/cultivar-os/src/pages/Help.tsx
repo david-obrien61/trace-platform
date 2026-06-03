@@ -370,8 +370,8 @@ export function Help() {
                   through the Blotato integration.
                 </p>
                 <p style={{ margin: 0, color: GRAY4, fontSize: '0.875rem' }}>
-                  To use campaigns, you'll need a Blotato account and your Blotato Account ID
-                  entered in Settings → Social Media.
+                  To use campaigns, enable the Social Media module from your dashboard tile.
+                  TRACE handles the publishing connection — no separate account required.
                 </p>
               </div>
             }
@@ -387,9 +387,9 @@ export function Help() {
                   angle, and a seasonal post. These appear on your dashboard as pending drafts.
                 </p>
                 <p style={{ margin: 0 }}>
-                  You review, optionally edit, and tap Publish. Posts go out through your
-                  connected Blotato account. To enable this, go to the Social Media tile on
-                  your dashboard and complete the setup with your Blotato Account ID.
+                  You review, optionally edit, and tap Publish. Posts go out through TRACE's
+                  publishing integration. To enable this, go to the Social Media tile on
+                  your dashboard, select your platforms, and tap Enable.
                 </p>
               </div>
             }

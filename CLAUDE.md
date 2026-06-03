@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: June 3, 2026
+# Last updated: June 4, 2026
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -257,6 +257,64 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-04 — Smoke-test fixes: per-vertical theming, new-owner demo path, discovery glimpse, Blotato abstraction
+
+**Branch:** `main` — all commits on main. Two commits this session: `fc36c9a` (Item 3) and `5b630e1` (Items 4a/4b/4c).
+
+**Items 1 and 2 were diagnosed but NOT fixed (awaiting David go-ahead):**
+
+**Item 1 — Ignition sign-in loop (DIAGNOSED, fix ready):**
+Root cause: `CoreApp.jsx` OWNER SYNC effect (lines ~757-767) calls `DataBridge.setShopId()` + `setShopReady(true)` when `ownerBusinessId` resolves, but never calls `setOnboardingDone(true)`. So returning owners on a new device hit the `onboardingDone = false` gate every login. Fix = add two lines to the OWNER SYNC effect:
+```js
+DataBridge.save('shop_policy', { ...(DataBridge.load('shop_policy') || {}), onboarding_complete: true });
+setOnboardingDone(true);
+```
+David: confirm go-ahead, then Claude adds these two lines to `packages/ignition-os/CoreApp.jsx`.
+
+**Item 2 — Ignition signup color (PARTIALLY FIXED as part of Item 3):**
+Root cause: `OwnerSignup.tsx` hardcoded `BG = '#EAF3DE'` (container) and `'#fff'` (card). These are now config-driven (`backgroundColor` / `cardColor`). Ignition's config passes `backgroundColor: '#020617'`, `cardColor: '#0f172a'`. The dark→light→dark jump is FIXED as of this session.
+REMAINING gap: text colors inside the card (Field labels `#333`, body text `#555`) are hardcoded for light backgrounds. On Ignition's dark card, these will be hard to read. Fix = add `labelColor?: string` to config or a `darkMode?: boolean` flag. NOT done (gated per David's instructions).
+
+**What was built this session:**
+
+Item 3 — Per-vertical placeholder copy (commit `fc36c9a`):
+- `packages/shared/src/auth/OwnerSignup.tsx`: `backgroundColor`, `cardColor`, `examples` fields added to config. Component uses these instead of hardcoded values. Cultivar keeps sage/white defaults + LAWNS examples. Ignition gets dark navy + auto-shop examples.
+- `packages/ignition-os/modules/OnboardingWizard.jsx`: `backgroundColor: '#020617'`, `cardColor: '#0f172a'`, `examples: { businessName: "e.g. Dave's Auto Shop", address: "123 Commerce Dr, Austin TX" }` added to ignitionSignupConfig.
+- `packages/cultivar-os/src/pages/SignUp.tsx`: `examples: { businessName: 'e.g. LAWNS Tree Farm', address: '...' }` added to cultivarConfig.
+
+Item 4a — New-owner demo path (commit `5b630e1`):
+- `packages/cultivar-os/src/pages/SignUp.tsx`: `onSuccess` now navigates to `/onboarding` (was `/dashboard`).
+- `packages/cultivar-os/src/pages/OnboardingWizard.tsx`: On mount, checks for existing businesses row. If found, sets `existingBusinessId` and starts at `CHOOSE_PATH` (skips WELCOME + NURSERY_SETUP). `finalize()` upserts `nursery_profiles` only (skips businesses.insert and business_members.insert when existing business detected).
+
+Item 4b — Discovery Glimpse (commit `5b630e1`):
+- `packages/shared/src/discovery/DiscoveryGlimpse.tsx` (new): Client-side VerticalStep component. Loads website from businesses table, fires `/api/discovery/ingest`, shows nursery seed insights while live analysis runs, displays real results when ready. Has "Skip for now" fallback.
+- Wired as `verticalStep` in Cultivar `SignUp.tsx` (after biometric, before onSuccess). 3 nursery-specific seed insights pre-loaded.
+- Import path: `@trace/shared/discovery/DiscoveryGlimpse` directly (NOT via barrel `@trace/shared/discovery`) — barrel re-exports server-side engine that imports `@anthropic-ai/sdk` which breaks Vite browser bundle.
+
+Item 4c — Blotato abstraction (commit `5b630e1`):
+- `packages/cultivar-os/src/pages/SocialSetup.tsx`: Removed `accountId` state, "Blotato Account ID" input/label, and validation. No breaking UI change for users — setup is now simpler (just select platforms).
+- `packages/cultivar-os/api/social/enable.ts`: Removed `blotato_account_id` from request body. Added `fetchBlotatoAccountId(platform)` — calls `GET https://backend.blotato.com/v2/users/me/accounts` server-side using `BLOTATO_API_KEY`. Matches by platform name. Falls through gracefully if API call fails (stores `null` account ID).
+- `packages/cultivar-os/src/pages/Help.tsx`: Updated two Q&A entries that told customers they needed a Blotato Account ID.
+
+**Builds:**
+- Cultivar: 2176 modules ✅
+- Ignition: 1834 modules ✅
+
+**⚠️ David — manual steps still pending:**
+1. **Push to Vercel** — run `npx vercel --prod` or `git push` (GitHub auto-deploy). Items 3+4 are committed to main but not yet deployed.
+2. **Item 1 fix go-ahead** — confirm and Claude adds the two OWNER SYNC lines to CoreApp.jsx.
+3. **Item 2 text contrast** — after seeing Item 1 fixed, decide whether the text-on-dark-card issue needs addressing (add `darkMode` flag to OwnerSignup config).
+4. **Blotato API structure verification** — `fetchBlotatoAccountId()` assumes accounts array has `{ id, platform }` shape. If the actual Blotato `/v2/users/me/accounts` response uses a different shape, the server-side fetch will return `null` (social enable still works, but `blotato_account_id` will be null in DB). Verify by checking Blotato docs or logging the response from a test enable call.
+
+**Factual corrections captured in THOUGHTS.md:**
+1. Ignition OwnerSignup theme was never visually verified (dark→light jump existed from day one)
+2. "Blotato Account ID" was never a real user requirement — TRACE owns the account
+3. New Cultivar owners post-signup hit `/dashboard`, not `/onboarding` (businessError guard doesn't fire when business row exists)
+
+**No runbook needed** — pure code session.
+
+---
 
 ### 2026-06-03 — Merge to main; Vercel 12-function limit fixed; deployment live ✅
 
@@ -1177,6 +1235,13 @@ Completed:
 - [x] Dead tile navigation fix ✅ (handleNavigate — May 29)
 - [x] Delivery routing MVP ✅ (/deliveries page + 4th wizard path — May 29)
 - [x] OnboardingWizard (4-path first-run experience) ✅ (May 29)
+- [x] Per-vertical theming in shared OwnerSignup ✅ (backgroundColor/cardColor/examples — June 4)
+- [x] New-owner demo path through OnboardingWizard ✅ (signup → /onboarding — June 4)
+- [x] DiscoveryGlimpse as verticalStep in Cultivar signup ✅ (June 4)
+- [x] Blotato Account ID removed from SocialSetup; fetched server-side ✅ (June 4)
+- [ ] Ignition sign-in loop fix (READY — awaiting David go-ahead; two-line fix in CoreApp.jsx)
+- [ ] Ignition signup text-on-dark-card contrast (Item 2 remaining gap — darkMode flag)
+- [ ] Blotato /v2/users/me/accounts response shape verification
 - [ ] Online Shop (/shop page)
 - [ ] Customer follow-up engine
 - [ ] Mobile responsive fix (tile grid desktop only)

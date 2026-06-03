@@ -200,7 +200,8 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 - `auth/invitations.ts` — `createInvitation`, `revokeInvitation`, `getPendingInvitations`, `expireInvitations`
 - `auth/acceptInvitation.ts` — `previewInvitation`, `acceptInvitation` (service-key server functions)
 - `auth/AcceptInvite.tsx` — React accept-invite page component (inline styles, TRACE green)
-- `auth/OwnerSignup.tsx` — Multi-step signup with PIN: Owner Info → PIN Setup → Biometric (optional) → vertical steps. Config-driven. Added 2026-06-03.
+- `auth/OwnerSignup.tsx` — Multi-step signup with PIN: Owner Info → PIN Setup → Biometric (optional) → vertical steps. Config-driven. Added 2026-06-03. Updated 2026-06-04: `backgroundColor`, `cardColor`, `examples` fields added to config (removes hardcoded Cultivar sage/white; enables Ignition dark theme).
+- `discovery/DiscoveryGlimpse.tsx` — Client-only React component (VerticalStep). Loads website from businesses table, fires /api/discovery/ingest, shows seed insights while live analysis runs. Import directly (not from barrel) to avoid bundling server-side SDK deps. Added 2026-06-04.
 - `auth/index.ts` — barrel export
 - `supabase/auth.ts` — `authenticateMember(businessId, pin)` for platform-wide business_members PIN auth (added 2026-06-03). Also: `getMemberSession()`, `clearMemberSession()`.
 
@@ -315,7 +316,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 **Status:** ✅ Built 2026-06-03 — shared, consumed by both Cultivar and Ignition  
 **Location:** `packages/shared/src/auth/OwnerSignup.tsx`
 
-**Config-driven:** Each vertical provides an `OwnerSignupConfig` specifying `memberTable`, `memberFKColumn`, `ownerRole`, `ownerPermissions`, `pinLength`, and an `onSuccess` callback. The vertical's `onSuccess` handles post-signup vertical-specific setup (e.g., Ignition creates the matching `shops` row and seeds DataBridge).
+**Config-driven:** Each vertical provides an `OwnerSignupConfig` specifying `memberTable`, `memberFKColumn`, `ownerRole`, `ownerPermissions`, `pinLength`, `backgroundColor`, `cardColor`, `examples` (per-vertical placeholder text), `verticalSteps` (optional post-biometric steps), and an `onSuccess` callback. The vertical's `onSuccess` handles post-signup vertical-specific setup (e.g., Ignition creates the matching `shops` row and seeds DataBridge; Cultivar navigates to /onboarding).
 
 **PIN hash:** SHA-256 of `{businessId}:{pin}` — consistent with `hashPin()` in `packages/shared/src/supabase/auth.ts`.
 
@@ -339,10 +340,10 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 ## OnboardingWizard (Cultivar OS)
 
-**What:** 4-path first-run experience for new nursery owners who arrived via email invite or direct login (not via /signup). Welcome → NurserySetup → ChoosePath → PathExperience → Done. Proves value immediately.  
-**Status:** ✅ Built (Cultivar OS only)  
+**What:** 4-path demo experience for new nursery owners. Flow after signup: after OwnerSignup completes → /onboarding → detects existing businesses row → starts at CHOOSE_PATH (skips Welcome + NurserySetup). Legacy path (direct /onboarding without prior signup): starts at WELCOME → NURSERY_SETUP → CHOOSE_PATH → PATH_EXPERIENCE → DONE.  
+**Status:** ✅ Updated 2026-06-04 — detects existing business on mount; signup routes here instead of /dashboard  
 **Location:** `packages/cultivar-os/src/pages/OnboardingWizard.tsx`  
-**Route:** `/onboarding` (public, redirected from Dashboard when business row is missing AND user came from login rather than /signup)
+**Route:** `/onboarding` (private, all new signups redirect here; Dashboard redirects here when no business row)
 
 **4 paths:**
 - LEAKAGE — leakage calculator: shows annual missed add-on revenue
@@ -350,7 +351,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 - SETUP — QuickBooks integration teaser
 - DELIVERY — demo delivery stops → Google Maps route → SMS driver link
 
-**Note:** New owner signup now goes through `/signup` (shared OwnerSignup) which creates the businesses row and OWNER member row as part of signup. The OnboardingWizard is triggered only when a user has a Supabase session but no businesses row (e.g., edge cases from prior incomplete signups before June 3).
+**finalize() behavior:** If business row exists (OwnerSignup path), skips businesses.insert and business_members.insert. Always upserts nursery_profiles. DONE screen uses name loaded from businesses table.
 
 ---
 
