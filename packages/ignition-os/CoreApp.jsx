@@ -762,6 +762,8 @@ const CoreApp = () => {
     supabase.from('shops').select('name').eq('id', ownerBusinessId).single()
       .then(({ data }) => {
         if (data?.name) { DataBridge.setShopName(data.name); setShopName(data.name); }
+        DataBridge.save('shop_policy', { ...(DataBridge.load('shop_policy') || {}), onboarding_complete: true });
+        setOnboardingDone(true);
         setShopReady(true);
       });
   }, [ownerBusinessId]);

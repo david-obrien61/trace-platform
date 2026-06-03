@@ -84,6 +84,7 @@ const ignitionSignupConfig = {
   primaryColor:     '#22c55e',
   backgroundColor:  '#020617',
   cardColor:        '#0f172a',
+  darkMode:         true,
   pinLength:        4,
   memberTable:      'shop_members',
   memberFKColumn:   'shop_id',

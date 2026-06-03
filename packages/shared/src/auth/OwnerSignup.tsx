@@ -23,6 +23,7 @@ export interface OwnerSignupConfig {
   primaryColor?: string;          // defaults to TRACE green
   backgroundColor?: string;       // defaults to Cultivar sage (#EAF3DE)
   cardColor?: string;             // defaults to white (#fff)
+  darkMode?: boolean;             // when true, flips card text/label/input colors for dark backgrounds
   pinLength?: number;             // defaults to 4
   memberTable: 'business_members' | 'shop_members';
   memberFKColumn: 'business_id' | 'shop_id';
@@ -70,6 +71,7 @@ export function OwnerSignup({ config, navigate }: Props) {
     primaryColor = DEFAULT_GREEN,
     backgroundColor = BG,
     cardColor = '#fff',
+    darkMode = false,
     pinLength = 4,
     memberTable,
     memberFKColumn,
@@ -83,6 +85,38 @@ export function OwnerSignup({ config, navigate }: Props) {
     verticalSteps = [],
     onSuccess,
   } = config;
+
+  const labelColor   = darkMode ? '#cbd5e1' : '#333';
+  const bodyColor    = darkMode ? '#94a3b8' : '#555';
+  const mutedColor   = darkMode ? '#64748b' : '#888';
+  const inputBorder  = darkMode ? '#334155' : '#ddd';
+  const inputBg      = darkMode ? '#1e293b' : '#fff';
+  const inputColor   = darkMode ? '#f1f5f9' : 'inherit';
+
+  const dynInputStyle: React.CSSProperties = {
+    padding: '12px 14px',
+    border: `1.5px solid ${inputBorder}`,
+    borderRadius: 8,
+    fontSize: '1rem',
+    fontFamily: 'inherit',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box',
+    background: inputBg,
+    color: inputColor,
+  };
+
+  const dynGhostStyle: React.CSSProperties = {
+    background: 'none',
+    border: 'none',
+    color: mutedColor,
+    fontSize: '0.9rem',
+    cursor: 'pointer',
+    padding: '8px 0',
+    fontFamily: 'inherit',
+    width: '100%',
+    textAlign: 'center',
+  };
 
   // ── Step 0: Owner Info fields
   const [businessName, setBusinessName] = useState('');
@@ -407,55 +441,55 @@ export function OwnerSignup({ config, navigate }: Props) {
           <form onSubmit={handleOwnerInfoNext} style={formStyle}>
             <p style={stepLabel}>Step 1 of {stepLabels.length} — Your info</p>
 
-            <Field label={`${businessLabel.charAt(0).toUpperCase() + businessLabel.slice(1)} name`}>
-              <input style={inputStyle} type="text" value={businessName}
+            <Field label={`${businessLabel.charAt(0).toUpperCase() + businessLabel.slice(1)} name`} labelColor={labelColor}>
+              <input style={dynInputStyle} type="text" value={businessName}
                 onChange={e => setBusinessName(e.target.value)} required
                 placeholder={examples.businessName ?? 'e.g. Your Business Name'} />
             </Field>
 
-            <Field label="Your name">
-              <input style={inputStyle} type="text" value={ownerName}
+            <Field label="Your name" labelColor={labelColor}>
+              <input style={dynInputStyle} type="text" value={ownerName}
                 onChange={e => setOwnerName(e.target.value)} required
                 placeholder="First and last name" />
             </Field>
 
-            <Field label="Email">
-              <input style={inputStyle} type="email" value={email}
+            <Field label="Email" labelColor={labelColor}>
+              <input style={dynInputStyle} type="email" value={email}
                 onChange={e => setEmail(e.target.value)} required
                 placeholder="you@example.com" />
             </Field>
 
-            <Field label="Password">
-              <input style={inputStyle} type="password" value={password}
+            <Field label="Password" labelColor={labelColor}>
+              <input style={dynInputStyle} type="password" value={password}
                 onChange={e => setPassword(e.target.value)} required
                 minLength={6} placeholder="At least 6 characters" />
             </Field>
 
-            <Field label="Confirm password">
-              <input style={inputStyle} type="password" value={confirmPw}
+            <Field label="Confirm password" labelColor={labelColor}>
+              <input style={dynInputStyle} type="password" value={confirmPw}
                 onChange={e => setConfirmPw(e.target.value)} required
                 placeholder="Same password again" />
             </Field>
 
             {collectPhone && (
-              <Field label="Phone (optional)">
-                <input style={inputStyle} type="tel" value={phone}
+              <Field label="Phone (optional)" labelColor={labelColor}>
+                <input style={dynInputStyle} type="tel" value={phone}
                   onChange={e => setPhone(e.target.value)}
                   placeholder="(512) 555-0100" />
               </Field>
             )}
 
             {collectAddress && (
-              <Field label="Address (optional)">
-                <input style={inputStyle} type="text" value={address}
+              <Field label="Address (optional)" labelColor={labelColor}>
+                <input style={dynInputStyle} type="text" value={address}
                   onChange={e => setAddress(e.target.value)}
                   placeholder={examples.address ?? '123 Main St, Austin TX'} />
               </Field>
             )}
 
             {collectWebsite && (
-              <Field label="Website (optional)">
-                <input style={inputStyle} type="url" value={website}
+              <Field label="Website (optional)" labelColor={labelColor}>
+                <input style={dynInputStyle} type="url" value={website}
                   onChange={e => setWebsite(e.target.value)}
                   placeholder="https://yoursite.com" />
               </Field>
@@ -465,7 +499,7 @@ export function OwnerSignup({ config, navigate }: Props) {
 
             <button type="submit" style={btnStyle(green)}>Continue →</button>
 
-            <p style={{ textAlign: 'center', fontSize: '0.8rem', color: '#888', marginTop: 8 }}>
+            <p style={{ textAlign: 'center', fontSize: '0.8rem', color: mutedColor, marginTop: 8 }}>
               Already have an account?{' '}
               <span onClick={() => navTo(signInPath)}
                 style={{ color: green, cursor: 'pointer', textDecoration: 'underline' }}>
@@ -480,14 +514,14 @@ export function OwnerSignup({ config, navigate }: Props) {
           <form onSubmit={handlePinSubmit} style={formStyle}>
             <p style={stepLabel}>Step 2 of {stepLabels.length} — Set your PIN</p>
 
-            <p style={{ fontSize: '0.88rem', color: '#555', lineHeight: 1.5, marginBottom: 4 }}>
+            <p style={{ fontSize: '0.88rem', color: bodyColor, lineHeight: 1.5, marginBottom: 4 }}>
               Your PIN is how you unlock the {businessLabel} dashboard each day.
               It works on your device without typing your password every time.
             </p>
 
-            <Field label={`${pinLength}-digit PIN`}>
+            <Field label={`${pinLength}-digit PIN`} labelColor={labelColor}>
               <input
-                style={{ ...inputStyle, letterSpacing: '0.3em', fontSize: '1.4rem', textAlign: 'center' }}
+                style={{ ...dynInputStyle, letterSpacing: '0.3em', fontSize: '1.4rem', textAlign: 'center' }}
                 type="password"
                 inputMode="numeric"
                 pattern={`\\d{${pinLength}}`}
@@ -500,9 +534,9 @@ export function OwnerSignup({ config, navigate }: Props) {
               />
             </Field>
 
-            <Field label={`Confirm PIN`}>
+            <Field label={`Confirm PIN`} labelColor={labelColor}>
               <input
-                style={{ ...inputStyle, letterSpacing: '0.3em', fontSize: '1.4rem', textAlign: 'center' }}
+                style={{ ...dynInputStyle, letterSpacing: '0.3em', fontSize: '1.4rem', textAlign: 'center' }}
                 type="password"
                 inputMode="numeric"
                 pattern={`\\d{${pinLength}}`}
@@ -522,7 +556,7 @@ export function OwnerSignup({ config, navigate }: Props) {
             </button>
 
             <button type="button" onClick={() => goTo('OWNER_INFO')}
-              style={{ ...ghostBtnStyle, marginTop: 8 }}>
+              style={{ ...dynGhostStyle, marginTop: 8 }}>
               ← Back
             </button>
           </form>
@@ -542,7 +576,7 @@ export function OwnerSignup({ config, navigate }: Props) {
                   Biometric registered! You can use Face ID or fingerprint to unlock.
                 </p>
               ) : (
-                <p style={{ color: '#555', fontSize: '0.9rem', lineHeight: 1.5 }}>
+                <p style={{ color: bodyColor, fontSize: '0.9rem', lineHeight: 1.5 }}>
                   Register your face or fingerprint for even faster access.
                   Your PIN always works as a backup.
                 </p>
@@ -558,7 +592,7 @@ export function OwnerSignup({ config, navigate }: Props) {
             )}
 
             <button type="button" onClick={advanceFromBiometric}
-              style={{ ...ghostBtnStyle, marginTop: biometricDone ? 0 : 8 }}>
+              style={{ ...dynGhostStyle, marginTop: biometricDone ? 0 : 8 }}>
               {biometricDone ? 'Continue →' : 'Skip for now →'}
             </button>
           </div>
@@ -591,11 +625,11 @@ export function OwnerSignup({ config, navigate }: Props) {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, labelColor = '#333' }: { label: string; children: React.ReactNode; labelColor?: string }) {
   return (
     <label style={{
       display: 'flex', flexDirection: 'column', gap: 6,
-      fontSize: '0.85rem', fontWeight: 600, color: '#333',
+      fontSize: '0.85rem', fontWeight: 600, color: labelColor,
     }}>
       {label}
       {children}
