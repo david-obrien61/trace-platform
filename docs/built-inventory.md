@@ -453,5 +453,25 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 ---
 
+## 📋 Specifications and User Stories
+
+Working product specifications describing intended behavior. These are design intent, not built features. When a spec is implemented, update this entry and the spec document with implementation notes.
+
+| Document | Covers | Status |
+|---|---|---|
+| [docs/user-stories/cultivar-flows-and-contractor-program-2026-06-03.md](user-stories/cultivar-flows-and-contractor-program-2026-06-03.md) | Delivery module config, contractor onboarding/tiers, online customer purchase flow, in-person LAWNS QR flow, delivery routing intelligence | 2026-06-03 — working spec, not yet implemented |
+
+---
+
+## 📂 Discovery Documents
+
+Quantitative, citable research artifacts. Used in sales conversations, product development, and investor context.
+
+| Document | Subject | Key finding |
+|---|---|---|
+| [docs/discovery/conduit-margin-evidence-2026-06-03.md](discovery/conduit-margin-evidence-2026-06-03.md) | Contractor markup analysis — Liberty Hill masonry project (Capital Land Design vs. actual) | 3.3× average materials markup; 57% savings ($2,629 on $4,651 quote); first documented data point for Conduit margin intelligence thesis |
+
+---
+
 *TRACE Enterprises · Built Inventory · Created 2026-05-28*  
 *Update this document when something new is confirmed built or confirmed missing.*
