@@ -1598,6 +1598,238 @@ End of Wednesday 2026-06-03 — The "Just A Movie" Principle entry.
 
 ---
 
+## Wednesday 2026-06-03 — Re-Demo Capability, Behavioral Telemetry, and Customer Accountability
+
+---
+
+### Section 1: The re-demo problem
+
+Every SaaS product has a version of this failure: the customer saw a demo, signed up, and now insists the product doesn't work as shown — but what they're describing is either a different feature, a configuration they haven't activated, or something that never appeared in the demo at all.
+
+The typical response is to apologize and try to close the gap. The problem with that response is it's built on an unverified assumption — that the customer's memory of the demo is accurate. Sometimes it is. Often it isn't.
+
+TRACE's answer: **the demo is on file and can be re-run against the live product.**
+
+The demo is a specific flow: scan QR code at plant → profile → add-ons → cart → QB invoice → confirmation. That flow is documented (CLAUDE.md has the demo URL, nursery ID, test login). It can be run again, today, against the live product. If a customer says "the demo showed X and the product doesn't do X," the re-demo is the ground truth check.
+
+### Section 2: Behavioral telemetry as the resolution layer
+
+Beyond the demo itself, customer issues live in the data. When a customer reports something broken, the question isn't "is the customer right or wrong?" The question is "what actually happened?"
+
+Behavioral telemetry — what the customer clicked, in what order, what the system returned — answers that question. Supabase logs, Vercel function logs, order records, social_drafts table state: these tell the truth about what occurred.
+
+This changes the support dynamic:
+
+- Before telemetry: customer's narrative vs. developer's assumption vs. apologetic resolution
+- After telemetry: customer's narrative + actual data → ground truth → resolution calibrated to actual cause
+
+The customer learns something about their own behavior when they caused the issue. TRACE takes responsibility when TRACE caused the issue. Neither party operates from narrative alone.
+
+### Section 3: Why this matters for the locked-rate covenant
+
+The locked-rate covenant ($149/month, locked forever) requires TRACE to be financially sustainable at that price. Every hour of support time that goes into relitigating unfounded complaints is an hour not spent on the platform. At $149/month, TRACE can't absorb that cost indefinitely.
+
+Telemetry-grounded support is efficient support. The resolution comes from data, not from extended back-and-forth. Customer gets an accurate answer faster. TRACE spends less time on resolution. Both sides win when the process is honest.
+
+### Section 4: The under-promise/over-deliver connection
+
+Under-promise and over-deliver (the Apple model entry) has a support implication: if TRACE has under-promised and over-delivered, the gap between customer expectation and actual capability should almost always resolve in TRACE's favor. The product should be doing more than the customer expected, not less.
+
+If a customer complains the product doesn't do something, and TRACE's telemetry shows the product does do it and the customer hasn't used it correctly, the honest response is a walkthrough, not an apology. The capability was there.
+
+### Section 5: Applying this to Cultivar OS specifically
+
+Cultivar's audit trail is rich:
+- orders table: every order with transport_method, add-ons selected, amounts, leakage_flag
+- social_drafts: every generated post, what tone, what status, when published
+- business_members: who logged in, what role
+- QB invoices: created, amounts, line items
+
+A customer who says "the QB integration lost my invoice" can be checked against the Vercel function log for their invoice call, the QB API response, and the QB record itself. Either the invoice is there (navigation issue) or the function failed (TRACE issue with log evidence). In neither case is the resolution based on the customer's memory alone.
+
+### Section 6: Building telemetry as a first-class product concern
+
+Telemetry isn't just a debugging tool — it's a product feature. The owner-facing dashboard already shows "Today's Sales" and leakage flags. The same data infrastructure that powers those views can power:
+
+- Support resolution (what actually happened in this order flow)
+- Customer behavior analysis (which tiles are being used, which are ignored)
+- Pricing intelligence (which add-ons get declined and at what rates)
+- Onboarding effectiveness (which steps produce friction or drop-off)
+
+Building telemetry as a first-class concern from the beginning means TRACE never enters a support conversation without ground truth available.
+
+### Section 7: The re-demo offer
+
+When a customer disputes what the product can do, the re-demo offer is: "Let's run the demo flow again right now. You watch. Either the product does what I demonstrated or it doesn't. If it doesn't, that's on us. If it does, then we have a training or configuration gap to close."
+
+That offer is confident because the demo is documented, repeatable, and honest. TRACE doesn't demo things it doesn't ship. (Honest Friction / no placeholder code rules.)
+
+### Section 8: What telemetry doesn't catch
+
+Telemetry shows system behavior, not intent. It can show that a customer clicked "approve" on an order. It can't show that the customer misunderstood what "approve" meant. That distinction matters in support — the system did what the customer asked; the customer didn't understand what they were asking.
+
+In these cases, telemetry diagnoses the gap but doesn't resolve the blame question. The resolution is honest: "The system did exactly what you told it to do. The part that wasn't clear was what 'approve' means in this context. Let's walk through it." No blame, but also no apology for the system working correctly.
+
+### Section 9: Telemetry and the trial period
+
+During the trial, behavioral telemetry is especially valuable. The trial fuzz mechanic (Day 15+: estimates visible, specifics locked) is only honest if the estimates are actually derived from real behavior. If a customer hasn't used a tile during the trial, the estimate for that tile should reflect no data, not a fabricated number.
+
+Telemetry during the trial informs:
+- What tiles the customer actually used
+- Which workflows they completed
+- Where they dropped off
+- What the honest estimate of monthly value is, derived from real usage
+
+This makes the "activate or see fuzz" moment an honest conversation anchored in their own behavior, not a marketing claim about what the platform might do.
+
+### Section 10: The institutional pattern
+
+David's operational background: institutional knowledge management, military supply chain, federal operations. All of these share one pattern — decisions get made based on documented ground truth, not on whoever tells the most compelling narrative.
+
+That institutional discipline is the ancestor of the telemetry principle. The ledger matters. The log matters. The record matters. "I remember it differently" isn't a sufficient ground for changing the record.
+
+TRACE applies that same institutional discipline to the customer relationship. Both parties operate from the record.
+
+---
+
+### Section 11: The customer is not always right
+
+The reflexive "customer is always right" framing has become standard in service businesses. It's wrong as stated. The honest version:
+
+**The customer is paying for what was promised. They get what was promised. They don't automatically get everything they think they want or deserve. And they don't get to abuse the relationship because money changed hands.**
+
+The waitress analogy: a customer paying for a meal doesn't have the right to abuse the server. The transaction is for the meal, not for permission to behave badly. The server can refuse service or escalate if abuse occurs. The customer's payment doesn't override basic reasonable behavior expectations.
+
+The TRACE analogy: a customer paying for the platform doesn't have the right to abuse TRACE staff, fabricate claims about what TRACE did, or demand things outside what was promised. The transaction is for the platform's measured outcomes, not for permission to be unreasonable.
+
+---
+
+### Section 12: Symmetric accountability
+
+**What TRACE is accountable for:**
+- Delivering what was promised in the demo and onboarding
+- Measuring honestly through behavioral telemetry and audit
+- Responding to legitimate issues with data and resolution
+- Maintaining the locked-rate covenant
+- Removing customer data on departure per the departure policy
+- Being honest when something is broken on TRACE's side
+
+**What the customer is accountable for:**
+- Paying the agreed price for what they activated
+- Using the platform within its documented capabilities
+- Following the workflows the platform supports
+- Being honest when describing issues
+- Behaving reasonably in support interactions
+- Recognizing when their own actions caused an issue
+
+This is the symmetric covenant. Both sides bound by the relationship's terms.
+
+---
+
+### Section 13: How this changes customer support
+
+Traditional customer support: customer complains, support apologizes, support tries to fix it regardless of cause.
+
+TRACE customer support:
+1. Customer reports issue
+2. Support pulls behavioral telemetry and system logs
+3. Support identifies what actually happened
+4. Support responds with specifics:
+   - "Here's what happened, here's how we'll fix it" — if TRACE issue
+   - "Here's what happened, here's how you can fix it" — if customer error
+   - "Here's what happened with the integration, here's the resolution path" — if third-party issue
+   - "What you're describing isn't what the demo showed; here's the actual scope of this feature" — if misunderstanding
+5. Resolution proceeds based on actual cause, not assumed cause
+
+The customer learns from their own actions when they caused the issue. TRACE doesn't apologize for things it didn't do. Both sides operate from ground truth.
+
+This is more respectful than the reflexive apology pattern. It treats the customer as a competent adult capable of understanding what actually happened, not as someone who needs to be placated.
+
+---
+
+### Section 14: When to fire a customer
+
+This principle has a hard implication: some customers are bad customers and should leave the relationship.
+
+Bad customer behaviors include:
+- Fabricating claims about TRACE behavior to avoid responsibility
+- Abusing customer support staff verbally or through systematic harassment
+- Demanding features outside what was promised, then attacking when refused
+- Public complaints that misrepresent what actually happened (when telemetry shows otherwise)
+- Manipulative tactics like threats of public shaming to extract concessions
+
+When these patterns appear, TRACE has options:
+1. Address with the customer directly using telemetry data
+2. Set clear expectations about acceptable behavior in the relationship
+3. Decline to continue the relationship if behavior doesn't change
+4. Apply the departure policy cleanly — customer takes what they paid for, TRACE removes their data
+
+This is uncomfortable because it conflicts with growth-at-all-costs SaaS culture. But it's consistent with the covenant. A relationship requires both parties to honor it. If one party abuses the relationship, the relationship ends.
+
+"If I make you successful, I'm ultimately successful" requires the customer to be willing to be successful within the platform's actual capabilities. Customers who fight against the platform's design or fabricate claims about its failures aren't being made successful — they're refusing to engage with what's actually being offered.
+
+---
+
+### Section 15: How this applies to Erin's onboarding
+
+Erin will click through Cultivar OS as a real user. She might find things she doesn't like or thinks should work differently. Two responses possible:
+
+**Model of what customers shouldn't do:** "This is broken, fix it." Without specifics, without checking the demo, without considering her own actions.
+
+**Model of the relationship TRACE wants:** "The demo said X, but I'm seeing Y. Here's what I clicked, here's what happened. Either the demo was wrong or the implementation differs from the demo. Which is it?"
+
+The second response is collaborative. It uses ground truth (what she clicked, what she saw, what the demo showed). It identifies a gap honestly. It doesn't assign blame; it asks for explanation.
+
+Erin gets to model this because she's the first non-builder user. Future customers will be evaluated against this same standard, applied more diplomatically.
+
+---
+
+### Section 16: Verify, then trust
+
+The Reagan-era principle was "trust but verify" — assume good faith, then check the data. TRACE inverts this in customer support contexts:
+
+**"Verify, then trust."**
+
+When a customer reports an issue, TRACE doesn't assume the customer's narrative is accurate. TRACE pulls the data first. The data tells the truth. The relationship then operates from that ground truth.
+
+This isn't adversarial. It's honest. Customers who are right find their complaints validated by data. Customers who are wrong find their complaints corrected by data. Either way, the resolution is faster and the customer learns something useful.
+
+---
+
+### Section 17: How this protects TRACE long-term
+
+The locked-rate covenant requires TRACE to be sustainable. Customers who consume disproportionate support resources through fabricated complaints, who damage staff morale through abuse, or who weaponize public complaints to extract concessions all threaten that sustainability.
+
+By holding customers accountable to their actual behavior (verified through telemetry), TRACE protects:
+- Staff morale — they're not absorbing unjust criticism
+- Resource allocation — support time goes to real issues
+- The covenant itself — TRACE can keep delivering locked rates because resources aren't drained by bad actors
+- The customer base — good customers benefit when TRACE isn't subsidizing bad customers through resource transfer
+
+Short-term, every customer interaction feels like it should be optimized for retention at any cost. Long-term, optimizing for relationships that work in both directions produces better outcomes for everyone in the system.
+
+---
+
+### Section 18: The integrated relationship model
+
+1. **Customer pays for what was promised; gets what was promised.** No more, no less.
+2. **Both sides accountable.** TRACE measured against promises. Customer measured against behavior.
+3. **Ground truth from telemetry.** Both sides operate from data, not narrative.
+4. **Re-demo capability.** Customer can always verify TRACE against what was promised.
+5. **Symmetric covenant.** TRACE delivers, customer behaves reasonably, relationship continues.
+6. **Bad actors leave.** Some customers should not be customers. TRACE has the discipline to enforce this.
+7. **Verify, then trust.** Data first, narrative second. Both sides learn from honest examination.
+
+This isn't a customer-hostile model. It's a customer-respecting model. It treats customers as competent adults capable of being held accountable, not as fragile entities that need to be placated.
+
+The customers who thrive in this model are exactly the customers TRACE wants — operator-class small business owners who value honest measurement, accountable relationships, and platforms that work as promised. The customers who don't thrive in this model self-select out, which improves the customer base over time.
+
+---
+
+End of Wednesday 2026-06-03 — Re-Demo, Behavioral Telemetry, and Customer Accountability entry.
+
+---
+
 ## 2026-06-01 — Comprehensive operating thesis (foundational document)
 
 After three days of substantive strategic conversation, capturing the full operating thesis for TRACE Enterprises as Claude understands it. Long-form deliberately. Future Claude conversations should be able to read this and operate from sound ground without David re-explaining context. Compression to a six-line version can happen later (Colonel Binder discipline) — for now, capture comprehensively.
