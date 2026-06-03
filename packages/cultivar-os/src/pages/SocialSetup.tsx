@@ -13,7 +13,6 @@ export function SocialSetup() {
   const navigate = useNavigate();
   const { businessId } = useBusinessContext();
 
-  const [accountId, setAccountId] = useState('');
   const [platforms, setPlatforms] = useState<string[]>(['instagram']);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -25,10 +24,6 @@ export function SocialSetup() {
   }
 
   async function handleSave() {
-    if (!accountId.trim()) {
-      setError('Enter your Blotato Account ID to continue.');
-      return;
-    }
     if (platforms.length === 0) {
       setError('Select at least one platform.');
       return;
@@ -42,8 +37,7 @@ export function SocialSetup() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          business_id:         businessId!,
-          blotato_account_id: accountId.trim(),
+          business_id: businessId!,
           platforms,
         }),
       });
@@ -132,40 +126,6 @@ export function SocialSetup() {
               </label>
             ))}
           </div>
-        </div>
-
-        {/* Blotato account ID */}
-        <div style={{ background: '#fff', borderRadius: 12, padding: '16px', border: '1px solid #e5e7eb' }}>
-          <label style={{ display: 'block' }}>
-            <p style={{
-              fontSize: '0.6875rem', fontWeight: 600, color: 'var(--gray-400)',
-              textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8,
-            }}>
-              Blotato Account ID
-            </p>
-            <input
-              type="text"
-              value={accountId}
-              onChange={e => setAccountId(e.target.value)}
-              placeholder="e.g. 12345"
-              inputMode="numeric"
-              style={{
-                width: '100%',
-                padding: '12px 14px',
-                fontSize: '1rem',
-                border: '1.5px solid #d1d5db',
-                borderRadius: 8,
-                outline: 'none',
-                boxSizing: 'border-box',
-                fontFamily: 'inherit',
-              }}
-            />
-          </label>
-          <p style={{ fontSize: '0.8125rem', color: 'var(--gray-400)', marginTop: 8, lineHeight: 1.5 }}>
-            Find this at{' '}
-            <span style={{ color: 'var(--green-primary)', fontWeight: 600 }}>app.blotato.com → Settings → API</span>.
-            It's the numeric ID next to your connected accounts.
-          </p>
         </div>
 
         {error && (

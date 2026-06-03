@@ -1,4 +1,4 @@
-import React, { CSSProperties, useState } from 'react';
+import React, { CSSProperties, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight, ArrowLeft, Leaf, QrCode, DollarSign,
@@ -421,6 +421,27 @@ export function OnboardingWizard() {
   const [nurseryInfo, setNurseryInfo] = useState({ name: '', phone: '', address: '' });
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeError, setFinalizeError] = useState('');
+  // When truthy, a businesses row already exists (OwnerSignup created it). Skip NURSERY_SETUP.
+  const [existingBusinessId, setExistingBusinessId] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function checkExisting() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: biz } = await supabase
+        .from('businesses')
+        .select('id, name')
+        .eq('owner_id', user.id)
+        .eq('business_type', 'nursery')
+        .maybeSingle();
+      if (biz) {
+        setExistingBusinessId(biz.id);
+        setNurseryInfo(n => ({ ...n, name: biz.name ?? '' }));
+        setStepIndex(STEPS.indexOf('CHOOSE_PATH'));
+      }
+    }
+    checkExisting();
+  }, []);
 
   const step = STEPS[stepIndex];
   const next = () => setStepIndex(i => Math.min(i + 1, STEPS.length - 1));
@@ -433,38 +454,43 @@ export function OnboardingWizard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { navigate('/login'); return; }
 
-      const newBusinessId = crypto.randomUUID();
-      const { error } = await supabase.from('businesses').insert({
-        id: newBusinessId,
-        owner_id: user.id,
-        name: nurseryInfo.name.trim(),
-        phone: nurseryInfo.phone.trim() || null,
-        address: nurseryInfo.address.trim() || null,
-        business_type: 'nursery',
-        trial_started_at: new Date().toISOString(),
-      });
+      let businessId = existingBusinessId;
 
-      if (error) {
-        setFinalizeError(error.message);
-        setFinalizing(false);
-        return;
+      if (!businessId) {
+        // Legacy path: wizard reached directly without OwnerSignup (e.g. manual /onboarding nav)
+        const newBusinessId = crypto.randomUUID();
+        const { error } = await supabase.from('businesses').insert({
+          id: newBusinessId,
+          owner_id: user.id,
+          name: nurseryInfo.name.trim(),
+          phone: nurseryInfo.phone.trim() || null,
+          address: nurseryInfo.address.trim() || null,
+          business_type: 'nursery',
+          trial_started_at: new Date().toISOString(),
+        });
+        if (error) {
+          setFinalizeError(error.message);
+          setFinalizing(false);
+          return;
+        }
+        businessId = newBusinessId;
+
+        // business_members row only needed on the legacy path; OwnerSignup already creates it.
+        await supabase.from('business_members').insert({
+          business_id: businessId,
+          user_id: user.id,
+          name: (user.user_metadata as { name?: string } | null)?.name ?? nurseryInfo.name,
+          email: user.email ?? null,
+          phone: null,
+          role: 'OWNER',
+          permissions: DEFAULT_PERMISSIONS.OWNER,
+          active: true,
+          invite_id: null,
+        });
       }
 
-      // Create OWNER business_members row so the owner appears in their own team list.
-      // Non-fatal: if the migration hasn't been applied yet this silently fails.
-      await supabase.from('business_members').insert({
-        business_id: newBusinessId,
-        user_id: user.id,
-        name: (user.user_metadata as { name?: string } | null)?.name ?? nurseryInfo.name,
-        email: user.email ?? null,
-        phone: null,
-        role: 'OWNER',
-        permissions: DEFAULT_PERMISSIONS.OWNER,
-        active: true,
-        invite_id: null,
-      });
-
-      await supabase.from('nursery_profiles').insert({ business_id: newBusinessId });
+      // nursery_profiles row — upsert so it's safe whether or not it already exists.
+      await supabase.from('nursery_profiles').upsert({ business_id: businessId }, { onConflict: 'business_id' });
       setStepIndex(STEPS.indexOf('DONE'));
     } catch {
       setFinalizeError('Something went wrong. Please try again.');
