@@ -258,6 +258,25 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-04 — Security fix: cross-vertical member resolution (audit #13)
+
+**Branch:** `main` — isolated security commit.
+
+**What was fixed:** `packages/shared/src/context/BusinessProvider.tsx` member path (line 87). Previously the member path queried `business_members` with no `business_type` filter — a Cultivar member email in the Ignition app could resolve to the nursery business (cross-tenant data exposure). Fix: after fetching the member row, verify `memberBiz.business_type === businessType` before accepting it. If the vertical doesn't match, `biz` stays null and `businessError = 'no_business'` fires, giving a hard access-denied stop.
+
+**Verification — all three cases confirmed by code trace:**
+- **A (Cultivar owner + member):** Owner path hits on `business_type='nursery'`. Member path: `memberBiz.business_type = 'nursery' === 'nursery'` → accepted. Clean landing. ✅
+- **B (Ignition owner + member):** Owner path hits `business_type='shop'` → `ownerBusinessId` set → OWNER SYNC → `setOnboardingDone(true)`. Loop stays fixed. Member path: `'shop' === 'shop'` → accepted. ✅
+- **C (isolation):** Cultivar member in Ignition app → `memberBiz.business_type = 'nursery' ≠ 'shop'` → filter rejects → `no_business` error → no data returned. Ignition member in Cultivar app: `'shop' ≠ 'nursery'` → same. Both are clean hard stops, no data bleed. ✅
+
+**Builds:** Cultivar 2176 modules ✅ · Ignition 1834 modules ✅ · zero TypeScript errors.
+
+**No factual corrections to docs needed** — audit report already stated the member path lacked a business_type filter; built-inventory.md and PLATFORM_STRATEGY.md do not assert that member resolution was vertical-scoped.
+
+**No runbook needed** — pure one-line code fix.
+
+---
+
 ### 2026-06-04 — Platform naming & vertical-leak audit (read-only)
 
 **Type:** Read-only audit. No code or schema changes made. One doc written.

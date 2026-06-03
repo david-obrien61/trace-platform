@@ -91,8 +91,10 @@ export function BusinessProvider({
           .eq('user_id', user.id)
           .eq('active', true)
           .single();
-        biz = (member?.businesses as any) ?? null;
-        if (member) {
+        const memberBiz = (member?.businesses as any) ?? null;
+        // Scope to current vertical — prevents cross-vertical data exposure (audit #13)
+        if (member && memberBiz?.business_type === businessType) {
+          biz = memberBiz;
           resolvedPerms = (member.permissions as string[]) ?? [];
           resolvedIsOwner = false;
         }
