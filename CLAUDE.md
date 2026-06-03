@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: May 29, 2026
+# Last updated: June 3, 2026
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -257,6 +257,210 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-03 — Shared OwnerSignup with PIN gesture layer; Ignition signup restored; PLATFORM_STRATEGY corrected
+
+**Branch:** `multi-tenant-extraction` — DO NOT MERGE to main.
+
+**What was built:**
+
+Shared signup architecture (platform-wide):
+- `packages/shared/src/auth/OwnerSignup.tsx` — multi-step signup: Owner Info → PIN Setup → Biometric (optional) → vertical steps array. Config-driven. Retry-aware (handles orphaned auth users from prior partial signups). No Tailwind — inline styles throughout.
+- `packages/shared/src/auth/index.ts` — exports `OwnerSignup`, `OwnerSignupConfig`, `VerticalStep`, `VerticalStepProps`
+- `packages/shared/src/supabase/auth.ts` — added `authenticateMember(businessId, pin)`, `getMemberSession()`, `clearMemberSession()` for platform-wide business_members PIN auth
+
+Cultivar OS:
+- `packages/cultivar-os/src/pages/SignUp.tsx` — now uses shared `OwnerSignup` with Cultivar config (memberTable: business_members, ownerRole: OWNER, collectPhone/Address/Website: true)
+- `packages/cultivar-os/src/pages/Dashboard.tsx` — amber profile completion banner when phone/address null; links to Settings
+
+Ignition OS:
+- `packages/ignition-os/modules/OnboardingWizard.jsx` — WELCOME + DONE steps retained (dark Ignition theme); SHOP+ACCOUNT+PIN steps replaced with shared `OwnerSignup`; onSuccess creates matching `shops` row + seeds DataBridge
+
+SQL Migrations:
+- `supabase/migrations/20260603_business_members_add_pin_hash.sql` — adds `pin_hash` column to business_members in bgobkjcopcxusjsetfob
+- `packages/ignition-os/supabase/migrations/20260603_recreate_shop_members.sql` — recreates shop_members in ufsgqckbxdtwviqjjtos with pin_hash, active, email columns (dropped by June 2 migration; Ignition signup was broken without it)
+
+Documentation:
+- `PLATFORM_STRATEGY.md` — corrected: PIN is platform-wide gesture layer standard (removed "Honest Debt" characterization for Ignition's PIN). Per-vertical gesture table updated (Cultivar now shows PIN as primary gesture).
+- `THOUGHTS.md` — new entry: "PIN as Platform Gesture Standard, and How the Partnership Actually Works" (10 sections including two-layer auth architecture and partnership correction dynamics)
+- `docs/discovery/onboarding-flow-findings-2026-06-03.md` — resolution notes added to Sections 2, 3, 3.5
+- `docs/built-inventory.md` — OwnerSignup (shared), OnboardingWizard (Ignition/Cultivar), auth modules updated
+- `docs/runbooks/shared-signup-with-pin-2026-06-03.md` — full runbook: migrations, config API, testing protocol, remaining gaps
+- `docs/runbooks/auth-cleanup-orphaned-users-2026-06-03.md` — how to clean up trace_ent@outlook.com and prevent re-occurrence
+
+**Builds:** Cultivar 2175 ✓ · Ignition 1834 ✓ · zero TypeScript errors
+
+**⚠️ David — required manual steps before new signups work:**
+
+1. **Apply business_members pin_hash migration (bgobkjcopcxusjsetfob):**
+   - Open: https://supabase.com/dashboard/project/bgobkjcopcxusjsetfob/sql/new
+   - Paste: `supabase/migrations/20260603_business_members_add_pin_hash.sql`
+   - Run + verify: `SELECT column_name FROM information_schema.columns WHERE table_name = 'business_members'` — expect `pin_hash` in list
+
+2. **Recreate shop_members (ufsgqckbxdtwviqjjtos):**
+   - Open: https://supabase.com/dashboard/project/ufsgqckbxdtwviqjjtos/sql/new
+   - Paste: `packages/ignition-os/supabase/migrations/20260603_recreate_shop_members.sql`
+   - Run + verify: `SELECT column_name FROM information_schema.columns WHERE table_name = 'shop_members'` — expect `pin_hash`, `active` in list
+
+3. **Clean up orphaned trace_ent@outlook.com auth user:**
+   - See `docs/runbooks/auth-cleanup-orphaned-users-2026-06-03.md`
+   - Or use a different email for further testing until cleaned up
+
+4. **Merge + deploy:** Multi-tenant-extraction branch must be merged to main for Vercel to pick up all changes. Until merged, new signups and TeamSection visibility are blocked.
+
+**What Cultivar new signup now looks like (after merge + migrations):**
+- `/signup` → shared OwnerSignup (3 steps: Owner Info → PIN → Biometric optional)
+- Collects: business name, owner name, email, password, phone, address, website
+- Creates: `auth.users` + `businesses` + `business_members` (with pin_hash, role=OWNER)
+- Navigates to `/dashboard` — no more empty state landing
+
+**What Ignition new signup now looks like:**
+- WELCOME screen → OwnerSignup → DONE screen
+- OwnerSignup onSuccess creates matching `shops` row + seeds DataBridge
+- CRITICAL FIX: shop_members now has pin_hash column; OnboardingWizard no longer crashes
+
+**What still needs to be built (not in this session):**
+- PIN daily login UI for Cultivar (Login page currently email/password only; `authenticateMember()` exists but no UI calls it)
+- Biometric credential persistence (WebAuthn credential ID not stored to DB — future enhancement)
+- Cultivar Login page with "Use PIN instead" option
+
+**Runbooks:** `docs/runbooks/shared-signup-with-pin-2026-06-03.md` + `docs/runbooks/auth-cleanup-orphaned-users-2026-06-03.md`
+
+---
+
+### 2026-06-02 — Prompt 4: BusinessProvider member-path fallback; full invite flow verified ✅
+
+**Branch:** `multi-tenant-extraction` — DO NOT MERGE to main.
+
+**What was built:**
+- `packages/shared/src/context/BusinessProvider.tsx` — two-path resolution: owner fast-path (businesses.owner_id), member fallback (business_members → businesses join). Exposes `userPermissions: string[] | null` and `isOwner: boolean` in context. `null` perms = owner (full access implied). `string[]` = member's explicit permission list.
+- `packages/shared/src/context/index.ts` — `BusinessContextValue` added to exports (was missing; caused TS error)
+- `packages/cultivar-os/src/pages/Dashboard.tsx` — Settings button gated on `canManageSettings = isOwner || perms.includes('manage_settings')`. Title "Owner Dashboard" for owners, "Dashboard" for members.
+- `packages/cultivar-os/src/pages/Settings.tsx` — permission gate: redirects to `/dashboard` if member without `manage_settings`
+- `scripts/test-member-login.mjs` — 8-section E2E test; fixed `.mjs`-incompatible TypeScript syntax (`as any` stripped)
+- `docs/runbooks/multi-tenant-extraction-member-path-fix-2026-06-02.md` — fix details, all 29 test assertions, David's step-by-step for inviting Erin tomorrow morning, rough edges
+
+**Test results:** 29/29 assertions passed. All cleanup completed.
+
+**Builds:** Cultivar 2174 ✓ · zero TypeScript errors
+
+**⚠️ DEPLOY REQUIRED — Prompt 4 changes are NOT yet live:**
+Multi-tenant-extraction branch must be merged to main (or force-deployed) for Vercel to pick up the BusinessProvider fix. Until deployed, Erin's login still hits the "Account not linked" wall.
+
+**Remaining blockers before Erin demo Wednesday morning:**
+1. **Merge branch or deploy manually**: `git push` → merge multi-tenant-extraction → main → Vercel auto-deploys
+2. **David's OWNER row** in business_members for LAWNS (see runbook SQL — insert once, then done)
+3. **Invite Erin**: Settings → Team section → Send Invite → copy link → share with Erin
+
+**What Erin sees after accepting invite (MANAGER role):**
+- ✅ Dashboard (LAWNS metrics)
+- ✅ QR Checkout, Orders, Deliveries, Campaigns tiles
+- ❌ NO Settings button
+- ❌ /settings auto-redirects to /dashboard
+
+**Runbook:** `docs/runbooks/multi-tenant-extraction-member-path-fix-2026-06-02.md`
+
+---
+
+### 2026-06-02 — Prompt 3: Cultivar consumes shared auth; TeamSection in Settings; /join route live
+
+**Branch:** `multi-tenant-extraction` — DO NOT MERGE to main.
+
+**What was built:**
+- `packages/cultivar-os/src/auth/roles.ts` — OWNER / MANAGER / STAFF roles with permission bundles. OWNER is full access. MANAGER is day-to-day ops (no settings). STAFF is QR checkout and orders only.
+- `packages/cultivar-os/api/members/preview-invite.ts` — Vercel GET handler, calls `previewInvitation` from shared
+- `packages/cultivar-os/api/members/accept-invite.ts` — Vercel POST handler, calls `acceptInvitation` from shared
+- `packages/cultivar-os/src/pages/Settings.tsx` — `TeamSection` added below NurserySection: shows active members, pending invitations, invite form (name/email/role), and invite link display with Copy button
+- `packages/cultivar-os/src/pages/OnboardingWizard.tsx` — `finalize()` now inserts OWNER `business_members` row after creating `businesses` row (non-fatal if migration not applied yet)
+- `packages/cultivar-os/src/router.tsx` — `/join` public route added, renders `AcceptInvite` from shared with `auth.signIn` and `/dashboard` redirect
+
+**Builds:** Cultivar 2174 ✓ · Ignition 1823 ✓ · zero TypeScript errors
+
+**Runbook:** `docs/runbooks/multi-tenant-extraction-cultivar-integration-2026-06-02.md`
+
+---
+
+### 2026-06-02 — Prompt 2: Shared auth package extracted, AcceptInvite built, migrations blocked on PAT
+
+**Branch:** `multi-tenant-extraction` — DO NOT MERGE to main.
+
+**What was built:**
+- `packages/shared/src/auth/types.ts` — `Member`, `Invitation`, `Device`, `Role`, `VerticalAdapter`, `AcceptInviteResult`, `InvitePreview`
+- `packages/shared/src/auth/members.ts` — `getMembersByBusiness`, `updateMemberRole`, `removeMember`, `checkPermission`
+- `packages/shared/src/auth/invitations.ts` — `createInvitation`, `revokeInvitation`, `getPendingInvitations`, `expireInvitations`
+- `packages/shared/src/auth/acceptInvitation.ts` — `previewInvitation`, `acceptInvitation` (server-side, service key)
+- `packages/shared/src/auth/AcceptInvite.tsx` — React component; inline styles, TRACE green, visually obvious
+- `packages/shared/src/auth/index.ts` — updated to export all of the above
+- `packages/shared/src/auth/README.md` — vertical adapter contract; Prompt 3 Cultivar integration can be done by reading this file alone
+- `scripts/apply-migrations.mjs` — one-command migration apply (needs Supabase PAT)
+- `scripts/test-shared-auth.mjs` — E2E test for the full invite → accept → verify → reject-reuse flow
+- `.claude/settings.json` — added `"permissionMode": "bypassPermissions"` (David requested "fire and walk away")
+
+**Builds:** Ignition 1823 ✓ · Cultivar 2173 ✓ · zero TypeScript errors in new shared auth files
+
+**⚠️ BLOCKER — Migrations NOT applied to live DB:**
+
+The Supabase Management API requires a personal access token (PAT) — not the service role JWT. All three programmatic approaches were tried and documented in the runbook. The service key in `packages/cultivar-os/.env.local` does NOT work with the Management API (returns 401).
+
+**One-time fix — run before Prompt 3:**
+```bash
+# 1. Get PAT: https://supabase.com/dashboard/account/tokens → Generate new token → "trace-migrations"
+# 2. Run:
+SUPABASE_PAT=sbp_your_token node scripts/apply-migrations.mjs
+# 3. Verify:
+node scripts/test-shared-auth.mjs
+```
+
+The E2E test confirmed the scripts work correctly. Step 1 fails with "table not in schema cache" until migrations are applied — that's the expected failure mode.
+
+**After migrations are applied, next session is Prompt 3 — Cultivar integration:**
+- `packages/cultivar-os/api/members/preview-invite.ts` (GET)
+- `packages/cultivar-os/api/members/accept-invite.ts` (POST)
+- Route `<Route path="/join" element={<AcceptInvitePage />} />` in Cultivar router
+- Staff management UI in Settings page TeamSection (invite modal + member list)
+- Full spec in `packages/shared/src/auth/README.md` — copy-paste ready
+
+**Runbook:** `docs/runbooks/multi-tenant-extraction-shared-package-2026-06-02.md`
+
+---
+
+### 2026-06-02 — Prompt 1: Multi-tenant extraction foundation: branch, Step 12, shared schema
+
+**Branch:** `multi-tenant-extraction` — DO NOT MERGE to main. David reviews and merges deliberately after all sessions in this series are complete.
+
+**What was built:**
+- `CLAUDE.md` Part 9 Step 12 added — Runbook capture for setup operations (mandatory for any session with environment/deployment/infrastructure work)
+- `supabase/migrations/20260602_shared_members_a_create_tables.sql` — new shared tables: `business_members`, `invitations`, `member_devices` with real RLS (owner_all + self_select + self_update). Replaces Ignition's PIN-centric shop_members/shop_invites pattern with email/Supabase-auth pattern.
+- `packages/ignition-os/supabase/migrations/20260602_ignition_drop_team_tables.sql` — drops old Ignition team tables (shop_members, shop_invites, teams, member_devices, pin_resets) from ufsgqckbxdtwviqjjtos
+- `docs/runbooks/multi-tenant-extraction-foundation-2026-06-02.md` — full runbook with schema design decisions, verification queries, gotchas
+
+**⚠️ David — required manual steps before continuing:**
+
+1. Apply shared tables migration to **cultivar-os project** (bgobkjcopcxusjsetfob):
+   - Open: https://supabase.com/dashboard/project/bgobkjcopcxusjsetfob/sql/new
+   - Paste: `supabase/migrations/20260602_shared_members_a_create_tables.sql`
+   - Run verification queries from runbook Step 2b
+
+2. Drop old Ignition tables from **ignition-os project** (ufsgqckbxdtwviqjjtos):
+   - Open: https://supabase.com/dashboard/project/ufsgqckbxdtwviqjjtos/sql/new
+   - Paste: `packages/ignition-os/supabase/migrations/20260602_ignition_drop_team_tables.sql`
+   - Run verification query from runbook Step 2c
+
+3. Before next session: confirm `git branch --show-current` = `multi-tenant-extraction`
+
+**Schema decisions (locked):**
+- `business_members` (not shop_members) — anchors to businesses table, vertical-agnostic
+- `invitations` (not shop_invites) — 7-day expiry added (email invites need expiration)
+- `member_devices` — denormalized `business_id` for clean RLS without join overhead
+- No `pin_resets` in shared — Cultivar uses email/password auth (CLAUDE.md locked auth rule)
+- No `teams` in v1 — premature abstraction, add when a vertical explicitly needs it
+- RLS v1: owner has full access, member can see/update own row. Cross-member reads use service key. Tighten to SECURITY DEFINER in v2.
+
+**Build status:** Not re-verified (no frontend code changed). Pre-session build was cultivar 2166 ✅ · ignition 1828 ✅. Migration files are SQL only.
+
+**Next session in this series:** BusinessMembersProvider + useMembers hook + invite/accept API endpoints in packages/shared/. Then consume in Cultivar's Settings page (TeamSection).
+
+---
 
 ### 2026-05-29 — Ignition OS multi-tenant conversion + Campaign Scheduler
 
@@ -1000,18 +1204,19 @@ packages/shared/src/
 
 ## 7. OFF LIMITS THIS SESSION
 
-- packages/ignition-os/ — DO NOT MODIFY
 - packages/shared/src/quickbooks/oauth.ts
   (IGNITION_OS_DATA hardcoding — post-demo fix)
 - packages/shared/src/supabase/auth.ts
   (PIN auth — post-demo refactor)
 - Old Supabase project ufsgqckbxdtwviqjjtos
-  — never reference in cultivar-os code
+  — never reference in cultivar-os code (exception: the drop migration
+  20260602_ignition_drop_team_tables.sql targets this project intentionally)
 - Any already-run Supabase migrations
 - nursery_modules RLS policy authenticated_select_nursery_modules
   (intentionally loose — allows any authenticated user to read;
   tighten to owner_id join post-demo once nurseries.owner_id
   is populated. See Part 4 post-demo tasks.)
+- main branch — all multi-tenant extraction work stays on multi-tenant-extraction branch until David merges deliberately
 
 ---
 
@@ -1089,6 +1294,24 @@ MANDATORY before ending every session:
    - The session explicitly states "no factual corrections surfaced in this session"
 
    *Rationale: Memory drifts. Both human and AI memory. Conversations build confident assertions on previously-held information. When an audit corrects the information, the correction must propagate to docs or the next conversation will re-assert the wrong information. The audit catches it once; the documentation update prevents catching it again.*
+
+12. **Runbook capture for setup operations** — For any session that performed environment setup, deployment configuration, repository migration, package installation sequences, database migrations, infrastructure changes, or any multi-step manual-feeling configuration: produce a runbook document at the end of the session.
+
+   The runbook lives in `docs/runbooks/` (create if it doesn't exist). Filename: `{operation-name}-{YYYY-MM-DD}.md`.
+
+   The runbook captures:
+   - What was being done and why
+   - The sequence of steps actually taken
+   - What to verify at each step
+   - What failed and how it was resolved
+   - How a future person (David, Andrew, Connor, future Claude) could replicate this
+   - What gotchas to watch for
+
+   The runbook is for **replay, not narrative**. Write it as if the next person doing this for a different reason needs to follow it successfully.
+
+   If the session was purely code changes (no environment/deployment/infrastructure work), state "No runbook needed — pure code session" and skip.
+
+   This step is mandatory for setup operations and the session is not complete until either a runbook exists or the no-runbook-needed declaration is made.
 
 ---
 

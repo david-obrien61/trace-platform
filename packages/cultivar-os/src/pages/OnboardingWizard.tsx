@@ -6,6 +6,7 @@ import {
   Truck, Navigation, Send, Copy, X, Plus,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { DEFAULT_PERMISSIONS } from '../auth/roles';
 
 // ─── Brand ───────────────────────────────────────────────────────────────────
 const GREEN = '#27500A';
@@ -448,6 +449,20 @@ export function OnboardingWizard() {
         setFinalizing(false);
         return;
       }
+
+      // Create OWNER business_members row so the owner appears in their own team list.
+      // Non-fatal: if the migration hasn't been applied yet this silently fails.
+      await supabase.from('business_members').insert({
+        business_id: newBusinessId,
+        user_id: user.id,
+        name: (user.user_metadata as { name?: string } | null)?.name ?? nurseryInfo.name,
+        email: user.email ?? null,
+        phone: null,
+        role: 'OWNER',
+        permissions: DEFAULT_PERMISSIONS.OWNER,
+        active: true,
+        invite_id: null,
+      });
 
       await supabase.from('nursery_profiles').insert({ business_id: newBusinessId });
       setStepIndex(STEPS.indexOf('DONE'));

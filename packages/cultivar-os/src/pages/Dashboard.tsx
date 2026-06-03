@@ -68,7 +68,8 @@ const POST_TYPE_LABELS: Record<string, string> = {
 export function Dashboard() {
   const { user } = auth.useSession();
   const navigate  = useNavigate();
-  const { businessId, loading: businessLoading, businessError } = useBusinessContext();
+  const { businessId, loading: businessLoading, businessError, userPermissions, isOwner } = useBusinessContext();
+  const canManageSettings = isOwner || (userPermissions ?? []).includes('manage_settings');
 
   const [businessName, setBusinessName]       = useState('');
   const [plantCount, setPlantCount]           = useState(0);
@@ -97,6 +98,7 @@ export function Dashboard() {
   const [connecting, setConnecting]           = useState(false);
   const [qbError, setQbError]                 = useState('');
   const [accountingNeedsReconnect, setAccountingNeedsReconnect] = useState(false);
+  const [profileIncomplete, setProfileIncomplete] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { modules } = useModules(businessId ?? '');
 
@@ -110,7 +112,7 @@ export function Dashboard() {
     const [businessRes, plantsRes, todayRes, installsRes, leakageRes] = await Promise.all([
       supabase
         .from('businesses')
-        .select('name, accounting_needs_reconnect')
+        .select('name, phone, address, accounting_needs_reconnect')
         .eq('id', businessId!)
         .single(),
 
@@ -145,6 +147,7 @@ export function Dashboard() {
     if (businessRes.data) {
       setBusinessName(businessRes.data.name);
       setAccountingNeedsReconnect(businessRes.data.accounting_needs_reconnect ?? false);
+      setProfileIncomplete(!businessRes.data.phone || !businessRes.data.address);
     }
 
     const plants = plantsRes.data ?? [];
@@ -358,7 +361,7 @@ export function Dashboard() {
           }}>
             {businessName}
           </p>
-          <h1 style={{ fontSize: '1.375rem', fontWeight: 700, margin: 0 }}>Owner Dashboard</h1>
+          <h1 style={{ fontSize: '1.375rem', fontWeight: 700, margin: 0 }}>{isOwner ? 'Owner Dashboard' : 'Dashboard'}</h1>
           {user?.email && (
             <p style={{ fontSize: '0.75rem', color: '#a8c890', marginTop: 4 }}>{user.email}</p>
           )}
@@ -374,16 +377,18 @@ export function Dashboard() {
           >
             Help
           </button>
-          <button
-            onClick={() => navigate('/settings')}
-            style={{
-              background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8,
-              padding: '8px 12px', color: '#fff', fontSize: '0.8125rem',
-              fontWeight: 600, cursor: 'pointer',
-            }}
-          >
-            Settings
-          </button>
+          {canManageSettings && (
+            <button
+              onClick={() => navigate('/settings')}
+              style={{
+                background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8,
+                padding: '8px 12px', color: '#fff', fontSize: '0.8125rem',
+                fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              Settings
+            </button>
+          )}
           <button
             onClick={handleSignOut}
             style={{
@@ -436,6 +441,33 @@ export function Dashboard() {
       )}
 
       <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 640, margin: '0 auto' }}>
+
+        {/* ── Profile completion banner ── */}
+        {profileIncomplete && canManageSettings && (
+          <div style={{
+            background: '#fffbeb', border: '1.5px solid #f59e0b', borderRadius: 12,
+            padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+          }}>
+            <div>
+              <p style={{ fontWeight: 700, fontSize: '0.9rem', color: '#92400e', margin: '0 0 2px' }}>
+                Complete your nursery profile
+              </p>
+              <p style={{ fontSize: '0.8rem', color: '#b45309', margin: 0, lineHeight: 1.4 }}>
+                Add your phone and address so customers and invoices have your contact info.
+              </p>
+            </div>
+            <button
+              onClick={() => navigate('/settings')}
+              style={{
+                background: '#f59e0b', border: 'none', borderRadius: 8,
+                padding: '8px 14px', color: '#fff', fontWeight: 700,
+                fontSize: '0.8rem', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+              }}
+            >
+              Complete →
+            </button>
+          </div>
+        )}
 
         {/* ── QB status banner ── */}
         {!qbConnected ? (

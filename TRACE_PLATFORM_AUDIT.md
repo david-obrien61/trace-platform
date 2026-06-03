@@ -78,13 +78,13 @@ Ground truth: current extracted reuse is ~19%, with a large (~41%) BUILD NEW bac
 | Route protection | `EnrollmentCatch.jsx` | `PrivateRoute.tsx` | `configureAuth.tsx` returns PrivateRoute | CONFIGURE |
 | Role definitions | OWNER, TECH, FRONT_OFFICE, ADMIN in `OnboardingWizard` finalize() | Owner-only (single role implied, no role table) | None | EXTRACT |
 | Permission mapping | Per-role `allowed` array: `['intake','queue','vin','estimates',...]` | No permissions beyond auth/unauth | None | EXTRACT |
-| Settings access by role | Admin-gated via DataBridge `current_user.role === 'OWNER'` | No settings page yet | None | BUILD NEW |
+| Settings access by role | Admin-gated via DataBridge `current_user.role === 'OWNER'` | ✅ Permission gate: `isOwner \|\| perms.includes('manage_settings')`. MANAGER role excluded. Auto-redirect to /dashboard. | `userPermissions` + `isOwner` in BusinessProvider context | ✅ BUILT (2026-06-02) |
 | Who sees what on dashboard | Role-based module visibility in DataBridge `shop_policy.active_modules` | Single owner view | None | EXTRACT |
-| QR join / team onboarding | `OnboardingWizard` TEAM_QR step: QR + share link → `/?join=<shopId>` | Not built | `qr/generate.ts` available | BUILD NEW |
+| QR join / team onboarding | `OnboardingWizard` TEAM_QR step: QR + share link → `/?join=<shopId>` | ✅ `/join?token=...` route (AcceptInvite from shared). Email-based invite flow. | `packages/shared/src/auth/AcceptInvite.tsx` | ✅ BUILT (2026-06-02) |
 | Multi-account login | PIN picker (any registered PIN unlocks session) | Single owner login | None | IGNORE (vertical-specific) |
 
 **Notes:**
-- Cultivar OS has no concept of staff roles yet. Lauren (manager) vs Terry (owner) will need different access levels post-demo.
+- ~~Cultivar OS has no concept of staff roles yet.~~ **(updated 2026-06-02)** OWNER / MANAGER / STAFF roles are live in `packages/cultivar-os/src/auth/roles.ts`. MANAGER = day-to-day ops (no settings). STAFF = QR checkout + orders only. Permission arrays stored in `business_members.permissions` column.
 - The `configureAuth` factory is well-designed but Cultivar OS bypasses it partially — `src/lib/auth.ts` uses it correctly.
 - STORAGE_KEY = `'IGNITION_OS_DATA'` is hardcoded in `packages/shared/src/quickbooks/oauth.ts` — OFF LIMITS until post-demo fix.
 
@@ -94,8 +94,8 @@ Ground truth: current extracted reuse is ~19%, with a large (~41%) BUILD NEW bac
 
 | Feature | Ignition OS | Cultivar OS | Shared | Action |
 |---|---|---|---|---|
-| Settings page / module | `AdminSubscription.jsx` doubles as settings + marketplace | No settings page (post-demo task) | None | BUILD NEW |
-| Business-level config | `DataBridge.save('shop_info', {...})` — name, phone, address, USDOT | `nurseries` table row — hardcoded nursery ID in env var | None | EXTRACT |
+| Settings page / module | `AdminSubscription.jsx` doubles as settings + marketplace | ✅ `Settings.tsx` — NurserySection, AccountingSection, SalesPromptsSection, TeamSection. Permission-gated (MANAGER redirected). | None | ✅ BUILT (2026-05-29 + 2026-06-02) |
+| Business-level config | `DataBridge.save('shop_info', {...})` — name, phone, address, USDOT | `businesses` table row, resolved via `BusinessProvider` (auth.uid() → owner or member lookup) | `BusinessProvider` in shared context | ✅ BUILT (2026-05-29) |
 | Tax rate config | Not visible (auto-calculated) | `VITE_TAX_RATE=0.0825` in env var — not UI-editable | None | BUILD NEW |
 | Default pricing config | Margin rules in `DataBridge` (`shop_policy.prot_matrix`) | `install_price` per plant in seed data, no UI | `pricing/marginEngine.ts` | BUILD NEW |
 | Module enable/disable | `AdminSubscription.jsx` — trial start button per module | `nursery_modules` table, `api/social/enable.ts` wizard | None | CONFIGURE |
@@ -269,8 +269,8 @@ Ground truth: current extracted reuse is ~19%, with a large (~41%) BUILD NEW bac
 | Concept alias learning | ✅ `concept_aliases` table in `IgnitionAudit.jsx` (cross-shop AI improvement) | ❌ | `AIUsageLog` type | IGNORE (auto vertical) |
 
 **Notes:**
-- Cultivar OS currently enforces tenancy by `nursery_id` in queries, not by `auth.uid()` in RLS. The `authenticated_select_nursery_modules` policy allows ANY authenticated user to read ANY nursery's modules. This is intentionally loose (post-demo fix) but must be locked before going multi-tenant.
-- The `VITE_DEMO_NURSERY_ID` env var approach hard-wires a single nursery — fine for demo, breaks for multi-nursery. The right model is: nursery_id from authenticated user's profile row, not an env var.
+- Cultivar OS currently enforces tenancy by `business_id` in queries. The `authenticated_select_nursery_modules` policy allows ANY authenticated user to read ANY nursery's modules — intentionally loose (post-demo fix). Must be locked to `owner_id` join before going multi-tenant.
+- ~~The `VITE_DEMO_NURSERY_ID` env var approach hard-wires a single nursery.~~ **(updated 2026-05-28 + 2026-06-02)** `BusinessProvider` resolves business via `auth.uid() → businesses.owner_id` (owner path) or `auth.uid() → business_members → businesses` (member path). `VITE_DEMO_NURSERY_ID` is still in Vercel env vars as a fallback reference but is no longer used in production code paths.
 - **(updated 2026-05-28 — Area 10 reflects May 23 snapshot)** The orders table had no SELECT RLS policy from its creation (May 17) until May 27, when the missing policy was identified during a demo dry-run (dashboard "Today's Sales" showed 0 after a confirmed order). Policy was applied manually in the Supabase SQL editor; migration `20260527_orders_authenticated_select_policy.sql` committed for future projects. Full incident record in CLAUDE.md Tech Debt Log entry #7. This is the third occurrence of the same root cause (modules + nursery_modules fixed May 22; orders fixed May 27) — see Open Architecture Decision #11 in CLAUDE.md for systemic prevention options.
 
 ---
@@ -370,7 +370,7 @@ Ground truth: current extracted reuse is ~19%, with a large (~41%) BUILD NEW bac
 | Social media / marketing | ❌ | `social_media` | Starter add-on | BUILD NEW |
 | Online shop | ❌ | `online_shop` | Starter add-on | BUILD NEW |
 | Customer follow-up | ❌ | `followup_engine` | Starter add-on | BUILD NEW |
-| Delivery routing | ❌ | `delivery_routing` | Growth | BUILD NEW |
+| Delivery routing | ❌ | ✅ `delivery_routing` — `DeliveryRoute.tsx` at `/deliveries`. Multi-stop Google Maps URL, SMS-to-driver, per-stop checkbox. | None | ✅ BUILT (2026-05-29) |
 | Contractor management | FLEET tier | `contractor_tiers` | Growth | BUILD NEW |
 | Seasonal / perishable | ❌ | `seasonal_module` | Growth | BUILD NEW |
 | Business insights | PREDICTIVE module | `business_insights` | Growth | BUILD NEW |
@@ -913,9 +913,9 @@ These are TRACE-owned capabilities that don't depend on any external service. Ea
 ## OPEN QUESTIONS BEFORE CONDUIT OS
 
 1. **Resend and Twilio** — are they actually wired with working API keys? The `send.ts` file references them but no env var confirmation in CLAUDE.md. Verify before any notification feature is demo'd.
-2. **Multi-nursery / multi-tenant** — the current `VITE_DEMO_NURSERY_ID` architecture is single-tenant by design. What does the auth → nursery_id lookup look like when LAWNS has a second location?
-3. **`configureAuth` for Cultivar staff roles** — Lauren (manager) needs different access than Terry (owner). Does the email strategy in configureAuth support roles, or does role come from the `nurseries` table?
-4. **QB token refresh** — access tokens expire in 60 min. No refresh logic exists. Who is responsible for re-auth in a production scenario?
+2. ~~**Multi-nursery / multi-tenant** — the current `VITE_DEMO_NURSERY_ID` architecture is single-tenant by design.~~ **(resolved 2026-06-02)** `BusinessProvider` resolves business from `auth.uid()` — owner path or member path. Multi-tenant member login fully verified via E2E test. `business_members` table is the join point for non-owners.
+3. ~~**`configureAuth` for Cultivar staff roles**~~ **(resolved 2026-06-02)** Roles live in `packages/cultivar-os/src/auth/roles.ts`. Permissions stored in `business_members.permissions`. `isOwner` and `userPermissions` exposed through `BusinessProvider` context. MANAGER and STAFF roles are defined and gating is enforced.
+4. ~~**QB token refresh** — access tokens expire in 60 min. No refresh logic exists.~~ **(resolved 2026-05-23)** `packages/shared/src/quickbooks/refresh.ts` (`refreshQBToken()`) performs proactive refresh at the start of every invoice call. Sets `accounting_needs_reconnect = true` if refresh token is dead. Dashboard shows amber banner when reconnect is needed.
 5. **Conduit OS vertical** — what is Conduit's equivalent of a "plant"? (A load? A shipment? A lane?) The abstract asset model can't be extracted until the second vertical's asset shape is known.
 
 ---

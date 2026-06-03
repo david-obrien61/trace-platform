@@ -158,6 +158,77 @@ export function getCurrentUser(): AuthSession | null {
   return _load('current_user') as AuthSession | null;
 }
 
+// ── platform-wide PIN auth (business_members) ─────────────────────────────────
+
+export interface MemberSession {
+  id:           string;
+  member_id:    string;
+  business_id:  string;
+  name:         string;
+  role:         string;
+  permissions:  string[];
+  cached_at:    string;
+}
+
+/**
+ * Verify a PIN against the platform-wide business_members table.
+ * Used by Cultivar OS and any vertical whose members are stored in the
+ * shared business_members table (bgobkjcopcxusjsetfob).
+ *
+ * PIN hash: SHA-256 of "{business_id}:{pin}" — same algorithm as authenticate().
+ * Returns a MemberSession on success, null on failure.
+ */
+export async function authenticateMember(
+  businessId: string,
+  pin: string,
+  storageKey = 'TRACE_MEMBER_SESSION',
+): Promise<MemberSession | null> {
+  const pinHash = await hashPin(businessId, pin);
+
+  const { data: member } = await supabase
+    .from('business_members')
+    .select('*')
+    .eq('business_id', businessId)
+    .eq('pin_hash', pinHash)
+    .eq('active', true)
+    .maybeSingle();
+
+  if (!member) return null;
+
+  const session: MemberSession = {
+    id:          member.id,
+    member_id:   member.id,
+    business_id: businessId,
+    name:        member.name,
+    role:        member.role,
+    permissions: member.permissions || [],
+    cached_at:   new Date().toISOString(),
+  };
+
+  if (isWeb) {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(session));
+    } catch { /* non-fatal */ }
+  }
+
+  return session;
+}
+
+export function getMemberSession(storageKey = 'TRACE_MEMBER_SESSION'): MemberSession | null {
+  if (!isWeb) return null;
+  try {
+    const raw = localStorage.getItem(storageKey);
+    return raw ? JSON.parse(raw) as MemberSession : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearMemberSession(storageKey = 'TRACE_MEMBER_SESSION'): void {
+  if (!isWeb) return;
+  try { localStorage.removeItem(storageKey); } catch { /* non-fatal */ }
+}
+
 export function logout(): void {
   _save('current_user', null);
 }

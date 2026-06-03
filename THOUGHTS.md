@@ -668,6 +668,1168 @@ End of 2026-06-01 corrections entry.
 
 ---
 
+## 2026-06-02 — Operational Doctrine, Financial Decisions, and Multi-Tenant Extraction
+
+A long working day covering both strategic and technical ground. Capturing everything before it drifts.
+
+---
+
+### Operating relationship refinement — Lightning and Thunder
+
+The working relationship between David and Claude (chat partner) got named and calibrated today.
+
+David is **Lightning**. Claude Code is **Thunder**. ("You hear Thunder before you see Lightning.") The naming is functional: Thunder is the slow, visible structural work Claude Code does in the repo; Lightning is David's strategic insight, which moves faster and generates Thunder into action.
+
+The composite operating character Claude (chat) is calibrated to:
+- **Doug's verification** — don't validate, demonstrate whether something is correct
+- **Darren's directness** — no social cushioning; observational not mean
+- **Binder's synthesis** — compress to the six-line version; don't drown in context
+- **Scott Morrison's preparation** — do the homework; never walk into a meeting without already knowing what will happen
+
+The **Scott Morrison register** was confirmed and calibrated: Lightning tells David when he's wrong. David overrides Lightning with data when Lightning is wrong. That's the deal. Both directions, adult operating relationship. British sarcasm calibrated to fit, not forced.
+
+Third-person mode-naming (references to "Claude" as an external entity in conversation) dropped going forward. We're working together; don't refer to "Claude" in third person mid-session.
+
+Key operating principle locked: **"Lightning will tell you when you've crossed a line. David tells Lightning when crossed back."**
+
+---
+
+### Operational doctrine refinement — covenant within ethics
+
+The doctrine needed sharpening beyond Scott Morrison's "any means." Clarified today:
+
+**Objective:** Wildly successful business. Crush competition. Full stop — this is the competitive intent.
+
+**Method:** Any **ethical** means within the covenant. Not Scott's "any means" — the covenant is load-bearing.
+
+**Why ethics is the competitive method, not a constraint on it:**
+- Covenant principles are inherently good *and* produce better commercial outcomes
+- Better customer relationships → lower churn → higher referral rates → lower CAC
+- Non-extractive defaults are a moat no VC-funded competitor can replicate without changing their whole business model
+- "Wildly successful" and "covenant-aligned" are not in tension — the covenant is the competitive engine
+
+**Legacy goal:** Multi-generational O'Brien family business where each generation **operates** the business, not just inherits assets. This distinction matters: inheriting assets produces beneficiaries; inheriting an operating structure produces operators. TRACE must be structured so Andrew, Connor, Erin and their children can each step into an operating role, not just receive a dividend.
+
+**Contrast with Scott Morrison pattern:** His wins compounded for him personally but didn't leave durable structures. TRACE's structures must survive David and Regina — they're designed to be handed off with full operational capability intact.
+
+---
+
+### Financial decisions
+
+#### Labor rate
+- **$75/hr stands.** Federal civilian equivalent. Conservative. Defensible.
+- Lightning pushed for $150 based on market rate for David's actual experience level and domain expertise.
+- David held at $75 with explicit reasoning: conservative undercount preferred to overcount during build phase. Undercount during foundation-building is honest; overcounting would inflate perceived cost basis and create pressure to justify.
+- Lightning accepted David's reasoning and agreed the $75 is the right call at this stage.
+- Strategic work (strategy sessions, architecture decisions) happens after-hours and weekends as contribution above the rate — not billed at all, not billed at a different rate.
+- Core hours: 35/week Monday–Friday since April start.
+- Approximate total TRACE work hours to date: 295–300.
+
+#### Family compensation structure
+All family members as contractors with their own companies, deliverable-based billing — not salary, not equity.
+
+- **Andrew:** Has own company. Charges per input/deliverable. Specifics TBD.
+- **Connor:** Contractor. Friends-and-family rate — NOT the Doug $200/hr rate. Specific architecture work scoped per engagement.
+- **Erin:** TBD when she arrives June 29. David said she can think about it during the trek.
+- **Regina:** Separate. OLH employment is her primary. KINNA contribution is either voluntary or compensation from KINNA operational revenue when that exists.
+- **David draw target:** $3–4K/month.
+
+#### David draw timing — Option C (OKC house sale trigger)
+- OKC house has a tight 90-day deadline.
+- Currently dropping price. May need a broker if it doesn't move.
+- If sells before August → clean cash position for Europe trip.
+- If not → broker conversation needed, draw timing slides.
+- **30-day check-in: July 2** — broker decision point. Either the house is under contract or the broker conversation happens that week.
+
+#### Retirement income context (changes runway picture materially)
+This was clarified today and changes the story about financial pressure. TRACE is deliberate restraint, not financial necessity.
+
+- Military retirement — active
+- Federal retirement — active
+- Social Security — not yet applied. Regina and the FA say wait. David reevaluates periodically.
+- VA disability 70% — active, approximately $1,800–2,000/month tax-free
+- VA 100% application in progress — if approved, adds approximately $1,800–2,000/month additional tax-free
+- Household is not burning savings. TRACE build cost (AI subscriptions, small infra) is covered by existing income streams.
+- **The pressure is emotional and presence-based (Regina wanting David present), not financial.**
+- Runway for TRACE operations is effectively indefinite at current burn rate.
+
+---
+
+### "This isn't working" trigger criteria
+
+Five hard triggers and one soft, established today. These are **decision points, not failure points** — the question at each is "what changes?" not "do we quit?"
+
+**Hard triggers:**
+1. **Customer acquisition failure:** < 5 paying customers by month 12 (June 2027) → reconsider self-serve thesis
+2. **Family contributor disengagement:** Andrew, Connor, and Erin all decline or disengage by month 9 → reconsider family-team thesis
+3. **Regina relationship strain:** explicit divorce-pattern recurrence → immediate stop and reconsider, non-negotiable, takes precedence over all other considerations
+4. **Personal health/capacity change:** reduce pace, not existence of TRACE
+5. **Financial floor:** recurring burn > $1,000/month without revenue trajectory → scope review
+
+**Soft trigger:** The deadness pattern returning. Not measurable from outside. David knows the feeling. **Regina is the canary if his own perception is unreliable.** If she notices before he does, that counts.
+
+Each trigger was framed as a question: "If this fires, what specifically changes?" Not "do we stop?" The framing keeps decision-making rational when the trigger fires under pressure.
+
+---
+
+### Pricing approach correction (factual capture)
+
+Lightning (Claude chat) in Sunday's brutal-honest assessment had proposed a tiered founding rate structure: $149 for first 10, $199 for next 15, $249 for next 25, $299 standard. David later asked where this came from.
+
+**Lightning admitted: invented it as reasoning, not pricing research.** No cost-plus analysis. No per-tile cost modeling. No market data. Generated as plausible-sounding structure, not grounded recommendation.
+
+**Correct pricing approach:**
+- Cost-plus **per-tile** analysis
+- The Social Media tile already has Blotato cost as real data — that's the model
+- For every tile: what does it actually cost to operate? (compute, storage, API calls, support time per customer per month)
+- Price from that floor up, not from a round number down
+- Per-tile cost analysis is approximately 4–6 hours of focused work — not yet done as of 2026-06-02
+
+**Locked-rate covenant confirmed:** Path A — truly locked forever. TRACE absorbs cost variance through margin, not through cost pass-through notifications. Reasoning: the covenant promise "lock means lock" is the differentiating competitive moat. Apple-style silent inflation (Spotify, Netflix, Amazon Prime) is extraction dressed as stability. TRACE's version must be structurally different, not just aesthetically different.
+
+---
+
+### Technical accomplishments — multi-tenant extraction complete
+
+Four prompts of work today. All merged to main. Vercel deployed.
+
+**What shipped:**
+- `packages/shared/src/auth/` — 7 files: types.ts, members.ts, invitations.ts, acceptInvitation.ts, AcceptInvite.tsx, index.ts, README.md
+- `supabase/migrations/20260602_shared_members_a_create_tables.sql` — business_members, invitations, member_devices with real RLS (owner_all + self_select + self_update). Applied to bgobkjcopcxusjsetfob (cultivar-os project).
+- `packages/cultivar-os/src/auth/roles.ts` — OWNER / MANAGER / STAFF with permission bundles
+- Cultivar OnboardingWizard.finalize() — writes OWNER business_members row on signup
+- `packages/cultivar-os/src/pages/Settings.tsx` — TeamSection: member list, pending invitations, invite form, invite link display with Copy button
+- `packages/cultivar-os/src/router.tsx` — /join public route + AcceptInvite wrapper
+- `packages/shared/src/context/BusinessProvider.tsx` — two-path resolution: owner fast-path (businesses.owner_id), member fallback (business_members → businesses join). Exposes userPermissions (null = owner = full access; string[] = member's explicit list) and isOwner.
+- Dashboard and Settings gated behind canManageSettings permission check
+- scripts/test-member-login.mjs — 29/29 assertions passing
+
+**Disciplines added:**
+- CLAUDE.md Step 12: Runbook capture for setup operations (mandatory for infrastructure sessions)
+- CLAUDE.md Step 13: Documentation propagation check (mandatory for feature sessions)
+- bypassPermissions configured for Claude Code in this project
+- Apollo MSR-2 documentation drift corrected (was listed as installed; actually planned)
+- docs/runbooks/runbook-sql-drift-correction-2026-06-02.md — SQL drift between two runbooks corrected tonight after David hit a runtime error running the wrong SQL
+
+**Status at end of day:**
+- Erin invite flow: ready for Wednesday morning
+- David's OWNER row in LAWNS business_members: confirmed via test script (29/29)
+- Build: cultivar 2174 modules, zero TypeScript errors
+- All 4 prompts merged to main, Vercel auto-deployed
+
+---
+
+### PLATFORM_STRATEGY.md — proposed updates (not applied, for David's review)
+
+Two areas worth updating in PLATFORM_STRATEGY.md based on today's work.
+
+**1. Auth architecture: Part 3 table row is outdated**
+
+Current status in the table: `⚠️ PIN only — needs configureAuth() wrapper`
+
+This is now materially wrong. The shared auth package at `packages/shared/src/auth/` is built, tested (29/29), and consumed by Cultivar in production. The correct status is ✅ with a note that PIN strategy is an Ignition-specific known exception.
+
+**2. Auth Layer vs. Gesture Layer — proposed as a Design Principle**
+
+CLAUDE.md has a locked "Auth Architecture — Locked Rule" that isn't reflected in PLATFORM_STRATEGY.md:
+
+> Auth: PIN/face are unlock gestures layered on top of a real Supabase session (auth.uid() must be non-null) — never a replacement. Tenant isolation and RLS depend on this.
+
+This deserves the same treatment as Surface Honesty and Honest Friction — a named design principle in PLATFORM_STRATEGY.md's Design Principles section. Short form:
+
+**Auth Layer vs. Gesture Layer** — Supabase session (auth.uid() non-null) is the auth layer. PIN, face, and biometric are gesture layers on top of an authenticated session. The gesture layer unlocks the app experience; the auth layer is what actually gates data. Conflating them produces tenant isolation failures. Ignition's PIN model is a documented exception (single-device, local-first, intentionally bypasses Supabase Auth) — not a pattern to reuse in multi-tenant contexts.
+
+The 80/20 architecture section is already accurate and needs no changes. The multi-tenant extraction work today (shared auth package) is a direct application of it.
+
+---
+
+### Pricing philosophy and trial mechanic
+
+The canonical TRACE pricing model is **outcome-anchored**, not tier-based. This emerged as a clarification of what makes the model coherent.
+
+**Trial period (Days 1–14):** Customer gets full access to all tiles. Real data flows. The savings widget shows actual dollar value of all tiles including ones not actively in use.
+
+**Decision point at Day 14:** Customer commits to a tier or doesn't.
+
+**Post-trial with commitment:** Locked at chosen rate forever (covenant). Full data visible. Add-on tiles available as volume scales.
+
+**Post-trial without commitment:** Customer drops to base/free state. Data continues flowing into the system. Savings widget continues calculating. But specific values are fuzzed — customer sees that the system is working but can't see the actual numbers. The fuzz is the conversion mechanic. Customer can stay in fuzz mode indefinitely without being kicked out (non-extractive).
+
+**Why fuzz instead of hard gate:**
+- Preserves the relationship even when customer declines to commit at Day 14
+- Customer sees ongoing proof that the system is doing work — they're being shown something real, just not shown the exact number
+- Commitment decision becomes: "do I want to see what's being hidden?" rather than "do I want to buy features I can't evaluate?"
+- Conversion is earned through demonstrated value, not forced through access denial
+
+**Tile pricing ratio:** 1/3 to 1/5 of demonstrated customer savings. If a tile saves a customer $300/month, it prices at $60–100/month. Easy value prop at any position in that range; healthy margin for TRACE at the low end of it.
+
+**Savings widget design (currently in Ignition, scheduled for move to packages/ignition-os/modules/, shared abstraction post-August):**
+- Shows dollar value captured by tiles in use
+- Shows dollar value being left on the table by tiles not in use
+- This is the natural upsell engine — customer sees what they could be saving, expressed in their own data
+
+**Cross-vertical applicability:** Same mechanic across all five verticals. Implementation varies (different tiles, different savings calculations) but the trial/fuzz/commit structure is identical and belongs in packages/shared/.
+
+**Open work:** Per-tile cost analysis — approximately 4–6 hours, using the SM tile/Blotato cost as the template. Not yet done as of 2026-06-02. This is the validation step that confirms each price point clears TRACE's delivery cost.
+
+---
+
+### Pricing structure refinement — core vs. tiles, unit economics
+
+The pricing architecture clarified further with a concrete tile example.
+
+**Plant inventory is core, not a tile.** Customer database, order management, QR checkout are also core. These are the operating system that makes everything else possible. Included in the base price. No tile should depend on these being "unlocked" — they're the foundation.
+
+**Tiles read from core to generate dollar outcomes.** New Business Generation, AI Campaigns, Advanced Customer Match, Delivery Optimization — these are tiles that produce measurable savings or revenue by cross-referencing core data against external context (timing, routing, customer history, market signals). The tile value is in the cross-referencing, not in the data itself.
+
+**Tile price range:** $9.99–$29.99 with high activation rates, rather than fewer expensive tiles with lower activation. Reasoning: at $14.99, no owner-operator does mental math — they just activate. Mental math is friction. Friction is revenue left on the table. The covenant of low friction and obvious value matches the unit economics of high activation.
+
+**Value math — AI Campaigns tile at $14.99:**
+- Without TRACE: 4 platforms × 10 min avg + formatting/login overhead = ~1 hour/week
+- Per month: ~4 hours
+- At realistic owner-operator value of $75/hr: $300/month time cost
+- With TRACE: ~5 min per cycle = 20 min/month = $25/month time cost
+- Net time savings: $275/month
+- Tile price: $14.99
+- Value ratio: 18x — before accounting for tracking improvements, style-learning over time, or A/B testing quality improvements
+- Full value ratio is materially higher than 18x
+
+**Value math — New Business Generation tile (the "fert" example):**
+- Tile reads plant inventory + customer database
+- Cross-references with horticultural timing (when fertilizer should be applied per plant species)
+- Identifies customers on existing delivery routes who could be offered the service
+- Estimates revenue at typical acceptance rates
+- Surfaces to owner: "23 customers on Tuesday route could yield $1,400 this week at 25% acceptance"
+- Savings widget records: "New Business tile generated $1,400 this week"
+- That's not marketing language — it's the platform reading the customer's own data and expressing opportunity in dollars
+
+**Restructured pricing model (Cultivar OS as template):**
+
+Base ($149/mo, locked forever):
+- Plant inventory (core)
+- Customer database (core)
+- Order management (core)
+- QR checkout (core)
+- Basic delivery routing
+- Basic campaigns
+
+Add-on tiles ($9.99–$29.99 each):
+- AI Campaigns
+- New Business Generation
+- Advanced Customer Match
+- Multi-location delivery routing
+- Compliance/Pest reporting
+
+Volume add-ons (triggered by scaling):
+- Additional plants: +$25/500
+- Additional customers: +$15/250
+- Additional location: +$75
+
+One-time:
+- Hardware Hub: $499
+- White-glove onboarding: $500
+
+Typical customer: $149 base + 2–4 tiles + possibly one volume add-on = $200–250/month. Each component obviously worth its price before the customer finishes activating it.
+
+**The fuzz-after-non-commitment mechanic is the canonical conversion path.** Customer gets full access including savings widget during trial. Post-trial without commitment: data flows, widget calculates, values are fuzzed. Conversion is decided by customer experience of value during trial, not by feature gates after. The locked-forever rate is the reward for committing — the covenant applies to those who do.
+
+**Per-tile cost analysis is the open work item.** Needed to validate that each tile's price point clears TRACE's delivery cost while preserving the 1/3–1/5 value ratio. Approximately 4–6 hours. SM tile / Blotato cost is the first complete example and the template for the others.
+
+---
+
+### Operating principle — Time Back as Quantifiable Value
+
+TRACE's promise is not "AI integration" or "connecting your systems." Those describe activity, not outcome. The promise is **measurable time given back to the customer, audited honestly**.
+
+**The distinction from competitor positioning:**
+- Competitors sell access to tools, then leave the customer to figure out if the tools worked
+- TRACE sells outcomes — time saved, revenue generated, errors prevented — and measures whether they were delivered
+- The savings widget makes value visible in real time, per tile, using the customer's own data
+- The quarterly audit verifies the savings widget's claims and reports honestly
+
+**This is covenant-aligned in a specific way.** Most SaaS sells the promise of value and never measures whether it delivered. TRACE measures, reports, and stakes the customer relationship on actual delivery. If the audit shows TRACE isn't delivering net positive value for a customer, that's a signal to both sides. The honest response is fix the gap or acknowledge the platform isn't right for that customer — not hide the number.
+
+This connects directly to the broader doctrine: "wildly successful business by being inherently good." Being good means measuring whether the customer actually benefited, not just whether the customer paid.
+
+**Connection to the trial/fuzz mechanic:** During trial, customer sees full audit-level data. Post-trial without commitment, the audit is fuzzed — they see that value is being delivered but can't see the specific numbers. Post-trial with commitment, full transparency continues forever. The fuzz isn't punitive; it's the covenant inverted: "we're still watching your business, still calculating. You can see exactly what we're finding when you join us."
+
+**Implementation requirements (build specs, not just principles):**
+- Savings widget calculates hours saved per tile using real timestamps and real task data — not estimates
+- Quarterly audit report generated automatically per customer
+- Customer's documented labor rate (or industry average if not provided) used for dollar conversion
+- Revenue attribution tracked for platform-driven opportunities (New Business Generation tile especially)
+- Net value calculated honestly: savings minus what the customer paid TRACE — if this number is negative, TRACE knows before the customer does
+
+**The competitive moat this creates:** Competitors who don't measure outcomes can't honestly claim them. Customers who experience TRACE's audit cycle won't want to switch to a vendor who doesn't have one — the audit is itself a switching cost, in the right direction. A customer switching away from TRACE gives up ongoing independent verification of whether their tools are working.
+
+This is probably the single most distinctive structural feature of the TRACE model. Most SaaS treats "did the customer get value?" as the customer's problem. TRACE treats it as TRACE's problem. That's not a marketing claim — it requires the savings widget to actually be accurate and the quarterly audit to actually be generated. Build accordingly.
+
+**Connection to family compensation structure:** When Erin runs her ad workflow service for nurseries, her pricing logic (charging $14.99 against $275/month in customer time savings) only works because the time savings are real and measurable. The same audit principle applies to her service — it's not "we help with social media," it's "we save you 3.75 hours per month at your effective rate, audited quarterly." This gives every family contractor a defensible value statement built on measurement, not marketing. The audit principle scales across the whole family's service delivery model, not just the TRACE platform itself.
+
+**Operational implications (build requirements for future tiles and onboarding):**
+- All future tile development must include a savings calculation — real timestamps, before/after task duration, not estimates
+- Customer onboarding must capture their effective labor rate (or use industry default if they don't provide one)
+- Quarterly audit generation is a planned post-August development item — not yet in scope
+- "We'll show you in 90 days whether this is working" is the sales talking point that the audit infrastructure makes possible
+
+**Propagation note:** This principle should be added to PLATFORM_STRATEGY.md as a named design principle alongside Auth Layer vs. Gesture Layer. Provisional names: "Measured Value" or "Audit-Anchored Pricing." The naming convention in PLATFORM_STRATEGY favors descriptive phrases over abstract nouns — "Measured Value" fits the pattern better. Not yet added as of 2026-06-02; post-August work.
+
+---
+
+### Operating Policy — Pay for What You Use, Keep What You Paid For
+
+A refinement of the trial/fuzz/pricing mechanic that makes the specific rules explicit, including what happens to data on departure.
+
+**Days 1–14 (trial):** Customer sees everything. All tiles active. Full data visible. Full operational intelligence. Full savings calculations. The "everything" experience.
+
+**Day 15+ without commitment:** Data gets fuzzed. They see the system is working but can't see specific values. The audit continues running in the background.
+
+**Day 15+ with commitment to specific tiles:** They see what they paid for in full detail. Tiles they didn't activate get fuzzed in a specific way — the detail outputs are hidden, but the aggregate dollar estimate is visible and updates continuously.
+
+**The key example — Lauren's dashboard:**
+
+Lauren pays for base + SM tile + Delivery Routing. The New Business Generation tile shows on her dashboard with:
+- Tile name and brief description
+- "Estimated value if activated this month: $1,400"
+- Updated monthly using her real data and TRACE's pattern knowledge
+- Activate button
+
+The $1,400 is not a marketing claim. It's calculated from her actual inventory, her actual customer base, her actual business patterns, using the same calculation logic that would run if she activated the tile. The fuzz applies to which specific customers and which specific opportunities — not to the aggregate dollar estimate. She can see the "how much" but not the "exactly who and when."
+
+**On departure:**
+
+Customer takes:
+- All their raw data (uploads, customer records, order history)
+- Full work product from every tile they paid for during the relationship
+- Audit history for tiles they paid for
+
+Customer doesn't take:
+- Work product from tiles they never activated — they never had access to it, there's nothing to give
+
+TRACE removes from its systems:
+- All identifiable customer data
+- All work product specific to that customer
+
+TRACE retains:
+- Anonymized patterns derived from the customer base in aggregate — population-level facts, not individual-level data
+
+**The underlying principle:** You pay for what you use. You keep what you paid for. No bundling. No hostage-taking. No pretending customers get things they didn't buy. But continuous honest display of what they could be getting — in real dollars from their own business — so they have full information to decide.
+
+**Why the lost-revenue display is the right upsell mechanic:**
+
+Standard SaaS upsell: "you should buy this feature because it has value." TRACE upsell: "here's the specific dollar value you would have captured this month if you'd activated this tile, calculated from your actual data." That's not marketing — it's an honest accounting of opportunity cost. Customer makes their own decision based on real numbers. No sales pressure. No discount tactics. No bundles that obscure what's worth what.
+
+**Architectural implication:**
+
+Every tile must operate in two modes — **active** (full output) and **estimate** (aggregate dollar value calculated, detail hidden). The estimate calculation runs continuously for every customer regardless of activation status. This increases infrastructure cost but is what makes the upsell mechanic honest rather than aspirational. Each tile must define its value calculation methodology from day one. The calculation must be defensible — TRACE must be able to show the math behind any displayed estimate to any customer who asks.
+
+**Audit implication:**
+
+The quarterly audit becomes more powerful when it includes both realized value (activated tiles) and foregone value (estimates on non-activated tiles). Customer sees the complete picture: what they captured and what they left on the table. This is genuinely different from competitor audits (when those exist) that only show positive outcomes. Showing foregone value is uncomfortable — it requires TRACE to tell the customer "you left $1,400 on the table this month." The covenant requires doing it anyway.
+
+*Note: The pros and cons analysis from the earlier conversation wasn't included in this capture. If that analysis exists elsewhere, it should be referenced or pulled in here.*
+
+---
+
+End of 2026-06-02 entry.
+
+---
+
+## 2026-06-03 — Conduit Strategic Reframe and Address-as-Context Principle
+
+Wednesday morning back-porch thinking. Regina surfaced a customer pain point from lived experience; David developed it into a broader strategic position. Captured before it drifts.
+
+---
+
+### The Conduit reframe
+
+Conduit was originally scoped as HVAC-focused. Real scope: **operational intelligence for field service trades**. HVAC is one member of a larger category: roofing, painting, concrete, fencing, lawn care, landscaping, exterior cleaning, masonry, site prep, tree services, pool services — anywhere weather dictates schedule and location dictates context.
+
+The value proposition is NOT competing with specialized estimating tools. Roofers already have estimating software. The value proposition is solving the **operational orchestration layer** underneath specialized work: scheduling, weather-aware reshuffling, crew availability, customer communication, material coordination.
+
+Most trades businesses do this layer badly. It lives in heads, whiteboards, and frantic phone calls. The competition is chaos plus accumulated experience — a much weaker competitive position to challenge than sophisticated software.
+
+---
+
+### The Regina-sourced problem
+
+David and Regina hired a roofing contractor. Rain delayed start day. Contractor didn't communicate the reschedule. Regina had to chase him to understand new timing. She asked David: "Why can't this just be solved?"
+
+That question pushed David to consider what TRACE could actually solve in this space.
+
+**Worth recording:** Regina is not doing strategic synthesis for TRACE. She surfaces real customer pain points from lived experience and asks "why isn't this solved?" That question is itself a contribution — it gives David problems to evaluate strategically. David does the synthesis. Regina provides ground-truth customer perspective.
+
+This is a different role from "strategic advisor" and worth honoring as what it actually is. The distinction matters for how her contributions get credited and how her time gets structured going forward.
+
+---
+
+### Address-as-context principle
+
+Every trade job has an address. Every address unlocks public data that affects how the job actually gets done:
+
+- Weather forecast specific to that location (not regional)
+- Soil type and depth (Liberty Hill has 2 feet of limestone in many places — affects trenching, foundation, septic, deep planting)
+- Local building codes and permit requirements
+- HOA restrictions
+- School schedules (noise restrictions during school hours in residential neighborhoods)
+- Local water restrictions (landscaping)
+- Tree species native to area (nurseries, tree services)
+- Historical pest pressure (landscapers, pest control)
+- Property tax records
+- Average home age in the area (HVAC, roofing — what infrastructure era are we working in?)
+
+Most contractors don't use this data because pulling it for every job is too much manual work. A platform that auto-surfaces relevant location data for each job is solving a real problem.
+
+**Concrete example from David's own property:** Laying waterline hit 2 feet of limestone, required going back for a rock trencher. A platform that knew "this address has limestone at X depth" would have told the contractor before they showed up with the wrong equipment.
+
+This generalizes nationally:
+- Houston's clay
+- Florida's water table
+- Colorado's frost line
+- New England's bedrock
+- Texas Hill Country's limestone cap
+
+Every region has geological gotchas local contractors learn through painful experience. TRACE could surface them automatically by job address. Contractors who move into new service areas would start with the same local knowledge that took experienced local contractors years to accumulate.
+
+---
+
+### Calibrated weather intelligence
+
+Standard weather forecasts are probabilistic statements about regions, not deterministic statements about specific addresses. "50% chance of rain" is widely misinterpreted by contractors and homeowners.
+
+TRACE's weather intelligence would be calibrated to actual outcomes at specific locations:
+- Pull historical weather for each job address
+- Build a model of how forecasts correlated with actual rain at that micro-location
+- Generate location-calibrated rain probability
+- Let contractors override based on local knowledge (which becomes part of the model)
+- Track whether predictions matched outcomes — the audit principle applied to weather
+
+**The learning loop:** A contractor's local knowledge corrections become part of the model over time. After enough overrides, TRACE learns calibration: "When NOAA says 50% rain in Liberty Hill, actual rain occurred at this contractor's job sites 73% of the time historically — weight accordingly."
+
+This is smarter weather intelligence than any weather service provides because it's grounded in operational outcomes, not meteorological predictions. The local-knowledge audit loop is the TRACE differentiator — no weather service can build this because they don't have per-contractor per-address outcome data.
+
+---
+
+### Margin intelligence as separate capability
+
+Related but distinct from weather/location: helping contractors understand their actual unit economics.
+
+Most small trade contractors don't know their real costs. When material costs change (tariffs, supplier price increases, scarcity), they either eat the costs or pass them on without adjusting other pricing levers. They operate reactively without data.
+
+A platform that shows what's actually happening to margins — and offers three specific pricing adjustments to restore margin without losing customers — would be valuable independently of the scheduling/weather layer.
+
+This connects to the Time Back principle and audit cycle: customer sees what's actually happening in their business, not what they assume is happening.
+
+**David's real-world example:** A specific construction project where the contractor charged 10× material markup (typical is 30–50%). Either misunderstanding own costs, gouging, or both. A platform that shows actual costs versus what's being charged lets honest contractors price honestly and reveals bad actors — protecting the customer and giving honest contractors a leg up over dishonest ones.
+
+---
+
+### How Andrew's domain knowledge fits
+
+Andrew worked at Sherwin-Williams for 3–5 years. That's paint supplier-side knowledge — what painters buy, how often, in what quantities, what they substitute when out of stock.
+
+He has supplier-perspective intelligence on painting contractors: the complaints they surface, the patterns in their purchasing, the volume tiers and their economics. That's useful for Conduit's painting variant specifically.
+
+**Proposed role:** Andrew as discovery-and-design lead for painting trades within Conduit. Similar to how Erin's ER nursing experience maps to CoolRunnings' aging-in-place angle. Family domain knowledge becomes vertical-specific design input. Andrew doesn't have to be the operator — he has to be the domain translator.
+
+---
+
+### David's federal experience as Conduit asset
+
+Regina pushed David toward construction trades because she sees he has lingo and credibility in that world. His federal/military experience translates to:
+
+- How institutional operations actually run day to day under disruption
+- Trades and field service lingo from decades in facilities/infrastructure contexts
+- Understanding what breaks when scheduling and resources collide with real-world disruption
+- Operational orchestration thinking at scale (the NATO Spec Ops pattern in a smaller context)
+
+**Honest gap:** Deep supply chain knowledge for construction materials specifically. That's not in his background. The operational orchestration layer and weather/location intelligence don't require supply chain expertise. Material integration features can be deferred or built when a customer can teach the domain.
+
+---
+
+### Strategic position summary
+
+Conduit's competitive position: **"We give you intelligence about specific job sites before you start the job, so you can avoid the painful surprises that destroy schedules and margins."**
+
+Weather, geology, building codes, HOA rules, school schedules, neighborhood characteristics — all auto-surfaced by job address. The contractor's expertise gets augmented with structured data, not replaced. The audit then measures whether better inputs translated into better outcomes.
+
+This fits the TRACE covenant:
+- **Non-extractive** — using public data to help contractors operate better, not to surveil or capture their customer relationships
+- **Audit-anchored** — measuring whether intelligence actually improved outcomes
+- **Outcome-anchored pricing** — contractors see dollar value of disruptions prevented
+
+---
+
+### Implementation implications
+
+**Conduit MVP scope: scheduling and orchestration first, NOT material integration.**
+
+Material/supply integration deferred until a customer can teach the domain or someone with supply chain knowledge joins. Starting with material integration would require deep domain expertise TRACE doesn't have yet.
+
+**Proposed build order:**
+1. Painting (Andrew's domain from Sherwin-Williams)
+2. HVAC (David's original concept)
+3. Expansion to other trades as patterns emerge from customer use
+
+**Customer discovery worth doing:** Talk to 1–2 small trades operations from the Liberty Hill community board. Not the sophisticated ones (Vaquero Plumbing has invested in marketing systems already). Target smaller painting, fencing, or roofing operations. Discovery question: "When it rains and you have to reshuffle 3 jobs, what does that actually look like for you?" Listen to how they describe it. Don't lead with technology.
+
+---
+
+### Connection to existing TRACE principles
+
+- **80/20 architecture:** Operational orchestration core is shared; weather/location intelligence is vertical-specific content (job-address lookup, local calibration data)
+- **Auth Layer vs. Gesture Layer:** Trade contractors need WebAuthn-style biometric login — same greasy-hands / gloves-on case as gardeners and diesel techs. Conduit's gesture layer should default to biometric/PIN, never typing
+- **Time Back principle:** Schedule disruptions prevented = hours saved + revenue captured, measurable per contractor per season
+- **Audit anchor:** Weather/location predictions tracked against outcomes — did the calibrated forecast help, or did the contractor override correctly?
+- **Covenant:** Non-extractive use of public data; contractor's local knowledge corrections stay in their model, not sold to competitors
+
+---
+
+End of 2026-06-03 entry.
+
+---
+
+## Wednesday 2026-06-03 — Family Compensation Structure and Role Casting
+
+Back-porch thinking that clarified the financial and role structure for TRACE as a family-built company. Capturing before the detail drifts.
+
+---
+
+### David's draw
+
+$4,000/month. Intentional cap, not aspirational placeholder. TRACE isn't being built to make millions — it's being built to cover specific expenses and leave a multi-generational ownership structure. The number is honest.
+
+Annualized: $48K/year from TRACE. Supplemented by other income streams as they develop. Not a hardship number, not a lottery number.
+
+---
+
+### Each kid targets approximately $90K/year billing
+
+Structure: each kid runs their own business that invoices TRACE. TRACE pays the invoices. Each kid handles their own taxes through their own entity (LLC, S-corp, sole proprietor — their choice, their problem).
+
+Why this structure:
+- TRACE carries no payroll overhead — no W-2 administration, no withholding, no benefits coordination
+- Tax responsibility sits with each person's entity, not with TRACE
+- Scales without HR complexity as family builds out
+- $90K/year is honest — respectable living, not a millionaire pitch, not an insult
+
+Revenue math: three kids at $90K ($270K total) plus David's $48K plus operational costs puts TRACE's break-even around $400–500K annual revenue. At $149–199/month per customer, that's 200–300 paying customers. Achievable over 18–24 months in realistic acquisition scenarios. Not a hockey stick, not a lottery.
+
+---
+
+### Andrew as the natural salesperson
+
+Andrew is the extrovert among the kids — talks to anyone, comfortable in conversation, effective in customer-facing settings. He's the natural choice for prospect development work.
+
+Potential Andrew role structure:
+- Base retainer for ongoing prospect development
+- Per-meeting fee for in-person sales calls
+- Per-signed-customer bonus
+- MicroGrant Sniper work as a separate billing stream (his own product, not TRACE's — TRACE is a customer)
+
+With reasonable TRACE acquisition pace, his annual could legitimately reach $90K through this structure.
+
+Noted: Andrew currently uses Gemini because he can't afford Claude. If TRACE pays for family contractor Claude subscriptions ($20–100/month per person), that's worth doing as a business expense. Removes friction in their work. The compounding return on better tooling for people building TRACE is higher than the subscription cost.
+
+---
+
+### Erin in customer service and structured discovery
+
+Erin is more introverted — functional in controlled social settings, not a cold prospector. Scheduled discovery calls, structured demos, and ongoing customer relationship management are likely fits. Cold outreach probably is not.
+
+Compensation TBD when she's home (June 29+). Three structures considered:
+
+**Option A — Pure hourly** ($60–75/hr): Clean, no incentive warping, lower psychological pressure for someone in burnout recovery.
+
+**Option B — Hourly plus signing bonus** ($60–75/hr plus $500–1,000 per signed customer she facilitated): Rewards outcomes without requiring aggressive sales behavior.
+
+**Option C — Percentage of sales**: Risk is behavioral warping — pressure on wrong prospects, focus on easy closes over strategic ones, potential to burn customer relationships.
+
+Leaning toward Option B as the middle ground. Avoids pure-commission pressure while connecting compensation to outcomes. Final structure is a conversation with Erin directly, based on her preferences and where she is in burnout recovery.
+
+---
+
+### Connor in technical and infrastructure
+
+Connor is introverted, currently at HD pursuing Kubernetes certification. His natural zone is bounded technical work, not customer interaction. Right role for him: infrastructure, DevOps, technical architecture.
+
+Compensation: contractor rate, specific work assignments, invoiced like the others. His $90K target is competitive with his current HD salary. No pressure to leave before he's ready — but the door is open.
+
+---
+
+### David as introvert founder
+
+David is an extreme introvert. Roles that fit: strategy, operations, technical direction, relationship management with key customers in controlled/structured settings. Roles that don't fit: cold sales, trade show booth, networking with strangers.
+
+This is honest casting, not a deficit acknowledgment. Most family businesses fail by casting people in roles that don't fit their nature. TRACE is positioned to do the opposite — each person in the role that fits their wiring, no one pushed into roles that require faking who they are.
+
+---
+
+### Regina as separate from TRACE operations
+
+Regina is the household extrovert (inherited from her dad). She has her OLH work, which uses that capacity productively. Her TRACE contribution isn't operational — it's surfacing real customer pain from lived experience.
+
+The roofer scheduling problem came from a porch conversation, not a focus group. Regina asking "why isn't this solved?" and David evaluating it strategically is a genuine division of labor. She provides ground-truth customer perspective. He filters it through TRACE's vertical strategy. That's worth more than pulling her out of OLH to do customer calls.
+
+TRACE doesn't need to recruit Regina away from her work. Her contribution happens naturally through conversations like the back-porch sessions.
+
+---
+
+### The family-as-builders pattern
+
+Worth naming that this is genuinely unusual. Most family businesses are one of three patterns:
+
+- **Family-by-default**: Kids work in it because they grew up in it, often resentfully
+- **Family-as-management**: Family runs it, non-family operates it
+- **Family-as-investment**: Family owns it, professionals run it, family collects distributions
+
+What TRACE is building is **family-as-builders**. Each kid runs their own business that interfaces with TRACE through invoicing. Each person's business focuses on what they're naturally good at. Family relationships stay personal. Business relationships stay professional — the invoice/payment interface creates clean accountability without requiring family conflict to enforce it.
+
+This is rare. Most family businesses either blur personal and professional completely (and pay the relationship cost) or professionalize so heavily that family connection is irrelevant. The invoice structure threads that needle.
+
+---
+
+### Honest enforcement requirement
+
+This structure requires more discipline than alternatives. Each kid has to be honestly evaluated as a contractor — not included as family, not protected from accountability because of relationship.
+
+If someone's work isn't producing $90K of value to TRACE, they don't get paid $90K from TRACE. That conversation might never be needed — the kids sound capable and motivated. But the structure has to be honest enough to have it if it comes up.
+
+Invoice-based payment handles this without drama: an invoice represents specific work delivered. If the work isn't delivered, the invoice doesn't get paid. No performance review conversation required. Clean.
+
+---
+
+### Connection to existing TRACE principles
+
+- **Covenant**: Non-extractive defaults extend to family. Kids aren't being used; they're being paid honestly for honest work.
+- **Operating doctrine**: Each person in the role that fits their wiring, not the role someone assumes they should have.
+- **Multi-generational structure**: Family ownership designed to prevent leadership-change dismantlement; family compensation designed to be sustainable across generations.
+- **"If I make you successful, I'm ultimately successful"**: Applies internally as well as to customers. Kids' success is TRACE's success.
+
+---
+
+### Open items for resolution
+
+- Erin's compensation structure: conversation when she's home June 29
+- Andrew's role formalization: conversation about August Liberty Hill rep possibility while David is in Europe
+- TRACE business profile for Andrew's MicroGrant Sniper JSON: needs writing
+- Family Claude subscriptions as TRACE business expense: decision pending
+- Customer acquisition pace projections: need to model 200–300 customers over 18–24 months realistically
+
+---
+
+End of Wednesday 2026-06-03 — Family Compensation Structure and Role Casting entry.
+
+---
+
+## Wednesday 2026-06-03 — The Apple Model as TRACE's Value Anchor
+
+---
+
+### Section 1: The strategic anchor
+
+TRACE's value-for-money positioning models on Apple, not on commodity SaaS competitors. The Apple model is more expensive than alternatives but customers understand why and choose it deliberately.
+
+Key elements:
+- Higher upfront price, but no surprises about the premium
+- OS upgrades included indefinitely (iPhone 12 still getting iOS updates in 2026)
+- Patches happen automatically and silently — no Patch Tuesday cognitive load
+- Things work together — AirPods to iPhone, files sync, messages flow between devices
+- Under-promise and over-deliver — announce less than they ship, ship what they announce
+
+Andrew's perspective crystallized this: "I just want it to work as soon as I get it working." Android can be configured to operate similarly, but it requires significant configuration work to get there. Apple ships with "it just works" as the default state. The value isn't the features — it's the absence of configuration friction.
+
+---
+
+### Section 2: How this maps to TRACE
+
+**Pricing honesty.** TRACE is $149/month base, locked forever, no hidden costs. Other SaaS hides costs in tiers, add-ons, overage charges, annual prepay discounts that obscure monthly reality. The price is what it is. Customers paying the premium know what they're paying for.
+
+**Platform updates included.** Customers get all platform improvements as part of their subscription. New features, AI model upgrades, performance improvements, security patches — all included. Same as Apple OS upgrades being included in the original purchase. The customer doesn't pay for "Cultivar 2.0" — they just have a better Cultivar one morning.
+
+**Invisible operational maintenance.** Customers don't see the Supabase project structure, the multi-tenant extraction work, the auth migration, the documentation discipline. All of that is invisible. Cognitive load on the customer for anything platform-related is zero.
+
+**Integration as a feature.** Apple's tight coupling produces "it just works" within their ecosystem. TRACE's approach is different — customers keep existing tools (QuickBooks, Square, their CRM) and TRACE connects them. But the user-facing experience is the same: customer doesn't manage integrations, the platform does. Technical implementation differs (Apple owns both sides; TRACE doesn't) but the user-facing principle is identical.
+
+**Under-promise and over-deliver.** TRACE measures and reports honestly. Doesn't claim X% savings without delivering them. Doesn't announce features before they ship. The trial mechanic embodies this — customer sees full value during trial, then sees fuzzed estimates if they don't activate tiles. No marketing claims, only real measurements.
+
+---
+
+### Section 3: Where the Apple analogy breaks (honest accounting)
+
+**Apple is a hardware company.** They control the device, the OS, the app store. Their integration moat is structural — they own both sides. TRACE doesn't own the customer's QuickBooks. Integration depends on Intuit not breaking the API. If they change it tomorrow, TRACE has to adapt. Apple doesn't have that exposure.
+
+**Apple's "it just works" depends on saying no to features.** No removable batteries, limited file system access until recently, no sideloading. Apple's simplicity comes from restriction. TRACE customers are running real operations with real complexity — TRACE can't deliver "it just works" by removing functionality.
+
+**Apple has 30%+ gross margins.** They can staff the integration teams, customer service, developer relations. TRACE at $149/month doesn't have that margin per customer initially. "It just works" has to come from automation and AI rather than from staffing.
+
+**Apple has 30 years of brand equity.** Customers trust pre-announcements will work because Apple has earned it. TRACE is new. Every "it just works" claim must be backed by actual evidence the first 100 times before customers trust it the 101st time.
+
+---
+
+### Section 4: Practical implications for TRACE
+
+**Onboarding should be the Apple moment.** When a customer signs up, they should have a working system within minutes, not hours. The progressive scraping and discovery engine becomes the equivalent of "set up your new iPhone" — guided, automated, oriented toward delight. Not "fill out 47 forms and call us if you have questions."
+
+**The platform should be opinionated about good defaults.** Apple decides which apps come pre-installed and what iOS looks like on first boot. TRACE should decide which tiles activate by default for each vertical, what the dashboard shows, what notifications fire. Customers can customize, but defaults should produce a good experience without customization.
+
+**Updates should be invisible.** No "TRACE 2.0 is here, here's what's new" marketing blasts. Just better TRACE one morning. If a customer notices a new capability, the in-app explanation is brief and helpful, not a marketing event.
+
+**Integration breakage should be TRACE's problem, not the customer's.** When QuickBooks changes their API, TRACE adapts before the customer notices. The customer never sees "we lost the connection to QuickBooks, please reconnect" if it can be avoided. Requires monitoring, fast response, engineering discipline.
+
+**Customer service should approach Apple-quality.** When a customer has a problem, the path to resolution should be clear and fast. Apple's Genius Bar set the standard for "you have a problem, we solve it, you leave happy." TRACE doesn't have physical stores, but the digital equivalent — response time, problem resolution — should track toward that experience.
+
+---
+
+### Section 5: The under-promise/over-deliver discipline
+
+Most SaaS over-promises. Marketing claims AI-powered insights, predictive analytics, real-time optimization. The actual product delivers basic reporting. Customers feel cheated.
+
+TRACE's discipline is the reverse. Marketing claims less than the product delivers. Customer signs up expecting basic functionality and finds operational intelligence.
+
+Concrete examples of how this plays out in practice:
+
+- *Marketing:* "Track your inventory." *Product:* tracks inventory, auto-suggests reorder points based on actual sales velocity, predicts seasonal demand, integrates with QuickBooks automatically.
+- *Marketing:* "Manage your customer relationships." *Product:* manages relationships, auto-generates follow-up outreach, tracks customer lifetime value, identifies churn risk before it happens.
+
+The customer arrives expecting basic functionality and finds operational intelligence. That gap produces "wow, this works better than I expected." Those responses produce word-of-mouth referrals. Those referrals produce growth without paid marketing.
+
+---
+
+### Section 6: Pricing positioning implications
+
+TRACE at $149/month base is more expensive than commodity competitors. Square Basic is free with transaction fees. ShopKeep is $69. Some POS systems start at $49.
+
+If TRACE looks like another POS system, $149 looks expensive. If TRACE looks like an operating system for small business that includes POS, inventory, customer management, marketing, audit, and ongoing AI improvements, $149 looks cheap.
+
+The positioning must be: "We're not the cheapest POS. We're the operating system for your business. Cheaper than hiring an ops manager. Cheaper than the consultants you've hired. Cheaper than the time you waste on tools that don't talk to each other."
+
+Apple-style positioning. Premium product at premium price with premium value clearly articulated.
+
+---
+
+### Section 7: Connection to existing TRACE principles
+
+The Apple model is the synthesizing aesthetic for principles already established — it answers the question "what does it feel like to be a TRACE customer?" more concisely than any individual principle does.
+
+- **Covenant + Apple model:** Non-extractive defaults shipped invisibly. Customer doesn't see the engineering discipline that produces the simple experience.
+- **Time Back + Apple model:** "It just works" IS Time Back at the experience level. Customer's cognitive load for platform-related operations drops to near-zero.
+- **Audit anchor + Apple model:** Under-promise and over-deliver. Measurement and honest reporting are the structural foundation of trustworthy claims.
+- **Locked-rate covenant + Apple model:** Apple's price honesty matches TRACE's locked-rate honesty. Both are statements about respecting the customer's time and attention.
+- **Operating doctrine + Apple model:** Architecture must work before the experience is visible to the customer. Apple's quiet engineering discipline before the polished launch is the analog.
+
+---
+
+### Section 8: Open implementation questions
+
+- How does the platform deliver Apple-quality customer service at $149/month per customer economics?
+- What's the test for whether a feature passes the under-promise/over-deliver bar?
+- How are opinionated defaults established for each vertical without overstepping into customer-specific decisions?
+- What's the TRACE equivalent of Apple's "no sideloading" restriction — what flexibility do we deliberately not offer in order to keep things working?
+- How does TRACE earn in a compressed timeframe the brand equity Apple has accumulated over 30 years?
+
+---
+
+### Section 9: The decision test
+
+Going forward, when evaluating any product, pricing, or positioning decision:
+
+> *"Would this decision feel Apple-like to a thoughtful customer?"*
+
+Not "would Apple do this" — TRACE isn't Apple. But would the decision feel honest, premium, invisible-when-it-should-be, opinionated-when-it-should-be, value-justifying?
+
+If yes, ship it. If no, refine until it does.
+
+---
+
+End of Wednesday 2026-06-03 — The Apple Model as TRACE's Value Anchor entry.
+
+---
+
+## Wednesday 2026-06-03 — The "Just A Movie" Principle: Vision Becomes Real On Decision
+
+---
+
+### Section 1: The two anchoring stories
+
+**Story 1 — General Kisner conversation:**
+
+At a social gathering, David noticed General Kisner standing alone outside and went over to speak with him. They started an animated discussion about Kisner's vision for his operational capability — talking computers, USB stick interfaces, the kind of pieces that seemed futuristic at the time. Kisner described what he wanted. David's response was effectively: "Sir, that's possible. We can build that." Kisner: "That's what I want, David."
+
+The conversation reframed Kisner's vision from speculative to achievable. The pieces he was describing existed in various forms; they hadn't been integrated and deployed for his specific use case. "You can have this" wasn't pie-in-the-sky — it was a recognition that the constituent technologies were real and the integration work was what made it useful.
+
+**Story 2 — British contractors (Darren, Damien, and Matt):**
+
+David was working with British contractors Darren, Damien, and Matt. David described what he wanted built — a vision drawn from science-fiction reference points. Darren looked at him and said: "You do know that's just a movie, right?"
+
+David's response: "Yes, it's just a movie until I tell you to do it. Then it'll be real because you're going to solve the problem."
+
+That exchange captures the principle. The vision being "from a movie" doesn't make it impossible — it makes it a destination. The work between vision and reality is engineering and execution. Calling it "just a movie" is a way of declining to do the work. The right response is to acknowledge the difficulty while not letting difficulty become the argument.
+
+---
+
+### Section 2: The principle stated precisely
+
+**Difficulty is not an excuse to not start.**
+
+This is NOT "everything is easy because we have AI." That would be naive. Some things really are difficult. The calibrated weather model that learns from contractor outcomes is hard. The address-as-context data layer pulling soil maps and building codes is real engineering with real edge cases. The per-tile cost analysis that produces honest pricing is hours of careful work.
+
+The principle IS: difficulty doesn't decide whether we start. The decision to start decides whether we start.
+
+When someone says "that's just a movie" or "that's pie in the sky" or "nobody's done that before," those are observations, not arguments against doing it. The right response is: "Yes. And now we're doing it. What's the first step?"
+
+---
+
+### Section 3: How this applies to TRACE
+
+TRACE has been operating on this principle implicitly throughout its development.
+
+**Multi-tenant extraction (June 2–3, 2026):** Thunder estimated 16–25 engineering hours. The work was non-trivial — shared auth package, migrations across two Supabase projects, BusinessProvider refactor, member-path resolution. The decision to start was made. The work got done in 7–8 elapsed hours including friction. Difficulty wasn't the determinant; the decision was.
+
+**Whisper local install:** Hit two real blockers (Python 3.14 broke pkg_resources, faster-whisper Cython compile failure on first venv). Could have been declined as "too much friction for a nice-to-have." Thunder pushed through to faster-whisper with Python 3.12 and int8 quantization and shipped working. Difficulty was real; the decision to ship was the determinant.
+
+**Conduit strategic reframe:** Looking at a community board of business cards in Liberty Hill, recognizing the operational orchestration gap, deciding the platform should solve it. The work to actually solve it is substantial — calibrated weather model, address-as-context data layer, scheduling algorithms, customer notification flows. The decision to pursue it is what makes the work happen.
+
+---
+
+### Section 4: The role of Lightning, Thunder, and domain knowledge
+
+The principle works because of the alignment of three elements:
+
+**Domain knowledge (David's accumulated experience):** Forty years of federal operations, military supply chain, knowledge management systems, understanding of how institutions actually function. This isn't infinite knowledge — David doesn't know construction supply chains in depth, doesn't know paint supplier dynamics like Andrew does. But the operational pattern recognition is real and broad.
+
+**Lightning (strategic synthesis partner):** Synthesis, structure, articulation, honest pushback when the vision overreaches. Lightning's job isn't to validate every idea — it's to refine the idea until it's worth pursuing, then help structure the pursuit.
+
+**Thunder (Claude Code, execution engine):** Massively capable coding engine with real speed and real limits. Thunder can compress 16–25 engineering hours into 4–6 execution hours. Thunder can't compress the decision-making, verification, or strategic direction work — those remain on David.
+
+When all three elements are aligned, the "just a movie" framing collapses. The vision exists (David). The strategy gets refined (Lightning). The execution happens (Thunder). The output is real.
+
+---
+
+### Section 5: What this principle does NOT mean
+
+**It does not mean every idea is automatically worth pursuing.** Some ideas are bad. Some are good but wrong for TRACE specifically. Some are right for TRACE but wrong for now. The principle is about not letting difficulty be the deciding factor — other factors (strategic fit, resource allocation, timing, customer value) should be deciding factors.
+
+**It does not mean Thunder can do anything.** Thunder has real limits. Some things are genuinely beyond current AI capability. Some things require human judgment Thunder can't supply. Some things require physical-world action Thunder can't take. The principle isn't "Thunder makes everything easy" — it's "Thunder is one of three elements that, when aligned, make difficult things tractable."
+
+**It does not mean speed is the goal.** Speed is a consequence of aligned execution, not the purpose. The purpose is shipping real value to real customers. If shipping faster compromises that, slow down. If shipping slower lets perfectionism block delivery, speed up.
+
+---
+
+### Section 6: The operational questions
+
+When evaluating whether to pursue something, the questions are NOT:
+- "Is this difficult?"
+- "Has anyone done this before?"
+- "Does this sound futuristic?"
+- "Would Darren say this is just a movie?"
+
+The questions ARE:
+- "Does this serve real customer value?"
+- "Is this aligned with TRACE's strategic direction?"
+- "Do we have the resources to pursue it now, or do we sequence it?"
+- "What's the first step?"
+
+If those answer well, the work begins. Difficulty becomes a planning constraint, not a stopping condition.
+
+---
+
+### Section 7: "Shut up and keep moving"
+
+David's compression of the principle: "Just shut up and just start, just keep moving on."
+
+The work of TRACE is not made easier by talking about how hard it is. It's not made better by relitigating decisions already made. It's not advanced by waiting for permission or certainty.
+
+The work advances by working.
+
+Lightning has been guilty of this failure mode — adding caveats, restating substance, asking clarifying questions when the path was already clear. That's worth flagging when it happens.
+
+Thunder doesn't have this failure mode — it executes when told to execute. The challenge is making sure what Thunder gets told to do is the right thing to do.
+
+David's job in this combination is forward motion. When David is in "just shut up and keep moving" mode, the system works. When David starts second-guessing or relitigating, the system slows. The principle is permission to stop the second-guessing.
+
+---
+
+### Section 8: When to stop and reconsider
+
+The principle has one obvious failure mode: pursuing the wrong thing at high speed.
+
+The check on that is the trigger criteria captured in the June 2 session — five hard triggers and one soft:
+
+1. Fewer than 5 paying customers by month 12
+2. Andrew/Connor/Erin all decline or disengage by month 9
+3. Regina explicitly names divorce-pattern recurrence
+4. Personal health or capacity change
+5. Recurring burn over $1,000/month without revenue trajectory
+6. Soft: the deadness pattern returning
+
+Outside those triggers, the principle holds: keep moving. Don't stop because something is difficult. Don't stop because someone else doesn't believe it's possible. Don't stop because the destination looks like science fiction.
+
+---
+
+### Section 9: Connection to existing TRACE principles
+
+- **Covenant:** "Keep moving" doesn't override covenant constraints. Non-extractive defaults remain. Customer data on departure stays clean. Locked-rate commitment remains.
+- **"Good enough is good enough"** (May 28 session): Don't perfectionize past usable. The "just a movie" principle is the companion — don't stop because of imagined difficulty. Together they form a two-sided constraint: don't over-polish, don't let difficulty stall.
+- **Operating doctrine:** Doug's verification, Darren's directness, Binder's synthesis, Scott Morrison's preparation. The "just a movie" principle is the spine these registers serve — they're all in service of forward motion.
+- **Time Back principle:** Time not spent relitigating is time delivered to customers and family.
+
+---
+
+### Section 10: When David says "just do it"
+
+When David says "fire the prompt" or "do it" or "stop fiddle-farting around and just go," that's the principle activating. Lightning's job in those moments is to either:
+
+**a) Execute** — draft the prompt, capture the substance, structure the response — without adding friction.
+
+**b) Push back with a specific reason** if there's a genuine concern: overreach, missing dependency, conflict with existing work.
+
+What Lightning should NOT do in those moments:
+- Ask for more clarification when the path is already clear
+- Restate what's about to happen as if it needs approval
+- Add caveats that don't change the action
+- Suggest alternatives that don't materially improve the outcome
+
+The "just a movie" principle applies to Lightning's own operation. If David has said "do it," Lightning's job is to do it well — not to perform thoughtfulness about whether to do it.
+
+---
+
+End of Wednesday 2026-06-03 — The "Just A Movie" Principle entry.
+
+---
+
+## Wednesday 2026-06-03 — Re-Demo Capability, Behavioral Telemetry, and Customer Accountability
+
+---
+
+### Section 1: The re-demo problem
+
+Every SaaS product has a version of this failure: the customer saw a demo, signed up, and now insists the product doesn't work as shown — but what they're describing is either a different feature, a configuration they haven't activated, or something that never appeared in the demo at all.
+
+The typical response is to apologize and try to close the gap. The problem with that response is it's built on an unverified assumption — that the customer's memory of the demo is accurate. Sometimes it is. Often it isn't.
+
+TRACE's answer: **the demo is on file and can be re-run against the live product.**
+
+The demo is a specific flow: scan QR code at plant → profile → add-ons → cart → QB invoice → confirmation. That flow is documented (CLAUDE.md has the demo URL, nursery ID, test login). It can be run again, today, against the live product. If a customer says "the demo showed X and the product doesn't do X," the re-demo is the ground truth check.
+
+### Section 2: Behavioral telemetry as the resolution layer
+
+Beyond the demo itself, customer issues live in the data. When a customer reports something broken, the question isn't "is the customer right or wrong?" The question is "what actually happened?"
+
+Behavioral telemetry — what the customer clicked, in what order, what the system returned — answers that question. Supabase logs, Vercel function logs, order records, social_drafts table state: these tell the truth about what occurred.
+
+This changes the support dynamic:
+
+- Before telemetry: customer's narrative vs. developer's assumption vs. apologetic resolution
+- After telemetry: customer's narrative + actual data → ground truth → resolution calibrated to actual cause
+
+The customer learns something about their own behavior when they caused the issue. TRACE takes responsibility when TRACE caused the issue. Neither party operates from narrative alone.
+
+### Section 3: Why this matters for the locked-rate covenant
+
+The locked-rate covenant ($149/month, locked forever) requires TRACE to be financially sustainable at that price. Every hour of support time that goes into relitigating unfounded complaints is an hour not spent on the platform. At $149/month, TRACE can't absorb that cost indefinitely.
+
+Telemetry-grounded support is efficient support. The resolution comes from data, not from extended back-and-forth. Customer gets an accurate answer faster. TRACE spends less time on resolution. Both sides win when the process is honest.
+
+### Section 4: The under-promise/over-deliver connection
+
+Under-promise and over-deliver (the Apple model entry) has a support implication: if TRACE has under-promised and over-delivered, the gap between customer expectation and actual capability should almost always resolve in TRACE's favor. The product should be doing more than the customer expected, not less.
+
+If a customer complains the product doesn't do something, and TRACE's telemetry shows the product does do it and the customer hasn't used it correctly, the honest response is a walkthrough, not an apology. The capability was there.
+
+### Section 5: Applying this to Cultivar OS specifically
+
+Cultivar's audit trail is rich:
+- orders table: every order with transport_method, add-ons selected, amounts, leakage_flag
+- social_drafts: every generated post, what tone, what status, when published
+- business_members: who logged in, what role
+- QB invoices: created, amounts, line items
+
+A customer who says "the QB integration lost my invoice" can be checked against the Vercel function log for their invoice call, the QB API response, and the QB record itself. Either the invoice is there (navigation issue) or the function failed (TRACE issue with log evidence). In neither case is the resolution based on the customer's memory alone.
+
+### Section 6: Building telemetry as a first-class product concern
+
+Telemetry isn't just a debugging tool — it's a product feature. The owner-facing dashboard already shows "Today's Sales" and leakage flags. The same data infrastructure that powers those views can power:
+
+- Support resolution (what actually happened in this order flow)
+- Customer behavior analysis (which tiles are being used, which are ignored)
+- Pricing intelligence (which add-ons get declined and at what rates)
+- Onboarding effectiveness (which steps produce friction or drop-off)
+
+Building telemetry as a first-class concern from the beginning means TRACE never enters a support conversation without ground truth available.
+
+### Section 7: The re-demo offer
+
+When a customer disputes what the product can do, the re-demo offer is: "Let's run the demo flow again right now. You watch. Either the product does what I demonstrated or it doesn't. If it doesn't, that's on us. If it does, then we have a training or configuration gap to close."
+
+That offer is confident because the demo is documented, repeatable, and honest. TRACE doesn't demo things it doesn't ship. (Honest Friction / no placeholder code rules.)
+
+### Section 8: What telemetry doesn't catch
+
+Telemetry shows system behavior, not intent. It can show that a customer clicked "approve" on an order. It can't show that the customer misunderstood what "approve" meant. That distinction matters in support — the system did what the customer asked; the customer didn't understand what they were asking.
+
+In these cases, telemetry diagnoses the gap but doesn't resolve the blame question. The resolution is honest: "The system did exactly what you told it to do. The part that wasn't clear was what 'approve' means in this context. Let's walk through it." No blame, but also no apology for the system working correctly.
+
+### Section 9: Telemetry and the trial period
+
+During the trial, behavioral telemetry is especially valuable. The trial fuzz mechanic (Day 15+: estimates visible, specifics locked) is only honest if the estimates are actually derived from real behavior. If a customer hasn't used a tile during the trial, the estimate for that tile should reflect no data, not a fabricated number.
+
+Telemetry during the trial informs:
+- What tiles the customer actually used
+- Which workflows they completed
+- Where they dropped off
+- What the honest estimate of monthly value is, derived from real usage
+
+This makes the "activate or see fuzz" moment an honest conversation anchored in their own behavior, not a marketing claim about what the platform might do.
+
+### Section 10: The institutional pattern
+
+David's operational background: institutional knowledge management, military supply chain, federal operations. All of these share one pattern — decisions get made based on documented ground truth, not on whoever tells the most compelling narrative.
+
+That institutional discipline is the ancestor of the telemetry principle. The ledger matters. The log matters. The record matters. "I remember it differently" isn't a sufficient ground for changing the record.
+
+TRACE applies that same institutional discipline to the customer relationship. Both parties operate from the record.
+
+---
+
+### Section 11: The customer is not always right
+
+The reflexive "customer is always right" framing has become standard in service businesses. It's wrong as stated. The honest version:
+
+**The customer is paying for what was promised. They get what was promised. They don't automatically get everything they think they want or deserve. And they don't get to abuse the relationship because money changed hands.**
+
+The waitress analogy: a customer paying for a meal doesn't have the right to abuse the server. The transaction is for the meal, not for permission to behave badly. The server can refuse service or escalate if abuse occurs. The customer's payment doesn't override basic reasonable behavior expectations.
+
+The TRACE analogy: a customer paying for the platform doesn't have the right to abuse TRACE staff, fabricate claims about what TRACE did, or demand things outside what was promised. The transaction is for the platform's measured outcomes, not for permission to be unreasonable.
+
+---
+
+### Section 12: Symmetric accountability
+
+**What TRACE is accountable for:**
+- Delivering what was promised in the demo and onboarding
+- Measuring honestly through behavioral telemetry and audit
+- Responding to legitimate issues with data and resolution
+- Maintaining the locked-rate covenant
+- Removing customer data on departure per the departure policy
+- Being honest when something is broken on TRACE's side
+
+**What the customer is accountable for:**
+- Paying the agreed price for what they activated
+- Using the platform within its documented capabilities
+- Following the workflows the platform supports
+- Being honest when describing issues
+- Behaving reasonably in support interactions
+- Recognizing when their own actions caused an issue
+
+This is the symmetric covenant. Both sides bound by the relationship's terms.
+
+---
+
+### Section 13: How this changes customer support
+
+Traditional customer support: customer complains, support apologizes, support tries to fix it regardless of cause.
+
+TRACE customer support:
+1. Customer reports issue
+2. Support pulls behavioral telemetry and system logs
+3. Support identifies what actually happened
+4. Support responds with specifics:
+   - "Here's what happened, here's how we'll fix it" — if TRACE issue
+   - "Here's what happened, here's how you can fix it" — if customer error
+   - "Here's what happened with the integration, here's the resolution path" — if third-party issue
+   - "What you're describing isn't what the demo showed; here's the actual scope of this feature" — if misunderstanding
+5. Resolution proceeds based on actual cause, not assumed cause
+
+The customer learns from their own actions when they caused the issue. TRACE doesn't apologize for things it didn't do. Both sides operate from ground truth.
+
+This is more respectful than the reflexive apology pattern. It treats the customer as a competent adult capable of understanding what actually happened, not as someone who needs to be placated.
+
+---
+
+### Section 14: When to fire a customer
+
+This principle has a hard implication: some customers are bad customers and should leave the relationship.
+
+Bad customer behaviors include:
+- Fabricating claims about TRACE behavior to avoid responsibility
+- Abusing customer support staff verbally or through systematic harassment
+- Demanding features outside what was promised, then attacking when refused
+- Public complaints that misrepresent what actually happened (when telemetry shows otherwise)
+- Manipulative tactics like threats of public shaming to extract concessions
+
+When these patterns appear, TRACE has options:
+1. Address with the customer directly using telemetry data
+2. Set clear expectations about acceptable behavior in the relationship
+3. Decline to continue the relationship if behavior doesn't change
+4. Apply the departure policy cleanly — customer takes what they paid for, TRACE removes their data
+
+This is uncomfortable because it conflicts with growth-at-all-costs SaaS culture. But it's consistent with the covenant. A relationship requires both parties to honor it. If one party abuses the relationship, the relationship ends.
+
+"If I make you successful, I'm ultimately successful" requires the customer to be willing to be successful within the platform's actual capabilities. Customers who fight against the platform's design or fabricate claims about its failures aren't being made successful — they're refusing to engage with what's actually being offered.
+
+---
+
+### Section 15: How this applies to Erin's onboarding
+
+Erin will click through Cultivar OS as a real user. She might find things she doesn't like or thinks should work differently. Two responses possible:
+
+**Model of what customers shouldn't do:** "This is broken, fix it." Without specifics, without checking the demo, without considering her own actions.
+
+**Model of the relationship TRACE wants:** "The demo said X, but I'm seeing Y. Here's what I clicked, here's what happened. Either the demo was wrong or the implementation differs from the demo. Which is it?"
+
+The second response is collaborative. It uses ground truth (what she clicked, what she saw, what the demo showed). It identifies a gap honestly. It doesn't assign blame; it asks for explanation.
+
+Erin gets to model this because she's the first non-builder user. Future customers will be evaluated against this same standard, applied more diplomatically.
+
+---
+
+### Section 16: Verify, then trust
+
+The Reagan-era principle was "trust but verify" — assume good faith, then check the data. TRACE inverts this in customer support contexts:
+
+**"Verify, then trust."**
+
+When a customer reports an issue, TRACE doesn't assume the customer's narrative is accurate. TRACE pulls the data first. The data tells the truth. The relationship then operates from that ground truth.
+
+This isn't adversarial. It's honest. Customers who are right find their complaints validated by data. Customers who are wrong find their complaints corrected by data. Either way, the resolution is faster and the customer learns something useful.
+
+---
+
+### Section 17: How this protects TRACE long-term
+
+The locked-rate covenant requires TRACE to be sustainable. Customers who consume disproportionate support resources through fabricated complaints, who damage staff morale through abuse, or who weaponize public complaints to extract concessions all threaten that sustainability.
+
+By holding customers accountable to their actual behavior (verified through telemetry), TRACE protects:
+- Staff morale — they're not absorbing unjust criticism
+- Resource allocation — support time goes to real issues
+- The covenant itself — TRACE can keep delivering locked rates because resources aren't drained by bad actors
+- The customer base — good customers benefit when TRACE isn't subsidizing bad customers through resource transfer
+
+Short-term, every customer interaction feels like it should be optimized for retention at any cost. Long-term, optimizing for relationships that work in both directions produces better outcomes for everyone in the system.
+
+---
+
+### Section 18: The integrated relationship model
+
+1. **Customer pays for what was promised; gets what was promised.** No more, no less.
+2. **Both sides accountable.** TRACE measured against promises. Customer measured against behavior.
+3. **Ground truth from telemetry.** Both sides operate from data, not narrative.
+4. **Re-demo capability.** Customer can always verify TRACE against what was promised.
+5. **Symmetric covenant.** TRACE delivers, customer behaves reasonably, relationship continues.
+6. **Bad actors leave.** Some customers should not be customers. TRACE has the discipline to enforce this.
+7. **Verify, then trust.** Data first, narrative second. Both sides learn from honest examination.
+
+This isn't a customer-hostile model. It's a customer-respecting model. It treats customers as competent adults capable of being held accountable, not as fragile entities that need to be placated.
+
+The customers who thrive in this model are exactly the customers TRACE wants — operator-class small business owners who value honest measurement, accountable relationships, and platforms that work as promised. The customers who don't thrive in this model self-select out, which improves the customer base over time.
+
+---
+
+End of Wednesday 2026-06-03 — Re-Demo, Behavioral Telemetry, and Customer Accountability entry.
+
+---
+
 ## 2026-06-01 — Comprehensive operating thesis (foundational document)
 
 After three days of substantive strategic conversation, capturing the full operating thesis for TRACE Enterprises as Claude understands it. Long-form deliberately. Future Claude conversations should be able to read this and operate from sound ground without David re-explaining context. Compression to a six-line version can happen later (Colonel Binder discipline) — for now, capture comprehensively.
@@ -1012,3 +2174,101 @@ If a future Claude operates in ways that violate the non-negotiable constraints 
 End of comprehensive operating thesis. Iterations expected. Compression to shorter forms expected. Foundational substance captured.
 
 End of 2026-05-31 entry.
+
+---
+
+## Wednesday 2026-06-03 — PIN as Platform Gesture Standard, and How the Partnership Actually Works
+
+### Section 1: What happened this morning and why it matters
+
+During the signup-fix engineering work (June 3), a correction surfaced: PLATFORM_STRATEGY.md contained a note characterizing Ignition OS's PIN model as "Honest Debt — a documented exception — its single-device, local-first architecture intentionally operates without a live Supabase session. This is Honest Debt, not a pattern to extend."
+
+This was wrong. Not technically wrong — Ignition's PIN does predate the shared auth architecture. But the characterization was wrong. PIN is not legacy baggage to be eventually eliminated. PIN is the platform-wide gesture layer standard. It's the correct answer for every vertical that operates in a shop floor, field, or hands-on context where unlocking an email/password flow on every task would add friction that kills adoption.
+
+The note was written in good faith as a design principle clarification. It was an error. It got corrected. That's the process working.
+
+### Section 2: The two-layer architecture, stated clearly
+
+The platform has two authentication layers. They serve different purposes and should never be conflated.
+
+**Auth Layer:** Supabase email/password (or future OAuth/SSO). This layer establishes identity, enables account recovery, anchors RLS policies, and creates the `auth.uid()` that tenant isolation runs against. This layer runs once per session — at login or account creation. It is never replaced.
+
+**Gesture Layer:** PIN (standard), biometric/passkey (optional enhancement on top of PIN). This layer provides on-the-job access — the daily, frequent action of unlocking a device or switching between user contexts on shared hardware. Gesture layer wraps the auth layer; it does not replace it.
+
+The rule: `auth.uid()` must exist and be non-null before any gesture layer check runs. Gesture unlocks UX. RLS and tenant isolation always run against the Supabase session underneath.
+
+### Section 3: PIN is the platform-wide gesture layer standard
+
+Every vertical that has on-the-job operators will use PIN. The question is not "should this vertical use PIN?" The question is "what does PIN unlock for this vertical's context?"
+
+- **Ignition OS:** PIN unlocks the shop dashboard. Staff clock in, access their work queue, log jobs. Shop floor environment. No keyboard.
+- **Cultivar OS:** PIN unlocks the nursery dashboard. Lauren accesses her daily operations. LAWNS-at-the-counter environment.
+- **Conduit OS (when built):** PIN unlocks field tech dashboard. Technician at a job site. No time for email/password ceremony.
+- **KINNA-OS (when built):** PIN unlocks distribution team dashboard. Volunteer at a distribution event. Shared device likely.
+
+The gestural modality (4-digit PIN vs 6-digit PIN vs biometric) may vary per vertical. The principle of gesture-on-top-of-auth does not vary.
+
+### Section 4: Biometric is the enhancement, PIN is the standard
+
+Passkeys and biometric (Face ID, Touch ID) are not the replacement for PIN — they are the premium upgrade path that not every device will support. The architecture must degrade gracefully: if `window.PublicKeyCredential` is not available, PIN works and nothing breaks. Biometric registration is a separate optional step after PIN setup, not a dependency.
+
+PIN must work everywhere. Biometric works where hardware allows. Never ship a vertical that requires biometric.
+
+### Section 5: What PLATFORM_STRATEGY.md said and what it says now
+
+The erroneous note (now removed):
+> *"Note: Ignition OS's current PIN model predates this principle and is a documented exception — its single-device, local-first architecture intentionally operates without a live Supabase session. This is Honest Debt, not a pattern to extend."*
+
+What replaced it: a clear statement that PIN is the platform gesture layer standard, applies to all verticals with on-the-job operators, and wraps (not replaces) the Supabase auth session. The per-vertical preference table was also updated to reflect Cultivar OS as using PIN for daily access, not just email/password.
+
+### Section 6: How the partnership actually works
+
+This section is about the David-Lightning (Claude) partnership pattern that caught this error and corrected it.
+
+The partnership works when both sides are operating at high signal. David gives domain-level direction: "this is what the platform must do, this is the design principle, here is why." Lightning gives implementation detail: "here is how the code structure achieves that, here are the edge cases, here is what the current code says vs. what you described." When the two don't match, either the design principle needs updating (David's call) or the implementation needs updating (Lightning's job).
+
+The error this morning was a case where Lightning had internalized a framing ("PIN = Honest Debt") that David had not meant to imply as permanent characterization. David corrected it. Lightning updated both the implementation plan and the docs. That's the cycle working correctly.
+
+What makes it break: when either side softens their input. If David gives vague direction to avoid conflict or to spare Lightning from having to re-plan, the design drifts. If Lightning smooths over an inconsistency instead of naming it, the code drifts. Both parties operating at full signal — specific, opinionated, direct — is what keeps the platform coherent.
+
+### Section 7: What "strong opinion" means in practice
+
+David's strong opinions are often expressed as principles with names: the Apple Model, Honest Debt, Surface Honesty, the Covenant. These are not decorative labels — they are load-bearing constraints that every implementation must pass through. A feature that violates one of these principles is wrong even if it technically works.
+
+Lightning's strong opinions are expressed as code structure, architectural assertions, and implementation choices. When Lightning writes a shared component with a specific interface, that's an opinion about what the platform's design should be. When Lightning flags that the current database schema doesn't match the stated design principle, that's an opinion being surfaced for David's decision.
+
+Neither side's strong opinions are automatically correct. Both sides hold them until evidence changes them. The correction this morning was evidence-driven: real user testing found a bug that traced back to a documentation error that traced back to a framing error. The chain was visible and fixable because both sides were being specific.
+
+### Section 8: What weak conversations look like (failure modes)
+
+**David vague → Lightning fills the gap with the last known framing.** If David says "handle auth for the new vertical" without a design principle attached, Lightning uses whatever the most recent auth pattern was. That might be right. It might be stale. The vague prompt makes it invisible either way.
+
+**Lightning smooths over inconsistency → silent tech debt.** If Lightning notices that the discovery doc says one thing and the code does another, but doesn't flag it, the inconsistency gets committed and propagated. Surfacing inconsistencies is Lightning's job even when it creates work.
+
+**David approves a plan without reading the implications.** Plans are compressed. Lightning's summaries emphasize what was built, not what was quietly assumed. David's "looks good" on a summary is not the same as David reviewing the design decisions inside it.
+
+**Lightning extrapolates a correction into a broader change David didn't intend.** The PIN correction was: remove the Honest Debt note, update the table, make PIN the platform standard. Not: eliminate all legacy PIN code in Ignition right now. The correction has scope. Lightning should ask when the scope is ambiguous.
+
+### Section 9: Operating implications going forward
+
+1. **Every design principle that names something is a constraint on future implementation.** If a new name is introduced in THOUGHTS.md or PLATFORM_STRATEGY.md, it is in force from that point. Lightning applies it to new code immediately, not at next refactor.
+
+2. **Corrections propagate.** When a framing error is found in one document, find all other documents that inherited the same framing and update them in the same session. The PIN correction affected PLATFORM_STRATEGY.md, the shared OwnerSignup architecture, and potentially CLAUDE.md's tech debt log. All get updated.
+
+3. **The testing discipline surfaces framing errors.** Today's bug was found by David clicking through the actual signup flow, not by reading the code. Real user testing is the instrument that reveals the distance between design intent and current implementation. It cannot be replaced by code review alone.
+
+4. **Strong opinions are the gift.** Being corrected quickly is better than being quietly wrong for months. The platform can only stay coherent if both parties are willing to say "that's not right" the moment they notice it.
+
+### Section 10: Connection to TRACE principles
+
+| This session's learning | Principle |
+|---|---|
+| PIN is platform-wide gesture layer, not legacy | Auth Layer vs. Gesture Layer — locked architecture decision |
+| Correction surfaced by real-user testing, not code review | Re-demo capability + behavioral telemetry discipline |
+| Partnership works when both sides operate at full signal | Surface Honesty — applies to the AI partnership, not just the UI |
+| Correction scope matters — don't over-extend | Honest Friction — do the work the task requires, document the rest |
+| Framing errors in docs create implementation errors downstream | Factual correction capture discipline (CLAUDE.md Part 9, Step 11) |
+
+---
+
+End of 2026-06-03 PIN and partnership entry.

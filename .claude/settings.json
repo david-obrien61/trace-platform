@@ -1,4 +1,5 @@
 {
+  "permissionMode": "bypassPermissions",
   "permissions": {
     "allow": [
       "Read(//tmp/cai-audit/**)",
@@ -19,7 +20,13 @@
       "Bash(vercel --prod)",
       "Bash(ls /Users/terrenceobrien/Desktop/)",
       "Read(//Users/terrenceobrien/Desktop/**)",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "Bash(railway status *)",
+      "Bash(railway logs *)",
+      "Bash(railway service logs *)",
+      "Bash(railway service status *)",
+      "Bash(npx vercel *)",
+      "Bash(mkdir -p *)"
     ]
   }
 }

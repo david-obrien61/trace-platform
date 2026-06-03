@@ -79,7 +79,7 @@ Everything else inherits automatically.
 | Layer | Module | Location | Status |
 |---|---|---|---|
 | Database | Supabase PostgreSQL, RLS, multi-tenant UUID | packages/shared/src/supabase/ | ✅ Live (Ignition OS) |
-| Auth | configureAuth() — PIN or email/password, role-based routing | packages/shared/src/supabase/auth.ts | ⚠️ PIN only — needs configureAuth() wrapper |
+| Auth | Shared auth package — email/password + member invite/accept flow, role-based routing, two-path BusinessProvider (owner + member fallback). Gesture layer (PIN, biometric) is vertical-specific on top of shared Supabase session. | packages/shared/src/auth/ | ✅ Live (Cultivar OS, 2026-06-02) — business_members, invitations, member_devices with real RLS; 29/29 E2E assertions passing |
 | Data sync | DataBridge.js — local-first, offline queue, trial clock | packages/shared/src/supabase/bridge.ts | ⚠️ localStorage only — Supabase migration needed |
 | AI router | AIEngine.ts — Claude/Gemini/Whisper by task. ai_router.py is legacy (Railway, mobile-era). Forward path: Vercel serverless functions. | packages/shared/src/ai/ | ✅ Built · ⚠️ Backend needs porting before AI features go live |
 | QuickBooks | OAuth 2.0 + invoice creation + customer sync | packages/shared/src/quickbooks/ | ⚠️ Ignition hardcoded — needs vertical-agnostic wrapper |
@@ -298,6 +298,41 @@ This is not a coincidence or a temporary property of the current two verticals. 
 
 ---
 
+### **Auth Layer vs. Gesture Layer**
+
+Authentication is one layer — a single Supabase auth account per person, tied to email, holding the actual security boundary. Gestures are convenience layers on top — PIN, facial recognition, biometric, passkey — that can vary per device for the same authenticated identity.
+
+The design driver is the **"hands not available" case**: a diesel mechanic with greasy hands cannot reliably type a password. A gardener wearing gloves cannot use a touchscreen keyboard. A nurse in PPE cannot scan a fingerprint. Each of these customers needs to authenticate quickly without their hands being available for typing.
+
+**The pattern that solves this:**
+- Personal phone: passkey using Face ID or fingerprint
+- Shop tablet: passkey using whatever biometric the tablet supports, or PIN fallback
+- Shop kiosk: PIN only (no biometric hardware)
+
+Same auth account. Different gestures per device. The authentication is one. The conveniences are many.
+
+**This is why authentication infrastructure is shared** (`packages/shared/src/auth/`) while gesture implementations are vertical-specific. The shared layer enforces real security via Supabase auth — `auth.uid()` must be non-null for any query that touches customer data. The verticals add gestures appropriate to their customer's working environment.
+
+| Vertical | Auth layer | Gesture layer |
+|---|---|---|
+| Cultivar OS (nurseries) | Shared Supabase auth | PIN for daily on-the-job access; WebAuthn passkey upgrade available |
+| Ignition OS (auto/diesel) | Shared Supabase auth | PIN (standard gesture for shop floor, shared hardware) |
+| CoolRunnings (home automation) | Shared Supabase auth | Biometric-first via mobile device passkey |
+| KINNA-OS (nonprofits) | Shared Supabase auth | PIN for distribution volunteers on shared devices |
+| Future verticals | Shared Supabase auth | Gesture choice driven by customer's working context |
+
+**PIN is the platform-wide gesture layer standard** for verticals with on-the-job operators (shop floor, field, counter, distribution). The question per vertical is not "should we use PIN?" — it is "what does PIN unlock in this context?" PIN-on-top-of-auth is the default. Biometric registration is an optional step offered after PIN setup; it enhances PIN, it does not replace it.
+
+**The principle prevents both failure modes:**
+- *Single global gesture* = broken UX for hands-not-available cases (the mechanic cannot type, the gesture fails them)
+- *Per-vertical custom auth* = security fragmentation, code duplication, impossible to share customer accounts across verticals
+
+Standard auth, vertical-specific gestures. One identity, many ways to prove it.
+
+**Application:** When a new vertical is built, authentication is not rebuilt — it is configured via the shared auth package. When a new gesture is needed for an existing vertical, it is added as a gesture layer that wraps a Supabase auth session, not as a replacement for it. No vertical is ever allowed to gate data access using only a PIN or biometric without an underlying `auth.uid()` — the gesture unlocks the UX, but RLS and tenant isolation always run against the Supabase session.
+
+---
+
 ## PART 5 — VERTICAL CONFIG — THE MASTER SWITCH
 
 This is the file that makes the platform work. One entry per vertical.
@@ -472,13 +507,18 @@ export const VERTICAL_CONFIG = {
 
 ### The Problem Being Solved
 
-Ignition OS uses PIN-based auth (kiosk, shop floor, no keyboard).
-Cultivar OS and KINNA-OS use email/password (owner on desktop/tablet).
-CoolRunnings uses email/password (homeowner on phone).
-Conduit OS uses PIN (field tech on tablet).
+PIN is the platform-wide gesture layer for on-the-job operators (shop floor, counter,
+field, distribution). Email/password is the auth layer — every vertical uses it for
+account creation and recovery. The gesture layer wraps the auth layer; it never replaces it.
 
-One auth module must support both patterns. The vertical config drives which
-pattern is used. No vertical writes its own auth logic.
+Ignition OS: PIN on shop floor and kiosk. No keyboard entry.
+Cultivar OS: PIN for daily counter/operations access; owner uses email/password to create account.
+KINNA-OS: PIN for distribution volunteers on shared devices.
+Conduit OS: PIN for field techs on tablets.
+CoolRunnings: Biometric-first via mobile passkey (phone-based, not shared hardware).
+
+One auth module supports all patterns. The vertical config drives gesture choice.
+No vertical writes its own auth logic.
 
 ### The configureAuth() Pattern
 

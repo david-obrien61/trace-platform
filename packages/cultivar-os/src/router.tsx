@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { PrivateRoute }    from './components/layout/PrivateRoute';
 import { PlantProfile }    from './pages/PlantProfile';
 import { AddOns }          from './pages/AddOns';
@@ -21,6 +21,20 @@ import { Campaigns }         from './pages/Campaigns';
 import { CampaignDetail }    from './pages/CampaignDetail';
 import { DiscoveryInspect }  from './pages/DiscoveryInspect';
 import PMI                   from './pages/PMI';
+import { AcceptInvite }      from '@trace/shared/auth';
+import { auth }              from './lib/auth';
+
+function AcceptInvitePage() {
+  const navigate = useNavigate();
+  return (
+    <AcceptInvite
+      apiBase=""
+      onRedirectTo="/dashboard"
+      supabaseSignIn={auth.signIn}
+      navigate={navigate}
+    />
+  );
+}
 
 export function AppRouter() {
   return (
@@ -35,6 +49,7 @@ export function AppRouter() {
       {/* AUTH */}
       <Route path="/login"   element={<Login />} />
       <Route path="/signup"  element={<SignUp />} />
+      <Route path="/join"    element={<AcceptInvitePage />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms"   element={<Terms />} />
       <Route path="/help"    element={<Help />} />
