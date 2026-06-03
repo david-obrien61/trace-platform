@@ -42,6 +42,41 @@ TRACE builds an operating system for owner-operated small businesses and nonprof
 
 ---
 
+## ARCHITECTURE CONSTANTS (Design Invariants)
+
+Non-negotiable platform invariants, checked before any schema, RLS policy,
+route, or shared-code change. Deviation requires a documented WHY — inline at
+the point of deviation AND a dated entry in the Exception Log below.
+
+**AC-1 — Variation lives in data, not schema.**
+Anything that differs between verticals or between businesses is configuration —
+a value, a row, or a token — never a name in shared schema or shared code.
+Shared/platform tables, columns, RLS policies, routes, and identifiers carry
+ZERO vertical nouns (nursery, shop, lawns, garden, etc.). Vertical identity
+exists only as a value in business_type. Vertical-specific nouns are permitted
+only inside that vertical's own package.
+
+**AC-2 — RLS is membership-scoped by default.**
+Every table's row-level security policy is scoped to business_id membership by
+default. Tenant isolation is enforced at the data layer, not only in client
+code. A looser policy is a deviation requiring a documented WHY.
+
+**AC-3 — Tenant isolation is absolute.**
+No query, resolver, or policy returns data for a business the current user is
+not a member of, across any vertical. Cross-vertical resolution returns
+no-access — never a wrong-vertical record.
+
+**AC-4 — Settle once, encode as variable, stop relitigating.**
+Structural design (spacing, type, sizing, validation, loading states) is shared
+across all surfaces. The only per-vertical variables are tokens (color) and
+configured vocabulary (size classes, lifecycle stages, business noun). Settled
+decisions are encoded as variables and executed against, not reopened.
+
+**Exception Log:**
+- (none)
+
+---
+
 ## PART 2 — VERTICAL REGISTRY
 
 Every vertical that exists or is planned. Update this table when a new

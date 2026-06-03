@@ -44,6 +44,46 @@ instance of the same shared platform.
 
 ---
 
+## 1.5. ARCHITECTURE CONSTANTS (Design Invariants)
+
+Non-negotiable platform invariants, checked before any schema, RLS policy,
+route, or shared-code change. Deviation requires a documented WHY — inline at
+the point of deviation AND a dated entry in the Exception Log in PLATFORM_STRATEGY.md.
+
+**AC-1 — Variation lives in data, not schema.**
+Anything that differs between verticals or between businesses is configuration —
+a value, a row, or a token — never a name in shared schema or shared code.
+Shared/platform tables, columns, RLS policies, routes, and identifiers carry
+ZERO vertical nouns (nursery, shop, lawns, garden, etc.). Vertical identity
+exists only as a value in business_type. Vertical-specific nouns are permitted
+only inside that vertical's own package.
+
+**AC-2 — RLS is membership-scoped by default.**
+Every table's row-level security policy is scoped to business_id membership by
+default. Tenant isolation is enforced at the data layer, not only in client
+code. A looser policy is a deviation requiring a documented WHY.
+
+**AC-3 — Tenant isolation is absolute.**
+No query, resolver, or policy returns data for a business the current user is
+not a member of, across any vertical. Cross-vertical resolution returns
+no-access — never a wrong-vertical record.
+
+**AC-4 — Settle once, encode as variable, stop relitigating.**
+Structural design (spacing, type, sizing, validation, loading states) is shared
+across all surfaces. The only per-vertical variables are tokens (color) and
+configured vocabulary (size classes, lifecycle stages, business noun). Settled
+decisions are encoded as variables and executed against, not reopened.
+
+**Known open violations (from 2026-06-04 audit — work in progress):**
+- AC-1: `nursery_modules`, `nursery_profiles` table names (post-demo rename)
+- AC-1: `nurseryName` in `packages/shared/src/qr/print.ts` (do-now, small)
+- AC-1: `shopId`/`shop_id` in `packages/shared/src/ai/AIEngine.ts` (post-demo)
+- AC-2: Some RLS policies use `USING(true)` — documented as loose, post-demo tighten
+- AC-4: Cultivar green (#27500A) hardcoded as default in shared UI primitives (post-August 2026)
+See `docs/audits/platform-naming-vertical-leak-audit-2026-06-03.md` for full inventory.
+
+---
+
 ## 2. STATUS & ARCHITECTURE
 
 ### Key Contacts
