@@ -258,6 +258,35 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-04 — Platform naming & vertical-leak audit (read-only)
+
+**Type:** Read-only audit. No code or schema changes made. One doc written.
+
+**Report:** `docs/audits/platform-naming-vertical-leak-audit-2026-06-03.md`
+
+**Summary of findings (16 items, no critical-active bugs):**
+
+- **Finding #1 (HIGH):** `nursery_modules` table serves ALL verticals but is named for Cultivar. Already caused the `updated_at` bug (May 22). Post-demo: rename → `business_modules`.
+- **Finding #2 (HIGH):** `nursery_profiles` table should be `business_profiles` or `vertical_profiles`. Post-demo rename.
+- **Finding #5 (HIGH, do-now small):** `packages/shared/src/qr/print.ts` uses `nurseryName` parameter and `.nursery` CSS class. Rename to `businessName`/`.business-name`. One file, one call site.
+- **Finding #13 (HIGH, do-now small):** BusinessProvider member path does NOT filter by `business_type`. A Cultivar member logging into Ignition could receive a nursery business. Add `.eq('business_type', businessType)` filter to member path (or filter returned row). One clause.
+- **Finding #6 (MED):** `AIEngine.ts` all methods use `shopId`/`shop_id` parameter. Should be `businessId`. Post-demo rename.
+- **Finding #7 (MED, trivial):** Shared `Settings.tsx` line 316 placeholder is hardcoded "LAWNS Tree Farm, LLC". Replace with generic copy.
+- **Finding #8 (MED, trivial):** `DiscoveryGlimpse.tsx` lines 121 + 283 hardcode "Cultivar OS". Accept `productName` prop.
+- **Finding #15 (MED):** Shared UI primitives (Button, Badge, ProgressBar, AcceptInvite, Settings) default to Cultivar green `#27500A`. Post-August 2026 design token system per existing roadmap.
+- **Finding #14 (MED):** social/campaigns API handlers hardcode `nursery_modules` — correctly isolated in `cultivar-os/api/` today; fix when extracting to shared.
+- Low findings (#3, #4, #9, #10, #11, #12, #16): stale comments, cosmetic RLS policy names, dual demo env vars. All low blast radius.
+
+**Ignition loop root cause (confirmed):** The loop was the missing `setOnboardingDone(true)` in OWNER SYNC — fixed by commit `a419bb8`. The `business_type` string literals are correctly aligned on both sides (`'nursery'` ↔ `'nursery'`, `'shop'` ↔ `'shop'`). NOT a naming-leak issue.
+
+**Do-now fixes (all small):** Findings #5, #7, #8, #13 — each under 30 minutes. Highest-value single line: **Finding #13** (one filter clause in BusinessProvider member path).
+
+**No factual corrections surfaced** — all assertions in CLAUDE.md and related docs about the multi-tenant extraction and the Ignition loop fix are consistent with the code audit findings.
+
+**No runbook needed** — read-only audit session.
+
+---
+
 ### 2026-06-04 — Smoke-test fixes: per-vertical theming, new-owner demo path, discovery glimpse, Blotato abstraction
 
 **Branch:** `main` — all commits on main. Two commits this session: `fc36c9a` (Item 3) and `5b630e1` (Items 4a/4b/4c).
