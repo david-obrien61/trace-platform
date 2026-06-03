@@ -1189,6 +1189,139 @@ End of 2026-06-03 entry.
 
 ---
 
+## Wednesday 2026-06-03 — Family Compensation Structure and Role Casting
+
+Back-porch thinking that clarified the financial and role structure for TRACE as a family-built company. Capturing before the detail drifts.
+
+---
+
+### David's draw
+
+$4,000/month. Intentional cap, not aspirational placeholder. TRACE isn't being built to make millions — it's being built to cover specific expenses and leave a multi-generational ownership structure. The number is honest.
+
+Annualized: $48K/year from TRACE. Supplemented by other income streams as they develop. Not a hardship number, not a lottery number.
+
+---
+
+### Each kid targets approximately $90K/year billing
+
+Structure: each kid runs their own business that invoices TRACE. TRACE pays the invoices. Each kid handles their own taxes through their own entity (LLC, S-corp, sole proprietor — their choice, their problem).
+
+Why this structure:
+- TRACE carries no payroll overhead — no W-2 administration, no withholding, no benefits coordination
+- Tax responsibility sits with each person's entity, not with TRACE
+- Scales without HR complexity as family builds out
+- $90K/year is honest — respectable living, not a millionaire pitch, not an insult
+
+Revenue math: three kids at $90K ($270K total) plus David's $48K plus operational costs puts TRACE's break-even around $400–500K annual revenue. At $149–199/month per customer, that's 200–300 paying customers. Achievable over 18–24 months in realistic acquisition scenarios. Not a hockey stick, not a lottery.
+
+---
+
+### Andrew as the natural salesperson
+
+Andrew is the extrovert among the kids — talks to anyone, comfortable in conversation, effective in customer-facing settings. He's the natural choice for prospect development work.
+
+Potential Andrew role structure:
+- Base retainer for ongoing prospect development
+- Per-meeting fee for in-person sales calls
+- Per-signed-customer bonus
+- MicroGrant Sniper work as a separate billing stream (his own product, not TRACE's — TRACE is a customer)
+
+With reasonable TRACE acquisition pace, his annual could legitimately reach $90K through this structure.
+
+Noted: Andrew currently uses Gemini because he can't afford Claude. If TRACE pays for family contractor Claude subscriptions ($20–100/month per person), that's worth doing as a business expense. Removes friction in their work. The compounding return on better tooling for people building TRACE is higher than the subscription cost.
+
+---
+
+### Erin in customer service and structured discovery
+
+Erin is more introverted — functional in controlled social settings, not a cold prospector. Scheduled discovery calls, structured demos, and ongoing customer relationship management are likely fits. Cold outreach probably is not.
+
+Compensation TBD when she's home (June 29+). Three structures considered:
+
+**Option A — Pure hourly** ($60–75/hr): Clean, no incentive warping, lower psychological pressure for someone in burnout recovery.
+
+**Option B — Hourly plus signing bonus** ($60–75/hr plus $500–1,000 per signed customer she facilitated): Rewards outcomes without requiring aggressive sales behavior.
+
+**Option C — Percentage of sales**: Risk is behavioral warping — pressure on wrong prospects, focus on easy closes over strategic ones, potential to burn customer relationships.
+
+Leaning toward Option B as the middle ground. Avoids pure-commission pressure while connecting compensation to outcomes. Final structure is a conversation with Erin directly, based on her preferences and where she is in burnout recovery.
+
+---
+
+### Connor in technical and infrastructure
+
+Connor is introverted, currently at HD pursuing Kubernetes certification. His natural zone is bounded technical work, not customer interaction. Right role for him: infrastructure, DevOps, technical architecture.
+
+Compensation: contractor rate, specific work assignments, invoiced like the others. His $90K target is competitive with his current HD salary. No pressure to leave before he's ready — but the door is open.
+
+---
+
+### David as introvert founder
+
+David is an extreme introvert. Roles that fit: strategy, operations, technical direction, relationship management with key customers in controlled/structured settings. Roles that don't fit: cold sales, trade show booth, networking with strangers.
+
+This is honest casting, not a deficit acknowledgment. Most family businesses fail by casting people in roles that don't fit their nature. TRACE is positioned to do the opposite — each person in the role that fits their wiring, no one pushed into roles that require faking who they are.
+
+---
+
+### Regina as separate from TRACE operations
+
+Regina is the household extrovert (inherited from her dad). She has her OLH work, which uses that capacity productively. Her TRACE contribution isn't operational — it's surfacing real customer pain from lived experience.
+
+The roofer scheduling problem came from a porch conversation, not a focus group. Regina asking "why isn't this solved?" and David evaluating it strategically is a genuine division of labor. She provides ground-truth customer perspective. He filters it through TRACE's vertical strategy. That's worth more than pulling her out of OLH to do customer calls.
+
+TRACE doesn't need to recruit Regina away from her work. Her contribution happens naturally through conversations like the back-porch sessions.
+
+---
+
+### The family-as-builders pattern
+
+Worth naming that this is genuinely unusual. Most family businesses are one of three patterns:
+
+- **Family-by-default**: Kids work in it because they grew up in it, often resentfully
+- **Family-as-management**: Family runs it, non-family operates it
+- **Family-as-investment**: Family owns it, professionals run it, family collects distributions
+
+What TRACE is building is **family-as-builders**. Each kid runs their own business that interfaces with TRACE through invoicing. Each person's business focuses on what they're naturally good at. Family relationships stay personal. Business relationships stay professional — the invoice/payment interface creates clean accountability without requiring family conflict to enforce it.
+
+This is rare. Most family businesses either blur personal and professional completely (and pay the relationship cost) or professionalize so heavily that family connection is irrelevant. The invoice structure threads that needle.
+
+---
+
+### Honest enforcement requirement
+
+This structure requires more discipline than alternatives. Each kid has to be honestly evaluated as a contractor — not included as family, not protected from accountability because of relationship.
+
+If someone's work isn't producing $90K of value to TRACE, they don't get paid $90K from TRACE. That conversation might never be needed — the kids sound capable and motivated. But the structure has to be honest enough to have it if it comes up.
+
+Invoice-based payment handles this without drama: an invoice represents specific work delivered. If the work isn't delivered, the invoice doesn't get paid. No performance review conversation required. Clean.
+
+---
+
+### Connection to existing TRACE principles
+
+- **Covenant**: Non-extractive defaults extend to family. Kids aren't being used; they're being paid honestly for honest work.
+- **Operating doctrine**: Each person in the role that fits their wiring, not the role someone assumes they should have.
+- **Multi-generational structure**: Family ownership designed to prevent leadership-change dismantlement; family compensation designed to be sustainable across generations.
+- **"If I make you successful, I'm ultimately successful"**: Applies internally as well as to customers. Kids' success is TRACE's success.
+
+---
+
+### Open items for resolution
+
+- Erin's compensation structure: conversation when she's home June 29
+- Andrew's role formalization: conversation about August Liberty Hill rep possibility while David is in Europe
+- TRACE business profile for Andrew's MicroGrant Sniper JSON: needs writing
+- Family Claude subscriptions as TRACE business expense: decision pending
+- Customer acquisition pace projections: need to model 200–300 customers over 18–24 months realistically
+
+---
+
+End of Wednesday 2026-06-03 — Family Compensation Structure and Role Casting entry.
+
+---
+
 ## 2026-06-01 — Comprehensive operating thesis (foundational document)
 
 After three days of substantive strategic conversation, capturing the full operating thesis for TRACE Enterprises as Claude understands it. Long-form deliberately. Future Claude conversations should be able to read this and operate from sound ground without David re-explaining context. Compression to a six-line version can happen later (Colonel Binder discipline) — for now, capture comprehensively.
