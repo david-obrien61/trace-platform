@@ -4,11 +4,11 @@ import React, { useEffect, useState } from 'react';
 //
 // HOW IT WORKS:
 //   1. Reads ?token= from current URL search params.
-//   2. Calls GET {apiBase}/api/members/preview-invite?token={token}
+//   2. Calls GET {apiBase}/api/members/invite?token={token}
 //      to validate the token and get the business name (unauthenticated).
 //   3. Shows a "Join {Business Name}" form: email + password.
 //      If ?email= is pre-populated in the URL, it pre-fills the field.
-//   4. On submit: calls POST {apiBase}/api/members/accept-invite
+//   4. On submit: calls POST {apiBase}/api/members/invite
 //      Body: { token, email, password }
 //   5. On success: signs the new user in, redirects to onRedirectTo.
 //
@@ -21,9 +21,8 @@ import React, { useEffect, useState } from 'react';
 // VERTICAL INTEGRATION:
 //   - Add a route at the path your invite links point to (e.g. /join or /accept)
 //   - Render <AcceptInvite apiBase="" onRedirectTo="/dashboard" supabaseSignIn={auth.signIn} />
-//   - Create two Vercel functions:
-//       GET  api/members/preview-invite.ts  (calls previewInvitation from shared)
-//       POST api/members/accept-invite.ts   (calls acceptInvitation from shared)
+//   - Create one Vercel function:
+//       api/members/invite.ts  (GET → previewInvitation, POST → acceptInvitation from shared)
 //   - See packages/shared/auth/README.md for the full API contract.
 
 interface Props {
@@ -62,7 +61,7 @@ export function AcceptInvite({ apiBase = '', onRedirectTo, supabaseSignIn, navig
       return;
     }
 
-    fetch(`${apiBase}/api/members/preview-invite?token=${encodeURIComponent(token)}`)
+    fetch(`${apiBase}/api/members/invite?token=${encodeURIComponent(token)}`)
       .then(r => r.json())
       .then((data: { valid: boolean; businessName?: string; invitedName?: string; role?: string; reason?: string }) => {
         if (!data.valid) {
@@ -103,7 +102,7 @@ export function AcceptInvite({ apiBase = '', onRedirectTo, supabaseSignIn, navig
     setPhase('submitting');
 
     try {
-      const res = await fetch(`${apiBase}/api/members/accept-invite`, {
+      const res = await fetch(`${apiBase}/api/members/invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, email, password }),

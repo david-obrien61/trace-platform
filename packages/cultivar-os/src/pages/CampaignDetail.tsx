@@ -83,10 +83,11 @@ export function CampaignDetail() {
     setPublishingId(post.id);
     setPublishError(prev => ({ ...prev, [post.id]: '' }));
     try {
-      const resp = await fetch('/api/campaigns/publish-post', {
+      const resp = await fetch('/api/campaigns', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action:      'publish-post',
           postId:      post.id,
           businessId,
           editedCopy:  post.edited_copy ?? null,
@@ -108,10 +109,11 @@ export function CampaignDetail() {
     if (!campaign || !businessId) return;
     setGenerating(true);
     try {
-      const resp = await fetch('/api/campaigns/generate', {
+      const resp = await fetch('/api/campaigns', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'generate',
           businessId,
           campaign: {
             name:            campaign.name,

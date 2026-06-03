@@ -74,10 +74,10 @@ export function Campaigns() {
     setGenerating(true);
     setGenError('');
     try {
-      const resp = await fetch('/api/campaigns/generate', {
+      const resp = await fetch('/api/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ businessId, campaign: { ...form } }),
+        body: JSON.stringify({ action: 'generate', businessId, campaign: { ...form } }),
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error ?? 'Generation failed');
