@@ -21,6 +21,8 @@ export interface OwnerSignupConfig {
   businessType: string;          // stored in businesses.business_type
   logo?: string;                  // emoji or image URL shown at top
   primaryColor?: string;          // defaults to TRACE green
+  backgroundColor?: string;       // defaults to Cultivar sage (#EAF3DE)
+  cardColor?: string;             // defaults to white (#fff)
   pinLength?: number;             // defaults to 4
   memberTable: 'business_members' | 'shop_members';
   memberFKColumn: 'business_id' | 'shop_id';
@@ -30,6 +32,10 @@ export interface OwnerSignupConfig {
   collectPhone?: boolean;         // default true
   collectAddress?: boolean;       // default true
   collectWebsite?: boolean;       // default true
+  examples?: {
+    businessName?: string;        // placeholder for business name input
+    address?: string;             // placeholder for address input
+  };
   verticalSteps?: VerticalStep[]; // optional steps after biometric
   onSuccess: (businessId: string, memberId: string) => void;
 }
@@ -62,6 +68,8 @@ export function OwnerSignup({ config, navigate }: Props) {
     businessType,
     logo = '🏢',
     primaryColor = DEFAULT_GREEN,
+    backgroundColor = BG,
+    cardColor = '#fff',
     pinLength = 4,
     memberTable,
     memberFKColumn,
@@ -71,6 +79,7 @@ export function OwnerSignup({ config, navigate }: Props) {
     collectPhone  = true,
     collectAddress = true,
     collectWebsite = true,
+    examples = {},
     verticalSteps = [],
     onSuccess,
   } = config;
@@ -356,14 +365,14 @@ export function OwnerSignup({ config, navigate }: Props) {
   return (
     <div style={{
       minHeight: '100vh',
-      background: BG,
+      background: backgroundColor,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       padding: '24px 16px',
     }}>
       <div style={{
-        background: '#fff',
+        background: cardColor,
         borderRadius: 16,
         padding: '32px 28px',
         width: '100%',
@@ -401,7 +410,7 @@ export function OwnerSignup({ config, navigate }: Props) {
             <Field label={`${businessLabel.charAt(0).toUpperCase() + businessLabel.slice(1)} name`}>
               <input style={inputStyle} type="text" value={businessName}
                 onChange={e => setBusinessName(e.target.value)} required
-                placeholder={`e.g. LAWNS Tree Farm`} />
+                placeholder={examples.businessName ?? 'e.g. Your Business Name'} />
             </Field>
 
             <Field label="Your name">
@@ -440,7 +449,7 @@ export function OwnerSignup({ config, navigate }: Props) {
               <Field label="Address (optional)">
                 <input style={inputStyle} type="text" value={address}
                   onChange={e => setAddress(e.target.value)}
-                  placeholder="400 Honeycomb Mesa, Leander TX" />
+                  placeholder={examples.address ?? '123 Main St, Austin TX'} />
               </Field>
             )}
 

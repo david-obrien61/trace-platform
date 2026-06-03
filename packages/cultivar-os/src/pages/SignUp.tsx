@@ -15,6 +15,10 @@ const cultivarConfig: OwnerSignupConfig = {
   collectPhone:    true,
   collectAddress:  true,
   collectWebsite:  true,
+  examples: {
+    businessName: 'e.g. LAWNS Tree Farm',
+    address:      '400 Honeycomb Mesa, Leander TX',
+  },
   onSuccess:       (_businessId, _memberId) => {
     // onSuccess fires after PIN setup + optional biometric.
     // BusinessProvider will resolve the businesses row via auth.uid() on next render.

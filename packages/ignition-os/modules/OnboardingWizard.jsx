@@ -82,6 +82,8 @@ const ignitionSignupConfig = {
   businessType:     'shop',
   logo:             '⚡',
   primaryColor:     '#22c55e',
+  backgroundColor:  '#020617',
+  cardColor:        '#0f172a',
   pinLength:        4,
   memberTable:      'shop_members',
   memberFKColumn:   'shop_id',
@@ -91,6 +93,10 @@ const ignitionSignupConfig = {
   collectPhone:     true,
   collectAddress:   true,
   collectWebsite:   false,
+  examples: {
+    businessName: "e.g. Dave's Auto Shop",
+    address:      '123 Commerce Dr, Austin TX',
+  },
 };
 
 export default function OnboardingWizard({ onComplete }) {
