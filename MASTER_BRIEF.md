@@ -88,6 +88,8 @@ Replace paper, gut-feel pricing, and lost margin with AI-native workflows — fo
 
 **Rule:** Never lead with the platform story to a business owner. Lead with the dollar they're losing today.
 
+**The structural foundation:** The platform is vertical-agnostic by construction — variation lives in data, never in schema. This is what lets a new vertical drop in without a migration, and it is the structural expression of the non-extractive, multi-vertical thesis. See PLATFORM_STRATEGY.md § Architecture Constants for the full design invariants.
+
 ---
 
 ## PART 1.5 — THE OPERATING MODEL

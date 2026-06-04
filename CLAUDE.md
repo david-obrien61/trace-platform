@@ -44,42 +44,19 @@ instance of the same shared platform.
 
 ---
 
-## 1.5. ARCHITECTURE CONSTANTS (Design Invariants)
+## 1.5. ARCHITECTURE CONSTANTS (Enforcement Hook)
 
-Non-negotiable platform invariants, checked before any schema, RLS policy,
-route, or shared-code change. Deviation requires a documented WHY — inline at
-the point of deviation AND a dated entry in the Exception Log in PLATFORM_STRATEGY.md.
+Full text lives ONLY in PLATFORM_STRATEGY.md § Architecture Constants. Check it before any schema, RLS, route, or shared-identifier change. One-line summaries for quick reference:
 
-**AC-1 — Variation lives in data, not schema.**
-Anything that differs between verticals or between businesses is configuration —
-a value, a row, or a token — never a name in shared schema or shared code.
-Shared/platform tables, columns, RLS policies, routes, and identifiers carry
-ZERO vertical nouns (nursery, shop, lawns, garden, etc.). Vertical identity
-exists only as a value in business_type. Vertical-specific nouns are permitted
-only inside that vertical's own package.
+- **AC-1:** No vertical nouns in shared schema/code. Vertical identity is a value (`business_type`), never a table name, column, or identifier.
+- **AC-2:** RLS scoped to `business_id` membership by default. Looser policy requires WHY + Exception Log entry in PLATFORM_STRATEGY.md.
+- **AC-3:** Tenant isolation absolute — cross-vertical resolution returns no-access, never a wrong-vertical record.
+- **AC-4:** Structural design shared; only tokens (color) and vocabulary vary per vertical.
 
-**AC-2 — RLS is membership-scoped by default.**
-Every table's row-level security policy is scoped to business_id membership by
-default. Tenant isolation is enforced at the data layer, not only in client
-code. A looser policy is a deviation requiring a documented WHY.
-
-**AC-3 — Tenant isolation is absolute.**
-No query, resolver, or policy returns data for a business the current user is
-not a member of, across any vertical. Cross-vertical resolution returns
-no-access — never a wrong-vertical record.
-
-**AC-4 — Settle once, encode as variable, stop relitigating.**
-Structural design (spacing, type, sizing, validation, loading states) is shared
-across all surfaces. The only per-vertical variables are tokens (color) and
-configured vocabulary (size classes, lifecycle stages, business noun). Settled
-decisions are encoded as variables and executed against, not reopened.
-
-**Known open violations (from 2026-06-04 audit — work in progress):**
-- AC-1: `nursery_modules`, `nursery_profiles` table names (post-demo rename)
-- AC-1: `nurseryName` in `packages/shared/src/qr/print.ts` (do-now, small)
-- AC-1: `shopId`/`shop_id` in `packages/shared/src/ai/AIEngine.ts` (post-demo)
-- AC-2: Some RLS policies use `USING(true)` — documented as loose, post-demo tighten
-- AC-4: Cultivar green (#27500A) hardcoded as default in shared UI primitives (post-August 2026)
+**Known open violations (audit 2026-06-04 — tracked in Active Tasks §Noun Purge):**
+- AC-1: `nursery_modules`, `nursery_profiles` table names · `nurseryName` in `qr/print.ts` · `shopId`/`shop_id` in `AIEngine.ts`
+- AC-2: Some RLS policies are `USING(true)` — documented intentional, post-demo tighten
+- AC-4: Cultivar green `#27500A` default in shared UI primitives (post-August 2026)
 See `docs/audits/platform-naming-vertical-leak-audit-2026-06-03.md` for full inventory.
 
 ---
@@ -297,6 +274,27 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-04 — Docs propagation: Architecture Constants + Noun Purge task
+
+**Type:** Docs-only. No code or schema changes. Three files edited.
+
+**What changed:**
+- `PLATFORM_STRATEGY.md`: Architecture Constants section already present (committed `0d0935e`); confirmed as the single source of full AC text. ✅
+- `CLAUDE.md §1.5`: Trimmed from full-text copy to enforcement hook only. Known violations list kept here for quick-reference per session. Full text lives only in PLATFORM_STRATEGY.md.
+- `CLAUDE.md Part 9`: Added step 13 — Architecture-constants compliance check (mandatory end-of-session gate for all schema/RLS/shared-identifier changes).
+- `CLAUDE.md Part 4`: Added §Noun Purge task block — four AC-1 items to execute as a set before KINNA/Conduit build: `nursery_modules→business_modules`, `nursery_profiles→business_profiles`, AIEngine `shopId→businessId`, `qr/print.ts nurseryName→businessName`.
+- `MASTER_BRIEF.md`: Added "The structural foundation" line after investor pitch — one sentence bridging to PLATFORM_STRATEGY.md § Architecture Constants; no full-text copy.
+
+**Consistency check:** `grep -c "AC-1 — Variation lives in data"` → CLAUDE.md: 0, MASTER_BRIEF.md: 0, PLATFORM_STRATEGY.md: 1. No triplication. ✅
+
+**No factual corrections surfaced** — no doc previously asserted vertical-named shared tables were acceptable architecture; the tables exist as acknowledged tech debt, not as intentional design.
+
+**No runbook needed** — pure docs session.
+
+**AC compliance (step 13):** No AC compliance issues — session did not touch shared schema, RLS, or shared identifiers.
+
+---
 
 ### 2026-06-04 — Security fix: cross-vertical member resolution (audit #13)
 
@@ -1326,6 +1324,18 @@ Completed:
 - [ ] Customer follow-up engine
 - [ ] Mobile responsive fix (tile grid desktop only)
 
+### 🟡 NOUN PURGE (AC-1 compliance — before KINNA/Conduit build)
+
+One deliberate migration session to close the AC-1 violations. Do as a set, not piecemeal.
+See audit findings #1, #2, #6 in `docs/audits/platform-naming-vertical-leak-audit-2026-06-03.md`.
+
+- [ ] `nursery_modules` → `business_modules` (migration + update 5 API files in cultivar-os/api/)
+- [ ] `nursery_profiles` → `business_profiles` (migration + update OnboardingWizard + Settings consumers)
+- [ ] `AIEngine.ts` — rename `shopId`/`shop_id` → `businessId`/`business_id` across all 9 public methods;
+      update 3 Ignition modules that import these (IgnitionAudit, IgnitionCipher, PredictiveKey)
+- [ ] `packages/shared/src/qr/print.ts` — rename `nurseryName` → `businessName`, `.nursery` CSS class → `.business-name`;
+      update one call site in Cultivar PlantProfile (audit finding #5 — do-now small)
+
 ### 🟢 POST-DEMO (Phase 1 — after signing)
 
 - [ ] Settings page: Lauren can set default install price at nursery level
@@ -1516,6 +1526,18 @@ MANDATORY before ending every session:
    If the session was purely code changes (no environment/deployment/infrastructure work), state "No runbook needed — pure code session" and skip.
 
    This step is mandatory for setup operations and the session is not complete until either a runbook exists or the no-runbook-needed declaration is made.
+
+13. **Architecture-constants compliance check** — Before closing, confirm:
+   - No new vertical nouns were introduced in `packages/shared/**` or any DB migration serving multiple verticals (AC-1).
+   - Any RLS policy deviation has a WHY documented inline AND an entry in the PLATFORM_STRATEGY.md Exception Log (AC-2).
+   - No cross-vertical data path was opened without an explicit isolation check (AC-3).
+   - Any new per-vertical variable is a token or vocabulary item, not a structural deviation (AC-4).
+
+   If a violation was introduced intentionally (time-pressure workaround), add it to the Known Open Violations list in CLAUDE.md §1.5 with a remediation trigger.
+
+   If the session did not touch shared schema, shared code, or RLS policies, state: "No AC compliance issues — session did not touch shared schema, RLS, or shared identifiers."
+
+   This step is mandatory. The session is not complete until the compliance check is answered explicitly.
 
 ---
 
