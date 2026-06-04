@@ -77,6 +77,8 @@ async function createIgnitionShopAndSeedDataBridge(businessId, memberId, shopNam
   }
 }
 
+const AUTH_DEBUG = true; // [AUTH-TRACE] gate — set false after diagnosis
+
 const ignitionSignupConfig = {
   businessLabel:    'shop',
   businessType:     'shop',
@@ -101,7 +103,102 @@ const ignitionSignupConfig = {
   debugAuth:        AUTH_DEBUG,
 };
 
-const AUTH_DEBUG = true; // [AUTH-TRACE] gate — set false after diagnosis
+// Returning-owner sign-in. Built local to Ignition — should be extracted to
+// packages/shared/src/auth/ before a second vertical needs this flow.
+const SignInScreen = ({ onBack }) => {
+  const [email,    setEmail]    = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [loading,  setLoading]  = React.useState(false);
+  const [error,    setError]    = React.useState('');
+
+  const handleSignIn = async (e) => {
+    e.preventDefault();
+    if (!email.trim() || !password) { setError('Email and password are required.'); return; }
+    setLoading(true);
+    setError('');
+    if (AUTH_DEBUG) console.log('[AUTH-TRACE] SignInScreen: attempting signInWithPassword', { email: email.trim() });
+
+    const { data, error: authErr } = await supabase.auth.signInWithPassword({
+      email:    email.trim(),
+      password,
+    });
+
+    if (authErr || !data?.user) {
+      if (AUTH_DEBUG) console.log('[AUTH-TRACE] SignInScreen: FAILED', { error: authErr?.message });
+      setError(authErr?.message ?? 'Sign-in failed — check your email and password.');
+      setLoading(false);
+      return;
+    }
+
+    if (AUTH_DEBUG) console.log('[AUTH-TRACE] SignInScreen: auth SUCCESS — verifying shop business…', { userId: data.user.id });
+
+    const { data: biz } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('owner_id', data.user.id)
+      .eq('business_type', 'shop')
+      .maybeSingle();
+
+    if (!biz) {
+      if (AUTH_DEBUG) console.log('[AUTH-TRACE] SignInScreen: no shop found — signing out');
+      await supabase.auth.signOut();
+      setError('No shop found for this account. Use "Get started →" to create a new one.');
+      setLoading(false);
+      return;
+    }
+
+    if (AUTH_DEBUG) console.log('[AUTH-TRACE] SignInScreen: shop found', biz.id, '— waiting for OWNER SYNC to exit wizard');
+    // Stay loading — BusinessProvider.onAuthStateChange → resolve() → owner lookup →
+    // OWNER SYNC in CoreApp → setOnboardingDone(true) → wizard unmounts automatically.
+  };
+
+  return (
+    <div style={wrap}>
+      <div style={card}>
+        <p style={{ fontSize: '0.75rem', color: '#22c55e', fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 16 }}>IGNITION OS</p>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 900, color: '#f1f5f9', marginBottom: 8, lineHeight: 1.2 }}>Welcome back</h2>
+        <p style={{ fontSize: '0.9rem', color: '#94a3b8', marginBottom: 28, lineHeight: 1.6 }}>
+          Sign in with the email and password you used when setting up your shop.
+        </p>
+        <form onSubmit={handleSignIn} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.85rem', fontWeight: 600, color: '#cbd5e1' }}>
+            Email
+            <input
+              type="email" value={email}
+              onChange={e => { setEmail(e.target.value); setError(''); }}
+              placeholder="you@example.com" required autoComplete="email"
+              style={{ padding: '12px 14px', border: '1.5px solid #334155', borderRadius: 8, fontSize: '1rem', fontFamily: 'inherit', outline: 'none', background: '#1e293b', color: '#f1f5f9', boxSizing: 'border-box', width: '100%' }}
+            />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.85rem', fontWeight: 600, color: '#cbd5e1' }}>
+            Password
+            <input
+              type="password" value={password}
+              onChange={e => { setPassword(e.target.value); setError(''); }}
+              placeholder="Your password" required autoComplete="current-password"
+              style={{ padding: '12px 14px', border: '1.5px solid #334155', borderRadius: 8, fontSize: '1rem', fontFamily: 'inherit', outline: 'none', background: '#1e293b', color: '#f1f5f9', boxSizing: 'border-box', width: '100%' }}
+            />
+          </label>
+          {error && (
+            <p style={{ color: '#f87171', fontSize: '0.85rem', textAlign: 'center', margin: 0 }}>{error}</p>
+          )}
+          <button
+            type="submit" disabled={loading}
+            style={{ ...BTN_PRIMARY, opacity: loading ? 0.7 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
+          >
+            {loading ? 'Signing in…' : 'Sign in →'}
+          </button>
+          <button
+            type="button" onClick={onBack}
+            style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.9rem', cursor: 'pointer', padding: '8px 0', fontFamily: 'inherit', width: '100%', textAlign: 'center' }}
+          >
+            ← New to Ignition OS? Get started
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
 
 export default function OnboardingWizard({ onComplete }) {
   const [step,         setStep]         = useState('WELCOME');
@@ -135,6 +232,10 @@ export default function OnboardingWizard({ onComplete }) {
     },
   };
 
+  if (step === 'SIGNIN') return (
+    <SignInScreen onBack={() => setStep('WELCOME')} />
+  );
+
   if (step === 'WELCOME') return (
     <div style={wrap}>
       <div style={card}>
@@ -164,9 +265,9 @@ export default function OnboardingWizard({ onComplete }) {
           if (AUTH_DEBUG) console.log('[AUTH-TRACE] navigate() prop received →', {
             path,
             wizardStep: step,
-            action: path === '/' ? 'setStep(WELCOME)' : 'no-op (unhandled path)',
+            action: path === '/' ? 'setStep(SIGNIN)' : 'no-op (unhandled path)',
           });
-          if (path === '/') setStep('WELCOME');
+          if (path === '/') setStep('SIGNIN');
         }}
       />
     );
