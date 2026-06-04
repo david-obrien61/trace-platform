@@ -131,23 +131,6 @@ export function useSubmitOrder() {
         tenantId: businessId,
       });
 
-      // ── Social post generation — non-blocking ────────────────────────────
-      fetch('/api/social/generate-posts', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          business_id:         businessId,
-          order_id:            orderId,
-          plant_species:       plant.species,
-          plant_common_name:   plant.common_name ?? undefined,
-          plant_container:     plant.current_container,
-          customer_first_name: customer.first_name,
-          addons_purchased:    services
-            .filter(s => s.selected)
-            .map(s => s.offering.name),
-        }),
-      }).catch(() => {});
-
       return { orderId, invoiceNumber, total, subtotal, taxAmount, qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus };
 
     } catch (err) {

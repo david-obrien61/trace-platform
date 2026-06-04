@@ -11,7 +11,7 @@ import { Tile } from '@trace/shared/components/tiles/Tile';
 // Configurable — will move to verticalConfig post-demo
 const LEAKAGE_AVG_VALUE = 28;
 
-const SM_DEBUG = true; // flip to true to re-enable [SM-TRACE] diagnostics
+const SM_DEBUG = false; // flip to true to re-enable [SM-TRACE] diagnostics
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -59,10 +59,18 @@ function SkeletonCard() {
   return <div className="skeleton" style={{ flex: 1, minWidth: 0, height: 88, borderRadius: 12 }} />;
 }
 
-const POST_TYPE_LABELS: Record<string, string> = {
-  educational:    'Educational',
-  customer_story: 'Customer Story',
-  seasonal:       'Seasonal',
+const PLATFORM_LABELS: Record<string, string> = {
+  instagram: 'Instagram',
+  facebook:  'Facebook',
+  tiktok:    'TikTok',
+  twitter:   'Twitter / X',
+};
+
+const PLATFORM_URLS: Record<string, string> = {
+  instagram: 'https://www.instagram.com/',
+  facebook:  'https://www.facebook.com/',
+  tiktok:    'https://www.tiktok.com/',
+  twitter:   'https://x.com/',
 };
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -86,14 +94,17 @@ export function Dashboard() {
     id: string;
     post_type: string | null;
     content: string | null;
+    original_text: string | null;
+    edited_text: string | null;
     platform: string;
   }
 
-  const [socialDrafts, setSocialDrafts]       = useState<SocialDraft[]>([]);
+  const [socialDrafts, setSocialDrafts]           = useState<SocialDraft[]>([]);
   const [campaignDraftCount, setCampaignDraftCount] = useState(0);
-  const [publishingId, setPublishingId]       = useState<string | null>(null);
-  const [publishedIds, setPublishedIds]       = useState<Set<string>>(new Set());
-  const [comingSoonMsg, setComingSoonMsg]     = useState<string | null>(null);
+  const [draftEdits, setDraftEdits]               = useState<Record<string, string>>({});
+  const [copiedId, setCopiedId]                   = useState<string | null>(null);
+  const [generatingPosts, setGeneratingPosts]     = useState(false);
+  const [comingSoonMsg, setComingSoonMsg]         = useState<string | null>(null);
 
   const [qbConnected, setQbConnected]         = useState(false);
   const [qbCompany, setQbCompany]             = useState('');
@@ -180,33 +191,57 @@ export function Dashboard() {
   async function loadSocialDrafts() {
     const { data } = await supabase
       .from('social_drafts')
-      .select('id, post_type, content, platform')
+      .select('id, post_type, content, original_text, edited_text, platform')
       .eq('business_id', businessId!)
       .eq('status', 'draft')
       .order('created_at', { ascending: true });
     setSocialDrafts((data as SocialDraft[]) ?? []);
   }
 
-  async function handlePublish(draftId: string) {
-    setPublishingId(draftId);
+  async function handleSaveEdit(draftId: string, text: string) {
+    await supabase
+      .from('social_drafts')
+      .update({ edited_text: text })
+      .eq('id', draftId);
+  }
+
+  function handleCopyCaption(draftId: string, text: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedId(draftId);
+      setTimeout(() => setCopiedId(prev => prev === draftId ? null : prev), 2000);
+    }).catch(() => {
+      // Fallback for older browsers
+      const el = document.createElement('textarea');
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopiedId(draftId);
+      setTimeout(() => setCopiedId(prev => prev === draftId ? null : prev), 2000);
+    });
+  }
+
+  async function handleMarkPosted(draftId: string) {
+    await supabase
+      .from('social_drafts')
+      .update({ status: 'published' })
+      .eq('id', draftId);
+    setSocialDrafts(prev => prev.filter(d => d.id !== draftId));
+  }
+
+  async function handleGeneratePosts() {
+    if (!businessId || generatingPosts) return;
+    setGeneratingPosts(true);
     try {
-      const res = await fetch('/api/social/publish', {
+      const res = await fetch('/api/social/generate-posts', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ draft_id: draftId }),
+        body:    JSON.stringify({ business_id: businessId }),
       });
-      const data = await res.json();
-      if (data.ok) {
-        setPublishedIds(prev => new Set([...prev, draftId]));
-        setSocialDrafts(prev => prev.filter(d => d.id !== draftId));
-      } else {
-        console.warn('[publish] failed:', data.reason);
-      }
-    } catch (err) {
-      console.warn('[publish] fetch error:', err);
-    } finally {
-      setPublishingId(null);
-    }
+      if (res.ok) await loadSocialDrafts();
+    } catch { /* non-fatal */ }
+    finally { setGeneratingPosts(false); }
   }
 
   // ── QB helpers ────────────────────────────────────────────────────────────
@@ -679,25 +714,50 @@ export function Dashboard() {
         </section>
 
         {/* ── Social Drafts ── */}
-        {socialDrafts.length > 0 && (
+        {(socialDrafts.length > 0 || modules.find(m => m.key === 'social_media')?.state === 'active') && (
           <section style={{ marginTop: '0.5rem' }}>
-            <h2 style={{
-              fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.1em',
-              color: 'var(--gray-400, #9ca3af)', textTransform: 'uppercase',
-              margin: '0 0 1rem',
-            }}>
-              Social Media — Ready to Publish
-            </h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {socialDrafts.map(draft => (
-                <div key={draft.id} style={{
-                  background: '#fff',
-                  border: '1.5px solid #e5e7eb',
-                  borderRadius: 12,
-                  padding: '14px 16px',
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={{
+                fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.1em',
+                color: 'var(--gray-400, #9ca3af)', textTransform: 'uppercase',
+                margin: 0,
+              }}>
+                Social Media — Ready to Post
+              </h2>
+              <button
+                onClick={handleGeneratePosts}
+                disabled={generatingPosts}
+                style={{
+                  background: generatingPosts ? '#e5e7eb' : 'var(--green-primary)',
+                  color: generatingPosts ? 'var(--gray-600)' : '#fff',
+                  border: 'none', borderRadius: 8,
+                  padding: '7px 14px',
+                  fontSize: '0.8125rem', fontWeight: 600,
+                  cursor: generatingPosts ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {generatingPosts ? 'Generating…' : 'Generate this week\'s posts'}
+              </button>
+            </div>
+            {socialDrafts.length === 0 && (
+              <p style={{ fontSize: '0.875rem', color: 'var(--gray-400)', textAlign: 'center', padding: '20px 0' }}>
+                No drafts yet. Generate posts from your week's sales.
+              </p>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {socialDrafts.map(draft => {
+                const displayText = draftEdits[draft.id] ?? draft.edited_text ?? draft.content ?? '';
+                const platformLabel = PLATFORM_LABELS[draft.platform] ?? draft.platform;
+                const platformUrl   = PLATFORM_URLS[draft.platform];
+                return (
+                  <div key={draft.id} style={{
+                    background: '#fff',
+                    border: '1.5px solid #e5e7eb',
+                    borderRadius: 12,
+                    padding: '14px 16px',
+                  }}>
+                    {/* Platform chip */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                       <span style={{
                         display: 'inline-block',
                         background: 'var(--sage-bg, #EAF3DE)',
@@ -705,38 +765,76 @@ export function Dashboard() {
                         fontSize: '0.6875rem', fontWeight: 700,
                         letterSpacing: '0.06em', textTransform: 'uppercase',
                         padding: '2px 8px', borderRadius: 6,
-                        marginBottom: 8,
                       }}>
-                        {POST_TYPE_LABELS[draft.post_type ?? ''] ?? draft.post_type ?? 'Post'}
+                        {platformLabel}
                       </span>
-                      <p style={{
-                        fontSize: '0.875rem', color: 'var(--gray-800, #1f2937)',
-                        lineHeight: 1.5, margin: 0,
-                        display: '-webkit-box', WebkitLineClamp: 3,
-                        WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                      }}>
-                        {draft.content}
-                      </p>
+                      <button
+                        onClick={() => handleMarkPosted(draft.id)}
+                        style={{
+                          background: 'none', border: 'none',
+                          fontSize: '0.75rem', color: 'var(--gray-400)',
+                          cursor: 'pointer', padding: '2px 0',
+                        }}
+                      >
+                        Mark as posted ✓
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handlePublish(draft.id)}
-                      disabled={publishingId === draft.id}
+
+                    {/* Editable caption */}
+                    <p style={{ fontSize: '0.6875rem', color: 'var(--gray-400)', marginBottom: 6 }}>
+                      Here's our best shot at your voice — edit it to sound like you.
+                    </p>
+                    <textarea
+                      value={displayText}
+                      onChange={e => setDraftEdits(prev => ({ ...prev, [draft.id]: e.target.value }))}
+                      onBlur={e => handleSaveEdit(draft.id, e.target.value)}
+                      rows={5}
                       style={{
-                        flexShrink: 0,
-                        background: publishingId === draft.id ? '#e5e7eb' : 'var(--green-primary, #27500A)',
-                        color: publishingId === draft.id ? 'var(--gray-600)' : '#fff',
-                        border: 'none', borderRadius: 8,
-                        padding: '10px 16px',
-                        fontSize: '0.875rem', fontWeight: 600,
-                        cursor: publishingId === draft.id ? 'not-allowed' : 'pointer',
-                        minWidth: 90,
+                        width: '100%', boxSizing: 'border-box',
+                        fontSize: '0.875rem', color: 'var(--gray-800)',
+                        lineHeight: 1.55, padding: '10px 12px',
+                        border: '1px solid #d1d5db', borderRadius: 8,
+                        resize: 'vertical', fontFamily: 'inherit',
                       }}
-                    >
-                      {publishingId === draft.id ? 'Posting…' : 'Publish'}
-                    </button>
+                    />
+
+                    {/* Action buttons */}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => handleCopyCaption(draft.id, displayText)}
+                        style={{
+                          flex: 1, minWidth: 120,
+                          background: copiedId === draft.id ? '#f0fdf4' : 'var(--green-primary)',
+                          color: copiedId === draft.id ? '#166534' : '#fff',
+                          border: copiedId === draft.id ? '1.5px solid #86efac' : 'none',
+                          borderRadius: 8, padding: '10px 0',
+                          fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer',
+                        }}
+                      >
+                        {copiedId === draft.id ? 'Copied!' : 'Copy caption'}
+                      </button>
+                      {platformUrl && (
+                        <a
+                          href={platformUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            flex: 1, minWidth: 120,
+                            background: '#f9fafb', border: '1px solid #e5e7eb',
+                            borderRadius: 8, padding: '10px 0',
+                            fontSize: '0.875rem', fontWeight: 600,
+                            color: 'var(--gray-700)', cursor: 'pointer',
+                            display: 'block', textAlign: 'center',
+                            textDecoration: 'none',
+                          }}
+                        >
+                          Open {platformLabel} →
+                        </a>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}

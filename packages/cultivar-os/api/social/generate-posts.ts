@@ -12,64 +12,70 @@ const MONTH_NAMES = [
   'July','August','September','October','November','December',
 ];
 
-const SYSTEM_PROMPT = `You are a social media writer for small owner-operated plant nurseries in Texas.
-Your job is to write short, warm, friendly social media posts after a sale.
+// One post per platform — formatted for each platform's style.
+// Return shape: { "instagram": "caption...", "facebook": "caption...", ... }
+const SYSTEM_PROMPT = `You are a social media writer for a small owner-operated plant nursery in Texas.
+Your job is to write ONE social media post per platform that celebrates the week's business activity.
 
-Rules for every post:
-- Under 280 characters total (including hashtags)
-- 3-5 relevant hashtags at the end
-- Warm nursery voice — not corporate, not salesy
-- Never mention prices
-- Never include customer last name, email, or any contact info
-- Customer first name only if used at all
+The post should feel warm and specific to what actually happened — not a generic template.
+Aggregate the week into one compelling moment. Never mention prices. Never include customer
+last names, emails, or contact info. Use customer first names only if they feel natural.
 
-Return ONLY a JSON object. No markdown, no explanation, no preamble. Exactly this shape:
-{"posts":[{"type":"educational","content":"..."},{"type":"customer_story","content":"..."},{"type":"seasonal","content":"..."}]}`;
+Formatting per platform:
+- instagram: Under 220 characters, 5–8 relevant hashtags at the end. Visual and upbeat.
+- facebook: 50–120 words. Warm and conversational. 2–3 hashtags max. More storytelling.
+- tiktok: Under 150 characters, punchy and energetic. 3–5 hashtags.
+- twitter: Under 260 characters, brief and direct. 2–3 hashtags.
+
+Return ONLY a JSON object. No markdown, no explanation, no preamble. Keys are platform names,
+values are the caption strings. Include only the platforms listed in the user message.
+Example: {"instagram":"caption...","facebook":"caption..."}`;
 
 export default async function handler(req: any, res: any) {
-  console.log('[generate-posts] ENTRY method:', req.method, 'body:', JSON.stringify(req.body));
-
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    console.warn('[generate-posts] EARLY EXIT — ANTHROPIC_API_KEY not set');
+    console.warn('[generate-posts] ANTHROPIC_API_KEY not set');
     return res.status(200).json({ ok: false, reason: 'api_key_missing' });
   }
 
-  const {
-    business_id,
-    order_id,
-    plant_species,
-    plant_common_name,
-    plant_container,
-    customer_first_name,
-    addons_purchased,
-  } = req.body;
+  const { business_id, period_days: rawPeriodDays } = req.body;
 
-  if (!business_id || !order_id) {
-    console.warn('[generate-posts] EARLY EXIT — missing business_id or order_id', { business_id, order_id });
-    return res.status(400).json({ error: 'Missing business_id or order_id' });
+  if (!business_id) {
+    return res.status(400).json({ error: 'Missing business_id' });
   }
 
   const db = adminDb();
 
-  // Check social_media module is enabled + configured for this business
-  const { data: nm, error: nmErr } = await db
+  // Load module config — platforms + cadence
+  const { data: mod, error: modErr } = await db
     .from('business_modules')
-    .select('enabled, configured')
+    .select('enabled, configured, config')
     .eq('business_id', business_id)
     .eq('module_key', 'social_media')
     .single();
 
-  console.log('[generate-posts] business_modules row:', JSON.stringify(nm), 'error:', nmErr?.message ?? null);
-
-  if (!nm?.enabled || !nm?.configured) {
-    console.warn('[generate-posts] EARLY EXIT — module_not_enabled');
+  if (modErr || !mod?.enabled || !mod?.configured) {
+    console.warn('[generate-posts] module not enabled:', modErr?.message);
     return res.status(200).json({ ok: false, reason: 'module_not_enabled' });
   }
 
-  // Get business name for the posts
+  const config     = (mod.config ?? {}) as { platforms?: string[]; cadence?: string };
+  const platforms  = Array.isArray(config.platforms) && config.platforms.length > 0
+    ? config.platforms
+    : ['instagram'];
+  const cadence    = config.cadence ?? 'weekly';
+
+  // Determine period
+  const periodDays = typeof rawPeriodDays === 'number' && rawPeriodDays > 0
+    ? rawPeriodDays
+    : cadence === 'few_times' ? 3 : 7;
+
+  const periodEnd   = new Date();
+  const periodStart = new Date(periodEnd.getTime() - periodDays * 24 * 60 * 60 * 1000);
+
+  // Load business name
   const { data: biz } = await db
     .from('businesses')
     .select('name')
@@ -77,33 +83,67 @@ export default async function handler(req: any, res: any) {
     .single();
   const businessName = (biz as any)?.name ?? 'Our Nursery';
 
-  const currentMonth   = MONTH_NAMES[new Date().getMonth()];
-  const commonName     = plant_common_name ?? plant_species ?? 'tree';
-  const addonsList     = Array.isArray(addons_purchased) && addons_purchased.length > 0
-    ? addons_purchased.join(', ')
-    : 'none';
+  // Load orders from the period — join plant data via order_items
+  const { data: orders } = await db
+    .from('orders')
+    .select('id, customer_id, total, customers(first_name)')
+    .eq('business_id', business_id)
+    .gte('created_at', periodStart.toISOString())
+    .lte('created_at', periodEnd.toISOString())
+    .order('created_at', { ascending: false })
+    .limit(50);
 
-  const userPrompt = `Write 3 social media posts for ${businessName}.
+  const orderCount = (orders ?? []).length;
 
-Sale details:
-- Plant: ${commonName}${plant_species ? ` (${plant_species})` : ''}
-- Container: ${plant_container ?? 'unknown'}
-- Customer first name: ${customer_first_name ?? 'a customer'}
-- Month: ${currentMonth}
-- Add-ons purchased: ${addonsList}
+  // Load plants from those orders for species context
+  const orderIds = (orders ?? []).map((o: any) => o.id);
+  let plantNames: string[] = [];
+  if (orderIds.length > 0) {
+    const { data: items } = await db
+      .from('order_items')
+      .select('plants(common_name, species)')
+      .in('order_id', orderIds);
+    plantNames = [...new Set(
+      (items ?? [])
+        .map((i: any) => i.plants?.common_name ?? i.plants?.species)
+        .filter(Boolean)
+    )].slice(0, 6) as string[];
+  }
 
-Generate:
-1. educational — an interesting fact or care tip about ${commonName}
-2. customer_story — celebrate ${customer_first_name ?? 'the customer'}'s purchase (first name only)
-3. seasonal — a planting or care tip relevant to ${currentMonth} in Texas`;
+  // Customer first names (deduplicated, limit 4)
+  const customerNames = [...new Set(
+    (orders ?? [])
+      .map((o: any) => o.customers?.first_name)
+      .filter(Boolean)
+  )].slice(0, 4) as string[];
+
+  const currentMonth = MONTH_NAMES[new Date().getMonth()];
+
+  const plantSummary   = plantNames.length > 0
+    ? plantNames.join(', ')
+    : 'trees and plants';
+  const customerSummary = customerNames.length > 0
+    ? customerNames.join(', ')
+    : 'customers';
+
+  const userPrompt = `Write social posts for ${businessName}.
+
+Period: ${periodStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${periodEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${currentMonth} in Texas
+Orders this period: ${orderCount}
+Plants sold: ${plantSummary}
+${customerNames.length > 0 ? `Customer first names: ${customerSummary}` : ''}
+
+Platforms to generate (include ALL of these as keys in the JSON):
+${platforms.join(', ')}
+
+${orderCount === 0 ? 'No sales this period — write a general warm nursery post about the season and what\'s growing.' : ''}`;
 
   const anthropic = new Anthropic({ apiKey });
 
   try {
-    console.log('[generate-posts] calling Claude API...');
     const message = await anthropic.messages.create({
       model:      'claude-sonnet-4-6',
-      max_tokens: 600,
+      max_tokens: 800,
       system: [
         {
           type:          'text',
@@ -113,41 +153,48 @@ Generate:
       ],
       messages: [{ role: 'user', content: userPrompt }],
     });
-    console.log('[generate-posts] Claude API returned. stop_reason:', message.stop_reason);
 
     const raw  = message.content.find(b => b.type === 'text');
     const text = raw?.type === 'text' ? raw.text.trim() : '';
-    const parsed = JSON.parse(text) as { posts: Array<{ type: string; content: string }> };
 
-    const inserts = parsed.posts.map(post => ({
-      business_id,
-      order_id,
-      platform:  'instagram',
-      content:   post.content,
-      post_type: post.type,
-      status:    'draft',
-    }));
-
-    console.log('[generate-posts] inserting', inserts.length, 'rows into social_drafts...');
-    const { error: insertErr } = await db.from('social_drafts').insert(inserts);
-    console.log('[generate-posts] insert complete. error:', insertErr?.message ?? null);
-
-    return res.status(200).json({ ok: true, count: inserts.length });
-  } catch (err: any) {
-    console.error('[generate-posts] generation error:', err?.message ?? err);
-
+    // Two-pass JSON extraction — handle stray markdown fences
+    let parsed: Record<string, string>;
     try {
-      const { error: failErr } = await db.from('social_drafts').insert({
-        business_id,
-        order_id,
-        platform:  'instagram',
-        content:   null,
-        post_type: null,
-        status:    'failed',
-      });
-      console.log('[generate-posts] failed-row insert error:', failErr?.message ?? null);
-    } catch { /* non-fatal */ }
+      parsed = JSON.parse(text);
+    } catch {
+      const match = text.match(/\{[\s\S]*\}/);
+      parsed = match ? JSON.parse(match[0]) : {};
+    }
 
+    const inserts = platforms
+      .filter(p => typeof parsed[p] === 'string' && parsed[p].trim())
+      .map(p => ({
+        business_id,
+        platform:      p,
+        content:       parsed[p].trim(),
+        original_text: parsed[p].trim(),
+        post_type:     null,
+        status:        'draft',
+        cadence,
+        period_start:  periodStart.toISOString(),
+        period_end:    periodEnd.toISOString(),
+      }));
+
+    if (inserts.length === 0) {
+      console.warn('[generate-posts] no posts parsed from Claude response');
+      return res.status(200).json({ ok: false, reason: 'parse_failed' });
+    }
+
+    const { error: insertErr } = await db.from('social_drafts').insert(inserts);
+    if (insertErr) {
+      console.error('[generate-posts] insert error:', insertErr.message);
+      return res.status(200).json({ ok: false, reason: 'insert_failed' });
+    }
+
+    return res.status(200).json({ ok: true, count: inserts.length, platforms: inserts.map(i => i.platform) });
+
+  } catch (err: any) {
+    console.error('[generate-posts] error:', err?.message ?? err);
     return res.status(200).json({ ok: false, reason: 'generation_failed' });
   }
 }

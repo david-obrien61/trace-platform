@@ -364,14 +364,12 @@ export function Help() {
                   <li style={{ marginBottom: 6 }}>A brief description of what this campaign is about</li>
                 </ul>
                 <p style={{ margin: '0 0 10px' }}>
-                  Cultivar OS drafts social media posts for the campaign based on your
-                  description and the tone of posts you've published before. You review each
-                  draft, edit if you want, and publish directly to your social accounts
-                  through the Blotato integration.
+                  Cultivar OS drafts social media posts for the campaign based on your description.
+                  You review each draft, edit it to sound like you, copy the caption, and post to
+                  your accounts.
                 </p>
                 <p style={{ margin: 0, color: GRAY4, fontSize: '0.875rem' }}>
-                  To use campaigns, enable the Social Media module from your dashboard tile.
-                  TRACE handles the publishing connection — no separate account required.
+                  To use campaigns, enable the Social Media module from your dashboard tile first.
                 </p>
               </div>
             }
@@ -382,14 +380,19 @@ export function Help() {
             a={
               <div style={bodyStyle}>
                 <p style={{ margin: '0 0 10px' }}>
-                  After each completed order, Cultivar OS automatically generates three social
-                  media post drafts in the background — an educational post, a customer story
-                  angle, and a seasonal post. These appear on your dashboard as pending drafts.
+                  TRACE writes ready-to-post captions from your sales each week, tailored to
+                  each platform you post on. Tap "Generate this week's posts" on your dashboard
+                  and TRACE looks at your recent sales, aggregates them into a story, and writes
+                  one caption per platform.
                 </p>
-                <p style={{ margin: 0 }}>
-                  You review, optionally edit, and tap Publish. Posts go out through TRACE's
-                  publishing integration. To enable this, go to the Social Media tile on
-                  your dashboard, select your platforms, and tap Enable.
+                <p style={{ margin: '0 0 10px' }}>
+                  Each caption appears in an editable field. Edit it to sound like you, then
+                  copy it and paste into Instagram, Facebook, or wherever you post. No app
+                  connection or separate account required — the handoff is copy-paste.
+                </p>
+                <p style={{ margin: 0, color: GRAY4, fontSize: '0.875rem' }}>
+                  To enable this, tap the Social Media tile on your dashboard, choose how often
+                  you want to post, and select your platforms.
                 </p>
               </div>
             }
