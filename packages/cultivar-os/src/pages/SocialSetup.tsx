@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBusinessContext } from '@trace/shared/context';
 
+const SM_DEBUG = false; // flip to true to re-enable [SM-TRACE] diagnostics
+
 const PLATFORMS = [
   { key: 'instagram', label: 'Instagram' },
   { key: 'facebook',  label: 'Facebook' },
@@ -15,16 +17,16 @@ export function SocialSetup() {
 
   // [SM-TRACE] Mount / unmount sentinel — reveals whether the component is ever fully mounted
   useEffect(() => {
-    console.log('[SM-TRACE] SocialSetup MOUNTED — businessId:', businessId);
+    if (SM_DEBUG) console.log('[SM-TRACE] SocialSetup MOUNTED — businessId:', businessId);
     return () => {
-      console.log('[SM-TRACE] SocialSetup UNMOUNTED — if you see this without a button click, the redirect is coming from OUTSIDE SocialSetup');
+      if (SM_DEBUG) console.log('[SM-TRACE] SocialSetup UNMOUNTED — if you see this without a button click, the redirect is coming from OUTSIDE SocialSetup');
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // [SM-TRACE] businessId change tracker — reveals late-resolving context
   useEffect(() => {
-    console.log('[SM-TRACE] businessId updated →', businessId, '(null means BusinessProvider still loading or no business found)');
+    if (SM_DEBUG) console.log('[SM-TRACE] businessId updated →', businessId, '(null means BusinessProvider still loading or no business found)');
   }, [businessId]);
 
   const [platforms, setPlatforms] = useState<string[]>(['instagram']);
@@ -61,7 +63,7 @@ export function SocialSetup() {
         throw new Error(body.error || `Save failed (${res.status})`);
       }
 
-      console.log('[SM-TRACE] handleSave SUCCESS → navigating to /dashboard');
+      if (SM_DEBUG) console.log('[SM-TRACE] handleSave SUCCESS → navigating to /dashboard');
       navigate('/dashboard');
     } catch (err: unknown) {
       setError((err as Error)?.message ?? 'Something went wrong. Try again.');
@@ -83,7 +85,7 @@ export function SocialSetup() {
         gap: 12,
       }}>
         <button
-          onClick={() => { console.log('[SM-TRACE] Back button clicked → navigating to /dashboard'); navigate('/dashboard'); }}
+          onClick={() => { if (SM_DEBUG) console.log('[SM-TRACE] Back button clicked → navigating to /dashboard'); navigate('/dashboard'); }}
           style={{
             background: 'rgba(255,255,255,0.12)',
             border: 'none',

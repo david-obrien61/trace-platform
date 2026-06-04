@@ -11,6 +11,8 @@ import { Tile } from '@trace/shared/components/tiles/Tile';
 // Configurable — will move to verticalConfig post-demo
 const LEAKAGE_AVG_VALUE = 28;
 
+const SM_DEBUG = false; // flip to true to re-enable [SM-TRACE] diagnostics
+
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
 function todayStart(): string {
@@ -100,7 +102,7 @@ export function Dashboard() {
   const [accountingNeedsReconnect, setAccountingNeedsReconnect] = useState(false);
   const [profileIncomplete, setProfileIncomplete] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { modules } = useModules(businessId ?? '');
+  const { modules } = useModules(businessId);
 
   // ── Data loading ─────────────────────────────────────────────────────────
 
@@ -295,7 +297,7 @@ export function Dashboard() {
   function handleEnable(key: string) {
     switch (key) {
       case 'social_media':
-        console.log('[SM-TRACE] Dashboard handleEnable: social_media tile was AVAILABLE → navigate /social/setup. businessId:', businessId);
+        if (SM_DEBUG) console.log('[SM-TRACE] Dashboard handleEnable: social_media tile was AVAILABLE → navigate /social/setup. businessId:', businessId);
         return navigate('/social/setup');
       case 'delivery_routing': return navigate('/deliveries');
       case 'online_shop':     return showComingSoon('Online Shop');
@@ -309,7 +311,7 @@ export function Dashboard() {
       case 'qr_checkout':     return navigate('/orders');
       case 'qb_invoicing':    return navigate('/settings');
       case 'social_media':
-        console.log('[SM-TRACE] Dashboard handleNavigate: social_media tile was ACTIVE → navigate /social/setup. businessId:', businessId);
+        if (SM_DEBUG) console.log('[SM-TRACE] Dashboard handleNavigate: social_media tile was ACTIVE → navigate /social/setup. businessId:', businessId);
         return navigate('/social/setup');
       case 'delivery_routing': return navigate('/deliveries');
       default:                return showComingSoon(key.replace(/_/g, ' '));

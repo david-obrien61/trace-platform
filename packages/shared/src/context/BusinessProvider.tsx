@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../supabase/client';
 
+const SM_DEBUG = false; // flip to true to re-enable [SM-TRACE] diagnostics
+
 export interface Business {
   id: string;
   owner_id: string;
@@ -56,7 +58,7 @@ export function BusinessProvider({
 
   // [SM-TRACE] Track every state transition — reveals what BusinessProvider resolves to for this user
   useEffect(() => {
-    console.log('[SM-TRACE] BusinessProvider state →', {
+    if (SM_DEBUG) console.log('[SM-TRACE] BusinessProvider state →', {
       loading,
       businessId: business?.id ?? null,
       businessError,
@@ -91,7 +93,7 @@ export function BusinessProvider({
         .eq('business_type', businessType)
         .single();
 
-      console.log('[SM-TRACE] BusinessProvider owner lookup →', {
+      if (SM_DEBUG) console.log('[SM-TRACE] BusinessProvider owner lookup →', {
         found: !!biz,
         businessId: (biz as any)?.id ?? null,
         error: ownerErr?.message ?? null,
@@ -111,7 +113,7 @@ export function BusinessProvider({
           .eq('active', true)
           .single();
         const memberBiz = (member?.businesses as any) ?? null;
-        console.log('[SM-TRACE] BusinessProvider member lookup →', {
+        if (SM_DEBUG) console.log('[SM-TRACE] BusinessProvider member lookup →', {
           found: !!member,
           memberBizId: memberBiz?.id ?? null,
           memberBizType: memberBiz?.business_type ?? null,
@@ -130,13 +132,13 @@ export function BusinessProvider({
       if (cancelled) return;
 
       if (!biz) {
-        console.log('[SM-TRACE] BusinessProvider RESULT: no_business — both owner and member paths failed');
+        if (SM_DEBUG) console.log('[SM-TRACE] BusinessProvider RESULT: no_business — both owner and member paths failed');
         setBusinessError('no_business');
         setBusiness(null);
         setUserPermissions(null);
         setIsOwner(false);
       } else {
-        console.log('[SM-TRACE] BusinessProvider RESULT: resolved →', {
+        if (SM_DEBUG) console.log('[SM-TRACE] BusinessProvider RESULT: resolved →', {
           businessId: (biz as any).id,
           businessType: (biz as any).business_type,
           isOwner: resolvedIsOwner,

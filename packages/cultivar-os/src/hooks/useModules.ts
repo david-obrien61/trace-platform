@@ -63,7 +63,7 @@ interface ModuleRow {
   tier_required: string | null;
 }
 
-export function useModules(businessId: string) {
+export function useModules(businessId: string | null) {
   const [modules, setModules] = useState<ModuleData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
@@ -72,6 +72,7 @@ export function useModules(businessId: string) {
     let cancelled = false;
 
     async function load() {
+      if (!businessId) return;
       setLoading(true);
       setError(null);
 
