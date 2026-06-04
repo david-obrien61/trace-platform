@@ -294,7 +294,9 @@ export function Dashboard() {
 
   function handleEnable(key: string) {
     switch (key) {
-      case 'social_media':    return navigate('/social/setup');
+      case 'social_media':
+        console.log('[SM-TRACE] Dashboard handleEnable: social_media tile was AVAILABLE → navigate /social/setup. businessId:', businessId);
+        return navigate('/social/setup');
       case 'delivery_routing': return navigate('/deliveries');
       case 'online_shop':     return showComingSoon('Online Shop');
       case 'followup_engine': return showComingSoon('Follow-Up Engine');
@@ -306,7 +308,9 @@ export function Dashboard() {
     switch (key) {
       case 'qr_checkout':     return navigate('/orders');
       case 'qb_invoicing':    return navigate('/settings');
-      case 'social_media':    return navigate('/social/setup');
+      case 'social_media':
+        console.log('[SM-TRACE] Dashboard handleNavigate: social_media tile was ACTIVE → navigate /social/setup. businessId:', businessId);
+        return navigate('/social/setup');
       case 'delivery_routing': return navigate('/deliveries');
       default:                return showComingSoon(key.replace(/_/g, ' '));
     }

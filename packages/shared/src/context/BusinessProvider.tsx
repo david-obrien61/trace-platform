@@ -54,6 +54,17 @@ export function BusinessProvider({
   const [userPermissions, setUserPermissions] = useState<string[] | null>(null);
   const [isOwner, setIsOwner] = useState(false);
 
+  // [SM-TRACE] Track every state transition — reveals what BusinessProvider resolves to for this user
+  useEffect(() => {
+    console.log('[SM-TRACE] BusinessProvider state →', {
+      loading,
+      businessId: business?.id ?? null,
+      businessError,
+      isOwner,
+      businessType,
+    });
+  }, [loading, business, businessError, isOwner, businessType]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -73,25 +84,41 @@ export function BusinessProvider({
       }
 
       // 1. Try owner lookup (fast path — covers 99% of logins)
-      let { data: biz } = await supabase
+      let { data: biz, error: ownerErr } = await supabase
         .from('businesses')
         .select('*')
         .eq('owner_id', user.id)
         .eq('business_type', businessType)
         .single();
 
+      console.log('[SM-TRACE] BusinessProvider owner lookup →', {
+        found: !!biz,
+        businessId: (biz as any)?.id ?? null,
+        error: ownerErr?.message ?? null,
+        userId: user.id,
+        businessType,
+      });
+
       let resolvedPerms: string[] | null = null; // null = owner (full access)
       let resolvedIsOwner = true;
 
       // 2. If not an owner, check business_members (member path)
       if (!biz) {
-        const { data: member } = await supabase
+        const { data: member, error: memberErr } = await supabase
           .from('business_members')
           .select('business_id, role, permissions, businesses(*)')
           .eq('user_id', user.id)
           .eq('active', true)
           .single();
         const memberBiz = (member?.businesses as any) ?? null;
+        console.log('[SM-TRACE] BusinessProvider member lookup →', {
+          found: !!member,
+          memberBizId: memberBiz?.id ?? null,
+          memberBizType: memberBiz?.business_type ?? null,
+          businessTypeFilter: businessType,
+          typeMatch: memberBiz?.business_type === businessType,
+          error: memberErr?.message ?? null,
+        });
         // Scope to current vertical — prevents cross-vertical data exposure (audit #13)
         if (member && memberBiz?.business_type === businessType) {
           biz = memberBiz;
@@ -103,11 +130,18 @@ export function BusinessProvider({
       if (cancelled) return;
 
       if (!biz) {
+        console.log('[SM-TRACE] BusinessProvider RESULT: no_business — both owner and member paths failed');
         setBusinessError('no_business');
         setBusiness(null);
         setUserPermissions(null);
         setIsOwner(false);
       } else {
+        console.log('[SM-TRACE] BusinessProvider RESULT: resolved →', {
+          businessId: (biz as any).id,
+          businessType: (biz as any).business_type,
+          isOwner: resolvedIsOwner,
+          permCount: resolvedPerms === null ? 'owner(all)' : resolvedPerms.length,
+        });
         setBusiness(biz as Business);
         setBusinessError(null);
         setUserPermissions(resolvedPerms);

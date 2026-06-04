@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: June 4, 2026
+# Last updated: June 4, 2026 (session 2 — STANDARDS.md v1)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -18,6 +18,7 @@ When this doc conflicts with another:
 - For architecture or where things should live, see PLATFORM_STRATEGY.md
 - For what's actually built in code, see TRACE_PLATFORM_AUDIT.md
 - For the discovery module, see DISCOVERY_MODULE_BRIEF.md (created Session 1b)
+- For engineering standards (STD-001 through STD-006), see STANDARDS.md
 - For reuse ratio figures, see TRACE_PLATFORM_AUDIT.md "Reuse ratio — corrected ground truth (2026-05-28)"; the 68/78/80% figures cited in prior sessions are retired.
 
 Update the handoff section at the end of every session.
@@ -274,6 +275,77 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-04 — STANDARDS.md v1 created; SM bounce diagnosed (read-only); [SM-TRACE] instrumentation live
+
+**Type:** Docs + instrumentation. No schema or production-logic changes. Three code files have active diagnostic logs.
+
+**What was built:**
+
+`STANDARDS.md` (new — repo root):
+- Six standards seeded from named scars: STD-001 (Prove Before You Act), STD-002 (Red-Test-First), STD-003 (Instrumentation Preserved), STD-004 (Tenant Isolation Bar), STD-005 (Verbatim Decisions), STD-006 (Vertical-Agnostic).
+- Full text: preamble, rules, scars, enforcement table, growth policy, candidates section (empty at v1).
+- Adopted immediately this session — Step 14 added to CLAUDE.md Part 9 session-end protocol.
+
+`CLAUDE.md Part 9` updated:
+- Step 14 added: STANDARDS compliance check (STD-001 through STD-006), mandatory alongside Step 13 AC check.
+
+**SM bounce diagnosis (STD-001 compliant — read-only, no fix applied):**
+
+Symptom: navigating to `/social/setup` flashes blank then routes back to `/dashboard`. Happens on both businesses.
+
+Static analysis finding: `SocialSetup.tsx` has **zero automatic redirects**. No component in the `/social/setup` render tree (`App → BusinessProvider → PrivateRoute → SocialSetup`) automatically redirects to `/dashboard`. The only `navigate('/dashboard', {replace:true})` in the codebase is `Settings.tsx:536` (permission guard at `/settings` route — different route, cannot affect `/social/setup`). Root cause is **not visible from static analysis** — runtime trace required.
+
+Config-shape comparison (prime suspect ruled out):
+- LAWNS `business_modules.config` for `social_media` after migration: `{"blotato_account_id":"269df7e1-351d-4add-9111-3d42564b1fc6"}`
+- What current `enable.ts` writes: `{"blotato_account_id":"...","platforms":["instagram"]}` (new `platforms` key, added June 4)
+- What `SocialSetup.tsx` reads from config: **nothing** — SocialSetup doesn't touch `business_modules` or config at all. Config shape cannot cause the bounce.
+
+**[SM-TRACE] instrumentation state (STD-003 — ACTIVE, fix not yet verified):**
+
+Logs are ACTIVE (not yet gated) — required for pre-fix diagnosis per STD-002. After root cause is confirmed and fix applied, gate all logs behind `const SM_DEBUG = false; if (SM_DEBUG) console.log(...)` per STD-003. Do NOT delete them.
+
+Files with active [SM-TRACE] logs:
+1. `packages/cultivar-os/src/pages/SocialSetup.tsx` — mount/unmount, businessId changes, before each navigate()
+2. `packages/shared/src/context/BusinessProvider.tsx` — state transitions, owner lookup result, member lookup result, resolution outcome
+3. `packages/cultivar-os/src/pages/Dashboard.tsx` — handleNavigate + handleEnable for social_media (shows tile state at click time)
+
+Re-enable after gating: set `SM_DEBUG = false` → `true` in each file. Flag not yet added — logs are inline. Adding the flag is the post-fix step.
+
+**How to run the trace:**
+1. Open browser DevTools → Console, filter: `[SM-TRACE]`
+2. Navigate to cultivar-os.vercel.app (or `npm run dev` locally)
+3. Log in → wait for Dashboard to load
+4. Click Social tile → screenshot the console output immediately
+5. StrictMode note: in development you will see one extra `UNMOUNTED` + `MOUNTED` pair per component — this is expected React behavior, NOT the bounce. A real bounce shows `UNMOUNTED` without a preceding `Back button clicked` or `handleSave SUCCESS` log.
+
+**Next session must:**
+1. Run the [SM-TRACE] to capture the output (STD-002: make the broken state visible)
+2. Identify root cause from the trace
+3. Apply fix
+4. Confirm fix via same trace (post-fix the `[SM-TRACE] SocialSetup UNMOUNTED` log should only appear when a button is clicked)
+5. Gate all [SM-TRACE] logs behind `const SM_DEBUG = false` per STD-003
+6. Remove `SM_DEBUG` flag name from this Handoff (it becomes a preserved asset in the code)
+
+**Builds:** Cultivar 2176 ✅ · zero TypeScript errors.
+
+**AC compliance (step 13):** No AC compliance issues — session did not touch shared schema, RLS, or shared identifiers. BusinessProvider.tsx edit adds only `console.log` calls inside the existing `resolve()` function; no logic change.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ No fix applied. Entire session was read-only diagnosis + instrumentation.
+- STD-002: ✅ Instrumentation is in place to make the broken state visible. Fix deferred to next session pending trace capture.
+- STD-003: ✅ All logs prefixed `[SM-TRACE]`. Gating step documented here for next session. No fix verified yet — logs intentionally active.
+- STD-004: N/A — no business-scoped feature shipped.
+- STD-005: N/A — no decisions reversed or documented this session (STANDARDS.md is new, no prior text to supersede).
+- STD-006: ✅ No vertical nouns introduced in shared code.
+
+**No customer-facing documentation propagation needed** — this session made no user-visible changes. STANDARDS.md is internal tooling. The [SM-TRACE] logs produce no visible UI changes.
+
+**No factual corrections surfaced** — the session confirmed that SocialSetup has no redirect logic (consistent with prior reading); no prior doc asserted otherwise.
+
+**No runbook needed** — pure code + docs session. No environment or infrastructure changes.
+
+---
 
 ### 2026-06-04 — business_modules: reshape module enablement, AC-1/AC-2 close
 
@@ -1680,6 +1752,29 @@ MANDATORY before ending every session:
    If the session did not touch shared schema, shared code, or RLS policies, state: "No AC compliance issues — session did not touch shared schema, RLS, or shared identifiers."
 
    This step is mandatory. The session is not complete until the compliance check is answered explicitly.
+
+14. **STANDARDS compliance check** — Before closing, answer for this session:
+
+   **STD-001 (Prove Before You Act):** Did any data change, destructive action, or fix happen before read-only diagnosis confirmed the root cause? If yes, document what was assumed vs. what was proved.
+
+   **STD-002 (Red-Test-First):** For any bug fix applied this session — was the broken state made visible (trace, failing test, or query showing bad data) BEFORE the fix was applied? Include before/after artifact reference in the Handoff.
+
+   **STD-003 (Instrumentation Preserved):** Were any `[SM-TRACE]`-style logs added this session? If yes:
+   - Are they prefixed consistently?
+   - If the fix is verified this session: are they gated behind `const <PREFIX>_DEBUG = false`?
+   - If the fix is NOT yet verified: are the flag name and file paths noted in the Handoff for the next session?
+
+   **STD-004 (Tenant Isolation Bar):** Did any feature touching business-scoped data ship this session? If yes: is a two-email isolation proof included in the Handoff?
+
+   **STD-005 (Verbatim Decisions):** Were any decisions reversed or updated? If yes: was the prior text explicitly struck through or replaced (not just supplemented)?
+
+   **STD-006 (Vertical-Agnostic):** Covered by AC-1 / Step 13. State: "No vertical nouns introduced in shared code" or document the exception.
+
+   If the session did not trigger a given standard, state that explicitly. Do not skip silently.
+
+   This step is mandatory. The session is not complete until every applicable standard is checked explicitly.
+
+   Full standard text lives in STANDARDS.md.
 
 ---
 
