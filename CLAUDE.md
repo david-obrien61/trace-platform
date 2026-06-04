@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: June 4, 2026 (session 2 — STANDARDS.md v1)
+# Last updated: June 4, 2026 (session 3 — SM flash-bounce fixed)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -275,6 +275,63 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-04 — SM flash-bounce FIXED; [SM-TRACE] gated; useModules null-guard applied
+
+**Type:** Bug fix. Two code files changed (useModules.ts, Dashboard.tsx). Two instrumentation files gated (SocialSetup.tsx, BusinessProvider.tsx). Commit: `b3eb1ee`.
+
+**Root cause (confirmed):**
+`Dashboard.tsx:103` called `useModules(businessId ?? '')`. `businessId` from `useBusinessContext()` is `string | null` — null while BusinessProvider's async `resolve()` is in flight. The `?? ''` coercion passed an empty string to `useModules`, which fired its effect immediately on mount with `businessId = ''`. PostgREST cast `''` to UUID, threw `invalid input syntax for type uuid: ""` → 400 on both `businesses?select=accounting_company_id&id=eq.` and `business_modules?select=module_key,...&business_id=eq.`. Tile grid landed in error state. When BusinessProvider resolved and `businessId` updated, `useModules` re-ran with the real UUID and queries succeeded — but the SM tile had already shown an error flash, and the cascade caused the `/social/setup` bounce.
+
+**Prior wrong theory (STD-001 corrected):** Missing columns (`accounting_company_id`, `configured`) was my first proposed diagnosis. David ran `information_schema.columns` on the live DB — both columns exist. No ALTER TABLE was applied. The schema-check disproved the theory before any irreversible action.
+
+**Fix applied (commit `b3eb1ee`):**
+
+`packages/cultivar-os/src/hooks/useModules.ts`:
+- Signature widened: `businessId: string` → `businessId: string | null`
+- Guard added at top of `load()`: `if (!businessId) return;` — queries only fire with a real UUID
+
+`packages/cultivar-os/src/pages/Dashboard.tsx`:
+- Call site: `useModules(businessId ?? '')` → `useModules(businessId)` — null propagates cleanly through the type; the `?? ''` poison is gone
+
+**[SM-TRACE] gated per STD-003 (all four files):**
+- `packages/cultivar-os/src/pages/SocialSetup.tsx` — `const SM_DEBUG = false` added; all 4 logs gated
+- `packages/cultivar-os/src/pages/Dashboard.tsx` — `const SM_DEBUG = false` added; 2 logs gated
+- `packages/shared/src/context/BusinessProvider.tsx` — `const SM_DEBUG = false` added; 5 logs gated
+
+Re-enable: set `SM_DEBUG = false` → `true` in each file. Probe locations:
+- SocialSetup.tsx: mount/unmount, businessId changes, handleSave SUCCESS, Back button click
+- Dashboard.tsx: handleEnable + handleNavigate for social_media tile
+- BusinessProvider.tsx: state transitions, owner lookup result, member lookup result, resolution outcome
+
+**STD-002 before/after:**
+- BEFORE: `businesses?id=eq.` and `business_modules?business_id=eq.` (empty) → 400 on every Dashboard load. David observed this in Network tab. Tile grid error state visible.
+- AFTER: `useModules` holds until `businessId` resolves. First query fires with real UUID → 200. No 400s on load. Tile grid renders correct state on first paint. SM `/social/setup` flash should be gone — the downstream bounce was caused by the error state clearing on re-render after BusinessProvider resolved.
+
+**Symptoms cleared by this fix:**
+- ✅ SM `/social/setup` flash-bounce — tile grid error state caused the cascade; guard eliminates the premature fire
+- ✅ QB tile never going active — `accounting_company_id` was being fetched with empty id; now fetched with real id
+- ✅ Tile grid 400 on every Dashboard load
+
+**Builds:** Cultivar 2176 ✅ · zero TypeScript errors.
+
+**No customer-facing documentation propagation needed** — internal guard, no UI behavior change visible to Lauren.
+
+**Factual correction (STD-001 enforced):** Missing-column theory was disproved by live schema check. `accounting_company_id` and `configured` both exist on the live tables. The 400 was a UUID cast failure, not a schema gap. No ALTER TABLE was written or applied.
+
+**No runbook needed** — pure code fix.
+
+**AC compliance (step 13):** No AC compliance issues — no schema, RLS, or shared identifier changes. `useModules` signature change is internal to the hook.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Wrong theory (missing columns) was caught READ-ONLY by schema check before any ALTER TABLE was proposed. Fix applied only after root cause confirmed by code trace.
+- STD-002: ✅ Broken state documented (400 with empty id=eq., David's Network tab evidence). Fix applied. After: queries fire only with real UUID, 200 responses, no flash.
+- STD-003: ✅ All [SM-TRACE] logs gated behind `SM_DEBUG = false` in all three files. Probe locations noted above.
+- STD-004: N/A — no business-scoped feature shipped.
+- STD-005: N/A — no decisions reversed.
+- STD-006: ✅ No vertical nouns introduced.
+
+---
 
 ### 2026-06-04 — STANDARDS.md v1 created; SM bounce diagnosed (read-only); [SM-TRACE] instrumentation live
 
