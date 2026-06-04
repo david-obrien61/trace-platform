@@ -1,9 +1,14 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-06-02
+# Last updated: 2026-06-04
 
 **Purpose:** Sessions keep rebuilding things that exist. This document is the single answer to "was X ever built?" Organized by capability, not by file. For file locations, see TRACE_PLATFORM_AUDIT.md.
+
+**Column guide:**
+- **Vertical** — `ignition` | `cultivar` | `shared` (`shared` = promoted to the platform shared layer; it's a location, not a vertical)
+- **Type** — `tile` (customer-facing dashboard tile/module) | `infrastructure` (plumbing: auth, QR, Supabase types, adapters) | `capability` (backend/feature that isn't a tile and isn't pure plumbing)
+- Reading the table: `Vertical:shared` = platform baseline. `Vertical:shared AND Type:tile` = every vertical inherits these tiles for free. See "NEEDS DAVID'S CALL" section at bottom for ambiguous entries.
 
 ---
 
@@ -11,6 +16,7 @@
 
 **What:** Unified multi-provider AI router. Single interface for all AI tasks across all verticals.  
 **Status:** ✅ Built — TypeScript  
+**Vertical:** shared | **Type:** capability  
 **Location:** `packages/shared/src/ai/AIEngine.ts`  
 **Original source:** `CAI/AIEngine.js` (archive — do not edit)  
 **Backend:** `CAI/ai_router.py` (FastAPI, Railway) — **LEGACY for web builds.** AIEngine.call() fails gracefully (`{ ok: false }`) when no backend is reachable. Port to Vercel serverless functions when activating AI features. See Tech Debt #12 in CLAUDE.md.  
@@ -56,6 +62,7 @@
 
 **What:** FastAPI router that handles all actual AI provider API calls.  
 **Status:** ⚠️ Legacy — built for the React Native mobile app where API keys couldn't live in the bundle. Now that Ignition OS is a Vercel web app, keys live in Vercel env vars and functions handle them server-side. Railway is not needed.  
+**Vertical:** ignition | **Type:** infrastructure  
 **Location:** `CAI/ai_router.py` (archive)  
 **Forward path:** Port the 11 endpoints to TypeScript Vercel functions under `packages/ignition-os/api/`. Start with `dtc_decode` and `estimate_draft` (text-only, no vision complexity). See Tech Debt #12 in CLAUDE.md.  
 **Exception:** `voice_transcribe` sends audio files — Vercel's 4.5MB payload limit needs evaluation before porting.
@@ -72,7 +79,10 @@
 
 ## Subscription Tiers + Pricing
 
-**Official pricing doc:** `CAI/docs/pricing_sheet.html` (printable, authoritative)
+**What:** Pricing tiers and module matrix defining what's included at each tier.  
+**Status:** ✅ Documented — `CAI/docs/pricing_sheet.html` (printable, authoritative)  
+**Vertical:** ignition | **Type:** infrastructure  
+*⚠️ NEEDS DAVID'S CALL — see bottom: pricing tiers are currently Ignition-specific from CAI; whether they apply platform-wide or each vertical has its own tier structure is unresolved.*
 
 | Tier | Price | Users | AI |
 |---|---|---|---|
@@ -101,6 +111,8 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** Owner-facing module marketplace. Shows all modules, trial status, pricing. Admin can start trials, see days remaining, configure umbrella subscription price.  
 **Status:** ✅ Built (JSX, Ignition OS only — not yet in shared or Cultivar)  
+**Vertical:** ignition | **Type:** capability  
+*⚠️ NEEDS DAVID'S CALL — see bottom: could be tile (if it appears as a dashboard tile in OmniDashboard) or capability (if it's reached via settings/admin nav).*  
 **Location:** `packages/ignition-os/modules/AdminSubscription.jsx`  
 **Default umbrella price:** $299/mo (state variable, admin-adjustable in UI)
 
@@ -126,6 +138,10 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 ## Trial Clock
 
+**What:** Two-tier trial system — 14-day platform trial and 30-day per-module trial.  
+**Status:** ✅ Built (Ignition OS only — not yet extracted to shared or used in Cultivar)  
+**Vertical:** ignition | **Type:** infrastructure  
+
 **Two distinct trial concepts:**
 
 1. **Platform trial (14-day):** Full PREMIER access. Set in `OnboardingWizard.finalize()`. Stored in Supabase `shops` table as `trial_started_at` / `trial_ends_at`. After expiry: data blur on all modules.
@@ -142,6 +158,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** localStorage-first data layer for Ignition OS. Single key `IGNITION_OS_DATA` stores all shop state: profiles, jobs, modules, trial clocks, integrations.  
 **Status:** ✅ Built (JavaScript, Ignition OS only — intentionally not shared)  
+**Vertical:** ignition | **Type:** infrastructure  
 **Location:** `packages/ignition-os/DataBridge.js`
 
 **Key methods:**
@@ -159,6 +176,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** 3-state tile grid for module navigation. States: active (works), available (can enable), locked (upgrade required). Supports count badge for notifications.  
 **Status:** ✅ Built and live — TypeScript/React  
+**Vertical:** shared | **Type:** infrastructure  
 **Location:** `packages/shared/src/components/tiles/TileGrid.tsx` + `Tile.tsx`  
 **Used by:** Cultivar OS Dashboard.tsx, Ignition OS AdminSubscription.jsx
 
@@ -175,6 +193,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** Vertical-agnostic auth factory. Returns `useSession` hook + `PrivateRoute` + `AuthProvider` configured for either email/password (Cultivar) or PIN/localStorage (Ignition).  
 **Status:** ✅ Built — TypeScript  
+**Vertical:** shared | **Type:** infrastructure  
 **Location:** `packages/shared/src/auth/configureAuth.tsx`
 
 **Email strategy (Cultivar OS):** Supabase email/password. `auth.uid()` is non-null. Required for RLS to work.  
@@ -185,7 +204,8 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 ## Multi-Tenant Auth System (Shared)
 
 **What:** Full invite-based team management for any vertical. Owner invites members by email; member receives a `/join?token=...` link, creates a Supabase account, and is linked to the owner's business.  
-**Status:** ✅ Built — TypeScript (branch: multi-tenant-extraction — not yet merged to main as of 2026-06-02)  
+**Status:** ✅ Built — TypeScript (merged to main 2026-06-03)  
+**Vertical:** shared | **Type:** infrastructure  
 **Location:** `packages/shared/src/auth/`
 
 **Schema (cultivar-os Supabase project — bgobkjcopcxusjsetfob):**
@@ -226,12 +246,13 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** React context that resolves the logged-in user's business and exposes it across the app. Two-path resolution: owner fast-path, member fallback.  
 **Status:** ✅ Built — TypeScript  
+**Vertical:** shared | **Type:** infrastructure  
 **Location:** `packages/shared/src/context/BusinessProvider.tsx`  
 **Exports:** `BusinessProvider`, `useBusinessContext`, `Business`, `BusinessContextValue` (from `packages/shared/src/context/index.ts`)
 
 **Resolution logic:**
 1. Owner path (fast): `businesses WHERE owner_id = auth.uid() AND business_type = $type`
-2. Member fallback (if owner returns null): `business_members WHERE user_id = auth.uid() AND active = true` with `businesses(*)` PostgREST join
+2. Member fallback (if owner returns null): `business_members WHERE user_id = auth.uid() AND active = true` with `businesses(*)` PostgREST join, filtered post-fetch to `business_type === businessType`
 
 **Context values:**
 - `business: Business | null` — full businesses row
@@ -244,7 +265,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **Consumed by:** `packages/cultivar-os/src/App.tsx` (`<BusinessProvider businessType="nursery">`), all Cultivar pages via `useBusinessContext()`.
 
-**Note:** Member-path does not filter by `business_type` — that filter is an owner-side concept. Members join a business directly. If a user is a member of multiple businesses, `.single()` will fail. Acceptable for v1.
+**Security note (fixed 2026-06-04, commit 8792c71):** Member path filters by `business_type` after fetching — `memberBiz?.business_type === businessType` must match before the member resolution is accepted. This prevents cross-vertical data exposure (audit finding #13). If a user is a member of multiple businesses in the same vertical, `.single()` will fail — acceptable for v1.
 
 ---
 
@@ -252,6 +273,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** Proactive QuickBooks token refresh. Checks expiry before any invoice call. Refreshes if missing or within 10 min of expiry. Sets `qb_needs_reconnect=true` and returns null if refresh token is dead.  
 **Status:** ✅ Built — TypeScript  
+**Vertical:** shared | **Type:** infrastructure  
 **Location:** `packages/shared/src/quickbooks/refresh.ts`  
 **Used by:** `packages/cultivar-os/api/qbo/invoice/cultivar.ts`
 
@@ -261,6 +283,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** Provider-agnostic notification sender + queue. Supports Resend (email) and Twilio (SMS).  
 **Status:** 🟡 Built but unconfirmed active — env vars not verified  
+**Vertical:** shared | **Type:** infrastructure  
 **Location:** `packages/shared/src/notifications/send.ts` + `queue.ts`
 
 **Templates (Cultivar OS):** `packages/shared/src/notifications/templates/cultivar.ts`
@@ -278,6 +301,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** Full Blotato-connected social post pipeline. Generates 3 AI posts per order, queues as drafts, owner reviews and publishes from dashboard.  
 **Status:** ✅ Built and live (Cultivar OS only)  
+**Vertical:** cultivar | **Type:** tile  
 **Backend:**
 - `api/social/generate-posts.ts` — Claude Sonnet 4.6, 3 post types per order
 - `api/social/enable.ts` — upserts nursery_modules enabled+configured
@@ -294,6 +318,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** Complete scan-to-invoice flow. QR scan → plant profile → add-ons → customer capture → cart review → order submit → QB invoice → email confirmation.  
 **Status:** ✅ Built and live — end-to-end  
+**Vertical:** cultivar | **Type:** tile  
 **Route:** `/plant/:sku` → `/plant/:sku/addons` → `/checkout/customer` → `/checkout/review` → `/checkout/confirm`
 
 **Key files:**
@@ -314,6 +339,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** Multi-step shared owner signup component with PIN gesture layer. Step 1: Owner Info (business name, owner name, email, password, phone, address, website). Step 2: PIN setup. Step 3: Biometric registration (optional, skippable). Optional vertical steps array.  
 **Status:** ✅ Built 2026-06-03 — shared, consumed by both Cultivar and Ignition  
+**Vertical:** shared | **Type:** infrastructure  
 **Location:** `packages/shared/src/auth/OwnerSignup.tsx`
 
 **Config-driven:** Each vertical provides an `OwnerSignupConfig` specifying `memberTable`, `memberFKColumn`, `ownerRole`, `ownerPermissions`, `pinLength`, `backgroundColor`, `cardColor`, `examples` (per-vertical placeholder text), `verticalSteps` (optional post-biometric steps), and an `onSuccess` callback. The vertical's `onSuccess` handles post-signup vertical-specific setup (e.g., Ignition creates the matching `shops` row and seeds DataBridge; Cultivar navigates to /onboarding).
@@ -328,6 +354,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** 3-step flow wrapping shared OwnerSignup. Welcome screen (dark Ignition theme) → OwnerSignup (TRACE green theme, full account + PIN setup) → Done screen (dark Ignition theme).  
 **Status:** ✅ Updated 2026-06-03 — uses shared OwnerSignup  
+**Vertical:** ignition | **Type:** capability  
 **Location:** `packages/ignition-os/modules/OnboardingWizard.jsx`
 
 **onSuccess callback:** Creates matching `shops` row (same UUID as `businesses.id`) in ufsgqckbxdtwviqjjtos, seeds DataBridge with shopId + shopName + current_user session, marks onboarding_complete=true.
@@ -342,6 +369,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** 4-path demo experience for new nursery owners. Flow after signup: after OwnerSignup completes → /onboarding → detects existing businesses row → starts at CHOOSE_PATH (skips Welcome + NurserySetup). Legacy path (direct /onboarding without prior signup): starts at WELCOME → NURSERY_SETUP → CHOOSE_PATH → PATH_EXPERIENCE → DONE.  
 **Status:** ✅ Updated 2026-06-04 — detects existing business on mount; signup routes here instead of /dashboard  
+**Vertical:** cultivar | **Type:** capability  
 **Location:** `packages/cultivar-os/src/pages/OnboardingWizard.tsx`  
 **Route:** `/onboarding` (private, all new signups redirect here; Dashboard redirects here when no business row)
 
@@ -359,6 +387,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** Owner-facing settings. Business profile, accounting (QB connect/disconnect), sales prompts (netting, install price), and team management.  
 **Status:** ✅ Built — TypeScript  
+**Vertical:** cultivar | **Type:** capability  
 **Location:** `packages/cultivar-os/src/pages/Settings.tsx`  
 **Route:** `/settings` (private; members without `manage_settings` are auto-redirected to `/dashboard`)
 
@@ -376,6 +405,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** Last 50 orders with leakage highlighting. Shows transport icon, customer name, amount, leakage flag.  
 **Status:** ✅ Built — TypeScript  
+**Vertical:** cultivar | **Type:** capability  
 **Location:** `packages/cultivar-os/src/pages/Orders.tsx`  
 **Route:** `/orders` (private)
 
@@ -387,6 +417,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** Generate a multi-stop delivery route from pending delivery orders. Checkbox selection per stop, inline address override for missing addresses, numbered stops list, Google Maps URL, SMS-to-driver.  
 **Status:** ✅ Built — TypeScript  
+**Vertical:** cultivar | **Type:** tile  
 **Location:** `packages/cultivar-os/src/pages/DeliveryRoute.tsx`  
 **Route:** `/deliveries` (private)
 
@@ -402,6 +433,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** Schedule, generate, and track social media campaigns. AI-generated post drafts with tone learning from published posts.  
 **Status:** ✅ Built — TypeScript (Cultivar OS only)  
+**Vertical:** cultivar | **Type:** tile  
 **Location:** `packages/cultivar-os/src/pages/Campaigns.tsx` + `CampaignDetail.tsx`  
 **Route:** `/campaigns` + `/campaigns/:id` (private)
 
@@ -419,6 +451,8 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **What:** Separate vertical for homes. Not part of trace-platform monorepo.  
 **Status:** Active development, separate repo  
+**Vertical:** N/A (separate repo — not in the trace-platform shared layer) | **Type:** N/A  
+*⚠️ NEEDS DAVID'S CALL — see bottom: this entry is a reference pointer, not a built capability in this repo. No type classification applies.*  
 **Repo:** `david-obrien61/CoolRunning` on GitHub  
 **Desktop folder:** `~/Desktop/CoolRunning/`  
 **Assessment tool:** `~/Desktop/trace-assessment-app/` — standalone, no git
@@ -426,6 +460,8 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 ---
 
 ## Repo Map (Desktop → GitHub)
+
+*Reference section — no Vertical/Type classification applies.*
 
 | Desktop Folder | GitHub Repo | What's in it | Status |
 |---|---|---|---|
@@ -464,6 +500,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 | Settings page (Cultivar OS) | 2026-05-29 + 2026-06-02 | Settings.tsx built with NurserySection, AccountingSection, SalesPromptsSection, TeamSection. Permission gate added 2026-06-02. |
 | Delivery routing (Cultivar OS) | 2026-05-29 | DeliveryRoute.tsx at /deliveries. Multi-stop Google Maps URL, SMS-to-driver. |
 | Multi-tenant member login | 2026-06-02 | BusinessProvider two-path resolution. Members land on Dashboard, not "Account not linked" wall. |
+| Cross-vertical member isolation | 2026-06-04 | BusinessProvider member path now filters by `business_type` post-fetch (commit 8792c71). |
 
 ---
 
@@ -485,6 +522,18 @@ Quantitative, citable research artifacts. Used in sales conversations, product d
 |---|---|---|
 | [docs/discovery/conduit-margin-evidence-2026-06-03.md](discovery/conduit-margin-evidence-2026-06-03.md) | Contractor markup analysis — Liberty Hill masonry project (Capital Land Design vs. actual) | 3.3× average materials markup; 57% savings ($2,629 on $4,651 quote); first documented data point for Conduit margin intelligence thesis |
 | [docs/discovery/onboarding-flow-findings-2026-06-03.md](discovery/onboarding-flow-findings-2026-06-03.md) | Real user testing of Ignition OS and Cultivar OS new-owner signup flows | Critical: Ignition blocked by missing shop_members table. High: Cultivar TeamSection not visible, signup form missing owner data. Navigation/onboarding shape inconsistencies between verticals. |
+
+---
+
+## ⚠️ NEEDS DAVID'S CALL
+
+Entries where the correct Vertical or Type tag is ambiguous. Best guess noted.
+
+| Entry | Ambiguity | Best guess |
+|---|---|---|
+| **Subscription Tiers + Pricing** | Currently documented from Ignition/CAI perspective. Question: does the STARTER/PROFESSIONAL/PREMIER tier structure apply platform-wide, or does each vertical have its own pricing model? Cultivar currently uses a flat $149/mo founding rate. | If platform-wide → `Vertical: shared`. If Ignition-only → `Vertical: ignition`. Tagged `ignition` for now. |
+| **AdminSubscription / Marketplace UI** | Is this a dashboard tile in the Ignition OmniDashboard tile grid, or is it reached via an admin/settings navigation separate from the tile grid? | If it appears in the tile grid → `Type: tile`. If admin nav → `Type: capability`. Tagged `capability` for now. |
+| **CoolRunnings** | This entry is a reference pointer to a separate repo, not a built capability inside trace-platform. No Vertical/Type classification is meaningful. | Could be removed from this inventory (it's not in this repo) or kept as a cross-reference note. Tagged `N/A` for now. |
 
 ---
 

@@ -275,6 +275,30 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-04 — built-inventory.md: Vertical + Type columns added
+
+**Type:** Docs-only. No code or schema changes.
+
+**What changed:** `docs/built-inventory.md` — added `Vertical` (ignition | cultivar | shared) and `Type` (tile | infrastructure | capability) columns to every entry. Column guide added at top. NEEDS DAVID'S CALL section added at bottom for 3 ambiguous entries (Subscription Tiers pricing scope, AdminSubscription tile-vs-capability, CoolRunnings reference-only status).
+
+**Tag summary (21 entries):**
+- **shared + infrastructure:** Tile System, configureAuth Factory, Multi-Tenant Auth System, BusinessProvider, QB Token Refresh, Notification System, OwnerSignup
+- **shared + capability:** AI Engine
+- **ignition + infrastructure:** FastAPI AI Backend (legacy), Trial Clock, DataBridge, Subscription Tiers (provisional)
+- **ignition + capability:** AdminSubscription (provisional), OnboardingWizard (Ignition)
+- **cultivar + tile:** Social Media Module, QR Checkout Flow, Delivery Routing, Campaign Scheduler
+- **cultivar + capability:** OnboardingWizard (Cultivar), Settings Page, Orders Page
+
+**Doc Reorg note:** built-inventory now carries Vertical + Type columns and is the intended source for the tile-grid baseline (shared+tile = every vertical inherits for free). This metadata rides along when built-inventory merges into the single current-state doc post-demo.
+
+**Step 11 — Factual correction:** `built-inventory.md` BusinessProvider section (line 247) previously stated "Member-path does not filter by `business_type`." This was corrected to reflect the fix in commit `8792c71` — the member path now filters by `business_type` post-fetch. The Resolved Gaps table was also updated with a "Cross-vertical member isolation" entry.
+
+**No runbook needed** — pure docs session.
+
+**AC compliance (step 13):** No AC compliance issues — session did not touch shared schema, RLS, or shared identifiers.
+
+---
+
 ### 2026-06-04 — Housekeeping task group + Vertical Config variable inventory (read-only)
 
 **Type:** Docs-only. No code, schema, or config changes.
