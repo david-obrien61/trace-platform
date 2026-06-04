@@ -89,6 +89,19 @@ member_devices
 ### Storage note (the `1234` incident)
 The plaintext `1234` seen in `pin_hash` tonight was **manually hand-entered by David during debugging** (typed the PIN into the hash field by mistake) — it is **not** evidence of a code path writing plaintext. Action item is *verify* the normal signup write path hashes correctly, not *fix* a known plaintext bug. (Still: with bcrypt migration, re-confirm the write path.)
 
+### Migration path — DECIDED 2026-06-04: HASH-ON-NEXT-SUCCESSFUL-LOGIN
+
+**Chosen approach:** transparent rolling upgrade. When a member's PIN verifies against the existing SHA-256 hash, immediately re-hash with bcrypt/argon2 and overwrite the stored value. The upgrade is invisible to the user and self-completing as members log in organically.
+
+**Mechanics:**
+1. On PIN verify: check if `pin_hash` is a SHA-256 hex (64-char hex string). If yes → verify against SHA-256 path → on success, immediately re-hash with bcrypt and `UPDATE business_members SET pin_hash = bcrypt_hash WHERE id = member_id`.
+2. On PIN verify: if `pin_hash` is a bcrypt hash (starts with `$2b$`) → verify against bcrypt path directly.
+3. After the defined window (to be set at build time, e.g. 30 days post-deploy), any member whose `pin_hash` is still SHA-256 format must reset their PIN before gaining access.
+
+**Why this path:** zero forced resets for active users. PINs upgrade silently on first use after the migration ships. Only stale accounts (no login during the window) require a forced reset, which is the correct behaviour for stale credentials anyway.
+
+**Action item at build time:** verify the normal signup write path produces a bcrypt hash (not SHA-256) for new enrollments before shipping.
+
 ---
 
 ## 4. Identity table reconciliation (kills the split-brain)

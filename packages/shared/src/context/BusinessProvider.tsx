@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../supabase/client';
 
-const SM_DEBUG = true; // flip to true to re-enable [SM-TRACE] diagnostics
+const SM_DEBUG = false; // flip to true to re-enable [SM-TRACE] diagnostics
 
 export interface Business {
   id: string;

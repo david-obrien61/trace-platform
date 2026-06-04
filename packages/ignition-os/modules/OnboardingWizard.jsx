@@ -77,7 +77,7 @@ async function createIgnitionShopAndSeedDataBridge(businessId, memberId, shopNam
   }
 }
 
-const AUTH_DEBUG = true; // [AUTH-TRACE] gate — set false after diagnosis
+const AUTH_DEBUG = false; // [AUTH-TRACE] gate — set false after diagnosis
 
 const ignitionSignupConfig = {
   businessLabel:    'shop',
