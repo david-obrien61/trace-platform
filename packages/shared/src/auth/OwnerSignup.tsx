@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase/client';
 import { hashPin } from '../supabase/auth';
 
@@ -39,6 +39,7 @@ export interface OwnerSignupConfig {
   };
   verticalSteps?: VerticalStep[]; // optional steps after biometric
   onSuccess: (businessId: string, memberId: string) => void;
+  debugAuth?: boolean;            // enable [AUTH-TRACE] diagnostic logs — set false after diagnosis
 }
 
 // ── Step IDs ─────────────────────────────────────────────────────────────────
@@ -84,6 +85,7 @@ export function OwnerSignup({ config, navigate }: Props) {
     examples = {},
     verticalSteps = [],
     onSuccess,
+    debugAuth = false,
   } = config;
 
   const labelColor   = darkMode ? '#cbd5e1' : '#333';
@@ -141,6 +143,26 @@ export function OwnerSignup({ config, navigate }: Props) {
 
   const green = primaryColor;
 
+  // ── [AUTH-TRACE] diagnostic instrumentation (gate: debugAuth) ─────────────
+
+  useEffect(() => {
+    if (debugAuth) console.log('[AUTH-TRACE] OwnerSignup MOUNTED', {
+      step,
+      signInPath,
+      hasNavigateProp: !!navigate,
+      businessLabel,
+      businessType,
+    });
+    return () => {
+      if (debugAuth) console.log('[AUTH-TRACE] OwnerSignup UNMOUNTED', { finalStep: step });
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (debugAuth) console.log('[AUTH-TRACE] OwnerSignup step →', step);
+  }, [step, debugAuth]);
+
   // ── Navigation helpers ────────────────────────────────────────────────────
 
   function goTo(s: StepId) {
@@ -149,6 +171,12 @@ export function OwnerSignup({ config, navigate }: Props) {
   }
 
   function navTo(path: string) {
+    if (debugAuth) console.log('[AUTH-TRACE] OwnerSignup navTo() fired', {
+      path,
+      currentStep: step,
+      hasNavigateProp: !!navigate,
+      action: navigate ? `calling navigate('${path}')` : `window.location.href = '${path}'`,
+    });
     if (navigate) navigate(path);
     else window.location.href = path;
   }

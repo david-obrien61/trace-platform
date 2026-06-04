@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { OwnerSignup } from '@trace/shared/auth';
 import { supabase }    from '../supabase';
 import DataBridge      from '../DataBridge';
@@ -98,13 +98,29 @@ const ignitionSignupConfig = {
     businessName: "e.g. Dave's Auto Shop",
     address:      '123 Commerce Dr, Austin TX',
   },
+  debugAuth:        AUTH_DEBUG,
 };
+
+const AUTH_DEBUG = true; // [AUTH-TRACE] gate — set false after diagnosis
 
 export default function OnboardingWizard({ onComplete }) {
   const [step,         setStep]         = useState('WELCOME');
   const [doneShopName, setDoneShopName] = useState('');
   // shopName is set from the URL when OwnerSignup onSuccess fires
   const [pendingShopName, setPendingShopName] = useState('');
+
+  // [AUTH-TRACE] mount + step-change probes
+  useEffect(() => {
+    if (AUTH_DEBUG) console.log('[AUTH-TRACE] OnboardingWizard MOUNTED, initial step:', step);
+    return () => {
+      if (AUTH_DEBUG) console.log('[AUTH-TRACE] OnboardingWizard UNMOUNTED');
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (AUTH_DEBUG) console.log('[AUTH-TRACE] OnboardingWizard step →', step);
+  }, [step]);
 
   const config = {
     ...ignitionSignupConfig,
@@ -145,6 +161,11 @@ export default function OnboardingWizard({ onComplete }) {
       <OwnerSignup
         config={config}
         navigate={(path) => {
+          if (AUTH_DEBUG) console.log('[AUTH-TRACE] navigate() prop received →', {
+            path,
+            wizardStep: step,
+            action: path === '/' ? 'setStep(WELCOME)' : 'no-op (unhandled path)',
+          });
           if (path === '/') setStep('WELCOME');
         }}
       />
