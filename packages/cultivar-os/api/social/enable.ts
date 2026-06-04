@@ -44,15 +44,14 @@ export default async function handler(req: any, res: any) {
   const db = adminDb();
 
   const { error } = await db
-    .from('nursery_modules')
+    .from('business_modules')
     .upsert(
       {
         business_id,
-        module_key:  'social_media',
-        enabled:     true,
-        configured:  true,
-        config:      { blotato_account_id, platforms },
-        updated_at:  new Date().toISOString(),
+        module_key: 'social_media',
+        enabled:    true,
+        configured: true,
+        config:     { blotato_account_id, platforms },
       },
       { onConflict: 'business_id,module_key' },
     );

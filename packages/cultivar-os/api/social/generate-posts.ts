@@ -56,13 +56,13 @@ export default async function handler(req: any, res: any) {
 
   // Check social_media module is enabled + configured for this business
   const { data: nm, error: nmErr } = await db
-    .from('nursery_modules')
+    .from('business_modules')
     .select('enabled, configured')
     .eq('business_id', business_id)
     .eq('module_key', 'social_media')
     .single();
 
-  console.log('[generate-posts] nursery_modules row:', JSON.stringify(nm), 'error:', nmErr?.message ?? null);
+  console.log('[generate-posts] business_modules row:', JSON.stringify(nm), 'error:', nmErr?.message ?? null);
 
   if (!nm?.enabled || !nm?.configured) {
     console.warn('[generate-posts] EARLY EXIT — module_not_enabled');

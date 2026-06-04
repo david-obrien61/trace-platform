@@ -29,7 +29,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const { data: nm } = await db
-    .from('nursery_modules')
+    .from('business_modules')
     .select('config')
     .eq('business_id', (draft as any).business_id)
     .eq('module_key', 'social_media')

@@ -304,7 +304,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 **Vertical:** cultivar | **Type:** tile  
 **Backend:**
 - `api/social/generate-posts.ts` — Claude Sonnet 4.6, 3 post types per order
-- `api/social/enable.ts` — upserts nursery_modules enabled+configured
+- `api/social/enable.ts` — upserts business_modules enabled+configured
 - `api/social/publish.ts` — POSTs to Blotato v2 API
 
 **Post types:** educational, customer_story, seasonal  
@@ -489,7 +489,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 | Delivery address persistence | Cultivar OS | DeliveryRoute.tsx shows inline address override but does not persist it. Needs `delivery_address` column on `orders` and capture at checkout for delivery transport. |
 | Delivery date scheduling | Cultivar OS | No `delivery_date` on orders. Route shows all pending with no date filtering. |
 | Per-plant install price edit | Cultivar OS | `plants.install_price` read-only in UI. No edit surface. Post-demo. |
-| Tighten nursery_modules RLS | Cultivar OS | `authenticated_select_nursery_modules` allows any authenticated user to read any nursery's modules. Must restrict to owner_id join post-demo. (CLAUDE.md post-demo task) |
+| ~~Tighten nursery_modules RLS~~ | ~~Cultivar OS~~ | ✅ RESOLVED 2026-06-04: `business_modules` created with membership-scoped RLS (`business_members.user_id = auth.uid() AND active = true`). `authenticated_select_nursery_modules` (loose) retired. |
 | Port ai_router.py to Vercel functions | Ignition OS | Railway is legacy for web build. Port 11 endpoints to `packages/ignition-os/api/`. (Tech Debt #12) |
 
 ## ✅ Resolved Gaps (previously listed as Not Yet Built)

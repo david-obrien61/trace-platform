@@ -49,7 +49,7 @@ const MODULE_ORDER = [
   'seasonal_module', 'business_insights', 'inventory_intake',
 ] as const;
 
-interface NurseryModuleRow {
+interface BusinessModuleRow {
   module_key: string;
   enabled: boolean;
   configured: boolean;
@@ -84,7 +84,7 @@ export function useModules(businessId: string) {
             .single(),
 
           supabase
-            .from('nursery_modules')
+            .from('business_modules')
             .select('module_key, enabled, configured, config')
             .eq('business_id', businessId),
 
@@ -99,8 +99,8 @@ export function useModules(businessId: string) {
         const accountingCompanyId = (businessRes.data as any)?.accounting_company_id ?? null;
         const businessPlan = 'starter'; // post-demo: fetch from subscription table
 
-        const nmByKey: Record<string, NurseryModuleRow> = {};
-        for (const row of (nmRes.data ?? []) as NurseryModuleRow[]) {
+        const nmByKey: Record<string, BusinessModuleRow> = {};
+        for (const row of (nmRes.data ?? []) as BusinessModuleRow[]) {
           nmByKey[row.module_key] = row;
         }
 

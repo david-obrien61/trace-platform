@@ -129,7 +129,7 @@ export default async function handler(req: any, res: any) {
       }
 
       const { data: mod } = await db
-        .from('nursery_modules')
+        .from('business_modules')
         .select('config')
         .eq('business_id', businessId)
         .eq('module_key', 'social_media')

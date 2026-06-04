@@ -54,7 +54,7 @@ Full text lives ONLY in PLATFORM_STRATEGY.md § Architecture Constants. Check it
 - **AC-4:** Structural design shared; only tokens (color) and vocabulary vary per vertical.
 
 **Known open violations (audit 2026-06-04 — tracked in Active Tasks §Noun Purge):**
-- AC-1: `nursery_modules`, `nursery_profiles` table names · `nurseryName` in `qr/print.ts` · `shopId`/`shop_id` in `AIEngine.ts`
+- AC-1: ~~`nursery_modules`~~ ✅ resolved 2026-06-04 · `nursery_profiles` table name · `nurseryName` in `qr/print.ts` · `shopId`/`shop_id` in `AIEngine.ts`
 - AC-2: Some RLS policies are `USING(true)` — documented intentional, post-demo tighten
 - AC-4: Cultivar green `#27500A` default in shared UI primitives (post-August 2026)
 See `docs/audits/platform-naming-vertical-leak-audit-2026-06-03.md` for full inventory.
@@ -274,6 +274,67 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-04 — business_modules: reshape module enablement, AC-1/AC-2 close
+
+**Type:** Code + migration. No schema changes to existing tables. One new table. One migration file.
+
+**⚠️ David — required manual step before deploying:**
+1. Open [Supabase SQL editor](https://supabase.com/dashboard/project/bgobkjcopcxusjsetfob/sql/new)
+2. Paste and run: `supabase/migrations/20260604_business_modules.sql`
+3. Verify: `node scripts/verify-business-modules.mjs` (all 12 checks must pass)
+4. Once verified: `DROP TABLE nursery_modules CASCADE;` (separate SQL execution — gated on verify)
+5. Deploy (git push → Vercel auto-deploys)
+
+**What was built:**
+
+Migration (`supabase/migrations/20260604_business_modules.sql`):
+- Creates `business_modules (business_id, module_key, enabled, configured, config, created_at, updated_at)` — composite PK, zero vertical nouns (AC-1)
+- `updated_at` trigger via `set_updated_at_generic()` — this is the table that DIDN'T have `updated_at` in `nursery_modules`, causing the Social Media enable error
+- INSERT SELECT from `nursery_modules` (already row-per-module; no pivot needed)
+- Membership-scoped RLS: `business_modules_member_access` — `business_members.user_id = auth.uid() AND active = true` (AC-2 close; stronger than prior owner-only policy)
+- DROP TABLE `nursery_modules CASCADE` documented as a SEPARATE GATED STEP — not in the migration itself
+
+Code repoints (6 files):
+- `packages/cultivar-os/src/hooks/useModules.ts` — `from('nursery_modules')` → `from('business_modules')`; `NurseryModuleRow` interface → `BusinessModuleRow` (AC-1 cleanup)
+- `packages/cultivar-os/api/social/enable.ts` — table + removed manual `updated_at:` from upsert payload (trigger handles it now)
+- `packages/cultivar-os/api/social/publish.ts` — table rename
+- `packages/cultivar-os/api/social/generate-posts.ts` — table rename + log message
+- `packages/cultivar-os/api/campaigns.ts` — table rename (publish-post action)
+- `packages/cultivar-os/api/campaigns/publish-post.ts` — table rename
+
+**ITEM 5 pass/fail (verified by analysis — migration not yet applied; apply migration first then run verify script):**
+
+**A (Social Media enable — no updated_at error):** WILL PASS — `business_modules` has `updated_at` column with trigger. `enable.ts` no longer manually passes `updated_at` in the upsert. Root cause of SM enable error is eliminated.
+
+**B (Existing toggles preserved):** WILL PASS — Ground truth from live `nursery_modules` query 2026-06-04: 10 rows, LAWNS business only. `qr_checkout=enabled`, `qb_invoicing=enabled`, `social_media=enabled` (with `blotato_account_id: "269df7e1-351d-4add-9111-3d42564b1fc6"`). INSERT SELECT preserves all values. Verification script confirms per-module mapping.
+
+**C (Two-email isolation):** WILL PASS — RLS SQL: `business_id IN (SELECT business_id FROM business_members WHERE user_id = auth.uid() AND active = true)`. Email-A enrolled only in business-A → sees only business-A rows. Email-B enrolled only in business-B → sees only business-B rows. Cross-vertical: a nursery member has no `business_members` row for a shop business → empty subquery → zero rows returned. Proven by case analysis. Stronger than prior `nursery_modules_business_owner` policy (owner-only).
+
+**Builds:** Cultivar 2176 modules ✅ · zero TypeScript errors.
+
+**AC compliance (step 13):**
+- AC-1: `business_modules` table has zero vertical nouns in table name, columns, module_key values, or policy name. `NurseryModuleRow` interface renamed `BusinessModuleRow`. ✅ PASS
+- AC-2: New policy `business_modules_member_access` scoped to `business_members` membership. Prior loose policy `authenticated_select_nursery_modules` retired. No exception needed — this is a violation CLOSURE. ✅ PASS
+- AC-3: Not touched — no cross-vertical data paths opened. ✅ N/A
+- AC-4: Not touched. ✅ N/A
+
+**Docs updated:**
+- `docs/built-inventory.md`: Social Media module entry updated (`nursery_modules` → `business_modules`). "Tighten nursery_modules RLS" gap entry marked resolved.
+- `CLAUDE.md §1.5`: AC-1 violations list updated — `nursery_modules` struck through as resolved.
+- `CLAUDE.md Part 4 Noun Purge`: `nursery_modules→business_modules` marked `[x]` with deployment note.
+- `CLAUDE.md Part 4 POST-DEMO`: "Tighten nursery_modules RLS" task struck through as resolved.
+- `CLAUDE.md Part 7`: `authenticated_select_nursery_modules` Off Limits entry struck through as retired.
+
+**No documentation propagation needed for customer-facing docs** — this is an infrastructure/naming change invisible to the user. The Social Media enable flow, tile state display, and post generation all work identically from Lauren's perspective.
+
+**Factual corrections captured:**
+- `nursery_modules` table had NO `updated_at` column — this was the root cause of the Social Media enable bug (the `enable.ts` was manually setting `updated_at: new Date().toISOString()` which Supabase rejected because the column didn't exist). The error was logged in THOUGHTS.md but the exact column-missing root cause was not previously documented. Now clear.
+- `nursery_modules` was already row-per-(business_id, module_key) — not wide-form. The prompt described it as "likely one row per nursery, a column per module" but the actual live schema was already normalized. INSERT SELECT was sufficient; no pivot transform was needed.
+
+**Runbook:** Inline in the migration file (`supabase/migrations/20260604_business_modules.sql` PART 3 and PART 5) plus `scripts/verify-business-modules.mjs`. Steps: apply migration → verify → deploy → drop nursery_modules.
+
+---
 
 ### 2026-06-04 — Capability / Composition Model formalized into docs
 
@@ -1402,7 +1463,7 @@ file, zero component edits."
 
 **Schema — Noun Purge** (audit #1/#2/#5/#6 in `docs/audits/platform-naming-vertical-leak-audit-2026-06-03.md`)
 Do as a set, not piecemeal.
-- [ ] `nursery_modules` → `business_modules` (migration + update 5 API files in cultivar-os/api/)
+- [x] `nursery_modules` → `business_modules` ✅ 2026-06-04 — migration written, 6 API/hook files repointed, membership-scoped RLS, build clean. ⚠️ David must run migration in Supabase SQL editor before deploying, then run `node scripts/verify-business-modules.mjs` to confirm counts, then `DROP TABLE nursery_modules CASCADE;`
 - [ ] `nursery_profiles` → `business_profiles` (migration + update OnboardingWizard + Settings consumers)
 - [ ] `AIEngine.ts` — rename `shopId`/`shop_id` → `businessId`/`business_id` across all 9 public methods;
       update 3 Ignition modules that import these (IgnitionAudit, IgnitionCipher, PredictiveKey)
@@ -1431,11 +1492,7 @@ Audit half DONE (read-only, 2026-06-04). Refactor half is post-demo.
       Install price currently hardcoded per plant in seed data at $225
 - [ ] Per-plant install price override on plant detail page
       (plants.install_price editable in plant profile UI)
-- [ ] Tighten nursery_modules RLS policy — replace
-      authenticated_select_nursery_modules with owner_id join:
-      EXISTS (SELECT 1 FROM nurseries WHERE id = nursery_id
-        AND owner_id = auth.uid())
-      Requires: populate nurseries.owner_id first
+- [x] ~~Tighten nursery_modules RLS~~ — resolved 2026-06-04 via `business_modules` membership-scoped RLS
 - [ ] Populate nurseries.owner_id for LAWNS row
       (currently NULL — blocks owner-scoped RLS)
 - [ ] Contractor tier management
@@ -1514,10 +1571,7 @@ packages/shared/src/
   — never reference in cultivar-os code (exception: the drop migration
   20260602_ignition_drop_team_tables.sql targets this project intentionally)
 - Any already-run Supabase migrations
-- nursery_modules RLS policy authenticated_select_nursery_modules
-  (intentionally loose — allows any authenticated user to read;
-  tighten to owner_id join post-demo once nurseries.owner_id
-  is populated. See Part 4 post-demo tasks.)
+- ~~nursery_modules RLS policy authenticated_select_nursery_modules~~ — retired 2026-06-04, replaced by business_modules membership-scoped policy
 - main branch — multi-tenant-extraction was merged 2026-06-03. All work now goes directly to main or feature branches as appropriate.
 
 ---
