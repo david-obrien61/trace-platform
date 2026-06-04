@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBusinessContext } from '@trace/shared/context';
 
-const SM_DEBUG = false; // flip to true to re-enable [SM-TRACE] diagnostics
+const SM_DEBUG = true; // flip to true to re-enable [SM-TRACE] diagnostics
 
 const PLATFORMS = [
   { key: 'instagram', label: 'Instagram' },

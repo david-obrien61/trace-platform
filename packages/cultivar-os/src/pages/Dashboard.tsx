@@ -11,7 +11,7 @@ import { Tile } from '@trace/shared/components/tiles/Tile';
 // Configurable — will move to verticalConfig post-demo
 const LEAKAGE_AVG_VALUE = 28;
 
-const SM_DEBUG = false; // flip to true to re-enable [SM-TRACE] diagnostics
+const SM_DEBUG = true; // flip to true to re-enable [SM-TRACE] diagnostics
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
