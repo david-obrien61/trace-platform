@@ -276,6 +276,139 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-04 — Spec commit · debug flags gated · bcrypt path recorded · blast-radius audit
+
+**Type:** Docs + instrumentation gate. No schema, no new features, no migrations. Commit: `db7cf37`.
+
+**What was done (four tasks, in order):**
+
+**Task 1 — Spec committed:** `docs/specs/SPEC-identity-and-access-2026-06-04.md` committed at `44cd755` earlier this session. Verbatim. `docs/specs/` directory is new.
+
+**Task 2 — Both debug flags gated (STD-003):**
+
+`AUTH_DEBUG` was `true` in `packages/ignition-os/modules/OnboardingWizard.jsx:80` → set to `false`.
+`SM_DEBUG` was `true` in `packages/shared/src/context/BusinessProvider.tsx:4` → set to `false`. *(The June 4 handoff said this was already gated — it was not. Corrected now.)*
+`SM_DEBUG` was already `false` in `Dashboard.tsx:14` and `SocialSetup.tsx:5` (correct per `b3eb1ee`).
+
+**Probe locations — re-enable by setting flag to `true`:**
+- `AUTH_DEBUG`: `packages/ignition-os/modules/OnboardingWizard.jsx:80` — gates 7 `[AUTH-TRACE]` logs in SignInScreen + OnboardingWizard mount/step/navigate events. `debugAuth: AUTH_DEBUG` on line 103 also gates `OwnerSignup.tsx` auth logs.
+- `SM_DEBUG` (BusinessProvider): `packages/shared/src/context/BusinessProvider.tsx:4` — gates 5 `[SM-TRACE]` logs: state transitions, owner lookup result, member lookup result, resolution outcome. Fires on every screen in BOTH verticals since BusinessProvider wraps the app root.
+- `SM_DEBUG` (Dashboard): `packages/cultivar-os/src/pages/Dashboard.tsx:14` — gates 2 logs for social_media tile handleEnable + handleNavigate.
+- `SM_DEBUG` (SocialSetup): `packages/cultivar-os/src/pages/SocialSetup.tsx:5` — gates 4 logs: MOUNTED, UNMOUNTED, businessId change, handleSave SUCCESS, Back button.
+
+**Task 3 — bcrypt migration path recorded in Spec Section 3:**
+Decision: **HASH-ON-NEXT-SUCCESSFUL-LOGIN** — when a member's PIN verifies against the existing SHA-256 hash, immediately re-hash with bcrypt/argon2 and overwrite. Transparent to user. Stragglers (no login during window) force-reset. Added as "Migration path — DECIDED 2026-06-04" subsection in Spec Section 3.
+
+**Task 4 — Blast-radius audit (read-only, STD-001 compliant):**
+
+Four-table reference inventory for identity reconciliation (Spec Section 4 build):
+
+---
+
+**TABLE: `shop_members`** — 16 live code references
+
+| File | Line(s) | Operation | Notes |
+|---|---|---|---|
+| `packages/shared/src/auth/OwnerSignup.tsx` | 28 | type union | `memberTable: 'business_members' \| 'shop_members'` — type definition in config interface |
+| `packages/shared/src/supabase/auth.ts` | 128 | READ | `authenticateMember()` — verifies PIN against `pin_hash` (OFF LIMITS per Part 7 — do not edit until post-demo) |
+| `packages/ignition-os/DataBridge.js` | 748 | READ | `verifyPIN()` — parallel PIN verify path |
+| `packages/ignition-os/CoreApp.jsx` | 211, 224, 239 | WRITE × 3 | Owner pre-creates member row, updates pin_hash, activates member |
+| `packages/ignition-os/CoreApp.jsx` | 603 | READ | Loads stored member session by id |
+| `packages/ignition-os/modules/OnboardingWizard.jsx` | 29 | WRITE | `onSuccess` — inserts owner's own member row |
+| `packages/ignition-os/modules/OnboardingWizard.jsx` | 91 | config | `memberTable: 'shop_members'` passed to shared OwnerSignup |
+| `packages/ignition-os/modules/IgnitionAdmin.jsx` | 324 | WRITE | Admin creates staff member row (active=false) |
+| `packages/ignition-os/modules/IgnitionAdmin.jsx` | 621 | UPDATE | Admin updates member details |
+| `packages/ignition-os/modules/IgnitionAdmin.jsx` | 1039 | DELETE | Admin removes member |
+| `packages/ignition-os/modules/IgnitionAdmin.jsx` | 1108, 1330 | READ × 2 | Lists all members for shop |
+| `packages/ignition-os/modules/IgnitionOmni.jsx` | 306, 349 | READ (join) | `shop_members(name)` joined from tech_hours; reads `entry.shop_members?.name` |
+
+---
+
+**TABLE: `shops`** — 15 live code references
+
+| File | Line(s) | Operation | Notes |
+|---|---|---|---|
+| `packages/ignition-os/CoreApp.jsx` | 172 | READ | Loads shop name for header display |
+| `packages/ignition-os/CoreApp.jsx` | 762 | READ | OWNER SYNC loads shop name after auth resolves |
+| `packages/ignition-os/CoreApp.jsx` | 810 | READ | QR scan / share-link flow: `shops.select('id, name')` |
+| `packages/ignition-os/CoreApp.jsx` | 831 | READ | Loads name for stored member session |
+| `packages/ignition-os/DataBridge.js` | 270 | READ | `DataBridge.shop.get()` |
+| `packages/ignition-os/DataBridge.js` | 271 | WRITE | `DataBridge.shop.save()` — upsert |
+| `packages/ignition-os/DataBridge.js` | 273 | WRITE | `DataBridge.shop.create()` — insert on first signup |
+| `packages/ignition-os/App.js` | 176 | READ | Startup check: `shops.select('id').limit(1)` |
+| `packages/ignition-os/OnboardingWizard.jsx` | 93 | WRITE | Duplicate top-level OnboardingWizard (not `modules/`) — upsert |
+| `packages/ignition-os/modules/OnboardingWizard.jsx` | 42 | WRITE | Creates `shops` row (same UUID as businesses.id) on signup |
+| `packages/ignition-os/modules/IgnitionOmni.jsx` | 89, 97 | READ+UPDATE | `is_dot_mandated` flag |
+| `packages/ignition-os/modules/IgnitionOmni.jsx` | 515, 574 | READ+UPDATE | `margin_config` JSON |
+| `packages/ignition-os/modules/IgnitionAdmin.jsx` | 1581 | UPDATE | Shop settings update |
+
+*Note: `businesses.id = shops.id` (same UUID, established by `20260529_ignition_businesses.sql`). The reconciliation path (Spec Section 4) retires `shops` as a separate table or makes it a view; DataBridge reads would need to be rerouted to `businesses`.*
+
+---
+
+**TABLE: `member_devices`** — 10 live code references. **TABLE DOES NOT EXIST IN DB** (dropped June 2 by `20260602_ignition_drop_team_tables.sql`, never recreated). All calls currently 404.
+
+| File | Line(s) | Operation | Notes |
+|---|---|---|---|
+| `packages/shared/src/supabase/auth.ts` | 77, 91, 100 | READ + WRITE + UPDATE | `autoEnrollDevice()` — checks device exists, inserts if new, updates last_seen_at (OFF LIMITS per Part 7) |
+| `packages/ignition-os/DataBridge.js` | 707, 721, 730 | READ + WRITE + UPDATE | Parallel `autoEnrollDevice()` implementation in DataBridge |
+| `packages/ignition-os/modules/IgnitionAdmin.jsx` | 602 | READ | Lists devices per member |
+| `packages/ignition-os/modules/IgnitionAdmin.jsx` | 636 | UPDATE | Disable device (`is_active = false`) |
+| `packages/ignition-os/modules/IgnitionAdmin.jsx` | 640 | UPDATE | Re-enable device (`is_active = true`) |
+| `packages/ignition-os/modules/IgnitionAdmin.jsx` | 644 | DELETE | Remove device row |
+
+*The old `supabase_identity_v2_migration.sql` schema used `shop_id` (vertical-specific). The new table must use `business_id` per Spec Section 2.*
+
+---
+
+**TABLE: `pin_resets`** — 3 live code references. **TABLE DOES NOT EXIST IN DB** (dropped June 2). PIN reset flow is currently fully broken.
+
+| File | Line(s) | Operation | Notes |
+|---|---|---|---|
+| `packages/ignition-os/CoreApp.jsx` | 52 | READ | Verifies reset code: `eq('reset_code', ...).eq('shop_id', ...).eq('used', false)` |
+| `packages/ignition-os/CoreApp.jsx` | 87 | UPDATE | Marks code as used: `.update({ used: true })` |
+| `packages/ignition-os/modules/IgnitionAdmin.jsx` | 1122 | WRITE | Admin inserts reset code |
+
+*Old schema: `reset_code text` (plaintext), scoped to `shop_id`. New table must: use `business_id`, hash the code, add authorization check (Spec Section 5b authorization gap).*
+
+---
+
+**Audit summary — what the identity reconciliation build must touch:**
+- `packages/shared/src/supabase/auth.ts` — `authenticateMember()` + `autoEnrollDevice()` (currently OFF LIMITS; will be unlocked for the identity build session)
+- `packages/shared/src/auth/OwnerSignup.tsx` — remove `'shop_members'` from `memberTable` union type
+- `packages/ignition-os/CoreApp.jsx` — 8 references across shop_members (4) + shops (4) + pin_resets (2) — the heaviest single file
+- `packages/ignition-os/DataBridge.js` — 6 references: shops (3) + shop_members (1) + member_devices (3)
+- `packages/ignition-os/modules/OnboardingWizard.jsx` — shop_members (2) + shops (1)
+- `packages/ignition-os/modules/IgnitionAdmin.jsx` — shop_members (4) + member_devices (4) + pin_resets (1)
+- `packages/ignition-os/modules/IgnitionOmni.jsx` — shop_members (2) + shops (4)
+
+**No Cultivar OS files reference any of these four tables.** Blast radius is 100% Ignition-side.
+
+**Factual correction (STD-001):** the June 4 handoff stated `SM_DEBUG = false` was applied to BusinessProvider.tsx. The live file had `SM_DEBUG = true`. Corrected this session (`db7cf37`).
+
+**No customer-facing documentation propagation needed** — no user-visible changes this session.
+
+**No runbook needed** — pure read-only audit + flag gating. No environment or DB changes.
+
+**AC compliance (step 13):** No AC compliance issues — session did not touch shared schema, RLS, or shared identifiers. BusinessProvider.tsx edit changes only the flag value, no logic.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Entire session read-only (audit). The one code change (flag gating) was confirmed safe before edit. Factual correction captured.
+- STD-002: N/A — no bug fix applied.
+- STD-003: ✅ AUTH_DEBUG gated to false in OnboardingWizard.jsx. SM_DEBUG gated to false in BusinessProvider.tsx (was wrongly live). All four probe file locations documented above.
+- STD-004: N/A — no business-scoped feature shipped.
+- STD-005: N/A — no decisions reversed. bcrypt migration path added as new content, not replacement.
+- STD-006: ✅ No vertical nouns introduced in shared code.
+
+**Next session (identity reconciliation build — start fresh, rested):**
+- Read this handoff + `docs/specs/SPEC-identity-and-access-2026-06-04.md`
+- Use the blast-radius map above to plan the migration sequence
+- Start with Spec Section 8 Step 1: reconcile identity tables (`businesses` canonical, `shops` retired or view)
+- `shared/src/supabase/auth.ts` and `shared/src/auth/OwnerSignup.tsx` will need to be unlocked (currently Off Limits)
+- Build carefully, not tired — this is foundational
+
+---
+
 ### 2026-06-04 — SM flash-bounce FIXED; [SM-TRACE] gated; useModules null-guard applied
 
 **Type:** Bug fix. Two code files changed (useModules.ts, Dashboard.tsx). Two instrumentation files gated (SocialSetup.tsx, BusinessProvider.tsx). Commit: `b3eb1ee`.
