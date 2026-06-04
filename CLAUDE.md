@@ -275,6 +275,30 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-04 — Housekeeping task group + Vertical Config variable inventory (read-only)
+
+**Type:** Docs-only. No code, schema, or config changes.
+
+**What changed:**
+- `CLAUDE.md Part 4`: Restructured Active Tasks — Noun Purge moved under new "🟡 HOUSEKEEPING (AC-1)" umbrella group. Added Doc Reorg subtask and Vertical Config Extraction subtask. All three are sequenced post-demo, grouped as one principle applied to three domains.
+- `docs/audits/vertical-config-variable-inventory-2026-06-03.md` (new): 36-variable inventory across 8 dimensions (identity, theme, copy, vocabulary, modules, auth, integrations, behavior). Includes full OwnerSignupConfig interface, proposed VerticalConfig type shape, readiness assessment, and post-demo refactor file list.
+
+**Key findings from the inventory:**
+- OwnerSignupConfig already covers ~60% of what VerticalConfig needs (theme, copy, auth). The build is an extension, not a ground-up design.
+- Biggest blocker: product name ("Cultivar OS" / "Ignition OS") hardcoded in 15+ files — a third vertical requires a find-and-replace hunt before shipping.
+- Second biggest: no `shop.ts` discovery schema for Ignition (blocks Ignition discovery feature).
+- TAX_RATE constant duplicated in code — should read from `businesses.tax_rate` only.
+- No AC-4 violations beyond what's already known. `darkMode` flag is a color-system concern, not a structural deviation.
+- 8th dimension found beyond the original 7: Auth & Membership Shape (memberTable, memberFKColumn, ownerRole) — already config-driven via OwnerSignupConfig ✅.
+
+**No factual corrections to other docs needed** — the audit confirmed that shared primitive color defaults (`#27500A`) are the only AC-4 borderline item, already logged in §1.5 violations list.
+
+**No runbook needed** — read-only audit + task restructure.
+
+**AC compliance (step 13):** No AC compliance issues — session did not touch shared schema, RLS, or shared identifiers.
+
+---
+
 ### 2026-06-04 — Docs propagation: Architecture Constants + Noun Purge task
 
 **Type:** Docs-only. No code or schema changes. Three files edited.
@@ -1324,17 +1348,35 @@ Completed:
 - [ ] Customer follow-up engine
 - [ ] Mobile responsive fix (tile grid desktop only)
 
-### 🟡 NOUN PURGE (AC-1 compliance — before KINNA/Conduit build)
+### 🟡 HOUSEKEEPING (AC-1: variation lives in one declarative place)
 
-One deliberate migration session to close the AC-1 violations. Do as a set, not piecemeal.
-See audit findings #1, #2, #6 in `docs/audits/platform-naming-vertical-leak-audit-2026-06-03.md`.
+One principle applied to three domains — schema, docs, vertical setup — sequenced AFTER
+the demo. Together they close the gap between "works now" and "new vertical = one config
+file, zero component edits."
 
+**Schema — Noun Purge** (audit #1/#2/#5/#6 in `docs/audits/platform-naming-vertical-leak-audit-2026-06-03.md`)
+Do as a set, not piecemeal.
 - [ ] `nursery_modules` → `business_modules` (migration + update 5 API files in cultivar-os/api/)
 - [ ] `nursery_profiles` → `business_profiles` (migration + update OnboardingWizard + Settings consumers)
 - [ ] `AIEngine.ts` — rename `shopId`/`shop_id` → `businessId`/`business_id` across all 9 public methods;
       update 3 Ignition modules that import these (IgnitionAudit, IgnitionCipher, PredictiveKey)
-- [ ] `packages/shared/src/qr/print.ts` — rename `nurseryName` → `businessName`, `.nursery` CSS class → `.business-name`;
-      update one call site in Cultivar PlantProfile (audit finding #5 — do-now small)
+- [ ] `packages/shared/src/qr/print.ts` — rename `nurseryName` → `businessName`, `.nursery` CSS → `.business-name`;
+      update one call site in Cultivar PlantProfile
+
+**Docs — Doc Reorg** (single-source every fact; reference, don't copy)
+- [ ] Lean CLAUDE.md to rules + state + pointers only — no architecture prose duplicated here
+- [ ] PLATFORM_STRATEGY.md is the sole architecture home (already partial — continue)
+- [ ] Merge built-inventory + audit findings into one current-state doc; retire the precedence rule
+- [ ] Single-source the "TRACE — Who We Are" philosophy block across all docs (sync or point; eliminate copies)
+- [ ] Enforce chronological THOUGHTS.md + grep-by-date recovery workflow
+
+**Vertical Setup — Vertical Config Extraction** (variable inventory in `docs/audits/vertical-config-variable-inventory-2026-06-03.md`)
+Audit half DONE (read-only, 2026-06-04). Refactor half is post-demo.
+- [ ] Build `packages/shared/src/config/VerticalConfig.ts` — typed config object per business_type
+      (identity, theme, copy, vocabulary, modules, integrations, behavior defaults)
+- [ ] Seed config entries for cultivar-os and ignition-os (migrate existing scattered values in)
+- [ ] Thread config reads through shared components (OwnerSignup, tiles, discovery, notifications)
+- [ ] Success test: new vertical = one config file + zero component edits
 
 ### 🟢 POST-DEMO (Phase 1 — after signing)
 
