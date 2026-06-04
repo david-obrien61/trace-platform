@@ -77,6 +77,71 @@ decisions are encoded as variables and executed against, not reopened.
 
 ---
 
+## THE CAPABILITY / COMPOSITION MODEL
+
+*Founding Realization — 2026-06-04. This is why the Architecture Constants exist.*
+
+### The Unit Is CAPABILITY, Not Vertical
+
+A vertical is a preset bundle of capabilities for a named market segment. The underlying unit
+of work is the CAPABILITY — an independently activatable function that can be composed across
+verticals. Vertical identity is a configuration value over a capability graph, not a first-class
+architectural entity.
+
+### Five Layers (Bottom to Top)
+
+| Layer | Definition | Example |
+|---|---|---|
+| **CAPABILITY** | A discrete, independently activatable unit of work | Missed revenue detection, QB invoice, AI social post |
+| **ADAPTER** | A pluggable backend connector that a capability may call | QuickBooks, Stripe, Blotato, Claude, Twilio |
+| **COMPOSITION** | The dependency graph — capability A requires capability B to be active | Invoice audit requires QR checkout to be active |
+| **VERTICAL** | A default bundle: the preset capability graph for a named market segment | Cultivar OS = nursery preset; Ignition OS = shop preset |
+| **IMPORT** | Adding a capability outside the preset bundle | A nursery activating the margin engine from the shop preset |
+
+IMPORT is only possible because AC-1 standards are in force: if table names carried vertical nouns,
+a nursery business row could not activate a capability built for shops. AC-1 is the precondition
+for any cross-vertical composition.
+
+### Three Buckets — How We Create Value
+
+**1. CONNECT** — Adapter to an existing tool the customer already uses.
+The customer has QuickBooks. They have Stripe. They have a phone. We plug in.
+Value: elimination of dual entry and manual reconciliation.
+
+**2. FILL THE GAP** — Capability with no external dependency; unserved value.
+Nobody sells missed-revenue detection to a nursery. Nobody sells urgency copy to a food pantry.
+We own this. It is our moat, and it lives entirely inside the platform.
+
+**3. SURFACE THE BETWEEN** — Cross-system AI inference; only possible because CONNECT and FILL
+THE GAP share the same business_id.
+Example: a shop's margin engine (FILL THE GAP) reads QB job data (CONNECT) and surfaces jobs
+that were profitable on paper but flagged by the tech as underpriced — then writes a draft
+social post (CONNECT + FILL THE GAP) explaining the value the shop delivered. None of this is
+possible if the connectors and the capability graph live in separate, unlinked schemas.
+AC-3 (tenant isolation absolute) is what makes SURFACE THE BETWEEN safe to build at all.
+
+### Discipline
+
+- **Opinionated defaults.** Every vertical ships with a preset bundle. A nursery owner does not
+  configure a capability graph — they get the nursery preset on day one.
+- **À la carte available.** Any business can activate a capability outside its preset (IMPORT),
+  subject to adapter availability. This is how the platform grows without rebuilding.
+- **New vertical = one config file + zero component edits.** This is the success test for all
+  Noun Purge, Doc Reorg, and Vertical Config Extraction work.
+
+### Sequencing — Why This Layer Is Post-Demo
+
+The Composition layer (dependency graph above business_modules) requires:
+1. Noun Purge complete — AC-1 in force on all table names and shared identifiers
+2. `VerticalConfig.ts` threaded through shared components — vertical identity as data
+3. `business_modules` as the activation surface — not `nursery_modules`
+
+None of this is blocking the LAWNS demo. The architecture already supports two verticals
+correctly. The Composition layer is the abstraction above what exists — it formalizes the
+pattern once the pattern is clean. Sequencing: post-demo, after noun purge, before KINNA-OS build.
+
+---
+
 ## PART 2 — VERTICAL REGISTRY
 
 Every vertical that exists or is planned. Update this table when a new

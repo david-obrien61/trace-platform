@@ -275,6 +275,28 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-04 — Capability / Composition Model formalized into docs
+
+**Type:** Docs-only. No code or schema changes. Three files edited.
+
+**What changed:**
+- `PLATFORM_STRATEGY.md`: New section `## THE CAPABILITY / COMPOSITION MODEL` inserted between ARCHITECTURE CONSTANTS and PART 2. Contains: five-layer model (CAPABILITY/ADAPTER/COMPOSITION/VERTICAL/IMPORT), three buckets (CONNECT/FILL THE GAP/SURFACE THE BETWEEN), discipline statement, sequencing note (post-demo, above business_modules, requires noun purge first). This section is the WHY behind AC-1 through AC-4.
+- `THOUGHTS.md`: New dated entry "2026-06-04 — The Capability / Composition Model — Founding Realization." Full analysis: how the three buckets work, why AC-3 is the safety condition for SURFACE THE BETWEEN, the before/after framing for investor conversations, sequencing discipline.
+- `MASTER_BRIEF.md`: New subsection "How TRACE Creates Value — Three Buckets" added before the Gap-Filler Registry. Gap-Filler Registry table updated with a Bucket column tagging each capability as CONNECT / FILL THE GAP / SURFACE THE BETWEEN. This strengthens the investor pitch: "why not just use QuickBooks and a Google Sheet?" now has a direct architectural answer.
+
+**Key formalization:**
+- The unit of work is CAPABILITY, not vertical. Vertical = preset bundle = default config over a capability graph.
+- SURFACE THE BETWEEN is only possible because CONNECT + FILL THE GAP share the same `business_id`. This is the architectural payoff of the platform.
+- AC-1 is the precondition for IMPORT (cross-vertical capability activation). Noun purge is not cleanup — it is structural.
+
+**No factual corrections surfaced** — model was accurate to actual platform behavior; this session named and formalized the pattern.
+
+**No runbook needed** — pure docs session.
+
+**AC compliance (step 13):** No AC compliance issues — session did not touch shared schema, RLS, or shared identifiers.
+
+---
+
 ### 2026-06-04 — built-inventory.md: Vertical + Type columns added
 
 **Type:** Docs-only. No code or schema changes.

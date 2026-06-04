@@ -2293,3 +2293,55 @@ Help.tsx and SocialSetup.tsx both told the customer they needed a Blotato Accoun
 
 CLAUDE.md said "new signups redirect to /onboarding via the Dashboard businessError guard." The guard only fires when `businessError === 'no_business'`. After OwnerSignup creates the businesses row, BusinessProvider resolves successfully — so the guard never fires, and the user sees the empty Dashboard directly. The OnboardingWizard was unreachable for new owners who signed up via shared OwnerSignup. Fixed: SignUp.tsx now navigates directly to /onboarding; OnboardingWizard detects existing business and skips NURSERY_SETUP.
 
+---
+
+## 2026-06-04 — The Capability / Composition Model — Founding Realization
+
+*Captured after the Thunder audit series (platform-naming audit, AC codification, built-inventory tagging, vertical-config variable inventory). The audit work surfaced the pattern; this entry names it.*
+
+**The core realization:** The unit of work is CAPABILITY, not vertical. We have been building
+capabilities (missed revenue detection, QB invoice, AI social post, urgency copy engine) and
+packaging them as verticals. But the vertical is just a preset bundle — a default configuration
+of the capability graph for a named market segment. The platform is a capability composition engine
+that can be configured to look like any vertical.
+
+**Why this matters now:** The noun purge (nursery_modules → business_modules, nurseryName →
+businessName, shopId → businessId) is not just cleanup. It is the precondition for the Composition
+layer. If table names carry vertical nouns, a nursery business cannot activate a capability built for
+shops. AC-1 is the structural expression of this realization, not a style preference.
+
+**The three-bucket model for investor conversations:**
+
+- CONNECT: we plug into tools the customer already uses (QB, Stripe, phone). Value = elimination
+  of dual entry and manual reconciliation. Every customer already understands this.
+- FILL THE GAP: we own capabilities with no external dependency (missed revenue detection, urgency
+  copy, asset growth timeline). Nobody sells this to these customers at this price point. This is
+  our moat.
+- SURFACE THE BETWEEN: cross-system AI inference that is only possible because CONNECT and FILL
+  THE GAP share the same business_id in the same schema. The shop's margin engine reads QB data
+  and surfaces underpriced jobs. The pantry's receiving voice memo tags incoming items against
+  TEFAP eligibility. The nursery's leakage detector cross-references what the tech offered, what
+  the customer declined, and what the QB invoice captured. None of this works if the connectors
+  and capabilities live in separate schemas or separate products. This bucket is the real pitch.
+
+**Why AC-3 is the safety condition for SURFACE THE BETWEEN:**
+If tenant isolation is not absolute, cross-system inference becomes a liability instead of an
+asset. A query that surfaces the between for business A must be categorically incapable of leaking
+business B's data. AC-3 is the promise that makes the pitch credible.
+
+**Sequencing discipline:**
+We do not build the Composition layer during demo prep. The preset bundles (nursery, shop) work
+correctly with two verticals. The Composition abstraction is only valuable — and only safe — once
+the noun purge is complete and VerticalConfig.ts is threaded through all shared components.
+The success test: new vertical = one config file + zero component edits. We are not there yet.
+We build toward it post-demo.
+
+**What changes in how we describe ourselves:**
+Before: "We build a separate app for each vertical that shares underlying infrastructure."
+After: "We build capabilities. Verticals are preset bundles. New markets are new presets, not new products."
+
+This is the framing that makes "infinite verticals" credible to a technical audience. It is also
+the framing that makes "60-day re-skin" credible to a business audience — because a re-skin is
+literally a config file when the architecture is clean.
+
+

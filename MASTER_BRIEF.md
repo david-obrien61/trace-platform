@@ -138,22 +138,50 @@ Andrew and Connor both have GitHub access. Both know the laptop password. Both h
 | OpenAI/Whisper | Voice transcription | ❌ | 🟡 Routed | P3 |
 | Samsara/Geotab | Fleet telematics | ❌ | 🟡 UI only | P3 |
 
+### How TRACE Creates Value — Three Buckets
+
+Every capability TRACE builds falls into one of three buckets. Together they explain why
+"infinite verticals" is a real claim, not a marketing line.
+
+**CONNECT** — Adapter to a tool the customer already uses (QuickBooks, Stripe, phone, calendar).
+Value: elimination of dual entry and manual reconciliation. The customer already understands the
+problem. We plug in and make it disappear.
+
+**FILL THE GAP** — Capability with no external dependency; unserved value in the market.
+Nobody sells missed-revenue detection to a nursery owner. Nobody sells urgency copy to a food pantry.
+We own this entirely. It is our moat. It lives inside the platform, not in a third-party connector.
+
+**SURFACE THE BETWEEN** — Cross-system AI inference that is only possible because CONNECT and
+FILL THE GAP share the same `business_id` in the same schema.
+- A shop's margin engine (FILL THE GAP) reads QuickBooks job data (CONNECT) and surfaces jobs
+  that were profitable on paper but underpriced relative to actual labor — then drafts a social
+  post explaining the value delivered.
+- A pantry's voice receiving log (FILL THE GAP) cross-references TEFAP eligibility data (CONNECT)
+  and flags items before they enter inventory incorrectly.
+- A nursery's leakage detector (FILL THE GAP) cross-references what the tech offered, what the
+  customer declined, and what the QB invoice captured (CONNECT) — then suggests the missed
+  conversation for the next visit.
+
+None of this works if CONNECT and FILL THE GAP live in separate products or separate schemas.
+SURFACE THE BETWEEN is the payoff of the platform architecture. It is the answer to "why not just
+use QuickBooks and a Google Sheet?"
+
 ### Gap-Filler Registry — Capabilities We Own
 
 These are TRACE-owned capabilities with no external dependency. Each is a competitive moat.
 
-| Capability | Description | Status |
-|---|---|---|
-| Missed revenue detection | Flags declined add-ons, skipped upgrades | ✅ Live (Cultivar) |
-| Asset growth timeline | Visual history from creation to sale | ✅ Live (Cultivar plants) |
-| Urgency copy engine | Regina Rule — time-sensitive add-on prompts | ✅ Live (Cultivar) |
-| QR → checkout → QB invoice | Full flow, one scan, no typing | ✅ Live (Cultivar) |
-| AI social post generation | 3 posts per order, vertical templates | ✅ Live (Cultivar) |
-| Multi-provider AI router | Claude/Gemini/Whisper by task type | ✅ Live (shared) |
-| Module tile system | 3-state per-tenant tile grid | ✅ Live (both) |
-| Invoice audit AI | Photo → Claude flags uncaptured charges | ✅ Concept (Ignition) |
-| ROI / savings report | Dollar value of TRACE to this business | 🟡 Built (shared) |
-| Suggestion engine | Post-transaction upsell + scheduling | 🟡 Partial (Cultivar addons) |
+| Capability | Bucket | Description | Status |
+|---|---|---|---|
+| Missed revenue detection | FILL THE GAP | Flags declined add-ons, skipped upgrades | ✅ Live (Cultivar) |
+| Asset growth timeline | FILL THE GAP | Visual history from creation to sale | ✅ Live (Cultivar plants) |
+| Urgency copy engine | FILL THE GAP | Regina Rule — time-sensitive add-on prompts | ✅ Live (Cultivar) |
+| QR → checkout → QB invoice | SURFACE THE BETWEEN | Full flow, one scan, no typing | ✅ Live (Cultivar) |
+| AI social post generation | SURFACE THE BETWEEN | 3 posts per order, vertical templates | ✅ Live (Cultivar) |
+| Multi-provider AI router | CONNECT | Claude/Gemini/Whisper by task type | ✅ Live (shared) |
+| Module tile system | FILL THE GAP | 3-state per-tenant tile grid | ✅ Live (both) |
+| Invoice audit AI | SURFACE THE BETWEEN | Photo → Claude flags uncaptured charges | ✅ Concept (Ignition) |
+| ROI / savings report | FILL THE GAP | Dollar value of TRACE to this business | 🟡 Built (shared) |
+| Suggestion engine | SURFACE THE BETWEEN | Post-transaction upsell + scheduling | 🟡 Partial (Cultivar addons) |
 
 ### Domain & Infrastructure
 
