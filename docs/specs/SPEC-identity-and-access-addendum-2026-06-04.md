@@ -8,6 +8,17 @@
 
 ## A. RBAC — People → Roles → Tiles
 
+### STATUS CORRECTION — this capability ALREADY EXISTS in Ignition
+**RBAC role→tile assignment is already built and working in Ignition** (not a from-scratch design). Confirmed by David this session: Ignition can create a role (e.g. `front_office`), assign it its own set of ~4 tiles; create `tech` with a *different* 4 tiles; create `sr_tech` with 5 tiles. People are assigned roles; roles drive which tiles they see. The core People→Roles→Tiles model below is **implemented**, not proposed.
+
+Therefore this is the SAME story as DataBridge / auth / SM: a real working capability trapped in one vertical that must be **audited for completeness, then PROMOTED to shared** so Cultivar/KINNA consume it — NOT rebuilt. The "extent not yet identified" gaps (David's words) are the *extensions* on top: the Lexicon layer (§A.1) and formalized role-levels (§A "role levels"). The base mechanism exists.
+
+**Two things to VERIFY first (read-only audit, next session — do not assume, we were burned twice this session asserting un-checked schema):**
+1. **What backs Ignition's role→tile assignment?** Is it the per-member `permissions` jsonb (the `["ADMIN","TECH","VIEW_ALL"]` array seen on `shop_members`/`business_members`), OR a dedicated roles table + role-tiles mapping table? — If per-member jsonb arrays: that's the drift-prone version; promotion must ALSO refactor to role-derived (a member has a role; the role implies tiles — not per-member arrays). If a real roles/role-tiles table exists: closer to correct, promote the mechanism.
+2. **Is the role→tile mapping per-business or global?** When `sr_tech` got 5 tiles, was that config for JB Auto specifically, or a platform-level role definition? — Determines whether promotion is "lift the mechanism" vs. "lift the mechanism AND make it per-business configurable." (Likely want: platform default role→tile sets, per-business override.)
+
+This audit folds into the existing blast-radius map (the same Ignition-only surface).
+
 ### The three things (kept separate on purpose)
 These are commonly conflated; keeping them distinct is what makes access work identically across all verticals.
 
@@ -42,8 +53,36 @@ The indirection is the value:
 
 > Staff's tile set is explicitly undecided. Flag, don't fill.
 
+### Role levels / hierarchy (sub-roles carry more capability)
+Roles are not necessarily flat. Some roles have **levels** where a higher level carries MORE tiles/capabilities — higher pay grade = more responsibility = more access. Example:
+- `tech` may split into `jr_tech` → `tech` → `sr_tech`, each a DISTINCT canonical role with a progressively larger tile/permission set.
+- `sr_tech` genuinely sees more than `jr_tech` — this is a real permission difference, NOT just a label.
+
+Design implication: the canonical role set is not 4 flat roles; it's a set that can include leveled sub-roles. Each level is its own canonical `db_name` (`jr_tech`, `sr_tech`) with its own role→tile mapping. The owner/manager assigns the level; the level implies the capability set (still role-derived, single source of truth — §A "role implies permissions").
+
+Note the interaction with the Lexicon layer (§A.1 below): `jr_tech` and `sr_tech` are distinct canonical roles, but a business may *display* both as just "Tech," or as "Apprentice" / "Lead Technician" — display is skinned, permissions are not. Two systems, both apply.
+
+### A.1 — The Lexicon Layer (`db_name` vs. what the user sees)
+The principle David has long described as **`db_name` vs. what a user sees.** Generalize it into a platform layer:
+
+**Every stable internal identifier (`db_name`) can be skinned with a business- or vertical-specific DISPLAY word, configurable by the customer, with zero effect on logic.**
+
+- Roles are the FIRST instance: `front_office` (db_name) → presented as "Concierge" at LAWNS, "Front Desk" at Dave's Auto, "Greeter" elsewhere. Same role, same permissions, same tiles — only the displayed word changes.
+- But it applies platform-wide: entities (`customer` → "client" / "grower"), statuses, tiles, work units (`job` → "work order" / "ticket"). Each vertical or business can fit the platform to their own language.
+
+**The inviolable rule:** the system keys off `db_name`, ALWAYS. The display string is config, NEVER load-bearing. Rename "Concierge" → "Front Desk" and nothing breaks, because no code ever matched the display word. The moment a displayed label becomes the thing code checks, you get drift and divergence (rename a role at one business → permission checks break). Never let the label become the key.
+
+**Shape:**
+- Stable: `db_name` / canonical key (e.g. `front_office`, `sr_tech`, `customer`, `job`).
+- Skin: a per-business (and/or per-vertical default) `display_label` in config.
+- Logic (permissions, tiles, queries, RLS): keys off the canonical `db_name` only.
+
+**Role storage implication:** `business_members.role` stores the canonical key (`front_office`, `sr_tech`). A separate lexicon/config holds `display_label` per business. The role model needs canonical-key + configurable-display-label, not a single freetext `role` string.
+
+**Why this is worth extracting:** it lets customers tailor the platform's language to their world without touching code — more flexible, more "fits their needs," on-brand for "make the operator successful." Likely its own small capability (a `lexicon` / `display_labels` config table keyed by `(business_id, db_name) → display_label`, with vertical-level defaults).
+
 ### Where this lives
-RBAC belongs IN the Identity & Access spec — roles ARE part of access. Fold Section A into the spec (likely a new Section between current §4 reconciliation and §5 recovery, or as §4b).
+RBAC + Lexicon belong IN the Identity & Access spec — roles ARE part of access, and the lexicon's first instance is role display. Fold Section A (incl. A.1 + role levels) into the spec (likely a new Section between current §4 reconciliation and §5 recovery, or as §4b). The Lexicon layer may also warrant its own short spec since it applies platform-wide beyond roles — reference it from I&A, expand separately if it grows.
 
 ---
 
@@ -75,8 +114,8 @@ A user must be able to work **offline** and have the app **sync when connectivit
 ---
 
 ## C. How this connects to the rest of the platform thesis
-Roles, tiles, devices, and offline-sync are all the same architectural move seen all session: **shared structure, vertical variation lives in data (config), never in divergent code.** RBAC role→tile mapping is per-vertical *config*; the role vocabulary is shared. Offline-sync is a shared capability promoted out of one vertical. Every one of these is "build/own it once in shared, verticals consume via `business_modules` + config, stop copying."
+Roles, tiles, devices, and offline-sync are all the same architectural move seen all session: **shared structure, vertical variation lives in data (config), never in divergent code.** And notably — RBAC, DataBridge/offline-sync are BOTH **already built in Ignition** and need PROMOTING to shared, not building from scratch. The pattern is consistent: real working capabilities trapped in one vertical (built first, because Ignition was the mature reference vertical), now needing extraction to shared so all verticals consume them. The work is audit → promote → make per-business-configurable → wire verticals to consume → stop copying. Lexicon and role-levels are the *extensions* added during promotion.
 
 ---
 
-*Capture complete. Integrate into the I&A spec next session, rested. Build nothing tonight.*
+*Capture complete. Integrate into the I&A spec next session, rested. Build nothing tonight. KEY REFRAME this session: RBAC is ALREADY BUILT in Ignition — audit & promote, do not rebuild.*
