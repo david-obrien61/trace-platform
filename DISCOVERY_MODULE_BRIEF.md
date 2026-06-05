@@ -162,6 +162,14 @@ The five-layer naming from the prior brief is preserved. The website adapter and
 
 ## Build Phases
 
+**Status (2026-06-05):**
+
+- **v0 engine is BUILT** and routed through the shared AI gateway (`packages/shared/src/ai/`). The two-pass split is live: `discovery_identity` (Haiku, fast extraction) runs first, then `discovery_analysis` (Sonnet, deep profile) uses the identity result as context, then `synthesis.ts` produces the silent partner email. Remaining for v0 to be complete: website adapter wiring into the discovery surface front-end, the silent-partner email send mechanism, and the internal admin view. LAWNS Tree Farm and Backbone Valley Nursery are still the planned first trial runs.
+
+- **`seed.ts` (profile → `service_offerings`) is NOT built.** It is the buildable-now piece of the v2 wow-moment — the "first login already knows you" pre-population. Critically: `seed.ts` does NOT require the v2 gated discovery surface to be in place first. It can wire directly to the current Cultivar OS signup flow independently of the gate. This makes it pullable forward into an earlier build window without breaking the v2 sequencing.
+
+- **Phasing confirmed: v0 → v1 → v2.** The v2 wow-moment (first login already pre-populated) depends on v1's discovery surface existing — a user must have gone through a discovery session for their account to be seeded. v0+v2 without v1 is incoherent: there is no session to seed from. The only piece of v2 pullable forward independently is `seed.ts`, for reasons above.
+
 **v0 — Website inspection + silent partner analysis email (build now)**
 - Website adapter: fetch URL, extract profile, vertical-aware
 - Synthesis: produce silent partner analysis email
