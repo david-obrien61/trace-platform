@@ -433,6 +433,38 @@ Standard auth, vertical-specific gestures. One identity, many ways to prove it.
 
 ---
 
+### **Lean Cost Architecture & Failure Isolation Over Platform Limits**
+
+*Origin: 2026-06-05 — Blotato cancellation + Vercel 12-function-cap question. David applied the Alan Effect to infrastructure.*
+
+TRACE runs on free/cheap tiers by default — the founder's own lean cost base is the model for the customer's. Paid dependencies must justify themselves or be cut. When a paid capability is genuinely needed, build it as a swappable, demand-gated **adapter slot** so the cost lives with the customer who needs it, not baked into everyone's base. **BUT cost minimization never overrides failure isolation.** A platform limit (e.g. Vercel Hobby's 12-function cap) must NOT dictate architecture in a way that couples capabilities that should fail independently. When the free tier forces a cascade, that is the signal to pay — not to compromise the engineering. Minimal cost means the lowest cost that *still delivers the value* — and resilience IS the value.
+
+**Part 1 — Lean cost architecture:**
+- Default to free/cheap/self-hostable over paid SaaS dependencies.
+- The founder's cost base is the proof-of-concept for the customer's. Every paid dependency is a cost the founder eats or the customer eats.
+- Paid dependencies must justify themselves or be cut. First application: **Blotato — CUT** (no connection API, never published, leaked key; social-publishing deferred to a demand-gated adapter).
+- When a paid capability IS needed → adapter slot, not hard dependency. Swappable, optional, demand-gated. The customer who needs it plugs in (and pays for) the adapter; everyone else pays nothing and the capability degrades gracefully.
+- **Track free-tier ceilings (grandfather: know where it breaks before it breaks):**
+  - Supabase free: row/storage/bandwidth limits.
+  - Vercel Hobby: 12 serverless functions/deployment; **non-commercial use only** — billing customers requires Vercel Pro regardless of function count. The 12-function cap is a pre-revenue/demo-phase constraint only. It must NEVER bake a structural compromise into the architecture.
+
+**Part 2 — Failure isolation over platform limits (Alan Effect applied to infra):**
+
+The Alan test for serverless functions: are the things being combined naturally ONE capability (cohesive — fine to combine), or SEPARATE capabilities being smashed together to hit a number (cascade risk — don't)?
+
+- **Combining cohesive actions within one capability** → fine. Example: `publish-post` + `schedule-post` in one `campaigns.ts`. They share fate correctly — if campaigns are down, all campaign actions down is correct behavior.
+- **Merging separate capabilities to dodge the cap** → Alan Effect. A bug in one capability should NOT take down a different capability. GFI-plugs-in-series.
+
+> **The rule:** organize serverless functions by **capability**, never by function-count. If capability-isolation fits under 12 → stay on Hobby. If it does NOT → that is the signal to move to Vercel Pro (needed for commercial use anyway), NOT to corrupt the architecture. Never merge unrelated capabilities to dodge the cap.
+
+**The cost reframe:** Vercel Pro is ~$20/mo. The cost of a cascade failure taking down checkout or QB during a demo is catastrophic. $20/mo to keep capabilities failure-isolated is the cheapest insurance available. *(Grandfather: costs almost nothing to do it right; costs an awful lot to do it wrong.)*
+
+**Operational check when recomposing api/ functions:**
+- Within one capability → consolidate freely.
+- Across separate capabilities → STOP. That's the cascade signal. Move to Vercel Pro, keep them isolated.
+
+---
+
 ## PART 5 — VERTICAL CONFIG — THE MASTER SWITCH
 
 This is the file that makes the platform work. One entry per vertical.
