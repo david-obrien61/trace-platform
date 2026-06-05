@@ -91,6 +91,7 @@ A composable AI operating system for owner-operated small businesses. **One code
 - **Roles:** People→Roles→Tiles (role implies permissions; don't store per-member arrays). Role levels (jr/sr) are distinct roles w/ bigger tile sets. Lexicon skins role display.
 - **`1234` plaintext PIN seen in DB was hand-entered by David debugging** — NOT a code bug. (Verify normal write-path hashes correctly.)
 - **Lean Cost + Failure Isolation:** free tiers by default; paid deps must justify or be cut (Blotato: cut). Platform limits (Vercel 12-fn cap) NEVER override failure isolation — cascade is the signal to pay, not to corrupt architecture. Organize api/ by capability, not count. Full principle → PLATFORM_STRATEGY.md § Design Principles.
+- **Cost-to-serve must be codified before pricing any AI capability.** Pricing on free-tier cost is a margin trap (founding rates are permanent). Haiku where it suffices, cache system prompts, batch non-real-time. Usage volumes = David's domain truth. Full framework → `docs/strategy/cost-to-serve-framework.md`.
 
 ---
 
@@ -119,6 +120,7 @@ A composable AI operating system for owner-operated small businesses. **One code
 | This session's findings | `docs/audits/live-testing-findings-2026-06-04.md` |
 | Identity & Access spec (+ addendum) | `docs/specs/SPEC-identity-and-access-2026-06-04.md` |
 | Running strategic thinking | `THOUGHTS.md` (tail last ~300 lines) |
+| Cost-to-serve + defensible pricing framework | `docs/strategy/cost-to-serve-framework.md` |
 
 **Conflict rule:** for what's *built*, TRACE_PLATFORM_AUDIT.md wins. For *strategy*, MASTER_BRIEF. For *architecture*, PLATFORM_STRATEGY. This bootstrap is the map; those are the territory.
 
