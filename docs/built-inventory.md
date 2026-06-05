@@ -1,9 +1,13 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-06-04
+# Last updated: 2026-06-05
 
 **Purpose:** Sessions keep rebuilding things that exist. This document is the single answer to "was X ever built?" Organized by capability, not by file. For file locations, see TRACE_PLATFORM_AUDIT.md.
+
+> **Audit reconciliation (2026-06-05):** Three stale bootstrap beliefs corrected. (1) AI Engine is already shared, NOT trapped in Ignition — promote already happened; what remains is unifying a split-brain. (2) RBAC is split — identity/invites shared; enforcement still Ignition-side and duplicated. (3) DataBridge footprint confirmed (~45 files, load-bearing) but characterization disputed: this doc says "localStorage-first, intentionally not shared," bootstrap says "offline-sync engine, promote" — unresolved, see NEEDS DAVID'S CALL.
+>
+> **File-type reality:** Ignition (`packages/ignition-os/`) is entirely `.jsx`/`.js`, ZERO `.ts`. Shared is `.ts`. Audit Ignition with `--include=*.jsx --include=*.js`, never `.ts`. Ignition's `src/` is empty; code lives at package root + `modules/`.
 
 **Column guide:**
 - **Vertical** — `ignition` | `cultivar` | `shared` (`shared` = promoted to the platform shared layer; it's a location, not a vertical)
@@ -55,6 +59,8 @@
 **Haiku fallback:** Pass `options.fallback = true` to retry failed Sonnet calls with Haiku.
 
 **Not yet built:** `SavingsReport.jsx` — React display component for `savings_report` output. API is complete; only display work remains.
+
+**⚠️ Split-brain (audit 2026-06-05):** AIEngine.ts routes through Railway (FastAPI). But four server-side files call the Anthropic SDK directly, bypassing it: `packages/shared/src/campaigns/generate.ts`, `packages/shared/src/discovery/engine.ts`, `packages/shared/src/discovery/synthesis.ts` (all hardcoded `claude-sonnet-4-6`; discovery files have no `cache_control`), and `packages/cultivar-os/api/social/generate-posts.ts`. The gateway job is NOT to build or promote a new router — AIEngine.ts already is the router. The job is: (1) add a Vercel-native transport path to AIEngine so it can call the SDK directly from server functions, (2) route all four files through it, (3) kill Railway. Ignition consumers (`IgnitionAudit.jsx`, `IgnitionCipher.jsx`, `PredictiveKey.jsx`) already call `AIEngine.call()` correctly and are not the problem.
 
 ---
 
@@ -170,6 +176,10 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **Important:** `STORAGE_KEY = 'IGNITION_OS_DATA'` is hardcoded in `packages/shared/src/quickbooks/oauth.ts`. This is Tech Debt #2 in CLAUDE.md — OFF LIMITS until post-demo fix.
 
+**Footprint (audit 2026-06-05):** ~45 files reference DataBridge across nearly every Ignition module (`DataBridge.js`, `CoreApp.jsx`, `IgnitionAdmin.jsx`, `IgnitionOmni.jsx`, `IgnitionCRM.jsx`, and many more). Load-bearing. No shared equivalent.
+
+**⚠️ CHARACTERIZATION CONFLICT (unresolved):** This doc says "localStorage-first wrapper, intentionally not shared." The bootstrap spec says "offline-sync engine, promote to shared." These are opposite post-demo jobs. Footprint (~45 files) is confirmed. Function and promote decision are not. A ~30-line read of `DataBridge.js` settles the function question; the promote question is David's. Do not open DataBridge for RBAC extraction or any shared promotion until this is resolved. → **NEEDS DAVID'S CALL.**
+
 ---
 
 ## Tile System
@@ -239,6 +249,8 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 - MANAGER excludes `manage_settings` by design — cannot reach Settings page
 
 **Test coverage:** `scripts/test-member-login.mjs` — 8 sections, 29 assertions against live DB. Verified: owner path, member path, MANAGER permission exclusions, LAWNS-specific invite flow.
+
+**⚠️ Enforcement is split (audit 2026-06-05):** The identity layer — member records, invitations, the permission model, `checkPermission()` — is shared and complete. But role/permission enforcement also lives Ignition-side inside `DataBridge.js` and `modules/IgnitionAdmin.jsx`. "Promote RBAC" means deduplicate and reconcile, not a clean lift. The enforcement code is entangled with DataBridge (enforcement logic sits inside `DataBridge.js`). Co-location confirmed by grep; true entanglement depth needs a targeted read before sequencing this work. Do not sequence RBAC extraction before the DataBridge characterization question is resolved.
 
 ---
 
@@ -311,6 +323,8 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 **Status lifecycle:** draft → published | failed  
 **Blotato endpoint:** `POST https://backend.blotato.com/v2/posts`  
 **Prompt caching:** System prompt uses `cache_control: ephemeral` for cost reduction
+
+**⚠️ Blotato CUT (decision 2026-06-05):** Blotato dropped — no connection API, key was leaking, social publish scoped out near-term. Cancel the Blotato account. The cancellation is safe: nothing fires on app load; `api/social/publish.ts` fires only on explicit owner click, so no active traffic to cut. The generate/draft half of the pipeline (`generate-posts.ts` → `social_drafts`) stands unchanged. The publish path (`api/social/publish.ts` → `https://backend.blotato.com/v2/posts`) is now stale. Re-home publish when Social Media is extracted to shared and a new publish target is chosen.
 
 ---
 
@@ -534,8 +548,9 @@ Entries where the correct Vertical or Type tag is ambiguous. Best guess noted.
 | **Subscription Tiers + Pricing** | Currently documented from Ignition/CAI perspective. Question: does the STARTER/PROFESSIONAL/PREMIER tier structure apply platform-wide, or does each vertical have its own pricing model? Cultivar currently uses a flat $149/mo founding rate. | If platform-wide → `Vertical: shared`. If Ignition-only → `Vertical: ignition`. Tagged `ignition` for now. |
 | **AdminSubscription / Marketplace UI** | Is this a dashboard tile in the Ignition OmniDashboard tile grid, or is it reached via an admin/settings navigation separate from the tile grid? | If it appears in the tile grid → `Type: tile`. If admin nav → `Type: capability`. Tagged `capability` for now. |
 | **CoolRunnings** | This entry is a reference pointer to a separate repo, not a built capability inside trace-platform. No Vertical/Type classification is meaningful. | Could be removed from this inventory (it's not in this repo) or kept as a cross-reference note. Tagged `N/A` for now. |
+| **DataBridge — promote or keep local** | This doc says localStorage-first wrapper intentionally not shared. Bootstrap spec says offline-sync engine, promote. These are opposite post-demo jobs. ~45-file footprint confirmed; function and promote decision are not. RBAC enforcement entangled inside DataBridge (grep confirmed co-location). | Read ~30 lines of `DataBridge.js` to settle the function question. David decides promote vs. keep-local. Until resolved: treat as Ignition-only, do not open for RBAC extraction or shared promotion. |
 
 ---
 
-*TRACE Enterprises · Built Inventory · Created 2026-05-28*  
+*TRACE Enterprises · Built Inventory · Created 2026-05-28 · Audit-reconciled 2026-06-05*  
 *Update this document when something new is confirmed built or confirmed missing.*
