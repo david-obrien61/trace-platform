@@ -121,6 +121,7 @@ A composable AI operating system for owner-operated small businesses. **One code
 | Identity & Access spec (+ addendum) | `docs/specs/SPEC-identity-and-access-2026-06-04.md` |
 | Running strategic thinking | `THOUGHTS.md` (tail last ~300 lines) |
 | Cost-to-serve + defensible pricing framework | `docs/strategy/cost-to-serve-framework.md` |
+| AI Gateway spec (unified routing, cost control, insight capture) | `docs/specs/SPEC-ai-gateway-2026-06-05.md` |
 
 **Conflict rule:** for what's *built*, TRACE_PLATFORM_AUDIT.md wins. For *strategy*, MASTER_BRIEF. For *architecture*, PLATFORM_STRATEGY. This bootstrap is the map; those are the territory.
 
