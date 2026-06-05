@@ -1,5 +1,5 @@
 import { fetchWebsiteContent } from '../../../shared/src/discovery/adapters/website';
-import { runEngine } from '../../../shared/src/discovery/engine';
+import { runIdentity, runAnalysis } from '../../../shared/src/discovery/engine';
 import { runSynthesis } from '../../../shared/src/discovery/synthesis';
 import { nurserySchema } from '../../../shared/src/discovery/verticals/nursery';
 import type { VerticalSchema } from '../../../shared/src/discovery/types';
@@ -35,13 +35,18 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // Step 2: Extract structured profile
-    const profile = await runEngine(content, schema, painPoint ?? null, apiKey);
+    // Step 2a: Fast identity extraction (Haiku) — feeds recognition moment
+    // NOTE: ingest.ts returns this as `identity` in the response JSON.
+    // DiscoveryGlimpse reads `data.profile` (the deep analysis) — unchanged.
+    const identity = await runIdentity(content, schema, apiKey);
 
-    // Step 3: Generate silent partner analysis email
+    // Step 2b: Deep analysis (Sonnet) — uses identity context, avoids re-extraction
+    const profile = await runAnalysis(content, schema, painPoint ?? null, identity, apiKey);
+
+    // Step 3: Silent partner email from the deep analysis (unchanged)
     const analysis = await runSynthesis(profile, apiKey);
 
-    res.json({ profile, analysis, fetchError: content.error ?? null });
+    res.json({ identity, profile, analysis, fetchError: content.error ?? null });
 
   } catch (err: any) {
     console.error('[discovery/ingest]', err.message);

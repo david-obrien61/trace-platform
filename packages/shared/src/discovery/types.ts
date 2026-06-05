@@ -51,3 +51,16 @@ export interface DiscoveryResult {
   profile:  BusinessDiscoveryProfile;
   analysis: SilentPartnerAnalysis;
 }
+
+/** Minimal fast-extraction result from Pass 1 (Haiku). Feeds the recognition
+ *  moment and pain-demo during onboarding — available before the deep analysis
+ *  completes. */
+export interface BusinessIdentity {
+  businessName:     string | null;
+  location:         string | null;
+  yearsInBusiness:  string | null;
+  staffSize:        'solo' | 'small' | 'medium' | 'large' | null;
+  servicesFound:    string[];
+  tone:             'formal' | 'casual' | 'family' | 'professional';
+  contentFreshness: 'current' | 'stale' | 'unknown';
+}
