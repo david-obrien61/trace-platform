@@ -160,6 +160,14 @@ For suggestedOfferings: suggest 3-6 services that this business could add or for
 // ── Legacy single-pass export (kept for any callers outside ingest.ts) ─────────
 
 /**
+ * @deprecated Runs both discovery passes in sequence — defeats the two-pass split.
+ * A caller using this pays Sonnet-analysis cost AND loses fast-identity speed.
+ * Use runIdentity() (fast, Haiku) for the onboarding/recognition pass, then
+ * runAnalysis() (deep, Sonnet) for the silent-partner pass. See capabilities.ts
+ * (discovery_identity / discovery_analysis) and the two-pass discovery spec.
+ * Retained only for backward compatibility; remove once confirmed no callers.
+ */
+/**
  * runEngine — backward-compat wrapper. Runs identity then analysis in sequence.
  * Prefer calling runIdentity + runAnalysis directly for progressive disclosure.
  */
