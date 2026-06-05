@@ -10,6 +10,12 @@ TRACE Enterprises · Built with CAI
 
 ---
 
+## 2026-06-05 — URL discrepancy-surfacing: exploration, not spec
+
+Explored (2026-06-05, not committed as spec): real-time URL discrepancy-surfacing at vertical entry ("your site lists owner X, changed recently?"). This was a possibility-exploration, not an approved build. The committed mechanism is the brief's presence-signal gate + website adapter extraction feeding seed.ts. Revisit discrepancy-surfacing as a potential v1/v2 enhancement; do not build from the exploration.
+
+---
+
 ## 2026-05-28 — brain dump (CoolRunnings, Discovery, SM/Composer)
 
 CoolRunnings — Home Intelligence System
