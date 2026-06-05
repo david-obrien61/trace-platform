@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { executeCapability } from '../ai/execute';
 import type { VerticalSchema, BusinessDiscoveryProfile, SuggestedOffering } from './types';
 import type { WebsiteContent } from './adapters/website';
 
@@ -14,9 +14,7 @@ export async function runEngine(
   statedPainPoint: string | null,
   apiKey: string,
 ): Promise<BusinessDiscoveryProfile> {
-  const anthropic = new Anthropic({ apiKey });
-
-  const prompt = `Analyze this ${schema.industryContext} website and extract a structured business profile.
+  const userPrompt = `Analyze this ${schema.industryContext} website and extract a structured business profile.
 
 Website URL: ${content.url}
 Page title: ${content.title || '(none)'}
@@ -61,22 +59,12 @@ Return a JSON object matching this exact structure:
 
 For suggestedOfferings: suggest 3-6 services that this business could add or formalize based on what their site reveals. Ground each rationale in a specific observation from the content.`;
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 2000,
+  // businessId not in scope for runEngine — override resolution falls through to default
+  const parsed = await executeCapability('discovery_engine', {
     system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: prompt }],
+    user: userPrompt,
+    apiKey,
   });
-
-  const raw = (response.content[0] as any).text?.trim() ?? '{}';
-  const cleaned = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
-
-  let parsed: any;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch {
-    throw new Error('Engine returned unparseable JSON');
-  }
 
   return {
     businessName:       parsed.businessName       ?? null,

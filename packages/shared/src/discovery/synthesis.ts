@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { executeCapability } from '../ai/execute';
 import type { BusinessDiscoveryProfile, SilentPartnerAnalysis } from './types';
 
 const SYSTEM_PROMPT = `You write "silent partner analysis" emails for TRACE Enterprises.
@@ -20,8 +20,6 @@ export async function runSynthesis(
   profile: BusinessDiscoveryProfile,
   apiKey: string,
 ): Promise<SilentPartnerAnalysis> {
-  const anthropic = new Anthropic({ apiKey });
-
   const yearsLine = profile.yearsInBusiness
     ? `They have been in business for ${profile.yearsInBusiness} years.`
     : 'They are an established business.';
@@ -38,7 +36,7 @@ export async function runSynthesis(
     ? `Lead with the 1-2 suggested offerings most directly connected to their stated pain point ("${profile.statedPainPoint}"). Then offer 1 additional amplifier from other gaps.`
     : `Lead with the 2-3 most impactful suggested offerings from the list below.`;
 
-  const prompt = `Write a silent partner analysis email for this business.
+  const userPrompt = `Write a silent partner analysis email for this business.
 
 Business: ${profile.businessName ?? 'this business'}
 Website: ${profile.websiteUrl ?? 'not provided'}
@@ -71,29 +69,12 @@ Return JSON:
   "html": "same email as clean HTML using only <p>, <strong>, <br> tags"
 }`;
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 2000,
+  // businessId not in scope for runSynthesis — override resolution falls through to default
+  const parsed = await executeCapability('discovery_synthesis', {
     system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: prompt }],
+    user: userPrompt,
+    apiKey,
   });
-
-  const raw = (response.content[0] as any).text?.trim() ?? '{}';
-
-  let parsed: any;
-  try {
-    // Try clean parse first, then fall back to extracting the first {...} block
-    const stripped = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
-    try {
-      parsed = JSON.parse(stripped);
-    } catch {
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error('no JSON object found');
-      parsed = JSON.parse(match[0]);
-    }
-  } catch (e: any) {
-    throw new Error(`Synthesis returned unparseable JSON: ${e.message}`);
-  }
 
   return {
     subject: parsed.subject ?? `A note on ${profile.businessName ?? 'your business'} from TRACE`,

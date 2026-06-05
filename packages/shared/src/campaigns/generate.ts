@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { executeCapability } from '../ai/execute';
 import type { CampaignToneSample } from './types';
 
 interface PostDraft {
@@ -7,6 +7,8 @@ interface PostDraft {
   copy_text: string;
   image_prompt: string | null;
 }
+
+const SYSTEM_PROMPT = 'You write social media content for owner-operated small businesses. Posts are warm, local, specific, and authentic — never corporate, never generic. They always sound like the owner wrote them personally, not a marketing department.';
 
 export async function generateCampaignPosts(params: {
   businessName: string;
@@ -22,8 +24,6 @@ export async function generateCampaignPosts(params: {
   toneSamples: CampaignToneSample[];
   apiKey: string;
 }): Promise<PostDraft[]> {
-  const anthropic = new Anthropic({ apiKey: params.apiKey });
-
   const dateRange = params.campaign.start_date && params.campaign.end_date
     ? `${params.campaign.start_date} to ${params.campaign.end_date}`
     : 'upcoming';
@@ -36,7 +36,7 @@ export async function generateCampaignPosts(params: {
       }\n\nMatch this tone and style in every post you write.`
     : '';
 
-  const prompt = `Generate social media content for a campaign at ${params.businessName}, a ${params.vertical} business.
+  const userPrompt = `Generate social media content for a campaign at ${params.businessName}, a ${params.vertical} business.
 
 Campaign: ${params.campaign.name}
 Type: ${params.campaign.campaign_type}
@@ -64,29 +64,17 @@ Return a JSON array of exactly 5 objects:
 ]
 Return only valid JSON. No markdown fences. No explanation.`;
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 3000,
-    system: 'You write social media content for owner-operated small businesses. Posts are warm, local, specific, and authentic — never corporate, never generic. They always sound like the owner wrote them personally, not a marketing department.',
-    messages: [{ role: 'user', content: prompt }],
+  // businessId not in scope for this function — override resolution falls through to default
+  const posts = await executeCapability('campaign_generate', {
+    system: SYSTEM_PROMPT,
+    user: userPrompt,
+    apiKey: params.apiKey,
   });
 
-  const raw = (response.content[0] as any).text?.trim() ?? '[]';
-  const stripped = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
-
-  let posts: any[];
-  try {
-    posts = JSON.parse(stripped);
-  } catch {
-    const match = raw.match(/\[[\s\S]*\]/);
-    if (!match) throw new Error('Campaign generation returned unparseable JSON');
-    posts = JSON.parse(match[0]);
-  }
-
-  return posts.map((p: any) => ({
-    platform: p.platform ?? 'instagram',
+  return (posts as any[]).map((p: any) => ({
+    platform:       p.platform       ?? 'instagram',
     scheduled_date: p.scheduled_date ?? null,
-    copy_text: p.copy_text ?? '',
-    image_prompt: p.image_prompt || null,
+    copy_text:      p.copy_text      ?? '',
+    image_prompt:   p.image_prompt   || null,
   }));
 }

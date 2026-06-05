@@ -1,5 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
+import { executeCapability } from '../../../shared/src/ai/execute';
 
 function adminDb() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL!;
@@ -119,12 +119,8 @@ export default async function handler(req: any, res: any) {
 
   const currentMonth = MONTH_NAMES[new Date().getMonth()];
 
-  const plantSummary   = plantNames.length > 0
-    ? plantNames.join(', ')
-    : 'trees and plants';
-  const customerSummary = customerNames.length > 0
-    ? customerNames.join(', ')
-    : 'customers';
+  const plantSummary    = plantNames.length > 0    ? plantNames.join(', ')    : 'trees and plants';
+  const customerSummary = customerNames.length > 0 ? customerNames.join(', ') : 'customers';
 
   const userPrompt = `Write social posts for ${businessName}.
 
@@ -138,33 +134,16 @@ ${platforms.join(', ')}
 
 ${orderCount === 0 ? 'No sales this period — write a general warm nursery post about the season and what\'s growing.' : ''}`;
 
-  const anthropic = new Anthropic({ apiKey });
-
   try {
-    const message = await anthropic.messages.create({
-      model:      'claude-sonnet-4-6',
-      max_tokens: 800,
-      system: [
-        {
-          type:          'text',
-          text:          SYSTEM_PROMPT,
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
-      messages: [{ role: 'user', content: userPrompt }],
-    });
-
-    const raw  = message.content.find(b => b.type === 'text');
-    const text = raw?.type === 'text' ? raw.text.trim() : '';
-
-    // Two-pass JSON extraction — handle stray markdown fences
-    let parsed: Record<string, string>;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      const match = text.match(/\{[\s\S]*\}/);
-      parsed = match ? JSON.parse(match[0]) : {};
-    }
+    // Pass businessId + supabase so the executor can resolve a per-business model override.
+    // cache_control stripped — governed by capabilities.social_generate.cache = 'none'.
+    const parsed = await executeCapability('social_generate', {
+      system:     SYSTEM_PROMPT,
+      user:       userPrompt,
+      apiKey,
+      businessId: business_id,
+      supabase:   db,
+    }) as Record<string, string>;
 
     const inserts = platforms
       .filter(p => typeof parsed[p] === 'string' && parsed[p].trim())
