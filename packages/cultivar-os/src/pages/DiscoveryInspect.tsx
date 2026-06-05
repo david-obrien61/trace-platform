@@ -48,6 +48,10 @@ export function DiscoveryInspect() {
   const [elapsed, setElapsed]           = useState(0);
   const timerRef                        = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef                    = useRef<number>(0);
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [sending, setSending]               = useState(false);
+  const [sent, setSent]                     = useState(false);
+  const [sendError, setSendError]           = useState('');
 
   useEffect(() => {
     if (!loading) {
@@ -73,6 +77,8 @@ export function DiscoveryInspect() {
     setError('');
     setProfile(null);
     setAnalysis(null);
+    setSent(false);
+    setSendError('');
 
     try {
       const resp = await fetch('/api/discovery/ingest', {
@@ -99,6 +105,30 @@ export function DiscoveryInspect() {
     navigator.clipboard.writeText(`Subject: ${analysis.subject}\n\n${analysis.body}`).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function sendAnalysis() {
+    if (!analysis || !recipientEmail.trim()) return;
+    setSending(true);
+    setSendError('');
+    try {
+      const resp = await fetch('/api/discovery/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'send',
+          analysis,
+          recipientEmail: recipientEmail.trim(),
+          businessName: profile?.businessName ?? '',
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.ok) throw new Error(data.error ?? 'Send failed');
+      setSent(true);
+    } catch (err: any) {
+      setSendError(err.message ?? 'Send failed');
+    }
+    setSending(false);
   }
 
   return (
@@ -357,6 +387,42 @@ export function DiscoveryInspect() {
               <div style={{ fontSize: '0.875rem', color: DARK, lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>
                 {analysis.body}
               </div>
+            </div>
+
+            {/* Send section */}
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #e5e7eb' }}>
+              <p style={{ fontSize: '0.6875rem', fontWeight: 700, color: GRAY, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 8px' }}>
+                Send to prospect
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  value={recipientEmail}
+                  onChange={e => setRecipientEmail(e.target.value)}
+                  placeholder="prospect@email.com"
+                  type="email"
+                  style={{ ...inputStyle, flex: 1 }}
+                />
+                <button
+                  onClick={sendAnalysis}
+                  disabled={sending || !recipientEmail.trim() || sent}
+                  style={{
+                    padding: '12px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                    background: sent ? '#16a34a' : (sending || !recipientEmail.trim()) ? '#e5e7eb' : GREEN,
+                    color: (!sent && (sending || !recipientEmail.trim())) ? GRAY : '#fff',
+                    fontWeight: 700, fontSize: '0.875rem', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {sent ? 'Sent ✓' : sending ? 'Sending…' : 'Send analysis'}
+                </button>
+              </div>
+              {sendError && (
+                <p style={{ fontSize: '0.8125rem', color: RED, marginTop: 8 }}>{sendError}</p>
+              )}
+              {sent && (
+                <p style={{ fontSize: '0.8125rem', color: '#16a34a', marginTop: 8 }}>
+                  Analysis sent to {recipientEmail}.
+                </p>
+              )}
             </div>
           </div>
         )}

@@ -4,7 +4,8 @@ import { runIdentity, runAnalysis } from '../../../shared/src/discovery/engine';
 import { runSynthesis } from '../../../shared/src/discovery/synthesis';
 import { nurserySchema } from '../../../shared/src/discovery/verticals/nursery';
 import { seedServiceOfferings } from '../../../shared/src/discovery/seed';
-import type { VerticalSchema } from '../../../shared/src/discovery/types';
+import { sendNotification } from '../../../shared/src/notifications/send';
+import type { VerticalSchema, SilentPartnerAnalysis } from '../../../shared/src/discovery/types';
 
 const VERTICAL_SCHEMAS: Record<string, VerticalSchema> = {
   nursery: nurserySchema,
@@ -15,7 +16,38 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { url, vertical = 'nursery', painPoint, businessId } = req.body;
+  const {
+    url, vertical = 'nursery', painPoint, businessId,
+    action, analysis: sentAnalysis, recipientEmail, recipientName, businessName,
+  } = req.body;
+
+  // ── action='send' — deliver a pre-generated analysis to a recipient ──────────
+  // No new Vercel function needed — routed through the existing endpoint.
+  if (action === 'send') {
+    const analysis = sentAnalysis as SilentPartnerAnalysis | undefined;
+    if (!analysis?.subject || !analysis?.body || !recipientEmail) {
+      return res.status(400).json({ error: 'analysis (subject+body) and recipientEmail required' });
+    }
+    const result = await sendNotification({
+      vertical:   'cultivar',
+      templateId: 'silent_partner_analysis',
+      entityId:   recipientEmail,
+      to:         { email: recipientEmail },
+      data: {
+        subject:       analysis.subject,
+        body:          analysis.body,
+        htmlContent:   analysis.html ?? '',
+        recipientName: recipientName ?? 'there',
+        businessName:  businessName  ?? 'your business',
+      },
+    });
+    if (!result.success && !result.demo) {
+      return res.status(500).json({ ok: false, error: result.error });
+    }
+    return res.json({ ok: true, demo: result.demo });
+  }
+
+  // ── Normal ingest flow ────────────────────────────────────────────────────────
   if (!url) {
     return res.status(400).json({ error: 'url is required' });
   }

@@ -226,6 +226,33 @@ const ownerLeakageAlert: TemplateDef<OwnerLeakageData> = {
     `${d.container} ${d.plantName} with no services. Invoice ${d.invoiceNumber}.`,
 };
 
+// ── silent_partner_analysis ───────────────────────────────────────────────────
+// Admin-triggered (David sends via DiscoveryInspect "Send this analysis" button).
+// synthesis.ts pre-renders subject/body/html — template passes them through.
+// Uses default TRACE branding (not LAWNS) — this email is from TRACE, not a business.
+
+interface SilentPartnerAnalysisData extends Record<string, unknown> {
+  subject:      string;
+  body:         string;
+  htmlContent:  string;   // pre-rendered HTML fragment (<p>, <strong>, <br>) from synthesis.ts
+  recipientName: string;
+  businessName: string;
+}
+
+const silentPartnerAnalysis: TemplateDef<SilentPartnerAnalysisData> = {
+  id:       'silent_partner_analysis',
+  vertical: 'cultivar',
+  channel:  'email',
+  type:     'transactional',
+
+  subject: (d) => d.subject,
+
+  // No BASE arg → uses default TRACE branding from baseEmailHtml defaults
+  html: (d) => baseEmailHtml(d.htmlContent),
+
+  text: (d) => d.body,
+};
+
 export const cultivarTemplates = [
   orderConfirmation,
   nettingWaiverReminder,
@@ -233,4 +260,5 @@ export const cultivarTemplates = [
   careTips30d,
   seasonalOffer,
   ownerLeakageAlert,
+  silentPartnerAnalysis,
 ] as TemplateDef[];
