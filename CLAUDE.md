@@ -2066,6 +2066,14 @@ MANDATORY before ending every session:
 
 ---
 
+**GAP vs DEBT ROUTING** — route by meaning, not by bucket:
+- **TECH DEBT** (Tech Debt Log, standard-ID): built WRONG. Shortcut, hardcode, compromise that works but isn't right. (e.g. hardcoded STORAGE_KEY.)
+- **NAMED GAP** (built-inventory `remaining:`): built as a LABELED, HONEST shell, intended to fill on a stated horizon. (e.g. service_offerings seed as 'suggested', no confirm-to-active UI yet.) A 'suggested'/hollow-but-labeled thing is a gap, NOT debt — it's working-as-designed at this phase.
+
+A labeled gap is roadmap. Tech debt is a defect. Don't file roadmap as defects (floods the debt log) or defects as roadmap (hides them).
+
+---
+
 ## 10. SESSION STARTER
 
 Paste this at the start of every Claude Code session:
