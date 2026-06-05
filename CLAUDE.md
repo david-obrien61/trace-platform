@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: June 4, 2026 (session 3 — SM flash-bounce fixed)
+# Last updated: June 5, 2026 (AI gateway + two-pass discovery)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -275,6 +275,104 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-05 — AI gateway + two-pass discovery
+
+**Type:** Code — shared infrastructure. No schema changes, no migrations, no customer-visible behavior changes (PART 1–3). PART 4 is an intentional behavior change to the discovery engine (reversible code, no DB impact). Four commits: `646eba1`, `2899b5a`, `b47e1f6`, `eeb38e9`. All pushed.
+
+**What was built (four parts, in order):**
+
+**PART 1 — `packages/shared/src/ai/capabilities.ts` (commit `646eba1`):**
+Single config home for all server-side AI calls. `CapabilityConfig` interface + `CAPABILITIES` registry. Four initial entries: `discovery_engine` (PART 4 splits this), `discovery_synthesis`, `campaign_generate`, `social_generate`. All Sonnet for PART 1. Override resolution reads `business_modules.config.model` per-business in the executor. `discovery_engine` entry was replaced in PART 4.
+
+**PART 2 — executor + parseJson + barrel (commit `2899b5a`):**
+
+`packages/shared/src/ai/execute.ts` — `executeCapability(key, opts)`:
+1. Looks up `CAPABILITIES[key]` — throws if unknown.
+2. Resolves model: reads `business_modules.config.model` for the `(businessId, capabilityKey)` pair when `businessId` + `supabase` are provided; falls through cleanly on any miss.
+3. When `AI_DEBUG=true`: logs `[TRACE:ai]` JSON lines for request, response, and error phases (capability, model, source, businessId, inputChars, inTok, outTok, latency_ms, ts).
+4. Instantiates Anthropic inline. Applies `cache_control:{type:'ephemeral'}` on system block ONLY if `cfg.cache === 'ephemeral'` (currently no capability uses ephemeral).
+5. Auto-detects `object` vs `array` from raw text, then calls `parseTwoPass`.
+6. Rethrows on error — caller error handling unchanged.
+
+`packages/shared/src/ai/parseJson.ts` — `parseTwoPass(text, shape)`: strips markdown fences, direct JSON.parse, then regex fallback for `{}` or `[]`.
+
+`packages/shared/src/ai/index.ts` — server-side barrel. NOTE: **not safe for browser/Vite bundles** (pulls in `@anthropic-ai/sdk`). AIEngine.ts stays a direct import.
+
+**PART 3 — Rewire 4 callers (commit `b47e1f6`):**
+
+Identical output — all still Sonnet, same prompts, same downstream handling. Only the SDK instantiation and JSON parsing moved to executor.
+
+| Caller | businessId in scope? | Passed? |
+|---|---|---|
+| `shared/campaigns/generate.ts` | No | No — override falls through to default ✅ |
+| `shared/discovery/engine.ts` | No | No — falls through ✅ |
+| `shared/discovery/synthesis.ts` | No | No — falls through ✅ |
+| `cultivar-os/api/social/generate-posts.ts` | Yes (`business_id`, `db`) | Yes ✅ |
+
+`generate-posts.ts` also: `cache_control` stripped from system (governed by `capabilities.social_generate.cache='none'`). Prompt assembly and DB insert logic unchanged.
+
+**PART 4 — Two-pass discovery split (commit `eeb38e9`):**
+
+`capabilities.ts`: `discovery_engine` replaced by:
+- `discovery_identity`: `claude-haiku-4-5-20251001`, `maxTokens:1000` — fast extraction
+- `discovery_analysis`: `claude-sonnet-4-6`, `maxTokens:2000` — deep analysis
+
+`engine.ts` split into three exports:
+- `runIdentity(content, schema, apiKey) → BusinessIdentity` — Haiku, first 2000 chars only, extracts: name, location, yearsInBusiness, staffSize, servicesFound[≤3], tone, contentFreshness.
+- `runAnalysis(content, schema, painPoint, identity, apiKey) → BusinessDiscoveryProfile` — Sonnet, full content, includes identity context as prompt prefix, returns complete profile.
+- `runEngine(...)` — kept as backward-compat wrapper (runs identity then analysis in sequence). Any code that still imports `runEngine` continues to work unchanged.
+
+`ingest.ts` two-pass orchestration:
+```
+Step 1: fetchWebsiteContent
+Step 2a: runIdentity → identity  (fast, Haiku)
+Step 2b: runAnalysis → profile   (deep, Sonnet)
+Step 3: runSynthesis(profile)    → analysis email
+res.json({ identity, profile, analysis, fetchError })
+```
+
+`DiscoveryGlimpse.tsx` reads `data.profile` — **backward compatible**, no change needed. `identity` is a new field in the response for future progressive disclosure.
+
+`types.ts`: `BusinessIdentity` interface added (minimal identity subset). `discovery/index.ts`: exports `runIdentity`, `runAnalysis`, `BusinessIdentity`.
+
+**AI_DEBUG logging — how to verify (expected [TRACE:ai] lines for a discovery run):**
+
+Set `AI_DEBUG=true` in the Vercel function env or local `.env.local`. A single `/api/discovery/ingest` call should emit 5 lines:
+```json
+{"tag":"[TRACE:ai]","phase":"request","capability":"discovery_identity","model":"claude-haiku-4-5-20251001","source":"default","businessId":"-","inputChars":N,"ts":"..."}
+{"tag":"[TRACE:ai]","phase":"response","capability":"discovery_identity","model":"claude-haiku-4-5-20251001","ok":true,"inTok":N,"outTok":N,"latency_ms":N}
+{"tag":"[TRACE:ai]","phase":"request","capability":"discovery_analysis","model":"claude-sonnet-4-6","source":"default","businessId":"-","inputChars":N,"ts":"..."}
+{"tag":"[TRACE:ai]","phase":"response","capability":"discovery_analysis","model":"claude-sonnet-4-6","ok":true,"inTok":N,"outTok":N,"latency_ms":N}
+{"tag":"[TRACE:ai]","phase":"request","capability":"discovery_synthesis","model":"claude-sonnet-4-6","source":"default","businessId":"-","inputChars":N,"ts":"..."}
+{"tag":"[TRACE:ai]","phase":"response","capability":"discovery_synthesis","model":"claude-sonnet-4-6","ok":true,"inTok":N,"outTok":N,"latency_ms":N}
+```
+(6 lines total — request+response per capability × 3 capabilities in one ingest run.)
+
+**No customer-facing documentation propagation needed** — internal infrastructure, invisible to Lauren/Terry.
+
+**No factual corrections surfaced.** The `discovery_engine` entry in `docs/built-inventory.md` is now stale (reflects the old single-pass structure) — flagged for the next doc-reconciliation pass per spec instruction.
+
+**No runbook needed** — pure code session.
+
+**AC compliance (step 13):** No AC compliance issues — session did not touch shared schema, RLS, or shared identifiers. All new shared code (`capabilities.ts`, `execute.ts`, `parseJson.ts`, `engine.ts` additions) contains zero vertical nouns.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ All files read before writing. No fix applied without confirmed root cause.
+- STD-002: N/A — no bug fix. PART 4 is a documented intentional behavior change.
+- STD-003: ✅ `[TRACE:ai]` logs gated behind `AI_DEBUG === 'true'` from commit one. Flag name and file location: `process.env.AI_DEBUG` in `packages/shared/src/ai/execute.ts:60,78,88`.
+- STD-004: N/A — no business-scoped data feature shipped.
+- STD-005: N/A — no decisions reversed.
+- STD-006: ✅ No vertical nouns in any new shared code.
+
+**Builds:** Cultivar 2176 ✅ · zero TypeScript errors (verified after each PART).
+
+**Next session options (in priority order):**
+1. **Identity reconciliation build** — the planned work per the June 4 blast-radius audit. Read `docs/specs/SPEC-identity-and-access-2026-06-04.md` + the blast-radius map in the June 4 handoff. Start with Spec Section 8 Step 1. `shared/src/supabase/auth.ts` and `shared/src/auth/OwnerSignup.tsx` will be unlocked for that session.
+2. **built-inventory.md doc reconciliation** — update discovery section (single-pass → two-pass), add AI gateway section, update capability model column. Flag: `discovery_engine` entry is stale.
+3. **Noun purge** — `nursery_profiles → business_profiles`, `AIEngine.ts shopId → businessId`, `qr/print.ts nurseryName → businessName`.
+
+---
 
 ### 2026-06-04 — Spec commit · debug flags gated · bcrypt path recorded · blast-radius audit
 
