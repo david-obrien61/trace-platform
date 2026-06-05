@@ -88,6 +88,10 @@ export default async function handler(req: any, res: any) {
     }
   }
 
+  // social/publish.ts was removed in the Vercel 12-function fix (2026-06-03); publishing lives here while
+  // campaign-generate and social-publish share one capability. When SM publishing becomes its own adapter
+  // (Ayrshare etc.) with separate tables or failure modes, split it back into api/social/publish.ts —
+  // that divergence is the Alan Effect tripwire and the clean signal to move to Vercel Pro.
   if (action === 'publish-post') {
     const { postId, businessId, editedCopy } = body;
     if (!postId || !businessId) {
