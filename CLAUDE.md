@@ -2072,6 +2072,10 @@ MANDATORY before ending every session:
 
 A labeled gap is roadmap. Tech debt is a defect. Don't file roadmap as defects (floods the debt log) or defects as roadmap (hides them).
 
+**GAP GRADUATION** — each built-inventory `remaining:` gap carries a stated horizon (now / next / later, or a date). A gap that is 30+ days PAST ITS STATED HORIZON has stopped being roadmap and is now a defect-in-practice — graduate it to the Tech Debt Log with a standard-ID, and remove it from `remaining:`. (30 days past horizon, NOT 30 days from creation — an honestly-deferred 'later' gap is on schedule, not stale.)
+
+15. **Gap graduation sweep** — scan all `remaining:` gaps in `docs/built-inventory.md`; graduate any that are 30+ days past their stated horizon to the Tech Debt Log (with a standard-ID) and remove from `remaining:`. If no gaps are past horizon, state explicitly: "No gap graduations this session."
+
 ---
 
 ## 10. SESSION STARTER
