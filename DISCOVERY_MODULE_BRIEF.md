@@ -162,20 +162,23 @@ The five-layer naming from the prior brief is preserved. The website adapter and
 
 ## Build Phases
 
-**Status (2026-06-05):**
+**Status (2026-06-05 — updated):**
 
-- **v0 engine is BUILT** and routed through the shared AI gateway (`packages/shared/src/ai/`). The two-pass split is live: `discovery_identity` (Haiku, fast extraction) runs first, then `discovery_analysis` (Sonnet, deep profile) uses the identity result as context, then `synthesis.ts` produces the silent partner email. Remaining for v0 to be complete: website adapter wiring into the discovery surface front-end, the silent-partner email send mechanism, and the internal admin view. LAWNS Tree Farm and Backbone Valley Nursery are still the planned first trial runs.
+- **v0 is COMPLETE for the trial path.** Full flow operational: DiscoveryInspect (internal, URL-gated) → website fetch → Haiku identity pass → Sonnet deep analysis → synthesis email → "Send analysis" button → Resend delivery. LAWNS Tree Farm and Backbone Valley Nursery are the planned first trial runs. ⚠️ One env var setup required before live delivery: add `RESEND_API_KEY` + `FROM_EMAIL` to Vercel cultivar-os project. Without them, the send action runs in demo mode (logs but does not deliver).
 
-- **`seed.ts` (profile → `service_offerings`) is NOT built.** It is the buildable-now piece of the v2 wow-moment — the "first login already knows you" pre-population. Critically: `seed.ts` does NOT require the v2 gated discovery surface to be in place first. It can wire directly to the current Cultivar OS signup flow independently of the gate. This makes it pullable forward into an earlier build window without breaking the v2 sequencing.
+- **`seed.ts` is BUILT and wired in-memory via `ingest.ts`.** When `businessId` is passed in the POST body, `seedServiceOfferings` fires immediately after `runAnalysis` while the profile is in memory — no DB lookup, no new table. Trial path (DiscoveryInspect) does not pass `businessId`, so seed does not fire for LAWNS/Backbone Valley — this is acceptable; seed waits for v2. See `packages/shared/src/discovery/seed.ts`.
 
-- **Phasing confirmed: v0 → v1 → v2.** The v2 wow-moment (first login already pre-populated) depends on v1's discovery surface existing — a user must have gone through a discovery session for their account to be seeded. v0+v2 without v1 is incoherent: there is no session to seed from. The only piece of v2 pullable forward independently is `seed.ts`, for reasons above.
+- **Discovery persistence is a v2-horizon GAP, not tech debt.** `ingest.ts` writes nothing to the DB; the profile exists in memory for the duration of one request. DB persistence (`discovery_sessions`, `business_discovery_profiles`), seed-at-signup via DB lookup, and retained session copies are v2 (gated surface + one-auth). Logged in `docs/built-inventory.md` Discovery Module `remaining:` gap.
 
-**v0 — Website inspection + silent partner analysis email (build now)**
-- Website adapter: fetch URL, extract profile, vertical-aware
-- Synthesis: produce silent partner analysis email
-- LAWNS and Backbone Valley Nursery as the first two trial runs
-- Internal admin view: David can see the analysis output before sending
-- The email goes to the prospect; TRACE keeps the copy
+- **Phasing confirmed: v0 → v1 → v2.** The v2 wow-moment (first login already pre-populated) depends on v1's discovery surface existing — a user must have gone through a discovery session for their account to be seeded. v0+v2 without v1 is incoherent: there is no session to seed from.
+
+**v0 — Website inspection + silent partner analysis email ✅ SHIPPED**
+- Website adapter: fetch URL, extract profile, vertical-aware ✅
+- Synthesis: produce silent partner analysis email ✅
+- LAWNS and Backbone Valley Nursery as the first two trial runs (ready)
+- Internal admin view: DiscoveryInspect with Send button ✅
+- Email delivered to prospect via Resend (requires env var setup) ✅
+- TRACE retains copy: NOT built — v2 (see persistence gap above)
 
 **v1 — Voice intake (after v0 validated)**
 - Voice pipeline: Whisper or Otter API → transcript → same engine.ts input

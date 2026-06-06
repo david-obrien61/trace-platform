@@ -60,7 +60,7 @@
 
 **Not yet built:** `SavingsReport.jsx` — React display component for `savings_report` output. API is complete; only display work remains.
 
-**⚠️ Split-brain (audit 2026-06-05):** AIEngine.ts routes through Railway (FastAPI). But four server-side files call the Anthropic SDK directly, bypassing it: `packages/shared/src/campaigns/generate.ts`, `packages/shared/src/discovery/engine.ts`, `packages/shared/src/discovery/synthesis.ts` (all hardcoded `claude-sonnet-4-6`; discovery files have no `cache_control`), and `packages/cultivar-os/api/social/generate-posts.ts`. The gateway job is NOT to build or promote a new router — AIEngine.ts already is the router. The job is: (1) add a Vercel-native transport path to AIEngine so it can call the SDK directly from server functions, (2) route all four files through it, (3) kill Railway. Ignition consumers (`IgnitionAudit.jsx`, `IgnitionCipher.jsx`, `PredictiveKey.jsx`) already call `AIEngine.call()` correctly and are not the problem.
+**✅ Split-brain resolved (2026-06-05):** The four server-side files (`shared/campaigns/generate.ts`, `shared/discovery/engine.ts`, `shared/discovery/synthesis.ts`, `cultivar-os/api/social/generate-posts.ts`) now route through `packages/shared/src/ai/execute.ts` → `CAPABILITIES` registry → Anthropic SDK directly on Vercel (no Railway). This is the new shared AI gateway — separate from AIEngine.ts, which remains the Ignition-specific router for Railway-backed tasks. AIEngine.ts Ignition consumers (`IgnitionAudit.jsx`, `IgnitionCipher.jsx`, `PredictiveKey.jsx`) are unchanged. See `packages/shared/src/ai/` for gateway implementation.
 
 ---
 
@@ -458,6 +458,45 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 **Schema:** `campaigns`, `campaign_posts`, `campaign_tone_samples` tables + RLS + LAWNS seed data. Migration: `supabase/migrations/20260529_campaigns.sql`.
 
 **Dashboard integration:** "Campaign Scheduler" card shows green border when drafts are pending.
+
+---
+
+## Discovery Module (Cultivar OS — v0)
+
+**What:** Silent partner analysis engine. Fetches a prospect's website, runs a two-pass AI analysis (fast identity extraction + deep profile), and generates a "silent partner" email: what the business is doing well, what could amplify it. David sends the analysis to the prospect; they receive something real and specific regardless of whether they ever sign up.  
+**Status:** ✅ v0 built — TypeScript (2026-06-05). See DISCOVERY_MODULE_BRIEF.md for full spec.  
+**Vertical:** cultivar (admin surface today; cross-vertical engine) | **Type:** capability  
+**Location:** `packages/shared/src/discovery/` + `packages/cultivar-os/api/discovery/ingest.ts` + `packages/cultivar-os/src/pages/DiscoveryInspect.tsx`
+
+**v0 flow (fully operational):**
+1. David opens `/discovery/inspect` (internal, URL is the gate — no auth wall)
+2. Enters prospect URL, vertical, optional pain point
+3. Engine runs: website fetch → Haiku identity pass → Sonnet deep analysis → Sonnet synthesis email
+4. David reviews profile + draft email in DiscoveryInspect
+5. Enters prospect email → clicks "Send analysis" → Resend delivers the silent partner email
+
+**Engine:**
+- `discovery/adapters/website.ts` — fetches URL, extracts text (Chrome headers, fallbacks to /about)
+- `discovery/engine.ts` — `runIdentity()` (Haiku, fast), `runAnalysis()` (Sonnet, deep); routes through `packages/shared/src/ai/execute.ts`
+- `discovery/synthesis.ts` — `runSynthesis()`: BusinessDiscoveryProfile → SilentPartnerAnalysis; routes through `execute.ts`
+- `discovery/seed.ts` — `seedServiceOfferings()`: maps suggestedOfferings → `service_offerings` rows with `is_active=false`; idempotent
+
+**API (cultivar-os):**
+- `api/discovery/ingest.ts` — POST `/api/discovery/ingest`
+  - Default: fetch → identity → analysis → synthesis → `{ identity, profile, analysis, seeded }`
+  - `businessId` in body → seeds service_offerings in-memory immediately after analysis (no DB lookup)
+  - `action='send'` in body → delivers analysis email via notifications module (no new Vercel function)
+
+**Admin surface:**
+- `pages/DiscoveryInspect.tsx` — form (URL + vertical + pain point) → loading stages → profile display → analysis preview → Copy button + Send section (recipient email input + "Send analysis" button)
+
+**Notification template:**
+- `notifications/templates/cultivar.ts` → `silent_partner_analysis` — transactional email, TRACE default branding (not LAWNS). Pre-rendered HTML from synthesis passes through.
+
+**⚠️ Env vars required for live email delivery (not yet set in Vercel):** `RESEND_API_KEY` + `FROM_EMAIL`. Without them, `sendNotification` runs in demo mode: logs the send, returns `{ ok: true, demo: true }` — no actual email delivery.
+
+**remaining:**
+- Discovery persistence — NOT built. `seed.ts` wired in-memory via `ingest.ts`; v0 admin sends analysis live with no retained copy. DB persistence (`discovery_sessions`, `business_discovery_profiles`), seed-at-signup via lookup, and retained session copies = v2 (gated surface + one-auth). GAP not debt. Horizon: v2/later.
 
 ---
 
