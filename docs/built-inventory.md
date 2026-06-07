@@ -62,6 +62,12 @@
 
 **✅ Split-brain resolved (2026-06-05):** The four server-side files (`shared/campaigns/generate.ts`, `shared/discovery/engine.ts`, `shared/discovery/synthesis.ts`, `cultivar-os/api/social/generate-posts.ts`) now route through `packages/shared/src/ai/execute.ts` → `CAPABILITIES` registry → Anthropic SDK directly on Vercel (no Railway). This is the new shared AI gateway — separate from AIEngine.ts, which remains the Ignition-specific router for Railway-backed tasks. AIEngine.ts Ignition consumers (`IgnitionAudit.jsx`, `IgnitionCipher.jsx`, `PredictiveKey.jsx`) are unchanged. See `packages/shared/src/ai/` for gateway implementation.
 
+**⚠️ AIEngine is DARK in Ignition production (Audit 2, 2026-06-06):** `VITE_API_URL` is NOT set in the ignition-os Vercel project. Every `AIEngine.call()` in Ignition OS web production returns `{ ok: false }`. Railway is still running but receives zero traffic from the web build. No Ignition AI feature has ever produced real output for a web user. See Tech Debt #12 (expanded) + `docs/audits/2026-06-06-audits-1-4.md` §2a.
+
+**⚠️ `invoice_scan` has ZERO callers (Audit 2, 2026-06-06):** The `invoice_scan` task in the AIEngine routing table is orphaned — no component, hook, or API handler invokes it anywhere. It was never wired. **Do not confuse with `invoice_audit`:** that IS built (two-stage Gemini→Claude on Railway), a leakage tool that reads OUTGOING invoices to flag uncaptured charges. `invoice_scan` → retire. `invoice_audit` → keep in scope for future Ignition (port to Vercel when Railway is killed). See `docs/audits/2026-06-06-audits-1-4.md` §2b.
+
+**⚠️ VIN OCR is a placeholder (Audit 2, 2026-06-06):** The VIN decode feature resolves to `alert('OCR Scanning initializing...')`. No Gemini vision call is ever made. The Gemini vision pipeline has never been proven end-to-end on Vercel — Receipt Keeper v1 will be the first confirmed live Vercel vision pipeline. See `docs/audits/2026-06-06-audits-1-4.md` §2c.
+
 ---
 
 ## FastAPI AI Backend (ai_router.py) — LEGACY
@@ -80,6 +86,45 @@
 
 **Cost tracking:** `_log_usage()` writes to `ai_usage` table (includes `cost_usd` per call).  
 **Error tracking:** `_log_error()` writes to `error_events` table. Non-fatal — calls never block.
+
+---
+
+## Receipt / Expense Storage
+
+**What:** Tables and storage for vendor receipt capture (`receipts`), structured expense records (`expenses`), and owner-declared allocation inputs for cost calculations (`cost_profile`).
+**Status:** ❌ NOT BUILT — confirmed Audit 3, 2026-06-06.
+**Vertical:** shared | **Type:** infrastructure
+
+**What exists:** One Supabase storage bucket — `eval-photos` (used by Ignition `invoice_audit` for image uploads — NOT a receipt archive). No `receipts`, `expenses`, or `cost_profile` tables exist anywhere in the codebase or in any migration file.
+
+**Proposed AC-clean schema** (proposal only — no migration written; confirm with Cost-to-Produce tile spec before building):
+- `receipts (id, business_id, image_url, vendor, amount, category, line_items jsonb, captured_at, owner_confirmed bool)` — one row per captured vendor receipt; image stored in a `receipts` Supabase bucket (separate from `eval-photos`)
+- `expenses (id, business_id, receipt_id, source CHECK IN ('receipt','bank_csv','manual'), amount, category, occurred_at)` — structured expense records from all sources
+- `cost_profile (id, business_id, home_office_pct, business_time_pct, labor_rate, fixed_overheads jsonb, asset_amortization jsonb)` — owner-declared allocation inputs (intake interview answers)
+
+All tables anchor to `business_id` — AC-1 ✅, AC-2 via `business_id`-scoped RLS ✅.
+
+**Build path:** Receipt Keeper v1 (local-only) creates `receipts` + Supabase `receipts` bucket. Receipt Keeper v2 + Cost-to-Produce adds `expenses` + `cost_profile`. See `docs/audits/2026-06-06-audits-1-4.md` §3.
+
+---
+
+## Margin Engine (Shared)
+
+**What:** Shared margin calculation engine — applies markup, computes price tiers, detects leakage.
+**Status:** 🟡 STUB — confirmed Audit 4, 2026-06-06. Silently underdelivers.
+**Vertical:** shared | **Type:** capability
+**Location (stub):** `packages/shared/src/business-logic/marginEngine.ts` (approximately 17 lines)
+
+**What the stub DOES NOT have:** tier definitions (FLEET / LEGACY / FF), overhead allocation, `analyzeTransaction()`, leakage detection. Any importer receives a shell response silently.
+
+**Current importers of the stub (affected):**
+- `packages/shared/src/components/SavingsReport.jsx` — calls the stub, receives empty/default output
+
+**Full engine location:** `packages/ignition-os/` (co-located with DataBridge or in a MarginEngine.js module). The full engine implements 4 price slabs, FLEET/LEGACY/FF customer tiers, `analyzeTransaction()`, and leakage detection. It works. It is just Ignition-local.
+
+**Overhead: CAPTURED but ORPHANED.** `IgnitionProt` (the Margins module) collects rent, electric, fuel, and maintenance into `DataBridge shop_policy.prot_matrix`. However, `calculateRetail(tx)` ignores them — it marks up `tx.cost` without adding any overhead-per-unit. The overhead exists; the math doesn't use it.
+
+**Build path:** Port full `MarginEngine.js` → `packages/shared/src/business-logic/MarginEngine.ts` (TypeScript, replace stub). Wire overhead into `calculateRetail()` in the same session (add one overhead-per-unit term from `prot_matrix`). See `docs/audits/2026-06-06-audits-1-4.md` §4. See also Tech Debt #16.
 
 ---
 
@@ -288,6 +333,10 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 **Vertical:** shared | **Type:** infrastructure  
 **Location:** `packages/shared/src/quickbooks/refresh.ts`  
 **Used by:** `packages/cultivar-os/api/qbo/invoice/cultivar.ts`
+
+**⚠️ QB integration scope: receivables only (Audit 6, 2026-06-06).** The current QB integration (`api/qbo/`) covers invoices (money IN) and customer lookup/create. Payables (money OUT — expense write, Attachable image archive, Chart of Accounts query, Purchase/Bill write) are confirmed API-capable but NOT yet wired in TRACE code. Payables wire-up = Receipt Keeper v2 scope. See `docs/audits/2026-06-06-audits-5-6-quickbooks.md` §6b.
+
+**⚠️ HONEST-DEBT: `accounting_needs_reconnect` reads `false` while QB token is expired (Audit 6, 2026-06-06).** The flag only flips on a 401 during an active invoice call. A dead/expired connection stays silent — no banner — until something fails mid-use. This is a Surface Honesty failure. Fix = proactive expiry check on dashboard load. See Tech Debt #15.
 
 ---
 
@@ -543,7 +592,12 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 | Delivery date scheduling | Cultivar OS | No `delivery_date` on orders. Route shows all pending with no date filtering. |
 | Per-plant install price edit | Cultivar OS | `plants.install_price` read-only in UI. No edit surface. Post-demo. |
 | ~~Tighten nursery_modules RLS~~ | ~~Cultivar OS~~ | ✅ RESOLVED 2026-06-04: `business_modules` created with membership-scoped RLS (`business_members.user_id = auth.uid() AND active = true`). `authenticated_select_nursery_modules` (loose) retired. |
-| Port ai_router.py to Vercel functions | Ignition OS | Railway is legacy for web build. Port 11 endpoints to `packages/ignition-os/api/`. (Tech Debt #12) |
+| Port ai_router.py to Vercel functions | Ignition OS | Railway is legacy for web build. Agreed kill path: retire orphaned tasks (invoice_scan, vin_decode), port real tasks (dtc_decode, estimate_draft first). (Tech Debt #12) |
+| Receipt / Expense / Cost-Profile storage | All verticals | `receipts`, `expenses`, `cost_profile` tables do not exist. No migration. Eval-photos bucket is Ignition-specific, not receipt archive. AC-clean schema proposed in Audit 3. Build from scratch. |
+| Margin Engine (shared — real) | All verticals | Shared `marginEngine.ts` is a 17-line stub. Full engine is Ignition-local `MarginEngine.js`. Port + wire overhead in same session. (Tech Debt #16) |
+| QB payables wiring | Cultivar OS → all | QB can write expenses (Purchase/Bill), archive receipt images (Attachable), query Chart of Accounts. None wired today. Receipt Keeper v2 scope. |
+| Proactive QB reconnect detection | Cultivar OS | `accounting_needs_reconnect` currently lies (reads false while expired). Fix = proactive expiry check on load. (Tech Debt #15 / HONEST-DEBT) |
+| Gemini vision pipeline (proven on Vercel) | Ignition OS, shared | VIN OCR is a placeholder (alert only). No Vercel serverless function has ever called Gemini vision and returned structured output. Receipt Keeper v1 will be the first confirmed pipeline. |
 
 ## ✅ Resolved Gaps (previously listed as Not Yet Built)
 
