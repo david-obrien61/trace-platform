@@ -278,6 +278,70 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-07 — Audit drift-kill: doc + record pass (Audits 1–6 complete)
+
+**Type:** Docs + record pass. No code, no migrations. Four commits: `63befe9`, `dc595dd`, `121450e`, `{PART4}`. All pushed.
+
+**Session mandate:** Audits 1–6 changed what several docs CLAIM is true. This session makes docs match reality (drift-kill). READ-ONLY on all code per session prompt.
+
+**Audits 1–6 status:** COMPLETE. Two consolidated reports received 2026-06-06. Reports archived verbatim as source records in `docs/audits/`. Findings drive the agreed build sequence (v7 §15).
+
+**What was done (four parts):**
+
+**PART 1 — Audit reports archived (commit `63befe9`):**
+- `docs/audits/2026-06-06-audits-1-4.md` — structure/engines findings (TASK_ROUTING not exported; AIEngine DARK in prod; invoice_scan orphaned; VIN OCR placeholder; storage NOT BUILT; shared marginEngine.ts stub; overhead orphaned in calculateRetail())
+- `docs/audits/2026-06-06-audits-5-6-quickbooks.md` — Railway + QB findings (Railway safe to kill; retire invoice_scan + vin_decode; QB OCR not API-accessible; QB CAN write payables/Attachable/CoA but NOT wired; QB bank feed not API-accessible; accounting_needs_reconnect lies; David's QB expired benignly; dog-food starts clean)
+
+**PART 2 — built-inventory.md drift-kill (commit `dc595dd`):**
+Six corrections + two new sections:
+- AIEngine: flagged DARK in Ignition production (VITE_API_URL unset)
+- invoice_scan: flagged ORPHANED (zero callers); invoice_audit distinguished as leakage tool (outgoing invoices)
+- VIN OCR: flagged PLACEHOLDER (alert only; Gemini vision never proven on Vercel)
+- QB Token Refresh entry: noted receivables-only scope; HONEST-DEBT lying-flag warning added
+- New section: **Receipt / Expense Storage — NOT BUILT** (no receipts/expenses/cost_profile tables; eval-photos bucket is Ignition-specific; AC-clean schema proposed)
+- New section: **Margin Engine (Shared) — STUB** (17-line stub underdelivers; full engine is Ignition-local; overhead captured-but-orphaned)
+- Not-Yet-Built table: 6 new rows added
+
+**PART 3 — CLAUDE.md Tech Debt Log additions (commit `121450e`):**
+- #12 expanded: AIEngine DARK in prod confirmed; agreed kill path updated (retire orphaned, port real tasks, Receipt Keeper is Vercel-native)
+- #15 NEW — HONEST-DEBT: `accounting_needs_reconnect` reads `false` while QB token expired. Reactive-only (401 flip) leaves dead connection silent. Surface Honesty failure per STD-001. Fix = proactive expiry check on dashboard load. Priority: before any real customer relies on QB.
+- #16 NEW — TECH-DEBT: Shared `marginEngine.ts` ~17-line stub silently underdelivers. Full engine is Ignition-local `MarginEngine.js`. Overhead captured in IgnitionProt but orphaned in `calculateRetail()`. Fix = port full engine + wire overhead in same session. Build step 2 in v7 §15.
+
+**PART 4 — TRACE_PLATFORM_AUDIT.md + CLAUDE.md handoff (this commit):**
+- `TRACE_PLATFORM_AUDIT.md`: new "Audit corrections — 2026-06-06" section at top (before reuse ratio). 11-row table: prior claim → audit reality. Agreed build sequence from v7 §15 recorded.
+- CLAUDE.md handoff: this entry.
+
+**Agreed build sequence (v7 §15) — now the state the next session reads:**
+1. **Honesty fix** — proactive QB dead-connection detection (Tech Debt #15). Dead connection announces itself; does not wait for a 401 mid-sale.
+2. **Margin engine full port + overhead wire** (Tech Debt #16). Port full `MarginEngine.js` → shared TypeScript; replace stub; wire prot_matrix overhead into `calculateRetail()` in same session.
+3. **Receipt Keeper v1** — Gemini Flash OCR, local `receipts` table, confirm-before-commit. NET-NEW. No Railway. Proves Vercel vision pipeline.
+4. **Cost-to-Produce tile** — feeds loaded cost into `tx.cost` slot; tiered question depth (L1/L2/L3); accumulated-data moat.
+5. **(v2)** QB payables write-back (Purchase/Bill) + Attachable image archive + CoA categories + cross-card reconciliation (max-sensitivity consent).
+
+**Railway kill threads through the sequence as parallel cleanup** — retire orphaned tasks (invoice_scan, vin_decode); port real tasks (dtc_decode, estimate_draft first); decommission Railway after confirmed live.
+
+**No builds started this session.** Next session writes the step-1 prompt (honesty fix) from this recorded state.
+
+**Documentation propagation check:** This was an internal docs-only session. No customer-facing pages, tiles, or features were changed. No Help.tsx or onboarding propagation needed.
+
+**Factual corrections captured:** All six built-inventory corrections above + three tech debt log items constitute the factual correction capture for this session. No THOUGHTS.md entry needed — corrections are captured in the audit docs (source records) and the built-inventory/CLAUDE.md edits (propagated).
+
+**Runbook:** No runbook needed — pure docs session. No environment, infrastructure, or DB changes.
+
+**AC compliance (step 13):** No AC compliance issues — session did not touch shared schema, RLS, or shared identifiers.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Read-only throughout. No fix applied without confirmed root cause. All corrections sourced from audit reports.
+- STD-002: N/A — no bug fix applied.
+- STD-003: N/A — no instrumentation added.
+- STD-004: N/A — no business-scoped feature shipped.
+- STD-005: ✅ Prior claims struck through or corrected in place (not supplemented alongside contradictory text). Each doc-correction notes the audit date.
+- STD-006: ✅ No vertical nouns introduced in shared code.
+
+**Gap graduation sweep (step 15):** One `remaining:` gap in built-inventory.md — discovery persistence, created 2026-06-05, horizon v2/later. NOT past horizon. No graduation.
+
+---
+
 ### 2026-06-05 — v0 discovery finish: seed.ts + GAP/DEBT rule + admin live-send + doc logging
 
 **Type:** Code + docs. No schema changes, no migrations. Six commits in two sub-sessions: `13cc14a`, `e56dd3f`, `8ffcb70`, `739e8f7`, `7c83732`, `c80b6c7`. All pushed.

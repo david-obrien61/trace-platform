@@ -37,6 +37,35 @@ The one-sentence version: We don't replace your systems. We connect them, surfac
 
 ---
 
+## Audit corrections — 2026-06-06 (Audits 1–6 complete)
+
+> Full report: `docs/audits/2026-06-06-audits-1-4.md` and `docs/audits/2026-06-06-audits-5-6-quickbooks.md`. These correction entries update prior assertions in this document. When this section conflicts with an earlier section below, THIS SECTION WINS — it is the more recent ground truth.
+
+| Prior claim | Reality (audit finding) | Source |
+|---|---|---|
+| AIEngine is built and importers get real AI output | AIEngine routes to Railway; `VITE_API_URL` unset in Ignition Vercel → all calls return `{ ok: false }`. Ignition AI is DARK in production. Railway receives zero web traffic. | Audit 2 |
+| `invoice_scan` is an available capability | Zero callers. Orphaned routing entry. Never wired. Retire, do not port. | Audit 2 |
+| `invoice_audit` = same as invoice/receipt capture | `invoice_audit` is a LEAKAGE tool — reads OUTGOING invoices, flags uncaptured charges. Opposite of Receipt Keeper (reads INCOMING vendor receipts). Two different problems. | Audit 2 |
+| VIN OCR is a built AI feature | Placeholder — `alert('OCR Scanning initializing...')`. Gemini vision never proven E2E on Vercel. | Audit 2 |
+| Receipt/expense/cost_profile storage exists or is implied | Nothing exists. No `receipts`, `expenses`, or `cost_profile` tables. One bucket (`eval-photos`) is Ignition-specific (not a receipt archive). Build from scratch. | Audit 3 |
+| Shared `marginEngine.ts` is the margin engine | ~17-line stub. No tiers, no overhead, no `analyzeTransaction()`, no leakage. Full engine is Ignition-local `MarginEngine.js`. Stub silently underdelivers to all importers. | Audit 4 |
+| IgnitionProt overhead is wired into margin calculations | Overhead IS captured (prot_matrix: rent, electric, fuel, maintenance) but ORPHANED — `calculateRetail()` ignores it. Every margin calc underestimates true cost. | Audit 4 |
+| QB can/should handle receipt OCR | QB OCR is mobile-app-only (internal ML). No API hook. TRACE must build its own OCR (Gemini Flash). Receipt Keeper is NET-NEW. | Audit 6 |
+| QB integration covers expenses + invoices | Current QB integration is RECEIVABLES ONLY (invoices in, customer lookup). Payables (Purchase/Bill write, Attachable image archive, CoA query) are API-capable but NOT wired. | Audit 6 |
+| `accounting_needs_reconnect` is a reliable connection indicator | HONEST-DEBT: flag only flips on 401 during active call. Dead connection stays silent. Reads `false` while expired. Surface Honesty failure. | Audit 6 |
+| Railway kill is risky | Railway safe to kill — receives zero web-build traffic. Load-bearing only for already-broken things. Agreed kill path: retire orphaned tasks, port real tasks, decommission. | Audit 5 |
+
+**Agreed build sequence from audit reality (v7 §15):**
+1. Honesty fix — proactive QB dead-connection detection (Tech Debt #15)
+2. Margin engine full port + overhead wire (Tech Debt #16; §15 build step 2)
+3. Receipt Keeper v1 — Gemini Flash OCR, local `receipts` table, confirm-before-commit (NET-NEW; proves Vercel vision pipeline)
+4. Cost-to-Produce tile — feeds loaded cost into margin engine `tx.cost` slot (§15 build step 4)
+5. (v2) QB payables write-back + Attachable + CoA + cross-card reconciliation (§15 build step 5)
+
+Railway kill threads through the sequence as parallel cleanup.
+
+---
+
 ## Reuse ratio — corrected ground truth (2026-05-28)
 
 Reuse percentages cited in prior sessions (78% / 68% reuse, 12% refactor, 20% vertical) were verbal estimates that drifted across sessions and were never committed as counted results. Claude Code flagged the figure as aspirational as early as 2026-05-22. The counted breakdown from this audit's 135 feature rows is:
