@@ -280,7 +280,7 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 ### 2026-06-07 — Audit drift-kill: doc + record pass (Audits 1–6 complete)
 
-**Type:** Docs + record pass. No code, no migrations. Four commits: `63befe9`, `dc595dd`, `121450e`, `{PART4}`. All pushed.
+**Type:** Docs + record pass. No code, no migrations. Four commits: `63befe9`, `dc595dd`, `121450e`, `888412d`. All pushed.
 
 **Session mandate:** Audits 1–6 changed what several docs CLAIM is true. This session makes docs match reality (drift-kill). READ-ONLY on all code per session prompt.
 
