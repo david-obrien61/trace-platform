@@ -94,6 +94,8 @@ export default function IgnitionEstimate() {
   const shopPolicy  = DataBridge.load('shop_policy') || {};
 
   const laborRate     = shopPolicy.labor_rate     || 125;
+  // HONEST DEBT 🔴 (D): markupPercent is a flat-percent fallback; retire after migrating to
+  //   shared MarginEngine slab model. Migration checklist: docs/audits/margin-engine-migration-checklist-2026-06-10.md
   const markupPercent = shopPolicy.markup_percent || 40;
   const taxRate       = shopPolicy.tax_rate       || 0.0825;
 

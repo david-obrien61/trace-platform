@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: June 10, 2026 (ACTIVATE: pain-point demo wizard via ?demo= + DemoLaunchButton shared)
+# Last updated: June 10, 2026 (THUNDER · Build 1: Margin Engine → shared, 5 impls deprecated)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -240,7 +240,7 @@ This log is created and maintained per the Honest Friction principle (see PLATFO
 | 12 | 🟡 `CAI/ai_router.py` (Railway FastAPI) was built to keep AI provider keys out of the React Native bundle. Now that Ignition OS is a Vercel web app, this is unnecessary — Vercel serverless functions hold keys server-side, same pattern cultivar-os uses for Claude calls today. Railway is still running but is legacy for the web build. AIEngine.ts currently points to `VITE_API_URL` which is unset in the ignition-os Vercel project — **EVERY AIENGINE CALL IN IGNITION VERCEL PRODUCTION RETURNS `{ ok: false }`. Ignition AI is DARK in production (Audit 2, 2026-06-06).** Railway receives zero web-build traffic → safe to kill clean. **Agreed kill path (v7 §15):** retire orphaned tasks (`invoice_scan`, `vin_decode`) — do NOT port them; port real tasks (`dtc_decode`, `estimate_draft` first — text-only, highest value); evaluate `voice_transcribe` (4.5MB Vercel limit) before deciding port vs. retire. Kill Railway after confirmed tasks are live. Receipt Keeper is Vercel-native from birth — adds zero Railway debt. | 2026-05-28 (decision made); DARK-in-prod finding confirmed Audit 2, 2026-06-06 | Port real ai_router.py endpoints to TypeScript Vercel functions under `packages/ignition-os/api/`. Retire orphaned tasks. Decommission Railway. | Before activating AI features in ignition-os web. |
 | 13 | 🟡 Vite build aliases for `react-native`, expo packages, and `lucide-react-native` exist in both `CAI/vite.config.js` AND `packages/ignition-os/vite.config.js` — duplicated. The stubs in `CAI/stubs/` and `packages/ignition-os/stubs/` are identical files in two places. | 2026-05-28 | Extract stubs to `packages/shared/stubs/` and reference from both vite configs. Low priority — only matters if stubs need to change. | If stubs ever need updating, deduplicate first. |
 | 15 | 🟢 **RESOLVED 2026-06-08 (commit `444fbb1`).** ~~HONEST-DEBT: `businesses.accounting_needs_reconnect` reads `false` while the QB token is expired. The flag only flipped on a 401 during an active invoice call — meaning a dead connection stayed silent until something failed mid-use.~~ **Fix applied:** (1) `qbo/status.ts` — on every dashboard load, fetches `accounting_token_expires_at`; if token is missing or expired, calls `refreshQBToken()`; if refresh succeeds → `needsReconnect: false` (silent, no banner); if refresh fails → `needsReconnect: true` (DB updated, banner fires). (2) `Dashboard.tsx loadMetrics()` — also selects `accounting_token_expires_at`; client-side derives early estimate (`expiresMs < Date.now()`) so banner appears immediately without waiting for status check. (3) `checkQbStatus()` — always applies the server's authoritative `needsReconnect` result, clearing banner if silent refresh succeeded. STD-007 added to STANDARDS.md as the class-of-bug record. | Audit 6, 2026-06-06 | ✅ RESOLVED 2026-06-08 | — |
-| 16 | 🟡 **TECH-DEBT: `packages/shared/src/business-logic/marginEngine.ts` is a ~17-line stub that silently underdelivers.** The stub exports the expected interface but contains no tier logic, no overhead, no `analyzeTransaction()`, no leakage detection. Any importer (currently `SavingsReport.jsx`) receives a shell response without error. The full engine — 4 price slabs, FLEET/LEGACY/FF tiers, `analyzeTransaction()`, leakage — exists in Ignition-local `MarginEngine.js`. Additional finding: overhead IS captured in `IgnitionProt` (`DataBridge shop_policy.prot_matrix`: rent, electric, fuel, maintenance) but `calculateRetail()` IGNORES it — every margin calculation underestimates true cost. STD-001: the caller cannot know the shared stub is incomplete. | Stub introduced pre-2026-05-29 (Shared Extraction Roadmap listed it as "copy-paste ready"); orphaned overhead confirmed Audit 4, 2026-06-06 | Port full `MarginEngine.js` → `packages/shared/src/business-logic/MarginEngine.ts` (TypeScript, replaces stub). Wire overhead into `calculateRetail()` in same session (add overhead-per-unit term from prot_matrix). This is §15 build step 2 in v7. | Before Cost-to-Produce tile is built (it feeds loaded cost into `tx.cost`; the margin engine marks up that cost — the stub makes the markup meaningless). |
+| 16 | 🟢 **RESOLVED 2026-06-10 (THUNDER · Build 1).** ~~TECH-DEBT: `packages/shared/src/business-logic/marginEngine.ts` is a ~17-line stub that silently underdelivers.~~ **Fix applied:** Canonical shared engine built at `packages/shared/src/business-logic/MarginEngine.ts`. 4-slab model + tier discounts (AC-1: tier names as config data, not TS identifiers) + `overheadPerUnit` wired into loaded cost before markup. Charm rounding: `Math.ceil(retail) - 0.01` (matches `MarginEngine.js` A exactly; stub used broken `Math.floor+0.99`). All 5 old implementations marked 🔴 DEPRECATED (A through E). No callers migrated yet — non-destructive phase. Migration checklist: `docs/audits/margin-engine-migration-checklist-2026-06-10.md`. **Remaining work (next session):** migrate callers starting with B (barrel swap + stub delete), then A callers (import path only), then C callers (IgnitionCipher price change — accepted). Cost-to-Produce tile session wires `overhead_config.monthly` into `overheadPerUnit` calculation. | Stub introduced pre-2026-05-29; overhead orphaned confirmed Audit 4, 2026-06-06; resolved 2026-06-10 | Callers migrate via checklist. Overhead wire upstream: IgnitionProt → DataBridge `margin_config.overheadPerUnit`. | Cost-to-Produce tile is unblocked — engine now produces correct markup. |
 | 17 | 🟡 **STD-008 SWEEP — `20260523_qb_token_expires_at.sql` (DEAD MIGRATION):** Adds `qb_token_expires_at` and `qb_needs_reconnect` to the OLD `nurseries` table, which was superseded by the `businesses` table (May-29 migration). Zero code reads these columns in any current file. The equivalent columns on `businesses` (`accounting_token_expires_at`, `accounting_needs_reconnect`) were added by the May-29 migration and are in use. The nurseries-table additions are dead code in the DB. STD-008 sweep finding 2026-06-08. | STD-008 sweep 2026-06-08 | No code fix needed — nurseries columns are dead. If the nurseries table is ever retired, drop them in that cleanup migration. | When the nurseries table is formally retired (post-demo cleanup pass). |
 | 18 | 🟡 **STD-008 SWEEP — `20260603_business_members_add_pin_hash.sql` (UNVERIFIED LIVE APPLICATION):** The migration adds `pin_hash text` to `business_members` in bgobkjcopcxusjsetfob. `OwnerSignup.tsx:301` inserts `pin_hash` on every signup. The June-3 handoff required David to apply this migration manually; `test-member-login.mjs` passed (29/29) the same session, suggesting it was applied. However, the application was never confirmed via an `information_schema.columns` query (STD-008 did not exist at the time). If `pin_hash` is missing from the live DB, new signups silently fail to store the PIN hash. STD-008 sweep finding 2026-06-08. | STD-008 sweep 2026-06-08 | Verify: run `SELECT column_name FROM information_schema.columns WHERE table_name = 'business_members'` in Supabase SQL editor — confirm `pin_hash` is present. Mark 🟢 if confirmed. | Next signup-flow session or before onboarding Erin. |
 | 19 | 🟡 **STD-009 SWEEP — `packages/shared/src/campaigns/generate.ts:129` HARDCODED CHANNEL FALLBACK:** The PostDraft mapping has `channel: p.channel ?? p.platform ?? enabledChannels[0]?.name ?? 'instagram'`. The `?? 'instagram'` final fallback hardcodes a channel name into the output-assembly path. If the AI returns a post without a `channel` field AND `p.platform` is also absent, the post is silently assigned to 'instagram' regardless of which channels were requested. STD-009 sweep finding 2026-06-08. | STD-009 sweep 2026-06-08 | Fix: replace `?? 'instagram'` with `?? enabledChannels[0]?.name ?? null` — derive from the enabled channels list, not a hardcoded name. Alternatively, filter out posts with no channel field and log a warning. | Before a business with Instagram disabled runs campaigns — the 'instagram' fallback could send their content to the wrong channel identity. |
@@ -288,6 +288,114 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-10 — THUNDER · Build 1: Margin Engine → shared (non-destructive; mark-deprecate)
+
+**Type:** Code + Docs. Three new files created (MarginEngine.ts, business-logic/index.ts, migration-checklist). Five existing files edited (deprecation markers). Zero migrations. Zero callers migrated (non-destructive).
+
+**Session mandate:** Build the canonical shared MarginEngine.ts (slab+tier+overhead), confirm the full caller map, mark all 5 pricing implementations 🔴 DEPRECATED without deleting or rewiring any live caller. All existing prices unchanged.
+
+---
+
+**STEP 0 — Gate confirmed:**
+- Session Starter checks passed. AC-1, AC-4, STD-006 reviewed.
+- CONTEXT: Five pricing implementations found in reconciliation. Verdict: slab model (A, MarginEngine.js) is canonical. prot_matrix (C) is a different model. Shared stub (B) is dead/broken. D (markup_percent) is flat-percent fallback. E (shops.margin_config) is display-only. Non-destructive session: build ONE correct engine, mark others deprecated, write migration checklist.
+
+---
+
+**What was built (three new files):**
+
+**FILE 1 — `packages/shared/src/business-logic/MarginEngine.ts` (new):**
+- 4-slab table: Consumables (≤$50, 4×) / Mid-Range (≤$200, 2×) / Heavy (≤$1000, 1.5×) / Major (>$1000, 1.25×)
+- Tier discounts by name string. AC-1: tier names (FLEET/LEGACY/FF/STANDARD) appear ONLY as string values in `DEFAULT_MARGIN_CONFIG.pricingTiers[].name` — never as TS identifiers or switch-case labels. Engine looks them up via `config.pricingTiers.find(t => t.name === tierName)` (string equality).
+- `overheadPerUnit: number` field. Added to vendor cost before slab selection. TD#16 overhead wire: the orphaned `DataBridge.overhead_config.monthly` (rent, electric, fuel, insurance, maintenance) now has a slot in the engine. Caller computes `sum(monthly) / avg_monthly_part_count` and writes to config; engine consumes the per-unit value.
+- Charm rounding: `Math.ceil(retail) - 0.01` — matches A exactly. Stub (B) used broken `Math.floor(raw) + 0.99` (different result for integers like $24).
+- Pure functions, no DataBridge, no Supabase, no vertical imports. Vertical-agnostic.
+- Exports: `calculateRetail()`, `getProfitMargin()`, `getMarkupPercent()`, `analyzeTransaction()`, `DEFAULT_MARGIN_CONFIG`, all config types.
+
+**FILE 2 — `packages/shared/src/business-logic/index.ts` (new):** Barrel export for the engine.
+
+**FILE 3 — `docs/audits/margin-engine-migration-checklist-2026-06-10.md` (new):**
+- Complete caller map (grep-confirmed): A callers (6 files), B callers (1 — dead barrel re-export), C callers (3 files, price change noted), D callers (1 file), E callers (1 file).
+- Migration order: B → A callers → SavingsReport → C/DataBridge.recordTransaction → C/OnboardingWizard demo → D/IgnitionEstimate → C/IgnitionCipher (last — price change).
+- ⚠️ **Known price change at C migration:** IgnitionCipher DTC estimates use prot_matrix percent model. After migrating to slab model, DTC prices will change (e.g. $10 cost: prot_matrix $16.67 → slab $39.99). David has accepted slab-as-canonical. No customer communication needed until IgnitionCipher is specifically migrated (deferred).
+- AC-1 compliance proof included.
+- Overhead wire upstream path documented.
+
+**DEPRECATION MARKERS (5 files edited, nothing deleted):**
+- **A** `packages/ignition-os/MarginEngine.js` — `// HONEST DEBT 🔴` header, migration pointer, caller list.
+- **B** `packages/shared/src/pricing/marginEngine.ts` — `// HONEST DEBT 🔴` header, notes zero live callers, safe to delete after barrel swap.
+- **C** `packages/ignition-os/DataBridge.js` — `// HONEST DEBT 🔴 (C)` before `getActiveMargin/calculateRetail` block, caller list, price-change warning.
+- **D** `packages/ignition-os/modules/IgnitionEstimate.jsx` — `// HONEST DEBT 🔴 (D)` inline on `markupPercent` line.
+- **E** `packages/ignition-os/modules/IgnitionOmni.jsx` — `// HONEST DEBT 🔴 (E)` on both read and write paths for `shops.margin_config`.
+
+---
+
+**Acceptance criteria — all verified:**
+- `cost=$6, STANDARD, overheadPerUnit=0` → $23.99 ✓ (Math.ceil(24) - 0.01 = 23.99; matches A)
+- `cost=$6, STANDARD, overheadPerUnit=$2` → loaded=$8, 4×=$32, $31.99 ✓ (overhead wired)
+- AC-1 proof: no vertical noun (FLEET/LEGACY/FF) as a TS identifier in shared engine ✓
+- 5 old implementations all marked 🔴, zero deleted ✓
+- Builds: Ignition 1836 ✅ · Cultivar 2176 ✅ · zero TypeScript errors ✓
+- Migration checklist exists with ordered caller map ✓
+
+---
+
+**Agreed build sequence — updated state:**
+1. ~~**Honesty fix** — proactive QB dead-connection detection (Tech Debt #15).~~ ✅ RESOLVED 2026-06-08
+2. ~~**social_drafts fix + de-noun + generator→shared + edit/save + STD-008** (THUNDER).~~ ✅ RESOLVED 2026-06-08
+3. ~~**advert_channels router + campaign config fix + Blotato kill + STD-009** (THUNDER cont.).~~ ✅ RESOLVED 2026-06-08
+4. ~~**social_drafts_platform_check + STD-008 inverse + sweep** (THUNDER close-out).~~ ✅ RESOLVED 2026-06-09
+5. ~~**Ignition OS Reality Audit → STD-010 + built-inventory** (docs).~~ ✅ RESOLVED 2026-06-09
+6. ~~**ACTIVATE: pain-point demo wizard + DemoLaunchButton shared**.~~ ✅ RESOLVED 2026-06-10
+7. ~~**Margin engine full port + overhead wire** (Tech Debt #16).~~ ✅ RESOLVED 2026-06-10 (non-destructive phase: engine built, all deprecated; caller migration = next session)
+8. **Caller migration** (next session — complete the migration checklist): migrate B barrel swap → A callers (import path only) → C callers (IgnitionCipher last, known price change).
+9. **Receipt Keeper v1** — Gemini Flash OCR, local `receipts` table, confirm-before-commit.
+10. **Cost-to-Produce tile** — feeds loaded cost into `tx.cost` slot. Wires `overhead_config.monthly` into `overheadPerUnit` calculation (first step of this session).
+11. **(v2)** QB payables write-back + Attachable + CoA + cross-card reconciliation.
+
+---
+
+**No runbook needed** — pure code + docs session. No environment, infrastructure, or DB changes.
+
+**Documentation propagation check (step 10):**
+1. `Help.tsx` — no new customer-facing features. No propagation needed.
+2. Onboarding — unchanged.
+3. `docs/built-inventory.md` ✅ updated (Margin Engine section rewritten from STUB to ✅ BUILT; Not-Yet-Built row struck through; Ignition module table entry updated).
+4. No `// FLAG:` placeholders affected.
+5. No new error messages.
+
+**Factual corrections captured (step 11):**
+- Prior built-inventory.md said margin engine stub was at `packages/shared/src/business-logic/marginEngine.ts`. Corrected: actual stub was at `packages/shared/src/pricing/marginEngine.ts` (lowercase path). The `business-logic/` directory did not exist before this session.
+- Prior description said SavingsReport.jsx in shared "calls the stub, receives empty/default output." Corrected: SavingsReport.jsx imports from `'../MarginEngine'` (resolves to `packages/shared/src/MarginEngine` which does NOT exist). The import is broken, not degraded. The component is unreachable for this reason (also TD#10 — IgnitionOmniDashboard imports `'./SavingsReport'` from ignition-os/modules/ which ALSO doesn't exist).
+
+**No runbook needed** — pure code session.
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns in `packages/shared/src/business-logic/MarginEngine.ts`. Tier names are string values in config data only. AC-1 proof in migration checklist.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Full read-only discovery before any edit. Five implementations confirmed by grep + file reads. Rounding difference confirmed by calculation (Math.ceil-0.01 vs Math.floor+0.99 on integer inputs). SavingsReport broken import confirmed by path resolution.
+- STD-002: N/A — no bug fix applied. Non-destructive session.
+- STD-003: N/A — no instrumentation added.
+- STD-004: N/A — no business-scoped data feature shipped.
+- STD-005: ✅ Tech Debt #16 updated in-place (prior text struck through, resolved text added). No contradictory text left standing.
+- STD-006: ✅ No vertical nouns in shared code.
+- STD-007: N/A — no integration status surfaces touched.
+- STD-008: N/A — no migrations written or applied.
+- STD-009: N/A — no generation path changes.
+- STD-010: ✅ The new engine's exports use decoded names (`calculateRetail`, `analyzeTransaction`, `getProfitMargin` — not opaque codes). Migration checklist names callers by decoded module name.
+
+**Gap graduation sweep (step 15):**
+- `remaining: voice-learning BI` — horizon v2/later. NOT past horizon.
+- `remaining: cadence-triggered generation` — horizon Social Rhythm. NOT past horizon.
+- `remaining: discovery persistence` — horizon v2/later. NOT past horizon.
+No gap graduations this session.
+
+---
 
 ### 2026-06-10 — ACTIVATE: Ignition pain-point demo wizard via ?demo= + DemoLaunchButton shared
 

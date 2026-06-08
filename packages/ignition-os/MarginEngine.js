@@ -1,3 +1,10 @@
+// HONEST DEBT 🔴: deprecated — migrate callers to shared MarginEngine (TD#16).
+//   Replacement: packages/shared/src/business-logic/MarginEngine.ts
+//   Migration checklist: docs/audits/margin-engine-migration-checklist-2026-06-10.md
+//   Callers: OnboardingWizard.jsx, PriceField.jsx, IgnitionPort.jsx, IgnitionProcure.jsx,
+//            shared/src/components/SavingsReport.jsx (broken path — fixes in same migration)
+//   Do not extend. Retire after all callers are migrated to shared engine.
+//
 /**
  * FILE: MarginEngine.js
  * PLATFORM: Universal (Web & Mobile)

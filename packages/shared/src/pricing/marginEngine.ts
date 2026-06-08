@@ -1,3 +1,9 @@
+// HONEST DEBT 🔴: deprecated — dead stub with broken rounding (Math.floor+0.99 ≠ Math.ceil-0.01).
+//   Zero live callers confirmed (only re-exported via shared/src/index.ts which has no consumers).
+//   Replacement: packages/shared/src/business-logic/MarginEngine.ts
+//   Migration: update shared/src/index.ts:26 to export from business-logic/MarginEngine, then delete this file.
+//   Migration checklist: docs/audits/margin-engine-migration-checklist-2026-06-10.md
+//
 // Slab-pricing: ≤$50 → 4×, ≤$200 → 2×, ≤$1000 → 1.5×, >$1000 → 1.25×. Rounds to nearest .99.
 // Ported from IgnitionMobile/CodeBaseB/MarginEngine.js
 

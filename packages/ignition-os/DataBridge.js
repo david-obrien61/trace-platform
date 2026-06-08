@@ -635,6 +635,14 @@ const DataBridge = {
     });
   },
 
+  // HONEST DEBT 🔴 (C): getProtMatrix/getActiveMargin/calculateRetail deprecated.
+  //   Uses prot_matrix percent-of-cost model — DIFFERENT from slab model; produces different prices.
+  //   Callers: IgnitionCipher.jsx (lines 35,39 — price will change at migration; accepted),
+  //            OnboardingWizard.jsx (line 435 — demo path only),
+  //            DataBridge.recordTransaction (line ~907 — margin_at_time stamp).
+  //   Replacement: packages/shared/src/business-logic/MarginEngine.ts calculateRetail()
+  //   Migration checklist: docs/audits/margin-engine-migration-checklist-2026-06-10.md
+  //   Do not extend. Retire after all C callers migrate.
   /**
    * PRICING: Legacy prot_matrix kept for backward compatibility with IgnitionCipher.
    * New code should use MarginEngine directly.

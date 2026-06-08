@@ -510,6 +510,9 @@ const IgnitionOmni = ({ activeJob, onEnterKiosk }) => {
     });
     setTrialModules(trls);
 
+    // HONEST DEBT 🔴 (E): shops.margin_config {labor_rate, parts_markup} is display-only storage —
+    //   not wired to any pricing calculation. Defer unification to Cost-to-Produce tile session.
+    //   Migration checklist: docs/audits/margin-engine-migration-checklist-2026-06-10.md
     // Margin config from Supabase
     const { data: shopRow } = await supabase
       .from('shops')
@@ -568,6 +571,7 @@ const IgnitionOmni = ({ activeJob, onEnterKiosk }) => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // HONEST DEBT 🔴 (E): writes to shops.margin_config (display storage only — see read-path comment above).
   const handleUpdateMarginConfig = async (newConfig) => {
     const shopId = DataBridge.getShopId();
     if (!shopId) return;

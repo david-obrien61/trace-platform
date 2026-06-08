@@ -110,21 +110,34 @@ All tables anchor to `business_id` — AC-1 ✅, AC-2 via `business_id`-scoped R
 
 ## Margin Engine (Shared)
 
-**What:** Shared margin calculation engine — applies markup, computes price tiers, detects leakage.
-**Status:** 🟡 STUB — confirmed Audit 4, 2026-06-06. Silently underdelivers.
+**What:** Shared margin calculation engine — 4-slab markup, tier discounts, overhead-per-unit wire, leakage detection.
+**Status:** ✅ BUILT — 2026-06-10 (THUNDER · Build 1). Replaces 17-line dead stub.
 **Vertical:** shared | **Type:** capability
-**Location (stub):** `packages/shared/src/business-logic/marginEngine.ts` (approximately 17 lines)
+**Location:** `packages/shared/src/business-logic/MarginEngine.ts` (canonical)
+**Barrel:** `packages/shared/src/business-logic/index.ts`
 
-**What the stub DOES NOT have:** tier definitions (FLEET / LEGACY / FF), overhead allocation, `analyzeTransaction()`, leakage detection. Any importer receives a shell response silently.
+**What the engine has:**
+- 4-slab table (Consumables/Mid-Range/Heavy/Major) — matches `MarginEngine.js` (A) exactly
+- Tier discounts by name string (AC-1: FLEET/LEGACY/FF are config DATA, not TS identifiers)
+- `overheadPerUnit` field wired into loaded cost before slab selection — TD#16 overhead slot
+- Charm rounding: `Math.ceil(retail) - 0.01` (matches A; stub used broken `Math.floor+0.99`)
+- `analyzeTransaction()` — leakage detection, profit margin %
+- Pure functions, no DataBridge, no Supabase, no vertical imports
 
-**Current importers of the stub (affected):**
-- `packages/shared/src/components/SavingsReport.jsx` — calls the stub, receives empty/default output
+**Unit check (acceptance criteria):**
+- `cost=$6, STANDARD, overheadPerUnit=0` → $23.99 ✓ (matches A)
+- `cost=$6, STANDARD, overheadPerUnit=$2` → loaded=$8, $31.99 ✓ (overhead wired)
 
-**Full engine location:** `packages/ignition-os/` (co-located with DataBridge or in a MarginEngine.js module). The full engine implements 4 price slabs, FLEET/LEGACY/FF customer tiers, `analyzeTransaction()`, and leakage detection. It works. It is just Ignition-local.
+**Deprecated implementations (all marked 🔴, not deleted):**
+- A: `packages/ignition-os/MarginEngine.js` — source of canonical slab logic; marked deprecated; callers migrate import path
+- B: `packages/shared/src/pricing/marginEngine.ts` — dead 17-line stub with broken rounding; zero live callers; delete after migrating barrel export
+- C: `DataBridge.getActiveMargin()` / `.calculateRetail()` — prot_matrix percent model (DIFFERENT pricing); callers will see price change at migration (accepted)
+- D: `IgnitionEstimate.jsx` `markup_percent` — flat percent fallback
+- E: `IgnitionOmni.jsx` `shops.margin_config` — display-only storage, not a pricing calc
 
-**Overhead: CAPTURED but ORPHANED.** `IgnitionProt` (the Margins module) collects rent, electric, fuel, and maintenance into `DataBridge shop_policy.prot_matrix`. However, `calculateRetail(tx)` ignores them — it marks up `tx.cost` without adding any overhead-per-unit. The overhead exists; the math doesn't use it.
+**Overhead wire status:** Slot built. Source = `DataBridge.overhead_config.monthly` (rent + electric + fuel + insurance + maintenance). Caller must compute `sum(monthly) / avg_monthly_part_count` and write to engine config. Wiring UI (IgnitionProt → DataBridge `margin_config.overheadPerUnit`) is the first step of the Cost-to-Produce tile session.
 
-**Build path:** Port full `MarginEngine.js` → `packages/shared/src/business-logic/MarginEngine.ts` (TypeScript, replace stub). Wire overhead into `calculateRetail()` in the same session (add one overhead-per-unit term from `prot_matrix`). See `docs/audits/2026-06-06-audits-1-4.md` §4. See also Tech Debt #16.
+**Migration checklist:** `docs/audits/margin-engine-migration-checklist-2026-06-10.md` — full caller map, ordered by risk, price-change warnings for C callers.
 
 ---
 
@@ -677,7 +690,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 |---|---|---|---|
 | `CoreApp.jsx` | Master Session Controller | WIRED (ForgotPinFlow + JoinFlow sub-flows BROKEN) | Session gate — every module flows through |
 | `DataBridge.js` | Local-First Data Layer | WIRED (cloud sync DARK — API_URL unset) | Infrastructure |
-| `MarginEngine.js` | Full Pricing Engine | WIRED (Ignition-local; shared stub is 17-line incomplete — Tech Debt #16) | Infrastructure |
+| `MarginEngine.js` | Full Pricing Engine | WIRED — 🔴 DEPRECATED 2026-06-10; superseded by `packages/shared/src/business-logic/MarginEngine.ts`. Migrate callers via checklist. | Infrastructure |
 | `ExternalBridge.js` | QB OAuth + CSV Import | QB path DARK / CSV WIRED | Support — QB dead; CSV migration works |
 | `IgnitionCore.js` | Web Session Guard + Sub-Router | WIRED | Session infrastructure |
 | `PriceField.jsx` | Part Pricing Widget | WIRED | Sub-component of IgnitionEstimate (Step 4) |
@@ -770,7 +783,7 @@ Defined in `IgnitionAdmin.jsx ALL_PERMISSIONS`. Enforced by `CoreApp AccessGatek
 | ~~Tighten nursery_modules RLS~~ | ~~Cultivar OS~~ | ✅ RESOLVED 2026-06-04: `business_modules` created with membership-scoped RLS (`business_members.user_id = auth.uid() AND active = true`). `authenticated_select_nursery_modules` (loose) retired. |
 | Port ai_router.py to Vercel functions | Ignition OS | Railway is legacy for web build. Agreed kill path: retire orphaned tasks (invoice_scan, vin_decode), port real tasks (dtc_decode, estimate_draft first). (Tech Debt #12) |
 | Receipt / Expense / Cost-Profile storage | All verticals | `receipts`, `expenses`, `cost_profile` tables do not exist. No migration. Eval-photos bucket is Ignition-specific, not receipt archive. AC-clean schema proposed in Audit 3. Build from scratch. |
-| Margin Engine (shared — real) | All verticals | Shared `marginEngine.ts` is a 17-line stub. Full engine is Ignition-local `MarginEngine.js`. Port + wire overhead in same session. (Tech Debt #16) |
+| ~~Margin Engine (shared — real)~~ | ~~All verticals~~ | ✅ BUILT 2026-06-10 — `packages/shared/src/business-logic/MarginEngine.ts`. 5 old impls marked 🔴. Callers migrate via checklist. |
 | QB payables wiring | Cultivar OS → all | QB can write expenses (Purchase/Bill), archive receipt images (Attachable), query Chart of Accounts. None wired today. Receipt Keeper v2 scope. |
 | ~~Proactive QB reconnect detection~~ | ~~Cultivar OS~~ | ✅ RESOLVED 2026-06-08 — `qbo/status.ts` now checks token expiry on load, attempts silent refresh, surfaces banner proactively. Tech Debt #15 closed. STD-007 added. |
 | Gemini vision pipeline (proven on Vercel) | Ignition OS, shared | VIN OCR is a placeholder (alert only). No Vercel serverless function has ever called Gemini vision and returned structured output. Receipt Keeper v1 will be the first confirmed pipeline. |
