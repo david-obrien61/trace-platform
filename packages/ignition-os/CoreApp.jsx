@@ -9,6 +9,7 @@ import React, { useState, useEffect } from 'react';
 import DataBridge from './DataBridge';
 import { supabase } from './supabase';
 import OnboardingWizard from './modules/OnboardingWizard';
+import DemoWizard from './OnboardingWizard';
 import { useBusinessContext } from '@trace/shared/context';
 import IgnitionFlux from './modules/IgnitionFlux';
 import PredictiveKey from './modules/PredictiveKey';
@@ -863,6 +864,31 @@ const CoreApp = () => {
   // JoinFlow, not the owner's OnboardingWizard.
   if (joinShopId) {
     return <JoinFlow shopId={joinShopId} inviteToken={inviteToken} />;
+  }
+
+  // DEMO LAUNCHER: ?demo=true → full 5-step pain-point wizard (WELCOME → TEAM_QR).
+  //               ?demo=quick → jump directly to scenario picker (CHOOSE_PATH), shop
+  //               pre-filled as "Demo Shop" with PIN 1234. Useful for repeated demos.
+  // Works regardless of onboardingDone state — bypasses broken auth signup entirely.
+  const demoMode = urlParams.get('demo');
+  if (demoMode) {
+    const clearDemoParam = () => {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('demo');
+      window.history.replaceState({}, '', url.toString());
+    };
+    return (
+      <DemoWizard
+        quickMode={demoMode === 'quick'}
+        onComplete={() => {
+          clearDemoParam();
+          const session = DataBridge.load('current_user');
+          setOnboardingDone(true);
+          setShopReady(true);
+          if (session) setCurrentUser(session);
+        }}
+      />
+    );
   }
 
   // ONBOARDING GATE: First-run wizard before anything else

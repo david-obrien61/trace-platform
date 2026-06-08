@@ -440,10 +440,55 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 ---
 
-## OnboardingWizard (Ignition OS)
+## Pain-Point Onboarding Wizard (Ignition OS — NOW ACTIVATED via ?demo=)
+
+**What:** Full 5-step demo-first onboarding wizard. Three pain-point scenarios show dollar value within 30 minutes — no prior data entry required.  
+**Status:** ✅ ACTIVATED 2026-06-10 — wired to `?demo=true` and `?demo=quick` URL params in CoreApp  
+**Vertical:** ignition | **Type:** capability  
+**Location:** `packages/ignition-os/OnboardingWizard.jsx` (root level)
+
+**Steps (STEPS array):**
+- `WELCOME` — "Done leaving money on the table" + 3 pain-point teasers
+- `SHOP_SETUP` — shop name, owner name, 4-digit PIN (skipped in quickMode)
+- `CHOOSE_PATH` — scenario picker (3 choices)
+- `PATH_EXPERIENCE` — chosen scenario runs live
+- `TEAM_QR` — "Shop is live" — QR code + role picker (Tech/Front Office) + invite link
+
+**Three scenarios in PATH_EXPERIENCE:**
+1. **MARGIN** (`MarginPath`) — enter vendor cost + price charged → `MarginEngine.calculateRetail()` → suggested price + "margin leak detected" + annual $ via weekly-parts slider
+2. **DIAGNOSE** (`DiagnosePath`) — pick fault code from FAULT_LIBRARY (6 codes) or type own → full estimate (parts + labor + margin) → save as first work order
+3. **MIGRATE** (`MigratePath`) — import customers from QuickBooks / CSV / manual entry
+
+**Launch URLs:**
+- `?demo=true` — full walkthrough from WELCOME (5 steps, owner enters real shop name + PIN)
+- `?demo=quick` — jump to CHOOSE_PATH; pre-filled with "Demo Shop" / PIN 1234 (zero typing required for fast demoing)
+
+**finalize() behavior:** generates new shopId (UUID), seeds DataBridge (localStorage), upserts to Supabase `shops` table, saves owner PIN to `DataBridge.user_profiles`. After `onComplete()` → CoreApp clears URL param + enters main app.
+
+**Margin engine used:** `packages/ignition-os/MarginEngine.js` (FULL engine — 4 slabs, tier discounts, analyzeTransaction). NOT the shared 17-line stub. Demo output is accurate.
+
+**quickMode prop:** `<DemoWizard quickMode={true} />` — skips WELCOME and SHOP_SETUP, initializes `stepIndex=2` (CHOOSE_PATH), pre-fills shopInfo/ownerName/ownerPin defaults.
+
+---
+
+## DemoLaunchButton (shared)
+
+**What:** Neutral shared button component that navigates to `?demo=true` or `?demo=quick`. AC-1 clean — zero vertical nouns, all copy and color are caller-supplied props.  
+**Status:** ✅ NEW 2026-06-10  
+**Vertical:** shared | **Type:** capability  
+**Location:** `packages/shared/src/onboarding/DemoLaunchButton.tsx`
+
+**Props:** `label`, `description`, `quick` (bool), `baseUrl`, `primaryColor`, `style`  
+**Usage:** Import as `import { DemoLaunchButton } from '@trace/shared/onboarding'`. Place anywhere — a settings page, admin panel, or landing tile. On click navigates to `baseUrl?demo=true|quick`.
+
+**Seam:** Any vertical that implements a pain-point onboarding wizard and handles `?demo=` in its router can share this button. The button is the shared piece; the wizard content is the vertical's data/config.
+
+---
+
+## OnboardingWizard — Auth Signup (Ignition OS)
 
 **What:** 3-step flow wrapping shared OwnerSignup. Welcome screen (dark Ignition theme) → OwnerSignup (TRACE green theme, full account + PIN setup) → Done screen (dark Ignition theme).  
-**Status:** ✅ Updated 2026-06-03 — uses shared OwnerSignup  
+**Status:** ⚠️ 2026-06-03 — uses shared OwnerSignup. Requires `shop_members` recreation migration in ufsgqckbxdtwviqjjtos (David manual step, unconfirmed). This path is UNREACHABLE when onboardingDone=true in DataBridge; bypassed entirely by ?demo= URL flow.  
 **Vertical:** ignition | **Type:** capability  
 **Location:** `packages/ignition-os/modules/OnboardingWizard.jsx`
 
@@ -665,7 +710,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 | `modules/IgnitionProcure.jsx` | Parts Entry for Active Job | ORPHANED (not in CoreApp routing; no caller in web build) | Step 6 — ORPHANED |
 | `hooks/useIgnitionVoice.js` | Voice Recognition Hook | WIRED (browser-dependent: Chrome/Safari) | IgnitionKosk sub-feature |
 | `hooks/usePowerSense.js` | Battery State Hook | WIRED (Chrome/Edge only) | IgnitionKosk environment detection |
-| `OnboardingWizard.jsx` (root) | Enrollment Flow (ORPHANED DUPLICATE) | ORPHANED — `modules/OnboardingWizard.jsx` is canonical | Not in active flow |
+| `OnboardingWizard.jsx` (root) | Pain-Point Demo Wizard (5-step) | ✅ ACTIVATED 2026-06-10 — `?demo=true` (full) or `?demo=quick` (jump to scenario picker). `modules/OnboardingWizard.jsx` = separate auth-based signup. | First-run + demo |
 | `EnrollmentCatch.jsx` | Enrollment Token Handler | ORPHANED (legacy DataBridge pending_users pattern) | Staff onboarding — old pattern |
 | `hooks/useDataBridge.js` | Legacy State Hook | ORPHANED (pre-DataBridge.js; hardcoded demo job) | Not in active flow |
 | `hooks/useIgnitionCipher.js` | Legacy PIN Auth Hook | ORPHANED. **⚠️ NAMING COLLISION** — same name "CIPHER" as IgnitionCipher.jsx (DTC decoder) but completely different function. Hardcoded PINs (1111/1234/2222/3333). | Not in active flow |

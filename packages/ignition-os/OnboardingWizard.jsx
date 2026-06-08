@@ -66,13 +66,19 @@ const FAULT_LIBRARY = {
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
-const OnboardingWizard = ({ onComplete }) => {
+// quickMode: pre-fills shop/owner/PIN defaults and jumps directly to CHOOSE_PATH (step 3).
+// Useful for demo runs where you don't want to walk through shop setup every time.
+const OnboardingWizard = ({ onComplete, quickMode = false }) => {
   const STEPS = ['WELCOME', 'SHOP_SETUP', 'CHOOSE_PATH', 'PATH_EXPERIENCE', 'TEAM_QR'];
-  const [stepIndex, setStepIndex]   = useState(0);
+  const [stepIndex, setStepIndex]   = useState(quickMode ? 2 : 0); // CHOOSE_PATH index = 2
   const [path, setPath]             = useState(null); // 'MARGIN' | 'DIAGNOSE' | 'MIGRATE'
-  const [shopInfo, setShopInfo]     = useState({ name: '', phone: '', address: '', usdot: '' });
-  const [ownerPin, setOwnerPin]     = useState('');
-  const [ownerName, setOwnerName]   = useState('');
+  const [shopInfo, setShopInfo]     = useState(
+    quickMode
+      ? { name: 'Demo Shop', phone: '', address: '', usdot: '' }
+      : { name: '', phone: '', address: '', usdot: '' }
+  );
+  const [ownerPin, setOwnerPin]     = useState(quickMode ? '1234' : '');
+  const [ownerName, setOwnerName]   = useState(quickMode ? 'Demo Owner' : '');
   const [shopInfoError, setShopInfoError] = useState('');
   const [finalShopId, setFinalShopId]     = useState(null);
   const [copiedJoinUrl, setCopiedJoinUrl] = useState(false);

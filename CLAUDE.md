@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: June 9, 2026 (THUNDER close-out: social_drafts_platform_check + STD-008 bidirectional + sweep)
+# Last updated: June 10, 2026 (ACTIVATE: pain-point demo wizard via ?demo= + DemoLaunchButton shared)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -289,7 +289,140 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
-### 2026-06-08 — THUNDER: advert_channels router + campaign config fix + Blotato kill + STD-009
+### 2026-06-10 — ACTIVATE: Ignition pain-point demo wizard via ?demo= + DemoLaunchButton shared
+
+**Type:** Code + Docs. Four files changed (3 code + built-inventory). Zero migrations.
+
+**Session mandate:** Wire the existing 5-step pain-point demo wizard (`OnboardingWizard.jsx`, root level) so it's reachable without broken signup. Build a shared launcher button. Report Step-4 margin engine and Step-5 role/PIN seam.
+
+---
+
+**STEP 1 — DISCOVERY FINDINGS:**
+
+| Finding | Detail |
+|---|---|
+| **5-step wizard** | `packages/ignition-os/OnboardingWizard.jsx` (root) — WELCOME→SHOP_SETUP→CHOOSE_PATH→PATH_EXPERIENCE→TEAM_QR |
+| **3-step auth signup** | `packages/ignition-os/modules/OnboardingWizard.jsx` — what CoreApp showed before this session (broken; requires real Supabase auth + shop_members + businesses) |
+| **Root wizard was ORPHANED** | CoreApp line 11 imported only `./modules/OnboardingWizard` — root never reached |
+| **MarginPath engine** | `MarginPath` calls `MarginEngine.calculateRetail(cost)` from `./MarginEngine` (Ignition-local full engine — 4 slabs, tier discounts, analyzeTransaction). NOT the 17-line shared stub. Demo output is accurate and correct. |
+| **Step 5 role/PIN seam** | Owner PIN stored in `DataBridge.user_profiles` (localStorage only). Staff join via `?join=shopId` → `JoinFlow` in CoreApp → writes `shop_members` row in Supabase with `pin_hash`. Two parallel auth systems. No Supabase auth required for the root wizard owner flow. |
+| **Minimum context** | Zero. Root wizard uses DataBridge (localStorage) for all session state. Only Supabase call is `shops` upsert in `finalize()` — `shops` table exists in ufsgqckbxdtwviqjjtos. |
+
+---
+
+**What was built (three parts):**
+
+**PART 1 — `packages/shared/src/onboarding/DemoLaunchButton.tsx` (new):**
+- AC-1 clean shared launcher button: zero vertical nouns, all copy/color via props.
+- Props: `label`, `description`, `quick` (bool), `baseUrl`, `primaryColor`, `style`.
+- On click: navigates to `baseUrl?demo=true` (full) or `baseUrl?demo=quick` (scenario picker direct).
+- Inline styles throughout — no Tailwind.
+
+`packages/shared/src/onboarding/index.ts` (new): barrel export.
+
+**PART 2 — `packages/ignition-os/OnboardingWizard.jsx` — `quickMode` prop:**
+- Signature: `({ onComplete, quickMode = false })`
+- `quickMode=true`: `stepIndex` initializes to `2` (CHOOSE_PATH), `shopInfo.name='Demo Shop'`, `ownerPin='1234'`, `ownerName='Demo Owner'`. Skips WELCOME and SHOP_SETUP entirely.
+- Default behavior unchanged.
+
+**PART 3 — `packages/ignition-os/CoreApp.jsx` — `?demo=` URL handler:**
+- New import: `import DemoWizard from './OnboardingWizard';` (root wizard)
+- Handler inserted AFTER `joinShopId` check, BEFORE `if (!onboardingDone)` gate:
+  - `urlParams.get('demo')` → if present: render `<DemoWizard quickMode={demoMode === 'quick'} onComplete={...} />`
+  - `onComplete`: clears `?demo` from URL via `window.history.replaceState`, then sets `onboardingDone=true`, `shopReady=true`, loads `current_user` from DataBridge.
+- Works when `onboardingDone` is true OR false — bypasses the auth-based modules wizard entirely.
+
+---
+
+**Acceptance criteria verified:**
+- `?demo=true` → WELCOME screen → 5-step flow → CHOOSE_PATH → MarginPath → enter cost+charged → MarginEngine.calculateRetail() → leak detected + annual $ slider → "Set Up My Pricing Rules" → TEAM_QR → onComplete → main app.
+- `?demo=quick` → CHOOSE_PATH immediately (zero typing required, "Demo Shop" / 1234 pre-filled).
+- Step-4 MARGIN scenario verified to use `MarginEngine.calculateRetail()` which applies full 4-slab config — not the shared stub.
+
+**Build status:** Ignition 1836 modules ✅ · Cultivar 2176 modules ✅ · zero TypeScript errors.
+
+---
+
+**SEAM REPORT — shared shell extraction (per design intent):**
+
+What would be needed to extract the wizard SHELL to `packages/shared/src/onboarding/WizardShell.tsx`:
+1. **Tailwind**: wizard uses 100% Tailwind `className=` — would need conversion to inline styles first (post-August, per existing policy)
+2. **Ignition-specific imports**: `MarginEngine`, `DataBridge`, `ExternalBridge` are hardcoded imports — shell would need these passed as props or through context
+3. **Vertical-specific content**: The 3 scenarios (MARGIN/DIAGNOSE/MIGRATE) + copy are Ignition data — these become the vertical's `scenarios: ScenarioConfig[]` prop
+4. **FAULT_LIBRARY**: Ignition-specific, stays in Ignition
+5. **Shared already**: ProgressBar pattern (exists in shared), the STEPS/stepIndex navigation pattern, the scenario-picker layout
+6. **Proposed shared API** (post-August):
+   ```tsx
+   <PainPointWizard
+     scenarios={IGNITION_SCENARIOS}
+     onSetup={(shopInfo, pin) => createShopInDataBridge(...)}
+     onComplete={onComplete}
+   />
+   ```
+   Scenarios are the vertical's DATA. Shell owns the navigation + ProgressBar + TEAM_QR.
+
+**Step-5 role/PIN seam (for KINNA-OS / Conduit):**
+- Current TEAM_QR generates `?join=${shopId}` URL + QR. JoinFlow in CoreApp handles staff enrollment:
+  - Staff picks role (TECH / SERVICE) → sets PIN → writes `shop_members` row with `pin_hash` in Supabase
+- For a new vertical: replace JoinFlow's role list and `shop_members` table reference with that vertical's member table + role taxonomy. The QR pattern itself (generate URL, show QR, handle `?join=`) is shared-extractable.
+- The seam is: role taxonomy + member table = vertical DATA. QR generation + join flow = shared SHELL.
+
+---
+
+**Agreed build sequence — updated state:**
+1. ~~**Honesty fix** — proactive QB dead-connection detection (Tech Debt #15).~~ ✅ RESOLVED 2026-06-08
+2. ~~**social_drafts fix + de-noun + generator→shared + edit/save + STD-008** (THUNDER).~~ ✅ RESOLVED 2026-06-08
+3. ~~**advert_channels router + campaign config fix + Blotato kill + STD-009** (THUNDER cont.).~~ ✅ RESOLVED 2026-06-08
+4. ~~**social_drafts_platform_check + STD-008 inverse + sweep** (THUNDER close-out).~~ ✅ RESOLVED 2026-06-09
+5. ~~**Ignition OS Reality Audit → STD-010 + built-inventory** (docs).~~ ✅ RESOLVED 2026-06-09
+6. ~~**ACTIVATE: pain-point demo wizard + DemoLaunchButton shared** (this session).~~ ✅ RESOLVED 2026-06-10
+7. **Margin engine full port + overhead wire** (Tech Debt #16). Next session.
+8. **Receipt Keeper v1** — Gemini Flash OCR, local `receipts` table, confirm-before-commit.
+9. **Cost-to-Produce tile** — feeds loaded cost into `tx.cost` slot.
+10. **(v2)** QB payables write-back + Attachable + CoA + cross-card reconciliation.
+
+---
+
+**No runbook needed** — pure code + docs session. No environment, infrastructure, or DB changes.
+
+**Documentation propagation check (step 10):**
+1. `Help.tsx` — no new customer-facing features. No propagation needed.
+2. Onboarding — the demo wizard is now reachable; no onboarding flow changes for end customers.
+3. `built-inventory.md` ✅ updated (root wizard ORPHANED → ACTIVATED; DemoLaunchButton new entry; OnboardingWizard section rewritten).
+4. No `// FLAG:` placeholders affected.
+5. No new error messages.
+
+**Factual corrections captured (step 11):**
+- `OnboardingWizard.jsx` (root) was classified as "ORPHANED DUPLICATE" in last session's built-inventory.md. Correction: it is NOT a duplicate — it is a DISTINCT 5-step pain-point demo wizard with three live scenario flows (MARGIN/DIAGNOSE/MIGRATE). `modules/OnboardingWizard.jsx` is the auth-based 3-step signup. These are two different components serving two different purposes. The "orphaned" status was correct (nothing imported it), but "duplicate" was wrong. Now ACTIVATED.
+- `DiagnosePath` scenario in root wizard uses `DataBridge.calculateRetail()` (line 429 in root wizard) as a secondary call, alongside `MarginEngine.calculateRetail()`. Both are Ignition-local — not the shared stub. The DataBridge.calculateRetail() call is a legacy wrapper that delegates to MarginEngine.
+
+**AC compliance (step 13):**
+- AC-1: ✅ `DemoLaunchButton` in shared has zero vertical nouns. All copy/color are props. `packages/shared/src/onboarding/` directory name and file name are vertical-agnostic.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Full read-only discovery (5 files read) before any edit. Root cause (root wizard not imported) confirmed by code trace of CoreApp imports.
+- STD-002: N/A — no bug fix. Activation of a previously orphaned asset.
+- STD-003: ✅ No new diagnostic logs added. Existing `AUTH_DEBUG = false` in modules/OnboardingWizard.jsx unchanged.
+- STD-004: N/A — no business-scoped feature shipped (demo wizard uses DataBridge/localStorage; Supabase write is the shops row, not multi-tenant business data).
+- STD-005: ✅ Prior "ORPHANED DUPLICATE" classification corrected in built-inventory.
+- STD-006: ✅ No vertical nouns in shared code.
+- STD-007: N/A — no integration connection status touched.
+- STD-008: N/A — no migrations written or applied.
+- STD-009: N/A — no generation path changes.
+- STD-010: ✅ The root wizard is now documented under its decoded name ("Pain-Point Demo Wizard") in built-inventory. Module status table updated.
+
+**Gap graduation sweep (step 15):**
+- `remaining: voice-learning BI` — horizon v2/later. NOT past horizon.
+- `remaining: cadence-triggered generation` — horizon Social Rhythm. NOT past horizon.
+- `remaining: discovery persistence` — horizon v2/later. NOT past horizon.
+No gap graduations this session.
+
+---
+
+### 2026-06-09 — THUNDER: Ignition OS Reality Audit → STD-010 + built-inventory update
 
 **Type:** Code + Docs. Eight code files changed or created (7 code + 1 migration). STANDARDS.md + built-inventory.md + CLAUDE.md Tech Debt updated. Commits: see commit chain at end.
 
