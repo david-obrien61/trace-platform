@@ -1,0 +1,190 @@
+/*
+ * ignition-theme.css
+ * Custom CSS for Ignition OS — handles pseudo-states (hover/focus/active/disabled)
+ * and animations that cannot be expressed as inline React styles.
+ *
+ * NON-TAILWIND class names only. These are TRACE custom classes, not Tailwind utilities.
+ * Imported by main.jsx — applies globally within the Ignition OS app.
+ *
+ * TD#14: Tailwind CDN removed. These classes replace the Tailwind pseudo-state utilities.
+ */
+
+/* ── Reset ──────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+/* ── Keyframe animations ─────────────────────────────────────────────────────── */
+@keyframes ign-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+@keyframes ign-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes ign-bounce {
+  0%, 100% { transform: translateY(-10%); animation-timing-function: cubic-bezier(0.8,0,1,1); }
+  50%       { transform: none; animation-timing-function: cubic-bezier(0,0,0.2,1); }
+}
+@keyframes ign-slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Animation utility classes ───────────────────────────────────────────────── */
+.ign-pulse  { animation: ign-pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
+.ign-spin   { animation: ign-spin 1s linear infinite; }
+.ign-bounce { animation: ign-bounce 1s infinite; }
+
+/* ── Input focus states ──────────────────────────────────────────────────────── */
+/* Applied to <input> and <select> elements via className="ign-input" */
+.ign-input:focus {
+  outline: none;
+  border-color: #3b82f6; /* blue-500 */
+}
+.ign-input-orange:focus {
+  outline: none;
+  border-color: #f97316; /* orange-500 */
+}
+.ign-input-green:focus {
+  outline: none;
+  border-color: #10b981; /* emerald-500 */
+}
+.ign-input:disabled,
+.ign-input-orange:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Primary action buttons (blue) ───────────────────────────────────────────── */
+.ign-btn-primary {
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+  cursor: pointer;
+}
+.ign-btn-primary:hover:not(:disabled) { background-color: #3b82f6; /* blue-500 */ }
+.ign-btn-primary:active:not(:disabled) { transform: scale(0.95); }
+.ign-btn-primary:disabled {
+  background-color: #1e293b; /* slate-800 */
+  color: #475569;            /* slate-600 */
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+/* ── Orange / warning buttons ────────────────────────────────────────────────── */
+.ign-btn-orange {
+  transition: background-color 0.15s ease;
+  cursor: pointer;
+}
+.ign-btn-orange:hover:not(:disabled)  { background-color: #f97316; /* orange-500 */ }
+.ign-btn-orange:active:not(:disabled) { transform: scale(0.95); }
+.ign-btn-orange:disabled {
+  background-color: #1e293b;
+  color: #475569;
+  cursor: not-allowed;
+}
+
+/* ── Emerald / success buttons ───────────────────────────────────────────────── */
+.ign-btn-emerald {
+  transition: background-color 0.15s ease;
+  cursor: pointer;
+}
+.ign-btn-emerald:hover:not(:disabled)  { background-color: #10b981; /* emerald-500 */ }
+.ign-btn-emerald:active:not(:disabled) { transform: scale(0.95); }
+.ign-btn-emerald:disabled {
+  background-color: #1e293b;
+  color: #475569;
+  cursor: not-allowed;
+}
+
+/* ── Red / danger buttons ────────────────────────────────────────────────────── */
+.ign-btn-red {
+  transition: background-color 0.15s ease;
+  cursor: pointer;
+}
+.ign-btn-red:hover:not(:disabled)  { background-color: #ef4444; /* red-500 */ }
+.ign-btn-red:active:not(:disabled) { transform: scale(0.95); }
+
+/* ── Secondary / slate buttons ───────────────────────────────────────────────── */
+.ign-btn-secondary {
+  transition: background-color 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+}
+.ign-btn-secondary:hover:not(:disabled) { background-color: #1e293b; /* slate-800 */ }
+.ign-btn-secondary:active:not(:disabled) { transform: scale(0.95); }
+.ign-btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Ghost / text-only buttons ───────────────────────────────────────────────── */
+.ign-btn-ghost {
+  transition: color 0.15s ease;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+}
+.ign-btn-ghost:hover { color: #94a3b8; /* slate-400 */ }
+
+/* ── Icon buttons ────────────────────────────────────────────────────────────── */
+.ign-icon-btn {
+  transition: color 0.15s ease, opacity 0.15s ease;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.ign-icon-btn:hover { color: #ffffff; }
+
+/* ── Cards with hover border highlight ───────────────────────────────────────── */
+.ign-card-hover {
+  transition: border-color 0.15s ease, transform 0.1s ease;
+  cursor: pointer;
+}
+.ign-card-hover:hover  { border-color: #475569; /* slate-600 */ }
+.ign-card-hover:active { transform: scale(0.98); }
+
+/* ── Tab/nav items ───────────────────────────────────────────────────────────── */
+.ign-tab {
+  transition: color 0.15s ease, border-color 0.15s ease;
+  cursor: pointer;
+}
+
+/* ── Permission badge toggles ────────────────────────────────────────────────── */
+.ign-badge-toggle {
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+}
+.ign-badge-toggle:hover { opacity: 0.85; }
+
+/* ── Scrollable containers ───────────────────────────────────────────────────── */
+.ign-scroll { overflow-y: auto; }
+.ign-scroll-x { overflow-x: auto; }
+
+/* ── Flex-wrap ───────────────────────────────────────────────────────────────── */
+.ign-wrap { flex-wrap: wrap; }
+
+/* ── Line clamp ──────────────────────────────────────────────────────────────── */
+.ign-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ign-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Backdrop blur (used on modals) ──────────────────────────────────────────── */
+.ign-backdrop { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+
+/* ── Slide-to-complete specific ──────────────────────────────────────────────── */
+.ign-slide-thumb {
+  transition: transform 0.1s ease;
+  cursor: grab;
+}
+.ign-slide-thumb:active { cursor: grabbing; }
+
+/* ── STYLE_DEBUG instrumentation toggle ──────────────────────────────────────── */
+/* STD-003: instrumentation is gated. Set STYLE_DEBUG=true in JS to emit runtime logs. */
+/* The logs themselves live in individual component files, not here. */

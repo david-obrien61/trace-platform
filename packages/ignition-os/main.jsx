@@ -1,5 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import './ignition-theme.css'
 import CoreApp from './CoreApp.jsx'
 import ErrorBoundary from './ErrorBoundary.jsx'
 import DataBridge from './DataBridge.js'
