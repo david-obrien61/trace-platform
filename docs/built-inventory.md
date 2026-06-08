@@ -336,7 +336,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **⚠️ QB integration scope: receivables only (Audit 6, 2026-06-06).** The current QB integration (`api/qbo/`) covers invoices (money IN) and customer lookup/create. Payables (money OUT — expense write, Attachable image archive, Chart of Accounts query, Purchase/Bill write) are confirmed API-capable but NOT yet wired in TRACE code. Payables wire-up = Receipt Keeper v2 scope. See `docs/audits/2026-06-06-audits-5-6-quickbooks.md` §6b.
 
-**⚠️ HONEST-DEBT: `accounting_needs_reconnect` reads `false` while QB token is expired (Audit 6, 2026-06-06).** The flag only flips on a 401 during an active invoice call. A dead/expired connection stays silent — no banner — until something fails mid-use. This is a Surface Honesty failure. Fix = proactive expiry check on dashboard load. See Tech Debt #15.
+**✅ RESOLVED 2026-06-08 — proactive expiry surfacing live.** `qbo/status.ts` now checks `accounting_token_expires_at` on every dashboard load; attempts silent `refreshQBToken()` if expired; returns `needsReconnect: true` if refresh fails. `Dashboard.tsx` derives the banner immediately from `accounting_token_expires_at` client-side and applies the authoritative server result from `checkQbStatus()`. A dead/expired connection now announces itself on page load — no mid-use 401 required. STD-007 added as the class-of-bug record.
 
 ---
 
@@ -596,7 +596,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 | Receipt / Expense / Cost-Profile storage | All verticals | `receipts`, `expenses`, `cost_profile` tables do not exist. No migration. Eval-photos bucket is Ignition-specific, not receipt archive. AC-clean schema proposed in Audit 3. Build from scratch. |
 | Margin Engine (shared — real) | All verticals | Shared `marginEngine.ts` is a 17-line stub. Full engine is Ignition-local `MarginEngine.js`. Port + wire overhead in same session. (Tech Debt #16) |
 | QB payables wiring | Cultivar OS → all | QB can write expenses (Purchase/Bill), archive receipt images (Attachable), query Chart of Accounts. None wired today. Receipt Keeper v2 scope. |
-| Proactive QB reconnect detection | Cultivar OS | `accounting_needs_reconnect` currently lies (reads false while expired). Fix = proactive expiry check on load. (Tech Debt #15 / HONEST-DEBT) |
+| ~~Proactive QB reconnect detection~~ | ~~Cultivar OS~~ | ✅ RESOLVED 2026-06-08 — `qbo/status.ts` now checks token expiry on load, attempts silent refresh, surfaces banner proactively. Tech Debt #15 closed. STD-007 added. |
 | Gemini vision pipeline (proven on Vercel) | Ignition OS, shared | VIN OCR is a placeholder (alert only). No Vercel serverless function has ever called Gemini vision and returned structured output. Receipt Keeper v1 will be the first confirmed pipeline. |
 
 ## ✅ Resolved Gaps (previously listed as Not Yet Built)

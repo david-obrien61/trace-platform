@@ -125,7 +125,7 @@ export function Dashboard() {
     const [businessRes, plantsRes, todayRes, installsRes, leakageRes] = await Promise.all([
       supabase
         .from('businesses')
-        .select('name, phone, address, accounting_needs_reconnect')
+        .select('name, phone, address, accounting_needs_reconnect, accounting_token_expires_at')
         .eq('id', businessId!)
         .single(),
 
@@ -159,7 +159,13 @@ export function Dashboard() {
 
     if (businessRes.data) {
       setBusinessName(businessRes.data.name);
-      setAccountingNeedsReconnect(businessRes.data.accounting_needs_reconnect ?? false);
+      // Belt-and-suspenders: derive reconnect state from token expiry immediately,
+      // rather than trusting the cached DB flag alone. checkQbStatus() will
+      // provide the authoritative result (including silent refresh attempt) shortly.
+      const tokenExpiresAt = businessRes.data.accounting_token_expires_at;
+      const expiresMs = tokenExpiresAt ? new Date(tokenExpiresAt).getTime() : 0;
+      const tokenExpired = expiresMs > 0 && expiresMs < Date.now();
+      setAccountingNeedsReconnect(businessRes.data.accounting_needs_reconnect || tokenExpired);
       setProfileIncomplete(!businessRes.data.phone || !businessRes.data.address);
     }
 
@@ -254,6 +260,10 @@ export function Dashboard() {
         if (data.connected) {
           setQbConnected(true);
           setQbCompany(data.companyName ?? '');
+          // Authoritative result from server: overrides client-side expiry estimate.
+          // If refresh succeeded silently, needsReconnect is false → banner clears.
+          // If refresh failed, needsReconnect is true → banner persists.
+          setAccountingNeedsReconnect(data.needsReconnect ?? false);
           return true;
         }
       }

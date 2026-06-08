@@ -173,6 +173,43 @@ complete and cross-referenced.
 
 ---
 
+### STD-007 — DERIVED CONNECTION STATE, NOT CACHED FLAGS
+
+**Rule:** State flags that reflect the status of an external connection or
+resource (OAuth tokens, API keys, integrations) must be DERIVED from real
+evidence — e.g., by comparing a stored expiry timestamp against the current
+time, or by proactively attempting a refresh — and surfaced proactively. A
+cached boolean that only updates reactively (on a mid-use 401 or failure call)
+is a Surface Honesty violation: the system is making a claim it cannot prove.
+
+**Scar:** `businesses.accounting_needs_reconnect` read `false` while David's
+QuickBooks token had been expired for 10+ days. The flag only flipped on a 401
+during an active invoice call (in `refreshQBToken()`, called only from
+`invoice/cultivar.ts`). An owner could see "QuickBooks connected" on the
+dashboard while their connection was dead. The first signal was a failed invoice
+during a customer sale — the worst possible moment. Fixed 2026-06-08:
+`qbo/status.ts` now proactively checks `accounting_token_expires_at` against
+`Date.now()` on every dashboard load; if expired, it attempts a silent refresh;
+if refresh fails, it sets `accounting_needs_reconnect = true` and returns
+`needsReconnect: true` to the client immediately. `Dashboard.tsx loadMetrics()`
+also derives a client-side early estimate from `accounting_token_expires_at` so
+the banner appears without waiting for the status check to complete.
+
+**In practice:**
+- Store expiry timestamps for all external tokens/credentials, not just the
+  token itself
+- On load of any surface that depends on a live connection, compare stored
+  expiry against `Date.now()` before displaying a "connected" state
+- Attempt a silent refresh if the token is expired and a refresh token exists
+- Surface the reconnect prompt proactively — before the user tries to use the
+  integration and before any request to the external service fails
+
+**Scope:** Every integration that holds an OAuth token, API key with expiry,
+or any credential that can silently lapse. Any dashboard or settings surface
+that displays connection status.
+
+---
+
 ## ENFORCEMENT
 
 | Standard | Applies to | Gate type |
@@ -183,6 +220,7 @@ complete and cross-referenced.
 | STD-004 | Every business-scoped feature | Two-email proof in Handoff |
 | STD-005 | Every decision recorded in docs | Review prior text before writing |
 | STD-006 | Every shared schema/code change | Step 13 AC-1 check in Part 9 |
+| STD-007 | Every integration with expiring credentials | Proactive expiry derivation, not reactive flag |
 
 **Part 9 addition:** A `STANDARDS compliance` line is now required alongside the
 existing Step 13 AC check at session end. See CLAUDE.md Part 9, Step 14.
@@ -212,6 +250,7 @@ for a confirming incident before promotion.
 | Version | Date | Change |
 |---|---|---|
 | 1.0 | 2026-06-04 | Created. Six standards seeded from session scars. Adopted immediately. |
+| 1.1 | 2026-06-08 | STD-007 added. Scar: QB `accounting_needs_reconnect` lying flag — reactive-only flag kept dead connection silent. Fixed by proactive `accounting_token_expires_at` check in `qbo/status.ts`. |
 
 ---
 

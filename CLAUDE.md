@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: June 5, 2026 (v0 discovery finish: seed.ts + admin send + doc logging)
+# Last updated: June 8, 2026 (Step 1: QB lying-flag honesty fix — proactive expiry check)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -239,7 +239,7 @@ This log is created and maintained per the Honest Friction principle (see PLATFO
 
 | 12 | 🟡 `CAI/ai_router.py` (Railway FastAPI) was built to keep AI provider keys out of the React Native bundle. Now that Ignition OS is a Vercel web app, this is unnecessary — Vercel serverless functions hold keys server-side, same pattern cultivar-os uses for Claude calls today. Railway is still running but is legacy for the web build. AIEngine.ts currently points to `VITE_API_URL` which is unset in the ignition-os Vercel project — **EVERY AIENGINE CALL IN IGNITION VERCEL PRODUCTION RETURNS `{ ok: false }`. Ignition AI is DARK in production (Audit 2, 2026-06-06).** Railway receives zero web-build traffic → safe to kill clean. **Agreed kill path (v7 §15):** retire orphaned tasks (`invoice_scan`, `vin_decode`) — do NOT port them; port real tasks (`dtc_decode`, `estimate_draft` first — text-only, highest value); evaluate `voice_transcribe` (4.5MB Vercel limit) before deciding port vs. retire. Kill Railway after confirmed tasks are live. Receipt Keeper is Vercel-native from birth — adds zero Railway debt. | 2026-05-28 (decision made); DARK-in-prod finding confirmed Audit 2, 2026-06-06 | Port real ai_router.py endpoints to TypeScript Vercel functions under `packages/ignition-os/api/`. Retire orphaned tasks. Decommission Railway. | Before activating AI features in ignition-os web. |
 | 13 | 🟡 Vite build aliases for `react-native`, expo packages, and `lucide-react-native` exist in both `CAI/vite.config.js` AND `packages/ignition-os/vite.config.js` — duplicated. The stubs in `CAI/stubs/` and `packages/ignition-os/stubs/` are identical files in two places. | 2026-05-28 | Extract stubs to `packages/shared/stubs/` and reference from both vite configs. Low priority — only matters if stubs need to change. | If stubs ever need updating, deduplicate first. |
-| 15 | 🟡 **HONEST-DEBT: `businesses.accounting_needs_reconnect` reads `false` while the QB token is expired.** The flag only flips to `true` when a 401 response occurs during an active invoice call — meaning a dead/expired QB connection stays silent (no banner, no warning) until something fails mid-use. A business owner sees "Connected" while their QB integration is broken. The first signal they receive is a failed invoice during a customer sale — worst possible moment. STD-001: the system cannot prove the claim it is making (connection is live). **Fix:** proactive expiry check on dashboard load — compare `accounting_token_expires_at` against now; if expired, set `accounting_needs_reconnect = true` immediately and display the amber reconnect banner before the owner tries to use QB. **Current state:** David's own test QB connection is expired (benign — David knows); no real customer is affected today. Low urgency NOW; HIGH urgency before any real customer relies on QB. | Audit 6, 2026-06-06 | Proactive expiry check function called on dashboard load (or low-frequency background check). No reactive-only detection. | Before any real customer relies on QB integration. |
+| 15 | 🟢 **RESOLVED 2026-06-08 (see commit).** ~~HONEST-DEBT: `businesses.accounting_needs_reconnect` reads `false` while the QB token is expired. The flag only flipped on a 401 during an active invoice call — meaning a dead connection stayed silent until something failed mid-use.~~ **Fix applied:** (1) `qbo/status.ts` — on every dashboard load, fetches `accounting_token_expires_at`; if token is missing or expired, calls `refreshQBToken()`; if refresh succeeds → `needsReconnect: false` (silent, no banner); if refresh fails → `needsReconnect: true` (DB updated, banner fires). (2) `Dashboard.tsx loadMetrics()` — also selects `accounting_token_expires_at`; client-side derives early estimate (`expiresMs < Date.now()`) so banner appears immediately without waiting for status check. (3) `checkQbStatus()` — always applies the server's authoritative `needsReconnect` result, clearing banner if silent refresh succeeded. STD-007 added to STANDARDS.md as the class-of-bug record. | Audit 6, 2026-06-06 | ✅ RESOLVED 2026-06-08 | — |
 | 16 | 🟡 **TECH-DEBT: `packages/shared/src/business-logic/marginEngine.ts` is a ~17-line stub that silently underdelivers.** The stub exports the expected interface but contains no tier logic, no overhead, no `analyzeTransaction()`, no leakage detection. Any importer (currently `SavingsReport.jsx`) receives a shell response without error. The full engine — 4 price slabs, FLEET/LEGACY/FF tiers, `analyzeTransaction()`, leakage — exists in Ignition-local `MarginEngine.js`. Additional finding: overhead IS captured in `IgnitionProt` (`DataBridge shop_policy.prot_matrix`: rent, electric, fuel, maintenance) but `calculateRetail()` IGNORES it — every margin calculation underestimates true cost. STD-001: the caller cannot know the shared stub is incomplete. | Stub introduced pre-2026-05-29 (Shared Extraction Roadmap listed it as "copy-paste ready"); orphaned overhead confirmed Audit 4, 2026-06-06 | Port full `MarginEngine.js` → `packages/shared/src/business-logic/MarginEngine.ts` (TypeScript, replaces stub). Wire overhead into `calculateRetail()` in same session (add overhead-per-unit term from prot_matrix). This is §15 build step 2 in v7. | Before Cost-to-Produce tile is built (it feeds loaded cost into `tx.cost`; the margin engine marks up that cost — the stub makes the markup meaningless). |
 | 14 | 🟡 **UPGRADED 2026-05-31: Tailwind is officially deprecated platform-wide.** Tailwind CSS is loaded via CDN script tag in `packages/ignition-os/index.html`. Existing Tailwind surface: ignition-os (2,334 className= lines across 32 files) + packages/shared/src/components/SavingsReport.jsx (86 lines) + packages/shared/src/components/QuickBooksConnector.jsx (54 lines). Cultivar OS className= usages are custom CSS class names (page, section, btn, badge, etc.) — NOT Tailwind. **Policy:** NO new Tailwind anywhere. No new `className=` with Tailwind utilities in any file in any package. Inline styles via `style={{ ... }}` are canonical. The shared design token file (forthcoming: `packages/shared/src/design-system/tokens.ts`) is referenced by inline styles, not Tailwind config. **Scheduled conversion:** Ignition OS + shared Tailwind files → inline styles in a dedicated post-August 2026 work session (~50h). Approach: file-by-file, one module per Claude Code session, visual regression after each. Tracking at `docs/tailwind-conversion-progress.md`. | 2026-05-29 (identified) → 2026-05-31 (deprecated) | Post-August 2026: convert all 34 files (32 ignition-os + 2 shared) to inline styles. Trigger: dedicated conversion sessions after Europe trip. | See `docs/tailwind-conversion-progress.md`. |
 
@@ -277,6 +277,83 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-08 — Step 1: QB lying-flag honesty fix (Tech Debt #15 RESOLVED)
+
+**Type:** Code. Two code files changed + STANDARDS.md updated. No schema changes, no migrations. One commit (hash below after push).
+
+**Session mandate:** v7 §15 Step 1 — kill the reactive-only `accounting_needs_reconnect` flag pattern. QB connection state must be DERIVED from real evidence on every dashboard load, not cached from the last mid-use failure.
+
+**Root cause (confirmed by discovery):**
+- `accounting_needs_reconnect` was ONLY written to `true` inside `refreshQBToken()`, which is called ONLY from `api/qbo/invoice/cultivar.ts` — i.e., only during a live checkout+invoice call.
+- `qbo/status.ts` (called on every dashboard load) only checked `accounting_company_id` — returned `connected: true` regardless of token validity.
+- `loadMetrics()` read the stale cached boolean from the DB.
+- Result: David's token has been expired since ~May 29 (10+ days). Dashboard showed green "QuickBooks connected" and zero amber warning.
+- `accounting_token_expires_at` WAS already persisted in the `businesses` table — confirmed pure code fix, no migration needed.
+
+**What was built (three parts):**
+
+**PART 1 — `packages/cultivar-os/api/qbo/status.ts`:**
+- Now imports `refreshQBToken` from shared.
+- Also selects `accounting_token, accounting_refresh_token, accounting_token_expires_at` from businesses.
+- Proactive check: if token is missing or `expiresAt < Date.now()` → calls `refreshQBToken()`.
+  - Refresh succeeds → `needsReconnect: false` (DB silently updated with fresh token).
+  - Refresh fails → `needsReconnect: true` (DB updated by `refreshQBToken`; flag now honest).
+- Returns `needsReconnect` in response JSON alongside existing `connected`, `realmId`, `companyName`.
+
+**PART 2 — `packages/cultivar-os/src/pages/Dashboard.tsx`:**
+- `loadMetrics()`: now also selects `accounting_token_expires_at`. Client-side derives early reconnect estimate: `expiresMs > 0 && expiresMs < Date.now()`. Combined with DB flag: `setAccountingNeedsReconnect(db_flag || tokenExpired)`. Banner shows immediately on loadMetrics completion without waiting for status check.
+- `checkQbStatus()`: now applies server's authoritative result: `setAccountingNeedsReconnect(data.needsReconnect ?? false)`. If silent refresh succeeded → banner clears. If refresh failed → banner stays. Overwrites the client-side estimate.
+
+**PART 3 — `STANDARDS.md`:**
+- STD-007 added: "State flags reflecting external connection/resource status must be DERIVED from real evidence (token expiry, health check) and surfaced proactively. A cached flag that only updates reactively on failure is a Surface Honesty violation."
+- Scar: this fix. First instance. Enforcement gate: check when any integration token/credential is involved.
+- Version bumped to 1.1. Changelog entry added.
+
+**Acceptance criteria verification:**
+- **Dead/unrefreshable connection → banner on load, no prior call needed:** ✓ client-side derives from expiry in `loadMetrics()` immediately; server confirms via failed refresh attempt in `checkQbStatus()`.
+- **Live connection → no banner:** ✓ `tokenExpired = false` client-side; server returns `needsReconnect: false`; banner stays hidden.
+- **Refreshable token → silent refresh, no banner:** ✓ server calls `refreshQBToken()`; if it succeeds, DB is updated, `needsReconnect: false` returned; `checkQbStatus()` clears local state even if `loadMetrics()` briefly set it.
+
+**Test fixture:** David's production QB connection at cultivar-os.vercel.app is expired (~May 29). Refresh token should still be valid (QB refresh tokens: ~100-day lifetime; May 29 + 100 days ≈ September 6). Expected behavior on deploy:
+- Dashboard loads → `loadMetrics()` detects expired token → amber banner shows briefly.
+- `checkQbStatus()` completes → `refreshQBToken()` runs → IF refresh token is valid: token is refreshed silently, DB updated, `needsReconnect: false` → banner clears, connection is live again.
+- IF refresh token is expired too: banner stays showing "QuickBooks needs reconnection."
+- Either outcome is honest. Current silent failure outcome is eliminated.
+
+**No new Vercel functions.** `qbo/status.ts` is an existing function — 12 functions total, at limit, unchanged.
+
+**No schema changes, no migrations.** `accounting_token_expires_at` was already a column on `businesses`.
+
+**Agreed build sequence (v7 §15) — updated state:**
+1. ~~**Honesty fix** — proactive QB dead-connection detection (Tech Debt #15).~~ ✅ RESOLVED 2026-06-08
+2. **Margin engine full port + overhead wire** (Tech Debt #16). Next session.
+3. **Receipt Keeper v1** — Gemini Flash OCR, local `receipts` table, confirm-before-commit.
+4. **Cost-to-Produce tile** — feeds loaded cost into `tx.cost` slot.
+5. **(v2)** QB payables write-back + Attachable + CoA + cross-card reconciliation.
+
+**Railway kill still threads through as parallel cleanup** — unchanged from prior handoff.
+
+**Documentation propagation check:** No customer-facing pages, tiles, or features changed. The amber reconnect banner already existed — this fix just makes it fire correctly. No Help.tsx propagation needed.
+
+**Factual corrections captured:** Prior handoff stated the lying flag "only flips on a 401 during an active invoice call." Confirmed correct by code read — `refreshQBToken()` is called only from `invoice/cultivar.ts`. No prior doc asserted otherwise; this confirms the finding, not a correction.
+
+**Runbook:** No runbook needed — pure code session. No environment or DB changes. David deploys via `git push` → Vercel auto-deploys.
+
+**AC compliance (step 13):** No AC compliance issues — no shared schema, no RLS, no shared identifiers changed. `qbo/status.ts` is Cultivar-OS-specific. Changes to Dashboard.tsx are Cultivar-OS-specific. `refreshQBToken` is already shared and unchanged.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Full read-only discovery (grep + file reads) before any edit. Root cause confirmed.
+- STD-002: ✅ Broken state documented: no amber banner on dashboard despite expired token (David's live account). Fix applied. After-state: banner shows on load; silent refresh clears it if refresh token is valid. Verification: load cultivar-os.vercel.app after deploy.
+- STD-003: N/A — no new diagnostic logs added.
+- STD-004: N/A — no new business-scoped data feature. The reconnect banner already existed; we're making it fire correctly.
+- STD-005: ✅ Tech Debt #15 entry struck through with new resolved text replacing it. No contradictory text left standing.
+- STD-006: ✅ No vertical nouns introduced. Changes are Cultivar-OS-specific files.
+- **STD-007: ✅ First instance — created this session. Fix adheres to the new standard.**
+
+**Gap graduation sweep (step 15):** One `remaining:` gap in built-inventory.md — discovery persistence, horizon v2/later. NOT past horizon (created June 5, horizon is v2/later). No graduation.
+
+---
 
 ### 2026-06-07 — Audit drift-kill: doc + record pass (Audits 1–6 complete)
 
