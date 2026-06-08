@@ -248,6 +248,10 @@ This log is created and maintained per the Honest Friction principle (see PLATFO
 | 21 | 🟡 **STD-009 SWEEP — `packages/cultivar-os/api/campaigns/publish-post.ts` ORPHANED FILE:** This file was superseded when the campaigns API was consolidated into `packages/cultivar-os/api/campaigns.ts` (action-routed handler). The orphaned file contains SMS-specific branching on `post.platform === 'sms'` that is dead code — no caller routes to this endpoint. It is not a Vercel function (Vercel routes from `api/campaigns.ts` at the root). Safe to delete in a cleanup session. STD-009 sweep finding 2026-06-08. | STD-009 sweep 2026-06-08 | Delete `packages/cultivar-os/api/campaigns/publish-post.ts`. Also delete `packages/cultivar-os/api/campaigns/generate.ts` (also orphaned — same consolidation). The `api/campaigns/` subdirectory can be removed entirely. | Next cleanup pass (low priority — dead code, no execution risk). |
 | 22 | 🟡 **STD-008 INVERSE SWEEP — `social_drafts_platform_check` (RESOLVED THIS SESSION — PENDING VERIFICATION):** Hand-applied CHECK constraint existed in live DB with no committed migration. Allowed list was `(instagram, facebook, tiktok, twitter)` — no 'sms'. When SMS enabled in advert_channels, `generate-posts.ts` batch-inserted all channels atomically; the sms row triggered the constraint violation; PostgREST rolled back ALL rows including instagram + tiktok. Zero rows written per generation run. Confirmed 2026-06-09 via live probe. Fix: `supabase/migrations/20260609_social_drafts_platform_check.sql` — drops hand-applied constraint, recreates including 'sms', brings it under migration control. STD-008 extended to cover both directions (v1.4). ⚠️ David must apply migration and run VERIFICATION QUERY. | STD-008 inverse sweep 2026-06-09 | Migration written — David applies to bgobkjcopcxusjsetfob + runs verification query. Mark 🟢 after constraint shows 5 values in pg_get_constraintdef result. | Apply before next social-posts generation attempt with SMS enabled. |
 | 23 | 🟡 **STD-008 INVERSE SWEEP — FULL SWEEP PENDING:** Sweep SQL written at `docs/audits/std008-inverse-sweep-2026-06-09.sql`. PostgREST cannot query `information_schema` or `pg_constraint` directly — sweep must be run manually in Supabase SQL editor. The sweep covers 4 queries: (1) CHECK constraints, (2) triggers, (3) RLS policies, (4) non-pkey indexes. Pre-migration-era tables (nurseries, plants, plant_events, addons, losses, social_drafts) may have additional hand-applied objects beyond the confirmed platform_check. Policies for orders, business_modules, businesses ARE documented in committed migrations (DROP IF EXISTS pattern in 2026-05-28/29/06-04 migrations). Known documented triggers: `trg_business_members_updated_at`, `business_modules_updated_at`. STD-008 inverse sweep finding 2026-06-09. | STD-008 inverse sweep 2026-06-09 | David runs `docs/audits/std008-inverse-sweep-2026-06-09.sql` in Supabase SQL editor; audits results against `grep -r <name> supabase/migrations/`; logs any undocumented findings to new Tech Debt entries. Mark 🟢 when sweep complete and all findings logged. | Before next migration session touching a pre-migration-era table (nurseries, plants, addons, losses). |
+| 24 | 🟡 **STD-010 NAMING DEBT — IGNITION MODULE NAMES (13 candidates):** Reality audit 2026-06-09 found 13 opaque module identifiers in Ignition OS. A second developer joining this project cannot determine what these modules do from their names. Full meanings: `FLUX` = RO Queue/Workflow Board · `CIPHER` (file IgnitionCipher.jsx) = DTC Fault Code Decoder · `CODE` (CoreApp UI label for same) = DTC Decoder · `STOK` = Parts Inventory · `PROT` = Margin & Pricing Configuration · `PROC` = Vendor Directory · `HUB` = Fleet Dispatch Board · `PORT` = Customer Estimate Portal · `KOSK` = Technician Floor Station · `OMNI` = Shop Command Dashboard · `PRED` = AI Preventive Maintenance Scheduler · `AUDIT` = AI Invoice Leakage Scanner · **WORST COLLISION:** `hooks/useIgnitionCipher.js` = Legacy PIN Auth Hook — same "CIPHER" opaque name as `IgnitionCipher.jsx` (DTC decoder), completely different function. STD-010 audit 2026-06-09. | STD-010 audit 2026-06-09 | Rename files and update CoreApp routing labels to decoded names. Coordinate with Tailwind conversion sessions (post-August). Do NOT rename during active demo period. WORST COLLISION (`useIgnitionCipher`) should be resolved first — it is orphaned so the rename is low-risk. | Before onboarding a second Ignition developer. |
+| 25 | 🟡 **IGNITION DARK INVENTORY — 6 AI FEATURES DEAD IN PRODUCTION:** Root cause: `VITE_API_URL` not set in ignition-os Vercel project → every `AIEngine.call()` returns `{ ok: false }` silently. Railway still running, zero Vercel traffic. Impacts: (1) **AI estimate skeleton** (`IgnitionEstimate.jsx POST /api/estimate/build`) — techs build estimates fully manually; no AI pre-fill. (2) **Auto-PO generation** (`IgnitionEstimate.jsx POST /api/jobs/${id}/generate-pos`) — no POs auto-generated after customer authorization. (3) **DTC AI decode** (`IgnitionCipher.jsx AIEngine.decodeDTC()`) — only 3 hardcoded codes work (3216/3251/157); all others silently return nothing. (4) **Invoice leakage scan** (`IgnitionAudit.jsx AIEngine.auditInvoice()`) — entire module unusable. (5) **PMI AI scheduling** (`PredictiveKey.jsx AIEngine.*`) — AI schedule generation dead; only manual asset entry works. (6) **QB OAuth** (`ExternalBridge.js ${API_URL}/api/qbo/auth-url`) — QB is fully dark + Ignition OS has NO api/qbo/* Vercel functions (unlike Cultivar). Agreed kill path (v7 §15): retire orphaned tasks (invoice_scan/vin_decode); port real tasks (dtc_decode + estimate_draft first); kill Railway after. | STD-010 audit 2026-06-09 | Port `dtc_decode` + `estimate_draft` to Vercel functions under `packages/ignition-os/api/`. These are text-only, no vision complexity. Port completes Railway kill path. | Before next Ignition OS demo or before claiming any AI feature works in Ignition. |
+| 26 | 🟡 **IGNITION ORPHANED DATABRIDGE KEYS:** Reality audit 2026-06-09 found 4 orphaned DataBridge keys. (1) **`inventory_items` (orphaned read):** `IgnitionOmni` reads this for the inventory value stat tile. `IgnitionStok` reads from Supabase `inventory` table — not DataBridge. No module writes `inventory_items`. Inventory value tile always shows $0. (2) **`fleet_units` (orphaned read):** `IgnitionHub` reads via `DataBridge.getFleetUnits()`. `DataBridge.saveFleetUnit()` exists but no module in the web build calls it with real data. Hub shows empty GPS grid. (3) **`labor_guide` (orphaned read):** `DataBridge.getLaborGuide()` always returns hardcoded defaults. No module has ever written a real labor guide. (4) **`margin_change_log` (orphaned write):** `DataBridge.setMarginConfig()` writes every margin config change to this key. No module reads or displays it — the audit log is silently accumulating, invisible. Additional: `pending_users` — written by IgnitionOmni legacy staff enrollment; only `EnrollmentCatch` reads it via an orphaned flow. | STD-010 audit 2026-06-09 | (1) Fix `inventory_items`: either write from IgnitionStok to DataBridge as well (sync) or point IgnitionOmni to Supabase `inventory` for the stat. (2) `fleet_units`/`labor_guide`: either remove the reads or build real writers. (3) `margin_change_log`: build a display in IgnitionProt settings panel. | Before next Ignition telemetry/stats session. |
+| 27 | 🟡 **IGNITION STD-008 INVERSE GAP — 10 TABLES, NO COMMITTED MIGRATIONS:** Reality audit 2026-06-09 found 10 Supabase tables referenced in production code with zero committed migration files in `packages/ignition-os/supabase/migrations/`. These tables either exist as hand-applied schema in `ufsgqckbxdtwviqjjtos` (STD-008 inverse gap — undocumented live objects) or do not exist at all. Tables: `dtc_codes`, `eval_photos`, `tools`, `tool_signout_log`, `repair_logs`, `customer_authorizations`, `concept_aliases`, `purchase_orders`, `pmi_schedules`, `ai_usage`, `feature_events`, `error_events`. Additionally, 3 tables are DROPPED with NO recreate migration: `pin_resets` (CoreApp ForgotPinFlow), `shop_invites` (CoreApp JoinFlow), `member_devices` (IgnitionAdmin Devices tab, DataBridge.autoEnrollDevice). These features COMPILE AND ROUTE but fail at runtime (table not found). Sweep required: David must run a schema query in `ufsgqckbxdtwviqjjtos` Supabase SQL editor to find which of the 10 tables actually exist as hand-applied objects. STD-008 applies to both Supabase projects. | STD-010 audit 2026-06-09 | (1) Run `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY 1;` in ufsgqckbxdtwviqjjtos to discover which tables exist. (2) For each existing-but-undocumented table: write a migration using `CREATE TABLE IF NOT EXISTS` to bring it under version control. (3) For the 3 dropped tables: write recreate migrations or remove the dead code paths. | Before next Ignition build session that adds a new table or modifies schema. |
 | 14 | 🟡 **UPGRADED 2026-05-31: Tailwind is officially deprecated platform-wide.** Tailwind CSS is loaded via CDN script tag in `packages/ignition-os/index.html`. Existing Tailwind surface: ignition-os (2,334 className= lines across 32 files) + packages/shared/src/components/SavingsReport.jsx (86 lines) + packages/shared/src/components/QuickBooksConnector.jsx (54 lines). Cultivar OS className= usages are custom CSS class names (page, section, btn, badge, etc.) — NOT Tailwind. **Policy:** NO new Tailwind anywhere. No new `className=` with Tailwind utilities in any file in any package. Inline styles via `style={{ ... }}` are canonical. The shared design token file (forthcoming: `packages/shared/src/design-system/tokens.ts`) is referenced by inline styles, not Tailwind config. **Scheduled conversion:** Ignition OS + shared Tailwind files → inline styles in a dedicated post-August 2026 work session (~50h). Approach: file-by-file, one module per Claude Code session, visual regression after each. Tracking at `docs/tailwind-conversion-progress.md`. | 2026-05-29 (identified) → 2026-05-31 (deprecated) | Post-August 2026: convert all 34 files (32 ignition-os + 2 shared) to inline styles. Trigger: dedicated conversion sessions after Europe trip. | See `docs/tailwind-conversion-progress.md`. |
 
 ---
@@ -443,6 +447,104 @@ Ignition-local `MarginEngine.js` carries `FLEET`, `LEGACY`, `FF` — auto/diesel
 - `remaining: voice-learning BI` — horizon v2/later. Created 2026-06-08. NOT past horizon.
 - `remaining: cadence-triggered generation` — horizon Social Rhythm. Created 2026-06-08. NOT past horizon.
 - Prior gap: `remaining: discovery persistence` — horizon v2/later. Created 2026-06-05. NOT past horizon.
+No gap graduations this session.
+
+---
+
+### 2026-06-09 — THUNDER: Ignition OS Reality Audit → STD-010 + built-inventory update
+
+**Type:** Docs + Audit. Read-only throughout. Two doc files updated (`docs/built-inventory.md`, `CLAUDE.md`). One audit document created (`docs/audits/ignition-reality-audit-2026-06-09.md`). Four new Tech Debt entries (#24–27). Three commits.
+
+**Session mandate:** Full reality audit of all `.jsx`/`.js` in `packages/ignition-os/`. Classify every module by STATUS (from code, not assumption). Update `docs/built-inventory.md` (was silent on all 30+ Ignition modules). Log STD-010 naming debt + DARK inventory + orphaned keys + STD-008 inverse gap to Tech Debt Log. No code changes.
+
+---
+
+**What was built (four parts):**
+
+**PART 1 — `docs/audits/ignition-reality-audit-2026-06-09.md` (new):**
+Full 3-step audit document:
+- STEP 1: Status table for every .jsx/.js file in ignition-os (45 files). Statuses: BUILT-AND-WIRED (15), BUILT-BUT-DARK (5), BUILT-BUT-ORPHANED (7), BUILT-BUT-BROKEN (3+), MOBILE-ONLY (2), DESIGNED-NEVER-BUILT (3).
+- STEP 2: Annotated workflow chain from RO intake → invoice (8 steps) with all DARK/BROKEN links explicitly called out.
+- STEP 3 cross-cutting findings: DataBridge key map (healthy, orphaned writes, orphaned reads), RBAC reality (19 permissions / 4 role presets / client-side only / COMPLIANCE module allows everyone), DARK inventory table (6 dead features), full Supabase table inventory (10 with no committed migration), STD-010 naming debt (13 candidates), file count summary.
+
+**Key findings that prevent future wrong decisions:**
+1. **Two parallel estimate paths** (`IgnitionEstimate` Supabase + `IgnitionPort` DataBridge) serve the same workflow step with incompatible data. Any "unify the estimate flow" work must reconcile both.
+2. **SPLIT-BRAIN customer data:** `IgnitionIntake` writes to Supabase `customers`. `IgnitionCRM` reads from DataBridge `customers_directory`. Customers from intake NEVER appear in CRM.
+3. **Ignition QB is not just DARK — it doesn't exist.** Cultivar OS has `api/qbo/*` Vercel functions. Ignition OS has NONE. Building QB for Ignition = build from scratch, not port.
+4. **`useIgnitionCipher.js` naming collision** — the hook name "CIPHER" = legacy PIN auth; the module name "CIPHER" (`IgnitionCipher.jsx`) = DTC decoder. Worst naming collision in the codebase.
+5. **10 Supabase tables with no committed migration in ufsgqckbxdtwviqjjtos** — DTD codes, eval photos, tools, tool signout log, repair logs, customer authorizations, concept aliases, purchase orders, PMI schedules, AI/feature/error event tables.
+
+**PART 2 — `docs/built-inventory.md` — new Ignition OS section:**
+Added `## Ignition OS — Workflow Modules (2026-06-09 Reality Audit)` section before "What Is NOT Yet Built." Contents:
+- Module status table (44 rows — every file with STATUS, decoded name, workflow position).
+- Workflow chain summary (quick reference version of STEP 2).
+- RBAC summary (19 permissions / 4 presets / client-side / COMPLIANCE gap).
+- DataBridge orphaned key table (5 entries: orphaned reads + orphaned writes).
+
+`docs/built-inventory.md` now truthfully answers "was X built in Ignition?" for all 30+ modules.
+
+**PART 3 — CLAUDE.md Tech Debt Log:**
+- #24: STD-010 NAMING DEBT — 13 opaque Ignition module names + worst collision (useIgnitionCipher vs IgnitionCipher.jsx).
+- #25: IGNITION DARK INVENTORY — 6 AI features dead in production (VITE_API_URL unset). Agreed kill path documented.
+- #26: IGNITION ORPHANED DATABRIDGE KEYS — `inventory_items` (stat always $0), `fleet_units` (Hub empty), `labor_guide` (always hardcoded), `margin_change_log` (accumulating, invisible).
+- #27: IGNITION STD-008 INVERSE GAP — 10 tables in production code with no committed migration. Plus 3 DROPPED tables with no recreate: `pin_resets`, `shop_invites`, `member_devices` → ForgotPin + JoinFlow + Devices tab BROKEN.
+
+**PART 4 — CLAUDE.md Handoff (this entry).**
+
+---
+
+**Agreed build sequence — updated state:**
+1. ~~**Honesty fix** — proactive QB dead-connection detection (Tech Debt #15).~~ ✅ RESOLVED 2026-06-08
+2. ~~**social_drafts fix + de-noun + generator→shared + edit/save + STD-008** (THUNDER).~~ ✅ RESOLVED 2026-06-08
+3. ~~**advert_channels router + campaign config fix + Blotato kill + STD-009** (THUNDER cont.).~~ ✅ RESOLVED 2026-06-08
+4. ~~**social_drafts_platform_check + STD-008 inverse + sweep** (THUNDER close-out).~~ ✅ RESOLVED 2026-06-09. ⚠️ STD-002 PENDING: David must apply migration + verify + run acceptance generation.
+5. ~~**Ignition OS Reality Audit → STD-010 + built-inventory** (this session).~~ ✅ RESOLVED 2026-06-09.
+6. **Margin engine full port + overhead wire** (Tech Debt #16). Next session.
+7. **Receipt Keeper v1** — Gemini Flash OCR, local `receipts` table, confirm-before-commit.
+8. **Cost-to-Produce tile** — feeds loaded cost into `tx.cost` slot.
+9. **(v2)** QB payables write-back + Attachable + CoA + cross-card reconciliation.
+
+**⚠️ STEP-6 WATCH — AC-1 / STD-006 LANDMINE (Margin Engine — unchanged):**
+Ignition-local `MarginEngine.js` carries `FLEET`, `LEGACY`, `FF` as tier identifiers. Port to `packages/shared/src/business-logic/MarginEngine.ts` MUST make these `business_type`-scoped data values. AC-1/STD-006 sweep required as acceptance criteria.
+
+---
+
+**No runbook needed** — pure docs/read-only session. No code changes, no migrations, no environment changes.
+
+**Documentation propagation check (step 10):**
+1. `Help.tsx` — no new customer-facing features. No propagation needed.
+2. Onboarding — unchanged.
+3. `built-inventory.md` ✅ updated (Ignition OS module inventory section added).
+4. No `// FLAG:` placeholders affected.
+5. No new error messages.
+
+**Factual corrections captured (step 11):**
+- `docs/built-inventory.md` was previously silent on all 30+ Ignition workflow modules. The document listed Ignition infrastructure (DataBridge, AdminSubscription, Trial Clock) but had zero entries for the 34-step RO workflow chain. This session establishes the ground truth.
+- Ignition QB integration: prior understanding was "QB is DARK in Ignition." Reality is stronger: Ignition OS has ZERO `api/qbo/*` Vercel functions. It is not dark — it doesn't exist. Cultivar's QB functions cannot be reused for Ignition without creating separate Vercel functions.
+- `IgnitionCipher.jsx` (DTC decoder) vs `hooks/useIgnitionCipher.js` (legacy PIN auth) — same opaque name, completely different modules. The hook is orphaned but the collision was previously undetected.
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns introduced in shared code. Session was read-only.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ 100% read-only throughout. No changes based on assumption — every STATUS classification derived from code reads.
+- STD-002: N/A — no bug fix applied.
+- STD-003: N/A — no instrumentation added.
+- STD-004: N/A — no business-scoped feature shipped.
+- STD-005: ✅ No decisions reversed.
+- STD-006: ✅ No vertical nouns introduced in shared code.
+- STD-007: N/A — no integration status surface changed.
+- STD-008: N/A — no migrations written. Tech Debt #27 documents the inverse gap discovery. Sweep is David's manual step.
+- STD-009: N/A — no generation path changes.
+- **STD-010 (established this session):** ✅ All 13 opaque names catalogued in Tech Debt #24. All discovered builds (30+ modules) now in `docs/built-inventory.md`. Session enforced the standard on itself.
+
+**Gap graduation sweep (step 15):**
+- `remaining: voice-learning BI` — horizon v2/later. NOT past horizon.
+- `remaining: cadence-triggered generation` — horizon Social Rhythm. NOT past horizon.
+- `remaining: discovery persistence` — horizon v2/later. NOT past horizon.
 No gap graduations this session.
 
 ---
