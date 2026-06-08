@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: June 8, 2026 (Step 1: QB lying-flag honesty fix — proactive expiry check)
+# Last updated: June 8, 2026 (Step 1 close-out: STD-002 PENDING, step-2 AC-1 watch recorded)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -18,7 +18,7 @@ When this doc conflicts with another:
 - For architecture or where things should live, see PLATFORM_STRATEGY.md
 - For what's actually built in code, see TRACE_PLATFORM_AUDIT.md
 - For the discovery module, see DISCOVERY_MODULE_BRIEF.md (created Session 1b)
-- For engineering standards (STD-001 through STD-006), see STANDARDS.md
+- For engineering standards (STD-001 through STD-007), see STANDARDS.md
 - For reuse ratio figures, see TRACE_PLATFORM_AUDIT.md "Reuse ratio — corrected ground truth (2026-05-28)"; the 68/78/80% figures cited in prior sessions are retired.
 
 Update the handoff section at the end of every session.
@@ -333,6 +333,9 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 5. **(v2)** QB payables write-back + Attachable + CoA + cross-card reconciliation.
 
 **Railway kill still threads through as parallel cleanup** — unchanged from prior handoff.
+
+**⚠️ STEP-2 WATCH — AC-1 / STD-006 LANDMINE (do not lose this entering Step 2):**
+The Ignition-local `MarginEngine.js` carries `FLEET`, `LEGACY`, and `FF` — auto/diesel vertical nouns hardcoded as tier identifiers. When ported to `packages/shared/src/business-logic/MarginEngine.ts`, these MUST become `business_type`-scoped data values (e.g., looked up at call time by the caller's vertical context), NOT hard-coded constants named after an Ignition-specific tier taxonomy. An AC-1 / STD-006 sweep of the ported engine is REQUIRED acceptance criteria for Step 2 — same class of bug that created the `nursery_modules` scar (STD-006 §Scar). The session that ports MarginEngine must also demonstrate: (a) no Ignition-vertical noun appears anywhere in the shared file, and (b) a Cultivar caller or a KINNA caller importing the shared engine would receive correct behavior without knowing anything named `FLEET`, `LEGACY`, or `FF`.
 
 **Documentation propagation check:** No customer-facing pages, tiles, or features changed. The amber reconnect banner already existed — this fix just makes it fire correctly. No Help.tsx propagation needed.
 
