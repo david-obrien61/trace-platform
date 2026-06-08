@@ -4,16 +4,27 @@ import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import type { Campaign, CampaignPost } from '@trace/shared/campaigns/types';
 
+const ADVERT_DEBUG = false;
+
 const GREEN = '#27500A';
 const SAGE  = '#EAF3DE';
 const GRAY  = '#6b7280';
 const DARK  = '#111827';
 
-const PLATFORM_ICONS: Record<string, string> = {
-  instagram: '📷', facebook: '👥', sms: '💬', email: '✉️',
+const CHANNEL_ICONS: Record<string, string> = {
+  instagram: '📷', facebook: '👥', sms: '💬', email: '✉️', tiktok: '🎵', twitter: '🐦',
 };
-const PLATFORM_COLORS: Record<string, string> = {
+const CHANNEL_COLORS: Record<string, string> = {
   instagram: '#e1306c', facebook: '#1877f2', sms: '#16a34a', email: '#7c3aed',
+  tiktok: '#010101', twitter: '#1da1f2',
+};
+
+// Open platform URLs — handoff: owner posts manually
+const CHANNEL_OPEN_URL: Record<string, string> = {
+  instagram: 'https://www.instagram.com/',
+  facebook:  'https://www.facebook.com/',
+  tiktok:    'https://www.tiktok.com/upload',
+  twitter:   'https://twitter.com/compose/tweet',
 };
 
 export function CampaignDetail() {
@@ -27,8 +38,9 @@ export function CampaignDetail() {
   const [editingId, setEditingId]         = useState<string | null>(null);
   const [editText, setEditText]           = useState('');
   const [savingId, setSavingId]           = useState<string | null>(null);
-  const [publishingId, setPublishingId]   = useState<string | null>(null);
-  const [publishError, setPublishError]   = useState<Record<string, string>>({});
+  const [copyingId, setCopyingId]         = useState<string | null>(null);
+  const [copiedId, setCopiedId]           = useState<string | null>(null);
+  const [copyError, setCopyError]         = useState<Record<string, string>>({});
   const [generating, setGenerating]       = useState(false);
 
   useEffect(() => {
@@ -47,7 +59,6 @@ export function CampaignDetail() {
     setCampaign(camp ?? null);
     setPosts(postRows ?? []);
 
-    // Revenue during the campaign window
     if (camp?.start_date && camp?.end_date && businessId) {
       const { data: orders } = await supabase
         .from('orders')
@@ -79,30 +90,53 @@ export function CampaignDetail() {
     setSavingId(null);
   }
 
-  async function handlePublish(post: CampaignPost) {
-    setPublishingId(post.id);
-    setPublishError(prev => ({ ...prev, [post.id]: '' }));
-    try {
-      const resp = await fetch('/api/campaigns', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action:      'publish-post',
-          postId:      post.id,
-          businessId,
-          editedCopy:  post.edited_copy ?? null,
-        }),
+  async function handleCopy(post: CampaignPost) {
+    const displayText = post.edited_copy ?? post.copy_text;
+    setCopyingId(post.id);
+    setCopyError(prev => ({ ...prev, [post.id]: '' }));
+
+    const doCopy = async () => {
+      try {
+        // Mark reviewed via API — saves tone sample if edited, updates status
+        const resp = await fetch('/api/campaigns', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action:     'copy-post',
+            postId:     post.id,
+            businessId,
+            editedCopy: post.edited_copy ?? null,
+          }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error ?? 'Copy failed');
+
+        if (ADVERT_DEBUG) console.log('[TRACE:advert] copy-post done — channel:', post.platform);
+
+        setCopiedId(post.id);
+        setPosts(prev => prev.map(p => p.id === post.id
+          ? { ...p, status: 'published', published_at: new Date().toISOString() }
+          : p,
+        ));
+        setTimeout(() => setCopiedId(prev => prev === post.id ? null : prev), 2000);
+      } catch (e: any) {
+        setCopyError(prev => ({ ...prev, [post.id]: e.message }));
+      }
+      setCopyingId(null);
+    };
+
+    // Copy to clipboard first, then mark reviewed
+    navigator.clipboard.writeText(displayText)
+      .then(doCopy)
+      .catch(() => {
+        const el = document.createElement('textarea');
+        el.value = displayText;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+        doCopy();
       });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error ?? 'Publish failed');
-      setPosts(prev => prev.map(p => p.id === post.id
-        ? { ...p, status: 'published', published_at: new Date().toISOString() }
-        : p,
-      ));
-    } catch (e: any) {
-      setPublishError(prev => ({ ...prev, [post.id]: e.message }));
-    }
-    setPublishingId(null);
   }
 
   async function handleGenerateMore() {
@@ -125,7 +159,6 @@ export function CampaignDetail() {
           },
         }),
       });
-      // Generate creates a NEW campaign — navigate there so posts are separate
       const data = await resp.json();
       if (resp.ok) navigate(`/campaigns/${data.campaignId}`);
     } catch { /* silent */ }
@@ -137,11 +170,11 @@ export function CampaignDetail() {
     return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   }
   function formatDateRange(start: string | null, end: string | null) {
-    if (!start && !end) return '';
     const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     if (start && end) return `${fmt(start)} – ${fmt(end)}`;
     if (start) return `Starts ${fmt(start)}`;
-    return `Ends ${fmt(end!)}`;
+    if (end)   return `Ends ${fmt(end)}`;
+    return '';
   }
 
   const draftCount     = posts.filter(p => p.status === 'draft').length;
@@ -192,7 +225,7 @@ export function CampaignDetail() {
           </div>
           <div style={{ flex: 1, background: '#fff', borderRadius: 10, padding: '10px 14px', border: '1px solid #e5e7eb', textAlign: 'center' }}>
             <p style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: publishedCount > 0 ? '#166534' : GRAY }}>{publishedCount}</p>
-            <p style={{ margin: 0, fontSize: '0.6875rem', color: GRAY, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Published</p>
+            <p style={{ margin: 0, fontSize: '0.6875rem', color: GRAY, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Copied &amp; posted</p>
           </div>
           {revenue !== null && (
             <div style={{ flex: 1, background: '#fff', borderRadius: 10, padding: '10px 14px', border: '1px solid #e5e7eb', textAlign: 'center' }}>
@@ -214,20 +247,22 @@ export function CampaignDetail() {
           </div>
         ) : (
           posts.map(post => {
-            const isEditing   = editingId === post.id;
-            const isSaving    = savingId === post.id;
-            const isPublishing = publishingId === post.id;
-            const isPublished = post.status === 'published';
-            const displayText = post.edited_copy ?? post.copy_text;
+            const isEditing    = editingId === post.id;
+            const isSaving     = savingId === post.id;
+            const isCopying    = copyingId === post.id;
+            const isReviewed   = post.status === 'published';
+            const displayText  = post.edited_copy ?? post.copy_text;
+            const openUrl      = CHANNEL_OPEN_URL[post.platform];
+            const isSms        = post.platform === 'sms';
 
             return (
               <div
                 key={post.id}
                 style={{
                   background: '#fff', borderRadius: 14, padding: '14px 16px',
-                  border: isPublished ? '1px solid #d1fae5' : '1px solid #e5e7eb',
+                  border: isReviewed ? '1px solid #d1fae5' : '1px solid #e5e7eb',
                   marginBottom: 10,
-                  opacity: isPublished ? 0.75 : 1,
+                  opacity: isReviewed ? 0.75 : 1,
                 }}
               >
                 {/* Post header */}
@@ -236,26 +271,26 @@ export function CampaignDetail() {
                     <span style={{
                       fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
                       padding: '3px 9px', borderRadius: 10,
-                      background: `${PLATFORM_COLORS[post.platform]}18`,
-                      color: PLATFORM_COLORS[post.platform],
+                      background: `${CHANNEL_COLORS[post.platform] ?? '#6b7280'}18`,
+                      color: CHANNEL_COLORS[post.platform] ?? GRAY,
                     }}>
-                      {PLATFORM_ICONS[post.platform]} {post.platform}
+                      {CHANNEL_ICONS[post.platform] ?? '📣'} {post.platform}
                     </span>
                     {post.scheduled_date && (
                       <span style={{ fontSize: '0.75rem', color: GRAY }}>{formatDate(post.scheduled_date)}</span>
                     )}
                   </div>
-                  {isPublished && (
-                    <span style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 600 }}>✓ Published</span>
+                  {isReviewed && (
+                    <span style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 600 }}>✓ Copied</span>
                   )}
-                  {post.edited_copy && !isPublished && (
+                  {post.edited_copy && !isReviewed && (
                     <span style={{ fontSize: '0.6875rem', color: '#92400e', background: '#fef3c7', padding: '2px 7px', borderRadius: 8, fontWeight: 600 }}>
                       Edited
                     </span>
                   )}
                 </div>
 
-                {/* Copy text — editable or display */}
+                {/* Copy text */}
                 {isEditing ? (
                   <textarea
                     value={editText}
@@ -277,20 +312,20 @@ export function CampaignDetail() {
                   </p>
                 )}
 
-                {/* Image prompt */}
-                {post.image_prompt && !isEditing && (
+                {/* Image prompt (non-SMS only) */}
+                {post.image_prompt && !isEditing && !isSms && (
                   <p style={{ fontSize: '0.75rem', color: GRAY, fontStyle: 'italic', marginBottom: 12, paddingLeft: 8, borderLeft: '2px solid #e5e7eb' }}>
                     📷 {post.image_prompt}
                   </p>
                 )}
 
-                {publishError[post.id] && (
-                  <p style={{ fontSize: '0.8125rem', color: '#b91c1c', marginBottom: 8 }}>{publishError[post.id]}</p>
+                {copyError[post.id] && (
+                  <p style={{ fontSize: '0.8125rem', color: '#b91c1c', marginBottom: 8 }}>{copyError[post.id]}</p>
                 )}
 
-                {/* Actions */}
-                {!isPublished && (
-                  <div style={{ display: 'flex', gap: 8 }}>
+                {/* Actions — handoff model: Copy / Download / Open */}
+                {!isReviewed && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {isEditing ? (
                       <>
                         <button
@@ -315,19 +350,48 @@ export function CampaignDetail() {
                         >
                           Edit
                         </button>
+
+                        {/* Copy caption — primary action; marks as reviewed */}
                         <button
-                          onClick={() => handlePublish(post)}
-                          disabled={isPublishing}
+                          onClick={() => handleCopy(post)}
+                          disabled={isCopying}
                           style={{
                             flex: 1, padding: '9px 14px', borderRadius: 8, border: 'none',
-                            background: isPublishing ? '#e5e7eb' : GREEN,
-                            color: isPublishing ? GRAY : '#fff',
+                            background: isCopying ? '#e5e7eb' : GREEN,
+                            color: isCopying ? GRAY : '#fff',
                             fontWeight: 700, fontSize: '0.875rem',
-                            cursor: isPublishing ? 'default' : 'pointer',
+                            cursor: isCopying ? 'default' : 'pointer',
                           }}
                         >
-                          {isPublishing ? 'Publishing…' : post.platform === 'sms' ? 'Mark sent' : 'Publish'}
+                          {copiedId === post.id ? '✓ Copied!' : isCopying ? 'Copying…' : isSms ? 'Copy text' : 'Copy caption'}
                         </button>
+
+                        {/* Download image — stub, non-SMS only */}
+                        {!isSms && (
+                          <button
+                            disabled
+                            title="Image download coming soon"
+                            style={{ padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', background: '#f9fafb', color: '#d1d5db', fontWeight: 600, fontSize: '0.8125rem', cursor: 'not-allowed' }}
+                          >
+                            ↓ Image
+                          </button>
+                        )}
+
+                        {/* Open channel — social only (no URL for SMS) */}
+                        {openUrl && !isSms && (
+                          <a
+                            href={openUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb',
+                              background: '#fff', color: GRAY, fontWeight: 600, fontSize: '0.8125rem',
+                              cursor: 'pointer', textDecoration: 'none', display: 'inline-flex', alignItems: 'center',
+                            }}
+                          >
+                            Open ↗
+                          </a>
+                        )}
                       </>
                     )}
                   </div>
