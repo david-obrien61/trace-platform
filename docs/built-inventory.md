@@ -367,7 +367,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 **Backend:**
 - `packages/shared/src/social/generate.ts` — `generateSocialDrafts()` — business_type-parameterized, Sonnet via AI gateway. `BUSINESS_DESCRIPTORS` map: variation is data, not code. `[TRACE:socialdraft]` behind `SOCIALDRAFT_DEBUG`.
 - `packages/cultivar-os/api/social/generate-posts.ts` — thin Vercel handler: reads context (orders, plants, config) → calls shared generator → inserts to `social_drafts` with `subject_type='inventory'`, `subject_id=null`.
-- `packages/cultivar-os/api/social/enable.ts` — upserts `business_modules` with `{ platforms, cadence }`. No blotato_account_id.
+- `packages/cultivar-os/api/social/enable.ts` — upserts `business_modules` with `{ advert_channels: AdvertChannel[], cadence }`. No blotato_account_id. `advert_channels` is the single source of truth for all channel config (social + SMS).
 
 **social_drafts table (de-nouned 2026-06-08):**
 - Columns: `id, business_id, platform, original_text, edited_text, status, subject_type, subject_id, cadence, period_start, period_end, copied_at, post_type, created_at`
@@ -392,7 +392,14 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 `cadence` is stored per module config; `period_start`/`period_end` captured per draft. The generator that reads `config.cadence` and auto-triggers a new generation window (preventing per-purchase overwhelm) is the next step.  
 **remaining:** cadence-triggered generation — scheduler that fires generate-posts on cadence rhythm. Horizon: Social Rhythm (next social session). NOT a defect — the data model is ready; the trigger is the unfilled seam.
 
-**Not built:** image generation, direct social publishing (Blotato removed 2026-06-05; re-evaluate when Social Rhythm is prioritized).
+**advert_channels config (2026-06-08):**
+`business_modules.config.advert_channels: [{type:'social'|'sms', name:string, enabled:boolean}]` — flat typed list. `generate-posts.ts` reads this and generates ONLY for enabled channels. SMS is a separate entry (`type:'sms'`, always one post, no image prompt). LEXICON RULE: "platform" is reserved for the top-level TRACE substrate; "channel"/"advert_channel" is used inside the product.
+
+**Not built:** image generation. Direct social publishing — Blotato removed 2026-06-08 (misrepresented capability).
+
+**Hidden seams declared (inert, demand-gated, priced — see `api/campaigns.ts` preamble):**
+- `auto-publish seam` — wire a vetted publisher adapter at activation. No refactor needed. Gate: demand + pricing.
+- `sms-auto-send seam` — TCPA/10DLC/opt-out compliance is real work at activation; adopt provider model. Gate: demand + pricing + provider selection.
 
 ---
 
@@ -513,19 +520,33 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 ## Campaign Scheduler (Cultivar OS)
 
-**What:** Schedule, generate, and track social media campaigns. AI-generated post drafts with tone learning from published posts.  
-**Status:** ✅ Built — TypeScript (Cultivar OS only)  
+**What:** Schedule, generate, and track social media campaigns. AI-generated post drafts with tone learning from copied posts. Owner copies text and posts manually — no auto-publish.  
+**Status:** ✅ Built — TypeScript (Cultivar OS only). advert_channels router live 2026-06-08. Blotato removed.  
 **Vertical:** cultivar | **Type:** tile  
 **Location:** `packages/cultivar-os/src/pages/Campaigns.tsx` + `CampaignDetail.tsx`  
 **Route:** `/campaigns` + `/campaigns/:id` (private)
 
 **Backend:**
-- `packages/cultivar-os/api/campaigns/generate.ts` — Claude Sonnet 4.6, generates posts using tone samples as few-shot examples
-- `packages/cultivar-os/api/campaigns/publish-post.ts` — marks published, auto-saves (original, edited) pairs as tone samples for future generation
+- `packages/cultivar-os/api/campaigns.ts` — combined action handler (action: 'generate' | 'copy-post'). **generate:** reads `business_modules.config.advert_channels`, generates ONLY for enabled channels, derives post count from campaign duration. No hardcoded channel names. **copy-post (handoff model):** copies text, marks status='published' (= owner reviewed, NOT auto-posted), saves edited pairs for tone learning.
+- `packages/shared/src/campaigns/generate.ts` — `generateCampaignPosts({ advertChannels, ... })`. `CHANNEL_GUIDANCE` map keyed by channel name. `postsPerChannel()` derives count from campaign days. `ADVERT_DEBUG` gated.
 
-**Schema:** `campaigns`, `campaign_posts`, `campaign_tone_samples` tables + RLS + LAWNS seed data. Migration: `supabase/migrations/20260529_campaigns.sql`.
+**Handoff controls (CampaignDetail.tsx):**
+- [Edit] → inline textarea → save draft edits locally.
+- [Copy caption] → clipboard + calls copy-post action → status='published'. SMS label: "Copy text".
+- [↓ Image] → stub, disabled (image generation seam).
+- [Open ↗] → opens channel URL in new tab (social channels only; no Open for SMS).
+
+**Schema:** `campaigns`, `campaign_posts`, `campaign_tone_samples` tables + RLS. Migration: `supabase/migrations/20260529_campaigns.sql`.
+- `campaign_posts.platform` stores the channel name (from `advert_channels[].name`).
+- `campaign_tone_samples`: `(business_id, platform, original_text, edited_text)` — accumulates with every copy-post where owner edited.
 
 **Dashboard integration:** "Campaign Scheduler" card shows green border when drafts are pending.
+
+**Hidden seams declared (inert — see `api/campaigns.ts` SEAM DECLARATIONS):**
+- `auto-publish seam` — wire adapter here when activated. Gate: demand + pricing.
+- `sms-auto-send seam` — TCPA/consent compliance at activation; adopt provider model. Gate: demand + pricing + provider.
+
+**⚠️ David must apply migration:** `supabase/migrations/20260608_advert_channels_config.sql` migrates existing `{ platforms, cadence }` config to `{ advert_channels, cadence }`. Run VERIFICATION query in migration file after applying.
 
 ---
 

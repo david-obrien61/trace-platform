@@ -1,5 +1,5 @@
 # STANDARDS.md — TRACE Engineering Standards
-# Version: 1.0
+# Version: 1.3
 # Created: 2026-06-04
 # Owner: David O'Brien / TRACE Enterprises
 
@@ -254,6 +254,62 @@ query shown → confirmation logged in Handoff before session closes.
 
 ---
 
+### STD-009 — CONFIG-HONESTY IN GENERATION PATHS
+
+**Rule:** Generation and output paths must derive business-specific choices —
+which channels to generate for, cadence, post counts, publish behavior — from
+the single configured source of truth (`business_modules.config.advert_channels`).
+These choices must NEVER be hardcoded into a prompt string, AI call, or
+output-assembly path.
+
+**Scar:** `packages/shared/src/campaigns/generate.ts` hardcoded
+`"2 Instagram posts, 2 Facebook posts, 1 SMS"` directly into the AI prompt and
+never fetched `business_modules.config`. A business with Facebook disabled and
+TikTok enabled would receive Facebook posts and no TikTok posts — the exact
+inverse of their configuration. The social-posts path (`generate-posts.ts`)
+correctly read config; campaigns did not. Both paths called Claude; one honored
+business config, one ignored it entirely. Fixed 2026-06-08: `generateCampaignPosts()`
+now accepts `advertChannels: AdvertChannel[]` (passed from the handler after
+fetching config), builds per-channel instructions from that array, and derives
+post counts from campaign duration rather than a hardcoded integer.
+
+**LEXICON RULE (adopted 2026-06-08):** `"platform"` is RESERVED for the
+top-level TRACE substrate (builtwithCAI). Inside the product — config fields,
+API parameters, UI labels, DB columns on business-owned tables — use `"channel"`
+or `"advert_channel"`. No config field, table, or identifier inside the product
+may be named `"platform"`. Violation: writing `config.platforms` when you mean
+`config.advert_channels`.
+
+**In practice:**
+- Every generation path (social, campaign, future notification) receives its
+  channel/cadence/count configuration from the caller, not from literals in the
+  generator
+- No channel name may appear in a hardcoded count expression
+  (`"2 Instagram posts"` is a violation; `"${count} × ${channelGuidance}"` is correct)
+- Count per channel must be derived from a business-set or campaign-derived
+  parameter — never a literal integer in the generator
+- The single config field is `advert_channels: AdvertChannel[]`; all generation
+  paths consume it via the caller
+
+**Sweep findings (2026-06-08 — log only, not yet fixed per session scope):**
+- `packages/shared/src/campaigns/generate.ts:129` — `?? 'instagram'` fallback
+  when AI omits `channel` field in PostDraft. Hardcoded channel name in output
+  assembly. → Tech Debt #19.
+- `packages/shared/src/campaigns/types.ts:18` — `CampaignPost.platform` union is
+  `'instagram' | 'facebook' | 'sms' | 'email'`, missing `'tiktok'` and `'twitter'`.
+  Type doesn't reflect all channels the generator can now produce — TypeScript
+  will silently widen or error depending on usage. → Tech Debt #20.
+- `packages/cultivar-os/api/campaigns/publish-post.ts` — Orphaned file (action
+  consolidated into `api/campaigns.ts`). Contains SMS-specific branching on
+  `post.platform === 'sms'`. Dead code; not a generation path; safe to delete
+  in a cleanup session. → Tech Debt #21.
+
+**Scope:** Every AI generation path that produces channel-specific output. Every
+config field that stores business channel preferences. Every API that accepts or
+returns channel selections.
+
+---
+
 ## ENFORCEMENT
 
 | Standard | Applies to | Gate type |
@@ -266,6 +322,7 @@ query shown → confirmation logged in Handoff before session closes.
 | STD-006 | Every shared schema/code change | Step 13 AC-1 check in Part 9 |
 | STD-007 | Every integration with expiring credentials | Proactive expiry derivation, not reactive flag |
 | STD-008 | Every migration session | Verification query in SQL editor; confirmation in Handoff |
+| STD-009 | Every AI generation path + every config field for channel/cadence/count | Config-read required; no hardcoded channel names or counts in generator |
 
 **Part 9 addition:** A `STANDARDS compliance` line is now required alongside the
 existing Step 13 AC check at session end. See CLAUDE.md Part 9, Step 14.
@@ -297,6 +354,7 @@ for a confirming incident before promotion.
 | 1.0 | 2026-06-04 | Created. Six standards seeded from session scars. Adopted immediately. |
 | 1.1 | 2026-06-08 | STD-007 added. Scar: QB `accounting_needs_reconnect` lying flag — reactive-only flag kept dead connection silent. Fixed by proactive `accounting_token_expires_at` check in `qbo/status.ts`. |
 | 1.2 | 2026-06-08 | STD-008 added. Scar: `20260604_social_drafts_voice_learning.sql` committed-but-unapplied — every generate-posts INSERT failed silently; loadSocialDrafts 400'd; ~0 rows across multiple sessions. STD-008 adds live-schema verification gate. |
+| 1.3 | 2026-06-08 | STD-009 added. Scar: `campaigns/generate.ts` hardcoded '2 Instagram posts, 2 Facebook posts, 1 SMS' in AI prompt; never read `business_modules.config`. Business channel selections ignored by campaign generator for entire feature lifetime. LEXICON RULE added: "platform" reserved for top-level substrate; use "channel" inside the product. |
 
 ---
 
