@@ -210,6 +210,50 @@ that displays connection status.
 
 ---
 
+### STD-008 — COMMITTED MIGRATION ≠ APPLIED MIGRATION
+
+**Rule:** A migration file committed to the repo is NOT done until its application
+to the live DB is verified. Code must never assume a column exists based on a
+migration file; the live schema must be confirmed (`information_schema.columns`
+query in the Supabase SQL editor, or a verification script) to match what the
+code writes. Deployed schema == on-disk migrations is a release gate, not an
+assumption.
+
+**Scar:** `20260604_social_drafts_voice_learning.sql` was committed to the repo
+and listed in the session handoff, but was never applied to the live
+`bgobkjcopcxusjsetfob` project. `generate-posts.ts` began writing `original_text`
+and `cadence` (columns from the unapplied migration) — every INSERT silently failed
+because PostgREST rejects unknown columns with a 400. `loadSocialDrafts()` also
+selected `original_text`/`edited_text`, returning a 400 on every dashboard load.
+Result: social_drafts stayed at ~0 real rows and the "Generate this week's posts"
+button appeared to work but produced nothing — across multiple sessions, undetected.
+Root cause confirmed 2026-06-08 per STD-001. Fixed by combined migration
+`20260608_social_drafts_subject_ref.sql`.
+
+**Verification pattern:**
+```sql
+-- Run in Supabase SQL editor after applying any migration:
+SELECT column_name, data_type, is_nullable
+  FROM information_schema.columns
+ WHERE table_name = '<table_name>'
+ ORDER BY ordinal_position;
+-- Cross-check: every column the code writes must appear here.
+```
+
+**In practice:**
+- After applying a migration, run the verification query and compare against
+  every `INSERT`/`UPDATE`/`SELECT` in code that touches the affected table
+- Add a `-- VERIFICATION QUERY:` block as a comment at the end of every migration
+  file so the check is self-documenting
+- Log the verification result in the session Handoff: "migration applied and
+  verified — live schema confirmed via information_schema query"
+- Never mark a migration as complete in docs without this confirmation
+
+**Scope:** Every migration session. Part 9 gate: migration applied → verification
+query shown → confirmation logged in Handoff before session closes.
+
+---
+
 ## ENFORCEMENT
 
 | Standard | Applies to | Gate type |
@@ -221,6 +265,7 @@ that displays connection status.
 | STD-005 | Every decision recorded in docs | Review prior text before writing |
 | STD-006 | Every shared schema/code change | Step 13 AC-1 check in Part 9 |
 | STD-007 | Every integration with expiring credentials | Proactive expiry derivation, not reactive flag |
+| STD-008 | Every migration session | Verification query in SQL editor; confirmation in Handoff |
 
 **Part 9 addition:** A `STANDARDS compliance` line is now required alongside the
 existing Step 13 AC check at session end. See CLAUDE.md Part 9, Step 14.
@@ -251,6 +296,7 @@ for a confirming incident before promotion.
 |---|---|---|
 | 1.0 | 2026-06-04 | Created. Six standards seeded from session scars. Adopted immediately. |
 | 1.1 | 2026-06-08 | STD-007 added. Scar: QB `accounting_needs_reconnect` lying flag — reactive-only flag kept dead connection silent. Fixed by proactive `accounting_token_expires_at` check in `qbo/status.ts`. |
+| 1.2 | 2026-06-08 | STD-008 added. Scar: `20260604_social_drafts_voice_learning.sql` committed-but-unapplied — every generate-posts INSERT failed silently; loadSocialDrafts 400'd; ~0 rows across multiple sessions. STD-008 adds live-schema verification gate. |
 
 ---
 
