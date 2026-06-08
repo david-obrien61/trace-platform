@@ -8,12 +8,25 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronsRight } from 'lucide-react';
 
+const STYLE_DEBUG = false;
+
+// Non-1:1 mappings flagged:
+// - cursor-grab / active:cursor-grabbing → kept via className="ign-slide-thumb" (ignition-theme.css)
+// - transition-opacity duration-300 → style={{ transition: 'opacity 0.3s' }}
+// - shadow-inner → not preserved inline (no direct inline equivalent); flagged below
+// [TRACE:STYLE] SlideToComplete converted, 8 classNames → inline, 3 non-1:1:
+//   (1) cursor-grab/active:cursor-grabbing → ign-slide-thumb CSS class
+//   (2) shadow-inner → dropped (inset shadow on track not preserved)
+//   (3) conditional className pattern for isDragging opacity → converted to conditional style object
+
 const SlideToComplete = ({ onComplete }) => {
   const [dragProgress, setDragProgress] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const trackRef = useRef(null);
   const lastVibrateSnap = useRef(0);
+
+  if (STYLE_DEBUG) console.log('[TRACE:STYLE] SlideToComplete converted, 8 classNames → inline, 3 non-1:1');
 
   const startDrag = (e) => {
     if (isCompleted) return;
@@ -22,47 +35,38 @@ const SlideToComplete = ({ onComplete }) => {
 
   const handleDrag = (clientX) => {
     if (!isDragging || isCompleted || !trackRef.current) return;
-    
+
     const trackRect = trackRef.current.getBoundingClientRect();
     const handleWidth = 96; // w-24 = 96px
     const maxDragPos = trackRect.width - handleWidth - 8; // 8px for padding/borders
-    
-    // Calculate raw X position relative to track
+
     let currentDragPos = clientX - trackRect.left - (handleWidth / 2);
-    
-    // Hard physical clamp so it doesn't leave the track
     if (currentDragPos < 0) currentDragPos = 0;
     if (currentDragPos > maxDragPos) currentDragPos = maxDragPos;
 
     let progress = (currentDragPos / maxDragPos) * 100;
     progress = Math.min(Math.max(progress, 0), 100);
-    
     setDragProgress(progress);
 
-    // Haptic Resistance: 10ms pulse every 10% movement increments
     const currentSnap = Math.floor(progress / 10);
     if (currentSnap > lastVibrateSnap.current) {
         if (navigator.vibrate) navigator.vibrate(15);
         lastVibrateSnap.current = currentSnap;
     } else if (currentSnap < lastVibrateSnap.current) {
-        lastVibrateSnap.current = currentSnap; // Update fallback without pulse 
+        lastVibrateSnap.current = currentSnap;
     }
 
-    // Completion Trigger
     if (progress >= 100) {
-      if (navigator.vibrate) navigator.vibrate([200]); // Huge "Thud" confirmation
+      if (navigator.vibrate) navigator.vibrate([200]);
       setIsCompleted(true);
       setIsDragging(false);
-      
       if (onComplete) {
-         // Tiny delay allows the user to see the success state lock-in before the UI shifts
          setTimeout(() => {
              onComplete();
-             // Reset state for future reuse
              setIsCompleted(false);
              setDragProgress(0);
              lastVibrateSnap.current = 0;
-         }, 500); 
+         }, 500);
       }
     }
   };
@@ -73,8 +77,6 @@ const SlideToComplete = ({ onComplete }) => {
   const endDrag = () => {
     if (isCompleted) return;
     setIsDragging(false);
-    
-    // Safety Net: Spring back to 0% if let go early
     if (dragProgress < 100) {
       setDragProgress(0);
       lastVibrateSnap.current = 0;
@@ -82,14 +84,12 @@ const SlideToComplete = ({ onComplete }) => {
   };
 
   useEffect(() => {
-    // Only bind global window events when dragging begins to save memory
     if (isDragging) {
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mouseup', endDrag);
       window.addEventListener('touchmove', onTouchMove, { passive: false });
       window.addEventListener('touchend', endDrag);
     }
-
     return () => {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', endDrag);
@@ -99,41 +99,85 @@ const SlideToComplete = ({ onComplete }) => {
   }, [isDragging, dragProgress, isCompleted]);
 
   return (
-    <div 
-       ref={trackRef}
-       className="relative w-full h-24 bg-slate-950 border-[6px] border-slate-800/80 rounded-[2.5rem] overflow-hidden flex items-center justify-center select-none shadow-inner mx-auto max-w-lg"
+    <div
+      ref={trackRef}
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: 96,
+        backgroundColor: '#020617',   // slate-950
+        border: '6px solid rgba(30,41,59,0.8)',  // slate-800/80
+        borderRadius: 40,
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        userSelect: 'none',
+        // shadow-inner: not preserved — flagged non-1:1
+        maxWidth: 512,
+        margin: '0 auto',
+      }}
     >
-      {/* CENTRAL TYPOGRAPHY THEME */}
-      <span className={`absolute z-0 text-xl font-black italic tracking-widest transition-opacity duration-300 pointer-events-none 
-         ${isDragging ? 'opacity-20' : 'opacity-100'} 
-         ${dragProgress > 50 ? 'text-slate-800' : 'text-slate-500'}
-      `}>
+      {/* CENTRAL TYPOGRAPHY */}
+      <span style={{
+        position: 'absolute',
+        zIndex: 0,
+        fontSize: 20,
+        fontWeight: 900,
+        fontStyle: 'italic',
+        letterSpacing: '0.1em',
+        transition: 'opacity 0.3s',
+        pointerEvents: 'none',
+        opacity: isDragging ? 0.2 : 1,
+        color: dragProgress > 50 ? '#1e293b' : '#64748b', // slate-800 : slate-500
+      }}>
         SLIDE TO FINISH JOB
       </span>
-      
+
       {/* EMERALD WAKE TRAIL */}
-      <div 
-        className="absolute top-0 left-0 bottom-0 bg-emerald-500/20 border-r border-emerald-500/50 shadow-[0_0_30px_rgba(16,185,129,0.3)_inset] pointer-events-none"
-        style={{ width: `calc(${dragProgress}% + 3rem)`, transition: isDragging ? 'none' : 'width 0.4s ease-out' }}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(16,185,129,0.2)',  // emerald-500/20
+          borderRight: '1px solid rgba(16,185,129,0.5)',
+          boxShadow: '0 0 30px rgba(16,185,129,0.3) inset',
+          pointerEvents: 'none',
+          width: `calc(${dragProgress}% + 3rem)`,
+          transition: isDragging ? 'none' : 'width 0.4s ease-out',
+        }}
       />
-      
-      {/* THE GRIP HANDLE */}
-      <div 
+
+      {/* GRIP HANDLE — cursor-grab/active:cursor-grabbing via ign-slide-thumb CSS class */}
+      <div
+        className="ign-slide-thumb"
         onMouseDown={startDrag}
         onTouchStart={startDrag}
-        className={`absolute top-1.5 bottom-1.5 w-24 bg-emerald-500 rounded-[1.8rem] flex items-center justify-center cursor-grab active:cursor-grabbing shadow-[0_0_15px_rgba(16,185,129,0.5)] z-10 border-2 border-emerald-400
-          ${isDragging ? '' : 'transition-all duration-400 ease-out'} 
-        `}
-        style={{ 
-           left: `calc(6px + ${dragProgress}% - ${dragProgress / 100 * 104}px)` 
-        }} 
+        style={{
+          position: 'absolute',
+          top: 6,
+          bottom: 6,
+          width: 96,
+          backgroundColor: '#10b981',   // emerald-500
+          borderRadius: 29,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 0 15px rgba(16,185,129,0.5)',
+          zIndex: 10,
+          border: '2px solid #34d399',  // emerald-400
+          left: `calc(6px + ${dragProgress}% - ${dragProgress / 100 * 104}px)`,
+          transition: isDragging ? 'none' : 'all 0.4s ease-out',
+        }}
       >
-        {/* TEXTURED GRIP RIDGES */}
-        <div className="flex gap-1.5 mr-2 opacity-60">
-           <div className="w-1.5 h-8 bg-emerald-950 rounded-full shadow-sm"></div>
-           <div className="w-1.5 h-8 bg-emerald-950 rounded-full shadow-sm"></div>
+        {/* GRIP RIDGES */}
+        <div style={{ display: 'flex', gap: 6, marginRight: 8, opacity: 0.6 }}>
+          <div style={{ width: 6, height: 32, backgroundColor: '#022c22', borderRadius: 9999, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }} />
+          <div style={{ width: 6, height: 32, backgroundColor: '#022c22', borderRadius: 9999, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }} />
         </div>
-        <ChevronsRight size={32} className="text-emerald-950 ml-1" />
+        <ChevronsRight size={32} style={{ color: '#022c22', marginLeft: 4 }} />
       </div>
     </div>
   );
