@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: June 8, 2026 (Step 1 close-out: STD-002 PENDING, step-2 AC-1 watch recorded)
+# Last updated: June 8, 2026 (THUNDER: social_drafts de-noun + generator→shared + edit/save + STD-008)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -279,6 +279,144 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-08 — THUNDER: social_drafts fix + AC-1 de-noun + generator→shared + edit/save + STD-008
+
+**Type:** Code + Docs + Migration. Five code files changed or created. One migration written. STANDARDS.md and CLAUDE.md Tech Debt updated. Commits: `ae65559`, `0a20bbe`, `5485919`. NOT YET PUSHED (push at end of this entry).
+
+**Session mandate:** THUNDER 6-step plan — fix the social_drafts silent-failure root cause (STD-008 scar), de-noun the schema (AC-1), move the generator to shared (B move), add edit/save widget to Dashboard, add STD-008 to STANDARDS.md, declare seams.
+
+---
+
+**Root cause confirmed (STD-001 compliant — full read-only before any change):**
+
+Migration `20260604_social_drafts_voice_learning.sql` was committed 2026-06-04 to the repo but was NEVER applied to the live Supabase project `bgobkjcopcxusjsetfob`. Specifically:
+- `generate-posts.ts` tried to INSERT `original_text`, `cadence`, `period_start`, `period_end` — columns that exist ONLY in the committed-but-unapplied migration. PostgREST returns 400 on unknown columns. Zero rows written, silently, across multiple sessions.
+- `Dashboard.tsx loadSocialDrafts()` SELECT'd `original_text, edited_text` — same columns, same 400 on every dashboard load.
+- Result: ~0 real rows in social_drafts, undetected across multiple sessions. This is the STD-008 scar.
+
+Additional AC-1 violations found on the table: `order_id` (commerce-specific FK), potentially `plant_id` (Cultivar noun). Both targeted for removal.
+
+**STD-008 sweep also found:**
+- `20260523_qb_token_expires_at.sql`: adds `qb_needs_reconnect` / `qb_token_expires_at` to OLD `nurseries` table; superseded by the `businesses` table migration. No code reads these columns. Harmless dead migration. → Tech Debt #17.
+- `20260603_business_members_add_pin_hash.sql`: likely applied (29/29 test pass June 3) but never confirmed via `information_schema` query. → Tech Debt #18 (verify pending).
+
+---
+
+**What was built (six parts):**
+
+**PART 1 — Migration `supabase/migrations/20260608_social_drafts_subject_ref.sql`:**
+- Applies all 20260604 columns via `ADD COLUMN IF NOT EXISTS`: `original_text text`, `edited_text text`, `cadence text`, `period_start timestamptz`, `period_end timestamptz`.
+- AC-1 de-noun: `ADD COLUMN IF NOT EXISTS subject_type text`, `subject_id uuid`. **NO CHECK constraint** on `subject_type` — a CHECK would enumerate vertical nouns in the DB schema (AC-1 leak).
+- Drops: `order_id` (commerce FK, AC-1 violation), `plant_id` IF EXISTS (Cultivar noun, IF EXISTS = safe no-op).
+- Retires `content` column: `UPDATE social_drafts SET original_text = content WHERE original_text IS NULL AND content IS NOT NULL`, then `DROP COLUMN IF EXISTS content`.
+- New `copied_at timestamptz`.
+- Status lifecycle cut: `published` → `copied`, `failed` → `draft`, `CHECK (status IN ('draft', 'edited', 'approved', 'copied'))`.
+- Clears stale `blotato_account_id` from `business_modules.config` for all social_media modules.
+- Includes `-- VERIFICATION QUERY:` block at end of file (per STD-008).
+
+⚠️ **David must apply this migration manually in Supabase SQL editor (bgobkjcopcxusjsetfob) then run the VERIFICATION QUERY.** See migration file for the query. The migration file is at `supabase/migrations/20260608_social_drafts_subject_ref.sql`.
+
+**PART 2 — `packages/shared/src/social/generate.ts` (new):**
+B move — generator extracted from the Vercel handler into shared. Exports `generateSocialDrafts(input: SocialGenerateInput)`.
+- `BUSINESS_DESCRIPTORS: Record<string, string>` map — `{ nursery: 'owner-operated plant nursery' }` with generic fallback. AC-1: variation is DATA keyed by `business_type` value, not a vertical noun in code.
+- Routes through AI gateway: `executeCapability('social_generate', { system, user, apiKey })`.
+- `SOCIALDRAFT_DEBUG = false` at module level; all `[TRACE:socialdraft]` logs gated.
+
+`packages/shared/src/social/index.ts` (new): barrel for `SocialGenerateInput` type and `generateSocialDrafts`.
+
+**PART 3 — `packages/cultivar-os/api/social/generate-posts.ts` (rewritten — thin handler):**
+- Imports `generateSocialDrafts` from `../../../shared/src/social/generate`.
+- Reads business context: `business_modules` (platforms, cadence), `businesses` (name, business_type), `orders` + `order_items` for period context.
+- Inserts to `social_drafts`: `original_text` (not `content`), `subject_type: 'inventory'`, `subject_id: null` (period aggregate), `cadence`, `period_start`, `period_end`.
+- No `plant_id`, no `order_id`, no `content`.
+- `SOCIALDRAFT_DEBUG = false`; `[TRACE:socialdraft]` logs gated.
+
+**PART 4 — `packages/cultivar-os/src/pages/Dashboard.tsx` (edit/save widget):**
+- `SocialDraft` interface updated: `original_text | null`, `edited_text | null`, `subject_type | null`, `subject_id | null`, `copied_at | null`.
+- `loadSocialDrafts()`: SELECTs new columns; filters `.not('status', 'eq', 'copied')` (not `.eq('status', 'draft')`); `[TRACE:socialdraft]` log on entry and result.
+- `handleSaveEdit()`: writes `{ edited_text: text, status: 'edited' }` (status transition, not just the text).
+- `handleCopyCaption()` (replaced `handleMarkPosted` + `handleCopyCaption`): copies `displayText` to clipboard (with textarea fallback), then updates `{ status: 'copied', copied_at: now }`, removes draft from queue on success.
+- `displayText`: `draftEdits[draft.id] ?? draft.edited_text ?? draft.original_text ?? ''`.
+- Draft card render: green border when `status === 'edited' || status === 'approved'`; "✓ Edited" chip; [Copy caption] + [Download image (stub, disabled)] + [Open platform] buttons.
+- `SOCIALDRAFT_DEBUG = false` added at module scope (alongside `SM_DEBUG`).
+
+**PART 5 — `STANDARDS.md` + `CLAUDE.md` Tech Debt:**
+- STD-008 added to STANDARDS.md: "A migration file committed to the repo is NOT done until its application to the live DB is verified." Scar: this session's root cause. Enforcement gate: verification query in SQL editor + confirmation in Handoff.
+- STANDARDS.md version bumped to 1.2. Enforcement table updated. Part 9 Step 14 updated with STD-007 and STD-008 gates.
+- CLAUDE.md Tech Debt Log: #17 (dead nurseries migration) and #18 (pin_hash verify pending) added.
+
+**PART 6 — `docs/built-inventory.md` (social module section rewritten):**
+- Title updated: "Social Media Module (shared + Cultivar OS surface)".
+- Generator documented at `packages/shared/src/social/generate.ts`.
+- `social_drafts` schema documented (de-nouned, no content/order_id/plant_id).
+- Edit/save widget described.
+- Two seams declared:
+  1. `remaining: voice-learning BI — horizon: v2/later` (original_text vs edited_text = training delta, accumulating, no consumer).
+  2. `remaining: cadence-triggered generation — horizon: Social Rhythm` (cadence data model ready; scheduler is the unfilled seam).
+
+---
+
+**Agreed build sequence (v7 §15) — updated state:**
+1. ~~**Honesty fix** — proactive QB dead-connection detection (Tech Debt #15).~~ ✅ RESOLVED 2026-06-08 (commit `444fbb1`)
+2. ~~**social_drafts fix + de-noun + generator→shared + edit/save + STD-008** (THUNDER).~~ ✅ RESOLVED 2026-06-08 (commits `ae65559`, `0a20bbe`, `5485919`). ⚠️ STD-002 PENDING DAVID APPLY+VERIFY (see below).
+3. **Margin engine full port + overhead wire** (Tech Debt #16). Next session.
+4. **Receipt Keeper v1** — Gemini Flash OCR, local `receipts` table, confirm-before-commit.
+5. **Cost-to-Produce tile** — feeds loaded cost into `tx.cost` slot.
+6. **(v2)** QB payables write-back + Attachable + CoA + cross-card reconciliation.
+
+**⚠️ STEP-2 WATCH — AC-1 / STD-006 LANDMINE** (unchanged from prior — entering Step 3 Margin Engine):
+Ignition-local `MarginEngine.js` carries `FLEET`, `LEGACY`, `FF` — auto/diesel vertical nouns hardcoded as tier identifiers. Port to `packages/shared/src/business-logic/MarginEngine.ts` MUST make these `business_type`-scoped data values. AC-1/STD-006 sweep of the ported engine is REQUIRED acceptance criteria for Step 3.
+
+---
+
+**Acceptance criteria — STD-002 status:**
+
+**BEFORE artifact:** `loadSocialDrafts()` 400 — documented by code trace (generate-posts.ts inserted columns from unapplied migration; loadSocialDrafts() selected same columns). David confirmed ~0 rows visible in Dashboard. Cannot produce live network capture without deploying.
+
+**AFTER artifact:** ⚠️ **PENDING DEPLOY + DAVID VERIFY.**
+Expected outcome after David applies migration and deploys:
+- `loadSocialDrafts()` → 200, returns array of drafts.
+- Clicking "Generate this week's posts" → inserts `original_text` (not empty), status='draft'.
+- Edit textarea → blur → row updates with `edited_text + status='edited'`.
+- [Copy caption] → clipboard filled; status → 'copied'; card removed from queue.
+
+DO NOT mark ✅ until David reports which path fired.
+
+---
+
+**Documentation propagation check:** `Help.tsx` mentions "Blotato Account ID" — already fixed 2026-06-05 (per that session's Handoff). No new customer-facing copy was added this session. Social module UX changes (edit/copy widget) are self-explanatory; no FAQ entry needed yet. `built-inventory.md` updated (PART 6). No other customer-facing propagation needed.
+
+**Factual corrections captured:**
+- `plant_id` was NOT present on `social_drafts` table — the DROP is a safe IF EXISTS no-op. (Task prompt assumed it existed; STD-001 investigation found no migration adding it.)
+- `generate-posts.ts` was ALREADY using `executeCapability('social_generate', ...)` via AI gateway — the "convert from direct SDK call" task step was a no-op. (Task assumed direct SDK; investigation confirmed gateway already in place.)
+- `SocialSetup.tsx` cadence screen was ALREADY BUILT — full `CADENCE_OPTIONS` UI in place; `enable.ts` already writes `{ platforms, cadence }`. No changes needed.
+
+**No runbook needed** — pure code + docs session. No environment, infrastructure, or DB changes (migration is David's manual step).
+
+**AC compliance (step 13):**
+- AC-1: ✅ `social_drafts` de-nouned — `order_id` dropped, `plant_id` IF EXISTS dropped, `subject_type`/`subject_id` added (no CHECK constraint — no vertical noun in schema). `BUSINESS_DESCRIPTORS` map in `generate.ts` uses values, not code branching. Zero vertical nouns in `packages/shared/src/social/`.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths opened.
+- AC-4: ✅ No structural deviations introduced.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Full read-only discovery before any edit. Root cause confirmed (committed-but-unapplied migration, columns missing from live schema).
+- STD-002: 🔲 **PENDING DEPLOY+VERIFY.** BEFORE state documented by code trace (400s). AFTER state requires David to apply migration + observe. Report expected: "loadSocialDrafts 200, generate-posts inserts row with original_text, edit/copy cycle works."
+- STD-003: ✅ `SOCIALDRAFT_DEBUG = false` in both `generate.ts` (shared) and `generate-posts.ts` (handler) and `Dashboard.tsx`. All `[TRACE:socialdraft]` logs gated. Flag name: `SOCIALDRAFT_DEBUG`. Re-enable: set to `true` in each file.
+- STD-004: N/A — no new business-scoped feature shipped beyond existing social module scope.
+- STD-005: ✅ Tech Debt #15 entry struck through per prior session. No decisions reversed this session.
+- STD-006: ✅ No vertical nouns introduced in shared code. `subject_type` is a value-domain field with no CHECK constraint.
+- STD-007: N/A — no external credentials touched.
+- STD-008: ✅ **First instance — created this session.** Migration `20260608_social_drafts_subject_ref.sql` written with `-- VERIFICATION QUERY:` block. David must apply and run query. Migration NOT marked complete until David confirms live schema.
+
+**Gap graduation sweep (step 15):**
+- `remaining: voice-learning BI` — created this session, horizon v2/later. NOT past horizon.
+- `remaining: cadence-triggered generation` — created this session, horizon Social Rhythm. NOT past horizon.
+- Prior gap: `remaining: discovery persistence` — created 2026-06-05, horizon v2/later. NOT past horizon.
+No gap graduations this session.
+
+---
 
 ### 2026-06-08 — Step 1: QB lying-flag honesty fix (Tech Debt #15 RESOLVED)
 
