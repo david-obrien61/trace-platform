@@ -2,12 +2,15 @@ import { createClient } from '@supabase/supabase-js';
 import { generateSocialDrafts } from '../../../shared/src/social/generate';
 
 const SOCIALDRAFT_DEBUG = false;
+const ADVERT_DEBUG      = false;
 
 function adminDb() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL!;
   const key = process.env.SUPABASE_SERVICE_KEY!;
   return createClient(url, key);
 }
+
+interface ChannelEntry { type: string; name: string; enabled: boolean; }
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -39,12 +42,26 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({ ok: false, reason: 'module_not_enabled' });
   }
 
-  const config    = (mod.config ?? {}) as { platforms?: string[]; cadence?: string };
-  const platforms = Array.isArray(config.platforms) && config.platforms.length > 0
-    ? config.platforms
-    : ['instagram'];
-  const cadence   = config.cadence ?? 'weekly';
+  const config = (mod.config ?? {}) as { advert_channels?: ChannelEntry[]; cadence?: string };
 
+  // Route by type: social channels → captions; sms → short text.
+  // advert_channels is the single source of truth — never hardcode channel names here.
+  const advertChannels: ChannelEntry[] = Array.isArray(config.advert_channels)
+    ? config.advert_channels
+    : [];
+
+  const socialChannels = advertChannels.filter(c => c.type === 'social' && c.enabled).map(c => c.name);
+  const smsEnabled     = advertChannels.some(c => c.type === 'sms' && c.enabled);
+  const allChannels    = [...socialChannels, ...(smsEnabled ? ['sms'] : [])];
+
+  if (ADVERT_DEBUG) console.log('[TRACE:advert] generate-posts channels:', allChannels);
+
+  if (allChannels.length === 0) {
+    console.warn('[generate-posts] no enabled channels');
+    return res.status(200).json({ ok: false, reason: 'no_channels_enabled' });
+  }
+
+  const cadence   = config.cadence ?? 'weekly';
   const periodDays = typeof rawPeriodDays === 'number' && rawPeriodDays > 0
     ? rawPeriodDays
     : cadence === 'few_times' ? 3 : 7;
@@ -107,7 +124,7 @@ export default async function handler(req: any, res: any) {
     const drafts = await generateSocialDrafts({
       businessName,
       businessType,
-      platforms,
+      channels: allChannels,   // social names + 'sms' if enabled
       periodStart,
       periodEnd,
       orderCount,
@@ -116,19 +133,19 @@ export default async function handler(req: any, res: any) {
       apiKey,
     });
 
-    const inserts = platforms
-      .filter(p => typeof drafts[p] === 'string' && drafts[p].trim())
-      .map(p => ({
+    const inserts = allChannels
+      .filter(ch => typeof drafts[ch] === 'string' && drafts[ch].trim())
+      .map(ch => ({
         business_id,
-        platform:     p,
-        original_text: drafts[p].trim(),
-        post_type:    null,
-        status:       'draft',
-        subject_type: 'inventory',  // Cultivar posts are about inventory (AC-1: value, not column)
-        subject_id:   null,         // period aggregate — no single entity
+        platform:      ch,
+        original_text: drafts[ch].trim(),
+        post_type:     null,
+        status:        'draft',
+        subject_type:  'inventory',  // Cultivar posts are about inventory (AC-1: value, not column)
+        subject_id:    null,          // period aggregate — no single entity
         cadence,
-        period_start: periodStart.toISOString(),
-        period_end:   periodEnd.toISOString(),
+        period_start:  periodStart.toISOString(),
+        period_end:    periodEnd.toISOString(),
       }));
 
     if (inserts.length === 0) {
@@ -137,6 +154,7 @@ export default async function handler(req: any, res: any) {
     }
 
     if (SOCIALDRAFT_DEBUG) console.log('[TRACE:socialdraft] inserting', inserts.length, 'rows');
+    if (ADVERT_DEBUG)      console.log('[TRACE:advert] inserting channels:', inserts.map(i => i.platform));
 
     const { error: insertErr } = await db.from('social_drafts').insert(inserts);
     if (insertErr) {
@@ -144,9 +162,9 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ ok: false, reason: 'insert_failed', detail: insertErr.message });
     }
 
-    if (SOCIALDRAFT_DEBUG) console.log('[TRACE:socialdraft] insert success — platforms:', inserts.map(i => i.platform));
+    if (SOCIALDRAFT_DEBUG) console.log('[TRACE:socialdraft] insert success — channels:', inserts.map(i => i.platform));
 
-    return res.status(200).json({ ok: true, count: inserts.length, platforms: inserts.map(i => i.platform) });
+    return res.status(200).json({ ok: true, count: inserts.length, channels: inserts.map(i => i.platform) });
 
   } catch (err: any) {
     console.error('[generate-posts] error:', err?.message ?? err);

@@ -9,9 +9,9 @@ function adminDb() {
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { business_id, platforms, cadence } = req.body;
+  const { business_id, advert_channels, cadence } = req.body;
 
-  if (!business_id || !Array.isArray(platforms) || platforms.length === 0) {
+  if (!business_id || !Array.isArray(advert_channels) || advert_channels.length === 0) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
@@ -25,7 +25,7 @@ export default async function handler(req: any, res: any) {
         module_key: 'social_media',
         enabled:    true,
         configured: true,
-        config:     { platforms, cadence: cadence ?? 'weekly' },
+        config:     { advert_channels, cadence: cadence ?? 'weekly' },
       },
       { onConflict: 'business_id,module_key' },
     );

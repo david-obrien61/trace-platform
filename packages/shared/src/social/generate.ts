@@ -18,7 +18,7 @@ const MONTH_NAMES = [
 export interface SocialGenerateInput {
   businessName:  string;
   businessType:  string;
-  platforms:     string[];
+  channels:      string[];   // channel names to generate — social names + 'sms'
   periodStart:   Date;
   periodEnd:     Date;
   orderCount:    number;
@@ -27,13 +27,13 @@ export interface SocialGenerateInput {
   apiKey:         string;
 }
 
-// Returns: { platform: caption } for each requested platform
+// Returns: { channelName: caption } for each requested channel
 // Throws on AI failure — caller decides whether to surface or swallow.
 export async function generateSocialDrafts(
   input: SocialGenerateInput,
 ): Promise<Record<string, string>> {
   const {
-    businessName, businessType, platforms, periodStart, periodEnd,
+    businessName, businessType, channels, periodStart, periodEnd,
     orderCount, subjectSummary, customerNames, apiKey,
   } = input;
 
@@ -41,25 +41,26 @@ export async function generateSocialDrafts(
   const currentMonth = MONTH_NAMES[new Date().getMonth()];
 
   if (SOCIALDRAFT_DEBUG) {
-    console.log('[TRACE:socialdraft] generate — businessType:', businessType, 'descriptor:', descriptor, 'platforms:', platforms);
+    console.log('[TRACE:socialdraft] generate — businessType:', businessType, 'descriptor:', descriptor, 'channels:', channels);
   }
 
   const systemPrompt = `You are a social media writer for a ${descriptor}. \
-Your job is to write ONE post per platform that celebrates the week's business activity.
+Your job is to write ONE post per channel that celebrates the week's business activity.
 
 Write warmly and specifically — reference what actually happened, not a generic template. \
 Aggregate the week into one compelling moment. Never mention prices. Never include customer \
 last names, emails, or contact info. Use customer first names only if they feel natural.
 
-Formatting per platform:
+Formatting per channel:
 - instagram: under 220 characters, 5–8 relevant hashtags at the end. Visual and upbeat.
 - facebook: 50–120 words. Warm and conversational. 2–3 hashtags max. More storytelling.
 - tiktok: under 150 characters, punchy and energetic. 3–5 hashtags.
 - twitter: under 260 characters, brief and direct. 2–3 hashtags.
+- sms: under 160 characters, direct, one clear call to action, no hashtags. Include the business name.
 
-Return ONLY a JSON object. No markdown, no explanation, no preamble. Keys are platform names, \
-values are caption strings. Include only the platforms listed in the user message. \
-Example: {"instagram":"caption...","facebook":"caption..."}`;
+Return ONLY a JSON object. No markdown, no explanation, no preamble. Keys are channel names, \
+values are caption strings. Include only the channels listed in the user message. \
+Example: {"instagram":"caption...","sms":"caption..."}`;
 
   const customerLine = customerNames.length > 0
     ? `Customer first names: ${customerNames.join(', ')}`
@@ -69,7 +70,7 @@ Example: {"instagram":"caption...","facebook":"caption..."}`;
     ? "No sales this period — write a general warm post about the season and what's growing."
     : '';
 
-  const userPrompt = `Write social posts for ${businessName}.
+  const userPrompt = `Write posts for ${businessName}.
 
 Period: ${periodStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – \
 ${periodEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${currentMonth}
@@ -78,8 +79,8 @@ What was sold: ${subjectSummary}
 ${customerLine}
 ${noSalesNote}
 
-Platforms to generate (include ALL of these as keys in the JSON):
-${platforms.join(', ')}`;
+Channels to generate (include ALL of these as keys in the JSON):
+${channels.join(', ')}`;
 
   if (SOCIALDRAFT_DEBUG) {
     console.log('[TRACE:socialdraft] calling executeCapability — orderCount:', orderCount, 'subjectSummary:', subjectSummary);
