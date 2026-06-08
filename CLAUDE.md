@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: June 8, 2026 (THUNDER: advert_channels router + campaign config fix + Blotato kill + STD-009)
+# Last updated: June 9, 2026 (THUNDER close-out: social_drafts_platform_check + STD-008 bidirectional + sweep)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -246,6 +246,8 @@ This log is created and maintained per the Honest Friction principle (see PLATFO
 | 19 | 🟡 **STD-009 SWEEP — `packages/shared/src/campaigns/generate.ts:129` HARDCODED CHANNEL FALLBACK:** The PostDraft mapping has `channel: p.channel ?? p.platform ?? enabledChannels[0]?.name ?? 'instagram'`. The `?? 'instagram'` final fallback hardcodes a channel name into the output-assembly path. If the AI returns a post without a `channel` field AND `p.platform` is also absent, the post is silently assigned to 'instagram' regardless of which channels were requested. STD-009 sweep finding 2026-06-08. | STD-009 sweep 2026-06-08 | Fix: replace `?? 'instagram'` with `?? enabledChannels[0]?.name ?? null` — derive from the enabled channels list, not a hardcoded name. Alternatively, filter out posts with no channel field and log a warning. | Before a business with Instagram disabled runs campaigns — the 'instagram' fallback could send their content to the wrong channel identity. |
 | 20 | 🟡 **STD-009 SWEEP — `packages/shared/src/campaigns/types.ts:18` INCOMPLETE PLATFORM UNION:** `CampaignPost.platform` is typed as `'instagram' \| 'facebook' \| 'sms' \| 'email'` — missing `'tiktok'` and `'twitter'`. The campaign generator now produces posts for those channels. Downstream TypeScript consumers of `CampaignPost` that switch on `platform` will have exhaustive-check gaps for tiktok and twitter. STD-009 sweep finding 2026-06-08. | STD-009 sweep 2026-06-08 | Widen to `string` (preferred — AC-1: no enumerated vertical nouns in shared types) or add `\| 'tiktok' \| 'twitter'` to the union and accept the maintenance burden. 'string' is cleaner since advert_channels is open-ended. | Before next TypeScript strict mode pass or when tiktok/twitter channels go live for a customer. |
 | 21 | 🟡 **STD-009 SWEEP — `packages/cultivar-os/api/campaigns/publish-post.ts` ORPHANED FILE:** This file was superseded when the campaigns API was consolidated into `packages/cultivar-os/api/campaigns.ts` (action-routed handler). The orphaned file contains SMS-specific branching on `post.platform === 'sms'` that is dead code — no caller routes to this endpoint. It is not a Vercel function (Vercel routes from `api/campaigns.ts` at the root). Safe to delete in a cleanup session. STD-009 sweep finding 2026-06-08. | STD-009 sweep 2026-06-08 | Delete `packages/cultivar-os/api/campaigns/publish-post.ts`. Also delete `packages/cultivar-os/api/campaigns/generate.ts` (also orphaned — same consolidation). The `api/campaigns/` subdirectory can be removed entirely. | Next cleanup pass (low priority — dead code, no execution risk). |
+| 22 | 🟡 **STD-008 INVERSE SWEEP — `social_drafts_platform_check` (RESOLVED THIS SESSION — PENDING VERIFICATION):** Hand-applied CHECK constraint existed in live DB with no committed migration. Allowed list was `(instagram, facebook, tiktok, twitter)` — no 'sms'. When SMS enabled in advert_channels, `generate-posts.ts` batch-inserted all channels atomically; the sms row triggered the constraint violation; PostgREST rolled back ALL rows including instagram + tiktok. Zero rows written per generation run. Confirmed 2026-06-09 via live probe. Fix: `supabase/migrations/20260609_social_drafts_platform_check.sql` — drops hand-applied constraint, recreates including 'sms', brings it under migration control. STD-008 extended to cover both directions (v1.4). ⚠️ David must apply migration and run VERIFICATION QUERY. | STD-008 inverse sweep 2026-06-09 | Migration written — David applies to bgobkjcopcxusjsetfob + runs verification query. Mark 🟢 after constraint shows 5 values in pg_get_constraintdef result. | Apply before next social-posts generation attempt with SMS enabled. |
+| 23 | 🟡 **STD-008 INVERSE SWEEP — FULL SWEEP PENDING:** Sweep SQL written at `docs/audits/std008-inverse-sweep-2026-06-09.sql`. PostgREST cannot query `information_schema` or `pg_constraint` directly — sweep must be run manually in Supabase SQL editor. The sweep covers 4 queries: (1) CHECK constraints, (2) triggers, (3) RLS policies, (4) non-pkey indexes. Pre-migration-era tables (nurseries, plants, plant_events, addons, losses, social_drafts) may have additional hand-applied objects beyond the confirmed platform_check. Policies for orders, business_modules, businesses ARE documented in committed migrations (DROP IF EXISTS pattern in 2026-05-28/29/06-04 migrations). Known documented triggers: `trg_business_members_updated_at`, `business_modules_updated_at`. STD-008 inverse sweep finding 2026-06-09. | STD-008 inverse sweep 2026-06-09 | David runs `docs/audits/std008-inverse-sweep-2026-06-09.sql` in Supabase SQL editor; audits results against `grep -r <name> supabase/migrations/`; logs any undocumented findings to new Tech Debt entries. Mark 🟢 when sweep complete and all findings logged. | Before next migration session touching a pre-migration-era table (nurseries, plants, addons, losses). |
 | 14 | 🟡 **UPGRADED 2026-05-31: Tailwind is officially deprecated platform-wide.** Tailwind CSS is loaded via CDN script tag in `packages/ignition-os/index.html`. Existing Tailwind surface: ignition-os (2,334 className= lines across 32 files) + packages/shared/src/components/SavingsReport.jsx (86 lines) + packages/shared/src/components/QuickBooksConnector.jsx (54 lines). Cultivar OS className= usages are custom CSS class names (page, section, btn, badge, etc.) — NOT Tailwind. **Policy:** NO new Tailwind anywhere. No new `className=` with Tailwind utilities in any file in any package. Inline styles via `style={{ ... }}` are canonical. The shared design token file (forthcoming: `packages/shared/src/design-system/tokens.ts`) is referenced by inline styles, not Tailwind config. **Scheduled conversion:** Ignition OS + shared Tailwind files → inline styles in a dedicated post-August 2026 work session (~50h). Approach: file-by-file, one module per Claude Code session, visual regression after each. Tracking at `docs/tailwind-conversion-progress.md`. | 2026-05-29 (identified) → 2026-05-31 (deprecated) | Post-August 2026: convert all 34 files (32 ignition-os + 2 shared) to inline styles. Trigger: dedicated conversion sessions after Europe trip. | See `docs/tailwind-conversion-progress.md`. |
 
 ---
@@ -441,6 +443,116 @@ Ignition-local `MarginEngine.js` carries `FLEET`, `LEGACY`, `FF` — auto/diesel
 - `remaining: voice-learning BI` — horizon v2/later. Created 2026-06-08. NOT past horizon.
 - `remaining: cadence-triggered generation` — horizon Social Rhythm. Created 2026-06-08. NOT past horizon.
 - Prior gap: `remaining: discovery persistence` — horizon v2/later. Created 2026-06-05. NOT past horizon.
+No gap graduations this session.
+
+---
+
+### 2026-06-09 — THUNDER: social_drafts_platform_check + STD-008 bidirectional extension + sweep
+
+**Type:** Docs + Migration + Sweep. One migration written. STANDARDS.md updated to v1.4. Tech Debt #22 and #23 added. Sweep SQL written. `docs/built-inventory.md` updated. No code changes.
+
+**Session mandate:** Fix the `social_drafts_platform_check` constraint that was blocking SMS inserts (zero rows written per generation run when SMS enabled), bring it under migration control (STD-008 inverse scar), extend STD-008 to cover both directions, write a sweep script for remaining undocumented live-DB objects.
+
+---
+
+**Root cause confirmed (STD-001 compliant):**
+
+`social_drafts_platform_check` existed in the live Supabase project `bgobkjcopcxusjsetfob` but in NO committed migration — hand-applied when social_drafts was created pre-migration-era. Allowed list: `(instagram, facebook, tiktok, twitter)`. When `advert_channels` config enabled 'sms', `generate-posts.ts` called `db.from('social_drafts').insert([rows])` with all channels including sms. Supabase batch inserts are atomic — one sms row violating the constraint rolled back ALL rows (instagram + tiktok included). Zero rows written per run. Confirmed by live probe 2026-06-09: `INSERT platform='tiktok'` succeeded; `INSERT platform='sms'` → error 23514 constraint violation.
+
+The generate-posts handler correctly returned `{ ok: false, reason: 'insert_failed', detail: 'social_drafts_platform_check' }` — this is the BEFORE artifact (STD-002).
+
+**BEFORE artifact (STD-002):** `POST /api/social/generate-posts → { "ok": false, "reason": "insert_failed", "detail": "new row for relation \"social_drafts\" violates check constraint \"social_drafts_platform_check\"" }`. Zero rows in social_drafts per run with SMS enabled. Confirmed via live REST probe.
+
+---
+
+**What was built (four parts):**
+
+**PART 1 — `supabase/migrations/20260609_social_drafts_platform_check.sql`:**
+- Double duty: (1) drops the hand-applied constraint (`IF NOT EXISTS` not available for DROP — uses plain `DROP CONSTRAINT IF EXISTS`), (2) recreates with 'sms' in the allowed list, (3) brings constraint under migration control.
+- New allowed values: `('instagram', 'facebook', 'tiktok', 'twitter', 'sms')`.
+- Includes `-- VERIFICATION QUERY:` block (STD-008).
+
+⚠️ **David must apply this migration manually in Supabase SQL editor (bgobkjcopcxusjsetfob) then run the VERIFICATION QUERY.** Migration file: `supabase/migrations/20260609_social_drafts_platform_check.sql`.
+
+**PART 2 — `STANDARDS.md` v1.4 — STD-008 extended bidirectionally:**
+- Renamed: "DEPLOYED SCHEMA == ON-DISK MIGRATIONS (BOTH DIRECTIONS)"
+- Added inverse direction: "A live DB object that exists in the live DB but has no corresponding committed migration is the same category of gap — the deployment is not reproducible and the object is invisible to code review, audits, and future migration sessions."
+- Added second scar: `social_drafts_platform_check` (this session).
+- Added sweep query to verification pattern section.
+- Changelog entry added.
+
+**PART 3 — Sweep SQL `docs/audits/std008-inverse-sweep-2026-06-09.sql`:**
+- Four queries: (1) CHECK constraints, (2) triggers, (3) RLS policies, (4) non-pkey indexes.
+- Cannot run via PostgREST (PGRST205 on `information_schema` tables). Must be David-run in SQL editor.
+- Expected documented objects noted inline.
+
+**PART 4 — CLAUDE.md Tech Debt Log + `docs/built-inventory.md`:**
+- Tech Debt #22: `social_drafts_platform_check` — confirmed finding, being fixed (pending David apply).
+- Tech Debt #23: Full sweep pending — David must run `docs/audits/std008-inverse-sweep-2026-06-09.sql` and audit results.
+- `built-inventory.md`: social_drafts table section updated with `platform_check` note.
+
+---
+
+**Agreed build sequence — updated state:**
+1. ~~**Honesty fix** — proactive QB dead-connection detection (Tech Debt #15).~~ ✅ RESOLVED 2026-06-08
+2. ~~**social_drafts fix + de-noun + generator→shared + edit/save + STD-008** (THUNDER).~~ ✅ RESOLVED 2026-06-08
+3. ~~**advert_channels router + campaign config fix + Blotato kill + STD-009** (THUNDER cont.).~~ ✅ RESOLVED 2026-06-08
+4. ~~**social_drafts_platform_check + STD-008 inverse + sweep** (THUNDER close-out).~~ ✅ RESOLVED 2026-06-09. ⚠️ STD-002 PENDING: David must apply `20260609_social_drafts_platform_check.sql` + VERIFY + run acceptance generation + confirm 3 rows (instagram + tiktok + sms) in social_drafts.
+5. **Margin engine full port + overhead wire** (Tech Debt #16). Next session.
+6. **Receipt Keeper v1** — Gemini Flash OCR, local `receipts` table, confirm-before-commit.
+7. **Cost-to-Produce tile** — feeds loaded cost into `tx.cost` slot.
+8. **(v2)** QB payables write-back + Attachable + CoA + cross-card reconciliation.
+
+**STD-002 AFTER artifact (PENDING):**
+After David applies migration → trigger SM-posts generation with instagram + tiktok + sms all enabled → expected response: `{ "ok": true, "count": 3, "channels": ["instagram", "tiktok", "sms"] }` → expected: 3 rows in social_drafts, each with non-empty `original_text`, status='draft'. Dashboard should render instagram and tiktok cards. SMS card renders as raw 'sms' label (no PLATFORM_LABELS entry — display-only gap; documented below). DO NOT mark ✅ until David reports actual response.
+
+**Dashboard SMS display (minor gap — display-only, not a blocker):**
+`Dashboard.tsx:PLATFORM_LABELS` has no 'sms' entry; falls back to raw `draft.platform` string ('sms'). `PLATFORM_URLS` has no 'sms' entry → no "Open →" button for SMS (correct — SMS has no web destination). The SMS draft is readable and editable. This is display polish, not a failure mode. Log as cosmetic debt if needed.
+
+**STD-008 sweep — full sweep still pending David:**
+PostgREST cannot query `information_schema` or `pg_constraint`. Sweep script written at `docs/audits/std008-inverse-sweep-2026-06-09.sql`. Known documented objects from migration catalog: 2 triggers (`trg_business_members_updated_at`, `business_modules_updated_at`). RLS policies on orders/business_modules/businesses/social_drafts ARE in committed migrations (DROP IF EXISTS pattern in 20260528/20260529/20260604 migrations). Pre-migration-era tables (nurseries, plants, plant_events, addons, losses) may have additional undocumented objects. Tech Debt #23 tracks this.
+
+**⚠️ STEP-5 WATCH — AC-1 / STD-006 LANDMINE (Margin Engine):**
+Unchanged from prior — `MarginEngine.js` carries `FLEET`, `LEGACY`, `FF` as tier identifiers. Port to shared MUST make these `business_type`-scoped data values. AC-1/STD-006 sweep required as acceptance criteria.
+
+---
+
+**No code changes** — pure migration + docs session. No Vercel functions changed. No new API surface.
+
+**No runbook needed** — no environment or infrastructure changes. Migration is David's manual step.
+
+**Documentation propagation check (step 10):**
+1. `Help.tsx` — no new customer-facing features. No propagation needed.
+2. Onboarding — unchanged.
+3. `built-inventory.md` ✅ updated (social_drafts platform_check note added).
+4. No `// FLAG:` placeholders affected.
+5. No new error messages.
+
+**Factual corrections (step 11):**
+- `social_drafts_platform_check` constraint was hand-applied pre-migration era — NOT in any committed migration file. Confirmed by grep of entire `supabase/migrations/` tree: zero results for `platform_check`. The constraint existed silently and was never part of reproducible infrastructure.
+- PostgREST cannot query `information_schema` or `pg_constraint` tables (returns PGRST205). Any STD-008 sweep of live-DB objects must be done via manual SQL editor execution, not the Supabase REST API. This is an architectural constraint of PostgREST's table-based routing.
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns introduced in migration or docs.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Full read-only investigation before any change. Root cause confirmed by live DB probe (23514 constraint error on SMS INSERT).
+- STD-002: 🔲 **BEFORE artifact captured.** `{ ok: false, reason: 'insert_failed', detail: 'social_drafts_platform_check' }` — confirmed by prior discovery session probe. AFTER artifact PENDING David apply + acceptance generation run.
+- STD-003: N/A — no instrumentation added.
+- STD-004: N/A — no business-scoped feature shipped.
+- STD-005: ✅ No decisions reversed.
+- STD-006: ✅ No vertical nouns introduced.
+- STD-007: N/A — no integration connection status.
+- STD-008: ✅ **Inverse scar closed.** `social_drafts_platform_check` brought under migration control. STD-008 extended bidirectionally in STANDARDS.md v1.4. Migration written with VERIFICATION QUERY. ⚠️ PENDING David apply + verify.
+- STD-009: N/A — no generation path changes.
+
+**Gap graduation sweep (step 15):**
+- `remaining: voice-learning BI` — horizon v2/later. NOT past horizon.
+- `remaining: cadence-triggered generation` — horizon Social Rhythm. NOT past horizon.
+- `remaining: discovery persistence` — horizon v2/later. NOT past horizon.
 No gap graduations this session.
 
 ---

@@ -375,6 +375,7 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 - `subject_type`/`subject_id`: AC-1 compliant subject ref (value, not column name). Cultivar writes `subject_type='inventory'`, `subject_id=null` for period aggregates.
 - Status lifecycle: `draft → edited → approved → copied` (+ `copied_at` timestamp).
 - **No** `content`, `order_id`, `plant_id` (all retired 2026-06-08).
+- **`social_drafts_platform_check` (2026-06-09):** CHECK constraint now migration-controlled. Hand-applied pre-migration-era; original allowed list was `(instagram, facebook, tiktok, twitter)`. Extended to include `'sms'` by `supabase/migrations/20260609_social_drafts_platform_check.sql`. ⚠️ Migration pending David apply + verify. Without this: SMS-enabled generation runs write zero rows (atomic batch rolls back when sms row violates constraint).
 
 **Dashboard edit/save widget:**
 - Generate button → calls `/api/social/generate-posts` → inserts drafts → `loadSocialDrafts()` reloads.

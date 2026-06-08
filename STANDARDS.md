@@ -1,5 +1,5 @@
 # STANDARDS.md — TRACE Engineering Standards
-# Version: 1.3
+# Version: 1.4
 # Created: 2026-06-04
 # Owner: David O'Brien / TRACE Enterprises
 
@@ -210,34 +210,49 @@ that displays connection status.
 
 ---
 
-### STD-008 — COMMITTED MIGRATION ≠ APPLIED MIGRATION
+### STD-008 — DEPLOYED SCHEMA == ON-DISK MIGRATIONS (BOTH DIRECTIONS)
 
-**Rule:** A migration file committed to the repo is NOT done until its application
-to the live DB is verified. Code must never assume a column exists based on a
-migration file; the live schema must be confirmed (`information_schema.columns`
-query in the Supabase SQL editor, or a verification script) to match what the
-code writes. Deployed schema == on-disk migrations is a release gate, not an
-assumption.
+**Rule:** The constraint is bidirectional:
+1. **Committed-not-applied:** A migration file committed to the repo is NOT done
+   until its application to the live DB is verified. Code must never assume a column
+   exists based on a migration file.
+2. **Live-not-in-migration (INVERSE):** A live DB object (CHECK constraint, trigger,
+   RLS policy, index) that exists in the live DB but has no corresponding committed
+   migration is the same category of gap — the deployment is not reproducible and the
+   object is invisible to code review, audits, and future migration sessions.
 
-**Scar:** `20260604_social_drafts_voice_learning.sql` was committed to the repo
-and listed in the session handoff, but was never applied to the live
-`bgobkjcopcxusjsetfob` project. `generate-posts.ts` began writing `original_text`
-and `cadence` (columns from the unapplied migration) — every INSERT silently failed
-because PostgREST rejects unknown columns with a 400. `loadSocialDrafts()` also
-selected `original_text`/`edited_text`, returning a 400 on every dashboard load.
-Result: social_drafts stayed at ~0 real rows and the "Generate this week's posts"
-button appeared to work but produced nothing — across multiple sessions, undetected.
-Root cause confirmed 2026-06-08 per STD-001. Fixed by combined migration
+Both directions break reproducibility. Both are STD-008 violations. Deployed schema
+== on-disk migrations is a release gate in BOTH directions, not an assumption.
+
+**Scar (original — committed-not-applied):** `20260604_social_drafts_voice_learning.sql`
+was committed but never applied to `bgobkjcopcxusjsetfob`. `generate-posts.ts`
+inserted `original_text`/`cadence` — PostgREST 400 on every INSERT. social_drafts
+stayed at ~0 rows across multiple sessions, undetected. Fixed by
 `20260608_social_drafts_subject_ref.sql`.
+
+**Scar (inverse — live-not-in-migration):** `social_drafts_platform_check` existed
+in the live DB but in NO committed migration — hand-applied when the table was created
+pre-migration-era. When `advert_channels` enabled 'sms', `generate-posts.ts` attempted
+`INSERT platform='sms'`. The batch insert is atomic; one sms row rolled back all rows
+(instagram + tiktok included). Confirmed 2026-06-09: zero rows written per run.
+Fixed by `20260609_social_drafts_platform_check.sql` — drops and recreates the
+constraint including 'sms', bringing it under migration control.
 
 **Verification pattern:**
 ```sql
--- Run in Supabase SQL editor after applying any migration:
+-- After applying a column migration — run in Supabase SQL editor:
 SELECT column_name, data_type, is_nullable
   FROM information_schema.columns
  WHERE table_name = '<table_name>'
  ORDER BY ordinal_position;
 -- Cross-check: every column the code writes must appear here.
+
+-- Sweep for undocumented live-DB objects (run periodically or before a migration session):
+SELECT tc.table_name, tc.constraint_name, cc.check_clause
+  FROM information_schema.table_constraints tc
+  JOIN information_schema.check_constraints cc USING (constraint_name, constraint_schema)
+ WHERE tc.table_schema = 'public' AND tc.constraint_type = 'CHECK'
+ ORDER BY tc.table_name, tc.constraint_name;
 ```
 
 **In practice:**
@@ -248,9 +263,13 @@ SELECT column_name, data_type, is_nullable
 - Log the verification result in the session Handoff: "migration applied and
   verified — live schema confirmed via information_schema query"
 - Never mark a migration as complete in docs without this confirmation
+- Before any migration session that touches a pre-migration-era table, run the
+  sweep query to identify undocumented live objects; bring any found object under
+  migration control in the same session (drop + recreate = migration-controlled)
 
 **Scope:** Every migration session. Part 9 gate: migration applied → verification
-query shown → confirmation logged in Handoff before session closes.
+query shown → confirmation logged in Handoff before session closes. Sweep for
+undocumented live objects at least once per table that predates the migration era.
 
 ---
 
@@ -355,6 +374,7 @@ for a confirming incident before promotion.
 | 1.1 | 2026-06-08 | STD-007 added. Scar: QB `accounting_needs_reconnect` lying flag — reactive-only flag kept dead connection silent. Fixed by proactive `accounting_token_expires_at` check in `qbo/status.ts`. |
 | 1.2 | 2026-06-08 | STD-008 added. Scar: `20260604_social_drafts_voice_learning.sql` committed-but-unapplied — every generate-posts INSERT failed silently; loadSocialDrafts 400'd; ~0 rows across multiple sessions. STD-008 adds live-schema verification gate. |
 | 1.3 | 2026-06-08 | STD-009 added. Scar: `campaigns/generate.ts` hardcoded '2 Instagram posts, 2 Facebook posts, 1 SMS' in AI prompt; never read `business_modules.config`. Business channel selections ignored by campaign generator for entire feature lifetime. LEXICON RULE added: "platform" reserved for top-level substrate; use "channel" inside the product. |
+| 1.4 | 2026-06-09 | STD-008 extended bidirectionally. Renamed "DEPLOYED SCHEMA == ON-DISK MIGRATIONS (BOTH DIRECTIONS)". Inverse scar added: `social_drafts_platform_check` existed in live DB but in no committed migration; 'sms' not in allowed list; atomic batch INSERT rolled back all rows (instagram + tiktok + sms) when SMS enabled. Fixed by `20260609_social_drafts_platform_check.sql`. Sweep query added to verification pattern. |
 
 ---
 
