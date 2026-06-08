@@ -344,9 +344,9 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 **STANDARDS compliance (step 14):**
 - STD-001: ✅ Full read-only discovery (grep + file reads) before any edit. Root cause confirmed.
-- STD-002: ✅ Broken state documented: no amber banner on dashboard despite expired token (David's live account). Fix applied. After-state: banner shows on load; silent refresh clears it if refresh token is valid. Verification: load cultivar-os.vercel.app after deploy.
+- STD-002: 🔲 **PENDING DEPLOY-VERIFY.** Broken state documented: David's QB token expired ~May 29; dashboard showed green "QuickBooks connected" with zero amber warning (confirmed by audit 6 + code trace). Fix applied (commits 444fbb1). `git push` triggered Vercel auto-deploy. **Artifact not yet landed — David must report the observed outcome.** Expected: load cultivar-os.vercel.app → Dashboard → observe path A (amber banner appears briefly → silent heal → banner clears, fresh token written) or path B (amber banner appears and persists = refresh token also dead). DO NOT mark ✅ until David reports which path fired.
 - STD-003: N/A — no new diagnostic logs added.
-- STD-004: N/A — no new business-scoped data feature. The reconnect banner already existed; we're making it fire correctly.
+- STD-004: N/A — assessed explicitly. `qbo/status.ts` query is `.eq('id', businessId)` — filtered to the specific business. Token fields (`accounting_token`, `accounting_refresh_token`) are read server-side with the service key and never returned to the client; response adds only `needsReconnect: boolean`, same class as pre-existing `connected: boolean`. No new write surface; no new cross-business read surface. Pre-existing auth gap (businessId taken from query param without JWT verification) predates this fix and is out of scope.
 - STD-005: ✅ Tech Debt #15 entry struck through with new resolved text replacing it. No contradictory text left standing.
 - STD-006: ✅ No vertical nouns introduced. Changes are Cultivar-OS-specific files.
 - **STD-007: ✅ First instance — created this session. Fix adheres to the new standard.**
