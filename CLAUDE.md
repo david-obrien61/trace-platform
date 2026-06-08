@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: June 10, 2026 (THUNDER · Build 1: Margin Engine → shared, 5 impls deprecated)
+# Last updated: June 10, 2026 (THUNDER · BUILD 2: Roles/permissions discovery + shared permission machinery)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -252,6 +252,7 @@ This log is created and maintained per the Honest Friction principle (see PLATFO
 | 25 | 🟡 **IGNITION DARK INVENTORY — 6 AI FEATURES DEAD IN PRODUCTION:** Root cause: `VITE_API_URL` not set in ignition-os Vercel project → every `AIEngine.call()` returns `{ ok: false }` silently. Railway still running, zero Vercel traffic. Impacts: (1) **AI estimate skeleton** (`IgnitionEstimate.jsx POST /api/estimate/build`) — techs build estimates fully manually; no AI pre-fill. (2) **Auto-PO generation** (`IgnitionEstimate.jsx POST /api/jobs/${id}/generate-pos`) — no POs auto-generated after customer authorization. (3) **DTC AI decode** (`IgnitionCipher.jsx AIEngine.decodeDTC()`) — only 3 hardcoded codes work (3216/3251/157); all others silently return nothing. (4) **Invoice leakage scan** (`IgnitionAudit.jsx AIEngine.auditInvoice()`) — entire module unusable. (5) **PMI AI scheduling** (`PredictiveKey.jsx AIEngine.*`) — AI schedule generation dead; only manual asset entry works. (6) **QB OAuth** (`ExternalBridge.js ${API_URL}/api/qbo/auth-url`) — QB is fully dark + Ignition OS has NO api/qbo/* Vercel functions (unlike Cultivar). Agreed kill path (v7 §15): retire orphaned tasks (invoice_scan/vin_decode); port real tasks (dtc_decode + estimate_draft first); kill Railway after. | STD-010 audit 2026-06-09 | Port `dtc_decode` + `estimate_draft` to Vercel functions under `packages/ignition-os/api/`. These are text-only, no vision complexity. Port completes Railway kill path. | Before next Ignition OS demo or before claiming any AI feature works in Ignition. |
 | 26 | 🟡 **IGNITION ORPHANED DATABRIDGE KEYS:** Reality audit 2026-06-09 found 4 orphaned DataBridge keys. (1) **`inventory_items` (orphaned read):** `IgnitionOmni` reads this for the inventory value stat tile. `IgnitionStok` reads from Supabase `inventory` table — not DataBridge. No module writes `inventory_items`. Inventory value tile always shows $0. (2) **`fleet_units` (orphaned read):** `IgnitionHub` reads via `DataBridge.getFleetUnits()`. `DataBridge.saveFleetUnit()` exists but no module in the web build calls it with real data. Hub shows empty GPS grid. (3) **`labor_guide` (orphaned read):** `DataBridge.getLaborGuide()` always returns hardcoded defaults. No module has ever written a real labor guide. (4) **`margin_change_log` (orphaned write):** `DataBridge.setMarginConfig()` writes every margin config change to this key. No module reads or displays it — the audit log is silently accumulating, invisible. Additional: `pending_users` — written by IgnitionOmni legacy staff enrollment; only `EnrollmentCatch` reads it via an orphaned flow. | STD-010 audit 2026-06-09 | (1) Fix `inventory_items`: either write from IgnitionStok to DataBridge as well (sync) or point IgnitionOmni to Supabase `inventory` for the stat. (2) `fleet_units`/`labor_guide`: either remove the reads or build real writers. (3) `margin_change_log`: build a display in IgnitionProt settings panel. | Before next Ignition telemetry/stats session. |
 | 27 | 🟡 **IGNITION STD-008 INVERSE GAP — 10 TABLES, NO COMMITTED MIGRATIONS:** Reality audit 2026-06-09 found 10 Supabase tables referenced in production code with zero committed migration files in `packages/ignition-os/supabase/migrations/`. These tables either exist as hand-applied schema in `ufsgqckbxdtwviqjjtos` (STD-008 inverse gap — undocumented live objects) or do not exist at all. Tables: `dtc_codes`, `eval_photos`, `tools`, `tool_signout_log`, `repair_logs`, `customer_authorizations`, `concept_aliases`, `purchase_orders`, `pmi_schedules`, `ai_usage`, `feature_events`, `error_events`. Additionally, 3 tables are DROPPED with NO recreate migration: `pin_resets` (CoreApp ForgotPinFlow), `shop_invites` (CoreApp JoinFlow), `member_devices` (IgnitionAdmin Devices tab, DataBridge.autoEnrollDevice). These features COMPILE AND ROUTE but fail at runtime (table not found). Sweep required: David must run a schema query in `ufsgqckbxdtwviqjjtos` Supabase SQL editor to find which of the 10 tables actually exist as hand-applied objects. STD-008 applies to both Supabase projects. | STD-010 audit 2026-06-09 | (1) Run `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY 1;` in ufsgqckbxdtwviqjjtos to discover which tables exist. (2) For each existing-but-undocumented table: write a migration using `CREATE TABLE IF NOT EXISTS` to bring it under version control. (3) For the 3 dropped tables: write recreate migrations or remove the dead code paths. | Before next Ignition build session that adds a new table or modifies schema. |
+| 28 | 🟡 **SECURITY DEBT — IGNITION pilot_all RLS: ALL TABLES WIDE OPEN.** `supabase_rls_pilot.sql` sets `USING(true) WITH CHECK(true)` on 7 original tables (shops, users, jobs, purchase_orders, tools, pmi_schedules, ai_usage). `supabase_job_lifecycle_migration.sql` adds `pilot_all_*` policies to all workflow tables (bays, customers, customer_vehicles, evaluations, dtc_codes, eval_photos, estimates, estimate_line_items, customer_authorizations, labor_entries, repair_logs, invoices, invoice_line_items). That is 19+ tables with zero row-level isolation. Only exception: `shop_members` recreated 2026-06-03 with real scoped model (`shop_owner_all`: EXISTS businesses.owner_id=auth.uid(); `shop_member_self_select`: open for PIN lookup). Any Supabase-auth'd session can read/write any Ignition row. Permission enforcement is CLIENT-SIDE ONLY via `session.allowed.includes('x')` checks in CoreApp.jsx. The pilot_all comment in the migration says "When Supabase Auth is wired, replace with: using (shop_id = auth.uid())" — the path is documented but not built. ALSO: there are TWO role namespaces that partially conflict: (1) `shop_members` canonical roles: TECH/SERVICE/ADMIN. (2) Test profiles use role-badge format: "ADMIN"/"TECH"/"PRICING_AUTHORITY" as permission strings, passed to `DataBridge.getSystemRoles()` for expansion. Members created via JoinFlow/IgnitionAdmin store capability strings ("view_hub","scan_parts") — these two formats are incompatible with each other in the `userCapabilities` expansion path. Shared fix built this session: `packages/shared/src/auth/permissions.ts` — `can()`, `hasRole()`, `canAccessModule()`, `expandRoles()`, `deriveAllowed()`. These are drop-in replacements for the inline checks; callers are NOT migrated yet. | THUNDER · BUILD 2 discovery, 2026-06-10 | (1) Replace pilot_all policies with shop_id-scoped policies (`USING(EXISTS (SELECT 1 FROM businesses WHERE id=shop_id AND owner_id=auth.uid()))`). (2) Unify role/permission format — adopt capability-string format (view_*) everywhere, retire role-badge format in DataBridge test profiles. (3) Migrate CoreApp.jsx permission checks to shared `can()` / `canAccessModule()`. | Before multi-shop Ignition launch or any customer other than the pilot shop. |
 | 14 | 🟡 **UPGRADED 2026-05-31: Tailwind is officially deprecated platform-wide.** Tailwind CSS is loaded via CDN script tag in `packages/ignition-os/index.html`. Existing Tailwind surface: ignition-os (2,334 className= lines across 32 files) + packages/shared/src/components/SavingsReport.jsx (86 lines) + packages/shared/src/components/QuickBooksConnector.jsx (54 lines). Cultivar OS className= usages are custom CSS class names (page, section, btn, badge, etc.) — NOT Tailwind. **Policy:** NO new Tailwind anywhere. No new `className=` with Tailwind utilities in any file in any package. Inline styles via `style={{ ... }}` are canonical. The shared design token file (forthcoming: `packages/shared/src/design-system/tokens.ts`) is referenced by inline styles, not Tailwind config. **Scheduled conversion:** Ignition OS + shared Tailwind files → inline styles in a dedicated post-August 2026 work session (~50h). Approach: file-by-file, one module per Claude Code session, visual regression after each. Tracking at `docs/tailwind-conversion-progress.md`. | 2026-05-29 (identified) → 2026-05-31 (deprecated) | Post-August 2026: convert all 34 files (32 ignition-os + 2 shared) to inline styles. Trigger: dedicated conversion sessions after Europe trip. | See `docs/tailwind-conversion-progress.md`. |
 
 ---
@@ -288,6 +289,142 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-10 — THUNDER · BUILD 2: Roles/permissions discovery + shared permission machinery
+
+**Type:** Code + Docs. Read-only discovery first, then one new shared file. Zero migrations, zero RLS changes.
+
+**Session mandate:** Full discovery of Ignition's role/permission model before any extraction to shared. Map both auth systems. Reconcile the two role namespaces. Enumerate all enforcement points. Separate scoped RLS from pilot_all. Then build only clearly-safe, vertical-agnostic permission machinery. Do NOT alter live RLS. Do NOT drop pilot_all. Do NOT change any auth behavior.
+
+---
+
+**DISCOVERY FINDINGS — COMPLETE:**
+
+**Two auth systems in Ignition OS:**
+
+| System | Owner PIN | Staff QR-join |
+|---|---|---|
+| Auth trigger | OnboardingWizard.jsx → PIN set | QR scan → JoinFlow in CoreApp.jsx |
+| Data store | DataBridge/localStorage (`IGNITION_OS_DATA.current_user`) | Supabase `shop_members` (pin_hash, role, permissions, active) |
+| Supabase auth | ❌ — no auth.uid() in owner PIN flow | ✅ — shop_members row; owner has auth.uid() via email/password signup |
+| Session shape | `DataBridge.current_user`: role/permissions/allowed | `AuthSession` from `auth.ts:authenticate()`: id/name/role/sub_role/permissions/allowed |
+
+**Role namespace reconciliation (4 namespaces found, 2 dead):**
+
+| Namespace | Roles | Status |
+|---|---|---|
+| `users` table (original schema) | ADMIN/SERVICE/TECHNICIAN/DEVELOPER | **DEAD** — no web code queries this table |
+| `useIgnitionCipher.js` hook | ADMIN/TECHNICIAN/SERVICE/DEVELOPER | **DEAD/ORPHANED** — pure in-memory useState; nothing imports it in web build (STD-010 worst collision entry) |
+| `shop_members` via JoinFlow/IgnitionAdmin | TECH/SERVICE/ADMIN (+ sub_roles: SR_TECH/BAY_TECH/APPRENTICE/ADVISOR/CASHIER) | **CANONICAL LIVE** — what `authenticate()` reads; what IgnitionAdmin creates |
+| `DataBridge.getSystemRoles()` fallback | ADMIN/TECH/CUSTOMER | **PARTIALLY LIVE** — used by CoreApp line 479-480 `userCapabilities` expansion; format mismatch with new permission strings (see below) |
+
+**Two permission formats — incompatible in CoreApp.js line 479-480:**
+- **Role-badge format (OLD):** `permissions = ["ADMIN", "TECH", "PRICING_AUTHORITY"]` — DataBridge test profiles; passed to `getSystemRoles()[roleBadge]` to expand; used in COMPLIANCE gate (`permissions.includes('ADMIN')`)
+- **Capability-string format (NEW, CANONICAL):** `permissions = ["view_hub","view_flux","scan_parts"]` — stored by IgnitionAdmin via ROLE_PRESETS; `allowed[]` derived by filtering `view_*`. This is what `authenticate()` reads from `shop_members`.
+- `DataBridge.getSystemRoles()` expects role-badge format as keys; JoinFlow members have capability-string format. Result: `userCapabilities` on CoreApp line 480 is always `[]` for real shop_members users.
+
+**Enforcement points — ALL CLIENT-SIDE:**
+
+| Location | Check | Format |
+|---|---|---|
+| `CoreApp.jsx:932` | `currentUser?.permissions?.includes('ADMIN')` | Role-badge (COMPLIANCE module gate) |
+| `CoreApp.jsx:1220` | `currentUser?.permissions?.includes('ADMIN')` | Role-badge (isAdmin UI gate) |
+| `CoreApp.jsx` navigation | `currentUser?.allowed?.includes('x')` | Module key (derived from view_* permissions) |
+| `Dashboard.tsx` | `isOwner \|\| userPermissions.includes('manage_settings')` | Capability-string (Cultivar) |
+| `Settings.tsx` | redirect if not owner and no 'manage_settings' | Capability-string (Cultivar) |
+
+**RLS model:**
+- `supabase_rls_pilot.sql` + `supabase_job_lifecycle_migration.sql` → 19+ tables with `pilot_all` USING(true) WITH CHECK(true)
+- Only exception: `shop_members` (recreated 2026-06-03): `shop_owner_all` (EXISTS businesses.owner_id=auth.uid()) + `shop_member_self_select` (open — PIN auth runs without auth.uid())
+- **Logged as Tech Debt #28** — do not promote to shared RLS yet; pilot_all must be replaced per-table before a real scoped model is meaningful
+
+---
+
+**What was built (two parts):**
+
+**PART 1 — `packages/shared/src/auth/permissions.ts` (new):**
+Pure functions, AC-1 clean, no vertical knowledge. Exports:
+- `can(session, permId)` — null-safe check of session.permissions[]. Works for both role-badge and capability-string formats.
+- `hasRole(session, roleName)` — null-safe session.role equality check.
+- `canAccessModule(allowed, moduleKey)` — checks the Ignition-specific `allowed[]` shortlist (derived from view_* permissions).
+- `expandRoles(policy, roleNames)` — expands role-badge strings → flat union of permission strings. Replacement for `DataBridge.getSystemRoles() + flatMap` pattern. Caller passes vertical's PermissionPolicy config.
+- `deriveAllowed(permissions)` — strips 'view_' prefix from capability strings; matches derivation in `auth.ts:authenticate()` and CoreApp.jsx JoinFlow.
+- `PermissionPolicy` interface — `{ roles: Record<string, string[]> }`. Role names are string values in the config map, never TS identifiers (AC-1).
+- `SessionLike` interface — minimal `{ role: string; permissions: string[] }` shape for the helpers.
+
+**Callers NOT migrated this session** — the inline checks in CoreApp.jsx and DataBridge.js are left as-is. Migration of Ignition callers is blocked on TD#28 (pilot_all fix provides the motivation to do the audit properly). Cultivar callers (Dashboard.tsx, Settings.tsx) are already clean one-liner expressions and don't need replacement.
+
+**PART 2 — `packages/shared/src/auth/index.ts` (updated):**
+Exports `can`, `hasRole`, `canAccessModule`, `expandRoles`, `deriveAllowed`, `PermissionPolicy`, `SessionLike`.
+
+---
+
+**Acceptance criteria verified:**
+- `npm run build:ignition` → 1836 modules ✅ zero errors
+- `npm run build:cultivar` → 2176 modules ✅ zero errors
+- `permissions.ts` has zero vertical nouns, no DataBridge/Supabase/React imports — pure TypeScript
+- `PermissionPolicy.roles` keys are `Record<string, string[]>` (AC-1: no enum of vertical role names)
+- No live RLS changes, no auth behavior changes, no existing callers rewired
+
+---
+
+**Agreed build sequence — updated state:**
+1. ~~**Honesty fix** — proactive QB dead-connection detection (Tech Debt #15).~~ ✅ RESOLVED 2026-06-08
+2. ~~**social_drafts fix + de-noun + generator→shared + edit/save + STD-008** (THUNDER).~~ ✅ RESOLVED 2026-06-08
+3. ~~**advert_channels router + campaign config fix + Blotato kill + STD-009** (THUNDER cont.).~~ ✅ RESOLVED 2026-06-08
+4. ~~**social_drafts_platform_check + STD-008 inverse + sweep** (THUNDER close-out).~~ ✅ RESOLVED 2026-06-09
+5. ~~**Ignition OS Reality Audit → STD-010 + built-inventory** (docs).~~ ✅ RESOLVED 2026-06-09
+6. ~~**ACTIVATE: pain-point demo wizard + DemoLaunchButton shared** (this session).~~ ✅ RESOLVED 2026-06-10
+7. ~~**Margin engine full port + overhead wire** (Tech Debt #16, BUILD 1).~~ ✅ NON-DESTRUCTIVE PHASE DONE 2026-06-10. Migration phase pending (B barrel swap → A callers → SavingsReport → C callers).
+8. ~~**Roles/permissions discovery + shared permission machinery** (BUILD 2, this session).~~ ✅ RESOLVED 2026-06-10
+9. **Receipt Keeper v1** — Gemini Flash OCR, local `receipts` table, confirm-before-commit.
+10. **Cost-to-Produce tile** — feeds loaded cost into `tx.cost` slot.
+11. **(v2)** QB payables write-back + Attachable + CoA + cross-card reconciliation.
+
+**⚠️ STEP-9 WATCH — AC-1 / STD-006 LANDMINE (Margin Engine caller migration):**
+Still pending. C callers (IgnitionCipher/DataBridge.calculateRetail) use prot_matrix percent-of-cost — materially different prices from slab model. David confirmed slab-as-canonical. IgnitionCipher migration is last due to the price change.
+
+---
+
+**No runbook needed** — pure code + docs session. No migrations, no RLS changes, no Vercel function changes.
+
+**Documentation propagation check (step 10):**
+1. `Help.tsx` — no new customer-facing features. No propagation needed.
+2. Onboarding — unchanged.
+3. `built-inventory.md` ✅ updated (Multi-Tenant Auth section rewritten; shared permission helpers documented).
+4. No `// FLAG:` placeholders affected.
+5. No new error messages.
+
+**Factual corrections captured (step 11):**
+- Prior audit note in built-inventory.md: "true entanglement depth needs a targeted read before sequencing this work." This session completed that read. Finding: enforcement is client-side only (session.allowed.includes / permissions.includes). DataBridge.getSystemRoles() + userCapabilities expansion is partially broken (format mismatch) and unrelated to the scoped permission model. The extraction path is now clear: replace client-side inline checks with `can()` / `canAccessModule()` from shared, driven by the vertical's PermissionPolicy. Sequencing constraint is TD#28 (pilot_all fix), not DataBridge entanglement.
+- Prior handoff stated `useIgnitionCipher.js` was the STD-010 "worst collision" entry (hooks/useIgnitionCipher = PIN auth; IgnitionCipher.jsx = DTC decoder). Confirmed: the hook is pure in-memory useState with no DataBridge, no Supabase, no callers in the web build. It is fully ORPHANED — not just orphaned from Supabase. The hook does reference `role: 'DEVELOPER'` (from the dead `users` table namespace), confirming it's legacy from the mobile era.
+- `DataBridge.getSystemRoles()` has 3 roles (ADMIN/TECH/CUSTOMER), NOT the same as IgnitionAdmin's 3 role presets (ADMIN/TECH/SERVICE). "CUSTOMER" in getSystemRoles maps to `['view_port','sign_estimates','pay_invoice']` — this is the IgnitionPort customer self-service portal capability set, not a staff role. Confirmed: CUSTOMER role exists to support the customer-facing estimate portal, separate from the staff JoinFlow roles.
+
+**AC compliance (step 13):**
+- AC-1: ✅ `permissions.ts` contains zero vertical nouns. `PermissionPolicy.roles` uses `Record<string, string[]>` — role names are string values in the data, not TypeScript identifiers. `SessionLike` uses `role: string` (not a union of role names).
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths opened.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Full read-only discovery (8 files read, 4 greps) before any code was written. Role reconciliation and enforcement map confirmed before designing the shared API.
+- STD-002: N/A — no bug fix applied.
+- STD-003: N/A — no instrumentation added.
+- STD-004: N/A — no business-scoped feature shipped.
+- STD-005: ✅ Prior "enforcement is entangled / needs more characterization" note in built-inventory.md replaced with the finding that enforcement IS characterizable and the path is clear.
+- STD-006: ✅ No vertical nouns introduced in shared code.
+- STD-007: N/A — no integration connection status touched.
+- STD-008: N/A — no migrations.
+- STD-009: N/A — no generation path changes.
+- STD-010: ✅ Discovery confirmed the two dead role namespaces (users table + useIgnitionCipher hook). Both already logged in prior STD-010 audit (TD#24). No new naming debt this session.
+
+**Gap graduation sweep (step 15):**
+- `remaining: voice-learning BI` — horizon v2/later. NOT past horizon.
+- `remaining: cadence-triggered generation` — horizon Social Rhythm. NOT past horizon.
+- `remaining: discovery persistence` — horizon v2/later. NOT past horizon.
+No gap graduations this session.
+
+---
 
 ### 2026-06-10 — THUNDER · Build 1: Margin Engine → shared (non-destructive; mark-deprecate)
 

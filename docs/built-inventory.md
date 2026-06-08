@@ -284,31 +284,42 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 **Shared TypeScript modules:**
 - `auth/types.ts` — `Member`, `Invitation`, `Role`, `VerticalAdapter`, `AcceptInviteResult`, `InvitePreview`
-- `auth/members.ts` — `getMembersByBusiness`, `updateMemberRole`, `removeMember`, `checkPermission`
+- `auth/members.ts` — `getMembersByBusiness`, `updateMemberRole`, `removeMember`, `checkPermission(permissions[], name)`
 - `auth/invitations.ts` — `createInvitation`, `revokeInvitation`, `getPendingInvitations`, `expireInvitations`
 - `auth/acceptInvitation.ts` — `previewInvitation`, `acceptInvitation` (service-key server functions)
 - `auth/AcceptInvite.tsx` — React accept-invite page component (inline styles, TRACE green)
 - `auth/OwnerSignup.tsx` — Multi-step signup with PIN: Owner Info → PIN Setup → Biometric (optional) → vertical steps. Config-driven. Added 2026-06-03. Updated 2026-06-04: `backgroundColor`, `cardColor`, `examples` fields added to config (removes hardcoded Cultivar sage/white; enables Ignition dark theme).
+- `auth/permissions.ts` — Pure permission check helpers (added 2026-06-10, THUNDER · BUILD 2):
+  - `can(session, permId)` — null-safe check for a permission string in session.permissions[]
+  - `hasRole(session, roleName)` — null-safe session.role equality check
+  - `canAccessModule(allowed, moduleKey)` — checks the Ignition-specific `allowed[]` shortlist (derived from view_* permissions by auth.ts authenticate())
+  - `expandRoles(policy, roleNames)` — expands role-badge strings → flat union of permission strings; replaces the DataBridge.getSystemRoles() + flatMap pattern in CoreApp.jsx
+  - `deriveAllowed(permissions)` — strips 'view_' prefix; matches the derivation in auth.ts and CoreApp.jsx JoinFlow
+  - `PermissionPolicy` interface — vertical passes `{ roles: Record<string, string[]> }` as config data (AC-1: role names are string values, not TypeScript identifiers)
+  - These are drop-in replacements for inline checks; callers NOT migrated yet (Ignition migration deferred to post-pilot_all fix, TD#28)
 - `discovery/DiscoveryGlimpse.tsx` — Client-only React component (VerticalStep). Loads website from businesses table, fires /api/discovery/ingest, shows seed insights while live analysis runs. Import directly (not from barrel) to avoid bundling server-side SDK deps. Added 2026-06-04.
 - `auth/index.ts` — barrel export
-- `supabase/auth.ts` — `authenticateMember(businessId, pin)` for platform-wide business_members PIN auth (added 2026-06-03). Also: `getMemberSession()`, `clearMemberSession()`.
+- `supabase/auth.ts` — `hashPin()`, `authenticate()` (queries shop_members, returns AuthSession with role/permissions/allowed), `authenticateMember()` (queries business_members, returns MemberSession), `getMemberSession()`, `clearMemberSession()`, `getTrialStatus()`.
 
 **Cultivar OS integration:**
-- `api/members/preview-invite.ts` — Vercel GET handler (reads token, returns business name + role)
-- `api/members/accept-invite.ts` — Vercel POST handler (activates member row, marks invitation used)
+- `api/members/preview-invite.ts` / `accept-invite.ts` — Vercel handlers (consolidated into `/api/members/invite` as GET+POST)
 - `src/pages/Settings.tsx` TeamSection — invite form, member list, pending invitations, copy-link UI
 - `src/router.tsx` — public `/join` route → `AcceptInvite` component
 - `src/auth/roles.ts` — OWNER / MANAGER / STAFF role definitions with permission arrays
 
-**Permission model:**
-- `null` permissions = owner (full access implied)
-- `string[]` permissions = member's explicit permission list from the DB column
+**Permission model — Cultivar OS (business_members table):**
+- `null` permissions = owner (full access implied). `string[]` = member's explicit DB-stored permissions.
 - Gate expression: `const canX = isOwner || (userPermissions ?? []).includes('permission_key')`
 - MANAGER excludes `manage_settings` by design — cannot reach Settings page
 
-**Test coverage:** `scripts/test-member-login.mjs` — 8 sections, 29 assertions against live DB. Verified: owner path, member path, MANAGER permission exclusions, LAWNS-specific invite flow.
+**Permission model — Ignition OS (shop_members table, PILOT phase):**
+- Roles: TECH / SERVICE / ADMIN (canonical, from shop_members); SUB_ROLES: SR_TECH/BAY_TECH/APPRENTICE (TECH), ADVISOR/CASHIER (SERVICE)
+- `allowed[]` = permissions filtered to view_* → strip prefix. Gate: `session.allowed.includes('flux')` etc.
+- Role presets defined in `IgnitionAdmin.jsx:ROLE_PRESETS` (TECH/SERVICE/ADMIN → capability string arrays)
+- `DataBridge.getSystemRoles()` uses OLD role-badge format (ADMIN/TECH/CUSTOMER); JoinFlow members use NEW capability-string format — these two formats are incompatible in the `userCapabilities` expansion path
+- ⚠️ All enforcement is CLIENT-SIDE ONLY — see Tech Debt #28 (pilot_all wide-open RLS)
 
-**⚠️ Enforcement is split (audit 2026-06-05):** The identity layer — member records, invitations, the permission model, `checkPermission()` — is shared and complete. But role/permission enforcement also lives Ignition-side inside `DataBridge.js` and `modules/IgnitionAdmin.jsx`. "Promote RBAC" means deduplicate and reconcile, not a clean lift. The enforcement code is entangled with DataBridge (enforcement logic sits inside `DataBridge.js`). Co-location confirmed by grep; true entanglement depth needs a targeted read before sequencing this work. Do not sequence RBAC extraction before the DataBridge characterization question is resolved.
+**Test coverage:** `scripts/test-member-login.mjs` — 8 sections, 29 assertions against live DB. Verified: owner path, member path, MANAGER permission exclusions, LAWNS-specific invite flow.
 
 ---
 

@@ -45,3 +45,7 @@ export { AcceptInvite } from './AcceptInvite';
 // Shared multi-step owner signup with PIN gesture layer
 export { OwnerSignup } from './OwnerSignup';
 export type { OwnerSignupConfig, VerticalStep, VerticalStepProps } from './OwnerSignup';
+
+// Permission check helpers — pure functions, AC-1 clean, no vertical nouns
+export { can, hasRole, canAccessModule, expandRoles, deriveAllowed } from './permissions';
+export type { PermissionPolicy, SessionLike } from './permissions';
