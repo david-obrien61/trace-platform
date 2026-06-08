@@ -358,22 +358,41 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 ---
 
-## Social Media Module (Cultivar OS)
+## Social Media Module (shared + Cultivar OS surface)
 
-**What:** Full Blotato-connected social post pipeline. Generates 3 AI posts per order, queues as drafts, owner reviews and publishes from dashboard.  
-**Status:** ✅ Built and live (Cultivar OS only)  
-**Vertical:** cultivar | **Type:** tile  
+**What:** Period-based AI social post generator. Aggregates the week's sales into platform-specific captions. Owner edits, copies to clipboard, posts manually.  
+**Status:** ✅ Generator moved to shared 2026-06-08 — business_type-parameterized, Sonnet via gateway. Table de-nouned (AC-1). Edit/save widget live.  
+**Vertical:** shared (generator) + cultivar (surface) | **Type:** tile  
+
 **Backend:**
-- `api/social/generate-posts.ts` — Claude Sonnet 4.6, 3 post types per order
-- `api/social/enable.ts` — upserts business_modules enabled+configured
-- `api/social/publish.ts` — POSTs to Blotato v2 API
+- `packages/shared/src/social/generate.ts` — `generateSocialDrafts()` — business_type-parameterized, Sonnet via AI gateway. `BUSINESS_DESCRIPTORS` map: variation is data, not code. `[TRACE:socialdraft]` behind `SOCIALDRAFT_DEBUG`.
+- `packages/cultivar-os/api/social/generate-posts.ts` — thin Vercel handler: reads context (orders, plants, config) → calls shared generator → inserts to `social_drafts` with `subject_type='inventory'`, `subject_id=null`.
+- `packages/cultivar-os/api/social/enable.ts` — upserts `business_modules` with `{ platforms, cadence }`. No blotato_account_id.
 
-**Post types:** educational, customer_story, seasonal  
-**Status lifecycle:** draft → published | failed  
-**Blotato endpoint:** `POST https://backend.blotato.com/v2/posts`  
-**Prompt caching:** System prompt uses `cache_control: ephemeral` for cost reduction
+**social_drafts table (de-nouned 2026-06-08):**
+- Columns: `id, business_id, platform, original_text, edited_text, status, subject_type, subject_id, cadence, period_start, period_end, copied_at, post_type, created_at`
+- `original_text`: immutable AI proposal. `edited_text`: what owner saved (null until edited).
+- `subject_type`/`subject_id`: AC-1 compliant subject ref (value, not column name). Cultivar writes `subject_type='inventory'`, `subject_id=null` for period aggregates.
+- Status lifecycle: `draft → edited → approved → copied` (+ `copied_at` timestamp).
+- **No** `content`, `order_id`, `plant_id` (all retired 2026-06-08).
 
-**⚠️ Blotato CUT (decision 2026-06-05):** Blotato dropped — no connection API, key was leaking, social publish scoped out near-term. Cancel the Blotato account. The cancellation is safe: nothing fires on app load; `api/social/publish.ts` fires only on explicit owner click, so no active traffic to cut. The generate/draft half of the pipeline (`generate-posts.ts` → `social_drafts`) stands unchanged. The publish path (`api/social/publish.ts` → `https://backend.blotato.com/v2/posts`) is now stale. Re-home publish when Social Media is extracted to shared and a new publish target is chosen.
+**Dashboard edit/save widget:**
+- Generate button → calls `/api/social/generate-posts` → inserts drafts → `loadSocialDrafts()` reloads.
+- Draft card: editable textarea (original_text); on blur → `handleSaveEdit()` → writes `edited_text + status='edited'`.
+- [Copy] button → copies to clipboard + `status='copied' + copied_at` → removes from queue.
+- [Download image] — stub, disabled (seam declared below).
+- [Open platform] — links to platform URL.
+- Edited drafts show green border + "✓ Edited" chip.
+
+**Voice-delta captured (seam declared):**  
+`original_text` vs `edited_text` = the training delta, accumulating now, no consumer yet.  
+**remaining:** voice-learning BI — query original vs edited pairs to detect voice patterns. Horizon: v2/later. NOT a defect — data is flowing cleanly; the analysis surface is the unfilled seam.
+
+**Aggregation/cadence generator (seam declared):**  
+`cadence` is stored per module config; `period_start`/`period_end` captured per draft. The generator that reads `config.cadence` and auto-triggers a new generation window (preventing per-purchase overwhelm) is the next step.  
+**remaining:** cadence-triggered generation — scheduler that fires generate-posts on cadence rhythm. Horizon: Social Rhythm (next social session). NOT a defect — the data model is ready; the trigger is the unfilled seam.
+
+**Not built:** image generation, direct social publishing (Blotato removed 2026-06-05; re-evaluate when Social Rhythm is prioritized).
 
 ---
 
