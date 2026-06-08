@@ -1,35 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
-import { executeCapability } from '../../../shared/src/ai/execute';
+import { generateSocialDrafts } from '../../../shared/src/social/generate';
+
+const SOCIALDRAFT_DEBUG = false;
 
 function adminDb() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL!;
   const key = process.env.SUPABASE_SERVICE_KEY!;
   return createClient(url, key);
 }
-
-const MONTH_NAMES = [
-  'January','February','March','April','May','June',
-  'July','August','September','October','November','December',
-];
-
-// One post per platform — formatted for each platform's style.
-// Return shape: { "instagram": "caption...", "facebook": "caption...", ... }
-const SYSTEM_PROMPT = `You are a social media writer for a small owner-operated plant nursery in Texas.
-Your job is to write ONE social media post per platform that celebrates the week's business activity.
-
-The post should feel warm and specific to what actually happened — not a generic template.
-Aggregate the week into one compelling moment. Never mention prices. Never include customer
-last names, emails, or contact info. Use customer first names only if they feel natural.
-
-Formatting per platform:
-- instagram: Under 220 characters, 5–8 relevant hashtags at the end. Visual and upbeat.
-- facebook: 50–120 words. Warm and conversational. 2–3 hashtags max. More storytelling.
-- tiktok: Under 150 characters, punchy and energetic. 3–5 hashtags.
-- twitter: Under 260 characters, brief and direct. 2–3 hashtags.
-
-Return ONLY a JSON object. No markdown, no explanation, no preamble. Keys are platform names,
-values are the caption strings. Include only the platforms listed in the user message.
-Example: {"instagram":"caption...","facebook":"caption..."}`;
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -41,14 +19,14 @@ export default async function handler(req: any, res: any) {
   }
 
   const { business_id, period_days: rawPeriodDays } = req.body;
-
-  if (!business_id) {
-    return res.status(400).json({ error: 'Missing business_id' });
-  }
+  if (!business_id) return res.status(400).json({ error: 'Missing business_id' });
 
   const db = adminDb();
 
-  // Load module config — platforms + cadence
+  if (SOCIALDRAFT_DEBUG) console.log('[TRACE:socialdraft] handler called — business_id:', business_id);
+
+  // ── Read business context ─────────────────────────────────────────────────
+
   const { data: mod, error: modErr } = await db
     .from('business_modules')
     .select('enabled, configured, config')
@@ -61,13 +39,12 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({ ok: false, reason: 'module_not_enabled' });
   }
 
-  const config     = (mod.config ?? {}) as { platforms?: string[]; cadence?: string };
-  const platforms  = Array.isArray(config.platforms) && config.platforms.length > 0
+  const config    = (mod.config ?? {}) as { platforms?: string[]; cadence?: string };
+  const platforms = Array.isArray(config.platforms) && config.platforms.length > 0
     ? config.platforms
     : ['instagram'];
-  const cadence    = config.cadence ?? 'weekly';
+  const cadence   = config.cadence ?? 'weekly';
 
-  // Determine period
   const periodDays = typeof rawPeriodDays === 'number' && rawPeriodDays > 0
     ? rawPeriodDays
     : cadence === 'few_times' ? 3 : 7;
@@ -75,15 +52,17 @@ export default async function handler(req: any, res: any) {
   const periodEnd   = new Date();
   const periodStart = new Date(periodEnd.getTime() - periodDays * 24 * 60 * 60 * 1000);
 
-  // Load business name
   const { data: biz } = await db
     .from('businesses')
-    .select('name')
+    .select('name, business_type')
     .eq('id', business_id)
     .single();
-  const businessName = (biz as any)?.name ?? 'Our Nursery';
 
-  // Load orders from the period — join plant data via order_items
+  const businessName = (biz as any)?.name ?? 'Our Business';
+  const businessType = (biz as any)?.business_type ?? 'nursery';
+
+  // ── Gather period context (vertical-assembled; passed to shared generator) ─
+
   const { data: orders } = await db
     .from('orders')
     .select('id, customer_id, total, customers(first_name)')
@@ -94,81 +73,78 @@ export default async function handler(req: any, res: any) {
     .limit(50);
 
   const orderCount = (orders ?? []).length;
+  const orderIds   = (orders ?? []).map((o: any) => o.id);
 
-  // Load plants from those orders for species context
-  const orderIds = (orders ?? []).map((o: any) => o.id);
-  let plantNames: string[] = [];
+  let subjectSummary = 'plants and trees';
   if (orderIds.length > 0) {
     const { data: items } = await db
       .from('order_items')
       .select('plants(common_name, species)')
       .in('order_id', orderIds);
-    plantNames = [...new Set(
+
+    const plantNames = [...new Set(
       (items ?? [])
         .map((i: any) => i.plants?.common_name ?? i.plants?.species)
-        .filter(Boolean)
+        .filter(Boolean),
     )].slice(0, 6) as string[];
+
+    if (plantNames.length > 0) subjectSummary = plantNames.join(', ');
   }
 
-  // Customer first names (deduplicated, limit 4)
   const customerNames = [...new Set(
     (orders ?? [])
       .map((o: any) => o.customers?.first_name)
-      .filter(Boolean)
+      .filter(Boolean),
   )].slice(0, 4) as string[];
 
-  const currentMonth = MONTH_NAMES[new Date().getMonth()];
+  if (SOCIALDRAFT_DEBUG) {
+    console.log('[TRACE:socialdraft] context — orderCount:', orderCount, 'subject:', subjectSummary, 'businessType:', businessType);
+  }
 
-  const plantSummary    = plantNames.length > 0    ? plantNames.join(', ')    : 'trees and plants';
-  const customerSummary = customerNames.length > 0 ? customerNames.join(', ') : 'customers';
-
-  const userPrompt = `Write social posts for ${businessName}.
-
-Period: ${periodStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${periodEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${currentMonth} in Texas
-Orders this period: ${orderCount}
-Plants sold: ${plantSummary}
-${customerNames.length > 0 ? `Customer first names: ${customerSummary}` : ''}
-
-Platforms to generate (include ALL of these as keys in the JSON):
-${platforms.join(', ')}
-
-${orderCount === 0 ? 'No sales this period — write a general warm nursery post about the season and what\'s growing.' : ''}`;
+  // ── Generate via shared module (gateway → Sonnet) ─────────────────────────
 
   try {
-    // Pass businessId + supabase so the executor can resolve a per-business model override.
-    // cache_control stripped — governed by capabilities.social_generate.cache = 'none'.
-    const parsed = await executeCapability('social_generate', {
-      system:     SYSTEM_PROMPT,
-      user:       userPrompt,
+    const drafts = await generateSocialDrafts({
+      businessName,
+      businessType,
+      platforms,
+      periodStart,
+      periodEnd,
+      orderCount,
+      subjectSummary,
+      customerNames,
       apiKey,
-      businessId: business_id,
-      supabase:   db,
-    }) as Record<string, string>;
+    });
 
     const inserts = platforms
-      .filter(p => typeof parsed[p] === 'string' && parsed[p].trim())
+      .filter(p => typeof drafts[p] === 'string' && drafts[p].trim())
       .map(p => ({
         business_id,
-        platform:      p,
-        content:       parsed[p].trim(),
-        original_text: parsed[p].trim(),
-        post_type:     null,
-        status:        'draft',
+        platform:     p,
+        original_text: drafts[p].trim(),
+        post_type:    null,
+        status:       'draft',
+        subject_type: 'inventory',  // Cultivar posts are about inventory (AC-1: value, not column)
+        subject_id:   null,         // period aggregate — no single entity
         cadence,
-        period_start:  periodStart.toISOString(),
-        period_end:    periodEnd.toISOString(),
+        period_start: periodStart.toISOString(),
+        period_end:   periodEnd.toISOString(),
       }));
 
     if (inserts.length === 0) {
-      console.warn('[generate-posts] no posts parsed from Claude response');
+      console.warn('[generate-posts] no posts parsed from AI response');
       return res.status(200).json({ ok: false, reason: 'parse_failed' });
     }
+
+    if (SOCIALDRAFT_DEBUG) console.log('[TRACE:socialdraft] inserting', inserts.length, 'rows');
 
     const { error: insertErr } = await db.from('social_drafts').insert(inserts);
     if (insertErr) {
       console.error('[generate-posts] insert error:', insertErr.message);
-      return res.status(200).json({ ok: false, reason: 'insert_failed' });
+      return res.status(200).json({ ok: false, reason: 'insert_failed', detail: insertErr.message });
     }
+
+    if (SOCIALDRAFT_DEBUG) console.log('[TRACE:socialdraft] insert success — platforms:', inserts.map(i => i.platform));
 
     return res.status(200).json({ ok: true, count: inserts.length, platforms: inserts.map(i => i.platform) });
 

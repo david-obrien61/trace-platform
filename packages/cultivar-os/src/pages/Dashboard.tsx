@@ -11,7 +11,8 @@ import { Tile } from '@trace/shared/components/tiles/Tile';
 // Configurable — will move to verticalConfig post-demo
 const LEAKAGE_AVG_VALUE = 28;
 
-const SM_DEBUG = false; // flip to true to re-enable [SM-TRACE] diagnostics
+const SM_DEBUG           = false; // flip to true to re-enable [SM-TRACE] diagnostics
+const SOCIALDRAFT_DEBUG  = false; // flip to true to re-enable [TRACE:socialdraft] diagnostics
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -93,10 +94,13 @@ export function Dashboard() {
   interface SocialDraft {
     id: string;
     post_type: string | null;
-    content: string | null;
     original_text: string | null;
     edited_text: string | null;
     platform: string;
+    status: string;
+    subject_type: string | null;
+    subject_id: string | null;
+    copied_at: string | null;
   }
 
   const [socialDrafts, setSocialDrafts]           = useState<SocialDraft[]>([]);
@@ -195,45 +199,50 @@ export function Dashboard() {
   }
 
   async function loadSocialDrafts() {
-    const { data } = await supabase
+    if (SOCIALDRAFT_DEBUG) console.log('[TRACE:socialdraft] loadSocialDrafts — businessId:', businessId);
+    const { data, error } = await supabase
       .from('social_drafts')
-      .select('id, post_type, content, original_text, edited_text, platform')
+      .select('id, post_type, original_text, edited_text, platform, status, subject_type, subject_id, copied_at')
       .eq('business_id', businessId!)
-      .eq('status', 'draft')
+      .not('status', 'eq', 'copied')
       .order('created_at', { ascending: true });
+    if (SOCIALDRAFT_DEBUG) console.log('[TRACE:socialdraft] loadSocialDrafts result — rows:', data?.length, 'error:', error?.message);
     setSocialDrafts((data as SocialDraft[]) ?? []);
   }
 
   async function handleSaveEdit(draftId: string, text: string) {
+    if (SOCIALDRAFT_DEBUG) console.log('[TRACE:socialdraft] handleSaveEdit — draftId:', draftId, 'textLen:', text.length);
     await supabase
       .from('social_drafts')
-      .update({ edited_text: text })
+      .update({ edited_text: text, status: 'edited' })
       .eq('id', draftId);
   }
 
-  function handleCopyCaption(draftId: string, text: string) {
-    navigator.clipboard.writeText(text).then(() => {
+  async function handleCopyCaption(draftId: string, text: string) {
+    if (SOCIALDRAFT_DEBUG) console.log('[TRACE:socialdraft] handleCopyCaption — draftId:', draftId);
+    const doCopy = () => {
       setCopiedId(draftId);
+      // status='copied' + copied_at — marks the review loop complete for this draft
+      supabase
+        .from('social_drafts')
+        .update({ status: 'copied', copied_at: new Date().toISOString() })
+        .eq('id', draftId)
+        .then(({ error }) => {
+          if (error) console.warn('[TRACE:socialdraft] copied status update failed:', error.message);
+          else setSocialDrafts(prev => prev.filter(d => d.id !== draftId));
+        });
       setTimeout(() => setCopiedId(prev => prev === draftId ? null : prev), 2000);
-    }).catch(() => {
-      // Fallback for older browsers
+    };
+
+    navigator.clipboard.writeText(text).then(doCopy).catch(() => {
       const el = document.createElement('textarea');
       el.value = text;
       document.body.appendChild(el);
       el.select();
       document.execCommand('copy');
       document.body.removeChild(el);
-      setCopiedId(draftId);
-      setTimeout(() => setCopiedId(prev => prev === draftId ? null : prev), 2000);
+      doCopy();
     });
-  }
-
-  async function handleMarkPosted(draftId: string) {
-    await supabase
-      .from('social_drafts')
-      .update({ status: 'published' })
-      .eq('id', draftId);
-    setSocialDrafts(prev => prev.filter(d => d.id !== draftId));
   }
 
   async function handleGeneratePosts() {
@@ -756,41 +765,40 @@ export function Dashboard() {
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {socialDrafts.map(draft => {
-                const displayText = draftEdits[draft.id] ?? draft.edited_text ?? draft.content ?? '';
+                // edited_text = what owner saved (may be null); original_text = immutable AI proposal
+                const displayText   = draftEdits[draft.id] ?? draft.edited_text ?? draft.original_text ?? '';
                 const platformLabel = PLATFORM_LABELS[draft.platform] ?? draft.platform;
                 const platformUrl   = PLATFORM_URLS[draft.platform];
+                const isEdited      = draft.status === 'edited' || draft.status === 'approved';
                 return (
                   <div key={draft.id} style={{
                     background: '#fff',
-                    border: '1.5px solid #e5e7eb',
+                    border: `1.5px solid ${isEdited ? 'var(--green-primary, #27500A)' : '#e5e7eb'}`,
                     borderRadius: 12,
                     padding: '14px 16px',
                   }}>
-                    {/* Platform chip */}
+                    {/* Platform chip + status */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                      <span style={{
-                        display: 'inline-block',
-                        background: 'var(--sage-bg, #EAF3DE)',
-                        color: 'var(--green-primary, #27500A)',
-                        fontSize: '0.6875rem', fontWeight: 700,
-                        letterSpacing: '0.06em', textTransform: 'uppercase',
-                        padding: '2px 8px', borderRadius: 6,
-                      }}>
-                        {platformLabel}
-                      </span>
-                      <button
-                        onClick={() => handleMarkPosted(draft.id)}
-                        style={{
-                          background: 'none', border: 'none',
-                          fontSize: '0.75rem', color: 'var(--gray-400)',
-                          cursor: 'pointer', padding: '2px 0',
-                        }}
-                      >
-                        Mark as posted ✓
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{
+                          display: 'inline-block',
+                          background: 'var(--sage-bg, #EAF3DE)',
+                          color: 'var(--green-primary, #27500A)',
+                          fontSize: '0.6875rem', fontWeight: 700,
+                          letterSpacing: '0.06em', textTransform: 'uppercase',
+                          padding: '2px 8px', borderRadius: 6,
+                        }}>
+                          {platformLabel}
+                        </span>
+                        {isEdited && (
+                          <span style={{ fontSize: '0.6875rem', color: 'var(--green-primary, #27500A)', fontWeight: 600 }}>
+                            ✓ Edited
+                          </span>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Editable caption */}
+                    {/* Editable caption — original_text is the immutable AI proposal */}
                     <p style={{ fontSize: '0.6875rem', color: 'var(--gray-400)', marginBottom: 6 }}>
                       Here's our best shot at your voice — edit it to sound like you.
                     </p>
@@ -808,7 +816,7 @@ export function Dashboard() {
                       }}
                     />
 
-                    {/* Action buttons */}
+                    {/* Action buttons: Copy (marks done + removes) · Download (future) · Open platform */}
                     <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                       <button
                         onClick={() => handleCopyCaption(draft.id, displayText)}
@@ -823,13 +831,26 @@ export function Dashboard() {
                       >
                         {copiedId === draft.id ? 'Copied!' : 'Copy caption'}
                       </button>
+                      <button
+                        disabled
+                        title="Image generation coming soon"
+                        style={{
+                          flex: 1, minWidth: 100,
+                          background: '#f3f4f6', border: '1px solid #e5e7eb',
+                          borderRadius: 8, padding: '10px 0',
+                          fontSize: '0.875rem', fontWeight: 600,
+                          color: '#9ca3af', cursor: 'not-allowed',
+                        }}
+                      >
+                        Download image
+                      </button>
                       {platformUrl && (
                         <a
                           href={platformUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{
-                            flex: 1, minWidth: 120,
+                            flex: 1, minWidth: 100,
                             background: '#f9fafb', border: '1px solid #e5e7eb',
                             borderRadius: 8, padding: '10px 0',
                             fontSize: '0.875rem', fontWeight: 600,
