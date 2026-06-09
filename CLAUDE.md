@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-11 (email-confirmation OFF + outbound mail broken → documented as launch-gate item)
+# Last updated: 2026-06-11 (B barrel swap: shared/src/index.ts → canonical engine; dead stub deleted)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -251,7 +251,7 @@ This log is created and maintained per the Honest Friction principle (see PLATFO
 | 12 | 🟡 `CAI/ai_router.py` (Railway FastAPI) was built to keep AI provider keys out of the React Native bundle. Now that Ignition OS is a Vercel web app, this is unnecessary — Vercel serverless functions hold keys server-side, same pattern cultivar-os uses for Claude calls today. Railway is still running but is legacy for the web build. AIEngine.ts currently points to `VITE_API_URL` which is unset in the ignition-os Vercel project — **EVERY AIENGINE CALL IN IGNITION VERCEL PRODUCTION RETURNS `{ ok: false }`. Ignition AI is DARK in production (Audit 2, 2026-06-06).** Railway receives zero web-build traffic → safe to kill clean. **Agreed kill path (v7 §15):** retire orphaned tasks (`invoice_scan`, `vin_decode`) — do NOT port them; port real tasks (`dtc_decode`, `estimate_draft` first — text-only, highest value); evaluate `voice_transcribe` (4.5MB Vercel limit) before deciding port vs. retire. Kill Railway after confirmed tasks are live. Receipt Keeper is Vercel-native from birth — adds zero Railway debt. | 2026-05-28 (decision made); DARK-in-prod finding confirmed Audit 2, 2026-06-06 | Port real ai_router.py endpoints to TypeScript Vercel functions under `packages/ignition-os/api/`. Retire orphaned tasks. Decommission Railway. | Before activating AI features in ignition-os web. |
 | 13 | 🟡 Vite build aliases for `react-native`, expo packages, and `lucide-react-native` exist in both `CAI/vite.config.js` AND `packages/ignition-os/vite.config.js` — duplicated. The stubs in `CAI/stubs/` and `packages/ignition-os/stubs/` are identical files in two places. | 2026-05-28 | Extract stubs to `packages/shared/stubs/` and reference from both vite configs. Low priority — only matters if stubs need to change. | If stubs ever need updating, deduplicate first. |
 | 15 | 🟢 **RESOLVED 2026-06-08 (commit `444fbb1`).** ~~HONEST-DEBT: `businesses.accounting_needs_reconnect` reads `false` while the QB token is expired. The flag only flipped on a 401 during an active invoice call — meaning a dead connection stayed silent until something failed mid-use.~~ **Fix applied:** (1) `qbo/status.ts` — on every dashboard load, fetches `accounting_token_expires_at`; if token is missing or expired, calls `refreshQBToken()`; if refresh succeeds → `needsReconnect: false` (silent, no banner); if refresh fails → `needsReconnect: true` (DB updated, banner fires). (2) `Dashboard.tsx loadMetrics()` — also selects `accounting_token_expires_at`; client-side derives early estimate (`expiresMs < Date.now()`) so banner appears immediately without waiting for status check. (3) `checkQbStatus()` — always applies the server's authoritative `needsReconnect` result, clearing banner if silent refresh succeeded. STD-007 added to STANDARDS.md as the class-of-bug record. | Audit 6, 2026-06-06 | ✅ RESOLVED 2026-06-08 | — |
-| 16 | 🟢 **RESOLVED 2026-06-10 (THUNDER · Build 1).** ~~TECH-DEBT: `packages/shared/src/business-logic/marginEngine.ts` is a ~17-line stub that silently underdelivers.~~ **Fix applied:** Canonical shared engine built at `packages/shared/src/business-logic/MarginEngine.ts`. 4-slab model + tier discounts (AC-1: tier names as config data, not TS identifiers) + `overheadPerUnit` wired into loaded cost before markup. Charm rounding: `Math.ceil(retail) - 0.01` (matches `MarginEngine.js` A exactly; stub used broken `Math.floor+0.99`). All 5 old implementations marked 🔴 DEPRECATED (A through E). No callers migrated yet — non-destructive phase. Migration checklist: `docs/audits/margin-engine-migration-checklist-2026-06-10.md`. **Remaining work (next session):** migrate callers starting with B (barrel swap + stub delete), then A callers (import path only), then C callers (IgnitionCipher price change — accepted). Cost-to-Produce tile session wires `overhead_config.monthly` into `overheadPerUnit` calculation. | Stub introduced pre-2026-05-29; overhead orphaned confirmed Audit 4, 2026-06-06; resolved 2026-06-10 | Callers migrate via checklist. Overhead wire upstream: IgnitionProt → DataBridge `margin_config.overheadPerUnit`. | Cost-to-Produce tile is unblocked — engine now produces correct markup. |
+| 16 | 🟡 **B barrel swap DONE 2026-06-11.** ~~TECH-DEBT: `packages/shared/src/business-logic/marginEngine.ts` is a ~17-line stub that silently underdelivers.~~ **Canonical engine built 2026-06-10 (THUNDER · Build 1):** `packages/shared/src/business-logic/MarginEngine.ts`. 4-slab + tier discounts + `overheadPerUnit`. All 5 old implementations marked 🔴 DEPRECATED. **B barrel swap done 2026-06-11:** `packages/shared/src/pricing/marginEngine.ts` (broken stub, broken rounding) DELETED. `shared/src/index.ts` now exports canonical engine. Migration checklist: `docs/audits/margin-engine-migration-checklist-2026-06-10.md`. **Engine remains ORPHANED** — STD-001 investigation confirmed Cultivar has ZERO pricing/margin callers (B2C retail model: prices stored as final values in DB; no cost-to-retail engine in use). **Remaining work:** A callers (Ignition import-path swaps, no price change). Cost-to-Produce tile = first Cultivar caller (needs `plants.cost_price` DB column). C/D callers (after accepted price change). | Stub introduced pre-2026-05-29; overhead orphaned confirmed Audit 4, 2026-06-06; engine built 2026-06-10; B swap 2026-06-11 | A callers next (Ignition). Cost-to-Produce tile = first Cultivar caller. Overhead wire: IgnitionProt → DataBridge `margin_config.overheadPerUnit`. | A callers unblock after Ignition next-session. Cost-to-Produce tile unblocks after `plants.cost_price` schema added. |
 | 17 | 🟡 **STD-008 SWEEP — `20260523_qb_token_expires_at.sql` (DEAD MIGRATION):** Adds `qb_token_expires_at` and `qb_needs_reconnect` to the OLD `nurseries` table, which was superseded by the `businesses` table (May-29 migration). Zero code reads these columns in any current file. The equivalent columns on `businesses` (`accounting_token_expires_at`, `accounting_needs_reconnect`) were added by the May-29 migration and are in use. The nurseries-table additions are dead code in the DB. STD-008 sweep finding 2026-06-08. | STD-008 sweep 2026-06-08 | No code fix needed — nurseries columns are dead. If the nurseries table is ever retired, drop them in that cleanup migration. | When the nurseries table is formally retired (post-demo cleanup pass). |
 | 18 | 🟡 **STD-008 SWEEP — `20260603_business_members_add_pin_hash.sql` (UNVERIFIED LIVE APPLICATION):** The migration adds `pin_hash text` to `business_members` in bgobkjcopcxusjsetfob. `OwnerSignup.tsx:301` inserts `pin_hash` on every signup. The June-3 handoff required David to apply this migration manually; `test-member-login.mjs` passed (29/29) the same session, suggesting it was applied. However, the application was never confirmed via an `information_schema.columns` query (STD-008 did not exist at the time). If `pin_hash` is missing from the live DB, new signups silently fail to store the PIN hash. STD-008 sweep finding 2026-06-08. | STD-008 sweep 2026-06-08 | Verify: run `SELECT column_name FROM information_schema.columns WHERE table_name = 'business_members'` in Supabase SQL editor — confirm `pin_hash` is present. Mark 🟢 if confirmed. | Next signup-flow session or before onboarding Erin. |
 | 19 | 🟡 **STD-009 SWEEP — `packages/shared/src/campaigns/generate.ts:129` HARDCODED CHANNEL FALLBACK:** The PostDraft mapping has `channel: p.channel ?? p.platform ?? enabledChannels[0]?.name ?? 'instagram'`. The `?? 'instagram'` final fallback hardcodes a channel name into the output-assembly path. If the AI returns a post without a `channel` field AND `p.platform` is also absent, the post is silently assigned to 'instagram' regardless of which channels were requested. STD-009 sweep finding 2026-06-08. | STD-009 sweep 2026-06-08 | Fix: replace `?? 'instagram'` with `?? enabledChannels[0]?.name ?? null` — derive from the enabled channels list, not a hardcoded name. Alternatively, filter out posts with no channel field and log a warning. | Before a business with Instagram disabled runs campaigns — the 'instagram' fallback could send their content to the wrong channel identity. |
@@ -300,6 +300,97 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-11 — MarginEngine B barrel swap (STD-001 finding: Cultivar has zero pricing callers)
+
+**Type:** Code. Two files changed (`packages/shared/src/index.ts` updated, `packages/shared/src/pricing/marginEngine.ts` deleted). Two docs updated (`PLATFORM_STATE.md`, `docs/audits/margin-engine-migration-checklist-2026-06-10.md`). Zero migrations, zero schema changes, zero API changes.
+
+**Session mandate:** THUNDER · WIRE — wire Cultivar pricing callers to `packages/shared/src/business-logic/MarginEngine.ts`, advancing the engine from ORPHANED → WIRED → WORKS.
+
+---
+
+**STD-001 FINDING (read-only investigation before any code change):**
+
+Cultivar OS has **zero pricing/margin call sites.** It uses a B2C retail model — prices are stored as final retail values in Supabase (`plants.base_price`, `service_offerings.price`). No cost-to-retail computation exists anywhere in Cultivar.
+
+`packages/cultivar-os/api/orders/submit.ts` confirmed:
+```typescript
+const plantSubtotal = Number(plant.base_price) * quantity;
+const addonsAmount  = transportAmount + nettingTotal + otherTotal;
+// no engine call — base_price is already retail
+```
+
+`Dashboard.tsx` leakage metric: `const LEAKAGE_AVG_VALUE = 28;` — hardcoded placeholder, not engine output.
+
+**Consequence:** The MarginEngine CANNOT advance ORPHANED → WIRED via Cultivar today. The first real Cultivar caller will be the **Cost-to-Produce tile** (deferred — needs `plants.cost_price` schema column + new UI). `analyzeTransaction()` requires a cost basis; Cultivar has none.
+
+---
+
+**WHAT WAS DONE (B barrel swap — migration checklist step 1):**
+
+**`packages/shared/src/pricing/marginEngine.ts` — DELETED:**
+- Dead stub with broken rounding (`Math.floor(raw) + 0.99` ≠ canonical `Math.ceil(retail) - 0.01`)
+- Exported only `calculateRetail(cost)` and `calculateMargin(cost, retail)` — no tiers, no overhead, no types
+- Zero live callers confirmed before deletion
+
+**`packages/shared/src/index.ts` — line 26 updated:**
+- OLD: `export { calculateRetail, calculateMargin } from './pricing/marginEngine';` (dead stub, broken)
+- NEW: exports `calculateRetail`, `getProfitMargin`, `getMarkupPercent`, `analyzeTransaction`, `DEFAULT_MARGIN_CONFIG` + all 5 type exports from `'./business-logic/MarginEngine'` (canonical)
+- Any code that `import { calculateRetail } from '@trace/shared'` now gets the correct 4-slab engine with charm rounding
+
+**Builds:**
+- Cultivar: ✅ 2179 modules, zero TypeScript errors
+- Ignition: ✅ 1839 modules, zero TypeScript errors
+
+---
+
+**MarginEngine level: still ORPHANED** — no vertical imports `calculateRetail` from `@trace/shared` yet. Barrel is clean and correct. The engine will advance to WIRED when the first A caller (Ignition import-path swap) ships.
+
+---
+
+**Documentation propagation check (step 10):**
+1. `Help.tsx` — no customer-facing changes. No propagation needed.
+2. Onboarding — unchanged.
+3. `PLATFORM_STATE.md` ✅ updated — MarginEngine row evidence note updated; `pricing/marginEngine.ts` row changed to DELETED.
+4. No `// FLAG:` placeholders affected.
+5. No new error messages.
+
+**Factual corrections captured (step 11):**
+- The THUNDER · WIRE task assumed Cultivar had existing pricing callers to migrate. STD-001 investigation disproved this. Cultivar is a B2C retail app; Ignition is a wholesale→retail shop. These are fundamentally different pricing models. The migration checklist's "Cultivar caller" phase was premature — no Cultivar file uses `calculateRetail()`. The first Cultivar caller is the Cost-to-Produce tile (deferred, needs schema).
+
+**No runbook needed** — pure code + docs session. No environment, DB, or API changes.
+
+**AC compliance (step 13):**
+- AC-1: ✅ Dead stub deleted; canonical engine has no vertical nouns. No new vertical nouns introduced anywhere.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Full read-only investigation before any change. `submit.ts`, `Dashboard.tsx`, all Cultivar pages grepped for margin engine usage — zero results. Root cause of inability to wire (B2C retail model = no cost basis) confirmed before doing anything.
+- STD-002: N/A — no bug fix.
+- STD-003: N/A — no instrumentation added. The `[TRACE:MARGIN]` logging planned in the task prompt was deferred because there are no Cultivar callers to instrument.
+- STD-004: N/A — no business-scoped data feature shipped.
+- STD-005: ✅ TD#16 updated in-place: B swap annotated as DONE; Cultivar-has-zero-callers finding documented; level remains 🟡 (not 🟢 — engine still ORPHANED).
+- STD-006: ✅ No vertical nouns introduced.
+- STD-007: N/A — no integration status surfaces touched.
+- STD-008: N/A — no migrations.
+- STD-009: N/A — no generation path changes.
+- STD-010: N/A — no new opaque names.
+- **BENCH standards (STEP 0 match):** BENCH-B still firing for Receipt Keeper. No new triggers from this session.
+
+**Gap graduation sweep (step 15):**
+- `remaining: voice-learning BI` — horizon v2/later. NOT past horizon.
+- `remaining: cadence-triggered generation` — horizon Social Rhythm. NOT past horizon.
+- `remaining: discovery persistence` — horizon v2/later. NOT past horizon.
+No gap graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- `Business-Logic · MarginEngine.ts` (shared): ORPHANED (unchanged — no new callers; barrel clean but still zero importers).
+- `Pricing · marginEngine.ts` (shared): ORPHANED → DELETED 2026-06-11.
+- `docs/audits/margin-engine-migration-checklist-2026-06-10.md`: B migration steps marked ✅ DONE 2026-06-11.
+
+---
 
 ### 2026-06-11 — Email confirmation OFF + outbound mail broken → launch-gate documentation
 

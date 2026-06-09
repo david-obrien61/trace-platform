@@ -22,8 +22,22 @@ export * from './notifications/index';
 export * from './qr/generate';
 export * from './qr/print';
 
-// Pricing
-export { calculateRetail, calculateMargin } from './pricing/marginEngine';
+// Pricing — canonical shared engine (business-logic/MarginEngine.ts, THUNDER · Build 1 · 2026-06-10)
+// Replaces dead stub at pricing/marginEngine.ts (broken Math.floor+0.99 rounding; zero callers).
+export {
+  calculateRetail,
+  getProfitMargin,
+  getMarkupPercent,
+  analyzeTransaction,
+  DEFAULT_MARGIN_CONFIG,
+} from './business-logic/MarginEngine';
+export type {
+  MarginSlab,
+  PricingTier,
+  MarginEngineConfig,
+  MarginTransaction,
+  MarginAnalysis,
+} from './business-logic/MarginEngine';
 
 // Utils
 export { formatDollars, formatMoney, formatMoneyOrDash } from './utils/formatCurrency';

@@ -48,10 +48,10 @@ These callers already get the canonical slab price. Migration = swap import path
 |------|------|------|------|
 | `packages/shared/src/index.ts` | 26 | re-exports `calculateRetail, calculateMargin` | LOW — zero live callers confirmed; safe to switch export to `business-logic/MarginEngine` in same session as stub delete |
 
-**B migration steps (when ready):**
-1. Update `packages/shared/src/index.ts:26` to re-export from `'./business-logic/MarginEngine'` instead of `'./pricing/marginEngine'`
-2. Delete `packages/shared/src/pricing/marginEngine.ts`
-3. Delete `packages/shared/src/pricing/` directory if empty
+**B migration — ✅ DONE 2026-06-11:**
+1. ~~Update `packages/shared/src/index.ts:26` to re-export from `'./business-logic/MarginEngine'` instead of `'./pricing/marginEngine'`~~ ✅
+2. ~~Delete `packages/shared/src/pricing/marginEngine.ts`~~ ✅
+3. ~~Delete `packages/shared/src/pricing/` directory if empty~~ ✅ (directory empty)
 
 ---
 
@@ -106,7 +106,7 @@ Example with anchor=40% vs STANDARD slab:
 
 ## Migration Order (lowest risk first)
 
-1. **B (stub + barrel)** — zero live callers, swap export in `index.ts`, delete stub file. No price change.
+1. ~~**B (stub + barrel)** — zero live callers, swap export in `index.ts`, delete stub file. No price change.~~ ✅ **DONE 2026-06-11** — `shared/src/index.ts` now exports from `business-logic/MarginEngine`. `pricing/marginEngine.ts` deleted. `pricing/` directory empty. Cultivar 2179 ✅ · Ignition 1839 ✅.
 2. **A callers (all except SavingsReport)** — same slab model, import path swap only. No price change.
 3. **SavingsReport in shared** — fixes broken `'../MarginEngine'` import at same time as Tech Debt #10 (rebuild ignition-os/modules/SavingsReport.jsx).
 4. **C — DataBridge.recordTransaction** — internal-only, no customer price change.

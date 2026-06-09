@@ -44,7 +44,7 @@
 | **Auth · members.ts** | WIRED | `auth/members.ts` | Settings.tsx: getMembersByBusiness:146, removeMember:209 | CLAUDE.md §HANDOFF 2026-06-02 |
 | **Auth · permissions.ts** | ORPHANED | `auth/permissions.ts` | Zero callers in either vertical — callers not yet migrated (TD#28 blocks this) | CLAUDE.md TD#28 |
 | **Auth · types.ts** | WIRED | `auth/types.ts` | Settings.tsx: type imports (Member, Invitation) | — |
-| **Business-Logic · MarginEngine.ts** | ORPHANED | `business-logic/MarginEngine.ts` | EXISTS, built correctly, zero callers — non-destructive phase; migration checklist pending | CLAUDE.md TD#16 · `docs/audits/margin-engine-migration-checklist-2026-06-10.md` |
+| **Business-Logic · MarginEngine.ts** | ORPHANED | `business-logic/MarginEngine.ts` | EXISTS, built correctly, zero callers — **B barrel swap done 2026-06-11**: shared/src/index.ts now exports canonical engine; dead stub deleted; shared barrel is clean · Next: A callers (Ignition import-path swaps) | CLAUDE.md TD#16 · `docs/audits/margin-engine-migration-checklist-2026-06-10.md` |
 | **Campaigns · generate.ts** | WIRED | `campaigns/generate.ts` | api/campaigns.ts:2 (generateCampaignPosts called on generate action) | built-inventory.md |
 | **Campaigns · types.ts** | WIRED | `campaigns/types.ts` | Campaigns.tsx:5, CampaignDetail.tsx:5 (type imports Campaign, CampaignPost) | — |
 | **Components · Card.tsx** | WIRED | `components/Card.tsx` | Dashboard.tsx:3 — `import { Card }` | — |
@@ -69,7 +69,7 @@
 | **Notifications · templates/ignition.ts** | EXISTS | `notifications/templates/ignition.ts` | No confirmed callers in Ignition production code | — |
 | **Onboarding · DemoLaunchButton.tsx** | ORPHANED | `onboarding/DemoLaunchButton.tsx` | Zero callers — CoreApp.jsx uses ?demo= URL param + OnboardingWizard.jsx directly | CLAUDE.md §HANDOFF 2026-06-10 |
 | **Pages · Settings.tsx** | WIRED | `pages/Settings.tsx` | cultivar-os/src/pages/Settings.tsx:3 — `<SharedSettings … />` wrapper | CLAUDE.md §HANDOFF 2026-05-29 |
-| **Pricing · marginEngine.ts** | ORPHANED | `pricing/marginEngine.ts` | Self-annotated: "Zero live callers confirmed." Exported in index.ts; index.ts barrel itself has no confirmed consumer. Replaced by business-logic/MarginEngine.ts | CLAUDE.md TD#16 |
+| **Pricing · marginEngine.ts** | ~~ORPHANED~~ **DELETED** | ~~`pricing/marginEngine.ts`~~ | Deleted 2026-06-11 — dead stub with broken rounding (Math.floor+0.99). shared/src/index.ts barrel now points at canonical business-logic/MarginEngine.ts. Zero callers were disrupted. | CLAUDE.md TD#16 |
 | **QR · generate.ts** | EXISTS | `qr/generate.ts` | Mentioned in Help.tsx prose only; no code imports it | — |
 | **QR · print.ts** | EXISTS | `qr/print.ts` | No confirmed callers in either vertical source | CLAUDE.md §1.5 (nurseryName rename deferred) |
 | **QuickBooks · refresh.ts** | WIRED | `quickbooks/refresh.ts` | api/qbo/status.ts:2, api/qbo/invoice/cultivar.ts:2 | CLAUDE.md §HANDOFF 2026-06-08 |
@@ -185,7 +185,7 @@
 | Social generator | WORKS | Cultivar only |
 | Campaign generator | WIRED | Cultivar only |
 | QuickBooks refresh | WIRED | Cultivar only |
-| MarginEngine.ts (canonical) | ORPHANED | Built; callers not migrated yet |
+| MarginEngine.ts (canonical) | ORPHANED | Built; B barrel swap done 2026-06-11 (shared/src/index.ts now exports canonical engine). Next: A callers (Ignition import-path swaps). |
 | permissions.ts | ORPHANED | Built; callers not migrated (TD#28 blocker) |
 | TileGrid + Tile | WIRED | Cultivar only |
 | Card | WIRED | Cultivar only |
