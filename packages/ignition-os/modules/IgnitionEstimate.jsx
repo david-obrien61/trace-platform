@@ -19,23 +19,27 @@ import DataBridge from '../DataBridge';
 import CustomerApprovalPortal from './CustomerApprovalPortal';
 import PriceField from '../PriceField';
 
+const STYLE_DEBUG = false;
+
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+// NON-1:1: STATUS_BADGE.color was a Tailwind class string → refactored to bg/color/border hex values
 const STATUS_BADGE = {
-  eval_done:    { label: 'Awaiting Estimate', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
-  estimating:   { label: 'Building…',         color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-  ready:        { label: 'Ready to Review',   color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
-  pending_auth: { label: 'Awaiting Customer', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+  eval_done:    { label: 'Awaiting Estimate', bg: 'rgba(245,158,11,0.2)',  color: '#fbbf24', border: 'rgba(245,158,11,0.3)'  },
+  estimating:   { label: 'Building…',         bg: 'rgba(59,130,246,0.2)', color: '#60a5fa', border: 'rgba(59,130,246,0.3)' },
+  ready:        { label: 'Ready to Review',   bg: 'rgba(16,185,129,0.2)', color: '#34d399', border: 'rgba(16,185,129,0.3)' },
+  pending_auth: { label: 'Awaiting Customer', bg: 'rgba(168,85,247,0.2)', color: '#c084fc', border: 'rgba(168,85,247,0.3)' },
 };
 
+// NON-1:1: ITEM_TYPE_META.color was 'text-blue-400' etc. → refactored to hex values
 const ITEM_TYPE_META = {
-  LABOR:  { label: 'Labor',      icon: Wrench,      color: 'text-blue-400' },
-  PART:   { label: 'Part',       icon: Package,     color: 'text-emerald-400' },
-  SUBLET: { label: 'Sublet',     icon: Car,         color: 'text-amber-400' },
-  FEE:    { label: 'Fee',        icon: ReceiptText, color: 'text-slate-400' },
-  MISC:   { label: 'Misc',       icon: FileText,    color: 'text-slate-500' },
+  LABOR:  { label: 'Labor',  icon: Wrench,      color: '#60a5fa' },
+  PART:   { label: 'Part',   icon: Package,     color: '#34d399' },
+  SUBLET: { label: 'Sublet', icon: Car,         color: '#fbbf24' },
+  FEE:    { label: 'Fee',    icon: ReceiptText, color: '#94a3b8' },
+  MISC:   { label: 'Misc',   icon: FileText,    color: '#64748b' },
 };
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -43,10 +47,10 @@ const ITEM_TYPE_META = {
 const fmt = (n) => n != null ? `$${Number(n).toFixed(2)}` : '—';
 
 const SectionDivider = ({ children }) => (
-  <div className="flex items-center gap-3 my-5">
-    <div className="flex-1 h-px bg-slate-800" />
-    <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">{children}</span>
-    <div className="flex-1 h-px bg-slate-800" />
+  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '20px 0' }}>
+    <div style={{ flex: 1, height: '1px', background: '#1e293b' }} />
+    <span style={{ fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#475569' }}>{children}</span>
+    <div style={{ flex: 1, height: '1px', background: '#1e293b' }} />
   </div>
 );
 
@@ -65,11 +69,11 @@ const EditableCell = ({ value, onSave, type = 'text', prefix }) => {
   if (!editing) return (
     <button
       onClick={() => { setDraft(value ?? ''); setEditing(true); }}
-      className="text-left hover:text-white transition-colors group flex items-center gap-1"
+      style={{ textAlign: 'left', display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0 }}
     >
-      {prefix && <span className="text-slate-600">{prefix}</span>}
+      {prefix && <span style={{ color: '#475569' }}>{prefix}</span>}
       <span>{value ?? '—'}</span>
-      <Edit3 size={10} className="text-slate-700 group-hover:text-slate-500 flex-shrink-0" />
+      <Edit3 size={10} style={{ color: '#334155', flexShrink: 0 }} />
     </button>
   );
 
@@ -81,7 +85,8 @@ const EditableCell = ({ value, onSave, type = 'text', prefix }) => {
       onChange={e => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
-      className="bg-slate-800 border border-blue-500 rounded px-2 py-0.5 text-white text-xs w-full outline-none"
+      className="ign-input"
+      style={{ background: '#1e293b', border: '1px solid #3b82f6', borderRadius: '4px', padding: '2px 8px', color: '#ffffff', fontSize: '12px', width: '100%', outline: 'none' }}
     />
   );
 };
@@ -113,8 +118,6 @@ export default function IgnitionEstimate() {
   const [savingIds, setSavingIds]     = useState(new Set());
   const [portalOpen, setPortalOpen]   = useState(false);
 
-  // ── load job queue ─────────────────────────────────────────────────────────
-
   const loadQueue = useCallback(async () => {
     if (!shopId) return;
     setLoadingQueue(true);
@@ -128,138 +131,79 @@ export default function IgnitionEstimate() {
 
   useEffect(() => { loadQueue(); }, [loadQueue]);
 
-  // ── open a job for review ──────────────────────────────────────────────────
-
   const openJob = async (job) => {
     setSelectedJob(job);
     setError('');
     setEstimate(null);
     setLineItems([]);
     setView('REVIEW');
-
-    // Load estimate for this job
     const { data: ests } = await supabase.from('estimates').select('*')
       .eq('job_id', job.id)
       .not('status', 'eq', 'voided')
       .order('created_at', { ascending: false })
       .limit(1);
-
     if (ests?.length) {
       const est = ests[0];
       setEstimate(est);
-      if (est.status !== 'building') {
-        await loadLineItems(est.id);
-      }
+      if (est.status !== 'building') { await loadLineItems(est.id); }
     }
   };
 
   const loadLineItems = async (estimateId) => {
     const { data } = await supabase.from('estimate_line_items').select('*')
-      .eq('estimate_id', estimateId)
-      .order('sort_order');
+      .eq('estimate_id', estimateId).order('sort_order');
     setLineItems(data || []);
   };
 
-  // ── trigger estimate agent ─────────────────────────────────────────────────
-
   const buildEstimate = async () => {
-    setBuilding(true);
-    setError('');
-
+    setBuilding(true); setError('');
     try {
-      // Create the estimate row if it doesn't exist
       let est = estimate;
       if (!est) {
-        // Find the most recent submitted evaluation
         const { data: evals } = await supabase.from('evaluations').select('id')
           .eq('job_id', selectedJob.id).eq('status', 'submitted')
           .order('created_at', { ascending: false }).limit(1);
-
         const evalId = evals?.[0]?.id || null;
-
         const { data: newEst, error: insErr } = await supabase.from('estimates').insert({
-          job_id:        selectedJob.id,
-          shop_id:       shopId,
-          evaluation_id: evalId,
-          status:        'building',
+          job_id: selectedJob.id, shop_id: shopId, evaluation_id: evalId, status: 'building',
         }).select().single();
-
         if (insErr) throw insErr;
-        est = newEst;
-        setEstimate(est);
+        est = newEst; setEstimate(est);
       } else {
-        // Reset existing estimate
         await supabase.from('estimates').update({ status: 'building' }).eq('id', est.id);
         await supabase.from('estimate_line_items').delete().eq('estimate_id', est.id);
         setLineItems([]);
       }
-
-      // Call Railway agent
       const res = await fetch(`${API_URL}/api/estimate/build`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          estimate_id:    est.id,
-          shop_id:        shopId,
-          labor_rate:     laborRate,
-          markup_percent: markupPercent,
-          tax_rate:       taxRate,
-        }),
+        body: JSON.stringify({ estimate_id: est.id, shop_id: shopId, labor_rate: laborRate, markup_percent: markupPercent, tax_rate: taxRate }),
       });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || `Agent returned ${res.status}`);
-      }
-
+      if (!res.ok) { const body = await res.json().catch(() => ({})); throw new Error(body.detail || `Agent returned ${res.status}`); }
       const result = await res.json();
-
-      // Refresh estimate + line items from Supabase (source of truth)
       const { data: fresh } = await supabase.from('estimates').select('*').eq('id', est.id).single();
-      setEstimate(fresh);
-      setLineItems(result.line_items || []);
-
-      // Update job status in local list
+      setEstimate(fresh); setLineItems(result.line_items || []);
       setJobs(prev => prev.map(j => j.id === selectedJob.id ? { ...j, status: 'estimating' } : j));
       setSelectedJob(prev => ({ ...prev, status: 'estimating' }));
-
     } catch (err) {
       setError(err.message || 'Estimate agent failed. Check Railway logs.');
-      // Revert estimate status
-      if (estimate?.id) {
-        await supabase.from('estimates').update({ status: 'building' }).eq('id', estimate.id);
-      }
-    } finally {
-      setBuilding(false);
-    }
+      if (estimate?.id) { await supabase.from('estimates').update({ status: 'building' }).eq('id', estimate.id); }
+    } finally { setBuilding(false); }
   };
 
-  // ── line item editing ──────────────────────────────────────────────────────
-
-  const markSaving = (id, on) => setSavingIds(prev => {
-    const next = new Set(prev);
-    on ? next.add(id) : next.delete(id);
-    return next;
-  });
+  const markSaving = (id, on) => setSavingIds(prev => { const next = new Set(prev); on ? next.add(id) : next.delete(id); return next; });
 
   const updateLineItem = async (id, field, value) => {
     markSaving(id, true);
     const item = lineItems.find(l => l.id === id);
     const updates = { [field]: value };
-
-    // Recalculate line_total on price/hours change
     if (field === 'labor_hours' || field === 'unit_price' || field === 'quantity') {
-      const hours   = field === 'labor_hours' ? value : item.labor_hours;
-      const price   = field === 'unit_price'  ? value : item.unit_price;
-      const qty     = field === 'quantity'    ? value : item.quantity;
-      if (item.item_type === 'LABOR' && hours) {
-        updates.line_total = +(hours * laborRate).toFixed(2);
-        updates.unit_price = laborRate;
-      } else if (price && qty) {
-        updates.line_total = +(price * qty).toFixed(2);
-      }
+      const hours = field === 'labor_hours' ? value : item.labor_hours;
+      const price = field === 'unit_price'  ? value : item.unit_price;
+      const qty   = field === 'quantity'    ? value : item.quantity;
+      if (item.item_type === 'LABOR' && hours) { updates.line_total = +(hours * laborRate).toFixed(2); updates.unit_price = laborRate; }
+      else if (price && qty) { updates.line_total = +(price * qty).toFixed(2); }
     }
-
     setLineItems(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l));
     await supabase.from('estimate_line_items').update(updates).eq('id', id);
     await syncTotals(id, updates);
@@ -271,13 +215,7 @@ export default function IgnitionEstimate() {
     const item = lineItems.find(l => l.id === id);
     const qty = item?.quantity || 1;
     const newTotal = +(finalPrice * qty).toFixed(2);
-    const updates = {
-      unit_price:                  finalPrice,
-      line_total:                  newTotal,
-      is_manual_override:          isOverride,
-      original_calculated_price:   suggestedPrice,
-      price_leakage:               isOverride ? leakage : 0,
-    };
+    const updates = { unit_price: finalPrice, line_total: newTotal, is_manual_override: isOverride, original_calculated_price: suggestedPrice, price_leakage: isOverride ? leakage : 0 };
     setLineItems(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l));
     const { error: upErr } = await supabase.from('estimate_line_items').update(updates).eq('id', id);
     if (upErr) console.error('[PriceOverride] Supabase write failed:', upErr);
@@ -292,51 +230,25 @@ export default function IgnitionEstimate() {
   };
 
   const syncTotals = async (changedId, changedUpdates) => {
-    // Recalculate totals from current lineItems state
-    const current = lineItems.map(l =>
-      l.id === changedId ? { ...l, ...changedUpdates } : l
-    );
+    const current = lineItems.map(l => l.id === changedId ? { ...l, ...changedUpdates } : l);
     const partsTotal = current.filter(l => l.item_type === 'PART').reduce((s, l) => s + (l.line_total || 0), 0);
     const sub = current.reduce((s, l) => s + (l.line_total || 0), 0);
     const tax = +(partsTotal * taxRate).toFixed(2);
     const total = +(sub + tax).toFixed(2);
-
     if (estimate?.id) {
-      await supabase.from('estimates').update({
-        subtotal: +sub.toFixed(2), tax, total,
-      }).eq('id', estimate.id);
+      await supabase.from('estimates').update({ subtotal: +sub.toFixed(2), tax, total }).eq('id', estimate.id);
       setEstimate(prev => prev ? { ...prev, subtotal: +sub.toFixed(2), tax, total } : prev);
     }
   };
 
-  // ── add manual line item ───────────────────────────────────────────────────
-
   const commitNewRow = async () => {
     if (!newRow.description.trim()) return;
     if (!estimate?.id) return;
-
-    const qty    = parseFloat(newRow.quantity) || 1;
-    const hours  = newRow.item_type === 'LABOR' ? parseFloat(newRow.labor_hours) || null : null;
-    const price  = newRow.item_type !== 'LABOR' ? parseFloat(newRow.unit_price) || null : laborRate;
-    const total  = hours
-      ? +(hours * laborRate).toFixed(2)
-      : price ? +(price * qty).toFixed(2) : 0;
-
-    const row = {
-      estimate_id:  estimate.id,
-      job_id:       selectedJob.id,
-      shop_id:      shopId,
-      item_type:    newRow.item_type,
-      description:  newRow.description.trim(),
-      quantity:     qty,
-      labor_hours:  hours,
-      labor_rate:   hours ? laborRate : null,
-      unit_price:   price,
-      line_total:   total,
-      auth_status:  'pending',
-      sort_order:   lineItems.length,
-    };
-
+    const qty   = parseFloat(newRow.quantity) || 1;
+    const hours = newRow.item_type === 'LABOR' ? parseFloat(newRow.labor_hours) || null : null;
+    const price = newRow.item_type !== 'LABOR' ? parseFloat(newRow.unit_price) || null : laborRate;
+    const total = hours ? +(hours * laborRate).toFixed(2) : price ? +(price * qty).toFixed(2) : 0;
+    const row = { estimate_id: estimate.id, job_id: selectedJob.id, shop_id: shopId, item_type: newRow.item_type, description: newRow.description.trim(), quantity: qty, labor_hours: hours, labor_rate: hours ? laborRate : null, unit_price: price, line_total: total, auth_status: 'pending', sort_order: lineItems.length };
     const { data } = await supabase.from('estimate_line_items').insert(row).select().single();
     if (data) setLineItems(prev => [...prev, data]);
     setNewRow({ item_type: 'LABOR', description: '', labor_hours: '', unit_price: '', quantity: 1 });
@@ -344,46 +256,25 @@ export default function IgnitionEstimate() {
     await syncTotals();
   };
 
-  // ── handle customer authorization callback ────────────────────────────────
-
   const handleAuthorized = async () => {
     setPortalOpen(false);
-    // Re-fetch estimate + line items to reflect updated auth_status values
     if (estimate?.id) {
       const { data: fresh } = await supabase.from('estimates').select('*').eq('id', estimate.id).single();
       if (fresh) setEstimate(fresh);
-      
-      const { data: freshItems } = await supabase.from('estimate_line_items').select('*')
-        .eq('estimate_id', estimate.id)
-        .order('sort_order');
-        
+      const { data: freshItems } = await supabase.from('estimate_line_items').select('*').eq('estimate_id', estimate.id).order('sort_order');
       if (freshItems) {
         setLineItems(freshItems);
-        
-        // Parts Sourcing Trigger (moved to backend)
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-        try {
-          await fetch(`${apiUrl}/api/jobs/${selectedJob?.id}/generate-pos`, {
-            method: 'POST'
-          });
-          console.log('[PROC] Auto-PO generation triggered.');
-        } catch (e) {
-          console.error('[PROC] Auto-PO error:', e);
-        }
+        try { await fetch(`${apiUrl}/api/jobs/${selectedJob?.id}/generate-pos`, { method: 'POST' }); console.log('[PROC] Auto-PO generation triggered.'); }
+        catch (e) { console.error('[PROC] Auto-PO error:', e); }
       }
     }
-    
     if (selectedJob?.id) {
       const { data: freshJob } = await supabase.from('jobs').select('*').eq('id', selectedJob.id).single();
-      if (freshJob) {
-        setSelectedJob(freshJob);
-        setJobs(prev => prev.map(j => j.id === freshJob.id ? freshJob : j));
-      }
+      if (freshJob) { setSelectedJob(freshJob); setJobs(prev => prev.map(j => j.id === freshJob.id ? freshJob : j)); }
     }
     setView('AUTHORIZED');
   };
-
-  // ── send estimate to customer ──────────────────────────────────────────────
 
   const sendToCustomer = async () => {
     setSending(true);
@@ -392,11 +283,9 @@ export default function IgnitionEstimate() {
     setEstimate(prev => ({ ...prev, status: 'sent' }));
     setSelectedJob(prev => ({ ...prev, status: 'pending_auth' }));
     setJobs(prev => prev.map(j => j.id === selectedJob.id ? { ...j, status: 'pending_auth' } : j));
-    setSending(false);
-    setView('SENT');
+    setSending(false); setView('SENT');
   };
 
-  // ─── derived totals from current lineItems ────────────────────────────────
   const partsTotal = lineItems.filter(l => l.item_type === 'PART').reduce((s, l) => s + (l.line_total || 0), 0);
   const subtotal   = lineItems.reduce((s, l) => s + (l.line_total || 0), 0);
   const tax        = +(partsTotal * taxRate).toFixed(2);
@@ -415,73 +304,77 @@ export default function IgnitionEstimate() {
   // ─────────────────────────────────────────────────────────────────────────
 
   if (view === 'QUEUE') return (
-    <div className="min-h-screen bg-slate-950 p-6 pb-32">
-      <div className="max-w-3xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+    <div style={{ minHeight: '100vh', background: '#020617', padding: '24px', paddingBottom: '128px' }}>
+      <div style={{ maxWidth: '48rem', marginLeft: 'auto', marginRight: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
           <div>
-            <h1 className="text-2xl font-black italic text-white uppercase tracking-tighter">Estimate Queue</h1>
-            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Service Writer // Zone 3 Entry</p>
+            <h1 style={{ fontSize: '24px', fontWeight: 900, fontStyle: 'italic', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '-0.05em' }}>Estimate Queue</h1>
+            <p style={{ fontSize: '10px', fontFamily: 'monospace', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Service Writer // Zone 3 Entry</p>
           </div>
-          <button onClick={loadQueue} className="p-2 text-slate-500 hover:text-white transition-colors">
-            <RefreshCw size={16} className={loadingQueue ? 'animate-spin' : ''} />
+          {/* NON-1:1: hover:text-white → dropped; animate-spin → ign-spin */}
+          <button onClick={loadQueue} style={{ padding: '8px', color: '#64748b', background: 'none', border: 'none', cursor: 'pointer' }}>
+            <RefreshCw size={16} className={loadingQueue ? 'ign-spin' : ''} />
           </button>
         </div>
 
         {error && (
-          <div className="bg-red-900/20 border border-red-500/40 rounded-xl px-4 py-3 mb-6 text-red-400 text-xs font-bold flex items-center gap-2">
+          <div style={{ background: 'rgba(127,29,29,0.2)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: '12px', padding: '12px 16px', marginBottom: '24px', color: '#f87171', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
             <AlertCircle size={14} /> {error}
           </div>
         )}
 
         {loadingQueue && (
-          <div className="flex justify-center py-20">
-            <Loader2 size={24} className="text-blue-500 animate-spin" />
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 0' }}>
+            {/* NON-1:1: animate-spin → ign-spin */}
+            <Loader2 size={24} className="ign-spin" style={{ color: '#3b82f6' }} />
           </div>
         )}
 
         {!loadingQueue && jobs.length === 0 && (
-          <div className="text-center py-20 text-slate-600">
-            <FileText size={40} className="mx-auto mb-4 opacity-30" />
-            <p className="font-black uppercase tracking-widest text-sm">No jobs awaiting estimates</p>
-            <p className="text-xs mt-2">Jobs move here after tech submits evaluation</p>
+          <div style={{ textAlign: 'center', padding: '80px 0', color: '#475569' }}>
+            <FileText size={40} style={{ marginLeft: 'auto', marginRight: 'auto', marginBottom: '16px', opacity: 0.3 }} />
+            <p style={{ fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '14px' }}>No jobs awaiting estimates</p>
+            <p style={{ fontSize: '12px', marginTop: '8px' }}>Jobs move here after tech submits evaluation</p>
           </div>
         )}
 
-        <div className="space-y-4">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {jobs.map(job => {
-            const badge = STATUS_BADGE[job.status] || { label: job.status, color: 'bg-slate-800 text-slate-400 border-slate-700' };
+            const badge = STATUS_BADGE[job.status] || { label: job.status, bg: 'rgba(30,41,59,1)', color: '#94a3b8', border: '#334155' };
             const cust  = job.customer || {};
             const veh   = job.vehicle  || {};
             return (
               <div
                 key={job.id}
-                className="bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition-all cursor-pointer group"
+                className="ign-card-hover"
+                style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '16px', padding: '20px', cursor: 'pointer' }}
                 onClick={() => openJob(job)}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border ${badge.color}`}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '4px 8px', borderRadius: '4px', border: `1px solid ${badge.border}`, background: badge.bg, color: badge.color }}>
                         {badge.label}
                       </span>
-                      <span className="text-[9px] font-mono text-slate-600">{job.wo_number || job.id?.slice(0, 8)}</span>
+                      <span style={{ fontSize: '9px', fontFamily: 'monospace', color: '#475569' }}>{job.wo_number || job.id?.slice(0, 8)}</span>
                     </div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <User size={12} className="text-slate-500 flex-shrink-0" />
-                      <span className="text-white font-bold text-sm truncate">{cust.name || 'Unknown Customer'}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <User size={12} style={{ color: '#64748b', flexShrink: 0 }} />
+                      {/* NON-1:1: truncate → overflow hidden ellipsis */}
+                      <span style={{ color: '#ffffff', fontWeight: 700, fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cust.name || 'Unknown Customer'}</span>
                     </div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Car size={12} className="text-slate-500 flex-shrink-0" />
-                      <span className="text-slate-400 text-xs">{[veh.year, veh.make, veh.model].filter(Boolean).join(' ') || 'Unknown Vehicle'}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <Car size={12} style={{ color: '#64748b', flexShrink: 0 }} />
+                      <span style={{ color: '#94a3b8', fontSize: '12px' }}>{[veh.year, veh.make, veh.model].filter(Boolean).join(' ') || 'Unknown Vehicle'}</span>
                     </div>
                     {job.complaint && (
-                      <p className="text-slate-600 text-xs truncate flex items-center gap-1">
-                        <AlertCircle size={10} className="text-amber-500/60 flex-shrink-0" />
+                      <p style={{ color: '#475569', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <AlertCircle size={10} style={{ color: 'rgba(245,158,11,0.6)', flexShrink: 0 }} />
                         {job.complaint}
                       </p>
                     )}
                   </div>
-                  <ChevronRight size={18} className="text-slate-700 group-hover:text-slate-400 transition-colors flex-shrink-0 mt-1" />
+                  <ChevronRight size={18} style={{ color: '#334155', flexShrink: 0, marginTop: '4px' }} />
                 </div>
               </div>
             );
@@ -496,20 +389,15 @@ export default function IgnitionEstimate() {
   // ─────────────────────────────────────────────────────────────────────────
 
   if (view === 'SENT') return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6">
-      <div className="max-w-sm w-full bg-slate-900 border border-emerald-500/30 rounded-3xl p-10 text-center shadow-2xl shadow-emerald-900/10">
-        <div className="w-16 h-16 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
-          <Send size={28} className="text-emerald-400" />
+    <div style={{ minHeight: '100vh', background: '#020617', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+      <div style={{ maxWidth: '24rem', width: '100%', background: '#0f172a', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '24px', padding: '40px', textAlign: 'center', boxShadow: '0 25px 50px rgba(6,78,59,0.1)' }}>
+        <div style={{ width: '64px', height: '64px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 'auto', marginRight: 'auto', marginBottom: '24px' }}>
+          <Send size={28} style={{ color: '#34d399' }} />
         </div>
-        <h2 className="text-xl font-black italic text-white uppercase tracking-tighter mb-2">Estimate Sent</h2>
-        <p className="text-slate-500 text-xs mb-2">
-          {selectedJob?.customer?.name || 'Customer'} has been notified.
-        </p>
-        <p className="text-slate-600 text-[10px] uppercase tracking-widest mb-8">Status: Awaiting Authorization</p>
-        <button
-          onClick={() => { setView('QUEUE'); loadQueue(); }}
-          className="w-full bg-slate-800 hover:bg-slate-700 text-white font-black py-4 rounded-xl uppercase tracking-widest text-[10px] transition-all"
-        >
+        <h2 style={{ fontSize: '20px', fontWeight: 900, fontStyle: 'italic', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '-0.05em', marginBottom: '8px' }}>Estimate Sent</h2>
+        <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '8px' }}>{selectedJob?.customer?.name || 'Customer'} has been notified.</p>
+        <p style={{ color: '#475569', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '32px' }}>Status: Awaiting Authorization</p>
+        <button onClick={() => { setView('QUEUE'); loadQueue(); }} style={{ width: '100%', background: '#1e293b', color: '#ffffff', fontWeight: 900, padding: '16px', borderRadius: '12px', textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '10px', border: 'none', cursor: 'pointer' }}>
           Back to Queue
         </button>
       </div>
@@ -521,20 +409,15 @@ export default function IgnitionEstimate() {
   // ─────────────────────────────────────────────────────────────────────────
 
   if (view === 'AUTHORIZED') return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6">
-      <div className="max-w-sm w-full bg-slate-900 border border-blue-500/30 rounded-3xl p-10 text-center shadow-2xl shadow-blue-900/10">
-        <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
-          <ClipboardCheck size={28} className="text-blue-400" />
+    <div style={{ minHeight: '100vh', background: '#020617', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+      <div style={{ maxWidth: '24rem', width: '100%', background: '#0f172a', border: '1px solid rgba(59,130,246,0.3)', borderRadius: '24px', padding: '40px', textAlign: 'center', boxShadow: '0 25px 50px rgba(30,58,138,0.1)' }}>
+        <div style={{ width: '64px', height: '64px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 'auto', marginRight: 'auto', marginBottom: '24px' }}>
+          <ClipboardCheck size={28} style={{ color: '#60a5fa' }} />
         </div>
-        <h2 className="text-xl font-black italic text-white uppercase tracking-tighter mb-2">Authorized</h2>
-        <p className="text-slate-500 text-xs mb-2">
-          {selectedJob?.customer?.name || 'Customer'} has authorized the repair.
-        </p>
-        <p className="text-slate-600 text-[10px] uppercase tracking-widest mb-8">Job Status: Authorized</p>
-        <button
-          onClick={() => { setView('QUEUE'); loadQueue(); }}
-          className="w-full bg-slate-800 hover:bg-slate-700 text-white font-black py-4 rounded-xl uppercase tracking-widest text-[10px] transition-all"
-        >
+        <h2 style={{ fontSize: '20px', fontWeight: 900, fontStyle: 'italic', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '-0.05em', marginBottom: '8px' }}>Authorized</h2>
+        <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '8px' }}>{selectedJob?.customer?.name || 'Customer'} has authorized the repair.</p>
+        <p style={{ color: '#475569', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '32px' }}>Job Status: Authorized</p>
+        <button onClick={() => { setView('QUEUE'); loadQueue(); }} style={{ width: '100%', background: '#1e293b', color: '#ffffff', fontWeight: 900, padding: '16px', borderRadius: '12px', textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '10px', border: 'none', cursor: 'pointer' }}>
           Back to Queue
         </button>
       </div>
@@ -545,91 +428,88 @@ export default function IgnitionEstimate() {
   // RENDER: REVIEW
   // ─────────────────────────────────────────────────────────────────────────
 
-  const canSend = estimate && lineItems.length > 0 &&
-    ['ready', 'building'].includes(estimate.status) &&
-    !building;
+  const canSend = estimate && lineItems.length > 0 && ['ready', 'building'].includes(estimate.status) && !building;
+  const isSent  = estimate?.status === 'sent' || selectedJob?.status === 'pending_auth';
+  const cust    = selectedJob?.customer || {};
+  const veh     = selectedJob?.vehicle  || {};
 
-  const isSent = estimate?.status === 'sent' || selectedJob?.status === 'pending_auth';
-
-  const cust = selectedJob?.customer || {};
-  const veh  = selectedJob?.vehicle  || {};
+  const estBadge = STATUS_BADGE[estimate?.status] || { bg: 'rgba(30,41,59,1)', color: '#94a3b8', border: '#334155', label: estimate?.status };
 
   return (
-    <div className="min-h-screen bg-slate-950 pb-32">
-      <div className="max-w-3xl mx-auto p-6">
+    <div style={{ minHeight: '100vh', background: '#020617', paddingBottom: '128px' }}>
+      <div style={{ maxWidth: '48rem', marginLeft: 'auto', marginRight: 'auto', padding: '24px' }}>
 
         {/* Back + title */}
-        <div className="flex items-center gap-4 mb-6">
-          <button onClick={() => setView('QUEUE')} className="text-slate-500 hover:text-white transition-colors">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+          {/* NON-1:1: hover:text-white → dropped */}
+          <button onClick={() => setView('QUEUE')} style={{ color: '#64748b', background: 'none', border: 'none', cursor: 'pointer' }}>
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="text-xl font-black italic text-white uppercase tracking-tighter">Estimate Review</h1>
-            <p className="text-[9px] font-mono text-slate-500">
+            <h1 style={{ fontSize: '20px', fontWeight: 900, fontStyle: 'italic', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '-0.05em' }}>Estimate Review</h1>
+            <p style={{ fontSize: '9px', fontFamily: 'monospace', color: '#64748b' }}>
               {selectedJob?.wo_number || selectedJob?.id?.slice(0, 8)} // {currentUser?.name}
             </p>
           </div>
           {estimate && (
-            <span className={`ml-auto text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border ${
-              STATUS_BADGE[estimate.status]?.color || 'bg-slate-800 text-slate-400 border-slate-700'
-            }`}>
-              {STATUS_BADGE[estimate.status]?.label || estimate.status}
+            <span style={{ marginLeft: 'auto', fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '4px 8px', borderRadius: '4px', background: estBadge.bg, color: estBadge.color, border: `1px solid ${estBadge.border}` }}>
+              {estBadge.label}
             </span>
           )}
         </div>
 
         {error && (
-          <div className="bg-red-900/20 border border-red-500/40 rounded-xl px-4 py-3 mb-6 flex items-center gap-3">
-            <AlertCircle size={14} className="text-red-400 flex-shrink-0" />
-            <p className="text-red-400 text-xs font-bold flex-1">{error}</p>
-            <button onClick={() => setError('')}><X size={14} className="text-red-500" /></button>
+          <div style={{ background: 'rgba(127,29,29,0.2)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: '12px', padding: '12px 16px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <AlertCircle size={14} style={{ color: '#f87171', flexShrink: 0 }} />
+            <p style={{ color: '#f87171', fontSize: '12px', fontWeight: 700, flex: 1 }}>{error}</p>
+            <button onClick={() => setError('')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={14} style={{ color: '#ef4444' }} /></button>
           </div>
         )}
 
         {/* Job summary card */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 mb-6 grid grid-cols-2 gap-4">
+        {/* NON-1:1: grid-cols-2 col-span-2 → grid with gridColumn span */}
+        <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '16px', padding: '16px', marginBottom: '24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div>
-            <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">Customer</p>
-            <p className="text-white font-bold text-sm">{cust.name || '—'}</p>
-            <p className="text-slate-500 text-xs">{cust.phone || ''}</p>
+            <p style={{ fontSize: '9px', fontWeight: 900, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Customer</p>
+            <p style={{ color: '#ffffff', fontWeight: 700, fontSize: '14px' }}>{cust.name || '—'}</p>
+            <p style={{ color: '#64748b', fontSize: '12px' }}>{cust.phone || ''}</p>
           </div>
           <div>
-            <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">Vehicle</p>
-            <p className="text-white font-bold text-sm">
-              {[veh.year, veh.make, veh.model].filter(Boolean).join(' ') || '—'}
-            </p>
-            {veh.vin && <p className="text-slate-500 text-xs font-mono">…{veh.vin.slice(-6)}</p>}
+            <p style={{ fontSize: '9px', fontWeight: 900, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Vehicle</p>
+            <p style={{ color: '#ffffff', fontWeight: 700, fontSize: '14px' }}>{[veh.year, veh.make, veh.model].filter(Boolean).join(' ') || '—'}</p>
+            {veh.vin && <p style={{ color: '#64748b', fontSize: '12px', fontFamily: 'monospace' }}>…{veh.vin.slice(-6)}</p>}
           </div>
           {selectedJob?.complaint && (
-            <div className="col-span-2 border-t border-slate-800 pt-3">
-              <p className="text-[9px] font-black text-amber-500/70 uppercase tracking-widest mb-1">Complaint</p>
-              <p className="text-slate-300 text-xs">{selectedJob.complaint}</p>
+            <div style={{ gridColumn: 'span 2', borderTop: '1px solid #1e293b', paddingTop: '12px' }}>
+              <p style={{ fontSize: '9px', fontWeight: 900, color: 'rgba(245,158,11,0.7)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Complaint</p>
+              <p style={{ color: '#cbd5e1', fontSize: '12px' }}>{selectedJob.complaint}</p>
             </div>
           )}
         </div>
 
-        {/* Build trigger — shown when no estimate yet OR estimate failed */}
+        {/* Build trigger */}
         {(!estimate || estimate.status === 'building') && !building && (
           <button
             onClick={buildEstimate}
-            className="w-full mb-6 bg-blue-600 hover:bg-blue-500 text-white font-black py-5 rounded-2xl uppercase tracking-widest text-[10px] flex items-center justify-center gap-3 transition-all active:scale-95 shadow-lg shadow-blue-900/30"
+            className="ign-card-hover"
+            style={{ width: '100%', marginBottom: '24px', background: '#2563eb', color: '#ffffff', fontWeight: 900, padding: '20px', borderRadius: '16px', textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', boxShadow: '0 10px 15px rgba(30,58,138,0.3)', border: 'none', cursor: 'pointer' }}
           >
             <Zap size={16} /> Build Estimate with AI
           </button>
         )}
 
         {building && (
-          <div className="w-full mb-6 bg-slate-900 border border-blue-500/30 rounded-2xl py-5 flex items-center justify-center gap-3">
-            <Loader2 size={16} className="text-blue-400 animate-spin" />
-            <span className="text-blue-400 font-black text-[10px] uppercase tracking-widest">Agent running…</span>
+          <div style={{ width: '100%', marginBottom: '24px', background: '#0f172a', border: '1px solid rgba(59,130,246,0.3)', borderRadius: '16px', padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+            {/* NON-1:1: animate-spin → ign-spin */}
+            <Loader2 size={16} className="ign-spin" style={{ color: '#60a5fa' }} />
+            <span style={{ color: '#60a5fa', fontWeight: 900, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Agent running…</span>
           </div>
         )}
 
-        {/* Rebuild button — shown when estimate already exists and not sent */}
         {estimate && estimate.status !== 'building' && !isSent && !building && (
           <button
             onClick={buildEstimate}
-            className="w-full mb-4 flex items-center justify-center gap-2 text-slate-600 hover:text-slate-400 text-[9px] font-black uppercase tracking-widest py-2 transition-colors"
+            style={{ width: '100%', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#475569', fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '8px', background: 'none', border: 'none', cursor: 'pointer' }}
           >
             <RefreshCw size={11} /> Rebuild with AI
           </button>
@@ -644,138 +524,99 @@ export default function IgnitionEstimate() {
               const meta = ITEM_TYPE_META[type];
               const Icon = meta.icon;
               return (
-                <div key={type} className="mb-2">
-                  <div className="flex items-center gap-2 mb-2 px-1">
-                    <Icon size={12} className={meta.color} />
-                    <span className={`text-[9px] font-black uppercase tracking-widest ${meta.color}`}>{meta.label}</span>
+                <div key={type} style={{ marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', paddingLeft: '4px' }}>
+                    <Icon size={12} style={{ color: meta.color }} />
+                    <span style={{ fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: meta.color }}>{meta.label}</span>
                   </div>
 
-                  <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden mb-4">
-                    {items.map(item => (
+                  <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', overflow: 'hidden', marginBottom: '16px' }}>
+                    {items.map((item, itemIdx) => (
                       type === 'PART' ? (
-                        <div key={item.id} className="border-b border-slate-800 last:border-0">
-                          <div className="flex items-start gap-3 px-4 py-3 hover:bg-slate-900/50 group">
-                            <div className="flex-1 min-w-0">
-                              <div className="text-white text-sm font-semibold mb-0.5">
+                        // NON-1:1: last:border-0 → conditional border check
+                        <div key={item.id} style={{ borderBottom: itemIdx < items.length - 1 ? '1px solid #1e293b' : 'none' }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 16px' }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ color: '#ffffff', fontSize: '14px', fontWeight: 600, marginBottom: '2px' }}>
                                 {isSent ? item.description : (
-                                  <EditableCell
-                                    value={item.description}
-                                    onSave={v => updateLineItem(item.id, 'description', v)}
-                                  />
+                                  <EditableCell value={item.description} onSave={v => updateLineItem(item.id, 'description', v)} />
                                 )}
                               </div>
-                              {item.part_number && (
-                                <p className="text-slate-600 text-[10px] font-mono">#{item.part_number}</p>
-                              )}
-                              {item.notes && (
-                                <p className="text-slate-600 text-[10px] italic mt-0.5">{item.notes}</p>
-                              )}
+                              {item.part_number && <p style={{ color: '#475569', fontSize: '10px', fontFamily: 'monospace' }}>#{item.part_number}</p>}
+                              {item.notes && <p style={{ color: '#475569', fontSize: '10px', fontStyle: 'italic', marginTop: '2px' }}>{item.notes}</p>}
                             </div>
-                            <div className="w-16 text-right flex-shrink-0">
-                              <div className="text-slate-400 text-xs">
+                            <div style={{ width: '64px', textAlign: 'right', flexShrink: 0 }}>
+                              <div style={{ color: '#94a3b8', fontSize: '12px' }}>
                                 {isSent ? `×${item.quantity}` : (
-                                  <EditableCell
-                                    value={item.quantity}
-                                    type="number"
-                                    onSave={v => updateLineItem(item.id, 'quantity', v)}
-                                  />
+                                  <EditableCell value={item.quantity} type="number" onSave={v => updateLineItem(item.id, 'quantity', v)} />
                                 )}
                               </div>
                             </div>
-                            <div className="w-20 text-right flex-shrink-0">
-                              <span className="text-white font-bold text-sm">{fmt(item.line_total)}</span>
-                              {savingIds.has(item.id) && <Loader2 size={10} className="text-blue-400 animate-spin inline ml-1" />}
-                              {item.is_manual_override && (
-                                <span className="text-[8px] font-black text-orange-500 uppercase block mt-0.5">Override</span>
-                              )}
+                            <div style={{ width: '80px', textAlign: 'right', flexShrink: 0 }}>
+                              <span style={{ color: '#ffffff', fontWeight: 700, fontSize: '14px' }}>{fmt(item.line_total)}</span>
+                              {/* NON-1:1: animate-spin → ign-spin */}
+                              {savingIds.has(item.id) && <Loader2 size={10} className="ign-spin" style={{ color: '#60a5fa', display: 'inline', marginLeft: '4px' }} />}
+                              {item.is_manual_override && <span style={{ fontSize: '8px', fontWeight: 900, color: '#f97316', textTransform: 'uppercase', display: 'block', marginTop: '2px' }}>Override</span>}
                             </div>
                             {!isSent && (
-                              <button
-                                onClick={() => deleteLineItem(item.id)}
-                                className="text-slate-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
-                              >
+                              // NON-1:1: opacity-0 group-hover:opacity-100 → always 50% opacity
+                              <button onClick={() => deleteLineItem(item.id)} style={{ color: '#334155', opacity: 0.5, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer' }}>
                                 <Trash2 size={14} />
                               </button>
                             )}
                           </div>
-                          <div className="px-4 pb-4">
+                          <div style={{ padding: '0 16px 16px' }}>
                             {!isSent ? (
-                              <PriceField
-                                cost={item.unit_cost || 0}
-                                initialPrice={item.unit_price}
-                                onUpdate={d => handlePriceOverride(item.id, d)}
-                              />
+                              <PriceField cost={item.unit_cost || 0} initialPrice={item.unit_price} onUpdate={d => handlePriceOverride(item.id, d)} />
                             ) : item.unit_price != null && (
-                              <div className="flex items-center gap-2 pb-1">
-                                <span className="text-slate-500 text-[10px]">{fmt(item.unit_price)}/ea</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '4px' }}>
+                                <span style={{ color: '#64748b', fontSize: '10px' }}>{fmt(item.unit_price)}/ea</span>
                                 {item.is_manual_override && (
-                                  <span className="text-[8px] font-black text-orange-500/70 uppercase px-1.5 py-0.5 rounded border border-orange-500/20">Relationship Tax</span>
+                                  <span style={{ fontSize: '8px', fontWeight: 900, color: 'rgba(249,115,22,0.7)', textTransform: 'uppercase', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(249,115,22,0.2)' }}>Relationship Tax</span>
                                 )}
                               </div>
                             )}
                           </div>
                         </div>
                       ) : (
-                        <div key={item.id} className="flex items-start gap-3 px-4 py-3 border-b border-slate-800 last:border-0 hover:bg-slate-900/50 group">
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white text-sm font-semibold mb-0.5">
+                        <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 16px', borderBottom: itemIdx < items.length - 1 ? '1px solid #1e293b' : 'none' }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ color: '#ffffff', fontSize: '14px', fontWeight: 600, marginBottom: '2px' }}>
                               {isSent ? item.description : (
-                                <EditableCell
-                                  value={item.description}
-                                  onSave={v => updateLineItem(item.id, 'description', v)}
-                                />
+                                <EditableCell value={item.description} onSave={v => updateLineItem(item.id, 'description', v)} />
                               )}
                             </div>
-                            {item.part_number && (
-                              <p className="text-slate-600 text-[10px] font-mono">#{item.part_number}</p>
-                            )}
-                            {item.notes && (
-                              <p className="text-slate-600 text-[10px] italic mt-0.5">{item.notes}</p>
-                            )}
+                            {item.part_number && <p style={{ color: '#475569', fontSize: '10px', fontFamily: 'monospace' }}>#{item.part_number}</p>}
+                            {item.notes && <p style={{ color: '#475569', fontSize: '10px', fontStyle: 'italic', marginTop: '2px' }}>{item.notes}</p>}
                           </div>
-                          <div className="w-16 text-right flex-shrink-0">
+                          <div style={{ width: '64px', textAlign: 'right', flexShrink: 0 }}>
                             {item.item_type === 'LABOR' ? (
-                              <div className="text-slate-400 text-xs">
+                              <div style={{ color: '#94a3b8', fontSize: '12px' }}>
                                 {isSent ? `${item.labor_hours}h` : (
-                                  <EditableCell
-                                    value={item.labor_hours}
-                                    type="number"
-                                    onSave={v => updateLineItem(item.id, 'labor_hours', v)}
-                                  />
+                                  <EditableCell value={item.labor_hours} type="number" onSave={v => updateLineItem(item.id, 'labor_hours', v)} />
                                 )}
                               </div>
                             ) : (
-                              <div className="text-slate-400 text-xs">
+                              <div style={{ color: '#94a3b8', fontSize: '12px' }}>
                                 {isSent ? `×${item.quantity}` : (
-                                  <EditableCell
-                                    value={item.quantity}
-                                    type="number"
-                                    onSave={v => updateLineItem(item.id, 'quantity', v)}
-                                  />
+                                  <EditableCell value={item.quantity} type="number" onSave={v => updateLineItem(item.id, 'quantity', v)} />
                                 )}
                               </div>
                             )}
                           </div>
-                          <div className="w-20 text-right flex-shrink-0">
-                            <div className="text-slate-400 text-xs">
+                          <div style={{ width: '80px', textAlign: 'right', flexShrink: 0 }}>
+                            <div style={{ color: '#94a3b8', fontSize: '12px' }}>
                               {isSent ? fmt(item.unit_price) : (
-                                <EditableCell
-                                  value={item.unit_price != null ? +item.unit_price.toFixed(2) : null}
-                                  type="number"
-                                  onSave={v => updateLineItem(item.id, 'unit_price', v)}
-                                />
+                                <EditableCell value={item.unit_price != null ? +item.unit_price.toFixed(2) : null} type="number" onSave={v => updateLineItem(item.id, 'unit_price', v)} />
                               )}
                             </div>
                           </div>
-                          <div className="w-20 text-right flex-shrink-0">
-                            <span className="text-white font-bold text-sm">{fmt(item.line_total)}</span>
-                            {savingIds.has(item.id) && <Loader2 size={10} className="text-blue-400 animate-spin inline ml-1" />}
+                          <div style={{ width: '80px', textAlign: 'right', flexShrink: 0 }}>
+                            <span style={{ color: '#ffffff', fontWeight: 700, fontSize: '14px' }}>{fmt(item.line_total)}</span>
+                            {savingIds.has(item.id) && <Loader2 size={10} className="ign-spin" style={{ color: '#60a5fa', display: 'inline', marginLeft: '4px' }} />}
                           </div>
                           {!isSent && (
-                            <button
-                              onClick={() => deleteLineItem(item.id)}
-                              className="text-slate-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
-                            >
+                            <button onClick={() => deleteLineItem(item.id)} style={{ color: '#334155', opacity: 0.5, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer' }}>
                               <Trash2 size={14} />
                             </button>
                           )}
@@ -789,42 +630,46 @@ export default function IgnitionEstimate() {
 
             {/* Add line item */}
             {!isSent && (
-              <div className="mb-6">
+              <div style={{ marginBottom: '24px' }}>
                 {!addingRow ? (
                   <button
                     onClick={() => setAddingRow(true)}
-                    className="w-full flex items-center justify-center gap-2 border border-dashed border-slate-700 hover:border-slate-500 text-slate-600 hover:text-slate-400 font-black py-3 rounded-xl uppercase tracking-widest text-[9px] transition-all"
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: '1px dashed #334155', color: '#475569', fontWeight: 900, padding: '12px', borderRadius: '12px', textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '9px', background: 'none', cursor: 'pointer' }}
                   >
                     <Plus size={12} /> Add Line Item
                   </button>
                 ) : (
-                  <div className="bg-slate-900 border border-blue-500/40 rounded-xl p-4 space-y-3">
-                    <div className="flex gap-3">
+                  <div style={{ background: '#0f172a', border: '1px solid rgba(59,130,246,0.4)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', gap: '12px' }}>
                       <select
                         value={newRow.item_type}
                         onChange={e => setNewRow(p => ({ ...p, item_type: e.target.value }))}
-                        className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs font-bold outline-none"
+                        className="ign-input"
+                        style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '8px 12px', color: '#ffffff', fontSize: '12px', fontWeight: 700, outline: 'none' }}
                       >
                         {Object.keys(ITEM_TYPE_META).map(t => (
                           <option key={t} value={t}>{ITEM_TYPE_META[t].label}</option>
                         ))}
                       </select>
+                      {/* NON-1:1: focus:border-blue-500 → ign-input */}
                       <input
                         autoFocus
                         placeholder="Description"
                         value={newRow.description}
                         onChange={e => setNewRow(p => ({ ...p, description: e.target.value }))}
-                        className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-blue-500"
+                        className="ign-input"
+                        style={{ flex: 1, background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '8px 12px', color: '#ffffff', fontSize: '14px', outline: 'none' }}
                       />
                     </div>
-                    <div className="flex gap-3">
+                    <div style={{ display: 'flex', gap: '12px' }}>
                       {newRow.item_type === 'LABOR' ? (
                         <input
                           type="number"
                           placeholder="Labor hours"
                           value={newRow.labor_hours}
                           onChange={e => setNewRow(p => ({ ...p, labor_hours: e.target.value }))}
-                          className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-blue-500"
+                          className="ign-input"
+                          style={{ flex: 1, background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '8px 12px', color: '#ffffff', fontSize: '14px', outline: 'none' }}
                         />
                       ) : (
                         <>
@@ -833,21 +678,23 @@ export default function IgnitionEstimate() {
                             placeholder="Qty"
                             value={newRow.quantity}
                             onChange={e => setNewRow(p => ({ ...p, quantity: e.target.value }))}
-                            className="w-20 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-blue-500"
+                            className="ign-input"
+                            style={{ width: '80px', background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '8px 12px', color: '#ffffff', fontSize: '14px', outline: 'none' }}
                           />
                           <input
                             type="number"
                             placeholder="Unit price"
                             value={newRow.unit_price}
                             onChange={e => setNewRow(p => ({ ...p, unit_price: e.target.value }))}
-                            className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-blue-500"
+                            className="ign-input"
+                            style={{ flex: 1, background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '8px 12px', color: '#ffffff', fontSize: '14px', outline: 'none' }}
                           />
                         </>
                       )}
-                      <button onClick={commitNewRow} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors">
+                      <button onClick={commitNewRow} style={{ background: '#2563eb', color: '#ffffff', padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer' }}>
                         <Check size={14} />
                       </button>
-                      <button onClick={() => setAddingRow(false)} className="text-slate-600 hover:text-slate-400 px-2 transition-colors">
+                      <button onClick={() => setAddingRow(false)} style={{ color: '#475569', padding: '8px', background: 'none', border: 'none', cursor: 'pointer' }}>
                         <X size={14} />
                       </button>
                     </div>
@@ -857,56 +704,56 @@ export default function IgnitionEstimate() {
             )}
 
             {/* Totals */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 mb-6">
-              <div className="space-y-2 text-sm mb-4">
-                <div className="flex justify-between text-slate-400">
+            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '16px', padding: '20px', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '14px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8' }}>
                   <span>Labor</span>
                   <span>{fmt(groupedItems.LABOR.reduce((s, l) => s + (l.line_total || 0), 0))}</span>
                 </div>
-                <div className="flex justify-between text-slate-400">
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8' }}>
                   <span>Parts</span>
                   <span>{fmt(partsTotal)}</span>
                 </div>
                 {(groupedItems.FEE.length + groupedItems.SUBLET.length + groupedItems.MISC.length) > 0 && (
-                  <div className="flex justify-between text-slate-400">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8' }}>
                     <span>Fees / Other</span>
                     <span>{fmt([...groupedItems.FEE, ...groupedItems.SUBLET, ...groupedItems.MISC].reduce((s, l) => s + (l.line_total || 0), 0))}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-slate-500 text-xs">
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', fontSize: '12px' }}>
                   <span>Tax ({(taxRate * 100).toFixed(2)}% on parts)</span>
                   <span>{fmt(tax)}</span>
                 </div>
               </div>
-              <div className="flex justify-between items-center border-t border-slate-800 pt-4">
-                <span className="text-white font-black text-lg uppercase tracking-wider">Total</span>
-                <span className="text-emerald-400 font-black text-2xl">{fmt(total)}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #1e293b', paddingTop: '16px' }}>
+                <span style={{ color: '#ffffff', fontWeight: 900, fontSize: '18px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total</span>
+                <span style={{ color: '#34d399', fontWeight: 900, fontSize: '24px' }}>{fmt(total)}</span>
               </div>
             </div>
 
-            {/* Agent notes */}
             {estimate?.agent_notes && (
-              <p className="text-slate-700 text-[9px] font-mono mb-6 text-center">{estimate.agent_notes}</p>
+              <p style={{ color: '#334155', fontSize: '9px', fontFamily: 'monospace', marginBottom: '24px', textAlign: 'center' }}>{estimate.agent_notes}</p>
             )}
 
-            {/* Send to customer / Open portal */}
             {!isSent ? (
               <button
                 onClick={sendToCustomer}
                 disabled={sending || !canSend}
-                className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-black py-5 rounded-2xl uppercase tracking-widest text-[10px] flex items-center justify-center gap-3 transition-all active:scale-95 shadow-lg shadow-emerald-900/30"
+                className="ign-card-hover"
+                style={{ width: '100%', background: '#059669', color: '#ffffff', fontWeight: 900, padding: '20px', borderRadius: '16px', textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', boxShadow: '0 10px 15px rgba(6,78,59,0.3)', border: 'none', cursor: sending || !canSend ? 'not-allowed' : 'pointer', opacity: sending || !canSend ? 0.4 : 1 }}
               >
-                {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                {sending ? <Loader2 size={16} className="ign-spin" /> : <Send size={16} />}
                 {sending ? 'Sending…' : 'Send to Customer'}
               </button>
             ) : (
-              <div className="space-y-3">
-                <div className="w-full bg-slate-900 border border-emerald-500/30 rounded-2xl py-3 flex items-center justify-center gap-2 text-emerald-400 font-black text-[10px] uppercase tracking-widest">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ width: '100%', background: '#0f172a', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '16px', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#34d399', fontWeight: 900, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                   <Check size={14} /> Estimate Sent — Awaiting Authorization
                 </div>
                 <button
                   onClick={() => setPortalOpen(true)}
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-5 rounded-2xl uppercase tracking-widest text-[10px] flex items-center justify-center gap-3 transition-all active:scale-95 shadow-lg shadow-blue-900/30"
+                  className="ign-card-hover"
+                  style={{ width: '100%', background: '#2563eb', color: '#ffffff', fontWeight: 900, padding: '20px', borderRadius: '16px', textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', boxShadow: '0 10px 15px rgba(30,58,138,0.3)', border: 'none', cursor: 'pointer' }}
                 >
                   <ClipboardCheck size={16} /> Open Customer Authorization Portal
                 </button>
@@ -915,20 +762,19 @@ export default function IgnitionEstimate() {
           </>
         )}
 
-        {/* Empty state — estimate exists but no line items yet */}
         {estimate && lineItems.length === 0 && !building && estimate.status !== 'building' && (
-          <div className="text-center py-12 text-slate-600">
-            <FileText size={32} className="mx-auto mb-3 opacity-30" />
-            <p className="text-xs font-black uppercase tracking-widest">No line items yet</p>
-            <p className="text-[10px] mt-1">Click "Build Estimate with AI" to generate them</p>
+          <div style={{ textAlign: 'center', padding: '48px 0', color: '#475569' }}>
+            <FileText size={32} style={{ marginLeft: 'auto', marginRight: 'auto', marginBottom: '12px', opacity: 0.3 }} />
+            <p style={{ fontSize: '12px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }}>No line items yet</p>
+            <p style={{ fontSize: '10px', marginTop: '4px' }}>Click "Build Estimate with AI" to generate them</p>
           </div>
         )}
 
       </div>
 
-      {/* Customer Authorization Portal — fullscreen overlay */}
+      {/* Customer Authorization Portal */}
       {portalOpen && estimate?.id && selectedJob?.id && (
-        <div className="fixed inset-0 z-50">
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50 }}>
           <CustomerApprovalPortal
             estimateId={estimate.id}
             jobId={selectedJob.id}
