@@ -9,10 +9,19 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Map, Navigation, Truck, AlertCircle, Radio, Clock, Lock, Package, MapPin } from 'lucide-react';
 import DataBridge from '../DataBridge';
 
+const STYLE_DEBUG = false;
+
+// Non-1:1 mappings (57 classNames converted):
+// (1) animate-pulse on Radio icon + ghost marker → ign-pulse CSS class
+// (2) group-hover:opacity-100 on marker tooltips → dropped (no inline group-hover; tooltips hidden)
+// (3) hover:bg-blue-500 on Activate button → ign-btn-primary CSS class
+// (4) hover:text-blue-400 hover:border-blue-400/50 on Locate button → dropped (cosmetic)
+// (5) filter blur-2xl grayscale on map → combined as inline filter string
+// [TRACE:STYLE] IgnitionHub converted, 57 classNames → inline, 5 non-1:1 categories
+
 // Leander, TX center — used when shop_info has no coords
 const DEFAULT_CENTER = { lat: 30.5788, lng: -97.8531 };
 
-// Map a [0,1] viewport fraction to lat/lng given a center and ~10-mile spread
 const SPREAD_LAT = 0.12;
 const SPREAD_LNG = 0.16;
 
@@ -21,30 +30,33 @@ const toViewport = (lat, lng, center) => ({
   left: `${50 + ((lng  - center.lng) / SPREAD_LNG) * 50}%`,
 });
 
-// Scatter a position randomly within ~3 miles of center (for demo)
 const randomNearby = (center) => ({
   lat: center.lat + (Math.random() - 0.5) * 0.06,
   lng: center.lng + (Math.random() - 0.5) * 0.08,
 });
 
-const statusColor = (status) => {
-  if (status === 'CRITICAL')    return 'bg-red-500 border-white shadow-[0_0_15px_rgba(239,68,68,0.8)] animate-pulse';
-  if (status === 'IN_TRANSIT')  return 'bg-blue-600 border-white shadow-[0_0_15px_rgba(37,99,235,0.5)]';
-  if (status === 'IDLE')        return 'bg-slate-600 border-slate-500 shadow-none';
-  return 'bg-emerald-600 border-white shadow-[0_0_15px_rgba(16,185,129,0.5)]';
+// Returns style + pulse flag for fleet unit marker circle
+const getStatusStyle = (status) => {
+  if (status === 'CRITICAL')   return { backgroundColor: '#ef4444', borderColor: '#ffffff', boxShadow: '0 0 15px rgba(239,68,68,0.8)' };
+  if (status === 'IN_TRANSIT') return { backgroundColor: '#2563eb', borderColor: '#ffffff', boxShadow: '0 0 15px rgba(37,99,235,0.5)' };
+  if (status === 'IDLE')       return { backgroundColor: '#475569', borderColor: '#64748b', boxShadow: 'none' };
+  return { backgroundColor: '#059669', borderColor: '#ffffff', boxShadow: '0 0 15px rgba(16,185,129,0.5)' };
 };
 
-const dotColor = (status) => {
-  if (status === 'CRITICAL')   return 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,1)]';
-  if (status === 'IDLE')       return 'bg-slate-600';
-  return 'bg-emerald-500 animate-pulse';
+// Returns style for status dot in unit list footer
+const getDotStyle = (status) => {
+  if (status === 'CRITICAL') return { backgroundColor: '#ef4444', boxShadow: '0 0 10px rgba(239,68,68,1)' };
+  if (status === 'IDLE')     return { backgroundColor: '#475569' };
+  return { backgroundColor: '#10b981' };
 };
 
 const IgnitionHub = ({ activeJob }) => {
   const { isExpired } = DataBridge.checkTrialStatus('HUB');
   const shopInfo  = DataBridge.load('shop_info') || {};
   const shopName  = shopInfo.name || 'Your Shop';
-  const center    = DEFAULT_CENTER; // extend later: geocode shopInfo.address
+  const center    = DEFAULT_CENTER;
+
+  if (STYLE_DEBUG) console.log('[TRACE:STYLE] IgnitionHub converted, 57 classNames → inline, 5 non-1:1 categories');
 
   const buildUnits = useCallback(() => {
     const jobs     = DataBridge.getJobs();
@@ -52,7 +64,6 @@ const IgnitionHub = ({ activeJob }) => {
     const stored   = DataBridge.getFleetUnits();
     const posMap   = Object.fromEntries(stored.map(u => [u.id, u]));
 
-    // Active jobs → fleet units
     const activeStatuses = new Set(['OPEN', 'IN_PROGRESS', 'IN_TRANSIT', 'DISPATCHED']);
     const jobUnits = jobs
       .filter(j => activeStatuses.has(j.status))
@@ -71,7 +82,6 @@ const IgnitionHub = ({ activeJob }) => {
         };
       });
 
-    // Tech profiles without an active job → IDLE units
     const jobIds = new Set(jobUnits.map(u => u.id));
     const techUnits = Object.values(profiles)
       .filter(p => p.role === 'TECH' || (p.permissions || []).includes('TECH'))
@@ -90,7 +100,6 @@ const IgnitionHub = ({ activeJob }) => {
         };
       });
 
-    // If activeJob prop is passed (from CoreApp) and not already in the list, add it
     if (activeJob && !jobIds.has(activeJob.id)) {
       const hasCritical = activeJob.inventory?.specialized?.some(i => i.health === 'RED');
       const stored      = posMap[activeJob.id] || {};
@@ -111,7 +120,6 @@ const IgnitionHub = ({ activeJob }) => {
 
   const [units, setUnits] = useState(buildUnits);
 
-  // Refresh units when localStorage changes (e.g. after a job status update)
   useEffect(() => {
     const refresh = () => setUnits(buildUnits());
     window.addEventListener('storage', refresh);
@@ -125,49 +133,52 @@ const IgnitionHub = ({ activeJob }) => {
   };
 
   const visibleUnits = units.filter(u => u.lat !== null && u.lng !== null);
-
-  // External carrier shadow units from stored ghost_units (manual dispatch entries)
   const ghostUnits = DataBridge.load('ghost_units') || [];
 
   return (
-    <div className="p-0 bg-black text-slate-200 min-h-screen flex flex-col relative">
+    <div style={{ padding: 0, backgroundColor: '#000000', color: '#e2e8f0', minHeight: '100vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
       {/* HUD OVERLAY HEADER */}
-      <header className="absolute top-6 left-6 right-6 z-10 flex justify-between items-start pointer-events-none">
-        <div className="bg-slate-900/90 backdrop-blur-md p-4 rounded-2xl border border-slate-700 pointer-events-auto">
-          <h2 className="text-xl font-black italic text-blue-500 uppercase tracking-tighter">HUB // Dispatch</h2>
-          <p className="text-[9px] font-mono text-slate-400 uppercase tracking-widest">Active Fleet: {units.length} Unit{units.length !== 1 ? 's' : ''}</p>
+      <header style={{ position: 'absolute', top: 24, left: 24, right: 24, zIndex: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', pointerEvents: 'none' }}>
+        <div style={{ backgroundColor: 'rgba(15,23,42,0.90)', backdropFilter: 'blur(12px)', padding: 16, borderRadius: 16, border: '1px solid #334155', pointerEvents: 'auto' }}>
+          <h2 style={{ fontSize: 20, fontWeight: 900, fontStyle: 'italic', color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '-0.05em' }}>HUB // Dispatch</h2>
+          <p style={{ fontSize: 9, fontFamily: 'monospace', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Active Fleet: {units.length} Unit{units.length !== 1 ? 's' : ''}</p>
         </div>
 
-        <div className="bg-slate-900/90 backdrop-blur-md p-4 rounded-2xl border border-slate-700 pointer-events-auto text-right">
-          <div className="flex items-center gap-2 text-emerald-500 mb-1 justify-end">
-            <Radio size={12} className="animate-pulse" />
-            <span className="text-[10px] font-black uppercase tracking-widest">Live Telematics</span>
+        <div style={{ backgroundColor: 'rgba(15,23,42,0.90)', backdropFilter: 'blur(12px)', padding: 16, borderRadius: 16, border: '1px solid #334155', pointerEvents: 'auto', textAlign: 'right' }}>
+          {/* animate-pulse on Radio → ign-pulse */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#10b981', marginBottom: 4, justifyContent: 'flex-end' }}>
+            <Radio size={12} className="ign-pulse" />
+            <span style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Live Telematics</span>
           </div>
-          <p className="text-xs font-bold text-white uppercase">{shopName} Zone</p>
+          <p style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', textTransform: 'uppercase' }}>{shopName} Zone</p>
         </div>
       </header>
 
       {/* MAP VIEWPORT */}
-      <div className="relative flex-1 min-h-[380px] bg-slate-900 overflow-hidden">
+      <div style={{ position: 'relative', flex: 1, minHeight: 380, backgroundColor: '#0f172a', overflow: 'hidden' }}>
+        {/* filter blur-2xl grayscale → inline filter string (non-1:1 combination; flagged) */}
         <div
-          className={`absolute inset-0 flex items-center justify-center transition-all ${isExpired ? 'filter blur-2xl grayscale' : ''}`}
           style={{
+            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'all 0.3s',
+            filter: isExpired ? 'blur(40px) grayscale(100%)' : 'none',
             backgroundColor: '#020617',
             backgroundImage: 'linear-gradient(rgba(30,41,59,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(30,41,59,0.5) 1px, transparent 1px)',
             backgroundSize: '40px 40px',
             backgroundPosition: 'center center',
           }}
         >
-          <div className="w-[500px] h-[500px] bg-blue-600/5 rounded-full blur-[80px] pointer-events-none" />
+          <div style={{ width: 500, height: 500, backgroundColor: 'rgba(37,99,235,0.05)', borderRadius: '50%', filter: 'blur(80px)', pointerEvents: 'none' }} />
         </div>
 
         {/* SHOP CENTER PIN */}
         {!isExpired && (
-          <div className="absolute" style={{ top: '50%', left: '50%', transform: 'translate(-50%,-100%)' }}>
-            <div className="p-1.5 rounded-full bg-slate-800 border border-slate-600">
-              <MapPin size={14} className="text-slate-400" />
+          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-100%)' }}>
+            <div style={{ padding: 6, borderRadius: '50%', backgroundColor: '#1e293b', border: '1px solid #475569' }}>
+              <MapPin size={14} style={{ color: '#94a3b8' }} />
             </div>
-            <p className="text-[7px] font-black text-slate-500 uppercase text-center mt-0.5 whitespace-nowrap">{shopName}</p>
+            <p style={{ fontSize: 7, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', textAlign: 'center', marginTop: 2, whiteSpace: 'nowrap' }}>{shopName}</p>
           </div>
         )}
 
@@ -177,15 +188,24 @@ const IgnitionHub = ({ activeJob }) => {
           return (
             <div
               key={unit.id}
-              className="absolute transition-all cursor-pointer group"
-              style={{ top: vp.top, left: vp.left, transform: 'translate(-50%,-50%)' }}
+              style={{ position: 'absolute', transition: 'all 0.3s', cursor: 'pointer', top: vp.top, left: vp.left, transform: 'translate(-50%,-50%)' }}
             >
-              <div className={`p-2 rounded-full border-2 ${statusColor(unit.status)}`}>
-                <Truck size={16} className="text-white" />
+              {/* animate-pulse on CRITICAL → ign-pulse */}
+              <div
+                className={unit.status === 'CRITICAL' ? 'ign-pulse' : ''}
+                style={{ padding: 8, borderRadius: '50%', border: '2px solid', ...getStatusStyle(unit.status) }}
+              >
+                <Truck size={16} style={{ color: '#ffffff' }} />
               </div>
-              <div className="absolute top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white p-2 rounded-lg border border-slate-700 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 shadow-xl">
-                <p className="text-[10px] font-black uppercase tracking-tighter">{unit.name}</p>
-                <p className="text-[8px] text-slate-400 uppercase">{unit.status} // ETA: {unit.eta}</p>
+              {/* group-hover:opacity-100 → dropped (no inline group-hover equivalent; tooltip hidden) */}
+              <div style={{
+                position: 'absolute', top: 40, left: '50%', transform: 'translateX(-50%)',
+                backgroundColor: '#0f172a', color: '#ffffff', padding: 8, borderRadius: 8,
+                border: '1px solid #334155', opacity: 0, whiteSpace: 'nowrap', zIndex: 20,
+                boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+              }}>
+                <p style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.05em' }}>{unit.name}</p>
+                <p style={{ fontSize: 8, color: '#94a3b8', textTransform: 'uppercase' }}>{unit.status} // ETA: {unit.eta}</p>
               </div>
             </div>
           );
@@ -198,15 +218,21 @@ const IgnitionHub = ({ activeJob }) => {
           return (
             <div
               key={unit.id}
-              className="absolute transition-all cursor-pointer group z-10"
-              style={{ top: vp.top, left: vp.left, transform: 'translate(-50%,-50%)' }}
+              style={{ position: 'absolute', transition: 'all 0.3s', cursor: 'pointer', zIndex: 10, top: vp.top, left: vp.left, transform: 'translate(-50%,-50%)' }}
             >
-              <div className="p-2 rounded-full border-2 border-orange-500 border-dashed bg-slate-900 shadow-[0_0_15px_rgba(249,115,22,0.6)] animate-pulse">
-                <Package size={16} className="text-orange-500" />
+              {/* animate-pulse → ign-pulse */}
+              <div className="ign-pulse" style={{ padding: 8, borderRadius: '50%', border: '2px dashed #f97316', backgroundColor: '#0f172a', boxShadow: '0 0 15px rgba(249,115,22,0.6)' }}>
+                <Package size={16} style={{ color: '#f97316' }} />
               </div>
-              <div className="absolute top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white p-2 rounded-lg border border-slate-700 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 shadow-xl">
-                <p className="text-[10px] font-black uppercase tracking-tighter text-orange-500">{unit.name}</p>
-                <p className="text-[8px] text-slate-400 uppercase">{unit.status} // ETA: {unit.eta}</p>
+              {/* group-hover:opacity-100 → dropped */}
+              <div style={{
+                position: 'absolute', top: 40, left: '50%', transform: 'translateX(-50%)',
+                backgroundColor: '#0f172a', color: '#ffffff', padding: 8, borderRadius: 8,
+                border: '1px solid #334155', opacity: 0, whiteSpace: 'nowrap', zIndex: 20,
+                boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+              }}>
+                <p style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.05em', color: '#f97316' }}>{unit.name}</p>
+                <p style={{ fontSize: 8, color: '#94a3b8', textTransform: 'uppercase' }}>{unit.status} // ETA: {unit.eta}</p>
               </div>
             </div>
           );
@@ -214,67 +240,84 @@ const IgnitionHub = ({ activeJob }) => {
 
         {/* No-units empty state */}
         {!isExpired && visibleUnits.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <p className="text-[10px] font-black text-slate-700 uppercase tracking-widest text-center px-8">
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+            <p style={{ fontSize: 10, fontWeight: 900, color: '#1e293b', textTransform: 'uppercase', letterSpacing: '0.1em', textAlign: 'center', paddingLeft: 32, paddingRight: 32 }}>
               No units on map<br />
-              <span className="text-slate-800">Use "Locate" in the unit list below to place a unit</span>
+              <span style={{ color: '#0f172a' }}>Use "Locate" in the unit list below to place a unit</span>
             </p>
           </div>
         )}
 
         {/* PAYWALL OVERLAY */}
         {isExpired && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md z-30">
-            <div className="bg-slate-900 p-8 rounded-3xl border border-blue-500/30 text-center max-w-xs shadow-2xl shadow-blue-900/50">
-              <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-500/50">
-                <Map size={32} className="text-blue-500" />
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.60)', backdropFilter: 'blur(12px)', zIndex: 30 }}>
+            <div style={{ backgroundColor: '#0f172a', padding: 32, borderRadius: 24, border: '1px solid rgba(59,130,246,0.30)', textAlign: 'center', maxWidth: 320, boxShadow: '0 25px 50px -12px rgba(30,58,138,0.50)' }}>
+              <div style={{ width: 64, height: 64, backgroundColor: 'rgba(59,130,246,0.20)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', border: '1px solid rgba(59,130,246,0.50)' }}>
+                <Map size={32} style={{ color: '#3b82f6' }} />
               </div>
-              <h3 className="text-xl font-black text-white italic uppercase tracking-tighter mb-2">Logistics Locked</h3>
-              <p className="text-xs text-slate-400 mb-6 uppercase leading-relaxed font-bold">Your trial for HUB has expired. Live tracking and dispatching are hidden.</p>
-              <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl text-xs uppercase shadow-lg shadow-blue-900/40 transition">Activate HUB</button>
+              <h3 style={{ fontSize: 20, fontWeight: 900, color: '#ffffff', fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: '-0.05em', marginBottom: 8 }}>Logistics Locked</h3>
+              <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 24, textTransform: 'uppercase', lineHeight: 1.625, fontWeight: 700 }}>Your trial for HUB has expired. Live tracking and dispatching are hidden.</p>
+              {/* hover:bg-blue-500 → ign-btn-primary */}
+              <button className="ign-btn-primary" style={{ width: '100%', backgroundColor: '#2563eb', color: '#ffffff', fontWeight: 900, paddingTop: 16, paddingBottom: 16, borderRadius: 12, fontSize: 12, textTransform: 'uppercase', boxShadow: '0 10px 15px -3px rgba(30,58,138,0.40)', transition: 'all 0.15s', border: 'none', cursor: 'pointer' }}>
+                Activate HUB
+              </button>
             </div>
           </div>
         )}
       </div>
 
       {/* UNIT STATUS LIST */}
-      <footer className="bg-slate-900 border-t border-slate-800 p-6 max-h-72 overflow-y-auto z-40">
-        <h3 className="text-[10px] font-black text-slate-500 uppercase mb-4 tracking-widest flex items-center gap-2">
+      <footer style={{ backgroundColor: '#0f172a', borderTop: '1px solid #1e293b', padding: 24, maxHeight: 288, overflowY: 'auto', zIndex: 40 }}>
+        <h3 style={{ fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', marginBottom: 16, letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: 8 }}>
           <Truck size={12} /> Fleet Unit Overview
         </h3>
 
         {units.length === 0 ? (
-          <p className="text-[10px] text-slate-600 uppercase font-black text-center py-4">
+          <p style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', fontWeight: 900, textAlign: 'center', paddingTop: 16, paddingBottom: 16 }}>
             No active jobs or techs on record yet.<br />
-            <span className="text-slate-700">Create a job in INTAKE to see units here.</span>
+            <span style={{ color: '#1e293b' }}>Create a job in INTAKE to see units here.</span>
           </p>
         ) : (
-          <div className="grid gap-3">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {units.map(unit => (
-              <div key={unit.id} className={`flex justify-between items-center bg-black/40 p-4 rounded-2xl border ${unit.status === 'CRITICAL' ? 'border-red-500/30' : 'border-slate-800'}`}>
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor(unit.status)}`} />
-                  <div className="min-w-0">
-                    <p className="text-xs font-black text-white uppercase italic truncate">{unit.name}</p>
+              <div key={unit.id} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                backgroundColor: 'rgba(0,0,0,0.40)', padding: 16, borderRadius: 16,
+                border: unit.status === 'CRITICAL' ? '1px solid rgba(239,68,68,0.30)' : '1px solid #1e293b',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+                  {/* animate-pulse on active units → ign-pulse */}
+                  <div
+                    className={unit.status !== 'CRITICAL' && unit.status !== 'IDLE' ? 'ign-pulse' : ''}
+                    style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, ...getDotStyle(unit.status) }}
+                  />
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: 12, fontWeight: 900, color: '#ffffff', textTransform: 'uppercase', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{unit.name}</p>
                     {unit.status === 'CRITICAL' && (
-                      <p className="text-[9px] text-red-500 font-bold uppercase tracking-widest mt-1">
-                        <AlertCircle size={10} className="inline mr-1" />FAULT: {unit.fault}
+                      <p style={{ fontSize: 9, color: '#ef4444', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <AlertCircle size={10} />FAULT: {unit.fault}
                       </p>
                     )}
                     {unit.lat !== null && (
-                      <p className="text-[8px] text-slate-600 font-mono mt-0.5">{unit.lat.toFixed(4)}, {unit.lng.toFixed(4)}</p>
+                      <p style={{ fontSize: 8, color: '#475569', fontFamily: 'monospace', marginTop: 2 }}>{unit.lat.toFixed(4)}, {unit.lng.toFixed(4)}</p>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <div className="text-right">
-                    <p className="text-[9px] font-black text-slate-500 uppercase italic">ETA</p>
-                    <p className="text-sm font-black text-white">{unit.eta}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <p style={{ fontSize: 9, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', fontStyle: 'italic' }}>ETA</p>
+                    <p style={{ fontSize: 14, fontWeight: 900, color: '#ffffff' }}>{unit.eta}</p>
                   </div>
+                  {/* hover:text-blue-400 hover:border-blue-400/50 → dropped (cosmetic) */}
                   {!isExpired && (
                     <button
                       onClick={() => simulateGPS(unit.id)}
-                      className="text-[8px] font-black text-blue-500 hover:text-blue-400 uppercase border border-blue-500/30 hover:border-blue-400/50 px-2 py-1 rounded-lg transition-colors"
+                      style={{
+                        fontSize: 8, fontWeight: 900, color: '#3b82f6', textTransform: 'uppercase',
+                        border: '1px solid rgba(59,130,246,0.30)', paddingLeft: 8, paddingRight: 8,
+                        paddingTop: 4, paddingBottom: 4, borderRadius: 8, transition: 'color 0.15s',
+                        background: 'none', cursor: 'pointer',
+                      }}
                       title="Simulate GPS ping for demo"
                     >
                       Locate
