@@ -7,12 +7,58 @@ import React, { useState } from 'react';
 import { Users, Plus, Building2, MapPin, Phone, Mail, ArrowLeft, Star, Car, User, Search } from 'lucide-react';
 import DataBridge from '../DataBridge';
 
+const STYLE_DEBUG = false;
+
+// Non-1:1 mappings (52 classNames converted):
+// (1) md:grid-cols-2 lg:grid-cols-3 on customer grid → flex-wrap fixed (flagged: no breakpoint equivalent)
+// (2) grid grid-cols-2 on form rows → flex-wrap fixed (flagged: no breakpoint equivalent)
+// (3) hover:bg-indigo-500 on buttons → ign-btn-primary CSS class (blue approximation; flagged: no ign-btn-indigo)
+// (4) active:scale-95 on buttons → ign-card-hover CSS class
+// (5) focus:border-indigo-500 on inputs → ign-input CSS class (blue approximation; flagged)
+// (6) hover:border-indigo-500/50 on cards → dropped (cosmetic)
+// (7) hover:text-white on back button → dropped (cosmetic)
+// (8) hover:text-slate-300 on inactive tabs → dropped (cosmetic)
+// [TRACE:STYLE] IgnitionCRM converted, 52 classNames → inline, 8 non-1:1 categories
+
+const labelStyle = {
+  fontSize: 10,
+  fontWeight: 900,
+  color: '#64748b',
+  textTransform: 'uppercase',
+  letterSpacing: '0.1em',
+  marginBottom: 8,
+  display: 'block',
+};
+
+const inputStyle = {
+  width: '100%',
+  backgroundColor: '#000000',
+  border: '1px solid #1e293b',
+  borderRadius: 12,
+  padding: 16,
+  color: '#ffffff',
+  fontWeight: 700,
+  outline: 'none',
+  transition: 'border-color 0.15s',
+};
+
+const getTierStyle = (tier) => {
+  if (tier === 'FLEET') return { backgroundColor: 'rgba(249,115,22,0.20)', color: '#fb923c' };
+  if (tier === 'FF')   return { backgroundColor: 'rgba(16,185,129,0.20)', color: '#34d399' };
+  return { backgroundColor: '#1e293b', color: '#94a3b8' };
+};
+
+const getTypeIconStyle = (type) => {
+  if (type === 'CONTRACT') return { backgroundColor: 'rgba(249,115,22,0.10)', color: '#f97316' };
+  return { backgroundColor: 'rgba(59,130,246,0.10)', color: '#3b82f6' };
+};
+
 const IgnitionCRM = () => {
   const { isExpired } = DataBridge.checkTrialStatus('CRM');
-  const [viewMode, setViewMode] = useState('DIRECTORY'); // DIRECTORY, ONBOARDING
+  const [viewMode, setViewMode] = useState('DIRECTORY');
   const [customers, setCustomers] = useState(() => DataBridge.getCustomers());
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   const [formData, setFormData] = useState({
     type: 'PERSONAL',
     name: '',
@@ -23,157 +69,357 @@ const IgnitionCRM = () => {
     contractNum: ''
   });
 
+  if (STYLE_DEBUG) console.log('[TRACE:STYLE] IgnitionCRM converted, 52 classNames → inline, 8 non-1:1 categories');
+
   const handleOnboardCustomer = () => {
     if (!formData.name || !formData.phone) return alert("Name and Phone are strictly required for onboarding.");
-    
-    const newCustomer = { 
-      ...formData, 
+    const newCustomer = {
+      ...formData,
       id: `C-${Math.floor(1000 + Math.random() * 9000)}`,
       vehicles: []
     };
-    
     DataBridge.addCustomer(newCustomer);
     setCustomers(DataBridge.getCustomers());
     setViewMode('DIRECTORY');
     setFormData({ type: 'PERSONAL', name: '', phone: '', email: '', address: '', tier: 'STANDARD', contractNum: '' });
   };
 
-  const filteredCustomers = customers.filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+  const filteredCustomers = customers.filter(c =>
+    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.phone.includes(searchTerm)
   );
 
   return (
-    <div className="p-6 bg-slate-950 text-slate-200 min-h-screen relative pb-32">
-      <header className="mb-8 border-b border-slate-800 pb-4">
-        <h2 className="text-2xl font-black italic text-white uppercase tracking-tighter text-indigo-400">CRM // Clients</h2>
-        <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Fleet & Retail Profiles</p>
+    <div style={{ padding: 24, backgroundColor: '#020617', color: '#e2e8f0', minHeight: '100vh', position: 'relative', paddingBottom: 96 }}>
+      <header style={{ marginBottom: 32, borderBottom: '1px solid #1e293b', paddingBottom: 16 }}>
+        <h2 style={{ fontSize: 24, fontWeight: 900, fontStyle: 'italic', color: '#818cf8', textTransform: 'uppercase', letterSpacing: '-0.05em' }}>
+          CRM // Clients
+        </h2>
+        <p style={{ fontSize: 10, fontFamily: 'monospace', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+          Fleet & Retail Profiles
+        </p>
       </header>
-      
-      <div className={`${isExpired ? 'filter blur-md pointer-events-none opacity-30 relative' : 'relative'}`}>
-        
+
+      <div style={{
+        position: 'relative',
+        filter: isExpired ? 'blur(12px)' : 'none',
+        pointerEvents: isExpired ? 'none' : undefined,
+        opacity: isExpired ? 0.3 : 1,
+      }}>
+
         {viewMode === 'DIRECTORY' ? (
           <>
-            <div className="flex gap-4 mb-8">
-              <div className="flex-1">
-                 <div className="relative">
-                   <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-                   <input 
-                     type="text" 
-                     placeholder="Search by Name or Phone..." 
-                     value={searchTerm} 
-                     onChange={e => setSearchTerm(e.target.value)}
-                     className="w-full bg-slate-900 border border-slate-800 focus:border-indigo-500 rounded-2xl pl-12 pr-4 py-4 text-white outline-none transition-colors"
-                   />
-                 </div>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 32 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ position: 'relative' }}>
+                  <Search size={18} style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+                  {/* focus:border-indigo-500 → ign-input CSS class (blue approximation; flagged) */}
+                  <input
+                    type="text"
+                    placeholder="Search by Name or Phone..."
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    className="ign-input"
+                    style={{
+                      width: '100%',
+                      backgroundColor: '#0f172a',
+                      border: '1px solid #1e293b',
+                      borderRadius: 16,
+                      paddingLeft: 48,
+                      paddingRight: 16,
+                      paddingTop: 16,
+                      paddingBottom: 16,
+                      color: '#ffffff',
+                      outline: 'none',
+                      transition: 'border-color 0.15s',
+                    }}
+                  />
+                </div>
               </div>
-              <button 
+              {/* hover:bg-indigo-500 → ign-btn-primary (blue approx; flagged); active:scale-95 → ign-card-hover */}
+              <button
                 onClick={() => setViewMode('ONBOARDING')}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white font-black px-6 py-4 rounded-2xl uppercase tracking-widest text-[10px] flex items-center gap-2 transition-all shadow-lg shadow-indigo-900/20 active:scale-95"
+                className="ign-btn-primary ign-card-hover"
+                style={{
+                  backgroundColor: '#4f46e5',
+                  color: '#ffffff',
+                  fontWeight: 900,
+                  paddingLeft: 24,
+                  paddingRight: 24,
+                  paddingTop: 16,
+                  paddingBottom: 16,
+                  borderRadius: 16,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  fontSize: 10,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  transition: 'all 0.15s',
+                  boxShadow: '0 10px 15px -3px rgba(79,70,229,0.20)',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
               >
                 <Plus size={16} /> New Client
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* md:grid-cols-2 lg:grid-cols-3 → flex-wrap; flagged: no breakpoint equivalent */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24 }}>
               {filteredCustomers.map(c => (
-                <div key={c.id} className="bg-slate-900 border border-slate-800 p-6 rounded-[2rem] shadow-xl hover:border-indigo-500/50 transition-all group">
-                  <div className="flex justify-between items-start mb-4">
-                     <div className="flex items-center gap-3">
-                       <div className={`p-3 rounded-xl ${c.type === 'CONTRACT' ? 'bg-orange-500/10 text-orange-500' : 'bg-blue-500/10 text-blue-500'}`}>
-                         {c.type === 'CONTRACT' ? <Building2 size={20} /> : <User size={20} />}
-                       </div>
-                       <div>
-                         <h4 className="text-white font-black text-lg uppercase italic tracking-tighter">{c.name}</h4>
-                         <p className="text-[10px] text-slate-500 font-mono tracking-widest">{c.id}</p>
-                       </div>
-                     </div>
-                     <span className={`text-[9px] font-black px-2 py-1 rounded uppercase tracking-widest ${
-                        c.tier === 'FLEET' ? 'bg-orange-500/20 text-orange-400' : 
-                        c.tier === 'FF' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'
-                     }`}>
-                       {c.tier} TIER
-                     </span>
-                  </div>
-                  
-                  <div className="space-y-2 mb-6">
-                    <p className="flex items-center gap-3 text-xs text-slate-300 font-medium"><Phone size={14} className="text-slate-500" /> {c.phone}</p>
-                    <p className="flex items-center gap-3 text-xs text-slate-300 font-medium"><Mail size={14} className="text-slate-500" /> {c.email || 'N/A'}</p>
-                    <p className="flex items-center gap-3 text-xs text-slate-300 font-medium"><MapPin size={14} className="text-slate-500" /> {c.address || 'N/A'}</p>
+                /* hover:border-indigo-500/50 → dropped (cosmetic) */
+                <div key={c.id} style={{
+                  flex: '1 1 calc(33% - 18px)',
+                  minWidth: 240,
+                  backgroundColor: '#0f172a',
+                  border: '1px solid #1e293b',
+                  padding: 24,
+                  borderRadius: 32,
+                  boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+                  transition: 'border-color 0.15s',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ padding: 12, borderRadius: 12, ...getTypeIconStyle(c.type) }}>
+                        {c.type === 'CONTRACT' ? <Building2 size={20} /> : <User size={20} />}
+                      </div>
+                      <div>
+                        <h4 style={{ color: '#ffffff', fontWeight: 900, fontSize: 18, textTransform: 'uppercase', fontStyle: 'italic', letterSpacing: '-0.05em' }}>{c.name}</h4>
+                        <p style={{ fontSize: 10, color: '#64748b', fontFamily: 'monospace', letterSpacing: '0.1em' }}>{c.id}</p>
+                      </div>
+                    </div>
+                    <span style={{
+                      fontSize: 9,
+                      fontWeight: 900,
+                      paddingLeft: 8,
+                      paddingRight: 8,
+                      paddingTop: 4,
+                      paddingBottom: 4,
+                      borderRadius: 4,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.1em',
+                      ...getTierStyle(c.tier),
+                    }}>
+                      {c.tier} TIER
+                    </span>
                   </div>
 
-                  <div className="border-t border-slate-800 pt-4">
-                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><Car size={12}/> Registered Assets</p>
-                     {c.vehicles?.map((v, i) => (
-                        <div key={i} className="bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 mb-2 flex justify-between items-center">
-                          <span className="text-xs text-slate-300 font-bold">{v.year} {v.make} {v.model}</span>
-                          <span className="text-[9px] text-slate-600 font-mono">{v.vin.slice(-6)}</span>
-                        </div>
-                     ))}
-                     {(!c.vehicles || c.vehicles.length === 0) && (
-                       <p className="text-xs text-slate-600 italic">No assets registered yet.</p>
-                     )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+                    <p style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: '#cbd5e1', fontWeight: 500 }}>
+                      <Phone size={14} style={{ color: '#64748b' }} /> {c.phone}
+                    </p>
+                    <p style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: '#cbd5e1', fontWeight: 500 }}>
+                      <Mail size={14} style={{ color: '#64748b' }} /> {c.email || 'N/A'}
+                    </p>
+                    <p style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: '#cbd5e1', fontWeight: 500 }}>
+                      <MapPin size={14} style={{ color: '#64748b' }} /> {c.address || 'N/A'}
+                    </p>
+                  </div>
+
+                  <div style={{ borderTop: '1px solid #1e293b', paddingTop: 16 }}>
+                    <p style={{ fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Car size={12} /> Registered Assets
+                    </p>
+                    {c.vehicles?.map((v, i) => (
+                      <div key={i} style={{
+                        backgroundColor: '#020617',
+                        paddingLeft: 12,
+                        paddingRight: 12,
+                        paddingTop: 8,
+                        paddingBottom: 8,
+                        borderRadius: 8,
+                        border: '1px solid #1e293b',
+                        marginBottom: 8,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}>
+                        <span style={{ fontSize: 12, color: '#cbd5e1', fontWeight: 700 }}>{v.year} {v.make} {v.model}</span>
+                        <span style={{ fontSize: 9, color: '#475569', fontFamily: 'monospace' }}>{v.vin.slice(-6)}</span>
+                      </div>
+                    ))}
+                    {(!c.vehicles || c.vehicles.length === 0) && (
+                      <p style={{ fontSize: 12, color: '#475569', fontStyle: 'italic' }}>No assets registered yet.</p>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
           </>
         ) : (
-          <div className="max-w-2xl mx-auto bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 shadow-2xl">
-            <button onClick={() => setViewMode('DIRECTORY')} className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-1 mb-6 hover:text-white transition-colors">
-               <ArrowLeft size={12} /> Back to Directory
+          <div style={{
+            maxWidth: 672,
+            margin: '0 auto',
+            backgroundColor: '#0f172a',
+            border: '1px solid #1e293b',
+            borderRadius: 40,
+            padding: 32,
+            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+          }}>
+            {/* hover:text-white on back button → dropped (cosmetic) */}
+            <button
+              onClick={() => setViewMode('DIRECTORY')}
+              style={{
+                fontSize: 10,
+                fontWeight: 900,
+                textTransform: 'uppercase',
+                color: '#64748b',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                marginBottom: 24,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'color 0.15s',
+              }}
+            >
+              <ArrowLeft size={12} /> Back to Directory
             </button>
 
-            <h3 className="text-2xl font-black uppercase text-white italic tracking-tighter mb-8 flex items-center gap-3">
-               <Users size={28} className="text-indigo-500" /> Client Onboarding
+            <h3 style={{
+              fontSize: 24,
+              fontWeight: 900,
+              textTransform: 'uppercase',
+              color: '#ffffff',
+              fontStyle: 'italic',
+              letterSpacing: '-0.05em',
+              marginBottom: 32,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+            }}>
+              <Users size={28} style={{ color: '#6366f1' }} /> Client Onboarding
             </h3>
 
-            {/* Tabs for Type */}
-            <div className="flex bg-slate-950 p-1 rounded-xl mb-8 border border-slate-800">
-               <button onClick={() => setFormData({...formData, type: 'PERSONAL', tier: 'STANDARD'})} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${formData.type === 'PERSONAL' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>Personal / Retail</button>
-               <button onClick={() => setFormData({...formData, type: 'CONTRACT', tier: 'FLEET'})} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${formData.type === 'CONTRACT' ? 'bg-orange-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>Fleet / Contract</button>
+            {/* Tab bar */}
+            <div style={{
+              display: 'flex',
+              backgroundColor: '#020617',
+              padding: 4,
+              borderRadius: 12,
+              marginBottom: 32,
+              border: '1px solid #1e293b',
+            }}>
+              {/* hover:text-slate-300 on inactive tabs → dropped (cosmetic) */}
+              <button
+                onClick={() => setFormData({...formData, type: 'PERSONAL', tier: 'STANDARD'})}
+                style={{
+                  flex: 1,
+                  paddingTop: 12,
+                  paddingBottom: 12,
+                  fontSize: 10,
+                  fontWeight: 900,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  borderRadius: 8,
+                  transition: 'all 0.15s',
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: formData.type === 'PERSONAL' ? '#1e293b' : 'transparent',
+                  color: formData.type === 'PERSONAL' ? '#ffffff' : '#64748b',
+                  boxShadow: formData.type === 'PERSONAL' ? '0 1px 3px rgba(0,0,0,0.3)' : 'none',
+                }}
+              >
+                Personal / Retail
+              </button>
+              <button
+                onClick={() => setFormData({...formData, type: 'CONTRACT', tier: 'FLEET'})}
+                style={{
+                  flex: 1,
+                  paddingTop: 12,
+                  paddingBottom: 12,
+                  fontSize: 10,
+                  fontWeight: 900,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  borderRadius: 8,
+                  transition: 'all 0.15s',
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: formData.type === 'CONTRACT' ? '#ea580c' : 'transparent',
+                  color: formData.type === 'CONTRACT' ? '#ffffff' : '#64748b',
+                  boxShadow: formData.type === 'CONTRACT' ? '0 1px 3px rgba(0,0,0,0.3)' : 'none',
+                }}
+              >
+                Fleet / Contract
+              </button>
             </div>
 
-            <div className="space-y-6 mb-8">
-               <div>
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Full Name / Company Name</label>
-                  <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-black border border-slate-800 rounded-xl p-4 text-white font-bold outline-none focus:border-indigo-500 transition-colors" placeholder="e.g. Texas Star Logistics" />
-               </div>
-               <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Primary Phone</label>
-                    <input type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full bg-black border border-slate-800 rounded-xl p-4 text-white font-bold outline-none focus:border-indigo-500 transition-colors" placeholder="555-0199" />
+            {/* Form fields — grid grid-cols-2 → flex-wrap; flagged: no breakpoint equivalent */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24, marginBottom: 32 }}>
+              <div>
+                <label style={labelStyle}>Full Name / Company Name</label>
+                {/* focus:border-indigo-500 → ign-input (blue approximation; flagged) */}
+                <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
+                  className="ign-input" style={inputStyle} placeholder="e.g. Texas Star Logistics" />
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+                <div style={{ flex: '1 1 calc(50% - 8px)', minWidth: 160 }}>
+                  <label style={labelStyle}>Primary Phone</label>
+                  <input type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})}
+                    className="ign-input" style={inputStyle} placeholder="555-0199" />
+                </div>
+                <div style={{ flex: '1 1 calc(50% - 8px)', minWidth: 160 }}>
+                  <label style={labelStyle}>Billing Email</label>
+                  <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})}
+                    className="ign-input" style={inputStyle} placeholder="billing@domain.com" />
+                </div>
+              </div>
+              <div>
+                <label style={labelStyle}>Billing Address</label>
+                <input type="text" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})}
+                  className="ign-input" style={inputStyle} placeholder="123 Fleet Way, Austin, TX" />
+              </div>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+                <div style={{ flex: '1 1 calc(50% - 8px)', minWidth: 160 }}>
+                  <label style={labelStyle}>Pricing Tier</label>
+                  <select value={formData.tier} onChange={e => setFormData({...formData, tier: e.target.value})}
+                    className="ign-input" style={{ ...inputStyle, appearance: 'none' }}>
+                    <option value="STANDARD">Standard Retail</option>
+                    <option value="FF">Friends & Family (Custom Flat Rate)</option>
+                    <option value="FLEET">Fleet Net (-$10/hr)</option>
+                  </select>
+                </div>
+                {formData.type === 'CONTRACT' && (
+                  <div style={{ flex: '1 1 calc(50% - 8px)', minWidth: 160 }}>
+                    <label style={labelStyle}>Contract Number</label>
+                    {/* focus:border-orange-500 → ign-input-orange */}
+                    <input type="text" value={formData.contractNum} onChange={e => setFormData({...formData, contractNum: e.target.value})}
+                      className="ign-input-orange" style={{ ...inputStyle, color: '#fb923c', fontFamily: 'monospace', fontSize: 14 }} placeholder="TX-FLT-000" />
                   </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Billing Email</label>
-                    <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-black border border-slate-800 rounded-xl p-4 text-white font-bold outline-none focus:border-indigo-500 transition-colors" placeholder="billing@domain.com" />
-                  </div>
-               </div>
-               <div>
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Billing Address</label>
-                  <input type="text" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full bg-black border border-slate-800 rounded-xl p-4 text-white font-bold outline-none focus:border-indigo-500 transition-colors" placeholder="123 Fleet Way, Austin, TX" />
-               </div>
-               
-               <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Pricing Tier</label>
-                    <select value={formData.tier} onChange={e => setFormData({...formData, tier: e.target.value})} className="w-full bg-black border border-slate-800 rounded-xl p-4 text-white font-bold outline-none focus:border-indigo-500 transition-colors appearance-none">
-                      <option value="STANDARD">Standard Retail</option>
-                      <option value="FF">Friends & Family (Custom Flat Rate)</option>
-                      <option value="FLEET">Fleet Net (-$10/hr)</option>
-                    </select>
-                  </div>
-                  {formData.type === 'CONTRACT' && (
-                    <div>
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Contract Number</label>
-                      <input type="text" value={formData.contractNum} onChange={e => setFormData({...formData, contractNum: e.target.value})} className="w-full bg-black border border-slate-800 rounded-xl p-4 text-orange-400 font-mono text-sm outline-none focus:border-orange-500 transition-colors" placeholder="TX-FLT-000" />
-                    </div>
-                  )}
-               </div>
+                )}
+              </div>
             </div>
 
-            <button onClick={handleOnboardCustomer} className="w-full bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-black py-5 rounded-2xl uppercase tracking-widest text-[10px] shadow-lg shadow-indigo-900/40 transition-all flex justify-center items-center gap-2">
-               <Star size={16} /> Finalize Client Profile
+            {/* hover:bg-indigo-500 → ign-btn-primary (blue approx; flagged); active:scale-95 → ign-card-hover */}
+            <button
+              onClick={handleOnboardCustomer}
+              className="ign-btn-primary ign-card-hover"
+              style={{
+                width: '100%',
+                backgroundColor: '#4f46e5',
+                color: '#ffffff',
+                fontWeight: 900,
+                paddingTop: 20,
+                paddingBottom: 20,
+                borderRadius: 16,
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                fontSize: 10,
+                boxShadow: '0 10px 15px -3px rgba(79,70,229,0.40)',
+                transition: 'all 0.15s',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 8,
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              <Star size={16} /> Finalize Client Profile
             </button>
           </div>
         )}
