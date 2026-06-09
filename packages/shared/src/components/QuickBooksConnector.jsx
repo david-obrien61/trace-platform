@@ -10,13 +10,19 @@ import React, { useState, useEffect } from 'react';
 import { Database, CheckCircle, AlertCircle, RefreshCw, Link2, Link2Off, DollarSign, Users, ChevronRight } from 'lucide-react';
 import ExternalBridge from '../ExternalBridge';
 
+const STYLE_DEBUG = false; // [TRACE:STYLE] STD-003
+
 const QBO_CALLBACK_URL = (
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) ||
   'http://localhost:8000'
 ) + '/api/qbo/callback';
 
 const StatusBadge = ({ connected }) => (
-  <span className={`text-[8px] font-black px-2 py-1 rounded-full uppercase ${connected ? 'bg-emerald-600/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>
+  <span style={{
+    fontSize: 8, fontWeight: 900, padding: '4px 8px', borderRadius: 999, textTransform: 'uppercase',
+    backgroundColor: connected ? 'rgba(5,150,105,0.2)' : '#1e293b',
+    color: connected ? '#34d399' : '#64748b',
+  }}>
     {connected ? 'Connected' : 'Not Connected'}
   </span>
 );
@@ -28,7 +34,6 @@ const QuickBooksConnector = ({ onConnected }) => {
   const [syncStats, setSyncStats]     = useState(null);
   const [liveStatus, setLiveStatus]   = useState(null);
 
-  // On mount, verify live connection status with the backend
   useEffect(() => {
     if (connection.connected) {
       ExternalBridge.qbo.getStatus()
@@ -89,39 +94,45 @@ const QuickBooksConnector = ({ onConnected }) => {
   const isConnected = connection.connected && liveStatus?.connected !== false;
 
   return (
-    <div className="p-6 bg-slate-950 text-slate-200 min-h-screen">
-      <header className="mb-8 border-b border-slate-800 pb-4">
-        <div className="flex items-center justify-between">
+    <div style={{ padding: 24, backgroundColor: '#020617', color: '#e2e8f0', minHeight: '100vh' }}>
+      <header style={{ marginBottom: 32, borderBottom: '1px solid #1e293b', paddingBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <h2 className="text-2xl font-black italic text-white uppercase tracking-tighter">QuickBooks</h2>
-            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Accounting Integration</p>
+            <h2 style={{ fontSize: 24, fontWeight: 900, fontStyle: 'italic', color: '#fff', textTransform: 'uppercase', letterSpacing: '-0.05em' }}>QuickBooks</h2>
+            <p style={{ fontSize: 10, fontFamily: 'monospace', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Accounting Integration</p>
           </div>
           <StatusBadge connected={isConnected} />
         </div>
       </header>
 
       {/* CONNECTION CARD */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 mb-6 shadow-2xl">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="w-14 h-14 bg-green-600/10 border border-green-500/20 rounded-2xl flex items-center justify-center">
-            <Database size={28} className="text-green-400" />
+      <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 24, padding: 24, marginBottom: 24, boxShadow: '0 25px 50px rgba(0,0,0,0.5)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+          <div style={{ width: 56, height: 56, backgroundColor: 'rgba(22,163,74,0.1)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Database size={28} color="#4ade80" />
           </div>
           <div>
-            <p className="text-sm font-black text-white uppercase italic tracking-tighter">QuickBooks Online</p>
+            <p style={{ fontSize: 14, fontWeight: 900, color: '#fff', textTransform: 'uppercase', fontStyle: 'italic', letterSpacing: '-0.05em' }}>QuickBooks Online</p>
             {isConnected && connection.companyName && (
-              <p className="text-[10px] text-emerald-400 font-bold">{connection.companyName}</p>
+              <p style={{ fontSize: 10, color: '#34d399', fontWeight: 700 }}>{connection.companyName}</p>
             )}
             {isConnected && connection.connectedAt && (
-              <p className="text-[9px] text-slate-500">Connected {new Date(connection.connectedAt).toLocaleDateString()}</p>
+              <p style={{ fontSize: 9, color: '#64748b' }}>Connected {new Date(connection.connectedAt).toLocaleDateString()}</p>
             )}
           </div>
         </div>
 
         {/* Status message */}
         {message && (
-          <div className={`flex items-center gap-2 rounded-xl p-3 mb-4 ${phase === 'ERROR' ? 'bg-red-400/5 border border-red-400/20' : 'bg-blue-400/5 border border-blue-400/20'}`}>
-            {phase === 'ERROR' ? <AlertCircle size={14} className="text-red-400" /> : <RefreshCw size={14} className="text-blue-400 animate-spin" />}
-            <p className={`text-[10px] font-bold ${phase === 'ERROR' ? 'text-red-400' : 'text-blue-400'}`}>{message}</p>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, borderRadius: 12, padding: 12, marginBottom: 16,
+            backgroundColor: phase === 'ERROR' ? 'rgba(248,113,113,0.05)' : 'rgba(96,165,250,0.05)',
+            border: phase === 'ERROR' ? '1px solid rgba(248,113,113,0.2)' : '1px solid rgba(96,165,250,0.2)',
+          }}>
+            {phase === 'ERROR'
+              ? <AlertCircle size={14} color="#f87171" />
+              : <RefreshCw size={14} color="#60a5fa" className="ign-spin" />}
+            <p style={{ fontSize: 10, fontWeight: 700, color: phase === 'ERROR' ? '#f87171' : '#60a5fa' }}>{message}</p>
           </div>
         )}
 
@@ -130,78 +141,98 @@ const QuickBooksConnector = ({ onConnected }) => {
           <button
             onClick={connect}
             disabled={phase === 'CONNECTING'}
-            className="w-full bg-green-600 hover:bg-green-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-black py-4 rounded-2xl uppercase tracking-widest text-[10px] transition-colors shadow-lg shadow-green-900/30 active:scale-95 flex items-center justify-center gap-2"
+            style={{
+              width: '100%', fontWeight: 900, padding: '16px 0', borderRadius: 16,
+              textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: 10,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              border: 'none', cursor: phase === 'CONNECTING' ? 'not-allowed' : 'pointer',
+              backgroundColor: phase === 'CONNECTING' ? '#1e293b' : '#16a34a',
+              color: phase === 'CONNECTING' ? '#475569' : '#fff',
+              boxShadow: phase === 'CONNECTING' ? 'none' : '0 10px 15px rgba(20,83,45,0.3)',
+            }}
           >
             <Link2 size={14} />
             {phase === 'CONNECTING' ? 'Authorizing...' : 'Connect to QuickBooks'}
           </button>
         ) : (
-          <div className="flex gap-3">
+          <div style={{ display: 'flex', gap: 12 }}>
             <button
               onClick={runSync}
               disabled={phase === 'SYNCING'}
-              className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-black py-4 rounded-2xl uppercase tracking-widest text-[10px] transition-colors active:scale-95 flex items-center justify-center gap-2"
+              style={{
+                flex: 1, fontWeight: 900, padding: '16px 0', borderRadius: 16,
+                textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: 10,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                border: 'none', cursor: phase === 'SYNCING' ? 'not-allowed' : 'pointer',
+                backgroundColor: phase === 'SYNCING' ? '#1e293b' : '#2563eb',
+                color: phase === 'SYNCING' ? '#475569' : '#fff',
+              }}
             >
-              <RefreshCw size={14} className={phase === 'SYNCING' ? 'animate-spin' : ''} />
+              <RefreshCw size={14} className={phase === 'SYNCING' ? 'ign-spin' : undefined} />
               {phase === 'SYNCING' ? 'Syncing...' : 'Sync Now'}
             </button>
             <button
               onClick={disconnect}
-              className="px-5 py-4 bg-slate-900 border border-slate-800 hover:border-red-500/50 text-slate-500 hover:text-red-400 rounded-2xl font-black text-[10px] uppercase transition-colors flex items-center gap-2"
+              style={{
+                padding: '16px 20px', backgroundColor: '#0f172a', border: '1px solid #1e293b',
+                color: '#64748b', borderRadius: 16, fontWeight: 900, fontSize: 10,
+                textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8,
+                cursor: 'pointer',
+              }}
             >
               <Link2Off size={14} />
             </button>
           </div>
         )}
 
-        <p className="text-[8px] text-slate-600 text-center mt-3 uppercase tracking-wider">
+        <p style={{ fontSize: 8, color: '#475569', textAlign: 'center', marginTop: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Requires QuickBooks Online. A popup will open for authorization.
         </p>
       </div>
 
       {/* SYNC STATS */}
       {(syncStats || isConnected) && (
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-2">
-              <Users size={14} className="text-blue-400" />
-              <p className="text-[9px] font-black text-slate-500 uppercase">Customers Synced</p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+          <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 16, padding: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <Users size={14} color="#60a5fa" />
+              <p style={{ fontSize: 9, fontWeight: 900, color: '#64748b', textTransform: 'uppercase' }}>Customers Synced</p>
             </div>
-            <p className="text-3xl font-black text-white italic">
+            <p style={{ fontSize: 30, fontWeight: 900, color: '#fff', fontStyle: 'italic' }}>
               {syncStats?.customers ?? '—'}
             </p>
             {syncStats?.syncedAt && (
-              <p className="text-[8px] text-slate-600 mt-1">Last: {syncStats.syncedAt}</p>
+              <p style={{ fontSize: 8, color: '#475569', marginTop: 4 }}>Last: {syncStats.syncedAt}</p>
             )}
           </div>
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-2">
-              <DollarSign size={14} className="text-emerald-400" />
-              <p className="text-[9px] font-black text-slate-500 uppercase">Invoices Pulled</p>
+          <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 16, padding: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <DollarSign size={14} color="#34d399" />
+              <p style={{ fontSize: 9, fontWeight: 900, color: '#64748b', textTransform: 'uppercase' }}>Invoices Pulled</p>
             </div>
-            <p className="text-3xl font-black text-white italic">
+            <p style={{ fontSize: 30, fontWeight: 900, color: '#fff', fontStyle: 'italic' }}>
               {syncStats?.invoices ?? '—'}
             </p>
-            <p className="text-[8px] text-slate-600 mt-1">Last 90 days</p>
+            <p style={{ fontSize: 8, color: '#475569', marginTop: 4 }}>Last 90 days</p>
           </div>
         </div>
       )}
 
       {/* WHAT SYNCS */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
-        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">What Gets Synced</p>
-        <div className="space-y-3">
+      <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 24, padding: 24 }}>
+        <p style={{ fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16 }}>What Gets Synced</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {[
             { label: 'Customer names, phones, and emails', dir: '← From QuickBooks', active: true },
             { label: 'Last 90 days of invoices and payment status', dir: '← From QuickBooks', active: true },
             { label: 'Completed work orders as invoices', dir: '→ To QuickBooks', active: false, coming: true },
             { label: 'Payment status updates', dir: '← From QuickBooks', active: false, coming: true },
           ].map(({ label, dir, active, coming }) => (
-            <div key={label} className="flex items-center gap-3">
-              <CheckCircle size={14} className={active ? 'text-emerald-400' : coming ? 'text-slate-700' : 'text-slate-700'} />
-              <div className="flex-1">
-                <p className={`text-[10px] font-bold ${active ? 'text-white' : 'text-slate-600'}`}>{label}</p>
-                <p className="text-[8px] text-slate-600 font-mono">{dir}{coming ? ' · Coming soon' : ''}</p>
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <CheckCircle size={14} color={active ? '#34d399' : '#374151'} />
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 10, fontWeight: 700, color: active ? '#fff' : '#475569' }}>{label}</p>
+                <p style={{ fontSize: 8, color: '#475569', fontFamily: 'monospace' }}>{dir}{coming ? ' · Coming soon' : ''}</p>
               </div>
             </div>
           ))}
@@ -210,28 +241,28 @@ const QuickBooksConnector = ({ onConnected }) => {
 
       {/* SETUP INSTRUCTIONS */}
       {!isConnected && (
-        <div className="mt-6 bg-slate-900/50 border border-slate-800 rounded-3xl p-6">
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Setup Required</p>
-          <div className="space-y-3">
+        <div style={{ marginTop: 24, backgroundColor: 'rgba(15,23,42,0.5)', border: '1px solid #1e293b', borderRadius: 24, padding: 24 }}>
+          <p style={{ fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16 }}>Setup Required</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {[
               'Create a free app at developer.intuit.com',
               `Set Redirect URI to: ${QBO_CALLBACK_URL}`,
               'Copy your Client ID and Client Secret into the .env file',
               'Restart the Python backend (shop_estimate.py)',
             ].map((step, i) => (
-              <div key={i} className="flex items-start gap-3">
-                <div className="w-5 h-5 bg-slate-800 rounded-full flex items-center justify-center text-[8px] font-black text-slate-400 flex-shrink-0 mt-0.5">
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ width: 20, height: 20, backgroundColor: '#1e293b', borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 900, color: '#94a3b8', flexShrink: 0, marginTop: 2 }}>
                   {i + 1}
                 </div>
-                <p className="text-[10px] text-slate-400">{step}</p>
+                <p style={{ fontSize: 10, color: '#94a3b8' }}>{step}</p>
               </div>
             ))}
           </div>
-          <div className="mt-4 bg-black rounded-xl p-3 font-mono text-[9px] text-slate-500">
-            <p className="text-slate-600"># Add to your .env file:</p>
-            <p className="text-emerald-400">QBO_CLIENT_ID=<span className="text-slate-500">your_client_id_here</span></p>
-            <p className="text-emerald-400">QBO_CLIENT_SECRET=<span className="text-slate-500">your_secret_here</span></p>
-            <p className="text-emerald-400">QBO_ENVIRONMENT=<span className="text-slate-500">sandbox</span></p>
+          <div style={{ marginTop: 16, backgroundColor: '#000', borderRadius: 12, padding: 12, fontFamily: 'monospace', fontSize: 9, color: '#64748b' }}>
+            <p style={{ color: '#475569' }}># Add to your .env file:</p>
+            <p style={{ color: '#34d399' }}>QBO_CLIENT_ID=<span style={{ color: '#64748b' }}>your_client_id_here</span></p>
+            <p style={{ color: '#34d399' }}>QBO_CLIENT_SECRET=<span style={{ color: '#64748b' }}>your_secret_here</span></p>
+            <p style={{ color: '#34d399' }}>QBO_ENVIRONMENT=<span style={{ color: '#64748b' }}>sandbox</span></p>
           </div>
         </div>
       )}
