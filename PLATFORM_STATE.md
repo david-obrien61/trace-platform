@@ -20,9 +20,10 @@
 | GATE | TRIGGER EVENT | REQUIRED ACTIONS | STATUS |
 |---|---|---|---|
 | **FIRST PAYING CUSTOMER** | First customer pays money | **(1) TIER UPGRADE:** Supabase free→Pro + Vercel Hobby→Pro. Verify current vendor terms at the time — Vercel Hobby prohibits commercial use; confirm against live Vercel/Supabase docs when the customer is near. **(2) ABUSE GUARDS ON-AND-TESTED:** Activate GUARD_A, GUARD_B, GUARD_C one-at-a-time. David tests each in isolation and says "proven." All three must be ON before the paying-customer event or before public self-serve opens, whichever comes first. **(3) PUBLIC SELF-SERVE (if opening):** Also gated here — guards are the safety layer that makes self-serve safe. | 🔴 NOT CROSSED |
-| **PUBLIC SELF-SERVE SIGNUP** | Business creation open to the public | Same as above + all three abuse guards confirmed ON. While invite-only (David + family), guards may stay OFF — no abuse surface. | 🔴 NOT CROSSED |
+| **PUBLIC SELF-SERVE SIGNUP** | Business creation open to the public | Same as FIRST PAYING CUSTOMER + all three abuse guards confirmed ON. While invite-only (David + family), guards may stay OFF — no abuse surface. | 🔴 NOT CROSSED |
+| **EMAIL CONFIRMATION + SMTP** | First paying customer / public self-serve (same trigger) | **(1) FIX OUTBOUND MAIL FIRST:** Configure real SMTP provider (Resend, SendGrid, or Postmark) in Supabase → Authentication → Settings (bgobkjcopcxusjsetfob). Default Supabase SMTP is rate-limited and unreliable for production. **(2) RE-ENABLE CONFIRMATION:** Once mail is confirmed working → Supabase → Authentication → Settings → "Confirm email" ON. **COUPLING:** confirmation-on + mail-broken = signup can't complete. Mail MUST work before re-enabling. Rationale: unconfirmed-email signup in production = impersonation / spam / no verified contact method. | 🔴 NOT CROSSED — **CURRENT DEGRADED STATE:** email confirmation OFF + outbound mail NOT WORKING (Supabase default SMTP; verification emails not delivered). Disabled pre-2026-06-11, exact date unknown. Account creation works ONLY because confirmation is off. Acceptable while invite-only (David + family); must be fixed before real/public users. |
 
-*Rationale: first-paying-customer simultaneously makes the platform commercial (tier terms), creates the abuse surface (guards), and exposes real customer data. Easy to miss in the excitement of a first sale — which is exactly when exposure is highest.*
+*Rationale: first-paying-customer simultaneously makes the platform commercial (tier terms), creates the abuse surface (guards), and exposes real customer data — including the need for verified contact methods. Easy to miss in the excitement of a first sale — which is exactly when exposure is highest.*
 
 ---
 
@@ -168,6 +169,7 @@
 | **trace-app Vercel deploy** | Not started | Create new Vercel project → import trace-platform repo → Build Command: `npm run build:trace` · Output: `packages/trace-app/dist` · Env vars: same VITE_SUPABASE_URL/ANON_KEY as cultivar-os |
 | **⛔ GUARD activation (LAUNCH GATE)** | Before first paying customer / before self-serve opens | Turn GUARD_A, GUARD_B, GUARD_C ON one at a time in `auth/businessGuards.ts` · David tests each in isolation · David says "proven" → leave ON · GUARD_C also needs `businesses.status` column before activating its insertPatch |
 | **⛔ Tier upgrade (LAUNCH GATE)** | Before first paying customer | Supabase free→Pro + Vercel Hobby→Pro · verify current vendor terms at the time against live docs |
+| **⛔ SMTP + email confirmation (LAUNCH GATE)** | Before first paying customer / public self-serve | (1) Configure real SMTP in bgobkjcopcxusjsetfob → Auth settings · (2) Verify delivery · (3) Re-enable "Confirm email" · MUST be in this order — confirmation-on with broken mail blocks all new signups |
 
 ---
 

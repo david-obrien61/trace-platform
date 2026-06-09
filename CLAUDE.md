@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-11 (trace-app: businessType="general" vertical + debris cleanup migration)
+# Last updated: 2026-06-11 (email-confirmation OFF + outbound mail broken → documented as launch-gate item)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -98,6 +98,16 @@ cultivar-os (NEW — active):
           customers, social_drafts, modules,
           nursery_modules
   Auth: email/password, email confirmation OFF
+  ⚠️ WHY OFF: outbound mail not working (Supabase default SMTP rate-limited /
+     unreliable — verification emails were not being delivered). Confirmation
+     was disabled pre-2026-06-11 (exact date unknown) so that signup works
+     while mail is broken. Account creation currently works ONLY because
+     confirmation is off.
+  ⚠️ LAUNCH GATE: fix SMTP (Resend/SendGrid/Postmark) → then re-enable
+     confirmation. These are COUPLED — turning confirmation on with broken
+     mail means signup can't complete. Mail FIRST, then confirmation.
+     Tied to same trigger as abuse guards: first paying customer / public
+     self-serve. See PLATFORM_STATE.md LAUNCH GATES.
 
 ignition-os (OLD — do not touch):
   Project ref: ufsgqckbxdtwviqjjtos
@@ -290,6 +300,68 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-11 — Email confirmation OFF + outbound mail broken → launch-gate documentation
+
+**Type:** Docs-only. Two files changed (`PLATFORM_STATE.md`, `CLAUDE.md`). Zero code changes, zero migrations, zero schema changes.
+
+**Session mandate:** Document the deliberately-lowered security posture (email confirmation OFF, outbound mail not working) in the session-visible index docs so it does not rely on memory. Tie it to the same launch-gate trigger as the abuse guards.
+
+---
+
+**CURRENT STATE (honest record):**
+
+- Supabase project `bgobkjcopcxusjsetfob` → Authentication → Settings → "Confirm email": **OFF**
+- Reason: outbound mail was not being delivered (Supabase default SMTP is rate-limited and unreliable). Confirmation disabled so that signup would work while mail was broken.
+- Date disabled: **pre-2026-06-11, exact date unknown.**
+- Effect: any email address (including unverified or impersonated) can create an account. Acceptable while creation is invite-only (David + family). Not acceptable for real/public users.
+
+**COUPLING:** turning confirmation ON with broken mail means every new signup is stuck — the confirmation email never arrives and the account can never be activated. Mail MUST be fixed before re-enabling.
+
+---
+
+**WHAT WAS DOCUMENTED:**
+
+**`PLATFORM_STATE.md` LAUNCH GATES section:**
+- New row: **EMAIL CONFIRMATION + SMTP** — trigger = same as abuse guards (first paying customer / public self-serve). Two-step sequence: (1) configure real SMTP (Resend/SendGrid/Postmark) in bgobkjcopcxusjsetfob Auth settings → (2) re-enable "Confirm email". Current degraded state noted in the STATUS column: "🔴 NOT CROSSED — CURRENT DEGRADED STATE: email confirmation OFF + outbound mail NOT WORKING."
+
+**`PLATFORM_STATE.md` IN-FLIGHT:**
+- New row: `⛔ SMTP + email confirmation (LAUNCH GATE)` — three-step sequence with coupling warning inline.
+
+**`CLAUDE.md` §2 Supabase Projects:**
+- Expanded `Auth: email/password, email confirmation OFF` with WHY (outbound mail not working), date-unknown honest note, coupling explanation, and pointer to PLATFORM_STATE.md LAUNCH GATES.
+
+---
+
+**Propagation check (step 10):** No customer-facing features changed. No Help.tsx propagation needed. No onboarding changes.
+
+**Factual corrections (step 11):** No prior doc asserted confirmation was ON. The prior bare note "email confirmation OFF" was factually correct but context-free. This session adds the why and the gate — not a correction, an expansion.
+
+**No runbook needed** — pure docs session. No environment, DB, or code changes.
+
+**AC compliance (step 13):** No AC compliance issues — session did not touch shared schema, RLS, or shared identifiers.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Read-only throughout. No changes without confirmed current state (David's explicit report of the broken-mail root cause).
+- STD-002: N/A — no bug fix.
+- STD-003: N/A — no instrumentation.
+- STD-004: N/A — no business-scoped feature.
+- STD-005: ✅ Bare note replaced with full context + gate. No contradictory text.
+- STD-006: N/A — no shared code changes.
+- STD-007: N/A — no integration status UI.
+- STD-008: N/A — no migrations.
+- STD-009: N/A — no generation path.
+- STD-010: N/A — no opaque names.
+- **BENCH (STEP 0):** BENCH-B still firing for Receipt Keeper. No new bench triggers.
+
+**Gap graduation sweep (step 15):** No gaps past horizon. No graduations.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- LAUNCH GATES: new EMAIL CONFIRMATION + SMTP row (🔴 NOT CROSSED — current degraded state).
+- IN-FLIGHT: new `⛔ SMTP + email confirmation` row.
+- No existing item levels changed.
+
+---
 
 ### 2026-06-11 — trace-app: businessType="general" vertical + debris cleanup migration
 
