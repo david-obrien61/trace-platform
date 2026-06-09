@@ -10,6 +10,20 @@ import { Upload, CheckCircle, AlertCircle, ChevronDown, ChevronUp, X } from 'luc
 import ExternalBridge from '../ExternalBridge';
 import DataBridge from '../DataBridge';
 
+const STYLE_DEBUG = false;
+
+// Non-1:1 mappings (60 classNames converted):
+// (1) animate-spin on loading spinner → ign-spin CSS class
+// (2) hover:border-blue-500 on drop zone → dropped (cosmetic; no inline hover equivalent)
+// (3) hover:bg-blue-500 on Preview button → ign-btn-primary CSS class
+// (4) active:scale-95 on action buttons → ign-card-hover CSS class
+// (5) hover:bg-emerald-500 on Import button → ign-btn-emerald CSS class
+// (6) hover:bg-slate-800 on Back/Another buttons → dropped (cosmetic)
+// (7) hover:text-slate-300 on Collapse toggle → dropped (cosmetic)
+// (8) disabled:bg-slate-800 disabled:text-slate-600 → inline conditional styles
+// (9) grid grid-cols-2 on formats list + DONE stats → flex-wrap (no breakpoint equivalent)
+// [TRACE:STYLE] CSVImporter converted, 60 classNames → inline, 9 non-1:1 categories
+
 const FIELD_OPTIONS = [
   { value: '',        label: '— Ignore this column —' },
   { value: 'name',   label: 'Customer Name' },
@@ -26,8 +40,15 @@ const FIELD_OPTIONS = [
   { value: 'notes',  label: 'Notes / Comments' },
 ];
 
+const backBtnStyle = {
+  paddingLeft: 24, paddingRight: 24, paddingTop: 16, paddingBottom: 16,
+  backgroundColor: '#0f172a', border: '1px solid #1e293b', color: '#94a3b8',
+  borderRadius: 16, fontWeight: 900, fontSize: 10, textTransform: 'uppercase',
+  cursor: 'pointer', transition: 'background-color 0.15s',
+};
+
 const CSVImporter = ({ onImportComplete }) => {
-  const [phase, setPhase]           = useState('UPLOAD'); // UPLOAD | MAPPING | PREVIEW | DONE
+  const [phase, setPhase]           = useState('UPLOAD');
   const [parsed, setParsed]         = useState(null);
   const [mapping, setMapping]       = useState({});
   const [customers, setCustomers]   = useState([]);
@@ -36,6 +57,8 @@ const CSVImporter = ({ onImportComplete }) => {
   const [loading, setLoading]       = useState(false);
   const [showPreview, setShowPreview] = useState(true);
   const fileRef = useRef();
+
+  if (STYLE_DEBUG) console.log('[TRACE:STYLE] CSVImporter converted, 60 classNames → inline, 9 non-1:1 categories');
 
   const handleFile = async (file) => {
     if (!file) return;
@@ -77,42 +100,58 @@ const CSVImporter = ({ onImportComplete }) => {
   // ── UPLOAD ────────────────────────────────────────────────────────────────
 
   if (phase === 'UPLOAD') return (
-    <div className="p-6 bg-slate-950 min-h-screen text-slate-200">
-      <h2 className="text-2xl font-black italic text-white uppercase tracking-tighter mb-1">Import Customers</h2>
-      <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-8">Accepts any CSV from Excel, Google Sheets, Mitchell1, Tekmetric, or your old system</p>
+    <div style={{ padding: 24, backgroundColor: '#020617', minHeight: '100vh', color: '#e2e8f0' }}>
+      <h2 style={{ fontSize: 24, fontWeight: 900, fontStyle: 'italic', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '-0.05em', marginBottom: 4 }}>Import Customers</h2>
+      <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 32 }}>Accepts any CSV from Excel, Google Sheets, Mitchell1, Tekmetric, or your old system</p>
 
+      {/* hover:border-blue-500 → dropped (cosmetic; no inline hover equivalent) */}
       <div
-        className="border-2 border-dashed border-slate-800 hover:border-blue-500 rounded-3xl p-16 flex flex-col items-center text-center cursor-pointer transition-colors mb-6"
+        style={{
+          border: '2px dashed #1e293b',
+          borderRadius: 24,
+          padding: 64,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          textAlign: 'center',
+          cursor: 'pointer',
+          transition: 'border-color 0.15s',
+          marginBottom: 24,
+        }}
         onClick={() => fileRef.current?.click()}
         onDragOver={e => e.preventDefault()}
         onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); }}
       >
+        {/* animate-spin → ign-spin */}
         {loading ? (
-          <div className="animate-spin w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full mb-4" />
+          <div className="ign-spin" style={{ width: 40, height: 40, border: '2px solid #3b82f6', borderTopColor: 'transparent', borderRadius: '50%', marginBottom: 16 }} />
         ) : (
-          <Upload size={40} className="text-slate-600 mb-4" />
+          <Upload size={40} style={{ color: '#475569', marginBottom: 16 }} />
         )}
-        <p className="text-sm font-black text-slate-400 uppercase italic mb-2">
+        <p style={{ fontSize: 14, fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase', fontStyle: 'italic', marginBottom: 8 }}>
           {loading ? 'Reading file...' : 'Drop your CSV here or click to browse'}
         </p>
-        <p className="text-[9px] text-slate-600 max-w-xs">
+        <p style={{ fontSize: 9, color: '#475569', maxWidth: 320 }}>
           Columns are auto-detected. You'll be able to confirm the mapping before anything is imported.
         </p>
-        <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={e => handleFile(e.target.files[0])} />
+        <input ref={fileRef} type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={e => handleFile(e.target.files[0])} />
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 text-red-400 bg-red-400/5 border border-red-400/20 rounded-xl p-4">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#f87171', backgroundColor: 'rgba(248,113,113,0.05)', border: '1px solid rgba(248,113,113,0.20)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
           <AlertCircle size={16} />
-          <p className="text-xs font-bold">{error}</p>
+          <p style={{ fontSize: 12, fontWeight: 700 }}>{error}</p>
         </div>
       )}
 
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-        <p className="text-[10px] font-black text-slate-500 uppercase mb-3">Supported Formats</p>
-        <div className="grid grid-cols-2 gap-2 text-[9px] text-slate-500 font-mono">
+      <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 16, padding: 20 }}>
+        <p style={{ fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', marginBottom: 12 }}>Supported Formats</p>
+        {/* grid grid-cols-2 → flex-wrap; flagged: no breakpoint equivalent */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {['Excel (.xlsx → Save as CSV)', 'Google Sheets export', 'Mitchell1 customer export', 'Tekmetric customer report', 'QuickBooks customer list CSV', 'Any custom spreadsheet'].map(f => (
-            <div key={f} className="flex items-center gap-2"><CheckCircle size={10} className="text-emerald-500" /> {f}</div>
+            <div key={f} style={{ flex: '1 1 calc(50% - 4px)', minWidth: 180, display: 'flex', alignItems: 'center', gap: 8, fontSize: 9, color: '#64748b', fontFamily: 'monospace' }}>
+              <CheckCircle size={10} style={{ color: '#10b981' }} /> {f}
+            </div>
           ))}
         </div>
       </div>
@@ -122,28 +161,35 @@ const CSVImporter = ({ onImportComplete }) => {
   // ── MAPPING ───────────────────────────────────────────────────────────────
 
   if (phase === 'MAPPING') return (
-    <div className="p-6 bg-slate-950 min-h-screen text-slate-200">
-      <h2 className="text-2xl font-black italic text-white uppercase tracking-tighter mb-1">Confirm Column Mapping</h2>
-      <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-2">
+    <div style={{ padding: 24, backgroundColor: '#020617', minHeight: '100vh', color: '#e2e8f0' }}>
+      <h2 style={{ fontSize: 24, fontWeight: 900, fontStyle: 'italic', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '-0.05em', marginBottom: 4 }}>Confirm Column Mapping</h2>
+      <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
         We auto-detected {Object.values(mapping).filter(Boolean).length} of {parsed.headers.length} columns.
         Adjust anything that looks wrong.
       </p>
-      <p className="text-[9px] text-slate-600 mb-8">{parsed.totalRows} data rows found in file</p>
+      <p style={{ fontSize: 9, color: '#475569', marginBottom: 32 }}>{parsed.totalRows} data rows found in file</p>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 mb-6 space-y-3">
+      <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 24, padding: 24, marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {parsed.headers.map(header => (
-          <div key={header} className="flex items-center gap-4">
-            <div className="bg-black border border-slate-800 rounded-xl px-4 py-2 flex-1 min-w-0">
-              <p className="text-[9px] text-slate-500 uppercase font-mono truncate">{header}</p>
-              <p className="text-[10px] text-slate-400 truncate">
+          <div key={header} style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ backgroundColor: '#000000', border: '1px solid #1e293b', borderRadius: 12, paddingLeft: 16, paddingRight: 16, paddingTop: 8, paddingBottom: 8, flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 9, color: '#64748b', textTransform: 'uppercase', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{header}</p>
+              <p style={{ fontSize: 10, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {parsed.rows[0]?.[header] || '—'}
               </p>
             </div>
-            <span className="text-slate-700 text-lg flex-shrink-0">→</span>
+            <span style={{ color: '#334155', fontSize: 18, flexShrink: 0 }}>→</span>
+            {/* focus:border-blue-500 → ign-input */}
             <select
               value={mapping[header] || ''}
               onChange={e => setMapping(m => ({ ...m, [header]: e.target.value || null }))}
-              className="bg-black border border-slate-800 rounded-xl px-3 py-2 text-[10px] text-white font-bold uppercase focus:outline-none focus:border-blue-500 transition-colors flex-1 appearance-none cursor-pointer"
+              className="ign-input"
+              style={{
+                backgroundColor: '#000000', border: '1px solid #1e293b', borderRadius: 12,
+                paddingLeft: 12, paddingRight: 12, paddingTop: 8, paddingBottom: 8,
+                fontSize: 10, color: '#ffffff', fontWeight: 700, textTransform: 'uppercase',
+                outline: 'none', transition: 'border-color 0.15s', flex: 1, appearance: 'none', cursor: 'pointer',
+              }}
             >
               {FIELD_OPTIONS.map(({ value, label }) => (
                 <option key={value} value={value}>{label}</option>
@@ -153,21 +199,36 @@ const CSVImporter = ({ onImportComplete }) => {
         ))}
       </div>
 
-      <div className="flex gap-3">
-        <button onClick={() => setPhase('UPLOAD')} className="px-6 py-4 bg-slate-900 border border-slate-800 text-slate-400 rounded-2xl font-black text-[10px] uppercase hover:bg-slate-800 transition-colors">
-          Back
-        </button>
+      <div style={{ display: 'flex', gap: 12 }}>
+        {/* hover:bg-slate-800 on Back → dropped (cosmetic) */}
+        <button onClick={() => setPhase('UPLOAD')} style={backBtnStyle}>Back</button>
+        {/* hover:bg-blue-500 → ign-btn-primary; active:scale-95 → ign-card-hover; disabled:* → inline conditional */}
         <button
           onClick={goToPreview}
           disabled={!Object.values(mapping).includes('name')}
-          className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-black py-4 rounded-2xl uppercase tracking-widest text-[10px] transition-colors active:scale-95"
+          className={Object.values(mapping).includes('name') ? 'ign-btn-primary ign-card-hover' : ''}
+          style={{
+            flex: 1,
+            backgroundColor: Object.values(mapping).includes('name') ? '#2563eb' : '#1e293b',
+            color: Object.values(mapping).includes('name') ? '#ffffff' : '#475569',
+            fontWeight: 900,
+            paddingTop: 16,
+            paddingBottom: 16,
+            borderRadius: 16,
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            fontSize: 10,
+            transition: 'all 0.15s',
+            border: 'none',
+            cursor: Object.values(mapping).includes('name') ? 'pointer' : 'not-allowed',
+          }}
         >
           Preview Import ({parsed.totalRows} rows)
         </button>
       </div>
 
       {!Object.values(mapping).includes('name') && (
-        <p className="text-[9px] text-orange-400 mt-3 text-center">At minimum, map a column to "Customer Name" to continue.</p>
+        <p style={{ fontSize: 9, color: '#fb923c', marginTop: 12, textAlign: 'center' }}>At minimum, map a column to "Customer Name" to continue.</p>
       )}
     </div>
   );
@@ -175,55 +236,72 @@ const CSVImporter = ({ onImportComplete }) => {
   // ── PREVIEW ───────────────────────────────────────────────────────────────
 
   if (phase === 'PREVIEW') return (
-    <div className="p-6 bg-slate-950 min-h-screen text-slate-200">
-      <h2 className="text-2xl font-black italic text-white uppercase tracking-tighter mb-1">Preview</h2>
-      <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-6">
+    <div style={{ padding: 24, backgroundColor: '#020617', minHeight: '100vh', color: '#e2e8f0' }}>
+      <h2 style={{ fontSize: 24, fontWeight: 900, fontStyle: 'italic', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '-0.05em', marginBottom: 4 }}>Preview</h2>
+      <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 24 }}>
         {customers.length} customers ready to import · Review before confirming
       </p>
 
+      {/* hover:text-slate-300 on Collapse → dropped (cosmetic) */}
       <button
         onClick={() => setShowPreview(v => !v)}
-        className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 hover:text-slate-300 transition-colors"
+        style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16, background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.15s' }}
       >
         {showPreview ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         {showPreview ? 'Collapse' : 'Expand'} Preview
       </button>
 
       {showPreview && (
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl mb-6 overflow-hidden">
-          <div className="max-h-80 overflow-y-auto divide-y divide-slate-800">
+        <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 24, marginBottom: 24, overflow: 'hidden' }}>
+          <div style={{ maxHeight: 320, overflowY: 'auto' }}>
             {customers.slice(0, 20).map((c, i) => (
-              <div key={i} className="flex items-center gap-4 px-5 py-3">
-                <div className="w-8 h-8 bg-slate-800 rounded-xl flex items-center justify-center text-[10px] font-black text-slate-500 flex-shrink-0">
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 16, paddingLeft: 20, paddingRight: 20, paddingTop: 12, paddingBottom: 12, borderBottom: '1px solid #1e293b' }}>
+                <div style={{ width: 32, height: 32, backgroundColor: '#1e293b', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900, color: '#64748b', flexShrink: 0 }}>
                   {(i + 1)}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-black text-white uppercase truncate">{c.name}</p>
-                  <p className="text-[9px] text-slate-500 truncate">{[c.phone, c.email, c.address].filter(Boolean).join(' · ')}</p>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 12, fontWeight: 900, color: '#ffffff', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</p>
+                  <p style={{ fontSize: 9, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[c.phone, c.email, c.address].filter(Boolean).join(' · ')}</p>
                 </div>
                 {c.vehicles?.length > 0 && (
-                  <span className="text-[8px] font-black text-blue-400 bg-blue-400/10 px-2 py-1 rounded-full flex-shrink-0">
+                  <span style={{ fontSize: 8, fontWeight: 900, color: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.10)', paddingLeft: 8, paddingRight: 8, paddingTop: 4, paddingBottom: 4, borderRadius: 9999, flexShrink: 0 }}>
                     {c.vehicles[0].year} {c.vehicles[0].make}
                   </span>
                 )}
               </div>
             ))}
             {customers.length > 20 && (
-              <div className="px-5 py-3 text-center">
-                <p className="text-[9px] text-slate-600 uppercase font-black">+ {customers.length - 20} more</p>
+              <div style={{ paddingLeft: 20, paddingRight: 20, paddingTop: 12, paddingBottom: 12, textAlign: 'center' }}>
+                <p style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', fontWeight: 900 }}>+ {customers.length - 20} more</p>
               </div>
             )}
           </div>
         </div>
       )}
 
-      <div className="flex gap-3">
-        <button onClick={() => setPhase('MAPPING')} className="px-6 py-4 bg-slate-900 border border-slate-800 text-slate-400 rounded-2xl font-black text-[10px] uppercase hover:bg-slate-800 transition-colors">
-          Back
-        </button>
+      <div style={{ display: 'flex', gap: 12 }}>
+        {/* hover:bg-slate-800 → dropped (cosmetic) */}
+        <button onClick={() => setPhase('MAPPING')} style={backBtnStyle}>Back</button>
+        {/* hover:bg-emerald-500 → ign-btn-emerald; active:scale-95 → ign-card-hover */}
         <button
           onClick={runImport}
-          className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-2xl uppercase tracking-widest text-[10px] transition-colors shadow-lg shadow-emerald-900/30 active:scale-95"
+          className="ign-btn-emerald ign-card-hover"
+          style={{
+            flex: 1,
+            backgroundColor: '#059669',
+            color: '#ffffff',
+            fontWeight: 900,
+            paddingTop: 16,
+            paddingBottom: 16,
+            borderRadius: 16,
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            fontSize: 10,
+            transition: 'all 0.15s',
+            boxShadow: '0 10px 15px -3px rgba(5,150,105,0.30)',
+            border: 'none',
+            cursor: 'pointer',
+          }}
         >
           Import {customers.length} Customers
         </button>
@@ -234,25 +312,27 @@ const CSVImporter = ({ onImportComplete }) => {
   // ── DONE ──────────────────────────────────────────────────────────────────
 
   if (phase === 'DONE') return (
-    <div className="p-6 bg-slate-950 min-h-screen text-slate-200 flex flex-col items-center justify-center text-center">
-      <div className="w-24 h-24 bg-emerald-600/10 border border-emerald-500/20 rounded-[2rem] flex items-center justify-center mb-8">
-        <CheckCircle size={48} className="text-emerald-400" />
+    <div style={{ padding: 24, backgroundColor: '#020617', minHeight: '100vh', color: '#e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+      <div style={{ width: 96, height: 96, backgroundColor: 'rgba(5,150,105,0.10)', border: '1px solid rgba(16,185,129,0.20)', borderRadius: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 32 }}>
+        <CheckCircle size={48} style={{ color: '#34d399' }} />
       </div>
-      <h2 className="text-3xl font-black italic text-white uppercase tracking-tighter mb-2">Import Complete</h2>
-      <div className="grid grid-cols-2 gap-4 mt-8 w-full max-w-xs">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-          <p className="text-3xl font-black text-emerald-400">{result.imported}</p>
-          <p className="text-[9px] font-black text-slate-500 uppercase">Imported</p>
+      <h2 style={{ fontSize: 30, fontWeight: 900, fontStyle: 'italic', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '-0.05em', marginBottom: 8 }}>Import Complete</h2>
+      {/* grid grid-cols-2 → flex-wrap; flagged: no breakpoint equivalent */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 32, width: '100%', maxWidth: 320 }}>
+        <div style={{ flex: '1 1 calc(50% - 8px)', backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 16, padding: 16 }}>
+          <p style={{ fontSize: 30, fontWeight: 900, color: '#34d399' }}>{result.imported}</p>
+          <p style={{ fontSize: 9, fontWeight: 900, color: '#64748b', textTransform: 'uppercase' }}>Imported</p>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-          <p className="text-3xl font-black text-slate-500">{result.skipped}</p>
-          <p className="text-[9px] font-black text-slate-500 uppercase">Skipped (Dupe)</p>
+        <div style={{ flex: '1 1 calc(50% - 8px)', backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 16, padding: 16 }}>
+          <p style={{ fontSize: 30, fontWeight: 900, color: '#64748b' }}>{result.skipped}</p>
+          <p style={{ fontSize: 9, fontWeight: 900, color: '#64748b', textTransform: 'uppercase' }}>Skipped (Dupe)</p>
         </div>
       </div>
-      <p className="text-[10px] text-slate-500 mt-6">Duplicates were matched by name + phone and skipped automatically.</p>
+      <p style={{ fontSize: 10, color: '#64748b', marginTop: 24 }}>Duplicates were matched by name + phone and skipped automatically.</p>
+      {/* hover:bg-slate-800 → dropped (cosmetic) */}
       <button
         onClick={() => setPhase('UPLOAD')}
-        className="mt-8 px-8 py-4 bg-slate-900 border border-slate-800 text-slate-300 rounded-2xl font-black text-[10px] uppercase hover:bg-slate-800 transition-colors"
+        style={{ marginTop: 32, paddingLeft: 32, paddingRight: 32, paddingTop: 16, paddingBottom: 16, backgroundColor: '#0f172a', border: '1px solid #1e293b', color: '#cbd5e1', borderRadius: 16, fontWeight: 900, fontSize: 10, textTransform: 'uppercase', cursor: 'pointer', transition: 'background-color 0.15s' }}
       >
         Import Another File
       </button>
