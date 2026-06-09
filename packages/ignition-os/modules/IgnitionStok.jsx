@@ -8,12 +8,22 @@ import React, { useState, useEffect } from 'react';
 import { Box, Search, Package, MapPin, AlertTriangle, ArrowRight, Lock } from 'lucide-react';
 import DataBridge from '../DataBridge';
 
+const STYLE_DEBUG = false;
+
+// Non-1:1 mappings (30 classNames converted):
+// (1) focus:border-blue-500 on search input → ign-input CSS class handles focus
+// grid-cols-2 → flex with 50% width children (1:1 functionally for 2-col)
+// filter blur-md → filter: 'blur(12px)' inline (1:1)
+// [TRACE:STYLE] IgnitionStok converted, 30 classNames → inline, 1 non-1:1 category
+
 const IgnitionStok = ({ initialSearchTerm = '' }) => {
   const { isExpired } = DataBridge.checkTrialStatus('STOK');
-  
+
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
+
+  if (STYLE_DEBUG) console.log('[TRACE:STYLE] IgnitionStok converted, 30 classNames → inline, 1 non-1:1 category');
 
   useEffect(() => {
     fetchInventory();
@@ -31,7 +41,7 @@ const IgnitionStok = ({ initialSearchTerm = '' }) => {
     // Dynamic import to avoid breaking if not present at top level
     const { supabase } = await import('../supabase');
     const { data, error } = await supabase.from('inventory').select('*').eq('shop_id', shopId);
-    
+
     if (!error && data) {
       const mapped = data.map(item => ({
         id: item.id,
@@ -47,83 +57,168 @@ const IgnitionStok = ({ initialSearchTerm = '' }) => {
     setLoading(false);
   };
 
-  const filteredInventory = inventory.filter(item => 
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+  const filteredInventory = inventory.filter(item =>
+    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.partNum.includes(searchTerm) ||
     item.fits.some(fit => fit.includes(searchTerm))
   );
 
   return (
-    <div className="p-6 bg-slate-900 text-slate-200 min-h-screen">
-      <header className="mb-8 border-b border-slate-800 pb-4 flex justify-between items-end">
+    <div style={{ padding: 24, backgroundColor: '#0f172a', color: '#e2e8f0', minHeight: '100%' }}>
+      <header style={{
+        marginBottom: 32,
+        borderBottom: '1px solid #1e293b',
+        paddingBottom: 16,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+      }}>
         <div>
-          <h2 className="text-2xl font-black italic text-white uppercase tracking-tighter text-blue-500">STOK // Inventory Sync</h2>
-          <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Leander Shop Stock // Relational Engine</p>
+          <h2 style={{ fontSize: 24, fontWeight: 900, fontStyle: 'italic', color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '-0.05em' }}>
+            STOK // Inventory Sync
+          </h2>
+          <p style={{ fontSize: 10, fontFamily: 'monospace', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            Leander Shop Stock // Relational Engine
+          </p>
         </div>
-        {isExpired && <span className="text-[9px] font-black text-red-500 border border-red-500/20 px-2 py-1 rounded uppercase">Locked</span>}
+        {isExpired && (
+          <span style={{
+            fontSize: 9,
+            fontWeight: 900,
+            color: '#ef4444',
+            border: '1px solid rgba(239,68,68,0.20)',
+            padding: '4px 8px',
+            borderRadius: 4,
+            textTransform: 'uppercase',
+          }}>
+            Locked
+          </span>
+        )}
       </header>
 
-      {/* SEARCH BAR (Supports Fault Code Search) */}
-      <div className="relative mb-8">
-        <Search className="absolute left-4 top-4 text-slate-500" size={20} />
-        <input 
-          type="text" 
-          placeholder="Search by Part Name, #, or Fault Code (e.g. 3216)" 
-          className="w-full bg-slate-800 border border-slate-700 p-4 pl-12 rounded-2xl text-white outline-none focus:border-blue-500 transition-all font-bold"
+      {/* SEARCH BAR — focus:border-blue-500 → ign-input CSS class */}
+      <div style={{ position: 'relative', marginBottom: 32 }}>
+        <Search style={{ position: 'absolute', left: 16, top: 16, color: '#64748b' }} size={20} />
+        <input
+          type="text"
+          placeholder="Search by Part Name, #, or Fault Code (e.g. 3216)"
+          className="ign-input"
+          style={{
+            width: '100%',
+            backgroundColor: '#1e293b',
+            border: '1px solid #334155',
+            padding: 16,
+            paddingLeft: 48,
+            borderRadius: 16,
+            color: '#ffffff',
+            outline: 'none',
+            fontWeight: 700,
+            transition: 'border-color 0.15s',
+          }}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
 
-      {/* INVENTORY GRID */}
-      <div className="grid gap-4">
+      {/* INVENTORY LIST */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {filteredInventory.map(item => (
-          <div key={item.id} className="bg-slate-800 p-5 rounded-3xl border border-slate-700 relative overflow-hidden">
-            <div className="flex justify-between items-start">
+          <div key={item.id} style={{
+            backgroundColor: '#1e293b',
+            padding: 20,
+            borderRadius: 24,
+            border: '1px solid #334155',
+            position: 'relative',
+            overflow: 'hidden',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <h3 className="font-black text-white italic uppercase tracking-tighter">{item.name}</h3>
-                <p className="text-[10px] font-mono text-slate-500">{item.partNum}</p>
+                <h3 style={{ fontWeight: 900, color: '#ffffff', fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: '-0.05em' }}>
+                  {item.name}
+                </h3>
+                <p style={{ fontSize: 10, fontFamily: 'monospace', color: '#64748b' }}>{item.partNum}</p>
               </div>
-              <div className="text-right">
-                <p className="text-[10px] font-black text-slate-500 uppercase">Stock Level</p>
-                <p className={`text-xl font-black ${item.qty > 0 ? 'text-emerald-400' : 'text-red-500'}`}>
+              <div style={{ textAlign: 'right' }}>
+                <p style={{ fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase' }}>Stock Level</p>
+                <p style={{ fontSize: 20, fontWeight: 900, color: item.qty > 0 ? '#34d399' : '#ef4444' }}>
                   {item.qty} UNITS
                 </p>
               </div>
             </div>
 
-            {/* RELATIONAL DATA (Blurred if Expired) */}
-            <div className={`mt-4 grid grid-cols-2 gap-3 transition-all ${isExpired ? 'filter blur-md opacity-30 select-none pointer-events-none' : ''}`}>
-              <div className="bg-slate-900 p-3 rounded-xl border border-slate-700 flex items-center gap-3">
-                <MapPin size={16} className="text-blue-500" />
+            {/* RELATIONAL DATA — filter:blur-md is 1:1 inline */}
+            <div style={{
+              marginTop: 16,
+              display: 'flex',
+              gap: 12,
+              transition: 'all 0.15s',
+              filter: isExpired ? 'blur(12px)' : 'none',
+              opacity: isExpired ? 0.3 : 1,
+              userSelect: isExpired ? 'none' : undefined,
+              pointerEvents: isExpired ? 'none' : undefined,
+            }}>
+              <div style={{
+                flex: 1,
+                backgroundColor: '#0f172a',
+                padding: 12,
+                borderRadius: 12,
+                border: '1px solid #334155',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+              }}>
+                <MapPin size={16} style={{ color: '#3b82f6' }} />
                 <div>
-                  <p className="text-[8px] font-black text-slate-500 uppercase leading-none">Bin Location</p>
-                  <p className="text-xs font-bold text-white uppercase">{item.bin}</p>
+                  <p style={{ fontSize: 8, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', lineHeight: 1 }}>Bin Location</p>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', textTransform: 'uppercase' }}>{item.bin}</p>
                 </div>
               </div>
-              <div className="bg-slate-900 p-3 rounded-xl border border-slate-700 flex items-center gap-3">
-                <Package size={16} className="text-emerald-500" />
+              <div style={{
+                flex: 1,
+                backgroundColor: '#0f172a',
+                padding: 12,
+                borderRadius: 12,
+                border: '1px solid #334155',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+              }}>
+                <Package size={16} style={{ color: '#10b981' }} />
                 <div>
-                  <p className="text-[8px] font-black text-slate-500 uppercase leading-none">Wholesale Cost</p>
-                  <p className="text-xs font-bold text-white">${item.cost}</p>
+                  <p style={{ fontSize: 8, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', lineHeight: 1 }}>Wholesale Cost</p>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: '#ffffff' }}>${item.cost}</p>
                 </div>
               </div>
             </div>
 
             {/* PAYWALL OVERLAY */}
             {isExpired && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/40 text-center p-4">
-                <Lock size={20} className="text-blue-500 mb-1" />
-                <p className="text-[10px] font-black text-white uppercase italic">Subscription Required</p>
+              <div style={{
+                position: 'absolute',
+                top: 0, left: 0, right: 0, bottom: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: 'rgba(15,23,42,0.40)',
+                textAlign: 'center',
+                padding: 16,
+              }}>
+                <Lock size={20} style={{ color: '#3b82f6', marginBottom: 4 }} />
+                <p style={{ fontSize: 10, fontWeight: 900, color: '#ffffff', textTransform: 'uppercase', fontStyle: 'italic' }}>
+                  Subscription Required
+                </p>
               </div>
             )}
           </div>
         ))}
         {loading && (
-          <div className="text-center p-10 text-slate-500 italic">Loading inventory...</div>
+          <div style={{ textAlign: 'center', padding: 40, color: '#64748b', fontStyle: 'italic' }}>
+            Loading inventory...
+          </div>
         )}
         {!loading && filteredInventory.length === 0 && (
-          <div className="text-center p-10 text-slate-500 italic">
+          <div style={{ textAlign: 'center', padding: 40, color: '#64748b', fontStyle: 'italic' }}>
             No inventory found matching "{searchTerm}".
           </div>
         )}
