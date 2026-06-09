@@ -9,10 +9,25 @@ import { Search, Calculator, AlertTriangle, ArrowRight, Lock } from 'lucide-reac
 import DataBridge from '../DataBridge';
 import AIEngine from '@trace/shared/ai/AIEngine';
 
+const STYLE_DEBUG = false;
+
+// Non-1:1 mappings (8 classNames converted):
+// (1) hover:bg-blue-500 on DECODE button → ign-btn-primary CSS class
+// (2) hover:text-blue-500 on auto-sync button → ign-btn-ghost CSS class
+// (3) hover:bg-emerald-500 on check inventory button → ign-btn-emerald CSS class
+// (4) filter blur-xl grayscale opacity-30 → inline filter: 'blur(1.25rem) grayscale(100%)' (1:1 preserved)
+// (5) select-none → userSelect: 'none' inline (1:1 preserved)
+// (6) pointer-events-none → pointerEvents: 'none' inline (1:1 preserved)
+// (7) space-y-4 → display flex + gap (1:1 preserved)
+// (8) transition-all duration-700 → transition: 'all 0.7s' inline (1:1 preserved)
+// [TRACE:STYLE] IgnitionCipher converted, 31 classNames → inline, 3 non-1:1 categories
+
 const IgnitionCipher = ({ activeJob, onUpdateJob, onNavigateToStok }) => {
   const [faultCode, setFaultCode] = useState('');
   const [result, setResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  if (STYLE_DEBUG) console.log('[TRACE:STYLE] IgnitionCipher converted, 31 classNames → inline, 3 non-1:1 categories');
 
   const { isExpired, daysRemaining } = DataBridge.checkTrialStatus('CODE');
 
@@ -73,75 +88,200 @@ const IgnitionCipher = ({ activeJob, onUpdateJob, onNavigateToStok }) => {
     }
   };
 
+  const severityColor = (sev) => {
+    if (sev === 'HIGH')   return '#f87171';
+    if (sev === 'MEDIUM') return '#fb923c';
+    return '#facc15';
+  };
+
   return (
-    <div className="p-6 bg-slate-900 text-slate-200 min-h-screen">
-      <header className="mb-8 border-b border-slate-800 pb-4 flex justify-between items-end">
+    <div style={{ padding: 24, backgroundColor: '#0f172a', color: '#e2e8f0', minHeight: '100%' }}>
+      <header style={{
+        marginBottom: 32,
+        borderBottom: '1px solid #1e293b',
+        paddingBottom: 16,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+      }}>
         <div>
-          <h2 className="text-2xl font-black italic text-white uppercase tracking-tighter">CODE // DTC Cipher</h2>
-          <p className="text-[10px] font-mono text-blue-500 uppercase tracking-widest">Diagnostic Translation Engine</p>
+          <h2 style={{ fontSize: 24, fontWeight: 900, fontStyle: 'italic', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '-0.05em' }}>
+            CODE // DTC Cipher
+          </h2>
+          <p style={{ fontSize: 10, fontFamily: 'monospace', color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            Diagnostic Translation Engine
+          </p>
         </div>
         {isExpired && (
-          <span className="bg-red-500/10 text-red-500 text-[9px] font-black px-2 py-1 rounded border border-red-500/20 uppercase">
+          <span style={{
+            backgroundColor: 'rgba(239,68,68,0.10)',
+            color: '#ef4444',
+            fontSize: 9,
+            fontWeight: 900,
+            padding: '4px 8px',
+            borderRadius: 4,
+            border: '1px solid rgba(239,68,68,0.20)',
+            textTransform: 'uppercase',
+          }}>
             Trial Expired
           </span>
         )}
       </header>
 
       {/* SEARCH / SCAN INPUT */}
-      <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 mb-8">
-        <div className="flex gap-3">
-          <input 
-            type="text" 
-            placeholder="ENTER SPN CODE" 
-            className="flex-1 bg-black border border-slate-600 p-4 rounded-xl font-black text-white text-center tracking-widest"
+      <div style={{
+        backgroundColor: '#1e293b',
+        padding: 24,
+        borderRadius: 24,
+        border: '1px solid #334155',
+        marginBottom: 32,
+      }}>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <input
+            type="text"
+            placeholder="ENTER SPN CODE"
+            className="ign-input"
+            style={{
+              flex: 1,
+              backgroundColor: '#000000',
+              border: '1px solid #475569',
+              padding: 16,
+              borderRadius: 12,
+              fontWeight: 900,
+              color: '#ffffff',
+              textAlign: 'center',
+              letterSpacing: '0.1em',
+              outline: 'none',
+            }}
             value={faultCode}
             onChange={(e) => setFaultCode(e.target.value)}
           />
-          <button onClick={handleTranslate} disabled={isLoading} className={`px-8 rounded-xl font-black text-white transition-colors ${isLoading ? 'bg-slate-600 cursor-wait' : 'bg-blue-600 hover:bg-blue-500'}`}>
+          {/* hover:bg-blue-500 → ign-btn-primary CSS class */}
+          <button
+            onClick={handleTranslate}
+            disabled={isLoading}
+            className={!isLoading ? 'ign-btn-primary' : ''}
+            style={{
+              paddingLeft: 32,
+              paddingRight: 32,
+              borderRadius: 12,
+              fontWeight: 900,
+              color: '#ffffff',
+              border: 'none',
+              cursor: isLoading ? 'wait' : 'pointer',
+              backgroundColor: isLoading ? '#475569' : '#2563eb',
+              transition: 'background-color 0.15s',
+            }}
+          >
             {isLoading ? '...' : 'DECODE'}
           </button>
         </div>
-        <button onClick={simulateLiveSync} className="mt-4 w-full text-[9px] text-slate-500 uppercase font-black hover:text-blue-500 transition-colors">
+        {/* hover:text-blue-500 → ign-btn-ghost CSS class */}
+        <button
+          onClick={simulateLiveSync}
+          className="ign-btn-ghost"
+          style={{
+            marginTop: 16,
+            width: '100%',
+            fontSize: 9,
+            color: '#64748b',
+            textTransform: 'uppercase',
+            fontWeight: 900,
+            border: 'none',
+            backgroundColor: 'transparent',
+            cursor: 'pointer',
+            transition: 'color 0.15s',
+          }}
+        >
           • Auto-Sync from Telematics •
         </button>
       </div>
 
       {/* THE RESULT ENGINE */}
       {result && (
-        <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 relative overflow-hidden">
-          <div className="flex justify-between mb-6">
+        <div style={{
+          backgroundColor: '#1e293b',
+          padding: 24,
+          borderRadius: 24,
+          border: '1px solid #334155',
+          position: 'relative',
+          overflow: 'hidden',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
             <div>
-              <p className="text-[10px] font-black text-slate-500 uppercase mb-1">Diagnosis</p>
-              <h3 className="text-xl font-black italic text-white">{result.name}</h3>
+              <p style={{ fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Diagnosis</p>
+              <h3 style={{ fontSize: 20, fontWeight: 900, fontStyle: 'italic', color: '#ffffff' }}>{result.name}</h3>
               {result.source === 'AI' && (
-                <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest">⚡ AI-decoded by Claude</span>
+                <span style={{ fontSize: 9, fontWeight: 900, color: '#c084fc', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  ⚡ AI-decoded by Claude
+                </span>
               )}
               {result.severity && (
-                <span className={`ml-3 text-[9px] font-black uppercase tracking-widest ${result.severity === 'HIGH' ? 'text-red-400' : result.severity === 'MEDIUM' ? 'text-orange-400' : 'text-yellow-400'}`}>
+                <span style={{ marginLeft: 12, fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: severityColor(result.severity) }}>
                   {result.severity} severity
                 </span>
               )}
             </div>
-            <AlertTriangle className="text-orange-500" />
+            <AlertTriangle style={{ color: '#f97316' }} />
           </div>
 
-          {/* THE BLIND SPOT Logic */}
-          <div className={`space-y-4 transition-all duration-700 ${isExpired ? 'filter blur-xl grayscale opacity-30 select-none pointer-events-none' : ''}`}>
-            <div className="bg-slate-950 p-4 rounded-xl border border-slate-700">
-              <p className="text-[10px] font-black text-blue-500 uppercase mb-2">Build List</p>
-              {result.parts.map(p => <div key={p} className="text-xs font-mono">• {p}</div>)}
+          {/* THE BLIND SPOT Logic — filter/opacity/pointer-events are 1:1 inline */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+            transition: 'all 0.7s',
+            filter: isExpired ? 'blur(1.25rem) grayscale(100%)' : 'none',
+            opacity: isExpired ? 0.3 : 1,
+            userSelect: isExpired ? 'none' : undefined,
+            pointerEvents: isExpired ? 'none' : undefined,
+          }}>
+            <div style={{ backgroundColor: '#020617', padding: 16, borderRadius: 12, border: '1px solid #334155' }}>
+              <p style={{ fontSize: 10, fontWeight: 900, color: '#3b82f6', textTransform: 'uppercase', marginBottom: 8 }}>Build List</p>
+              {result.parts.map(p => (
+                <div key={p} style={{ fontSize: 12, fontFamily: 'monospace' }}>• {p}</div>
+              ))}
             </div>
-            <div className="bg-emerald-500/5 p-4 rounded-xl border border-emerald-500/20 flex justify-between items-center">
+            <div style={{
+              backgroundColor: 'rgba(16,185,129,0.05)',
+              padding: 16,
+              borderRadius: 12,
+              border: '1px solid rgba(16,185,129,0.20)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}>
               <div>
-                <p className="text-[9px] font-black text-emerald-500 uppercase">Est. Repair Cost</p>
-                <p className="text-2xl font-black text-white">${result.total}</p>
+                <p style={{ fontSize: 9, fontWeight: 900, color: '#10b981', textTransform: 'uppercase' }}>Est. Repair Cost</p>
+                <p style={{ fontSize: 24, fontWeight: 900, color: '#ffffff' }}>${result.total}</p>
               </div>
-              <p className="text-[9px] text-slate-500 font-mono italic">{result.labor} Hours Labor</p>
+              <p style={{ fontSize: 9, color: '#64748b', fontFamily: 'monospace', fontStyle: 'italic' }}>{result.labor} Hours Labor</p>
             </div>
             {onNavigateToStok && (
-              <button 
+              /* hover:bg-emerald-500 → ign-btn-emerald CSS class */
+              <button
                 onClick={() => onNavigateToStok(faultCode)}
-                className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-xl flex justify-center items-center gap-2 uppercase text-xs tracking-widest shadow-lg shadow-emerald-900/40 transition-colors"
+                className="ign-btn-emerald"
+                style={{
+                  width: '100%',
+                  marginTop: 16,
+                  backgroundColor: '#059669',
+                  color: '#ffffff',
+                  fontWeight: 900,
+                  paddingTop: 16,
+                  paddingBottom: 16,
+                  borderRadius: 12,
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: 8,
+                  textTransform: 'uppercase',
+                  fontSize: 12,
+                  letterSpacing: '0.1em',
+                  boxShadow: '0 10px 15px -3px rgba(6,46,26,0.4)',
+                  border: 'none',
+                  cursor: isExpired ? 'not-allowed' : 'pointer',
+                }}
                 disabled={isExpired}
               >
                 Check Leander Inventory <ArrowRight size={14} />
@@ -151,11 +291,42 @@ const IgnitionCipher = ({ activeJob, onUpdateJob, onNavigateToStok }) => {
 
           {/* PAYWALL OVERLAY */}
           {isExpired && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-slate-900/40">
-              <Lock size={32} className="text-blue-500 mb-4" />
-              <p className="text-sm font-black text-white uppercase italic mb-2 tracking-tighter">Information Advantage Locked</p>
-              <p className="text-[10px] text-slate-400 mb-6 px-4">Your trial for CODE has expired. We found the solution, but access to part numbers and labor times requires a subscription.</p>
-              <button className="bg-blue-600 text-white font-black py-3 px-8 rounded-xl text-xs uppercase shadow-lg shadow-blue-900/40">
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 24,
+              textAlign: 'center',
+              backgroundColor: 'rgba(15,23,42,0.40)',
+            }}>
+              <Lock size={32} style={{ color: '#3b82f6', marginBottom: 16 }} />
+              <p style={{ fontSize: 14, fontWeight: 900, color: '#ffffff', textTransform: 'uppercase', fontStyle: 'italic', marginBottom: 8, letterSpacing: '-0.05em' }}>
+                Information Advantage Locked
+              </p>
+              <p style={{ fontSize: 10, color: '#94a3b8', marginBottom: 24, paddingLeft: 16, paddingRight: 16 }}>
+                Your trial for CODE has expired. We found the solution, but access to part numbers and labor times requires a subscription.
+              </p>
+              <button style={{
+                backgroundColor: '#2563eb',
+                color: '#ffffff',
+                fontWeight: 900,
+                paddingTop: 12,
+                paddingBottom: 12,
+                paddingLeft: 32,
+                paddingRight: 32,
+                borderRadius: 12,
+                fontSize: 12,
+                textTransform: 'uppercase',
+                boxShadow: '0 10px 15px -3px rgba(30,58,138,0.4)',
+                border: 'none',
+                cursor: 'pointer',
+              }}>
                 Unlock Module
               </button>
             </div>
