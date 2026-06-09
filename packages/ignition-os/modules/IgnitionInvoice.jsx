@@ -1,28 +1,53 @@
+/**
+ * FILE: IgnitionInvoice.jsx
+ * PLATFORM: Web (React DOM)
+ * PURPOSE: Invoice generation and payment processing for authorized repair orders.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import DataBridge from '../DataBridge';
 import { Receipt, CreditCard, Banknote, Building2, CheckCircle2, ChevronLeft, ArrowRight, Printer } from 'lucide-react';
 
+const STYLE_DEBUG = false;
+
+// Non-1:1 mappings (63 classNames converted):
+// (1) hover:text-white on Back button → dropped (cosmetic)
+// (2) hover:border-slate-600 on job selector button → dropped (cosmetic)
+// (3) hover:bg-slate-800/30 on line item rows → dropped (cosmetic)
+// (4) hover:bg-blue-500 on Generate Invoice button → dropped (cosmetic)
+// (5) hover:border-slate-600 on payment method buttons → dropped (cosmetic)
+// (6) hover:bg-emerald-500 on Process Payment button → dropped (cosmetic)
+// (7) hover:bg-slate-700 on Download PDF button → dropped (cosmetic)
+// (8) focus:border-blue-500 on mileage input → ign-input CSS class
+// (9) disabled:opacity-50 / disabled:bg-slate-800 / disabled:text-slate-500 → inline conditional styles
+// (10) lg:flex-row → always row (no breakpoint equivalent; flagged)
+// (11) lg:w-80 → always 320px (no breakpoint equivalent; flagged)
+// (12) space-y-3/4/6 → flexDirection:column + gap equivalents
+// [TRACE:STYLE] IgnitionInvoice converted, 63 classNames → inline, 12 non-1:1 categories
+
 export default function IgnitionInvoice({ onBack }) {
   const [shopId] = useState(() => DataBridge.load('shop_info')?.id || DataBridge.load('shop_policy')?.shop_id);
   const [jobs, setJobs] = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
-  
+
   const [estimate, setEstimate] = useState(null);
   const [lineItems, setLineItems] = useState([]);
-  
+
   const [invoice, setInvoice] = useState(null);
   const [invoiceItems, setInvoiceItems] = useState([]);
-  
+
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
-  
+
   const [paymentMethod, setPaymentMethod] = useState('CARD');
   const [mileageOut, setMileageOut] = useState('');
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   // Fixed pilot tax rate
   const TAX_RATE = 0.0825;
+
+  if (STYLE_DEBUG) console.log('[TRACE:STYLE] IgnitionInvoice converted, 63 classNames → inline, 12 non-1:1 categories');
 
   useEffect(() => {
     loadJobs();
@@ -36,14 +61,13 @@ export default function IgnitionInvoice({ onBack }) {
 
   const loadJobs = async () => {
     setLoading(true);
-    // For pilot, we fetch 'authorized', 'in_repair', 'repair_done', and 'invoiced' jobs
     const { data } = await supabase
       .from('jobs')
       .select('*')
       .eq('shop_id', shopId)
       .in('status', ['authorized', 'in_repair', 'repair_done', 'invoiced'])
       .order('created_at', { ascending: false });
-      
+
     if (data) setJobs(data);
     setLoading(false);
   };
@@ -54,8 +78,7 @@ export default function IgnitionInvoice({ onBack }) {
     setLineItems([]);
     setInvoice(null);
     setInvoiceItems([]);
-    
-    // Check if an invoice already exists for this job
+
     const { data: existingInvoice } = await supabase
       .from('invoices')
       .select('*')
@@ -74,29 +97,27 @@ export default function IgnitionInvoice({ onBack }) {
       return;
     }
 
-    // No invoice yet, load the authorized estimate
     const { data: estData } = await supabase
       .from('estimates')
       .select('*')
       .eq('job_id', job.id)
-      .in('status', ['authorized', 'sent', 'ready']) // Fallback statuses just in case
+      .in('status', ['authorized', 'sent', 'ready'])
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
 
     if (estData) {
       setEstimate(estData);
-      // Load only approved items
       const { data: estItems } = await supabase
         .from('estimate_line_items')
         .select('*')
         .eq('estimate_id', estData.id)
         .eq('auth_status', 'approved')
         .order('sort_order');
-      
+
       if (estItems) setLineItems(estItems);
     }
-    
+
     setProcessing(false);
   };
 
@@ -109,7 +130,6 @@ export default function IgnitionInvoice({ onBack }) {
     const tax = +(partsTotal * TAX_RATE).toFixed(2);
     const total = +(subtotal + tax).toFixed(2);
 
-    // Create Invoice
     const { data: newInvoice, error: invError } = await supabase
       .from('invoices')
       .insert({
@@ -131,7 +151,6 @@ export default function IgnitionInvoice({ onBack }) {
       return;
     }
 
-    // Clone line items to invoice_line_items
     const invItemsData = lineItems.map(item => ({
       invoice_id: newInvoice.id,
       job_id: selectedJob.id,
@@ -153,15 +172,13 @@ export default function IgnitionInvoice({ onBack }) {
       .insert(invItemsData)
       .select();
 
-    // Update job status
     await supabase.from('jobs').update({ status: 'invoiced' }).eq('id', selectedJob.id);
 
-    // Refresh state
     setInvoice(newInvoice);
     setInvoiceItems(newInvItems || []);
     setJobs(prev => prev.map(j => j.id === selectedJob.id ? { ...j, status: 'invoiced' } : j));
     setSelectedJob(prev => ({ ...prev, status: 'invoiced' }));
-    
+
     setProcessing(false);
   };
 
@@ -193,7 +210,6 @@ export default function IgnitionInvoice({ onBack }) {
     }
     setProcessing(true);
 
-    // Update Invoice to paid
     await supabase
       .from('invoices')
       .update({
@@ -203,7 +219,6 @@ export default function IgnitionInvoice({ onBack }) {
       })
       .eq('id', invoice.id);
 
-    // Update Job to closed
     await supabase
       .from('jobs')
       .update({
@@ -212,39 +227,58 @@ export default function IgnitionInvoice({ onBack }) {
       })
       .eq('id', selectedJob.id);
 
-    // Refresh everything
     setInvoice(prev => ({ ...prev, status: 'paid', payment_method: paymentMethod }));
-    setJobs(prev => prev.filter(j => j.id !== selectedJob.id)); // Remove from list since it's closed
+    setJobs(prev => prev.filter(j => j.id !== selectedJob.id));
     setSelectedJob(null);
     setProcessing(false);
   };
 
   const renderJobSelector = () => (
-    <div className="w-1/3 border-r border-slate-800 bg-slate-900/50 flex flex-col h-full">
-      <div className="p-6 border-b border-slate-800 bg-slate-900 flex items-center justify-between">
-        <h2 className="text-xl font-black italic uppercase tracking-tighter text-white">Invoicing</h2>
-        <Receipt className="text-blue-500" />
+    <div style={{ width: '33.333%', borderRight: '1px solid #1e293b', backgroundColor: 'rgba(15,23,42,0.50)', display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ padding: 24, borderBottom: '1px solid #1e293b', backgroundColor: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 900, fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: '-0.05em', color: '#ffffff' }}>Invoicing</h2>
+        <Receipt style={{ color: '#3b82f6' }} />
       </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      {/* hover:border-slate-600 on job buttons → dropped (cosmetic) */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {loading ? (
-          <p className="text-xs text-slate-500 uppercase tracking-widest p-4 text-center">Loading jobs...</p>
+          <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', padding: 16, textAlign: 'center' }}>Loading jobs...</p>
         ) : jobs.length === 0 ? (
-          <p className="text-xs text-slate-500 uppercase tracking-widest p-4 text-center">No jobs ready for invoice</p>
+          <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', padding: 16, textAlign: 'center' }}>No jobs ready for invoice</p>
         ) : (
           jobs.map(job => (
             <button
               key={job.id}
               onClick={() => setSelectedJob(job)}
-              className={`w-full text-left p-4 rounded-2xl border transition-all ${selectedJob?.id === job.id ? 'bg-blue-900/20 border-blue-500/50' : 'bg-slate-900 border-slate-800 hover:border-slate-600'}`}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: 16,
+                borderRadius: 16,
+                border: selectedJob?.id === job.id ? '1px solid rgba(59,130,246,0.50)' : '1px solid #1e293b',
+                backgroundColor: selectedJob?.id === job.id ? 'rgba(30,58,138,0.20)' : '#0f172a',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
             >
-              <div className="flex justify-between items-start mb-2">
-                <p className="text-white font-black uppercase text-sm">{job.customer?.name || 'Unknown Customer'}</p>
-                <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border ${job.status === 'invoiced' ? 'bg-orange-500/10 border-orange-500/30 text-orange-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'}`}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                <p style={{ color: '#ffffff', fontWeight: 900, textTransform: 'uppercase', fontSize: 14 }}>{job.customer?.name || 'Unknown Customer'}</p>
+                <span style={{
+                  fontSize: 9,
+                  fontWeight: 900,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  ...(job.status === 'invoiced'
+                    ? { backgroundColor: 'rgba(249,115,22,0.10)', border: '1px solid rgba(249,115,22,0.30)', color: '#fb923c' }
+                    : { backgroundColor: 'rgba(59,130,246,0.10)', border: '1px solid rgba(59,130,246,0.30)', color: '#60a5fa' })
+                }}>
                   {job.status}
                 </span>
               </div>
-              <p className="text-slate-400 text-xs font-bold">{job.vehicle?.year} {job.vehicle?.make} {job.vehicle?.model}</p>
-              <p className="text-slate-500 text-[10px] uppercase tracking-widest mt-2">RO: {job.id.slice(0, 8)}</p>
+              <p style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>{job.vehicle?.year} {job.vehicle?.make} {job.vehicle?.model}</p>
+              <p style={{ color: '#64748b', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 8 }}>RO: {job.id.slice(0, 8)}</p>
             </button>
           ))
         )}
@@ -253,106 +287,140 @@ export default function IgnitionInvoice({ onBack }) {
   );
 
   const renderInvoicePreview = () => {
-    // Determine the source of items (either existing invoice or approved estimate)
     const activeItems = invoice ? invoiceItems : lineItems;
     const subtotal = invoice ? invoice.subtotal : activeItems.reduce((s, l) => s + (l.line_total || 0), 0);
     const tax = invoice ? invoice.tax : +(activeItems.filter(l => l.item_type === 'PART').reduce((s, l) => s + (l.line_total || 0), 0) * TAX_RATE).toFixed(2);
     const total = invoice ? invoice.total : +(subtotal + tax).toFixed(2);
 
     return (
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-black">
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', backgroundColor: '#000000' }}>
         {/* Header */}
-        <div className="p-6 border-b border-slate-800 bg-slate-900 flex justify-between items-center">
+        <div style={{ padding: 24, borderBottom: '1px solid #1e293b', backgroundColor: '#0f172a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h2 className="text-2xl font-black italic uppercase text-white tracking-tighter">
+            <h2 style={{ fontSize: 24, fontWeight: 900, fontStyle: 'italic', textTransform: 'uppercase', color: '#ffffff', letterSpacing: '-0.05em' }}>
               {invoice ? `Invoice #${invoice.id.slice(0, 8).toUpperCase()}` : 'Final Invoice Preview'}
             </h2>
-            <p className="text-slate-400 text-xs font-bold mt-1">
+            <p style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700, marginTop: 4 }}>
               {selectedJob.customer?.name} • {selectedJob.vehicle?.year} {selectedJob.vehicle?.make}
             </p>
           </div>
           {onBack && (
-            <button onClick={onBack} className="text-slate-400 hover:text-white transition-colors flex items-center gap-2 text-[10px] font-black uppercase tracking-widest bg-slate-800 px-4 py-2 rounded-xl">
+            /* hover:text-white → dropped (cosmetic) */
+            <button onClick={onBack} style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', backgroundColor: '#1e293b', padding: '8px 16px', borderRadius: 12, border: 'none', cursor: 'pointer', transition: 'all 0.15s' }}>
               <ChevronLeft size={14} /> Back
             </button>
           )}
         </div>
 
-        {/* Invoice Body */}
-        <div className="flex-1 overflow-y-auto p-8 flex flex-col lg:flex-row gap-8">
-          <div className="flex-1 space-y-6">
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
-              <div className="p-4 border-b border-slate-800 bg-slate-950 flex justify-between">
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Approved Line Items</span>
-                {!invoice && <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-1"><CheckCircle2 size={12}/> Ready to Generate</span>}
+        {/* Invoice Body — lg:flex-row → always row; flagged: no breakpoint equivalent */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 32, display: 'flex', flexDirection: 'row', gap: 32 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 24, overflow: 'hidden' }}>
+              <div style={{ padding: 16, borderBottom: '1px solid #1e293b', backgroundColor: '#020617', display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Approved Line Items</span>
+                {!invoice && <span style={{ fontSize: 10, fontWeight: 900, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={12}/> Ready to Generate</span>}
               </div>
-              <div className="p-0">
+              <div>
                 {activeItems.length === 0 ? (
-                  <p className="p-6 text-center text-slate-500 text-xs">No approved line items found.</p>
+                  <p style={{ padding: 24, textAlign: 'center', color: '#64748b', fontSize: 12 }}>No approved line items found.</p>
                 ) : (
                   activeItems.map((item, idx) => (
-                    <div key={idx} className="p-4 border-b border-slate-800/50 flex justify-between items-start hover:bg-slate-800/30 transition-colors">
+                    /* hover:bg-slate-800/30 → dropped (cosmetic) */
+                    <div key={idx} style={{ padding: 16, borderBottom: '1px solid rgba(30,41,59,0.50)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[9px] font-black uppercase tracking-widest bg-slate-800 text-slate-400 px-2 py-0.5 rounded">{item.item_type}</span>
-                          <span className="text-sm font-bold text-slate-200">{item.description}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', backgroundColor: '#1e293b', color: '#94a3b8', padding: '2px 8px', borderRadius: 4 }}>{item.item_type}</span>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0' }}>{item.description}</span>
                         </div>
-                        {item.item_type === 'PART' && <p className="text-[10px] text-slate-500 font-mono">PN: {item.part_number || 'N/A'} • Qty: {item.quantity}</p>}
-                        {item.item_type === 'LABOR' && <p className="text-[10px] text-slate-500 font-mono">{item.labor_hours} hrs @ ${item.labor_rate}/hr</p>}
+                        {item.item_type === 'PART' && <p style={{ fontSize: 10, color: '#64748b', fontFamily: 'monospace' }}>PN: {item.part_number || 'N/A'} • Qty: {item.quantity}</p>}
+                        {item.item_type === 'LABOR' && <p style={{ fontSize: 10, color: '#64748b', fontFamily: 'monospace' }}>{item.labor_hours} hrs @ ${item.labor_rate}/hr</p>}
                       </div>
-                      <span className="text-sm font-black text-white">${item.line_total?.toFixed(2)}</span>
+                      <span style={{ fontSize: 14, fontWeight: 900, color: '#ffffff' }}>${item.line_total?.toFixed(2)}</span>
                     </div>
                   ))
                 )}
               </div>
-              
+
               {/* Totals */}
-              <div className="p-6 bg-slate-950 flex flex-col items-end gap-2 border-t border-slate-800">
-                <div className="flex justify-between w-48 text-sm font-bold text-slate-400">
+              <div style={{ padding: 24, backgroundColor: '#020617', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, borderTop: '1px solid #1e293b' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: 192, fontSize: 14, fontWeight: 700, color: '#94a3b8' }}>
                   <span>Subtotal</span>
                   <span>${subtotal.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between w-48 text-sm font-bold text-slate-400">
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: 192, fontSize: 14, fontWeight: 700, color: '#94a3b8' }}>
                   <span>Tax (Parts Only)</span>
                   <span>${tax.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between w-48 text-xl font-black text-white mt-2 pt-2 border-t border-slate-800">
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: 192, fontSize: 20, fontWeight: 900, color: '#ffffff', marginTop: 8, paddingTop: 8, borderTop: '1px solid #1e293b' }}>
                   <span>Total</span>
-                  <span className="text-emerald-400">${total.toFixed(2)}</span>
+                  <span style={{ color: '#34d399' }}>${total.toFixed(2)}</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Action Panel */}
-          <div className="w-full lg:w-80 space-y-4">
+          {/* Action Panel — lg:w-80 → always 320px; flagged: no breakpoint equivalent */}
+          <div style={{ width: 320, display: 'flex', flexDirection: 'column', gap: 16 }}>
             {!invoice ? (
-               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
-                 <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 mb-4">Generate Snapshot</h3>
-                 <p className="text-sm text-slate-400 mb-6 leading-relaxed">
+               <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 24, padding: 24, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+                 <h3 style={{ fontSize: 12, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#64748b', marginBottom: 16 }}>Generate Snapshot</h3>
+                 <p style={{ fontSize: 14, color: '#94a3b8', marginBottom: 24, lineHeight: 1.6 }}>
                    Generating the invoice will create an immutable snapshot of all approved lines. This action cannot be reversed.
                  </p>
+                 {/* hover:bg-blue-500 → dropped (cosmetic); disabled:opacity-50 → inline conditional */}
                  <button
                    onClick={generateInvoice}
                    disabled={processing || activeItems.length === 0}
-                   className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-black py-4 rounded-2xl uppercase tracking-widest text-[10px] transition-colors flex items-center justify-center gap-2"
+                   style={{
+                     width: '100%',
+                     backgroundColor: (processing || activeItems.length === 0) ? '#1e293b' : '#2563eb',
+                     color: (processing || activeItems.length === 0) ? '#475569' : '#ffffff',
+                     opacity: 1,
+                     fontWeight: 900,
+                     padding: 16,
+                     borderRadius: 16,
+                     textTransform: 'uppercase',
+                     letterSpacing: '0.1em',
+                     fontSize: 10,
+                     display: 'flex',
+                     alignItems: 'center',
+                     justifyContent: 'center',
+                     gap: 8,
+                     border: 'none',
+                     cursor: (processing || activeItems.length === 0) ? 'not-allowed' : 'pointer',
+                     transition: 'all 0.15s',
+                   }}
                  >
                    {processing ? 'Generating...' : 'Generate Final Invoice'}
                  </button>
                </div>
             ) : invoice.status === 'open' ? (
-               <div className="bg-slate-900 border border-blue-500/30 rounded-3xl p-6 shadow-2xl shadow-blue-900/20">
-                 <h3 className="text-xs font-black uppercase tracking-widest text-blue-400 mb-4 flex items-center gap-2"><CreditCard size={14} /> Process Payment</h3>
-                 
-                 <div className="space-y-4 mb-6">
+               <div style={{ backgroundColor: '#0f172a', border: '1px solid rgba(59,130,246,0.30)', borderRadius: 24, padding: 24, boxShadow: '0 25px 50px -12px rgba(30,58,138,0.20)' }}>
+                 <h3 style={{ fontSize: 12, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#60a5fa', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}><CreditCard size={14} /> Process Payment</h3>
+
+                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
                     <div>
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Payment Method</label>
-                      <div className="grid grid-cols-3 gap-2">
+                      <label style={{ fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, display: 'block' }}>Payment Method</label>
+                      {/* grid grid-cols-3 → flex with equal flex children; hover:border-slate-600 → dropped */}
+                      <div style={{ display: 'flex', gap: 8 }}>
                         {['CARD', 'CASH', 'FINANCING'].map(method => (
                           <button
                             key={method}
                             onClick={() => setPaymentMethod(method)}
-                            className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${paymentMethod === method ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'}`}
+                            style={{
+                              flex: 1,
+                              padding: '12px 0',
+                              borderRadius: 12,
+                              fontSize: 10,
+                              fontWeight: 900,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.1em',
+                              transition: 'all 0.15s',
+                              border: paymentMethod === method ? '1px solid #3b82f6' : '1px solid #1e293b',
+                              backgroundColor: paymentMethod === method ? '#2563eb' : '#020617',
+                              color: paymentMethod === method ? '#ffffff' : '#94a3b8',
+                              cursor: 'pointer',
+                            }}
                           >
                             {method}
                           </button>
@@ -361,34 +429,73 @@ export default function IgnitionInvoice({ onBack }) {
                     </div>
 
                     <div>
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Mileage Out <span className="text-red-400">*</span></label>
-                      <input 
+                      <label style={{ fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, display: 'block' }}>Mileage Out <span style={{ color: '#f87171' }}>*</span></label>
+                      {/* focus:border-blue-500 → ign-input CSS class */}
+                      <input
                         type="number"
                         value={mileageOut}
                         onChange={e => setMileageOut(e.target.value)}
                         placeholder="Current Odometer"
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-white font-bold text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                        className="ign-input"
+                        style={{ width: '100%', backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: 12, padding: 16, color: '#ffffff', fontWeight: 700, fontSize: 14, outline: 'none', transition: 'border-color 0.15s', boxSizing: 'border-box' }}
                       />
                     </div>
                  </div>
 
+                 {/* hover:bg-emerald-500 → dropped; disabled states → inline conditional */}
                  <button
                    onClick={processPaymentAndClose}
                    disabled={processing || !mileageOut}
-                   className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:bg-slate-800 disabled:text-slate-500 text-white font-black py-4 rounded-2xl uppercase tracking-widest text-[10px] transition-colors flex items-center justify-center gap-2"
+                   style={{
+                     width: '100%',
+                     backgroundColor: (processing || !mileageOut) ? '#1e293b' : '#059669',
+                     color: (processing || !mileageOut) ? '#64748b' : '#ffffff',
+                     fontWeight: 900,
+                     padding: 16,
+                     borderRadius: 16,
+                     textTransform: 'uppercase',
+                     letterSpacing: '0.1em',
+                     fontSize: 10,
+                     display: 'flex',
+                     alignItems: 'center',
+                     justifyContent: 'center',
+                     gap: 8,
+                     border: 'none',
+                     cursor: (processing || !mileageOut) ? 'not-allowed' : 'pointer',
+                     transition: 'all 0.15s',
+                   }}
                  >
                    {processing ? 'Processing...' : 'Process Payment & Close'}
                  </button>
                </div>
             ) : (
-               <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-3xl p-6 shadow-2xl flex flex-col items-center text-center">
-                 <CheckCircle2 size={48} className="text-emerald-400 mb-4" />
-                 <h3 className="text-lg font-black italic uppercase tracking-tighter text-white mb-1">Invoice Paid</h3>
-                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-6">Job Closed • {invoice.payment_method}</p>
+               <div style={{ backgroundColor: 'rgba(6,78,59,0.20)', border: '1px solid rgba(16,185,129,0.30)', borderRadius: 24, padding: 24, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                 <CheckCircle2 size={48} style={{ color: '#34d399', marginBottom: 16 }} />
+                 <h3 style={{ fontSize: 18, fontWeight: 900, fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: '-0.05em', color: '#ffffff', marginBottom: 4 }}>Invoice Paid</h3>
+                 <p style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#94a3b8', marginBottom: 24 }}>Job Closed • {invoice.payment_method}</p>
+                 {/* hover:bg-slate-700 → dropped; disabled:opacity-50 → inline conditional */}
                  <button
                    onClick={downloadPdf}
                    disabled={downloadingPdf}
-                   className="w-full bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white font-black py-4 rounded-2xl uppercase tracking-widest text-[10px] transition-colors flex items-center justify-center gap-2"
+                   style={{
+                     width: '100%',
+                     backgroundColor: downloadingPdf ? '#0f172a' : '#1e293b',
+                     color: '#ffffff',
+                     opacity: downloadingPdf ? 0.5 : 1,
+                     fontWeight: 900,
+                     padding: 16,
+                     borderRadius: 16,
+                     textTransform: 'uppercase',
+                     letterSpacing: '0.1em',
+                     fontSize: 10,
+                     display: 'flex',
+                     alignItems: 'center',
+                     justifyContent: 'center',
+                     gap: 8,
+                     border: 'none',
+                     cursor: downloadingPdf ? 'not-allowed' : 'pointer',
+                     transition: 'all 0.15s',
+                   }}
                  >
                    <Printer size={14}/> {downloadingPdf ? 'Generating...' : 'Download Invoice PDF'}
                  </button>
@@ -401,15 +508,15 @@ export default function IgnitionInvoice({ onBack }) {
   };
 
   return (
-    <div className="flex h-full w-full bg-black overflow-hidden">
+    <div style={{ display: 'flex', height: '100%', width: '100%', backgroundColor: '#000000', overflow: 'hidden' }}>
       {renderJobSelector()}
       {selectedJob ? (
         renderInvoicePreview()
       ) : (
-        <div className="flex-1 flex flex-col items-center justify-center text-slate-600 p-8 text-center">
-          <Receipt size={64} className="mb-6 opacity-20" />
-          <h3 className="text-2xl font-black italic uppercase tracking-tighter mb-2 text-slate-500">Invoice Generation</h3>
-          <p className="text-sm">Select a job from the queue to generate an invoice or process payment.</p>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#475569', padding: 32, textAlign: 'center' }}>
+          <Receipt size={64} style={{ marginBottom: 24, opacity: 0.2 }} />
+          <h3 style={{ fontSize: 24, fontWeight: 900, fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: '-0.05em', marginBottom: 8, color: '#64748b' }}>Invoice Generation</h3>
+          <p style={{ fontSize: 14 }}>Select a job from the queue to generate an invoice or process payment.</p>
         </div>
       )}
     </div>
