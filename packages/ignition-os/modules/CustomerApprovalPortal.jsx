@@ -24,6 +24,9 @@ import DataBridge from '../DataBridge';
 
 const STYLE_DEBUG = true;
 
+// [TRACE:WORKFLOW] ON — teardown instrumentation (authorization path: estimate_sent→authorized). Comment out after migration.
+const TRACE_WORKFLOW = true;
+
 // Non-1:1 mappings (71 classNames converted):
 // (1) hover:text-slate-400 on close button → dropped (cosmetic)
 // (2) hover:text-emerald-400 on Approve All → dropped (cosmetic)
@@ -148,6 +151,7 @@ export default function CustomerApprovalPortal({ estimateId, jobId, shopId, onAu
         authorized_total: +approvedTotal.toFixed(2), customer_name: customerName, authorized_at: now,
       });
       await supabase.from('estimates').update({ status: 'authorized', authorized_at: now }).eq('id', estimateId);
+      if (TRACE_WORKFLOW) console.log('[TRACE:WORKFLOW] CustomerApprovalPortal.handleAuthorize → jobs.update(status=authorized): jobId=%s estimateId=%s approvedIds=%o declinedIds=%o approvedTotal=%o — WORKFLOW STEP 4 (sent→authorized; gates in_repair start in KOSK)', jobId, estimateId, approvedIds, declinedIds, +approvedTotal.toFixed(2));
       await supabase.from('jobs').update({ status: 'authorized' }).eq('id', jobId);
       setAuthResult({ approvedCount: approvedIds.length, declinedCount: declinedIds.length, total });
       setAuthorized(true);

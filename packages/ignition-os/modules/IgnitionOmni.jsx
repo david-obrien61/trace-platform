@@ -8,6 +8,9 @@ import { supabase } from '../supabase';
 
 const STYLE_DEBUG = true;
 
+// [TRACE:MARGIN] ON — teardown instrumentation (E PATH — shops.margin_config display-only storage). Comment out after Cost-to-Produce tile session.
+const TRACE_MARGIN = true;
+
 const DEMO_LEAKAGE_ROWS = [
   { customer: 'Demo — Hansen Trucking', description: 'Engine Rebuild (8.0h)',      billed: 760,  target: 1000, leakage: 240, isDemo: true },
   { customer: 'Demo — Garcia Fleet',    description: 'Transmission Svc (3.5h)',    billed: 298,  target: 438,  leakage: 140, isDemo: true },
@@ -615,6 +618,7 @@ const IgnitionOmni = ({ activeJob, onEnterKiosk }) => {
       .eq('id', shopId)
       .single();
     const config = shopRow?.margin_config || { labor_rate: 125, parts_markup: 0.40 };
+    if (TRACE_MARGIN) console.log('[TRACE:MARGIN] IgnitionOmni.fetchData (E PATH — shops.margin_config): laborRate=%o partsMarkup=%o — DISPLAY-ONLY: not wired to any pricing calculation; unify in Cost-to-Produce tile session', config.labor_rate, config.parts_markup);
     setMarginConfig(config);
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -668,6 +672,7 @@ const IgnitionOmni = ({ activeJob, onEnterKiosk }) => {
   const handleUpdateMarginConfig = async (newConfig) => {
     const shopId = DataBridge.getShopId();
     if (!shopId) return;
+    if (TRACE_MARGIN) console.log('[TRACE:MARGIN] IgnitionOmni.handleUpdateMarginConfig (E PATH — writes shops.margin_config): newConfig=%o — DISPLAY-ONLY write; not propagated to slab engine or DataBridge.getMarginConfig', newConfig);
     const { error } = await supabase.from('shops').update({ margin_config: newConfig }).eq('id', shopId);
     if (!error) { setMarginConfig(newConfig); fetchData(); }
   };

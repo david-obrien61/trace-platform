@@ -15,6 +15,9 @@ import { supabase } from '../supabase';
 
 const STYLE_DEBUG = true;
 
+// [TRACE:WORKFLOW] ON — teardown instrumentation (KOSK: authorized→in_repair transitions). Comment out after migration.
+const TRACE_WORKFLOW = true;
+
 // Non-1:1 mappings (68 classNames converted):
 // (1) border-[6px]/shadow-[0_0_120px...inset]/rounded-[2rem] (toolbox mode) → inline custom values
 // (2) shadow-[0_0_15px_rgba(59,130,246,0.8)] on listening bar → inline boxShadow
@@ -184,6 +187,7 @@ const IgnitionKosk = ({ activeJob, onUpdateJob, onExitKiosk, onStartEval }) => {
               }).select('id').single();
               if (data) setLaborEntryId(data.id);
               const newTechs = [...(activeJob?.active_techs || []), techId];
+              if (TRACE_WORKFLOW) console.log('[TRACE:WORKFLOW] IgnitionKosk BEGIN REPAIR → onUpdateJob(status=in_repair): jobId=%s techId=%s techCount=%o — WORKFLOW STEP 5 (authorized→in_repair); labor_entries row created: %s', activeJob.id, techId, newTechs.length, data?.id);
               onUpdateJob({ ...activeJob, active_techs: newTechs, status: 'in_repair' });
               setIsClockedIn(true);
             }}

@@ -5,6 +5,9 @@ import DataBridge from '../DataBridge';
 
 const STYLE_DEBUG = true;
 
+// [TRACE:WORKFLOW] ON — teardown instrumentation. Comment out after DataBridge job-sync unwound.
+const TRACE_WORKFLOW = true;
+
 // Non-1:1 mappings (31 classNames converted):
 // (1) hover:bg-slate-700 on refresh button → ign-btn-secondary CSS class
 // (2) animate-spin on RefreshCw icon → ign-spin CSS class
@@ -71,6 +74,7 @@ const IgnitionFlux = ({ onNavigate, onSelectJob, onEnterKiosk }) => {
   const fetchJobs = useCallback(async () => {
     const shopId = DataBridge.getShopId();
     if (!shopId) { setLoading(false); return; }
+    if (TRACE_WORKFLOW) console.log('[TRACE:WORKFLOW] IgnitionFlux.fetchJobs → Supabase jobs query for shopId=%s', shopId);
     setLoading(true);
     setError('');
     const { data, error: dbErr } = await supabase
@@ -80,6 +84,7 @@ const IgnitionFlux = ({ onNavigate, onSelectJob, onEnterKiosk }) => {
       .order('updated_at', { ascending: false });
     setLoading(false);
     if (dbErr) { setError('Failed to load repair orders.'); return; }
+    if (TRACE_WORKFLOW) console.log('[TRACE:WORKFLOW] IgnitionFlux.fetchJobs → loaded %o jobs from Supabase', (data || []).length);
     setJobs(data || []);
   }, []);
 
@@ -88,6 +93,7 @@ const IgnitionFlux = ({ onNavigate, onSelectJob, onEnterKiosk }) => {
   const navigateToJob = (job) => {
     onSelectJob(job);
     const s = (job.status || '').toLowerCase();
+    if (TRACE_WORKFLOW) console.log('[TRACE:WORKFLOW] IgnitionFlux.navigateToJob: jobId=%s status=%s → routing to module', job.id, s);
     if (['intake', 'queued', 'in_eval', 'eval_done'].includes(s))      onNavigate('EVAL');
     else if (['estimating', 'pending_auth'].includes(s))                onNavigate('ESTIMATES');
     else if (['authorized', 'in_repair', 'supplement', 'repair_done'].includes(s)) onEnterKiosk();

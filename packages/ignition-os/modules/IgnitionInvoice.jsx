@@ -11,6 +11,9 @@ import { Receipt, CreditCard, Banknote, Building2, CheckCircle2, ChevronLeft, Ar
 
 const STYLE_DEBUG = true;
 
+// [TRACE:WORKFLOW] ON — teardown instrumentation (invoice path: invoiced→paid→closed). Comment out after migration.
+const TRACE_WORKFLOW = true;
+
 // Non-1:1 mappings (63 classNames converted):
 // (1) hover:text-white on Back button → dropped (cosmetic)
 // (2) hover:border-slate-600 on job selector button → dropped (cosmetic)
@@ -172,6 +175,7 @@ export default function IgnitionInvoice({ onBack }) {
       .insert(invItemsData)
       .select();
 
+    if (TRACE_WORKFLOW) console.log('[TRACE:WORKFLOW] IgnitionInvoice.generateInvoice → jobs.update(status=invoiced): jobId=%s invoiceId=%s total=%o lineItems=%o — WORKFLOW STEP 7 (repair_done→invoiced)', selectedJob.id, newInvoice.id, total, invItemsData.length);
     await supabase.from('jobs').update({ status: 'invoiced' }).eq('id', selectedJob.id);
 
     setInvoice(newInvoice);
@@ -219,6 +223,7 @@ export default function IgnitionInvoice({ onBack }) {
       })
       .eq('id', invoice.id);
 
+    if (TRACE_WORKFLOW) console.log('[TRACE:WORKFLOW] IgnitionInvoice.processPaymentAndClose → jobs.update(status=closed): jobId=%s invoiceId=%s paymentMethod=%s — WORKFLOW STEP 8 (invoiced→paid→closed; RO lifecycle terminal)', selectedJob.id, invoice.id, paymentMethod);
     await supabase
       .from('jobs')
       .update({

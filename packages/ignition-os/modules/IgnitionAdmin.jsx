@@ -19,6 +19,9 @@ import DataBridge from '../DataBridge';
 
 const STYLE_DEBUG = true; // [TRACE:STYLE] STD-003: set true to enable style logs
 
+// [TRACE:AUTH] ON — teardown instrumentation. Comment out after permissions migration proven.
+const TRACE_AUTH = true;
+
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 
 const ALL_PERMISSIONS = [
@@ -382,6 +385,7 @@ const InviteStaffModal = ({ onClose }) => {
       return;
     }
 
+    if (TRACE_AUTH) console.log('[TRACE:AUTH] IgnitionAdmin.createMember → shop_members.insert: name=%s role=%s permissions=%o (FORMAT: capability-string NEW — these will break AccessGatekeeper.userCapabilities flatMap via getSystemRoles; TD#28)', form.name.trim().toUpperCase(), form.role, form.permissions);
     const { error: memberErr } = await supabase.from('shop_members').insert({
       shop_id: shopId, invite_id: invite.id,
       name: form.name.trim().toUpperCase(), role: form.role,

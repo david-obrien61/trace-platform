@@ -7,6 +7,13 @@
 
 import { supabase } from './supabase';
 
+// ─── TRACE teardown instrumentation — ON by birth of teardown ─────────────────
+// Each const controls one subsystem tag. David comments out a const after that
+// subsystem's migration is proven. Do not delete — comment out to go dormant.
+const TRACE_MARGIN = true;   // [TRACE:MARGIN] prot_matrix legacy + margin_config new path + recordTransaction
+const TRACE_AUTH   = true;   // [TRACE:AUTH]   PIN auth, getProfiles (role-badge format-collision), getSystemRoles
+const TRACE_DATA   = true;   // [TRACE:DATA]   save/load for teardown target keys
+
 const isWeb = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 let memoryStore = {};
 
@@ -354,6 +361,9 @@ const DataBridge = {
    * SAVE: Persists data with automated metadata and trial tracking.
    */
   save: (key, data, skipPush = false) => {
+    // [TRACE:DATA] log teardown-critical keys so coupling unwinding is visible
+    const TRACE_KEYS = new Set(['margin_config', 'prot_matrix', 'current_user', 'active_jobs', 'margin_change_log', 'system_config', 'overhead_config']);
+    if (TRACE_DATA && TRACE_KEYS.has(key)) console.log('[TRACE:DATA] DataBridge.save key=%s payload=%o', key, data);
     try {
       let payload;
       if (data && typeof data === 'object' && !Array.isArray(data)) {
@@ -408,14 +418,19 @@ const DataBridge = {
     try {
       // 1. Always check hot memory first (fastest, universal)
       if (memoryStore[key] !== undefined) {
+        // [TRACE:DATA] log teardown-critical key reads from memory
+        const TRACE_KEYS = new Set(['margin_config', 'prot_matrix', 'current_user', 'active_jobs', 'system_config', 'overhead_config']);
+        if (TRACE_DATA && TRACE_KEYS.has(key)) console.log('[TRACE:DATA] DataBridge.load key=%s → from memoryStore', key);
         return memoryStore[key];
       }
-      
+
       // 2. Fallback to platform storage (sync on web, async hydration on mobile)
       if (isWeb) {
         const store = JSON.parse(localStorage.getItem(DataBridge.storageKey));
         if (store && store[key] !== undefined) {
           memoryStore[key] = store[key];
+          const TRACE_KEYS = new Set(['margin_config', 'prot_matrix', 'current_user', 'active_jobs', 'system_config', 'overhead_config']);
+          if (TRACE_DATA && TRACE_KEYS.has(key)) console.log('[TRACE:DATA] DataBridge.load key=%s → from localStorage', key);
           return store[key];
         }
       }
@@ -581,7 +596,8 @@ const DataBridge = {
    * MarginEngine reads this directly; these methods are for saving/logging changes.
    */
   getMarginConfig: () => {
-    return DataBridge.load('margin_config') || {
+    const stored = DataBridge.load('margin_config');
+    const config = stored || {
       slabs: [
         { label: 'Consumables', maxCost: 50,   multiplier: 4.0  },
         { label: 'Mid-Range',   maxCost: 200,  multiplier: 2.0  },
@@ -590,9 +606,12 @@ const DataBridge = {
       ],
       tierDiscounts: { FLEET: 10, LEGACY: 20, FF: 5 },
     };
+    if (TRACE_MARGIN) console.log('[TRACE:MARGIN] DataBridge.getMarginConfig (NEW PATH) → source=%s slabs=%o', stored ? 'stored' : 'DEFAULT', config.slabs.map(s => s.label));
+    return config;
   },
 
   setMarginConfig: (newConfig, userId) => {
+    if (TRACE_MARGIN) console.log('[TRACE:MARGIN] DataBridge.setMarginConfig (NEW PATH) → slabs=%o tiers=%o changedBy=%s', newConfig.slabs?.map(s => s.label), newConfig.tierDiscounts, userId);
     const oldConfig = DataBridge.load('margin_config') || {};
     DataBridge.save('margin_config', newConfig);
 
@@ -648,19 +667,26 @@ const DataBridge = {
    * New code should use MarginEngine directly.
    */
   getProtMatrix: () => {
-    return DataBridge.load('prot_matrix') || { anchor: 40, fleetOffset: 10, legacyOffset: 20, ffFlat: 5 };
+    const matrix = DataBridge.load('prot_matrix') || { anchor: 40, fleetOffset: 10, legacyOffset: 20, ffFlat: 5 };
+    if (TRACE_MARGIN) console.log('[TRACE:MARGIN] DataBridge.getProtMatrix (LEGACY C PATH — TEARDOWN TARGET) → anchor=%o fleetOffset=%o legacyOffset=%o ffFlat=%o', matrix.anchor, matrix.fleetOffset, matrix.legacyOffset, matrix.ffFlat);
+    return matrix;
   },
   getActiveMargin: (tier) => {
     const matrix = DataBridge.getProtMatrix();
+    let margin;
     switch(tier) {
-      case 'FLEET': return matrix.anchor - matrix.fleetOffset;
-      case 'LEGACY': return matrix.anchor - matrix.legacyOffset;
-      case 'FF': return matrix.ffFlat;
-      default: return matrix.anchor;
+      case 'FLEET':  margin = matrix.anchor - matrix.fleetOffset; break;
+      case 'LEGACY': margin = matrix.anchor - matrix.legacyOffset; break;
+      case 'FF':     margin = matrix.ffFlat; break;
+      default:       margin = matrix.anchor;
     }
+    if (TRACE_MARGIN) console.log('[TRACE:MARGIN] DataBridge.getActiveMargin (LEGACY C PATH — TEARDOWN TARGET) tier=%s → margin=%o%%', tier, margin);
+    return margin;
   },
   calculateRetail: (cost, margin) => {
-    return (cost / (1 - (margin / 100))).toFixed(2);
+    const result = (cost / (1 - (margin / 100))).toFixed(2);
+    if (TRACE_MARGIN) console.log('[TRACE:MARGIN] DataBridge.calculateRetail (LEGACY C PATH — prot_matrix percent-of-cost — TEARDOWN TARGET) cost=%o margin=%o%% → result=%s (will differ from slab model after migration)', cost, margin, result);
+    return result;
   },
 
   /**
@@ -748,7 +774,11 @@ const DataBridge = {
    */
   authenticate: async (pin) => {
     const shopId = DataBridge.getShopId();
-    if (!shopId) return null;
+    if (TRACE_AUTH) console.log('[TRACE:AUTH] DataBridge.authenticate called — shopId=%s (Supabase shop_members PIN path)', shopId);
+    if (!shopId) {
+      if (TRACE_AUTH) console.log('[TRACE:AUTH] DataBridge.authenticate → FAILED: no shopId in DataBridge');
+      return null;
+    }
 
     const pinHash = await DataBridge.hashPin(shopId, pin);
 
@@ -760,7 +790,10 @@ const DataBridge = {
       .eq('active', true)
       .maybeSingle();
 
-    if (!member) return null;
+    if (!member) {
+      if (TRACE_AUTH) console.log('[TRACE:AUTH] DataBridge.authenticate → FAILED: no matching shop_members row (wrong PIN or inactive)');
+      return null;
+    }
 
     await DataBridge.autoEnrollDevice(member.id, shopId);
 
@@ -777,6 +810,8 @@ const DataBridge = {
         .map(p => p.replace('view_', '')),
       cached_at: new Date().toISOString(),
     };
+    // [TRACE:AUTH] Log the permission format of the session — are these capability-strings or role-badges?
+    if (TRACE_AUTH) console.log('[TRACE:AUTH] DataBridge.authenticate → SUCCESS: name=%s role=%s permissions=%o allowed=%o — FORMAT: %s', session.name, session.role, session.permissions, session.allowed, session.permissions.length && session.permissions[0].startsWith('view_') ? 'capability-string (NEW)' : 'role-badge (OLD/COLLISION)');
     DataBridge.save('current_user', session);
     return session;
   },
@@ -786,14 +821,19 @@ const DataBridge = {
    */
   getProfiles: () => {
     const saved = DataBridge.load('user_profiles');
-    if (saved && Object.keys(saved).length > 0) return saved;
+    if (saved && Object.keys(saved).length > 0) {
+      if (TRACE_AUTH) console.log('[TRACE:AUTH] DataBridge.getProfiles → source=DataBridge count=%o — FORMAT: role-badge (OLD/FORMAT-COLLISION: AccessGatekeeper.userCapabilities expansion BROKEN for these profiles)', Object.keys(saved).length);
+      return saved;
+    }
     // Default seed profiles — overwritten after onboarding creates the owner account
-    return {
+    const seeds = {
       '1111': { id: '1111', name: 'A. MANAGER', role: 'ADMIN', allowed: ['intake', 'queue', 'vin', 'voice', 'estimates', 'parts', 'procure', 'tools', 'inv', 'admin', 'fleet', 'kiosk'], preferences: { pinnedSpecs: ['Model Year', 'Make', 'Model'] }, hasSignedWaiver: true, permissions: ["ADMIN", "TECH", "PRICING_AUTHORITY"] },
       '1234': { id: '1234', name: 'T. OBRIEN', role: 'TECHNICIAN', allowed: ['queue', 'parts', 'tools'], preferences: { pinnedSpecs: ['Model Year', 'Make', 'Model', 'Displacement (L)'] }, hasSignedWaiver: false, permissions: ["TECH"] },
       '2222': { id: '2222', name: 'S. WRITER', role: 'SERVICE', allowed: ['intake', 'queue', 'vin', 'estimates', 'parts', 'procure', 'kiosk'], preferences: { pinnedSpecs: ['Model Year', 'Make', 'Model'] }, hasSignedWaiver: true, permissions: ["TECH"] },
       '3333': { id: '3333', name: 'L. PILOT', role: 'DEVELOPER', allowed: ['intake', 'queue', 'vin', 'voice', 'estimates', 'parts', 'procure', 'tools', 'inv', 'admin', 'fleet', 'kiosk'], preferences: { pinnedSpecs: ['Model Year', 'Make', 'Model', 'VIN'] }, hasSignedWaiver: true, permissions: ["ADMIN", "TECH", "PRICING_AUTHORITY"] }
     };
+    if (TRACE_AUTH) console.log('[TRACE:AUTH] DataBridge.getProfiles → source=SEED count=%o — FORMAT: role-badge (OLD/FORMAT-COLLISION: permissions=["ADMIN","TECH","PRICING_AUTHORITY"] — these are role-badge strings, NOT capability-strings; AccessGatekeeper userCapabilities lookup will return [] for shop_members users)', Object.keys(seeds).length);
+    return seeds;
   },
 
   logout: () => {
@@ -911,6 +951,7 @@ const DataBridge = {
    * RECORD TRANSACTION: Stamps each sale with margin metadata for quarterly analytics.
    */
   recordTransaction: (tx) => {
+    if (TRACE_MARGIN) console.log('[TRACE:MARGIN] DataBridge.recordTransaction — uses LEGACY getActiveMargin (C PATH); tier=%s cost=%o actualPrice=%o', tx.tier, tx.cost, tx.actualPrice);
     const rates = DataBridge.getSystemRates();
     const margin = DataBridge.getActiveMargin(tx.tier || 'STANDARD');
     const d = new Date();
@@ -1065,14 +1106,17 @@ const DataBridge = {
   getSystemRoles: () => {
     const config = DataBridge.load('system_config');
     if (config && config.roles) {
+      if (TRACE_AUTH) console.log('[TRACE:AUTH] DataBridge.getSystemRoles → source=system_config keys=%o — EXPANSION MAP used by AccessGatekeeper.userCapabilities; BROKEN for real shop_members users (their permissions are capability-strings, not role-badge keys)', Object.keys(config.roles));
       return config.roles;
     }
     // Hardcoded Master Fallback
-    return {
+    const fallback = {
       ADMIN: ["view_omni", "view_hub", "view_flux", "view_predictive", "view_cipher", "view_stok", "view_proc", "view_prot", "view_port", "view_crm", "view_marketplace", "edit_margins", "manage_users", "approve_payroll"],
       TECH: ["view_kosk", "view_cipher", "view_hub", "scan_parts", "update_flux"],
       CUSTOMER: ["view_port", "sign_estimates", "pay_invoice"]
     };
+    if (TRACE_AUTH) console.log('[TRACE:AUTH] DataBridge.getSystemRoles → source=FALLBACK roles=%o — EXPANSION MAP (3 keys: ADMIN/TECH/CUSTOMER); IgnitionAdmin creates shop_members with capability-string permissions — those members pass role-badge keys that do NOT exist in this map → userCapabilities=[] (TD#28 format-collision)', Object.keys(fallback));
+    return fallback;
   }
 };
 

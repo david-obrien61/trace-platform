@@ -20,6 +20,9 @@ import IgnitionVIN from './IgnitionVIN';
 
 const STYLE_DEBUG = true;
 
+// [TRACE:WORKFLOW] ON — teardown instrumentation (Zone 2 eval path: intake→in_eval→eval_done). Comment out after migration.
+const TRACE_WORKFLOW = true;
+
 // Non-1:1 mappings (89 classNames converted):
 // (1) hover:* on all interactive elements → dropped (cosmetic)
 // (2) transition-colors / transition-all → dropped (no inline equivalent)
@@ -168,6 +171,7 @@ export default function IgnitionEval({ job, onBack, onEvalSubmitted }) {
       }
 
       if (['intake', 'queued'].includes(job?.status)) {
+        if (TRACE_WORKFLOW) console.log('[TRACE:WORKFLOW] IgnitionEval.startEval → jobs.update(status=in_eval): jobId=%s prevStatus=%s — WORKFLOW STEP 2 (intake→in_eval)', job.id, job.status);
         await supabase.from('jobs').update({ status: 'in_eval' }).eq('id', job.id);
       }
     } catch (err) {
@@ -300,6 +304,7 @@ export default function IgnitionEval({ job, onBack, onEvalSubmitted }) {
         await supabase.from('labor_entries').update({ clocked_out: now, duration_minutes }).eq('id', laborEntryId);
       }
 
+      if (TRACE_WORKFLOW) console.log('[TRACE:WORKFLOW] IgnitionEval.submitEval → jobs.update(status=eval_done): jobId=%s dtcCount=%o workItems=%o laborEntryId=%s — WORKFLOW STEP 3 (in_eval→eval_done; hands off to IgnitionEstimate)', job.id, (window._evalDtcCodes || []).length, workItems.length, laborEntryId);
       await supabase.from('jobs').update({ status: 'eval_done' }).eq('id', job.id);
 
       setView('SUBMITTED');

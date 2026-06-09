@@ -18,6 +18,9 @@ import { supabase } from '../supabase';
 
 const STYLE_DEBUG = true;
 
+// [TRACE:API] ON — teardown instrumentation. Comment out after AIEngine.auditInvoice ported to Vercel function.
+const TRACE_API = true;
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const SEVERITY_META = {
@@ -452,9 +455,11 @@ const IgnitionAudit = () => {
     }, 1800);
 
     try {
+      if (TRACE_API) console.log('[TRACE:API] IgnitionAudit.runAudit → AIEngine.auditInvoice() called — DARK IN PROD (VITE_API_URL unset in Vercel; entire module unusable; TD#25) — shopId=%s tier=%s mimeType=%s b64Len=%o', shopId, tier, mimeType, b64.length);
       const res = await AIEngine.auditInvoice(b64, shopId, tier, mimeType);
       clearInterval(tick);
       setProgress(STEPS.length);
+      if (TRACE_API) console.log('[TRACE:API] IgnitionAudit.runAudit → AIEngine.auditInvoice result: ok=%s recoveryPotential=%o', res.ok, res.recovery_potential);
       if (!res.ok) throw new Error(res.error || 'Audit returned no result');
       setResult(res);
       setStage('RESULT');

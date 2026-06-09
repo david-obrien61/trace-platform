@@ -17,6 +17,9 @@ import AIEngine from '@trace/shared/ai/AIEngine';
 
 const STYLE_DEBUG = true;
 
+// [TRACE:API] ON — teardown instrumentation. Comment out after AIEngine.suggestPMI ported to Vercel function.
+const TRACE_API = true;
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
 const INTERVAL_DAYS = { daily: 1, weekly: 7, monthly: 30, quarterly: 90, annually: 365 };
@@ -398,18 +401,21 @@ const PredictiveKey = ({ clientTier: propTier }) => {
 
   const requestAISchedule = async (asset) => {
     setAiLoading(prev => ({ ...prev, [asset.id]: true }));
+    if (TRACE_API) console.log('[TRACE:API] PredictiveKey.requestAISchedule → AIEngine.suggestPMI() called — DARK IN PROD (VITE_API_URL unset; AI schedule generation dead; TD#25) — assetId=%s assetName=%s tier=%s', asset.id, asset.name, clientTier);
     try {
       const result = await AIEngine.suggestPMI(
         { id: asset.id, name: asset.name, type: asset.type },
         shopId,
         clientTier
       );
+      if (TRACE_API) console.log('[TRACE:API] PredictiveKey.requestAISchedule → AIEngine.suggestPMI result: tasks=%o ok=%s', result?.tasks?.length, !!result?.tasks?.length);
       if (result?.tasks?.length) {
         DataBridge.savePMISchedule(asset.id, result);
         setSchedules(prev => ({ ...prev, [asset.id]: result }));
         setExpandedId(asset.id);
       }
     } catch (err) {
+      if (TRACE_API) console.log('[TRACE:API] PredictiveKey.requestAISchedule → AIEngine.suggestPMI THREW: %s', err.message);
       console.error('[PMI] AI schedule request failed:', err);
     } finally {
       setAiLoading(prev => ({ ...prev, [asset.id]: false }));

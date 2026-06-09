@@ -21,6 +21,9 @@ import ExternalBridge from './ExternalBridge';
 
 const STYLE_DEBUG = true; // [TRACE:STYLE] STD-003
 
+// [TRACE:MARGIN] ON — teardown instrumentation (A+C PATH — two pricing paths in demo wizard). Comment out after migration.
+const TRACE_MARGIN = true;
+
 // Dynamic color values for path-chooser and import sub-path buttons
 const CHOICE_COLORS = {
   emerald: { iconBg:'rgba(5,150,105,0.1)', iconBorder:'rgba(16,185,129,0.2)', text:'#34d399', badgeBg:'rgba(5,150,105,0.2)', activeBorder:'#10b981' },
@@ -363,6 +366,7 @@ const OnboardingWizard = ({ onComplete, quickMode = false }) => {
     const cost = parseFloat(costPaid) || 0;
     const charged = parseFloat(priceCharged) || 0;
     const suggested = cost > 0 ? MarginEngine.calculateRetail(cost) : 0;
+    if (TRACE_MARGIN && cost > 0) console.log('[TRACE:MARGIN] OnboardingWizard.MarginPath (A PATH — MarginEngine.js LOCAL): cost=%o → suggested=%o leakagePerPart=%o — TEARDOWN TARGET: after migration, imports shared MarginEngine.ts', cost, suggested, charged > 0 && suggested > charged ? suggested - charged : 0);
     const leakagePerPart = charged > 0 && suggested > charged ? suggested - charged : 0;
     const annualLeakage = leakagePerPart * weeklyParts * 52;
 
@@ -480,6 +484,7 @@ const OnboardingWizard = ({ onComplete, quickMode = false }) => {
       if (!base) return;
       const laborCost = base.labor * rates.BASE;
       const totalCost = laborCost + base.partsCost;
+      if (TRACE_MARGIN) console.log('[TRACE:MARGIN] OnboardingWizard.DiagnosePath (C PATH — DataBridge.calculateRetail): totalCost=%o margin=%o%% — C PATH prot_matrix; TEARDOWN TARGET: post-migration this should use slab model → PRICE WILL CHANGE', totalCost, DataBridge.getActiveMargin('STANDARD'));
       const retail    = parseFloat(DataBridge.calculateRetail(totalCost, DataBridge.getActiveMargin('STANDARD')));
       setEstimate({ ...base, laborCost, totalCost, retail, laborHours: base.labor, rateUsed: rates.BASE });
     };

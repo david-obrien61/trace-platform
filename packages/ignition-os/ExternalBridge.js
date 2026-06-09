@@ -8,6 +8,9 @@
 
 import DataBridge from './DataBridge';
 
+// [TRACE:API] ON — teardown instrumentation (QB OAuth path: DARK in Ignition prod — no api/qbo/* Vercel functions; TD#25). Comment out after migration.
+const TRACE_API = true;
+
 const API_URL =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) ||
   (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_URL) ||
@@ -38,6 +41,7 @@ const qbo = {
    */
   initiateOAuth: async () => {
     try {
+      if (TRACE_API) console.log('[TRACE:API] ExternalBridge.qbo.initiateOAuth → GET %s/api/qbo/auth-url — DARK IN PROD: Ignition OS has ZERO api/qbo/* Vercel functions (unlike Cultivar); this hits Railway ai_router.py if VITE_API_URL is set, otherwise localhost:8000; TD#25 + TD#12', API_URL);
       const res = await fetch(`${API_URL}/api/qbo/auth-url`);
       if (!res.ok) throw new Error('Backend unavailable. Make sure shop_estimate.py is running.');
       const { url } = await res.json();
@@ -81,6 +85,7 @@ const qbo = {
   },
 
   getStatus: async () => {
+    if (TRACE_API) console.log('[TRACE:API] ExternalBridge.qbo.getStatus → GET %s/api/qbo/status — DARK IN PROD (Ignition has no /api/qbo/ Vercel functions; TD#25)', API_URL);
     const res = await fetch(`${API_URL}/api/qbo/status`);
     if (!res.ok) return { connected: false };
     return res.json();

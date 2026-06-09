@@ -12,6 +12,9 @@ import DataBridge from './DataBridge';
 
 const STYLE_DEBUG = true;
 
+// [TRACE:MARGIN] ON — teardown instrumentation (A PATH — MarginEngine.js local caller). Comment out after migration.
+const TRACE_MARGIN = true;
+
 // Non-1:1 mappings:
 // (1) hover:bg-slate-700 on lock toggle → ign-btn-secondary CSS class
 // (2) animate-pulse on Override Active badge → ign-pulse CSS class
@@ -29,6 +32,7 @@ const PriceField = ({ cost, initialPrice, onUpdate }) => {
   const currentUser = DataBridge.load('current_user');
   const isAdmin = currentUser?.permissions?.includes('ADMIN') || false;
   const suggestedPrice = MarginEngine.calculateRetail(cost);
+  if (TRACE_MARGIN) console.log('[TRACE:MARGIN] PriceField (A PATH — MarginEngine.js LOCAL): cost=%o → suggestedPrice=%o — TEARDOWN TARGET: after migration, this caller imports shared MarginEngine.ts instead', cost, suggestedPrice);
 
   useEffect(() => {
     if (isLocked) setPrice(suggestedPrice);

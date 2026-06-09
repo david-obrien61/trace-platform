@@ -12,6 +12,9 @@ import DataBridge from '../DataBridge';
 
 const STYLE_DEBUG = true;
 
+// [TRACE:MARGIN] ON — teardown instrumentation (A PATH — MarginEngine.js local caller). Comment out after migration.
+const TRACE_MARGIN = true;
+
 // Non-1:1 mappings (38 classNames converted):
 // (1) sm:flex-row sm:items-center sm:p-10 sm:text-xl md:grid-cols-2 → dropped (no breakpoint equivalent)
 // (2) focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 on inputs → ign-input CSS class
@@ -57,6 +60,7 @@ const IgnitionProcure = ({ activeJob, onPartAdded }) => {
   if (STYLE_DEBUG) console.log('[TRACE:STYLE] IgnitionProcure converted, 38 classNames → inline, 6 non-1:1 categories');
 
   const retailPrice = MarginEngine.calculateRetail(cost);
+  if (TRACE_MARGIN) console.log('[TRACE:MARGIN] IgnitionProcure (A PATH — MarginEngine.js LOCAL): cost=%o → retailPrice=%o — TEARDOWN TARGET: after migration, imports shared MarginEngine.ts', cost, retailPrice);
 
   const handleSave = () => {
     if (!partNum || !vendor || !cost) {

@@ -10,6 +10,9 @@ import DataBridge from '../DataBridge';
 
 const STYLE_DEBUG = true;
 
+// [TRACE:MARGIN] ON — teardown instrumentation (PROT config load/save path). Comment out after migration.
+const TRACE_MARGIN = true;
+
 // Non-1:1 mappings (49 classNames converted):
 // (1) lg:grid-cols-2 main grid → flex-wrap (flagged: no breakpoint equivalent)
 // (2) lg:col-span-2 on margin card → width:100% in flex context (flagged)
@@ -73,15 +76,20 @@ const IgnitionProt = () => {
   if (STYLE_DEBUG) console.log('[TRACE:STYLE] IgnitionProt converted, 49 classNames → inline, 7 non-1:1 categories');
 
   useEffect(() => {
-    setRates(DataBridge.getSystemRates() || { BASE: 165, DIAGNOSTIC: 195, MOBILE: 225 });
-    setMatrix(DataBridge.getMarginMatrix() || { defaultMarkup: 1.25, slabs: [] });
-    setCosts(DataBridge.getOperationalCosts() || { rent: 0, electric: 0, fuel: 0, maintenance: 0 });
+    const rates  = DataBridge.getSystemRates() || { BASE: 165, DIAGNOSTIC: 195, MOBILE: 225 };
+    const matrix = DataBridge.getMarginMatrix() || { defaultMarkup: 1.25, slabs: [] };
+    const costs  = DataBridge.getOperationalCosts() || { rent: 0, electric: 0, fuel: 0, maintenance: 0 };
+    if (TRACE_MARGIN) console.log('[TRACE:MARGIN] IgnitionProt.useEffect LOAD: rates=%o matrix=%o costs=%o — overhead_config.monthly is the source for Cost-to-Produce tile overheadPerUnit calculation', rates, matrix, costs);
+    setRates(rates);
+    setMatrix(matrix);
+    setCosts(costs);
   }, []);
 
   const handleSave = () => {
     const adminId = currentUser?.id || 'SYSTEM';
     const sortedSlabs = [...(matrix.slabs || [])].sort((a, b) => parseFloat(a.maxCost) - parseFloat(b.maxCost));
     const finalMatrix = { ...matrix, slabs: sortedSlabs };
+    if (TRACE_MARGIN) console.log('[TRACE:MARGIN] IgnitionProt.handleSave: rates=%o matrix=%o costs=%o adminId=%s — SAVE PATH: writes to DataBridge system_config + margin_config + overhead_config; this is the upstream source for MarginEngine.getConfig() and overheadPerUnit in shared engine', rates, finalMatrix, costs, adminId);
     DataBridge.setSystemRates(rates, adminId);
     DataBridge.setMarginMatrix(finalMatrix, adminId);
     DataBridge.setOperationalCosts(costs, adminId);

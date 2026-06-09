@@ -16,6 +16,9 @@ import DataBridge from '../DataBridge';
 
 const STYLE_DEBUG = true;
 
+// [TRACE:WORKFLOW] ON — teardown instrumentation. Comment out after intake→Supabase chain proven.
+const TRACE_WORKFLOW = true;
+
 // Non-1:1 mappings (90 classNames converted):
 // (1) hover:border-blue-500 / hover:bg-slate-800 / hover:border-slate-600 / hover:text-* → dropped (cosmetic)
 // (2) transition-colors / transition-all → dropped (no inline equivalent)
@@ -240,6 +243,7 @@ export default function IgnitionIntake({ onJobCreated, onBack }) {
       const cust = selectedCustomer;
       const woNum = `RO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
+      if (TRACE_WORKFLOW) console.log('[TRACE:WORKFLOW] IgnitionIntake.submitIntake → creating RO: customerId=%s vehicleId=%s woNum=%s — SPLIT-BRAIN NOTE: customers written to Supabase here; CRM reads from DataBridge.customers_directory (TD#26 orphaned key — customer won\'t appear in CRM)', customerId, vehicleId, woNum);
       const { data: job, error: e } = await supabase.from('jobs').insert({
         shop_id:           shopId,
         wo_number:         woNum,
@@ -267,6 +271,7 @@ export default function IgnitionIntake({ onJobCreated, onBack }) {
       }).select().single();
       if (e) throw e;
 
+      if (TRACE_WORKFLOW) console.log('[TRACE:WORKFLOW] IgnitionIntake.submitIntake → job created: jobId=%s woNum=%s status=intake', job.id, job.wo_number);
       onJobCreated?.(job);
     } catch (err) {
       setError(err.message || 'Failed to create RO. Try again.');

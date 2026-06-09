@@ -35,6 +35,11 @@ import { Lock, LayoutDashboard, Truck, Activity, ShoppingCart, Search, Package, 
 
 const STYLE_DEBUG = true; // [TRACE:STYLE]
 
+// [TRACE:AUTH] ON — teardown instrumentation. Comment out after auth/permission migration proven.
+const TRACE_AUTH     = true;
+// [TRACE:WORKFLOW] ON — teardown instrumentation. Comment out after DataBridge cloud-sync unwound.
+const TRACE_WORKFLOW = true;
+
 const GRID_BG = {
   backgroundImage: 'linear-gradient(rgba(30,41,59,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(30,41,59,0.3) 1px, transparent 1px)',
   backgroundSize: '40px 40px',
@@ -461,6 +466,13 @@ const AccessGatekeeper = ({ requiredPermissions, children }) => {
   const rolesRegistry  = DataBridge.getSystemRoles();
   const userCapabilities = currentUser.permissions.flatMap(role => rolesRegistry[role] || []);
   const hasAccess = requiredPermissions.some(rp => userCapabilities.includes(rp)) || overrideActive;
+  // [TRACE:AUTH] FORMAT-COLLISION DETECTOR: shop_members users have capability-string permissions
+  // (e.g. "view_flux") — getSystemRoles() keys are role-badge names (ADMIN/TECH/CUSTOMER).
+  // flatMap returns [] for every capability-string permission → hasAccess=false → Access Denied.
+  if (TRACE_AUTH) {
+    const fmt = currentUser.permissions.length && currentUser.permissions[0].startsWith('view_') ? 'capability-string (NEW → userCapabilities=[])' : 'role-badge (SEED/OLD → expansion works)';
+    console.log('[TRACE:AUTH] AccessGatekeeper: user=%s permissions=%o format=%s userCapabilities=%o required=%o hasAccess=%s', currentUser.name || '?', currentUser.permissions, fmt, userCapabilities, requiredPermissions, hasAccess);
+  }
 
   if (hasAccess) return children;
 
@@ -582,6 +594,7 @@ const IdentityMatrix = ({ onLogin, shopName }) => {
         cached_at: new Date().toISOString(),
       };
       DataBridge.save('current_user', session);
+      if (TRACE_AUTH) console.log('[TRACE:AUTH] loginWithBio → SUCCESS: name=%s role=%s permissions=%o allowed=%o — FORMAT: capability-string (NEW — from shop_members; AccessGatekeeper flatMap will return [] for this session)', session.name, session.role, session.permissions, session.allowed);
       onLogin(session);
     } catch (_) { setBioError('Biometric cancelled — enter PIN.'); }
   };
@@ -728,7 +741,9 @@ const CoreApp = () => {
   }, [ownerBusinessId]);
 
   const fetchCloudData = () => {
+    if (TRACE_WORKFLOW) console.log('[TRACE:WORKFLOW] fetchCloudData → DataBridge.pullCloudSync() called — TEARDOWN TARGET: DataBridge cloud-sync coupling (active_jobs key)');
     DataBridge.pullCloudSync().then(serverJobs => {
+      if (TRACE_WORKFLOW) console.log('[TRACE:WORKFLOW] fetchCloudData → pullCloudSync resolved: count=%o', serverJobs ? serverJobs.length : 0);
       if (serverJobs && serverJobs.length > 0) {
         setAllJobs(serverJobs);
         const currentId = activeJob?.jobId || activeJob?.id;
@@ -739,10 +754,12 @@ const CoreApp = () => {
   };
 
   const handleUpdateJob = (job) => {
+    if (TRACE_WORKFLOW) console.log('[TRACE:WORKFLOW] handleUpdateJob: jobId=%s status=%s — TEARDOWN TARGET: DataBridge.save(active_job_context) + pushCloudSync coupling', job.id || job.jobId, job.status);
     setActiveJob(job);
     DataBridge.save('active_job_context', job);
     setAllJobs(prev => prev.map(j => (j.id === job.id ? job : j)));
     DataBridge.pushCloudSync([job]);
+    if (TRACE_WORKFLOW) console.log('[TRACE:WORKFLOW] handleUpdateJob → pushCloudSync dispatched for jobId=%s', job.id || job.jobId);
   };
 
   useEffect(() => { fetchCloudData(); }, []);

@@ -21,6 +21,13 @@ import PriceField from '../PriceField';
 
 const STYLE_DEBUG = true;
 
+// [TRACE:MARGIN] ON — teardown instrumentation (D path — flat-percent fallback). Comment out after slab migration.
+const TRACE_MARGIN   = true;
+// [TRACE:API] ON — teardown instrumentation. Comment out after Railway replaced by Vercel functions.
+const TRACE_API      = true;
+// [TRACE:WORKFLOW] ON — teardown instrumentation. Comment out after job-status transitions proven stable.
+const TRACE_WORKFLOW = true;
+
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -102,6 +109,7 @@ export default function IgnitionEstimate() {
   // HONEST DEBT 🔴 (D): markupPercent is a flat-percent fallback; retire after migrating to
   //   shared MarginEngine slab model. Migration checklist: docs/audits/margin-engine-migration-checklist-2026-06-10.md
   const markupPercent = shopPolicy.markup_percent || 40;
+  if (TRACE_MARGIN) console.log('[TRACE:MARGIN] IgnitionEstimate.markupPercent (D PATH — flat-percent): value=%o%% — TEARDOWN TARGET: replace with slab-model MarginEngine.getMarkupPercent(cost) after migration', markupPercent);
   const taxRate       = shopPolicy.tax_rate       || 0.0825;
 
   const [view, setView]               = useState('QUEUE');
@@ -174,15 +182,22 @@ export default function IgnitionEstimate() {
         await supabase.from('estimate_line_items').delete().eq('estimate_id', est.id);
         setLineItems([]);
       }
+      if (TRACE_API) console.log('[TRACE:API] IgnitionEstimate.buildEstimate → POST %s/api/estimate/build — DARK IN PROD (VITE_API_URL unset in Vercel; calls Railway ai_router.py; TD#25 + TD#12) — estimateId=%s laborRate=%o markupPercent=%o%%', API_URL, est.id, laborRate, markupPercent);
       const res = await fetch(`${API_URL}/api/estimate/build`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ estimate_id: est.id, shop_id: shopId, labor_rate: laborRate, markup_percent: markupPercent, tax_rate: taxRate }),
       });
-      if (!res.ok) { const body = await res.json().catch(() => ({})); throw new Error(body.detail || `Agent returned ${res.status}`); }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        if (TRACE_API) console.log('[TRACE:API] IgnitionEstimate.buildEstimate → FAILED: status=%o detail=%s', res.status, body.detail);
+        throw new Error(body.detail || `Agent returned ${res.status}`);
+      }
       const result = await res.json();
+      if (TRACE_API) console.log('[TRACE:API] IgnitionEstimate.buildEstimate → SUCCESS: lineItems=%o', (result.line_items || []).length);
       const { data: fresh } = await supabase.from('estimates').select('*').eq('id', est.id).single();
       setEstimate(fresh); setLineItems(result.line_items || []);
+      if (TRACE_WORKFLOW) console.log('[TRACE:WORKFLOW] IgnitionEstimate.buildEstimate → job status transition: jobId=%s estimating', selectedJob.id);
       setJobs(prev => prev.map(j => j.id === selectedJob.id ? { ...j, status: 'estimating' } : j));
       setSelectedJob(prev => ({ ...prev, status: 'estimating' }));
     } catch (err) {

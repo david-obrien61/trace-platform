@@ -13,6 +13,9 @@ import CustomerApprovalPortal from './CustomerApprovalPortal';
 
 const STYLE_DEBUG = true;
 
+// [TRACE:MARGIN] ON — teardown instrumentation (A PATH — MarginEngine.js local caller). Comment out after migration.
+const TRACE_MARGIN = true;
+
 const IgnitionPort = ({ activeJob, allJobs = [], onUpdateJob, onSelectJob }) => {
   const [viewMode, setViewMode] = useState('LIST');
   const [pricingData, setPricingData] = useState({});
@@ -371,6 +374,7 @@ const IgnitionPort = ({ activeJob, allJobs = [], onUpdateJob, onSelectJob }) => 
               {activeJob?.suggestedParts?.map((part) => {
                 const pState = pricingData[part.id] || { source: 'INVENTORY', vendor: '', cost: '', locked: false };
                 const retail = MarginEngine.calculateRetail(pState.cost);
+                if (TRACE_MARGIN) console.log('[TRACE:MARGIN] IgnitionPort part pricing (A PATH): partId=%s cost=%o → retail=%o — TEARDOWN TARGET: MarginEngine.js LOCAL caller', part.id, pState.cost, retail);
                 const isLocked = pState.locked;
 
                 return (

@@ -11,6 +11,11 @@ import AIEngine from '@trace/shared/ai/AIEngine';
 
 const STYLE_DEBUG = true;
 
+// [TRACE:MARGIN] ON — teardown instrumentation (C PATH — prot_matrix callers). Comment out after migration to slab model.
+const TRACE_MARGIN = true;
+// [TRACE:API] ON — teardown instrumentation. Comment out after AIEngine.decodeDTC ported to Vercel function.
+const TRACE_API    = true;
+
 // Non-1:1 mappings (8 classNames converted):
 // (1) hover:bg-blue-500 on DECODE button → ign-btn-primary CSS class
 // (2) hover:text-blue-500 on auto-sync button → ign-btn-ghost CSS class
@@ -48,10 +53,12 @@ const IgnitionCipher = ({ activeJob, onUpdateJob, onNavigateToStok }) => {
 
     const activeRate   = activeJob?.lockedLaborRate || DataBridge.getSystemRates().BASE;
     const activeMargin = activeJob?.lockedMargin || DataBridge.getActiveMargin('STANDARD');
+    if (TRACE_MARGIN) console.log('[TRACE:MARGIN] IgnitionCipher.handleTranslate: code=%s activeRate=%o activeMargin=%o%% — C PATH: uses DataBridge.getActiveMargin (prot_matrix percent-of-cost); TEARDOWN TARGET: post-migration this cost will be routed through slab model → PRICE WILL CHANGE', code, activeRate, activeMargin);
 
     const base = faultLibrary[code];
     if (base) {
       const retail = DataBridge.calculateRetail(base.partsCost + base.labor * activeRate, activeMargin);
+      if (TRACE_MARGIN) console.log('[TRACE:MARGIN] IgnitionCipher.handleTranslate (LOCAL LIBRARY): code=%s partsCost=%o laborCost=%o → DataBridge.calculateRetail(%o, %o%%) = %o (C PATH)', code, base.partsCost, base.labor * activeRate, base.partsCost + base.labor * activeRate, activeMargin, retail);
       setResult({ ...base, total: retail, rateApplied: activeRate, marginApplied: activeMargin, source: 'LOCAL' });
       if (!activeJob?.lockedLaborRate && onUpdateJob)
         onUpdateJob({ ...activeJob, lockedLaborRate: activeRate, lockedMargin: activeMargin });
@@ -63,6 +70,7 @@ const IgnitionCipher = ({ activeJob, onUpdateJob, onNavigateToStok }) => {
     setResult(null);
     try {
       const vehicle = activeJob ? `${activeJob.year || ''} ${activeJob.make || ''} ${activeJob.model || ''}`.trim() : '';
+      if (TRACE_API) console.log('[TRACE:API] IgnitionCipher.handleTranslate → AIEngine.decodeDTC([%s], vehicle=%s) — DARK IN PROD (VITE_API_URL unset; only 3 hardcoded codes work locally; TD#25)', code, vehicle || 'undefined');
       const aiRes = await AIEngine.decodeDTC([code], vehicle || undefined);
       if (aiRes?.codes?.[0]) {
         const c = aiRes.codes[0];
@@ -81,7 +89,9 @@ const IgnitionCipher = ({ activeJob, onUpdateJob, onNavigateToStok }) => {
       } else {
         setResult({ name: `Code ${code} — No data found`, parts: [], labor: 0, partsCost: 0, total: 0, source: 'AI' });
       }
+      if (TRACE_API) console.log('[TRACE:API] IgnitionCipher.handleTranslate → AIEngine.decodeDTC result: ok=%s codes=%o', !!aiRes?.codes, (aiRes?.codes || []).length);
     } catch (err) {
+      if (TRACE_API) console.log('[TRACE:API] IgnitionCipher.handleTranslate → AIEngine.decodeDTC THREW: %s (likely { ok:false } from unset VITE_API_URL)', err.message);
       setResult({ name: `Code ${code} — AI unavailable`, parts: [], labor: 0, partsCost: 0, total: 0, source: 'ERROR' });
     } finally {
       setIsLoading(false);
