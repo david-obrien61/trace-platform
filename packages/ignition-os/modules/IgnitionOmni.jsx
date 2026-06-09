@@ -6,6 +6,8 @@ import {
 import DataBridge from '../DataBridge';
 import { supabase } from '../supabase';
 
+const STYLE_DEBUG = false;
+
 const DEMO_LEAKAGE_ROWS = [
   { customer: 'Demo — Hansen Trucking', description: 'Engine Rebuild (8.0h)',      billed: 760,  target: 1000, leakage: 240, isDemo: true },
   { customer: 'Demo — Garcia Fleet',    description: 'Transmission Svc (3.5h)',    billed: 298,  target: 438,  leakage: 140, isDemo: true },
@@ -38,39 +40,94 @@ const StaffManagement = () => {
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-[2rem] p-8 mt-8 shadow-2xl">
-      <h3 className="text-xs font-black uppercase text-slate-400 mb-8 flex items-center gap-3 tracking-widest">
-        <UserPlus size={18} className="text-emerald-500" /> Staff Management & Enrollment
+    <div style={{
+      backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 32,
+      padding: 32, marginTop: 32, boxShadow: '0 25px 50px rgba(0,0,0,0.5)',
+    }}>
+      <h3 style={{
+        fontSize: 12, fontWeight: 900, textTransform: 'uppercase', color: '#94a3b8',
+        marginBottom: 32, display: 'flex', alignItems: 'center', gap: 12, letterSpacing: '0.1em',
+      }}>
+        <UserPlus size={18} style={{ color: '#10b981' }} /> Staff Management &amp; Enrollment
       </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
         <div>
-          <input placeholder="Staff Name" value={name} onChange={e => setName(e.target.value)} className="w-full bg-slate-950 p-4 rounded-2xl border border-slate-800 text-sm mb-4 text-white focus:border-blue-500 outline-none" />
-          <input placeholder="Phone / Email" value={phone} onChange={e => setPhone(e.target.value)} className="w-full bg-slate-950 p-4 rounded-2xl border border-slate-800 text-sm mb-6 text-white focus:border-blue-500 outline-none" />
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Assign Permission Keys</p>
-          <div className="flex flex-wrap gap-2 mb-6">
-            {keys.map(k => (
-              <button
-                key={k}
-                onClick={() => setSelectedKeys(prev => prev.includes(k) ? prev.filter(p => p !== k) : [...prev, k])}
-                className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-wider border transition-all ${selectedKeys.includes(k) ? 'bg-blue-600 border-blue-500 text-white drop-shadow-md' : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-white'}`}
-              >
-                {k}
-              </button>
-            ))}
+          <input
+            placeholder="Staff Name"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            className="ign-input"
+            style={{
+              width: '100%', backgroundColor: '#020617', padding: 16, borderRadius: 16,
+              border: '1px solid #1e293b', fontSize: 14, marginBottom: 16, color: '#ffffff',
+              boxSizing: 'border-box',
+            }}
+          />
+          <input
+            placeholder="Phone / Email"
+            value={phone}
+            onChange={e => setPhone(e.target.value)}
+            className="ign-input"
+            style={{
+              width: '100%', backgroundColor: '#020617', padding: 16, borderRadius: 16,
+              border: '1px solid #1e293b', fontSize: 14, marginBottom: 24, color: '#ffffff',
+              boxSizing: 'border-box',
+            }}
+          />
+          <p style={{ fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16 }}>
+            Assign Permission Keys
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 24 }}>
+            {keys.map(k => {
+              const isSelected = selectedKeys.includes(k);
+              return (
+                <button
+                  key={k}
+                  onClick={() => setSelectedKeys(prev => prev.includes(k) ? prev.filter(p => p !== k) : [...prev, k])}
+                  style={{
+                    padding: '8px 16px', borderRadius: 9999, fontSize: 9, fontWeight: 900,
+                    textTransform: 'uppercase', letterSpacing: '0.05em',
+                    border: isSelected ? '1px solid #3b82f6' : '1px solid #334155',
+                    backgroundColor: isSelected ? '#2563eb' : '#1e293b',
+                    color: isSelected ? '#ffffff' : '#64748b',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {k}
+                </button>
+              );
+            })}
           </div>
-          <button onClick={createNewStaff} className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] tracking-widest font-black uppercase px-8 py-4 rounded-2xl shadow-lg transition-colors">
+          <button
+            onClick={createNewStaff}
+            style={{
+              backgroundColor: '#059669', color: '#ffffff', fontSize: 10,
+              letterSpacing: '0.1em', fontWeight: 900, textTransform: 'uppercase',
+              padding: '16px 32px', borderRadius: 16, border: 'none', cursor: 'pointer',
+              boxShadow: '0 10px 15px rgba(0,0,0,0.3)',
+            }}
+          >
             Generate Invite Link
           </button>
         </div>
 
         {enrollLink && (
-          <div className="bg-black/40 p-8 rounded-[2rem] border-2 border-dashed border-emerald-500/30 flex flex-col items-center justify-center text-center">
-            <QrCode size={56} className="text-emerald-500 mb-6 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)]" />
-            <p className="text-xs font-black text-emerald-400 uppercase tracking-widest mb-4">Pending Enrollment Secured</p>
-            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 w-full mb-4">
-              <a href={enrollLink} className="text-[10px] text-blue-400 break-all font-mono hover:text-blue-300" target="_blank" rel="noreferrer">{enrollLink}</a>
+          <div style={{
+            backgroundColor: 'rgba(0,0,0,0.4)', padding: 32, borderRadius: 32,
+            border: '2px dashed rgba(16,185,129,0.3)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', textAlign: 'center',
+          }}>
+            <QrCode size={56} style={{ color: '#10b981', marginBottom: 24, filter: 'drop-shadow(0 0 15px rgba(16,185,129,0.5))' }} />
+            <p style={{ fontSize: 12, fontWeight: 900, color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16 }}>
+              Pending Enrollment Secured
+            </p>
+            <div style={{ backgroundColor: '#020617', padding: 16, borderRadius: 12, border: '1px solid #1e293b', width: '100%', marginBottom: 16, boxSizing: 'border-box' }}>
+              <a href={enrollLink} style={{ fontSize: 10, color: '#60a5fa', wordBreak: 'break-all', fontFamily: 'monospace' }} target="_blank" rel="noreferrer">{enrollLink}</a>
             </div>
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider mt-2">Open this link on target device to assign PIN.</p>
+            <p style={{ fontSize: 9, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 8 }}>
+              Open this link on target device to assign PIN.
+            </p>
           </div>
         )}
       </div>
@@ -105,35 +162,49 @@ const ComplianceGuard = () => {
   };
 
   return (
-    <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-2xl mt-8">
-      <div className="flex justify-between items-center">
+    <div style={{ backgroundColor: '#0f172a', padding: 24, borderRadius: 24, border: '1px solid #1e293b', boxShadow: '0 25px 50px rgba(0,0,0,0.5)', marginTop: 32 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h3 className="text-sm font-black text-white uppercase italic">DOT Compliance Gate</h3>
-          <p className="text-[10px] text-slate-500 uppercase">Forces digital DVIR before asset release</p>
+          <h3 style={{ fontSize: 14, fontWeight: 900, color: '#ffffff', textTransform: 'uppercase', fontStyle: 'italic', margin: 0 }}>DOT Compliance Gate</h3>
+          <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', margin: 0 }}>Forces digital DVIR before asset release</p>
         </div>
         <button
           onClick={handleToggle}
           disabled={saving}
-          className={`w-14 h-8 rounded-full transition-all relative disabled:opacity-50 ${guardActive ? 'bg-emerald-600' : 'bg-red-600'}`}
+          style={{
+            width: 56, height: 32, borderRadius: 9999, position: 'relative',
+            border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
+            backgroundColor: guardActive ? '#059669' : '#dc2626',
+            opacity: saving ? 0.5 : 1,
+          }}
         >
-          <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${guardActive ? 'left-7' : 'left-1'}`} />
+          <div style={{
+            position: 'absolute', top: 4, width: 24, height: 24,
+            backgroundColor: '#ffffff', borderRadius: '50%',
+            left: guardActive ? 28 : 4, transition: 'left 0.2s',
+          }} />
         </button>
       </div>
 
       {showWarning && (
-        <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
-          <p className="text-[10px] font-black text-red-500 uppercase mb-2 animate-pulse tracking-widest">!!! CRITICAL WARNING !!!</p>
-          <p className="text-xs text-slate-300 leading-tight mb-4">
-            Disabling this gate removes the FMCSA-mandated inspection barrier. Assets can be released without safety documentation.
-            <span className="text-white font-bold italic"> Disable at your own peril.</span>
+        <div style={{ marginTop: 16, padding: 16, backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 12 }}>
+          <p className="ign-pulse" style={{ fontSize: 10, fontWeight: 900, color: '#ef4444', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.1em' }}>
+            !!! CRITICAL WARNING !!!
           </p>
-          <div className="flex gap-2">
-            <button onClick={() => setShowWarning(false)} className="flex-1 bg-slate-800 text-white text-[10px] font-black py-3 rounded-lg">
+          <p style={{ fontSize: 12, color: '#cbd5e1', lineHeight: 1.4, marginBottom: 16 }}>
+            Disabling this gate removes the FMCSA-mandated inspection barrier. Assets can be released without safety documentation.
+            <span style={{ color: '#ffffff', fontWeight: 700, fontStyle: 'italic' }}> Disable at your own peril.</span>
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => setShowWarning(false)}
+              style={{ flex: 1, backgroundColor: '#1e293b', color: '#ffffff', fontSize: 10, fontWeight: 900, padding: '12px 0', borderRadius: 8, border: 'none', cursor: 'pointer' }}
+            >
               CANCEL
             </button>
             <button
               onClick={() => { setShowWarning(false); setAndPersist(false); DataBridge.smartSync('COMPLIANCE_BYPASS', { event: 'COMPLIANCE_BYPASS_ENABLED', timestamp: new Date().toISOString(), user: 'Owner_Admin', warning_displayed: true, status: 'DANGEROUS' }); }}
-              className="flex-1 bg-red-600 text-white text-[10px] font-black py-3 rounded-lg"
+              style={{ flex: 1, backgroundColor: '#dc2626', color: '#ffffff', fontSize: 10, fontWeight: 900, padding: '12px 0', borderRadius: 8, border: 'none', cursor: 'pointer' }}
             >
               I ACCEPT LIABILITY
             </button>
@@ -163,56 +234,67 @@ const LeakageAudit = ({ auditData, isDemo, marginConfig, onUpdateConfig }) => {
   };
 
   return (
-    <div className="mt-8">
+    <div style={{ marginTop: 32 }}>
       {isDemo && (
-        <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-4">
-          <AlertCircle size={12} className="text-amber-400 flex-shrink-0" />
-          <p className="text-amber-400 text-[9px] font-black uppercase tracking-widest">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, backgroundColor: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 12, padding: 12, marginBottom: 16 }}>
+          <AlertCircle size={12} style={{ color: '#fbbf24', flexShrink: 0 }} />
+          <p style={{ fontSize: 9, fontWeight: 900, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
             Demo data shown — process real invoices to see live leakage
           </p>
         </div>
       )}
 
       {/* MARGIN TARGETS */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 mb-4">
-        <div className="flex justify-between items-center mb-3">
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Your Target Rates</p>
+      <div style={{ backgroundColor: 'rgba(15,23,42,0.6)', border: '1px solid #1e293b', borderRadius: 16, padding: 16, marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <p style={{ fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Your Target Rates</p>
           <button
             onClick={() => setEditing(!editing)}
-            className="text-[9px] font-black text-blue-400 uppercase tracking-widest hover:text-blue-300 transition-colors"
+            style={{ fontSize: 9, fontWeight: 900, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.1em', background: 'none', border: 'none', cursor: 'pointer' }}
           >
             {editing ? 'Cancel' : 'Edit Rates'}
           </button>
         </div>
 
         {!editing ? (
-          <div className="flex gap-8">
+          <div style={{ display: 'flex', gap: 32 }}>
             <div>
-              <p className="text-[9px] text-slate-600 uppercase tracking-widest">Labor Rate</p>
-              <p className="text-base font-black text-white">${marginConfig?.labor_rate ?? 125}/hr</p>
+              <p style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Labor Rate</p>
+              <p style={{ fontSize: 16, fontWeight: 900, color: '#ffffff', margin: 0 }}>${marginConfig?.labor_rate ?? 125}/hr</p>
             </div>
             <div>
-              <p className="text-[9px] text-slate-600 uppercase tracking-widest">Parts Markup</p>
-              <p className="text-base font-black text-white">{Math.round((marginConfig?.parts_markup ?? 0.40) * 100)}%</p>
+              <p style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Parts Markup</p>
+              <p style={{ fontSize: 16, fontWeight: 900, color: '#ffffff', margin: 0 }}>{Math.round((marginConfig?.parts_markup ?? 0.40) * 100)}%</p>
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div>
-              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">
+              <label style={{ fontSize: 9, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: 4 }}>
                 Target Labor Rate ($/hr)
               </label>
               <input
                 type="number"
                 value={laborRate}
                 onChange={e => setLaborRate(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-bold text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                className="ign-input"
+                style={{
+                  width: '100%', backgroundColor: '#020617', border: '1px solid #334155',
+                  borderRadius: 12, padding: 12, color: '#ffffff', fontWeight: 700,
+                  fontSize: 14, boxSizing: 'border-box',
+                }}
               />
             </div>
             <button
               onClick={saveConfig}
               disabled={saving}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[10px] font-black py-3 rounded-xl uppercase tracking-widest transition-colors"
+              style={{
+                width: '100%', backgroundColor: saving ? '#1e293b' : '#2563eb',
+                color: saving ? '#64748b' : '#ffffff', fontSize: 10, fontWeight: 900,
+                padding: '12px 0', borderRadius: 12, textTransform: 'uppercase',
+                letterSpacing: '0.1em', border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
+                opacity: saving ? 0.5 : 1,
+              }}
             >
               {saving ? 'Saving...' : 'Save My Rates'}
             </button>
@@ -221,52 +303,60 @@ const LeakageAudit = ({ auditData, isDemo, marginConfig, onUpdateConfig }) => {
       </div>
 
       {/* LEAKAGE TABLE */}
-      <div className="bg-slate-900 rounded-3xl border border-slate-800 p-6 shadow-2xl">
-        <div className="flex justify-between items-center mb-6">
+      <div style={{ backgroundColor: '#0f172a', borderRadius: 24, border: '1px solid #1e293b', padding: 24, boxShadow: '0 25px 50px rgba(0,0,0,0.5)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <div>
-            <h3 className="text-sm font-black uppercase text-white flex items-center gap-2 italic">
-              <TrendingDown size={16} className="text-red-500" /> Margin Leakage Audit
+            <h3 style={{ fontSize: 14, fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', display: 'flex', alignItems: 'center', gap: 8, fontStyle: 'italic', margin: 0 }}>
+              <TrendingDown size={16} style={{ color: '#ef4444' }} /> Margin Leakage Audit
             </h3>
-            <p className="text-[9px] text-slate-500 font-mono uppercase">Target Rate vs. Billed Rate</p>
+            <p style={{ fontSize: 9, color: '#64748b', fontFamily: 'monospace', textTransform: 'uppercase' }}>Target Rate vs. Billed Rate</p>
           </div>
-          <div className="text-right">
-            <p className="text-[10px] font-black text-red-500 uppercase">Potential Leakage</p>
-            <p className="text-2xl font-black text-white">
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: 10, fontWeight: 900, color: '#ef4444', textTransform: 'uppercase', margin: 0 }}>Potential Leakage</p>
+            <p style={{ fontSize: 24, fontWeight: 900, color: '#ffffff', margin: 0 }}>
               -${totalLeakage.toLocaleString('en-US', { maximumFractionDigits: 0 })}
             </p>
           </div>
         </div>
 
-        <div className="space-y-2">
-          <div className="grid grid-cols-4 text-[8px] font-black text-slate-600 uppercase pb-2 px-2">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', fontSize: 8, fontWeight: 900, color: '#475569', textTransform: 'uppercase', paddingBottom: 8, paddingLeft: 8, paddingRight: 8 }}>
             <span>Customer</span>
             <span>Service</span>
             <span>Billed</span>
-            <span className="text-right">Leakage</span>
+            <span style={{ textAlign: 'right' }}>Leakage</span>
           </div>
           {auditData.map((row, i) => (
-            <div key={i} className="grid grid-cols-4 items-center bg-black/40 p-3 rounded-xl border border-slate-800 text-[10px]">
-              <span className="font-bold text-white uppercase tracking-tighter truncate">
+            <div key={i} style={{
+              display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', alignItems: 'center',
+              backgroundColor: 'rgba(0,0,0,0.4)', padding: 12, borderRadius: 12,
+              border: '1px solid #1e293b', fontSize: 10,
+            }}>
+              <span style={{ fontWeight: 700, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '-0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {row.customer}{row.isDemo ? ' *' : ''}
               </span>
-              <span className="text-slate-400 truncate">{row.description}</span>
-              <span className="font-mono text-slate-400">${row.billed.toFixed(0)}</span>
-              <span className="text-right font-black text-red-500">-${row.leakage.toFixed(0)}</span>
+              <span style={{ color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.description}</span>
+              <span style={{ fontFamily: 'monospace', color: '#94a3b8' }}>${row.billed.toFixed(0)}</span>
+              <span style={{ textAlign: 'right', fontWeight: 900, color: '#ef4444' }}>-${row.leakage.toFixed(0)}</span>
             </div>
           ))}
         </div>
 
         {isDemo && (
-          <p className="text-[9px] text-slate-600 mt-4 italic">
+          <p style={{ fontSize: 9, color: '#475569', marginTop: 16, fontStyle: 'italic' }}>
             * Demo rows — process real invoices to see your actual margin data.
           </p>
         )}
 
-        <div className="mt-6 pt-4 border-t border-slate-800 flex justify-between items-center">
-          <p className="text-[9px] text-slate-500 italic max-w-[200px]">
+        <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <p style={{ fontSize: 9, color: '#64748b', fontStyle: 'italic', maxWidth: 200 }}>
             Leakage = labor billed below your target rate.
           </p>
-          <button className="bg-slate-800 hover:bg-red-900/20 hover:text-red-500 text-slate-400 text-[9px] font-black px-4 py-2 rounded-lg border border-slate-700 transition-all uppercase">
+          <button style={{
+            backgroundColor: '#1e293b', color: '#94a3b8', fontSize: 9, fontWeight: 900,
+            padding: '8px 16px', borderRadius: 8, border: '1px solid #334155',
+            textTransform: 'uppercase', cursor: 'pointer',
+          }}>
             Export for Tax/Marketing
           </button>
         </div>
@@ -281,12 +371,8 @@ const DEMO_VELOCITY_ROWS = [
   { name: 'Demo — Williams', efficiency:  87, flaggedHours: 5.2,  actualHours: 5.98, jobCount: 2, isDemo: true },
 ];
 
-const effBadgeClass = (eff) =>
-  eff >= 100
-    ? 'text-emerald-400 border-emerald-500/30'
-    : eff >= 85
-    ? 'text-amber-400 border-amber-500/30'
-    : 'text-red-400 border-red-500/30';
+const effColor = (eff) =>
+  eff >= 100 ? '#34d399' : eff >= 85 ? '#fbbf24' : '#f87171';
 
 const VelocityLeaderboard = () => {
   const [visible, setVisible] = useState(false);
@@ -382,78 +468,88 @@ const VelocityLeaderboard = () => {
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 mt-8 shadow-2xl">
-      <div className="flex justify-between items-center">
+    <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 24, padding: 24, marginTop: 32, boxShadow: '0 25px 50px rgba(0,0,0,0.5)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h3 className="text-sm font-black italic uppercase text-white flex items-center gap-2 tracking-tighter">
-            <Zap size={16} className="text-amber-400" /> Velocity Leaderboard
+          <h3 style={{ fontSize: 14, fontWeight: 900, fontStyle: 'italic', textTransform: 'uppercase', color: '#ffffff', display: 'flex', alignItems: 'center', gap: 8, letterSpacing: '-0.05em', margin: 0 }}>
+            <Zap size={16} style={{ color: '#fbbf24' }} /> Velocity Leaderboard
           </h3>
-          <p className="text-[9px] text-slate-500 font-mono uppercase tracking-widest">
+          <p style={{ fontSize: 9, color: '#64748b', fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
             Flagged hrs sold vs. clocked — last 30 days
           </p>
         </div>
         <button
           onClick={handleToggle}
-          className={`flex items-center gap-2 text-[9px] font-black uppercase tracking-widest px-4 py-2 rounded-xl border transition-all ${
-            visible
-              ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-              : 'bg-amber-600 border-amber-500 text-white hover:bg-amber-500'
-          }`}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em',
+            padding: '8px 16px', borderRadius: 12,
+            border: visible ? '1px solid #334155' : '1px solid #d97706',
+            backgroundColor: visible ? '#1e293b' : '#d97706',
+            color: visible ? '#cbd5e1' : '#ffffff',
+            cursor: 'pointer',
+          }}
         >
           {visible ? <><EyeOff size={11} /> Hide</> : <><Eye size={11} /> Show</>}
         </button>
       </div>
 
       {visible && (
-        <div className="mt-6">
+        <div style={{ marginTop: 24 }}>
           {isDemo && (
-            <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-4">
-              <AlertCircle size={12} className="text-amber-400 flex-shrink-0" />
-              <p className="text-amber-400 text-[9px] font-black uppercase tracking-widest">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, backgroundColor: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 12, padding: 12, marginBottom: 16 }}>
+              <AlertCircle size={12} style={{ color: '#fbbf24', flexShrink: 0 }} />
+              <p style={{ fontSize: 9, fontWeight: 900, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                 Demo data — clock real labor entries to see live efficiency
               </p>
             </div>
           )}
 
           {loading ? (
-            <div className="text-center py-8 text-slate-500 text-[10px] font-mono uppercase tracking-widest">
+            <div style={{ textAlign: 'center', padding: '32px 0', color: '#64748b', fontSize: 10, fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
               Loading...
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-12 text-[8px] font-black text-slate-600 uppercase px-3 pb-2 tracking-widest">
-                <span className="col-span-1">#</span>
-                <span className="col-span-4">Tech</span>
-                <span className="col-span-2 text-center">Jobs</span>
-                <span className="col-span-2 text-center">Flagged</span>
-                <span className="col-span-2 text-center">Clocked</span>
-                <span className="col-span-1 text-right">Eff%</span>
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr 4fr 2fr 2fr 2fr 1fr',
+                fontSize: 8, fontWeight: 900, color: '#475569', textTransform: 'uppercase',
+                padding: '0 12px 8px', letterSpacing: '0.1em',
+              }}>
+                <span>#</span>
+                <span>Tech</span>
+                <span style={{ textAlign: 'center' }}>Jobs</span>
+                <span style={{ textAlign: 'center' }}>Flagged</span>
+                <span style={{ textAlign: 'center' }}>Clocked</span>
+                <span style={{ textAlign: 'right' }}>Eff%</span>
               </div>
 
-              <div className="space-y-2">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {rows.map((row, i) => (
-                  <div key={i} className="grid grid-cols-12 items-center bg-black/40 p-3 rounded-xl border border-slate-800">
-                    <span className="col-span-1 text-[10px] font-black text-slate-500">{i + 1}</span>
-                    <span className="col-span-4 text-[10px] font-bold text-white uppercase tracking-tighter truncate pr-2">
+                  <div key={i} style={{
+                    display: 'grid', gridTemplateColumns: '1fr 4fr 2fr 2fr 2fr 1fr',
+                    alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)',
+                    padding: 12, borderRadius: 12, border: '1px solid #1e293b',
+                  }}>
+                    <span style={{ fontSize: 10, fontWeight: 900, color: '#64748b' }}>{i + 1}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '-0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 8 }}>
                       {row.name}{row.isDemo ? ' *' : ''}
                     </span>
-                    <span className="col-span-2 text-center text-[10px] font-mono text-slate-400">{row.jobCount}</span>
-                    <span className="col-span-2 text-center text-[10px] font-mono text-slate-400">{row.flaggedHours.toFixed(1)}h</span>
-                    <span className="col-span-2 text-center text-[10px] font-mono text-slate-400">{row.actualHours.toFixed(1)}h</span>
-                    <span className={`col-span-1 text-right text-[10px] font-black ${effBadgeClass(row.efficiency).split(' ')[0]}`}>
+                    <span style={{ textAlign: 'center', fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>{row.jobCount}</span>
+                    <span style={{ textAlign: 'center', fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>{row.flaggedHours.toFixed(1)}h</span>
+                    <span style={{ textAlign: 'center', fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>{row.actualHours.toFixed(1)}h</span>
+                    <span style={{ textAlign: 'right', fontSize: 10, fontWeight: 900, color: effColor(row.efficiency) }}>
                       {row.efficiency}%
                     </span>
                   </div>
                 ))}
               </div>
 
-              <div className="mt-4 pt-4 border-t border-slate-800 flex justify-between items-end">
-                <p className="text-[9px] text-slate-500 italic max-w-[300px]">
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                <p style={{ fontSize: 9, color: '#64748b', fontStyle: 'italic', maxWidth: 300 }}>
                   Eff% = flagged hours sold ÷ actual clocked hours. Above 100% = faster than estimate.
                 </p>
-                {isDemo && (
-                  <p className="text-[9px] text-slate-600 italic">* Demo</p>
-                )}
+                {isDemo && <p style={{ fontSize: 9, color: '#475569', fontStyle: 'italic' }}>* Demo</p>}
               </div>
             </>
           )}
@@ -464,6 +560,8 @@ const VelocityLeaderboard = () => {
 };
 
 const IgnitionOmni = ({ activeJob, onEnterKiosk }) => {
+  if (STYLE_DEBUG) console.log('[TRACE:STYLE] IgnitionOmni mounted');
+
   const [trialModules, setTrialModules] = useState([]);
   const [auditData, setAuditData]       = useState([]);
   const [isAuditDemo, setIsAuditDemo]   = useState(false);
@@ -477,7 +575,6 @@ const IgnitionOmni = ({ activeJob, onEnterKiosk }) => {
     const now        = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    // Jobs for stats
     const { data: monthJobs } = await supabase
       .from('jobs')
       .select('*')
@@ -499,7 +596,6 @@ const IgnitionOmni = ({ activeJob, onEnterKiosk }) => {
 
     setStats({ revenue: monthRevenue, jobCount: jobsList.length, inventoryValue: inventoryVal, efficiency });
 
-    // Subscriptions / trials
     const subs = DataBridge.load('system_subscriptions') || {};
     const trls = [];
     Object.keys(subs).forEach(key => {
@@ -513,7 +609,6 @@ const IgnitionOmni = ({ activeJob, onEnterKiosk }) => {
     // HONEST DEBT 🔴 (E): shops.margin_config {labor_rate, parts_markup} is display-only storage —
     //   not wired to any pricing calculation. Defer unification to Cost-to-Produce tile session.
     //   Migration checklist: docs/audits/margin-engine-migration-checklist-2026-06-10.md
-    // Margin config from Supabase
     const { data: shopRow } = await supabase
       .from('shops')
       .select('margin_config')
@@ -522,7 +617,6 @@ const IgnitionOmni = ({ activeJob, onEnterKiosk }) => {
     const config = shopRow?.margin_config || { labor_rate: 125, parts_markup: 0.40 };
     setMarginConfig(config);
 
-    // Real invoices + line items for leakage audit (last 30 days)
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const { data: invoicesRaw } = await supabase
       .from('invoices')
@@ -532,7 +626,6 @@ const IgnitionOmni = ({ activeJob, onEnterKiosk }) => {
       .order('created_at', { ascending: false })
       .limit(20);
 
-    // Customer names
     const custIds = [...new Set((invoicesRaw || []).map(i => i.customer_id).filter(Boolean))];
     let custMap = {};
     if (custIds.length > 0) {
@@ -579,50 +672,56 @@ const IgnitionOmni = ({ activeJob, onEnterKiosk }) => {
     if (!error) { setMarginConfig(newConfig); fetchData(); }
   };
 
+  const STAT_TILES = [
+    { label: 'Monthly Revenue',  val: `$${(stats.revenue / 1000).toFixed(1)}k`,         change: `${stats.jobCount} jobs`, icon: <DollarSign size={16}/> },
+    { label: 'Active Trials',    val: trialModules.length.toString(),                    change: 'Tracking',               icon: <Users size={16}/> },
+    { label: 'Inventory Value',  val: `$${(stats.inventoryValue / 1000).toFixed(1)}k`,  change: 'Live',                   icon: <Package size={16}/> },
+    { label: 'Completion Rate',  val: stats.efficiency > 0 ? `${stats.efficiency}%` : '—', change: 'This Month',          icon: <TrendingUp size={16}/> },
+  ];
+
   return (
-    <div className="p-6 bg-slate-950 text-slate-200 min-h-screen">
-      <header className="mb-8 border-b border-slate-800 pb-6">
-        <h2 className="text-3xl font-black italic text-white uppercase tracking-tighter">OMNI // Command</h2>
-        <p className="text-[10px] font-mono text-blue-500 uppercase tracking-widest">
+    <div style={{ padding: 24, backgroundColor: '#020617', color: '#e2e8f0', minHeight: '100vh' }}>
+      <header style={{ marginBottom: 32, borderBottom: '1px solid #1e293b', paddingBottom: 24 }}>
+        <h2 style={{ fontSize: 30, fontWeight: 900, fontStyle: 'italic', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '-0.05em', margin: 0 }}>
+          OMNI // Command
+        </h2>
+        <p style={{ fontSize: 10, fontFamily: 'monospace', color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.1em', margin: 0 }}>
           Shop Performance Metrics // {DataBridge.load('shop_info')?.name || 'Your Shop'}
         </p>
       </header>
 
       {/* TOP LEVEL TOTALS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        {[
-          { label: 'Monthly Revenue',  val: `$${(stats.revenue / 1000).toFixed(1)}k`,         change: `${stats.jobCount} jobs`, icon: <DollarSign size={16}/> },
-          { label: 'Active Trials',    val: trialModules.length.toString(),                    change: 'Tracking',               icon: <Users size={16}/> },
-          { label: 'Inventory Value',  val: `$${(stats.inventoryValue / 1000).toFixed(1)}k`,  change: 'Live',                   icon: <Package size={16}/> },
-          { label: 'Completion Rate',  val: stats.efficiency > 0 ? `${stats.efficiency}%` : '—', change: 'This Month',          icon: <TrendingUp size={16}/> },
-        ].map((stat, i) => (
-          <div key={i} className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
-            <div className="flex justify-between items-start mb-2">
-              <div className="p-2 bg-slate-800 rounded-lg text-blue-500">{stat.icon}</div>
-              <span className="text-[10px] font-black text-emerald-500 flex items-center">{stat.change} <ArrowUpRight size={10}/></span>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
+        {STAT_TILES.map((stat, i) => (
+          <div key={i} style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', padding: 16, borderRadius: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+              <div style={{ padding: 8, backgroundColor: '#1e293b', borderRadius: 8, color: '#3b82f6' }}>{stat.icon}</div>
+              <span style={{ fontSize: 10, fontWeight: 900, color: '#10b981', display: 'flex', alignItems: 'center' }}>
+                {stat.change} <ArrowUpRight size={10}/>
+              </span>
             </div>
-            <p className="text-[10px] font-black text-slate-500 uppercase">{stat.label}</p>
-            <p className="text-xl font-black text-white italic">{stat.val}</p>
+            <p style={{ fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', margin: 0 }}>{stat.label}</p>
+            <p style={{ fontSize: 20, fontWeight: 900, color: '#ffffff', fontStyle: 'italic', margin: 0 }}>{stat.val}</p>
           </div>
         ))}
       </div>
 
       {/* TRIAL & BLIND-SPOT TRACKER */}
-      <section className="bg-slate-900 border border-slate-800 rounded-3xl p-6 mb-8">
-        <h3 className="text-xs font-black uppercase text-slate-400 mb-6 flex items-center gap-2">
-          <BarChart3 size={16} className="text-blue-500" /> Trial Conversion Pipeline
+      <section style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 24, padding: 24, marginBottom: 32 }}>
+        <h3 style={{ fontSize: 12, fontWeight: 900, textTransform: 'uppercase', color: '#94a3b8', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <BarChart3 size={16} style={{ color: '#3b82f6' }} /> Trial Conversion Pipeline
         </h3>
-        <div className="space-y-4">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {trialModules.length === 0 ? (
-            <div className="text-center font-mono text-xs text-slate-500 italic p-6 border border-dashed border-slate-700 rounded-xl">
+            <div style={{ textAlign: 'center', fontFamily: 'monospace', fontSize: 12, color: '#64748b', fontStyle: 'italic', padding: 24, border: '1px dashed #334155', borderRadius: 12 }}>
               No active test-flights or trials currently running. Check Marketplace.
             </div>
           ) : (
             trialModules.map((trial, i) => (
-              <div key={i} className="flex justify-between items-center bg-black/40 p-4 rounded-xl border border-slate-800">
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', padding: 16, borderRadius: 12, border: '1px solid #1e293b' }}>
                 <div>
-                  <p className="text-sm font-bold text-white uppercase">{trial.module}</p>
-                  <p className="text-[10px] text-slate-500 font-mono uppercase">{trial.daysLeft} Days Remaining</p>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: '#ffffff', textTransform: 'uppercase', margin: 0 }}>{trial.module}</p>
+                  <p style={{ fontSize: 10, color: '#64748b', fontFamily: 'monospace', textTransform: 'uppercase', margin: 0 }}>{trial.daysLeft} Days Remaining</p>
                 </div>
               </div>
             ))
@@ -631,19 +730,24 @@ const IgnitionOmni = ({ activeJob, onEnterKiosk }) => {
       </section>
 
       {/* LIVE INTELLIGENCE FEED */}
-      <section className="bg-slate-900 border border-slate-800 rounded-3xl p-6 mb-8">
-        <h3 className="text-xs font-black uppercase text-slate-400 mb-6 flex items-center gap-2">
-          <Mic size={16} className="text-blue-500" /> Live Feed (KOSK Sync)
+      <section style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 24, padding: 24, marginBottom: 32 }}>
+        <h3 style={{ fontSize: 12, fontWeight: 900, textTransform: 'uppercase', color: '#94a3b8', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Mic size={16} style={{ color: '#3b82f6' }} /> Live Feed (KOSK Sync)
         </h3>
-        <div className="space-y-3">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {activeJob?.notes && activeJob.notes.length > 0 ? (
             activeJob.notes.map((n, i) => (
-              <div key={i} className="bg-black/50 p-4 rounded-xl border border-blue-500/20 text-emerald-400 font-mono text-xs shadow-inner shadow-blue-500/10">
+              <div key={i} style={{
+                backgroundColor: 'rgba(0,0,0,0.5)', padding: 16, borderRadius: 12,
+                border: '1px solid rgba(59,130,246,0.2)', color: '#34d399',
+                fontFamily: 'monospace', fontSize: 12,
+                boxShadow: 'inset 0 2px 4px rgba(59,130,246,0.1)',
+              }}>
                 {n}
               </div>
             ))
           ) : (
-            <div className="text-center font-mono text-xs text-slate-500 italic p-6 border border-dashed border-slate-800 rounded-xl">
+            <div style={{ textAlign: 'center', fontFamily: 'monospace', fontSize: 12, color: '#64748b', fontStyle: 'italic', padding: 24, border: '1px dashed #1e293b', borderRadius: 12 }}>
               No technician transcriptions available on current active job.
             </div>
           )}
@@ -651,14 +755,32 @@ const IgnitionOmni = ({ activeJob, onEnterKiosk }) => {
       </section>
 
       {/* QUICK ACTIONS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <button onClick={onEnterKiosk} className="bg-emerald-600 p-4 rounded-2xl font-black uppercase italic text-xs shadow-lg shadow-emerald-900/20 hover:bg-emerald-500 transition-colors">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+        <button
+          onClick={onEnterKiosk}
+          className="ign-card-hover"
+          style={{
+            backgroundColor: '#059669', padding: 16, borderRadius: 16,
+            fontWeight: 900, textTransform: 'uppercase', fontStyle: 'italic', fontSize: 12,
+            boxShadow: '0 10px 15px rgba(5,150,105,0.2)', border: 'none', cursor: 'pointer',
+            color: '#ffffff',
+          }}
+        >
           Initialize KOSK Mode
         </button>
-        <button className="bg-blue-600 p-4 rounded-2xl font-black uppercase italic text-xs shadow-lg shadow-blue-900/20">
+        <button style={{
+          backgroundColor: '#2563eb', padding: 16, borderRadius: 16,
+          fontWeight: 900, textTransform: 'uppercase', fontStyle: 'italic', fontSize: 12,
+          boxShadow: '0 10px 15px rgba(37,99,235,0.2)', border: 'none', cursor: 'pointer',
+          color: '#ffffff',
+        }}>
           Generate Monthly ROI
         </button>
-        <button className="bg-slate-800 p-4 rounded-2xl font-black uppercase italic text-xs border border-slate-700">
+        <button style={{
+          backgroundColor: '#1e293b', padding: 16, borderRadius: 16,
+          fontWeight: 900, textTransform: 'uppercase', fontStyle: 'italic', fontSize: 12,
+          border: '1px solid #334155', cursor: 'pointer', color: '#e2e8f0',
+        }}>
           Marketplace Tiers
         </button>
       </div>
