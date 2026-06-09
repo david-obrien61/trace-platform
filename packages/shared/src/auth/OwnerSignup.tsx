@@ -213,55 +213,76 @@ export function OwnerSignup({ config, navigate }: Props) {
     setSubmitting(true);
 
     try {
-      // 1. Create Supabase auth user (or recover orphaned one)
+      // 1. Resolve user identity
       let userId: string;
 
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-      });
+      // ── Add-a-business path: detect existing authenticated session ─────────────
+      // An already-authenticated user creating a second business must not call
+      // supabase.auth.signUp() — that would 422 on their existing email. Detect
+      // the session first and branch: authenticated → skip auth; not authenticated →
+      // normal signup or orphaned-account recovery.
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
 
-      if (signUpError) {
-        const msg = signUpError.message ?? '';
-        if (msg.toLowerCase().includes('already registered') || msg.toLowerCase().includes('already been registered')) {
-          // Orphaned account (prior partial signup) — try to sign in
-          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-            email: email.trim(),
-            password,
-          });
-          if (signInError || !signInData.user) {
-            setErrorMsg(
-              `This email is already registered. If you started signing up before, try signing in at ${signInPath}. ` +
-              `If you forgot your password, use the reset link there.`
-            );
+      if (currentSession?.user) {
+        // User is already authenticated — skip auth signup entirely.
+        // They are deliberately creating an additional business under their existing identity.
+        userId = currentSession.user.id;
+        console.log('[TRACE:BUSINESS] add-a-business: reusing existing session', {
+          uid: userId,
+          businessType,
+        });
+      } else {
+        // Normal path: brand-new user or orphaned account recovery
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+        });
+
+        if (signUpError) {
+          const msg = signUpError.message ?? '';
+          if (msg.toLowerCase().includes('already registered') || msg.toLowerCase().includes('already been registered')) {
+            // Orphaned account (prior partial signup) — try to sign in
+            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+              email: email.trim(),
+              password,
+            });
+            if (signInError || !signInData.user) {
+              setErrorMsg(
+                `This email is already registered. If you started signing up before, try signing in at ${signInPath}. ` +
+                `If you forgot your password, use the reset link there.`
+              );
+              setSubmitting(false);
+              return;
+            }
+            userId = signInData.user.id;
+            // Check if this orphaned account already has a businesses row of this type.
+            // (Authenticated add-a-business users are handled above — this block only
+            //  applies to unauthenticated orphaned-account recovery.)
+            const { data: existingBiz } = await supabase
+              .from('businesses')
+              .select('id')
+              .eq('owner_id', userId)
+              .eq('business_type', businessType)
+              .maybeSingle();
+            if (existingBiz) {
+              setErrorMsg(
+                `An account with this email already has a ${businessLabel} set up. Sign in at ${signInPath}.`
+              );
+              setSubmitting(false);
+              return;
+            }
+          } else {
+            setErrorMsg(signUpError.message ?? 'Could not create account. Try again.');
             setSubmitting(false);
             return;
           }
-          userId = signInData.user.id;
-          // Check if this orphaned account already has a businesses row
-          const { data: existingBiz } = await supabase
-            .from('businesses')
-            .select('id')
-            .eq('owner_id', userId)
-            .maybeSingle();
-          if (existingBiz) {
-            setErrorMsg(
-              `An account with this email already has a ${businessLabel} set up. Sign in at ${signInPath}.`
-            );
-            setSubmitting(false);
-            return;
-          }
+        } else if (signUpData.user) {
+          userId = signUpData.user.id;
         } else {
-          setErrorMsg(signUpError.message ?? 'Could not create account. Try again.');
+          setErrorMsg('Account creation did not return a user. Check your email for a confirmation link, or try again.');
           setSubmitting(false);
           return;
         }
-      } else if (signUpData.user) {
-        userId = signUpData.user.id;
-      } else {
-        setErrorMsg('Account creation did not return a user. Check your email for a confirmation link, or try again.');
-        setSubmitting(false);
-        return;
       }
 
       // 2. Create businesses row

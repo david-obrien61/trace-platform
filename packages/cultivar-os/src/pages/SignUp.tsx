@@ -41,8 +41,8 @@ const cultivarConfig: OwnerSignupConfig = {
     address:      '400 Honeycomb Mesa, Leander TX',
   },
   verticalSteps:   [discoveryStep],
-  onSuccess:       (_businessId, _memberId) => {
-    window.location.href = '/onboarding';
+  onSuccess:       (businessId, _memberId) => {
+    window.location.href = `/onboarding?biz=${businessId}`;
   },
 };
 
@@ -52,7 +52,7 @@ export function SignUp() {
     <OwnerSignup
       config={{
         ...cultivarConfig,
-        onSuccess: (_businessId, _memberId) => navigate('/onboarding'),
+        onSuccess: (businessId, _memberId) => navigate(`/onboarding?biz=${businessId}`),
       }}
       navigate={navigate}
     />

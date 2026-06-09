@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-11 (BusinessProvider multi-business — Option B)
+# Last updated: 2026-06-11 (add-a-business create flow for existing users)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -291,6 +291,124 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-11 — Add-a-business create flow for existing users
+
+**Type:** Code. Three files changed (`packages/shared/src/auth/OwnerSignup.tsx`, `packages/cultivar-os/src/pages/SignUp.tsx`, `packages/cultivar-os/src/pages/OnboardingWizard.tsx`). PLATFORM_STATE.md updated. Zero migrations, zero schema changes, zero API changes.
+
+**Session mandate:** Fix the create-side of multi-business support. BUILD 1 (commit `85dda46`) made BusinessProvider RESOLVE multiple businesses. But an already-authenticated user navigating to `/signup` hit a hard block: the flow always called `supabase.auth.signUp()` first, got a 422 (email already exists), triggered orphaned-account recovery, found the LAWNS business, and returned "An account with this email already has a nursery set up." The fix: detect an existing auth session BEFORE calling signUp and branch accordingly.
+
+---
+
+**WHAT WAS BUILT:**
+
+**`packages/shared/src/auth/OwnerSignup.tsx` — session detection before signUp:**
+
+At the top of `handlePinSubmit()`'s try block, added:
+```typescript
+const { data: { session: currentSession } } = await supabase.auth.getSession();
+
+if (currentSession?.user) {
+  // Already authenticated — skip auth signup entirely.
+  userId = currentSession.user.id;
+  console.log('[TRACE:BUSINESS] add-a-business: reusing existing session', {
+    uid: userId,
+    businessType,
+  });
+} else {
+  // Normal path: brand-new user or orphaned-account recovery (unchanged)
+}
+```
+
+After `userId` is resolved (either path), the rest of the function is UNCHANGED: creates `businesses` row, hashes PIN, creates `business_members` owner row, calls `onSuccess(newBusinessId, memberId)`.
+
+Also fixed: the orphaned-account recovery path's `existingBiz` check now filters by `.eq('business_type', businessType)` so a Cultivar user can still create an Ignition business without being blocked.
+
+**`packages/cultivar-os/src/pages/SignUp.tsx` — pass businessId via URL:**
+
+Both `onSuccess` callbacks updated to navigate to `/onboarding?biz=<businessId>`:
+- Static config object: `window.location.href = \`/onboarding?biz=${businessId}\``
+- Inline component override: `navigate(\`/onboarding?biz=${businessId}\`)`
+
+Purpose: ensures `OnboardingWizard` knows exactly which business was just created, even when the user has 2+ nurseries.
+
+**`packages/cultivar-os/src/pages/OnboardingWizard.tsx` — checkExisting fix:**
+
+Replaced `maybeSingle()` on an unordered query (breaks when user has 2 businesses) with a two-level approach:
+1. **Prefer `?biz=` URL param** — fetches that exact business (ownership-guarded: `.eq('owner_id', user.id)`)
+2. **Fallback** — `.order('created_at', { ascending: false }).limit(1).maybeSingle()` — safe against multiple rows
+
+---
+
+**End-to-end flow (code-traced, single-business user unaffected):**
+
+**New path (David, logged in, LAWNS owner, creates second business):**
+1. Navigate to `/signup`
+2. Fill business name, owner name, email, password
+3. PIN step → `handlePinSubmit()` → `getSession()` → finds active session
+4. `userId = session.user.id` (no signUp call, no 422)
+5. Creates new `businesses` row (new UUID, same `owner_id`)
+6. Creates `business_members` owner row
+7. `onSuccess(newBizId)` → `navigate('/onboarding?biz=<newBizId>')`
+8. `OnboardingWizard.checkExisting()` reads `?biz=` → fetches that business → `existingBusinessId = newBizId`
+9. `finalize()` upserts `nursery_profiles` using `existingBusinessId` → navigates to DONE → `/dashboard`
+10. `BusinessProvider` resolves 2 nurseries → `needsPicker=true` → `BusinessPicker` shown
+11. David selects either business → data scoped correctly
+
+**Existing single-business users (regression gate):**
+- `getSession()` may return a session → skips signUp → creates second business row → resolves to picker
+- For new users with no session → existing flow unchanged
+
+---
+
+**Builds:**
+- Cultivar: ✅ 2177 modules, zero TypeScript errors
+- Ignition: ✅ 1838 modules, zero TypeScript errors
+
+---
+
+**Documentation propagation check (step 10):**
+1. `Help.tsx` — no new customer-facing features. No propagation needed.
+2. Onboarding — `/onboarding?biz=` URL param is internal plumbing. No visible change to onboarding copy.
+3. `PLATFORM_STATE.md` ✅ updated — Auth · OwnerSignup.tsx row: add-a-business path noted.
+4. No `// FLAG:` placeholders affected.
+5. No new error messages (the "already has a nursery" message is now only shown in the orphaned-account recovery path where it belongs).
+
+**Factual corrections captured (step 11):**
+- The orphaned-account recovery `existingBiz` check previously had no `business_type` filter — a Cultivar user's LAWNS business would have blocked them from creating an Ignition business. This was a latent cross-vertical bug. Fixed this session by adding `.eq('business_type', businessType)`.
+- `OnboardingWizard.checkExisting()` used `maybeSingle()` on a query returning all businesses for the user — PostgREST returns an error when multiple rows are returned with `maybeSingle()`. This was broken the moment multi-business resolution went live. Fixed with URL param preference + ordered+limited fallback.
+
+**No runbook needed** — pure code session. No migrations, no environment changes.
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns introduced. `[TRACE:BUSINESS]` log uses `businessType` from component props (a data value). `businessType` in the `existingBiz` filter is the prop value, not a hardcoded string.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ Vertical fence preserved — `existingBiz` check now filters by `business_type` so cross-vertical business creation is not blocked by a same-email business in a different vertical.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Full read-only investigation of the signup flow before any edit. Block location confirmed (signUp call → 422 → orphaned recovery → existingBiz → hard stop).
+- STD-002: N/A — no bug fix with a user-visible before/after. This is a feature addition (add-a-business path). The regression (422 for existing users) was never user-visible in a shipped UI.
+- STD-003: ✅ `[TRACE:BUSINESS]` log line added ON-by-birth (no flag). Single log in the new session-detection branch. David says "proven" → comment out.
+- STD-004: N/A — no new business-scoped data surface. The add-a-business path creates standard `businesses` + `business_members` rows; RLS is unchanged.
+- STD-005: ✅ No decisions reversed.
+- STD-006: ✅ No vertical nouns in shared code.
+- STD-007: N/A — no integration status surfaces touched.
+- STD-008: N/A — no migrations.
+- STD-009: N/A — no generation path changes.
+- STD-010: N/A — no new opaque module names.
+- **BENCH standards (STEP 0 match):** BENCH-B trigger still firing for Receipt Keeper. No new triggers from this session.
+
+**Gap graduation sweep (step 15):**
+- `remaining: voice-learning BI` — horizon v2/later. NOT past horizon.
+- `remaining: cadence-triggered generation` — horizon Social Rhythm. NOT past horizon.
+- `remaining: discovery persistence` — horizon v2/later. NOT past horizon.
+No gap graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- `Auth · OwnerSignup.tsx` (shared): WIRED → WIRED (level unchanged; note updated with add-a-business path evidence).
+
+---
+
 ### 2026-06-11 — BusinessProvider multi-business resolution (Option B)
 
 **Type:** Code. One shared file changed (`packages/shared/src/context/BusinessProvider.tsx`). PLATFORM_STATE.md updated. Zero migrations, zero schema changes, zero API changes.
@@ -352,8 +470,9 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 9. ~~**TD#14 Tailwind conversion** (THUNDER · Tailwind pass).~~ ✅ RESOLVED 2026-06-10
 10. ~~**Ignition instrumentation** (THUNDER · instrumentation pass).~~ ✅ RESOLVED 2026-06-10
 11. ~~**BusinessProvider multi-business (Option B)** (this session).~~ ✅ RESOLVED 2026-06-11
-12. **Receipt Keeper v1** — Gemini Flash OCR, local `receipts` table, confirm-before-commit. (BENCH-B trigger firing — David must confirm promotion before shipping.)
-13. **Cost-to-Produce tile** — feeds loaded cost into `tx.cost` slot.
+12. ~~**Add-a-business create flow** (this session).~~ ✅ RESOLVED 2026-06-11 — existing session detected → skips signUp → creates second businesses row. `?biz=` URL param fixes OnboardingWizard for multi-business. Multi-business: resolve ✅ + create ✅.
+13. **Receipt Keeper v1** — Gemini Flash OCR, local `receipts` table, confirm-before-commit. (BENCH-B trigger firing — David must confirm promotion before shipping.)
+14. **Cost-to-Produce tile** — feeds loaded cost into `tx.cost` slot.
 14. **(v2)** QB payables write-back + Attachable + CoA + cross-card reconciliation.
 
 ---

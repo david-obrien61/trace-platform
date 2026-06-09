@@ -428,11 +428,35 @@ export function OnboardingWizard() {
     async function checkExisting() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+
+      // Prefer the businessId passed by OwnerSignup.onSuccess via ?biz= query param.
+      // This avoids maybeSingle() failing when the user owns multiple nursery businesses.
+      const bizIdFromUrl = new URLSearchParams(window.location.search).get('biz');
+
+      if (bizIdFromUrl) {
+        const { data: biz } = await supabase
+          .from('businesses')
+          .select('id, name')
+          .eq('id', bizIdFromUrl)
+          .eq('owner_id', user.id)
+          .maybeSingle();
+        if (biz) {
+          setExistingBusinessId(biz.id);
+          setNurseryInfo(n => ({ ...n, name: biz.name ?? '' }));
+          setStepIndex(STEPS.indexOf('CHOOSE_PATH'));
+          return;
+        }
+      }
+
+      // Fallback: most recently created nursery business for this user.
+      // Uses order + limit(1) to avoid maybeSingle() error on multiple rows.
       const { data: biz } = await supabase
         .from('businesses')
         .select('id, name')
         .eq('owner_id', user.id)
         .eq('business_type', 'nursery')
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
       if (biz) {
         setExistingBusinessId(biz.id);

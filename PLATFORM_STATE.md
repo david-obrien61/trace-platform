@@ -24,7 +24,7 @@
 | **AI · execute.ts** | WORKS | `ai/execute.ts` | 4 internal callers (engine.ts, synthesis.ts, social/generate.ts, campaigns/generate.ts) · social_drafts confirmed live 2026-06-08 via REST API | CLAUDE.md §HANDOFF 2026-06-05 |
 | **AI · parseJson.ts** | WIRED | `ai/parseJson.ts` | Called by `ai/execute.ts` (internal) | — |
 | **Auth · AcceptInvite.tsx** | WIRED | `auth/AcceptInvite.tsx` | cultivar-os router.tsx:30 — /join route renders it | built-inventory.md |
-| **Auth · OwnerSignup.tsx** | WIRED | `auth/OwnerSignup.tsx` | SignUp.tsx:52 (Cultivar), modules/OnboardingWizard.jsx:262 (Ignition) | built-inventory.md |
+| **Auth · OwnerSignup.tsx** | WIRED | `auth/OwnerSignup.tsx` | SignUp.tsx:52 (Cultivar), modules/OnboardingWizard.jsx:262 (Ignition) · **add-a-business path added 2026-06-11**: detects existing session → skips signUp → creates second businesses row under same auth.uid() | built-inventory.md |
 | **Auth · acceptInvitation.ts** | WIRED | `auth/acceptInvitation.ts` | api/members/invite.ts:15,25 + api/members/accept-invite.ts:18 + api/members/preview-invite.ts:17 | built-inventory.md |
 | **Auth · configureAuth.tsx** | WIRED | `auth/configureAuth.tsx` | cultivar-os/src/lib/auth.ts:1 | built-inventory.md |
 | **Auth · invitations.ts** | WIRED | `auth/invitations.ts` | Settings.tsx: createInvitation:171, getPendingInvitations:147, revokeInvitation:200 | CLAUDE.md §HANDOFF 2026-06-02 |
