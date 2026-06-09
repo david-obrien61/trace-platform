@@ -9,6 +9,18 @@ import React, { useState } from 'react';
 import { Camera, ShieldAlert, CheckCircle2, AlertTriangle, FileCheck } from 'lucide-react';
 import DataBridge from '../DataBridge';
 
+const STYLE_DEBUG = false;
+
+// Non-1:1 mappings (31 classNames converted):
+// (1) sm:p-8, sm:flex-row, sm:w-28, sm:text-xs, sm:text-5xl responsive → fixed/dropped; flagged
+// (2) hover:bg-slate-100, hover:bg-orange-50, hover:bg-emerald-500 → ign-btn-* classes
+// (3) animate-pulse on sidebar accent → ign-pulse class
+// (4) animate-in / slide-in-from-top-4 (Tailwind v3 animate) → dropped; flagged (non-standard)
+// (5) focus:ring-4 / focus:ring-orange-500/20 → ign-input CSS class handles focus
+// (6) shadow-inner → kept inline where supported; flagged where not
+// Note: IgnitionCompliance uses LIGHT theme (white/orange). Not dark navy.
+// [TRACE:STYLE] IgnitionCompliance converted, 31 classNames → inline, 5 categories non-1:1
+
 const dotItems = [
   "Service Brakes", "Parking System", "Brake Drums/Rotors", "Brake Hoses/Tubing",
   "Low Air Warning", "Tractor Protection", "Air Compressor", "Coupling Devices",
@@ -22,145 +34,259 @@ const IgnitionCompliance = ({ onComplete }) => {
   const [results, setResults] = useState({});
   const shopInfo = DataBridge.load('shop_info') || {};
 
-  const handleStatus = (index, status) => {
-    setResults(prev => ({
-      ...prev,
-      [index]: { ...prev[index], status: status }
-    }));
+  if (STYLE_DEBUG) console.log('[TRACE:STYLE] IgnitionCompliance converted, 31 classNames → inline, 5 non-1:1 categories');
+
+  const handleStatus = (index, status) => setResults(prev => ({ ...prev, [index]: { ...prev[index], status } }));
+  const handleNotes  = (index, note)   => setResults(prev => ({ ...prev, [index]: { ...prev[index], notes: note } }));
+  const handlePhoto  = (index) => {
+    setResults(prev => ({ ...prev, [index]: { ...prev[index], photo: 'mock_photo_data_b64' } }));
+    alert('Hardware Interface: Native Camera API Triggered.\n(Mock photo attached for prototype)');
   };
 
-  const handleNotes = (index, note) => {
-    setResults(prev => ({
-      ...prev,
-      [index]: { ...prev[index], notes: note }
-    }));
-  };
-
-  const handlePhoto = (index) => {
-    const fakePhotoUrl = "mock_photo_data_b64";
-    setResults(prev => ({
-      ...prev,
-      [index]: { ...prev[index], photo: fakePhotoUrl }
-    }));
-    alert("Hardware Interface: Native Camera API Triggered.\n(Mock photo attached for prototype)");
-  };
-
-  // HARD-STOP LOGIC
   const checkCompletionStatus = () => {
     for (let i = 0; i < dotItems.length; i++) {
-        const item = results[i];
-        if (!item || !item.status) return false;
-        
-        // Liability Engine: If failed, MUST have context.
-        if (item.status === 'FAIL') {
-            if (!item.photo && (!item.notes || item.notes.trim() === '')) {
-                return false;
-            }
-        }
+      const item = results[i];
+      if (!item || !item.status) return false;
+      if (item.status === 'FAIL' && !item.photo && (!item.notes || item.notes.trim() === '')) return false;
     }
     return true;
   };
 
   const submitAudit = () => {
     if (!checkCompletionStatus()) {
-        alert("CRITICAL HARD-STOP: You must complete all 24 points and adequately document any failure points before signing off.");
-        return;
+      alert('CRITICAL HARD-STOP: You must complete all 24 points and adequately document any failure points before signing off.');
+      return;
     }
-    
     const payload = {
-       timestamp: new Date().toISOString(),
-       results,
-       inspector: DataBridge.load('current_user')?.id || 'UNKNOWN_TECH'
+      timestamp: new Date().toISOString(),
+      results,
+      inspector: DataBridge.load('current_user')?.id || 'UNKNOWN_TECH',
     };
-    
     DataBridge.smartSync('SUBMIT_PMI', payload);
-    
-    if(onComplete) onComplete(payload);
+    if (onComplete) onComplete(payload);
   };
 
   const isFullyComplete = checkCompletionStatus();
 
+  // Item row border/bg based on status
+  const itemStyle = (data) => {
+    const isFail = data.status === 'FAIL';
+    if (isFail)            return { backgroundColor: 'rgba(255,247,237,0.8)', borderLeftColor: '#ea580c' };
+    if (data.status === 'PASS') return { backgroundColor: '#f8fafc', borderLeftColor: '#1e293b' };
+    if (data.status === 'N/A')  return { backgroundColor: '#f1f5f9', borderLeftColor: '#94a3b8' };
+    return { backgroundColor: '#ffffff', borderLeftColor: '#e2e8f0' };
+  };
+
+  const btnStyle = (active, activeColor, activeText) => ({
+    flex: 1,
+    padding: '16px 16px',
+    fontWeight: 900,
+    fontSize: 14,
+    textTransform: 'uppercase',
+    transition: 'background-color 0.15s',
+    cursor: 'pointer',
+    backgroundColor: active ? activeColor : '#ffffff',
+    color: active ? activeText : '#94a3b8',
+    border: 'none',
+  });
+
   return (
-    <div className="bg-white min-h-full text-slate-900 p-4 sm:p-8 font-sans border-t-8 border-orange-600 relative pb-32 shadow-inner">
-      <header className="mb-10 text-center border-b-4 border-slate-900 pb-8 flex flex-col items-center">
-         <ShieldAlert size={64} className="text-orange-600 mb-4 drop-shadow-md" />
-         <h1 className="text-4xl sm:text-5xl font-black text-slate-900 uppercase tracking-tighter">DOT Safety Inspection</h1>
-         <p className="text-sm font-bold text-orange-700 uppercase tracking-widest bg-orange-200 px-6 py-2 mt-4 rounded-full border-2 border-orange-300 shadow-sm">
-            Mandatory 24-Point Compliance Audit
-         </p>
+    <div style={{
+      backgroundColor: '#ffffff',
+      minHeight: '100%',
+      color: '#0f172a',
+      padding: 16,
+      fontFamily: 'sans-serif',
+      borderTop: '8px solid #ea580c',
+      position: 'relative',
+      paddingBottom: 128,
+    }}>
+      <header style={{
+        marginBottom: 40,
+        textAlign: 'center',
+        borderBottom: '4px solid #0f172a',
+        paddingBottom: 32,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+      }}>
+        <ShieldAlert size={64} style={{ color: '#ea580c', marginBottom: 16 }} />
+        <h1 style={{ fontSize: 36, fontWeight: 900, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '-0.05em' }}>
+          DOT Safety Inspection
+        </h1>
+        <p style={{
+          fontSize: 14,
+          fontWeight: 700,
+          color: '#9a3412',
+          textTransform: 'uppercase',
+          letterSpacing: '0.1em',
+          backgroundColor: '#fed7aa',
+          padding: '8px 24px',
+          marginTop: 16,
+          borderRadius: 9999,
+          border: '2px solid #fdba74',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+        }}>
+          Mandatory 24-Point Compliance Audit
+        </p>
       </header>
 
-      <div className="max-w-4xl mx-auto space-y-5">
-         {dotItems.map((item, i) => {
-            const data = results[i] || {};
-            const isFail = data.status === 'FAIL';
-            
-            return (
-              <div key={i} className={`p-5 sm:p-6 border-l-8 rounded-2xl shadow-xl transition-all duration-300 ${
-                 isFail ? 'bg-orange-50/80 border-orange-600 shadow-orange-900/10' : 
-                 data.status === 'PASS' ? 'bg-slate-50 border-slate-800' :
-                 data.status === 'N/A' ? 'bg-slate-100 border-slate-400' :
-                 'bg-white border-slate-200 hover:border-slate-400'
-              }`}>
-                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
-                    <div className="flex items-center gap-4">
-                      <span className="text-2xl font-black text-slate-300 w-10">{i + 1}.</span>
-                      <h3 className="text-xl font-black uppercase text-slate-800 tracking-tight">{item}</h3>
-                    </div>
-                    
-                    <div className="flex w-full sm:w-auto overflow-hidden rounded-xl border-2 border-slate-800 shadow-sm">
-                       <button onClick={() => handleStatus(i, 'PASS')} className={`flex-1 sm:w-28 px-4 py-4 font-black text-sm uppercase transition-colors ${data.status === 'PASS' ? 'bg-slate-800 text-white' : 'bg-white text-slate-400 hover:bg-slate-100'} border-r-2 border-slate-800`}>PASS</button>
-                       <button onClick={() => handleStatus(i, 'FAIL')} className={`flex-1 sm:w-28 px-4 py-4 font-black text-sm uppercase transition-colors ${data.status === 'FAIL' ? 'bg-orange-600 text-white' : 'bg-white text-slate-400 hover:bg-orange-50'} border-r-2 border-slate-800`}>FAIL</button>
-                       <button onClick={() => handleStatus(i, 'N/A')} className={`flex-1 sm:w-28 px-4 py-4 font-black text-sm uppercase transition-colors ${data.status === 'N/A' ? 'bg-slate-400 text-white' : 'bg-white text-slate-400 hover:bg-slate-100'}`}>N/A</button>
-                    </div>
-                 </div>
-
-                 {isFail && (
-                    <div className="mt-6 p-6 bg-orange-100 rounded-2xl border-2 border-orange-300 animate-in fade-in slide-in-from-top-4 shadow-inner">
-                       <p className="text-xs font-black uppercase text-orange-800 tracking-widest mb-4 flex items-center gap-2"><AlertTriangle size={16}/> Defect Documentation Required</p>
-                       <div className="flex flex-col sm:flex-row gap-4">
-                          <textarea 
-                            className="flex-1 bg-white border-2 border-orange-200 rounded-xl p-4 text-base font-medium focus:border-orange-500 focus:ring-4 focus:ring-orange-500/20 outline-none resize-none"
-                            placeholder="Describe the critical defect to avoid DOT liability..."
-                            value={data.notes || ''}
-                            onChange={(e) => handleNotes(i, e.target.value)}
-                            rows={3}
-                          />
-                          <button onClick={() => handlePhoto(i)} className={`sm:w-40 flex flex-col items-center justify-center gap-3 rounded-xl border-4 border-dashed transition-all p-4 active:scale-95 ${data.photo ? 'bg-emerald-100 border-emerald-500 text-emerald-700' : 'bg-white border-orange-400 text-orange-600 hover:bg-orange-50'}`}>
-                             {data.photo ? <CheckCircle2 size={32} /> : <Camera size={32} />}
-                             <span className="text-xs uppercase font-black text-center">{data.photo ? 'Photo Attached' : 'Attach Photo Evidence'}</span>
-                          </button>
-                       </div>
-                    </div>
-                 )}
+      <div style={{ maxWidth: 896, margin: '0 auto' }}>
+        {dotItems.map((item, i) => {
+          const data = results[i] || {};
+          const isFail = data.status === 'FAIL';
+          return (
+            <div key={i} style={{
+              padding: 20,
+              borderLeft: '8px solid',
+              borderRadius: 16,
+              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+              marginBottom: 20,
+              transition: 'all 0.3s',
+              ...itemStyle(data),
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 24 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <span style={{ fontSize: 24, fontWeight: 900, color: '#cbd5e1', width: 40 }}>{i + 1}.</span>
+                  <h3 style={{ fontSize: 20, fontWeight: 900, textTransform: 'uppercase', color: '#1e293b', letterSpacing: '-0.025em' }}>{item}</h3>
+                </div>
+                <div style={{ display: 'flex', overflow: 'hidden', borderRadius: 12, border: '2px solid #1e293b', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                  <button onClick={() => handleStatus(i, 'PASS')} style={{ ...btnStyle(data.status === 'PASS', '#1e293b', '#ffffff'), borderRight: '2px solid #1e293b' }}>PASS</button>
+                  <button onClick={() => handleStatus(i, 'FAIL')} style={{ ...btnStyle(data.status === 'FAIL', '#ea580c', '#ffffff'), borderRight: '2px solid #1e293b' }}>FAIL</button>
+                  <button onClick={() => handleStatus(i, 'N/A')}  style={btnStyle(data.status === 'N/A', '#94a3b8', '#ffffff')}>N/A</button>
+                </div>
               </div>
-            );
-         })}
+
+              {isFail && (
+                <div style={{
+                  marginTop: 24,
+                  padding: 24,
+                  backgroundColor: '#ffedd5',
+                  borderRadius: 16,
+                  border: '2px solid #fdba74',
+                }}>
+                  <p style={{ fontSize: 12, fontWeight: 900, textTransform: 'uppercase', color: '#9a3412', letterSpacing: '0.1em', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <AlertTriangle size={16} /> Defect Documentation Required
+                  </p>
+                  <div style={{ display: 'flex', gap: 16 }}>
+                    <textarea
+                      className="ign-input-orange"
+                      style={{
+                        flex: 1,
+                        backgroundColor: '#ffffff',
+                        border: '2px solid #fdba74',
+                        borderRadius: 12,
+                        padding: 16,
+                        fontSize: 16,
+                        fontWeight: 500,
+                        outline: 'none',
+                        resize: 'none',
+                      }}
+                      placeholder="Describe the critical defect to avoid DOT liability..."
+                      value={data.notes || ''}
+                      onChange={(e) => handleNotes(i, e.target.value)}
+                      rows={3}
+                    />
+                    <button
+                      onClick={() => handlePhoto(i)}
+                      className="ign-btn-secondary"
+                      style={{
+                        width: 160,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 12,
+                        borderRadius: 12,
+                        border: data.photo ? '4px solid #10b981' : '4px dashed #fb923c',
+                        padding: 16,
+                        backgroundColor: data.photo ? '#d1fae5' : '#ffffff',
+                        color: data.photo ? '#047857' : '#ea580c',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {data.photo ? <CheckCircle2 size={32} /> : <Camera size={32} />}
+                      <span style={{ fontSize: 12, textTransform: 'uppercase', fontWeight: 900, textAlign: 'center' }}>
+                        {data.photo ? 'Photo Attached' : 'Attach Photo Evidence'}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      <div className="max-w-4xl mx-auto mt-16 bg-slate-900 rounded-[2rem] p-8 text-white shadow-2xl flex flex-col sm:flex-row justify-between items-center gap-8 relative overflow-hidden">
-         {isFullyComplete && <div className="absolute top-0 left-0 w-2 h-full bg-orange-500 animate-pulse"></div>}
-         <div className="flex items-center gap-6">
-            <div className={`p-4 rounded-full ${isFullyComplete ? "bg-orange-500/20 text-orange-500" : "bg-slate-800 text-slate-600"}`}>
-               <FileCheck size={48} />
-            </div>
-            <div>
-               <h3 className="text-2xl font-black uppercase italic tracking-tighter">Sign & Certify</h3>
-               <p className="text-[10px] text-slate-400 font-mono tracking-widest mt-1 uppercase">By submitting, you legally certify this form.</p>
-            </div>
-         </div>
-         <button 
-           onClick={submitAudit}
-           disabled={!isFullyComplete}
-           className={`w-full sm:w-auto px-12 py-6 rounded-2xl font-black text-xl uppercase tracking-widest transition-all shadow-xl flex-shrink-0 ${isFullyComplete ? 'bg-orange-600 text-white hover:bg-orange-500 active:scale-95 cursor-pointer shadow-orange-900/50' : 'bg-slate-800 border-[3px] border-slate-700 text-slate-600 cursor-not-allowed'}`}
-         >
-           {isFullyComplete ? 'Complete PMI' : 'Audit Incomplete'}
-         </button>
+      <div style={{
+        maxWidth: 896,
+        margin: '64px auto 0',
+        backgroundColor: '#0f172a',
+        borderRadius: 32,
+        padding: 32,
+        color: '#ffffff',
+        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 32,
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        {isFullyComplete && (
+          <div className="ign-pulse" style={{ position: 'absolute', top: 0, left: 0, width: 8, height: '100%', backgroundColor: '#f97316' }} />
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+          <div style={{ padding: 16, borderRadius: 9999, backgroundColor: isFullyComplete ? 'rgba(249,115,22,0.2)' : '#1e293b', color: isFullyComplete ? '#f97316' : '#475569' }}>
+            <FileCheck size={48} />
+          </div>
+          <div>
+            <h3 style={{ fontSize: 24, fontWeight: 900, textTransform: 'uppercase', fontStyle: 'italic', letterSpacing: '-0.05em' }}>Sign &amp; Certify</h3>
+            <p style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace', letterSpacing: '0.1em', marginTop: 4, textTransform: 'uppercase' }}>By submitting, you legally certify this form.</p>
+          </div>
+        </div>
+        <button
+          onClick={submitAudit}
+          disabled={!isFullyComplete}
+          className={isFullyComplete ? 'ign-btn-orange' : ''}
+          style={{
+            padding: '24px 48px',
+            borderRadius: 16,
+            fontWeight: 900,
+            fontSize: 20,
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            border: isFullyComplete ? 'none' : '3px solid #334155',
+            flexShrink: 0,
+            cursor: isFullyComplete ? 'pointer' : 'not-allowed',
+            backgroundColor: isFullyComplete ? '#ea580c' : '#1e293b',
+            color: isFullyComplete ? '#ffffff' : '#475569',
+            boxShadow: isFullyComplete ? '0 20px 25px -5px rgba(120,53,15,0.5)' : 'none',
+          }}
+        >
+          {isFullyComplete ? 'Complete PMI' : 'Audit Incomplete'}
+        </button>
       </div>
 
-      <footer className="fixed bottom-0 left-0 right-0 bg-slate-900 border-t-4 border-orange-600 p-5 font-mono text-[10px] sm:text-xs text-slate-400 uppercase flex justify-between tracking-widest z-50">
-         <div className="font-black text-white">{shopInfo.name || "UNREGISTERED SHOP"}</div>
-         <div>USDOT: <span className="font-black text-white">{shopInfo.global_contact?.usdot || "PENDING"}</span></div>
+      <footer style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: '#0f172a',
+        borderTop: '4px solid #ea580c',
+        padding: 20,
+        fontFamily: 'monospace',
+        fontSize: 10,
+        color: '#94a3b8',
+        textTransform: 'uppercase',
+        display: 'flex',
+        justifyContent: 'space-between',
+        letterSpacing: '0.1em',
+        zIndex: 50,
+      }}>
+        <div style={{ fontWeight: 900, color: '#ffffff' }}>{shopInfo.name || 'UNREGISTERED SHOP'}</div>
+        <div>USDOT: <span style={{ fontWeight: 900, color: '#ffffff' }}>{shopInfo.global_contact?.usdot || 'PENDING'}</span></div>
       </footer>
     </div>
   );
