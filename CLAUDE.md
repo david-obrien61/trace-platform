@@ -14,11 +14,12 @@
 This document owns session-by-session handoff state, current infrastructure specifics, and the active task list. Read this first at the start of every Claude Code session.
 
 When this doc conflicts with another:
+- For verified current state of every platform item (LEVEL + LOCATION + EVIDENCE), see PLATFORM_STATE.md — read this first every session before writing any code
 - For strategy, demo plan, or revenue questions, see MASTER_BRIEF.md
 - For architecture or where things should live, see PLATFORM_STRATEGY.md
 - For what's actually built in code, see TRACE_PLATFORM_AUDIT.md
 - For the discovery module, see DISCOVERY_MODULE_BRIEF.md (created Session 1b)
-- For engineering standards (STD-001 through STD-007), see STANDARDS.md
+- For engineering standards (STD-001 through STD-010), see STANDARDS.md
 - For reuse ratio figures, see TRACE_PLATFORM_AUDIT.md "Reuse ratio — corrected ground truth (2026-05-28)"; the 68/78/80% figures cited in prior sessions are retired.
 
 Update the handoff section at the end of every session.
@@ -289,6 +290,107 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-10 — PLATFORM_STATE.md — verified status index
+
+**Type:** Docs-only. One new file. Two CLAUDE.md edits (Scope & Hierarchy + Session Starter + Part 9 step 16). Zero code changes, zero migrations, zero schema changes.
+
+**Session mandate:** Build `PLATFORM_STATE.md` — a thin, machine-verified, one-screen index of every platform item at an explicit level (EXISTS/WIRED/WORKS/ORPHANED/BROKEN), anchored to file location + evidence. PRESUMED and UNKNOWN quarantined below the verified table, never blended with it.
+
+---
+
+**WHAT WAS BUILT:**
+
+**`PLATFORM_STATE.md` (new — repo root):**
+- 6 sections: SHARED LAYER (45 items) · CULTIVAR (22 items) · IGNITION (16 items) · IN-FLIGHT (9 pending actions) · HARVEST MAP (19 organs at level) · STANDARDS (10 active standards)
+- Fenced `⚠️ NOT YET VERIFIED` section (8 items quarantined — none blended with verified rows)
+- Every verified row: LEVEL + LOCATION + EVIDENCE + → detail doc pointer
+- ORPHANED items surfaced: `pricing/marginEngine.ts` (dead stub), `business-logic/MarginEngine.ts` (callers pending), `auth/permissions.ts` (callers pending TD#28), `onboarding/DemoLaunchButton.tsx` (zero callers), `quickbooks/invoice.ts`, `quickbooks/customer.ts`, `qr/generate.ts`, `qr/print.ts`, `design-system/tokens.ts`, 8 shared primitive components (FormField/Button/Badge/ProgressBar/Skeleton/LockedOverlay — in index.ts barrel, zero direct vertical callers confirmed)
+- BROKEN items surfaced: `components/SavingsReport.jsx` (imports `'../DataBridge'` + `'../MarginEngine'` which don't exist at that path), `IgnitionOmniDashboard` SAVINGS tab (imports `'./SavingsReport'` — file missing from `modules/`)
+- KEY FINDING: Vercel function count is **11** (not 12 as last recorded) — social/publish.ts was removed; campaigns.ts handles copy-post action. One slot available.
+- KEY FINDING: QB in Ignition is not "dark" — it **doesn't exist** (zero api/qbo/* Vercel functions for Ignition). Cultivar's QB functions cannot be reused.
+
+**CLAUDE.md edits:**
+- Scope & Hierarchy: `PLATFORM_STATE.md` added as first pointer (read it before writing code), STD reference updated to STD-001 through STD-010
+- Session Starter: added "Read PLATFORM_STATE.md" + updated check #3 to reference verified level
+- Part 9: added step 16 — PLATFORM_STATE.md update gate (advance level only with evidence; never mark David's checks done)
+
+---
+
+**VERIFICATION SUMMARY (STEP 1 evidence):**
+
+Key shared items confirmed ORPHANED by grep:
+- `pricing/marginEngine.ts` — self-annotated "Zero live callers" · confirmed: index.ts barrel has no consumer
+- `business-logic/MarginEngine.ts` — grep found zero callers outside `shared/src/business-logic/` itself
+- `auth/permissions.ts` — grep in cultivar-os/src, ignition-os/modules, CoreApp.jsx → zero imports
+- `onboarding/DemoLaunchButton.tsx` — zero imports in either vertical
+- `qr/generate.ts`, `qr/print.ts` — Help.tsx mentions generate.ts by name in prose; zero code imports
+- `quickbooks/invoice.ts`, `quickbooks/customer.ts` — cultivar invoice handler has inline findOrCreateQBCustomer; no shared import
+- All 8 shared primitive components (Button/Badge/FormField/ProgressBar/Skeleton/LockedOverlay + QuickBooksConnector.jsx) — exported in index.ts; zero direct vertical imports confirmed
+
+Key items confirmed WORKS:
+- `context/BusinessProvider.tsx` — WORKS · cultivar App.tsx:9 + ignition main.jsx:7 · 29/29 test assertions 2026-06-03
+- `social/generate.ts` — WORKS · 2 fresh rows confirmed 2026-06-08 via REST API
+- `notifications/send.ts` — WORKS · order confirmation confirmed 2026-05-27
+- Cultivar end-to-end checkout + QB invoice — WORKS · confirmed 2026-05-27
+
+Key items confirmed WIRED (not WORKS — no cited test evidence):
+- `auth/OwnerSignup.tsx` — WIRED · SignUp.tsx:52 + OnboardingWizard.jsx:262
+- `campaigns/generate.ts` — WIRED · api/campaigns.ts:2 called on generate action
+- All 3 discovery components (engine, synthesis, seed) — WIRED · api/discovery/ingest.ts
+
+---
+
+**Agreed build sequence — unchanged:**
+- See prior session handoffs. Next: margin engine caller migration → receipt keeper v1.
+
+---
+
+**No runbook needed** — docs-only session.
+
+**Documentation propagation check (step 10):**
+1. Help.tsx — no new customer-facing features. No propagation needed.
+2. Onboarding — unchanged.
+3. `PLATFORM_STATE.md` ✅ is the deliverable.
+4. No FLAG placeholders affected.
+5. No new error messages.
+
+**Factual corrections captured (step 11):**
+- Vercel function count: prior handoff recorded 12 functions. Actual count confirmed 11 (find api/**/*.ts → 11 files). social/publish.ts was removed when campaigns.ts absorbed copy-post action.
+- Ignition QB: prior characterization was "DARK in prod." Actual state: **doesn't exist** (zero api/qbo/* files in ignition-os; Cultivar has api/qbo/). Building QB for Ignition = net new, not port.
+- `components/SavingsReport.jsx` in shared has broken imports (`'../DataBridge'`, `'../MarginEngine'`) — neither path exists in shared/src. This file is BROKEN, not WIRED. IgnitionOmniDashboard.jsx:14 imports `'./SavingsReport'` pointing to `packages/ignition-os/modules/SavingsReport.jsx` (also missing — TD#10). These are two distinct broken paths.
+- Shared primitive components (FormField/Button/Badge/ProgressBar/Skeleton/LockedOverlay): exported in shared/src/index.ts but zero direct callers found in either vertical source. They exist and are extractable but are not currently consumed. Status: EXISTS (not WIRED).
+
+**No runbook needed** — pure docs session.
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns introduced.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ 100% read-only verification before writing. Every level assignment backed by grep/read evidence.
+- STD-002: N/A — no bug fix.
+- STD-003: N/A — no instrumentation.
+- STD-004: N/A — no business-scoped feature.
+- STD-005: ✅ Factual corrections propagated: Vercel count, Ignition QB existence, SavingsReport broken imports.
+- STD-006: ✅ No vertical nouns in shared code.
+- STD-007: N/A — no integration status surfaces touched.
+- STD-008: N/A — no migrations.
+- STD-009: N/A — no generation path changes.
+- STD-010: ✅ PLATFORM_STATE.md uses decoded module names throughout (IgnitionFlux = RO Queue, etc., per coverage ledger).
+
+**Gap graduation sweep (step 15):**
+- `remaining: voice-learning BI` — horizon v2/later. NOT past horizon.
+- `remaining: cadence-triggered generation` — horizon Social Rhythm. NOT past horizon.
+- `remaining: discovery persistence` — horizon v2/later. NOT past horizon.
+No gap graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- `PLATFORM_STATE.md` itself is new — no prior rows to advance. All items classified fresh from grep evidence this session.
+
+---
 
 ### 2026-06-10 — THUNDER · Ignition instrumentation pass (5-tag teardown prep)
 
@@ -3412,6 +3514,13 @@ A labeled gap is roadmap. Tech debt is a defect. Don't file roadmap as defects (
 
 15. **Gap graduation sweep** — scan all `remaining:` gaps in `docs/built-inventory.md`; graduate any that are 30+ days past their stated horizon to the Tech Debt Log (with a standard-ID) and remove from `remaining:`. If no gaps are past horizon, state explicitly: "No gap graduations this session."
 
+16. **PLATFORM_STATE.md update** — After any session that changes the level of a tracked item (a new file added, a caller wired, a build confirmed, a migration applied, an orphaned file deleted), update the relevant row in `PLATFORM_STATE.md`:
+    - Advance the level only when you have evidence (WIRED → WORKS requires a test result, confirmed-live use, or build-verified runtime path — not just "it should work").
+    - Move anything to "⚠️ NOT YET VERIFIED" if evidence is lost or stale.
+    - Never mark David's operational checks done on his behalf.
+    - Add new items to the appropriate section with all required columns (LEVEL + LOCATION + EVIDENCE).
+    If no items changed level this session, state explicitly: "No PLATFORM_STATE.md level changes this session."
+
 ---
 
 ## 10. SESSION STARTER
@@ -3420,6 +3529,7 @@ Paste this at the start of every Claude Code session:
 
 ```
 Read CLAUDE.md before we begin.
+Read PLATFORM_STATE.md — verified current state (LEVEL + LOCATION + EVIDENCE).
 
 Current session: [describe task]
 Today's goal: [specific deliverable]
@@ -3427,7 +3537,7 @@ Today's goal: [specific deliverable]
 Before writing any code confirm:
 1. What was completed last session (from Handoff)
 2. What shared modules this session needs
-3. Those modules exist in packages/shared/src/
+3. Those modules exist in packages/shared/src/ AND are at WIRED or WORKS level in PLATFORM_STATE.md
 
 Do not start until you confirm all three.
 Do not touch ignition-os, old Supabase project,
