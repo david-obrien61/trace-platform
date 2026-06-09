@@ -8,9 +8,25 @@
 import React, { useState } from 'react';
 import { AlertOctagon, Wrench, XCircle } from 'lucide-react';
 
+const STYLE_DEBUG = false;
+
+// Non-1:1 mappings:
+// (1) hover:text-white on cancel button → ign-icon-btn CSS class
+// (2) hover:bg-blue-500 on submit button → ign-btn-primary CSS class
+// (3) animate-pulse on "Do Not Move" btn → ign-pulse CSS class
+// (4) sm:text-xs responsive → dropped (fixed text-[10px]); flagged
+// (5) backdrop-blur-md → backdropFilter inline (1:1 preserved)
+// [TRACE:STYLE] IgnitionHandover converted, 16 classNames → inline, 4 non-1:1:
+//   (1) hover:text-white → ign-icon-btn
+//   (2) hover:bg-blue-500 → ign-btn-primary
+//   (3) animate-pulse → ign-pulse
+//   (4) sm:text-xs responsive → dropped/fixed
+
 const IgnitionHandover = ({ activeJob, onSubmit, onCancel }) => {
   const [note, setNote] = useState('');
   const [isOperable, setIsOperable] = useState(true);
+
+  if (STYLE_DEBUG) console.log('[TRACE:STYLE] IgnitionHandover converted, 16 classNames → inline, 4 non-1:1');
 
   const handleSubmit = () => {
     if (!note.trim()) {
@@ -21,54 +37,143 @@ const IgnitionHandover = ({ activeJob, onSubmit, onCancel }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-      <div className="bg-slate-950 w-full max-w-lg border-4 border-slate-800 rounded-[2.5rem] p-8 shadow-2xl relative">
-        <button onClick={onCancel} className="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      zIndex: 100,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 16,
+      backgroundColor: 'rgba(0,0,0,0.8)',
+      backdropFilter: 'blur(12px)',
+      WebkitBackdropFilter: 'blur(12px)',
+    }}>
+      <div style={{
+        backgroundColor: '#020617',
+        width: '100%',
+        maxWidth: 512,
+        border: '4px solid #1e293b',
+        borderRadius: 40,
+        padding: 32,
+        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+        position: 'relative',
+      }}>
+        <button
+          className="ign-icon-btn"
+          onClick={onCancel}
+          style={{
+            position: 'absolute',
+            top: 24,
+            right: 24,
+            color: '#64748b',
+          }}
+        >
           <XCircle size={32} />
         </button>
 
-        <h2 className="text-2xl font-black text-white italic uppercase tracking-tighter mb-2">Job Handover Protocol</h2>
-        <p className="text-slate-500 text-[10px] font-mono uppercase tracking-widest mb-8">Formal Suspension Log For WO #{activeJob?.id}</p>
+        <h2 style={{ fontSize: 24, fontWeight: 900, color: '#ffffff', fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: '-0.05em', marginBottom: 8 }}>
+          Job Handover Protocol
+        </h2>
+        <p style={{ color: '#64748b', fontSize: 10, fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 32 }}>
+          Formal Suspension Log For WO #{activeJob?.id}
+        </p>
 
-        <div className="mb-8">
-          <label className="block text-[10px] font-black uppercase text-slate-500 mb-2">Detailed Status Note (Required)</label>
-          <textarea 
+        <div style={{ marginBottom: 32 }}>
+          <label style={{ display: 'block', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', color: '#64748b', marginBottom: 8 }}>
+            Detailed Status Note (Required)
+          </label>
+          <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            className="w-full h-32 bg-slate-900 border-2 border-slate-700 rounded-2xl p-4 text-white font-mono text-sm focus:border-blue-500 outline-none resize-none"
+            className="ign-input"
+            style={{
+              width: '100%',
+              height: 128,
+              backgroundColor: '#0f172a',
+              border: '2px solid #334155',
+              borderRadius: 16,
+              padding: 16,
+              color: '#ffffff',
+              fontFamily: 'monospace',
+              fontSize: 14,
+              outline: 'none',
+              resize: 'none',
+            }}
             placeholder="e.g. Turbo removed, waiting on gaskets. Bolts are in the magnetic tray on the cart."
           />
         </div>
 
-        <div className="mb-10">
-          <label className="block text-[10px] font-black uppercase text-slate-500 mb-4">Safety Flag: Asset Operability</label>
-          <div className="flex gap-4">
-            <button 
+        <div style={{ marginBottom: 40 }}>
+          <label style={{ display: 'block', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', color: '#64748b', marginBottom: 16 }}>
+            Safety Flag: Asset Operability
+          </label>
+          <div style={{ display: 'flex', gap: 16 }}>
+            <button
               onClick={() => setIsOperable(true)}
-              className={`flex-1 flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border-4 transition-all ${
-                isOperable ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-slate-800 bg-slate-900 text-slate-600'
-              }`}
+              style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                padding: 16,
+                borderRadius: 16,
+                border: isOperable ? '4px solid #10b981' : '4px solid #1e293b',
+                backgroundColor: isOperable ? 'rgba(5,150,105,0.1)' : '#0f172a',
+                color: isOperable ? '#34d399' : '#475569',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
             >
               <Wrench size={24} />
-              <span className="font-black text-[10px] sm:text-xs uppercase">Safe to Move</span>
+              <span style={{ fontWeight: 900, fontSize: 10, textTransform: 'uppercase' }}>Safe to Move</span>
             </button>
-            <button 
+            <button
               onClick={() => setIsOperable(false)}
-              className={`flex-1 flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border-4 transition-all ${
-                !isOperable ? 'border-orange-500 bg-orange-500/10 text-orange-400 animate-pulse' : 'border-slate-800 bg-slate-900 text-slate-600'
-              }`}
+              className={!isOperable ? 'ign-pulse' : ''}
+              style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                padding: 16,
+                borderRadius: 16,
+                border: !isOperable ? '4px solid #f97316' : '4px solid #1e293b',
+                backgroundColor: !isOperable ? 'rgba(249,115,22,0.1)' : '#0f172a',
+                color: !isOperable ? '#fb923c' : '#475569',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
             >
               <AlertOctagon size={24} />
-              <span className="font-black text-[10px] sm:text-xs uppercase text-center">Do Not Move</span>
+              <span style={{ fontWeight: 900, fontSize: 10, textTransform: 'uppercase', textAlign: 'center' }}>Do Not Move</span>
             </button>
           </div>
         </div>
 
-        <button 
+        <button
+          className={note.trim() ? 'ign-btn-primary' : ''}
           onClick={handleSubmit}
-          className={`w-full py-6 rounded-3xl font-black text-lg uppercase tracking-widest transition-colors ${
-             note.trim() ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-[0_0_20px_rgba(37,99,235,0.4)]' : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-          }`}
+          style={{
+            width: '100%',
+            paddingTop: 24,
+            paddingBottom: 24,
+            borderRadius: 24,
+            fontWeight: 900,
+            fontSize: 18,
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            border: 'none',
+            cursor: note.trim() ? 'pointer' : 'not-allowed',
+            backgroundColor: note.trim() ? '#2563eb' : '#1e293b',
+            color: note.trim() ? '#ffffff' : '#64748b',
+            boxShadow: note.trim() ? '0 0 20px rgba(37,99,235,0.4)' : 'none',
+            transition: 'color 0.15s, background-color 0.15s',
+          }}
         >
           Confirm Suspension
         </button>
