@@ -15,16 +15,24 @@ import DataBridge from '../DataBridge';
 import { MarginEngine } from '../MarginEngine';
 import ExternalBridge from '../ExternalBridge';
 
+const STYLE_DEBUG = false; // [TRACE:STYLE] STD-003
+
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 const fmt$ = (n) => `$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtK = (n) => n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : fmt$(n);
 
+const SIZE_MAP = { 'text-4xl': 36, 'text-2xl': 24, 'text-xl': 20, 'text-lg': 18 };
+const COLOR_MAP = {
+  'text-white': '#fff', 'text-emerald-400': '#34d399', 'text-red-400': '#f87171',
+  'text-blue-400': '#60a5fa', 'text-orange-400': '#fb923c',
+};
+
 const Stat = ({ label, value, sub, color = 'text-white', size = 'text-4xl' }) => (
-  <div className="flex flex-col gap-1">
-    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{label}</p>
-    <p className={`${size} font-black italic tracking-tighter ${color}`}>{value}</p>
-    {sub && <p className="text-[9px] text-slate-600">{sub}</p>}
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <p style={{ fontSize: 9, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{label}</p>
+    <p style={{ fontSize: SIZE_MAP[size] ?? 36, fontWeight: 900, fontStyle: 'italic', letterSpacing: '-0.05em', color: COLOR_MAP[color] ?? '#fff' }}>{value}</p>
+    {sub && <p style={{ fontSize: 9, color: '#475569' }}>{sub}</p>}
   </div>
 );
 
@@ -41,7 +49,6 @@ const useSavingsData = () => {
     const daysLeft    = Math.max(0, 14 - daysActive);
     const trialPct    = Math.min(100, (daysActive / 14) * 100);
 
-    // ── Real transaction data ──────────────────────────────────────────────
     const transactions  = DataBridge.load('transaction_history') || [];
     const withinTrial   = transactions.filter(tx => tx.timestamp >= startedAt.getTime());
 
@@ -56,7 +63,6 @@ const useSavingsData = () => {
       realLeakage   += leakage;
     });
 
-    // ── Wizard baseline (used when no real transactions yet) ───────────────
     const wizardCheck   = policy.first_margin_check;
     let projectedAnnual = 0;
     let wizardLeakage   = 0;
@@ -67,21 +73,15 @@ const useSavingsData = () => {
       projectedAnnual = wizardLeakage * weekly * 52;
     }
 
-    // ── Quarterly analytics from ExternalBridge ────────────────────────────
     const quarterlyData = ExternalBridge.analytics.getQuarterlyMargins();
+    const changeImpact  = ExternalBridge.analytics.getChangeImpact();
 
-    // ── Change log impact ──────────────────────────────────────────────────
-    const changeImpact = ExternalBridge.analytics.getChangeImpact();
+    const hasRealData      = withinTrial.length > 0;
+    const displayRevenue   = hasRealData ? realRevenue  : 0;
+    const displayCaptured  = hasRealData ? realCaptured : 0;
+    const displayLeakage   = hasRealData ? realLeakage  : wizardLeakage;
+    const displayProjected = projectedAnnual;
 
-    // ── Summary numbers to display ─────────────────────────────────────────
-    const hasRealData   = withinTrial.length > 0;
-    const displayRevenue      = hasRealData ? realRevenue       : 0;
-    const displayCaptured     = hasRealData ? realCaptured      : 0;
-    const displayLeakage      = hasRealData ? realLeakage       : wizardLeakage;
-    const displayProjected    = projectedAnnual;
-
-    // Margin engine value: what the system suggested vs what was actually billed
-    // If real data exists, this is measured. Otherwise, project from wizard.
     const engineValue = hasRealData
       ? withinTrial.reduce((s, tx) => {
           const { suggested } = MarginEngine.analyzeTransaction(tx);
@@ -101,41 +101,41 @@ const useSavingsData = () => {
 // ─── SUBCOMPONENTS ────────────────────────────────────────────────────────────
 
 const TrialCountdown = ({ daysLeft, daysActive, trialPct }) => {
-  const color = daysLeft > 7 ? 'bg-blue-500' : daysLeft > 3 ? 'bg-orange-500' : 'bg-red-500';
+  const strokeColor = daysLeft > 7 ? '#3b82f6' : daysLeft > 3 ? '#f97316' : '#ef4444';
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 flex items-center gap-6">
-      <div className="flex-shrink-0">
-        <div className="relative w-16 h-16">
-          <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
+    <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 24, padding: 24, display: 'flex', alignItems: 'center', gap: 24 }}>
+      <div style={{ flexShrink: 0 }}>
+        <div style={{ position: 'relative', width: 64, height: 64 }}>
+          <svg style={{ width: 64, height: 64, transform: 'rotate(-90deg)' }} viewBox="0 0 64 64">
             <circle cx="32" cy="32" r="28" fill="none" stroke="#1e293b" strokeWidth="5" />
             <circle
               cx="32" cy="32" r="28" fill="none"
-              stroke={daysLeft > 7 ? '#3b82f6' : daysLeft > 3 ? '#f97316' : '#ef4444'}
+              stroke={strokeColor}
               strokeWidth="5"
               strokeDasharray={`${2 * Math.PI * 28}`}
               strokeDashoffset={`${2 * Math.PI * 28 * (1 - trialPct / 100)}`}
               strokeLinecap="round"
             />
           </svg>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-sm font-black text-white">{daysLeft}</span>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: 14, fontWeight: 900, color: '#fff' }}>{daysLeft}</span>
           </div>
         </div>
       </div>
       <div>
-        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Free Trial</p>
-        <p className="text-lg font-black text-white italic uppercase tracking-tighter">
+        <p style={{ fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Free Trial</p>
+        <p style={{ fontSize: 18, fontWeight: 900, color: '#fff', fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: '-0.05em' }}>
           {daysLeft > 0 ? `${daysLeft} Days Left` : 'Trial Complete'}
         </p>
-        <p className="text-[9px] text-slate-500 mt-0.5">
+        <p style={{ fontSize: 9, color: '#64748b', marginTop: 2 }}>
           Day {daysActive} of 14 · {daysLeft > 0 ? 'Data collecting automatically' : 'Ready for full report'}
         </p>
       </div>
       {daysLeft <= 3 && daysLeft > 0 && (
-        <div className="ml-auto flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-xl px-4 py-2">
-          <AlertCircle size={14} className="text-orange-400" />
-          <p className="text-[9px] font-black text-orange-400 uppercase">Trial ending soon</p>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, backgroundColor: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.2)', borderRadius: 12, padding: '8px 16px' }}>
+          <AlertCircle size={14} color="#fb923c" />
+          <p style={{ fontSize: 9, fontWeight: 900, color: '#fb923c', textTransform: 'uppercase' }}>Trial ending soon</p>
         </div>
       )}
     </div>
@@ -143,55 +143,55 @@ const TrialCountdown = ({ daysLeft, daysActive, trialPct }) => {
 };
 
 const ValueSummary = ({ data }) => {
-  const { hasRealData, displayRevenue, displayCaptured, displayLeakage, displayProjected, wizardCheck } = data;
+  const { hasRealData, displayCaptured, displayLeakage, displayProjected, wizardCheck } = data;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
       {/* CAPTURED MARGIN */}
-      <div className="bg-slate-900 border border-emerald-500/20 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]" />
-        <div className="flex items-center gap-2 mb-4">
-          <TrendingUp size={16} className="text-emerald-400" />
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+      <div style={{ backgroundColor: '#0f172a', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 24, padding: 24, boxShadow: '0 25px 50px rgba(0,0,0,0.5)', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, width: 4, height: '100%', backgroundColor: '#10b981', boxShadow: '0 0 15px rgba(16,185,129,0.5)' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <TrendingUp size={16} color="#34d399" />
+          <p style={{ fontSize: 10, fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
             {hasRealData ? 'Gross Profit Captured' : 'Projected Annual Value'}
           </p>
         </div>
-        <p className="text-5xl font-black italic text-emerald-400 tracking-tighter mb-2">
+        <p style={{ fontSize: 48, fontWeight: 900, fontStyle: 'italic', color: '#34d399', letterSpacing: '-0.05em', marginBottom: 8 }}>
           {hasRealData ? fmtK(displayCaptured) : fmtK(displayProjected)}
         </p>
-        <p className="text-[9px] text-slate-500">
+        <p style={{ fontSize: 9, color: '#64748b' }}>
           {hasRealData
             ? `From ${data.transactions.length} job${data.transactions.length !== 1 ? 's' : ''} this trial period`
             : 'Based on your margin check during setup'}
         </p>
         {!hasRealData && wizardCheck && (
-          <div className="mt-4 pt-4 border-t border-slate-800 text-[9px] text-slate-600">
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #1e293b', fontSize: 9, color: '#475569' }}>
             <p>{fmt$(wizardCheck.leakagePerPart)}/part × {wizardCheck.weeklyParts} parts/week × 52 weeks</p>
           </div>
         )}
       </div>
 
       {/* LEAKAGE DETECTED */}
-      <div className="bg-slate-900 border border-red-500/20 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-1 h-full bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]" />
-        <div className="flex items-center gap-2 mb-4">
-          <TrendingDown size={16} className="text-red-400" />
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+      <div style={{ backgroundColor: '#0f172a', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 24, padding: 24, boxShadow: '0 25px 50px rgba(0,0,0,0.5)', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, width: 4, height: '100%', backgroundColor: '#ef4444', boxShadow: '0 0 15px rgba(239,68,68,0.4)' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <TrendingDown size={16} color="#f87171" />
+          <p style={{ fontSize: 10, fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
             {hasRealData ? 'Margin Leakage Detected' : 'Leakage Per Part'}
           </p>
         </div>
-        <p className="text-5xl font-black italic text-red-400 tracking-tighter mb-2">
+        <p style={{ fontSize: 48, fontWeight: 900, fontStyle: 'italic', color: '#f87171', letterSpacing: '-0.05em', marginBottom: 8 }}>
           {hasRealData ? fmtK(displayLeakage) : fmt$(displayLeakage)}
         </p>
-        <p className="text-[9px] text-slate-500">
+        <p style={{ fontSize: 9, color: '#64748b' }}>
           {hasRealData
             ? 'Revenue below suggested pricing this period'
-            : 'Gap between your price and the engine\'s suggestion'}
+            : "Gap between your price and the engine's suggestion"}
         </p>
         {displayLeakage > 0 && (
-          <div className="mt-4 flex items-center gap-2 bg-red-500/5 border border-red-500/10 rounded-xl px-3 py-2">
-            <AlertCircle size={12} className="text-red-400" />
-            <p className="text-[8px] font-black text-red-400 uppercase">
+          <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 8, backgroundColor: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.1)', borderRadius: 12, padding: '8px 12px' }}>
+            <AlertCircle size={12} color="#f87171" />
+            <p style={{ fontSize: 8, fontWeight: 900, color: '#f87171', textTransform: 'uppercase' }}>
               {hasRealData ? 'Override pricing was used on these jobs' : 'Pricing rules will close this gap automatically'}
             </p>
           </div>
@@ -206,29 +206,29 @@ const WizardFinding = ({ wizardCheck }) => {
   const suggested = MarginEngine.calculateRetail(wizardCheck.costPaid);
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <Zap size={14} className="text-blue-400" />
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Setup Discovery — {wizardCheck.partName}</p>
+    <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 24, padding: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        <Zap size={14} color="#60a5fa" />
+        <p style={{ fontSize: 10, fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Setup Discovery — {wizardCheck.partName}</p>
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
         <div>
-          <p className="text-[8px] text-slate-600 uppercase mb-1">You Paid Vendor</p>
-          <p className="text-xl font-black text-slate-300">{fmt$(wizardCheck.costPaid)}</p>
+          <p style={{ fontSize: 8, color: '#475569', textTransform: 'uppercase', marginBottom: 4 }}>You Paid Vendor</p>
+          <p style={{ fontSize: 20, fontWeight: 900, color: '#cbd5e1' }}>{fmt$(wizardCheck.costPaid)}</p>
         </div>
         <div>
-          <p className="text-[8px] text-slate-600 uppercase mb-1">You Charged</p>
-          <p className="text-xl font-black text-white">{fmt$(wizardCheck.priceCharged)}</p>
+          <p style={{ fontSize: 8, color: '#475569', textTransform: 'uppercase', marginBottom: 4 }}>You Charged</p>
+          <p style={{ fontSize: 20, fontWeight: 900, color: '#fff' }}>{fmt$(wizardCheck.priceCharged)}</p>
         </div>
         <div>
-          <p className="text-[8px] text-slate-600 uppercase mb-1">Engine Suggests</p>
-          <p className="text-xl font-black text-emerald-400">{fmt$(suggested)}</p>
+          <p style={{ fontSize: 8, color: '#475569', textTransform: 'uppercase', marginBottom: 4 }}>Engine Suggests</p>
+          <p style={{ fontSize: 20, fontWeight: 900, color: '#34d399' }}>{fmt$(suggested)}</p>
         </div>
       </div>
       {wizardCheck.leakagePerPart > 0 && (
-        <p className="text-[9px] text-slate-500 mt-3">
-          Ignition OS priced this at <span className="text-emerald-400 font-black">{fmt$(suggested)}</span> automatically —
-          {' '}<span className="text-emerald-400 font-black">{fmt$(wizardCheck.leakagePerPart)} more</span> than you charged manually.
+        <p style={{ fontSize: 9, color: '#64748b', marginTop: 12 }}>
+          Ignition OS priced this at <span style={{ color: '#34d399', fontWeight: 900 }}>{fmt$(suggested)}</span> automatically —
+          {' '}<span style={{ color: '#34d399', fontWeight: 900 }}>{fmt$(wizardCheck.leakagePerPart)} more</span> than you charged manually.
         </p>
       )}
     </div>
@@ -240,25 +240,24 @@ const QuarterlyChart = ({ data }) => {
   const maxRevenue = Math.max(...data.map(q => q.totalRevenue), 1);
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
-      <div className="flex items-center gap-2 mb-5">
-        <BarChart2 size={14} className="text-blue-400" />
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Quarterly Revenue History</p>
+    <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 24, padding: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+        <BarChart2 size={14} color="#60a5fa" />
+        <p style={{ fontSize: 10, fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Quarterly Revenue History</p>
       </div>
-      <div className="flex items-end gap-3 h-32">
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 128 }}>
         {data.map((q) => {
           const heightPct = (q.totalRevenue / maxRevenue) * 100;
           return (
-            <div key={q.quarter} className="flex-1 flex flex-col items-center gap-1">
-              <p className="text-[8px] font-black text-emerald-400">{q.avgMarginPct}%</p>
-              <div className="w-full flex flex-col justify-end" style={{ height: '80px' }}>
+            <div key={q.quarter} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <p style={{ fontSize: 8, fontWeight: 900, color: '#34d399' }}>{q.avgMarginPct}%</p>
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: 80 }}>
                 <div
-                  className="w-full bg-blue-600/60 border border-blue-500/30 rounded-t-lg transition-all hover:bg-blue-500/60"
-                  style={{ height: `${heightPct}%` }}
+                  style={{ width: '100%', backgroundColor: 'rgba(37,99,235,0.6)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: '6px 6px 0 0', height: `${heightPct}%` }}
                 />
               </div>
-              <p className="text-[8px] font-mono text-slate-500">{q.quarter}</p>
-              <p className="text-[8px] font-black text-slate-400">{fmtK(q.totalRevenue)}</p>
+              <p style={{ fontSize: 8, fontFamily: 'monospace', color: '#64748b' }}>{q.quarter}</p>
+              <p style={{ fontSize: 8, fontWeight: 900, color: '#94a3b8' }}>{fmtK(q.totalRevenue)}</p>
             </div>
           );
         })}
@@ -273,29 +272,29 @@ const ChangeImpactLog = ({ changes }) => {
   if (relevant.length === 0) return null;
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <ShieldCheck size={14} className="text-purple-400" />
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pricing Change Impact</p>
+    <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 24, padding: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        <ShieldCheck size={14} color="#c084fc" />
+        <p style={{ fontSize: 10, fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Pricing Change Impact</p>
       </div>
-      <div className="space-y-3">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {relevant.slice(0, 5).map((c, i) => {
           const improved = c.afterAvgMargin > c.beforeAvgMargin;
           return (
-            <div key={i} className="flex items-center gap-4 bg-black border border-slate-800 rounded-2xl px-4 py-3">
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-black text-white truncate">{c.field_changed}</p>
-                <p className="text-[8px] text-slate-600">{c.changed_by} · {new Date(c.changed_at).toLocaleDateString()}</p>
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 16, backgroundColor: '#000', border: '1px solid #1e293b', borderRadius: 16, padding: '12px 16px' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 10, fontWeight: 900, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.field_changed}</p>
+                <p style={{ fontSize: 8, color: '#475569' }}>{c.changed_by} · {new Date(c.changed_at).toLocaleDateString()}</p>
               </div>
-              <div className="flex items-center gap-3 text-[9px] font-mono flex-shrink-0">
-                <span className="text-slate-500">{c.beforeAvgMargin ?? '—'}%</span>
-                <ChevronRight size={12} className="text-slate-700" />
-                <span className={improved ? 'text-emerald-400' : 'text-red-400'}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 9, fontFamily: 'monospace', flexShrink: 0 }}>
+                <span style={{ color: '#64748b' }}>{c.beforeAvgMargin ?? '—'}%</span>
+                <ChevronRight size={12} color="#334155" />
+                <span style={{ color: improved ? '#34d399' : '#f87171' }}>
                   {c.afterAvgMargin ?? '—'}%
                 </span>
               </div>
               {c.afterAvgMargin && c.beforeAvgMargin && (
-                <span className={`text-[8px] font-black px-2 py-1 rounded-full flex-shrink-0 ${improved ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                <span style={{ fontSize: 8, fontWeight: 900, padding: '4px 8px', borderRadius: 999, flexShrink: 0, backgroundColor: improved ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: improved ? '#34d399' : '#f87171' }}>
                   {improved ? '+' : ''}{(c.afterAvgMargin - c.beforeAvgMargin).toFixed(1)}%
                 </span>
               )}
@@ -308,21 +307,21 @@ const ChangeImpactLog = ({ changes }) => {
 };
 
 const ConversionCTA = ({ daysLeft, annualValue }) => (
-  <div className="bg-gradient-to-br from-blue-900/40 to-slate-900 border border-blue-500/30 rounded-3xl p-8 text-center shadow-2xl">
-    <Zap size={32} className="text-blue-400 mx-auto mb-4" />
-    <h3 className="text-xl font-black italic text-white uppercase tracking-tighter mb-2">
+  <div style={{ background: 'linear-gradient(135deg, rgba(30,58,138,0.4), #0f172a)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 24, padding: 32, textAlign: 'center', boxShadow: '0 25px 50px rgba(0,0,0,0.5)' }}>
+    <Zap size={32} color="#60a5fa" style={{ display: 'block', margin: '0 auto 16px' }} />
+    <h3 style={{ fontSize: 20, fontWeight: 900, fontStyle: 'italic', color: '#fff', textTransform: 'uppercase', letterSpacing: '-0.05em', marginBottom: 8 }}>
       {daysLeft > 0 ? `${daysLeft} Days to Decide` : 'Your Trial Data Is Ready'}
     </h3>
-    <p className="text-sm text-slate-400 mb-2 max-w-sm mx-auto">
+    <p style={{ fontSize: 14, color: '#94a3b8', maxWidth: 384, margin: '0 auto 8px' }}>
       {annualValue > 0
         ? `Ignition OS is tracking ${fmtK(annualValue)} in annual margin opportunity for your shop.`
         : 'Ignition OS is actively protecting your pricing on every job.'}
     </p>
-    <p className="text-[9px] text-slate-600 mb-6">Full version includes multi-user access, QuickBooks sync, and compliance reporting.</p>
-    <button className="bg-blue-600 hover:bg-blue-500 text-white font-black px-10 py-4 rounded-2xl uppercase tracking-widest text-[10px] transition-colors shadow-xl shadow-blue-900/40 active:scale-95">
+    <p style={{ fontSize: 9, color: '#475569', marginBottom: 24 }}>Full version includes multi-user access, QuickBooks sync, and compliance reporting.</p>
+    <button className="ign-card-hover" style={{ backgroundColor: '#2563eb', color: '#fff', fontWeight: 900, padding: '16px 40px', borderRadius: 16, textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: 10, boxShadow: '0 20px 25px rgba(30,58,138,0.4)', border: 'none', cursor: 'pointer' }}>
       Activate Full Version
     </button>
-    <p className="text-[8px] text-slate-600 mt-3 uppercase tracking-wider">No data lost · Pricing rules carry over</p>
+    <p style={{ fontSize: 8, color: '#475569', marginTop: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>No data lost · Pricing rules carry over</p>
   </div>
 );
 
@@ -332,19 +331,19 @@ const SavingsReport = () => {
   const data = useSavingsData();
 
   return (
-    <div className="space-y-5">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h2 className="text-xl font-black italic text-white uppercase tracking-tighter">
+          <h2 style={{ fontSize: 20, fontWeight: 900, fontStyle: 'italic', color: '#fff', textTransform: 'uppercase', letterSpacing: '-0.05em' }}>
             Trial Savings Report
           </h2>
-          <p className="text-[9px] text-slate-500 uppercase tracking-widest mt-0.5">
+          <p style={{ fontSize: 9, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 2 }}>
             Since {data.startedAt.toLocaleDateString()} · {data.daysActive} day{data.daysActive !== 1 ? 's' : ''} of data
           </p>
         </div>
         {!data.hasRealData && (
-          <span className="text-[8px] font-black text-blue-400 bg-blue-400/10 border border-blue-400/20 px-3 py-1.5 rounded-full uppercase">
+          <span style={{ fontSize: 8, fontWeight: 900, color: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.2)', padding: '6px 12px', borderRadius: 999, textTransform: 'uppercase' }}>
             Projected · Create jobs to see real data
           </span>
         )}
