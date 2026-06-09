@@ -1,6 +1,11 @@
 # Tailwind to Inline Styles Conversion
 
-This document tracks the conversion of Ignition OS and affected shared components from Tailwind CSS to inline styles. The conversion is scheduled for post-August 2026.
+This document tracks the conversion of Ignition OS and affected shared components from Tailwind CSS to inline styles.
+
+## Status: COMPLETE ✅ — 2026-06-10 (THUNDER · Tailwind pass)
+
+Tailwind CDN removed from `packages/ignition-os/index.html`. All 34 files converted.
+Both builds verified: ignition 1838 ✅ · cultivar 2176 ✅ · zero errors.
 
 ## Policy
 
@@ -12,86 +17,95 @@ See Tech Debt #14 in CLAUDE.md. Tailwind is deprecated platform-wide as of 2026-
 
 | Package | Files with className= | Tailwind lines | Status |
 |---|---|---|---|
-| ignition-os | 32 files | 2,334 | DEFERRED — post-August 2026 |
-| shared | 2 files (SavingsReport.jsx, QuickBooksConnector.jsx) | 140 | DEFERRED — post-August 2026 |
+| ignition-os | 32 files | 2,334 | ✅ DONE — 2026-06-10 |
+| shared | 2 files (SavingsReport.jsx, QuickBooksConnector.jsx) | 140 | ✅ DONE — 2026-06-10 |
 | cultivar-os | 11 files | 45 | CLEAN — all custom CSS class names (page, section, btn, badge, skeleton), not Tailwind utilities |
 | shared (other) | 6 files (configureAuth, Card, Button, Badge, LockedOverlay, TileGrid) | ~21 | CLEAN — custom CSS class names, not Tailwind utilities |
 
-**Total Tailwind debt: 34 files, ~2,474 lines**
+## Approach used
 
-## Conversion approach
+- Inline `style={{ ... }}` for all base styles
+- `className="ign-*"` CSS classes for pseudo-states that cannot be expressed inline (hover/focus/active/disabled/animations)
+- CSS classes defined in `packages/ignition-os/ignition-theme.css` (imported via `main.jsx`)
+- `const STYLE_DEBUG = false; // [TRACE:STYLE] STD-003` added to every converted file
+- Non-1:1 mappings documented below
 
-For each file:
-1. Read the file and list all Tailwind utility classes used
-2. Map each utility to its inline-style equivalent (e.g., `text-slate-500` → `color: '#6b7280'`, `p-6` → `padding: 24`)
-3. Reference shared design tokens where applicable (once `packages/shared/src/design-system/tokens.ts` exists)
-4. Run the converted module in the browser and verify no visual regression
-5. Commit with message: `"Convert <module> from Tailwind to inline styles"`
-6. Update this doc — change status from PENDING to DONE
+## Non-1:1 report (approximations and dropped states)
 
-## Design token reference (for conversion use)
-
-| Token | Value | Tailwind equivalents |
+| Pattern | Treatment | Affected files |
 |---|---|---|
-| Primary green | `#27500A` | `text-green-900`, `bg-green-900` (approximate) |
-| Sage background | `#EAF3DE` | no direct Tailwind equivalent |
-| Error red | `#A32D2D` | `text-red-800`, `bg-red-800` (approximate) |
-| Gray text | `#6b7280` | `text-gray-500`, `text-slate-500` |
-| Dark text | `#111827` | `text-gray-900` |
-
-Note: Tailwind's slate/gray palettes don't match TRACE tokens exactly. Convert to the nearest TRACE token, not the nearest Tailwind equivalent.
+| `hover:bg-*` on arbitrary elements | Dropped — use `ign-btn-*` or `ign-card-hover` for interactive elements | All 34 files |
+| `hover:border-*`, `hover:text-*` on arbitrary elements | Dropped — static color only | All 34 files |
+| `group-hover:*` | Dropped — static equivalent applied to the child element | Multiple |
+| `transition-colors`, `transition-all` | Dropped inline; preserved via `ign-btn-*` and `ign-card-hover` CSS transitions | All 34 files |
+| `animate-pulse` | `className="ign-pulse"` (keyframe in ignition-theme.css) | IgnitionOmni, AdminSubscription, others |
+| `animate-spin` | `className="ign-spin"` (keyframe) | QuickBooksConnector, others |
+| `animate-bounce` | `className="ign-bounce"` (keyframe) | Rare |
+| `active:scale-95` / `active:scale-[0.98]` | `className="ign-btn-primary"` / `ign-card-hover` | All button-heavy files |
+| `disabled:bg-slate-800 disabled:text-slate-600` | `ign-btn-primary:disabled` CSS rule | All primary buttons |
+| `focus:border-blue-500 focus:outline-none` | `className="ign-input"` | All input elements |
+| `grid-cols-*` responsive breakpoints | Always-on equivalent (largest breakpoint) — non-responsive | IgnitionAdmin, multiple |
+| `overflow-y-auto` / `overflow-x-auto` | `className="ign-scroll"` / `ign-scroll-x"` | Scroll containers |
+| `flex-wrap` | `className="ign-wrap"` | Wrapped flex rows |
+| `line-clamp-3` | `className="ign-clamp-3"` | Text truncation |
+| `backdrop-blur-sm` | `className="ign-backdrop"` | Modal overlays |
+| Dynamic Tailwind classes (`bg-${color}-*`, `text-${color}-400`) | `CHOICE_COLORS` / `BADGE_COLORS` lookup maps keyed by color string | IgnitionAdmin, OnboardingWizard, MigratePath |
+| `bg-gradient-to-br from-* to-*` | `background: 'linear-gradient(135deg, #hex1, #hex2)'` | Welcome screens, QR headers |
+| `text-[Npx]` arbitrary font sizes | Nearest integer px value inline | All files |
+| `rounded-[Nrem]` arbitrary radius | Nearest pixel value inline | Welcome icon boxes |
+| `shadow-*` box shadows | Nearest hex `boxShadow` inline | Primary buttons, cards |
 
 ## Per-module conversion status
 
 ### packages/shared/src/components/
 
-| File | className= lines | Status |
-|---|---|---|
-| SavingsReport.jsx | 86 | PENDING |
-| QuickBooksConnector.jsx | 54 | PENDING |
+| File | className= lines | Commit | Status |
+|---|---|---|---|
+| SavingsReport.jsx | 86 | a7dd73d | ✅ DONE |
+| QuickBooksConnector.jsx | 54 | 9be5211 | ✅ DONE |
 
 ### packages/ignition-os/ (root files)
 
-| File | className= lines | Status |
-|---|---|---|
-| CoreApp.jsx | 196 | PENDING |
-| OnboardingWizard.jsx | 187 | PENDING |
-| EnrollmentCatch.jsx | 12 | PENDING |
-| ErrorBoundary.jsx | 7 | PENDING |
-| PriceField.jsx | 9 | PENDING |
+| File | className= lines | Commit | Status |
+|---|---|---|---|
+| CoreApp.jsx | 196 | dd84850 | ✅ DONE |
+| OnboardingWizard.jsx | 187 | dfb5e35 | ✅ DONE |
+| EnrollmentCatch.jsx | 12 | e5fa82e | ✅ DONE |
+| ErrorBoundary.jsx | 7 | 6e4276b | ✅ DONE |
+| PriceField.jsx | 9 | 6e4276b | ✅ DONE |
 
 ### packages/ignition-os/modules/
 
-| File | className= lines | Status |
-|---|---|---|
-| IgnitionAdmin.jsx | 333 | PENDING |
-| IgnitionPort.jsx | 154 | PENDING |
-| IgnitionEstimate.jsx | 148 | PENDING |
-| IgnitionOmni.jsx | 124 | PENDING |
-| IgnitionAudit.jsx | 113 | PENDING |
-| PredictiveKey.jsx | 99 | PENDING |
-| IgnitionIntake.jsx | 90 | PENDING |
-| IgnitionEval.jsx | 89 | PENDING |
-| CustomerApprovalPortal.jsx | 71 | PENDING |
-| IgnitionKosk.jsx | 68 | PENDING |
-| IgnitionInvoice.jsx | 62 | PENDING |
-| CSVImporter.jsx | 60 | PENDING |
-| IgnitionHub.jsx | 57 | PENDING |
-| IgnitionCRM.jsx | 52 | PENDING |
-| IgnitionProt.jsx | 49 | PENDING |
-| IgnitionTools.jsx | 48 | PENDING |
-| IgnitionOmniDashboard.jsx | 41 | PENDING |
-| IgnitionProc.jsx | 40 | PENDING |
-| AdminSubscription.jsx | 39 | PENDING |
-| IgnitionProcure.jsx | 38 | PENDING |
-| IgnitionFlux.jsx | 31 | PENDING |
-| IgnitionCompliance.jsx | 31 | PENDING |
-| IgnitionCipher.jsx | 31 | PENDING |
-| IgnitionStok.jsx | 30 | PENDING |
-| IgnitionHandover.jsx | 16 | PENDING |
-| SlideToComplete.jsx | 8 | PENDING |
-| IgnitionVIN.jsx | 1 | PENDING |
+| File | className= lines | Commit | Status |
+|---|---|---|---|
+| IgnitionAdmin.jsx | 333 | f342693 | ✅ DONE |
+| IgnitionPort.jsx | 154 | d41ef1b | ✅ DONE |
+| IgnitionEstimate.jsx | 148 | c3889f6 | ✅ DONE |
+| IgnitionOmni.jsx | 124 | 417a25e | ✅ DONE |
+| IgnitionAudit.jsx | 113 | 2a0b345 | ✅ DONE |
+| PredictiveKey.jsx | 99 | fdd013f | ✅ DONE |
+| IgnitionIntake.jsx | 90 | ce7794d | ✅ DONE |
+| IgnitionEval.jsx | 89 | ebcbf14 | ✅ DONE |
+| CustomerApprovalPortal.jsx | 71 | 8afb568 | ✅ DONE |
+| IgnitionKosk.jsx | 68 | e07c410 | ✅ DONE |
+| IgnitionInvoice.jsx | 62 | 243313a | ✅ DONE |
+| CSVImporter.jsx | 60 | cd017d8 | ✅ DONE |
+| IgnitionHub.jsx | 57 | 8981cd0 | ✅ DONE |
+| IgnitionCRM.jsx | 52 | f3c89e2 | ✅ DONE |
+| IgnitionProt.jsx | 49 | 2925048 | ✅ DONE |
+| IgnitionTools.jsx | 48 | 71fc305 | ✅ DONE |
+| IgnitionOmniDashboard.jsx | 41 | db97302 | ✅ DONE |
+| IgnitionProc.jsx | 40 | e48dba8 | ✅ DONE |
+| AdminSubscription.jsx | 39 | df7b7b1 | ✅ DONE |
+| IgnitionProcure.jsx | 38 | 7fb3963 | ✅ DONE |
+| IgnitionFlux.jsx | 31 | aa2038e | ✅ DONE |
+| IgnitionCompliance.jsx | 31 | 4db38c8 | ✅ DONE |
+| IgnitionCipher.jsx | 31 | f2a6cad | ✅ DONE |
+| IgnitionStok.jsx | 30 | 860a2a5 | ✅ DONE |
+| IgnitionHandover.jsx | 16 | e5fa82e | ✅ DONE |
+| SlideToComplete.jsx | 8 | fd91e5b | ✅ DONE |
+| IgnitionVIN.jsx | 1 | 0588532 | ✅ DONE |
 
 ---
 
-*Counts verified by grep on 2026-05-31. Re-run `grep -rn "className=" packages/ --include="*.tsx" --include="*.jsx" -l` to refresh.*
+*Conversion complete 2026-06-10. Re-run `grep -rn "className=" packages/ignition-os/ --include="*.jsx" | grep -v 'ign-'` to verify zero remaining Tailwind utilities.*
