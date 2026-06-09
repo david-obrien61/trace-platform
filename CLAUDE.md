@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-11 (add-a-business: full flow — email-exists path + /add-business entry point)
+# Last updated: 2026-06-11 (abuse guards: GUARD_A/B/C shipped OFF — platform business logic)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -290,6 +290,134 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-11 — Abuse guards: GUARD_A/B/C shipped OFF (platform business logic)
+
+**Type:** Code. Two files changed (`packages/shared/src/auth/businessGuards.ts` new + `packages/shared/src/auth/OwnerSignup.tsx` import + wire + `packages/shared/src/auth/index.ts` export). Zero migrations, zero schema changes, zero API changes. Commit `34390de`.
+
+**Session mandate:** Build three abuse guards for the add-business flow as platform business logic. Each guard ships OFF (default false). OFF = clean base case, no effect. ON = fully enforces. No partial/half-wired state.
+
+---
+
+**WHAT WAS BUILT:**
+
+**`packages/shared/src/auth/businessGuards.ts` (new):**
+
+Three guards + `runBusinessCreationGuards(userId, supabase)` entry point. AC-1 clean — no vertical nouns. Pure platform logic.
+
+**GUARD_A_PER_IDENTITY_FREE_TIER** (flag, default `false`):
+- When ON: queries `businesses` for `owner_id = userId` (count only, via RLS-safe client query).
+- If prior businesses exist (count ≥ 1): sets `insertPatch: { trial_started_at: null }` — new business skips free trial. Billing reads `null` as "outside trial window."
+- If first business: no patch, trial proceeds normally.
+- `[TRACE:GUARD_A]` log when ON: userId, priorCount, decision string.
+
+**GUARD_B_CREATION_RATE_LIMIT** (flag, default `false`):
+- When ON: queries `businesses` for `owner_id = userId AND created_at >= windowStart` (last 24 h, rolling).
+- If recentCount ≥ 5: returns `{ allowed: false, error: '...' }` — blocks creation with user-facing message.
+- `[TRACE:GUARD_B]` log when ON: userId, recentCount, limit, windowHours, decision.
+
+**GUARD_C_SUSPICIOUS_PATTERN_REVIEW** (flag, default `false`):
+- When ON: queries `businesses` for `owner_id = userId AND created_at >= windowStart` (last 24 h). Checks: count ≥ 10 AND all rows have `trial_started_at IS NOT NULL`.
+- If suspicious: returns `{ allowed: true, heldForReview: true }`. Creation proceeds but the caller receives the flag to surface to admins.
+- `insertPatch: { status: 'review_pending' }` is commented out pending the `businesses.status` column. Activation instructions in the file.
+- NOT triggered at count=2 (normal for David + family).
+- `[TRACE:GUARD_C]` log when ON.
+
+**Fail-open discipline:** Guard query errors return `{ allowed: true }` (fail-open, never block on a guard infrastructure failure). Each fail-open path emits its own `[TRACE:GUARD_X]` log.
+
+**Guard chain:** `runBusinessCreationGuards` runs A → B → C in order. First non-allowed result short-circuits. All `insertPatch` values from passing guards are merged.
+
+**`packages/shared/src/auth/OwnerSignup.tsx` — wire in `createBusinessAndMember()`:**
+
+After `bizInsert` is fully constructed and before the Supabase insert:
+```typescript
+const guard = await runBusinessCreationGuards(userId, supabase);
+if (!guard.allowed) { setErrorMsg(guard.error ?? '...'); return null; }
+Object.assign(bizInsert, guard.insertPatch ?? {});
+if (guard.heldForReview) {
+  console.log('[TRACE:BUSINESS] business creation held for review (GUARD_C)', { userId, businessType });
+}
+```
+
+The import is `import { runBusinessCreationGuards } from './businessGuards';`
+
+**`packages/shared/src/auth/index.ts`:**
+- `runBusinessCreationGuards` + `GuardResult` type exported.
+
+---
+
+**Activation discipline (documented, not activated):**
+
+1. Prove base add-business flow with all three guards OFF (David + second business test, unimpeded).
+2. Turn each guard ON one-at-a-time. Test in isolation. David says "proven" → leave ON.
+3. Thunder does NOT activate guards unilaterally.
+4. **HARD LAUNCH PREREQUISITE:** All three guards ON-and-tested before public self-serve business creation opens. While creation is private/invite-only (David + family), guards may stay OFF. This is the documented launch gate.
+
+**GUARD_C prerequisite before activation:**
+```sql
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS status text DEFAULT 'active';
+```
+Then uncomment `insertPatch: { status: 'review_pending' }` in `checkGuardC()`.
+
+---
+
+**Base flow regression gate (code-traced):**
+
+David creates TRACE Enterprises (or LAWNS as second business):
+- All three guard flags = false → `runBusinessCreationGuards` returns `{ allowed: true }` immediately for each guard (3 early returns, no queries).
+- `guard.allowed = true` → no block.
+- `guard.insertPatch = undefined` → `Object.assign(bizInsert, {})` → bizInsert unchanged.
+- `guard.heldForReview = undefined` → no log.
+- `createBusinessAndMember` continues exactly as before. ✓
+
+---
+
+**Builds:**
+- Cultivar: ✅ 2179 modules, zero TypeScript errors
+- Ignition: ✅ 1839 modules, zero TypeScript errors
+
+---
+
+**Documentation propagation check (step 10):**
+1. `Help.tsx` — no customer-facing features (guards are admin/platform logic, invisible to users). No propagation needed.
+2. Onboarding — unchanged. All add-business flows unaffected (guards are OFF).
+3. `PLATFORM_STATE.md` — no level changes (businessGuards.ts is new, ORPHANED until a guard is activated). No update needed.
+4. No `// FLAG:` placeholders affected.
+5. No new error messages visible to users in default OFF state. GUARD_B's error message ("Too many businesses were created recently…") is only surfaced when that guard is ON.
+
+**Factual corrections captured (step 11):** No factual corrections. The add-business flow was understood correctly going into this session.
+
+**No runbook needed** — pure code session. No migrations, no environment changes.
+
+**AC compliance (step 13):**
+- AC-1: ✅ Zero vertical nouns in `businessGuards.ts`. Uses `businesses`, `owner_id`, `trial_started_at`, `business_type` — all generic. No Cultivar/Ignition/nursery/shop nouns anywhere.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths. Guard queries are scoped to `owner_id = userId` (RLS-filtered by the Supabase client's active session).
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Full read-only investigation of `OwnerSignup.tsx`, `businesses` schema migration, and `auth/index.ts` before writing any code. Chokepoint confirmed (`createBusinessAndMember`). `trial_started_at` column existence confirmed in migration file.
+- STD-002: N/A — no bug fix. Guards are OFF; no broken-to-fixed transition.
+- STD-003: ✅ `[TRACE:GUARD_A]`, `[TRACE:GUARD_B]`, `[TRACE:GUARD_C]` logs fire ONLY when the respective guard flag is `true`. In default OFF state, zero logs emitted (clean base case). Born-ON in the sense that when turned ON, they emit immediately. `[TRACE:BUSINESS]` log for `heldForReview` also fires only when GUARD_C is ON and the pattern is detected.
+- STD-004: N/A — no new business-scoped data feature shipped (guards are OFF; no new data surface).
+- STD-005: ✅ No decisions reversed.
+- STD-006: ✅ No vertical nouns introduced in shared code.
+- STD-007: N/A — no integration status surfaces touched.
+- STD-008: N/A — no migrations.
+- STD-009: N/A — no generation path changes.
+- STD-010: N/A — no new opaque module names. `businessGuards.ts` uses decoded names throughout.
+- **BENCH standards (STEP 0 match):** BENCH-B trigger still firing for Receipt Keeper. No new triggers from this session. The guards themselves are not a BENCH-B trigger — they deal with creation-rate/trial abuse, not file upload/ingest safety.
+
+**Gap graduation sweep (step 15):**
+- `remaining: voice-learning BI` — horizon v2/later. NOT past horizon.
+- `remaining: cadence-triggered generation` — horizon Social Rhythm. NOT past horizon.
+- `remaining: discovery persistence` — horizon v2/later. NOT past horizon.
+No gap graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- `businessGuards.ts` is a new shared auth file. It exists (EXISTS level) but is not wired to any callers that are ON — guards are OFF by default. No level change warranted for other items. No update needed.
+
+---
 
 ### 2026-06-11 — Add-a-business: email-exists→LOGIN_TO_ADD + /add-business entry point
 
