@@ -3,19 +3,34 @@ import { RefreshCw, ChevronRight, Clock, Wrench, AlertCircle } from 'lucide-reac
 import { supabase } from '../supabase';
 import DataBridge from '../DataBridge';
 
+const STYLE_DEBUG = false;
+
+// Non-1:1 mappings (31 classNames converted):
+// (1) hover:bg-slate-700 on refresh button → ign-btn-secondary CSS class
+// (2) animate-spin on RefreshCw icon → ign-spin CSS class
+// (3) active:scale-95 / active:scale-[0.99] → ign-card-hover CSS class (0.98 approx)
+// (4) hover:border-slate-600 on summary tiles → dropped (cosmetic)
+// (5) hover:border-slate-600 + hover:text-white on filter tabs → dropped (cosmetic)
+// (6) animate-pulse on loading text → ign-pulse CSS class
+// (7) hover:border-slate-600 on job rows → ign-card-hover CSS class
+// STATUS_META: Tailwind class strings → static CSS color/border/bg values (1:1 in behavior)
+// grid-cols-4 → flex with flex:1 children (1:1 for fixed 4 items)
+// [TRACE:STYLE] IgnitionFlux converted, 31 classNames → inline, 7 non-1:1 categories
+
+// STATUS_META restructured: static CSS values instead of Tailwind class strings
 const STATUS_META = {
-  intake:       { label: 'NEW',          color: 'text-amber-400',   border: 'border-amber-500/30',   bg: 'bg-amber-500/10'   },
-  queued:       { label: 'QUEUED',       color: 'text-amber-400',   border: 'border-amber-500/30',   bg: 'bg-amber-500/10'   },
-  in_eval:      { label: 'IN EVAL',      color: 'text-blue-400',    border: 'border-blue-500/30',    bg: 'bg-blue-500/10'    },
-  eval_done:    { label: 'EVAL DONE',    color: 'text-blue-300',    border: 'border-blue-500/30',    bg: 'bg-blue-500/10'    },
-  estimating:   { label: 'ESTIMATING',  color: 'text-purple-400',  border: 'border-purple-500/30',  bg: 'bg-purple-500/10'  },
-  pending_auth: { label: 'PENDING AUTH', color: 'text-orange-400',  border: 'border-orange-500/30',  bg: 'bg-orange-500/10'  },
-  authorized:   { label: 'AUTHORIZED',  color: 'text-emerald-400', border: 'border-emerald-500/30', bg: 'bg-emerald-500/10' },
-  in_repair:    { label: 'IN REPAIR',   color: 'text-sky-400',     border: 'border-sky-500/30',     bg: 'bg-sky-500/10'     },
-  supplement:   { label: 'SUPPLEMENT',  color: 'text-yellow-400',  border: 'border-yellow-500/30',  bg: 'bg-yellow-500/10'  },
-  repair_done:  { label: 'QC READY',    color: 'text-teal-400',    border: 'border-teal-500/30',    bg: 'bg-teal-500/10'    },
-  invoiced:     { label: 'INVOICED',    color: 'text-orange-400',  border: 'border-orange-500/30',  bg: 'bg-orange-500/10'  },
-  closed:       { label: 'CLOSED',      color: 'text-slate-400',   border: 'border-slate-600',      bg: 'bg-slate-800/50'   },
+  intake:       { label: 'NEW',          color: '#fbbf24', borderColor: 'rgba(245,158,11,0.30)',  backgroundColor: 'rgba(245,158,11,0.10)'  },
+  queued:       { label: 'QUEUED',       color: '#fbbf24', borderColor: 'rgba(245,158,11,0.30)',  backgroundColor: 'rgba(245,158,11,0.10)'  },
+  in_eval:      { label: 'IN EVAL',      color: '#60a5fa', borderColor: 'rgba(59,130,246,0.30)',  backgroundColor: 'rgba(59,130,246,0.10)'  },
+  eval_done:    { label: 'EVAL DONE',    color: '#93c5fd', borderColor: 'rgba(59,130,246,0.30)',  backgroundColor: 'rgba(59,130,246,0.10)'  },
+  estimating:   { label: 'ESTIMATING',  color: '#c084fc', borderColor: 'rgba(168,85,247,0.30)', backgroundColor: 'rgba(168,85,247,0.10)' },
+  pending_auth: { label: 'PENDING AUTH', color: '#fb923c', borderColor: 'rgba(249,115,22,0.30)',  backgroundColor: 'rgba(249,115,22,0.10)'  },
+  authorized:   { label: 'AUTHORIZED',  color: '#34d399', borderColor: 'rgba(16,185,129,0.30)', backgroundColor: 'rgba(16,185,129,0.10)' },
+  in_repair:    { label: 'IN REPAIR',   color: '#38bdf8', borderColor: 'rgba(14,165,233,0.30)',  backgroundColor: 'rgba(14,165,233,0.10)'  },
+  supplement:   { label: 'SUPPLEMENT',  color: '#facc15', borderColor: 'rgba(234,179,8,0.30)',   backgroundColor: 'rgba(234,179,8,0.10)'   },
+  repair_done:  { label: 'QC READY',    color: '#2dd4bf', borderColor: 'rgba(20,184,166,0.30)',  backgroundColor: 'rgba(20,184,166,0.10)'  },
+  invoiced:     { label: 'INVOICED',    color: '#fb923c', borderColor: 'rgba(249,115,22,0.30)',  backgroundColor: 'rgba(249,115,22,0.10)'  },
+  closed:       { label: 'CLOSED',      color: '#94a3b8', borderColor: '#475569',               backgroundColor: 'rgba(30,41,59,0.50)'    },
 };
 
 const FILTERS = ['ALL', 'OPEN', 'IN PROGRESS', 'AWAITING AUTH', 'CLOSED'];
@@ -40,9 +55,9 @@ const elapsed = (ts) => {
 const statusMeta = (status) =>
   STATUS_META[(status || '').toLowerCase()] || {
     label: (status || 'UNKNOWN').toUpperCase(),
-    color: 'text-slate-400',
-    border: 'border-slate-700',
-    bg: 'bg-slate-800',
+    color: '#94a3b8',
+    borderColor: '#334155',
+    backgroundColor: '#1e293b',
   };
 
 const IgnitionFlux = ({ onNavigate, onSelectJob, onEnterKiosk }) => {
@@ -50,6 +65,8 @@ const IgnitionFlux = ({ onNavigate, onSelectJob, onEnterKiosk }) => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter]   = useState('ALL');
   const [error, setError]     = useState('');
+
+  if (STYLE_DEBUG) console.log('[TRACE:STYLE] IgnitionFlux converted, 31 classNames → inline, 7 non-1:1 categories');
 
   const fetchJobs = useCallback(async () => {
     const shopId = DataBridge.getShopId();
@@ -91,47 +108,84 @@ const IgnitionFlux = ({ onNavigate, onSelectJob, onEnterKiosk }) => {
   };
 
   return (
-    <div className="p-6 bg-slate-950 text-slate-200 min-h-screen">
-      <header className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
+    <div style={{ padding: 24, backgroundColor: '#020617', color: '#e2e8f0', minHeight: '100%' }}>
+      <header style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 24,
+        borderBottom: '1px solid #1e293b',
+        paddingBottom: 16,
+      }}>
         <div>
-          <h2 className="text-2xl font-black italic tracking-tighter text-white uppercase">Ignition Flux</h2>
-          <p className="text-[10px] font-mono text-blue-500 uppercase tracking-widest">
+          <h2 style={{ fontSize: 24, fontWeight: 900, fontStyle: 'italic', letterSpacing: '-0.05em', color: '#ffffff', textTransform: 'uppercase' }}>
+            Ignition Flux
+          </h2>
+          <p style={{ fontSize: 10, fontFamily: 'monospace', color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
             {loading ? 'Loading...' : `${jobs.length} Repair Order${jobs.length !== 1 ? 's' : ''}`}
           </p>
         </div>
+        {/* hover:bg-slate-700 → ign-btn-secondary; active:scale-95 → ign-card-hover */}
         <button
           onClick={fetchJobs}
-          className="bg-slate-800 p-2 rounded-lg border border-slate-700 hover:bg-slate-700 active:scale-95 transition-all"
+          className="ign-btn-secondary ign-card-hover"
+          style={{
+            backgroundColor: '#1e293b',
+            padding: 8,
+            borderRadius: 8,
+            border: '1px solid #334155',
+            cursor: 'pointer',
+          }}
         >
-          <RefreshCw size={16} className={`text-blue-500 ${loading ? 'animate-spin' : ''}`} />
+          {/* animate-spin → ign-spin CSS class */}
+          <RefreshCw size={16} className={loading ? 'ign-spin' : ''} style={{ color: '#3b82f6' }} />
         </button>
       </header>
 
-      {/* SUMMARY TILES */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
+      {/* SUMMARY TILES — grid-cols-4 → flex */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
         {(['OPEN', 'IN PROGRESS', 'AWAITING AUTH', 'CLOSED']).map(k => (
           <button
             key={k}
             onClick={() => setFilter(filter === k ? 'ALL' : k)}
-            className={`bg-slate-900 border rounded-xl p-3 text-center transition-all active:scale-95 ${filter === k ? 'border-blue-500/60' : 'border-slate-800 hover:border-slate-600'}`}
+            style={{
+              flex: 1,
+              backgroundColor: '#0f172a',
+              border: `1px solid ${filter === k ? 'rgba(59,130,246,0.60)' : '#1e293b'}`,
+              borderRadius: 12,
+              padding: 12,
+              textAlign: 'center',
+              transition: 'border-color 0.15s',
+              cursor: 'pointer',
+            }}
           >
-            <p className="text-xl font-black text-white">{counts[k]}</p>
-            <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest leading-tight mt-0.5">{k}</p>
+            <p style={{ fontSize: 20, fontWeight: 900, color: '#ffffff' }}>{counts[k]}</p>
+            <p style={{ fontSize: 8, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', lineHeight: 1.25, marginTop: 2 }}>{k}</p>
           </button>
         ))}
       </div>
 
       {/* FILTER TABS */}
-      <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, overflowX: 'auto', paddingBottom: 4 }}>
         {FILTERS.map(f => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`flex-shrink-0 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${
-              filter === f
-                ? 'bg-blue-600 border-blue-500 text-white'
-                : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-600 hover:text-white'
-            }`}
+            style={{
+              flexShrink: 0,
+              padding: '8px 16px',
+              borderRadius: 12,
+              fontSize: 9,
+              fontWeight: 900,
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              border: '1px solid',
+              transition: 'all 0.15s',
+              cursor: 'pointer',
+              backgroundColor: filter === f ? '#2563eb' : '#0f172a',
+              borderColor:     filter === f ? '#3b82f6' : '#1e293b',
+              color:           filter === f ? '#ffffff' : '#64748b',
+            }}
           >
             {f}
           </button>
@@ -139,29 +193,54 @@ const IgnitionFlux = ({ onNavigate, onSelectJob, onEnterKiosk }) => {
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-5">
-          <AlertCircle size={14} className="text-red-500 flex-shrink-0" />
-          <p className="text-red-400 text-xs font-bold">{error}</p>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          backgroundColor: 'rgba(239,68,68,0.10)',
+          border: '1px solid rgba(239,68,68,0.30)',
+          borderRadius: 12,
+          padding: 16,
+          marginBottom: 20,
+        }}>
+          <AlertCircle size={14} style={{ color: '#ef4444', flexShrink: 0 }} />
+          <p style={{ color: '#f87171', fontSize: 12, fontWeight: 700 }}>{error}</p>
         </div>
       )}
 
+      {/* animate-pulse → ign-pulse CSS class */}
       {loading && (
-        <div className="text-center py-16 text-slate-500 text-[10px] uppercase tracking-widest font-black animate-pulse">
+        <div className="ign-pulse" style={{
+          textAlign: 'center',
+          paddingTop: 64,
+          paddingBottom: 64,
+          color: '#64748b',
+          fontSize: 10,
+          textTransform: 'uppercase',
+          letterSpacing: '0.1em',
+          fontWeight: 900,
+        }}>
           Loading repair orders...
         </div>
       )}
 
       {!loading && visible.length === 0 && (
-        <div className="text-center py-16 border border-dashed border-slate-800 rounded-2xl">
-          <Wrench size={32} className="text-slate-700 mx-auto mb-3" />
-          <p className="text-slate-500 text-[10px] uppercase tracking-widest font-black">
+        <div style={{
+          textAlign: 'center',
+          paddingTop: 64,
+          paddingBottom: 64,
+          border: '1px dashed #1e293b',
+          borderRadius: 16,
+        }}>
+          <Wrench size={32} style={{ color: '#334155', margin: '0 auto 12px' }} />
+          <p style={{ color: '#64748b', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 900 }}>
             No repair orders in this category
           </p>
         </div>
       )}
 
       {!loading && visible.length > 0 && (
-        <div className="space-y-3">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {visible.map(job => {
             const meta     = statusMeta(job.status);
             const cust     = job.customer;
@@ -175,31 +254,55 @@ const IgnitionFlux = ({ onNavigate, onSelectJob, onEnterKiosk }) => {
             const woLabel  = job.wo_number || job.id?.slice(0, 8).toUpperCase();
 
             return (
+              /* hover:border-slate-600 active:scale-[0.99] → ign-card-hover CSS class */
               <button
                 key={job.id}
                 onClick={() => navigateToJob(job)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-4 text-left hover:border-slate-600 active:scale-[0.99] transition-all"
+                className="ign-card-hover"
+                style={{
+                  width: '100%',
+                  backgroundColor: '#0f172a',
+                  border: '1px solid #1e293b',
+                  borderRadius: 16,
+                  padding: 16,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 16,
+                  textAlign: 'left',
+                  transition: 'border-color 0.15s',
+                  cursor: 'pointer',
+                }}
               >
-                <div className={`flex-shrink-0 px-2 py-1 rounded-lg border ${meta.bg} ${meta.border}`}>
-                  <span className={`text-[8px] font-black uppercase tracking-widest ${meta.color}`}>
+                <div style={{
+                  flexShrink: 0,
+                  padding: '4px 8px',
+                  borderRadius: 8,
+                  border: `1px solid ${meta.borderColor}`,
+                  backgroundColor: meta.backgroundColor,
+                }}>
+                  <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: meta.color }}>
                     {meta.label}
                   </span>
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-black text-white uppercase tracking-tighter truncate">{custName}</p>
-                  <p className="text-[10px] text-slate-500 uppercase truncate">{vehLabel}</p>
-                  <p className="text-[9px] font-mono text-slate-600 mt-0.5">WO# {woLabel}</p>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 14, fontWeight: 900, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '-0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {custName}
+                  </p>
+                  <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {vehLabel}
+                  </p>
+                  <p style={{ fontSize: 9, fontFamily: 'monospace', color: '#475569', marginTop: 2 }}>WO# {woLabel}</p>
                 </div>
 
-                <div className="flex-shrink-0 flex items-center gap-3">
-                  <div className="flex items-center gap-1 text-slate-600">
+                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#475569' }}>
                     <Clock size={10} />
-                    <span className="text-[9px] font-black uppercase">
+                    <span style={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase' }}>
                       {elapsed(job.updated_at || job.created_at)}
                     </span>
                   </div>
-                  <ChevronRight size={14} className="text-slate-600" />
+                  <ChevronRight size={14} style={{ color: '#475569' }} />
                 </div>
               </button>
             );
