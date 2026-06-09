@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-10 (STANDARDS v1.6 — BENCH-B promoted to STD-010, Receipt Keeper)
+# Last updated: 2026-06-11 (BusinessProvider multi-business — Option B)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -290,6 +290,118 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-11 — BusinessProvider multi-business resolution (Option B)
+
+**Type:** Code. One shared file changed (`packages/shared/src/context/BusinessProvider.tsx`). PLATFORM_STATE.md updated. Zero migrations, zero schema changes, zero API changes.
+
+**Session mandate:** Auth-spine surgery on BusinessProvider — replace `.single()` with multi-business array resolution so David can have his own business AND be the LAWNS owner simultaneously with proper QB/receipt isolation. Additive only. LAWNS single-business behavior must remain identical (regression gate).
+
+---
+
+**WHAT WAS BUILT:**
+
+**`packages/shared/src/context/BusinessProvider.tsx` (rewritten):**
+
+- **Owner path:** `supabase.from('businesses').select('*').eq('owner_id', user.id).eq('business_type', businessType)` — `.single()` removed. Returns array of all owned businesses.
+- **Member path:** `supabase.from('business_members').select('...businesses(*)').eq('user_id', user.id).eq('active', true)` — `.single()` removed. Returns array of all memberships; filtered by `business_type` (audit #13 vertical fence preserved).
+- Merges owner + member results into `ResolvedBusiness[]` (deduped by business_id so owner of their own nursery doesn't appear twice).
+- **Resolution rules:**
+  - 0 businesses → `businessError='no_business'` (unchanged — same error wall)
+  - **1 business → auto-select, NO picker, identical to today (regression gate ✓)**
+  - 2+ businesses → validate localStorage persisted ID; if valid → auto-use (no picker); if invalid/absent → clear + show picker
+- `setActiveBusinessId(id)` — writes to localStorage (`trace_active_business_${businessType}`) + updates React state. Switching re-scopes all downstream consumers immediately (state update → re-render → `activeResolved` changes → `business`/`businessId`/`isOwner`/`userPermissions` all update).
+- **`BusinessPicker` component** (inline in same file): inline-styled (no Tailwind), TRACE green palette, lists businesses by name + business_type, clicking a row calls `setActiveBusinessId`.
+
+**New context fields (additive — zero breaking changes):**
+- `businesses: Business[]` — all resolved businesses for this user+vertical
+- `activeBusinessId: string | null` — currently active selection (same value as `businessId`)
+- `setActiveBusinessId: (id: string) => void` — for future business-switcher UI
+
+**`[TRACE:BUSINESS]` instrumentation (born ON per STD-003 v1.5):**
+3 tagged logs in `resolve()`:
+1. Owner path result: count, ids
+2. Member path result: count
+3. Resolution outcome: total count, auto-select vs persisted vs picker, business names
+
+**Regression gate verified by code trace (LAWNS, single-business user):**
+- Owner path: finds 1 business (LAWNS, business_type='nursery') → `resolved.length === 1`
+- `resolved.length === 1` → auto-select, localStorage set, `activeBusinessIdState` set, `needsPicker=false`
+- `children` render, Dashboard sees `businessId=LAWNS.id`, `isOwner=true`, `userPermissions=null`
+- **Zero behavior change from prior code for any existing single-business user. ✓**
+
+---
+
+**Builds:**
+- Cultivar: ✅ zero TypeScript errors
+- Ignition: ✅ zero TypeScript errors
+
+**Commit:** `85dda46` — pushed to `david-obrien61/trace-platform` main.
+
+---
+
+**Agreed build sequence — updated state:**
+1. ~~**Honesty fix** — proactive QB dead-connection detection (Tech Debt #15).~~ ✅ RESOLVED 2026-06-08
+2. ~~**social_drafts fix + de-noun + generator→shared + edit/save + STD-008** (THUNDER).~~ ✅ RESOLVED 2026-06-08
+3. ~~**advert_channels router + campaign config fix + Blotato kill + STD-009** (THUNDER cont.).~~ ✅ RESOLVED 2026-06-08
+4. ~~**social_drafts_platform_check + STD-008 inverse + sweep** (THUNDER close-out).~~ ✅ RESOLVED 2026-06-09
+5. ~~**Ignition OS Reality Audit → STD-010 + built-inventory** (docs).~~ ✅ RESOLVED 2026-06-09
+6. ~~**ACTIVATE: pain-point demo wizard + DemoLaunchButton shared**.~~ ✅ RESOLVED 2026-06-10
+7. ~~**Margin engine full port + overhead wire** (Tech Debt #16).~~ ✅ NON-DESTRUCTIVE PHASE DONE 2026-06-10. Migration phase pending.
+8. ~~**Roles/permissions discovery + shared permission machinery** (BUILD 2).~~ ✅ RESOLVED 2026-06-10
+9. ~~**TD#14 Tailwind conversion** (THUNDER · Tailwind pass).~~ ✅ RESOLVED 2026-06-10
+10. ~~**Ignition instrumentation** (THUNDER · instrumentation pass).~~ ✅ RESOLVED 2026-06-10
+11. ~~**BusinessProvider multi-business (Option B)** (this session).~~ ✅ RESOLVED 2026-06-11
+12. **Receipt Keeper v1** — Gemini Flash OCR, local `receipts` table, confirm-before-commit. (BENCH-B trigger firing — David must confirm promotion before shipping.)
+13. **Cost-to-Produce tile** — feeds loaded cost into `tx.cost` slot.
+14. **(v2)** QB payables write-back + Attachable + CoA + cross-card reconciliation.
+
+---
+
+**No runbook needed** — pure code session. No migrations, no environment changes.
+
+**Documentation propagation check (step 10):**
+1. `Help.tsx` — no new customer-facing features. No propagation needed.
+2. Onboarding — unchanged. Single-business users see no change.
+3. `PLATFORM_STATE.md` ✅ updated (both shared BusinessProvider row and Cultivar row).
+4. No `// FLAG:` placeholders affected.
+5. No new error messages.
+
+**Factual corrections captured (step 11):**
+- No factual corrections. All prior claims about BusinessProvider using `.single()` were accurate; this session replaces it by design, not by discovering a wrong prior claim.
+
+**No runbook needed** — pure code session.
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns introduced. `activeBusinessKey` uses `businessType` as a data value (the prop string), never a hardcoded literal. `BusinessPicker` renders `b.business_type` as display text — that's data, not an identifier.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ Vertical fence (audit #13) preserved: member path still filters `memberBiz.business_type !== businessType` before adding to resolved list.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Full read-only investigation of BusinessProvider, all 12 callers, and Ignition main.jsx before writing any code.
+- STD-002: N/A — this is a feature add, not a bug fix. Regression gate proven by code trace (single-business path is auto-select, identical to prior `.single()` behavior).
+- STD-003: ✅ `[TRACE:BUSINESS]` — 3 log lines, born ON (no flag, no `false` gate), subsystem-tagged. Fires in every `resolve()` call. David says "proven" → comment out.
+- STD-004: ✅ Vertical fence (audit #13) preserved. Tenant isolation: member path still checks `memberBiz.business_type === businessType` — a Cultivar member in Ignition still gets zero results from the member path for the shop vertical. Two-email proof deferred to operational check (no DB changes in this session; RLS is unchanged).
+- STD-005: ✅ No decisions reversed.
+- STD-006: ✅ No vertical nouns in shared code. `businessType` is always the prop value, not a hardcoded string.
+- STD-007: N/A — no integration status surfaces touched.
+- STD-008: N/A — no migrations.
+- STD-009: N/A — no generation path changes.
+- STD-010: N/A — no new opaque module names.
+- **BENCH standards (STEP 0 match):** BENCH-B trigger is still firing for Receipt Keeper. No new triggers from this session.
+
+**Gap graduation sweep (step 15):**
+- `remaining: voice-learning BI` — horizon v2/later. NOT past horizon.
+- `remaining: cadence-triggered generation` — horizon Social Rhythm. NOT past horizon.
+- `remaining: discovery persistence` — horizon v2/later. NOT past horizon.
+No gap graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- `Context · BusinessProvider.tsx` (shared): WORKS → WORKS (still WORKS; level unchanged, note updated with multi-business evidence).
+- `BusinessProvider / tenant isolation` (Cultivar): WORKS → WORKS (still WORKS; note updated).
+
+---
 
 ### 2026-06-10 — STANDARDS v1.5 — roster model + bench + Thunder intelligence
 
