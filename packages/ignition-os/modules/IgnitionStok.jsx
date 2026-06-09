@@ -8,7 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { Box, Search, Package, MapPin, AlertTriangle, ArrowRight, Lock } from 'lucide-react';
 import DataBridge from '../DataBridge';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings (30 classNames converted):
 // (1) focus:border-blue-500 on search input → ign-input CSS class handles focus

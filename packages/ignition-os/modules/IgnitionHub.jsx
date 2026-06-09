@@ -9,7 +9,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Map, Navigation, Truck, AlertCircle, Radio, Clock, Lock, Package, MapPin } from 'lucide-react';
 import DataBridge from '../DataBridge';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings (57 classNames converted):
 // (1) animate-pulse on Radio icon + ghost marker → ign-pulse CSS class

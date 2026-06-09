@@ -9,7 +9,7 @@ import { Search, Calculator, AlertTriangle, ArrowRight, Lock } from 'lucide-reac
 import DataBridge from '../DataBridge';
 import AIEngine from '@trace/shared/ai/AIEngine';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings (8 classNames converted):
 // (1) hover:bg-blue-500 on DECODE button → ign-btn-primary CSS class

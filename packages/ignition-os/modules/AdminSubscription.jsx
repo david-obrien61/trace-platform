@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import DataBridge from '../DataBridge';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings (39 classNames converted):
 // (1) md:grid-cols-3 responsive → fixed flex-wrap row (flagged: no breakpoint)

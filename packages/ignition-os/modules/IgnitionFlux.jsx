@@ -3,7 +3,7 @@ import { RefreshCw, ChevronRight, Clock, Wrench, AlertCircle } from 'lucide-reac
 import { supabase } from '../supabase';
 import DataBridge from '../DataBridge';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings (31 classNames converted):
 // (1) hover:bg-slate-700 on refresh button → ign-btn-secondary CSS class

@@ -9,7 +9,7 @@ import { supabase } from '../supabase';
 import DataBridge from '../DataBridge';
 import { Receipt, CreditCard, Banknote, Building2, CheckCircle2, ChevronLeft, ArrowRight, Printer } from 'lucide-react';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings (63 classNames converted):
 // (1) hover:text-white on Back button → dropped (cosmetic)

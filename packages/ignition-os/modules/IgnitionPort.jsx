@@ -11,7 +11,7 @@ import DataBridge from '../DataBridge';
 import { MarginEngine } from '../MarginEngine';
 import CustomerApprovalPortal from './CustomerApprovalPortal';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 const IgnitionPort = ({ activeJob, allJobs = [], onUpdateJob, onSelectJob }) => {
   const [viewMode, setViewMode] = useState('LIST');

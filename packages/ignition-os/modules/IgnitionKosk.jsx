@@ -13,7 +13,7 @@ import { usePowerSense } from '../hooks/usePowerSense';
 import SlideToComplete from './SlideToComplete';
 import { supabase } from '../supabase';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings (68 classNames converted):
 // (1) border-[6px]/shadow-[0_0_120px...inset]/rounded-[2rem] (toolbox mode) → inline custom values

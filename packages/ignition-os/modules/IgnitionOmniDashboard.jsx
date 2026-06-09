@@ -13,7 +13,7 @@ import {
 import DataBridge from '../DataBridge';
 import SavingsReport from './SavingsReport';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings (41 classNames converted):
 // (1) lg:grid-cols-3 on LiveMetrics grid → flex-wrap fixed (flagged: no breakpoint equivalent)

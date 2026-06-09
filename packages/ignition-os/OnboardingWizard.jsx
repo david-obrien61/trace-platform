@@ -19,7 +19,7 @@ import { supabase } from './supabase';
 import { MarginEngine } from './MarginEngine';
 import ExternalBridge from './ExternalBridge';
 
-const STYLE_DEBUG = false; // [TRACE:STYLE] STD-003
+const STYLE_DEBUG = true; // [TRACE:STYLE] STD-003
 
 // Dynamic color values for path-chooser and import sub-path buttons
 const CHOICE_COLORS = {

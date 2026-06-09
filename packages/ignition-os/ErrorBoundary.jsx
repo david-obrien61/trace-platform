@@ -1,7 +1,7 @@
 import React from 'react';
 import DataBridge from './DataBridge';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1: hover:bg-blue-500 on Reload button → ign-btn-primary CSS class
 // [TRACE:STYLE] ErrorBoundary converted, 7 classNames → inline, 1 non-1:1:

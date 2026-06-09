@@ -10,7 +10,7 @@ import { PackageOpen, Save, RefreshCw, DollarSign } from 'lucide-react';
 import { MarginEngine } from '../MarginEngine';
 import DataBridge from '../DataBridge';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings (38 classNames converted):
 // (1) sm:flex-row sm:items-center sm:p-10 sm:text-xl md:grid-cols-2 → dropped (no breakpoint equivalent)

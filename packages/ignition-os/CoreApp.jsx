@@ -33,7 +33,7 @@ import IgnitionInvoice from './modules/IgnitionInvoice';
 import IgnitionTools from './modules/IgnitionTools';
 import { Lock, LayoutDashboard, Truck, Activity, ShoppingCart, Search, Package, BarChart3, ShieldCheck, Users, Map, Store, ScanLine, QrCode, DollarSign, RefreshCw, UserPlus, ClipboardCheck, Cog, FileSearch, CheckCircle, ChevronRight, FilePlus, ClipboardList, Microscope, Receipt, Wrench } from 'lucide-react';
 
-const STYLE_DEBUG = false; // [TRACE:STYLE]
+const STYLE_DEBUG = true; // [TRACE:STYLE]
 
 const GRID_BG = {
   backgroundImage: 'linear-gradient(rgba(30,41,59,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(30,41,59,0.3) 1px, transparent 1px)',

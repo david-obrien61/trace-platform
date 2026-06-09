@@ -14,7 +14,7 @@ import {
 import { supabase } from '../supabase';
 import DataBridge from '../DataBridge';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings (90 classNames converted):
 // (1) hover:border-blue-500 / hover:bg-slate-800 / hover:border-slate-600 / hover:text-* → dropped (cosmetic)

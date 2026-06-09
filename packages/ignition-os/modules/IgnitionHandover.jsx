@@ -8,7 +8,7 @@
 import React, { useState } from 'react';
 import { AlertOctagon, Wrench, XCircle } from 'lucide-react';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings:
 // (1) hover:text-white on cancel button → ign-icon-btn CSS class

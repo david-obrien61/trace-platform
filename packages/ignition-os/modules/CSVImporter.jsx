@@ -10,7 +10,7 @@ import { Upload, CheckCircle, AlertCircle, ChevronDown, ChevronUp, X } from 'luc
 import ExternalBridge from '../ExternalBridge';
 import DataBridge from '../DataBridge';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings (60 classNames converted):
 // (1) animate-spin on loading spinner → ign-spin CSS class

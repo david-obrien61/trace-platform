@@ -10,7 +10,7 @@ import React, { useState, useEffect } from 'react';
 import { Database, CheckCircle, AlertCircle, RefreshCw, Link2, Link2Off, DollarSign, Users, ChevronRight } from 'lucide-react';
 import ExternalBridge from '../ExternalBridge';
 
-const STYLE_DEBUG = false; // [TRACE:STYLE] STD-003
+const STYLE_DEBUG = true; // [TRACE:STYLE] STD-003
 
 const QBO_CALLBACK_URL = (
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) ||

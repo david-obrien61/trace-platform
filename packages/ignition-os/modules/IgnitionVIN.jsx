@@ -5,7 +5,7 @@
  */
 import React from 'react';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 export default function IgnitionVIN({ onVinScanned }) {
   if (STYLE_DEBUG) console.log('[TRACE:STYLE] IgnitionVIN converted, 1 className → inline, 0 non-1:1');

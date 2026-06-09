@@ -18,7 +18,7 @@ import { supabase } from '../supabase';
 import DataBridge from '../DataBridge';
 import IgnitionVIN from './IgnitionVIN';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings (89 classNames converted):
 // (1) hover:* on all interactive elements → dropped (cosmetic)

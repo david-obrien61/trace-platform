@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { Users, Plus, Building2, MapPin, Phone, Mail, ArrowLeft, Star, Car, User, Search } from 'lucide-react';
 import DataBridge from '../DataBridge';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings (52 classNames converted):
 // (1) md:grid-cols-2 lg:grid-cols-3 on customer grid → flex-wrap fixed (flagged: no breakpoint equivalent)

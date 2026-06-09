@@ -9,7 +9,7 @@ import React, { useState } from 'react';
 import { Camera, ShieldAlert, CheckCircle2, AlertTriangle, FileCheck } from 'lucide-react';
 import DataBridge from '../DataBridge';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings (31 classNames converted):
 // (1) sm:p-8, sm:flex-row, sm:w-28, sm:text-xs, sm:text-5xl responsive → fixed/dropped; flagged

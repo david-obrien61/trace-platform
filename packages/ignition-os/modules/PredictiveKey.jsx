@@ -15,7 +15,7 @@ import {
 import DataBridge from '../DataBridge';
 import AIEngine from '@trace/shared/ai/AIEngine';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 

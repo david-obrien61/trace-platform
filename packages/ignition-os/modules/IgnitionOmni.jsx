@@ -6,7 +6,7 @@ import {
 import DataBridge from '../DataBridge';
 import { supabase } from '../supabase';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 const DEMO_LEAKAGE_ROWS = [
   { customer: 'Demo — Hansen Trucking', description: 'Engine Rebuild (8.0h)',      billed: 760,  target: 1000, leakage: 240, isDemo: true },

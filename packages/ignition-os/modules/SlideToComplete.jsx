@@ -8,7 +8,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronsRight } from 'lucide-react';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings flagged:
 // - cursor-grab / active:cursor-grabbing → kept via className="ign-slide-thumb" (ignition-theme.css)

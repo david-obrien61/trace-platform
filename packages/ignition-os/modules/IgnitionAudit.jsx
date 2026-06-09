@@ -16,7 +16,7 @@ import DataBridge from '../DataBridge';
 import AIEngine from '@trace/shared/ai/AIEngine';
 import { supabase } from '../supabase';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

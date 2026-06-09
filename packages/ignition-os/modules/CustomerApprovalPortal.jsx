@@ -22,7 +22,7 @@ import {
 import { supabase } from '../supabase';
 import DataBridge from '../DataBridge';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings (71 classNames converted):
 // (1) hover:text-slate-400 on close button → dropped (cosmetic)

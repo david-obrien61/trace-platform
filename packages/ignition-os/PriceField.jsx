@@ -10,7 +10,7 @@ import { Lock, Unlock, AlertCircle } from 'lucide-react';
 import { MarginEngine } from './MarginEngine';
 import DataBridge from './DataBridge';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings:
 // (1) hover:bg-slate-700 on lock toggle → ign-btn-secondary CSS class

@@ -3,7 +3,7 @@ import { Wrench, Plus, Clock, ToggleLeft, ToggleRight, X, Shield, Barcode } from
 import DataBridge from '../DataBridge';
 import { supabase } from '../supabase';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings (48 classNames converted):
 // (1) PMI_BADGES.*.classes Tailwind strings → CSS value objects (restructured)

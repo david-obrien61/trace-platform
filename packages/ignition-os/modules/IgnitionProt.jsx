@@ -8,7 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { Save, TrendingUp, Settings, Trash2, Plus, ShieldCheck, Calculator } from 'lucide-react';
 import DataBridge from '../DataBridge';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings (49 classNames converted):
 // (1) lg:grid-cols-2 main grid → flex-wrap (flagged: no breakpoint equivalent)

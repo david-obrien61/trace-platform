@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { Truck, Store, Plus, Building2, MapPin, Phone, Globe, Hash, ArrowLeft } from 'lucide-react';
 import DataBridge from '../DataBridge';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings (40 classNames converted):
 // (1) hover:bg-orange-500 on primary buttons → ign-btn-orange CSS class

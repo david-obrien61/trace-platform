@@ -9,7 +9,7 @@ import React, { useState, useRef } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import DataBridge from './DataBridge';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // Non-1:1 mappings:
 // (1) hover:bg-emerald-500 on accept button → ign-btn-emerald CSS class

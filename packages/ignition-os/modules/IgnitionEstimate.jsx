@@ -19,7 +19,7 @@ import DataBridge from '../DataBridge';
 import CustomerApprovalPortal from './CustomerApprovalPortal';
 import PriceField from '../PriceField';
 
-const STYLE_DEBUG = false;
+const STYLE_DEBUG = true;
 
 // ─── constants ────────────────────────────────────────────────────────────────
 

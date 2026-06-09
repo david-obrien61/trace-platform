@@ -17,7 +17,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../supabase';
 import DataBridge from '../DataBridge';
 
-const STYLE_DEBUG = false; // [TRACE:STYLE] STD-003: set true to enable style logs
+const STYLE_DEBUG = true; // [TRACE:STYLE] STD-003: set true to enable style logs
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 
