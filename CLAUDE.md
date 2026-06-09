@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: June 10, 2026 (THUNDER · Tailwind pass COMPLETE — all 34 files converted, CDN removed)
+# Last updated: 2026-06-10 (THUNDER · Ignition instrumentation — 21 files, 5 tags, 100% coverage ledger)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -289,6 +289,119 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-10 — THUNDER · Ignition instrumentation pass (5-tag teardown prep)
+
+**Type:** Code + Docs. 21 files instrumented in `packages/ignition-os/` only. 1 coverage ledger written. 0 logic changes, 0 migrations, 0 schema changes.
+
+**Session mandate:** Add 5 tagged console subsystems ahead of the surgical Ignition teardown/migration. Tags: `[TRACE:MARGIN]`, `[TRACE:AUTH]`, `[TRACE:DATA]`, `[TRACE:WORKFLOW]`, `[TRACE:API]`. All tags ON-by-default (STD-003). David controls off per-subsystem by commenting out the named const. Claude does not silence on its own.
+
+---
+
+**WHAT WAS BUILT:**
+
+**21 files instrumented (Ignition OS only — scope enforced):**
+
+| Subsystem | Files | Key Cut-Lines Tagged |
+|---|---|---|
+| MARGIN (A PATH) | `MarginEngine.js`, `PriceField.jsx`, `IgnitionPort.jsx`, `IgnitionProcure.jsx`, `OnboardingWizard.jsx` (root) | Every `calculateRetail()` call on the LOCAL engine — teardown targets for migration to shared |
+| MARGIN (C PATH) | `DataBridge.js`, `IgnitionCipher.jsx`, `OnboardingWizard.jsx` (root) | `getActiveMargin`, `calculateRetail` (prot_matrix percent-of-cost; PRICE WILL CHANGE warning) |
+| MARGIN (D PATH) | `IgnitionEstimate.jsx` | `markupPercent = shopPolicy.markup_percent` (flat-percent fallback) |
+| MARGIN (E PATH) | `IgnitionOmni.jsx`, `IgnitionProt.jsx` | `shops.margin_config` read/write (display-only) + overhead_config source |
+| AUTH | `DataBridge.js`, `CoreApp.jsx`, `IgnitionAdmin.jsx` | Format-collision detector in AccessGatekeeper: `capability-string (NEW → userCapabilities=[])` vs `role-badge (SEED/OLD → expansion works)`; member CREATE path shows new format |
+| DATA | `DataBridge.js` | `save/load` for teardown-target keys with key name in log |
+| WORKFLOW | `CoreApp.jsx`, `IgnitionFlux.jsx`, `IgnitionIntake.jsx`, `IgnitionEval.jsx`, `CustomerApprovalPortal.jsx`, `IgnitionKosk.jsx`, `IgnitionEstimate.jsx`, `IgnitionInvoice.jsx` | Full 8-step RO chain: intake→in_eval→eval_done→sent→authorized→in_repair→invoiced→paid/closed |
+| API (DARK) | `ExternalBridge.js`, `IgnitionAudit.jsx`, `IgnitionCipher.jsx`, `IgnitionEstimate.jsx`, `PredictiveKey.jsx` | Every AIEngine.call() and QB OAuth call — labeled DARK IN PROD (VITE_API_URL unset; TD#25) |
+
+**`docs/ignition-trace-coverage.md`** (new) — 100% file ledger:
+- 77 total files classified: **21 INSTRUMENTED** / 19 SKIPPED-LOW-RISK / 37 SKIPPED-DEAD
+- **⚠️ BLIND SPOTS ON CUT-LINES** section (4 items: IgnitionOmniDashboard SavingsReport gap, ExternalBridge sync paths partial, useIgnitionCipher dead hook, IgnitionEval dtcCount workaround)
+- Teardown readiness checklists for all 4 subsystems
+- Per-subsystem const gate file lists (silence by commenting out the const)
+
+**How to silence a subsystem (STD-003):** comment out the named const at file top:
+```js
+// const TRACE_MARGIN = true;   ← comment this; logs become dead code
+```
+David calls this. Claude may suggest "MARGIN migration proven, want it off?" but does not silence unilaterally.
+
+---
+
+**ACCEPTANCE CRITERIA — ALL MET:**
+
+- `npm run build:ignition` → 1838 modules ✅ zero errors
+- `npm run build:cultivar` → 2177 modules ✅ zero errors
+- Scope enforced: 0 instrumented files in `packages/cultivar-os/` or `packages/shared/`
+- Logic unchanged: every instrumented file has identical runtime behavior with `TRACE_X = false`
+- Coverage ledger: `docs/ignition-trace-coverage.md` — 100% of 77 files classified
+- STD-003: all logs gated behind named const, consistent `[TRACE:TAG]` prefix
+
+---
+
+**Agreed build sequence — updated state:**
+1. ~~**Honesty fix** — proactive QB dead-connection detection (Tech Debt #15).~~ ✅ RESOLVED 2026-06-08
+2. ~~**social_drafts fix + de-noun + generator→shared + edit/save + STD-008** (THUNDER).~~ ✅ RESOLVED 2026-06-08
+3. ~~**advert_channels router + campaign config fix + Blotato kill + STD-009** (THUNDER cont.).~~ ✅ RESOLVED 2026-06-08
+4. ~~**social_drafts_platform_check + STD-008 inverse + sweep** (THUNDER close-out).~~ ✅ RESOLVED 2026-06-09
+5. ~~**Ignition OS Reality Audit → STD-010 + built-inventory** (docs).~~ ✅ RESOLVED 2026-06-09
+6. ~~**ACTIVATE: pain-point demo wizard + DemoLaunchButton shared**.~~ ✅ RESOLVED 2026-06-10
+7. ~~**Margin engine full port + overhead wire** (Tech Debt #16).~~ ✅ NON-DESTRUCTIVE PHASE DONE 2026-06-10. Migration phase pending.
+8. ~~**Roles/permissions discovery + shared permission machinery** (BUILD 2).~~ ✅ RESOLVED 2026-06-10
+9. ~~**TD#14 Tailwind conversion** (THUNDER · Tailwind pass).~~ ✅ RESOLVED 2026-06-10
+10. ~~**Ignition instrumentation** (THUNDER · this session).~~ ✅ RESOLVED 2026-06-10
+11. **Receipt Keeper v1** — Gemini Flash OCR, local `receipts` table, confirm-before-commit.
+12. **Cost-to-Produce tile** — feeds loaded cost into `tx.cost` slot.
+13. **(v2)** QB payables write-back + Attachable + CoA + cross-card reconciliation.
+
+**⚠️ NEXT-SESSION WATCH — Margin Engine caller migration (checklist: `docs/audits/margin-engine-migration-checklist-2026-06-10.md`):**
+`[TRACE:MARGIN]` is now live on all A/C/D/E callers. The teardown flow is:
+1. **B barrel swap** → delete `packages/shared/src/pricing/marginEngine.ts` stub, point its re-export to the canonical engine
+2. **A callers** → `MarginEngine.js` LOCAL → `@trace/shared/business-logic/MarginEngine` (import path only; `calculateRetail(cost)` signature is identical)
+3. **SavingsReport.jsx** → fix broken import (currently imports from `'../MarginEngine'` which doesn't resolve)
+4. **D caller** → `IgnitionEstimate.jsx` markupPercent → `MarginEngine.getMarkupPercent(cost)`
+5. **C callers** → `IgnitionCipher.jsx` / `DataBridge.calculateRetail` / `OnboardingWizard DiagnosePath` (last — PRICE WILL CHANGE: prot_matrix $16.67 → slab $39.99 on $10 part)
+
+---
+
+**No runbook needed** — pure code + docs session. No migrations, no environment changes.
+
+**Documentation propagation check (step 10):**
+1. `Help.tsx` — no new customer-facing features. No propagation needed.
+2. Onboarding — unchanged.
+3. `docs/ignition-trace-coverage.md` ✅ new — 100% coverage ledger written this session.
+4. No `// FLAG:` placeholders affected.
+5. No new error messages.
+
+**Factual corrections captured (step 11):**
+- Prior session marked `STYLE_DEBUG = true` in the converted Ignition files as "STD-003 guard added to every converted file." This session confirmed those flags were already set to `true` in source — the value was NOT flipped to `false` in many files (e.g., IgnitionProt.jsx line 11 still reads `const STYLE_DEBUG = true;`). This is a non-blocking gap — the style debug logs are not sensitive — but it means the Tailwind pass's STD-003 claim was incomplete. Not corrected here (out of scope for this session); log only.
+
+**No runbook needed** — pure code session.
+
+**AC compliance (step 13):**
+- AC-1: ✅ Zero vertical nouns introduced. Instrumentation is observational only (console.log), no data model changes. All tags and const names are vertical-agnostic.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Read every file before instrumenting. No instrumentation added based on assumption — each log placement confirmed by reading the actual call sites.
+- STD-002: N/A — no bug fix applied. Instrumentation session.
+- STD-003: ✅ All logs use consistent `[TRACE:TAG]` prefix. All gated behind named `const TRACE_X = true;` at module scope. Silence = comment out the const. David controls per-subsystem.
+- STD-004: N/A — no business-scoped data feature shipped.
+- STD-005: N/A — no decisions reversed.
+- STD-006: ✅ No vertical nouns introduced. Scope enforced: packages/ignition-os/ only.
+- STD-007: N/A — no integration status surfaces touched (instrumentation only; ExternalBridge was read-only observation, no state change).
+- STD-008: N/A — no migrations written or applied.
+- STD-009: N/A — no generation path changes.
+- STD-010: ✅ Coverage ledger uses decoded names for all modules (IgnitionFlux = RO Queue, IgnitionCipher = DTC Decoder, etc.). No new opaque names introduced.
+
+**Gap graduation sweep (step 15):**
+- `remaining: voice-learning BI` — horizon v2/later. NOT past horizon.
+- `remaining: cadence-triggered generation` — horizon Social Rhythm. NOT past horizon.
+- `remaining: discovery persistence` — horizon v2/later. NOT past horizon.
+No gap graduations this session.
+
+---
 
 ### 2026-06-10 — THUNDER · Tailwind pass COMPLETE
 
