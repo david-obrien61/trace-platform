@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-11 (abuse guards: GUARD_A/B/C shipped OFF — platform business logic)
+# Last updated: 2026-06-11 (trace-app: businessType="general" vertical + debris cleanup migration)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -290,6 +290,164 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-11 — trace-app: businessType="general" vertical + debris cleanup migration
+
+**Type:** Code + Migration. One new package (`packages/trace-app/`), two root scripts added, one migration written. Zero migrations applied (David's manual step). Zero changes to BusinessProvider, AddBusiness.tsx, or Cultivar. Ignition unchanged.
+
+**Session mandate:** STEP 1 — verify BusinessProvider already scopes to the injected businessType. STEP 2 — create a `general` vertical app (`.app`) so TRACE Enterprises (business_type='general', id~45830ba7) resolves there. STEP 3 — write a cleanup migration to delete the debris nursery-typed TRACE Enterprises (id~11901e52).
+
+---
+
+**STEP 1 FINDING (read-only):**
+
+`packages/shared/src/context/BusinessProvider.tsx` line 218: `.eq('business_type', businessType)` — BusinessProvider already correctly scopes resolution to its `businessType` prop on both the owner path (lines 214–229) and member path (lines 234–257, `memberBiz.business_type !== businessType` vertical fence). The resolver is correct.
+
+The gap: no app passed `businessType="general"` to BusinessProvider. TRACE Enterprises (general) was in the database but invisible because Cultivar uses `businessType="nursery"` and Ignition uses `businessType="shop"`. The fix was not to change BusinessProvider — it was to create the missing app.
+
+---
+
+**WHAT WAS BUILT:**
+
+**`packages/trace-app/`** (new package — 12 files):
+
+```
+packages/trace-app/
+  package.json          @trace/trace-app, react/react-dom/react-router-dom/supabase-js only
+  vite.config.ts        @trace/shared alias identical to cultivar-os
+  tsconfig.json         identical to cultivar-os
+  index.html            title: "TRACE", theme-color: #27500A
+  src/
+    main.tsx
+    App.tsx             ← KEY FIX: <BusinessProvider businessType="general">
+    router.tsx          /login + /dashboard (PrivateRoute) + / → /dashboard
+    styles/globals.css  TRACE green CSS custom properties + .page/.btn classes
+    lib/
+      supabase.ts       re-exports from @trace/shared/supabase/client
+      auth.ts           configureAuth({ strategy: 'email', vertical: 'trace-app', tenantTable: 'businesses' })
+    pages/
+      Login.tsx         email/password form, logo: 🏢, title: "TRACE"
+      Dashboard.tsx     useBusinessContext + auth.useSession · [TRACE:BUSINESS] born ON
+                        no_business state → instructional copy (add via Cultivar + Business)
+                        business switcher (shown only when businesses.length > 1)
+                        business info card (name/phone/address/email/website/signed-in-as)
+                        placeholder modules card (dashed, "Modules coming soon")
+    components/
+      layout/
+        PrivateRoute.tsx  delegates to auth.PrivateRoute()
+```
+
+**`package.json`** (root) — two scripts added:
+```json
+"dev:trace":   "npm run dev --workspace=packages/trace-app",
+"build:trace": "npm run build --workspace=packages/trace-app"
+```
+
+**`supabase/migrations/20260611_delete_debris_trace_enterprises_nursery.sql`** (new):
+Triple-guarded DELETE targeting only the debris nursery-typed row:
+```sql
+DELETE FROM businesses
+WHERE id::text LIKE '11901e52%'
+  AND business_type = 'nursery'
+  AND name ILIKE '%TRACE%';
+```
+Includes STEP 1 verify (SELECT before delete — confirms 1 row) and STEP 3 verify (SELECT after — confirms 0 rows).
+
+**⚠️ David must run this manually in bgobkjcopcxusjsetfob Supabase SQL editor.** Run STEP 1 SELECT first, confirm 1 row, then run STEP 2 DELETE, then STEP 3 SELECT (expect 0 rows).
+
+After cleanup, David's business state:
+- LAWNS Tree Farm, LLC (`business_type='nursery'`) → resolves in Cultivar
+- TRACE Enterprises (`business_type='general'`) → resolves in trace-app
+
+---
+
+**End-to-end resolution (code-traced):**
+
+**David in trace-app:**
+1. Navigate to trace-app URL → `/login` → email/password sign in
+2. `auth.PrivateRoute()` → session found → renders Dashboard
+3. `BusinessProvider` (businessType='general') → `.eq('business_type', 'general')` owner path
+4. Finds TRACE Enterprises (45830ba7) → `resolved.length === 1` → auto-select
+5. `[TRACE:BUSINESS]` log: `{ businessId: '45830ba7...', name: 'TRACE Enterprises', type: 'general' }`
+6. Dashboard renders business info card, no switcher (single business)
+
+**David in Cultivar (regression gate):**
+1. BusinessProvider (businessType='nursery') → `.eq('business_type', 'nursery')` owner path
+2. Finds LAWNS Tree Farm (a1b2c3d4) → auto-select (single nursery)
+3. TRACE Enterprises (general) → not returned by the nursery-scoped query → invisible ✓
+4. `[TRACE:BUSINESS]` log: `{ name: 'LAWNS Tree Farm, LLC', type: 'nursery' }`
+
+**After debris cleanup (David's manual step):**
+- The nursery-typed TRACE Enterprises (11901e52) is deleted
+- Cultivar: still resolves LAWNS (unaffected)
+- trace-app: still resolves TRACE Enterprises general (unaffected — different id)
+
+---
+
+**Builds:**
+- trace-app: ✅ 93 modules, zero TypeScript errors
+- Cultivar: ✅ zero regressions
+- Ignition: ✅ 1838 modules, zero TypeScript errors
+
+---
+
+**Vercel setup for trace-app (David, future):**
+Create a new Vercel project → Import `david-obrien61/trace-platform` → Override:
+- Build Command: `npm run build:trace`
+- Output Directory: `packages/trace-app/dist`
+- Env vars: same `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` as cultivar-os (bgobkjcopcxusjsetfob project)
+
+No separate Supabase project needed — trace-app shares the same auth session as Cultivar. David signs in with david_obrien2016@outlook.com on either app.
+
+---
+
+**Documentation propagation check (step 10):**
+1. `Help.tsx` — no new customer-facing features. No propagation needed.
+2. Onboarding — unchanged. trace-app has no onboarding wizard (general businesses skip nursery onboarding).
+3. `PLATFORM_STATE.md` ✅ updated — new TRACE APP section with all items at correct levels.
+4. No `// FLAG:` placeholders affected.
+5. No new user-visible error messages. `no_business` state in trace-app Dashboard has clear instructional copy ("Add a business from Cultivar OS using the + Business button").
+
+**Factual corrections captured (step 11):**
+- STEP 1 verified: BusinessProvider was NOT broken — it already had `.eq('business_type', businessType)` on line 218. The prior session's handoff was correct in asserting it would scope to its injected type. The bug was the absence of an app passing `businessType="general"`, not a resolver defect.
+
+**No runbook needed** — trace-app is a standard Vite app with the same config pattern as cultivar-os. The Vercel setup is documented inline above.
+
+**AC compliance (step 13):**
+- AC-1: ✅ `businessType="general"` in App.tsx is a data value prop (string), not a TS identifier. `packages/trace-app/` name is the product name, not a vertical noun embedded in shared code. All shared code unchanged.
+- AC-2: ✅ No RLS changes. trace-app uses the same RLS policies (businesses scoped by owner_id) already in place.
+- AC-3: ✅ Vertical fence preserved. Cultivar users in trace-app get 0 rows (businessType='nursery' ≠ 'general'). trace-app users in Cultivar get 0 rows (businessType='general' ≠ 'nursery').
+- AC-4: ✅ No structural deviations. trace-app follows the same shared/auth + BusinessProvider + configureAuth pattern as Cultivar.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ STEP 1 read-only verification confirmed BusinessProvider was correct before writing any code. No fix applied based on assumption.
+- STD-002: N/A — no bug fix in the platform sense. The resolver was correct; this is a new vertical app.
+- STD-003: ✅ `const TRACE_BUSINESS_DEBUG = true; // [TRACE:BUSINESS] STD-003` born ON in `packages/trace-app/src/pages/Dashboard.tsx:4`. David says "proven" → comment out. No other instrumentation.
+- STD-004: N/A — trace-app resolves per-owner businesses from the shared `businesses` table already gated by `owner_id = auth.uid()` RLS. No new data surface opened.
+- STD-005: ✅ No decisions reversed.
+- STD-006: ✅ No vertical nouns introduced in shared code. `businessType="general"` is a string value in a prop.
+- STD-007: N/A — no integration connection status surfaces touched.
+- STD-008: Migration written (`20260611_delete_debris_trace_enterprises_nursery.sql`). **David must apply manually.** Not a schema migration — this is a data cleanup DELETE. Verification queries included in the file (STEP 1 SELECT before + STEP 3 SELECT after).
+- STD-009: N/A — no generation path changes.
+- STD-010: ✅ trace-app uses decoded names throughout (Login, Dashboard, AppRouter, PrivateRoute). No opaque module names.
+- **BENCH standards (STEP 0 match):** BENCH-B trigger still firing for Receipt Keeper. No new triggers from this session.
+
+**Gap graduation sweep (step 15):**
+- `remaining: voice-learning BI` — horizon v2/later. NOT past horizon.
+- `remaining: cadence-triggered generation` — horizon Social Rhythm. NOT past horizon.
+- `remaining: discovery persistence` — horizon v2/later. NOT past horizon.
+No gap graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- `TRACE APP` section: new (all rows fresh this session).
+- `trace-app · Build`: WORKS — 93 modules, 2026-06-11.
+- `trace-app · BusinessProvider (general)`: WIRED — App.tsx passes businessType="general"; code-traced.
+- `trace-app · Login/Dashboard/Auth`: EXISTS/WIRED as appropriate.
+- `trace-app · Vercel project`: EXISTS (not deployed).
+- `trace-app · Debris cleanup migration`: EXISTS (David must apply).
+- IN-FLIGHT table: 2 new rows added (debris cleanup + trace-app Vercel deploy).
+
+---
 
 ### 2026-06-11 — Abuse guards: GUARD_A/B/C shipped OFF (platform business logic)
 

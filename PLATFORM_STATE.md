@@ -3,7 +3,7 @@
      PRESUMED/UNKNOWN are quarantined below — never in the verified table.
      Read first every session. Update the relevant line after any state change.
      Never round a level up. -->
-<!-- Last verified: 2026-06-11 (add-a-business: email-exists→LOGIN_TO_ADD + /add-business page + Dashboard entry point) -->
+<!-- Last verified: 2026-06-11 (trace-app created: businessType="general", 93 modules, BusinessProvider scopes to 'general'; debris migration written for David) -->
 <!-- Detail docs: built-inventory.md, CLAUDE.md, STANDARDS.md, PLATFORM_STRATEGY.md -->
 
 ## VERIFICATION KEY
@@ -102,6 +102,20 @@
 
 ---
 
+## TRACE APP (`packages/trace-app/`)
+
+| ITEM | LEVEL | LOCATION | EVIDENCE | → DETAIL |
+|---|---|---|---|---|
+| **Build** | WORKS | `packages/trace-app/` | 93 modules, zero errors — 2026-06-11 | CLAUDE.md §HANDOFF 2026-06-11 |
+| **BusinessProvider (general)** | WIRED | `packages/trace-app/src/App.tsx` | `<BusinessProvider businessType="general">` — resolves only `business_type='general'` rows (TRACE Enterprises 45830ba7) · LAWNS (nursery) correctly absent · `[TRACE:BUSINESS]` born ON in Dashboard.tsx | CLAUDE.md §HANDOFF 2026-06-11 |
+| **Login page** | EXISTS | `packages/trace-app/src/pages/Login.tsx` | Email/password via `auth.signIn` · same Supabase session as Cultivar (bgobkjcopcxusjsetfob) | — |
+| **Dashboard** | WIRED | `packages/trace-app/src/pages/Dashboard.tsx` | Reads business info, shows business switcher (for 2+ general businesses), no_business state instructional copy | — |
+| **Auth (email strategy)** | WIRED | `packages/trace-app/src/lib/auth.ts` | `configureAuth({ strategy: 'email', vertical: 'trace-app', tenantTable: 'businesses' })` | — |
+| **Vercel project** | EXISTS | `packages/trace-app/dist/` (after build) | Not yet deployed to Vercel — build verified locally only | David must create Vercel project (build:trace script, same Supabase env vars as cultivar-os) |
+| **Debris cleanup migration** | EXISTS | `supabase/migrations/20260611_delete_debris_trace_enterprises_nursery.sql` | Deletes nursery-typed TRACE Enterprises (id~11901e52) · triple-guarded WHERE · **David must run in bgobkjcopcxusjsetfob SQL editor** | CLAUDE.md §HANDOFF 2026-06-11 |
+
+---
+
 ## IGNITION OS (`packages/ignition-os/`)
 
 | ITEM | LEVEL | LOCATION | EVIDENCE | → DETAIL |
@@ -138,6 +152,8 @@
 | **Ignition QB** | Not started | No api/qbo/* functions exist for Ignition · must build from scratch (not port from Cultivar) |
 | **STD-008 inverse sweep** | David must run | `docs/audits/std008-inverse-sweep-2026-06-09.sql` in ufsgqckbxdtwviqjjtos SQL editor |
 | **business_members pin_hash verify (TD#18)** | David must run | `SELECT column_name FROM information_schema.columns WHERE table_name = 'business_members'` → confirm pin_hash present in bgobkjcopcxusjsetfob |
+| **trace-app debris cleanup** | David must run | `supabase/migrations/20260611_delete_debris_trace_enterprises_nursery.sql` → STEP 1 verify (1 row), STEP 2 delete, STEP 3 verify (0 rows) in bgobkjcopcxusjsetfob · expected result: LAWNS=nursery, TRACE=general |
+| **trace-app Vercel deploy** | Not started | Create new Vercel project → import trace-platform repo → Build Command: `npm run build:trace` · Output: `packages/trace-app/dist` · Env vars: same VITE_SUPABASE_URL/ANON_KEY as cultivar-os |
 
 ---
 
