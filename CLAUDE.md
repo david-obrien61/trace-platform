@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-10 (THUNDER · Ignition instrumentation — 21 files, 5 tags, 100% coverage ledger)
+# Last updated: 2026-06-10 (STANDARDS v1.5 — roster model + bench + Thunder intelligence)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -19,7 +19,7 @@ When this doc conflicts with another:
 - For architecture or where things should live, see PLATFORM_STRATEGY.md
 - For what's actually built in code, see TRACE_PLATFORM_AUDIT.md
 - For the discovery module, see DISCOVERY_MODULE_BRIEF.md (created Session 1b)
-- For engineering standards (STD-001 through STD-010), see STANDARDS.md
+- For engineering standards (STD-001 through STD-009 + BENCH-A through BENCH-D), see STANDARDS.md
 - For reuse ratio figures, see TRACE_PLATFORM_AUDIT.md "Reuse ratio — corrected ground truth (2026-05-28)"; the 68/78/80% figures cited in prior sessions are retired.
 
 Update the handoff section at the end of every session.
@@ -290,6 +290,102 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-10 — STANDARDS v1.5 — roster model + bench + Thunder intelligence
+
+**Type:** Docs-only. One file changed (`STANDARDS.md`). Two CLAUDE.md edits (header date + Scope & Hierarchy STD reference). Zero code changes, zero migrations, zero schema changes.
+
+**Session mandate:** Apply David's roster-additions doc to STANDARDS.md (v1.4 → v1.5): add the roster model (Active/Bench/N/A), four bench standards, Thunder intelligence instructions, and STD-003 amendment. Fix the header to carry `Last updated:` per the freshness convention (first application to this file). Flag BENCH-B to David — its trigger is firing for Receipt Keeper.
+
+---
+
+**WHAT WAS BUILT:**
+
+**STANDARDS.md v1.5** — 223 net new lines, 32 removed (old CANDIDATES section + old STD-003 implementation pattern):
+
+**Roster model (new section after PREAMBLE):**
+- Active = STD-001–009, enforced every relevant session. Two origin types: TRACE scars (our failures) + enterprise scars (industry's failures we inherit without re-bleeding).
+- Bench = identified, dormant until triggered. Each entry: ACTIVATE WHEN + CLASS (catastrophic/hygiene).
+- N/A = not listed — deliberately excluded from the roster.
+- Promotion rule: catastrophic-class requires David's go; hygiene-class: Thunder applies and reports.
+- File reframed as team-onboarding document (Erin/Andrew/Connor). Every standard carries its scar or territory as a lesson — not a rulebook.
+
+**THE BENCH (replaces empty CANDIDATES section):**
+- BENCH-A: payments/PCI — catastrophic. Never touch raw card data; use processor tokenization.
+- BENCH-B: file upload/ingest safety — catastrophic. ⚠️ **TRIGGER FIRING NOW** — Receipt Keeper v1 ingests receipt images. David must confirm promotion before Receipt Keeper ships.
+- BENCH-C: PII handling — catastrophic. Tenant-scoped, no plaintext PII in logs or URLs.
+- BENCH-D: external callback/webhook verification — catastrophic. Verify signatures; treat payloads as untrusted.
+
+**THUNDER INTELLIGENCE (new section after THE BENCH):**
+1. Match every build against bench ACTIVATE WHEN triggers. Catastrophic match = stop and ask David. Hygiene match = apply and report.
+2. Flag general-knowledge candidates — if a build touches territory with no TRACE standard, propose benching a candidate.
+3. Never round up a standard's application — partial compliance is not compliance.
+4. David owns activation and override. Overrides documented per STD-005.
+5. STEP 0 gate addition: every session prompt must include the full roster read + bench-match instruction.
+
+**STD-003 amendment (on-by-birth / commented-when-proven):**
+- OLD: `const SM_DEBUG = false; if (SM_DEBUG) console.log(...)` — born silent, flag-gated.
+- NEW: logs go in ON and emitting while unproven. David says "proven" → lines COMMENTED OUT. Flag-gate pattern RETIRED as resting state.
+- New scar added: Tailwind born-silent scar (2026-06-10) — `STYLE_DEBUG = false` at birth meant the instrument never spoke.
+- Active instrumentation section documents all 5 current THUNDER subsystem tags and their files.
+
+**ENFORCEMENT table:** BENCH-A–D row added — "Every session (STEP 0 roster match) → catastrophic = stop-and-ask; hygiene = apply-and-report."
+
+**GROWTH POLICY:** updated to document bench entry requirements (ACTIVATE WHEN trigger + CLASS + territory/lesson).
+
+**Header:** `Last updated: 2026-06-10` added (first application of the freshness convention to this file). Computed from changelog — equals date of v1.5 row.
+
+---
+
+**⚠️ ACTION REQUIRED — BENCH-B PROMOTION DECISION:**
+
+BENCH-B (file upload / ingest safety) trigger is firing for Receipt Keeper v1. Catastrophic-class — Thunder cannot auto-promote. **Before Receipt Keeper ships, David must answer: "Promote BENCH-B to ACTIVE?"**
+
+When promoted, the BENCH-B rule applies: validate real content-type (not just extension), enforce size limits, scope storage per-tenant, strip metadata. For Receipt Keeper specifically: Gemini Flash vision endpoint accepts images; the file never needs to be stored raw in a user-accessible location — OCR result is the artifact, not the image. Promotion is straightforward.
+
+---
+
+**No runbook needed** — pure docs session.
+
+**Documentation propagation check (step 10):**
+1. `Help.tsx` — no new customer-facing features. No propagation needed.
+2. Onboarding — unchanged.
+3. `PLATFORM_STATE.md` — no level changes this session (docs-only).
+4. No `// FLAG:` placeholders affected.
+5. No new error messages.
+
+**Factual corrections captured (step 11):**
+- Scope & Hierarchy in CLAUDE.md referenced "STD-001 through STD-010" — STANDARDS.md only has STD-001 through STD-009. The v1.5 entry is about bench standards (BENCH-A through BENCH-D), not a new STD-010. Corrected to "STD-001 through STD-009 + BENCH-A through BENCH-D."
+
+**No runbook needed** — pure docs session. No environment or DB changes.
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns introduced. No shared schema changes.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Read-only review of current STANDARDS.md before writing.
+- STD-002: N/A — no bug fix.
+- STD-003: ✅ This session amended STD-003 itself. Active instrumentation tags documented (BENCH-B firing flag is an example of on-by-birth observation surfaced immediately).
+- STD-004: N/A — no business-scoped feature.
+- STD-005: ✅ Old CANDIDATES section explicitly replaced (not supplemented alongside). Old STD-003 implementation pattern replaced with new pattern + retirement notice. Old "STD-001 through STD-010" reference replaced in Scope & Hierarchy.
+- STD-006: ✅ No vertical nouns introduced.
+- STD-007: N/A — no integration status surface touched.
+- STD-008: N/A — no migrations.
+- STD-009: N/A — no generation path changes.
+- **BENCH standards (STEP 0 match):** BENCH-B trigger is firing (Receipt Keeper). Catastrophic-class. Surfaced to David per Thunder intelligence rule 1. Not auto-promoted.
+
+**Gap graduation sweep (step 15):**
+- `remaining: voice-learning BI` — horizon v2/later. NOT past horizon.
+- `remaining: cadence-triggered generation` — horizon Social Rhythm. NOT past horizon.
+- `remaining: discovery persistence` — horizon v2/later. NOT past horizon.
+No gap graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):** None — docs-only session. No item levels changed.
+
+---
 
 ### 2026-06-10 — PLATFORM_STATE.md — verified status index
 
