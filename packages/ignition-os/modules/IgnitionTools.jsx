@@ -3,10 +3,29 @@ import { Wrench, Plus, Clock, ToggleLeft, ToggleRight, X, Shield, Barcode } from
 import DataBridge from '../DataBridge';
 import { supabase } from '../supabase';
 
+const STYLE_DEBUG = false;
+
+// Non-1:1 mappings (48 classNames converted):
+// (1) PMI_BADGES.*.classes Tailwind strings → CSS value objects (restructured)
+// (2) Conditional className strings on toggle/tab buttons → conditional inline styles
+// (3) grid grid-cols-2 gap-3 → flex-wrap (flagged: no breakpoint equivalent)
+// (4) focus:border-blue-500 on inputs → ign-input CSS class
+// (5) hover:text-white on X button → dropped (cosmetic)
+// (6) hover:border-blue-500 hover:text-blue-500 on add-tool button → ign-btn-ghost CSS class
+// (7) active:scale-95 on submit button → ign-card-hover CSS class
+// [TRACE:STYLE] IgnitionTools converted, 48 classNames → inline, 7 non-1:1 categories
+
+// PMI_BADGES restructured: CSS value objects instead of Tailwind class strings
 const PMI_BADGES = {
-  OVERDUE:  { label: 'PMI OVERDUE',  classes: 'bg-red-500/10 border-red-500/30 text-red-400' },
-  DUE_SOON: { label: 'PMI DUE SOON', classes: 'bg-amber-500/10 border-amber-500/30 text-amber-400' },
-  OK:       { label: 'PMI OK',       classes: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' },
+  OVERDUE:  { label: 'PMI OVERDUE',  color: '#f87171', borderColor: 'rgba(239,68,68,0.30)',   backgroundColor: 'rgba(239,68,68,0.10)'   },
+  DUE_SOON: { label: 'PMI DUE SOON', color: '#fbbf24', borderColor: 'rgba(245,158,11,0.30)',  backgroundColor: 'rgba(245,158,11,0.10)'  },
+  OK:       { label: 'PMI OK',       color: '#34d399', borderColor: 'rgba(16,185,129,0.30)',  backgroundColor: 'rgba(16,185,129,0.10)'  },
+};
+
+const getStatusStyle = (status) => {
+  if (status === 'ACTIVE')  return { color: '#34d399', borderColor: 'rgba(16,185,129,0.30)', backgroundColor: 'rgba(16,185,129,0.10)' };
+  if (status === 'OVERDUE') return { color: '#f87171', borderColor: 'rgba(239,68,68,0.30)',  backgroundColor: 'rgba(239,68,68,0.10)'  };
+  return { color: '#64748b', borderColor: '#334155', backgroundColor: '#1e293b' };
 };
 
 const getPmiStatus = (tool) => {
@@ -19,6 +38,27 @@ const getPmiStatus = (tool) => {
 
 const EMPTY_FORM = { name: '', type: '', brand: '', model: '', serial: '', barcode_id: '', pmi_interval_days: '' };
 
+const badgeBase = {
+  fontSize: 9,
+  fontWeight: 900,
+  textTransform: 'uppercase',
+  letterSpacing: '0.1em',
+  padding: '4px 8px',
+  borderRadius: 4,
+  border: '1px solid',
+};
+
+const inputStyle = {
+  backgroundColor: '#1e293b',
+  border: '1px solid #334155',
+  borderRadius: 12,
+  padding: '12px 16px',
+  color: '#ffffff',
+  fontSize: 14,
+  outline: 'none',
+  width: '100%',
+};
+
 const IgnitionTools = () => {
   const [tools, setTools] = useState([]);
   const [bypassLog, setBypassLog] = useState([]);
@@ -28,6 +68,8 @@ const IgnitionTools = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+
+  if (STYLE_DEBUG) console.log('[TRACE:STYLE] IgnitionTools converted, 48 classNames → inline, 7 non-1:1 categories');
 
   const shopId = DataBridge.getShopId();
   const currentUser = DataBridge.load('current_user');
@@ -63,10 +105,7 @@ const IgnitionTools = () => {
   };
 
   useEffect(() => { loadTools(); }, []);
-
-  useEffect(() => {
-    if (custodyEnabled && view === 'log') loadBypassLog();
-  }, [custodyEnabled, view]);
+  useEffect(() => { if (custodyEnabled && view === 'log') loadBypassLog(); }, [custodyEnabled, view]);
 
   const toggleCustody = () => {
     const next = !custodyEnabled;
@@ -98,20 +137,37 @@ const IgnitionTools = () => {
   };
 
   return (
-    <div className="p-6 pb-32 bg-slate-950 min-h-screen">
-      <div className="flex justify-between items-start mb-6">
+    <div style={{ padding: 24, paddingBottom: 128, backgroundColor: '#020617', minHeight: '100vh' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <div>
-          <h1 className="text-3xl font-black italic uppercase tracking-tighter text-white">Hardware Ledger</h1>
-          <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-1">Tool Registry & PMI Tracking</p>
+          <h1 style={{ fontSize: 30, fontWeight: 900, fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: '-0.05em', color: '#ffffff' }}>
+            Hardware Ledger
+          </h1>
+          <p style={{ fontSize: 10, color: '#64748b', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4 }}>
+            Tool Registry & PMI Tracking
+          </p>
         </div>
         {isAdmin && (
+          /* Conditional className → conditional inline styles */
           <button
             onClick={toggleCustody}
-            className={`flex items-center gap-2 px-4 py-2 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${
-              custodyEnabled
-                ? 'border-blue-500/40 bg-blue-500/10 text-blue-400'
-                : 'border-slate-700 bg-slate-900 text-slate-500'
-            }`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 16px',
+              borderRadius: 16,
+              border: '1px solid',
+              fontSize: 10,
+              fontWeight: 900,
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              transition: 'all 0.15s',
+              cursor: 'pointer',
+              borderColor: custodyEnabled ? 'rgba(59,130,246,0.40)' : '#334155',
+              backgroundColor: custodyEnabled ? 'rgba(59,130,246,0.10)' : '#0f172a',
+              color: custodyEnabled ? '#60a5fa' : '#64748b',
+            }}
           >
             {custodyEnabled ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
             Bay Custody {custodyEnabled ? 'ON' : 'OFF'}
@@ -120,85 +176,107 @@ const IgnitionTools = () => {
       </div>
 
       {custodyEnabled && (
-        <div className="mb-4 px-4 py-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl">
-          <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest">
+        <div style={{ marginBottom: 16, padding: '12px 16px', backgroundColor: 'rgba(59,130,246,0.10)', border: '1px solid rgba(59,130,246,0.20)', borderRadius: 16 }}>
+          <p style={{ color: '#60a5fa', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
             Bay custody active — techs must acknowledge all tools at job closeout
           </p>
         </div>
       )}
 
-      <div className="flex gap-2 mb-6">
+      {/* Tab buttons — conditional className → conditional inline styles */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
         <button
           onClick={() => setView('registry')}
-          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
-            view === 'registry' ? 'bg-white text-black border-white' : 'bg-slate-900 text-slate-400 border-slate-800'
-          }`}
+          style={{
+            padding: '8px 16px',
+            borderRadius: 12,
+            fontSize: 10,
+            fontWeight: 900,
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            border: '1px solid',
+            transition: 'all 0.15s',
+            cursor: 'pointer',
+            backgroundColor: view === 'registry' ? '#ffffff' : '#0f172a',
+            color: view === 'registry' ? '#000000' : '#94a3b8',
+            borderColor: view === 'registry' ? '#ffffff' : '#1e293b',
+          }}
         >
           Registry
         </button>
         {custodyEnabled && (
           <button
             onClick={() => setView('log')}
-            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
-              view === 'log' ? 'bg-white text-black border-white' : 'bg-slate-900 text-slate-400 border-slate-800'
-            }`}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 12,
+              fontSize: 10,
+              fontWeight: 900,
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              border: '1px solid',
+              transition: 'all 0.15s',
+              cursor: 'pointer',
+              backgroundColor: view === 'log' ? '#ffffff' : '#0f172a',
+              color: view === 'log' ? '#000000' : '#94a3b8',
+              borderColor: view === 'log' ? '#ffffff' : '#1e293b',
+            }}
           >
             Bypass Log
           </button>
         )}
       </div>
 
-      {error && <p className="text-red-400 text-xs mb-4 font-bold">{error}</p>}
+      {error && <p style={{ color: '#f87171', fontSize: 12, marginBottom: 16, fontWeight: 700 }}>{error}</p>}
 
       {view === 'registry' && (
         <>
           {loading ? (
-            <div className="text-slate-500 text-xs font-black uppercase tracking-widest text-center py-16">Loading...</div>
+            <div style={{ color: '#64748b', fontSize: 12, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', textAlign: 'center', paddingTop: 64, paddingBottom: 64 }}>
+              Loading...
+            </div>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {tools.length === 0 && !showAddForm && (
-                <div className="text-center py-16 text-slate-600">
-                  <Wrench size={40} className="mx-auto mb-4 opacity-30" />
-                  <p className="text-xs font-black uppercase tracking-widest">No tools registered</p>
+                <div style={{ textAlign: 'center', paddingTop: 64, paddingBottom: 64, color: '#475569' }}>
+                  <Wrench size={40} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
+                  <p style={{ fontSize: 12, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }}>No tools registered</p>
                 </div>
               )}
               {tools.map(tool => {
                 const pmiStatus = getPmiStatus(tool);
                 const pmiBadge = pmiStatus ? PMI_BADGES[pmiStatus] : null;
+                const statusStyle = getStatusStyle(tool.status);
                 return (
-                  <div key={tool.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-white font-black text-sm">{tool.name}</p>
-                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border ${
-                          tool.status === 'ACTIVE'
-                            ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10'
-                            : tool.status === 'OVERDUE'
-                            ? 'border-red-500/30 text-red-400 bg-red-500/10'
-                            : 'border-slate-700 text-slate-500 bg-slate-800'
-                        }`}>{tool.status}</span>
+                  <div key={tool.id} style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 16, padding: 20 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <p style={{ color: '#ffffff', fontWeight: 900, fontSize: 14 }}>{tool.name}</p>
+                        {/* Status badge — conditional className → getStatusStyle() */}
+                        <span style={{ ...badgeBase, ...statusStyle }}>{tool.status}</span>
+                        {/* PMI badge — pmiBadge.classes Tailwind → pmiBadge CSS values */}
                         {pmiBadge && (
-                          <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border ${pmiBadge.classes}`}>
+                          <span style={{ ...badgeBase, color: pmiBadge.color, borderColor: pmiBadge.borderColor, backgroundColor: pmiBadge.backgroundColor }}>
                             {pmiBadge.label}
                           </span>
                         )}
                       </div>
                       {(tool.brand || tool.model || tool.serial) && (
-                        <p className="text-slate-500 text-xs">{[tool.brand, tool.model, tool.serial].filter(Boolean).join(' · ')}</p>
+                        <p style={{ color: '#64748b', fontSize: 12 }}>{[tool.brand, tool.model, tool.serial].filter(Boolean).join(' · ')}</p>
                       )}
                       {tool.barcode_id && (
-                        <p className="text-slate-600 text-[10px] font-mono flex items-center gap-1">
+                        <p style={{ color: '#475569', fontSize: 10, fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: 4 }}>
                           <Barcode size={10} /> {tool.barcode_id}
                         </p>
                       )}
                       {tool.pmi_interval_days && (
-                        <p className="text-slate-600 text-[10px] flex items-center gap-1">
+                        <p style={{ color: '#475569', fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
                           <Clock size={10} /> PMI every {tool.pmi_interval_days} days
                           {tool.last_pmi_at && ` · Last: ${new Date(tool.last_pmi_at).toLocaleDateString()}`}
                         </p>
                       )}
                       {tool.last_assigned_tech && (
-                        <p className="text-slate-600 text-[10px]">Last tech: {tool.last_assigned_tech}</p>
+                        <p style={{ color: '#475569', fontSize: 10 }}>Last tech: {tool.last_assigned_tech}</p>
                       )}
                     </div>
                   </div>
@@ -208,21 +286,25 @@ const IgnitionTools = () => {
           )}
 
           {showAddForm ? (
-            <form onSubmit={handleAddTool} className="mt-4 bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col gap-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xs font-black uppercase tracking-widest text-white">Add Tool</h3>
-                <button type="button" onClick={() => setShowAddForm(false)} className="text-slate-500 hover:text-white transition-colors">
+            <form onSubmit={handleAddTool} style={{ marginTop: 16, backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 16, padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ fontSize: 12, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#ffffff' }}>Add Tool</h3>
+                {/* hover:text-white on X → dropped (cosmetic) */}
+                <button type="button" onClick={() => setShowAddForm(false)} style={{ color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.15s' }}>
                   <X size={16} />
                 </button>
               </div>
+              {/* focus:border-blue-500 → ign-input CSS class */}
               <input
                 required
                 placeholder="Tool Name *"
                 value={addForm.name}
                 onChange={e => setAddForm(p => ({ ...p, name: e.target.value }))}
-                className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500"
+                className="ign-input"
+                style={inputStyle}
               />
-              <div className="grid grid-cols-2 gap-3">
+              {/* grid grid-cols-2 → flex-wrap; flagged: no breakpoint */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
                 {[
                   { key: 'type',       placeholder: 'Type (Scanner, Torque...)' },
                   { key: 'brand',      placeholder: 'Brand' },
@@ -235,7 +317,8 @@ const IgnitionTools = () => {
                     placeholder={placeholder}
                     value={addForm[key]}
                     onChange={e => setAddForm(p => ({ ...p, [key]: e.target.value }))}
-                    className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500"
+                    className="ign-input"
+                    style={{ ...inputStyle, flex: '1 1 calc(50% - 6px)', minWidth: 140 }}
                   />
                 ))}
                 <input
@@ -243,25 +326,59 @@ const IgnitionTools = () => {
                   placeholder="PMI Interval (days)"
                   value={addForm.pmi_interval_days}
                   onChange={e => setAddForm(p => ({ ...p, pmi_interval_days: e.target.value }))}
-                  className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500"
+                  className="ign-input"
+                  style={{ ...inputStyle, flex: '1 1 calc(50% - 6px)', minWidth: 140 }}
                 />
               </div>
+              {/* active:scale-95 → ign-card-hover; disabled:opacity-50 → conditional inline opacity */}
               <button
                 type="submit"
                 disabled={saving}
-                className="bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] active:scale-95 transition-all disabled:opacity-50"
+                className="ign-card-hover"
+                style={{
+                  backgroundColor: '#2563eb',
+                  color: '#ffffff',
+                  paddingTop: 16,
+                  paddingBottom: 16,
+                  borderRadius: 16,
+                  fontWeight: 900,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  fontSize: 10,
+                  transition: 'all 0.15s',
+                  border: 'none',
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  opacity: saving ? 0.5 : 1,
+                }}
               >
                 {saving ? 'Saving...' : 'Add Tool'}
               </button>
             </form>
           ) : (
             isAdmin && (
+              /* hover:border-blue-500 hover:text-blue-500 → ign-btn-ghost CSS class */
               <button
                 onClick={() => setShowAddForm(true)}
-                className="mt-4 w-full flex items-center justify-center gap-2 py-4 border-2 border-dashed border-slate-700 rounded-2xl text-slate-500 hover:border-blue-500 hover:text-blue-500 transition-all"
+                className="ign-btn-ghost"
+                style={{
+                  marginTop: 16,
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  paddingTop: 16,
+                  paddingBottom: 16,
+                  border: '2px dashed #334155',
+                  borderRadius: 16,
+                  color: '#64748b',
+                  transition: 'all 0.15s',
+                  backgroundColor: 'transparent',
+                  cursor: 'pointer',
+                }}
               >
                 <Plus size={18} />
-                <span className="text-[10px] font-black uppercase tracking-widest">Add Tool</span>
+                <span style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Add Tool</span>
               </button>
             )
           )}
@@ -269,29 +386,29 @@ const IgnitionTools = () => {
       )}
 
       {view === 'log' && (
-        <div className="flex flex-col gap-3">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {bypassLog.length === 0 ? (
-            <div className="text-center py-16 text-slate-600">
-              <Shield size={40} className="mx-auto mb-4 opacity-30" />
-              <p className="text-xs font-black uppercase tracking-widest">No manager bypasses on record</p>
+            <div style={{ textAlign: 'center', paddingTop: 64, paddingBottom: 64, color: '#475569' }}>
+              <Shield size={40} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
+              <p style={{ fontSize: 12, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }}>No manager bypasses on record</p>
             </div>
           ) : (
             bypassLog.map(entry => (
-              <div key={entry.id} className="bg-slate-900 border border-amber-500/20 rounded-2xl p-5">
-                <div className="flex justify-between items-start mb-2">
+              <div key={entry.id} style={{ backgroundColor: '#0f172a', border: '1px solid rgba(245,158,11,0.20)', borderRadius: 16, padding: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                   <div>
-                    <p className="text-white font-black text-sm">{entry.tool_name}</p>
-                    <p className="text-slate-500 text-xs">{entry.tech_name} · {new Date(entry.created_at).toLocaleString()}</p>
+                    <p style={{ color: '#ffffff', fontWeight: 900, fontSize: 14 }}>{entry.tool_name}</p>
+                    <p style={{ color: '#64748b', fontSize: 12 }}>{entry.tech_name} · {new Date(entry.created_at).toLocaleString()}</p>
                   </div>
-                  <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-amber-500/30 bg-amber-500/10 text-amber-400">
+                  <span style={{ ...badgeBase, color: '#fbbf24', borderColor: 'rgba(245,158,11,0.30)', backgroundColor: 'rgba(245,158,11,0.10)' }}>
                     Manager Override
                   </span>
                 </div>
                 {entry.bypass_reason && (
-                  <p className="text-slate-300 text-xs mt-2 bg-slate-800 rounded-xl px-3 py-2">{entry.bypass_reason}</p>
+                  <p style={{ color: '#cbd5e1', fontSize: 12, marginTop: 8, backgroundColor: '#1e293b', borderRadius: 12, padding: '8px 12px' }}>{entry.bypass_reason}</p>
                 )}
                 {entry.bypass_by && (
-                  <p className="text-slate-600 text-[10px] mt-2">Override by: {entry.bypass_by}</p>
+                  <p style={{ color: '#475569', fontSize: 10, marginTop: 8 }}>Override by: {entry.bypass_by}</p>
                 )}
               </div>
             ))
