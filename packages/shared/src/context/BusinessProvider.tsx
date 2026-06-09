@@ -1,7 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../supabase/client';
 
-const SM_DEBUG = false; // flip to true to re-enable [SM-TRACE] diagnostics
+const SM_DEBUG = false; // flip to true to re-enable legacy [SM-TRACE] diagnostics
+
+// Per-vertical localStorage key — isolates Cultivar selection from Ignition selection
+const activeBusinessKey = (businessType: string) =>
+  `trace_active_business_${businessType}`;
 
 export interface Business {
   id: string;
@@ -21,9 +25,18 @@ export interface Business {
   created_at: string;
 }
 
+interface ResolvedBusiness {
+  business: Business;
+  isOwner: boolean;
+  permissions: string[] | null; // null = owner (full access implied)
+}
+
 export interface BusinessContextValue {
   business: Business | null;
   businessId: string | null;
+  businesses: Business[];                    // all resolved businesses for this user+vertical
+  activeBusinessId: string | null;          // currently selected business id
+  setActiveBusinessId: (id: string) => void; // switch active business
   businessError: string | null;
   loading: boolean;
   reload: () => void;
@@ -35,12 +48,87 @@ export interface BusinessContextValue {
 const BusinessContext = createContext<BusinessContextValue>({
   business: null,
   businessId: null,
+  businesses: [],
+  activeBusinessId: null,
+  setActiveBusinessId: () => {},
   businessError: null,
   loading: true,
   reload: () => {},
   userPermissions: null,
   isOwner: false,
 });
+
+// ─── Business picker ──────────────────────────────────────────────────────────
+// Shown only when 2+ businesses resolved and no valid persisted selection.
+// Inline-styled per platform policy (no Tailwind).
+
+function BusinessPicker({
+  businesses,
+  onSelect,
+}: {
+  businesses: Business[];
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: '#EAF3DE',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+    }}>
+      <div style={{
+        background: '#fff',
+        borderRadius: 12,
+        padding: '2rem',
+        maxWidth: 400,
+        width: '90%',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
+      }}>
+        <h2 style={{ margin: '0 0 0.5rem', color: '#27500A', fontSize: '1.25rem', fontWeight: 600 }}>
+          Select a business
+        </h2>
+        <p style={{ margin: '0 0 1.5rem', color: '#64748b', fontSize: '0.9rem', lineHeight: 1.5 }}>
+          You have access to multiple businesses. Choose which one to open.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {businesses.map(b => (
+            <button
+              key={b.id}
+              onClick={() => onSelect(b.id)}
+              style={{
+                textAlign: 'left',
+                background: '#f8faf5',
+                border: '1.5px solid #c8e6c9',
+                borderRadius: 8,
+                padding: '0.875rem 1rem',
+                cursor: 'pointer',
+                fontSize: '0.95rem',
+                color: '#1a2e0a',
+                fontWeight: 500,
+              }}
+            >
+              {b.name}
+              <span style={{
+                display: 'block',
+                fontSize: '0.78rem',
+                color: '#64748b',
+                fontWeight: 400,
+                marginTop: 2,
+                textTransform: 'capitalize',
+              }}>
+                {b.business_type}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function BusinessProvider({
   children,
@@ -49,23 +137,31 @@ export function BusinessProvider({
   children: React.ReactNode;
   businessType: string;
 }) {
-  const [business, setBusiness] = useState<Business | null>(null);
+  // All businesses this user can access in this vertical
+  const [resolvedBusinesses, setResolvedBusinesses] = useState<ResolvedBusiness[]>([]);
   const [businessError, setBusinessError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
-  const [userPermissions, setUserPermissions] = useState<string[] | null>(null);
-  const [isOwner, setIsOwner] = useState(false);
 
-  // [SM-TRACE] Track every state transition — reveals what BusinessProvider resolves to for this user
+  // Persisted active selection — initialized from localStorage, survives reload
+  const [activeBusinessId, setActiveBusinessIdState] = useState<string | null>(() => {
+    try { return localStorage.getItem(activeBusinessKey(businessType)); } catch { return null; }
+  });
+
+  const setActiveBusinessId = (id: string) => {
+    try { localStorage.setItem(activeBusinessKey(businessType), id); } catch {}
+    setActiveBusinessIdState(id);
+  };
+
+  // [SM-TRACE] legacy state transition log (gated — keep for re-enable)
   useEffect(() => {
     if (SM_DEBUG) console.log('[SM-TRACE] BusinessProvider state →', {
       loading,
-      businessId: business?.id ?? null,
+      businessId: resolvedBusinesses.find(r => r.business.id === activeBusinessId)?.business.id ?? null,
       businessError,
-      isOwner,
       businessType,
     });
-  }, [loading, business, businessError, isOwner, businessType]);
+  }, [loading, resolvedBusinesses, businessError, activeBusinessId, businessType]);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,77 +174,107 @@ export function BusinessProvider({
 
       if (!user) {
         if (!cancelled) {
-          setBusiness(null);
+          setResolvedBusinesses([]);
           setBusinessError(null);
           setLoading(false);
         }
         return;
       }
 
-      // 1. Try owner lookup (fast path — covers 99% of logins)
-      let { data: biz, error: ownerErr } = await supabase
+      const resolved: ResolvedBusiness[] = [];
+
+      // 1. Owner path — fetch ALL businesses this user owns in this vertical
+      //    (was .single(); now returns the full array)
+      const { data: ownedBizzes } = await supabase
         .from('businesses')
         .select('*')
         .eq('owner_id', user.id)
-        .eq('business_type', businessType)
-        .single();
+        .eq('business_type', businessType);
 
-      if (SM_DEBUG) console.log('[SM-TRACE] BusinessProvider owner lookup →', {
-        found: !!biz,
-        businessId: (biz as any)?.id ?? null,
-        error: ownerErr?.message ?? null,
+      console.log('[TRACE:BUSINESS] owner path', {
         userId: user.id,
         businessType,
+        count: ownedBizzes?.length ?? 0,
+        ids: ownedBizzes?.map(b => b.id) ?? [],
       });
 
-      let resolvedPerms: string[] | null = null; // null = owner (full access)
-      let resolvedIsOwner = true;
+      for (const biz of (ownedBizzes ?? [])) {
+        resolved.push({ business: biz as Business, isOwner: true, permissions: null });
+      }
 
-      // 2. If not an owner, check business_members (member path)
-      if (!biz) {
-        const { data: member, error: memberErr } = await supabase
-          .from('business_members')
-          .select('business_id, role, permissions, businesses(*)')
-          .eq('user_id', user.id)
-          .eq('active', true)
-          .single();
-        const memberBiz = (member?.businesses as any) ?? null;
-        if (SM_DEBUG) console.log('[SM-TRACE] BusinessProvider member lookup →', {
-          found: !!member,
-          memberBizId: memberBiz?.id ?? null,
-          memberBizType: memberBiz?.business_type ?? null,
-          businessTypeFilter: businessType,
-          typeMatch: memberBiz?.business_type === businessType,
-          error: memberErr?.message ?? null,
+      // 2. Member path — fetch ALL business_members rows for this user, active=true
+      //    Filter by business_type to prevent cross-vertical data exposure (audit #13)
+      //    (was .single(); now returns the full array)
+      const { data: memberships } = await supabase
+        .from('business_members')
+        .select('business_id, role, permissions, businesses(*)')
+        .eq('user_id', user.id)
+        .eq('active', true);
+
+      console.log('[TRACE:BUSINESS] member path', {
+        userId: user.id,
+        businessType,
+        membershipCount: memberships?.length ?? 0,
+      });
+
+      const ownedIds = new Set(resolved.map(r => r.business.id));
+      for (const m of (memberships ?? [])) {
+        const memberBiz = (m.businesses as any) as Business | null;
+        if (!memberBiz) continue;
+        if (memberBiz.business_type !== businessType) continue; // vertical fence (audit #13)
+        if (ownedIds.has(memberBiz.id)) continue; // already included via owner path
+        resolved.push({
+          business: memberBiz,
+          isOwner: false,
+          permissions: (m.permissions as string[]) ?? [],
         });
-        // Scope to current vertical — prevents cross-vertical data exposure (audit #13)
-        if (member && memberBiz?.business_type === businessType) {
-          biz = memberBiz;
-          resolvedPerms = (member.permissions as string[]) ?? [];
-          resolvedIsOwner = false;
-        }
       }
 
       if (cancelled) return;
 
-      if (!biz) {
-        if (SM_DEBUG) console.log('[SM-TRACE] BusinessProvider RESULT: no_business — both owner and member paths failed');
+      if (resolved.length === 0) {
+        console.log('[TRACE:BUSINESS] result: no_business — both paths returned nothing', { userId: user.id, businessType });
         setBusinessError('no_business');
-        setBusiness(null);
-        setUserPermissions(null);
-        setIsOwner(false);
-      } else {
-        if (SM_DEBUG) console.log('[SM-TRACE] BusinessProvider RESULT: resolved →', {
-          businessId: (biz as any).id,
-          businessType: (biz as any).business_type,
-          isOwner: resolvedIsOwner,
-          permCount: resolvedPerms === null ? 'owner(all)' : resolvedPerms.length,
-        });
-        setBusiness(biz as Business);
-        setBusinessError(null);
-        setUserPermissions(resolvedPerms);
-        setIsOwner(resolvedIsOwner);
+        setResolvedBusinesses([]);
+        setLoading(false);
+        return;
       }
+
+      setBusinessError(null);
+      setResolvedBusinesses(resolved);
+
+      if (resolved.length === 1) {
+        // REGRESSION-CRITICAL: single business → auto-select, NO picker shown, identical to prior behavior
+        const autoId = resolved[0].business.id;
+        console.log('[TRACE:BUSINESS] result: auto-select (single business)', {
+          id: autoId,
+          name: resolved[0].business.name,
+          isOwner: resolved[0].isOwner,
+        });
+        setActiveBusinessIdState(autoId);
+        try { localStorage.setItem(activeBusinessKey(businessType), autoId); } catch {}
+      } else {
+        // 2+ businesses — validate that the persisted selection is still in the resolved list
+        let persistedId: string | null = null;
+        try { persistedId = localStorage.getItem(activeBusinessKey(businessType)); } catch {}
+        const stillValid = persistedId !== null && resolved.some(r => r.business.id === persistedId);
+        console.log('[TRACE:BUSINESS] result: multi-business', {
+          count: resolved.length,
+          ids: resolved.map(r => r.business.id),
+          names: resolved.map(r => r.business.name),
+          persistedId,
+          stillValid,
+          selectionPath: stillValid ? 'persisted' : 'picker',
+        });
+        if (!stillValid) {
+          // Stale or missing selection — clear so the picker shows
+          setActiveBusinessIdState(null);
+          try { localStorage.removeItem(activeBusinessKey(businessType)); } catch {}
+        }
+        // If stillValid, setActiveBusinessIdState was already initialized from localStorage
+        // and the current React state already holds the right value — no-op needed.
+      }
+
       setLoading(false);
     }
 
@@ -164,17 +290,34 @@ export function BusinessProvider({
     };
   }, [tick, businessType]);
 
+  // Derive active business from the resolved list + current activeBusinessId
+  const activeResolved = resolvedBusinesses.find(r => r.business.id === activeBusinessId) ?? null;
+  const activeBusiness = activeResolved?.business ?? null;
+  const allBusinesses = resolvedBusinesses.map(r => r.business);
+
+  // Picker is needed when: not loading, no error, 2+ businesses, no valid selection
+  const needsPicker =
+    !loading &&
+    businessError === null &&
+    resolvedBusinesses.length > 1 &&
+    activeResolved === null;
+
   return (
     <BusinessContext.Provider value={{
-      business,
-      businessId: business?.id ?? null,
+      business: activeBusiness,
+      businessId: activeBusiness?.id ?? null,
+      businesses: allBusinesses,
+      activeBusinessId: activeBusiness?.id ?? null,
+      setActiveBusinessId,
       businessError,
       loading,
       reload: () => setTick(t => t + 1),
-      userPermissions,
-      isOwner,
+      userPermissions: activeResolved?.permissions ?? null,
+      isOwner: activeResolved?.isOwner ?? false,
     }}>
-      {children}
+      {needsPicker
+        ? <BusinessPicker businesses={allBusinesses} onSelect={setActiveBusinessId} />
+        : children}
     </BusinessContext.Provider>
   );
 }
