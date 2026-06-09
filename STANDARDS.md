@@ -1,6 +1,7 @@
 # STANDARDS.md — TRACE Engineering Standards
-# Version: 1.4
+# Version: 1.5
 # Created: 2026-06-04
+# Last updated: 2026-06-10
 # Owner: David O'Brien / TRACE Enterprises
 
 > Every standard on this list traces to a real failure that bit us.
@@ -16,6 +17,46 @@ This team is finite (solo + family). Every standard must trace to a real failure
 that bit us. We do not adopt best-practices by reputation. We fail fast, learn,
 adjust. A standard earns its place by preventing a specific scar; it loses its
 place if it adds friction without catching a real failure.
+
+---
+
+## THE ROSTER MODEL
+
+Standards exist in three states. The point is not to hold every industry standard —
+it is to hold the ones that apply to *our* stack, activate them at the right moment,
+and never carry noise.
+
+- **ACTIVE** (on the field — enforced now): STD-001 through STD-009 below. Each has
+  a confirming scar and is enforced every relevant session. Two origins:
+    - *TRACE scars* — failures from this codebase (the QB lying flag, the
+      hand-applied constraint, the hardcoded channels).
+    - *Enterprise scars* — failures the whole industry already bled for; we inherit
+      the lesson without re-bleeding (secrets in code, tenant isolation).
+  An active standard is enforced regardless of origin — the origin only tells you
+  whether the scar is ours or the field's.
+
+- **BENCH** (identified, applies to our stack, dormant until triggered): standards
+  we KNOW will apply when we reach certain territory, written ahead of time so we
+  adopt the proven path instead of improvising under pressure. Each bench standard
+  carries an **ACTIVATE WHEN** trigger (a recognizable build condition) and a
+  **CLASS** (catastrophic = stop-and-ask before proceeding; hygiene = apply-and-
+  report). A bench standard is not enforced until its trigger fires and it is
+  promoted to ACTIVE.
+
+- **N/A** (not on our roster): the rest of the industry's standards that don't apply
+  to our stack (React/TS, Supabase/Postgres, Vercel serverless, multi-tenant SaaS,
+  AI gateway). Deliberately not listed — listing them is the noise we reject.
+
+**Promotion (Bench → Active):** when a bench standard's trigger fires, it is promoted
+to ACTIVE with the date and the triggering build noted. Catastrophic-class promotions
+require David's explicit go (it's a conscious decision on a high-cost change). Hygiene-
+class promotions: Thunder applies and reports.
+
+**This file is also the document handed to new team members (Erin, Andrew, Connor).**
+Every standard carries its scar or its territory — the *why* — so it is understood,
+not blindly obeyed. A reader is invited to disagree-with-reasoning (red-team) and
+David holds the override. A standard without its story is a rulebook; a standard with
+its story is a lesson. Write them as lessons.
 
 ---
 
@@ -69,38 +110,67 @@ original failure.
 
 ### STD-003 — INSTRUMENTATION IS A PRESERVED ASSET
 
-**Rule:** Diagnostic logs are prefixed (e.g. `[SM-TRACE]`, `[BP-TRACE]`), and
-after a fix is verified they are PRESERVED behind a debug flag rather than
-deleted. Production builds must produce zero diagnostic output.
+**Rule:** Diagnostic logs are prefixed by subsystem tag (e.g. `[TRACE:MARGIN]`,
+`[TRACE:AUTH]`, `[TRACE:DATA]`, `[TRACE:WORKFLOW]`, `[TRACE:API]`) and follow the
+on-by-birth lifecycle:
 
-**Implementation pattern:**
+- **Born ON.** Instrumentation goes in AS code is written, ON and emitting, while
+  the code is unproven. It is NOT born silenced behind a false flag.
+- **On until proven.** It stays on, emitting, until the behavior is proven correct
+  in operation — not just in a build. "Builds pass" is NOT "proven." Operational
+  and visual acceptance is David's call. Thunder may suggest "this looks proven,
+  want to comment it out?" but does not silence unilaterally.
+- **Commented out when earned.** Once David says proven, the log lines are
+  COMMENTED OUT (dormant, re-enableable by uncommenting) — not deleted, not left
+  gated behind a false flag.
+- **Tag by subsystem** where many traces run simultaneously so the console stays
+  filterable — signal, not flood.
+
+**The flag-gate pattern is RETIRED as the resting state.** `const SM_DEBUG = false;
+if (SM_DEBUG) console.log(...)` is the old model. The resting state for an earned
+(proven) log is COMMENTED OUT, not silenced behind a false const.
+
+**Implementation pattern (current):**
 ```ts
-const SM_DEBUG = false;  // flip to true locally to re-enable trace
-if (SM_DEBUG) console.log('[SM-TRACE] SocialSetup MOUNTED — businessId:', businessId);
+// ACTIVE while unproven — born ON, emitting:
+console.log('[TRACE:MARGIN] calculateRetail — cost:', cost, 'tier:', tier);
+
+// After David says proven — COMMENTED OUT (not deleted, not flagged false):
+// console.log('[TRACE:MARGIN] calculateRetail — cost:', cost, 'tier:', tier);
 ```
 
-**Scar:** Every non-trivial bug required re-deriving which state to instrument.
-The Ignition loop, the SM enable error, the orders SELECT RLS gap — all required
-fresh probe points each time because prior diagnostics were deleted.
+**Scars:**
+- *Re-derivation scar:* Every non-trivial bug required re-deriving which state to
+  instrument. The Ignition loop, the SM enable error, the orders SELECT RLS gap —
+  all required fresh probe points each time because prior diagnostics were deleted.
+- *Born-silent scar (Tailwind pass, 2026-06-10):* The Tailwind conversion session
+  shipped instrumentation born SILENT (`STYLE_DEBUG = false`), which is on-by-birth's
+  opposite — the instrument couldn't catch anything because it never spoke. The
+  flag-gate pattern produced instruments that were defensive at birth instead of
+  diagnostic.
 
 **Preservation rule:**
-- After a fix is verified: wrap every `console.log('[SM-TRACE]...')` in
-  `if (SM_DEBUG)`, set `SM_DEBUG = false`
 - Never delete instrumentation — it documents WHERE the failure was and HOW to
   re-examine it
-- Note the flag name and file path in the session Handoff so future sessions can
-  re-enable without re-deriving
+- When David says proven: comment out the log lines (not delete, not set flag false)
+- Note the subsystem tag and file paths in the session Handoff so future sessions
+  can re-enable by uncommenting
 
-**Flag naming convention:** `<PREFIX>_DEBUG` where prefix matches the log prefix.
-Current active debug flags:
-- `SM_DEBUG` — Social Media setup lifecycle trace
-  - Files: `packages/cultivar-os/src/pages/SocialSetup.tsx`,
-    `packages/shared/src/context/BusinessProvider.tsx`,
-    `packages/cultivar-os/src/pages/Dashboard.tsx`
-  - Re-enable: set `SM_DEBUG = false` → `true` in each file (or add the flag
-    where not yet gated — see STD-003 adoption note below)
+**Active instrumentation (currently ON — not yet proven):**
+- `[TRACE:MARGIN]` — all A/C/D/E margin engine call sites.
+  Files: `MarginEngine.js`, `PriceField.jsx`, `IgnitionPort.jsx`, `IgnitionProcure.jsx`,
+  `IgnitionCipher.jsx`, `DataBridge.js`, `IgnitionEstimate.jsx`, `IgnitionOmni.jsx`,
+  `IgnitionProt.jsx`, `OnboardingWizard.jsx` (root).
+- `[TRACE:AUTH]` — `DataBridge.js`, `CoreApp.jsx`, `IgnitionAdmin.jsx`.
+- `[TRACE:DATA]` — `DataBridge.js` (save/load for teardown-target keys).
+- `[TRACE:WORKFLOW]` — `CoreApp.jsx`, `IgnitionFlux.jsx`, `IgnitionIntake.jsx`,
+  `IgnitionEval.jsx`, `CustomerApprovalPortal.jsx`, `IgnitionKosk.jsx`,
+  `IgnitionEstimate.jsx`, `IgnitionInvoice.jsx`.
+- `[TRACE:API]` — `ExternalBridge.js`, `IgnitionAudit.jsx`, `IgnitionCipher.jsx`,
+  `IgnitionEstimate.jsx`, `PredictiveKey.jsx`.
 
-**Scope:** Every bug-fix prompt. Any instrumentation added during diagnosis.
+**Scope:** Every bug-fix prompt. Any instrumentation added during diagnosis. All new
+code paths in non-trivial modules.
 
 ---
 
@@ -335,13 +405,14 @@ returns channel selections.
 |---|---|---|
 | STD-001 | Every bug-fix or data-change prompt | STEP 0 hard gate in session prompt |
 | STD-002 | Every bug-fix prompt | Before/after artifact in Handoff |
-| STD-003 | Every instrumentation added | Debug-flag wrap after fix verified |
+| STD-003 | Every instrumentation added | Born ON; commented out only when David says proven |
 | STD-004 | Every business-scoped feature | Two-email proof in Handoff |
 | STD-005 | Every decision recorded in docs | Review prior text before writing |
 | STD-006 | Every shared schema/code change | Step 13 AC-1 check in Part 9 |
 | STD-007 | Every integration with expiring credentials | Proactive expiry derivation, not reactive flag |
 | STD-008 | Every migration session | Verification query in SQL editor; confirmation in Handoff |
 | STD-009 | Every AI generation path + every config field for channel/cadence/count | Config-read required; no hardcoded channel names or counts in generator |
+| BENCH-A–D | Every session (STEP 0 roster match against ACTIVATE WHEN triggers) | Catastrophic-class match → stop and ask David; hygiene-class match → apply and report |
 
 **Part 9 addition:** A `STANDARDS compliance` line is now required alongside the
 existing Step 13 AC check at session end. See CLAUDE.md Part 9, Step 14.
@@ -350,19 +421,138 @@ existing Step 13 AC check at session end. See CLAUDE.md Part 9, Step 14.
 
 ## GROWTH POLICY
 
-New entries require:
+New ACTIVE entries require:
 1. A named scar (a real failure, dated)
 2. A rule that would have caught it
 3. A defined scope (not "always" — that dilutes everything)
 
-Proposed standards without a scar go in the "Candidates" section below and wait
-for a confirming incident before promotion.
+New BENCH entries require:
+1. An ACTIVATE WHEN trigger (a recognizable build condition)
+2. A CLASS (catastrophic/hygiene)
+3. A territory explanation — the scar or the industry's accumulated lesson that
+   justifies the standard. A bench entry without its story is just a rule.
+
+Bench standards without a confirming TRACE scar carry their territory (the industry's
+accumulated lesson) in place of a scar — the lesson is earned by the field, not by us
+specifically, and that is sufficient.
 
 ---
 
-## CANDIDATES (not yet promoted — no confirming scar yet)
+## THE BENCH
 
-*None at v1.*
+Identified, dormant — activate when the trigger fires.
+
+These apply to our stack and will bite if unaddressed when we reach their territory.
+They are written now so we adopt the proven path rather than improvise. Thunder reads
+these every session (STEP 0) and matches builds against the ACTIVATE WHEN triggers.
+
+---
+
+### BENCH-A — PAYMENT DATA SAFETY (PCI / tokenization)
+
+**ACTIVATE WHEN:** any code accepts money, handles card/bank data, or integrates a
+payment processor (Stripe, etc.).
+**CLASS:** 🔴 CATASTROPHIC — stop and get David's go before proceeding.
+
+**Rule (when active):** Never touch, store, or log raw card/bank numbers. Use the
+processor's tokenization (hosted fields / payment intents). Verify webhook signatures.
+Use idempotency keys on charge operations (a double-tap must not double-charge).
+
+**Territory (enterprise scar — not yet a TRACE scar):** The whole industry has bled
+here — leaked card data is existential (PCI liability, customer trust, possibly
+company-ending). This is the canonical "adopt the proven path, do not improvise"
+standard. When we reach payments, we lift a proven integration; we do not invent one.
+
+---
+
+### BENCH-B — FILE UPLOAD / INGEST SAFETY
+
+**ACTIVATE WHEN:** any code accepts a file from a user/customer (image, PDF, CSV) —
+including OCR ingest.
+**CLASS:** 🔴 CATASTROPHIC — stop and get David's go before proceeding.
+
+**Rule (when active):** Validate file type (real content-type, not just extension),
+enforce size limits, never execute or trust uploaded content, scope storage per-tenant,
+never let an upload path reach a place it can be served as code. Strip/validate metadata.
+
+**Territory:** Receipt Keeper v1 ingests receipt images via OCR — so this trigger is
+currently firing.
+
+⚠️ **TRIGGER IS FIRING NOW — Receipt Keeper v1.** This is catastrophic-class. Per the
+promotion rules, Thunder does NOT auto-promote. David must confirm before Receipt Keeper
+ships: **"Promote BENCH-B to ACTIVE for Receipt Keeper?"** Until David confirms, treat
+BENCH-B rules as advisory for the build and flag any deviation explicitly.
+
+---
+
+### BENCH-C — PII HANDLING
+
+**ACTIVATE WHEN:** code stores, displays, exports, or transmits customer personal data
+(names, addresses, phone, vehicle/customer records, anything identifying a real person).
+**CLASS:** 🔴 CATASTROPHIC — stop and get David's go before proceeding.
+
+**Rule (when active):** PII is tenant-scoped (rides on STD-004 isolation). Never log
+PII in plaintext diagnostics or TRACE output. Never put PII in URL params/query strings.
+Honor the customer-departure policy (customer takes what they paid for; identifiable
+data removed; only aggregate patterns retained). Minimize what's collected and exposed.
+
+**Territory:** Every vertical holds customer PII. Cultivar has customer records; Ignition
+has customers + vehicles. The cross-vertical exposure bug (STD-004 scar) was a PII
+near-miss. This formalizes the handling rules beyond just isolation.
+
+---
+
+### BENCH-D — EXTERNAL CALLBACK / WEBHOOK VERIFICATION
+
+**ACTIVATE WHEN:** an external service calls back into our system (payment webhooks,
+QB callbacks, any inbound POST from a third party).
+**CLASS:** 🔴 CATASTROPHIC — stop and get David's go before proceeding.
+
+**Rule (when active):** Verify the signature/secret on every inbound webhook before
+acting on it. Never trust an unsigned callback. Treat the payload as untrusted input
+(validate before use). Idempotency on webhook handlers (the same event may arrive twice).
+
+**Territory (enterprise scar):** QB integration already exists; payment processors are
+coming (BENCH-A). An unverified webhook is an open door for forged events (fake "payment
+succeeded"). Industry scar — well-documented, catastrophic if skipped.
+
+---
+
+## THUNDER INTELLIGENCE — match, flag, and propose
+
+Standards are not a static list Thunder obeys — they are a roster Thunder matches
+every build against. Per STEP 0, Thunder reads the FULL roster (Active + Bench)
+every session.
+
+**1. Match builds against the Bench.** While building, if the work matches a bench
+standard's ACTIVATE WHEN trigger, Thunder surfaces it:
+- **Catastrophic-class match:** STOP and ask David before proceeding. State the
+  standard, why it applies, and that it's catastrophic-class. (Rare, high-value —
+  these are the only mandatory stops; they are not noise, they are the guardrail working.)
+- **Hygiene-class match:** apply the standard and report it ("applied BENCH-X because
+  this build does Y"). No stop — reversible, low-cost, move-and-report.
+
+**2. Flag general-knowledge candidates (catch scars before they bite).** Thunder's
+training carries the full body of industry standards (the N/A set we didn't roster).
+If a build touches territory that USUALLY has a safeguard and we have NO standard
+(active or bench) for it, Thunder flags it: "this build does X; that territory usually
+has a safeguard; we have no standard for it — want me to bench a candidate?" This is
+how the roster grows ahead of the scar instead of after it.
+
+**3. Never round up a standard's application.** Applying a standard partially and
+calling it done is the half-truth class (see STD-001 / the no-round-up principle).
+If a standard can't be fully applied, say so explicitly — do not mark it satisfied.
+
+**4. David owns activation and override.** Thunder may SUGGEST promoting a bench
+standard or benching a candidate. David decides. Overrides (choosing not to apply an
+applicable standard) are documented per STD-005 in the override log, with the reasoning
+and a revisit trigger — a conscious, recorded exception, never a silent skip.
+
+**STEP 0 gate addition:** Every session prompt must include: "Read STANDARDS.md in
+full, INCLUDING the Bench. While building, match the work against bench ACTIVATE WHEN
+triggers and flag matches (catastrophic = stop-and-ask, hygiene = apply-and-report).
+Flag any unsafe territory we have no standard for as a bench candidate. Never round up
+a standard's application."
 
 ---
 
@@ -375,6 +565,7 @@ for a confirming incident before promotion.
 | 1.2 | 2026-06-08 | STD-008 added. Scar: `20260604_social_drafts_voice_learning.sql` committed-but-unapplied — every generate-posts INSERT failed silently; loadSocialDrafts 400'd; ~0 rows across multiple sessions. STD-008 adds live-schema verification gate. |
 | 1.3 | 2026-06-08 | STD-009 added. Scar: `campaigns/generate.ts` hardcoded '2 Instagram posts, 2 Facebook posts, 1 SMS' in AI prompt; never read `business_modules.config`. Business channel selections ignored by campaign generator for entire feature lifetime. LEXICON RULE added: "platform" reserved for top-level substrate; use "channel" inside the product. |
 | 1.4 | 2026-06-09 | STD-008 extended bidirectionally. Renamed "DEPLOYED SCHEMA == ON-DISK MIGRATIONS (BOTH DIRECTIONS)". Inverse scar added: `social_drafts_platform_check` existed in live DB but in no committed migration; 'sms' not in allowed list; atomic batch INSERT rolled back all rows (instagram + tiktok + sms) when SMS enabled. Fixed by `20260609_social_drafts_platform_check.sql`. Sweep query added to verification pattern. |
+| 1.5 | 2026-06-10 | Roster model added (Active/Bench/N/A). CANDIDATES section formalized into the trigger-tagged Bench: BENCH-A payments/PCI, BENCH-B file-upload (TRIGGER FIRING — Receipt Keeper v1; catastrophic-class; David's confirmation required before ship), BENCH-C PII, BENCH-D webhook verification. Thunder intelligence instructions added (match bench triggers, flag general candidates, never round up, David owns activation/override). STD-003 amended to corrected on-by-birth / commented-when-proven policy; flag-gate pattern retired as resting state; Tailwind born-silent scar added; active instrumentation subsystem tags listed. ENFORCEMENT table updated with BENCH-A–D row. Growth Policy updated for bench entries. File reframed as team-onboarding document (Erin/Andrew/Connor) — every standard carries its scar or territory as a lesson. |
 
 ---
 
