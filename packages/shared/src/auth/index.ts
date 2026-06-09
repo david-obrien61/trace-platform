@@ -49,3 +49,7 @@ export type { OwnerSignupConfig, VerticalStep, VerticalStepProps } from './Owner
 // Permission check helpers — pure functions, AC-1 clean, no vertical nouns
 export { can, hasRole, canAccessModule, expandRoles, deriveAllowed } from './permissions';
 export type { PermissionPolicy, SessionLike } from './permissions';
+
+// Abuse guards for business creation — shipped OFF, genuine kill-switches
+export { runBusinessCreationGuards } from './businessGuards';
+export type { GuardResult } from './businessGuards';

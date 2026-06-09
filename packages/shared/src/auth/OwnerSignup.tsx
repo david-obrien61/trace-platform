@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase/client';
 import { hashPin } from '../supabase/auth';
+import { runBusinessCreationGuards } from './businessGuards';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -257,6 +258,23 @@ export function OwnerSignup({ config, navigate }: Props) {
     if (collectPhone && phone.trim())     bizInsert.phone   = phone.trim();
     if (collectAddress && address.trim()) bizInsert.address = address.trim();
     if (collectWebsite && website.trim()) bizInsert.website = website.trim();
+
+    // ── Abuse guards (platform business logic, shipped OFF by default) ────────
+    // Each guard is a genuine kill-switch. OFF = no effect on the flow below.
+    // ON = enforces. See packages/shared/src/auth/businessGuards.ts for flags
+    // and activation discipline.
+    const guard = await runBusinessCreationGuards(userId, supabase);
+    if (!guard.allowed) {
+      setErrorMsg(guard.error ?? 'Account creation blocked. Please contact support.');
+      return null;
+    }
+    // Merge guard patches (e.g. GUARD_A sets trial_started_at=null for non-first businesses)
+    Object.assign(bizInsert, guard.insertPatch ?? {});
+    if (guard.heldForReview) {
+      console.log('[TRACE:BUSINESS] business creation held for review (GUARD_C)', {
+        userId, businessType,
+      });
+    }
 
     const { data: bizData, error: bizError } = await supabase
       .from('businesses')
