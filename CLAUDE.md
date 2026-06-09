@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-10 (STANDARDS v1.5 — roster model + bench + Thunder intelligence)
+# Last updated: 2026-06-10 (STANDARDS v1.6 — BENCH-B promoted to STD-010, Receipt Keeper)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -19,7 +19,7 @@ When this doc conflicts with another:
 - For architecture or where things should live, see PLATFORM_STRATEGY.md
 - For what's actually built in code, see TRACE_PLATFORM_AUDIT.md
 - For the discovery module, see DISCOVERY_MODULE_BRIEF.md (created Session 1b)
-- For engineering standards (STD-001 through STD-009 + BENCH-A through BENCH-D), see STANDARDS.md
+- For engineering standards (STD-001 through STD-010 + BENCH-A, BENCH-C, BENCH-D), see STANDARDS.md
 - For reuse ratio figures, see TRACE_PLATFORM_AUDIT.md "Reuse ratio — corrected ground truth (2026-05-28)"; the 68/78/80% figures cited in prior sessions are retired.
 
 Update the handoff section at the end of every session.

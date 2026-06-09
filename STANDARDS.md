@@ -1,5 +1,5 @@
 # STANDARDS.md — TRACE Engineering Standards
-# Version: 1.5
+# Version: 1.6
 # Created: 2026-06-04
 # Last updated: 2026-06-10
 # Owner: David O'Brien / TRACE Enterprises
@@ -26,7 +26,7 @@ Standards exist in three states. The point is not to hold every industry standar
 it is to hold the ones that apply to *our* stack, activate them at the right moment,
 and never carry noise.
 
-- **ACTIVE** (on the field — enforced now): STD-001 through STD-009 below. Each has
+- **ACTIVE** (on the field — enforced now): STD-001 through STD-010 below. Each has
   a confirming scar and is enforced every relevant session. Two origins:
     - *TRACE scars* — failures from this codebase (the QB lying flag, the
       hand-applied constraint, the hardcoded channels).
@@ -399,6 +399,60 @@ returns channel selections.
 
 ---
 
+### STD-010 — FILE UPLOAD / INGEST SAFETY
+
+**Promoted from BENCH-B:** 2026-06-10 — triggered by Receipt Keeper v1 (Gemini
+Flash vision ingest path). David's explicit go confirmed 2026-06-10.
+
+**Rule:** Any code path that accepts a file from a user or customer must:
+1. **Validate real content-type** — read magic bytes or rely on a trusted server-
+   side check; never trust the client-declared MIME type or file extension alone.
+2. **Enforce an explicit size limit** — reject before processing; do not consume a
+   payload to discover its size.
+3. **Never execute or trust the content** — treat all uploaded content as untrusted
+   input at the system boundary; no eval, no shell-out, no path traversal.
+4. **Scope storage per-tenant** — a file uploaded by Business A must never be
+   accessible to Business B; rides on STD-004 isolation. Storage path pattern:
+   `{bucket}/{business_id}/{file_id}` — never a flat shared bucket.
+5. **Do not surface raw uploads as executable code** — a stored upload must never
+   be served from a URL that a browser treats as a script or HTML resource.
+6. **For OCR / AI ingest paths:** the structured result is the artifact, not the
+   raw file. Prefer not persisting the raw upload unless there is a specific
+   retention requirement. If persisted, apply rules 1–5 in full.
+
+**Territory (enterprise scar — not yet a TRACE scar):** File upload vulnerabilities
+are a persistent top-10 class (content-type spoofing is trivial — any client can
+set `Content-Type: image/jpeg` on a PHP shell). Unrestricted upload → code
+execution is an established critical path. Size-limit absence → storage exhaustion
+/ denial of service. Tenant-scoped storage is a data-boundary requirement in the
+same class as STD-004. Receipt Keeper is the triggering build; these rules apply
+to all future upload paths.
+
+**Receipt Keeper — triggering build:** Gemini Flash vision accepts images via
+base64 payload; the raw image need not be stored in a user-accessible location at
+all. The OCR result (structured JSON: merchant, date, amount, line items) is the
+artifact. If images are persisted for audit purposes, they must be in a
+per-tenant path in Supabase Storage (`receipts/{business_id}/`) with an RLS
+policy that mirrors STD-004.
+
+**In practice:**
+- Every Vercel function receiving a file: validate content-type header AND magic
+  bytes before forwarding to Gemini or storing
+- Size limit: set explicitly in the handler (e.g., reject > 10 MB) before any
+  buffer read or base64 encode
+- Storage writes: `business_id` in the path, RLS policy on the bucket — verify
+  via two-tenant isolation proof per STD-004 before shipping
+- Receipt Keeper's confirm-before-commit UX (user sees parsed result, confirms
+  before anything is written) is ALSO a partial implementation of this standard —
+  the "never trust the content" rule is satisfied by showing the parse result to
+  the human before committing it as a financial record
+
+**Scope:** Every code path that accepts a file from a user (POST body binary,
+multipart, base64-encoded image). Every Vercel function that calls an OCR or vision
+AI endpoint. Every storage write that originates from user-supplied content.
+
+---
+
 ## ENFORCEMENT
 
 | Standard | Applies to | Gate type |
@@ -412,7 +466,8 @@ returns channel selections.
 | STD-007 | Every integration with expiring credentials | Proactive expiry derivation, not reactive flag |
 | STD-008 | Every migration session | Verification query in SQL editor; confirmation in Handoff |
 | STD-009 | Every AI generation path + every config field for channel/cadence/count | Config-read required; no hardcoded channel names or counts in generator |
-| BENCH-A–D | Every session (STEP 0 roster match against ACTIVATE WHEN triggers) | Catastrophic-class match → stop and ask David; hygiene-class match → apply and report |
+| STD-010 | Every file-accepting code path, every OCR/vision ingest, every storage write from user-supplied content | Content-type validation + size limit + per-tenant storage path + no raw-file trust |
+| BENCH-A, BENCH-C, BENCH-D | Every session (STEP 0 roster match against ACTIVATE WHEN triggers) | Catastrophic-class match → stop and ask David; hygiene-class match → apply and report |
 
 **Part 9 addition:** A `STANDARDS compliance` line is now required alongside the
 existing Step 13 AC check at session end. See CLAUDE.md Part 9, Step 14.
@@ -467,21 +522,8 @@ standard. When we reach payments, we lift a proven integration; we do not invent
 
 ### BENCH-B — FILE UPLOAD / INGEST SAFETY
 
-**ACTIVATE WHEN:** any code accepts a file from a user/customer (image, PDF, CSV) —
-including OCR ingest.
-**CLASS:** 🔴 CATASTROPHIC — stop and get David's go before proceeding.
-
-**Rule (when active):** Validate file type (real content-type, not just extension),
-enforce size limits, never execute or trust uploaded content, scope storage per-tenant,
-never let an upload path reach a place it can be served as code. Strip/validate metadata.
-
-**Territory:** Receipt Keeper v1 ingests receipt images via OCR — so this trigger is
-currently firing.
-
-⚠️ **TRIGGER IS FIRING NOW — Receipt Keeper v1.** This is catastrophic-class. Per the
-promotion rules, Thunder does NOT auto-promote. David must confirm before Receipt Keeper
-ships: **"Promote BENCH-B to ACTIVE for Receipt Keeper?"** Until David confirms, treat
-BENCH-B rules as advisory for the build and flag any deviation explicitly.
+✅ **PROMOTED → STD-010 (2026-06-10).** Triggered by Receipt Keeper v1. David's
+explicit go confirmed 2026-06-10. Full rule text lives in STD-010 above.
 
 ---
 
@@ -566,6 +608,7 @@ a standard's application."
 | 1.3 | 2026-06-08 | STD-009 added. Scar: `campaigns/generate.ts` hardcoded '2 Instagram posts, 2 Facebook posts, 1 SMS' in AI prompt; never read `business_modules.config`. Business channel selections ignored by campaign generator for entire feature lifetime. LEXICON RULE added: "platform" reserved for top-level substrate; use "channel" inside the product. |
 | 1.4 | 2026-06-09 | STD-008 extended bidirectionally. Renamed "DEPLOYED SCHEMA == ON-DISK MIGRATIONS (BOTH DIRECTIONS)". Inverse scar added: `social_drafts_platform_check` existed in live DB but in no committed migration; 'sms' not in allowed list; atomic batch INSERT rolled back all rows (instagram + tiktok + sms) when SMS enabled. Fixed by `20260609_social_drafts_platform_check.sql`. Sweep query added to verification pattern. |
 | 1.5 | 2026-06-10 | Roster model added (Active/Bench/N/A). CANDIDATES section formalized into the trigger-tagged Bench: BENCH-A payments/PCI, BENCH-B file-upload (TRIGGER FIRING — Receipt Keeper v1; catastrophic-class; David's confirmation required before ship), BENCH-C PII, BENCH-D webhook verification. Thunder intelligence instructions added (match bench triggers, flag general candidates, never round up, David owns activation/override). STD-003 amended to corrected on-by-birth / commented-when-proven policy; flag-gate pattern retired as resting state; Tailwind born-silent scar added; active instrumentation subsystem tags listed. ENFORCEMENT table updated with BENCH-A–D row. Growth Policy updated for bench entries. File reframed as team-onboarding document (Erin/Andrew/Connor) — every standard carries its scar or territory as a lesson. |
+| 1.6 | 2026-06-10 | BENCH-B promoted to STD-010 (FILE UPLOAD / INGEST SAFETY). David's explicit go confirmed 2026-06-10 — triggered by Receipt Keeper v1 Gemini Flash vision ingest path. STD-010 rule: real content-type validation, explicit size limits, per-tenant storage path, never-trust-content, OCR result is the artifact (not the raw file). BENCH-B entry replaced with promotion tombstone. ENFORCEMENT table: STD-010 row added; bench row updated to BENCH-A, BENCH-C, BENCH-D. |
 
 ---
 
