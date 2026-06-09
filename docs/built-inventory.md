@@ -464,6 +464,36 @@ Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Mult
 
 ---
 
+## Business Creation Abuse Guards (Shared)
+
+**What:** Three opt-in guards that run at the `createBusinessAndMember()` chokepoint in `OwnerSignup.tsx` before any `businesses` row is inserted. All three ship **OFF by default** (`false`). OFF = clean base case, zero queries, zero effect. ON = fully enforces. No partial state.  
+**Status:** ✅ Built 2026-06-11 — wired into OwnerSignup.tsx; all flags OFF  
+**Vertical:** shared | **Type:** infrastructure  
+**Location:** `packages/shared/src/auth/businessGuards.ts`  
+**Entry point:** `runBusinessCreationGuards(userId, supabase)` — runs A → B → C in order; first non-allowed result short-circuits; passes merge `insertPatch` to caller
+
+**Guards:**
+
+| Guard | Flag | Default | Behavior when ON |
+|---|---|---|---|
+| **GUARD_A** `PER_IDENTITY_FREE_TIER` | `GUARD_A_PER_IDENTITY_FREE_TIER` | `false` | Queries `businesses` for prior rows by this owner. If ≥1 prior business exists → sets `insertPatch: { trial_started_at: null }` — new business skips free trial. First business is unaffected. |
+| **GUARD_B** `CREATION_RATE_LIMIT` | `GUARD_B_CREATION_RATE_LIMIT` | `false` | Queries `businesses` for rows created in last 24 h by this owner. If recentCount ≥ 5 → returns `{ allowed: false, error: '…' }` — blocks creation with a user-visible message. |
+| **GUARD_C** `SUSPICIOUS_PATTERN_REVIEW` | `GUARD_C_SUSPICIOUS_PATTERN_REVIEW` | `false` | Queries `businesses` for last-24h rows. If count ≥ 10 AND all have `trial_started_at IS NOT NULL` → returns `{ allowed: true, heldForReview: true }`. Creation proceeds but caller receives flag for admin surfacing. ⚠️ Requires `businesses.status` column before activating `insertPatch: { status: 'review_pending' }`. |
+
+**Fail-open discipline:** Guard query errors return `{ allowed: true }` — guard infrastructure failures never block a legitimate business creation.
+
+**Activation discipline (documented in file, not yet activated):**
+1. Prove base add-business flow with all three guards OFF (David + second business test, unimpeded).
+2. Turn each guard ON one-at-a-time in isolation. David says "proven" → leave ON.
+3. GUARD_C prerequisite before activation: `ALTER TABLE businesses ADD COLUMN IF NOT EXISTS status text DEFAULT 'active';` then uncomment `insertPatch` line in `checkGuardC()`.
+
+**⛔ HARD LAUNCH GATE — must be ON-and-tested before public self-serve business creation opens:**
+While creation is private/invite-only (David + family), guards may stay OFF — no abuse surface. When self-serve opens, all three guards must be individually activated, tested, and proven by David. This is a **launch prerequisite**, not a suggestion.
+
+**`[TRACE:GUARD_A/B/C]` logs:** fire only when the respective flag is `true`. In default OFF state, zero logs emitted (clean base case per STD-003).
+
+---
+
 ## Pain-Point Onboarding Wizard (Ignition OS — NOW ACTIVATED via ?demo=)
 
 **What:** Full 5-step demo-first onboarding wizard. Three pain-point scenarios show dollar value within 30 minutes — no prior data entry required.  

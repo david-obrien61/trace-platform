@@ -15,6 +15,17 @@
 
 ---
 
+## ⛔ LAUNCH GATES — must cross before the event named; visible every session at STEP 0
+
+| GATE | TRIGGER EVENT | REQUIRED ACTIONS | STATUS |
+|---|---|---|---|
+| **FIRST PAYING CUSTOMER** | First customer pays money | **(1) TIER UPGRADE:** Supabase free→Pro + Vercel Hobby→Pro. Verify current vendor terms at the time — Vercel Hobby prohibits commercial use; confirm against live Vercel/Supabase docs when the customer is near. **(2) ABUSE GUARDS ON-AND-TESTED:** Activate GUARD_A, GUARD_B, GUARD_C one-at-a-time. David tests each in isolation and says "proven." All three must be ON before the paying-customer event or before public self-serve opens, whichever comes first. **(3) PUBLIC SELF-SERVE (if opening):** Also gated here — guards are the safety layer that makes self-serve safe. | 🔴 NOT CROSSED |
+| **PUBLIC SELF-SERVE SIGNUP** | Business creation open to the public | Same as above + all three abuse guards confirmed ON. While invite-only (David + family), guards may stay OFF — no abuse surface. | 🔴 NOT CROSSED |
+
+*Rationale: first-paying-customer simultaneously makes the platform commercial (tier terms), creates the abuse surface (guards), and exposes real customer data. Easy to miss in the excitement of a first sale — which is exactly when exposure is highest.*
+
+---
+
 ## SHARED LAYER (`packages/shared/src/`)
 
 | ITEM | LEVEL | LOCATION | EVIDENCE | → DETAIL |
@@ -24,6 +35,7 @@
 | **AI · execute.ts** | WORKS | `ai/execute.ts` | 4 internal callers (engine.ts, synthesis.ts, social/generate.ts, campaigns/generate.ts) · social_drafts confirmed live 2026-06-08 via REST API | CLAUDE.md §HANDOFF 2026-06-05 |
 | **AI · parseJson.ts** | WIRED | `ai/parseJson.ts` | Called by `ai/execute.ts` (internal) | — |
 | **Auth · AcceptInvite.tsx** | WIRED | `auth/AcceptInvite.tsx` | cultivar-os router.tsx:30 — /join route renders it | built-inventory.md |
+| **Auth · businessGuards.ts** | WIRED | `auth/businessGuards.ts` | `runBusinessCreationGuards()` called in OwnerSignup.tsx `createBusinessAndMember()` chokepoint · **ALL THREE GUARDS OFF (flags = false)** — zero queries, zero effect in current state · ⚠️ **LAUNCH GATE: all guards must be ON-and-tested before public self-serve opens** — see IN-FLIGHT | built-inventory.md · CLAUDE.md §HANDOFF 2026-06-11 |
 | **Auth · OwnerSignup.tsx** | WIRED | `auth/OwnerSignup.tsx` | SignUp.tsx:52 (Cultivar), modules/OnboardingWizard.jsx:262 (Ignition), AddBusiness.tsx (new 2026-06-11) · **full add-a-business surface 2026-06-11**: (1) session-on-mount → skips auth fields; (2) email-exists → `LOGIN_TO_ADD` step (sign in with existing password → create business); (3) `createBusinessAndMember(userId)` helper extracted; (4) Dashboard `+ Business` button for owners → `/add-business`; (5) BusinessPicker `+ Add a business` link | built-inventory.md |
 | **Auth · acceptInvitation.ts** | WIRED | `auth/acceptInvitation.ts` | api/members/invite.ts:15,25 + api/members/accept-invite.ts:18 + api/members/preview-invite.ts:17 | built-inventory.md |
 | **Auth · configureAuth.tsx** | WIRED | `auth/configureAuth.tsx` | cultivar-os/src/lib/auth.ts:1 | built-inventory.md |
@@ -154,6 +166,8 @@
 | **business_members pin_hash verify (TD#18)** | David must run | `SELECT column_name FROM information_schema.columns WHERE table_name = 'business_members'` → confirm pin_hash present in bgobkjcopcxusjsetfob |
 | **trace-app debris cleanup** | David must run | `supabase/migrations/20260611_delete_debris_trace_enterprises_nursery.sql` → STEP 1 verify (1 row), STEP 2 delete, STEP 3 verify (0 rows) in bgobkjcopcxusjsetfob · expected result: LAWNS=nursery, TRACE=general |
 | **trace-app Vercel deploy** | Not started | Create new Vercel project → import trace-platform repo → Build Command: `npm run build:trace` · Output: `packages/trace-app/dist` · Env vars: same VITE_SUPABASE_URL/ANON_KEY as cultivar-os |
+| **⛔ GUARD activation (LAUNCH GATE)** | Before first paying customer / before self-serve opens | Turn GUARD_A, GUARD_B, GUARD_C ON one at a time in `auth/businessGuards.ts` · David tests each in isolation · David says "proven" → leave ON · GUARD_C also needs `businesses.status` column before activating its insertPatch |
+| **⛔ Tier upgrade (LAUNCH GATE)** | Before first paying customer | Supabase free→Pro + Vercel Hobby→Pro · verify current vendor terms at the time against live docs |
 
 ---
 
