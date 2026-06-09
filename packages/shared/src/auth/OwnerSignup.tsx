@@ -44,7 +44,12 @@ export interface OwnerSignupConfig {
 
 // ── Step IDs ─────────────────────────────────────────────────────────────────
 
-type StepId = 'OWNER_INFO' | 'PIN_SETUP' | 'BIOMETRIC' | `VERTICAL_${number}`;
+type StepId =
+  | 'OWNER_INFO'
+  | 'PIN_SETUP'
+  | 'BIOMETRIC'
+  | 'LOGIN_TO_ADD'       // shown when email already exists; prompt sign-in to add business
+  | `VERTICAL_${number}`;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -134,6 +139,15 @@ export function OwnerSignup({ config, navigate }: Props) {
   const [pin,        setPin]        = useState('');
   const [confirmPin, setConfirmPin] = useState('');
 
+  // ── Add-a-business state
+  // detectedUserId: set on mount when an existing session is found; signals
+  //   "skip auth — create business under this user's existing identity."
+  const [detectedUserId, setDetectedUserId] = useState<string | null>(null);
+
+  // loginPassword: used in LOGIN_TO_ADD step (distinct from the password field in OWNER_INFO,
+  //   which is the "new account" password — not the user's existing password)
+  const [loginPassword, setLoginPassword]   = useState('');
+
   // ── Multi-step state
   const [step,          setStep]          = useState<StepId>('OWNER_INFO');
   const [submitting,    setSubmitting]    = useState(false);
@@ -142,6 +156,30 @@ export function OwnerSignup({ config, navigate }: Props) {
   const [biometricDone, setBiometricDone] = useState(false);
 
   const green = primaryColor;
+
+  // ── Detect existing session on mount ─────────────────────────────────────
+  // If the user is already authenticated, we skip the auth signup entirely and
+  // create the new business under their existing identity. This is the
+  // add-a-business path for logged-in users.
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setDetectedUserId(session.user.id);
+        setEmail(session.user.email ?? '');
+        console.log('[TRACE:BUSINESS] add-a-business: session detected on mount — skipping auth', {
+          uid: session.user.id,
+          businessType,
+          path: 'detected-on-mount',
+        });
+      } else {
+        console.log('[TRACE:BUSINESS] add-a-business: no session on mount — will use normal signup path', {
+          businessType,
+          path: 'new-user',
+        });
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── [AUTH-TRACE] diagnostic instrumentation (gate: debugAuth) ─────────────
 
@@ -182,6 +220,8 @@ export function OwnerSignup({ config, navigate }: Props) {
   }
 
   // ── Step 0 → 1: validate Owner Info and advance ───────────────────────────
+  // Skip password validation when an existing session was detected — the user
+  // is already authenticated and we don't need a password for them.
 
   function handleOwnerInfoNext(e: React.FormEvent) {
     e.preventDefault();
@@ -189,12 +229,95 @@ export function OwnerSignup({ config, navigate }: Props) {
     if (!businessName.trim()) { setErrorMsg('Business name is required.'); return; }
     if (!ownerName.trim())    { setErrorMsg('Your name is required.'); return; }
     if (!email.trim())        { setErrorMsg('Email is required.'); return; }
-    if (password.length < 6)  { setErrorMsg('Password must be at least 6 characters.'); return; }
-    if (password !== confirmPw) { setErrorMsg('Passwords do not match.'); return; }
+    if (!detectedUserId) {
+      if (password.length < 6)  { setErrorMsg('Password must be at least 6 characters.'); return; }
+      if (password !== confirmPw) { setErrorMsg('Passwords do not match.'); return; }
+    }
     goTo('PIN_SETUP');
   }
 
-  // ── Step 1: submit (create account + businesses + member) ─────────────────
+  // ── createBusinessAndMember ───────────────────────────────────────────────
+  // Extracted helper — called from both handlePinSubmit (normal/detected-session
+  // paths) and handleLoginToAdd (LOGIN_TO_ADD sign-in path). Assumes PIN state
+  // is set. Returns { businessId, memberId } on success, null on failure (also
+  // sets errorMsg).
+
+  async function createBusinessAndMember(
+    userId: string,
+  ): Promise<{ businessId: string; memberId: string } | null> {
+    const pinVal = pin.trim();
+
+    // 1. Create businesses row
+    const bizInsert: Record<string, unknown> = {
+      owner_id:      userId,
+      name:          businessName.trim(),
+      email:         email.trim(),
+      business_type: businessType,
+    };
+    if (collectPhone && phone.trim())     bizInsert.phone   = phone.trim();
+    if (collectAddress && address.trim()) bizInsert.address = address.trim();
+    if (collectWebsite && website.trim()) bizInsert.website = website.trim();
+
+    const { data: bizData, error: bizError } = await supabase
+      .from('businesses')
+      .insert(bizInsert)
+      .select('id')
+      .single();
+
+    if (bizError || !bizData) {
+      setErrorMsg('Could not create your ' + businessLabel + ' profile. ' + (bizError?.message ?? ''));
+      return null;
+    }
+    const businessId = bizData.id as string;
+
+    // 2. Hash PIN using same algorithm as authenticate() in auth.ts
+    const pinHash = await hashPin(businessId, pinVal);
+
+    // 3. Create member row (owner) in the vertical's member table
+    const memberInsert: Record<string, unknown> = {
+      [memberFKColumn]: businessId,
+      name:        ownerName.trim(),
+      email:       email.trim(),
+      role:        ownerRole,
+      permissions: ownerPermissions,
+      pin_hash:    pinHash,
+      active:      true,
+    };
+    // business_members also needs user_id for Supabase auth linkage
+    if (memberTable === 'business_members') {
+      memberInsert.user_id = userId;
+    }
+
+    const { data: memberData, error: memberError } = await supabase
+      .from(memberTable)
+      .insert(memberInsert)
+      .select('id')
+      .single();
+
+    if (memberError || !memberData) {
+      setErrorMsg('Could not create owner account: ' + (memberError?.message ?? 'unknown error'));
+      return null;
+    }
+
+    return { businessId, memberId: memberData.id as string };
+  }
+
+  // ── advanceAfterCreate ────────────────────────────────────────────────────
+  // After a successful createBusinessAndMember(), store result and go to the
+  // next step (biometric, vertical, or done).
+
+  function advanceAfterCreate(businessId: string, memberId: string) {
+    setSubmitted({ businessId, memberId });
+    if (typeof window !== 'undefined' && window.PublicKeyCredential) {
+      goTo('BIOMETRIC');
+    } else if (verticalSteps.length > 0) {
+      goTo('VERTICAL_0');
+    } else {
+      onSuccess(businessId, memberId);
+    }
+  }
+
+  // ── Step 1: submit ─────────────────────────────────────────────────────────
 
   async function handlePinSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -213,26 +336,20 @@ export function OwnerSignup({ config, navigate }: Props) {
     setSubmitting(true);
 
     try {
-      // 1. Resolve user identity
       let userId: string;
 
-      // ── Add-a-business path: detect existing authenticated session ─────────────
-      // An already-authenticated user creating a second business must not call
-      // supabase.auth.signUp() — that would 422 on their existing email. Detect
-      // the session first and branch: authenticated → skip auth; not authenticated →
-      // normal signup or orphaned-account recovery.
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-
-      if (currentSession?.user) {
-        // User is already authenticated — skip auth signup entirely.
-        // They are deliberately creating an additional business under their existing identity.
-        userId = currentSession.user.id;
-        console.log('[TRACE:BUSINESS] add-a-business: reusing existing session', {
+      if (detectedUserId) {
+        // ── Already authenticated — skip auth signup entirely ──────────────
+        // An existing session was detected on mount (or set via handleLoginToAdd).
+        // Create the new business directly under the existing uid.
+        userId = detectedUserId;
+        console.log('[TRACE:BUSINESS] handlePinSubmit: using detectedUserId (authenticated path)', {
           uid: userId,
           businessType,
+          path: 'skip-auth',
         });
       } else {
-        // Normal path: brand-new user or orphaned account recovery
+        // ── Normal path: brand-new user signup ────────────────────────────
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: email.trim(),
           password,
@@ -240,117 +357,96 @@ export function OwnerSignup({ config, navigate }: Props) {
 
         if (signUpError) {
           const msg = signUpError.message ?? '';
-          if (msg.toLowerCase().includes('already registered') || msg.toLowerCase().includes('already been registered')) {
-            // Orphaned account (prior partial signup) — try to sign in
-            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          if (
+            msg.toLowerCase().includes('already registered') ||
+            msg.toLowerCase().includes('already been registered')
+          ) {
+            // Email belongs to an existing account.
+            // Route to LOGIN_TO_ADD instead of dead-ending — the user needs to
+            // sign in to add a new business under their existing identity.
+            console.log('[TRACE:BUSINESS] handlePinSubmit: email-exists → routing to LOGIN_TO_ADD', {
               email: email.trim(),
-              password,
+              businessType,
+              path: 'email-exists',
             });
-            if (signInError || !signInData.user) {
-              setErrorMsg(
-                `This email is already registered. If you started signing up before, try signing in at ${signInPath}. ` +
-                `If you forgot your password, use the reset link there.`
-              );
-              setSubmitting(false);
-              return;
-            }
-            userId = signInData.user.id;
-            // Check if this orphaned account already has a businesses row of this type.
-            // (Authenticated add-a-business users are handled above — this block only
-            //  applies to unauthenticated orphaned-account recovery.)
-            const { data: existingBiz } = await supabase
-              .from('businesses')
-              .select('id')
-              .eq('owner_id', userId)
-              .eq('business_type', businessType)
-              .maybeSingle();
-            if (existingBiz) {
-              setErrorMsg(
-                `An account with this email already has a ${businessLabel} set up. Sign in at ${signInPath}.`
-              );
-              setSubmitting(false);
-              return;
-            }
-          } else {
-            setErrorMsg(signUpError.message ?? 'Could not create account. Try again.');
             setSubmitting(false);
+            goTo('LOGIN_TO_ADD');
             return;
           }
-        } else if (signUpData.user) {
-          userId = signUpData.user.id;
-        } else {
+          setErrorMsg(signUpError.message ?? 'Could not create account. Try again.');
+          setSubmitting(false);
+          return;
+        }
+
+        if (!signUpData.user) {
           setErrorMsg('Account creation did not return a user. Check your email for a confirmation link, or try again.');
           setSubmitting(false);
           return;
         }
+
+        userId = signUpData.user.id;
+        console.log('[TRACE:BUSINESS] handlePinSubmit: new-user signUp success', {
+          uid: userId,
+          businessType,
+          path: 'new-user',
+        });
       }
 
-      // 2. Create businesses row
-      const bizInsert: Record<string, unknown> = {
-        owner_id:      userId,
-        name:          businessName.trim(),
-        email:         email.trim(),
-        business_type: businessType,
-      };
-      if (collectPhone && phone.trim())    bizInsert.phone   = phone.trim();
-      if (collectAddress && address.trim()) bizInsert.address = address.trim();
-      if (collectWebsite && website.trim()) bizInsert.website = website.trim();
-
-      const { data: bizData, error: bizError } = await supabase
-        .from('businesses')
-        .insert(bizInsert)
-        .select('id')
-        .single();
-
-      if (bizError || !bizData) {
-        setErrorMsg('Could not create your ' + businessLabel + ' profile. ' + (bizError?.message ?? ''));
+      const result = await createBusinessAndMember(userId);
+      if (!result) {
         setSubmitting(false);
         return;
       }
-      const businessId = bizData.id as string;
 
-      // 3. Hash PIN using same algorithm as authenticate() in auth.ts
-      const pinHash = await hashPin(businessId, pinVal);
-
-      // 4. Create member row (owner) in the vertical's member table
-      const memberInsert: Record<string, unknown> = {
-        [memberFKColumn]: businessId,
-        name:        ownerName.trim(),
-        email:       email.trim(),
-        role:        ownerRole,
-        permissions: ownerPermissions,
-        pin_hash:    pinHash,
-        active:      true,
-      };
-      // business_members also needs user_id for Supabase auth linkage
-      if (memberTable === 'business_members') {
-        memberInsert.user_id = userId;
-      }
-
-      const { data: memberData, error: memberError } = await supabase
-        .from(memberTable)
-        .insert(memberInsert)
-        .select('id')
-        .single();
-
-      if (memberError || !memberData) {
-        setErrorMsg('Could not create owner account: ' + (memberError?.message ?? 'unknown error'));
-        setSubmitting(false);
-        return;
-      }
-      const memberId = memberData.id as string;
-
-      setSubmitted({ businessId, memberId });
       setSubmitting(false);
+      advanceAfterCreate(result.businessId, result.memberId);
 
-      // Advance to biometric step (or vertical steps, or done)
-      if (typeof window !== 'undefined' && window.PublicKeyCredential) {
-        goTo('BIOMETRIC');
-      } else if (verticalSteps.length > 0) {
-        goTo('VERTICAL_0');
-      } else {
-        onSuccess(businessId, memberId);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unexpected error. Please try again.';
+      setErrorMsg(msg);
+      setSubmitting(false);
+    }
+  }
+
+  // ── LOGIN_TO_ADD: sign in with existing credentials, then create business ──
+  // This step is reached when the user enters an email that already has a TRACE
+  // account in the normal (non-authenticated) signup flow. Rather than dead-
+  // ending with "already registered", we prompt for their existing password and
+  // create the new business under their authenticated identity.
+
+  async function handleLoginToAdd(e: React.FormEvent) {
+    e.preventDefault();
+    setErrorMsg('');
+    setSubmitting(true);
+
+    try {
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: loginPassword,
+      });
+
+      if (signInError || !signInData.user) {
+        setErrorMsg('Sign in failed — check your password and try again.');
+        setSubmitting(false);
+        return;
       }
+
+      const userId = signInData.user.id;
+      console.log('[TRACE:BUSINESS] LOGIN_TO_ADD: signed in, creating business', {
+        uid: userId,
+        businessType,
+        path: 'login-to-add',
+      });
+
+      const result = await createBusinessAndMember(userId);
+      if (!result) {
+        setSubmitting(false);
+        return;
+      }
+
+      setDetectedUserId(userId); // mark authenticated for any follow-on flows
+      setSubmitting(false);
+      advanceAfterCreate(result.businessId, result.memberId);
 
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unexpected error. Please try again.';
@@ -434,9 +530,10 @@ export function OwnerSignup({ config, navigate }: Props) {
   ];
 
   function currentStepIndex(): number {
-    if (step === 'OWNER_INFO')  return 0;
-    if (step === 'PIN_SETUP')   return 1;
-    if (step === 'BIOMETRIC')   return 2;
+    if (step === 'OWNER_INFO')   return 0;
+    if (step === 'PIN_SETUP')    return 1;
+    if (step === 'LOGIN_TO_ADD') return 1; // same position as PIN_SETUP
+    if (step === 'BIOMETRIC')    return 2;
     const vi = currentVerticalIndex();
     return vi >= 0
       ? (typeof window !== 'undefined' && window.PublicKeyCredential ? 3 : 2) + vi
@@ -466,12 +563,12 @@ export function OwnerSignup({ config, navigate }: Props) {
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{ fontSize: 36, marginBottom: 6 }}>{logo}</div>
           <h1 style={{ fontSize: '1.3rem', fontWeight: 800, color: green, margin: 0 }}>
-            Set up your {businessLabel}
+            {detectedUserId ? `Add a ${businessLabel}` : `Set up your ${businessLabel}`}
           </h1>
         </div>
 
         {/* Progress dots */}
-        {stepLabels.length > 1 && (
+        {stepLabels.length > 1 && step !== 'LOGIN_TO_ADD' && (
           <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 24 }}>
             {stepLabels.map((label, i) => (
               <div key={i} title={label} style={{
@@ -490,6 +587,26 @@ export function OwnerSignup({ config, navigate }: Props) {
           <form onSubmit={handleOwnerInfoNext} style={formStyle}>
             <p style={stepLabel}>Step 1 of {stepLabels.length} — Your info</p>
 
+            {/* Authenticated badge — shown when a session was detected on mount */}
+            {detectedUserId && (
+              <div style={{
+                background: '#f0fdf4',
+                border: '1.5px solid #86efac',
+                borderRadius: 8,
+                padding: '10px 14px',
+                fontSize: '0.85rem',
+                lineHeight: 1.5,
+              }}>
+                <span style={{ fontWeight: 700, color: '#166534' }}>
+                  Adding a new {businessLabel}
+                </span>
+                {' '}
+                <span style={{ color: '#15803d' }}>to your account</span>
+                <br />
+                <span style={{ fontSize: '0.8rem', color: '#16a34a' }}>{email}</span>
+              </div>
+            )}
+
             <Field label={`${businessLabel.charAt(0).toUpperCase() + businessLabel.slice(1)} name`} labelColor={labelColor}>
               <input style={dynInputStyle} type="text" value={businessName}
                 onChange={e => setBusinessName(e.target.value)} required
@@ -502,23 +619,28 @@ export function OwnerSignup({ config, navigate }: Props) {
                 placeholder="First and last name" />
             </Field>
 
-            <Field label="Email" labelColor={labelColor}>
-              <input style={dynInputStyle} type="email" value={email}
-                onChange={e => setEmail(e.target.value)} required
-                placeholder="you@example.com" />
-            </Field>
+            {/* Show email + password fields only when NOT already authenticated */}
+            {!detectedUserId && (
+              <>
+                <Field label="Email" labelColor={labelColor}>
+                  <input style={dynInputStyle} type="email" value={email}
+                    onChange={e => setEmail(e.target.value)} required
+                    placeholder="you@example.com" />
+                </Field>
 
-            <Field label="Password" labelColor={labelColor}>
-              <input style={dynInputStyle} type="password" value={password}
-                onChange={e => setPassword(e.target.value)} required
-                minLength={6} placeholder="At least 6 characters" />
-            </Field>
+                <Field label="Password" labelColor={labelColor}>
+                  <input style={dynInputStyle} type="password" value={password}
+                    onChange={e => setPassword(e.target.value)} required
+                    minLength={6} placeholder="At least 6 characters" />
+                </Field>
 
-            <Field label="Confirm password" labelColor={labelColor}>
-              <input style={dynInputStyle} type="password" value={confirmPw}
-                onChange={e => setConfirmPw(e.target.value)} required
-                placeholder="Same password again" />
-            </Field>
+                <Field label="Confirm password" labelColor={labelColor}>
+                  <input style={dynInputStyle} type="password" value={confirmPw}
+                    onChange={e => setConfirmPw(e.target.value)} required
+                    placeholder="Same password again" />
+                </Field>
+              </>
+            )}
 
             {collectPhone && (
               <Field label="Phone (optional)" labelColor={labelColor}>
@@ -548,13 +670,15 @@ export function OwnerSignup({ config, navigate }: Props) {
 
             <button type="submit" style={btnStyle(green)}>Continue →</button>
 
-            <p style={{ textAlign: 'center', fontSize: '0.8rem', color: mutedColor, marginTop: 8 }}>
-              Already have an account?{' '}
-              <span onClick={() => navTo(signInPath)}
-                style={{ color: green, cursor: 'pointer', textDecoration: 'underline' }}>
-                Sign in
-              </span>
-            </p>
+            {!detectedUserId && (
+              <p style={{ textAlign: 'center', fontSize: '0.8rem', color: mutedColor, marginTop: 8 }}>
+                Already have an account?{' '}
+                <span onClick={() => navTo(signInPath)}
+                  style={{ color: green, cursor: 'pointer', textDecoration: 'underline' }}>
+                  Sign in
+                </span>
+              </p>
+            )}
           </form>
         )}
 
@@ -607,6 +731,55 @@ export function OwnerSignup({ config, navigate }: Props) {
             <button type="button" onClick={() => goTo('OWNER_INFO')}
               style={{ ...dynGhostStyle, marginTop: 8 }}>
               ← Back
+            </button>
+          </form>
+        )}
+
+        {/* LOGIN_TO_ADD: shown when a logged-out user's email already has a TRACE account.
+            Instead of dead-ending, we prompt them to sign in with their EXISTING password
+            and then create the new business under their authenticated identity. */}
+        {step === 'LOGIN_TO_ADD' && (
+          <form onSubmit={handleLoginToAdd} style={formStyle}>
+            <p style={stepLabel}>Add a {businessLabel}</p>
+
+            <div style={{
+              background: '#fefce8',
+              border: '1.5px solid #fde047',
+              borderRadius: 8,
+              padding: '12px 14px',
+              fontSize: '0.875rem',
+              color: '#713f12',
+              lineHeight: 1.5,
+            }}>
+              <strong>{email}</strong> already has a TRACE account.
+              Sign in with your existing password to add a new {businessLabel}.
+            </div>
+
+            <Field label="Your existing password" labelColor={labelColor}>
+              <input
+                style={dynInputStyle}
+                type="password"
+                value={loginPassword}
+                onChange={e => setLoginPassword(e.target.value)}
+                required
+                autoFocus
+                placeholder="Your password"
+                autoComplete="current-password"
+              />
+            </Field>
+
+            {errorMsg && <p style={errorStyle}>{errorMsg}</p>}
+
+            <button type="submit" disabled={submitting} style={btnStyle(green, submitting)}>
+              {submitting ? 'Signing in…' : 'Sign in & add →'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setLoginPassword(''); goTo('OWNER_INFO'); }}
+              style={{ ...dynGhostStyle, marginTop: 8 }}
+            >
+              ← Use a different email
             </button>
           </form>
         )}
@@ -703,34 +876,11 @@ const stepLabel: React.CSSProperties = {
   margin: 0,
 };
 
-const inputStyle: React.CSSProperties = {
-  padding: '12px 14px',
-  border: '1.5px solid #ddd',
-  borderRadius: 8,
-  fontSize: '1rem',
-  fontFamily: 'inherit',
-  outline: 'none',
-  width: '100%',
-  boxSizing: 'border-box',
-};
-
 const errorStyle: React.CSSProperties = {
   color: RED,
   fontSize: '0.85rem',
   textAlign: 'center',
   margin: 0,
-};
-
-const ghostBtnStyle: React.CSSProperties = {
-  background: 'none',
-  border: 'none',
-  color: '#888',
-  fontSize: '0.9rem',
-  cursor: 'pointer',
-  padding: '8px 0',
-  fontFamily: 'inherit',
-  width: '100%',
-  textAlign: 'center',
 };
 
 function btnStyle(color: string, disabled = false): React.CSSProperties {

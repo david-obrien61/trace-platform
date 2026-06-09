@@ -449,6 +449,18 @@ export function Dashboard() {
               Settings
             </button>
           )}
+          {isOwner && (
+            <button
+              onClick={() => navigate('/add-business')}
+              style={{
+                background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8,
+                padding: '8px 12px', color: '#fff', fontSize: '0.8125rem',
+                fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              + Business
+            </button>
+          )}
           <button
             onClick={handleSignOut}
             style={{

@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-11 (add-a-business create flow for existing users)
+# Last updated: 2026-06-11 (add-a-business: full flow — email-exists path + /add-business entry point)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -291,6 +291,152 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-11 — Add-a-business: email-exists→LOGIN_TO_ADD + /add-business entry point
+
+**Type:** Code. Five files changed (`packages/shared/src/auth/OwnerSignup.tsx`, `packages/shared/src/context/BusinessProvider.tsx`, `packages/cultivar-os/src/App.tsx`, `packages/cultivar-os/src/pages/Dashboard.tsx`, `packages/cultivar-os/src/router.tsx`) + one new file (`packages/cultivar-os/src/pages/AddBusiness.tsx`). PLATFORM_STATE.md updated. Zero migrations, zero schema changes, zero API changes.
+
+**Session mandate:** Close the remaining gap in multi-business support. The previous session fixed the case where a user was ALREADY logged in going to /signup. This session fixes: (1) the logged-OUT existing user who enters their email and hits "account already registered" dead-end; (2) the missing direct entry point for adding a business from the dashboard/picker.
+
+---
+
+**WHAT WAS BUILT:**
+
+**`packages/shared/src/auth/OwnerSignup.tsx` — four changes:**
+
+1. **`LOGIN_TO_ADD` step** (new `StepId`): when `signUp` returns "already registered", instead of dead-ending → `goTo('LOGIN_TO_ADD')`. The step renders: amber info box ("email already has a TRACE account"), password field for the user's EXISTING account password, "Sign in & add →" button, "← Use a different email" back link.
+
+2. **`handleLoginToAdd`**: calls `supabase.auth.signInWithPassword(email, loginPassword)` → on success → `createBusinessAndMember(userId)` → `advanceAfterCreate()`.
+
+3. **`createBusinessAndMember(userId)` helper** extracted from `handlePinSubmit`. Now shared by both `handlePinSubmit` (normal/session-detected paths) and `handleLoginToAdd`. Creates `businesses` row + hashes PIN + creates `business_members` owner row. No `nursery_profiles` write — that only happens in `OnboardingWizard.tsx` for nursery verticals. A `business_type='general'` business routes to `/dashboard` (not `/onboarding`) and never hits that code.
+
+4. **`advanceAfterCreate(businessId, memberId)` helper** extracted — handles the biometric → vertical → onSuccess progression without duplication.
+
+5. **Session-on-mount `useEffect`**: detects existing session → `setDetectedUserId(session.user.id)`, pre-fills email → OWNER_INFO shows green "Adding a new {businessLabel} to your account / {email}" box, hides email/password/confirm fields. `handleOwnerInfoNext` skips password validation when `detectedUserId` is set.
+
+6. **`[TRACE:BUSINESS]` logs** — 4 tagged logs, born ON: mount session detection, `handlePinSubmit` skip-auth path, email-exists routing to LOGIN_TO_ADD, and LOGIN_TO_ADD sign-in success.
+
+**`packages/shared/src/context/BusinessProvider.tsx` — `addBusinessHref` prop:**
+
+- `BusinessPicker` now accepts optional `addBusinessHref?: string` prop.
+- When provided, renders a dashed `+ Add a business` link below the business list (styled as secondary action).
+- `BusinessProvider` accepts and threads the prop down to `BusinessPicker`.
+- Zero change to existing picker behavior when prop is absent.
+
+**`packages/cultivar-os/src/App.tsx`:**
+
+- `<BusinessProvider businessType="nursery" addBusinessHref="/add-business">` — the Add button in the picker now routes to the new page.
+
+**`packages/cultivar-os/src/pages/AddBusiness.tsx` (new):**
+
+- `OwnerSignup` with `businessType='general'`, no `verticalSteps`.
+- `onSuccess` → `navigate('/dashboard')` (no `/onboarding` — general businesses skip nursery onboarding).
+- Session detection fires on mount automatically (inherited from OwnerSignup) → OWNER_INFO shows authenticated simplified form, skips email/password.
+- Mounted via `PrivateRoute /add-business` — only reachable when logged in.
+
+**`packages/cultivar-os/src/pages/Dashboard.tsx`:**
+
+- `+ Business` button added to the header button group, visible only when `isOwner`.
+- Navigates to `/add-business`.
+
+**`packages/cultivar-os/src/router.tsx`:**
+
+- `import { AddBusiness } from './pages/AddBusiness'` added.
+- `<Route path="/add-business" element={<AddBusiness />} />` added inside the existing `<Route element={<PrivateRoute />}>` block.
+
+---
+
+**End-to-end flows (code-traced):**
+
+**Path A — Logged-OUT existing user creating a new business:**
+1. Navigate to `/signup` (or `/add-business` — will redirect to `/login` because not authed)
+2. Go to `/signup`, fill business name + name + **existing email** + new password
+3. PIN step → `handlePinSubmit()` → `detectedUserId` is null → `signUp(email, newPassword)`
+4. Supabase returns "already registered" error
+5. `goTo('LOGIN_TO_ADD')` — amber step shows
+6. User enters their **existing** password → `handleLoginToAdd()` → `signInWithPassword(email, existingPassword)`
+7. On success → `createBusinessAndMember(userId)` → `advanceAfterCreate()`
+8. → `/dashboard` (for `type='general'`) OR `/onboarding?biz=<id>` (if configured in verticalConfig)
+9. `BusinessProvider` resolves 2+ businesses → picker (if no valid persisted selection)
+
+**Path B — Logged-IN owner adding a business from the dashboard:**
+1. Dashboard header: click `+ Business` → `/add-business`
+2. `OwnerSignup` mounts → `useEffect` fires → `getSession()` → session found
+3. `setDetectedUserId(session.user.id)`, `setEmail(session.user.email)`
+4. OWNER_INFO shows green "Adding a new business to your account / david_obrien2016@outlook.com"
+5. No email/password fields shown. User fills business name + owner name.
+6. PIN step → `handlePinSubmit()` → `detectedUserId` set → `createBusinessAndMember(detectedUserId)`
+7. → `navigate('/dashboard')`
+8. `BusinessProvider` resolves 2 businesses → picker if no valid persisted selection
+
+**Path C — Logged-IN owner adding a business from the BusinessPicker:**
+1. BusinessPicker shown (2+ businesses, no valid selection)
+2. Click `+ Add a business` → `href="/add-business"` → navigates to AddBusiness page
+3. Same as Path B from step 2 onward.
+
+**New-user regression gate (code-traced):**
+- `detectedUserId = null` (no session on mount)
+- `signUp(email, password)` → fresh email → `signUpData.user` returned
+- `userId = signUpData.user.id`
+- `createBusinessAndMember(userId)` → normal new-user flow
+- No change in behavior. ✓
+
+**Duplicate-email guard (code-traced):**
+- Genuine duplicate email where user clicks "Use a different email" → `goTo('OWNER_INFO')` → can re-enter new email
+- This is routing-to-login, NOT loosening duplicate rejection. The guard still fires (`signUp` still rejects duplicate emails) — we just handle it gracefully instead of dead-ending. ✓
+
+---
+
+**Builds:**
+- Cultivar: ✅ 2178 modules, zero TypeScript errors
+- Ignition: ✅ 1838 modules, zero TypeScript errors
+
+---
+
+**Documentation propagation check (step 10):**
+1. `Help.tsx` — no new customer-facing features (Add a business is operational plumbing, not a Lauren/Terry workflow). No propagation needed.
+2. Onboarding — unchanged. Nursery onboarding flow (OnboardingWizard.tsx) is unaffected.
+3. `PLATFORM_STATE.md` ✅ updated — Auth · OwnerSignup.tsx note expanded; AddBusiness page row added; Cultivar Build module count updated to 2178.
+4. No `// FLAG:` placeholders affected.
+5. No new error messages to customer-facing UX (LOGIN_TO_ADD error: "Sign in failed — check your password and try again" is self-explanatory).
+
+**Factual corrections captured (step 11):**
+- Prior handoff described the email-exists recovery as "orphaned-account recovery path." It was actually calling `signInWithPassword` with the NEW password the user entered in OWNER_INFO — not their existing password. That's why it silently failed. This session replaces it with a deliberate `LOGIN_TO_ADD` step that explicitly prompts for the existing password. The prior behavior was broken, not just "orphaned." Captured here.
+- `AddBusiness.tsx` uses `businessType='general'` which means `onSuccess` → `/dashboard` (not `/onboarding`). Nursery `onSuccess` → `/onboarding?biz=`. This distinction is by design: `general` businesses have no Cultivar-specific vertical onboarding; the user goes straight to the dashboard and BusinessProvider resolves via the picker.
+
+**No runbook needed** — pure code session. No migrations, no environment changes.
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns introduced. `businessType='general'` in `AddBusiness.tsx` is a data VALUE (prop string), not an identifier. `[TRACE:BUSINESS]` logs use `businessType` from props.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ Vertical fence preserved — BusinessProvider member path still filters by `businessType`.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Full read-only investigation before any edit — OwnerSignup.tsx, SignUp.tsx, BusinessProvider.tsx, App.tsx, Dashboard.tsx, router.tsx all read. Root cause confirmed (signInWithPassword called with NEW password, not existing).
+- STD-002: BEFORE: logged-out existing user → `signUp` → "already registered" → dead-end error. AFTER: routes to `LOGIN_TO_ADD` step → user authenticates → business created. David must test end-to-end live (clear storage → go to /signup with david_obrien2016@outlook.com → confirm LOGIN_TO_ADD step appears → enter real password → verify new business row created in Supabase).
+- STD-003: ✅ 4 `[TRACE:BUSINESS]` logs born ON — mount detection, skip-auth path, email-exists→LOGIN_TO_ADD, LOGIN_TO_ADD success. David says "proven" → comment out.
+- STD-004: N/A — no new business-scoped data surface beyond the standard `businesses` + `business_members` rows already protected by existing RLS.
+- STD-005: ✅ No decisions reversed.
+- STD-006: ✅ No vertical nouns in shared code. `businessType='general'` is a data value.
+- STD-007: N/A — no integration status surfaces touched.
+- STD-008: N/A — no migrations.
+- STD-009: N/A — no generation path changes.
+- STD-010: N/A — no new opaque module names.
+- **BENCH standards (STEP 0 match):** BENCH-B trigger still firing for Receipt Keeper. No new triggers from this session.
+
+**Gap graduation sweep (step 15):**
+- `remaining: voice-learning BI` — horizon v2/later. NOT past horizon.
+- `remaining: cadence-triggered generation` — horizon Social Rhythm. NOT past horizon.
+- `remaining: discovery persistence` — horizon v2/later. NOT past horizon.
+No gap graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- `Auth · OwnerSignup.tsx` (shared): WIRED → WIRED (level unchanged; note expanded with full flow).
+- `Cultivar · AddBusiness page`: new row added (EXISTS → WIRED — route registered, session detection inherited, build ✅).
+- `Cultivar · Build`: 2177 → 2178 modules.
+
+---
+
 ### 2026-06-11 — Add-a-business create flow for existing users
 
 **Type:** Code. Three files changed (`packages/shared/src/auth/OwnerSignup.tsx`, `packages/cultivar-os/src/pages/SignUp.tsx`, `packages/cultivar-os/src/pages/OnboardingWizard.tsx`). PLATFORM_STATE.md updated. Zero migrations, zero schema changes, zero API changes.
@@ -470,10 +616,10 @@ No gap graduations this session.
 9. ~~**TD#14 Tailwind conversion** (THUNDER · Tailwind pass).~~ ✅ RESOLVED 2026-06-10
 10. ~~**Ignition instrumentation** (THUNDER · instrumentation pass).~~ ✅ RESOLVED 2026-06-10
 11. ~~**BusinessProvider multi-business (Option B)** (this session).~~ ✅ RESOLVED 2026-06-11
-12. ~~**Add-a-business create flow** (this session).~~ ✅ RESOLVED 2026-06-11 — existing session detected → skips signUp → creates second businesses row. `?biz=` URL param fixes OnboardingWizard for multi-business. Multi-business: resolve ✅ + create ✅.
+12. ~~**Add-a-business create flow** (two sessions).~~ ✅ FULLY RESOLVED 2026-06-11 — Session 1: existing session detected → skips signUp. Session 2: email-exists → LOGIN_TO_ADD step; `/add-business` page (PrivateRoute, type='general'); Dashboard `+ Business` header button; BusinessPicker `+ Add a business` link. Multi-business: resolve ✅ + create ✅ (all paths covered).
 13. **Receipt Keeper v1** — Gemini Flash OCR, local `receipts` table, confirm-before-commit. (BENCH-B trigger firing — David must confirm promotion before shipping.)
 14. **Cost-to-Produce tile** — feeds loaded cost into `tx.cost` slot.
-14. **(v2)** QB payables write-back + Attachable + CoA + cross-card reconciliation.
+15. **(v2)** QB payables write-back + Attachable + CoA + cross-card reconciliation.
 
 ---
 

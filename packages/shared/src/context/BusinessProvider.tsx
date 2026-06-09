@@ -65,9 +65,11 @@ const BusinessContext = createContext<BusinessContextValue>({
 function BusinessPicker({
   businesses,
   onSelect,
+  addBusinessHref,
 }: {
   businesses: Business[];
   onSelect: (id: string) => void;
+  addBusinessHref?: string;
 }) {
   return (
     <div style={{
@@ -122,6 +124,28 @@ function BusinessPicker({
               </span>
             </button>
           ))}
+
+          {addBusinessHref && (
+            <a
+              href={addBusinessHref}
+              style={{
+                display: 'block',
+                textAlign: 'center',
+                background: 'none',
+                border: '1.5px dashed #86efac',
+                borderRadius: 8,
+                padding: '0.875rem 1rem',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                color: '#15803d',
+                fontWeight: 600,
+                textDecoration: 'none',
+                marginTop: 4,
+              }}
+            >
+              + Add a business
+            </a>
+          )}
         </div>
       </div>
     </div>
@@ -133,9 +157,11 @@ function BusinessPicker({
 export function BusinessProvider({
   children,
   businessType,
+  addBusinessHref,
 }: {
   children: React.ReactNode;
   businessType: string;
+  addBusinessHref?: string;  // when provided, "Add a business" link appears in BusinessPicker
 }) {
   // All businesses this user can access in this vertical
   const [resolvedBusinesses, setResolvedBusinesses] = useState<ResolvedBusiness[]>([]);
@@ -316,7 +342,7 @@ export function BusinessProvider({
       isOwner: activeResolved?.isOwner ?? false,
     }}>
       {needsPicker
-        ? <BusinessPicker businesses={allBusinesses} onSelect={setActiveBusinessId} />
+        ? <BusinessPicker businesses={allBusinesses} onSelect={setActiveBusinessId} addBusinessHref={addBusinessHref} />
         : children}
     </BusinessContext.Provider>
   );

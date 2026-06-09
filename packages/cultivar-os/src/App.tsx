@@ -6,7 +6,7 @@ import './styles/globals.css';
 export function App() {
   return (
     <BrowserRouter>
-      <BusinessProvider businessType="nursery">
+      <BusinessProvider businessType="nursery" addBusinessHref="/add-business">
         <AppRouter />
       </BusinessProvider>
     </BrowserRouter>

@@ -3,7 +3,7 @@
      PRESUMED/UNKNOWN are quarantined below — never in the verified table.
      Read first every session. Update the relevant line after any state change.
      Never round a level up. -->
-<!-- Last verified: 2026-06-10 (THUNDER · instrumentation pass) -->
+<!-- Last verified: 2026-06-11 (add-a-business: email-exists→LOGIN_TO_ADD + /add-business page + Dashboard entry point) -->
 <!-- Detail docs: built-inventory.md, CLAUDE.md, STANDARDS.md, PLATFORM_STRATEGY.md -->
 
 ## VERIFICATION KEY
@@ -24,7 +24,7 @@
 | **AI · execute.ts** | WORKS | `ai/execute.ts` | 4 internal callers (engine.ts, synthesis.ts, social/generate.ts, campaigns/generate.ts) · social_drafts confirmed live 2026-06-08 via REST API | CLAUDE.md §HANDOFF 2026-06-05 |
 | **AI · parseJson.ts** | WIRED | `ai/parseJson.ts` | Called by `ai/execute.ts` (internal) | — |
 | **Auth · AcceptInvite.tsx** | WIRED | `auth/AcceptInvite.tsx` | cultivar-os router.tsx:30 — /join route renders it | built-inventory.md |
-| **Auth · OwnerSignup.tsx** | WIRED | `auth/OwnerSignup.tsx` | SignUp.tsx:52 (Cultivar), modules/OnboardingWizard.jsx:262 (Ignition) · **add-a-business path added 2026-06-11**: detects existing session → skips signUp → creates second businesses row under same auth.uid() | built-inventory.md |
+| **Auth · OwnerSignup.tsx** | WIRED | `auth/OwnerSignup.tsx` | SignUp.tsx:52 (Cultivar), modules/OnboardingWizard.jsx:262 (Ignition), AddBusiness.tsx (new 2026-06-11) · **full add-a-business surface 2026-06-11**: (1) session-on-mount → skips auth fields; (2) email-exists → `LOGIN_TO_ADD` step (sign in with existing password → create business); (3) `createBusinessAndMember(userId)` helper extracted; (4) Dashboard `+ Business` button for owners → `/add-business`; (5) BusinessPicker `+ Add a business` link | built-inventory.md |
 | **Auth · acceptInvitation.ts** | WIRED | `auth/acceptInvitation.ts` | api/members/invite.ts:15,25 + api/members/accept-invite.ts:18 + api/members/preview-invite.ts:17 | built-inventory.md |
 | **Auth · configureAuth.tsx** | WIRED | `auth/configureAuth.tsx` | cultivar-os/src/lib/auth.ts:1 | built-inventory.md |
 | **Auth · invitations.ts** | WIRED | `auth/invitations.ts` | Settings.tsx: createInvitation:171, getPendingInvitations:147, revokeInvitation:200 | CLAUDE.md §HANDOFF 2026-06-02 |
@@ -76,12 +76,13 @@
 
 | ITEM | LEVEL | LOCATION | EVIDENCE | → DETAIL |
 |---|---|---|---|---|
-| **Build** | WORKS | `packages/cultivar-os/` | 2177 modules, zero errors — 2026-06-10 | — |
+| **Build** | WORKS | `packages/cultivar-os/` | 2178 modules, zero errors — 2026-06-11 | — |
 | **Vercel deploy** | WORKS | cultivar-os.vercel.app | GitHub push → auto-deploy ● Ready (23s) · confirmed 2026-06-03 | CLAUDE.md §HANDOFF 2026-06-03 |
 | **Vercel functions (11)** | WORKS | `api/*.ts` + subdirs | 11 live functions: campaigns, dashboard, discovery/ingest, members/invite, orders/submit, qbo/auth-url, qbo/callback, qbo/invoice/cultivar, qbo/status, social/enable, social/generate-posts · **1 slot below 12-function Hobby limit** | CLAUDE.md §HANDOFF 2026-06-03 |
 | **QR checkout → QB invoice** | WORKS | `src/pages/PlantProfile → CartReview → api/orders/submit + api/qbo/invoice/cultivar` | Confirmed end-to-end 2026-05-27 (Terry demo run) · Invoice #3648.380 $920.13 generated | CLAUDE.md §Key Data |
 | **BusinessProvider / tenant isolation** | WORKS | `src/App.tsx + context/NurseryProvider.tsx` | businessType="nursery" · cross-vertical member filter applied · 29/29 test assertions 2026-06-03 · **multi-business (Option B) added 2026-06-11**: .single() replaced on both paths; auto-select for 1 business (regression gate ✓); picker for 2+ with localStorage persistence; `[TRACE:BUSINESS]` born ON; builds green Cultivar ✓ Ignition ✓ | CLAUDE.md §HANDOFF |
-| **OwnerSignup** | WIRED | `src/pages/SignUp.tsx` | Renders shared OwnerSignup with cultivarConfig · → /onboarding on success | CLAUDE.md §HANDOFF 2026-06-04 |
+| **OwnerSignup (nursery)** | WIRED | `src/pages/SignUp.tsx` | Renders shared OwnerSignup with cultivarConfig · → /onboarding on success | CLAUDE.md §HANDOFF 2026-06-04 |
+| **AddBusiness page** | WIRED | `src/pages/AddBusiness.tsx` | New 2026-06-11 · businessType='general', no verticalSteps · PrivateRoute /add-business · session detection fires on mount → skips email/pw · → /dashboard on success | CLAUDE.md §HANDOFF 2026-06-11 |
 | **Dashboard tile grid** | WORKS | `src/pages/Dashboard.tsx` | TileGrid + Tile from shared · QB reconnect banner wired to accounting_token_expires_at · confirmed operational demo 2026-05-27 | CLAUDE.md TD#15 resolved |
 | **QB dead-connection detection** | WORKS | `api/qbo/status.ts` | Proactive expiry check + refreshQBToken() on every dashboard load · TD#15 resolved 2026-06-08 commit 444fbb1 | CLAUDE.md TD#15 |
 | **Social drafts generation** | WORKS | `api/social/generate-posts.ts` | generateSocialDrafts called with advert_channels · 2 fresh rows confirmed 2026-06-08 via REST API (cadence, period_start populated) | CLAUDE.md §HANDOFF 2026-06-08 |
