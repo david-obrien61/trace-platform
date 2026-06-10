@@ -31,7 +31,7 @@ We come alongside, quietly. We connect what you already use. We fill the gaps no
 The one-sentence version: We don't replace your systems. We connect them, surface what matters, and fill the gaps you couldn't fill yourself.
 
 > **TRACE Enterprises — Built with CAI**
-> Last updated: 2026-05-23
+> Last updated: 2026-06-13
 > Maintained by: David O'Brien
 > **Purpose:** Single source of truth for strategy, build priorities, and competitive positioning.
 > Both Claude.ai (strategy) and Claude Code (build) read this file at the start of every session.
@@ -854,6 +854,170 @@ This section is the live snapshot of where each near-term customer relationship 
 
 ---
 
+## PART 16 — DESIGN DECISIONS CAPTURED 2026-06-13
+
+These decisions were settled in the 2026-06-13 session while building Receipt Keeper v1 (OCR → DB pipeline) and reviewing the grower inventory model. They are recorded here — not in code or migration files — because they shape the product thesis and constrain future feature work. They are locked; if a subsequent session challenges one of these, it must first read this section.
+
+---
+
+### D-001 — PLATFORM IDENTITY CONSTRAINT
+
+**Decision:** TRACE is not a system of record. TRACE is a lens.
+
+The authoritative version of any data record lives in the customer's own system — QuickBooks, Neon One, the notebook, the cash register. TRACE captures at the point of context (the transaction, the receipt scan, the service call) and derives insight. It does not aspire to replace the system the customer trusts for audit, compliance, or reporting.
+
+**Test for any new feature:** Is this feature trying to be the authoritative record, or is it a derived view? If authoritative → push it to the customer's system (QB, their CRM). If derived → TRACE holds it as a lens, tagged by `business_id`, readable by that business only.
+
+**Why it matters:** This constraint prevents scope creep into ERP/CRM territory, keeps the platform's value proposition clean (connect + fill + surface), and explains why QB write-back (receivables, expenses) is always in scope but "replacing QuickBooks" is explicitly not.
+
+**Implication for Receipt Keeper:** The receipt is captured at point-of-purchase (the physical moment). The OCR result is a derived read. The line items are a derived extract. None of these are the authoritative accounting record — that lives in QB. Receipt Keeper feeds QB (future write-back), not the other way around.
+
+---
+
+### D-002 — CAPTURE-AT-POS PRINCIPLE
+
+**Decision:** Capture happens on the mobile device at the physical moment of the transaction. Review and resolution happen on desktop, at a deliberate time.
+
+Two roles in the pipeline:
+- **Mobile / field role:** Capture the receipt / scan the QR / confirm the order. Minimal friction. The goal is zero-friction data entry at the moment the data exists.
+- **Desktop / owner role:** Review the captured data, classify lines, reconcile totals, approve or correct. No urgency. Full screen.
+
+**Why it matters:** If capture is friction-heavy, it won't happen consistently. If review is time-pressured, errors compound. Separating the two roles by device and timing lets each be designed for its actual context.
+
+**Current state:** Receipt Keeper v1 captures on any device (no explicit mobile/desktop split in the UI yet). The confirm-before-write step is the beginning of the review layer. Future: a dedicated desktop review queue where multiple receipts can be classified and reconciled in a single session.
+
+---
+
+### D-003 — THREE-STATE LINE CLASSIFICATION
+
+**Decision:** Every line item on a receipt is classified into one of three states: **BUSINESS / PERSONAL / NEEDS-A-DECISION**.
+
+**Rules:**
+- The receipt inherits a default classification at the top (e.g., "business receipt") and each line inherits that default.
+- The user overrides only the exceptions — not the common case.
+- **Zero-click common case:** A business-purpose receipt where all lines are business expenses requires no user action beyond the receipt-level classification.
+- **NEEDS-A-DECISION:** Lines that are ambiguous (personal item bought on business card, mixed-use supply) park here with an optional why-note. The why-note is accountant-readable and enables hand-off without a meeting.
+- **No fractional splitting in v1.** A fuel charge is either business or personal. The 70%/30% case is deferred to v2 (requires accounting sophistication the v1 target user doesn't have).
+
+**Data model:** `line_items jsonb` (already built, 2026-06-13) stores the raw extracted lines. Classification state is a future column (`line_items_classified jsonb` or a separate `receipt_lines` table) when the review UI is built.
+
+**Why it matters:** Three states is the minimum viable model. Two states (business/personal) forces the user to make a binary decision on every ambiguous line — which kills adoption. Four or more states (business/personal/mixed/capital/etc.) is accounting software, not a capture tool. Three states with a why-note is the right tension: enough to be useful to an accountant, not enough to require an accountant to set up.
+
+---
+
+### D-004 — RECONCILIATION ENGINE
+
+**Decision:** The Receipt Keeper reconciliation engine compares summed line items against the stated receipt total and applies severity-scaled friction.
+
+**Three outcomes:**
+1. **Match (within tolerance):** Silent green indicator. No user action required. Most receipts.
+2. **Small gap (e.g., tax rounding, missing a line):** Shown to the user — non-alarming, informational. "Total is $0.23 more than your lines." User can accept or correct.
+3. **Large gap or overage (lines exceed stated total, or gap > threshold):** **HARD FLAG before save.** The user must reconcile with the physical receipt in hand before the record is written. The system does not save a materially wrong record silently.
+
+**Surface Honesty application:** The system must not write a record it knows is inconsistent without telling the user. Silent rubber-stamping is a Surface Honesty violation. The severity-scaled friction model honors both the principle and the user's time — don't interrupt them for rounding noise, but stop them before they file a receipt that's off by $40.
+
+**v1 state:** Not yet built. The `line_items` column (2026-06-13) is the prerequisite. The reconciliation engine is a v2 feature — requires the desktop review UI and the three-state classification to have a home.
+
+---
+
+### D-005 — HONESTY LEDGER
+
+**Decision:** For every OCR-extracted field, TRACE tracks what was presented to the user (the OCR read) versus what was sent to the database (what the user confirmed or corrected).
+
+**Captured signals:**
+- `accept_vs_edit` (already built, 2026-06-12): receipt-level — did the user accept the OCR output or edit any field?
+- Future per-field: which specific fields were edited, from what value to what value?
+- `ocr_cost_estimate` (already built, 2026-06-12): cost per receipt — operator visibility into AI spend.
+
+**Purpose:** Two uses:
+1. **Audit trail:** If a receipt is challenged, the ledger shows exactly what the AI read and exactly what the human confirmed. This is compliance-adjacent and earns trust with accountants.
+2. **OCR quality signal:** Aggregate `accept_vs_edit` data across receipts reveals which vendors, receipt formats, or photo conditions produce bad reads. This feeds provider selection and prompt tuning decisions.
+
+**v1 state:** Receipt-level honesty ledger is live (`accept_vs_edit`, `ocr_cost_estimate`). Per-field ledger is a v2 enhancement — requires the desktop review UI to instrument individual field edits.
+
+---
+
+### D-006 — RERUN-AS-LEARNING
+
+**Decision:** Every OCR rerun on a receipt that previously failed (or was heavily edited) is a labeled training signal, not just a retry.
+
+**What to log on rerun:**
+- The original image (or a reference to it in storage)
+- The original bad read (the prior `ocr_raw` output)
+- The corrected values (what the user entered manually)
+- The provider that generated the bad read
+- The reason for rerun (explicit: user initiated; implicit: validation failed)
+
+**Why it matters:** The failure mode for OCR is not random — it is systematic. Bad receipt paper, certain fonts, crumpled edges, poor lighting all produce predictable failure patterns. Logging labeled failures lets TRACE (a) tune the provider prompt, (b) flag image quality to the user before they submit, and (c) build a small training set that would support a fine-tuned model if volume ever justifies it.
+
+**v1 state:** Not yet instrumented. The prerequisite is the rerun UI (user-initiated retry on a failed or corrected receipt). The data model is the `receipts` table (already has `ocr_raw`, `accept_vs_edit`) — logging the prior read alongside the corrected values is a two-column addition (`prior_ocr_raw jsonb`, `rerun_reason text`).
+
+---
+
+### D-007 — EVENT MODEL RESOLUTION (GROWER INVENTORY)
+
+**Decision:** The grower inventory event model has exactly ONE primitive: **draw a count off a lot for a reason.** Reasons are data, not code branches.
+
+**The primitive:**
+```
+lot (e.g., "250 Liberty Maples — 2024 crop")
+ └─ event: draw N units for reason R
+     ├── reason: graduate (moved to container, cost-to-ADVANCE)
+     ├── reason: sell (left lot, revenue attached)
+     ├── reason: die (loss, loss-rate tracked)
+     └── reason: [new reason] ← new row in reasons table, zero code change
+```
+
+**Cost rides along:** Each event carries the cost-basis at the time of the draw. This enables the Cost-to-Produce tile — the loaded cost per unit at any stage — without requiring a separate accounting layer.
+
+**Remaining = leftover, not a separate tracking object.** The remaining count is derived: lot.initial_count minus sum of all event draws. There is no "current inventory" field to update — the current state is always computed from events.
+
+**Why "reasons are data, not code":** Adding a new event type (e.g., "donated," "composted," "returned to supplier") requires no code change — it's a new row in the reasons table. The event model is open-ended by construction. This is the AC-1 discipline applied to business events: vertical-specific vocabulary lives in data, never in schema identifiers.
+
+**v1 state:** This model is the architectural decision for the Cost-to-Produce tile (not yet built). The current `plant_events` table in Cultivar OS is a partial implementation — it has event types but they are hardcoded as string literals rather than a lookup table. The refactor is a post-demo task.
+
+---
+
+### D-008 — BENCH-E MATURATION (EXTERNAL AI PROVIDER RESILIENCE)
+
+**Decision:** BENCH-E (External AI Provider Resilience) matures in three successive passes. Each pass is a distinct build milestone.
+
+**Pass 1 — Foundation (DONE, 2026-06-12):**
+- Provider try-chain with isolated catches and timeouts
+- Operator-greppable fallback log: `[TRACE:SUBSYSTEM] provider-fallback fired: X→Y, reason: Z`
+- Clean user error on all-fail: actionable, non-technical copy
+- Provider 3+ slot documented in code comments
+
+**Pass 2 — Configuration externalization (NEXT):**
+- Provider list, timeout values, and retry counts move from code constants to a config object (`providerConfig`)
+- Config object can be overridden per-vertical or per-business-module
+- Enables A/B testing of provider order without a code deploy
+- Enables disabling a provider for a specific business (e.g., data-sovereignty concern)
+
+**Pass 3 — Operational monitoring (FUTURE, threshold: >10 receipts/day):**
+- Fallback-rate counter: how often did each provider fall through to the next?
+- Displayed as a glanceable number on an operator dashboard (not a log file)
+- Threshold alerting: if Gemini fallback rate exceeds X% in a rolling window, surface it proactively
+- This is the difference between "we have logs" and "we have observability"
+
+**Why three passes:** Pass 1 is correctness (the feature works). Pass 2 is flexibility (the feature can be tuned without a deploy). Pass 3 is intelligence (the feature tells the operator when it's struggling). Each pass has a different build complexity and a different trigger — Pass 1 always, Pass 2 when a second vertical uses the same provider chain, Pass 3 when daily volume makes manual log-scanning impractical.
+
+**Current state:** Pass 1 is DONE (committed 2026-06-12, `ocr.ts` Gemini→Claude fallback chain). Pass 2 and Pass 3 are benched pending volume.
+
+---
+
+### Open Threads for Next Session
+
+*(Not decisions — active uncertainties that must be resolved before the affected features advance.)*
+
+**Thread 1 — Gemini 2.0 live-test failure:** David's live receipt test with `gemini-2.0-flash` had Gemini lose every receipt (zero successful OCR reads). This may be the 8-second `AbortController` firing before Gemini can respond on mobile network conditions, or a request-shape change between `gemini-1.5-flash` and `gemini-2.0-flash`. Investigate before advancing Receipt Keeper v1 from WIRED to WORKS. Read `packages/cultivar-os/api/receipts/ocr.ts` — `tryGemini()` function — and compare the request body shape against the `gemini-2.0-flash` API docs.
+
+**Thread 2 — line_items quality not yet eyeballed:** The `line_items` column was added (2026-06-13) and the insert call was wired, but no successful live test has been run that would show whether Gemini actually returns a well-structured `line_items` array for a real receipt. The OCR prompt already requests `"line_items": [{"description": "string", "amount": number}] or null` — but real grocery/fuel/hardware receipts may return null, partial arrays, or malformed objects. This must be confirmed before any UI surface consumes `line_items`.
+
+**Thread 3 — David as customer-zero on the 80% shared spine:** The Receipt Keeper, the Cost-to-Produce tile, and the grower event model are all features that David will use himself (truck receipts, nursery accounting, business operations). This is the most reliable design feedback loop available. As each feature is built, David uses it for 2-4 weeks before it goes to LAWNS or any other customer. The 80% shared spine means that what works for David's general business (`business_type='general'`) will work for Lauren's nursery with only vocabulary differences. Document the use-for-yourself cycle as explicit protocol before shipping to customers.
+
+---
+
 ## APPENDIX A — SESSION STARTERS
 
 ### Claude Code session:
@@ -897,5 +1061,5 @@ Blotato user ID:  269df7e1-351d-4add-9111-3d42564b1fc6
 
 *TRACE Enterprises · Built with CAI*
 *cultivar-os.vercel.app · builtwithcai.com*
-*MASTER_BRIEF.md v3 — May 27, 2026*
+*MASTER_BRIEF.md v4 — June 13, 2026*
 *Update this file every session. No exceptions.*
