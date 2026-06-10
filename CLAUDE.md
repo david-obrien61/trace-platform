@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-13 (Receipt Keeper: storage bucket RLS + atomic save fail + line_items OCR capture; build 2180 ✅; 2 migrations pending David apply; live receipt test required)
+# Last updated: 2026-06-14 (Receipt Keeper: editable line-item grid + live reconciliation + conflict dialog/override recording (Tesla bit); migration 20260614 committed; build 2180 ✅; 4 migrations pending David apply; live grid test required)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -300,6 +300,181 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-14 — Receipt Keeper: editable line-item grid + live reconciliation + conflict dialog/override recording (Tesla bit)
+
+**Type:** Code (2 files changed: `packages/cultivar-os/src/pages/ReceiptKeeper.tsx` full rewrite, `supabase/migrations/20260614_receipts_reconciliation.sql` new) + Docs (`PLATFORM_STATE.md` updated, `CLAUDE.md` header + handoff). Also `.gitignore` patched (`.env.vercel.*` pattern added). Build 2180 ✅ (module count unchanged — migration is SQL only).
+
+**Session mandate:** THUNDER · BUILD · Three tasks in ReceiptKeeper.tsx: (1) editable line-item grid seeded from OCR output, (2) live reconciliation readout comparing line sum vs confirmed total, (3) conflict dialog + durable override recording ("Tesla bit").
+
+---
+
+**ROOT CAUSE / MOTIVATION:**
+
+v1 captured `line_items` from OCR but stored them opaquely — the owner couldn't see or fix individual items. The confirm step showed a vendor/date/amount/category form but no per-line breakdown. A receipt with a $47.82 total and 4 line items gave the owner no way to verify which items Gemini read correctly.
+
+The Tesla bit: if the owner edits the total to something that conflicts with the line sum, v1 had no record of the conflict having been shown, no record of when the owner proceeded anyway, and no way to distinguish "owner corrected an OCR error" from "owner didn't notice a real discrepancy." The override-record pattern closes that gap permanently.
+
+---
+
+**WHAT WAS BUILT (three parts):**
+
+**PART 1 — Editable line-item grid:**
+
+New `LineItem` interface: `{ id: string; description: string; amount: string }`. Amounts stored as `string` for free-form editing; parsed to `number` on save via `parseFloat`.
+
+State:
+- `lineItems: LineItem[]` — the live, editable list on the confirm screen.
+- `lineItemsOriginal` — snapshot of OCR output set once at OCR time, never mutated. Written to `line_items_original` in the DB row. Proves what was read.
+- `amountOriginal` — snapshot of OCR total field. Written to `amount_original`. Drives `header_amount_edited` flag.
+
+OCR wiring: when OCR succeeds, `ocrResult.parsed.line_items` is mapped to `LineItem[]` (assigned `id: crypto.randomUUID()` for React keys) and stored in both `lineItems` (editable) and `lineItemsOriginal` (immutable snapshot).
+
+Confirm step UI (inline styles throughout, zero Tailwind):
+- "Line Items" heading with `+ Add row` button.
+- Each row: description text input (flex 1) + amount text input (fixed 80px) + red `×` delete button.
+- "Total from lines: $XX.XX" readout below the grid.
+- Keyboard: amount inputs use `inputMode="decimal"`.
+
+**PART 2 — Live reconciliation readout:**
+
+Constants:
+```typescript
+const MATCH_TOLERANCE = 0.02;   // ≤$0.02 = match (rounding noise)
+const SMALL_GAP_ABS   = 5.00;   // abs gap < $5 = small (plausible tax/tip)
+const SMALL_GAP_PCT   = 0.10;   // gap < 10% of total = small
+```
+
+`computeReconcile()` at confirm-step render time:
+- Returns `{ status, lineSum, total, delta, gapNote }`.
+- `no_lines`: no line items — reconciliation skipped.
+- `match`: `|delta| ≤ 0.02` — green "Lines match total" indicator.
+- `small_gap`: gap is small but non-zero — amber indicator with `gapNote` explaining direction (e.g. "Lines exceed total by $0.84 — possibly tax not in total").
+- `large_mismatch`: large gap — red indicator; blocks the normal Save path.
+
+Component-level readout: `const reconcileState: ReconcileResult | null = step === 'confirm' ? computeReconcile() : null;` — runs on every render, so the indicator updates live as the owner types.
+
+**PART 3 — Conflict dialog + override recording ("Tesla bit"):**
+
+`handleConfirm()` gates: if `rs.status === 'large_mismatch'` → `setShowConflictDialog(true)` → return. Normal save is blocked.
+
+Conflict dialog (inline modal, no library):
+- Shows the delta clearly: "Line items sum to $X.XX but total is $Y.YY — difference: $Z.ZZ."
+- Two buttons: `Cancel` (closes dialog, returns to confirm step with all fields intact) and `Save anyway` (records the override).
+
+`handleSaveAnyway()` Tesla bit:
+```typescript
+const overriddenAt = new Date().toISOString();
+console.log('[TRACE:RECEIPT] conflict override — delta:', rs.delta.toFixed(2), 'overridden_at:', overriddenAt);
+await doSave({ reconcileState: rs, overriddenAt });
+```
+
+**`doSave()` extracted helper** shared between `handleConfirm` (normal path, `overriddenAt: null`) and `handleSaveAnyway` (override path, `overriddenAt: ISO string`):
+- Fresh `const rs = computeReconcile()` inside the helper — authoritative save-time values, not the stale component-level result.
+- `dbReconcileStatus`: `'match'` or `'small_gap'` written directly; `'large_mismatch_overridden'` only when `overriddenAt != null`; `null` when `no_lines`.
+- DB insert now includes all 6 reconciliation columns plus the existing fields.
+- `header_amount_edited`: `amountOriginal !== null && Math.abs(parseFloat(fields.amount) - amountOriginal) > 0.01`.
+- `finalLineItems`: parsed to `Array<{description, amount: number}>` for the DB `line_items` column (amounts as numbers, not strings).
+
+---
+
+**`supabase/migrations/20260614_receipts_reconciliation.sql` (new):**
+
+Six additive columns on `receipts`:
+1. `line_items_original jsonb` — raw OCR output, never mutated.
+2. `amount_original numeric(10,2)` — raw OCR total, never mutated.
+3. `reconcile_status text CHECK IN ('match', 'small_gap', 'large_mismatch_overridden')` — outcome at save time.
+4. `reconcile_overridden_at timestamptz` — when the override happened (null unless large_mismatch path).
+5. `reconcile_delta numeric(10,2)` — `sum(line_items.amount) − amount` at save time.
+6. `header_amount_edited boolean` — true if owner changed the total field from OCR output.
+
+All `ADD COLUMN IF NOT EXISTS` — non-destructive. Existing rows get `NULL` in all six columns.
+VERIFICATION QUERY: expects 6 rows (all six column names).
+
+AC-1: no vertical nouns. AC-2: existing dual RLS (owner + member) covers all new columns — no new policies needed.
+
+**⚠️ David must apply in bgobkjcopcxusjsetfob SQL editor + run VERIFICATION QUERY.**
+
+---
+
+**End-to-end flow after build:**
+
+```
+setStep('saving')
+↓
+OCR result seeds lineItems[] + lineItemsOriginal snapshot + amountOriginal snapshot
+↓ confirm step renders
+  · Editable grid: OCR line items shown; owner can add/edit/delete
+  · reconcileState computed on every render
+  · Readout: green MATCH / amber SMALL GAP (with note) / red LARGE MISMATCH
+↓ owner clicks Save
+  · computeReconcile() fresh call
+  · if large_mismatch → showConflictDialog = true → STOP
+    · dialog: delta shown · Cancel → back to confirm · Save anyway → handleSaveAnyway()
+  · else → doSave({ overriddenAt: null })
+↓ doSave()
+  · storage.upload → if fail: setStep('confirm'), abort
+  · receipts.insert({
+      line_items: finalLineItems (amounts as numbers),
+      line_items_original, amount_original,
+      reconcile_status, reconcile_overridden_at, reconcile_delta, header_amount_edited
+    })
+  · → setStep('done')
+```
+
+---
+
+**Security note — `.gitignore` patch:**
+
+`.env.vercel.prod` and `.env.vercel.pulled` were in the untracked file list (Vercel CLI pulls env files to disk). Neither was staged, but both could be accidentally staged in a future `git add .`. Added `.env.vercel.*` pattern to `.gitignore` with comment. Committed as part of the same commit `9d7fd13`.
+
+---
+
+**Build verification:** `npm run build:cultivar` → 2180 modules ✅ zero TypeScript errors.
+
+---
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns. `line_items_original`, `reconcile_status`, `reconcile_delta`, `reconcile_overridden_at`, `header_amount_edited`, `amount_original` — all generic. `computeReconcile()`, `doSave()`, `handleSaveAnyway()` — generic function names. `MATCH_TOLERANCE`, `SMALL_GAP_ABS`, `SMALL_GAP_PCT` — generic constants.
+- AC-2: ✅ No RLS changes. Existing dual owner+member RLS on `receipts` covers all 6 new columns by row-level enforcement.
+- AC-3: ✅ No cross-vertical data paths opened.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Read `20260612_receipts.sql` + `20260613_receipts_add_line_items.sql` + `ReceiptKeeper.tsx` (prior state) before writing. Confirmed `line_items` column exists in prior migration. Confirmed `ocrResult.parsed.line_items` typing. No assumption-based code.
+- STD-002: ✅ **BEFORE**: confirm screen had no line-item breakdown; no reconciliation; owner could save any total/line mismatch without warning or record. **AFTER**: editable grid; live reconciliation readout; conflict dialog on large_mismatch; `reconcile_overridden_at` timestamptz records exact moment override was chosen. Live acceptance test: David applies migration → uploads receipt with line items → edits total to a large mismatch → confirms dialog fires → confirms `reconcile_overridden_at` non-null in DB row. Pending David apply + live test.
+- STD-003: ✅ `TRACE_RECEIPT = true` preserved (born ON). `[TRACE:RECEIPT] conflict override` log fires on the override path (always-visible on override — no flag gate needed; override is always meaningful). `[TRACE:RECEIPT] confirm` and `saved` logs updated to include line-item counts.
+- STD-004: N/A — no new business-scoped data surface. `receipts` table dual RLS unchanged.
+- STD-005: ✅ No decisions reversed.
+- STD-006: ✅ No vertical nouns introduced.
+- STD-007: N/A — no integration status surfaces touched.
+- STD-008: ✅ Migration `20260614_receipts_reconciliation.sql` written with VERIFICATION QUERY block. **David must apply** to bgobkjcopcxusjsetfob SQL editor. Not marked WORKS until confirmed.
+- STD-009: N/A — no generation/prompt path changes.
+- STD-010: ✅ Storage path convention unchanged (`receipts/{business_id}/{receipt_id}.{ext}`). OCR result is still the artifact. No new opaque names.
+- **BENCH-E: ✅ Preserved** — provider fallback chain unchanged. Grid/reconciliation work does not touch OCR provider chain.
+
+**Gap graduation sweep (step 15):** No gaps past horizon. No graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- `Receipt Keeper v1`: WIRED (unchanged — four pending migrations; live grid test required to advance to WORKS).
+- `receipts table`: WORKS (unchanged — note updated: two pending migrations added).
+- `receipts reconciliation migration`: new row at EXISTS level — migration committed, David must apply.
+- Header updated to 2026-06-14.
+- IN-FLIGHT `Receipt Keeper v1` row: updated with 4-step David sequence (was 3 steps).
+
+**David's required steps before live grid test:**
+1. Apply `supabase/migrations/20260613_receipts_storage_rls.sql` → VERIFICATION QUERY (expect 3 rows: receipts_storage_delete, receipts_storage_insert, receipts_storage_select)
+2. Apply `supabase/migrations/20260613_receipts_add_line_items.sql` → VERIFICATION QUERY (expect line_items, jsonb, YES)
+3. Apply `supabase/migrations/20260614_receipts_reconciliation.sql` → VERIFICATION QUERY (expect 6 rows: amount_original, header_amount_edited, line_items_original, reconcile_delta, reconcile_overridden_at, reconcile_status)
+4. `git push` → Vercel auto-deploys → live grid test:
+   - Upload a receipt photo → OCR seeds the line-item grid → edit a line amount → confirm reconciliation readout updates live
+   - Edit total amount to a large mismatch → click Save → confirm conflict dialog fires showing delta
+   - Click "Save anyway" → confirm row in Supabase has `reconcile_overridden_at` non-null + `reconcile_status = 'large_mismatch_overridden'`
+5. Advance Receipt Keeper v1 to WORKS in PLATFORM_STATE.md when step 4 confirmed
+
+**No runbook needed** — pure code + docs session. No environment changes.
+
+---
 
 ### 2026-06-13 — Receipt Keeper: storage bucket RLS + atomic save fail + line_items OCR capture
 
