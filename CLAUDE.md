@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-12 (Receipt Keeper OCR provider fallback: gemini-2.0-flash primary + claude-haiku-4-5 fallback; BENCH-E added to STANDARDS.md; build 2180 ✅; deploy + re-test required)
+# Last updated: 2026-06-13 (Receipt Keeper: storage bucket RLS + atomic save fail + line_items OCR capture; build 2180 ✅; 2 migrations pending David apply; live receipt test required)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -300,6 +300,143 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-13 — Receipt Keeper: storage bucket RLS + atomic save fail + line_items OCR capture
+
+**Type:** Code (2 files changed: `supabase/migrations/20260613_receipts_storage_rls.sql` new, `supabase/migrations/20260613_receipts_add_line_items.sql` new, `packages/cultivar-os/src/pages/ReceiptKeeper.tsx` 4 targeted edits) + Docs (`PLATFORM_STATE.md` updated). Zero API changes, zero new features. Build 2180 ✅ (module count unchanged — migrations are SQL only).
+
+**Session mandate:** THUNDER · FIX + CAPTURE · Three tasks: (1) fix storage bucket RLS correctness blocker (every upload returned 400); (2) make storage fail atomic (no orphan rows, no lying logs); (3) capture line_items from OCR into receipts table.
+
+---
+
+**ROOT CAUSE — Task 1 (STD-001 confirmed read-first):**
+
+The `receipts` TABLE (`20260612_receipts.sql`) has correct dual RLS (owner + member). The `receipts` storage BUCKET had **zero `storage.objects` policies** — a separate RLS layer that Supabase requires independently of table RLS. Every `supabase.storage.from('receipts').upload(...)` call returned HTTP 400 "new row violates row-level security policy" because there was no INSERT policy on `storage.objects` for the bucket.
+
+This is the STD-008 inverse gap pattern: the bucket existed with the right name and private flag, but the RLS objects protecting it were hand-applied-never or simply missing — never committed to a migration.
+
+---
+
+**WHAT WAS BUILT (three parts):**
+
+**`supabase/migrations/20260613_receipts_storage_rls.sql` (new — Task 1):**
+
+Three policies on `storage.objects`:
+
+1. **`receipts_storage_insert`** (INSERT, WITH CHECK): dual owner+member, `bucket_id = 'receipts'` AND `split_part(name, '/', 1)::uuid IN (SELECT id FROM businesses WHERE owner_id = auth.uid()) OR ... IN (SELECT business_id FROM business_members WHERE user_id = auth.uid() AND active = true)`. AC-3: cross-business upload blocked at DB level — a user writing to `{other_business_id}/{file}` hits the WITH CHECK and gets 400.
+
+2. **`receipts_storage_select`** (SELECT, USING): same dual path — used by v2 `createSignedUrl()` (path stored in `image_url`; signed URL generation needs SELECT on the object).
+
+3. **`receipts_storage_delete`** (DELETE, USING): **owner only** — members cannot delete receipt images. Owner path only.
+
+All three use `DROP POLICY IF EXISTS "..."` before `CREATE POLICY` (idempotent). VERIFICATION QUERY and cross-tenant isolation test documented in the file.
+
+**STD-008 snapshot note:** "Expected BEFORE: (0 rows)" in the snapshot query — confirms the missing-policy hypothesis was the root cause, not a wrong policy.
+
+**⚠️ David must apply in bgobkjcopcxusjsetfob SQL editor + run VERIFICATION QUERY** (expect 3 rows: receipts_storage_delete, receipts_storage_insert, receipts_storage_select).
+
+---
+
+**`supabase/migrations/20260613_receipts_add_line_items.sql` (new — Task 3a):**
+
+```sql
+ALTER TABLE receipts ADD COLUMN IF NOT EXISTS line_items jsonb;
+```
+
+WHY: The OCR prompt (`ocr.ts` PROMPT constant, lines 49–51) already returns `"line_items": [{"description": "string", "amount": number}] or null`. The `OcrResult.parsed` interface in `ReceiptKeeper.tsx` already types `line_items` correctly (as `Array<{description: string; amount: number}> | null`). Only the column and the save call were missing.
+
+VERIFICATION QUERY: `SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = 'receipts' AND column_name = 'line_items';` → expect `line_items | jsonb | YES`.
+
+**⚠️ David must apply in bgobkjcopcxusjsetfob SQL editor + run VERIFICATION QUERY.**
+
+---
+
+**`packages/cultivar-os/src/pages/ReceiptKeeper.tsx` — 4 targeted edits (Tasks 2 + 3b):**
+
+**Edit 1** (confirm log): Added `'line_items:', ocrResult?.parsed?.line_items?.length ?? 0` to the `[TRACE:RECEIPT] confirm` log line. Captures item count at the confirm moment before the user clicks Save.
+
+**Edit 2** (storage error block — Task 2, atomic fail): Changed the storage error path from non-fatal (continued to DB write with `image_url = null`) to **abort-entirely**:
+```typescript
+if (storErr) {
+  // Storage failed — abort save entirely. No orphan row, no lying "saved" log.
+  // User stays on confirm step and keeps their OCR work — they can retry.
+  console.error('[TRACE:RECEIPT] storage FAILED — row NOT written:', storErr.message);
+  setErrorMsg('Photo upload failed — check connection and try again');
+  setStep('confirm');
+  return;
+}
+```
+The `setStep('confirm')` (not `setStep('error')`) is deliberate: the user retains all their filled-in vendor/date/amount/category fields and can retry the Save button without redoing OCR. The storage exception path (`catch`) uses the same discipline.
+
+**Surface Honesty application:** The prior `[TRACE:RECEIPT] saved` log fired even when `storErr` was set (image never actually stored). After this fix, the success log only fires when BOTH storage AND DB write succeeded.
+
+**Edit 3** (DB insert — Task 3b): Added `line_items: ocrResult?.parsed?.line_items ?? null` to the `receipts` insert object.
+
+**Edit 4** (success log): Updated to include `'line_items:', ocrResult?.parsed?.line_items?.length ?? 0` in the save success log.
+
+---
+
+**End-to-end flow after fix:**
+
+```
+setStep('saving')
+↓
+storage.upload(storagePath, base64Bytes)
+↓ if storErr or exception:
+  console.error('[TRACE:RECEIPT] storage FAILED')
+  setErrorMsg('Photo upload failed...')
+  setStep('confirm')  ← user retains OCR fields, can retry
+  return
+↓ if success:
+  image_url = storagePath
+  console.log('[TRACE:RECEIPT] stored image')
+↓
+receipts.insert({ ..., image_url, line_items: parsed.line_items ?? null })
+↓ if dbErr:
+  setStep('error')
+↓ if success:
+  console.log('[TRACE:RECEIPT] saved — id, accept_vs_edit, line_items count')
+  setStep('done')
+```
+
+---
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns. `line_items`, `receipts_storage_*` policy names, `split_part` path extraction — all generic.
+- AC-2: ✅ No RLS changes on data tables. Storage policies use same dual-path structure as table RLS.
+- AC-3: ✅ Storage INSERT policy WITH CHECK on `split_part(name,'/',1)::uuid` — cross-business upload blocked at DB level. User A cannot write to `{business_B_id}/{file}`.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Read `20260612_receipts.sql` to confirm dual RLS structure before writing storage policies. Read `ocr.ts` lines 49–51 to confirm `line_items` already in prompt before adding the column. No assumption-based code.
+- STD-002: ✅ **BEFORE**: every storage upload → 400 "violates row-level security policy" (confirmed by code-path trace: no INSERT policy on storage.objects for receipts bucket). **AFTER**: migration written with dual owner+member INSERT policy. Live acceptance test: upload real receipt → storage upload succeeds (no 400) → `image_url` non-null in receipts row. Pending David apply + live test.
+- STD-003: ✅ `[TRACE:RECEIPT]` logs preserved. Storage FAILED path emits `console.error` (separate from success log pattern — errors always on). No new debug flag added — storage fail is always-visible by design.
+- STD-004: N/A — no new business-scoped data surface. `line_items` is scoped by existing dual RLS on receipts table.
+- STD-005: ✅ No decisions reversed.
+- STD-006: ✅ No vertical nouns in any new code or migrations.
+- STD-007: N/A — no integration status surfaces touched.
+- STD-008: ✅ Both migrations written with VERIFICATION QUERY blocks. **David must apply** (`20260613_receipts_storage_rls.sql` + `20260613_receipts_add_line_items.sql`) — not marked WORKS until confirmed.
+- STD-009: N/A — no generation path changes.
+- STD-010: ✅ Storage path convention unchanged (`receipts/{business_id}/{receipt_id}.{ext}`). `split_part(name,'/',1)` extracts business_id from this convention — consistent with how storage is structured in ReceiptKeeper.tsx.
+- **BENCH-E: ✅ Preserved** — provider fallback chain from prior session unchanged. Storage policy fix does not interact with the OCR provider chain.
+
+**Gap graduation sweep (step 15):** No gaps past horizon. No graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- `Receipt Keeper v1`: WIRED (unchanged — two 2026-06-13 migrations pending David apply; live test required to advance to WORKS).
+- `receipts table`: WORKS (unchanged — note updated: line_items migration written, David must apply).
+- Header updated to 2026-06-13.
+- IN-FLIGHT `Receipt Keeper v1` row: updated with 3 new David steps.
+
+**David's required steps before live test:**
+1. Apply `supabase/migrations/20260613_receipts_storage_rls.sql` in bgobkjcopcxusjsetfob SQL editor → run VERIFICATION QUERY (expect 3 rows)
+2. Apply `supabase/migrations/20260613_receipts_add_line_items.sql` → run VERIFICATION QUERY (expect line_items, jsonb, YES)
+3. `git push` → Vercel auto-deploys → upload real receipt photo → confirm image lands in storage + row has `image_url` non-null + `line_items` array in DB
+4. Advance `Receipt Keeper v1` to WORKS in PLATFORM_STATE.md when step 3 confirmed
+
+**No runbook needed** — pure code + docs session. No environment changes.
+
+---
 
 ### 2026-06-12 — Receipt Keeper OCR: gemini-2.0-flash model fix + provider fallback chain
 

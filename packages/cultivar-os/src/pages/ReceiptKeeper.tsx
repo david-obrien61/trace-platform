@@ -224,7 +224,7 @@ export function ReceiptKeeper() {
     const acceptVsEdit = detectAcceptVsEdit();
     setStep('saving');
 
-    if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] confirm — accept_vs_edit:', acceptVsEdit, 'vendor:', fields.vendor, 'amount:', fields.amount);
+    if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] confirm — accept_vs_edit:', acceptVsEdit, 'vendor:', fields.vendor, 'amount:', fields.amount, 'line_items:', ocrResult?.parsed?.line_items?.length ?? 0);
 
     // STD-010: per-tenant storage path — receipts/{business_id}/{receipt_id}
     // Upload image to Supabase Storage before writing the DB row
@@ -247,17 +247,23 @@ export function ReceiptKeeper() {
           .upload(storagePath, blob, { contentType: mimeType, upsert: false });
 
         if (storErr) {
-          // Storage error is non-fatal — receipt row still saved without image_url
-          console.error('[TRACE:RECEIPT] storage upload error:', storErr.message);
-        } else {
-          // Store the storage path (not a public URL) — bucket is private.
-          // To display: generate a signed URL from this path at view time.
-          image_url = storagePath;
-          if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] stored image — path:', storagePath);
+          // Storage failed — abort save entirely. No orphan row, no lying "saved" log.
+          // User stays on confirm step and keeps their OCR work — they can retry.
+          console.error('[TRACE:RECEIPT] storage FAILED — row NOT written:', storErr.message);
+          setErrorMsg('Photo upload failed — check connection and try again');
+          setStep('confirm');
+          return;
         }
+        // Store the storage path (not a public URL) — bucket is private.
+        // To display: generate a signed URL from this path at view time.
+        image_url = storagePath;
+        if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] stored image — path:', storagePath);
       } catch (e: any) {
-        console.error('[TRACE:RECEIPT] storage exception:', e.message);
-        // non-fatal — continue to DB write
+        // Storage exception — abort save, same discipline as error path
+        console.error('[TRACE:RECEIPT] storage exception — row NOT written:', (e as any).message);
+        setErrorMsg('Photo upload failed — check connection and try again');
+        setStep('confirm');
+        return;
       }
     }
 
@@ -276,6 +282,7 @@ export function ReceiptKeeper() {
       status:            'confirmed',
       accept_vs_edit:    acceptVsEdit,
       ocr_cost_estimate: ocrResult.ocr_cost_estimate ?? null,
+      line_items:        ocrResult?.parsed?.line_items ?? null, // Task 3: raw itemized list from OCR
     }).select('id').single();
 
     if (error) {
@@ -285,7 +292,7 @@ export function ReceiptKeeper() {
       return;
     }
 
-    if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] saved — id:', data?.id, 'accept_vs_edit:', acceptVsEdit);
+    if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] saved — id:', data?.id, 'accept_vs_edit:', acceptVsEdit, 'line_items:', ocrResult?.parsed?.line_items?.length ?? 0);
     setSavedReceiptId(data?.id ?? receiptId);
     setStep('done');
   }
