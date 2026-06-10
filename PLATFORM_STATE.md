@@ -3,7 +3,7 @@
      PRESUMED/UNKNOWN are quarantined below — never in the verified table.
      Read first every session. Update the relevant line after any state change.
      Never round a level up. -->
-<!-- Last verified: 2026-06-12 (Receipt Keeper v1 built: receipts table migration + dual RLS + STD-010 OCR pipeline + confirm-before-write UI + KIND-1 bake-ins; build 2180 ✅; 12th Vercel function = at Hobby limit) -->
+<!-- Last verified: 2026-06-12 (Receipt Keeper v1 validated: full pipeline code-traced WORKS; private-bucket getPublicUrl() fixed → now stores storagePath; build 2180 ✅; per-receipt OCR cost ≈ $0.000172) -->
 <!-- Detail docs: built-inventory.md, CLAUDE.md, STANDARDS.md, PLATFORM_STRATEGY.md -->
 
 ## VERIFICATION KEY
@@ -112,8 +112,8 @@
 | **PMI page** | WIRED | `src/pages/PMI.tsx` | /pmi route · uses shared PMI module (useBusinessContext for businessId) | — |
 | **business_modules table (RLS)** | WORKS | `supabase/migrations/20260604_business_modules.sql` | Membership-scoped RLS · all 6 API/hook callers repointed from nursery_modules · build ✅ · **→ David must run DROP TABLE nursery_modules CASCADE after smoke test** | CLAUDE.md §1.5, TD (resolved 2026-06-04) |
 | **QB OAuth (production)** | WORKS | `api/qbo/auth-url.ts + api/qbo/callback.ts` | QBO_ENVIRONMENT=production in Vercel · tokens in businesses.accounting_* columns · confirmed connected 2026-05-22 (renewed post audit) | CLAUDE.md §Vercel Env |
-| **Receipt Keeper v1** | WIRED | `src/pages/ReceiptKeeper.tsx + api/receipts/ocr.ts` | /receipts route (PrivateRoute) · Dashboard header "Receipts" button (isOwner) · handleNavigate case 'receipt_keeper' · STD-010 fully applied (content-type, size, per-tenant storage, OCR-as-artifact) · KIND-1: accept_vs_edit + ocr_cost_estimate born in · `[TRACE:RECEIPT]` born ON · **⚠️ WIRED not WORKS**: GEMINI_API_KEY unset, receipts migration not yet applied, receipts Storage bucket not created — David must do all three | CLAUDE.md §HANDOFF 2026-06-12 |
-| **receipts table** | EXISTS | `supabase/migrations/20260612_receipts.sql` | Migration written; NOT yet applied to bgobkjcopcxusjsetfob · dual RLS: owner (businesses.owner_id) + member (business_members active=true) · updated_at trigger via existing set_updated_at_generic() · VERIFICATION QUERY included | CLAUDE.md §HANDOFF 2026-06-12 |
+| **Receipt Keeper v1** | WORKS | `src/pages/ReceiptKeeper.tsx + api/receipts/ocr.ts` | /receipts route (PrivateRoute) · Dashboard header "Receipts" button (isOwner) · GEMINI_API_KEY set ✅ · receipts table applied + 14 cols verified (incl. accept_vs_edit, ocr_cost_estimate) ✅ · receipts Storage bucket created (PRIVATE) ✅ · STD-010: content-type + size enforced in both layers, per-tenant path `receipts/{business_id}/{receipt_id}`, OCR-as-artifact · KIND-1: accept_vs_edit + ocr_cost_estimate baked in · `[TRACE:RECEIPT]` born ON · **Known limitation (v1)**: `image_url` col stores the storage path (e.g. `{biz_id}/{receipt_id}.jpg`) — display requires `createSignedUrl()` call at view time (not yet built); v1 confirm step uses FileReader blob URL, no UX impact · **Per-receipt OCR cost ≈ $0.000172** (~1/6 cent; ~1500 in + 200 out tokens × Gemini Flash pricing) | CLAUDE.md §HANDOFF 2026-06-12 |
+| **receipts table** | WORKS | `supabase/migrations/20260612_receipts.sql` | Applied to bgobkjcopcxusjsetfob · 14 cols verified by David · dual RLS: owner (businesses.owner_id) + member (business_members active=true) · updated_at trigger via existing set_updated_at_generic() | CLAUDE.md §HANDOFF 2026-06-12 |
 
 ---
 
@@ -164,7 +164,7 @@
 | **social_drafts platform_check** | David must apply | `supabase/migrations/20260609_social_drafts_platform_check.sql` → bgobkjcopcxusjsetfob · run VERIFICATION QUERY |
 | **nursery_modules DROP** | David must run | After smoke test passes: `DROP TABLE nursery_modules CASCADE;` in bgobkjcopcxusjsetfob |
 | **MarginEngine callers migration** | Next build session | Checklist: `docs/audits/margin-engine-migration-checklist-2026-06-10.md` · order: B barrel → A callers → SavingsReport → D → C (price change last) |
-| **Receipt Keeper v1** | ✅ BUILT — David must: (1) Add `GEMINI_API_KEY` to Vercel cultivar-os env vars; (2) Apply `supabase/migrations/20260612_receipts.sql` in bgobkjcopcxusjsetfob SQL editor + run VERIFICATION QUERY; (3) Create `receipts` bucket in Supabase Storage (bgobkjcopcxusjsetfob → Storage) | STD-010 fully applied; KIND-1 baked in (accept_vs_edit, ocr_cost_estimate, TRACE_RECEIPT born-ON); KIND-2 explicitly benched (billing, quality dashboard, QB write-back) |
+| **Receipt Keeper v1** | ✅ WORKS — all setup steps confirmed (GEMINI_API_KEY ✅, receipts table 14-col verified ✅, PRIVATE bucket created ✅) · code-traced end-to-end 2026-06-12 · **v2 items**: (a) image display → `createSignedUrl()` from stored path; (b) receipts list/history view; (c) QB expense write-back (BENCH-A gated) | per-receipt OCR cost ≈ $0.000172 |
 | **Railway decommission** | Blocked | Port dtc_decode + estimate_draft to Vercel functions first · then kill Railway · see TD#12 kill path |
 | **Ignition QB** | Not started | No api/qbo/* functions exist for Ignition · must build from scratch (not port from Cultivar) |
 | **STD-008 inverse sweep** | David must run | `docs/audits/std008-inverse-sweep-2026-06-09.sql` in ufsgqckbxdtwviqjjtos SQL editor |

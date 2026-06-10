@@ -193,8 +193,9 @@ export function ReceiptKeeper() {
           // Storage error is non-fatal — receipt row still saved without image_url
           console.error('[TRACE:RECEIPT] storage upload error:', storErr.message);
         } else {
-          const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(storagePath);
-          image_url = urlData?.publicUrl ?? null;
+          // Store the storage path (not a public URL) — bucket is private.
+          // To display: generate a signed URL from this path at view time.
+          image_url = storagePath;
           if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] stored image — path:', storagePath);
         }
       } catch (e: any) {
