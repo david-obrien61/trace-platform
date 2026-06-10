@@ -3,7 +3,7 @@
      PRESUMED/UNKNOWN are quarantined below — never in the verified table.
      Read first every session. Update the relevant line after any state change.
      Never round a level up. -->
-<!-- Last verified: 2026-06-12 (Receipt Keeper v1 validated: full pipeline code-traced WORKS; private-bucket getPublicUrl() fixed → now stores storagePath; build 2180 ✅; per-receipt OCR cost ≈ $0.000172) -->
+<!-- Last verified: 2026-06-12 (Vercel function count verified 12/12 AT limit; Blotato endpoint already deleted prior session (35913b2); 3 orphaned source files deleted from packages/; build 2180 ✅) -->
 <!-- Detail docs: built-inventory.md, CLAUDE.md, STANDARDS.md, PLATFORM_STRATEGY.md -->
 
 ## VERIFICATION KEY
@@ -91,7 +91,7 @@
 |---|---|---|---|---|
 | **Build** | WORKS | `packages/cultivar-os/` | 2180 modules, zero errors — 2026-06-12 | — |
 | **Vercel deploy** | WORKS | cultivar-os.vercel.app | GitHub push → auto-deploy ● Ready (23s) · confirmed 2026-06-03 | CLAUDE.md §HANDOFF 2026-06-03 |
-| **Vercel functions (12)** | WORKS | `api/*.ts` + subdirs | 12 live functions: campaigns, dashboard, discovery/ingest, members/invite, orders/submit, qbo/auth-url, qbo/callback, qbo/invoice/cultivar, qbo/status, **receipts/ocr** (new 2026-06-12), social/enable, social/generate-posts · **AT 12-function Hobby limit — FULL** | CLAUDE.md §HANDOFF 2026-06-03 |
+| **Vercel functions (12)** | WORKS | `api/*.ts` + subdirs | 12 live functions: campaigns, dashboard, discovery/ingest, members/invite, orders/submit, qbo/auth-url, qbo/callback, qbo/invoice/cultivar, qbo/status, receipts/ocr, social/enable, social/generate-posts · **AT 12-function Hobby limit — FULL; no headroom** · `api/social/publish.ts` (Blotato) already deleted in 35913b2 (2026-06-08) · 3 orphaned source files deleted 2026-06-12 (packages/cultivar-os/api/campaigns/generate.ts, campaigns/publish-post.ts, services/customer-match.ts — were dead code, not in Vercel count) · ⚠️ `packages/shared/src/pages/Settings.tsx:266` has dead fetch() to `/api/services/customer-match` (root gone, will 404) | CLAUDE.md §HANDOFF 2026-06-03 |
 | **QR checkout → QB invoice** | WORKS | `src/pages/PlantProfile → CartReview → api/orders/submit + api/qbo/invoice/cultivar` | Confirmed end-to-end 2026-05-27 (Terry demo run) · Invoice #3648.380 $920.13 generated | CLAUDE.md §Key Data |
 | **BusinessProvider / tenant isolation** | WORKS (⚠️ TEMP OPEN) | `src/App.tsx + context/NurseryProvider.tsx` | businessType="nursery" · **TEMP OPEN-ACCESS 2026-06-11**: vertical fence commented out on both owner + member paths; picker shows all David's businesses cross-type. Restore by re-enabling `[TEMP — OPEN ACCESS]` lines in BusinessProvider.tsx. | CLAUDE.md §HANDOFF |
 | **OwnerSignup (nursery)** | WIRED | `src/pages/SignUp.tsx` | Renders shared OwnerSignup with cultivarConfig · → /onboarding on success | CLAUDE.md §HANDOFF 2026-06-04 |

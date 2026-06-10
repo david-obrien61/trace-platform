@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-12 (Receipt Keeper v1 validated WORKS; getPublicUrl() → storagePath fix; per-receipt OCR cost ≈ $0.000172)
+# Last updated: 2026-06-12 (Vercel count verified 12/12 AT limit; Blotato endpoint already gone (35913b2); 3 orphaned source files deleted; dead Settings.tsx customer-match fetch flagged)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -300,6 +300,94 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-12 — Vercel function count verification + orphaned source file cleanup
+
+**Type:** Code (delete 3 dead files) + Docs. Zero migrations, zero schema changes, zero new features.
+
+**Session mandate:** THUNDER · VERIFY — confirm actual Vercel serverless function count after Blotato removal. Verify whether Blotato endpoint files were truly deleted or are orphaned. Report X/12. Update PLATFORM_STATE.md, handoff, commit.
+
+---
+
+**STEP 1 — Actual function count (filesystem truth):**
+
+Listed root `api/` directly — Vercel counts ONLY files under the root `api/` directory, not source files in `packages/cultivar-os/api/`:
+
+```
+api/campaigns.ts
+api/dashboard.ts
+api/discovery/ingest.ts
+api/members/invite.ts
+api/orders/submit.ts
+api/qbo/auth-url.ts
+api/qbo/callback.ts
+api/qbo/invoice/cultivar.ts
+api/qbo/status.ts
+api/receipts/ocr.ts
+api/social/enable.ts
+api/social/generate-posts.ts
+```
+
+**Count: 12/12 — AT Hobby plan limit. No headroom.**
+
+`api/social/publish.ts` is **ABSENT** — already deleted in commit `35913b2` (session 2026-06-08, "Blotato kill"). David's recent Blotato removal was application-layer changes (UI/logic), not the endpoint file — the endpoint was already gone.
+
+---
+
+**STEP 2 — Orphaned source files in packages/ (dead code, NOT Vercel slots):**
+
+Three files in `packages/cultivar-os/api/` had no root `api/` re-exporter — dead code eating no Vercel slots but honest cleanup:
+
+| File | Why dead |
+|---|---|
+| `packages/cultivar-os/api/campaigns/generate.ts` | TD#21 — consolidated into `packages/cultivar-os/api/campaigns.ts` (singular) when root `api/campaigns.ts` was created |
+| `packages/cultivar-os/api/campaigns/publish-post.ts` | TD#21 — still contained Blotato-era code; no root re-exporter |
+| `packages/cultivar-os/api/services/customer-match.ts` | Root `api/services/customer-match.ts` was deleted in a prior session; source file remained |
+
+**All three deleted this session.** Directories (`campaigns/`, `services/`) removed as now-empty. Build verified: Cultivar 2180 modules ✅ zero TypeScript errors.
+
+---
+
+**STEP 3 — Discovery: dead Settings.tsx fetch() flagged as new tech debt**
+
+Grepping for callers of the deleted files surfaced an unexpected finding:
+
+`packages/shared/src/pages/Settings.tsx:266` has a live `fetch('/api/services/customer-match', ...)` call inside `findCustomers()`. The root endpoint is already gone — this call will 404 in production whenever a user triggers the customer-match feature in Settings. The source file is now also deleted.
+
+This is new tech debt: the Settings.tsx feature (find customers who match a service offering) needs either a new Vercel function to back it or the dead UI section removed. Not in scope this session. See Tech Debt below (filed as entry, not yet numbered).
+
+**Functional impact today:** The "Find customers" button in Settings fails silently (resp.ok = false, shows error state). Not demo-critical. Flagged in PLATFORM_STATE.md Vercel row.
+
+---
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns introduced. Only deletions.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Listed root `api/` directly to confirm count (filesystem truth, not docs). Confirmed no root re-exporter for the 3 source files before deleting.
+- STD-002: N/A — no bug fix applied.
+- STD-003: N/A — no instrumentation added.
+- STD-004: N/A — no business-scoped data feature shipped.
+- STD-005: ✅ TD#21 state updated: files were flagged for deletion; now deleted.
+- STD-006: ✅ No vertical nouns introduced.
+- STD-007: N/A — no integration status surfaces.
+- STD-008: N/A — no migrations.
+- STD-009: N/A — no generation path changes.
+- STD-010: N/A — no new opaque names.
+- **BENCH standards (STEP 0):** BENCH-B was the trigger for Receipt Keeper (now WORKS). No new bench triggers this session.
+
+**Gap graduation sweep (step 15):** No gap graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- `Vercel functions (12)`: note updated — Blotato endpoint absence confirmed, orphaned source files deletion noted, dead Settings.tsx fetch() flagged.
+- No level changes.
+
+**No runbook needed** — pure code cleanup + docs session.
+
+---
 
 ### 2026-06-12 — Receipt Keeper v1 validation: WORKS confirmed; getPublicUrl() → storagePath fix
 
