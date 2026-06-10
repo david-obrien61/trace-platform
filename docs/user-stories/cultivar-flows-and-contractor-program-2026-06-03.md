@@ -16,7 +16,7 @@ This document captures user stories and configuration specifications for Cultiva
 - In-person customer flow (QR code at nursery)
 - Delivery routing intelligence
 
-These are **working specifications subject to refinement** as product development proceeds. They represent design intent, not built features. As features are implemented, `docs/built-inventory.md` and `TRACE_PLATFORM_AUDIT.md` capture what actually ships — this document is the authoritative source for what these flows are *supposed to do*.
+These are **working specifications subject to refinement** as product development proceeds. They represent design intent, not built features. As features are implemented, `docs/built-inventory.md` and `PLATFORM_AUDIT.md` capture what actually ships — this document is the authoritative source for what these flows are *supposed to do*.
 
 **When referencing these flows:** Point to specific sections in this document rather than duplicating content in PLATFORM_STRATEGY.md or elsewhere. When a section is implemented, add a note to that section indicating the implementation date and relevant files.
 
@@ -96,7 +96,7 @@ Allow customers to self-schedule delivery without owner approval. Owners can ena
 
 ### Implementation note
 
-PLATFORM_STRATEGY.md references "Phase 3 (contractor portal)" and TRACE_PLATFORM_AUDIT.md lists `contractor_tiers` as a FLEET-tier BUILD NEW item. This section is the detailed specification for that feature. When built, update PLATFORM_STRATEGY.md Phase 3 to reference this document.
+PLATFORM_STRATEGY.md references "Phase 3 (contractor portal)" and PLATFORM_AUDIT.md lists `contractor_tiers` as a FLEET-tier BUILD NEW item. This section is the detailed specification for that feature. When built, update PLATFORM_STRATEGY.md Phase 3 to reference this document.
 
 ---
 
@@ -330,7 +330,7 @@ These are noted for future product discussions and are not blockers to this spec
 **PLATFORM_STRATEGY.md — Phase 3 (contractor portal)**  
 PLATFORM_STRATEGY.md mentions "Phase 3 (contractor portal)" under the accounting adapter roadmap section (line ~1116). That reference is minimal — no flow description, no tier structure. This user stories document is the detailed specification for that feature. No content conflict, but PLATFORM_STRATEGY.md should be updated to cross-reference this document when contractor portal enters active development.
 
-**TRACE_PLATFORM_AUDIT.md — Contractor management**  
+**PLATFORM_AUDIT.md — Contractor management**  
 Lists `contractor_tiers` as a "FLEET tier | BUILD NEW" item. This document specifies what `contractor_tiers` should support. No conflict; the audit entry should eventually reference this document's Section 3 and 4.
 
 **docs/built-inventory.md — Online Shop (stub)**  

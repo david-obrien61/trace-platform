@@ -66,16 +66,16 @@ When a Claude Code session is implementing a feature described in this document:
 3. After implementation, update the section with implementation notes
 4. Update built-inventory.md
 
-When PLATFORM_STRATEGY.md or TRACE_PLATFORM_AUDIT.md reference these features, they should cite this document rather than re-describing the flows. Cross-reference format: "See docs/user-stories/cultivar-flows-and-contractor-program-2026-06-03.md Section N."
+When PLATFORM_STRATEGY.md or PLATFORM_AUDIT.md reference these features, they should cite this document rather than re-describing the flows. Cross-reference format: "See docs/user-stories/cultivar-flows-and-contractor-program-2026-06-03.md Section N."
 
 ---
 
 ## Conflicts identified during document creation
 
-A conflict search ran across PLATFORM_STRATEGY.md, TRACE_PLATFORM_AUDIT.md, and docs/built-inventory.md before creating this document. Findings:
+A conflict search ran across PLATFORM_STRATEGY.md, PLATFORM_AUDIT.md, and docs/built-inventory.md before creating this document. Findings:
 
 - **No contradictions found.** The new user stories specify intended behavior; existing docs describe current state.
-- **Touch points documented** in the "Conflicts and reconciliation needed" section at the bottom of the user stories document: PLATFORM_STRATEGY.md Phase 3 mention, TRACE_PLATFORM_AUDIT.md contractor_tiers entry, built-inventory.md Online Shop stub and delivery gaps.
+- **Touch points documented** in the "Conflicts and reconciliation needed" section at the bottom of the user stories document: PLATFORM_STRATEGY.md Phase 3 mention, PLATFORM_AUDIT.md contractor_tiers entry, built-inventory.md Online Shop stub and delivery gaps.
 - **No edits made** to existing documents — conflicts were flagged for David's review per task instructions.
 
 The PLATFORM_STRATEGY.md Phase 3 mention will need a cross-reference added when contractor portal enters active development. That update belongs in the implementation session, not here.

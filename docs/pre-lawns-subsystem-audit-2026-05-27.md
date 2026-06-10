@@ -63,8 +63,8 @@ Cart lives in Zustand (`useCart.ts`) — in-memory, no localStorage. Customer in
 
 All DB writes are in a try/catch; any failure throws and returns a 500, which the frontend shows as a visible error on CartReview (the red error box). The order does not partially commit — if any step fails, the error is surfaced.
 
-**Critical correction from TRACE_PLATFORM_AUDIT.md:**  
-TRACE_PLATFORM_AUDIT.md line 135 states: "No lookup — always creates new customer row." **This is wrong as of May 23.** `api/orders/submit.ts` lines 34–75 perform an email-based dedup: if a customer with the same email exists for this nursery, it reuses that row and updates their name/phone/address. Multiple demo checkouts with the same email will not create duplicate "Terry" rows. The audit doc is stale on this point.
+**Critical correction from PLATFORM_AUDIT.md:**  
+PLATFORM_AUDIT.md line 135 states: "No lookup — always creates new customer row." **This is wrong as of May 23.** `api/orders/submit.ts` lines 34–75 perform an email-based dedup: if a customer with the same email exists for this nursery, it reuses that row and updates their name/phone/address. Multiple demo checkouts with the same email will not create duplicate "Terry" rows. The audit doc is stale on this point.
 
 **What's questionable:**  
 Cart state is in-memory only. A mid-checkout browser refresh destroys the cart and returns the user to the dashboard (via the `if (!item)` guard in CartReview). During a demo, if someone accidentally refreshes the page between the Add-Ons screen and the Review screen, the cart is gone. Risk is low if the demo is controlled, but worth knowing.
@@ -143,7 +143,7 @@ Two acceptable paths:
 Multiple demo orders using the same email address (e.g., `david_obrien2016@outlook.com`) will all map to the same customer row. The name and phone are updated on each order, not duplicated. Lauren will see one customer record regardless of how many demo runs are performed.
 
 **No blast radius concern:**  
-The TRACE_PLATFORM_AUDIT.md warning about "five Terry rows" is no longer accurate. Dedup was implemented in the May 23 session.
+The PLATFORM_AUDIT.md warning about "five Terry rows" is no longer accurate. Dedup was implemented in the May 23 session.
 
 **Gap (post-demo):**  
 There is no customer lookup at the CustomerCapture form — a returning customer who types their email doesn't see their prior address or phone pre-filled. The form always starts blank (unless the cart has a saved customer from navigating back). This is a usability gap, not a demo-critical bug.
@@ -194,7 +194,7 @@ Additionally: `RESEND_API_KEY` and `FROM_EMAIL` do not appear in the CLAUDE.md V
 `useModules.ts` line 100: `const nurseryPlan = 'starter'; // post-demo: fetch from subscription table`. This string is compared against `tier_required` values from the modules table. Any module with `tier_required='growth'` shows as locked. Any module with `tier_required='starter'` or null shows as available/active based on the nursery_modules row. The `'starter'` hardcode is acknowledged tech debt per CLAUDE.md.
 
 **What's broken — tile navigation:**  
-`Dashboard.tsx` line 289–291: `function handleNavigate(_key: string) { // post-demo: route to module-specific pages }` — the handler is an explicit empty stub. Tapping any `active` state tile (QR Checkout, QuickBooks, Social when enabled) does nothing. The tile appears interactive (box shadow, green dot, cursor: pointer) but produces no response. This is the Surface Honesty violation logged in TRACE_PLATFORM_AUDIT.md.
+`Dashboard.tsx` line 289–291: `function handleNavigate(_key: string) { // post-demo: route to module-specific pages }` — the handler is an explicit empty stub. Tapping any `active` state tile (QR Checkout, QuickBooks, Social when enabled) does nothing. The tile appears interactive (box shadow, green dot, cursor: pointer) but produces no response. This is the Surface Honesty violation logged in PLATFORM_AUDIT.md.
 
 **Demo risk level:** MEDIUM — tapping an active tile silently does nothing. If Lauren or Terry tap a tile expecting navigation, nothing happens. No error, no feedback.
 
@@ -302,7 +302,7 @@ The `nursery_modules` and `modules` tables use loose RLS policies (`authenticate
 The CLAUDE.md active tasks list "Mobile responsive fix: tile grid desktop only (768px+)" as an open task. However, looking at `TileGrid.tsx`, there is no 768px gate. The tile grid renders on all screen sizes: 4 columns at <640px, 6 columns at ≥640px, 8 columns at ≥1024px. On a phone, 4 tiles of 72px each display fine horizontally. The open task was apparently written before the tile grid was built and may not reflect the actual behavior.
 
 **Dashboard mobile behavior:**  
-Dashboard.tsx uses `max-width: 640px; margin: 0 auto` for the main content area. On a phone, the metric cards display in a 2×2 grid using flexbox. The tile grid shows below. No bottom navigation exists (noted as BUILD NEW in TRACE_PLATFORM_AUDIT.md).
+Dashboard.tsx uses `max-width: 640px; margin: 0 auto` for the main content area. On a phone, the metric cards display in a 2×2 grid using flexbox. The tile grid shows below. No bottom navigation exists (noted as BUILD NEW in PLATFORM_AUDIT.md).
 
 **Cannot determine from code alone:**  
 Whether the dashboard looks polished on a 375px-wide phone screen (iPhone SE) vs. a 428px screen (iPhone 14 Pro Max) cannot be verified without a runtime test. The CSS structure looks mobile-aware but has never been reported as tested.

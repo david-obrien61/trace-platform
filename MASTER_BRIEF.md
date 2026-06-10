@@ -5,7 +5,7 @@
 This document owns strategy, demo plan, revenue, philosophy, team, contacts, and the customer roster. When a question is about "what TRACE wants to be" or "what we're selling to whom," this doc answers it.
 
 When this doc conflicts with another:
-- For current code state, defer to TRACE_PLATFORM_AUDIT.md
+- For current code state, defer to PLATFORM_AUDIT.md
 - For target architecture, defer to PLATFORM_STRATEGY.md
 - For session-by-session handoff state, defer to CLAUDE.md
 - For the discovery module specifically, defer to DISCOVERY_MODULE_BRIEF.md (created Session 1b)
@@ -537,7 +537,7 @@ The name and definition above have been drafted and shared with Regina (OLH Prog
 ---
 
 ## PART 6 — PLATFORM AUDIT FINDINGS
-*(From TRACE_PLATFORM_AUDIT.md — May 23, 2026)*
+*(From PLATFORM_AUDIT.md — May 23, 2026)*
 
 ### Top 10 Things to Extract to shared/ Before Conduit OS
 
@@ -847,9 +847,9 @@ This section is the live snapshot of where each near-term customer relationship 
 |---|---|---|
 | 2026-05-12 | MASTER_BRIEF.md v1 created. Strategy session. | David + Claude.ai |
 | 2026-05-22 | Cultivar OS demo-ready. QB production approved. Social module complete. Full checkout → QB invoice verified with real QB account. | David + Claude Code |
-| 2026-05-23 | MASTER_BRIEF.md v2. TRACE_PLATFORM_AUDIT.md complete. Platform philosophy, module economy, suggestion engine, vertical roadmap documented. | David + Claude.ai |
+| 2026-05-23 | MASTER_BRIEF.md v2. PLATFORM_AUDIT.md complete. Platform philosophy, module economy, suggestion engine, vertical roadmap documented. | David + Claude.ai |
 | 2026-05-27 | Brand framing rewrite: TRACE family architecture, Built with CAI as craft signature, silent partner philosophy made primary. | David + Claude.ai |
-| 2026-05-27 | Brand framing committed: TRACE family architecture (Terrence, Regina, Andrew, Connor, Erin), Built with CAI as craft signature, silent partner philosophy as center, two new Design Principles (Honest Velocity, Epistemic Humility) added to PLATFORM_STRATEGY.md. The "TRACE — Who We Are" block is now synchronized across MASTER_BRIEF, PLATFORM_STRATEGY, DISCOVERY_MODULE_BRIEF, and TRACE_PLATFORM_AUDIT. Three new Open Architecture Decisions logged (provisional names, family-member sign-off). | David + Claude.ai |
+| 2026-05-27 | Brand framing committed: TRACE family architecture (Terrence, Regina, Andrew, Connor, Erin), Built with CAI as craft signature, silent partner philosophy as center, two new Design Principles (Honest Velocity, Epistemic Humility) added to PLATFORM_STRATEGY.md. The "TRACE — Who We Are" block is now synchronized across MASTER_BRIEF, PLATFORM_STRATEGY, DISCOVERY_MODULE_BRIEF, and PLATFORM_AUDIT. Three new Open Architecture Decisions logged (provisional names, family-member sign-off). | David + Claude.ai |
 | 2026-05-27 | Session L: Factual corrections from founding timeline audit — Cultivar velocity language, Ignition status, founding doc reference. | David + Claude Code |
 
 ---

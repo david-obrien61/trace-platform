@@ -1,4 +1,4 @@
-> Preserved artifact. Original location: repo root. Moved 2026-05-26 during Session 1b doc reconciliation. Findings folded into TRACE_PLATFORM_AUDIT.md UI Surface State section.
+> Preserved artifact. Original location: repo root. Moved 2026-05-26 during Session 1b doc reconciliation. Findings folded into PLATFORM_AUDIT.md UI Surface State section.
 
 # CULTIVAR OS — PRE-DEMO BUTTON AUDIT
 **Generated:** 2026-05-25 | **Demo:** LAWNS Tree Farm, Leander TX (May 26)

@@ -582,7 +582,7 @@ CREATE POLICY "owner_insert"  ON <p> FOR INSERT TO authenticated WITH CHECK (tru
 - [ ] CLAUDE.md: add new Supabase project section, new Vercel env vars section
 - [ ] CLAUDE.md: Desktop folder map updated
 - [ ] `docs/built-inventory.md`: Repo Map row added
-- [ ] TRACE_PLATFORM_AUDIT.md: new vertical section started
+- [ ] PLATFORM_AUDIT.md: new vertical section started
 
 ---
 

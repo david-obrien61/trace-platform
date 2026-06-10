@@ -3,7 +3,7 @@
      PRESUMED/UNKNOWN are quarantined below — never in the verified table.
      Read first every session. Update the relevant line after any state change.
      Never round a level up. -->
-<!-- Last verified: 2026-06-11 (TEMP OPEN ACCESS: business_type filter bypassed in BusinessProvider — picker shows ALL businesses cross-type so David can operate now; re-scope to per-app-type model deferred) -->
+<!-- Last verified: 2026-06-12 (docs session: TRACE_PLATFORM_AUDIT.md renamed to PLATFORM_AUDIT.md — all refs updated; PLATFORM_STRATEGY.md freshness header + target architecture (one-source/many-views), schema naming convention (80/20), red-team constraints, current-vs-target gap recorded) -->
 <!-- Detail docs: built-inventory.md, CLAUDE.md, STANDARDS.md, PLATFORM_STRATEGY.md -->
 
 ## VERIFICATION KEY
@@ -116,6 +116,8 @@
 ---
 
 ## TRACE APP (`packages/trace-app/`)
+
+⚠️ **TRIAGE FLAG (2026-06-12):** This package was built as a separate "general business" entry app. It is now **superseded by the one-app/views decision** recorded in `PLATFORM_STRATEGY.md § TARGET ARCHITECTURE`. The one-app model makes a separate `trace-app` package unnecessary. **David must decide:** repurpose as the canonical single-app root (fold cultivar-os into it), or remove. Do NOT treat this package as live target architecture until that decision is made.
 
 | ITEM | LEVEL | LOCATION | EVIDENCE | → DETAIL |
 |---|---|---|---|---|

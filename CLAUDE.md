@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-11 (TEMP OPEN ACCESS: BusinessProvider business_type filter bypassed — picker spans all types)
+# Last updated: 2026-06-12 (PLATFORM_AUDIT rename + PLATFORM_STRATEGY target architecture recorded)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -17,10 +17,10 @@ When this doc conflicts with another:
 - For verified current state of every platform item (LEVEL + LOCATION + EVIDENCE), see PLATFORM_STATE.md — read this first every session before writing any code
 - For strategy, demo plan, or revenue questions, see MASTER_BRIEF.md
 - For architecture or where things should live, see PLATFORM_STRATEGY.md
-- For what's actually built in code, see TRACE_PLATFORM_AUDIT.md
+- For what's actually built in code, see PLATFORM_AUDIT.md
 - For the discovery module, see DISCOVERY_MODULE_BRIEF.md (created Session 1b)
 - For engineering standards (STD-001 through STD-010 + BENCH-A, BENCH-C, BENCH-D), see STANDARDS.md
-- For reuse ratio figures, see TRACE_PLATFORM_AUDIT.md "Reuse ratio — corrected ground truth (2026-05-28)"; the 68/78/80% figures cited in prior sessions are retired.
+- For reuse ratio figures, see PLATFORM_AUDIT.md "Reuse ratio — corrected ground truth (2026-05-28)"; the 68/78/80% figures cited in prior sessions are retired.
 
 Update the handoff section at the end of every session.
 
@@ -292,7 +292,7 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 - QB invoice pattern — wait until KINNA-OS accounting requirements are clear.
 - CSV importer, hardware registry — Ignition-specific, no cross-vertical need yet.
 
-**Initial entries above are seeded from the Session 1a audit findings and the button audit folded into TRACE_PLATFORM_AUDIT.md in this session (1b). Future entries are added by Claude Code or David whenever Honest Friction surfaces a workaround that is intentionally executed against architectural intent.**
+**Initial entries above are seeded from the Session 1a audit findings and the button audit folded into PLATFORM_AUDIT.md in this session (1b). Future entries are added by Claude Code or David whenever Honest Friction surfaces a workaround that is intentionally executed against architectural intent.**
 
 ---
 
@@ -300,6 +300,97 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-12 — PLATFORM_AUDIT rename + PLATFORM_STRATEGY target architecture recorded
+
+**Type:** Docs-only. Files changed: `TRACE_PLATFORM_AUDIT.md` → `PLATFORM_AUDIT.md` (git mv), `PLATFORM_STRATEGY.md` (freshness header + 4 new sections), `PLATFORM_STATE.md` (last-verified header + TRACE APP triage flag), `CLAUDE.md` (this entry + all TRACE_PLATFORM_AUDIT refs). Zero code changes, zero migrations, zero schema changes.
+
+**Session mandate:** THUNDER · UPDATE PLATFORM_STRATEGY.md + RENAME audit doc — record the one-source/many-views architecture decision David red-teamed 2026-06-11/12.
+
+---
+
+**STEP 1 — RENAME: `TRACE_PLATFORM_AUDIT.md` → `PLATFORM_AUDIT.md`**
+
+11 files had references to the old name. All updated:
+- `PLATFORM_STRATEGY.md` (2 refs)
+- `MASTER_BRIEF.md` (4 refs — including bare `TRACE_PLATFORM_AUDIT` without `.md` in changelog)
+- `TRACE-SESSION-BOOTSTRAP.md` (3 refs)
+- `CLAUDE.md` (6 refs — includes this entry)
+- `docs/built-inventory.md` (2 refs)
+- `docs/pre-lawns-subsystem-audit-2026-05-27.md` (4 refs)
+- `docs/runbook-new-vertical.md` (1 ref)
+- `docs/audits/platform-naming-vertical-leak-audit-2026-06-03.md` (1 ref)
+- `docs/audits/2026-05-25_BUTTON_AUDIT_DEMO.md` (1 ref)
+- `docs/runbooks/cultivar-user-stories-capture-2026-06-03.md` (3 refs)
+- `docs/user-stories/cultivar-flows-and-contractor-program-2026-06-03.md` (3 refs)
+
+Zero references to the old name remain in the repo (confirmed by grep).
+
+**STEP 2 — PLATFORM_STRATEGY.md freshness header:**
+
+Added `# Last updated: 2026-06-12` + 4-line changelog to the file header. First freshness header this document has carried. Previous sessions edited it without versioning; now tracked.
+
+**STEPS 3–6 — New sections added to PLATFORM_STRATEGY.md:**
+
+**`## TARGET ARCHITECTURE — One Source, Many Views`** (after CAPABILITY/COMPOSITION MODEL, before PART 2 Vertical Registry):
+- One data source + one shared engine. Verticals = configured lenses / views, not separate apps.
+- SharePoint-views analogy: one list, many views. Select a view → see filtered data with the right skin and tile-bundle. Platform is the list. Vertical is the view.
+- Entry points vs apps: `.app` domains are entry doors into one app. `builtwithcai.app` = general view (David = customer-zero). `.com` = marketing/positioning.
+- Hand diagram (2026-06-11) described in text: one circle (platform DB), five arrows (entry points/views).
+
+**`## SCHEMA NAMING CONVENTION — The 80/20 Rule`** (inline after TARGET ARCHITECTURE):
+- 80% SHARED tables = zero vertical noun. Examples: `businesses`, `customers`, `receipts`, `social_drafts`.
+- 20% VERTICAL tables = vertical-PREFIX. Examples: `growers_plants`, `shop_jobs`, `kinna_people`.
+- The table name itself tells you which layer it's in. No ambiguity.
+- Prefix finalization: David finalizes exact prefix words (growers_ vs nursery_, etc.) before new vertical tables are created under this convention.
+
+**`## RED-TEAM CONSTRAINTS — Decided and Accepted`** (inline after SCHEMA NAMING CONVENTION):
+- **Constraint 1 — Blast Radius (accepted):** One source = one failure domain. Consciously accepted as the standard, industry-proven multi-tenant SaaS pattern (solved problem). Mitigation: STD-008, snapshot-first.
+- **Constraint 2 — RLS Before Convergence (hard sequence):** Fix TD#28 (pilot_all 19+ Ignition tables wide-open) FIRST. Then and only then merge DBs. LAWNS is live in Cultivar's DB — breach in merged DB affects LAWNS.
+
+**`## CURRENT STATE vs TARGET`** (inline after RED-TEAM CONSTRAINTS):
+- Current: two separate Supabase projects; TEMP OPEN-ACCESS active in BusinessProvider; pre-convention table names (nurseries, nursery_profiles) still in prod.
+- Target: one platform DB; one app with runtime view-config; 80/20 schema.
+- DB convergence sequence: (1) Fix TD#28, (2) snapshot, (3) migrate Ignition schema, (4) verify RLS, (5) retire ufsgqckbxdtwviqjjtos.
+- `packages/trace-app/` TRIAGE FLAG: superseded by one-app/views decision. David decides: repurpose or remove.
+
+**STEP 7 — "Each is its own product" reframe DRAFT:**
+
+The current paragraph (line 31 of PLATFORM_STRATEGY.md) still reads "Each is its own product. Each is also part of the same family of software underneath." This pre-dates the one-app/views decision.
+
+A draft reframe is inserted inline as a `> ⚠️ DRAFT — FLAGGED FOR DAVID'S REVIEW` blockquote directly under the current paragraph. The current paragraph remains unchanged (marketing copy still in use). The draft proposes David's voice version of the structural reframe. **David finalizes the wording.** Do not overwrite the current paragraph until David confirms.
+
+---
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns introduced. Docs-only session.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths.
+- AC-4: ✅ One-source/many-views is itself an AC-4 decision (settled once, encoded as doctrine, stop relitigating).
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Read-only throughout (full PLATFORM_STRATEGY.md + TRACE_PLATFORM_AUDIT.md first 30 lines read in STEP 0 gate before any changes).
+- STD-002: N/A — no bug fix.
+- STD-003: N/A — no instrumentation.
+- STD-004: N/A — no business-scoped data feature.
+- STD-005: ✅ No decisions reversed. "Each is its own product" paragraph preserved; reframe is a DRAFT + flagged, not a replacement.
+- STD-006: ✅ No vertical nouns in shared code.
+- STD-007: N/A — no integration status surfaces.
+- STD-008: N/A — no migrations.
+- STD-009: N/A — no generation path changes.
+- STD-010: N/A — no new opaque names.
+- **BENCH standards (STEP 0 match):** BENCH-B still firing for Receipt Keeper. No new triggers.
+
+**Gap graduation sweep (step 15):** No gaps past horizon. No graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- Last-verified header updated to 2026-06-12.
+- TRACE APP section: TRIAGE FLAG added — package superseded by one-app/views decision; David decides.
+- No item level changes (docs-only session).
+
+**No runbook needed** — pure docs session. No environment, DB, or code changes.
+
+---
 
 ### 2026-06-11 — TEMP OPEN ACCESS: BusinessProvider business_type filter bypassed (David can operate now)
 
@@ -2632,8 +2723,8 @@ Six corrections + two new sections:
 - #15 NEW — HONEST-DEBT: `accounting_needs_reconnect` reads `false` while QB token expired. Reactive-only (401 flip) leaves dead connection silent. Surface Honesty failure per STD-001. Fix = proactive expiry check on dashboard load. Priority: before any real customer relies on QB.
 - #16 NEW — TECH-DEBT: Shared `marginEngine.ts` ~17-line stub silently underdelivers. Full engine is Ignition-local `MarginEngine.js`. Overhead captured in IgnitionProt but orphaned in `calculateRetail()`. Fix = port full engine + wire overhead in same session. Build step 2 in v7 §15.
 
-**PART 4 — TRACE_PLATFORM_AUDIT.md + CLAUDE.md handoff (this commit):**
-- `TRACE_PLATFORM_AUDIT.md`: new "Audit corrections — 2026-06-06" section at top (before reuse ratio). 11-row table: prior claim → audit reality. Agreed build sequence from v7 §15 recorded.
+**PART 4 — PLATFORM_AUDIT.md + CLAUDE.md handoff (this commit):**
+- `PLATFORM_AUDIT.md`: new "Audit corrections — 2026-06-06" section at top (before reuse ratio). 11-row table: prior claim → audit reality. Agreed build sequence from v7 §15 recorded.
 - CLAUDE.md handoff: this entry.
 
 **Agreed build sequence (v7 §15) — now the state the next session reads:**
@@ -4116,7 +4207,7 @@ supabase/migrations/20260528_per_tenant_rls_isolation.sql
 - **Build status:** Clean — 2156 modules, zero TS errors
 
 - **Completed this session (May 23 — platform audit):**
-  - TRACE_PLATFORM_AUDIT.md written to repo root ✅
+  - PLATFORM_AUDIT.md written to repo root ✅
     Full 15-area comparison: ignition-os vs cultivar-os vs shared
     Top 10 extract-to-shared priorities identified before Conduit OS
     Full connector inventory + gap-filler registry
@@ -4151,7 +4242,7 @@ Completed:
 Not in this session (Session 1b):
 - DISCOVERY_MODULE_BRIEF.md creation
 - Surface Honesty principle in PLATFORM_STRATEGY
-- Button audit findings fold-in to TRACE_PLATFORM_AUDIT
+- Button audit findings fold-in to PLATFORM_AUDIT
 - BUTTON_AUDIT_DEMO.md → docs/audits/ relocation as dated artifact
 - PANTRY_OS.md file rename (confirmed not needed — file does not exist in repo)
 
@@ -4174,7 +4265,7 @@ Next session: Session 1b (net-new content + button audit + discovery brief).
 Completed:
 - PART 1: DISCOVERY_MODULE_BRIEF.md created (placeholder; detailed UX, question schema, and full build plan deferred to dedicated session)
 - PART 2: Surface Honesty AND Honest Friction principles added to PLATFORM_STRATEGY.md (both names provisional)
-- PART 3: BUTTON_AUDIT_DEMO findings folded into TRACE_PLATFORM_AUDIT.md as UI Surface State section
+- PART 3: BUTTON_AUDIT_DEMO findings folded into PLATFORM_AUDIT.md as UI Surface State section
 - PART 4: BUTTON_AUDIT_DEMO.md relocated to docs/audits/2026-05-25_BUTTON_AUDIT_DEMO.md as dated artifact
 - PART 5: KINNA-OS schema clients → people with rationale note
 - PART 6: Domain inventory added to CLAUDE.md infrastructure section
@@ -4220,7 +4311,7 @@ Pending:
 ### 2026-05-27 — Session K / Session I / Session L: Subsystem audit, founding timeline, MASTER_BRIEF corrections, LAWNS data ingestion
 
 Completed:
-- Session K (pre-LAWNS subsystem verification audit) completed; report at docs/pre-lawns-subsystem-audit-2026-05-27.md. GO-WITH-CAVEATS verdict. HIGH-3 finding (QB sandbox) overturned by Vercel inspection — env is production. Customer dedup confirmed working (TRACE_PLATFORM_AUDIT.md line 135 is stale and should be refreshed).
+- Session K (pre-LAWNS subsystem verification audit) completed; report at docs/pre-lawns-subsystem-audit-2026-05-27.md. GO-WITH-CAVEATS verdict. HIGH-3 finding (QB sandbox) overturned by Vercel inspection — env is production. Customer dedup confirmed working (PLATFORM_AUDIT.md line 135 is stale and should be refreshed).
 - Session I (founding timeline audit) completed; report at docs/trace-founding-timeline-2026-05-27.md. Earliest verifiable TRACE timestamp: GitHub account creation April 11, 2026. Cultivar OS feature-complete in 5 calendar days (May 18 first commit → May 22-23 demo-hardened). Ignition OS status corrected to "feature-complete, development paused."
 - Session L (MASTER_BRIEF factual corrections) completed; velocity numbers, Ignition status, founding doc reference all updated.
 - Nurseries row for LAWNS populated with real data sourced from LAWNS website ingestion (lawnstrees.com). Placeholder values (fake phone, fake Layna email, wrong address) replaced. Address corrected from "Honey Comb Mesa" to "Honeycomb Mesa" matching the LAWNS site spelling. Website populated. Email remains null pending direct input from Lauren or Terry during onboarding.

@@ -1,11 +1,17 @@
 # TRACE Platform — Multi-Vertical Strategy & Architecture
+# Last updated: 2026-06-12
+# Changelog:
+# 2026-06-12 — target architecture set: one-source/many-views model, schema naming convention, one-DB decision (red-teamed); general-target reframe (§ TARGET ARCHITECTURE)
+# 2026-06-10 — Capability/Composition Model formalized (§ CAPABILITY / COMPOSITION MODEL); STD reference updated
+# 2026-05-29 — Architecture Constants added (AC-1 through AC-4)
+# 2026-05-27 — KINNA-OS subtitle updated; TRACE — Who We Are synced across docs
 
 ## Scope & Hierarchy
 
 This document owns target architecture — what packages/shared/ and the vertical apps should look like when complete. Every table and section here describes target state, not current state.
 
 When this doc conflicts with another:
-- For current state, see TRACE_PLATFORM_AUDIT.md (audit wins on what is built)
+- For current state, see PLATFORM_AUDIT.md (audit wins on what is built)
 - For strategy, revenue, and contacts, see MASTER_BRIEF.md
 - For session handoff and infrastructure specifics, see CLAUDE.md
 - For the discovery module's product brief, see DISCOVERY_MODULE_BRIEF.md (created Session 1b)
@@ -23,6 +29,12 @@ The five of us are not yet all on payroll. We are a family company in formation.
 The craft. Every TRACE product is Built with CAI — our signature on the work. The signature is literal: this software is built with composable AI as the engineering partner, used carefully, used well, used by people who know what good work looks like because they've done it with their hands for forty years.
 
 The product line. We don't sell platforms. We sell the operating system for your kind of business: Cultivar OS for nurseries and garden centers, Ignition OS for diesel and auto repair shops, Conduit OS for HVAC, plumbing, and electrical, KINNA-OS for community nonprofits, CoolRunnings for homes. Each is its own product. Each is also part of the same family of software underneath — the way a small dedicated family ships fast and stays consistent.
+
+> **⚠️ DRAFT — FLAGGED FOR DAVID'S REVIEW (2026-06-12):** The paragraph above reflects the pre-2026-06-12 framing ("each is its own product"). The architecture decision made 2026-06-12 reframes this: TRACE is one platform with many views — verticals are configured entry points, not separate products. The marketing surface ("your kind of business") stays; the structural claim changes. Proposed reframe for David's edit:
+>
+> *The product line. TRACE is one platform — one engine, one database, one shared codebase — configured as the operating system for your kind of business. Walk in through Cultivar OS if you're a nursery. Walk in through Ignition OS if you're a diesel shop. Walk in through KINNA-OS if you run a faith-based program. The door is yours. What's behind it is the same family of software, built once, shared by all. David is customer-zero for the general door — TRACE Enterprises runs on the same platform you do.*
+>
+> David reviews and finalizes this wording. Do not overwrite the current paragraph until David confirms the reframe. Until then, both versions live here — the existing paragraph (marketing copy in use) and this draft (architectural reframe pending).
 
 The silent partner. We are not here to replace what you have. You already have QuickBooks, or Square, or Neon One, or a notebook full of phone numbers. You already have a business that works. What you don't have is enough hours in the day, and the gaps between your tools are where your time and your money are leaking out.
 
@@ -139,6 +151,167 @@ The Composition layer (dependency graph above business_modules) requires:
 None of this is blocking the LAWNS demo. The architecture already supports two verticals
 correctly. The Composition layer is the abstraction above what exists — it formalizes the
 pattern once the pattern is clean. Sequencing: post-demo, after noun purge, before KINNA-OS build.
+
+---
+
+## TARGET ARCHITECTURE — One Source, Many Views
+
+*Decided 2026-06-12. Red-teamed and locked (AC-4). Do not relitigate.*
+
+### The Model
+
+**One data source. One shared engine. Views, not apps.**
+
+The platform is one agnostic database and one shared codebase, configured at runtime by
+`business_type` and entry domain. Verticals are not separate applications — they are
+**configured lenses** (views) on the same source.
+
+The best analogy is SharePoint views: one list, many views. Each view is a filter + skin +
+tile-bundle + vertical-specific programming layered on top. Selecting a view doesn't copy the
+data to a new location. It configures how you see and interact with what's already there.
+TRACE works the same way. The data source is the platform. The vertical is the view.
+
+### Entry Points vs Apps
+
+The `.app` domains (cultivar-os.app, ignition-os.app, conduit-os.app, kinna-os.app,
+builtwithcai.app) are **entry points** — pointers that load the platform pre-configured for
+that vertical's view. They are not separate applications. One app. Many entry doors.
+
+`builtwithcai.app` is the **general view** — the same platform, unfiltered. David is
+customer-zero for the general view. The general entry is the platform experiencing itself,
+not a separate product.
+
+The `.com` domains serve a distinct purpose: **marketing and positioning** (who this view is
+for). `trace-enterprises.com` is the who-we-are / purpose page. `builtwithcai.com` is
+discovery. Vertical `.com` domains describe the market segment.
+
+### Hand Diagram (2026-06-11)
+
+David sketched this by hand: a single circle (the platform database) with five arrows pointing
+outward to labeled entry points. Each arrow is labeled with a domain name and a brief
+description of who walks through that door. The circle doesn't change. The arrows are views.
+This diagram is the correct mental model for the platform. Every architectural decision should
+be legible from it. "Does this require a new circle?" — if yes, reconsider.
+
+---
+
+## SCHEMA NAMING CONVENTION — The 80/20 Rule
+
+*Decided 2026-06-12. Red-teamed and locked (AC-4).*
+
+One platform database holds both layers. The **table name itself** tells you which layer
+it belongs to. No ambiguity.
+
+**80% — SHARED tables (no vertical noun):**
+Tables that serve all verticals carry zero vertical noun in their name.
+Examples: `businesses`, `business_members`, `business_modules`, `customers`, `receipts`,
+`social_drafts`, `notifications_log`, `ai_usage_log`, `subscription_tiers`, `vendors`,
+`growth_goals`.
+Rule: shared = vertical-noun-FREE. This enforces AC-1 at the naming layer.
+
+**20% — VERTICAL tables (vertical-PREFIX as identifier):**
+Tables that are domain-specific carry a vertical prefix as a namespace marker — making it
+unmistakable that the table is not platform-wide.
+Examples: `growers_plants`, `growers_plant_events`, `growers_profiles` (nursery/garden);
+`shop_jobs`, `shop_estimates`, `shop_members_devices` (auto/diesel);
+`trades_tickets`, `trades_equipment` (HVAC/trades);
+`kinna_people`, `kinna_distributions` (faith-based/nonprofit).
+
+The prefix makes the layer indicator visible in the name itself. A reader seeing `growers_*`
+knows immediately: vertical-specific, not platform schema. A reader seeing `businesses`
+knows immediately: shared, applies to every vertical.
+
+**Prefix finalization:** David finalizes exact prefix words (growers_ vs nursery_, etc.) before
+any vertical table is created under this convention. The current `nursery_*` tables (nurseries,
+nursery_profiles) predate this convention; they will be renamed as part of the post-demo noun
+purge (see AC-1 violations in CLAUDE.md §1.5).
+
+---
+
+## RED-TEAM CONSTRAINTS — Decided and Accepted
+
+*Both constraints survived attack 2026-06-12. Locked.*
+
+### Constraint 1 — Blast Radius (Accepted with Mitigation)
+
+**The risk:** One shared database = one failure domain. A bad migration can affect all tenants
+simultaneously, not just one vertical.
+
+**Why accepted:** This is the standard, industry-proven multi-tenant SaaS pattern. Every
+major SaaS platform (Salesforce, Stripe, GitHub, AWS) runs multi-tenant on shared databases
+with row-level isolation. This is an implementation of a solved problem, sized as such — not
+a novel risk requiring novel architecture.
+
+**Mitigation (already in force):**
+- STD-008: committed migration ≠ applied migration. Every migration has a verification query.
+  No migration is "done" until the live DB is confirmed.
+- Snapshot-first before any destructive migration.
+- Migration discipline enforced by the STD-008 standard.
+
+### Constraint 2 — RLS Before Convergence (Hard Sequence)
+
+**The rule:** Tenant isolation via RLS must be fully in place BEFORE the two separate Supabase
+projects (`bgobkjcopcxusjsetfob` Cultivar and `ufsgqckbxdtwviqjjtos` Ignition) are merged
+into one platform database.
+
+**Why:** With a shared database, RLS is the sole tenant boundary. The industry-standard
+pattern (Postgres/Supabase native) is well-known and well-solved — apply the recipe, not
+invent. But known holes currently exist.
+
+**The gate:** Tech Debt #28 — `supabase_rls_pilot.sql` sets `USING(true) WITH CHECK(true)` on
+19+ Ignition tables (pilot_all wide open). ANY row of ANY shop is readable by ANY authed
+session in the Ignition project. This is the known gap.
+
+**Sequence:**
+1. Fix TD#28 — replace `pilot_all` policies with `shop_id`-scoped policies
+   (`USING(EXISTS (SELECT 1 FROM businesses WHERE id=shop_id AND owner_id=auth.uid()))`)
+   on ALL 19+ affected Ignition tables.
+2. Verify: run `SELECT * FROM shops WHERE id != <test_shop_id>` with a non-owner session →
+   expect zero rows returned.
+3. Only after TD#28 is confirmed resolved: proceed with DB convergence (Ignition schema
+   migration into the platform DB, snapshot-first).
+
+**Do NOT merge while TD#28 exists.** LAWNS is live in Cultivar's DB. One breach in the
+merged DB affects LAWNS. Treat accordingly.
+
+---
+
+## CURRENT STATE vs TARGET
+
+*Honest accounting as of 2026-06-12.*
+
+**CURRENT:**
+- Two separate Supabase projects: `bgobkjcopcxusjsetfob` (Cultivar + platform) and
+  `ufsgqckbxdtwviqjjtos` (Ignition-only).
+- TRACE Enterprises (general) lives in Cultivar's DB (`bgobkjcopcxusjsetfob`).
+- BusinessProvider has a TEMP OPEN-ACCESS bypass active (commit-marked, reversible) —
+  `business_type` filter commented out so David sees all his businesses now.
+- Pre-naming-convention tables in production: `nurseries`, `nursery_profiles`, `nursery_modules`
+  (partly resolved — `nursery_modules` → `business_modules` done; others deferred to noun purge).
+
+**TARGET:**
+- One agnostic platform database (the current `bgobkjcopcxusjsetfob` becomes/represents the
+  platform DB after Ignition schema is migrated in).
+- One app with runtime view-configuration by `business_type` and entry domain.
+- 80/20 schema: shared tables with no vertical noun; vertical tables with vertical prefix.
+- BusinessProvider `business_type` filter restored and replaced by the one-app/views routing
+  model (entry domain → businessType prop — no bypass needed).
+
+**DB CONVERGENCE SEQUENCE (deferred, not this week):**
+1. Fix TD#28 (RLS Before Convergence — hard gate; see above)
+2. Snapshot `ufsgqckbxdtwviqjjtos` before any migration
+3. Write Ignition schema migration under 80/20 naming convention
+4. Apply to `bgobkjcopcxusjsetfob`, verify RLS isolation
+5. Retire `ufsgqckbxdtwviqjjtos`
+LAWNS is live in Cultivar's DB — every step involving `bgobkjcopcxusjsetfob` touches production.
+
+**`packages/trace-app/` — TRIAGE FLAG:**
+This package was built 2026-06-11 as a separate "general business" entry point app
+(commit `d4017a1`). It is now **superseded by the one-app/views decision** — the one-app
+model makes a separate `trace-app` package unnecessary; the general view is just the single
+app loaded with `businessType='general'`. This package needs triage: either repurpose as the
+canonical single-app root (folding cultivar-os into it), or remove. Do NOT treat `trace-app`
+as the live target architecture in its current form. Decision deferred — David owns this call.
 
 ---
 
@@ -289,7 +462,7 @@ The pitch to small business owners is that TRACE is the connective tissue that *
 
 **What's forbidden:** the fourth state — looks active, clicks, does nothing. This state is the default when developers (human or AI) build a UI element ahead of its backing logic. Surface Honesty inverts that default. Build the LABELED modal first if necessary, or hide the element until WORKS is achievable.
 
-**Application:** Every new UI element gets reviewed against this rule before merge. Existing dead-button states (see TRACE_PLATFORM_AUDIT.md's "UI Surface State — Cultivar OS (May 25 snapshot)" section) are technical debt to be cleared before any next demo.
+**Application:** Every new UI element gets reviewed against this rule before merge. Existing dead-button states (see PLATFORM_AUDIT.md's "UI Surface State — Cultivar OS (May 25 snapshot)" section) are technical debt to be cleared before any next demo.
 
 **On the name:** "Surface Honesty" is a provisional label. The principle is locked; the name may be revised after 30-60 days of use. See CLAUDE.md Open Architecture Decisions.
 

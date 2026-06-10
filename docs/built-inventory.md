@@ -3,7 +3,7 @@
 # Read this before starting any build session — the thing you're about to build may already exist
 # Last updated: 2026-06-05
 
-**Purpose:** Sessions keep rebuilding things that exist. This document is the single answer to "was X ever built?" Organized by capability, not by file. For file locations, see TRACE_PLATFORM_AUDIT.md.
+**Purpose:** Sessions keep rebuilding things that exist. This document is the single answer to "was X ever built?" Organized by capability, not by file. For file locations, see PLATFORM_AUDIT.md.
 
 > **Audit reconciliation (2026-06-05):** Three stale bootstrap beliefs corrected. (1) AI Engine is already shared, NOT trapped in Ignition — promote already happened; what remains is unifying a split-brain. (2) RBAC is split — identity/invites shared; enforcement still Ignition-side and duplicated. (3) DataBridge footprint confirmed (~45 files, load-bearing) but characterization disputed: this doc says "localStorage-first, intentionally not shared," bootstrap says "offline-sync engine, promote" — unresolved, see NEEDS DAVID'S CALL.
 >
@@ -550,7 +550,7 @@ While creation is private/invite-only (David + family), guards may stay OFF — 
 
 **Migration required:** `packages/ignition-os/supabase/migrations/20260603_recreate_shop_members.sql` must be applied to ufsgqckbxdtwviqjjtos before new Ignition signups work.
 
-**Extraction target:** `packages/shared/src/onboarding/WizardShell.tsx` (see TRACE_PLATFORM_AUDIT.md Top 10 #1) — post-August
+**Extraction target:** `packages/shared/src/onboarding/WizardShell.tsx` (see PLATFORM_AUDIT.md Top 10 #1) — post-August
 
 ---
 

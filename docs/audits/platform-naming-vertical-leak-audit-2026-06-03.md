@@ -90,7 +90,7 @@ TRACE is one platform, many verticals. The multi-tenant extraction moved `shops`
 
 ## Factual Corrections vs. Assertions in Other Docs
 
-No corrections needed to `PLATFORM_STRATEGY.md` or `TRACE_PLATFORM_AUDIT.md` based on this audit. The assertions about the multi-tenant extraction being complete are accurate. The audit confirms `business_id` is used in all new queries and the `nursery_id` cleanup migration is written but not yet applied — consistent with what CLAUDE.md states.
+No corrections needed to `PLATFORM_STRATEGY.md` or `PLATFORM_AUDIT.md` based on this audit. The assertions about the multi-tenant extraction being complete are accurate. The audit confirms `business_id` is used in all new queries and the `nursery_id` cleanup migration is written but not yet applied — consistent with what CLAUDE.md states.
 
 **One factual note:** CLAUDE.md's Handoff for 2026-06-04 says the Ignition sign-in loop was fixed by `setOnboardingDone(true)` in the OWNER SYNC effect. This audit confirms that is the correct root cause and fix. The business_type filter is NOT the root cause — both sides are correctly aligned.
 

@@ -59,7 +59,7 @@ A composable AI operating system for owner-operated small businesses. **One code
 
 ## 4. WHAT'S BUILT (the anti-rebuild inventory — CHECK THIS BEFORE PROPOSING ANY BUILD)
 
-> This section is the front-line defense against rebuilding. If a capability is listed here as built in a vertical, the job is PROMOTE/CONSUME, not rebuild. Deep detail → built-inventory.md / TRACE_PLATFORM_AUDIT.md.
+> This section is the front-line defense against rebuilding. If a capability is listed here as built in a vertical, the job is PROMOTE/CONSUME, not rebuild. Deep detail → built-inventory.md / PLATFORM_AUDIT.md.
 
 **Built in IGNITION (the mature vertical — most "do we have this?" answers are YES here):**
 - **FULL RBAC ADMIN CONSOLE** ("ADMIN | COMMAND CENTER") — confirmed live 2026-06-04. Four tabs: TEAM (join code/QR, teams/grouping, invite), STAFF (member mgmt, invite, PIN reset), ROLES, SHOP SETTINGS. **ROLES tab:** system roles (ADMIN=14 perms, TECH=5, CUSTOMER=3, marked SYSTEM ROLE) + **ADD CUSTOM ROLE** (custom roles by name); permissions grouped by category (MODULES/FINANCIAL/ADMIN/TECH OPS/CUSTOMER), per-permission toggles, role→tile mapping, SAVE ROLE DEFINITIONS. **SHOP SETTINGS:** business profile + SYSTEM POLICY (Price Audit Mode, Bay Custody Tracking, **Auto-Lock Screen after 10 min** = device-session timeout, DOT Mandated Shop) + DANGER ZONE (Restart Onboarding, Simulate Trial Day, Factory Reset). → **This is near-complete RBAC + admin. Job = extract to shared, vertical-skin. NOT design, NOT rebuild.**
@@ -113,7 +113,7 @@ A composable AI operating system for owner-operated small businesses. **One code
 | Session handoff state, infra specifics, active tasks, NON-NEGOTIABLE rules | `CLAUDE.md` |
 | Strategy / demo / revenue / philosophy | `MASTER_BRIEF.md` |
 | Architecture / where things should live | `PLATFORM_STRATEGY.md` |
-| What's actually built in code (ground truth on conflicts) | `TRACE_PLATFORM_AUDIT.md` |
+| What's actually built in code (ground truth on conflicts) | `PLATFORM_AUDIT.md` |
 | Capability inventory | `built-inventory.md` |
 | Vertical-noun / naming leaks | `platform-naming-vertical-leak-audit-2026-06-03.md` |
 | Onboarding/auth findings | `onboarding-flow-findings-2026-06-03.md` |
@@ -123,7 +123,7 @@ A composable AI operating system for owner-operated small businesses. **One code
 | Cost-to-serve + defensible pricing framework | `docs/strategy/cost-to-serve-framework.md` |
 | AI Gateway spec (unified routing, cost control, insight capture) | `docs/specs/SPEC-ai-gateway-2026-06-05.md` |
 
-**Conflict rule:** for what's *built*, TRACE_PLATFORM_AUDIT.md wins. For *strategy*, MASTER_BRIEF. For *architecture*, PLATFORM_STRATEGY. This bootstrap is the map; those are the territory.
+**Conflict rule:** for what's *built*, PLATFORM_AUDIT.md wins. For *strategy*, MASTER_BRIEF. For *architecture*, PLATFORM_STRATEGY. This bootstrap is the map; those are the territory.
 
 ---
 
