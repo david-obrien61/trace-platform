@@ -21,6 +21,7 @@ import { Campaigns }         from './pages/Campaigns';
 import { CampaignDetail }    from './pages/CampaignDetail';
 import { AddBusiness }       from './pages/AddBusiness';
 import { DiscoveryInspect }  from './pages/DiscoveryInspect';
+import { ReceiptKeeper }     from './pages/ReceiptKeeper';
 import PMI                   from './pages/PMI';
 import { AcceptInvite }      from '@trace/shared/auth';
 import { auth }              from './lib/auth';
@@ -67,6 +68,7 @@ export function AppRouter() {
         <Route path="/campaigns/:id"     element={<CampaignDetail />} />
         <Route path="/pmi"               element={<PMI />} />
         <Route path="/add-business"      element={<AddBusiness />} />
+        <Route path="/receipts"          element={<ReceiptKeeper />} />
       </Route>
 
       {/* DEMO — QB invoice preview (no auth, for demo fallback) */}

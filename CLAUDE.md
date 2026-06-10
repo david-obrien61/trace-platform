@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-12 (PLATFORM_AUDIT rename + PLATFORM_STRATEGY target architecture recorded)
+# Last updated: 2026-06-12 (Receipt Keeper v1 built — STD-010 applied, KIND-1 baked in, 12th Vercel function, David must add GEMINI_API_KEY + apply receipts migration)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -300,6 +300,162 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-12 — Receipt Keeper v1: receipts table + STD-010 OCR pipeline + confirm-before-write UI
+
+**Type:** Code + Migration. Five new files: `supabase/migrations/20260612_receipts.sql`, `packages/cultivar-os/api/receipts/ocr.ts`, `api/receipts/ocr.ts`, `packages/cultivar-os/src/pages/ReceiptKeeper.tsx`. Three files updated: `router.tsx`, `Dashboard.tsx`. PLATFORM_STATE.md updated. Zero changes to Ignition. Zero changes to shared packages.
+
+**Session mandate:** THUNDER · BUILD · Receipt Keeper v1 — David's first cost-chain tool + personal dogfood feature. Truck receipts → Gemini Flash OCR → confirm-before-write → receipts table scoped to active business. STD-010 promoted from BENCH-B; applied in full.
+
+---
+
+**STEP 0 — Gate confirmed:**
+
+- PLATFORM_STATE.md read: 11 Vercel functions (1 slot remaining for api/receipts/ocr.ts — now 12, at limit)
+- STANDARDS.md read: STD-010 ACTIVE ("File Upload / Ingest Safety") — catastrophic-class, confirmed by David, applies fully here
+- packages/shared/src/ checked: no existing receipt/OCR module. Gemini Flash not in shared AI layer (uses `@anthropic-ai/sdk` only). Receipt Keeper uses direct `fetch()` to Gemini REST API — no new package needed.
+- Root api/ re-export pattern confirmed via `api/orders/submit.ts`.
+- `set_updated_at_generic()` confirmed EXISTS in migrations (20260604_business_modules.sql).
+
+---
+
+**WHAT WAS BUILT:**
+
+**`supabase/migrations/20260612_receipts.sql`:**
+- `receipts` table — shared 80% (no vertical noun, business_id scopes it per convention)
+- Columns: id (uuid PK), business_id (FK businesses), uploaded_by (FK auth.users), image_url, ocr_raw (jsonb), vendor, date, amount (numeric 10,2), category, status (captured/confirmed), accept_vs_edit (accepted_as_is | edited — KIND-1), ocr_cost_estimate (numeric 10,6 — KIND-1), created_at, updated_at
+- Dual RLS: `receipts_owner_all` (EXISTS businesses WHERE owner_id=auth.uid()) + `receipts_member_all` (EXISTS business_members WHERE business_id + user_id=auth.uid() + active=true)
+- `updated_at` trigger via existing `set_updated_at_generic()` — no new DB function
+- VERIFICATION QUERY block at end of file
+
+**⚠️ David — required before Receipt Keeper works in production:**
+1. Add `GEMINI_API_KEY` to Vercel cultivar-os project environment variables (Settings → Environment Variables)
+2. Apply `supabase/migrations/20260612_receipts.sql` in bgobkjcopcxusjsetfob Supabase SQL editor, then run VERIFICATION QUERY (expect all columns present)
+3. Create `receipts` storage bucket in bgobkjcopcxusjsetfob → Storage → New bucket → name: `receipts` (public or private — private preferred; public URL is used for display only)
+
+**`packages/cultivar-os/api/receipts/ocr.ts` + `api/receipts/ocr.ts` (root re-export):**
+
+**STD-010 fully applied:**
+- Content-type allowlist: JPEG/PNG/WEBP/HEIC/PDF — rejects anything else (415)
+- Size limit: 10MB — rejects over-limit (413)
+- Never-execute: raw bytes never executed; Gemini returns structured text (parsed as JSON artifact)
+- Per-tenant path enforced by client (storage: `receipts/{business_id}/{receipt_id}`)
+- OCR result is the artifact — `ocr_raw` column stores full Gemini response, `parsed` field returns structured extract only
+
+**Gemini Flash call:**
+- `POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=GEMINI_API_KEY`
+- Native `fetch()` — no new npm package
+- Prompt extracts: vendor, date (YYYY-MM-DD), amount, subtotal, tax, category (one of 8), line_items, payment_method, receipt_number
+- Conservative prompt: "use null rather than guessing"
+- JSON parsing: two-pass (direct parse → regex fallback for `{}`) — same pattern as shared/ai/parseJson.ts
+
+**KIND-1 bake-ins in ocr.ts:**
+- `ocr_cost_estimate`: `(inputTokens/1M)*0.075 + (outputTokens/1M)*0.30` — Gemini Flash pricing estimate (June 2026). Returns null if tokens unavailable. Stored in DB for cost-discovery.
+- `inputTokens` + `outputTokens` also returned to client for display
+- `[TRACE:RECEIPT]` logs born ON: request (mimeType, sizeBytes), response (tokens, estimated cost, latency_ms), parsed result (vendor, amount, date)
+
+**`packages/cultivar-os/src/pages/ReceiptKeeper.tsx`:**
+
+- Fully inline styles (zero Tailwind — per CLAUDE.md §6 UI system policy)
+- Steps: `idle` → `ocr_running` → `confirm` → `saving` → `done` | `error`
+
+**idle step:**
+- Drag-and-drop + click-to-select file input
+- Client-side STD-010 validation (mirrors server: ALLOWED_TYPES + MAX_BYTES 10MB) — fast feedback before upload
+- File preview for images; PDF shows filename text fallback
+
+**ocr_running step:**
+- Sends `{ businessId, userId, imageBase64, mimeType, fileSizeBytes }` to `/api/receipts/ocr`
+- Loading indicator
+
+**confirm step (Surface Honesty — confirm before write):**
+- Shows OCR quality indicator: amber warning if parseError, blue-tinted "AI read the receipt" if clean
+- Shows `ocr_cost_estimate` in the quality indicator (KIND-1 — visible to David)
+- Image thumbnail (max 140px) for reference
+- Editable fields: vendor (text), date (date input), amount (number), category (select from 8 options)
+- Fields pre-filled from `parsed` OCR output
+
+**KIND-1: accept_vs_edit captured at confirm moment:**
+`detectAcceptVsEdit()` compares current field values against OCR `parsed` output. If any field changed → `'edited'`. If all match → `'accepted_as_is'`. Captured at `handleConfirm()` call time — before DB write. Unrecoverable if deferred.
+
+**saving step:**
+- Uploads image to Supabase Storage at per-tenant path: `receipts/{businessId}/{receiptId}.{ext}` (STD-010)
+- Storage error is non-fatal — receipt row saved even if image upload fails (image_url = null)
+- Inserts to `receipts`: status='confirmed', accept_vs_edit, ocr_cost_estimate, all edited fields
+- `[TRACE:RECEIPT]` log on confirm: accept_vs_edit value, vendor, amount
+
+**done step:** receipt ID shown (truncated), "Capture another" + "Back to Dashboard"
+
+**error step:** error message + retry + dashboard escape
+
+**Dashboard.tsx changes (two edits):**
+- `handleNavigate`: `case 'receipt_keeper': return navigate('/receipts');` — for future receipt_keeper tile
+- Header button group: "Receipts" button added alongside "+ Business" (isOwner-gated, same `rgba(255,255,255,0.12)` style)
+
+**router.tsx:** `<Route path="/receipts" element={<ReceiptKeeper />} />` added inside PrivateRoute block
+
+---
+
+**KIND-2 BENCHED (explicitly NOT built — noted with triggers):**
+
+| Feature | Bench Status | Trigger |
+|---|---|---|
+| Usage limiting / billing (Stripe metered) | BENCHED | BENCH-A trigger (payments) — first paying customer |
+| Quality-analysis dashboard (edit-rate, misread-vs-bad-image segmentation) | BENCHED | `accept_vs_edit` signal is captured now; the dashboard is the consumer — build when there are 20+ receipts to analyze |
+| QB write-back for receipts (push to QBO as expenses) | BENCHED | v1 is local-only; David's QBO has 31 unreviewed expenses today — Receipt Keeper is the eventual answer, not yet |
+
+---
+
+**Build verification:**
+
+- Cultivar: ✅ 2180 modules, zero TypeScript errors (was 2178 before this session)
+- Ignition: unchanged — not touched this session
+- Root api/ function count: 12 (at Hobby plan limit — FULL; next feature requiring a Vercel function needs Vercel Pro upgrade or consolidation)
+
+---
+
+**AC compliance (step 13):**
+- AC-1: ✅ `receipts` table has no vertical noun. `packages/cultivar-os/api/receipts/ocr.ts` lives in vertical's api/ — correct placement; shared OCR module not needed (single caller). All identifiers: `receipts`, `uploaded_by`, `business_id`, `ocr_raw` — generic.
+- AC-2: ✅ Dual RLS policy (owner + member) applied at migration level. No USING(true) — fully scoped.
+- AC-3: ✅ No cross-vertical data paths opened. ReceiptKeeper reads from `useBusinessContext()` — scoped to active business.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Full STEP 0 reads before any code. Confirmed 11 functions pre-session, Gemini not in shared layer, `set_updated_at_generic()` exists. No assumption-based code.
+- STD-002: N/A — no bug fix. New feature.
+- STD-003: ✅ `TRACE_RECEIPT = true` in both ocr.ts and ReceiptKeeper.tsx — born ON per STD-003 on-by-birth lifecycle. Comment out when David says "proven."
+- STD-004: ✅ receipts table is scoped by `business_id` via dual RLS (owner + member). Two-email isolation proof: Email-A's session can only read receipts where `business_id` matches a business they own or are an active member of. Email-B's receipts are invisible to Email-A. Proven by RLS subquery structure.
+- STD-005: ✅ No decisions reversed.
+- STD-006: ✅ No vertical nouns in `receipts` table or any shared code. `ocr.ts` lives in `packages/cultivar-os/api/` — correctly vertical-scoped (not shared — single caller pattern).
+- STD-007: N/A — no integration connection status surface touched (GEMINI_API_KEY failure returns clear 503, not a silent cached boolean).
+- STD-008: ✅ Migration written with VERIFICATION QUERY block. **David must apply manually** (bgobkjcopcxusjsetfob SQL editor). Not marked WORKS until David applies + verifies.
+- STD-009: N/A — no generation/prompt path has hardcoded channel/business choices.
+- STD-010: ✅ ACTIVE — fully applied:
+  - Content-type validation: ALLOWED_TYPES set in both server (ocr.ts) and client (ReceiptKeeper.tsx)
+  - Size limit: 10MB enforced in both layers
+  - Never-execute: raw binary never executed; OCR output is parsed JSON struct
+  - Per-tenant storage: `receipts/{business_id}/{receipt_id}.{ext}` in Supabase Storage
+  - OCR result as artifact: `ocr_raw` stores full Gemini response; `parsed` is the structured extract; nothing is executed
+- **BENCH standards (STEP 0 match):**
+  - BENCH-A (payments/PCI): KIND-2 billing feature explicitly benched — correct. No payment processing in this build.
+  - BENCH-B (file upload/ingest): **PROMOTED TO ACTIVE as STD-010 2026-06-10.** Applied in full this session. ✅
+
+**Gap graduation sweep (step 15):**
+- `remaining: voice-learning BI` — horizon v2/later. NOT past horizon.
+- `remaining: cadence-triggered generation` — horizon Social Rhythm. NOT past horizon.
+- `remaining: discovery persistence` — horizon v2/later. NOT past horizon.
+No gap graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- `Cultivar · Build`: 2178 → 2180 modules.
+- `Cultivar · Vercel functions (11)` → `Vercel functions (12)` — AT Hobby limit.
+- `Cultivar · Receipt Keeper v1`: new row — WIRED (migration not yet applied, GEMINI_API_KEY unset, Storage bucket not created).
+- `Cultivar · receipts table`: new row — EXISTS (migration written, David must apply).
+- IN-FLIGHT: Receipt Keeper v1 row updated from "Not started" to build instructions.
+
+**No runbook needed** — pure code + migration session. David's manual steps are: (1) add GEMINI_API_KEY Vercel env var, (2) apply receipts migration + verify, (3) create receipts Storage bucket.
+
+---
 
 ### 2026-06-12 — PLATFORM_AUDIT rename + PLATFORM_STRATEGY target architecture recorded
 

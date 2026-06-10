@@ -3,7 +3,7 @@
      PRESUMED/UNKNOWN are quarantined below — never in the verified table.
      Read first every session. Update the relevant line after any state change.
      Never round a level up. -->
-<!-- Last verified: 2026-06-12 (docs session: TRACE_PLATFORM_AUDIT.md renamed to PLATFORM_AUDIT.md — all refs updated; PLATFORM_STRATEGY.md freshness header + target architecture (one-source/many-views), schema naming convention (80/20), red-team constraints, current-vs-target gap recorded) -->
+<!-- Last verified: 2026-06-12 (Receipt Keeper v1 built: receipts table migration + dual RLS + STD-010 OCR pipeline + confirm-before-write UI + KIND-1 bake-ins; build 2180 ✅; 12th Vercel function = at Hobby limit) -->
 <!-- Detail docs: built-inventory.md, CLAUDE.md, STANDARDS.md, PLATFORM_STRATEGY.md -->
 
 ## VERIFICATION KEY
@@ -89,9 +89,9 @@
 
 | ITEM | LEVEL | LOCATION | EVIDENCE | → DETAIL |
 |---|---|---|---|---|
-| **Build** | WORKS | `packages/cultivar-os/` | 2178 modules, zero errors — 2026-06-11 | — |
+| **Build** | WORKS | `packages/cultivar-os/` | 2180 modules, zero errors — 2026-06-12 | — |
 | **Vercel deploy** | WORKS | cultivar-os.vercel.app | GitHub push → auto-deploy ● Ready (23s) · confirmed 2026-06-03 | CLAUDE.md §HANDOFF 2026-06-03 |
-| **Vercel functions (11)** | WORKS | `api/*.ts` + subdirs | 11 live functions: campaigns, dashboard, discovery/ingest, members/invite, orders/submit, qbo/auth-url, qbo/callback, qbo/invoice/cultivar, qbo/status, social/enable, social/generate-posts · **1 slot below 12-function Hobby limit** | CLAUDE.md §HANDOFF 2026-06-03 |
+| **Vercel functions (12)** | WORKS | `api/*.ts` + subdirs | 12 live functions: campaigns, dashboard, discovery/ingest, members/invite, orders/submit, qbo/auth-url, qbo/callback, qbo/invoice/cultivar, qbo/status, **receipts/ocr** (new 2026-06-12), social/enable, social/generate-posts · **AT 12-function Hobby limit — FULL** | CLAUDE.md §HANDOFF 2026-06-03 |
 | **QR checkout → QB invoice** | WORKS | `src/pages/PlantProfile → CartReview → api/orders/submit + api/qbo/invoice/cultivar` | Confirmed end-to-end 2026-05-27 (Terry demo run) · Invoice #3648.380 $920.13 generated | CLAUDE.md §Key Data |
 | **BusinessProvider / tenant isolation** | WORKS (⚠️ TEMP OPEN) | `src/App.tsx + context/NurseryProvider.tsx` | businessType="nursery" · **TEMP OPEN-ACCESS 2026-06-11**: vertical fence commented out on both owner + member paths; picker shows all David's businesses cross-type. Restore by re-enabling `[TEMP — OPEN ACCESS]` lines in BusinessProvider.tsx. | CLAUDE.md §HANDOFF |
 | **OwnerSignup (nursery)** | WIRED | `src/pages/SignUp.tsx` | Renders shared OwnerSignup with cultivarConfig · → /onboarding on success | CLAUDE.md §HANDOFF 2026-06-04 |
@@ -112,6 +112,8 @@
 | **PMI page** | WIRED | `src/pages/PMI.tsx` | /pmi route · uses shared PMI module (useBusinessContext for businessId) | — |
 | **business_modules table (RLS)** | WORKS | `supabase/migrations/20260604_business_modules.sql` | Membership-scoped RLS · all 6 API/hook callers repointed from nursery_modules · build ✅ · **→ David must run DROP TABLE nursery_modules CASCADE after smoke test** | CLAUDE.md §1.5, TD (resolved 2026-06-04) |
 | **QB OAuth (production)** | WORKS | `api/qbo/auth-url.ts + api/qbo/callback.ts` | QBO_ENVIRONMENT=production in Vercel · tokens in businesses.accounting_* columns · confirmed connected 2026-05-22 (renewed post audit) | CLAUDE.md §Vercel Env |
+| **Receipt Keeper v1** | WIRED | `src/pages/ReceiptKeeper.tsx + api/receipts/ocr.ts` | /receipts route (PrivateRoute) · Dashboard header "Receipts" button (isOwner) · handleNavigate case 'receipt_keeper' · STD-010 fully applied (content-type, size, per-tenant storage, OCR-as-artifact) · KIND-1: accept_vs_edit + ocr_cost_estimate born in · `[TRACE:RECEIPT]` born ON · **⚠️ WIRED not WORKS**: GEMINI_API_KEY unset, receipts migration not yet applied, receipts Storage bucket not created — David must do all three | CLAUDE.md §HANDOFF 2026-06-12 |
+| **receipts table** | EXISTS | `supabase/migrations/20260612_receipts.sql` | Migration written; NOT yet applied to bgobkjcopcxusjsetfob · dual RLS: owner (businesses.owner_id) + member (business_members active=true) · updated_at trigger via existing set_updated_at_generic() · VERIFICATION QUERY included | CLAUDE.md §HANDOFF 2026-06-12 |
 
 ---
 
@@ -162,7 +164,7 @@
 | **social_drafts platform_check** | David must apply | `supabase/migrations/20260609_social_drafts_platform_check.sql` → bgobkjcopcxusjsetfob · run VERIFICATION QUERY |
 | **nursery_modules DROP** | David must run | After smoke test passes: `DROP TABLE nursery_modules CASCADE;` in bgobkjcopcxusjsetfob |
 | **MarginEngine callers migration** | Next build session | Checklist: `docs/audits/margin-engine-migration-checklist-2026-06-10.md` · order: B barrel → A callers → SavingsReport → D → C (price change last) |
-| **Receipt Keeper v1** | Not started | Gemini Flash OCR · local receipts table · confirm-before-commit |
+| **Receipt Keeper v1** | ✅ BUILT — David must: (1) Add `GEMINI_API_KEY` to Vercel cultivar-os env vars; (2) Apply `supabase/migrations/20260612_receipts.sql` in bgobkjcopcxusjsetfob SQL editor + run VERIFICATION QUERY; (3) Create `receipts` bucket in Supabase Storage (bgobkjcopcxusjsetfob → Storage) | STD-010 fully applied; KIND-1 baked in (accept_vs_edit, ocr_cost_estimate, TRACE_RECEIPT born-ON); KIND-2 explicitly benched (billing, quality dashboard, QB write-back) |
 | **Railway decommission** | Blocked | Port dtc_decode + estimate_draft to Vercel functions first · then kill Railway · see TD#12 kill path |
 | **Ignition QB** | Not started | No api/qbo/* functions exist for Ignition · must build from scratch (not port from Cultivar) |
 | **STD-008 inverse sweep** | David must run | `docs/audits/std008-inverse-sweep-2026-06-09.sql` in ufsgqckbxdtwviqjjtos SQL editor |

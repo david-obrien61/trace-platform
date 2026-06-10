@@ -368,6 +368,7 @@ export function Dashboard() {
         if (SM_DEBUG) console.log('[SM-TRACE] Dashboard handleNavigate: social_media tile was ACTIVE → navigate /social/setup. businessId:', businessId);
         return navigate('/social/setup');
       case 'delivery_routing': return navigate('/deliveries');
+      case 'receipt_keeper':   return navigate('/receipts');
       default:                return showComingSoon(key.replace(/_/g, ' '));
     }
   }
@@ -447,6 +448,18 @@ export function Dashboard() {
               }}
             >
               Settings
+            </button>
+          )}
+          {isOwner && (
+            <button
+              onClick={() => navigate('/receipts')}
+              style={{
+                background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8,
+                padding: '8px 12px', color: '#fff', fontSize: '0.8125rem',
+                fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              Receipts
             </button>
           )}
           {isOwner && (
