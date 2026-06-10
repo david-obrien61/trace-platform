@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-11 (B barrel swap: shared/src/index.ts → canonical engine; dead stub deleted)
+# Last updated: 2026-06-11 (TEMP OPEN ACCESS: BusinessProvider business_type filter bypassed — picker spans all types)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -300,6 +300,109 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-11 — TEMP OPEN ACCESS: BusinessProvider business_type filter bypassed (David can operate now)
+
+**Type:** Code. One file changed (`packages/shared/src/context/BusinessProvider.tsx`). PLATFORM_STATE.md updated. Zero migrations, zero schema changes, zero API changes. Commit `a8c4bab`.
+
+**Session mandate:** THUNDER · OPEN IT UP — temporarily remove the business_type filter from BusinessProvider so the picker lists ALL of David's businesses regardless of type. Reversible. David logs in, picks TRACE Enterprises or LAWNS, connects QuickBooks, operates.
+
+---
+
+**WHAT WAS CHANGED:**
+
+**`packages/shared/src/context/BusinessProvider.tsx` — two `[TEMP — OPEN ACCESS]` blocks:**
+
+1. **Owner path (was line 218):** `.eq('business_type', businessType)` call **commented out**.
+   - OLD: queries `businesses` filtered to `business_type = businessType`
+   - NEW: queries ALL businesses owned by `user.id` regardless of type
+   - Restore: uncomment `.eq('business_type', businessType)` immediately after `.eq('owner_id', user.id)`
+
+2. **Member path (was line 250):** `if (memberBiz.business_type !== businessType) continue;` **commented out**.
+   - OLD: member businesses that don't match `businessType` are silently dropped
+   - NEW: all active member businesses appear in the resolved list regardless of type
+   - Restore: uncomment the `if (memberBiz.business_type !== businessType) continue;` line
+
+Both blocks are clearly marked `// [TEMP — OPEN ACCESS]` with inline restore instructions.
+
+---
+
+**Regression gate verified (single-business users, unchanged behavior):**
+
+If resolved.length === 1 → auto-select fires, NO picker shown, identical to prior behavior. ✓
+
+Multi-business behavior (David's case, post-change):
+1. David logs into any app (Cultivar, trace-app, etc.)
+2. Owner path returns LAWNS (nursery) + TRACE Enterprises (general) — two businesses
+3. No valid persisted selection → picker shown
+4. Picker lists both with type labels ("lawns" + "general")
+5. David picks → `setActiveBusinessId()` → localStorage persisted → app renders with that business
+
+**`[TRACE:BUSINESS]` logs remain ON** — owner path + member path + resolution outcome all logging.
+
+---
+
+**Builds:**
+- Cultivar: ✅ 2179 modules, zero TypeScript errors
+- Ignition: ✅ 1839 modules, zero TypeScript errors
+
+---
+
+**How to restore vertical scoping (when one-app-skinned routing is built):**
+
+In `packages/shared/src/context/BusinessProvider.tsx`:
+```diff
+// Owner path
+const { data: ownedBizzes } = await supabase
+  .from('businesses')
+  .select('*')
+  .eq('owner_id', user.id);
++ .eq('business_type', businessType); // [TEMP — OPEN ACCESS] uncomment to restore
+
+// Member path
+- // [TEMP — OPEN ACCESS] vertical fence bypassed
++ if (memberBiz.business_type !== businessType) continue; // vertical fence (audit #13)
+```
+
+---
+
+**Documentation propagation check (step 10):**
+1. `Help.tsx` — no customer-facing features changed. No propagation needed.
+2. Onboarding — unchanged. Single-business users see no difference.
+3. `PLATFORM_STATE.md` ✅ updated — BusinessProvider row + tenant isolation row both flagged ⚠️ TEMP OPEN.
+4. No `// FLAG:` placeholders affected.
+5. No new error messages.
+
+**Factual corrections captured (step 11):** No factual corrections. TEMP OPEN ACCESS is a deliberate, documented change.
+
+**No runbook needed** — pure code session. No migrations, no environment changes. Vercel will auto-deploy on push.
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns introduced. The filter bypass touches data values (`business_type` is a string field), not code identifiers.
+- AC-2: ✅ No RLS changes.
+- AC-3: ⚠️ DELIBERATE TEMP EXCEPTION — cross-vertical data paths are now open for David's single-user case. Acceptable while usage is private (David + family only, invite-only). Restore before multi-user launch. Logged in PLATFORM_STATE.md as TEMP OPEN.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Read BusinessProvider.tsx in full before editing. The two filter points were confirmed by code read.
+- STD-002: N/A — this is a deliberate feature change, not a bug fix.
+- STD-003: ✅ `[TRACE:BUSINESS]` logs remain ON throughout. No new logs added.
+- STD-004: ⚠️ DELIBERATE TEMP EXCEPTION — tenant isolation is relaxed for David's single-user case. The AC-3 exception above applies to STD-004 as well. Restore before multi-tenant public launch.
+- STD-005: ✅ No decisions reversed.
+- STD-006: ✅ No vertical nouns in shared code.
+- STD-007: N/A — no integration status surfaces touched.
+- STD-008: N/A — no migrations.
+- STD-009: N/A — no generation path changes.
+- STD-010: N/A — no new opaque names.
+- **BENCH standards (STEP 0 match):** BENCH-B still firing for Receipt Keeper. No new triggers from this session.
+
+**Gap graduation sweep (step 15):** No gap graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- `Context · BusinessProvider.tsx` (shared): WORKS → WORKS (level unchanged; flagged ⚠️ TEMP OPEN).
+- `BusinessProvider / tenant isolation` (Cultivar): WORKS → WORKS (⚠️ TEMP OPEN — vertical fence bypassed deliberately).
+
+---
 
 ### 2026-06-11 — MarginEngine B barrel swap (STD-001 finding: Cultivar has zero pricing callers)
 
