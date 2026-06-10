@@ -82,37 +82,53 @@ Return ONLY the JSON object, no explanation.`;
   try {
     const startMs = Date.now();
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: prompt },
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: imageBase64,
-                },
-              },
-            ],
-          }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 1024,
-          },
-        }),
-      }
-    );
+    // Abort after 8s — stays under Vercel Hobby's 10s hard kill, lets us return a clean error
+    const controller = new AbortController();
+    const timeoutId  = setTimeout(() => controller.abort(), 8000);
 
+    let geminiRes: Response;
+    try {
+      geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: prompt },
+                {
+                  inline_data: {
+                    mime_type: mimeType,
+                    data: imageBase64,
+                  },
+                },
+              ],
+            }],
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 1024,
+            },
+          }),
+        }
+      );
+    } catch (fetchErr: any) {
+      clearTimeout(timeoutId);
+      if (fetchErr.name === 'AbortError') {
+        console.error('[TRACE:RECEIPT] Gemini fetch timed out after 8s — sizeBytes:', sizeBytes);
+        return res.status(408).json({ ok: false, error: 'OCR timed out — try a smaller or clearer photo' });
+      }
+      throw fetchErr; // re-throw non-timeout errors to outer catch
+    }
+
+    clearTimeout(timeoutId);
     const latencyMs = Date.now() - startMs;
 
     if (!geminiRes.ok) {
       const errBody = await geminiRes.text();
       console.error('[TRACE:RECEIPT] Gemini error', geminiRes.status, errBody);
-      return res.status(502).json({ error: 'OCR failed — upstream error', detail: geminiRes.status });
+      return res.status(502).json({ ok: false, error: 'OCR failed — upstream error', detail: geminiRes.status });
     }
 
     const geminiData = await geminiRes.json();

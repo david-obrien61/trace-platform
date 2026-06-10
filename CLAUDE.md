@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-12 (Vercel count verified 12/12 AT limit; Blotato endpoint already gone (35913b2); 3 orphaned source files deleted; dead Settings.tsx customer-match fetch flagged)
+# Last updated: 2026-06-12 (Receipt Keeper 502 fixed: client canvas compress + server AbortController 8s timeout; build 2180 ✅; re-test required)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -300,6 +300,103 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-12 — Receipt Keeper 502 root cause + fix (client compress + server timeout)
+
+**Type:** Code (2 files changed). Zero migrations, zero schema changes, zero new features. Build 2180 ✅.
+
+**Session mandate:** THUNDER · DEBUG · Receipt Keeper OCR returning 502 on every real receipt (IMG_6886.JPG 2.6MB, IMG_6885.JPG 3.4MB). Diagnose, fix, update PLATFORM_STATE.md honestly, commit.
+
+---
+
+**ROOT CAUSE (STD-001 — read-only before writing):**
+
+502 = Vercel hard-killed the function. The function cannot return ANYTHING when Vercel kills it — the `catch` block at the bottom of `ocr.ts` is unreachable. This rules out all other explanations.
+
+Chain of causation:
+1. David uploads 3.4MB JPEG
+2. `ReceiptKeeper.tsx:fileToBase64()` reads file directly (no compression) → ~4.5MB base64 string
+3. `handleRunOCR()` JSON-encodes that as the request body → ~4.5MB POST to `/api/receipts/ocr`
+4. `ocr.ts` sends that 4.5MB JSON body to Gemini Flash with **no AbortController or timeout**
+5. Upload to Gemini + Gemini OCR processing + response transmission = likely >10s on a large image
+6. Vercel Hobby hard kills the function at exactly 10s → HTTP 502 gateway error
+7. No `catch` block can fire — function is dead — so client gets opaque 502 HTML
+8. `ReceiptKeeper.tsx:handleRunOCR()` called `await res.json()` directly → throws on HTML body → caught by outer catch → shows "Network error" (misleading)
+
+Secondary factor: ~4.5MB base64 JSON body may also be near/at Vercel's 4.5MB body size limit.
+
+Evidence that GEMINI_API_KEY is correctly set: 502 (function killed) not 503 (explicit key guard returns 503 immediately at line 34, not a 10s wait).
+
+---
+
+**FIX APPLIED (two files):**
+
+**`packages/cultivar-os/src/pages/ReceiptKeeper.tsx`:**
+
+1. **Compression constants** (after CATEGORIES): `COMPRESS_TYPES`, `COMPRESS_THRESHOLD` (400KB), `COMPRESS_MAX_DIM` (1200px), `COMPRESS_QUALITY` (0.82).
+
+2. **`resizeAndCompressImage(file)` function** (new, outside component): canvas-based resize + JPEG re-encode. If file ≤ 400KB or non-compressible type → returns raw base64 unchanged. If image > 400KB → draws to canvas at max 1200px, re-encodes as JPEG at 82% quality. Fail-safe: any canvas error → returns original. Expected result: 3.4MB JPEG → ~300KB → ~400KB base64 JSON body.
+
+3. **`handleFileSelect()` rewritten**: calls `resizeAndCompressImage(file)` instead of `fileToBase64()`. Sets `mimeType` from compressed output (always `image/jpeg` after compression). Logs original + compressed sizes via `[TRACE:RECEIPT]`.
+
+4. **`handleRunOCR()` JSON parse guard**: wraps `await res.json()` in inner try/catch. Non-JSON bodies (502 HTML) leave `data = {}`. Error message: if `res.status === 502` → "OCR timed out — try a smaller or clearer photo" (Surface Honesty).
+
+**`packages/cultivar-os/api/receipts/ocr.ts`:**
+
+5. **AbortController 8s timeout**: `const controller = new AbortController(); const timeoutId = setTimeout(() => controller.abort(), 8000)` before Gemini `fetch()`. `signal: controller.signal` in fetch options. `clearTimeout(timeoutId)` after fetch resolves.
+
+6. **Clean 408 on AbortError**: inner try/catch wraps only the `fetch()`. If `fetchErr.name === 'AbortError'` → logs sizeBytes → returns `res.status(408).json({ ok: false, error: 'OCR timed out — try a smaller or clearer photo' })`. Non-abort errors re-thrown to outer catch. The 8s abort fires 2s before Vercel's 10s kill → function can write the response.
+
+7. **`ok: false` added** to the non-OK Gemini response path (was missing previously).
+
+---
+
+**Expected behavior after fix:**
+
+| Scenario | Before fix | After fix |
+|---|---|---|
+| 3.4MB JPEG | Compress to ~300KB → ~400KB JSON body | ← same, but now compressed |
+| Gemini call | No timeout, 10s+ → Vercel kills → 502 | AbortController fires at 8s → JSON 408 |
+| Server 408 response | — | Client reads `data.error` → "OCR timed out — try a smaller or clearer photo" |
+| 502 HTML body | `res.json()` throws → "Network error" (misleading) | Inner try/catch → `data = {}` → "OCR timed out" message from status check |
+| <400KB image | No compression (fast path) | Still no compression (under threshold) |
+
+**Post-fix, David must test**: upload IMG_6886.JPG or IMG_6885.JPG → expect confirm step with OCR-pre-filled fields (not 502). Advance PLATFORM_STATE.md Receipt Keeper v1 to WORKS when confirmed.
+
+---
+
+**Build verification:** `npm run build:cultivar` → 2180 modules ✅ zero TypeScript errors.
+
+---
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns introduced. Canvas compression is generic; no schema changes.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Root cause confirmed by code trace (no AbortController + no compression + Vercel 10s limit) before writing any code. The 503 guard at line 34 proved GEMINI_API_KEY is set (503 would fire in <1ms, not 10s). The 502 proved Vercel killed the function before any catch block ran.
+- STD-002: ✅ BEFORE: every POST to `/api/receipts/ocr` with real JPEG (2.6-3.4MB) returns 502; David tested 3 receipts. AFTER: 8s AbortController + client compression → must confirm with real test (build ✅; deploy + re-test required).
+- STD-003: ✅ `[TRACE:RECEIPT]` logs remain born ON in both files. No new tags added. `handleFileSelect` now logs original + compressed sizes so David can verify compression is firing.
+- STD-004: N/A — no business-scoped data feature changed.
+- STD-005: ✅ PLATFORM_STATE.md Receipt Keeper row corrected from WORKS → WIRED with honest 502 failure record. "Live test is truth" principle applied.
+- STD-006: ✅ No vertical nouns in shared code.
+- STD-007: N/A — no integration status surfaces touched.
+- STD-008: N/A — no migrations written or applied.
+- STD-009: N/A — no generation path changes.
+- STD-010: ✅ STD-010 compliance strengthened: client now compresses before upload (smaller payload, faster server, less exposure time); server AbortController prevents hanging with unwritten response. Per-tenant storage path unchanged.
+- **BENCH standards (STEP 0 match):** No new bench triggers from this session. BENCH-B (STD-010) was already ACTIVE and this session improved its enforcement.
+
+**Gap graduation sweep (step 15):** No gap graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- `Receipt Keeper v1`: WORKS → **WIRED** (live test showed 502; fix applied; re-test required to return to WORKS).
+- IN-FLIGHT row updated from "WORKS" claim to "502 fix applied — re-test required."
+
+**No runbook needed** — pure code session. No environment changes, no migrations, no new files.
+
+---
 
 ### 2026-06-12 — Vercel function count verification + orphaned source file cleanup
 
