@@ -209,13 +209,16 @@ export function BusinessProvider({
 
       const resolved: ResolvedBusiness[] = [];
 
-      // 1. Owner path — fetch ALL businesses this user owns in this vertical
-      //    (was .single(); now returns the full array)
+      // 1. Owner path — fetch ALL businesses this user owns
+      //    [TEMP — OPEN ACCESS] business_type filter bypassed so David sees ALL his
+      //    businesses to operate now (TRACE Enterprises=general, LAWNS=nursery, etc.).
+      //    Re-scope to per-app-type model later when one-app-skinned routing is built.
+      //    Restore: uncomment the .eq('business_type', businessType) line below.
       const { data: ownedBizzes } = await supabase
         .from('businesses')
         .select('*')
-        .eq('owner_id', user.id)
-        .eq('business_type', businessType);
+        .eq('owner_id', user.id);
+        // .eq('business_type', businessType); // [TEMP — OPEN ACCESS] restore to re-scope
 
       console.log('[TRACE:BUSINESS] owner path', {
         userId: user.id,
@@ -247,7 +250,9 @@ export function BusinessProvider({
       for (const m of (memberships ?? [])) {
         const memberBiz = (m.businesses as any) as Business | null;
         if (!memberBiz) continue;
-        if (memberBiz.business_type !== businessType) continue; // vertical fence (audit #13)
+        // [TEMP — OPEN ACCESS] vertical fence bypassed — all member businesses resolve
+        // regardless of type. Restore line below to re-scope:
+        // if (memberBiz.business_type !== businessType) continue; // vertical fence (audit #13)
         if (ownedIds.has(memberBiz.id)) continue; // already included via owner path
         resolved.push({
           business: memberBiz,

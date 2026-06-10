@@ -3,7 +3,7 @@
      PRESUMED/UNKNOWN are quarantined below — never in the verified table.
      Read first every session. Update the relevant line after any state change.
      Never round a level up. -->
-<!-- Last verified: 2026-06-11 (trace-app created: businessType="general", 93 modules, BusinessProvider scopes to 'general'; debris migration written for David) -->
+<!-- Last verified: 2026-06-11 (TEMP OPEN ACCESS: business_type filter bypassed in BusinessProvider — picker shows ALL businesses cross-type so David can operate now; re-scope to per-app-type model deferred) -->
 <!-- Detail docs: built-inventory.md, CLAUDE.md, STANDARDS.md, PLATFORM_STRATEGY.md -->
 
 ## VERIFICATION KEY
@@ -53,7 +53,7 @@
 | **Components · SavingsReport.jsx** | BROKEN | `components/SavingsReport.jsx` | Imports `'../DataBridge'` and `'../MarginEngine'` — neither exists at that path in shared/src/. Also: IgnitionOmniDashboard.jsx:14 imports `'./SavingsReport'` which is missing from `modules/` (TD#10) | CLAUDE.md TD#10 |
 | **Components · Button/Badge/Card/FormField/ProgressBar/Skeleton/LockedOverlay** | EXISTS | `components/*.tsx` | Exported via shared/src/index.ts barrel; no direct imports found in either vertical's source files (index.ts barrel itself has zero callers confirmed) | — |
 | **Components · QuickBooksConnector.jsx** | EXISTS | `components/QuickBooksConnector.jsx` | Zero callers in either vertical's source confirmed | — |
-| **Context · BusinessProvider.tsx** | WORKS | `context/BusinessProvider.tsx` | App.tsx:9 (Cultivar, businessType="nursery"), main.jsx:7 (Ignition, businessType="shop") · 29/29 test assertions passed 2026-06-03 · **multi-business 2026-06-11**: both paths now array-resolve; auto-select 1-biz (regression gate); picker 2+-biz + localStorage persistence; `[TRACE:BUSINESS]` born ON; builds green | CLAUDE.md §HANDOFF |
+| **Context · BusinessProvider.tsx** | WORKS | `context/BusinessProvider.tsx` | App.tsx:9 (Cultivar, businessType="nursery"), main.jsx:7 (Ignition, businessType="shop") · 29/29 test assertions passed 2026-06-03 · **multi-business 2026-06-11**: both paths array-resolve; auto-select 1-biz (regression gate); picker 2+-biz + localStorage persistence · **⚠️ TEMP OPEN-ACCESS 2026-06-11**: business_type filter commented out on BOTH owner + member paths so picker shows ALL businesses regardless of type. Re-scope to per-app-type model by uncommenting the two `[TEMP — OPEN ACCESS]` lines when one-app-skinned routing is built. | CLAUDE.md §HANDOFF |
 | **Design · tokens.ts** | EXISTS | `design-system/tokens.ts` | Zero callers in either vertical confirmed | — |
 | **Discovery · DiscoveryGlimpse.tsx** | WIRED | `discovery/DiscoveryGlimpse.tsx` | SignUp.tsx:16 — `<DiscoveryGlimpse />` as verticalStep during signup | CLAUDE.md §HANDOFF 2026-06-05 |
 | **Discovery · engine.ts** | WORKS | `discovery/engine.ts` | api/discovery/ingest.ts:3 (runIdentity, runAnalysis) · generation confirmed 2026-06-08 (social_drafts rows with period_start populated) | CLAUDE.md §HANDOFF 2026-06-08 |
@@ -93,7 +93,7 @@
 | **Vercel deploy** | WORKS | cultivar-os.vercel.app | GitHub push → auto-deploy ● Ready (23s) · confirmed 2026-06-03 | CLAUDE.md §HANDOFF 2026-06-03 |
 | **Vercel functions (11)** | WORKS | `api/*.ts` + subdirs | 11 live functions: campaigns, dashboard, discovery/ingest, members/invite, orders/submit, qbo/auth-url, qbo/callback, qbo/invoice/cultivar, qbo/status, social/enable, social/generate-posts · **1 slot below 12-function Hobby limit** | CLAUDE.md §HANDOFF 2026-06-03 |
 | **QR checkout → QB invoice** | WORKS | `src/pages/PlantProfile → CartReview → api/orders/submit + api/qbo/invoice/cultivar` | Confirmed end-to-end 2026-05-27 (Terry demo run) · Invoice #3648.380 $920.13 generated | CLAUDE.md §Key Data |
-| **BusinessProvider / tenant isolation** | WORKS | `src/App.tsx + context/NurseryProvider.tsx` | businessType="nursery" · cross-vertical member filter applied · 29/29 test assertions 2026-06-03 · **multi-business (Option B) added 2026-06-11**: .single() replaced on both paths; auto-select for 1 business (regression gate ✓); picker for 2+ with localStorage persistence; `[TRACE:BUSINESS]` born ON; builds green Cultivar ✓ Ignition ✓ | CLAUDE.md §HANDOFF |
+| **BusinessProvider / tenant isolation** | WORKS (⚠️ TEMP OPEN) | `src/App.tsx + context/NurseryProvider.tsx` | businessType="nursery" · **TEMP OPEN-ACCESS 2026-06-11**: vertical fence commented out on both owner + member paths; picker shows all David's businesses cross-type. Restore by re-enabling `[TEMP — OPEN ACCESS]` lines in BusinessProvider.tsx. | CLAUDE.md §HANDOFF |
 | **OwnerSignup (nursery)** | WIRED | `src/pages/SignUp.tsx` | Renders shared OwnerSignup with cultivarConfig · → /onboarding on success | CLAUDE.md §HANDOFF 2026-06-04 |
 | **AddBusiness page** | WIRED | `src/pages/AddBusiness.tsx` | New 2026-06-11 · businessType='general', no verticalSteps · PrivateRoute /add-business · session detection fires on mount → skips email/pw · → /dashboard on success | CLAUDE.md §HANDOFF 2026-06-11 |
 | **Dashboard tile grid** | WORKS | `src/pages/Dashboard.tsx` | TileGrid + Tile from shared · QB reconnect banner wired to accounting_token_expires_at · confirmed operational demo 2026-05-27 | CLAUDE.md TD#15 resolved |
