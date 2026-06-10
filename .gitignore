@@ -1,6 +1,7 @@
 node_modules/
 .env.local
 .env.*.local
+.env*.local
 dist/
 .DS_Store
 *.log
@@ -8,4 +9,5 @@ dist/
 __pycache__/
 *.pyc
 venv/
-.env*.local
+# Vercel pulled/synced env files — may contain API keys
+.env.vercel.*

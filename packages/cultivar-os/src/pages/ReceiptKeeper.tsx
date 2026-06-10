@@ -12,15 +12,17 @@ const MAX_BYTES = MAX_MB * 1024 * 1024;
 
 const CATEGORIES = ['fuel', 'supplies', 'meals', 'parts', 'equipment', 'maintenance', 'office', 'other'];
 
-// Image compression before OCR: reduce payload to avoid Vercel body limits + speed up Gemini.
-// A 3.4MB JPEG → ~4.5MB base64 JSON body, which hits Vercel Hobby's 10s function timeout.
-// After compression: ~300KB JPEG → ~400KB body → Gemini responds in 2-4s.
-const COMPRESS_TYPES     = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
-const COMPRESS_THRESHOLD = 400 * 1024; // only compress if original > 400 KB
-const COMPRESS_MAX_DIM   = 1200;        // max pixel dimension after resize
-const COMPRESS_QUALITY   = 0.82;        // JPEG re-encode quality — sufficient for receipt OCR
+// Reconciliation thresholds
+const MATCH_TOLERANCE = 0.02;  // ≤$0.02 = match (rounding noise)
+const SMALL_GAP_ABS   = 5.00;  // <$5 absolute gap = small (plausibly tax/tip)
+const SMALL_GAP_PCT   = 0.10;  // <10% of total = small gap
 
-// Returns a base64 string (no data: prefix). If image is small or non-compressible, returns raw base64.
+// Image compression before OCR: reduce payload to avoid Vercel body limits + speed up Gemini.
+const COMPRESS_TYPES     = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+const COMPRESS_THRESHOLD = 400 * 1024;
+const COMPRESS_MAX_DIM   = 1200;
+const COMPRESS_QUALITY   = 0.82;
+
 async function resizeAndCompressImage(file: File): Promise<{ base64: string; sizeBytes: number; mimeType: string }> {
   const raw = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -33,7 +35,7 @@ async function resizeAndCompressImage(file: File): Promise<{ base64: string; siz
     return { base64: raw, sizeBytes: file.size, mimeType: file.type || 'image/jpeg' };
   }
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
       const { width, height } = img;
@@ -90,21 +92,42 @@ interface EditableFields {
   category: string;
 }
 
+// Editable line item — string amounts for free-form input; parsed to number on save
+interface LineItem {
+  id: string;
+  description: string;
+  amount: string;
+}
+
+interface ReconcileResult {
+  status: 'no_lines' | 'match' | 'small_gap' | 'large_mismatch';
+  lineSum: number;
+  total: number;
+  delta: number;   // lineSum − total; positive = lines exceed total
+  gapNote: string | null;
+}
+
 export function ReceiptKeeper() {
   const navigate = useNavigate();
   const { businessId } = useBusinessContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [step, setStep]               = useState<Step>('idle');
-  const [errorMsg, setErrorMsg]       = useState<string | null>(null);
+  const [step, setStep]                 = useState<Step>('idle');
+  const [errorMsg, setErrorMsg]         = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageBase64, setImageBase64] = useState<string | null>(null);
-  const [mimeType, setMimeType]       = useState<string | null>(null);
+  const [imageBase64, setImageBase64]   = useState<string | null>(null);
+  const [mimeType, setMimeType]         = useState<string | null>(null);
   const [fileSizeBytes, setFileSizeBytes] = useState<number>(0);
-  const [fileName, setFileName]       = useState<string>('');
-  const [ocrResult, setOcrResult]     = useState<OcrResult | null>(null);
-  const [fields, setFields]           = useState<EditableFields>({ vendor: '', date: '', amount: '', category: '' });
+  const [fileName, setFileName]         = useState<string>('');
+  const [ocrResult, setOcrResult]       = useState<OcrResult | null>(null);
+  const [fields, setFields]             = useState<EditableFields>({ vendor: '', date: '', amount: '', category: '' });
   const [savedReceiptId, setSavedReceiptId] = useState<string | null>(null);
+
+  // Line items state — user-editable grid from OCR output
+  const [lineItems, setLineItems]               = useState<LineItem[]>([]);
+  const [lineItemsOriginal, setLineItemsOriginal] = useState<Array<{ description: string; amount: number }> | null>(null);
+  const [amountOriginal, setAmountOriginal]     = useState<number | null>(null);
+  const [showConflictDialog, setShowConflictDialog] = useState(false);
 
   // STD-010: file validation (client-side mirror of server enforcement)
   function validateFile(file: File): string | null {
@@ -117,20 +140,6 @@ export function ReceiptKeeper() {
     return null;
   }
 
-  function fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        // Strip data:mime;base64, prefix — server gets raw base64
-        const base64 = result.split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-
   async function handleFileSelect(file: File) {
     const err = validateFile(file);
     if (err) { setErrorMsg(err); return; }
@@ -138,15 +147,13 @@ export function ReceiptKeeper() {
     setErrorMsg(null);
     setFileName(file.name);
 
-    // Preview (for images only — use original file for display)
     if (file.type.startsWith('image/')) {
       const url = URL.createObjectURL(file);
       setImagePreview(url);
     } else {
-      setImagePreview(null); // PDF — no preview
+      setImagePreview(null);
     }
 
-    // Compress before encoding: shrinks 3MB JPEG → ~300KB, keeping OCR payload under Vercel limits
     const { base64, sizeBytes, mimeType: mt } = await resizeAndCompressImage(file);
     setImageBase64(base64);
     setMimeType(mt);
@@ -173,9 +180,8 @@ export function ReceiptKeeper() {
         body: JSON.stringify({ businessId, userId: user.id, imageBase64, mimeType, fileSizeBytes }),
       });
 
-      // Server may return HTML (502 gateway) — guard against JSON.parse throw
       let data: any = {};
-      try { data = await res.json(); } catch { /* non-JSON body (502 etc.) — data stays {} */ }
+      try { data = await res.json(); } catch { /* non-JSON body (502 etc.) */ }
 
       if (!res.ok || !data.ok) {
         const msg = data.error ?? (res.status === 502 ? 'OCR timed out — try a smaller or clearer photo' : 'OCR failed — try again');
@@ -184,7 +190,7 @@ export function ReceiptKeeper() {
         return;
       }
 
-      if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] OCR result — provider:', data.provider, 'vendor:', data.parsed?.vendor, 'amount:', data.parsed?.amount, 'tokens:', data.inputTokens, '+', data.outputTokens, 'cost:', data.ocr_cost_estimate);
+      if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] OCR result — provider:', data.provider, 'vendor:', data.parsed?.vendor, 'amount:', data.parsed?.amount, 'line_items:', data.parsed?.line_items?.length ?? 0, 'tokens:', data.inputTokens, '+', data.outputTokens, 'cost:', data.ocr_cost_estimate);
 
       setOcrResult(data);
 
@@ -196,6 +202,17 @@ export function ReceiptKeeper() {
         category: data.parsed?.category ?? '',
       });
 
+      // Initialize editable line items from OCR
+      const ocrLines: Array<{ description: string; amount: number }> = data.parsed?.line_items ?? [];
+      const initialLineItems: LineItem[] = ocrLines.map(item => ({
+        id:          crypto.randomUUID(),
+        description: item.description ?? '',
+        amount:      item.amount != null ? String(item.amount) : '',
+      }));
+      setLineItems(initialLineItems);
+      setLineItemsOriginal(ocrLines.length > 0 ? ocrLines : null);
+      setAmountOriginal(data.parsed?.amount ?? null);
+
       setStep('confirm');
     } catch (err: any) {
       console.error('[TRACE:RECEIPT] OCR fetch error:', err.message);
@@ -204,39 +221,96 @@ export function ReceiptKeeper() {
     }
   }
 
-  // KIND-1: accept_vs_edit — detect edits relative to OCR output at confirm moment
-  function detectAcceptVsEdit(): 'accepted_as_is' | 'edited' {
-    const p = ocrResult?.parsed;
-    if (!p) return 'edited'; // no OCR output = manual entry = edited
-    const vendorChanged  = fields.vendor.trim()   !== (p.vendor   ?? '').trim();
-    const dateChanged    = fields.date.trim()      !== (p.date     ?? '').trim();
-    const amountChanged  = fields.amount.trim()    !== (p.amount != null ? String(p.amount) : '');
-    const categoryChanged = fields.category.trim() !== (p.category ?? '').trim();
-    return (vendorChanged || dateChanged || amountChanged || categoryChanged) ? 'edited' : 'accepted_as_is';
+  // Live reconciliation — called on every render when step === 'confirm'
+  function computeReconcile(): ReconcileResult {
+    if (lineItems.length === 0) {
+      return { status: 'no_lines', lineSum: 0, total: 0, delta: 0, gapNote: null };
+    }
+    const lineSum = lineItems.reduce((acc, item) => {
+      const n = parseFloat(item.amount);
+      return acc + (isNaN(n) ? 0 : n);
+    }, 0);
+    const parsedTotal = parseFloat(fields.amount);
+    const total = isNaN(parsedTotal) ? 0 : parsedTotal;
+    const delta = lineSum - total;
+    const absD  = Math.abs(delta);
+
+    if (absD <= MATCH_TOLERANCE) {
+      return { status: 'match', lineSum, total, delta, gapNote: null };
+    }
+    const isSmall = absD < SMALL_GAP_ABS || (total > 0 && absD / total < SMALL_GAP_PCT);
+    if (isSmall) {
+      const note = delta > 0
+        ? `Lines exceed total by $${absD.toFixed(2)} — possibly tax not in total`
+        : `Total exceeds lines by $${absD.toFixed(2)} — possibly tax or tip`;
+      return { status: 'small_gap', lineSum, total, delta, gapNote: note };
+    }
+    return { status: 'large_mismatch', lineSum, total, delta, gapNote: null };
   }
 
-  async function handleConfirm() {
-    if (!businessId || !ocrResult) return;
+  // Component-level reconcileState — drives the live readout below the line items grid
+  const reconcileState: ReconcileResult | null = step === 'confirm' ? computeReconcile() : null;
 
+  // Line item mutation helpers
+  function addLineItem() {
+    setLineItems(prev => [...prev, { id: crypto.randomUUID(), description: '', amount: '' }]);
+  }
+  function updateLineItem(id: string, field: 'description' | 'amount', value: string) {
+    setLineItems(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+  }
+  function deleteLineItem(id: string) {
+    setLineItems(prev => prev.filter(item => item.id !== id));
+  }
+
+  // KIND-1: count line item rows that differ from OCR original
+  function countEditedLineItems(): number {
+    if (!lineItemsOriginal || lineItemsOriginal.length === 0) {
+      return lineItems.length; // all are manual additions
+    }
+    let count = 0;
+    lineItems.forEach((item, idx) => {
+      const orig = lineItemsOriginal[idx];
+      if (!orig) { count++; return; } // added row
+      if (item.description.trim() !== (orig.description ?? '').trim()) count++;
+      else if (parseFloat(item.amount) !== orig.amount) count++;
+    });
+    if (lineItemsOriginal.length > lineItems.length) {
+      count += lineItemsOriginal.length - lineItems.length; // deleted rows
+    }
+    return count;
+  }
+
+  // KIND-1: accept_vs_edit — detect any edits relative to OCR output
+  function detectAcceptVsEdit(): 'accepted_as_is' | 'edited' {
+    const p = ocrResult?.parsed;
+    if (!p) return 'edited';
+    const vendorChanged    = fields.vendor.trim()   !== (p.vendor   ?? '').trim();
+    const dateChanged      = fields.date.trim()      !== (p.date     ?? '').trim();
+    const amountChanged    = fields.amount.trim()    !== (p.amount != null ? String(p.amount) : '');
+    const categoryChanged  = fields.category.trim()  !== (p.category ?? '').trim();
+    const lineItemsEdited  = countEditedLineItems() > 0;
+    return (vendorChanged || dateChanged || amountChanged || categoryChanged || lineItemsEdited)
+      ? 'edited'
+      : 'accepted_as_is';
+  }
+
+  // Shared save helper — used by both normal confirm path and conflict override path
+  async function doSave(opts: { reconcileState: ReconcileResult; overriddenAt: string | null }) {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setErrorMsg('Not authenticated'); return; }
+    if (!user) { setErrorMsg('Not authenticated'); setStep('error'); return; }
 
-    const acceptVsEdit = detectAcceptVsEdit();
-    setStep('saving');
-
-    if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] confirm — accept_vs_edit:', acceptVsEdit, 'vendor:', fields.vendor, 'amount:', fields.amount, 'line_items:', ocrResult?.parsed?.line_items?.length ?? 0);
+    const acceptVsEdit    = detectAcceptVsEdit();
+    const editedLineCount = countEditedLineItems();
 
     // STD-010: per-tenant storage path — receipts/{business_id}/{receipt_id}
-    // Upload image to Supabase Storage before writing the DB row
     const receiptId = crypto.randomUUID();
     let image_url: string | null = null;
 
     if (imageBase64 && mimeType) {
       try {
-        const ext = mimeType.split('/')[1]?.replace('jpeg', 'jpg') ?? 'jpg';
+        const ext         = mimeType.split('/')[1]?.replace('jpeg', 'jpg') ?? 'jpg';
         const storagePath = `${businessId}/${receiptId}.${ext}`;
 
-        // Convert base64 back to Blob for storage upload
         const binary = atob(imageBase64);
         const bytes  = new Uint8Array(binary.length);
         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -247,20 +321,15 @@ export function ReceiptKeeper() {
           .upload(storagePath, blob, { contentType: mimeType, upsert: false });
 
         if (storErr) {
-          // Storage failed — abort save entirely. No orphan row, no lying "saved" log.
-          // User stays on confirm step and keeps their OCR work — they can retry.
           console.error('[TRACE:RECEIPT] storage FAILED — row NOT written:', storErr.message);
           setErrorMsg('Photo upload failed — check connection and try again');
           setStep('confirm');
           return;
         }
-        // Store the storage path (not a public URL) — bucket is private.
-        // To display: generate a signed URL from this path at view time.
-        image_url = storagePath;
+        image_url = storagePath; // private bucket — generate signed URL at view time
         if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] stored image — path:', storagePath);
       } catch (e: any) {
-        // Storage exception — abort save, same discipline as error path
-        console.error('[TRACE:RECEIPT] storage exception — row NOT written:', (e as any).message);
+        console.error('[TRACE:RECEIPT] storage exception — row NOT written:', e.message);
         setErrorMsg('Photo upload failed — check connection and try again');
         setStep('confirm');
         return;
@@ -268,21 +337,42 @@ export function ReceiptKeeper() {
     }
 
     const parsedAmount = parseFloat(fields.amount);
+    const rs = opts.reconcileState;
+
+    // Build final line_items from current editable state (owner-confirmed, not raw OCR)
+    const finalLineItems = lineItems
+      .filter(item => item.description.trim() || item.amount.trim())
+      .map(item => ({ description: item.description.trim(), amount: parseFloat(item.amount) || 0 }));
+
+    // Reconcile status mapping: only 'large_mismatch' becomes 'large_mismatch_overridden' in DB
+    const dbReconcileStatus: string | null = rs.status === 'no_lines'
+      ? null
+      : opts.overriddenAt ? 'large_mismatch_overridden' : rs.status;
+
+    const headerAmountEdited: boolean | null = amountOriginal !== null
+      ? parseFloat(fields.amount) !== amountOriginal
+      : null;
 
     const { data, error } = await supabase.from('receipts').insert({
-      id:                receiptId,
-      business_id:       businessId,
-      uploaded_by:       user.id,
+      id:                      receiptId,
+      business_id:             businessId,
+      uploaded_by:             user.id,
       image_url,
-      ocr_raw:           ocrResult.ocr_raw,
-      vendor:            fields.vendor.trim() || null,
-      date:              fields.date.trim()   || null,
-      amount:            isNaN(parsedAmount)  ? null : parsedAmount,
-      category:          fields.category      || null,
-      status:            'confirmed',
-      accept_vs_edit:    acceptVsEdit,
-      ocr_cost_estimate: ocrResult.ocr_cost_estimate ?? null,
-      line_items:        ocrResult?.parsed?.line_items ?? null, // Task 3: raw itemized list from OCR
+      ocr_raw:                 ocrResult?.ocr_raw,
+      vendor:                  fields.vendor.trim() || null,
+      date:                    fields.date.trim()   || null,
+      amount:                  isNaN(parsedAmount)  ? null : parsedAmount,
+      category:                fields.category      || null,
+      status:                  'confirmed',
+      accept_vs_edit:          acceptVsEdit,
+      ocr_cost_estimate:       ocrResult?.ocr_cost_estimate ?? null,
+      line_items:              finalLineItems.length > 0 ? finalLineItems : null,
+      line_items_original:     lineItemsOriginal ?? null,
+      amount_original:         amountOriginal ?? null,
+      reconcile_status:        dbReconcileStatus,
+      reconcile_overridden_at: opts.overriddenAt ?? null,
+      reconcile_delta:         rs.status !== 'no_lines' ? Math.round(rs.delta * 100) / 100 : null,
+      header_amount_edited:    headerAmountEdited,
     }).select('id').single();
 
     if (error) {
@@ -292,9 +382,42 @@ export function ReceiptKeeper() {
       return;
     }
 
-    if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] saved — id:', data?.id, 'accept_vs_edit:', acceptVsEdit, 'line_items:', ocrResult?.parsed?.line_items?.length ?? 0);
+    if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] saved — id:', data?.id,
+      'accept_vs_edit:', acceptVsEdit,
+      'line_count:', finalLineItems.length,
+      'edited_line_count:', editedLineCount,
+      'header_amount_edited:', headerAmountEdited,
+      'reconcile_status:', dbReconcileStatus,
+      'reconcile_delta:', rs.status !== 'no_lines' ? rs.delta.toFixed(2) : 'n/a');
+
     setSavedReceiptId(data?.id ?? receiptId);
     setStep('done');
+  }
+
+  // Normal confirm path — gate on large mismatch before saving
+  async function handleConfirm() {
+    if (!businessId || !ocrResult) return;
+    setErrorMsg(null);
+
+    const rs = computeReconcile();
+    if (rs.status === 'large_mismatch') {
+      setShowConflictDialog(true);
+      return;
+    }
+
+    setStep('saving');
+    if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] confirm — vendor:', fields.vendor, 'amount:', fields.amount, 'line_count:', lineItems.length);
+    await doSave({ reconcileState: rs, overriddenAt: null });
+  }
+
+  // Override path — owner acknowledged conflict and chose to save anyway ("Tesla bit")
+  async function handleSaveAnyway() {
+    setShowConflictDialog(false);
+    setStep('saving');
+    const rs = computeReconcile();
+    const overriddenAt = new Date().toISOString();
+    if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] conflict override — delta:', rs.delta.toFixed(2), 'overridden_at:', overriddenAt);
+    await doSave({ reconcileState: rs, overriddenAt });
   }
 
   function handleReset() {
@@ -308,9 +431,13 @@ export function ReceiptKeeper() {
     setOcrResult(null);
     setFields({ vendor: '', date: '', amount: '', category: '' });
     setSavedReceiptId(null);
+    setLineItems([]);
+    setLineItemsOriginal(null);
+    setAmountOriginal(null);
+    setShowConflictDialog(false);
   }
 
-  // ── Styles ──────────────────────────────────────────────────────────────────
+  // ── Styles ─────────────────────────────────────────────────────────────────
 
   const PAGE: React.CSSProperties = {
     minHeight: '100vh',
@@ -439,7 +566,114 @@ export function ReceiptKeeper() {
     padding: '0 0 16px',
   };
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // Line items grid styles (mobile-first ~380px viewport)
+  const LINE_ITEMS_SECTION: React.CSSProperties = { marginBottom: 16 };
+
+  const LINE_ITEM_HEADER: React.CSSProperties = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  };
+
+  const LINE_ITEM_ROW: React.CSSProperties = {
+    display: 'flex',
+    gap: 6,
+    marginBottom: 6,
+    alignItems: 'center',
+  };
+
+  const LINE_DESC_INPUT: React.CSSProperties = {
+    flex: 1,
+    minWidth: 0,
+    border: '1px solid #d1d5db',
+    borderRadius: 6,
+    padding: '7px 8px',
+    fontSize: '0.875rem',
+    color: '#111827',
+    outline: 'none',
+    boxSizing: 'border-box',
+  };
+
+  const LINE_AMT_INPUT: React.CSSProperties = {
+    width: 76,
+    flexShrink: 0,
+    border: '1px solid #d1d5db',
+    borderRadius: 6,
+    padding: '7px 6px',
+    fontSize: '0.875rem',
+    color: '#111827',
+    outline: 'none',
+    boxSizing: 'border-box',
+    textAlign: 'right',
+  };
+
+  const LINE_DELETE_BTN: React.CSSProperties = {
+    width: 28,
+    height: 28,
+    flexShrink: 0,
+    border: 'none',
+    borderRadius: 6,
+    background: '#fee2e2',
+    color: '#A32D2D',
+    cursor: 'pointer',
+    fontSize: '1rem',
+    lineHeight: '1',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
+  };
+
+  const ADD_ROW_BTN: React.CSSProperties = {
+    width: '100%',
+    background: 'transparent',
+    border: '1px dashed #a7c985',
+    borderRadius: 6,
+    padding: '6px 12px',
+    fontSize: '0.8125rem',
+    color: '#4b7a2e',
+    cursor: 'pointer',
+    marginTop: 4,
+  };
+
+  // Reconcile readout — severity-scaled color
+  function reconcileReadoutStyle(status: ReconcileResult['status']): React.CSSProperties {
+    if (status === 'match')          return { background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 6, padding: '7px 10px', fontSize: '0.8125rem', color: '#166534', marginTop: 8 };
+    if (status === 'small_gap')      return { background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '7px 10px', fontSize: '0.8125rem', color: '#92400e', marginTop: 8 };
+    if (status === 'large_mismatch') return { background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, padding: '7px 10px', fontSize: '0.8125rem', color: '#A32D2D', marginTop: 8 };
+    return { display: 'none' };
+  }
+
+  function reconcileReadoutText(rs: ReconcileResult): string {
+    if (rs.status === 'match') return `✓ Lines: $${rs.lineSum.toFixed(2)} = Total: $${rs.total.toFixed(2)}`;
+    const absD = Math.abs(rs.delta);
+    const dir  = rs.delta > 0 ? 'exceed' : 'below';
+    const prefix = rs.status === 'large_mismatch' ? '⚠️ ' : '';
+    return `${prefix}Lines $${rs.lineSum.toFixed(2)} ${dir} total $${rs.total.toFixed(2)} by $${absD.toFixed(2)}`;
+  }
+
+  // Conflict dialog styles (fixed overlay — outside card, bottom sheet)
+  const DIALOG_BACKDROP: React.CSSProperties = {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.5)',
+    zIndex: 100,
+    display: 'flex',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  };
+
+  const DIALOG_CARD: React.CSSProperties = {
+    background: '#fff',
+    borderRadius: '16px 16px 0 0',
+    padding: '24px 20px 36px',
+    width: '100%',
+    maxWidth: 480,
+    boxShadow: '0 -4px 24px rgba(0,0,0,0.15)',
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div style={PAGE}>
@@ -558,6 +792,66 @@ export function ReceiptKeeper() {
               />
             </div>
 
+            {/* ── LINE ITEMS GRID (between Date and Total Amount) ── */}
+            <div style={LINE_ITEMS_SECTION}>
+              <div style={LINE_ITEM_HEADER}>
+                <label style={LABEL}>Line Items</label>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                  {lineItems.length === 0
+                    ? 'none captured'
+                    : `${lineItems.length} item${lineItems.length !== 1 ? 's' : ''}`}
+                </span>
+              </div>
+
+              {lineItems.length === 0 && (
+                <div style={{ fontSize: '0.8125rem', color: '#94a3b8', padding: '8px 12px', background: '#f9fafb', borderRadius: 6, textAlign: 'center', marginBottom: 6 }}>
+                  No line items captured — add manually if needed
+                </div>
+              )}
+
+              {lineItems.map(item => (
+                <div key={item.id} style={LINE_ITEM_ROW}>
+                  <input
+                    style={LINE_DESC_INPUT}
+                    value={item.description}
+                    onChange={e => updateLineItem(item.id, 'description', e.target.value)}
+                    placeholder="Description"
+                  />
+                  <input
+                    style={LINE_AMT_INPUT as React.CSSProperties}
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={item.amount}
+                    onChange={e => updateLineItem(item.id, 'amount', e.target.value)}
+                    placeholder="0.00"
+                  />
+                  <button
+                    style={LINE_DELETE_BTN}
+                    onClick={() => deleteLineItem(item.id)}
+                    aria-label="Delete line item"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+
+              <button style={ADD_ROW_BTN} onClick={addLineItem}>
+                + Add line item
+              </button>
+
+              {/* Live reconcile readout — below grid, above Total Amount */}
+              {reconcileState && reconcileState.status !== 'no_lines' && (
+                <div style={reconcileReadoutStyle(reconcileState.status)}>
+                  {reconcileReadoutText(reconcileState)}
+                  {reconcileState.gapNote && (
+                    <div style={{ marginTop: 3, opacity: 0.8 }}>{reconcileState.gapNote}</div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Total Amount — AFTER line items grid so owner reconciles consciously */}
             <div style={FIELD_ROW}>
               <label style={LABEL}>Total Amount ($)</label>
               <input
@@ -642,6 +936,47 @@ export function ReceiptKeeper() {
           </div>
         )}
       </div>
+
+      {/* ── CONFLICT DIALOG (outside card — fixed overlay, bottom sheet) ───── */}
+      {showConflictDialog && reconcileState && (
+        <div style={DIALOG_BACKDROP} onClick={() => setShowConflictDialog(false)}>
+          <div style={DIALOG_CARD} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: '1.125rem', fontWeight: 700, color: '#A32D2D', marginBottom: 10 }}>
+              ⚠️ Line items don't match total
+            </div>
+            <div style={{ fontSize: '0.875rem', color: '#374151', lineHeight: 1.6, marginBottom: 6 }}>
+              <strong>Lines sum to:</strong>{' '}
+              <span style={{ fontFamily: 'monospace' }}>${reconcileState.lineSum.toFixed(2)}</span>
+            </div>
+            <div style={{ fontSize: '0.875rem', color: '#374151', lineHeight: 1.6, marginBottom: 6 }}>
+              <strong>Total field:</strong>{' '}
+              <span style={{ fontFamily: 'monospace' }}>${reconcileState.total.toFixed(2)}</span>
+            </div>
+            <div style={{ fontSize: '0.875rem', color: '#A32D2D', lineHeight: 1.6, marginBottom: 18, fontWeight: 600 }}>
+              Difference: ${Math.abs(reconcileState.delta).toFixed(2)}
+            </div>
+            <div style={{ fontSize: '0.8125rem', color: '#64748b', marginBottom: 20, lineHeight: 1.5 }}>
+              Check the receipt and fix the numbers above, or save with the discrepancy recorded.
+            </div>
+
+            {/* Preferred path — go back and fix */}
+            <button
+              style={{ ...BTN_PRIMARY, marginTop: 0 }}
+              onClick={() => setShowConflictDialog(false)}
+            >
+              ← Go back and fix
+            </button>
+
+            {/* Allowed path — override recorded as durable decision */}
+            <button
+              style={{ ...BTN_GHOST, border: '1px solid #f59e0b', color: '#92400e', background: '#fffbeb', marginTop: 10 }}
+              onClick={handleSaveAnyway}
+            >
+              Save anyway — I've checked the receipt
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
