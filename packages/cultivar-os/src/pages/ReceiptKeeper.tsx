@@ -66,6 +66,7 @@ async function resizeAndCompressImage(file: File): Promise<{ base64: string; siz
 type Step = 'idle' | 'uploading' | 'ocr_running' | 'confirm' | 'saving' | 'done' | 'error';
 
 interface OcrResult {
+  provider: 'gemini' | 'claude';
   parsed: {
     vendor?: string | null;
     date?: string | null;
@@ -183,7 +184,7 @@ export function ReceiptKeeper() {
         return;
       }
 
-      if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] OCR result — vendor:', data.parsed?.vendor, 'amount:', data.parsed?.amount, 'tokens:', data.inputTokens, '+', data.outputTokens, 'cost:', data.ocr_cost_estimate);
+      if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] OCR result — provider:', data.provider, 'vendor:', data.parsed?.vendor, 'amount:', data.parsed?.amount, 'tokens:', data.inputTokens, '+', data.outputTokens, 'cost:', data.ocr_cost_estimate);
 
       setOcrResult(data);
 
@@ -505,7 +506,7 @@ export function ReceiptKeeper() {
           <div style={{ textAlign: 'center', padding: '32px 0', color: '#27500A' }}>
             <div style={{ fontSize: '2rem', marginBottom: 12 }}>🔍</div>
             <div style={{ fontWeight: 700, marginBottom: 6 }}>Reading receipt…</div>
-            <div style={{ fontSize: '0.875rem', color: '#64748b' }}>Gemini Flash is extracting fields</div>
+            <div style={{ fontSize: '0.875rem', color: '#64748b' }}>AI is extracting fields</div>
           </div>
         )}
 
@@ -522,7 +523,7 @@ export function ReceiptKeeper() {
                 ✓ AI read the receipt — review and edit before saving
                 {ocrResult.ocr_cost_estimate != null && (
                   <span style={{ float: 'right', color: '#0284c7', fontSize: '0.75rem' }}>
-                    ~${ocrResult.ocr_cost_estimate.toFixed(4)}
+                    ~${ocrResult.ocr_cost_estimate.toFixed(4)}{ocrResult.provider === 'claude' ? ' (fallback)' : ''}
                   </span>
                 )}
               </div>

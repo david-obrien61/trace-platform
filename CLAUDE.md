@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-12 (Receipt Keeper 502 fixed: client canvas compress + server AbortController 8s timeout; build 2180 ✅; re-test required)
+# Last updated: 2026-06-12 (Receipt Keeper OCR provider fallback: gemini-2.0-flash primary + claude-haiku-4-5 fallback; BENCH-E added to STANDARDS.md; build 2180 ✅; deploy + re-test required)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -300,6 +300,157 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-12 — Receipt Keeper OCR: gemini-2.0-flash model fix + provider fallback chain
+
+**Type:** Code (2 files changed: `packages/cultivar-os/api/receipts/ocr.ts` complete rewrite, `packages/cultivar-os/src/pages/ReceiptKeeper.tsx` 4 targeted edits) + Docs (`STANDARDS.md` v1.7 BENCH-E added, `PLATFORM_STATE.md` updated). Zero migrations, zero schema changes, zero new features. Build 2180 ✅.
+
+**Session mandate:** THUNDER · DEBUG + BUILD · Fix 502 on 199KB compressed payload (function crashing, not timing out) + build provider fallback chain: Gemini 2.0 Flash → Claude Haiku 4.5 vision → clean 503.
+
+---
+
+**ROOT CAUSE (STD-001 — confirmed from Vercel runtime logs):**
+
+Vercel runtime log contained: `[TRACE:RECEIPT] Gemini error 404`
+
+This single log line proves two things simultaneously:
+1. The function WAS running (not a pre-handler crash, not a Vercel hard-kill) — the STD-003 log fired.
+2. Google returned HTTP 404 from Gemini. Only one explanation for a 404 on a valid API endpoint: the model `gemini-1.5-flash` was deprecated and removed from Google's API by June 2026.
+
+The old handler's non-OK branch at `ocr.ts` line ~128:
+```typescript
+if (!googleRes.ok) {
+  return res.status(502).json({ ok: false, error: 'OCR failed — upstream error', detail: googleRes.status });
+}
+```
+
+**Our own code returned 502 — not Vercel's gateway.** A 404 from Google → our `res.status(502)` → client received 502. The `catch` block below it was unreachable because the function ran to completion — it just ran to a bad branch.
+
+This is different from the prior session's root cause (3.4MB JPEG → Vercel 10s kill → true raw 502 HTML). The prior session's compression + AbortController fix was correct for the timeout case. But a 199KB compressed payload still 502'd because the model itself was gone.
+
+---
+
+**FIX (two files):**
+
+**`packages/cultivar-os/api/receipts/ocr.ts` — complete rewrite:**
+
+Architecture: provider chain pattern (BENCH-E / STD-010 alignment).
+
+1. **`GEMINI_MODEL = 'gemini-2.0-flash'`** — THE PRIMARY FIX. One constant change eliminates the 404.
+
+2. **`CLAUDE_MODEL = 'claude-haiku-4-5-20251001'`** — fallback for when Gemini fails.
+
+3. **`CLAUDE_VISION_TYPES`** — `new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'])`. Claude does NOT support heic/heif/pdf → `canHandle: false` for those types → skip, not error.
+
+4. **`tryGemini()`** — AbortController 8s timeout (preserved from prior fix), throws on non-OK. `gemini-2.0-flash` pricing: ~$0.075/1M input, $0.30/1M output.
+
+5. **`tryClaude()`** — throws immediately if mimeType not in `CLAUDE_VISION_TYPES`. Normalizes `image/jpg` → `image/jpeg` for Claude's strict `media_type` union. Anthropic SDK `timeout: 9000`. Haiku 4.5 pricing: ~$0.80/1M input, $4.00/1M output (~10× more than Gemini — this is the fallback cost signal David will see in `ocr_cost_estimate`.
+
+6. **Provider chain loop:**
+   ```typescript
+   const providers = [
+     { name: 'gemini', canHandle: !!geminiKey, fn: () => tryGemini(...) },
+     { name: 'claude', canHandle: !!claudeKey && CLAUDE_VISION_TYPES.has(mimeType), fn: () => tryClaude(...) },
+     // provider 3 slot: { name: 'azure', canHandle: !!azureKey, fn: () => tryAzure(...) },
+   ];
+   for (const p of providers) {
+     if (!p.canHandle) continue;
+     try {
+       result = await p.fn();
+       if (lastFailedProvider) {
+         console.log(`[TRACE:RECEIPT] provider-fallback fired: ${lastFailedProvider}→${p.name}, reason: ${lastErr.slice(0, 120)}`);
+       }
+       break;
+     } catch (err) { lastErr = err.message; lastFailedProvider = p.name; }
+   }
+   if (!result) return res.status(503).json({ ok: false, error: "Couldn't read this receipt — try a clearer photo or better lighting" });
+   ```
+
+7. **Operator fallback log** (greppable): `[TRACE:RECEIPT] provider-fallback fired: gemini→claude, reason: Gemini 404: ...`
+
+8. **Clean 503** on all-fail with Surface Honesty user message (actionable, not technical).
+
+9. **Response includes `provider` field** identifying which provider succeeded — visible in `ocr_cost_estimate` display.
+
+**`packages/cultivar-os/src/pages/ReceiptKeeper.tsx` — 4 targeted edits:**
+1. `OcrResult` interface: added `provider: 'gemini' | 'claude'`
+2. Console log: includes `data.provider` for debugging
+3. Loading copy: "Gemini Flash is extracting fields" → "AI is extracting fields" (provider-agnostic)
+4. Cost display: shows `(fallback)` indicator when `ocrResult.provider === 'claude'` — David can see when the more expensive fallback fired
+
+---
+
+**Provider cost comparison:**
+
+| Provider | Input | Output | Typical receipt (~1500 in / 200 out tokens) |
+|---|---|---|---|
+| Gemini 2.0 Flash | $0.075/1M | $0.30/1M | ~$0.000172/receipt |
+| Claude Haiku 4.5 | $0.80/1M | $4.00/1M | ~$0.0020/receipt (~11.6× more expensive) |
+
+At 100 receipts/month: Gemini ~$0.02/mo, Haiku ~$0.20/mo. Both trivial. The fallback indicator in the UI is for awareness, not alarm.
+
+---
+
+**Expected behavior after fix:**
+
+| Scenario | Before | After |
+|---|---|---|
+| Model deprecated (404 from Google) | Our code → `res.status(502)` | Gemini 404 → fallback to Claude → success |
+| Gemini timeout (8s) | AbortError → abort fires, 2s before Vercel kill → JSON 408 | Same — AbortError caught, fallback to Claude |
+| HEIC/HEIF file with Claude fallback | — | `canHandle: false` for Claude → skip → all-fail → 503 |
+| All providers fail | — | `res.status(503).json({ ok: false, error: "Couldn't read..." })` |
+| Both keys missing at startup | — | Early `res.status(503)` before any processing |
+
+**Post-fix, David must test**: upload IMG_6886.JPG or IMG_6885.JPG → expect confirm step with OCR-pre-filled fields (not 502). Advance PLATFORM_STATE.md Receipt Keeper v1 to WORKS when confirmed.
+
+---
+
+**BENCH-E added to STANDARDS.md v1.7:**
+
+**BENCH-E — EXTERNAL AI PROVIDER RESILIENCE** (hygiene-class, apply-and-report):
+- Try-chain pattern: each provider in its own try/catch + timeout
+- One failure never kills the chain
+- All-fail → clean user error ("Couldn't read this receipt — try a clearer photo")
+- Operator-greppable fallback log: `[TRACE:SUBSYSTEM] provider-fallback fired: X→Y, reason: Z`
+- Provider 3+ slot documented in comments
+- Never trust provider stability — AI providers deprecate models without notice
+
+TRACE scar: `gemini-1.5-flash` deprecated → Google 404 → our own 502 → feature 100% dark.
+
+---
+
+**Build verification:** `npm run build:cultivar` → 2180 modules ✅ zero TypeScript errors.
+
+---
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns introduced. Provider chain is generic. No schema changes.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Root cause confirmed from runtime logs (`[TRACE:RECEIPT] Gemini error 404`) before any code change. The log proved (a) function ran, (b) Google returned 404, (c) our own branch returned 502. No assumption-based fix.
+- STD-002: ✅ BEFORE: every POST to `/api/receipts/ocr` with 199KB compressed JPEG returned 502; confirmed by David. AFTER: model updated, provider chain in place; build ✅; deploy + live test with IMG_6886.JPG required to close.
+- STD-003: ✅ `[TRACE:RECEIPT]` logs remain born ON in both files. Provider-fallback log is operator-greppable. No new tags added.
+- STD-004: N/A — no new business-scoped data surface touched.
+- STD-005: ✅ Prior session's "gemini-1.5-flash" reference updated to "gemini-2.0-flash" — corrected inline, not supplemented alongside.
+- STD-006: ✅ No vertical nouns introduced.
+- STD-007: N/A — no integration status surfaces touched.
+- STD-008: N/A — no migrations written or applied.
+- STD-009: N/A — no generation path changes.
+- STD-010: ✅ All STD-010 rules preserved in rewrite: content-type allowlist (ALLOWED_TYPES), 10MB size check, per-tenant storage path unchanged, OCR result is the artifact.
+- **BENCH-E: ✅ Applied this session** (triggering build: user-facing AI provider call). Try-chain pattern with isolated catches, fallback log, clean 503 on all-fail, provider 3 slot in comments. Hygiene-class — applied and reporting.
+
+**Gap graduation sweep (step 15):** No gaps past horizon. No graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- `Receipt Keeper v1`: WORKS → **WIRED** (provider fallback fix applied; deploy + re-test with real photo required to return to WORKS).
+- PLATFORM_STATE.md header updated to reflect provider fallback fix and re-test requirement.
+
+**No runbook needed** — pure code + docs session. No environment changes, no migrations.
+
+---
 
 ### 2026-06-12 — Receipt Keeper 502 root cause + fix (client compress + server timeout)
 

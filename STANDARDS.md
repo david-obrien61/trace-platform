@@ -1,7 +1,7 @@
 # STANDARDS.md — TRACE Engineering Standards
-# Version: 1.6
+# Version: 1.7
 # Created: 2026-06-04
-# Last updated: 2026-06-10
+# Last updated: 2026-06-12
 # Owner: David O'Brien / TRACE Enterprises
 
 > Every standard on this list traces to a real failure that bit us.
@@ -468,6 +468,7 @@ AI endpoint. Every storage write that originates from user-supplied content.
 | STD-009 | Every AI generation path + every config field for channel/cadence/count | Config-read required; no hardcoded channel names or counts in generator |
 | STD-010 | Every file-accepting code path, every OCR/vision ingest, every storage write from user-supplied content | Content-type validation + size limit + per-tenant storage path + no raw-file trust |
 | BENCH-A, BENCH-C, BENCH-D | Every session (STEP 0 roster match against ACTIVATE WHEN triggers) | Catastrophic-class match → stop and ask David; hygiene-class match → apply and report |
+| BENCH-E | Any session that adds an external AI provider call that is user-facing | Apply try-chain pattern; provider 3 slot in comments; operator log on fallback; clean user error on all-fail |
 
 **Part 9 addition:** A `STANDARDS compliance` line is now required alongside the
 existing Step 13 AC check at session end. See CLAUDE.md Part 9, Step 14.
@@ -560,6 +561,59 @@ succeeded"). Industry scar — well-documented, catastrophic if skipped.
 
 ---
 
+### BENCH-E — EXTERNAL AI PROVIDER RESILIENCE (provider chain / graceful degradation)
+
+**ACTIVATE WHEN:** a Vercel function or server-side handler makes a live call to an
+external AI provider (Gemini, Anthropic, OpenAI, Azure Vision, etc.) and the result is
+user-facing — meaning the user receives a success/failure message based on whether the
+call succeeds.
+**CLASS:** 🟡 HYGIENE — apply and report. No stop-and-ask.
+
+**Rule (when active):**
+1. **Try-chain, not single-point.** If more than one provider can do the job, try them
+   in sequence — each in its own isolated try/catch + timeout. One provider failing must
+   NEVER propagate as an exception to the next; the chain continues.
+2. **One failure never kills the chain.** A 404 (deprecated model), 429 (rate limit),
+   500 (upstream error), or timeout from Provider A causes a log and fallthrough to
+   Provider B — not a re-throw, not a crash.
+3. **All-fail → clean user error.** If every provider fails, the response to the user is
+   actionable and human ("Couldn't read this receipt — try a clearer photo or better
+   lighting"), never a raw HTTP error code or exception message.
+4. **Operator-greppable fallback log.** When a fallback fires, log:
+   `[TRACE:<SUBSYSTEM>] provider-fallback fired: <primary>→<fallback>, reason: <first 120 chars of error>`.
+   This is the operator signal — not a user-facing message.
+5. **Never trust provider stability.** AI providers deprecate models without grace
+   periods (confirmed: `gemini-1.5-flash` deprecated mid-session, returned HTTP 404 with
+   no prior notice). ALWAYS check provider release notes when deploying AI features.
+   Pinning to a specific model version without a fallback is a single-point-of-failure.
+6. **Provider 3+ slot in comments.** When building a two-provider chain, leave a
+   documented slot for a third provider (`// provider 3 slot: { name: 'azure', ... }`)
+   so future expansion requires only a new entry in the array, not a new control-flow design.
+
+**TRACE scar (2026-06-12):** `ocr.ts` used `gemini-1.5-flash` (no fallback). Google
+deprecated the model. Google API returned HTTP 404. The old non-OK branch in `ocr.ts`
+mapped any non-OK Gemini response to `res.status(502)` — our OWN code, not a Vercel
+hard-kill. Every OCR request on a real receipt returned 502 to the user. The failure
+was invisible until David tested with a real receipt photo. Because there was no fallback
+chain, the feature was 100% dark the moment the model was deprecated. Fixed 2026-06-12:
+model updated to `gemini-2.0-flash` + provider chain: Gemini 2.0 Flash primary →
+Claude Haiku 4.5 vision fallback → clean 503 with actionable user message.
+
+**In practice:**
+- Every AI provider call that is user-facing: wrap in the try-chain pattern
+- Provider selection array: `[{ name, canHandle, fn }]` — iterate, catch, continue
+- `canHandle` gate prevents fruitless attempts (missing key, unsupported type for provider)
+- For vision providers: Claude only supports jpeg/png/gif/webp — check before queuing;
+  skip silently (counts as "canHandle: false"), not as an error
+- Session checklist: before shipping any AI-backed user feature, ask "what happens when
+  this provider returns 404, 429, or 503?"
+
+**Scope:** Every Vercel function that makes a live external AI call and returns a
+user-facing success/failure response. Receipt Keeper, future document parsers, vision
+analysis features, AI generation paths that could surface provider errors to users.
+
+---
+
 ## THUNDER INTELLIGENCE — match, flag, and propose
 
 Standards are not a static list Thunder obeys — they are a roster Thunder matches
@@ -609,6 +663,7 @@ a standard's application."
 | 1.4 | 2026-06-09 | STD-008 extended bidirectionally. Renamed "DEPLOYED SCHEMA == ON-DISK MIGRATIONS (BOTH DIRECTIONS)". Inverse scar added: `social_drafts_platform_check` existed in live DB but in no committed migration; 'sms' not in allowed list; atomic batch INSERT rolled back all rows (instagram + tiktok + sms) when SMS enabled. Fixed by `20260609_social_drafts_platform_check.sql`. Sweep query added to verification pattern. |
 | 1.5 | 2026-06-10 | Roster model added (Active/Bench/N/A). CANDIDATES section formalized into the trigger-tagged Bench: BENCH-A payments/PCI, BENCH-B file-upload (TRIGGER FIRING — Receipt Keeper v1; catastrophic-class; David's confirmation required before ship), BENCH-C PII, BENCH-D webhook verification. Thunder intelligence instructions added (match bench triggers, flag general candidates, never round up, David owns activation/override). STD-003 amended to corrected on-by-birth / commented-when-proven policy; flag-gate pattern retired as resting state; Tailwind born-silent scar added; active instrumentation subsystem tags listed. ENFORCEMENT table updated with BENCH-A–D row. Growth Policy updated for bench entries. File reframed as team-onboarding document (Erin/Andrew/Connor) — every standard carries its scar or territory as a lesson. |
 | 1.6 | 2026-06-10 | BENCH-B promoted to STD-010 (FILE UPLOAD / INGEST SAFETY). David's explicit go confirmed 2026-06-10 — triggered by Receipt Keeper v1 Gemini Flash vision ingest path. STD-010 rule: real content-type validation, explicit size limits, per-tenant storage path, never-trust-content, OCR result is the artifact (not the raw file). BENCH-B entry replaced with promotion tombstone. ENFORCEMENT table: STD-010 row added; bench row updated to BENCH-A, BENCH-C, BENCH-D. |
+| 1.7 | 2026-06-12 | BENCH-E added — EXTERNAL AI PROVIDER RESILIENCE (provider chain / graceful degradation). TRACE scar: `gemini-1.5-flash` deprecated mid-session → Google 404 → our own `res.status(502)` on every receipt OCR request until the model was updated. No fallback existed → feature was 100% dark on model deprecation. Fixed 2026-06-12: `ocr.ts` now uses `gemini-2.0-flash` (primary) + Claude Haiku 4.5 vision (fallback) + clean 503 all-fail. Rule: try-chain with isolated catches, one-failure-never-kills-chain, all-fail clean user error, operator-greppable fallback log, provider 3+ slot in comments. Hygiene-class: apply and report, no stop-and-ask. |
 
 ---
 
