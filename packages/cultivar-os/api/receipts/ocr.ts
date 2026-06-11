@@ -2,8 +2,15 @@
 // This function is the ONLY server-side path for receipt OCR.
 // Client-side never sees provider API keys or raw binary data.
 //
-// PROVIDER CHAIN: Gemini 2.0 Flash (primary) → Claude Haiku 4.5 (fallback) → clean user error.
+// PROVIDER CHAIN: Gemini 2.5 Flash (primary) → Claude Haiku 4.5 (fallback) → clean user error.
 // Each provider has its own try/catch and timeout. One failure never kills the chain.
+//
+// MODEL CONFIG — BENCH-E rule: model names are VALUES, not source constants.
+// Resolution order (getOcrModels):
+//   1. platform_config table (key: ocr_primary_model / ocr_fallback_model) — edit one DB row to swap
+//   2. env vars OCR_PRIMARY_MODEL / OCR_FALLBACK_MODEL
+//   3. hardcoded defaults below (last resort — should never be reached in production)
+// A model swap is a config change, never a code edit.
 //
 // KIND-2 BENCHED (explicitly NOT in this build):
 //   - Usage limiting / billing → benched, awaiting payments/first paying customer
@@ -11,6 +18,7 @@
 //   - QB write-back for receipts → benched; v1 is local-only
 
 import Anthropic from '@anthropic-ai/sdk';
+import { createClient } from '@supabase/supabase-js';
 
 const TRACE_RECEIPT = true; // [TRACE:RECEIPT] STD-003 — comment out when David says "proven"
 
@@ -28,31 +36,40 @@ const ALLOWED_TYPES = new Set([
 // STD-010: size limit — 10 MB
 const MAX_BYTES = 10 * 1024 * 1024;
 
-// Provider model IDs
-const GEMINI_MODEL = 'gemini-2.0-flash';
-const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
+// Hardcoded defaults — last resort only. In production these should be
+// overridden by platform_config rows or OCR_*_MODEL env vars.
+const DEFAULT_PRIMARY_MODEL = 'gemini-2.5-flash';
+const DEFAULT_FALLBACK_MODEL = 'claude-haiku-4-5-20251001';
 
 // Claude vision supports jpeg/png/gif/webp only — no heic/heif/pdf
 const CLAUDE_VISION_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']);
 
-// Shared OCR prompt — identical for both providers
-const PROMPT = `You are a receipt parser. Extract structured data from this receipt image.
+// NOTE: unit_price artifact — Gemini may return trailing-decimal noise on unit_price
+// (e.g., 1.611 instead of 1.61). Totals are always exact. Benched until a unit_price
+// display column is added to the line-item grid UI — round to 2 decimal places on display.
 
-Return a JSON object with these fields (use null for any field you cannot read clearly):
+// Strict OCR prompt — validated in bake-off against McCoy's receipt (2026-06-11).
+// "Extract ONLY what's printed" eliminates hallucination on missing fields.
+const PROMPT = `You are a receipt parser. Extract ONLY what is literally printed on this receipt — do not infer, estimate, or fill in values that are not visible.
+
+Return a JSON object with these exact fields (use null for any field you cannot read directly from the receipt):
 {
-  "vendor": "string — business/store name",
-  "date": "string — date in YYYY-MM-DD format if possible, otherwise as-read",
-  "amount": number — total amount paid (numeric, no currency symbol),
-  "subtotal": number or null,
-  "tax": number or null,
-  "category": "string — one of: fuel, supplies, meals, parts, equipment, maintenance, office, other",
-  "line_items": [{"description": "string", "amount": number}] or null,
-  "payment_method": "string or null — cash, credit, debit, check",
-  "receipt_number": "string or null"
+  "vendor": "string — store or business name as printed",
+  "date": "string — date in YYYY-MM-DD format, or as printed if format is unclear",
+  "amount": number — total amount paid (numeric only, no currency symbol),
+  "subtotal": number or null — subtotal before tax if printed,
+  "tax": number or null — tax amount if printed,
+  "category": "string — best fit from: fuel, supplies, meals, parts, equipment, maintenance, office, other",
+  "line_items": array or null — each item as: {"description": "as printed", "quantity": number or null, "unit_price": number or null, "amount": number} — null if no itemized list is visible,
+  "payment_method": "string or null — cash, credit, debit, check, as indicated on the receipt",
+  "receipt_number": "string or null — receipt, invoice, or transaction number if printed"
 }
 
-Be conservative: if you cannot confidently read a value, use null rather than guessing.
-Return ONLY the JSON object, no explanation.`;
+Rules:
+- Extract ONLY values that appear on the receipt. Do not infer or estimate missing values.
+- For line_items: include quantity and unit_price only if they are printed on the receipt; otherwise set to null.
+- For amounts: numeric values only — no currency symbols, no commas.
+- Return ONLY the JSON object. No explanation, no markdown fences, no commentary.`;
 
 interface ProviderResult {
   provider: 'gemini' | 'claude';
@@ -62,6 +79,38 @@ interface ProviderResult {
   outputTokens: number | null;
   costEstimate: number | null;
   latencyMs: number;
+}
+
+// Config resolution: platform_config table → env var → hardcoded default
+// Called once per request (~20-50ms DB lookup — immaterial vs 2-8s OCR latency)
+async function getOcrModels(): Promise<{ primaryModel: string; fallbackModel: string }> {
+  // Layer 1: platform_config table (service key bypasses RLS — infrastructure config, not tenant data)
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_KEY;
+    if (supabaseUrl && serviceKey) {
+      const db = createClient(supabaseUrl, serviceKey);
+      const { data } = await db
+        .from('platform_config')
+        .select('key, value')
+        .in('key', ['ocr_primary_model', 'ocr_fallback_model']);
+      if (data && data.length > 0) {
+        const map = Object.fromEntries(data.map((r: any) => [r.key as string, r.value as string]));
+        return {
+          primaryModel: map['ocr_primary_model'] ?? process.env.OCR_PRIMARY_MODEL ?? DEFAULT_PRIMARY_MODEL,
+          fallbackModel: map['ocr_fallback_model'] ?? process.env.OCR_FALLBACK_MODEL ?? DEFAULT_FALLBACK_MODEL,
+        };
+      }
+    }
+  } catch {
+    // platform_config migration not yet applied or Supabase unavailable — fall through to env/defaults
+  }
+
+  // Layer 2: env vars (Vercel dashboard, no code edit needed)
+  return {
+    primaryModel: process.env.OCR_PRIMARY_MODEL ?? DEFAULT_PRIMARY_MODEL,
+    fallbackModel: process.env.OCR_FALLBACK_MODEL ?? DEFAULT_FALLBACK_MODEL,
+  };
 }
 
 // Shared JSON extraction — both providers return freetext that may have markdown fences
@@ -81,15 +130,16 @@ function parseOcrText(rawText: string): { parsed: Record<string, any> | null; pa
   return { parsed, parseError };
 }
 
-// Provider 1: Gemini 2.0 Flash — cheapest, fastest, supports HEIC/PDF
-async function tryGemini(imageBase64: string, mimeType: string, geminiKey: string): Promise<ProviderResult> {
+// Provider 1: Gemini (primary) — cheapest, fastest, supports HEIC/PDF
+// model param comes from getOcrModels() — never hardcoded here
+async function tryGemini(imageBase64: string, mimeType: string, geminiKey: string, model: string): Promise<ProviderResult> {
   const startMs = Date.now();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 8000);
   let fetchRes: Response;
   try {
     fetchRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -102,19 +152,19 @@ async function tryGemini(imageBase64: string, mimeType: string, geminiKey: strin
     );
   } catch (fetchErr: any) {
     clearTimeout(timeoutId);
-    if (fetchErr.name === 'AbortError') throw new Error('Gemini timed out after 8s');
+    if (fetchErr.name === 'AbortError') throw new Error(`Gemini (${model}) timed out after 8s`);
     throw fetchErr;
   }
   clearTimeout(timeoutId);
   if (!fetchRes.ok) {
     const body = await fetchRes.text().catch(() => '');
-    throw new Error(`Gemini ${fetchRes.status}: ${body.slice(0, 200)}`);
+    throw new Error(`Gemini ${fetchRes.status} (model: ${model}): ${body.slice(0, 200)}`);
   }
   const data = await fetchRes.json();
   const usage = data.usageMetadata ?? {};
   const inp = usage.promptTokenCount ?? null;
   const out = usage.candidatesTokenCount ?? null;
-  // Gemini 2.0 Flash pricing estimate (June 2026): ~$0.075/1M input, $0.30/1M output
+  // Gemini 2.5 Flash pricing estimate (June 2026): ~$0.075/1M input, $0.30/1M output
   const cost = inp && out ? (inp / 1e6) * 0.075 + (out / 1e6) * 0.30 : null;
   return {
     provider: 'gemini',
@@ -127,9 +177,9 @@ async function tryGemini(imageBase64: string, mimeType: string, geminiKey: strin
   };
 }
 
-// Provider 2: Claude Haiku 4.5 vision — fallback when Gemini fails
-// Supports: jpeg/png/gif/webp only. Throws immediately for unsupported types.
-async function tryClaude(imageBase64: string, mimeType: string, claudeKey: string): Promise<ProviderResult> {
+// Provider 2: Claude (fallback) — supports jpeg/png/gif/webp only; throws for unsupported types
+// model param comes from getOcrModels() — never hardcoded here
+async function tryClaude(imageBase64: string, mimeType: string, claudeKey: string, model: string): Promise<ProviderResult> {
   if (!CLAUDE_VISION_TYPES.has(mimeType)) {
     throw new Error(`Claude vision does not support ${mimeType} — skipping`);
   }
@@ -140,7 +190,7 @@ async function tryClaude(imageBase64: string, mimeType: string, claudeKey: strin
   const startMs = Date.now();
   const client = new Anthropic({ apiKey: claudeKey, timeout: 9000 }); // 9s — inside Vercel's 10s kill
   const msg = await client.messages.create({
-    model: CLAUDE_MODEL,
+    model,
     max_tokens: 1024,
     messages: [{
       role: 'user',
@@ -202,12 +252,16 @@ export default async function handler(req: any, res: any) {
 
   if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] OCR request — businessId:', businessId, 'mimeType:', mimeType, 'sizeBytes:', sizeBytes);
 
+  // Resolve model names from config (DB → env var → hardcoded default)
+  const { primaryModel, fallbackModel } = await getOcrModels();
+  if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] models resolved — primary:', primaryModel, 'fallback:', fallbackModel);
+
   // Provider chain — each entry: { name, canHandle, fn }
   // canHandle prevents unnecessary attempts (missing key, unsupported type)
   const providers: Array<{ name: 'gemini' | 'claude'; canHandle: boolean; fn: () => Promise<ProviderResult> }> = [
-    { name: 'gemini', canHandle: !!geminiKey, fn: () => tryGemini(imageBase64, mimeType, geminiKey) },
-    { name: 'claude', canHandle: !!claudeKey && CLAUDE_VISION_TYPES.has(mimeType), fn: () => tryClaude(imageBase64, mimeType, claudeKey) },
-    // provider 3 slot: { name: 'azure', canHandle: !!azureKey, fn: () => tryAzure(...) },
+    { name: 'gemini', canHandle: !!geminiKey, fn: () => tryGemini(imageBase64, mimeType, geminiKey, primaryModel) },
+    { name: 'claude', canHandle: !!claudeKey && CLAUDE_VISION_TYPES.has(mimeType), fn: () => tryClaude(imageBase64, mimeType, claudeKey, fallbackModel) },
+    // provider 3 slot: { name: 'azure', canHandle: !!azureKey, fn: () => tryAzure(imageBase64, mimeType, azureKey, azureModel) },
   ];
 
   let result: ProviderResult | null = null;
@@ -219,7 +273,7 @@ export default async function handler(req: any, res: any) {
     try {
       result = await p.fn();
       if (lastFailedProvider) {
-        // Fallback activated — log greppably for operator monitoring
+        // Fallback activated — log greppably for operator monitoring (BENCH-E)
         console.log(`[TRACE:RECEIPT] provider-fallback fired: ${lastFailedProvider}→${p.name}, reason: ${lastErr.slice(0, 120)}`);
       }
       break;
@@ -240,7 +294,7 @@ export default async function handler(req: any, res: any) {
   const { parsed, parseError } = parseOcrText(result.rawText);
 
   if (TRACE_RECEIPT) console.log(
-    `[TRACE:RECEIPT] ${result.provider} response — inputTokens:`, result.inputTokens,
+    `[TRACE:RECEIPT] ${result.provider} response — model: ${primaryModel}, inputTokens:`, result.inputTokens,
     'outputTokens:', result.outputTokens,
     'estimatedCost:', result.costEstimate,
     'latencyMs:', result.latencyMs,
@@ -249,6 +303,7 @@ export default async function handler(req: any, res: any) {
     '[TRACE:RECEIPT] parsed result — vendor:', parsed?.vendor,
     'amount:', parsed?.amount,
     'date:', parsed?.date,
+    'line_items:', parsed?.line_items?.length ?? 0,
     'parseError:', parseError,
   );
 

@@ -1,7 +1,7 @@
 # STANDARDS.md — TRACE Engineering Standards
-# Version: 1.7
+# Version: 1.8
 # Created: 2026-06-04
-# Last updated: 2026-06-12
+# Last updated: 2026-06-11
 # Owner: David O'Brien / TRACE Enterprises
 
 > Every standard on this list traces to a real failure that bit us.
@@ -589,6 +589,12 @@ call succeeds.
 6. **Provider 3+ slot in comments.** When building a two-provider chain, leave a
    documented slot for a third provider (`// provider 3 slot: { name: 'azure', ... }`)
    so future expansion requires only a new entry in the array, not a new control-flow design.
+7. **Model names are values, not source constants.** Never hardcode a model string as a
+   TypeScript constant in the source file. A model swap must be a config change — edit a
+   `platform_config` DB row or an env var (`OCR_PRIMARY_MODEL`) — not a source code edit,
+   build, and deploy cycle. Resolution order: `platform_config` table → env var → hardcoded
+   default (last resort only). The hardcoded default exists so the feature still works when
+   the config table is not yet applied; it is NOT the intended configuration path.
 
 **TRACE scar (2026-06-12):** `ocr.ts` used `gemini-1.5-flash` (no fallback). Google
 deprecated the model. Google API returned HTTP 404. The old non-OK branch in `ocr.ts`
@@ -598,6 +604,15 @@ was invisible until David tested with a real receipt photo. Because there was no
 chain, the feature was 100% dark the moment the model was deprecated. Fixed 2026-06-12:
 model updated to `gemini-2.0-flash` + provider chain: Gemini 2.0 Flash primary →
 Claude Haiku 4.5 vision fallback → clean 503 with actionable user message.
+
+**TRACE scar (2026-06-11, second deprecation):** `gemini-2.0-flash` was deprecated within
+3 days of the first fix, again returning 404. The pattern (hardcoded model constant in
+source = code edit required on every deprecation) recurred immediately. Fix: externalized
+model names to `platform_config` table (Layer 1) + `OCR_PRIMARY_MODEL` env var (Layer 2) +
+hardcoded default (Layer 3, last resort). Model is now `gemini-2.5-flash` (validated in
+bake-off against McCoy's receipt, scored PERFECT). A future deprecation requires only:
+`UPDATE platform_config SET value='gemini-2.6-flash' WHERE key='ocr_primary_model';` — no
+code edit, no deploy.
 
 **In practice:**
 - Every AI provider call that is user-facing: wrap in the try-chain pattern
@@ -664,6 +679,7 @@ a standard's application."
 | 1.5 | 2026-06-10 | Roster model added (Active/Bench/N/A). CANDIDATES section formalized into the trigger-tagged Bench: BENCH-A payments/PCI, BENCH-B file-upload (TRIGGER FIRING — Receipt Keeper v1; catastrophic-class; David's confirmation required before ship), BENCH-C PII, BENCH-D webhook verification. Thunder intelligence instructions added (match bench triggers, flag general candidates, never round up, David owns activation/override). STD-003 amended to corrected on-by-birth / commented-when-proven policy; flag-gate pattern retired as resting state; Tailwind born-silent scar added; active instrumentation subsystem tags listed. ENFORCEMENT table updated with BENCH-A–D row. Growth Policy updated for bench entries. File reframed as team-onboarding document (Erin/Andrew/Connor) — every standard carries its scar or territory as a lesson. |
 | 1.6 | 2026-06-10 | BENCH-B promoted to STD-010 (FILE UPLOAD / INGEST SAFETY). David's explicit go confirmed 2026-06-10 — triggered by Receipt Keeper v1 Gemini Flash vision ingest path. STD-010 rule: real content-type validation, explicit size limits, per-tenant storage path, never-trust-content, OCR result is the artifact (not the raw file). BENCH-B entry replaced with promotion tombstone. ENFORCEMENT table: STD-010 row added; bench row updated to BENCH-A, BENCH-C, BENCH-D. |
 | 1.7 | 2026-06-12 | BENCH-E added — EXTERNAL AI PROVIDER RESILIENCE (provider chain / graceful degradation). TRACE scar: `gemini-1.5-flash` deprecated mid-session → Google 404 → our own `res.status(502)` on every receipt OCR request until the model was updated. No fallback existed → feature was 100% dark on model deprecation. Fixed 2026-06-12: `ocr.ts` now uses `gemini-2.0-flash` (primary) + Claude Haiku 4.5 vision (fallback) + clean 503 all-fail. Rule: try-chain with isolated catches, one-failure-never-kills-chain, all-fail clean user error, operator-greppable fallback log, provider 3+ slot in comments. Hygiene-class: apply and report, no stop-and-ask. |
+| 1.8 | 2026-06-11 | BENCH-E Rule 7 added — MODEL NAMES ARE VALUES, NOT SOURCE CONSTANTS. Second scar added: `gemini-2.0-flash` deprecated 3 days after the first fix, again requiring a source-code edit + deploy cycle. Fix: model names externalized to `platform_config` table (Layer 1) → `OCR_PRIMARY_MODEL` env var (Layer 2) → hardcoded default (Layer 3, last resort). Model is now `gemini-2.5-flash` (validated in bake-off). A future deprecation = one DB row edit, no code change. |
 
 ---
 

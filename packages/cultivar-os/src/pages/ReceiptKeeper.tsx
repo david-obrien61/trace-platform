@@ -74,7 +74,7 @@ interface OcrResult {
     date?: string | null;
     amount?: number | null;
     category?: string | null;
-    line_items?: Array<{ description: string; amount: number }> | null;
+    line_items?: Array<{ description: string; amount: number; quantity?: number | null; unit_price?: number | null }> | null;
     receipt_number?: string | null;
     payment_method?: string | null;
   } | null;

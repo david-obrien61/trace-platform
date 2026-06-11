@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-14 (Receipt Keeper: editable line-item grid + live reconciliation + conflict dialog/override recording (Tesla bit); migration 20260614 committed; build 2180 ✅; 4 migrations pending David apply; live grid test required)
+# Last updated: 2026-06-11 (OCR model externalized to platform_config + gemini-2.5-flash; BENCH-E Rule 7; strict bake-off prompt; migration 20260611_platform_config.sql committed; build 2180 ✅; 5 migrations pending David apply; live grid test required)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -300,6 +300,136 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-11 — Receipt Keeper OCR: model externalized to platform_config + gemini-2.5-flash + strict prompt (BENCH-E Rule 7)
+
+**Type:** Code (2 files changed: `packages/cultivar-os/api/receipts/ocr.ts` complete rewrite, `packages/cultivar-os/src/pages/ReceiptKeeper.tsx` 1-line OcrResult interface update) + Migration (`supabase/migrations/20260611_platform_config.sql` new) + Docs (`STANDARDS.md` v1.8, `PLATFORM_STATE.md` updated, `CLAUDE.md` header + handoff). Build 2180 ✅ (module count unchanged).
+
+**Session mandate:** THUNDER · FIX + EXTERNALIZE · TASK 1: fix deprecated `gemini-2.0-flash` (404) → `gemini-2.5-flash`. TASK 2: externalize model names — two layers: (a) `platform_config` DB table, (b) env vars, falling back to hardcoded default. Goal: future model swap = edit one DB row, never source code. TASK 3: strict bake-off-validated OCR prompt. TASK 4: note unit_price artifact (benched cosmetic). CLOSE-OUT: BENCH-E Rule 7, STANDARDS.md v1.8, PLATFORM_STATE.md updated.
+
+---
+
+**ROOT CAUSE (second consecutive model deprecation in 3 days):**
+
+This was the SECOND Google Gemini deprecation in 3 days: `gemini-1.5-flash` → `gemini-2.0-flash` → `gemini-2.5-flash`. Each time the previous fix was to update a hardcoded TypeScript constant (`const GEMINI_MODEL = '...'`), rebuild, and redeploy. This is the wrong pattern — a model name is not a source code concern; it is infrastructure configuration.
+
+The structural fix: a model name must be a config value readable at runtime, not a TypeScript constant compiled into the bundle.
+
+---
+
+**WHAT WAS BUILT:**
+
+**`packages/cultivar-os/api/receipts/ocr.ts` — complete rewrite:**
+
+1. **Removed `const GEMINI_MODEL` and `const CLAUDE_MODEL`** — both are now gone from source.
+
+2. **Added last-resort hardcoded defaults** (ONLY reached if DB lookup AND env var both absent):
+   ```typescript
+   const DEFAULT_PRIMARY_MODEL = 'gemini-2.5-flash';
+   const DEFAULT_FALLBACK_MODEL = 'claude-haiku-4-5-20251001';
+   ```
+
+3. **`getOcrModels()` — new async function** (config resolution, 3-layer waterfall):
+   - **Layer 1:** Queries `platform_config` table via Supabase service key. Reads `ocr_primary_model` and `ocr_fallback_model` rows. Service key bypasses RLS — this is infrastructure config, not tenant data.
+   - **Layer 2:** Falls through to `OCR_PRIMARY_MODEL` / `OCR_FALLBACK_MODEL` env vars if DB lookup fails or table not yet applied.
+   - **Layer 3:** Falls through to `DEFAULT_PRIMARY_MODEL` / `DEFAULT_FALLBACK_MODEL` (last resort).
+   - Entire DB call wrapped in try/catch — if `platform_config` migration hasn't been applied yet, silently falls through to env/defaults. No hard dependency on migration being applied before code deploys.
+
+4. **`tryGemini(imageBase64, mimeType, geminiKey, model: string)`** — `model` param (from `getOcrModels()`) is used in the Gemini API URL. Never hardcoded.
+
+5. **`tryClaude(imageBase64, mimeType, claudeKey, model: string)`** — `model` param passed to Anthropic SDK. Never hardcoded.
+
+6. **Updated PROMPT** to strict bake-off-validated version (McCoy's receipt, 2026-06-11):
+   - "Extract ONLY what is literally printed on this receipt — do not infer, estimate, or fill in values that are not visible."
+   - `line_items` now includes optional `quantity` (number or null) and `unit_price` (number or null) per item.
+   - "Return ONLY the JSON object. No explanation, no markdown fences, no commentary."
+
+7. **Unit_price artifact noted** (comment inline): Gemini may return trailing-decimal noise on `unit_price` (e.g., 1.611 vs 1.61). Totals are always exact. Cosmetic issue — benched until a unit_price display column is added to the grid UI. Round to 2 decimal places on display.
+
+8. **Updated `[TRACE:RECEIPT]` log** to include resolved `primaryModel` name (makes model-in-use visible in Vercel logs without code change).
+
+**`packages/cultivar-os/src/pages/ReceiptKeeper.tsx` — 1-line change:**
+
+`OcrResult.parsed.line_items` interface extended with optional new fields (backward-compatible — existing code reads only `description` and `amount`; new fields safely ignored):
+```typescript
+// Before:
+line_items?: Array<{ description: string; amount: number }> | null;
+// After:
+line_items?: Array<{ description: string; amount: number; quantity?: number | null; unit_price?: number | null }> | null;
+```
+
+---
+
+**`supabase/migrations/20260611_platform_config.sql` (new):**
+
+Creates `platform_config` (key text PK, value text, description, updated_at) infrastructure key/value table.
+
+- RLS enabled, **zero user-facing policies** — service key (server-side) is the only access path. An authenticated browser session cannot read or write this table (AC-2).
+- Seeds `ocr_primary_model = 'gemini-2.5-flash'` and `ocr_fallback_model = 'claude-haiku-4-5-20251001'`.
+- `ON CONFLICT (key) DO NOTHING` — idempotent. Re-running the migration is safe.
+- VERIFICATION QUERY: `SELECT key, value FROM platform_config WHERE key IN ('ocr_primary_model', 'ocr_fallback_model') ORDER BY key;` — expect 2 rows.
+
+**To swap the primary model after this migration is applied** (no code change, no redeploy needed):
+```sql
+UPDATE platform_config SET value = 'gemini-2.5-flash-preview-05-20' WHERE key = 'ocr_primary_model';
+```
+
+**⚠️ David must apply in bgobkjcopcxusjsetfob SQL editor + run VERIFICATION QUERY.**
+
+---
+
+**BENCH-E Rule 7 added to STANDARDS.md v1.8:**
+
+**Rule 7 — Model names are values, not source constants.** A model swap must be a config change — edit a `platform_config` DB row or an env var (`OCR_PRIMARY_MODEL`) — never a source code edit, build, and deploy cycle. Resolution order: `platform_config` table → env var → hardcoded default (last resort only).
+
+Two TRACE scars now in BENCH-E:
+1. 2026-06-12: `gemini-1.5-flash` deprecated → 404 → our 502.
+2. 2026-06-11: `gemini-2.0-flash` deprecated → second 404 → second 502. Triggered Rule 7.
+
+---
+
+**David's required steps before live test:**
+1. Apply `supabase/migrations/20260611_platform_config.sql` in bgobkjcopcxusjsetfob SQL editor → run VERIFICATION QUERY (expect 2 rows: ocr_fallback_model + ocr_primary_model)
+2. Apply `supabase/migrations/20260613_receipts_storage_rls.sql` → VERIFICATION QUERY (expect 3 rows)
+3. Apply `supabase/migrations/20260613_receipts_add_line_items.sql` → VERIFICATION QUERY (expect line_items, jsonb, YES)
+4. Apply `supabase/migrations/20260614_receipts_reconciliation.sql` → VERIFICATION QUERY (expect 6 rows)
+5. `git push` → Vercel auto-deploys → upload receipt photo → confirm OCR works with gemini-2.5-flash (no 502 / 404) → confirm line-item grid is seeded → confirm reconciliation readout → confirm conflict dialog on large mismatch
+6. Advance Receipt Keeper v1 to WORKS in PLATFORM_STATE.md when step 5 confirmed
+
+**Build verification:** `npm run build:cultivar` → 2180 modules ✅ zero TypeScript errors.
+
+---
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns. `platform_config`, `ocr_primary_model`, `ocr_fallback_model` — all generic infrastructure identifiers. `getOcrModels()` — generic function name.
+- AC-2: ✅ `platform_config` has RLS enabled with zero user-facing policies. Service key only. No authenticated client can read or write this table.
+- AC-3: ✅ No cross-vertical data paths opened.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Root cause confirmed by reading `ocr.ts` (prior session scar: hardcoded constant → each deprecation = code edit). No assumption-based code.
+- STD-002: ✅ **BEFORE**: `gemini-2.0-flash` returns 404 → our code returns 502 (same root-cause class as prior session). **AFTER**: `getOcrModels()` reads `gemini-2.5-flash` from `platform_config` table; provider chain retries on failure. Live acceptance test: David applies migration → uploads real receipt → confirm no 502 + `[TRACE:RECEIPT] models resolved — primary: gemini-2.5-flash` log fires. Pending David apply + deploy + live test.
+- STD-003: ✅ `TRACE_RECEIPT = true` preserved. `[TRACE:RECEIPT] models resolved` log added (shows which models were loaded on every request — operator visibility). `[TRACE:RECEIPT] provider-fallback fired` log preserved for greppable fallback tracking.
+- STD-004: N/A — `platform_config` is infrastructure, not business-scoped data. No tenant isolation surface added.
+- STD-005: ✅ No decisions reversed.
+- STD-006: ✅ No vertical nouns in shared code or migration.
+- STD-007: N/A — no integration connection status surfaces touched.
+- STD-008: ✅ Migration `20260611_platform_config.sql` written with VERIFICATION QUERY block. **David must apply** to bgobkjcopcxusjsetfob SQL editor. Not marked WORKS until confirmed.
+- STD-009: N/A — no generation/prompt path for campaign/social changed.
+- STD-010: ✅ `platform_config` is a decoded, descriptive name. No opaque codes.
+- **BENCH-E: ✅ Rule 7 applied this session** (triggering build: second AI provider model deprecation). Model names externalized to `platform_config` table + env var fallback. Provider chain unchanged. Strict prompt applied from bake-off validation. Unit_price artifact flagged as cosmetic, benched.
+
+**Gap graduation sweep (step 15):** No gaps past horizon. No graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- `Receipt Keeper v1`: WIRED (unchanged — one new pending migration `20260611_platform_config.sql` added as step 0; evidence field updated to reflect gemini-2.5-flash + externalization).
+- `platform_config migration`: new row at EXISTS level — migration committed, David must apply.
+- Header updated to 2026-06-11.
+- IN-FLIGHT `Receipt Keeper v1` row: updated from 4-step to 5-step David sequence (step 0 = platform_config migration).
+
+**No runbook needed** — pure code + docs session. No environment changes.
+
+---
 
 ### 2026-06-14 — Receipt Keeper: editable line-item grid + live reconciliation + conflict dialog/override recording (Tesla bit)
 
