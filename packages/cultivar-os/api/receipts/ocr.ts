@@ -135,7 +135,7 @@ function parseOcrText(rawText: string): { parsed: Record<string, any> | null; pa
 async function tryGemini(imageBase64: string, mimeType: string, geminiKey: string, model: string): Promise<ProviderResult> {
   const startMs = Date.now();
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  const timeoutId = setTimeout(() => controller.abort(), 9000);
   let fetchRes: Response;
   try {
     fetchRes = await fetch(
@@ -152,7 +152,7 @@ async function tryGemini(imageBase64: string, mimeType: string, geminiKey: strin
     );
   } catch (fetchErr: any) {
     clearTimeout(timeoutId);
-    if (fetchErr.name === 'AbortError') throw new Error(`Gemini (${model}) timed out after 8s`);
+    if (fetchErr.name === 'AbortError') throw new Error(`Gemini (${model}) timed out after 9s`);
     throw fetchErr;
   }
   clearTimeout(timeoutId);
@@ -191,7 +191,7 @@ async function tryClaude(imageBase64: string, mimeType: string, claudeKey: strin
   const client = new Anthropic({ apiKey: claudeKey, timeout: 9000 }); // 9s — inside Vercel's 10s kill
   const msg = await client.messages.create({
     model,
-    max_tokens: 1024,
+    max_tokens: 2048,
     messages: [{
       role: 'user',
       content: [

@@ -32,6 +32,8 @@ interface OcrResult {
     vendor?: string | null;
     date?: string | null;
     amount?: number | null;
+    subtotal?: number | null;
+    tax?: number | null;
     category?: string | null;
     line_items?: Array<{ description: string; amount: number; quantity?: number | null; unit_price?: number | null }> | null;
     receipt_number?: string | null;
@@ -142,7 +144,7 @@ export function ReceiptKeeper() {
       setFields({
         vendor:   data.parsed?.vendor   ?? '',
         date:     data.parsed?.date     ?? '',
-        amount:   data.parsed?.amount != null ? String(data.parsed.amount) : '',
+        amount:   data.parsed?.amount != null ? Number(data.parsed.amount).toFixed(2) : '',
         category: data.parsed?.category ?? '',
       });
 
@@ -151,8 +153,14 @@ export function ReceiptKeeper() {
       const initialLineItems: LineItem[] = ocrLines.map(item => ({
         id:          crypto.randomUUID(),
         description: item.description ?? '',
-        amount:      item.amount != null ? String(item.amount) : '',
+        amount:      item.amount != null ? Number(item.amount).toFixed(2) : '',
       }));
+      // Inject tax as a line item when OCR captured it and it's not already in the line items
+      const parsedTax: number | null = data.parsed?.tax ?? null;
+      const taxAlreadyInLines = ocrLines.some((l: any) => /tax/i.test(l.description ?? ''));
+      if (parsedTax != null && !taxAlreadyInLines) {
+        initialLineItems.push({ id: crypto.randomUUID(), description: 'Tax', amount: Number(parsedTax).toFixed(2) });
+      }
       setLineItems(initialLineItems);
       setLineItemsOriginal(ocrLines.length > 0 ? ocrLines : null);
       setAmountOriginal(data.parsed?.amount ?? null);
