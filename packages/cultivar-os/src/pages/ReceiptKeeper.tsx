@@ -500,6 +500,16 @@ export function ReceiptKeeper() {
         <p style={SUBTITLE}>Capture truck receipts — OCR reads, you confirm</p>
 
         {/* ── IDLE / FILE SELECT ─────────────────────────────────── */}
+        {/* FLAG: REQ-1 — WIDGET CONSENT-TO-USE (REQUIRED before this step renders):
+            When the user activates data entry, present an upfront consent surface covering
+            (a) consent to use this tool and (b) how their data is handled. Must appear at
+            activation, not buried. Do NOT build this activation step without that surface. */}
+        {/* FLAG: REQ-2 — HANDWRITTEN-RECEIPT KNOWN-LIMITATION DISCLOSURE (REQUIRED, same surface as REQ-1):
+            The consent surface MUST state that HANDWRITTEN receipts are a known issue and must be
+            carefully inspected before saving — handwriting capture is unreliable.
+            Evidence (2026-06-11): handwritten Schrock's A/C invoice read all line items as $0.00,
+            missed $395 total and "pd Venmo" annotation, fell to Claude fallback. Printed = clean.
+            Framing: disclose + require inspection only — no business advice about what to do with the receipt. */}
         {step === 'idle' && (
           <>
             {!imageBase64 ? (

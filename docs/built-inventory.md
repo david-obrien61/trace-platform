@@ -106,6 +106,19 @@ All tables anchor to `business_id` — AC-1 ✅, AC-2 via `business_id`-scoped R
 
 **Build path:** Receipt Keeper v1 (local-only) creates `receipts` + Supabase `receipts` bucket. Receipt Keeper v2 + Cost-to-Produce adds `expenses` + `cost_profile`. See `docs/audits/2026-06-06-audits-1-4.md` §3.
 
+⚠️ **PENDING REQUIREMENTS — must implement when consent surface / data-entry activation widget is built:**
+
+**REQ-1 — WIDGET CONSENT-TO-USE (REQUIRED):**
+When a customer activates the Receipt Keeper data-entry widget (e.g. opens the file picker / initiates data entry), the widget MUST present an upfront consent-to-use surface BEFORE data entry proceeds — consent to use the tool and how their data is handled. This must appear at the moment of activation, not buried in a settings page or terms link. Do NOT build the activation step without this surface.
+Code anchor: `// FLAG: REQ-1` in `packages/cultivar-os/src/pages/ReceiptKeeper.tsx` at the idle step entry point.
+
+**REQ-2 — HANDWRITTEN-RECEIPT KNOWN-LIMITATION DISCLOSURE (REQUIRED):**
+That same upfront consent surface MUST state clearly that HANDWRITTEN receipts are a known issue and must be carefully inspected by the user before saving — handwriting capture is unreliable. Do not suppress or minimize this limitation.
+Evidence (2026-06-11): a handwritten Schrock's A/C invoice read all line items as $0.00, missed the $395 handwritten total, missed a "pd Venmo" payment annotation, and fell to the Claude Haiku fallback. Printed receipts read cleanly. This is not an edge case — it is a known failure mode.
+Code anchor: `// FLAG: REQ-2` in `packages/cultivar-os/src/pages/ReceiptKeeper.tsx` at the idle step entry point.
+
+**Framing discipline:** These are CAPTURE/DISCLOSURE requirements — state the limitation and require human inspection. Do NOT add business advice about how to handle receipts or what to do about the limitation. Consistent with TRACE's capture-not-rule line and the Surface Honesty principle.
+
 ---
 
 ## Margin Engine (Shared)

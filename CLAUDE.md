@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-15 (McCoy's always-normalize fix: browser-image-compression replaces COMPRESS_THRESHOLD; build 2185 ✅; David live test pending)
+# Last updated: 2026-06-15 (widget consent + handwritten-receipt disclosure: REQ-1 + REQ-2 recorded as permanent pending requirements in built-inventory.md + FLAG comments in ReceiptKeeper.tsx)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -300,6 +300,80 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-15 — Widget consent + handwritten-receipt disclosure: REQ-1 + REQ-2 permanently recorded
+
+**Type:** Docs-only. Two files changed (`docs/built-inventory.md` pending-requirements block added, `packages/cultivar-os/src/pages/ReceiptKeeper.tsx` FLAG comments added). Zero code logic changes, zero migrations, zero schema changes, zero API changes.
+
+**Session mandate:** THUNDER · LOG PERMANENT PENDING REQUIREMENTS — record two requirements that must not be forgotten when the Receipt Keeper data-entry activation / consent surface is built. Record in both a tracking doc AND a code anchor so they surface at build time without relying on memory.
+
+---
+
+**THE TWO REQUIREMENTS:**
+
+**REQ-1 — WIDGET CONSENT-TO-USE (REQUIRED):**
+When a customer activates the Receipt Keeper data-entry widget (opens the file picker / initiates data entry), the widget MUST present an upfront consent-to-use surface BEFORE data entry proceeds — consent to use the tool AND how their data is handled. Must appear at activation, not buried in settings or a terms link.
+
+**REQ-2 — HANDWRITTEN-RECEIPT KNOWN-LIMITATION DISCLOSURE (REQUIRED):**
+That same upfront consent surface MUST state clearly that HANDWRITTEN receipts are a known issue and must be carefully inspected before saving — handwriting capture is unreliable.
+
+Evidence (2026-06-11): a handwritten Schrock's A/C invoice read all line items as $0.00, missed the $395 handwritten total, missed a "pd Venmo" payment annotation, and fell to the Claude Haiku fallback. Printed receipts read cleanly. This is not an edge case — it is a known, proven failure mode.
+
+**Framing discipline (David-stated):** These are CAPTURE/DISCLOSURE requirements — disclose the limitation and require human inspection. Do NOT add business advice about how to handle receipts. Consistent with TRACE's capture-not-rule line and the Surface Honesty principle.
+
+---
+
+**WHERE THEY WERE RECORDED (two durable anchors):**
+
+**`docs/built-inventory.md` — Receipt / Expense Storage section:**
+A `⚠️ PENDING REQUIREMENTS` block was inserted between the "Build path" line and the closing `---`. Block contains full text of REQ-1 and REQ-2 with evidence, code anchor references, and framing discipline note. This will surface at build time when anyone reads the inventory.
+
+**`packages/cultivar-os/src/pages/ReceiptKeeper.tsx` — idle step entry point:**
+Two `// FLAG:` comment blocks were inserted immediately before the `{/* ── IDLE / FILE SELECT ──` comment (at the render location of the idle step). These follow the `// FLAG:` convention established in Part 9 Step 10. Content:
+- `FLAG: REQ-1` — consent surface required before this step renders
+- `FLAG: REQ-2` — handwritten-receipt known-limitation disclosure required on same surface; includes the Schrock's A/C 2026-06-11 evidence inline
+
+---
+
+**No build verification needed** — no logic changes. No TypeScript affected. ReceiptKeeper.tsx behavior is 100% unchanged; the FLAG comments are in JSX comment syntax and produce no output.
+
+---
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns in shared code. Docs-only session.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Read-only throughout (read CLAUDE.md Part 9, read ReceiptKeeper.tsx lines 498–549 to confirm idle step location). No changes without confirmed target.
+- STD-002: N/A — no bug fix.
+- STD-003: N/A — no instrumentation.
+- STD-004: N/A — no business-scoped feature shipped.
+- STD-005: ✅ No decisions reversed. Additive-only session.
+- STD-006: ✅ No vertical nouns in shared code.
+- STD-007: N/A — no integration status surfaces touched.
+- STD-008: N/A — no migrations.
+- STD-009: N/A — no generation path changes.
+- STD-010: N/A — no new opaque names.
+- **BENCH-E: ✅ Preserved** — no provider chain changes.
+
+**Factual corrections (step 11):** REQ-2 evidence (Schrock's A/C 2026-06-11 handwritten receipt failure) is now the first documented proof-of-failure for handwritten receipt OCR on this platform. Recorded in both anchors.
+
+**Gap graduation sweep (step 15):** No gaps past horizon. No graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):** None — docs-only session. No item levels changed.
+
+**No runbook needed** — pure docs session. No environment changes.
+
+**Documentation propagation check (step 10):**
+1. `Help.tsx` — no new customer-facing features. No propagation needed.
+2. Onboarding — unchanged.
+3. `docs/built-inventory.md` ✅ updated — `⚠️ PENDING REQUIREMENTS` block added.
+4. `// FLAG:` placeholders added to `ReceiptKeeper.tsx` at idle step — these ARE the placeholders; nothing to fulfill yet.
+5. No new error messages.
+
+---
 
 ### 2026-06-15 — McCoy's always-normalize fix: browser-image-compression replaces COMPRESS_THRESHOLD
 
