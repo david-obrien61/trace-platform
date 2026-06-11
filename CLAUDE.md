@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-15 (OCR regression fix: maxOutputTokens 1024→2048 + COMPRESS_THRESHOLD 400KB→2.5MB; gemini-2.5-flash thinking tokens; build 2180 ✅; live acceptance test pending David · FILE SIZE & ORGANIZATION CHECK protocol added to Part 9)
+# Last updated: 2026-06-15 (ReceiptKeeper.tsx behavior-preserving refactor: 985→790 lines; 4 modules extracted; build 2184 ✅; McCoy's-fallback bug preserved for next session diagnosis)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -300,6 +300,107 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-15 — ReceiptKeeper.tsx behavior-preserving refactor: 985→790 lines, 4 modules extracted
+
+**Type:** Code only (4 new files created, 1 file edited). Zero migrations, zero schema changes, zero API changes, zero behavior changes. Build 2184 ✅ (+4 modules over prior 2180).
+
+**Session mandate:** THUNDER · BEHAVIOR-PRESERVING REFACTOR — split ReceiptKeeper.tsx (985 lines, too large to read whole without context overflow) into focused modules WITHOUT fixing any bugs. McCoy's-fallback bug must survive the split identically. Diagnose/fix in a separate operation.
+
+---
+
+**WHAT WAS EXTRACTED (4 modules, in order):**
+
+**1. `packages/cultivar-os/src/utils/receiptReconciliation.ts` (65 lines):**
+- `MATCH_TOLERANCE`, `SMALL_GAP_ABS`, `SMALL_GAP_PCT` constants
+- `fmt` (Intl.NumberFormat USD currency formatter)
+- `LineItem` interface (editable grid row — amount as string)
+- `ReconcileResult` interface (status, lineSum, total, delta, gapNote)
+- `computeReconcile(lineItems, totalAmount)` — pure reconciliation logic
+- `reconcileReadoutStyle(status)` — returns severity-scaled CSSProperties
+- `reconcileReadoutText(rs)` — human-readable readout string
+
+**2. `packages/cultivar-os/src/utils/imageCompression.ts` (48 lines):**
+- `COMPRESS_TYPES` (Set of compressible MIME types)
+- `COMPRESS_THRESHOLD = 2.5 * 1024 * 1024` (McCoy's 2.2MB passes through raw)
+- `COMPRESS_MAX_DIM = 1200`, `COMPRESS_QUALITY = 0.82`
+- `resizeAndCompressImage(file)` — canvas-based resize + JPEG re-encode, fail-safe
+
+**3. `packages/cultivar-os/src/components/ConflictDialog.tsx` (73 lines):**
+- `DIALOG_BACKDROP`, `DIALOG_CARD` style constants
+- `ConflictDialog` component — accepts `reconcileState`, `onClose`, `onSaveAnyway`, `btnPrimaryStyle`, `btnGhostStyle` props
+- Imports `fmt` and `ReconcileResult` from receiptReconciliation
+
+**4. `packages/cultivar-os/src/components/LineItemGrid.tsx` (149 lines):**
+- All `LINE_*` style constants (`LINE_ITEMS_SECTION`, `LINE_ITEM_HEADER`, `LINE_ITEM_ROW`, `LINE_DESC_INPUT`, `LINE_AMT_INPUT`, `LINE_DELETE_BTN`, `ADD_ROW_BTN`)
+- `LineItemGrid` component — accepts `lineItems`, `onUpdate`, `onDelete`, `onAdd`, `reconcileState`, `labelStyle` props
+- `labelStyle` prop: receives the `LABEL` constant from ReceiptKeeper (that constant is used by many other form fields in ReceiptKeeper; it stays there and is threaded in as a prop)
+- Imports `LineItem`, `ReconcileResult`, `reconcileReadoutStyle`, `reconcileReadoutText` from receiptReconciliation
+
+**`packages/cultivar-os/src/pages/ReceiptKeeper.tsx` — edits:**
+- Added imports for all 4 extracted modules
+- Removed dead imports (`fmt`, `reconcileReadoutStyle`, `reconcileReadoutText`) from receiptReconciliation import block
+- Removed 70-line `LINE_*` style constants block
+- Replaced 57-line grid JSX with 7-line `<LineItemGrid>` component call
+- Removed `DIALOG_BACKDROP`, `DIALOG_CARD` constants (moved to ConflictDialog)
+- Replaced inline dialog JSX with `<ConflictDialog>` component call
+- Result: 985 → ~790 lines
+
+---
+
+**BEHAVIOR PRESERVATION CONFIRMED:**
+- McCoy's-fallback bug still present and identical (fallback path drops tax-capture & $00.00 formatting — NOT touched)
+- `COMPRESS_THRESHOLD` value unchanged (2.5MB)
+- All reconciliation logic unchanged (same constants, same pure functions)
+- `computeReconcile` call sites in ReceiptKeeper pass same `(lineItems, fields.amount)` args
+- `handleConfirm` / `handleSaveAnyway` / `doSave` logic untouched
+
+---
+
+**Build verification:** `npm run build:cultivar` → 2184 modules ✅ (was 2180; +4 new files). Zero TypeScript errors.
+
+---
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns. All new files use generic names (receiptReconciliation, imageCompression, ConflictDialog, LineItemGrid).
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Read each file before editing. Used offset/limit to avoid context overflow on ReceiptKeeper.tsx.
+- STD-002: N/A — behavior-preserving refactor. No bug fix applied.
+- STD-003: ✅ `TRACE_RECEIPT = true` preserved in ReceiptKeeper.tsx (unchanged). No instrumentation added or removed.
+- STD-004: N/A — no data surface changes.
+- STD-005: ✅ No decisions reversed.
+- STD-006: ✅ No vertical nouns in shared code.
+- STD-007: N/A — no integration status surfaces touched.
+- STD-008: N/A — no migrations written or applied.
+- STD-009: N/A — no generation/prompt path changes.
+- STD-010: ✅ No new opaque names. All new files use decoded descriptive names.
+- **BENCH-E: ✅ Preserved** — provider chain, model externalization, all OCR logic unchanged. This refactor is structural only.
+
+**Gap graduation sweep (step 15):** No gaps past horizon. No graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- `Receipt Keeper v1`: WIRED (unchanged — refactor does not change level; pending David's live acceptance test from the 2026-06-15 OCR regression fix session).
+- No other level changes.
+
+**No customer-facing documentation propagation needed** — internal refactor, no behavior change.
+**No factual corrections surfaced** — session was pure structural code movement.
+**No runbook needed** — pure code session. No environment changes.
+
+---
+
+**NEXT SESSION — diagnose and fix the McCoy's-fallback bug:**
+
+The fallback bug is now isolated to `packages/cultivar-os/api/receipts/ocr.ts` (server side) and `packages/cultivar-os/src/pages/ReceiptKeeper.tsx` (client side, now ~790 lines). Files to read for diagnosis:
+1. `api/receipts/ocr.ts` — `tryClaude()` function (fallback path)
+2. `ReceiptKeeper.tsx` — `parseOcrText()` and how `ocrResult.parsed` is consumed in the confirm step
+
+Known bug behavior: when Claude Haiku fires as fallback (Gemini unavailable/fails), the tax field is not captured and amount fields may show `$00.00` formatting. Primary path (Gemini) works correctly.
+
+---
 
 ### 2026-06-15 — Receipt Keeper OCR regression fix: maxOutputTokens 1024→2048 + COMPRESS_THRESHOLD 400KB→2.5MB
 
