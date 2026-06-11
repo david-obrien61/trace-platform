@@ -92,19 +92,23 @@
 ## Receipt / Expense Storage
 
 **What:** Tables and storage for vendor receipt capture (`receipts`), structured expense records (`expenses`), and owner-declared allocation inputs for cost calculations (`cost_profile`).
-**Status:** ❌ NOT BUILT — confirmed Audit 3, 2026-06-06.
+**Status:** ✅ BUILT (receipts + bucket, Receipt Keeper v1 = WORKS 2026-06-11) | ❌ expenses + cost_profile NOT YET BUILT
 **Vertical:** shared | **Type:** infrastructure
 
-**What exists:** One Supabase storage bucket — `eval-photos` (used by Ignition `invoice_audit` for image uploads — NOT a receipt archive). No `receipts`, `expenses`, or `cost_profile` tables exist anywhere in the codebase or in any migration file.
+**What is built (2026-06-11):**
+- `receipts` table — 14 cols + 6 reconciliation cols. Migrations: `20260612_receipts.sql`, `20260613_receipts_add_line_items.sql`, `20260614_receipts_reconciliation.sql`. All applied to bgobkjcopcxusjsetfob 2026-06-11 (confirmed live test).
+- `receipts` Supabase storage bucket — RLS: `20260613_receipts_storage_rls.sql` (3 policies).
+- `platform_config` table — `20260611_platform_config.sql`. Holds `ocr_primary_model` + `ocr_fallback_model` (swappable without code change per BENCH-E Rule 7).
+- Receipt Keeper v1 UI: `src/pages/ReceiptKeeper.tsx` (~727 lines) + extracted modules: `src/utils/receiptReconciliation.ts`, `src/utils/imageCompression.ts`, `src/components/LineItemGrid.tsx`, `src/components/ConflictDialog.tsx`.
+- API: `api/receipts/ocr.ts` — Gemini 2.5 Flash primary → Claude Haiku 4.5 fallback → 503.
 
-**Proposed AC-clean schema** (proposal only — no migration written; confirm with Cost-to-Produce tile spec before building):
-- `receipts (id, business_id, image_url, vendor, amount, category, line_items jsonb, captured_at, owner_confirmed bool)` — one row per captured vendor receipt; image stored in a `receipts` Supabase bucket (separate from `eval-photos`)
+**What is NOT yet built:**
 - `expenses (id, business_id, receipt_id, source CHECK IN ('receipt','bank_csv','manual'), amount, category, occurred_at)` — structured expense records from all sources
-- `cost_profile (id, business_id, home_office_pct, business_time_pct, labor_rate, fixed_overheads jsonb, asset_amortization jsonb)` — owner-declared allocation inputs (intake interview answers)
+- `cost_profile (id, business_id, home_office_pct, business_time_pct, labor_rate, fixed_overheads jsonb, asset_amortization jsonb)` — owner-declared allocation inputs
 
 All tables anchor to `business_id` — AC-1 ✅, AC-2 via `business_id`-scoped RLS ✅.
 
-**Build path:** Receipt Keeper v1 (local-only) creates `receipts` + Supabase `receipts` bucket. Receipt Keeper v2 + Cost-to-Produce adds `expenses` + `cost_profile`. See `docs/audits/2026-06-06-audits-1-4.md` §3.
+**Build path:** ✅ Receipt Keeper v1 done. Receipt Keeper v2 + Cost-to-Produce tile adds `expenses` + `cost_profile`. See `docs/audits/2026-06-06-audits-1-4.md` §3.
 
 ⚠️ **PENDING REQUIREMENTS — must implement when consent surface / data-entry activation widget is built:**
 
@@ -836,11 +840,12 @@ Defined in `IgnitionAdmin.jsx ALL_PERMISSIONS`. Enforced by `CoreApp AccessGatek
 | Per-plant install price edit | Cultivar OS | `plants.install_price` read-only in UI. No edit surface. Post-demo. |
 | ~~Tighten nursery_modules RLS~~ | ~~Cultivar OS~~ | ✅ RESOLVED 2026-06-04: `business_modules` created with membership-scoped RLS (`business_members.user_id = auth.uid() AND active = true`). `authenticated_select_nursery_modules` (loose) retired. |
 | Port ai_router.py to Vercel functions | Ignition OS | Railway is legacy for web build. Agreed kill path: retire orphaned tasks (invoice_scan, vin_decode), port real tasks (dtc_decode, estimate_draft first). (Tech Debt #12) |
-| Receipt / Expense / Cost-Profile storage | All verticals | `receipts`, `expenses`, `cost_profile` tables do not exist. No migration. Eval-photos bucket is Ignition-specific, not receipt archive. AC-clean schema proposed in Audit 3. Build from scratch. |
+| ~~Receipt storage~~ | ~~All verticals~~ | ✅ RESOLVED 2026-06-11: `receipts` table + bucket built, Receipt Keeper v1 = WORKS (McCoy's live test). See Receipt / Expense Storage section above. |
+| Expense / Cost-Profile storage | All verticals | `expenses` + `cost_profile` tables do not exist. No migration. Receipt Keeper v2 + Cost-to-Produce tile scope. |
 | ~~Margin Engine (shared — real)~~ | ~~All verticals~~ | ✅ BUILT 2026-06-10 — `packages/shared/src/business-logic/MarginEngine.ts`. 5 old impls marked 🔴. Callers migrate via checklist. |
 | QB payables wiring | Cultivar OS → all | QB can write expenses (Purchase/Bill), archive receipt images (Attachable), query Chart of Accounts. None wired today. Receipt Keeper v2 scope. |
 | ~~Proactive QB reconnect detection~~ | ~~Cultivar OS~~ | ✅ RESOLVED 2026-06-08 — `qbo/status.ts` now checks token expiry on load, attempts silent refresh, surfaces banner proactively. Tech Debt #15 closed. STD-007 added. |
-| Gemini vision pipeline (proven on Vercel) | Ignition OS, shared | VIN OCR is a placeholder (alert only). No Vercel serverless function has ever called Gemini vision and returned structured output. Receipt Keeper v1 will be the first confirmed pipeline. |
+| ~~Gemini vision pipeline (proven on Vercel)~~ | ~~Ignition OS, shared~~ | ✅ RESOLVED 2026-06-11: Receipt Keeper v1 `api/receipts/ocr.ts` is the confirmed first Vercel → Gemini vision pipeline. Live test: provider=gemini, 3-4s, 5 line items structured. VIN OCR (Ignition) remains a placeholder — still unresolved for Ignition. |
 
 ## ✅ Resolved Gaps (previously listed as Not Yet Built)
 

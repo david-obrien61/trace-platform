@@ -5580,3 +5580,16 @@ Completed:
 
 ---
 
+
+### 2026-06-11 — Widget consent + handwritten-receipt disclosure: REQ-1 + REQ-2 permanently recorded
+
+**Type:** Docs-only. Two files changed (`docs/built-inventory.md` pending-requirements block added, `packages/cultivar-os/src/pages/ReceiptKeeper.tsx` FLAG comments added). Zero code logic changes, zero migrations, zero schema changes, zero API changes.
+
+**Session mandate:** THUNDER · LOG PERMANENT PENDING REQUIREMENTS — record two requirements that must not be forgotten when the Receipt Keeper data-entry activation / consent surface is built. Record in both a tracking doc AND a code anchor so they surface at build time without relying on memory.
+
+**REQ-1 — WIDGET CONSENT-TO-USE:** When a customer activates the Receipt Keeper data-entry widget, the widget MUST present an upfront consent-to-use surface BEFORE data entry proceeds. Must appear at activation.
+
+**REQ-2 — HANDWRITTEN-RECEIPT DISCLOSURE:** That same surface MUST state clearly that HANDWRITTEN receipts are a known issue and must be carefully inspected before saving. Evidence 2026-06-11: Schrock's A/C handwritten invoice read all items as $0.00, missed $395 total, missed "pd Venmo" annotation, fell to Claude Haiku fallback. Printed receipts read cleanly.
+
+**Anchors:** `docs/built-inventory.md` (PENDING REQUIREMENTS block) + `packages/cultivar-os/src/pages/ReceiptKeeper.tsx` (two `// FLAG:` comment blocks at idle step entry point).
+

@@ -1,7 +1,7 @@
 # TRACE Platform — Multi-Vertical Strategy & Architecture
-# Last updated: 2026-06-12
+# Last updated: 2026-06-11
 # Changelog:
-# 2026-06-12 — target architecture set: one-source/many-views model, schema naming convention, one-DB decision (red-teamed); general-target reframe (§ TARGET ARCHITECTURE)
+# 2026-06-11 — target architecture set: one-source/many-views model, schema naming convention, one-DB decision (red-teamed); general-target reframe (§ TARGET ARCHITECTURE)
 # 2026-06-10 — Capability/Composition Model formalized (§ CAPABILITY / COMPOSITION MODEL); STD reference updated
 # 2026-05-29 — Architecture Constants added (AC-1 through AC-4)
 # 2026-05-27 — KINNA-OS subtitle updated; TRACE — Who We Are synced across docs
@@ -30,7 +30,7 @@ The craft. Every TRACE product is Built with CAI — our signature on the work. 
 
 The product line. We don't sell platforms. We sell the operating system for your kind of business: Cultivar OS for nurseries and garden centers, Ignition OS for diesel and auto repair shops, Conduit OS for HVAC, plumbing, and electrical, KINNA-OS for community nonprofits, CoolRunnings for homes. Each is its own product. Each is also part of the same family of software underneath — the way a small dedicated family ships fast and stays consistent.
 
-> **⚠️ DRAFT — FLAGGED FOR DAVID'S REVIEW (2026-06-12):** The paragraph above reflects the pre-2026-06-12 framing ("each is its own product"). The architecture decision made 2026-06-12 reframes this: TRACE is one platform with many views — verticals are configured entry points, not separate products. The marketing surface ("your kind of business") stays; the structural claim changes. Proposed reframe for David's edit:
+> **⚠️ DRAFT — FLAGGED FOR DAVID'S REVIEW (2026-06-11):** The paragraph above reflects the pre-2026-06-11 framing ("each is its own product"). The architecture decision made 2026-06-11 reframes this: TRACE is one platform with many views — verticals are configured entry points, not separate products. The marketing surface ("your kind of business") stays; the structural claim changes. Proposed reframe for David's edit:
 >
 > *The product line. TRACE is one platform — one engine, one database, one shared codebase — configured as the operating system for your kind of business. Walk in through Cultivar OS if you're a nursery. Walk in through Ignition OS if you're a diesel shop. Walk in through KINNA-OS if you run a faith-based program. The door is yours. What's behind it is the same family of software, built once, shared by all. David is customer-zero for the general door — TRACE Enterprises runs on the same platform you do.*
 >
@@ -156,7 +156,7 @@ pattern once the pattern is clean. Sequencing: post-demo, after noun purge, befo
 
 ## TARGET ARCHITECTURE — One Source, Many Views
 
-*Decided 2026-06-12. Red-teamed and locked (AC-4). Do not relitigate.*
+*Decided 2026-06-11. Red-teamed and locked (AC-4). Do not relitigate.*
 
 ### The Model
 
@@ -197,7 +197,7 @@ be legible from it. "Does this require a new circle?" — if yes, reconsider.
 
 ## SCHEMA NAMING CONVENTION — The 80/20 Rule
 
-*Decided 2026-06-12. Red-teamed and locked (AC-4).*
+*Decided 2026-06-11. Red-teamed and locked (AC-4).*
 
 One platform database holds both layers. The **table name itself** tells you which layer
 it belongs to. No ambiguity.
@@ -230,7 +230,7 @@ purge (see AC-1 violations in CLAUDE.md §1.5).
 
 ## RED-TEAM CONSTRAINTS — Decided and Accepted
 
-*Both constraints survived attack 2026-06-12. Locked.*
+*Both constraints survived attack 2026-06-11. Locked.*
 
 ### Constraint 1 — Blast Radius (Accepted with Mitigation)
 
@@ -278,7 +278,7 @@ merged DB affects LAWNS. Treat accordingly.
 
 ## CURRENT STATE vs TARGET
 
-*Honest accounting as of 2026-06-12.*
+*Honest accounting as of 2026-06-11.*
 
 **CURRENT:**
 - Two separate Supabase projects: `bgobkjcopcxusjsetfob` (Cultivar + platform) and

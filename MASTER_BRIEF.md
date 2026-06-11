@@ -31,7 +31,7 @@ We come alongside, quietly. We connect what you already use. We fill the gaps no
 The one-sentence version: We don't replace your systems. We connect them, surface what matters, and fill the gaps you couldn't fill yourself.
 
 > **TRACE Enterprises — Built with CAI**
-> Last updated: 2026-06-13
+> Last updated: 2026-06-11
 > Maintained by: David O'Brien
 > **Purpose:** Single source of truth for strategy, build priorities, and competitive positioning.
 > Both Claude.ai (strategy) and Claude Code (build) read this file at the start of every session.
@@ -854,9 +854,9 @@ This section is the live snapshot of where each near-term customer relationship 
 
 ---
 
-## PART 16 — DESIGN DECISIONS CAPTURED 2026-06-13
+## PART 16 — DESIGN DECISIONS CAPTURED 2026-06-11
 
-These decisions were settled in the 2026-06-13 session while building Receipt Keeper v1 (OCR → DB pipeline) and reviewing the grower inventory model. They are recorded here — not in code or migration files — because they shape the product thesis and constrain future feature work. They are locked; if a subsequent session challenges one of these, it must first read this section.
+These decisions were settled in the 2026-06-11 session while building Receipt Keeper v1 (OCR → DB pipeline) and reviewing the grower inventory model. They are recorded here — not in code or migration files — because they shape the product thesis and constrain future feature work. They are locked; if a subsequent session challenges one of these, it must first read this section.
 
 ---
 
@@ -899,7 +899,7 @@ Two roles in the pipeline:
 - **NEEDS-A-DECISION:** Lines that are ambiguous (personal item bought on business card, mixed-use supply) park here with an optional why-note. The why-note is accountant-readable and enables hand-off without a meeting.
 - **No fractional splitting in v1.** A fuel charge is either business or personal. The 70%/30% case is deferred to v2 (requires accounting sophistication the v1 target user doesn't have).
 
-**Data model:** `line_items jsonb` (already built, 2026-06-13) stores the raw extracted lines. Classification state is a future column (`line_items_classified jsonb` or a separate `receipt_lines` table) when the review UI is built.
+**Data model:** `line_items jsonb` (already built, 2026-06-11) stores the raw extracted lines. Classification state is a future column (`line_items_classified jsonb` or a separate `receipt_lines` table) when the review UI is built.
 
 **Why it matters:** Three states is the minimum viable model. Two states (business/personal) forces the user to make a binary decision on every ambiguous line — which kills adoption. Four or more states (business/personal/mixed/capital/etc.) is accounting software, not a capture tool. Three states with a why-note is the right tension: enough to be useful to an accountant, not enough to require an accountant to set up.
 
@@ -916,7 +916,7 @@ Two roles in the pipeline:
 
 **Surface Honesty application:** The system must not write a record it knows is inconsistent without telling the user. Silent rubber-stamping is a Surface Honesty violation. The severity-scaled friction model honors both the principle and the user's time — don't interrupt them for rounding noise, but stop them before they file a receipt that's off by $40.
 
-**v1 state:** Not yet built. The `line_items` column (2026-06-13) is the prerequisite. The reconciliation engine is a v2 feature — requires the desktop review UI and the three-state classification to have a home.
+**v1 state:** BUILT — `computeReconcile()` with MATCH_TOLERANCE $0.02, three severity outcomes (match/small_gap/large_gap), `ConflictDialog` blocks save on large_gap/overage, `reconcile_overridden_at` write path. Confirmed 2026-06-11 (McCoy's live test: green "Lines = Total"). Three-state LINE CLASSIFICATION (D-003 — business/personal/needs-a-decision per line) remains deferred to v2.
 
 ---
 
@@ -925,9 +925,9 @@ Two roles in the pipeline:
 **Decision:** For every OCR-extracted field, TRACE tracks what was presented to the user (the OCR read) versus what was sent to the database (what the user confirmed or corrected).
 
 **Captured signals:**
-- `accept_vs_edit` (already built, 2026-06-12): receipt-level — did the user accept the OCR output or edit any field?
+- `accept_vs_edit` (already built, 2026-06-11): receipt-level — did the user accept the OCR output or edit any field?
 - Future per-field: which specific fields were edited, from what value to what value?
-- `ocr_cost_estimate` (already built, 2026-06-12): cost per receipt — operator visibility into AI spend.
+- `ocr_cost_estimate` (already built, 2026-06-11): cost per receipt — operator visibility into AI spend.
 
 **Purpose:** Two uses:
 1. **Audit trail:** If a receipt is challenged, the ledger shows exactly what the AI read and exactly what the human confirmed. This is compliance-adjacent and earns trust with accountants.
@@ -982,7 +982,7 @@ lot (e.g., "250 Liberty Maples — 2024 crop")
 
 **Decision:** BENCH-E (External AI Provider Resilience) matures in three successive passes. Each pass is a distinct build milestone.
 
-**Pass 1 — Foundation (DONE, 2026-06-12):**
+**Pass 1 — Foundation (DONE, 2026-06-11):**
 - Provider try-chain with isolated catches and timeouts
 - Operator-greppable fallback log: `[TRACE:SUBSYSTEM] provider-fallback fired: X→Y, reason: Z`
 - Clean user error on all-fail: actionable, non-technical copy
@@ -1002,7 +1002,26 @@ lot (e.g., "250 Liberty Maples — 2024 crop")
 
 **Why three passes:** Pass 1 is correctness (the feature works). Pass 2 is flexibility (the feature can be tuned without a deploy). Pass 3 is intelligence (the feature tells the operator when it's struggling). Each pass has a different build complexity and a different trigger — Pass 1 always, Pass 2 when a second vertical uses the same provider chain, Pass 3 when daily volume makes manual log-scanning impractical.
 
-**Current state:** Pass 1 is DONE (committed 2026-06-12, `ocr.ts` Gemini→Claude fallback chain). Pass 2 and Pass 3 are benched pending volume.
+**Current state:** Pass 1 is DONE (committed 2026-06-11, `ocr.ts` Gemini→Claude fallback chain). BENCH-E Rule 7 (model names externalized to `platform_config` DB) also completed 2026-06-11 — this partially fulfills Pass 2 for the provider-name dimension; timeout/retry configuration remains Pass 2. Pass 3 benched pending volume.
+
+---
+
+### D-009 — OCR IS COMMODITY
+
+**Decision:** Receipt OCR is commodity infrastructure, not a TRACE differentiator. The moat is Cost-to-Produce/margin intelligence, not receipt digitization.
+
+**Evidence settled 2026-06-11:**
+- App Store has free receipt-scanning apps available to any user
+- Nanonets is a specialist receipt OCR vendor — its API exists and is competitively priced, but offers no capability not covered by Gemini Flash + Claude Haiku
+- QuickBooks Online has NO external reader API — QB's receipt OCR is import-only through their own app; a TRACE→QB receipt write-back path must go through the QB expense/attachment API, not OCR
+- Gemini 2.5 Flash + Claude Haiku (already in BENCH-E chain) cover the use case at sub-penny cost per receipt with zero vendor lock-in
+
+**What this constrains:**
+1. **No specialist OCR vendor.** Nanonets, Textract, Google Document AI, and equivalents are out of scope. Gemini Flash + Claude Haiku handle the job at a fraction of the cost. The BENCH-E Rule 7 externalization means a provider swap is one DB row, not a code change.
+2. **Do not pitch Receipt Keeper as the differentiator.** It is table stakes — something TRACE must provide, not something TRACE competes on. The pitch is Cost-to-Produce, margin clarity, and QB write-back.
+3. **OCR is the input; margin intelligence is the product.** What happens after capture (D-001 lens model, QB write-back, Cost-to-Produce tile) is where TRACE is different. Receipt digitization alone is a commodity every phone already does.
+
+**Why it matters:** Without this decision explicit, a future session could justify spec'ing a specialist OCR vendor or positioning Receipt Keeper as a selling point. Neither is correct. OCR is infrastructure; margin is the product.
 
 ---
 
@@ -1010,9 +1029,9 @@ lot (e.g., "250 Liberty Maples — 2024 crop")
 
 *(Not decisions — active uncertainties that must be resolved before the affected features advance.)*
 
-**Thread 1 — Gemini 2.0 live-test failure:** David's live receipt test with `gemini-2.0-flash` had Gemini lose every receipt (zero successful OCR reads). This may be the 8-second `AbortController` firing before Gemini can respond on mobile network conditions, or a request-shape change between `gemini-1.5-flash` and `gemini-2.0-flash`. Investigate before advancing Receipt Keeper v1 from WIRED to WORKS. Read `packages/cultivar-os/api/receipts/ocr.ts` — `tryGemini()` function — and compare the request body shape against the `gemini-2.0-flash` API docs.
+**~~Thread 1 — Gemini 2.0 live-test failure~~** ✅ RESOLVED 2026-06-11 — Upgraded to `gemini-2.5-flash` (validated in bake-off). AbortController extended to 9s. Live test at McCoy's produced provider=gemini, 3-4s, 5 line items, $31.00 formatted. Receipt Keeper v1 advanced to WORKS.
 
-**Thread 2 — line_items quality not yet eyeballed:** The `line_items` column was added (2026-06-13) and the insert call was wired, but no successful live test has been run that would show whether Gemini actually returns a well-structured `line_items` array for a real receipt. The OCR prompt already requests `"line_items": [{"description": "string", "amount": number}] or null` — but real grocery/fuel/hardware receipts may return null, partial arrays, or malformed objects. This must be confirmed before any UI surface consumes `line_items`.
+**~~Thread 2 — line_items quality not yet eyeballed~~** ✅ RESOLVED 2026-06-11 — McCoy's live test confirmed well-structured `line_items` array: 5 line items + Tax $2.36 injected correctly. `line_items` column applied (part of 5-migration bundle). UI grid renders from it in ReceiptKeeper.tsx.
 
 **Thread 3 — David as customer-zero on the 80% shared spine:** The Receipt Keeper, the Cost-to-Produce tile, and the grower event model are all features that David will use himself (truck receipts, nursery accounting, business operations). This is the most reliable design feedback loop available. As each feature is built, David uses it for 2-4 weeks before it goes to LAWNS or any other customer. The 80% shared spine means that what works for David's general business (`business_type='general'`) will work for Lauren's nursery with only vocabulary differences. Document the use-for-yourself cycle as explicit protocol before shipping to customers.
 

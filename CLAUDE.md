@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-11 (widget consent + handwritten-receipt disclosure: REQ-1 + REQ-2 recorded as permanent pending requirements in built-inventory.md + FLAG comments in ReceiptKeeper.tsx; date corrected from stale 2026-06-15 to actual 2026-06-11)
+# Last updated: 2026-06-11 (THUNDER doc-sync + date-drift sweep: corrected 2026-06-12/13/14/15 → 2026-06-11 across 5 canonical docs; content sync: Receipt Keeper v1 WORKS propagated to built-inventory.md + MASTER_BRIEF.md D-004/D-008/D-009; migrations applied status corrected in PLATFORM_STATE.md)
 # Current AI: Claude Code
 
 ---
@@ -320,76 +320,86 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
-### 2026-06-15 — Widget consent + handwritten-receipt disclosure: REQ-1 + REQ-2 permanently recorded
+### 2026-06-11 — THUNDER doc-sync + date-drift sweep
 
-**Type:** Docs-only. Two files changed (`docs/built-inventory.md` pending-requirements block added, `packages/cultivar-os/src/pages/ReceiptKeeper.tsx` FLAG comments added). Zero code logic changes, zero migrations, zero schema changes, zero API changes.
+**Type:** Docs-only. Zero code changes, zero migrations, zero schema changes, zero API changes.
 
-**Session mandate:** THUNDER · LOG PERMANENT PENDING REQUIREMENTS — record two requirements that must not be forgotten when the Receipt Keeper data-entry activation / consent surface is built. Record in both a tracking doc AND a code anchor so they surface at build time without relying on memory.
-
----
-
-**THE TWO REQUIREMENTS:**
-
-**REQ-1 — WIDGET CONSENT-TO-USE (REQUIRED):**
-When a customer activates the Receipt Keeper data-entry widget (opens the file picker / initiates data entry), the widget MUST present an upfront consent-to-use surface BEFORE data entry proceeds — consent to use the tool AND how their data is handled. Must appear at activation, not buried in settings or a terms link.
-
-**REQ-2 — HANDWRITTEN-RECEIPT KNOWN-LIMITATION DISCLOSURE (REQUIRED):**
-That same upfront consent surface MUST state clearly that HANDWRITTEN receipts are a known issue and must be carefully inspected before saving — handwriting capture is unreliable.
-
-Evidence (2026-06-11): a handwritten Schrock's A/C invoice read all line items as $0.00, missed the $395 handwritten total, missed a "pd Venmo" payment annotation, and fell to the Claude Haiku fallback. Printed receipts read cleanly. This is not an edge case — it is a known, proven failure mode.
-
-**Framing discipline (David-stated):** These are CAPTURE/DISCLOSURE requirements — disclose the limitation and require human inspection. Do NOT add business advice about how to handle receipts. Consistent with TRACE's capture-not-rule line and the Surface Honesty principle.
+**Session mandate:** THUNDER · DOC-SYNC + DATE-DRIFT SWEEP — correct systematic forward-date drift across canonical docs; sync Receipt Keeper v1 WORKS state into docs that hadn't been updated; add OCR COMMODITY strategic conclusion.
 
 ---
 
-**WHERE THEY WERE RECORDED (two durable anchors):**
+**DATE DRIFT CORRECTED (all → 2026-06-11):**
 
-**`docs/built-inventory.md` — Receipt / Expense Storage section:**
-A `⚠️ PENDING REQUIREMENTS` block was inserted between the "Build path" line and the closing `---`. Block contains full text of REQ-1 and REQ-2 with evidence, code anchor references, and framing discipline note. This will surface at build time when anyone reads the inventory.
+| File | Drift found | Count |
+|---|---|---|
+| `CLAUDE.md` | `2026-06-15` in handoff section heading | 1 |
+| `PLATFORM_STRATEGY.md` | `2026-06-12` in header + changelog + 4 decision footers | 7 |
+| `PLATFORM_STATE.md` | `2026-06-12` in Build/Vercel/TRIAGE rows; `2026-06-14` in receipts HANDOFF refs | 5 |
+| `STANDARDS.md` | `2026-06-12` in v1.7 changelog + BENCH-E scar text | 3 |
+| `MASTER_BRIEF.md` | `2026-06-13` in header + Part 16 header + D-003/D-004/D-005/D-008 text; `2026-06-12` in D-005/D-008 | 9 |
 
-**`packages/cultivar-os/src/pages/ReceiptKeeper.tsx` — idle step entry point:**
-Two `// FLAG:` comment blocks were inserted immediately before the `{/* ── IDLE / FILE SELECT ──` comment (at the render location of the idle step). These follow the `// FLAG:` convention established in Part 9 Step 10. Content:
-- `FLAG: REQ-1` — consent surface required before this step renders
-- `FLAG: REQ-2` — handwritten-receipt known-limitation disclosure required on same surface; includes the Schrock's A/C 2026-06-11 evidence inline
-
----
-
-**No build verification needed** — no logic changes. No TypeScript affected. ReceiptKeeper.tsx behavior is 100% unchanged; the FLAG comments are in JSX comment syntax and produce no output.
+Migration filenames (`20260612_*`, `20260613_*`, `20260614_*`) intentionally left unchanged per task constraint — cosmetic, do not rename committed files.
 
 ---
 
-**AC compliance (step 13):**
-- AC-1: ✅ No vertical nouns in shared code. Docs-only session.
-- AC-2: ✅ No RLS changes.
-- AC-3: ✅ No cross-vertical data paths.
-- AC-4: ✅ No structural deviations.
+**CONTENT SYNC APPLIED:**
+
+**PLATFORM_STATE.md:**
+- `receipts table` row: updated "pending migrations — David must apply" → "All 5 migrations applied 2026-06-11 (confirmed live test)" — corrects inconsistency with Receipt Keeper v1 WORKS row which already stated "Migrations all applied."
+- `receipts reconciliation migration`: EXISTS → WORKS; evidence updated to reflect applied + live test confirmation.
+- `platform_config migration`: EXISTS → WORKS; evidence updated.
+
+**MASTER_BRIEF.md Part 16:**
+- D-004 v1 state: Updated from "Not yet built" to "BUILT — computeReconcile() MATCH_TOLERANCE $0.02, ConflictDialog, reconcile_overridden_at, confirmed McCoy's 2026-06-11."
+- D-008 current state: Note added that BENCH-E Rule 7 (model names externalized) also completed 2026-06-11, partially fulfilling Pass 2.
+- Open Threads 1 + 2: Marked RESOLVED (Gemini 2.5 Flash live test at McCoy's resolved both).
+- **D-009 added:** OCR IS COMMODITY — App Store + Nanonets + QBO-no-reader-API confirm OCR is infrastructure, not moat. Moat is Cost-to-Produce/margin. Gemini Flash + Claude Haiku cover it at sub-penny cost. No specialist OCR vendor needed or desirable.
+
+**docs/built-inventory.md:**
+- Receipt / Expense Storage section: status `❌ NOT BUILT` → `✅ BUILT (receipts + bucket, Receipt Keeper v1 WORKS)`. Updated "what exists" and "what is not yet built" breakdown.
+- Gaps table: Receipt storage row moved to resolved; expenses/cost_profile remain in gaps.
+- Gemini vision pipeline gap: RESOLVED 2026-06-11 (Receipt Keeper v1 confirmed first Vercel → Gemini vision pipeline); Ignition VIN OCR noted still unresolved.
+
+**DEFERRED/OPEN (honestly noted, not resolved this session):**
+- ReceiptKeeper.tsx module reorg: confirmed happened (receiptReconciliation.ts, imageCompression.ts, LineItemGrid.tsx, ConflictDialog.tsx all exist). Actual main file is 727 lines (task said ~790 — minor discrepancy; 727 is verified current).
+- docs-at-root vs docs/ path references reconciliation: still pending.
+- Code-health audit: not yet scheduled.
+
+---
+
+**AC compliance (step 13):** No AC issues — session did not touch shared schema, RLS, or shared identifiers.
 
 **STANDARDS compliance (step 14):**
-- STD-001: ✅ Read-only throughout (read CLAUDE.md Part 9, read ReceiptKeeper.tsx lines 498–549 to confirm idle step location). No changes without confirmed target.
+- STD-001: ✅ Read-only diagnosis throughout before every doc edit. Grepped files before editing to confirm exact text.
 - STD-002: N/A — no bug fix.
 - STD-003: N/A — no instrumentation.
 - STD-004: N/A — no business-scoped feature shipped.
-- STD-005: ✅ No decisions reversed. Additive-only session.
-- STD-006: ✅ No vertical nouns in shared code.
+- STD-005: ✅ D-004 v1 state struck through as stale and replaced with correct state. No decisions reversed — corrections only.
+- STD-006: ✅ No vertical nouns introduced.
 - STD-007: N/A — no integration status surfaces touched.
-- STD-008: N/A — no migrations.
+- STD-008: N/A — no new migrations written.
 - STD-009: N/A — no generation path changes.
 - STD-010: N/A — no new opaque names.
 - **BENCH-E: ✅ Preserved** — no provider chain changes.
 
-**Factual corrections (step 11):** REQ-2 evidence (Schrock's A/C 2026-06-11 handwritten receipt failure) is now the first documented proof-of-failure for handwritten receipt OCR on this platform. Recorded in both anchors.
+**Factual corrections captured (step 11):**
+- PLATFORM_STRATEGY.md, PLATFORM_STATE.md, STANDARDS.md, MASTER_BRIEF.md all claimed future-dated work that actually happened 2026-06-11. Corrected across all five docs.
+- MASTER_BRIEF.md D-004 claimed reconciliation engine "not yet built" — contradicted by PLATFORM_STATE.md evidence. Corrected.
+- PLATFORM_STATE.md receipts/platform_config migration rows said "David must apply" — contradicted by Receipt Keeper v1 WORKS row saying "all 5 migrations confirmed applied." Corrected.
 
 **Gap graduation sweep (step 15):** No gaps past horizon. No graduations this session.
 
-**PLATFORM_STATE.md level changes (step 16):** None — docs-only session. No item levels changed.
+**PLATFORM_STATE.md level changes (step 16):**
+- `receipts reconciliation migration`: EXISTS → WORKS (evidence: applied 2026-06-11, reconcile_status write proven by green "Lines = Total" in McCoy's live test)
+- `platform_config migration`: EXISTS → WORKS (evidence: applied 2026-06-11, getOcrModels() DB read proven by provider=gemini in McCoy's live test)
 
-**No runbook needed** — pure docs session. No environment changes.
+**No runbook needed** — pure docs session.
 
 **Documentation propagation check (step 10):**
 1. `Help.tsx` — no new customer-facing features. No propagation needed.
 2. Onboarding — unchanged.
-3. `docs/built-inventory.md` ✅ updated — `⚠️ PENDING REQUIREMENTS` block added.
-4. `// FLAG:` placeholders added to `ReceiptKeeper.tsx` at idle step — these ARE the placeholders; nothing to fulfill yet.
+3. `docs/built-inventory.md` ✅ updated — Receipt Keeper v1 WORKS status propagated.
+4. No `// FLAG:` placeholders fulfilled (REQ-1 + REQ-2 remain open — consent surface not built yet).
 5. No new error messages.
 
 ---
