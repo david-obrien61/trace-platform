@@ -10,6 +10,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",
     "@supabase/supabase-js": "^2.39.0",
+    "browser-image-compression": "^2.0.2",
     "date-fns": "^3.0.6",
     "lucide-react": "^1.16.0",
     "qrcode": "^1.5.3",

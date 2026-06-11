@@ -7,11 +7,7 @@ import {
   ReconcileResult,
   computeReconcile,
 } from '../utils/receiptReconciliation';
-import {
-  COMPRESS_TYPES,
-  COMPRESS_THRESHOLD, // 2.5MB — McCoy's 2.2MB passes through raw; files >2.5MB still compress
-  resizeAndCompressImage,
-} from '../utils/imageCompression';
+import { resizeAndCompressImage } from '../utils/imageCompression';
 import { ConflictDialog } from '../components/ConflictDialog';
 import { LineItemGrid } from '../components/LineItemGrid';
 

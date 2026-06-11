@@ -40,7 +40,10 @@
       "Bash(node --env-file=/tmp/bakeoff_keys.env scratch/ocr-bakeoff/bakeoff.mjs docs/McCoys_Receipt.JPG)",
       "Bash(curl -s -o /dev/null -w '%{http_code} %{time_total}s\\\\n' -X POST https://api.anthropic.com/v1/messages -H 'Content-Type: application/json' -H 'anthropic-version: 2023-06-01' -H 'x-api-key: __CMDSUB_OUTPUT__')",
       "Bash(node --env-file=.env.local scratch/ocr-bakeoff/bakeoff.mjs docs/McCoys_Receipt.JPG)",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(grep -n \"lineSum\\\\|\\\\.toFixed\\\\|\\\\$\\\\{.*amount\\\\|Total from\\\\|lineSum\\\\|reconcile\\\\|delta\\\\|unit_price\\\\|gapNote\" /Users/terrenceobrien/Desktop/trace-platform/packages/cultivar-os/src/pages/ReceiptKeeper.tsx)",
+      "Bash(grep -n \"^## 9\\\\.\\\\|^## 10\\\\.\\\\|^---$\" /Users/terrenceobrien/Desktop/trace-platform/CLAUDE.md)",
+      "Bash(npm view *)"
     ]
   },
   "permissionMode": "bypassPermissions"
