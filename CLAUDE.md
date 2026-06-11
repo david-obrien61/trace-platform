@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-15 (OCR regression fix: maxOutputTokens 1024→2048 + COMPRESS_THRESHOLD 400KB→2.5MB; gemini-2.5-flash thinking tokens; build 2180 ✅; live acceptance test pending David)
+# Last updated: 2026-06-15 (OCR regression fix: maxOutputTokens 1024→2048 + COMPRESS_THRESHOLD 400KB→2.5MB; gemini-2.5-flash thinking tokens; build 2180 ✅; live acceptance test pending David · FILE SIZE & ORGANIZATION CHECK protocol added to Part 9)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -5631,6 +5631,21 @@ $149/month cost. Net benefit: $1,906/month month 1.
 ---
 
 ## 9. END-OF-SESSION PROTOCOL
+
+**FILE SIZE & ORGANIZATION CHECK (before editing any file):**
+
+Before adding to or editing a file, note its current line count. If the file exceeds ~800 lines OR is clearly handling multiple distinct concerns, **STOP and ASK David**:
+
+> "This file is [N] lines and handles [concerns A, B, C] — should we reorganize it into smaller modules before adding more, or edit in place for now?"
+
+Rules:
+- Line count is a **trigger to ask**, not an automatic action. Do NOT silently refactor a large file mid-task — surface it and let David decide: split-first / edit-then-split / leave it.
+- The real concern is whether a file does too many jobs to reason about and edit cleanly. A cohesive large file may be fine; a small file doing six unrelated jobs is not. The check is to prompt the judgment, which is David's to make.
+- Context-thrash guard: reading an oversized file whole on every edit overflows the session context. Prefer viewing only the relevant range (use `offset` + `limit` on Read); flag files that are too big to work with cleanly.
+
+This check applies at the moment of opening a file to edit it — not retrospectively at session end.
+
+---
 
 MANDATORY before ending every session:
 
