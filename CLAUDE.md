@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-15 (McCoy's Gemini thinking-layer fix: thinkingBudget:0; build 2184 ✅; David live test pending)
+# Last updated: 2026-06-15 (McCoy's always-normalize fix: browser-image-compression replaces COMPRESS_THRESHOLD; build 2185 ✅; David live test pending)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -300,6 +300,107 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-15 — McCoy's always-normalize fix: browser-image-compression replaces COMPRESS_THRESHOLD
+
+**Type:** Code (3 files changed: `packages/cultivar-os/src/utils/imageCompression.ts` full rewrite, `packages/cultivar-os/src/pages/ReceiptKeeper.tsx` import cleanup, `packages/cultivar-os/package.json` new dep). Zero migrations, zero schema changes, zero API changes. Build 2185 ✅ (+1 module over prior 2184).
+
+**Session mandate:** THUNDER · DIAGNOSE + FIX — McCoy's receipt STILL shows `~$0.0030 (fallback)` cost tag despite prior `thinkingBudget:0` fix. Console evidence: `"file selected — original: 2351251 compressed: 2351251"` — the 2.35MB image is NOT being compressed at all. Adopt `browser-image-compression` library (standard, maintained, no hand-tuned thresholds) to always normalize every receipt image before upload. Remove `COMPRESS_THRESHOLD` entirely.
+
+---
+
+**DIAGNOSIS — ROOT CAUSE (console proof):**
+
+`COMPRESS_THRESHOLD = 2.5 * 1024 * 1024` (2.5MB). McCoy's image is 2.35MB. **2.35MB < 2.5MB → the skip-if-under gate fires → compression is completely bypassed → raw 2.35MB bytes sent to Gemini.**
+
+Chain of causation: 2.35MB raw image → Gemini upload takes time → even with `thinkingBudget:0` stopping extended reasoning, the raw full-resolution upload itself pushes the Gemini call to ~10s → exceeds the 9s AbortController → `AbortError` → fallback to Claude Haiku → `~$0.0030 (fallback)` displayed.
+
+The prior `thinkingBudget:0` fix was correct for its stated root cause (thinking layer latency) but incomplete — the same image bypasses the compression gate that would have made the fix sufficient.
+
+**Why `thinkingBudget:0` worked in the bake-off script:** the bake-off reads raw bytes via `fs.readFileSync()` with no upload overhead from a browser File API. Gemini's network + processing time for the bake-off scenario was under 9s even at full resolution.
+
+**Why SiteOne works consistently:** SiteOne's receipt image is smaller than McCoy's — even at raw resolution it likely stays under ~1MB, giving Gemini sufficient headroom.
+
+---
+
+**WHAT WAS FIXED (3 files):**
+
+**`packages/cultivar-os/src/utils/imageCompression.ts` — full rewrite:**
+
+Replaced the entire canvas-based threshold-gated approach with `browser-image-compression` v2.0.2 (stable, ~2.5M weekly downloads, well-maintained).
+
+- **Removed:** `COMPRESS_TYPES`, `COMPRESS_THRESHOLD`, `COMPRESS_MAX_DIM`, `COMPRESS_QUALITY` constants and all associated skip logic.
+- **New `COMPRESS_OPTIONS`:** `maxWidthOrHeight: 1800`, `maxSizeMB: 0.5` (~500KB target), `useWebWorker: true`, `fileType: 'image/jpeg'`, `initialQuality: 0.82`.
+- **Always normalizes** — no threshold gate. Every receipt image compressed to ≤1800px long edge / ~500KB.
+- **PDF pass-through** — PDFs cannot be canvas-rendered in browser, passed through raw.
+- **Fail-safe** — if compression throws, falls back to raw file rather than blocking OCR.
+
+**`packages/cultivar-os/src/pages/ReceiptKeeper.tsx` — import cleanup:**
+
+Removed `COMPRESS_TYPES` and `COMPRESS_THRESHOLD` from the import (those exports no longer exist). Only `resizeAndCompressImage` imported now.
+
+**`packages/cultivar-os/package.json` — new dependency:**
+
+Added `"browser-image-compression": "^2.0.2"` to dependencies.
+
+---
+
+**Expected console output after fix (McCoy's 2.35MB):**
+```
+[TRACE:RECEIPT] file selected — original: 2351251 compressed: ~200000 (mimeType: image/jpeg)
+```
+(~200KB compressed, not 2351251 raw)
+
+---
+
+**STD-002 before/after (PENDING David live test):**
+
+- **BEFORE:** Console shows `compressed: 2351251` (same as original) → raw 2.35MB to Gemini → Vercel logs show `[TRACE:RECEIPT] provider-fallback fired: gemini→claude` → cost display `~$0.0030 (fallback)`.
+- **AFTER (fix applied, build ✅):** Console should show `compressed: ~200000` → normalized image to Gemini → Vercel logs show NO fallback line → cost display `~$0.0001` (no `(fallback)` tag) → 6 line items, "$31.00", green reconciliation.
+- **Live acceptance test:** David deploys (`git push`), uploads McCoy's receipt (`docs/McCoys_Receipt.JPG`), confirms:
+  1. Browser console: `compressed:` value is ~200KB (not 2.35MB).
+  2. Vercel function log: `[TRACE:RECEIPT] models resolved — primary: gemini-2.5-flash`; NO `provider-fallback fired` line.
+  3. Cost display: `~$0.0001` (no `(fallback)` tag).
+  4. Confirm step: 6 line items, amount "$31.00", green "Lines match total".
+
+---
+
+**Build verification:** `npm run build:cultivar` → 2185 modules ✅ zero TypeScript errors.
+
+**Commit:** `376c6af`
+
+---
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns. `imageCompression.ts` uses generic names (`resizeAndCompressImage`, `COMPRESS_OPTIONS`). Dependency is a generic npm library.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Root cause confirmed read-only from console evidence before fix. `COMPRESS_THRESHOLD = 2.5MB` and McCoy's 2.35MB — threshold comparison proved skip gate fires. No assumption-based fix.
+- STD-002: 🔲 **PENDING DAVID DEPLOY + LIVE TEST.** BEFORE: console `compressed: 2351251` (skip confirmed). AFTER: fix applied, build ✅. Acceptance test defined above.
+- STD-003: ✅ `TRACE_RECEIPT = true` preserved in both `ocr.ts` and `ReceiptKeeper.tsx` (unchanged). No new logs added.
+- STD-004: N/A — no new business-scoped data surface.
+- STD-005: ✅ No decisions reversed.
+- STD-006: ✅ No vertical nouns introduced.
+- STD-007: N/A — no integration status surfaces touched.
+- STD-008: N/A — no migrations written or applied.
+- STD-009: N/A — no generation/prompt path changes.
+- STD-010: N/A — no new opaque names. `browser-image-compression` is a standard library name.
+- **BENCH-E: ✅ Preserved** — provider chain architecture unchanged. Compression is a client-side pre-processing step before the image reaches the BENCH-E provider chain. `getOcrModels()`, fallback log, and `tryGemini()`/`tryClaude()` all unchanged.
+
+**Gap graduation sweep (step 15):** No gaps past horizon. No graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- `Receipt Keeper v1`: WIRED (unchanged — pending David's live acceptance test; advance to WORKS after confirmed clean McCoy's read on Gemini with no fallback).
+
+**David's required steps:**
+1. `git push` → Vercel auto-deploys
+2. Upload McCoy's receipt (`docs/McCoys_Receipt.JPG`) → confirm: browser console shows `compressed:` value ~200KB (not 2.35MB); no `provider-fallback fired` in Vercel logs; cost shows `~$0.0001` (not `~$0.0030 fallback`); 6 line items; "$31.00"; green reconciliation
+3. Advance Receipt Keeper v1 to WORKS in PLATFORM_STATE.md when step 2 confirmed
+
+---
 
 ### 2026-06-15 — McCoy's Gemini thinking-layer fix: thinkingBudget:0
 
