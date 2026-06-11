@@ -1,7 +1,26 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-15 (widget consent + handwritten-receipt disclosure: REQ-1 + REQ-2 recorded as permanent pending requirements in built-inventory.md + FLAG comments in ReceiptKeeper.tsx)
+# Last updated: 2026-06-11 (widget consent + handwritten-receipt disclosure: REQ-1 + REQ-2 recorded as permanent pending requirements in built-inventory.md + FLAG comments in ReceiptKeeper.tsx; date corrected from stale 2026-06-15 to actual 2026-06-11)
 # Current AI: Claude Code
+
+---
+
+## SESSION HEALTH CHECK — run at session open, before any code or docs
+
+```bash
+date                          # 1. Verify today's date — update memory/currentDate if stale
+git branch --show-current     # 2. Confirm branch (main or feature branch as appropriate)
+ls PLATFORM_STATE.md          # 3. Must exist at repo root — if missing, stop and tell David
+git status --short            # 4. Flag any ?? untracked files before starting work
+```
+
+**Rules:**
+- **Date ≠ memory/currentDate** → update `~/.claude/projects/-Users-terrenceobrien-Desktop-trace-platform/memory/` before proceeding — stale dates corrupt commit messages and handoff entries.
+- **PLATFORM_STATE.md missing** → do NOT write any code; report to David before proceeding.
+- **`??` files in git status** → report them to David; sort before starting code work.
+- **Reread ⛔ LAUNCH GATES** in PLATFORM_STATE.md every session — never cross a gate without David's explicit direction.
+
+---
 
 > CRITICAL: Read this entire file before touching any code.
 > Update the Handoff section (Part 3) before ending every session.

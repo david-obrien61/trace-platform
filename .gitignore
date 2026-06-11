@@ -11,3 +11,5 @@ __pycache__/
 venv/
 # Vercel pulled/synced env files — may contain API keys
 .env.vercel.*
+# Scratch / throwaway work — never commit
+scratch/
