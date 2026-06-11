@@ -146,7 +146,11 @@ async function tryGemini(imageBase64: string, mimeType: string, geminiKey: strin
         signal: controller.signal,
         body: JSON.stringify({
           contents: [{ parts: [{ text: PROMPT }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }],
-          generationConfig: { temperature: 0, maxOutputTokens: 2048 },
+          // thinkingBudget: 0 disables gemini-2.5-flash's extended reasoning layer.
+          // Thinking adds 10-20s latency for large images (McCoy's 2.2MB) with no accuracy
+          // benefit for fixed-schema receipt extraction. Without this, thinking reliably
+          // exceeds the 9s AbortController on full-res receipts.
+          generationConfig: { temperature: 0, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } },
         }),
       }
     );
