@@ -2,6 +2,18 @@ import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
+import {
+  LineItem,
+  ReconcileResult,
+  computeReconcile,
+} from '../utils/receiptReconciliation';
+import {
+  COMPRESS_TYPES,
+  COMPRESS_THRESHOLD, // 2.5MB — McCoy's 2.2MB passes through raw; files >2.5MB still compress
+  resizeAndCompressImage,
+} from '../utils/imageCompression';
+import { ConflictDialog } from '../components/ConflictDialog';
+import { LineItemGrid } from '../components/LineItemGrid';
 
 const TRACE_RECEIPT = true; // [TRACE:RECEIPT] STD-003 — comment out when David says "proven"
 
@@ -11,59 +23,6 @@ const MAX_MB = 10;
 const MAX_BYTES = MAX_MB * 1024 * 1024;
 
 const CATEGORIES = ['fuel', 'supplies', 'meals', 'parts', 'equipment', 'maintenance', 'office', 'other'];
-
-// Reconciliation thresholds
-const MATCH_TOLERANCE = 0.02;  // ≤$0.02 = match (rounding noise)
-const SMALL_GAP_ABS   = 5.00;  // <$5 absolute gap = small (plausibly tax/tip)
-const SMALL_GAP_PCT   = 0.10;  // <10% of total = small gap
-
-// Image compression before OCR: reduce payload to avoid Vercel body limits + speed up Gemini.
-const COMPRESS_TYPES     = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
-const COMPRESS_THRESHOLD = 2.5 * 1024 * 1024; // 2.5MB — McCoy's 2.2MB passes through raw; files >2.5MB still compress
-const COMPRESS_MAX_DIM   = 1200;
-const COMPRESS_QUALITY   = 0.82;
-
-async function resizeAndCompressImage(file: File): Promise<{ base64: string; sizeBytes: number; mimeType: string }> {
-  const raw = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-
-  if (!COMPRESS_TYPES.has(file.type) || file.size <= COMPRESS_THRESHOLD) {
-    return { base64: raw, sizeBytes: file.size, mimeType: file.type || 'image/jpeg' };
-  }
-
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      const { width, height } = img;
-      const maxDim = COMPRESS_MAX_DIM;
-      let w = width, h = height;
-      if (w > maxDim || h > maxDim) {
-        if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
-        else       { w = Math.round((w * maxDim) / h); h = maxDim; }
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0, w, h);
-      canvas.toBlob(blob => {
-        if (!blob) { resolve({ base64: raw, sizeBytes: file.size, mimeType: file.type }); return; }
-        const reader2 = new FileReader();
-        reader2.onload = () => {
-          const b64 = (reader2.result as string).split(',')[1];
-          resolve({ base64: b64, sizeBytes: blob.size, mimeType: 'image/jpeg' });
-        };
-        reader2.onerror = () => resolve({ base64: raw, sizeBytes: file.size, mimeType: file.type });
-        reader2.readAsDataURL(blob);
-      }, 'image/jpeg', COMPRESS_QUALITY);
-    };
-    img.onerror = () => resolve({ base64: raw, sizeBytes: file.size, mimeType: file.type });
-    img.src = 'data:' + file.type + ';base64,' + raw;
-  });
-}
 
 type Step = 'idle' | 'uploading' | 'ocr_running' | 'confirm' | 'saving' | 'done' | 'error';
 
@@ -90,21 +49,6 @@ interface EditableFields {
   date: string;
   amount: string;
   category: string;
-}
-
-// Editable line item — string amounts for free-form input; parsed to number on save
-interface LineItem {
-  id: string;
-  description: string;
-  amount: string;
-}
-
-interface ReconcileResult {
-  status: 'no_lines' | 'match' | 'small_gap' | 'large_mismatch';
-  lineSum: number;
-  total: number;
-  delta: number;   // lineSum − total; positive = lines exceed total
-  gapNote: string | null;
 }
 
 export function ReceiptKeeper() {
@@ -221,35 +165,8 @@ export function ReceiptKeeper() {
     }
   }
 
-  // Live reconciliation — called on every render when step === 'confirm'
-  function computeReconcile(): ReconcileResult {
-    if (lineItems.length === 0) {
-      return { status: 'no_lines', lineSum: 0, total: 0, delta: 0, gapNote: null };
-    }
-    const lineSum = lineItems.reduce((acc, item) => {
-      const n = parseFloat(item.amount);
-      return acc + (isNaN(n) ? 0 : n);
-    }, 0);
-    const parsedTotal = parseFloat(fields.amount);
-    const total = isNaN(parsedTotal) ? 0 : parsedTotal;
-    const delta = lineSum - total;
-    const absD  = Math.abs(delta);
-
-    if (absD <= MATCH_TOLERANCE) {
-      return { status: 'match', lineSum, total, delta, gapNote: null };
-    }
-    const isSmall = absD < SMALL_GAP_ABS || (total > 0 && absD / total < SMALL_GAP_PCT);
-    if (isSmall) {
-      const note = delta > 0
-        ? `Lines exceed total by $${absD.toFixed(2)} — possibly tax not in total`
-        : `Total exceeds lines by $${absD.toFixed(2)} — possibly tax or tip`;
-      return { status: 'small_gap', lineSum, total, delta, gapNote: note };
-    }
-    return { status: 'large_mismatch', lineSum, total, delta, gapNote: null };
-  }
-
   // Component-level reconcileState — drives the live readout below the line items grid
-  const reconcileState: ReconcileResult | null = step === 'confirm' ? computeReconcile() : null;
+  const reconcileState: ReconcileResult | null = step === 'confirm' ? computeReconcile(lineItems, fields.amount) : null;
 
   // Line item mutation helpers
   function addLineItem() {
@@ -399,7 +316,7 @@ export function ReceiptKeeper() {
     if (!businessId || !ocrResult) return;
     setErrorMsg(null);
 
-    const rs = computeReconcile();
+    const rs = computeReconcile(lineItems, fields.amount);
     if (rs.status === 'large_mismatch') {
       setShowConflictDialog(true);
       return;
@@ -414,7 +331,7 @@ export function ReceiptKeeper() {
   async function handleSaveAnyway() {
     setShowConflictDialog(false);
     setStep('saving');
-    const rs = computeReconcile();
+    const rs = computeReconcile(lineItems, fields.amount);
     const overriddenAt = new Date().toISOString();
     if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] conflict override — delta:', rs.delta.toFixed(2), 'overridden_at:', overriddenAt);
     await doSave({ reconcileState: rs, overriddenAt });
@@ -566,113 +483,6 @@ export function ReceiptKeeper() {
     padding: '0 0 16px',
   };
 
-  // Line items grid styles (mobile-first ~380px viewport)
-  const LINE_ITEMS_SECTION: React.CSSProperties = { marginBottom: 16 };
-
-  const LINE_ITEM_HEADER: React.CSSProperties = {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  };
-
-  const LINE_ITEM_ROW: React.CSSProperties = {
-    display: 'flex',
-    gap: 6,
-    marginBottom: 6,
-    alignItems: 'center',
-  };
-
-  const LINE_DESC_INPUT: React.CSSProperties = {
-    flex: 1,
-    minWidth: 0,
-    border: '1px solid #d1d5db',
-    borderRadius: 6,
-    padding: '7px 8px',
-    fontSize: '0.875rem',
-    color: '#111827',
-    outline: 'none',
-    boxSizing: 'border-box',
-  };
-
-  const LINE_AMT_INPUT: React.CSSProperties = {
-    width: 76,
-    flexShrink: 0,
-    border: '1px solid #d1d5db',
-    borderRadius: 6,
-    padding: '7px 6px',
-    fontSize: '0.875rem',
-    color: '#111827',
-    outline: 'none',
-    boxSizing: 'border-box',
-    textAlign: 'right',
-  };
-
-  const LINE_DELETE_BTN: React.CSSProperties = {
-    width: 28,
-    height: 28,
-    flexShrink: 0,
-    border: 'none',
-    borderRadius: 6,
-    background: '#fee2e2',
-    color: '#A32D2D',
-    cursor: 'pointer',
-    fontSize: '1rem',
-    lineHeight: '1',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 0,
-  };
-
-  const ADD_ROW_BTN: React.CSSProperties = {
-    width: '100%',
-    background: 'transparent',
-    border: '1px dashed #a7c985',
-    borderRadius: 6,
-    padding: '6px 12px',
-    fontSize: '0.8125rem',
-    color: '#4b7a2e',
-    cursor: 'pointer',
-    marginTop: 4,
-  };
-
-  // Reconcile readout — severity-scaled color
-  function reconcileReadoutStyle(status: ReconcileResult['status']): React.CSSProperties {
-    if (status === 'match')          return { background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 6, padding: '7px 10px', fontSize: '0.8125rem', color: '#166534', marginTop: 8 };
-    if (status === 'small_gap')      return { background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '7px 10px', fontSize: '0.8125rem', color: '#92400e', marginTop: 8 };
-    if (status === 'large_mismatch') return { background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, padding: '7px 10px', fontSize: '0.8125rem', color: '#A32D2D', marginTop: 8 };
-    return { display: 'none' };
-  }
-
-  function reconcileReadoutText(rs: ReconcileResult): string {
-    if (rs.status === 'match') return `✓ Lines: $${rs.lineSum.toFixed(2)} = Total: $${rs.total.toFixed(2)}`;
-    const absD = Math.abs(rs.delta);
-    const dir  = rs.delta > 0 ? 'exceed' : 'below';
-    const prefix = rs.status === 'large_mismatch' ? '⚠️ ' : '';
-    return `${prefix}Lines $${rs.lineSum.toFixed(2)} ${dir} total $${rs.total.toFixed(2)} by $${absD.toFixed(2)}`;
-  }
-
-  // Conflict dialog styles (fixed overlay — outside card, bottom sheet)
-  const DIALOG_BACKDROP: React.CSSProperties = {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.5)',
-    zIndex: 100,
-    display: 'flex',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  };
-
-  const DIALOG_CARD: React.CSSProperties = {
-    background: '#fff',
-    borderRadius: '16px 16px 0 0',
-    padding: '24px 20px 36px',
-    width: '100%',
-    maxWidth: 480,
-    boxShadow: '0 -4px 24px rgba(0,0,0,0.15)',
-  };
-
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -793,63 +603,14 @@ export function ReceiptKeeper() {
             </div>
 
             {/* ── LINE ITEMS GRID (between Date and Total Amount) ── */}
-            <div style={LINE_ITEMS_SECTION}>
-              <div style={LINE_ITEM_HEADER}>
-                <label style={LABEL}>Line Items</label>
-                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                  {lineItems.length === 0
-                    ? 'none captured'
-                    : `${lineItems.length} item${lineItems.length !== 1 ? 's' : ''}`}
-                </span>
-              </div>
-
-              {lineItems.length === 0 && (
-                <div style={{ fontSize: '0.8125rem', color: '#94a3b8', padding: '8px 12px', background: '#f9fafb', borderRadius: 6, textAlign: 'center', marginBottom: 6 }}>
-                  No line items captured — add manually if needed
-                </div>
-              )}
-
-              {lineItems.map(item => (
-                <div key={item.id} style={LINE_ITEM_ROW}>
-                  <input
-                    style={LINE_DESC_INPUT}
-                    value={item.description}
-                    onChange={e => updateLineItem(item.id, 'description', e.target.value)}
-                    placeholder="Description"
-                  />
-                  <input
-                    style={LINE_AMT_INPUT as React.CSSProperties}
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={item.amount}
-                    onChange={e => updateLineItem(item.id, 'amount', e.target.value)}
-                    placeholder="0.00"
-                  />
-                  <button
-                    style={LINE_DELETE_BTN}
-                    onClick={() => deleteLineItem(item.id)}
-                    aria-label="Delete line item"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-
-              <button style={ADD_ROW_BTN} onClick={addLineItem}>
-                + Add line item
-              </button>
-
-              {/* Live reconcile readout — below grid, above Total Amount */}
-              {reconcileState && reconcileState.status !== 'no_lines' && (
-                <div style={reconcileReadoutStyle(reconcileState.status)}>
-                  {reconcileReadoutText(reconcileState)}
-                  {reconcileState.gapNote && (
-                    <div style={{ marginTop: 3, opacity: 0.8 }}>{reconcileState.gapNote}</div>
-                  )}
-                </div>
-              )}
-            </div>
+            <LineItemGrid
+              lineItems={lineItems}
+              onUpdate={updateLineItem}
+              onDelete={deleteLineItem}
+              onAdd={addLineItem}
+              reconcileState={reconcileState}
+              labelStyle={LABEL}
+            />
 
             {/* Total Amount — AFTER line items grid so owner reconciles consciously */}
             <div style={FIELD_ROW}>
@@ -939,43 +700,13 @@ export function ReceiptKeeper() {
 
       {/* ── CONFLICT DIALOG (outside card — fixed overlay, bottom sheet) ───── */}
       {showConflictDialog && reconcileState && (
-        <div style={DIALOG_BACKDROP} onClick={() => setShowConflictDialog(false)}>
-          <div style={DIALOG_CARD} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: '1.125rem', fontWeight: 700, color: '#A32D2D', marginBottom: 10 }}>
-              ⚠️ Line items don't match total
-            </div>
-            <div style={{ fontSize: '0.875rem', color: '#374151', lineHeight: 1.6, marginBottom: 6 }}>
-              <strong>Lines sum to:</strong>{' '}
-              <span style={{ fontFamily: 'monospace' }}>${reconcileState.lineSum.toFixed(2)}</span>
-            </div>
-            <div style={{ fontSize: '0.875rem', color: '#374151', lineHeight: 1.6, marginBottom: 6 }}>
-              <strong>Total field:</strong>{' '}
-              <span style={{ fontFamily: 'monospace' }}>${reconcileState.total.toFixed(2)}</span>
-            </div>
-            <div style={{ fontSize: '0.875rem', color: '#A32D2D', lineHeight: 1.6, marginBottom: 18, fontWeight: 600 }}>
-              Difference: ${Math.abs(reconcileState.delta).toFixed(2)}
-            </div>
-            <div style={{ fontSize: '0.8125rem', color: '#64748b', marginBottom: 20, lineHeight: 1.5 }}>
-              Check the receipt and fix the numbers above, or save with the discrepancy recorded.
-            </div>
-
-            {/* Preferred path — go back and fix */}
-            <button
-              style={{ ...BTN_PRIMARY, marginTop: 0 }}
-              onClick={() => setShowConflictDialog(false)}
-            >
-              ← Go back and fix
-            </button>
-
-            {/* Allowed path — override recorded as durable decision */}
-            <button
-              style={{ ...BTN_GHOST, border: '1px solid #f59e0b', color: '#92400e', background: '#fffbeb', marginTop: 10 }}
-              onClick={handleSaveAnyway}
-            >
-              Save anyway — I've checked the receipt
-            </button>
-          </div>
-        </div>
+        <ConflictDialog
+          reconcileState={reconcileState}
+          onClose={() => setShowConflictDialog(false)}
+          onSaveAnyway={handleSaveAnyway}
+          btnPrimaryStyle={BTN_PRIMARY}
+          btnGhostStyle={BTN_GHOST}
+        />
       )}
     </div>
   );
