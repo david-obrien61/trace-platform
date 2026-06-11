@@ -146,7 +146,7 @@ async function tryGemini(imageBase64: string, mimeType: string, geminiKey: strin
         signal: controller.signal,
         body: JSON.stringify({
           contents: [{ parts: [{ text: PROMPT }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
+          generationConfig: { temperature: 0, maxOutputTokens: 2048 },
         }),
       }
     );

@@ -19,7 +19,7 @@ const SMALL_GAP_PCT   = 0.10;  // <10% of total = small gap
 
 // Image compression before OCR: reduce payload to avoid Vercel body limits + speed up Gemini.
 const COMPRESS_TYPES     = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
-const COMPRESS_THRESHOLD = 400 * 1024;
+const COMPRESS_THRESHOLD = 2.5 * 1024 * 1024; // 2.5MB — McCoy's 2.2MB passes through raw; files >2.5MB still compress
 const COMPRESS_MAX_DIM   = 1200;
 const COMPRESS_QUALITY   = 0.82;
 

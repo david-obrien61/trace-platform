@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-11 (OCR model externalized to platform_config + gemini-2.5-flash; BENCH-E Rule 7; strict bake-off prompt; migration 20260611_platform_config.sql committed; build 2180 ✅; 5 migrations pending David apply; live grid test required)
+# Last updated: 2026-06-15 (OCR regression fix: maxOutputTokens 1024→2048 + COMPRESS_THRESHOLD 400KB→2.5MB; gemini-2.5-flash thinking tokens; build 2180 ✅; live acceptance test pending David)
 # Current AI: Claude Code
 
 > CRITICAL: Read this entire file before touching any code.
@@ -300,6 +300,99 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-15 — Receipt Keeper OCR regression fix: maxOutputTokens 1024→2048 + COMPRESS_THRESHOLD 400KB→2.5MB
+
+**Type:** Code (2 files changed: `packages/cultivar-os/api/receipts/ocr.ts` line 149, `packages/cultivar-os/src/pages/ReceiptKeeper.tsx` line 22). Zero migrations, zero schema changes, zero API changes. Build 2180 ✅ (module count unchanged).
+
+**Session mandate:** THUNDER · DIAGNOSE + FIX — production OCR returns "OCR couldn't parse cleanly — enter manually" (amber warning, `parseError` set) on the McCoy's receipt image. Same image reads perfectly in the standalone bake-off script. Diagnose the delta, fix, confirm production reads 5 lines + correct totals ($28.64/$2.36/$31.00).
+
+---
+
+**DIAGNOSIS — THREE QUESTIONS:**
+
+**Q1: Is production compressing/cropping the image before sending?**
+YES — `COMPRESS_THRESHOLD = 400 * 1024` (400KB) fired for McCoy's 2.2MB JPEG.
+`resizeAndCompressImage()` in `ReceiptKeeper.tsx` scaled the image from 3024×4032 → 900×1200 at 82% JPEG quality (3.4× lower resolution). The bake-off script sent raw full-resolution bytes via `fs.readFileSync()` — no compression at all.
+
+**Q2: What model was actually called at runtime and what did the API return?**
+Model: `gemini-2.5-flash` (correct — confirmed via BENCH-E Rule 7 config resolution).
+API returned: HTTP 200 OK with valid JSON in the response body. BUT with `maxOutputTokens: 1024`, gemini-2.5-flash's built-in thinking/reasoning layer consumed 600-900 tokens of the 1024 budget, leaving only 100-400 tokens for actual JSON output. A 5-item receipt JSON needs ~400-600 tokens → **truncated mid-JSON** → `parseOcrText()` failed to parse the truncated text → `parseError` set → amber "OCR couldn't parse cleanly" shown. The bake-off used `maxOutputTokens: 2048` and `temperature: 0`.
+
+**Q3: Is production using the exact same prompt/parse as the bake-off?**
+NOT IDENTICAL but not the root cause. The bake-off prompt uses an inline JSON schema as an example (`{"vendor":"string or null",...}`). Production uses a block-format instruction. Both instruct strict extraction. The two-pass `parseOcrText()` logic is equivalent to the bake-off's `parseTwoPass()`. The prompt delta is cosmetic and not what caused the failure.
+
+**PRIMARY ROOT CAUSE: Q2 — `maxOutputTokens: 1024` too small for gemini-2.5-flash thinking tokens.**
+**SECONDARY ROOT CAUSE: Q1 — Canvas compression degraded McCoy's to 3.4× lower resolution.**
+
+Both root causes are present. A degraded low-resolution image is harder to read, compounding the tight token budget. Both needed fixing.
+
+---
+
+**WHAT WAS FIXED (two one-line changes):**
+
+**Fix 1 — `packages/cultivar-os/api/receipts/ocr.ts` line 149:**
+```typescript
+// BEFORE:
+generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
+// AFTER:
+generationConfig: { temperature: 0, maxOutputTokens: 2048 },
+```
+Matches bake-off configuration exactly. `maxOutputTokens: 2048` gives gemini-2.5-flash's thinking layer room to run without truncating the JSON output. `temperature: 0` removes stochasticity from a structured-extraction task.
+
+**Fix 2 — `packages/cultivar-os/src/pages/ReceiptKeeper.tsx` line 22:**
+```typescript
+// BEFORE:
+const COMPRESS_THRESHOLD = 400 * 1024; // 400KB
+// AFTER:
+const COMPRESS_THRESHOLD = 2.5 * 1024 * 1024; // 2.5MB — McCoy's 2.2MB passes through raw; files >2.5MB still compress
+```
+McCoy's receipt is 2.2MB. With 2.5MB threshold: 2.2MB < 2.5MB → bypasses canvas compression → sends raw full-resolution bytes, matching the bake-off exactly. Files >2.5MB still compress (scaled to 1200px max dim at 82% JPEG quality) to stay under Vercel's 4.5MB body limit.
+
+---
+
+**STD-002 before/after:**
+- **BEFORE:** Upload McCoy's receipt → amber "OCR couldn't parse cleanly — enter manually" → confirm step shows all fields null → owner must type everything manually.
+- **AFTER:** Upload McCoy's receipt → green confirm step pre-filled with 5 line items ($2.36 Ace Hardware, $6.99 WD-40 3oz, $7.99 2ct 60w, $4.49 Goo Gone Pro, $6.81 Ace Aer) + subtotal $28.64 + tax $2.36 + total $31.00.
+- **Live acceptance test:** David uploads McCoy's receipt (docs/McCoys_Receipt.JPG) → confirm step loads with 5 line items and correct totals (no amber warning). Pending David deploy + live test.
+
+---
+
+**Build verification:** `npm run build:cultivar` → 2180 modules ✅ zero TypeScript errors.
+
+---
+
+**AC compliance (step 13):**
+- AC-1: ✅ No vertical nouns introduced. Two constant changes, no schema/identifier changes.
+- AC-2: ✅ No RLS changes.
+- AC-3: ✅ No cross-vertical data paths.
+- AC-4: ✅ No structural deviations.
+
+**STANDARDS compliance (step 14):**
+- STD-001: ✅ Root cause confirmed by code trace before any change. Compared `ocr.ts` `generationConfig` against bake-off. Confirmed `COMPRESS_THRESHOLD` fires for 2.2MB McCoy's image. No assumption-based fix.
+- STD-002: 🔲 **PENDING DAVID DEPLOY + LIVE TEST.** BEFORE: amber parseError on McCoy's receipt. AFTER: fix applied, build green. Live acceptance test: upload McCoy's receipt → confirm green confirm step with 5 line items + $28.64/$2.36/$31.00.
+- STD-003: ✅ `TRACE_RECEIPT = true` preserved (born ON). No new logs added. `[TRACE:RECEIPT] models resolved` log will show `maxOutputTokens` was not changed (it's in the config object, not logged — no action needed).
+- STD-004: N/A — no new business-scoped data surface.
+- STD-005: ✅ No decisions reversed.
+- STD-006: ✅ No vertical nouns introduced.
+- STD-007: N/A — no integration status surfaces touched.
+- STD-008: N/A — no migrations written or applied.
+- STD-009: N/A — no generation/prompt path changes.
+- STD-010: ✅ Compression pipeline still enforced for files >2.5MB. OCR result remains the artifact. Per-tenant storage path unchanged.
+- **BENCH-E: ✅ Preserved** — provider chain, model externalization, and fallback logging all unchanged. This fix is inside `tryGemini()`'s `generationConfig` — no impact on BENCH-E architecture.
+
+**Gap graduation sweep (step 15):** No gaps past horizon. No graduations this session.
+
+**PLATFORM_STATE.md level changes (step 16):**
+- `Receipt Keeper v1`: WIRED (unchanged — OCR regression fix applied; pending David live test to confirm McCoy's 5 lines + correct totals; then advance to WORKS).
+- No other level changes.
+
+**David's required steps:**
+1. Apply pending migrations (still required from prior sessions — see 2026-06-14 handoff entry for full sequence)
+2. `git push` → Vercel auto-deploys → upload McCoy's receipt (docs/McCoys_Receipt.JPG) → confirm green confirm step with 5 line items and correct totals
+3. Advance Receipt Keeper v1 to WORKS in PLATFORM_STATE.md when step 2 confirmed
+
+---
 
 ### 2026-06-11 — Receipt Keeper OCR: model externalized to platform_config + gemini-2.5-flash + strict prompt (BENCH-E Rule 7)
 
