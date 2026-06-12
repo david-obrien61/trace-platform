@@ -1,7 +1,25 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-11 (THUNDER doc-sync + date-drift sweep: corrected 2026-06-12/13/14/15 → 2026-06-11 across 5 canonical docs; content sync: Receipt Keeper v1 WORKS propagated to built-inventory.md + MASTER_BRIEF.md D-004/D-008/D-009; migrations applied status corrected in PLATFORM_STATE.md)
+# Last updated: 2026-06-12 (THUNDER Cost-to-Produce design doc written: docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md — spine, fork, 4 feeds, 5 pillars, two-tier model, audit conflict log, build sequence; no code/schema/migrations)
 # Current AI: Claude Code
+
+---
+
+## CONTEXT BUDGET CHECK — run THIS FIRST, before reading anything else
+
+1. **CLAUDE.md size:** If this file exceeds ~600 lines, FLAG to David before proceeding:
+   > "CLAUDE.md is [N] lines — it may be filling context on load. Recommend trimming
+   > handoff history to docs/handoff-archive.md before we proceed."
+   Do NOT silently push on.
+2. **Working files:** Before opening any file to read or edit, note its line count first.
+   If >~600 lines, read in chunks (`offset`/`limit`) — never load a large file whole.
+   Flag files >~800 lines per the file-size rule in §9.
+3. **Build logs / install output:** Never dump full output into context. Use targeted reads
+   and summarized output only.
+4. **Repeated auto-compaction:** If you notice it happening, STOP and tell David which
+   file or output is oversized rather than pushing through — thrashing wastes the session.
+
+Context is finite space, not compute. Read narrowly; flag early.
 
 ---
 
@@ -319,6 +337,49 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-12 — THUNDER Cost-to-Produce design doc
+
+**Type:** Design capture only. Zero code changes, zero migrations, zero schema changes.
+
+**Session mandate:** THUNDER · WRITE COST-TO-PRODUCE DESIGN DOC — capture the fully resolved
+architecture for Cost-to-Produce as a single authoritative design document. No build.
+
+**Deliverable:** `docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md`
+
+**What's in the doc (14 sections):**
+- Spine: accumulate honestly → emit `cost: number` → divide → surface confidence → never rule on tax/legal
+- Core boundary: capture/surface/model; never take tax or legal position. Every cost line carries cash timing.
+- The fork: accumulator (upstream, event-sourced) → period pool (downstream, snapshot ÷ denominator). One-directional. No reverse writes.
+- Four cost feeds: Receipt Keeper [WORKS], Recurring [DESIGN], Labor + imputed [DESIGN], Asset Manager (Andrew's [BUILT, separate repo]; shared promote-and-consolidate [DESIGN])
+- Cost-object node model: ASSET | PROJECT | PRODUCT as `node_type` discriminator on one `cost_objects` table (AC-1). Containment edges (tree) + contribution edges (DAG for shared costs). COUNT-ONCE rule. PROJECT→PRODUCT conversion lifecycle (CoolRunnings worked case). Shared-cost allocation: owner assigns basis, TRACE does arithmetic, labels it MODEL not FACT.
+- Five pillars (all [DESIGN]): cash-today vs accrual; cost-of-capital; estimate→actual variance + bias learning; confidence-mix rollups (confirmed/derived/estimated/UNKNOWN — never silently zero); payback/break-even clock (F&F hole + discount leakage)
+- Denominator: per `business_type` config (item | customer-month | billable-hour). TRACE self-pricing = sensitivity CURVE at N=1,5,20,100.
+- AI cost: `ai_usage_log` shared table [DESIGN]; `ocr_raw` / receipts provider columns [WORKS]; Tier 2 routing intelligence [DESIGN]
+- MarginEngine: BUILT (canonical, 2026-06-10), ORPHANED for Cultivar. `overheadPerUnit` is the absorption hook. `plants.cost_price` column is the first-caller blocker.
+- Two-tier model: Core = "What did I spend?" (WORKS — Receipt Keeper v1); Pro = "What does it cost me to MAKE this?" (DESIGN — entire intelligence layer). Trial: 2 weeks all-on → Core stays. Fractal rule. Anti-exploitation stance. TRACE eats own cooking (CUSTOMER-ZERO).
+- Surface constraint: `/costs` owns Cost-to-Produce. Dashboard.tsx gets ONE read-only tile max. (Dashboard.tsx: 936 lines, 27 commits/90d, named highest collision risk in code-health audit.)
+- Audit conflict log: 4 entries (asset manager, MarginEngine staleness, ai_usage_log, plants.cost_price) — all resolved consistently with audit-wins rule.
+- Honest inventory: 15 items that do NOT exist yet (code/schema/migration) vs 3 that are built.
+- Build sequencing: 14-step logical dependency order (not committed sprint plan).
+
+**AC compliance:** No AC issues — session did not touch shared schema, RLS, or shared identifiers.
+
+**STANDARDS compliance:**
+- STD-001: ✅ Read-only diagnosis throughout. Checked PLATFORM_AUDIT, PLATFORM_STATE, built-inventory before writing.
+- STD-002 through STD-010: N/A — design-capture session; no code written, no bug fix, no migration, no integration surface touched.
+
+**Factual corrections captured:** None surfaced. PLATFORM_AUDIT §3 staleness on MarginEngine (was "17-line stub", now canonical BUILT) was already documented in PLATFORM_STATE.md. No new corrections.
+
+**No runbook needed** — pure design-capture session.
+
+**Documentation propagation check:** No customer-facing feature built. No Help.tsx, onboarding, or error message changes. No `// FLAG:` fulfillments. `docs/built-inventory.md` not updated (no state changed — all items in this doc are DESIGN; the only WORKS items already have correct state in built-inventory). Explicit: no customer-facing documentation propagation needed for this session.
+
+**Gap graduation sweep:** No gap graduations this session.
+
+**PLATFORM_STATE.md level changes:** None — design session only. No new files wired, no builds confirmed, no migrations applied.
+
+---
 
 ### 2026-06-11 — THUNDER doc-sync + date-drift sweep
 
