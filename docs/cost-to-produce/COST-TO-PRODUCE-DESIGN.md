@@ -709,6 +709,28 @@ assumed to be included.
 
 **Status: OPEN**
 
+### RECEIPT ROUTING SEAM (OPEN)
+
+A receipt can populate `business_inventory` (stock on hand — the dollars become asset
+basis) OR flow to QB/accounting as an operating expense — the SAME dollars, two possible
+treatments. Double-count risk is real: the accumulator could see the receipt amount once
+as inventory cost and again as an accounting expense, inflating the period pool.
+
+The dedup link is `business_inventory.receipt_id` (and the parallel `business_service_log.receipt_id`
+added in the 2026-06-12 migrations). **PRESENT receipt_id = the receipt is the cost source
+for that row; the accumulator must not also count the QB expense for the same receipt.**
+
+What TRACE does: capture, link, surface the receipt_id relationship. What TRACE never
+does: rule on whether the item should be capitalized as stock vs. expensed now. That is
+the accountant's call — the inventory-vs-expense tax treatment is outside TRACE's boundary
+(see §1: "never take a tax or legal position"). The receipt_id is the join that makes the
+accountant's job possible; the dedup logic itself is an open implementation seam until
+the accumulator is built and the count-once rule is enforced in code, not just intent.
+
+**Status: OPEN — receipt_id seam exists in schema (2026-06-12); accumulator enforcement
+not yet built. Flag for test coverage at the accumulator → pool slice (same risk class as
+SLICE SEAM above).**
+
 ---
 
 ## 15. BUILD SEQUENCING (recommended order, not committed)
