@@ -1,0 +1,83 @@
+import Anthropic from '@anthropic-ai/sdk';
+
+const PROMPT = `You are a preventive maintenance (PMI) expert for small business equipment.
+Given an asset's name and details, return a JSON object with a list of recommended maintenance tasks.
+
+Return ONLY this JSON object, no markdown fences, no explanation:
+{"tasks": [{"name": "string", "interval": "string"}]}
+
+Rules:
+- name: short, action-oriented task description (e.g. "Change engine oil", "Check tire pressure")
+- interval: human-readable frequency — "daily", "weekly", "monthly", "quarterly", "semi-annually", "annually", "every 2 years", or "every N miles/hours" for usage-based
+- Include 3-8 tasks typical for the asset type
+- Prioritize safety-critical tasks first
+- If asset details are sparse, use the asset type to infer sensible defaults`;
+
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ ok: false, error: 'Method not allowed' });
+  }
+
+  const { businessId, name, asset_type, make, model, year } = req.body ?? {};
+
+  if (!businessId || !name) {
+    return res.status(400).json({ ok: false, error: 'businessId and name are required' });
+  }
+
+  const claudeKey = process.env.ANTHROPIC_API_KEY ?? '';
+  if (!claudeKey) {
+    console.error('[TRACE:PMI] ANTHROPIC_API_KEY missing');
+    return res.status(503).json({ ok: false, error: 'AI unavailable — contact support' });
+  }
+
+  const assetDescription = [
+    name,
+    asset_type ? `(${asset_type})` : '',
+    make ? `Make: ${make}` : '',
+    model ? `Model: ${model}` : '',
+    year ? `Year: ${year}` : '',
+  ].filter(Boolean).join(' ');
+
+  try {
+    const client = new Anthropic({ apiKey: claudeKey });
+    const msg = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 512,
+      messages: [{
+        role: 'user',
+        content: `Asset: ${assetDescription}\n\nReturn the JSON maintenance task list.`,
+      }],
+      system: PROMPT,
+    });
+
+    const textBlock = msg.content.find((b: any) => b.type === 'text') as any;
+    const rawText: string = textBlock?.text ?? '';
+
+    let tasks: Array<{ name: string; interval: string }> = [];
+    try {
+      const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+      const parsed = JSON.parse(cleaned);
+      tasks = Array.isArray(parsed?.tasks) ? parsed.tasks : [];
+    } catch {
+      const match = rawText.match(/\{[\s\S]*\}/);
+      if (match) {
+        try {
+          const parsed = JSON.parse(match[0]);
+          tasks = Array.isArray(parsed?.tasks) ? parsed.tasks : [];
+        } catch {
+          console.error('[TRACE:PMI] Failed to parse AI response:', rawText.slice(0, 200));
+          return res.status(500).json({ ok: false, error: 'AI returned unparseable response — try again' });
+        }
+      }
+    }
+
+    if (tasks.length === 0) {
+      return res.status(500).json({ ok: false, error: 'AI returned no tasks — try again' });
+    }
+
+    return res.json({ ok: true, tasks });
+  } catch (err: any) {
+    console.error('[TRACE:PMI] Anthropic error:', err?.message?.slice(0, 200));
+    return res.status(503).json({ ok: false, error: 'AI suggest failed — try again' });
+  }
+}

@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-12 (THUNDER manual-entry forms: BusinessAssets + BusinessInventory WIRED; /assets + /inventory routes live; build clean)
+# Last updated: 2026-06-13 (THUNDER PMI rewire: PMI.tsx BROKEN→WIRED on 3 live tables; barcode_id + task checklist + inspection result + AI suggest (api/pmi/suggest.ts, Claude Sonnet 4.6); 20260613 migration written; build clean; ⚠️ Vercel 13-function limit hit)
 # Current AI: Claude Code
 
 ---
@@ -314,55 +314,65 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
-### 2026-06-12 — THUNDER manual-entry forms: business_assets + business_inventory
+### 2026-06-13 — THUNDER PMI: rewire shared PMI module + AI suggest endpoint
 
-**Type:** Feature build. 2 new pages, 1 router update. Zero schema changes, zero migration changes, zero API changes.
+**Type:** Module rewire + new Vercel API endpoint + migration. Zero new pages. Zero router changes. No env/infra changes.
 
-**Session mandate:** THUNDER · BUILD manual-entry form for business_assets + business_inventory — the permanent fallback FLOOR under every smarter (AI/receipt) source. Build first so David can load real data now.
+**Session mandate:** THUNDER · rewire `packages/shared/src/modules/PMI.tsx` off dead `pmi_assets`/`pmi_service_logs` onto 3 live Supabase tables (`business_assets`, `business_pmi_schedule`, `business_service_log`); port task checklist + inspection result enum from `PredictiveKey.jsx`; add `barcode_id` to asset form; wire AI schedule suggest via new Vercel function using proven receipts/ocr.ts gateway pattern.
 
 **PRE-BUILD VERIFY completed:**
-- `businessId` resolution: `useBusinessContext()` from `@trace/shared/context` — `businessId: string | null`. Canonical path confirmed in Orders.tsx, ReceiptKeeper.tsx, DeliveryRoute.tsx.
-- RLS INSERT confirmed for both owner and member: both tables have `WITH CHECK` on both `_owner_all` and `_member_all` policies — dual-policy matches receipts table pattern. Active member INSERT explicitly allowed.
-- House style: Orders.tsx pattern — inline styles, `#EAF3DE` background, `#27500A` primary, `ArrowLeft` + lucide-react icons, `'../lib/supabase'` import, `useNavigate`.
+- `barcode_id text` confirmed in base migration (20260612, line 36) — no ALTER needed
+- `business_pmi_schedule.tasks jsonb DEFAULT '[]'` confirmed — tasks column exists
+- `business_service_log` has NO `result` column — new migration required (20260613)
+- `last_service_at` is on `business_pmi_schedule`, NOT `business_assets`
+- Receipt Keeper gateway pattern confirmed at `packages/cultivar-os/api/receipts/ocr.ts`
 
-**TASK 1 — BusinessAssets.tsx** (`packages/cultivar-os/src/pages/BusinessAssets.tsx`):
-- INSERT form: name (req), asset_type, make, model, serial_number, year, location, status (ACTIVE/IN_REPAIR/OFFLINE/RETIRED, default ACTIVE), acquisition_cost, cost_confidence (ESTIMATED default, UNKNOWN selectable — Surface Honesty: manual cost ≠ CONFIRMED), notes
-- LIST view: table with name/S/N, type, make+model+year, location, status badge, cost+confidence, added date
-- Bottom sheet modal pattern (tap outside to dismiss)
-- businessId always from session context, never user-supplied
+**TASK 1 — Migration** (`supabase/migrations/20260613_business_service_log_result.sql`):
+- `ALTER TABLE business_service_log ADD COLUMN IF NOT EXISTS result text CHECK (result IN ('PASS', 'NEEDS_ATTENTION', 'FAIL'))`
+- ⚠️ **David must run this in Supabase SQL editor BEFORE using the log service form** — result field INSERT will error without it
 
-**TASK 2 — BusinessInventory.tsx** (`packages/cultivar-os/src/pages/BusinessInventory.tsx`):
-- INSERT form: name (req), sku, qty (req, default 0), unit_cost, location, status (default available), serial_number, cost_confidence (ESTIMATED default — Surface Honesty), received_at, notes
-- receipt_id intentionally absent in manual form — linked by receipt flow later (COUNT-ONCE dedup seam preserved)
-- LIST view: table with name/SKU/S/N, qty pill, unit_cost+confidence, location, status badge, received date
+**TASK 2 — PMI.tsx rewire** (`packages/shared/src/modules/PMI.tsx`):
+- `loadAssets()`: two-query (business_assets .neq RETIRED + business_pmi_schedule by asset_id IDs), merged client-side into `PMIAsset[]`. `getPMIStatus()`/`daysUntilDue()` unchanged.
+- `handleAddAsset()`: INSERT business_assets (with barcode_id); if interval set, INSERT business_pmi_schedule. barcode_id field added to form.
+- `handleLogService()`: INSERT business_service_log (result nullable — PASS/NEEDS_ATTENTION/FAIL); UPDATE business_pmi_schedule.last_service_at via schedule_id.
+- Task checklist: `business_pmi_schedule.tasks` jsonb `[{name, interval}]`. Per-task card in log form. `openLogForm()` seeds logTasks from selected.tasks.
+- Inspection result: 3-button PASS/NEEDS_ATTENTION/FAIL picker in log form. `RESULT_STYLE` constant for badge colors.
+- `handleSuggestSchedule()`: POST `/api/pmi/suggest` → UPSERT business_pmi_schedule.tasks. "Suggest Schedule" button in detail view.
+- AC-1 ✅: no vertical nouns anywhere in rewired code. businessId from useBusinessContext(), never hardcoded.
 
-**TASK 3 — router.tsx**:
-- Added `import { BusinessAssets } from './pages/BusinessAssets'`
-- Added `import { BusinessInventory } from './pages/BusinessInventory'`
-- Registered `/assets` and `/inventory` as PrivateRoute children
-- CoreApp.jsx NOT touched — standalone routes per task constraint
+**TASK 3 — api/pmi/suggest.ts** (`packages/cultivar-os/api/pmi/suggest.ts` + root shim `api/pmi/suggest.ts`):
+- Claude Sonnet 4.6, text-only (no vision stage), `ANTHROPIC_API_KEY` server-side only
+- Input: `{businessId, name, asset_type, make, model, year}`. Output: `{ok: true, tasks: [{name, interval}]}`
+- `ANTHROPIC_API_KEY` already set in Vercel cultivar-os project — no new env var needed
+- ⚠️ **13th Vercel function — exceeds Hobby limit (cap = 12)**. Vercel will refuse deploy until David either (a) upgrades to Pro or (b) removes one existing function. See PLATFORM_STATE.md Vercel functions row.
 
 **Build:** `npm run build:cultivar` — ✅ clean (2187 modules, 0 errors)
+**Grep proof:** ZERO references to `pmi_assets` or `pmi_service_logs` in shared/, cultivar-os/, api/ directories.
 
-**AC compliance:** AC-1 ✅ — no vertical nouns in new code; all table refs use `business_` prefix. businessId from session, never hardcoded.
+**AC compliance:** AC-1 ✅ — `business_` prefix only; no vertical nouns. businessId from session.
 
 **STANDARDS compliance:**
-- STD-001: ✅ WIRED (not WORKS) — INSERT path wired and build-verified; live data INSERT not yet confirmed by David in browser.
-- STD-002 through STD-010: N/A — no shared module changes, no AI calls, no env/infra.
+- STD-001: ✅ WIRED — INSERT path wired and build-verified; live data not yet confirmed by David in browser.
+- STD-005 (AI calls): `api/pmi/suggest.ts` uses `ANTHROPIC_API_KEY` server-side only, never exposed to client. ✅
 
-**No runbook needed** — no env/infra changes. No new Vercel env vars.
+**No new Vercel env vars needed.** `ANTHROPIC_API_KEY` already set.
 
-**Documentation propagation check:** No Help.tsx update needed (these are internal owner tools, not customer-facing). No onboarding path touches these pages yet.
+**Documentation propagation check:** No Help.tsx update needed (PMI is internal owner tool). No onboarding path touches this page.
 
-**Gap graduation sweep:** No gap graduations.
+**Gap graduation sweep:** PMI module BROKEN→WIRED. business_pmi_schedule EXISTS→WIRED. business_service_log EXISTS→WIRED. PMI page BROKEN→WIRED.
 
 **PLATFORM_STATE.md level changes:**
-- business_assets: EXISTS → WIRED (BusinessAssets.tsx + /assets route live, build clean)
-- business_inventory: EXISTS → WIRED (BusinessInventory.tsx + /inventory route live, build clean)
-- business_pmi_schedule: no change (still EXISTS)
-- business_service_log: no change (still EXISTS)
+- Modules · PMI.tsx: BROKEN → WIRED
+- PMI page: BROKEN → WIRED
+- business_pmi_schedule table: EXISTS → WIRED
+- business_service_log table: EXISTS → WIRED
+- Vercel functions: updated to flag 13th function + limit breach
 
-**Next step for David:** Navigate to `/assets` and `/inventory` in the running app and INSERT one real row each. Once rows appear in the list and in the Supabase table editor, graduate both to WORKS.
+**Next steps for David:**
+1. **Run `20260613_business_service_log_result.sql`** in Supabase SQL editor (bgobkjcopcxusjsetfob) — required before log result field works
+2. Navigate to `/pmi`, add an asset, set a maintenance schedule, log a service — verify all INSERTs succeed
+3. Click "Suggest Schedule" on an asset — verify AI returns tasks list
+4. **Resolve Vercel 13-function limit**: upgrade cultivar-os Vercel project to Pro, or decide which existing function to remove
 
 ---
 

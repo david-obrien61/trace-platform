@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-06-12
+# Last updated: 2026-06-13
 
 **Purpose:** Sessions keep rebuilding things that exist. This document is the single answer to "was X ever built?" Organized by capability, not by file. For file locations, see PLATFORM_AUDIT.md.
 
@@ -128,24 +128,24 @@ Code anchor: `// FLAG: REQ-2` in `packages/cultivar-os/src/pages/ReceiptKeeper.t
 ## Business Asset Layer (Cost-to-Produce)
 
 **What:** Schema + UI layer for tracking business-owned assets and inventory. Foundation for the Cost-to-Produce tile. Part of the same receipt-anchored cost model as Receipt Keeper — receipts can link to inventory rows via the COUNT-ONCE dedup seam.  
-**Status:** ✅ WIRED 2026-06-12 — schema applied, manual-entry UIs live; pmi_schedule + service_log tables exist but no app module yet  
+**Status:** ✅ WIRED 2026-06-13 — schema applied, manual-entry UIs live, PMI module rewired onto live tables; AI suggest endpoint added. ⚠️ David must run `20260613_business_service_log_result.sql` before using the log result field.  
 **Vertical:** cultivar (UI surfaces today; schema AC-1 clean, business_id-scoped) | **Type:** infrastructure
 
 **What is built (2026-06-12):**
-- `business_assets` table — RLS: `owner_all` + `member_all` dual-policy (matches receipts pattern). FK→businesses CASCADE. BEFORE UPDATE trigger. Status CHECK (ACTIVE/IN_REPAIR/OFFLINE/RETIRED). Columns: name, asset_type, make, model, serial_number, year, location, status, acquisition_cost, cost_confidence, notes. Migration: `supabase/migrations/20260612_business_assets_inventory_pmi_service.sql`. Applied + structurally verified 2026-06-12.
+- `business_assets` table — RLS: `owner_all` + `member_all` dual-policy (matches receipts pattern). FK→businesses CASCADE. BEFORE UPDATE trigger. Status CHECK (ACTIVE/IN_REPAIR/OFFLINE/RETIRED). Columns: name, asset_type, make, model, serial_number, **barcode_id**, year, location, status, acquisition_cost, cost_confidence, notes. Migration: `supabase/migrations/20260612_business_assets_inventory_pmi_service.sql`. Applied + structurally verified 2026-06-12.
 - `business_inventory` table — same migration. Columns: name, sku, qty, unit_cost, location, status, serial_number, cost_confidence, received_at, notes. **+`receipt_id` FK→receipts (SET NULL)** — COUNT-ONCE dedup seam: when linked, receipt line item is authoritative cost; inventory's unit_cost is secondary.
-- `business_pmi_schedule` table — same migration. 2 FKs (→businesses CASCADE, →business_assets CASCADE). columns: tasks jsonb, overrides jsonb, last_service_at, scheduled_interval_days, is_active. 0 rows. **No app module reads/writes yet — EXISTS only. NOT the `pmi_assets` table referenced by the shared `PMI.tsx` module — those are separate.**
-- `business_service_log` table — same migration. 3 FKs (→businesses CASCADE, →business_assets CASCADE, →receipts SET NULL). Append-only ledger (no `updated_at` trigger by design — corrections add new rows). receipt_id = COUNT-ONCE dedup seam. 0 rows. **EXISTS only.**
+- `business_pmi_schedule` table — same migration. 2 FKs (→businesses CASCADE, →business_assets CASCADE). columns: tasks jsonb (AI-suggest writes here), overrides jsonb, last_service_at, interval_days. **WIRED 2026-06-13**: PMI.tsx handleAddAsset() INSERTs when interval set; handleLogService() UPDATEs last_service_at; handleSuggestSchedule() UPSERTs tasks from /api/pmi/suggest response.
+- `business_service_log` table — same migration + `supabase/migrations/20260613_business_service_log_result.sql` (adds `result text CHECK(PASS/NEEDS_ATTENTION/FAIL)`). 3 FKs (→businesses CASCADE, →business_assets CASCADE, →receipts SET NULL). Append-only ledger (no `updated_at` trigger — corrections add new rows). receipt_id = COUNT-ONCE dedup seam. **WIRED 2026-06-13**: PMI.tsx handleLogService() INSERTs. ⚠️ `result` column requires 20260613 migration — David must apply before using log result.
 - `cost_confidence` enum — migration `20260612_cost_confidence.sql`. Values: `ESTIMATED`, `CONFIRMED`, `UNKNOWN`. Applied 2026-06-12. Surface Honesty enforcement: manual entry defaults ESTIMATED; CONFIRMED requires a receipt link; UNKNOWN = entered but source not known.
 - `BusinessAssets.tsx` UI — INSERT form (name, asset_type, make, model, year, serial_number, location, status, acquisition_cost, cost_confidence, notes) + LIST view at `/assets`. businessId from `useBusinessContext()`. Commit b924800.
 - `BusinessInventory.tsx` UI — INSERT form (name, sku, qty, unit_cost, location, status, serial_number, cost_confidence, received_at, notes; receipt_id intentionally absent — linked by receipt flow) + LIST view at `/inventory`. Commit b924800.
 - Router: `/assets` and `/inventory` registered as PrivateRoute children in `packages/cultivar-os/src/router.tsx`.
 
-**What is NOT yet built:**
-- PMI module UI — `packages/shared/src/modules/PMI.tsx` is **BROKEN at runtime**: it queries `pmi_assets` which does NOT exist in bgobkjcopcxusjsetfob. Migration `20260529_pmi_shared.sql` was written but **never applied**. `business_pmi_schedule` (EXISTS 2026-06-12) is a different table and does NOT unblock PMI.tsx. See PLATFORM_STATE.md PMI page row (BROKEN).
-- `pmi_suggest` AIEngine route — Claude Sonnet 4.6. Wired in AIEngine.ts routing table but **DARK** (VITE_API_URL unset in Ignition Vercel project; no Vercel function exists for Cultivar either).
-- Business Service Log UI — no app module reads/writes `business_service_log` yet.
-- Cost-to-Produce tile — the dashboard tile that aggregates all four tables into margin insight. Design doc: `docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md`.
+**What was NOT yet built (as of 2026-06-12) — now updated:**
+- ~~PMI module UI — BROKEN~~ → **WIRED 2026-06-13**: `packages/shared/src/modules/PMI.tsx` fully rewired onto business_assets + business_pmi_schedule + business_service_log. barcode_id, task checklist, PASS/NEEDS_ATTENTION/FAIL result, AI suggest. See PMI Module section below.
+- ~~`pmi_suggest` AIEngine route DARK~~ → **New Vercel endpoint 2026-06-13**: `api/pmi/suggest.ts` (Claude Sonnet 4.6, text-only). Input: `{businessId, name, asset_type, make, model, year}`. Output: `{ok: true, tasks: [{name, interval}]}`. ⚠️ 13th Vercel function — exceeds Hobby limit; David must upgrade to Pro or free a slot.
+- ~~Business Service Log UI — no app module~~ → **WIRED 2026-06-13**: PMI.tsx handleLogService() writes to business_service_log (result column requires 20260613 migration).
+- **Cost-to-Produce tile** — the dashboard tile that aggregates all four tables into margin insight. Design doc: `docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md`. **Not yet built.**
 
 **Seams declared:**
 - `business_inventory.receipt_id` FK→`receipts.id` (SET NULL) — COUNT-ONCE dedup seam. Presence = receipt is authoritative cost; absence = inventory's `unit_cost` stands. receipt_id is intentionally absent in the manual-entry form; linked only through the receipt flow.
@@ -866,9 +866,9 @@ Defined in `IgnitionAdmin.jsx ALL_PERMISSIONS`. Enforced by `CoreApp AccessGatek
 | Online Shop | Cultivar OS | Tile exists, "Enable" stub. Next roadmap item. |
 | Follow-Up engine | Cultivar OS | Tile exists, nothing built. |
 | ~~Abstract asset model~~ | ~~Shared~~ | ✅ RESOLVED 2026-06-12: `business_assets`, `business_inventory`, `business_pmi_schedule`, `business_service_log` tables built (AC-1 clean, `business_id`-scoped RLS). BusinessAssets.tsx + BusinessInventory.tsx WIRED at `/assets` + `/inventory`. Schema is the concrete instantiation of the pattern. Full shared extraction (QR→record→event as a shared module) remains a future step — see "✅ Resolved Gaps" below. |
-| PMI module (`shared/src/modules/PMI.tsx`) | Cultivar OS | ⚠️ **BROKEN at runtime (confirmed 2026-06-12):** PMI.tsx queries `pmi_assets` which does NOT exist in bgobkjcopcxusjsetfob. Migration `20260529_pmi_shared.sql` was written but never applied. `business_pmi_schedule` (EXISTS 2026-06-12) is a separate table and does NOT unblock this module. `pmi_suggest` AIEngine route (Claude Sonnet 4.6) exists in AIEngine.ts but is DARK (VITE_API_URL unset). See PLATFORM_STATE.md PMI page row (BROKEN). |
-| Business Service Log UI | Cultivar OS | `business_service_log` table EXISTS (2026-06-12). No app module reads or writes it. Prerequisite for the Cost-to-Produce service-cost ledger. |
-| Business PMI Schedule UI | Cultivar OS | `business_pmi_schedule` table EXISTS (2026-06-12). No app module reads or writes it. Prerequisite for the Cost-to-Produce maintenance schedule view. |
+| ~~PMI module (`shared/src/modules/PMI.tsx`)~~ | ~~Cultivar OS~~ | ✅ **WIRED 2026-06-13:** Rewired off dead `pmi_assets` onto `business_assets` + `business_pmi_schedule` + `business_service_log`. barcode_id field. Task checklist from tasks jsonb. PASS/NEEDS_ATTENTION/FAIL result on service log. AI suggest via new `api/pmi/suggest.ts` (Claude Sonnet 4.6, text-only). Build clean. ⚠️ David must run `20260613_business_service_log_result.sql` + verify in browser. See resolved gap entry below. |
+| ~~Business Service Log UI~~ | ~~Cultivar OS~~ | ✅ **WIRED 2026-06-13:** PMI.tsx handleLogService() writes to `business_service_log`. See PMI module row above. |
+| ~~Business PMI Schedule UI~~ | ~~Cultivar OS~~ | ✅ **WIRED 2026-06-13:** PMI.tsx reads/writes `business_pmi_schedule` (INSERT on add, UPDATE last_service_at on log, UPSERT tasks on AI suggest). See PMI module row above. |
 | Onboarding wizard (shared) | Shared | Two separate OnboardingWizard implementations (Ignition + Cultivar). Extract WizardShell to shared before Conduit OS. |
 | Trial clock enforcement | Cultivar OS | Seam exists in useModules.ts line 100 (`nurseryPlan = 'starter'`). No blur, no Stripe. |
 | Delivery address persistence | Cultivar OS | DeliveryRoute.tsx shows inline address override but does not persist it. Needs `delivery_address` column on `orders` and capture at checkout for delivery transport. |
@@ -893,6 +893,7 @@ Defined in `IgnitionAdmin.jsx ALL_PERMISSIONS`. Enforced by `CoreApp AccessGatek
 | Multi-tenant member login | 2026-06-02 | BusinessProvider two-path resolution. Members land on Dashboard, not "Account not linked" wall. |
 | Cross-vertical member isolation | 2026-06-04 | BusinessProvider member path now filters by `business_type` post-fetch (commit 8792c71). |
 | Abstract asset model / Business Asset Layer | 2026-06-12 | `business_assets` + `business_inventory` + `business_pmi_schedule` + `business_service_log` tables applied to bgobkjcopcxusjsetfob. `cost_confidence` enum. BusinessAssets.tsx + BusinessInventory.tsx WIRED (commit b924800). AC-1 clean. Surface Honesty: cost_confidence defaults ESTIMATED for manual entry; CONFIRMED requires receipt link. COUNT-ONCE dedup seam: `business_inventory.receipt_id` + `business_service_log.receipt_id` FKs→receipts. |
+| PMI module rewired + AI suggest endpoint | 2026-06-13 | `packages/shared/src/modules/PMI.tsx` rewired off dead `pmi_assets`/`pmi_service_logs` onto 3 live tables. barcode_id in add form. Task checklist from `business_pmi_schedule.tasks` jsonb. Inspection result PASS/NEEDS_ATTENTION/FAIL on service log (requires 20260613 migration). `api/pmi/suggest.ts` (Claude Sonnet 4.6, text-only, proven receipts/ocr.ts gateway pattern). Build clean 2187 modules. Zero dead-table refs (grep verified). ⚠️ **David must:** (1) run `20260613_business_service_log_result.sql`; (2) navigate `/pmi` and verify in browser; (3) confirm Vercel function count / upgrade to Pro for 13th function. |
 
 ---
 
