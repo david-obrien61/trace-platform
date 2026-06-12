@@ -7,6 +7,71 @@
 
 ---
 
+### 2026-06-11 — THUNDER doc-sync + date-drift sweep
+
+**Type:** Docs-only. Zero code changes, zero migrations, zero schema changes, zero API changes.
+
+**Session mandate:** THUNDER · DOC-SYNC + DATE-DRIFT SWEEP — correct systematic forward-date drift across canonical docs; sync Receipt Keeper v1 WORKS state into docs that hadn't been updated; add OCR COMMODITY strategic conclusion.
+
+---
+
+**DATE DRIFT CORRECTED (all → 2026-06-11):**
+
+| File | Drift found | Count |
+|---|---|---|
+| `CLAUDE.md` | `2026-06-15` in handoff section heading | 1 |
+| `PLATFORM_STRATEGY.md` | `2026-06-12` in header + changelog + 4 decision footers | 7 |
+| `PLATFORM_STATE.md` | `2026-06-12` in Build/Vercel/TRIAGE rows; `2026-06-14` in receipts HANDOFF refs | 5 |
+| `STANDARDS.md` | `2026-06-12` in v1.7 changelog + BENCH-E scar text | 3 |
+| `MASTER_BRIEF.md` | `2026-06-13` in header + Part 16 header + D-003/D-004/D-005/D-008 text; `2026-06-12` in D-005/D-008 | 9 |
+
+Migration filenames (`20260612_*`, `20260613_*`, `20260614_*`) intentionally left unchanged per task constraint — cosmetic, do not rename committed files.
+
+---
+
+**CONTENT SYNC APPLIED:**
+
+**PLATFORM_STATE.md:**
+- `receipts table` row: updated "pending migrations — David must apply" → "All 5 migrations applied 2026-06-11 (confirmed live test)" — corrects inconsistency with Receipt Keeper v1 WORKS row which already stated "Migrations all applied."
+- `receipts reconciliation migration`: EXISTS → WORKS; evidence updated to reflect applied + live test confirmation.
+- `platform_config migration`: EXISTS → WORKS; evidence updated.
+
+**MASTER_BRIEF.md Part 16:**
+- D-004 v1 state: Updated from "Not yet built" to "BUILT — computeReconcile() MATCH_TOLERANCE $0.02, ConflictDialog, reconcile_overridden_at, confirmed McCoy's 2026-06-11."
+- D-008 current state: Note added that BENCH-E Rule 7 (model names externalized) also completed 2026-06-11, partially fulfilling Pass 2.
+- Open Threads 1 + 2: Marked RESOLVED (Gemini 2.5 Flash live test at McCoy's resolved both).
+- **D-009 added:** OCR IS COMMODITY — App Store + Nanonets + QBO-no-reader-API confirm OCR is infrastructure, not moat. Moat is Cost-to-Produce/margin. Gemini Flash + Claude Haiku cover it at sub-penny cost. No specialist OCR vendor needed or desirable.
+
+**docs/built-inventory.md:**
+- Receipt / Expense Storage section: status `❌ NOT BUILT` → `✅ BUILT (receipts + bucket, Receipt Keeper v1 WORKS)`. Updated "what exists" and "what is not yet built" breakdown.
+- Gaps table: Receipt storage row moved to resolved; expenses/cost_profile remain in gaps.
+- Gemini vision pipeline gap: RESOLVED 2026-06-11 (Receipt Keeper v1 confirmed first Vercel → Gemini vision pipeline); Ignition VIN OCR noted still unresolved.
+
+**DEFERRED/OPEN (honestly noted, not resolved this session):**
+- ReceiptKeeper.tsx module reorg: confirmed happened (receiptReconciliation.ts, imageCompression.ts, LineItemGrid.tsx, ConflictDialog.tsx all exist). Actual main file is 727 lines (task said ~790 — minor discrepancy; 727 is verified current).
+- docs-at-root vs docs/ path references reconciliation: still pending.
+- Code-health audit: not yet scheduled.
+
+---
+
+**AC compliance:** No AC issues — session did not touch shared schema, RLS, or shared identifiers.
+
+**STANDARDS compliance:**
+- STD-001: ✅ Read-only diagnosis throughout before every doc edit.
+- STD-002 through STD-010: N/A or ✅ — see CLAUDE.md 2026-06-11 entry for full detail.
+- BENCH-E: ✅ Preserved — no provider chain changes.
+
+**Factual corrections captured:**
+- PLATFORM_STRATEGY.md, PLATFORM_STATE.md, STANDARDS.md, MASTER_BRIEF.md all claimed future-dated work that actually happened 2026-06-11. Corrected.
+- MASTER_BRIEF.md D-004 claimed reconciliation engine "not yet built" — contradicted by PLATFORM_STATE.md. Corrected.
+- PLATFORM_STATE.md receipts/platform_config migration rows said "David must apply" — contradicted by Receipt Keeper v1 WORKS row. Corrected.
+
+**PLATFORM_STATE.md level changes:**
+- `receipts reconciliation migration`: EXISTS → WORKS
+- `platform_config migration`: EXISTS → WORKS
+
+---
+
 ### 2026-06-15 — McCoy's always-normalize fix: browser-image-compression replaces COMPRESS_THRESHOLD
 
 **Type:** Code (3 files changed: `packages/cultivar-os/src/utils/imageCompression.ts` full rewrite, `packages/cultivar-os/src/pages/ReceiptKeeper.tsx` import cleanup, `packages/cultivar-os/package.json` new dep). Zero migrations, zero schema changes, zero API changes. Build 2185 ✅ (+1 module over prior 2184).

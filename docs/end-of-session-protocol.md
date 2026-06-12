@@ -1,0 +1,133 @@
+# End-of-Session Protocol — TRACE Platform
+
+> Read this at the END of every session — not at session open.
+> Full text lives here; CLAUDE.md §9 contains only the pointer + file-size check.
+
+---
+
+## FILE SIZE & ORGANIZATION CHECK (before editing any file during the session)
+
+Before adding to or editing a file, note its current line count. If the file exceeds ~800 lines
+OR is clearly handling multiple distinct concerns, **STOP and ASK David**:
+
+> "This file is [N] lines and handles [concerns A, B, C] — should we reorganize it into
+> smaller modules before adding more, or edit in place for now?"
+
+Rules:
+- Line count is a **trigger to ask**, not an automatic action. Do NOT silently refactor a large file.
+- The real concern is whether a file does too many jobs to reason about and edit cleanly.
+- Context-thrash guard: reading an oversized file whole on every edit overflows the session context.
+  Prefer viewing only the relevant range (use `offset` + `limit` on Read).
+
+This check applies at the moment of opening a file to edit it — not retrospectively at session end.
+
+---
+
+## MANDATORY CLOSE CHECKLIST (steps 1–16)
+
+1. Update Part 3 (Handoff) in CLAUDE.md
+2. Update Part 4 (Active Tasks) — check completed
+3. Update Part 7 (Off Limits) — clear old, add current
+4. Confirm no hardcoded URLs or keys in new code
+5. git add CLAUDE.md
+6. git commit -m "Update CLAUDE.md — [date] [what was built]"
+7. git push
+8. Write 3-sentence plain English summary
+
+9. **Tailwind drift check** — run:
+   ```
+   git diff --name-only $SESSION_START_COMMIT HEAD -- 'packages/**/*.tsx' 'packages/**/*.jsx' | xargs grep -l 'className=' 2>/dev/null
+   ```
+   - `packages/ignition-os/`: pre-existing Tailwind is expected (deprecated, post-August conversion)
+   - `packages/shared/src/components/SavingsReport.jsx` or `QuickBooksConnector.jsx`: same — pre-existing
+   - Any other file or package: `className=` with Tailwind utility classes = policy violation
+   If new Tailwind found: convert to inline styles before committing OR document in commit message AND add to `docs/tailwind-conversion-progress.md`.
+
+10. **Documentation propagation check** — For any session that built, modified, or removed a customer-facing widget, page, or feature, answer all five:
+
+   1. Does `packages/cultivar-os/src/pages/Help.tsx` (or vertical equivalent) need a new Q&A or update?
+   2. Does the onboarding flow reference this widget/feature accurately?
+   3. Does `docs/built-inventory.md` reflect current state?
+   4. Are there any `// FLAG:` placeholders this session's work fulfills? If so, replace with real content.
+   5. Does any error message or in-app help text need to be added or updated?
+
+   **If yes to any:** make the updates in this session's commit. Propagation is part of the work.
+   **If no to all:** state explicitly: "No customer-facing documentation propagation needed for this session."
+   This step is mandatory.
+
+11. **Factual correction capture** — Triggered when:
+   - An audit revealed something different from what was previously asserted
+   - Claude discovered a file in a different state than expected
+   - David said "I think X works this way" and Claude verified it works differently
+   - A user-facing description was found to be inaccurate after checking the code
+   - Tech Debt entries were found to be already-fixed or no-longer-relevant
+
+   When triggered: (1) Identify the wrong claim (quote it). (2) Identify what's actually true (cite file/line). (3) Update the source-of-truth doc. (4) Append a brief entry to `THOUGHTS.md`.
+
+   Mandatory: session not complete until either a correction is captured OR the session explicitly states "no factual corrections surfaced in this session."
+
+12. **Runbook capture** — For any session that performed environment setup, deployment configuration, repository migration, package installation, database migrations, or infrastructure changes: produce a runbook at `docs/runbooks/{operation-name}-{YYYY-MM-DD}.md`.
+
+   Runbook covers: what + why, steps taken, how to verify each step, what failed and how it was resolved, gotchas. Write for replay, not narrative.
+
+   If purely code changes: state "No runbook needed — pure code session."
+
+13. **Architecture-constants compliance check** — Before closing, confirm:
+   - No new vertical nouns in `packages/shared/**` or any shared DB migration (AC-1).
+   - Any RLS policy deviation has WHY documented inline AND in PLATFORM_STRATEGY.md Exception Log (AC-2).
+   - No cross-vertical data path opened without an explicit isolation check (AC-3).
+   - Any new per-vertical variable is a token or vocabulary item, not a structural deviation (AC-4).
+
+   If violation introduced intentionally: add to Known Open Violations in CLAUDE.md §1.5 with remediation trigger.
+   If session did not touch shared schema/code/RLS: state "No AC compliance issues — session did not touch shared schema, RLS, or shared identifiers."
+   Mandatory.
+
+14. **STANDARDS compliance check** — Answer for each applicable standard:
+
+   **STD-001 (Prove Before You Act):** Did any fix happen before read-only diagnosis confirmed root cause?
+
+   **STD-002 (Red-Test-First):** For any bug fix — was the broken state made visible BEFORE the fix was applied?
+
+   **STD-003 (Instrumentation Preserved):** Were any `[SM-TRACE]`-style logs added? If yes: consistently prefixed? Gated behind `const <PREFIX>_DEBUG = false` if fix verified?
+
+   **STD-004 (Tenant Isolation Bar):** Did any feature touching business-scoped data ship? If yes: is a two-email isolation proof in the Handoff?
+
+   **STD-005 (Verbatim Decisions):** Were any decisions reversed or updated? If yes: was prior text explicitly struck through or replaced (not just supplemented)?
+
+   **STD-006 (Vertical-Agnostic):** Covered by AC-1 / Step 13.
+
+   **STD-007 (Derived Connection State):** Did session work touch any surface displaying integration status (QB, Blotato, any OAuth token)? If yes: confirm it derives state proactively from an expiry timestamp, not a cached boolean.
+
+   **STD-008 (Committed Migration ≠ Applied Migration):** Did session work apply a DB migration? If yes: applied to live DB? `information_schema.columns` verification query run? Live schema confirmation logged in Handoff? State one of: "Migration applied and verified — live schema confirmed [columns listed]" OR "Migration written; David must apply; verification query included in migration file."
+
+   **STD-009 / STD-010:** See STANDARDS.md for full text.
+
+   Do not skip silently for any standard. State "N/A" explicitly. Full standard text in STANDARDS.md.
+   Mandatory.
+
+---
+
+## GAP vs DEBT ROUTING
+
+**TECH DEBT** → `docs/tech-debt-log.md` (with standard-ID): built WRONG. Shortcut, hardcode, compromise.
+
+**NAMED GAP** → `docs/built-inventory.md` `remaining:`: built as a labeled, honest shell. A 'suggested'/hollow-but-labeled thing is a gap, NOT debt — it's working-as-designed at this phase.
+
+A labeled gap is roadmap. Tech debt is a defect. Don't conflate them.
+
+**GAP GRADUATION** — each built-inventory `remaining:` gap carries a stated horizon. A gap 30+ days PAST ITS STATED HORIZON has stopped being roadmap and is now a defect-in-practice — graduate it to `docs/tech-debt-log.md` with a standard-ID and remove from `remaining:`. (30 days past horizon, NOT 30 days from creation.)
+
+---
+
+15. **Gap graduation sweep** — Scan all `remaining:` gaps in `docs/built-inventory.md`; graduate any that are 30+ days past their stated horizon to `docs/tech-debt-log.md` (with a standard-ID) and remove from `remaining:`. If no gaps are past horizon, state explicitly: "No gap graduations this session."
+
+16. **PLATFORM_STATE.md update** — After any session that changes the level of a tracked item (new file added, caller wired, build confirmed, migration applied, orphaned file deleted), update the relevant row:
+    - Advance the level only when you have evidence (WIRED → WORKS requires a test result, confirmed-live use, or build-verified runtime path).
+    - Move anything to "⚠️ NOT YET VERIFIED" if evidence is lost or stale.
+    - Never mark David's operational checks done on his behalf.
+    - Add new items with all required columns (LEVEL + LOCATION + EVIDENCE).
+    If no items changed level: state explicitly "No PLATFORM_STATE.md level changes this session."
+
+---
+
+*This file is the authoritative source for the end-of-session protocol. CLAUDE.md §9 contains only the pointer.*
