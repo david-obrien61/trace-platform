@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-12 (THUNDER Cost-to-Produce design doc written: docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md — spine, fork, 4 feeds, 5 pillars, two-tier model, audit conflict log, build sequence; companion diagrams: docs/cost-to-produce/diagrams-2026-06-12.html; no code/schema/migrations)
+# Last updated: 2026-06-12 (THUNDER manual-entry forms: BusinessAssets + BusinessInventory WIRED; /assets + /inventory routes live; build clean)
 # Current AI: Claude Code
 
 ---
@@ -310,48 +310,55 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
-### 2026-06-12 — THUNDER Cost-to-Produce design doc
+### 2026-06-12 — THUNDER manual-entry forms: business_assets + business_inventory
 
-**Type:** Design capture only. Zero code changes, zero migrations, zero schema changes.
+**Type:** Feature build. 2 new pages, 1 router update. Zero schema changes, zero migration changes, zero API changes.
 
-**Session mandate:** THUNDER · WRITE COST-TO-PRODUCE DESIGN DOC — capture the fully resolved
-architecture for Cost-to-Produce as a single authoritative design document. No build.
+**Session mandate:** THUNDER · BUILD manual-entry form for business_assets + business_inventory — the permanent fallback FLOOR under every smarter (AI/receipt) source. Build first so David can load real data now.
 
-**Deliverables:**
-- `docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md` — canonical design doc
-- `docs/cost-to-produce/diagrams-2026-06-12.html` — companion diagrams (revisit artifact; not the canonical doc)
+**PRE-BUILD VERIFY completed:**
+- `businessId` resolution: `useBusinessContext()` from `@trace/shared/context` — `businessId: string | null`. Canonical path confirmed in Orders.tsx, ReceiptKeeper.tsx, DeliveryRoute.tsx.
+- RLS INSERT confirmed for both owner and member: both tables have `WITH CHECK` on both `_owner_all` and `_member_all` policies — dual-policy matches receipts table pattern. Active member INSERT explicitly allowed.
+- House style: Orders.tsx pattern — inline styles, `#EAF3DE` background, `#27500A` primary, `ArrowLeft` + lucide-react icons, `'../lib/supabase'` import, `useNavigate`.
 
-**What's in the doc (14 sections):**
-- Spine: accumulate honestly → emit `cost: number` → divide → surface confidence → never rule on tax/legal
-- Core boundary: capture/surface/model; never take tax or legal position. Every cost line carries cash timing.
-- The fork: accumulator (upstream, event-sourced) → period pool (downstream, snapshot ÷ denominator). One-directional. No reverse writes.
-- Four cost feeds: Receipt Keeper [WORKS], Recurring [DESIGN], Labor + imputed [DESIGN], Asset Manager (Andrew's [BUILT, separate repo]; shared promote-and-consolidate [DESIGN])
-- Cost-object node model: ASSET | PROJECT | PRODUCT as `node_type` discriminator on one `cost_objects` table (AC-1). Containment edges (tree) + contribution edges (DAG for shared costs). COUNT-ONCE rule. PROJECT→PRODUCT conversion lifecycle (CoolRunnings worked case). Shared-cost allocation: owner assigns basis, TRACE does arithmetic, labels it MODEL not FACT.
-- Five pillars (all [DESIGN]): cash-today vs accrual; cost-of-capital; estimate→actual variance + bias learning; confidence-mix rollups (confirmed/derived/estimated/UNKNOWN — never silently zero); payback/break-even clock (F&F hole + discount leakage)
-- Denominator: per `business_type` config (item | customer-month | billable-hour). TRACE self-pricing = sensitivity CURVE at N=1,5,20,100.
-- AI cost: `ai_usage_log` shared table [DESIGN]; `ocr_raw` / receipts provider columns [WORKS]; Tier 2 routing intelligence [DESIGN]
-- MarginEngine: BUILT (canonical, 2026-06-10), ORPHANED for Cultivar. `overheadPerUnit` is the absorption hook. `plants.cost_price` column is the first-caller blocker.
-- Two-tier model: Core = "What did I spend?" (WORKS — Receipt Keeper v1); Pro = "What does it cost me to MAKE this?" (DESIGN — entire intelligence layer). Trial: 2 weeks all-on → Core stays. Fractal rule. Anti-exploitation stance. TRACE eats own cooking (CUSTOMER-ZERO).
-- Surface constraint: `/costs` owns Cost-to-Produce. Dashboard.tsx gets ONE read-only tile max. (Dashboard.tsx: 936 lines, 27 commits/90d, named highest collision risk in code-health audit.)
-- Audit conflict log: 4 entries (asset manager, MarginEngine staleness, ai_usage_log, plants.cost_price) — all resolved consistently with audit-wins rule.
-- Honest inventory: 15 items that do NOT exist yet (code/schema/migration) vs 3 that are built.
-- Build sequencing: 14-step logical dependency order (not committed sprint plan).
+**TASK 1 — BusinessAssets.tsx** (`packages/cultivar-os/src/pages/BusinessAssets.tsx`):
+- INSERT form: name (req), asset_type, make, model, serial_number, year, location, status (ACTIVE/IN_REPAIR/OFFLINE/RETIRED, default ACTIVE), acquisition_cost, cost_confidence (ESTIMATED default, UNKNOWN selectable — Surface Honesty: manual cost ≠ CONFIRMED), notes
+- LIST view: table with name/S/N, type, make+model+year, location, status badge, cost+confidence, added date
+- Bottom sheet modal pattern (tap outside to dismiss)
+- businessId always from session context, never user-supplied
 
-**AC compliance:** No AC issues — session did not touch shared schema, RLS, or shared identifiers.
+**TASK 2 — BusinessInventory.tsx** (`packages/cultivar-os/src/pages/BusinessInventory.tsx`):
+- INSERT form: name (req), sku, qty (req, default 0), unit_cost, location, status (default available), serial_number, cost_confidence (ESTIMATED default — Surface Honesty), received_at, notes
+- receipt_id intentionally absent in manual form — linked by receipt flow later (COUNT-ONCE dedup seam preserved)
+- LIST view: table with name/SKU/S/N, qty pill, unit_cost+confidence, location, status badge, received date
+
+**TASK 3 — router.tsx**:
+- Added `import { BusinessAssets } from './pages/BusinessAssets'`
+- Added `import { BusinessInventory } from './pages/BusinessInventory'`
+- Registered `/assets` and `/inventory` as PrivateRoute children
+- CoreApp.jsx NOT touched — standalone routes per task constraint
+
+**Build:** `npm run build:cultivar` — ✅ clean (2187 modules, 0 errors)
+
+**AC compliance:** AC-1 ✅ — no vertical nouns in new code; all table refs use `business_` prefix. businessId from session, never hardcoded.
 
 **STANDARDS compliance:**
-- STD-001: ✅ Read-only diagnosis throughout. Checked PLATFORM_AUDIT, PLATFORM_STATE, built-inventory before writing.
-- STD-002 through STD-010: N/A — design-capture session; no code written, no bug fix, no migration, no integration surface touched.
+- STD-001: ✅ WIRED (not WORKS) — INSERT path wired and build-verified; live data INSERT not yet confirmed by David in browser.
+- STD-002 through STD-010: N/A — no shared module changes, no AI calls, no env/infra.
 
-**Factual corrections captured:** None surfaced. PLATFORM_AUDIT §3 staleness on MarginEngine (was "17-line stub", now canonical BUILT) was already documented in PLATFORM_STATE.md. No new corrections.
+**No runbook needed** — no env/infra changes. No new Vercel env vars.
 
-**No runbook needed** — pure design-capture session.
+**Documentation propagation check:** No Help.tsx update needed (these are internal owner tools, not customer-facing). No onboarding path touches these pages yet.
 
-**Documentation propagation check:** No customer-facing feature built. No Help.tsx, onboarding, or error message changes. No `// FLAG:` fulfillments. `docs/built-inventory.md` not updated (no state changed — all items in this doc are DESIGN; the only WORKS items already have correct state in built-inventory). Explicit: no customer-facing documentation propagation needed for this session.
+**Gap graduation sweep:** No gap graduations.
 
-**Gap graduation sweep:** No gap graduations this session.
+**PLATFORM_STATE.md level changes:**
+- business_assets: EXISTS → WIRED (BusinessAssets.tsx + /assets route live, build clean)
+- business_inventory: EXISTS → WIRED (BusinessInventory.tsx + /inventory route live, build clean)
+- business_pmi_schedule: no change (still EXISTS)
+- business_service_log: no change (still EXISTS)
 
-**PLATFORM_STATE.md level changes:** None — design session only. No new files wired, no builds confirmed, no migrations applied.
+**Next step for David:** Navigate to `/assets` and `/inventory` in the running app and INSERT one real row each. Once rows appear in the list and in the Supabase table editor, graduate both to WORKS.
 
 ---
 
