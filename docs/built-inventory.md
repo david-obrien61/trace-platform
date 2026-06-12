@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-06-05
+# Last updated: 2026-06-12
 
 **Purpose:** Sessions keep rebuilding things that exist. This document is the single answer to "was X ever built?" Organized by capability, not by file. For file locations, see PLATFORM_AUDIT.md.
 
@@ -108,7 +108,7 @@
 
 All tables anchor to `business_id` — AC-1 ✅, AC-2 via `business_id`-scoped RLS ✅.
 
-**Build path:** ✅ Receipt Keeper v1 done. Receipt Keeper v2 + Cost-to-Produce tile adds `expenses` + `cost_profile`. See `docs/audits/2026-06-06-audits-1-4.md` §3.
+**Build path:** ✅ Receipt Keeper v1 done. Business Asset Layer done (2026-06-12). Receipt Keeper v2 + Cost-to-Produce tile adds `expenses` + `cost_profile`. See `docs/audits/2026-06-06-audits-1-4.md` §3.
 
 ⚠️ **PENDING REQUIREMENTS — must implement when consent surface / data-entry activation widget is built:**
 
@@ -122,6 +122,39 @@ Evidence (2026-06-11): a handwritten Schrock's A/C invoice read all line items a
 Code anchor: `// FLAG: REQ-2` in `packages/cultivar-os/src/pages/ReceiptKeeper.tsx` at the idle step entry point.
 
 **Framing discipline:** These are CAPTURE/DISCLOSURE requirements — state the limitation and require human inspection. Do NOT add business advice about how to handle receipts or what to do about the limitation. Consistent with TRACE's capture-not-rule line and the Surface Honesty principle.
+
+---
+
+## Business Asset Layer (Cost-to-Produce)
+
+**What:** Schema + UI layer for tracking business-owned assets and inventory. Foundation for the Cost-to-Produce tile. Part of the same receipt-anchored cost model as Receipt Keeper — receipts can link to inventory rows via the COUNT-ONCE dedup seam.  
+**Status:** ✅ WIRED 2026-06-12 — schema applied, manual-entry UIs live; pmi_schedule + service_log tables exist but no app module yet  
+**Vertical:** cultivar (UI surfaces today; schema AC-1 clean, business_id-scoped) | **Type:** infrastructure
+
+**What is built (2026-06-12):**
+- `business_assets` table — RLS: `owner_all` + `member_all` dual-policy (matches receipts pattern). FK→businesses CASCADE. BEFORE UPDATE trigger. Status CHECK (ACTIVE/IN_REPAIR/OFFLINE/RETIRED). Columns: name, asset_type, make, model, serial_number, year, location, status, acquisition_cost, cost_confidence, notes. Migration: `supabase/migrations/20260612_business_assets_inventory_pmi_service.sql`. Applied + structurally verified 2026-06-12.
+- `business_inventory` table — same migration. Columns: name, sku, qty, unit_cost, location, status, serial_number, cost_confidence, received_at, notes. **+`receipt_id` FK→receipts (SET NULL)** — COUNT-ONCE dedup seam: when linked, receipt line item is authoritative cost; inventory's unit_cost is secondary.
+- `business_pmi_schedule` table — same migration. 2 FKs (→businesses CASCADE, →business_assets CASCADE). columns: tasks jsonb, overrides jsonb, last_service_at, scheduled_interval_days, is_active. 0 rows. **No app module reads/writes yet — EXISTS only. NOT the `pmi_assets` table referenced by the shared `PMI.tsx` module — those are separate.**
+- `business_service_log` table — same migration. 3 FKs (→businesses CASCADE, →business_assets CASCADE, →receipts SET NULL). Append-only ledger (no `updated_at` trigger by design — corrections add new rows). receipt_id = COUNT-ONCE dedup seam. 0 rows. **EXISTS only.**
+- `cost_confidence` enum — migration `20260612_cost_confidence.sql`. Values: `ESTIMATED`, `CONFIRMED`, `UNKNOWN`. Applied 2026-06-12. Surface Honesty enforcement: manual entry defaults ESTIMATED; CONFIRMED requires a receipt link; UNKNOWN = entered but source not known.
+- `BusinessAssets.tsx` UI — INSERT form (name, asset_type, make, model, year, serial_number, location, status, acquisition_cost, cost_confidence, notes) + LIST view at `/assets`. businessId from `useBusinessContext()`. Commit b924800.
+- `BusinessInventory.tsx` UI — INSERT form (name, sku, qty, unit_cost, location, status, serial_number, cost_confidence, received_at, notes; receipt_id intentionally absent — linked by receipt flow) + LIST view at `/inventory`. Commit b924800.
+- Router: `/assets` and `/inventory` registered as PrivateRoute children in `packages/cultivar-os/src/router.tsx`.
+
+**What is NOT yet built:**
+- PMI module UI — `packages/shared/src/modules/PMI.tsx` is **BROKEN at runtime**: it queries `pmi_assets` which does NOT exist in bgobkjcopcxusjsetfob. Migration `20260529_pmi_shared.sql` was written but **never applied**. `business_pmi_schedule` (EXISTS 2026-06-12) is a different table and does NOT unblock PMI.tsx. See PLATFORM_STATE.md PMI page row (BROKEN).
+- `pmi_suggest` AIEngine route — Claude Sonnet 4.6. Wired in AIEngine.ts routing table but **DARK** (VITE_API_URL unset in Ignition Vercel project; no Vercel function exists for Cultivar either).
+- Business Service Log UI — no app module reads/writes `business_service_log` yet.
+- Cost-to-Produce tile — the dashboard tile that aggregates all four tables into margin insight. Design doc: `docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md`.
+
+**Seams declared:**
+- `business_inventory.receipt_id` FK→`receipts.id` (SET NULL) — COUNT-ONCE dedup seam. Presence = receipt is authoritative cost; absence = inventory's `unit_cost` stands. receipt_id is intentionally absent in the manual-entry form; linked only through the receipt flow.
+- `business_service_log.receipt_id` — same COUNT-ONCE pattern. Receipt present = receipt is authoritative cost source for this service event.
+- `cost_confidence` on both assets + inventory — Surface Honesty flag per PLATFORM_STRATEGY.md. ESTIMATED = human-typed number. CONFIRMED = receipt-linked. UNKNOWN = entered, source not known.
+
+**AC compliance:** AC-1 ✅ — all table/column names use `business_` prefix; no vertical nouns. businessId from session context, never hardcoded. AC-2 ✅ — dual RLS policies (owner_all + member_all) match the receipts table pattern.
+
+⚠️ **Tech Debt #29 (OPEN):** `receipts` table should be renamed `business_receipts` for full AC-1 compliance. All receipt callers reference `receipts` currently. Deferred until after LAWNS demo. See `docs/tech-debt-log.md` #29.
 
 ---
 
@@ -832,7 +865,10 @@ Defined in `IgnitionAdmin.jsx ALL_PERMISSIONS`. Enforced by `CoreApp AccessGatek
 | Customer directory | Cultivar OS | `customers` table exists, no browse/search UI. Lauren needs this. |
 | Online Shop | Cultivar OS | Tile exists, "Enable" stub. Next roadmap item. |
 | Follow-Up engine | Cultivar OS | Tile exists, nothing built. |
-| Abstract asset model | Shared | QR→record→event pattern is identical in both verticals. Extract before Conduit OS. |
+| ~~Abstract asset model~~ | ~~Shared~~ | ✅ RESOLVED 2026-06-12: `business_assets`, `business_inventory`, `business_pmi_schedule`, `business_service_log` tables built (AC-1 clean, `business_id`-scoped RLS). BusinessAssets.tsx + BusinessInventory.tsx WIRED at `/assets` + `/inventory`. Schema is the concrete instantiation of the pattern. Full shared extraction (QR→record→event as a shared module) remains a future step — see "✅ Resolved Gaps" below. |
+| PMI module (`shared/src/modules/PMI.tsx`) | Cultivar OS | ⚠️ **BROKEN at runtime (confirmed 2026-06-12):** PMI.tsx queries `pmi_assets` which does NOT exist in bgobkjcopcxusjsetfob. Migration `20260529_pmi_shared.sql` was written but never applied. `business_pmi_schedule` (EXISTS 2026-06-12) is a separate table and does NOT unblock this module. `pmi_suggest` AIEngine route (Claude Sonnet 4.6) exists in AIEngine.ts but is DARK (VITE_API_URL unset). See PLATFORM_STATE.md PMI page row (BROKEN). |
+| Business Service Log UI | Cultivar OS | `business_service_log` table EXISTS (2026-06-12). No app module reads or writes it. Prerequisite for the Cost-to-Produce service-cost ledger. |
+| Business PMI Schedule UI | Cultivar OS | `business_pmi_schedule` table EXISTS (2026-06-12). No app module reads or writes it. Prerequisite for the Cost-to-Produce maintenance schedule view. |
 | Onboarding wizard (shared) | Shared | Two separate OnboardingWizard implementations (Ignition + Cultivar). Extract WizardShell to shared before Conduit OS. |
 | Trial clock enforcement | Cultivar OS | Seam exists in useModules.ts line 100 (`nurseryPlan = 'starter'`). No blur, no Stripe. |
 | Delivery address persistence | Cultivar OS | DeliveryRoute.tsx shows inline address override but does not persist it. Needs `delivery_address` column on `orders` and capture at checkout for delivery transport. |
@@ -856,6 +892,7 @@ Defined in `IgnitionAdmin.jsx ALL_PERMISSIONS`. Enforced by `CoreApp AccessGatek
 | Delivery routing (Cultivar OS) | 2026-05-29 | DeliveryRoute.tsx at /deliveries. Multi-stop Google Maps URL, SMS-to-driver. |
 | Multi-tenant member login | 2026-06-02 | BusinessProvider two-path resolution. Members land on Dashboard, not "Account not linked" wall. |
 | Cross-vertical member isolation | 2026-06-04 | BusinessProvider member path now filters by `business_type` post-fetch (commit 8792c71). |
+| Abstract asset model / Business Asset Layer | 2026-06-12 | `business_assets` + `business_inventory` + `business_pmi_schedule` + `business_service_log` tables applied to bgobkjcopcxusjsetfob. `cost_confidence` enum. BusinessAssets.tsx + BusinessInventory.tsx WIRED (commit b924800). AC-1 clean. Surface Honesty: cost_confidence defaults ESTIMATED for manual entry; CONFIRMED requires receipt link. COUNT-ONCE dedup seam: `business_inventory.receipt_id` + `business_service_log.receipt_id` FKs→receipts. |
 
 ---
 

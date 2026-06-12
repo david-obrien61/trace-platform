@@ -128,6 +128,17 @@ A labeled gap is roadmap. Tech debt is a defect. Don't conflate them.
     - Add new items with all required columns (LEVEL + LOCATION + EVIDENCE).
     If no items changed level: state explicitly "No PLATFORM_STATE.md level changes this session."
 
+17. **BUILT-INVENTORY.md update** — For every capability built, changed, or disproven THIS session (derive from this session's commits + PLATFORM_STATE level changes), add or update its entry in `docs/built-inventory.md`:
+    - New capability built → add or update the capability section: what is built, schema/location/evidence.
+    - Capability disproven ("was thought WORKS, confirmed BROKEN") → add a `⚠️` discovery note with date.
+    - Capability promoted (gap → resolved) → move from "What Is NOT Yet Built" to "✅ Resolved Gaps."
+    - No capability changed this session → write `<!-- No capability changes: YYYY-MM-DD -->` as the last line of the file before the footer.
+    - **Always:** bump `Last updated:` on line 4 to today's date.
+
+    **VERIFY before committing:** open line 4 of `docs/built-inventory.md` — if the date is not today's date, this step was skipped.
+
+    **Session STEP 0 check (read-in, not write-out):** at session open, run `head -4 docs/built-inventory.md`. If `Last updated:` is older than the latest commit that added, changed, or removed a capability (schema/page/migration/module), FLAG it as stale before trusting it to answer "was X built?" — a stale index is the re-audit cost this rule was written to prevent.
+
 ---
 
 *This file is the authoritative source for the end-of-session protocol. CLAUDE.md §9 contains only the pointer.*

@@ -30,6 +30,7 @@ date                          # 1. Verify today's date — update memory/current
 git branch --show-current     # 2. Confirm branch (main or feature branch as appropriate)
 ls PLATFORM_STATE.md          # 3. Must exist at repo root — if missing, stop and tell David
 git status --short            # 4. Flag any ?? untracked files before starting work
+head -4 docs/built-inventory.md  # 5. Check 'Last updated:' — if older than latest capability commit, FLAG as stale
 ```
 
 **Rules:**
@@ -37,6 +38,7 @@ git status --short            # 4. Flag any ?? untracked files before starting w
 - **PLATFORM_STATE.md missing** → do NOT write any code; report to David before proceeding.
 - **`??` files in git status** → report them to David; sort before starting code work.
 - **Reread ⛔ LAUNCH GATES** in PLATFORM_STATE.md every session — never cross a gate without David's explicit direction.
+- **`built-inventory.md` Last updated older than latest capability commit** → FLAG as stale before using it to answer "was X built?" — re-audit is the cost of a stale index.
 
 ---
 
@@ -133,7 +135,9 @@ cultivar-os (NEW — active):
   Tables: nurseries, plants, plant_events, orders,
           order_items, order_addons, addons, losses,
           customers, social_drafts, modules,
-          nursery_modules
+          business_modules, receipts,
+          business_assets, business_inventory,
+          business_pmi_schedule, business_service_log
   Auth: email/password, email confirmation OFF
   ⚠️ WHY OFF: outbound mail not working (Supabase default SMTP rate-limited /
      unreliable — verification emails were not being delivered). Confirmation
@@ -552,6 +556,7 @@ Full protocol (steps 1–16, file-size check, gap/debt routing, gap graduation):
 4. Tailwind drift check · Documentation propagation check · Factual correction capture
 5. Runbook if env/infra work · AC compliance check · STANDARDS compliance check
 6. Gap graduation sweep · PLATFORM_STATE.md level changes
+7. **Update BUILT-INVENTORY.md** — bump `Last updated:` to today + add/update every capability changed this session. **Verify line 4 date = today before committing.** (Full protocol: step 17 in docs/end-of-session-protocol.md)
 
 ---
 
@@ -570,8 +575,9 @@ Before writing any code confirm:
 1. What was completed last session (from Handoff)
 2. What shared modules this session needs
 3. Those modules exist in packages/shared/src/ AND are at WIRED or WORKS level in PLATFORM_STATE.md
+4. `docs/built-inventory.md` `Last updated:` is not older than the latest capability commit — if stale, FLAG before using it to answer "was X built?"
 
-Do not start until you confirm all three.
+Do not start until you confirm all four.
 Do not touch ignition-os, old Supabase project,
 or QB oauth.ts.
 ```
