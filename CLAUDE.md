@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-12 (THUNDER Cost-to-Produce design doc written: docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md — spine, fork, 4 feeds, 5 pillars, two-tier model, audit conflict log, build sequence; no code/schema/migrations)
+# Last updated: 2026-06-12 (THUNDER Cost-to-Produce design doc written: docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md — spine, fork, 4 feeds, 5 pillars, two-tier model, audit conflict log, build sequence; companion diagrams: docs/cost-to-produce/diagrams-2026-06-12.html; no code/schema/migrations)
 # Current AI: Claude Code
 
 ---
@@ -317,7 +317,9 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 **Session mandate:** THUNDER · WRITE COST-TO-PRODUCE DESIGN DOC — capture the fully resolved
 architecture for Cost-to-Produce as a single authoritative design document. No build.
 
-**Deliverable:** `docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md`
+**Deliverables:**
+- `docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md` — canonical design doc
+- `docs/cost-to-produce/diagrams-2026-06-12.html` — companion diagrams (revisit artifact; not the canonical doc)
 
 **What's in the doc (14 sections):**
 - Spine: accumulate honestly → emit `cost: number` → divide → surface confidence → never rule on tax/legal
