@@ -92,6 +92,7 @@ Maps to established accounting patterns:
 A single cost object can feed multiple period pools (shared cost allocation).
 The seam between accumulator and pool is where the no-double-count rule lives —
 enforced at query time, not at write time.
+(See KNOWN OPEN SEAMS — this is an open risk flagged for test coverage, not a closed guarantee.)
 
 **STATE:** DESIGN (no accumulator data model exists; no period pool query exists)
 
@@ -230,6 +231,7 @@ One asset → many products (shared cost). One product ← many assets.
 The combination of containment and contribution creates a DAG (not a pure tree) wherever
 shared costs exist. The no-double-count rule at the period pool seam prevents the same
 cost from appearing twice in a single product's rollup.
+(See KNOWN OPEN SEAMS — this is an open risk flagged for test coverage, not a closed guarantee.)
 
 ### 5.3 PROJECT → PRODUCT conversion lifecycle
 
@@ -274,28 +276,50 @@ The allocation is labeled MODEL, not FACT.
 
 **STATE: DESIGN** — no allocation UI, no basis-assignment table, no rollup query.
 
+### 5.6 Lot horizon and season-end events
+
+**STATE: DESIGN**
+
+**HORIZON LIVES ON THE COST OBJECT (lot), NOT `business_type`.** One nursery (LAWNS) holds
+all horizons at once: oaks = long-accumulator (ride the ladder for years); herbs/veg =
+single-season (sell out or die this year); vines/shrubs = CARRY-OR-CULL (sell if they go,
+carry to next year if they don't). `business_type` does NOT select the costing engine — the
+LOT's horizon does. A single business runs accumulator-path and period-path lots simultaneously.
+
+**SEASON-END EVENT on each lot** (extends the graduate / split / die / sell lifecycle):
+- **sell** — realize cost vs revenue; close the lot's accumulator.
+- **cull / die** — shrinkage loss; write off accrued cost as a loss event.
+- **CARRY** — roll accrued cost forward as next season's OPENING BASIS. The carried lot
+  raises a writedown question (is a year-old, harder-to-sell plant worth full accrued cost?).
+  That is the accountant's call — we surface "this lot carried $X accrued into this season"
+  and hand the package over. (See KNOWN OPEN SEAMS — carried-lot valuation.)
+
 ---
 
 ## 6. PILLARS
 
 *Intelligence layered on captured cost. All [DESIGN] unless noted.*
 
-### 6.1 CASH-TODAY vs ACCRUAL
+### 6.1 CASH-TODAY (a VIEW, not a field)
 
 **STATE: DESIGN**
 
-Show: cash-out-today + today's margin (owner-survival view).
-Flag: "Your accountant amortizes this differently. This is cash-today view."
-Never compute: the accrual schedule. Hand the package over.
+Cash-today is a LENS over the lower system — not a standalone field, not a co-equal
+alternative to the accountant's view. It shows cash-out-today + today's margin
+(owner-survival view). We flag that the accountant amortizes differently. We NEVER
+compute the accrual schedule or take a position on it — that belongs to the accountant.
 
-The boundary IS the feature. Accrual hides the cash crunch that kills small operators.
-An owner seeing "asset cost = $3,000" on an accrual schedule misses the month they
-actually wrote the check.
+The boundary IS the feature. The accrual schedule hides the cash crunch that kills small
+operators. An owner seeing amortized cost spread over ten years on the books misses the
+month they actually wrote the check. We surface the moment cash left.
 
 Each cost line carries `cash_timing`:
 - `confirmed_paid` — cash left. Date confirmed.
 - `committed_owed` — obligation incurred; cash not yet out.
 - `estimated` — projected; no commitment yet.
+
+The projected-vs-actual dimension of cash timing (the owner's projected cash curve vs
+actuals) is part of the variance loop — see §6.3.
 
 ### 6.2 COST-OF-CAPITAL
 
@@ -331,6 +355,16 @@ This is the intelligence — personalized to the individual owner's behavior.
 
 The variance signal is the most durable moat: no generic benchmark matches an
 owner's specific pattern. Every receipt makes the model more accurate for that owner.
+
+**The SAME variance loop applies to cash TIMING.** Capture the owner's projected cash
+curve (cash out in off-season, back at sell-through); capture actuals as they land;
+surface the delta; over time learn the owner's projection bias and auto-correct future
+projections. We DISPLAY the projection the owner enters and can help STRUCTURE it if
+asked — we NEVER generate the forecast as our position. Owner-driven data display,
+not financial advice.
+
+Note: the revenue side of the projected cash flow (when sell-through cash returns) is
+not yet modeled here — cost timing only. (See KNOWN OPEN SEAMS — revenue-timing layer.)
 
 ### 6.4 CONFIDENCE-MIX ROLLUPS
 
@@ -638,7 +672,46 @@ The only built things in this design's scope:
 
 ---
 
-## 14. BUILD SEQUENCING (recommended order, not committed)
+## 14. KNOWN OPEN SEAMS
+
+*Unresolved risks. Not solved rules. Do not soften "open" to "handled".*
+
+### SLICE SEAM (OPEN — highest-risk edge, flag for test coverage)
+
+The accumulator → pool slice is the one place double-count can creep. Specifically: an
+asset's PM (maintenance) cost stream entering the period pool while the same asset's
+capex is also counted in the accumulator rollup. The no-double-count rule is stated in §3
+and §5.2 — but the rule is a design intent, not an implementation guarantee. Until there
+is test coverage at the slice seam, this risk is OPEN. Flag for test coverage in the
+build plan. Highest-risk edge in the entire system.
+
+**Status: OPEN**
+
+### CARRIED-LOT VALUATION (OPEN)
+
+The CARRY season-end event (§5.6) rolls a lot's accrued cost forward as next season's
+opening basis. This immediately raises a writedown question: is a year-old, harder-to-sell
+lot worth its full accrued cost? The answer is the ACCOUNTANT's call, not ours. TRACE
+surfaces "this lot carried $X accrued into this season" and hands the package over — we
+never rule on whether to write it down, at what rate, or by what method. The valuation
+question is architecturally deferred to the professional.
+
+**Status: OPEN**
+
+### REVENUE-TIMING LAYER (OPEN — future)
+
+The projected-vs-actual variance loop in §6.3 currently models COST timing only — when
+cash left, when it was committed, when it was estimated. The revenue side of the cash
+curve (when sell-through cash actually returns; when a customer pays) is NOT yet modeled
+in this design. A full cash-flow picture requires both sides. The revenue-timing layer is
+explicitly out of scope for this design capture and is flagged here so it is not silently
+assumed to be included.
+
+**Status: OPEN**
+
+---
+
+## 15. BUILD SEQUENCING (recommended order, not committed)
 
 *Not a sprint plan. A logical dependency order when building begins.*
 
