@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-13 (THUNDER PMI rewire: PMI.tsx BROKEN→WIRED on 3 live tables; barcode_id + task checklist + inspection result + AI suggest (api/pmi/suggest.ts, Claude Sonnet 4.6); 20260613 migration written; build clean; ⚠️ Vercel 13-function limit hit)
+# Last updated: 2026-06-13 (THUNDER INVENTORIES: created docs/inventory-functions.md + inventory-env.md + inventory-ai.md; DB table reconciliation; wired into health check §2 + Session Starter §10 + end-of-session-protocol step 18)
 # Current AI: Claude Code
 
 ---
@@ -31,6 +31,7 @@ git branch --show-current     # 2. Confirm branch (main or feature branch as app
 ls PLATFORM_STATE.md          # 3. Must exist at repo root — if missing, stop and tell David
 git status --short            # 4. Flag any ?? untracked files before starting work
 head -4 docs/built-inventory.md  # 5. Check 'Last updated:' — if older than latest capability commit, FLAG as stale
+head -2 docs/inventory-functions.md docs/inventory-env.md docs/inventory-ai.md  # 6. Check inventory doc dates — FLAG stale if older than latest commit touching their domain
 ```
 
 **Rules:**
@@ -39,6 +40,7 @@ head -4 docs/built-inventory.md  # 5. Check 'Last updated:' — if older than la
 - **`??` files in git status** → report them to David; sort before starting code work.
 - **Reread ⛔ LAUNCH GATES** in PLATFORM_STATE.md every session — never cross a gate without David's explicit direction.
 - **`built-inventory.md` Last updated older than latest capability commit** → FLAG as stale before using it to answer "was X built?" — re-audit is the cost of a stale index.
+- **Inventory docs stale** → any of `docs/inventory-functions.md`, `docs/inventory-env.md`, `docs/inventory-ai.md` older than the latest commit touching its domain → FLAG before answering questions from it.
 
 ---
 
@@ -132,12 +134,18 @@ See `docs/audits/platform-naming-vertical-leak-audit-2026-06-03.md` for full inv
 cultivar-os (NEW — active):
   Project ref: bgobkjcopcxusjsetfob
   URL: https://bgobkjcopcxusjsetfob.supabase.co
-  Tables: nurseries, plants, plant_events, orders,
+  Tables: ⚠️ This list is a quick-reference only — it is stale.
+          Canonical per-table state (LEVEL + LOCATION + EVIDENCE): PLATFORM_STATE.md.
+          Confirmed tables (2026-06-13 audit against migrations):
+          nurseries, plants, plant_events, orders,
           order_items, order_addons, addons, losses,
           customers, social_drafts, modules,
           business_modules, receipts,
           business_assets, business_inventory,
-          business_pmi_schedule, business_service_log
+          business_pmi_schedule, business_service_log,
+          businesses, business_members, platform_config
+          ⚠️ Diffs vs prior list: businesses/business_members/platform_config were MISSING.
+          nursery_modules still EXISTS (pending DROP — see PLATFORM_STATE.md IN-FLIGHT).
   Auth: email/password, email confirmation OFF
   ⚠️ WHY OFF: outbound mail not working (Supabase default SMTP rate-limited /
      unreliable — verification emails were not being delivered). Confirmation
@@ -313,6 +321,31 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-13 — THUNDER INVENTORIES: standing inventory docs created + protocol wired
+
+**Type:** Docs-only session. No code, no schema, no migrations. Zero code changes.
+
+**What was done:**
+- Created `docs/inventory-functions.md` — 13 deployed functions enumerated (count, Hobby limit status, purpose/calls/env vars per function, 2 FILE-ONLY undeployed files flagged, deleted function history).
+- Created `docs/inventory-env.md` — all Vercel env vars cataloged: 14 confirmed live, 2 orphaned (BLOTATO_API_KEY + VITE_APP_URL — no code refs), 8 referenced-in-code but not confirmed in Vercel.
+- Created `docs/inventory-ai.md` — AI architecture documented: WORKS (Receipt Keeper OCR + social generate), WIRED (discovery 3-stage + campaigns + PMI suggest), DEPRECATED (AIEngine/Railway path). Capability registry quick-ref included.
+- Reconciled DB table situation: **PLATFORM_STATE.md is canonical for table state.** CLAUDE.md §2 table list was missing `businesses`, `business_members`, `platform_config` — those 3 added to list with ⚠️ note. `nursery_modules` pending DROP flagged.
+- Wired all three inventory docs into: CLAUDE.md §2 health check (check 6), CLAUDE.md §10 Session Starter (check 5), docs/end-of-session-protocol.md (step 18).
+
+**Flags for David (enumeration, not cleanup — nothing deleted):**
+- ⚠️ `api/services/` directory in root api/ is **empty** — leftover after `customer-match.ts` deletion. Safe to remove when convenient.
+- ⚠️ `BLOTATO_API_KEY` set in Vercel but **zero code references** — orphaned after social/publish.ts deletion (2026-06-08). Safe to remove from Vercel after confirming no other use.
+- ⚠️ `VITE_APP_URL` set in Vercel but **zero code references** — possibly orphaned. Confirm before removing.
+- ⚠️ `packages/cultivar-os/api/members/accept-invite.ts` and `preview-invite.ts` — **no root shims, NOT deployed**. Logic appears duplicated in deployed `invite.ts`. Verify then remove if truly redundant.
+- ⚠️ 13 of 12 Vercel Hobby functions — **deploy blocked** until David upgrades to Pro or removes one function.
+
+**No PLATFORM_STATE.md level changes this session.** (docs-only)
+**No BUILT-INVENTORY.md changes this session.** (docs-only)
+**No AC compliance issues** — session did not touch shared schema, RLS, or shared identifiers.
+**No runbook needed** — pure docs session.
+
+---
 
 ### 2026-06-13 — THUNDER PMI: rewire shared PMI module + AI suggest endpoint
 
@@ -586,8 +619,9 @@ Before writing any code confirm:
 2. What shared modules this session needs
 3. Those modules exist in packages/shared/src/ AND are at WIRED or WORKS level in PLATFORM_STATE.md
 4. `docs/built-inventory.md` `Last updated:` is not older than the latest capability commit — if stale, FLAG before using it to answer "was X built?"
+5. `docs/inventory-functions.md`, `docs/inventory-env.md`, `docs/inventory-ai.md` dates — if any is older than the latest commit touching its domain, FLAG as stale before answering "what functions/vars/AI routes do we have?"
 
-Do not start until you confirm all four.
+Do not start until you confirm all five.
 Do not touch ignition-os, old Supabase project,
 or QB oauth.ts.
 ```

@@ -139,6 +139,16 @@ A labeled gap is roadmap. Tech debt is a defect. Don't conflate them.
 
     **Session STEP 0 check (read-in, not write-out):** at session open, run `head -4 docs/built-inventory.md`. If `Last updated:` is older than the latest commit that added, changed, or removed a capability (schema/page/migration/module), FLAG it as stale before trusting it to answer "was X built?" — a stale index is the re-audit cost this rule was written to prevent.
 
+18. **Standing inventory update** — For each accumulation type touched this session, update the matching inventory doc and bump its `Last updated:` line to today:
+    - Added or removed a serverless function → `docs/inventory-functions.md`
+    - Added, removed, or reclassified a Vercel env var → `docs/inventory-env.md`
+    - Added or changed an AI feature (model, route, status) → `docs/inventory-ai.md`
+    - Added or removed a DB table → update PLATFORM_STATE.md (canonical for table state); also update `CLAUDE.md §2` table quick-reference list.
+    - If none of the above: state explicitly "No standing inventory changes this session."
+
+    **Rule:** these docs are lean — one line per item. Pointers to deeper docs, never inline depth.
+    **VERIFY before committing:** `head -2 docs/inventory-functions.md docs/inventory-env.md docs/inventory-ai.md` — date on line 2 of each touched doc must equal today.
+
 ---
 
 *This file is the authoritative source for the end-of-session protocol. CLAUDE.md §9 contains only the pointer.*
