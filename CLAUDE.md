@@ -323,6 +323,47 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-13 — THUNDER VOICE-SCHEMA: rename campaign_tone_samples → business_voice_samples + source column
+
+**Type:** Schema rename + one new column + campaigns repoint. Zero new pages. Zero router changes. No env/infra changes.
+
+**Session mandate:** Cheap-now irreversible schema move — generalize the voice store away from campaigns before it holds real learned voice. Social read-back explicitly deferred. Return to Cost-to-Produce after this.
+
+**What was done:**
+- Migration `supabase/migrations/20260613_business_voice_samples.sql` written:
+  - `ALTER TABLE campaign_tone_samples RENAME TO business_voice_samples` (rows + UUIDs ride along)
+  - RLS policy renamed `tone_samples_owner` → `business_voice_samples_owner`
+  - `source text NOT NULL` added with temporary DEFAULT `'campaign_generate'` → backfilled → DEFAULT dropped (explicit-on-insert required)
+  - `COMMENT ON COLUMN` documents convention: source values are capability keys from `shared/src/ai/capabilities.ts`
+- `packages/cultivar-os/api/campaigns.ts` repointed:
+  - READ site (line 66): `campaign_tone_samples` → `business_voice_samples` (filter: `business_id` only — already pooled)
+  - WRITE site (line 155): `campaign_tone_samples` → `business_voice_samples` + `source: 'campaign_generate'` added
+- Build: `npm run build:cultivar` ✅ 2187 modules, 0 errors (unchanged count)
+- Social NOT touched — `social/generate.ts` has zero voice-sample references (grep confirmed)
+- Deferred work documented in `docs/ai-gateway/VOICE-LOOP-PRECONDITIONS.md` DEFERRED section
+
+**AC compliance:** AC-1 ✅ — `business_` prefix, no vertical noun, business_id-scoped. AC-2 ✅ — existing RLS policy followed through table rename.
+
+**⚠️ David must run `20260613_business_voice_samples.sql`** in bgobkjcopcxusjsetfob SQL editor before `business_voice_samples` exists. Until then, campaigns write/read will 404.
+
+**PLATFORM_STATE.md level changes:**
+- Added row: `business_voice_samples table` → WIRED (pending David running migration)
+- Updated: `Social campaign generator` row — notes added re: reads/writes to `business_voice_samples`
+
+**No new Vercel env vars. No new Vercel functions. No new pages.**
+
+**Voice thread parked.** Schema locked, campaigns repointed. Returning to Cost-to-Produce.
+
+**Next steps for David:**
+1. ✅ (carry-forward) **Run `20260613_business_service_log_result.sql`** in bgobkjcopcxusjsetfob — required before PMI log result field works
+2. ✅ (carry-forward) Navigate to `/pmi`, add asset, log service — verify INSERTs succeed
+3. ✅ (carry-forward) Click "Suggest Schedule" — verify AI returns tasks list
+4. **NEW: Run `20260613_business_voice_samples.sql`** in bgobkjcopcxusjsetfob — renames `campaign_tone_samples` → `business_voice_samples`, adds `source` column
+5. After migration: use Campaigns → edit a generated post → verify pair saved to `business_voice_samples` with `source='campaign_generate'`
+6. Next session: **Cost-to-Produce** — BusinessAssets + BusinessInventory live INSERTs + receipt routing seam
+
+---
+
 ### 2026-06-13 — THUNDER INVENTORIES: standing inventory docs created + protocol wired
 
 **Type:** Docs-only session. No code, no schema, no migrations. Zero code changes.

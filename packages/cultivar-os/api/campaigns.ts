@@ -63,7 +63,7 @@ export default async function handler(req: any, res: any) {
       if (ADVERT_DEBUG) console.log('[TRACE:advert] campaigns generate — channels:', advertChannels.filter(c => c.enabled).map(c => c.name));
 
       const { data: samples } = await db
-        .from('campaign_tone_samples')
+        .from('business_voice_samples')
         .select('id, business_id, platform, original_text, edited_text, created_at')
         .eq('business_id', businessId)
         .order('created_at', { ascending: false })
@@ -152,11 +152,12 @@ export default async function handler(req: any, res: any) {
       if (wasEdited) {
         await db.from('campaign_posts').update({ edited_copy: editedCopy.trim() }).eq('id', postId);
         // Tone learning: save original vs. edited pair for future generation
-        await db.from('campaign_tone_samples').insert({
+        await db.from('business_voice_samples').insert({
           business_id:   businessId,
           platform:      post.platform,
           original_text: post.copy_text,
           edited_text:   editedCopy.trim(),
+          source:        'campaign_generate',
         });
       }
 

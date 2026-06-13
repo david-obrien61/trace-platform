@@ -351,3 +351,27 @@ Based on recon, the critical inputs are:
 6. **pmi/suggest.ts is a routing job, not a design question.** Route it through
    `executeCapability` under a `pmi_suggest` capability key in `CAPABILITIES`. Removes
    the only true STD-002 violation in the web function layer.
+
+---
+
+## DEFERRED — Social read-back NOT built (2026-06-13)
+
+**What was done (same session):**
+- `campaign_tone_samples` renamed → `business_voice_samples` (migration `20260613_business_voice_samples.sql`)
+- `source text NOT NULL` column added; existing rows backfilled to `'campaign_generate'`
+- `packages/cultivar-os/api/campaigns.ts` repointed to `business_voice_samples` (both read and write sites)
+- Campaigns write site now supplies `source: 'campaign_generate'` explicitly
+- Campaigns loop still closes end-to-end: owner edits a campaign post → pair saved to `business_voice_samples` with `source='campaign_generate'` → next generation reads back from `business_voice_samples` filtered by `business_id` only (pooled — no source filter)
+
+**What was NOT built (deferred):**
+- `social/generate.ts` does NOT read voice samples back from `business_voice_samples`
+- `social_drafts` captures `original_text`/`edited_text` pairs (Sweep 1 — FOUND) but they are NOT written into `business_voice_samples` on owner edit
+- Social has a working demo output without this; Cost-to-Produce is the active priority
+
+**To build when voice thread resumes:**
+1. On owner edit/save in social drafts (`Dashboard.tsx handleSaveEdit`), write a row to `business_voice_samples` with `source='social_generate'`, `business_id`, `platform`, `original_text`, `edited_text`
+2. In `social/generate.ts` (`generateSocialDrafts`), query `business_voice_samples` filtered by `business_id` (NOT by source — pooled voice), inject as few-shot `toneBlock` analogous to `campaigns/generate.ts:78-84`
+3. Write-trigger decision: either fire on `handleSaveEdit` directly, or add a separate `social_tone_learn` action to `api/social/generate-posts.ts`. The `handleSaveEdit` path is simpler.
+4. Filter for true edits only: `WHERE edited_text IS NOT NULL AND edited_text != original_text`
+
+**Voice thread parked:** schema locked, campaigns repointed. Returning to Cost-to-Produce.
