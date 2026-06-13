@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-13 (THUNDER INVENTORIES: created docs/inventory-functions.md + inventory-env.md + inventory-ai.md; DB table reconciliation; wired into health check §2 + Session Starter §10 + end-of-session-protocol step 18)
+# Last updated: 2026-06-13 (THUNDER VERIFY-GATE: schema verification gate added to end-of-session-protocol.md + CLAUDE.md §9; 4-table catalog-backed verification run against business_assets/business_inventory/business_pmi_schedule/business_service_log)
 # Current AI: Claude Code
 
 ---
@@ -589,8 +589,10 @@ $149/month cost. Net benefit: $1,906/month month 1.
 
 ## 9. END-OF-SESSION PROTOCOL
 
-Full protocol (steps 1–16, file-size check, gap/debt routing, gap graduation):
+Full protocol (steps 1–16, file-size check, gap/debt routing, gap graduation, schema verification gate):
 **[docs/end-of-session-protocol.md](docs/end-of-session-protocol.md)**
+
+**MID-SESSION GATE — SCHEMA VERIFICATION:** Any session that creates or alters a table, column, policy, constraint, FK, or trigger is NOT done until Thunder outputs catalog-backed verification proving the change. Queries hit the live catalog (`information_schema` / `pg_catalog`), NEVER the builder's memory. Structure AND RLS must both be proven. Standard query set in `docs/end-of-session-protocol.md` → SCHEMA VERIFICATION GATE section.
 
 **Quick reference — mandatory close sequence:**
 1. Update Handoff (Part 3) + Active Tasks (Part 4) + Off Limits (Part 7)

@@ -23,6 +23,56 @@ This check applies at the moment of opening a file to edit it — not retrospect
 
 ---
 
+## SCHEMA VERIFICATION GATE (mid-session — triggers on any table-touching change)
+
+**A migration is NOT "done" and NOT committable-as-working until Thunder produces catalog-backed verification output showing the change STUCK.**
+
+This gate fires during the session, not at close — the moment you create or alter a table, column, policy, constraint, FK, or trigger. Verification queries hit the live catalog (`information_schema` / `pg_catalog`), NEVER the builder's memory. Structure AND security must both be proven. RLS is MANDATORY — it is the failure that does not announce itself and leaks tenant data silently.
+
+**Standard verify query set** — use these verbatim; all fields are real catalog fields:
+
+```sql
+-- 1. RLS enabled (the silent-danger check):
+SELECT relname, relrowsecurity
+FROM pg_class
+WHERE relname = '<table>';
+-- relrowsecurity MUST be true.
+
+-- 2. Policies present + scoped:
+SELECT tablename, policyname, cmd, qual, with_check
+FROM pg_policies
+WHERE tablename = '<table>';
+-- confirm owner + member policies, both USING (qual) and WITH CHECK present and
+-- scoped to business_id.
+
+-- 3. Foreign keys bound:
+SELECT conname, conrelid::regclass AS tbl, confrelid::regclass AS references_table
+FROM pg_constraint
+WHERE contype = 'f' AND conrelid = '<table>'::regclass;
+
+-- 4. CHECK constraints:
+SELECT conname, pg_get_constraintdef(oid)
+FROM pg_constraint
+WHERE contype = 'c' AND conrelid = '<table>'::regclass;
+
+-- 5. Columns (structure):
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = '<table>'
+ORDER BY ordinal_position;
+
+-- 6. REST liveness (Thunder runs directly):
+--    GET /rest/v1/<table>?limit=0  →  expect HTTP 200.
+```
+
+**Rule on query safety:** NEVER reference fields that do not exist. There is NO `check_constraints` column in `information_schema.columns` — CHECK definitions live in `pg_constraint`. Sanity-check every verify query references real catalog fields BEFORE handing it to David.
+
+**Output format:** For each table, produce a result table showing RLS on/off, policies list, FK list, CHECK list, columns list. End with a per-table **CLEAN** or **HOLES-FOUND** verdict. A missing RLS policy or a policy not scoped to `business_id` is CRITICAL — name it exactly, do NOT auto-fix without David's go.
+
+**pg_catalog note:** `pg_policies`, `pg_class`, `pg_constraint` are NOT available via REST API — they require the Supabase SQL editor. Thunder provides the SQL and produces output once David pastes and returns results. REST liveness (query 6) Thunder runs directly.
+
+---
+
 ## MANDATORY CLOSE CHECKLIST (steps 1–16)
 
 1. Update Part 3 (Handoff) in CLAUDE.md
