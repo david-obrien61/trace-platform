@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-06-12
+# Last updated: 2026-06-13
 
 **Purpose:** Sessions keep rebuilding things that exist. This document is the single answer to "was X ever built?" Organized by capability, not by file. For file locations, see PLATFORM_AUDIT.md.
 
@@ -692,9 +692,9 @@ While creation is private/invite-only (David + family), guards may stay OFF — 
 - [↓ Image] → stub, disabled (image generation seam).
 - [Open ↗] → opens channel URL in new tab (social channels only; no Open for SMS).
 
-**Schema:** `campaigns`, `campaign_posts`, `campaign_tone_samples` tables + RLS. Migration: `supabase/migrations/20260529_campaigns.sql`.
+**Schema:** `campaigns`, `campaign_posts`, `business_voice_samples` tables + RLS. Migration: `supabase/migrations/20260529_campaigns.sql` (original); `supabase/migrations/20260613_business_voice_samples.sql` (renamed + source column).
 - `campaign_posts.platform` stores the channel name (from `advert_channels[].name`).
-- `campaign_tone_samples`: `(business_id, platform, original_text, edited_text)` — accumulates with every copy-post where owner edited.
+- `business_voice_samples`: `(business_id, platform, original_text, edited_text, source)` — accumulates with every copy-post where owner edited. `source='campaign_generate'`. VERIFIED 2026-06-13 (C1–C6 CLEAN). Proof: `docs/verification/20260613_business_voice_samples_verification.md`.
 
 **Dashboard integration:** "Campaign Scheduler" card shows green border when drafts are pending.
 

@@ -323,6 +323,37 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-13 — THUNDER VALIDATE-THEN-CLOSE: business_voice_samples catalog proof persisted + PLATFORM_STATE WIRED
+
+**Type:** Docs-only close-out. No code, no schema, no migrations, no shared-module edits.
+
+**Session mandate:** Confirm the catalog verification (C1–C6) from the VOICE-SCHEMA session was actually done & passed, persist the proof into the repo so it outlives the chat, then record WIRED in PLATFORM_STATE against the persisted proof.
+
+**STAGE A gate result:** A1 PASS (3/3 JS-client checks pass — table queryable, old table gone, anon blocked). A2 NOT FOUND (C1–C6 results existed only in chat, not in repo). Gate decision: STAGE A INCOMPLETE — proceeded to STAGE B per protocol (persist first, then record).
+
+**What was done:**
+- Created `docs/verification/20260613_business_voice_samples_verification.md` — C1–C6 verdicts recorded verbatim (all PASS). This is now the durable proof in the repo.
+- `PLATFORM_STATE.md` line 103 updated: `WIRED` → **`WIRED (verified 2026-06-13, catalog-confirmed)`**. ⚠️ warning removed (migration confirmed applied). Proof path cited.
+- `docs/built-inventory.md` schema line updated: `campaign_tone_samples` → `business_voice_samples`, date bumped to 2026-06-13.
+- `docs/tech-debt-log.md` entries #30 and #31 added (RLS scope inconsistency; PostgREST catalog doctrine).
+
+**AC compliance:** N/A — docs-only session. No schema, no shared identifiers.
+**No new Vercel env vars. No new functions. No migrations.**
+
+**PLATFORM_STATE.md level changes:**
+- `business_voice_samples table`: WIRED → **WIRED (verified 2026-06-13, catalog-confirmed)**. Proof: `docs/verification/20260613_business_voice_samples_verification.md`.
+
+**Voice thread closed.** Schema VERIFIED and proof in repo. Campaigns repointed. Social read-back deferred. Returning to Cost-to-Produce.
+
+**Next steps for David:**
+1. ✅ (carry-forward) **Run `20260613_business_service_log_result.sql`** in bgobkjcopcxusjsetfob — required before PMI log result field works
+2. ✅ (carry-forward) Navigate to `/pmi`, add asset, log service — verify INSERTs succeed
+3. ✅ (carry-forward) Click "Suggest Schedule" — verify AI returns tasks list
+4. ✅ (carry-forward) **`20260613_business_voice_samples.sql`** — confirmed APPLIED (VERIFIED). No action needed.
+5. **Next session: Cost-to-Produce** — BusinessAssets + BusinessInventory live INSERTs + receipt routing seam. Confirm whether `docs/cost-to-produce/COST-DATA-DISCOVERY.md` ran & reported.
+
+---
+
 ### 2026-06-13 — THUNDER VOICE-SCHEMA: rename campaign_tone_samples → business_voice_samples + source column
 
 **Type:** Schema rename + one new column + campaigns repoint. Zero new pages. Zero router changes. No env/infra changes.
