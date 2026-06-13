@@ -29,6 +29,6 @@
 - **Decision:** Ship the `advert_channels` plumbing first; margin-engine port stays next in the queue.
 - **Seat that objected:** Customer-first-contact.
 - **Objection (one line):** A perfectly-routed post in a robot voice still gets rejected by Lauren — making the generated voice good enough to survive first contact may outrank the margin port as the next priority.
-- **Outcome:** OPEN as of 2026-06-10 — override-vs-honor was not yet decided. **DAVID: verify current state and close this entry** (did the margin port proceed, or did voice work jump the queue?).
-- **Reasoning:** (pending David's call)
-- **To revisit:** Lauren's reaction to the generated voice on the first real send.
+- **Outcome:** Closed — false dichotomy (resolved 2026-06-13). The either/or framing ("voice OR margin port") was wrong; neither was overridden.
+- **Reasoning:** The margin-engine port is a dependency of Cost-to-Produce (the current priority work thread), not a competitor to voice. Voice (social read-back) belongs in the queue as its own item and has been deferred and documented in `docs/ai-gateway/VOICE-LOOP-PRECONDITIONS.md`. Both belong, for different reasons. The customer-first-contact seat correctly flagged that voice matters and must stay queued — that part was honored. No override occurred.
+- **To revisit:** Voice read-back when Cost-to-Produce clears. Lauren's reaction to the generated voice on the first real send (unchanged).

@@ -71,6 +71,8 @@ ORDER BY ordinal_position;
 
 **pg_catalog note:** `pg_policies`, `pg_class`, `pg_constraint` are NOT available via REST API — they require the Supabase SQL editor. Thunder provides the SQL and produces output once David pastes and returns results. REST liveness (query 6) Thunder runs directly.
 
+**JS-client half:** For every schema-changing session, Thunder runs `node scripts/verify-migration.mjs <table> [old_table]` to confirm: target table queryable + row count, old table absent (if renamed), anon query returns 0 rows (RLS in effect). The catalog half (C1–C6 SQL) David runs in the Supabase SQL editor. Both halves required for VERIFIED status. Results persisted to `docs/verification/<migration>_verification.md` before PLATFORM_STATE is updated.
+
 ---
 
 ## MANDATORY CLOSE CHECKLIST (steps 1–16)
