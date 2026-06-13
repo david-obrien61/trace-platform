@@ -84,6 +84,16 @@ across all surfaces. The only per-vertical variables are tokens (color) and
 configured vocabulary (size classes, lifecycle stages, business noun). Settled
 decisions are encoded as variables and executed against, not reopened.
 
+## AC-5: One integration, one connector, one router
+
+**Rule.** A third-party integration is a single connector behind ONE router function. Its endpoints are internal routes (method/path dispatch inside the connector), NOT separate platform functions. New connectors are built to this from the first commit; existing connectors that violate it are consolidated when next touched.
+
+**Boundary (do not over-apply).** One router PER integration, NEVER one router ACROSS integrations. The connector boundary IS the failure-isolation boundary: a shared cross-integration router is a series-wire that drops multiple integrations on one fault (Alan Effect, Parable 4). QBO's endpoints share a client, auth, env, and failure domain → consolidate. QBO + Stripe do not → stay separate.
+
+**Why.** Function-per-endpoint makes platform function-count scale with endpoints (each integration burns 2–4 slots; the Vercel cap becomes a recurring tax). One-router-per-connector makes it scale with integrations (~one slot each; headroom that grows). This is AC-4 (settle once, encode) applied to integration shape, and the grandfather rule at the architecture level: build the pattern right the first time so the class stops recurring.
+
+**Enforcement / violation loop.** A violation is not automatically wrong. When connector work would violate AC-5, reevaluate the work against this principle. If the violation is knowingly accepted, log it in `decisions/override-log.md` (Section 14 machinery) with the reasoning. Silent violation is the only disallowed outcome.
+
 **Exception Log:**
 - (none)
 

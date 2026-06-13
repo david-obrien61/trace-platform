@@ -95,6 +95,7 @@ Full text lives ONLY in PLATFORM_STRATEGY.md § Architecture Constants. Check it
 - **AC-2:** RLS scoped to `business_id` membership by default. Looser policy requires WHY + Exception Log entry in PLATFORM_STRATEGY.md.
 - **AC-3:** Tenant isolation absolute — cross-vertical resolution returns no-access, never a wrong-vertical record.
 - **AC-4:** Structural design shared; only tokens (color) and vocabulary vary per vertical.
+- **AC-5:** One integration = one connector = one router. Cross-integration routers forbidden (Alan Effect). Consolidate-when-touched for existing violations; log accepted deviations in `decisions/override-log.md`.
 
 **Known open violations (audit 2026-06-04 — tracked in Active Tasks §Noun Purge):**
 - AC-1: ~~`nursery_modules`~~ ✅ resolved 2026-06-04 · `nursery_profiles` table name · `nurseryName` in `qr/print.ts` · `shopId`/`shop_id` in `AIEngine.ts`
