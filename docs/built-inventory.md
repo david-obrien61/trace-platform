@@ -1,9 +1,11 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-06-13
+# Last updated: 2026-06-12
 
 **Purpose:** Sessions keep rebuilding things that exist. This document is the single answer to "was X ever built?" Organized by capability, not by file. For file locations, see PLATFORM_AUDIT.md.
+
+**Convention:** This is a LEAN index. Each entry = capability + status + one-line location + POINTER to the authoritative doc for detail. Never inline audit/spec content here — link to it. Keep this file scannable.
 
 > **Audit reconciliation (2026-06-05):** Three stale bootstrap beliefs corrected. (1) AI Engine is already shared, NOT trapped in Ignition — promote already happened; what remains is unifying a split-brain. (2) RBAC is split — identity/invites shared; enforcement still Ignition-side and duplicated. (3) DataBridge footprint confirmed (~45 files, load-bearing) but characterization disputed: this doc says "localStorage-first, intentionally not shared," bootstrap says "offline-sync engine, promote" — unresolved, see NEEDS DAVID'S CALL.
 >
@@ -198,26 +200,30 @@ Code anchor: `// FLAG: REQ-2` in `packages/cultivar-os/src/pages/ReceiptKeeper.t
 **Vertical:** ignition | **Type:** infrastructure  
 *⚠️ NEEDS DAVID'S CALL — see bottom: pricing tiers are currently Ignition-specific from CAI; whether they apply platform-wide or each vertical has its own tier structure is unresolved.*
 
-| Tier | Price | Users | AI |
-|---|---|---|---|
-| STARTER | $149/mo | 3 | None |
-| PROFESSIONAL | $299/mo | 8 | AI Bundle (12 tasks) |
-| PREMIER | $499/mo | Unlimited | Full AI (13 tasks) |
-| Trial | Free, 14 days | Unlimited | Full PREMIER access |
+**Authoritative detail:** [`CAI/docs/pricing_sheet.html`](../CAI/docs/pricing_sheet.html) — printable, authoritative tier/add-on/module matrix.
 
-**Add-ons:**
-- Extra Location: +$99/mo
-- 5-User Block: +$49/mo
-- SMS: +$29/mo
-- API Access: +$99/mo
-
-**Module matrix (PROFESSIONAL tier includes):**
-VIN Decode, Scribe AI, DTC Cipher, Parts & Manifest, Procurement, Stock AI, CRM, OMNI Summary
-
-**PREMIER adds:**
-Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Multi-Location, White-Label Portal
-
-**Trial:** 14 days full PREMIER, no card required, hardware kit included.
+> ⚠️ DEPRECATED — canonical source is `CAI/docs/pricing_sheet.html` above; remove this inlined copy in a later cleanup pass.
+>
+> | Tier | Price | Users | AI |
+> |---|---|---|---|
+> | STARTER | $149/mo | 3 | None |
+> | PROFESSIONAL | $299/mo | 8 | AI Bundle (12 tasks) |
+> | PREMIER | $499/mo | Unlimited | Full AI (13 tasks) |
+> | Trial | Free, 14 days | Unlimited | Full PREMIER access |
+>
+> **Add-ons:**
+> - Extra Location: +$99/mo
+> - 5-User Block: +$49/mo
+> - SMS: +$29/mo
+> - API Access: +$99/mo
+>
+> **Module matrix (PROFESSIONAL tier includes):**
+> VIN Decode, Scribe AI, DTC Cipher, Parts & Manifest, Procurement, Stock AI, CRM, OMNI Summary
+>
+> **PREMIER adds:**
+> Full OMNI, HUB Dispatch, DOT Compliance, Tools+PMI, Predictive Maintenance, Multi-Location, White-Label Portal
+>
+> **Trial:** 14 days full PREMIER, no card required, hardware kit included.
 
 ---
 
@@ -774,6 +780,10 @@ While creation is private/invite-only (David + family), guards may stay OFF — 
 > - **DARK root cause:** `VITE_API_URL` not set in ignition-os Vercel project → every `AIEngine.call()` returns `{ ok: false }`. Railway running but receives zero Vercel traffic.
 > - **BROKEN root cause:** `20260602_ignition_drop_team_tables.sql` dropped `pin_resets`, `shop_invites`, `member_devices`. Only `shop_members` was recreated (`20260603_recreate_shop_members.sql`). The other three tables have no recreate migration.
 > - **SPLIT-BRAIN root cause:** `IgnitionIntake` writes customers to Supabase `customers`. `IgnitionCRM` reads from DataBridge `customers_directory`. These are entirely separate stores — intake customers never appear in CRM.
+
+**Authoritative detail:** [`docs/audits/ignition-reality-audit-2026-06-09.md`](audits/ignition-reality-audit-2026-06-09.md) — full module table, workflow chain, RBAC, and DataBridge orphaned keys.
+
+> ⚠️ DEPRECATED — the module table, workflow chain, RBAC section, and DataBridge orphaned keys below are bulk copies from the audit doc above. Remove in a later cleanup pass; read the audit doc for authoritative detail.
 
 ### Module Status Table
 

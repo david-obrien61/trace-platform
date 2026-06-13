@@ -437,7 +437,7 @@ Do as a set, not piecemeal.
 **Docs — Doc Reorg** (single-source every fact; reference, don't copy)
 - [ ] Lean CLAUDE.md to rules + state + pointers only — no architecture prose duplicated here
 - [ ] PLATFORM_STRATEGY.md is the sole architecture home (already partial — continue)
-- [ ] Merge built-inventory + audit findings into one current-state doc; retire the precedence rule
+- [ ] BUILT-INVENTORY.md links to audit docs via POINTERS (capability entry + reference link), never inlines audit content. Keep the index lean and scannable. Audit docs stay separate and authoritative for detail.
 - [ ] Single-source the "TRACE — Who We Are" philosophy block across all docs (sync or point; eliminate copies)
 - [ ] Enforce chronological THOUGHTS.md + grep-by-date recovery workflow
 
