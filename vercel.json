@@ -1,3 +1,8 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/api/qbo/auth-url", "destination": "/api/qbo-connector?_route=auth-url" },
+    { "source": "/api/qbo/callback", "destination": "/api/qbo-connector?_route=callback" },
+    { "source": "/api/qbo/status",   "destination": "/api/qbo-connector?_route=status" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
