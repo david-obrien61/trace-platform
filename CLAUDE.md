@@ -406,7 +406,57 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 1. **Run `20260613_business_service_log_result.sql`** in Supabase SQL editor (bgobkjcopcxusjsetfob) — required before log result field works
 2. Navigate to `/pmi`, add an asset, set a maintenance schedule, log a service — verify all INSERTs succeed
 3. Click "Suggest Schedule" on an asset — verify AI returns tasks list
-4. **Resolve Vercel 13-function limit**: upgrade cultivar-os Vercel project to Pro, or decide which existing function to remove
+4. ~~**Resolve Vercel 13-function limit**~~ ✅ resolved same day — QBO consolidated 13→11 (THUNDER AC-5 session below)
+
+---
+
+### 2026-06-13 — THUNDER AC-5: write constant + consolidate QBO behind one router
+
+**Type:** Docs (PART 1) + refactor (PART 2). Zero new pages. Zero schema changes. Zero env/infra changes.
+
+**Session mandate:** THUNDER · write AC-5 (one-integration-one-router) as architecture constant; then execute to it by consolidating `api/qbo/auth-url.ts`, `api/qbo/callback.ts`, `api/qbo/status.ts` into one connector (`api/qbo-connector.ts`). Clear the Vercel Hobby deploy gate (13→11 functions). Unblock AI-router build for next session.
+
+**PART 1 — AC-5 written (commit b4450c9):**
+- `PLATFORM_STRATEGY.md` — AC-5 appended after AC-4, before Exception Log: one integration = one connector = one router; endpoints are internal routes (path/method dispatch); consolidate-when-touched; cross-integration routers forbidden (Alan Effect); accepted deviations logged in `decisions/override-log.md`.
+- `CLAUDE.md §1.5` — one-line enforcement hook added: AC-5 check triggers on any connector/third-party-integration work.
+
+**PART 2 — QBO consolidated (commit fcdfa97):**
+- Created `packages/cultivar-os/api/qbo/router.ts` — single AC-5 connector with `handleAuthUrl()`, `handleCallback()`, `handleStatus()` dispatched by `req.query._route`. Shared `supabase()` factory, shared QB constants. Zero logic change.
+- Created `api/qbo-connector.ts` — single root shim (replaces 3 shims).
+- Deleted: `api/qbo/auth-url.ts`, `api/qbo/callback.ts`, `api/qbo/status.ts` (root shims) + `packages/cultivar-os/api/qbo/auth-url.ts`, `packages/cultivar-os/api/qbo/callback.ts`, `packages/cultivar-os/api/qbo/status.ts` (implementations).
+- Updated `vercel.json`: three specific rewrites added before SPA catch-all:
+  - `/api/qbo/auth-url` → `/api/qbo-connector?_route=auth-url`
+  - `/api/qbo/callback` → `/api/qbo-connector?_route=callback`
+  - `/api/qbo/status` → `/api/qbo-connector?_route=status`
+- All three public paths preserved byte-exactly. `/api/qbo/callback` = Intuit-registered URI unchanged.
+
+**VERIFY-FIRST result (Parable 3 — irreversible-external):**
+- Registered URI: `https://cultivar-os.vercel.app/api/qbo/callback` (from `QBO_REDIRECT_URI` env var)
+- Preserved via vercel.json rewrite source: `/api/qbo/callback` — byte-identical ✅
+
+**Invoice call (reported as required):** `api/qbo/invoice/cultivar.ts` left separate. Different caller (orders/submit flow vs. OAuth lifecycle), different failure domain. 13→11 matches expected without including it.
+
+**Frontend changes:** Zero. Settings.tsx:541, shared oauth.ts:60/72, QuickBooksConnector.jsx:18 all reference the same public paths — preserved via rewrites. OFF LIMITS oauth.ts not touched.
+
+**Build:** `npm run build:cultivar` — ✅ clean (2187 modules, 0 errors — same as last session).
+**Function count:** 13 → 11. Vercel Hobby cap = 12. Deploy gate cleared with 1 slot headroom.
+**AC-5 compliance:** One QBO connector (`router.ts`), one Vercel function (`qbo-connector.ts`), internal path dispatch — ✅ satisfied.
+**CLAUDE.md flag:** 636 lines (just over 600-line context budget threshold) — note for David; trim handoff history to `docs/handoff-archive.md` when convenient.
+
+**No new env vars needed.** No schema changes. No migrations.
+**No runbook needed** — pure refactor; Vercel routing change is git-snapshotted.
+
+**PLATFORM_STATE.md level changes:**
+- Vercel functions: "12 + 1 pending / OVER LIMIT" → "11 of 12 / 1 slot headroom / deploy unblocked"
+
+**docs/inventory-functions.md updated:** Function count header updated (13→11), table collapsed (rows 3+4+6 → row 3 = qbo-connector), deleted-functions table updated with three QBO files + reason.
+
+**Next steps for David:**
+1. ✅ (carry-forward from PMI session) **Run `20260613_business_service_log_result.sql`** in Supabase SQL editor (bgobkjcopcxusjsetfob) — required before PMI log result field works
+2. ✅ (carry-forward) Navigate to `/pmi`, add asset, log service — verify INSERTs succeed
+3. ✅ (carry-forward) Click "Suggest Schedule" — verify AI returns tasks list
+4. **Next session: AI-router BUILD** — ordered-provider failover in `executeCapability`, route `/api/pmi/suggest` through it, build `ai_usage` table + INSERT. Deploy gate now cleared (11 functions, 1 slot headroom).
+5. No Vercel project upgrade needed — QBO consolidation cleared the gate within Hobby plan.
 
 ---
 
