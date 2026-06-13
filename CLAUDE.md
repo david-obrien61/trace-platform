@@ -286,7 +286,7 @@ Full log (entries #1–#28): **[docs/tech-debt-log.md](docs/tech-debt-log.md)**
 
 Quick-reference status: 🟢 = resolved · 🟡 = open · (#) = entry number
 
-Active open items: #2 (QB hardcode), #3 (social in cultivar), #4 (nursery footer), #8 (RLS unverified), #10 (SavingsReport missing), #12 (Ignition AI dark / Railway kill path), #13 (stub duplication), #16 (MarginEngine orphaned — A callers + plants.cost_price), #17 (dead migration), #18 (pin_hash unverified), #19 (instagram fallback), #20 (platform union), #21 (orphaned campaigns files), #22 (platform_check migration — David must apply), #23 (STD-008 inverse sweep pending), #24 (opaque names), #25 (6 AI features dark), #26 (orphaned DataBridge keys), #27 (10 tables no migrations), #28 (pilot_all RLS open)
+Active open items: #2 (QB hardcode), #3 (social in cultivar), #4 (nursery footer), #8 (RLS unverified), #10 (SavingsReport missing), #12 (Ignition AI dark / Railway kill path), #13 (stub duplication), #16 (MarginEngine orphaned — A callers + plants.cost_price), #17 (dead migration), #18 (pin_hash unverified), #19 (instagram fallback), #20 (platform union), #21 (orphaned campaigns files), #22 (platform_check migration — David must apply), #23 (STD-008 inverse sweep pending), #24 (opaque names), #25 (6 AI features dark), #26 (orphaned DataBridge keys), #27 (10 tables no migrations), #28 (pilot_all RLS open), #29 (receipts naming), #30 (voice-samples RLS scope), #31 (catalog-verify process), #32 (cultivar_plants anon read open)
 
 ---
 
@@ -322,6 +322,58 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-13 — THUNDER FINISH: cultivar_plants policy cleanup — drop redundant public-read, scope owner write (AC-3)
+
+**Type:** RLS-policy-only migration. Zero code. Zero shared-module edits. Zero new pages/functions/env. Closes the cultivar_plants thread.
+
+**Session mandate:** Close the policy chaff left by the untangle. The untangle migration was RUN; catalog checks C1/C2/C4/C5 came back CLEAN, but C3 surfaced FOUR policies on `cultivar_plants` — two redundant/over-broad leftovers carried over from the old `plants` table.
+
+**STEP 0 GATE confirmed:** Last handoff: THUNDER UNTANGLE (plants → cultivar_plants). No shared modules touched (this is a single-table RLS migration). Off Limits (Part 7) clear — oauth.ts, auth.ts, old project, run migrations all untouched.
+
+**The four policies C3 found (confirmed via qual):**
+- `anon_select_plants` — anon · SELECT · `USING(true)` → **KEEP** (QR scan resolves a scanned tag; page is unauthenticated)
+- `cultivar_plants_owner_select` — authenticated · SELECT · owner-or-member scoped → **KEEP**
+- `plants_business_owner` — public · ALL · `business_id IN (owner's businesses)` → **REPLACE** (the ONLY policy granting owner WRITE; can't just drop)
+- `plants_select_public` — public · SELECT · `USING(true)` → **DROP** (redundant with anon_select_plants)
+
+**Migration `supabase/migrations/20260613_cultivar_plants_policy_cleanup.sql`:**
+1. `DROP POLICY plants_select_public` — redundant public read.
+2. `CREATE POLICY cultivar_plants_owner_all` (authenticated, FOR ALL, owner-via-businesses.owner_id OR active business_members; USING + WITH CHECK both the membership predicate) → then `DROP POLICY plants_business_owner` (the public/ALL leftover it replaces). Net: owner/member keep scoped write; the public write-hole shape is gone.
+3. `anon_select_plants` + `cultivar_plants_owner_select` left untouched.
+
+**Two catches that shaped the migration:**
+1. `plants_business_owner` was the ONLY WRITE grant (SELECT policies don't write) — so it was REPLACED, not dropped, or owners lose write to their own plants.
+2. The real scan→checkout is SERVER-MEDIATED (QBO creds can't live in an anon browser), so blanket public read (`USING true`) is NOT load-bearing for checkout. `anon_select_plants` stays only so the public plant page can resolve a scanned tag.
+
+**VERIFY (catalog-backed — David runs in bgobkjcopcxusjsetfob SQL editor; queries embedded as comments in the migration, not graded here):**
+- V1: exactly THREE policies remain — anon_select_plants (anon/SELECT), cultivar_plants_owner_select (auth/SELECT), cultivar_plants_owner_all (auth/ALL). `plants_business_owner` + `plants_select_public` GONE.
+- V2: zero public/ALL policies (write-hole shape eliminated).
+- V3: RLS still enabled (`relrowsecurity = true`).
+
+**AC compliance:** AC-3 ✅ — tenant isolation: write scoped to owning business (owner_id) or active member; public write-hole removed. AC-1 ✅ — no vertical nouns; `cultivar_` prefix marks the vertical identity join.
+
+**Verification doc:** `docs/verification/20260613_cultivar_plants_verification.md` — Part A records the untangle C-checks (C1/C2/C4/C5 PASS, C3 = the 4 policies). Part B records V1–V3 as PENDING David's apply (two-half protocol, Tech Debt #31). PLATFORM_STATE reflects the split.
+
+**Tech Debt #32 logged:** `anon_select_plants` USING(true) exposes ALL plant-identity rows to anon, not just a scanned one. Acceptable (non-sensitive identity + server-mediated checkout) — **do not act, David's call.**
+
+**No code changes → no build run (RLS-only migration). No new env vars, functions, or pages.**
+
+**PLATFORM_STATE.md level changes:**
+- `cultivar_plants table`: WIRED → **WIRED (untangle catalog-confirmed; policy cleanup pending David apply)**. Cited cleanup migration + verification doc. Flips to verified once David runs cleanup + pastes V1–V3.
+
+**Scope boundary (NOT done — separate, sequenced, gated on LAWNS yes):** lot population, accrual ladder, scan→QBO connector (QBO invoice path already built; this is a CONNECTOR build "if LAWNS says yes"), MarginEngine caller.
+
+**⚠️ HOUSEKEEPING — TOP next-session item:** CLAUDE.md is ~860 lines, well over the 600-line context budget. **Archive older handoff entries (the pre-UNTANGLE 2026-06-13 set: VALIDATE-THEN-CLOSE, VOICE-SCHEMA, INVENTORIES, PMI, AC-5) to `docs/handoff-archive.md`** to keep session context load manageable. Deliberately NOT done in this commit to keep it scoped to the RLS change (commit message is `fix(rls):`). Do it first thing next session.
+
+**Next steps for David:**
+1. **Run `20260613_cultivar_plants_policy_cleanup.sql`** in bgobkjcopcxusjsetfob SQL editor — drops `plants_select_public`, replaces `plants_business_owner` with `cultivar_plants_owner_all`.
+2. **Run V1–V3** (embedded in the migration) and paste results into `docs/verification/20260613_cultivar_plants_verification.md` Part B → then PLATFORM_STATE flips to verified.
+3. ⚠️ **CARRY-FORWARD — still unrun: `20260613_business_service_log_result.sql`** (PMI log result field) — run in bgobkjcopcxusjsetfob; PMI log result INSERT errors without it.
+4. ✅ (carry-forward) `20260613_cultivar_plants_untangle.sql` — confirmed RUN (C1/C2/C4/C5 clean).
+5. **Lot population** (next build step, gated separately) — INSERT business_inventory rows for LAWNS SKUs, UPDATE cultivar_plants.inventory_id, restoring QR checkout.
+
+---
 
 ### 2026-06-13 — THUNDER UNTANGLE: plants → cultivar_plants (identity-only, FK to business_inventory)
 
