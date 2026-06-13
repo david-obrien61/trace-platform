@@ -56,19 +56,19 @@ export function usePlant(tagId: string | undefined): UsePlantResult {
     let cancelled = false;
 
     async function fetchFromNetwork() {
-      // If we already seeded from cache, don't show the loading spinner again
       if (!readCache(tagId!)) setLoading(true);
       setError(null);
 
+      // Join business_inventory via inventory_id FK — PostgREST resolves via FK constraint.
+      // Returns null for business_inventory when inventory_id is null (no lot linked yet).
       const { data: plantData, error: plantErr } = await supabase
-        .from('plants')
-        .select('*')
+        .from('cultivar_plants')
+        .select('*, business_inventory ( id, qty, unit_cost, status, received_at )')
         .ilike('tag_id', tagId!)
         .single();
 
       if (plantErr || !plantData) {
         if (!cancelled) {
-          // Only set error if we have no cached data to show
           if (!plant) setError(plantErr?.message ?? 'Plant not found');
           setLoading(false);
         }
@@ -81,17 +81,12 @@ export function usePlant(tagId: string | undefined): UsePlantResult {
         .eq('plant_id', plantData.id)
         .order('occurred_at', { ascending: true });
 
-      const { count } = await supabase
-        .from('plants')
-        .select('*', { count: 'exact', head: true })
-        .eq('business_id', plantData.business_id)
-        .eq('species', plantData.species)
-        .eq('current_container', plantData.current_container)
-        .eq('status', 'available');
+      // availableCount comes from the lot's qty field.
+      // When no inventory is linked (inventory_id null), default to 1 so the UI renders.
+      const resolvedCount = (plantData.business_inventory as any)?.qty ?? 1;
 
       if (!cancelled) {
-        const resolvedEvents  = (eventData ?? []) as PlantEvent[];
-        const resolvedCount   = count ?? 1;
+        const resolvedEvents = (eventData ?? []) as PlantEvent[];
         setPlant(plantData as Plant);
         setEvents(resolvedEvents);
         setAvailableCount(resolvedCount);

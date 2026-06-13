@@ -39,7 +39,10 @@ export function PlantProfile() {
     );
   }
 
-  const isUnavailable = plant.status !== 'available';
+  const inv          = plant.business_inventory;
+  const inventoryStatus = inv?.status ?? null;
+  const unitCost     = inv?.unit_cost ?? 0;
+  const isUnavailable = !inv || inventoryStatus !== 'available';
 
   function handleAddToCart() {
     setItem(plant!, qty);
@@ -76,7 +79,7 @@ export function PlantProfile() {
             </div>
 
             <button className="btn btn-primary" onClick={handleAddToCart}>
-              Add to cart — ${(plant.base_price * qty).toLocaleString('en-US')}
+              Add to cart — ${(unitCost * qty).toLocaleString('en-US')}
             </button>
 
             <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--gray-400)', marginTop: 10 }}>
@@ -93,7 +96,7 @@ export function PlantProfile() {
             textAlign: 'center',
           }}>
             <p style={{ fontWeight: 600, color: 'var(--gray-800)' }}>
-              This plant is {plant.status}
+              {inventoryStatus ? `This plant is ${inventoryStatus}` : 'Availability not set up yet'}
             </p>
             <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginTop: 4 }}>
               Ask a team member for availability on this species.

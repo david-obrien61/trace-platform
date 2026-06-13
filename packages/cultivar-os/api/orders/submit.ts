@@ -118,7 +118,7 @@ export default async function handler(req: any, res: any) {
       return sum + p;
     }, 0);
 
-    const plantSubtotal = Number(plant.base_price) * quantity;
+    const plantSubtotal = Number(plant.business_inventory?.unit_cost ?? 0) * quantity;
     const addonsAmount  = transportAmount + nettingTotal + otherTotal;
     const subtotal      = plantSubtotal + addonsAmount;
     const taxAmount     = Math.round(subtotal * TAX_RATE * 100) / 100;
@@ -166,7 +166,7 @@ export default async function handler(req: any, res: any) {
       order_id:   orderId,
       plant_id:   plant.id,
       quantity,
-      unit_price: plant.base_price,
+      unit_price: plant.business_inventory?.unit_cost ?? 0,
       subtotal:   plantSubtotal,
     });
     if (itemErr) throw new Error(`Order item: ${itemErr.message}`);
@@ -237,11 +237,15 @@ export default async function handler(req: any, res: any) {
       await db.from('order_compliance_records').insert(complianceRows);
     }
 
-    // ── 10. Reserve plant ──────────────────────────────────────────────────
-    await db
-      .from('plants')
-      .update({ status: 'reserved', updated_at: new Date().toISOString() })
-      .eq('id', plant.id);
+    // ── 10. Reserve inventory lot ─────────────────────────────────────────
+    // Stock state lives on business_inventory, not cultivar_plants (identity-only after untangle).
+    // Skip if inventory_id is null — lot population is sequenced separately.
+    if (plant.inventory_id) {
+      await db
+        .from('business_inventory')
+        .update({ status: 'reserved', updated_at: new Date().toISOString() })
+        .eq('id', plant.inventory_id);
+    }
 
     // ── 11. Leakage alert to business owner (fire-and-forget) ──────────────
     if (leakageFlag) {

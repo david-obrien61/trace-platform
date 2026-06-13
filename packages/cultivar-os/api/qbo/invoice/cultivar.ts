@@ -131,7 +131,7 @@ export default async function handler(req: any, res: any) {
     // Fetch line items
     const { data: orderItems } = await db
       .from('order_items')
-      .select('*, plants(*)')
+      .select('*, cultivar_plants(*)')
       .eq('order_id', order_id);
 
     // Try new service_selections model first; fall back to legacy order_addons
@@ -159,7 +159,7 @@ export default async function handler(req: any, res: any) {
     const lines: unknown[] = [];
 
     for (const item of orderItems || []) {
-      const plant = item.plants;
+      const plant = item.cultivar_plants;
       lines.push({
         Description: `${plant.common_name || plant.species} — ${plant.current_container}`,
         Amount: Number(item.subtotal),
@@ -243,8 +243,9 @@ export default async function handler(req: any, res: any) {
       const hasNettingAddon = (orderAddons || []).some((oa: any) => oa.addons?.trigger_rule === 'transport=self');
       if (!hasNettingAddon && order.transport_method !== 'self') {
         if (order.transport_method === 'install') {
-          const installPlant     = (orderItems || [])[0]?.plants;
-          const installUnitPrice = Number(installPlant?.install_price ?? 0);
+          // install_price removed from cultivar_plants (stock fact — moved to service_offerings).
+          // Legacy install line defaults to 0 until service_offerings pricing is wired.
+          const installUnitPrice = 0;
           const installQty       = (orderItems || [])[0]?.quantity ?? 1;
           lines.push({
             Description: `Installation service · ${installQty} plant${installQty > 1 ? 's' : ''}`,

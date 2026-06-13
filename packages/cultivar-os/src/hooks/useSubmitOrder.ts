@@ -117,7 +117,7 @@ export function useSubmitOrder() {
           plantName:     plant.common_name ?? plant.species,
           container:     plant.current_container,
           quantity,
-          plantTotal:    `$${(plant.base_price * quantity).toFixed(2)}`,
+          plantTotal:    `$${((plant.business_inventory?.unit_cost ?? 0) * quantity).toFixed(2)}`,
           addonsTotal:   `$${addonsAmount.toFixed(2)}`,
           subtotal:      `$${subtotal.toFixed(2)}`,
           tax:           `$${taxAmount.toFixed(2)}`,

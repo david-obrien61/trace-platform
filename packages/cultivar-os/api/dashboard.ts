@@ -14,30 +14,34 @@ export default async function handler(req: any, res: any) {
     const db = supabase();
     const todayStr = new Date().toISOString().slice(0, 10);
 
-    const [ordersRes, plantsRes, businessRes] = await Promise.all([
+    const [ordersRes, cultivarPlantsRes, inventoryRes, businessRes] = await Promise.all([
       db.from('orders').select('id, total_amount, leakage_flag, created_at, status').eq('business_id', businessId),
-      db.from('plants').select('base_price, status').eq('business_id', businessId),
+      // identity count — cultivar_plants rows (one per QR tag/lot identity)
+      db.from('cultivar_plants').select('id', { count: 'exact', head: true }).eq('business_id', businessId),
+      // stock facts — business_inventory rows (qty * unit_cost for inventory value)
+      db.from('business_inventory').select('qty, unit_cost, status').eq('business_id', businessId),
       db.from('businesses').select('accounting_company_id, name').eq('id', businessId).single(),
     ]);
 
-    const orders = ordersRes.data || [];
-    const plants = plantsRes.data || [];
+    const orders         = ordersRes.data || [];
+    const inventoryLots  = inventoryRes.data || [];
+    const plant_count    = cultivarPlantsRes.count ?? 0;
 
-    const todayOrders = orders.filter((o: any) => o.created_at?.slice(0, 10) === todayStr);
-    const todayRevenue = todayOrders.reduce((s: number, o: any) => s + Number(o.total_amount), 0);
-    const inventoryValue = plants
-      .filter((p: any) => p.status === 'available')
-      .reduce((s: number, p: any) => s + Number(p.base_price), 0);
-    const leakageCount = orders.filter((o: any) => o.leakage_flag).length;
+    const todayOrders    = orders.filter((o: any) => o.created_at?.slice(0, 10) === todayStr);
+    const todayRevenue   = todayOrders.reduce((s: number, o: any) => s + Number(o.total_amount), 0);
+    const availableLots  = inventoryLots.filter((l: any) => l.status === 'available');
+    const inventoryValue = availableLots.reduce((s: number, l: any) => s + (Number(l.qty) * Number(l.unit_cost ?? 0)), 0);
+    const available_count = availableLots.reduce((s: number, l: any) => s + Number(l.qty), 0);
+    const leakageCount   = orders.filter((o: any) => o.leakage_flag).length;
 
     return res.json({
       today_order_count: todayOrders.length,
-      today_revenue: todayRevenue,
-      inventory_value: inventoryValue,
-      plant_count: plants.length,
-      available_count: plants.filter((p: any) => p.status === 'available').length,
-      leakage_count: leakageCount,
-      qb_connected: !!businessRes.data?.accounting_company_id,
+      today_revenue:     todayRevenue,
+      inventory_value:   inventoryValue,
+      plant_count,
+      available_count,
+      leakage_count:     leakageCount,
+      qb_connected:      !!businessRes.data?.accounting_company_id,
     });
   } catch (err: any) {
     console.error('[dashboard]', err);

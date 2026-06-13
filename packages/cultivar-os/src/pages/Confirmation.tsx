@@ -131,7 +131,7 @@ export function Confirmation() {
 
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem', color: '#374151', marginBottom: 8 }}>
           <span>{plant.common_name ?? plant.species} · {plant.current_container} × {quantity}</span>
-          <span>${(plant.base_price * quantity).toFixed(2)}</span>
+          <span>${((plant.business_inventory?.unit_cost ?? 0) * quantity).toFixed(2)}</span>
         </div>
 
         {nettingActive && (

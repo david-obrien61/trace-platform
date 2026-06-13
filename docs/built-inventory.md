@@ -500,7 +500,7 @@ Code anchor: `// FLAG: REQ-2` in `packages/cultivar-os/src/pages/ReceiptKeeper.t
 - `api/orders/submit.ts` — writes order + order_items + order_addons, customer dedup by email
 - `api/qbo/invoice/cultivar.ts` — creates QB invoice + customer
 
-**Install price:** Captured from `plants.install_price`. QB line item created. Scheduling not built.  
+**Install price:** Legacy `plants.install_price` column DROPPED 2026-06-13 (THUNDER UNTANGLE). QB install line now defaults to $0 until install pricing is wired through service_offerings (correct long-term model). Scheduling not built.  
 **Leakage flag:** Set in `api/orders/submit.ts` when add-ons declined and transport is self-only.
 
 ---
@@ -883,7 +883,7 @@ Defined in `IgnitionAdmin.jsx ALL_PERMISSIONS`. Enforced by `CoreApp AccessGatek
 | Trial clock enforcement | Cultivar OS | Seam exists in useModules.ts line 100 (`nurseryPlan = 'starter'`). No blur, no Stripe. |
 | Delivery address persistence | Cultivar OS | DeliveryRoute.tsx shows inline address override but does not persist it. Needs `delivery_address` column on `orders` and capture at checkout for delivery transport. |
 | Delivery date scheduling | Cultivar OS | No `delivery_date` on orders. Route shows all pending with no date filtering. |
-| Per-plant install price edit | Cultivar OS | `plants.install_price` read-only in UI. No edit surface. Post-demo. |
+| Per-plant install price edit | Cultivar OS | `plants.install_price` DROPPED 2026-06-13 (THUNDER UNTANGLE — stock fact). Install pricing moves to service_offerings. Post-demo. |
 | ~~Tighten nursery_modules RLS~~ | ~~Cultivar OS~~ | ✅ RESOLVED 2026-06-04: `business_modules` created with membership-scoped RLS (`business_members.user_id = auth.uid() AND active = true`). `authenticated_select_nursery_modules` (loose) retired. |
 | Port ai_router.py to Vercel functions | Ignition OS | Railway is legacy for web build. Agreed kill path: retire orphaned tasks (invoice_scan, vin_decode), port real tasks (dtc_decode, estimate_draft first). (Tech Debt #12) |
 | ~~Receipt storage~~ | ~~All verticals~~ | ✅ RESOLVED 2026-06-11: `receipts` table + bucket built, Receipt Keeper v1 = WORKS (McCoy's live test). See Receipt / Expense Storage section above. |

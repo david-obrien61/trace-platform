@@ -67,7 +67,7 @@ export function AddOns() {
   const nettingFallback =
     !nettingSelection && isSelfTransport && !nettingDeclined ? nettingPrice * quantity : 0;
 
-  const plantSubtotal = plant.base_price * quantity;
+  const plantSubtotal = (plant.business_inventory?.unit_cost ?? 0) * quantity;
   const grandTotal    = plantSubtotal + transportAmount + addonAmount + nettingFallback;
 
   return (

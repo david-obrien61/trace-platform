@@ -1,11 +1,11 @@
 import { differenceInYears, differenceInMonths } from 'date-fns';
 import type { Plant } from '../../types/plant';
 
-function formatAge(arrivedAt: string): string {
-  const arrived = new Date(arrivedAt);
-  const now     = new Date();
-  const years   = differenceInYears(now, arrived);
-  const months  = differenceInMonths(now, arrived) % 12;
+function formatAge(receivedAt: string): string {
+  const received = new Date(receivedAt);
+  const now      = new Date();
+  const years    = differenceInYears(now, received);
+  const months   = differenceInMonths(now, received) % 12;
 
   if (years === 0 && months === 0) return 'Just arrived';
   if (years === 0) return `${months} month${months !== 1 ? 's' : ''} in cultivation`;
@@ -18,7 +18,10 @@ interface PlantHeroProps {
 }
 
 export function PlantHero({ plant }: PlantHeroProps) {
-  const age = plant.arrived_at ? formatAge(plant.arrived_at) : null;
+  const inv = plant.business_inventory;
+  const age = inv?.received_at ? formatAge(inv.received_at) : null;
+  const inventoryStatus = inv?.status ?? null;
+  const unitCost = inv?.unit_cost ?? 0;
 
   return (
     <div>
@@ -49,9 +52,11 @@ export function PlantHero({ plant }: PlantHeroProps) {
           <span style={{ fontSize: '0.75rem', color: 'var(--gray-400)', fontFamily: 'monospace' }}>
             {plant.tag_id}
           </span>
-          <span className={`badge ${plant.status === 'available' ? 'badge-green' : 'badge-gray'}`}>
-            {plant.status}
-          </span>
+          {inventoryStatus && (
+            <span className={`badge ${inventoryStatus === 'available' ? 'badge-green' : 'badge-gray'}`}>
+              {inventoryStatus}
+            </span>
+          )}
         </div>
 
         {/* Species */}
@@ -69,21 +74,16 @@ export function PlantHero({ plant }: PlantHeroProps) {
           <Stat label="Warranty" value={`${plant.warranty_months} months`} />
         </div>
 
-        {/* Pricing */}
-        <div style={{
-          background: 'var(--sage-bg)',
-          borderRadius: 10,
-          padding: '14px 16px',
-        }}>
-          <PriceLine label="Plant price" amount={plant.base_price} large />
-          {plant.install_price > 0 && (
-            <PriceLine
-              label="+ Professional installation"
-              amount={plant.install_price}
-              note="Choose at checkout"
-            />
-          )}
-        </div>
+        {/* Pricing — from business_inventory.unit_cost via inventory_id join */}
+        {unitCost > 0 && (
+          <div style={{
+            background: 'var(--sage-bg)',
+            borderRadius: 10,
+            padding: '14px 16px',
+          }}>
+            <PriceLine label="Plant price" amount={unitCost} large />
+          </div>
+        )}
 
         {plant.notes && (
           <p style={{ marginTop: 12, fontSize: '0.875rem', color: 'var(--gray-600)' }}>

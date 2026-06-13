@@ -137,8 +137,8 @@ cultivar-os (NEW — active):
   URL: https://bgobkjcopcxusjsetfob.supabase.co
   Tables: ⚠️ This list is a quick-reference only — it is stale.
           Canonical per-table state (LEVEL + LOCATION + EVIDENCE): PLATFORM_STATE.md.
-          Confirmed tables (2026-06-13 audit against migrations):
-          nurseries, plants, plant_events, orders,
+          Confirmed tables (2026-06-13 audit + THUNDER UNTANGLE):
+          nurseries, cultivar_plants, plant_events, orders,
           order_items, order_addons, addons, losses,
           customers, social_drafts, modules,
           business_modules, receipts,
@@ -322,6 +322,75 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-13 — THUNDER UNTANGLE: plants → cultivar_plants (identity-only, FK to business_inventory)
+
+**Type:** Schema migration + code repoint. Zero new pages. Zero shared-module edits. Zero env/infra changes.
+
+**Session mandate:** Untangle the `plants` table from double-duty (identity + stock facts) into a pure vertical identity join table (`cultivar_plants`). Stock facts (status, price, arrived_at) now live exclusively on `business_inventory`. QR scan flow updated to read stock from `business_inventory` via `inventory_id` FK.
+
+**STEP 0 GATE confirmed:** Last handoff: business_voice_samples VALIDATE-THEN-CLOSE. No shared modules touched. Off Limits clear.
+
+**What was done:**
+
+- **Migration** `supabase/migrations/20260613_cultivar_plants_untangle.sql`:
+  - `ALTER TABLE plants RENAME TO cultivar_plants` (Postgres auto-updates FK from order_items.plant_id)
+  - `ADD COLUMN inventory_id uuid REFERENCES business_inventory(id) ON DELETE SET NULL` (nullable — lot population is sequenced separately)
+  - `DROP COLUMN nursery_id` (AC-1 violation)
+  - `DROP COLUMN status, arrived_at, base_price, install_price` (stock facts → belong on business_inventory)
+  - RLS: `authenticated_select_plants` dropped (referenced dropped nursery_id) → `cultivar_plants_owner_select` created (business_id + membership-scoped, matches business_assets/business_inventory pattern)
+  - Verification query block (C1–C6) embedded in migration file for David to run post-apply
+
+- **Type** `packages/cultivar-os/src/types/plant.ts`:
+  - `Plant` interface: removed `status`, `arrived_at`, `base_price`, `install_price`, `nursery_id?`; added `inventory_id: string | null` + `business_inventory?: PlantInventory | null`
+  - New `PlantInventory` interface: `{ id, qty, unit_cost, status, received_at }`
+  - `PlantEvent`: removed `nursery_id?` (AC-1 cleanup in the type)
+
+- **Hook** `packages/cultivar-os/src/hooks/usePlant.ts`:
+  - Query changed: `from('plants').select('*')` → `from('cultivar_plants').select('*, business_inventory ( id, qty, unit_cost, status, received_at )')` (PostgREST FK join via inventory_id)
+  - Third count query REMOVED — `availableCount` now comes from `plant.business_inventory?.qty ?? 1`
+
+- **Code repoint — 17 files (zero references to old table name / dropped fields):**
+  - `PlantHero.tsx`: `arrived_at` → `business_inventory?.received_at`; `status` → `business_inventory?.status`; `base_price` → `business_inventory?.unit_cost`; `install_price` → removed
+  - `PlantCard.tsx`: `base_price`, `status` → `business_inventory?.unit_cost`, `business_inventory?.status`
+  - `PlantProfile.tsx`: `isUnavailable` uses `!inv || inv.status !== 'available'`; price uses `unitCost * qty`
+  - `AddOns.tsx`, `CartReview.tsx`, `Confirmation.tsx`, `useSubmitOrder.ts`: `plant.base_price` → `plant.business_inventory?.unit_cost ?? 0`
+  - `api/dashboard.ts` (API): `from('plants').select('base_price, status')` → `from('cultivar_plants')` count + `from('business_inventory').select('qty, unit_cost, status')` for value/count
+  - `src/pages/Dashboard.tsx` (client): same — `plants` → `business_inventory` for inventory tile
+  - `api/orders/submit.ts`: price line uses `business_inventory?.unit_cost ?? 0`; reserve step: `from('plants').update({ status: 'reserved' })` → `from('business_inventory').update({ status: 'reserved' }).eq('id', plant.inventory_id)` (no-op if inventory_id null)
+  - `api/qbo/invoice/cultivar.ts`: `select('*, plants(*)')` → `cultivar_plants(*)`; `item.plants` → `item.cultivar_plants`; `install_price` → `0` (install pricing moves to service_offerings)
+  - `api/social/generate-posts.ts`: `plants(common_name, species)` → `cultivar_plants(common_name, species)`; `i.plants?.` → `i.cultivar_plants?.`
+  - `Orders.tsx`, `DeliveryRoute.tsx`: inline type + select string + accessor all updated to `cultivar_plants`
+
+- **Stale artifact** `docs/cost-to-produce/INVENTORY-SHAPE-VERIFY.md`: correction note appended — "DE-FACTO-INVENTORY untangle" premise is now resolved; the FK exists; stock-grain separation is complete.
+
+**Build:** `npm run build:cultivar` ✅ 2187 modules, 0 errors (same count)
+**Grep proof:** `from('plants')` — 0 hits. `plant.base_price` / `plant.install_price` / `plant.arrived_at` — 0 hits.
+
+**AC compliance:**
+- AC-1 ✅ — `cultivar_` prefix marks vertical identity join; no vertical nouns in shared identifiers; `nursery_id` dropped
+- AC-2 ✅ — `cultivar_plants_owner_select` uses business_id membership scope (owner + member paths)
+
+**⚠️ David must run `20260613_cultivar_plants_untangle.sql`** in bgobkjcopcxusjsetfob SQL editor before deploying. Until applied: `cultivar_plants` table doesn't exist → QR scan 404s.
+
+**⚠️ inventory_id is NULL on all existing cultivar_plants rows after migration.** QR scan will fetch identity correctly, but the plant profile will show "Availability not set up yet" / checkout blocked until lot population runs (sequenced separately — next build step).
+
+**No new Vercel env vars. No new Vercel functions. No new pages.**
+
+**PLATFORM_STATE.md level changes:**
+- Added: `cultivar_plants table` → WIRED (migration written, code repointed, build clean; David must apply migration; inventory_id null until lot population)
+- Updated NOT YET VERIFIED: nurseries/plants/plant_events/addons RLS row → now `cultivar_plants` policy updated (business_id scope); others still not frontend-confirmed
+- Updated: `CLAUDE.md §2` table list: `plants` → `cultivar_plants`
+
+**Next steps for David:**
+1. ✅ (carry-forward) **Run `20260613_business_service_log_result.sql`** in bgobkjcopcxusjsetfob — required before PMI log result field works
+2. ✅ (carry-forward) Navigate to `/pmi`, add asset, log service — verify INSERTs succeed
+3. ✅ (carry-forward) Click "Suggest Schedule" — verify AI returns tasks list
+4. **NEW: Run `20260613_cultivar_plants_untangle.sql`** in bgobkjcopcxusjsetfob SQL editor — renames plants → cultivar_plants, drops stock-fact cols, adds inventory_id FK, updates RLS
+5. **After migration: run C1–C6 verification queries** (embedded in migration file comments) — report back for catalog proof
+6. **Next session: Lot population** — INSERT business_inventory rows for LAWNS SKUs (Shumard Red Oak, Cedar Elm, Live Oak, etc.), then UPDATE cultivar_plants.inventory_id to link each tag_id row to its lot row. This restores QR checkout flow.
+
+---
 
 ### 2026-06-13 — THUNDER VALIDATE-THEN-CLOSE: business_voice_samples catalog proof persisted + PLATFORM_STATE WIRED
 

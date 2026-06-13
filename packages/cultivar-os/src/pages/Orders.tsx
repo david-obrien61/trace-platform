@@ -13,7 +13,7 @@ interface OrderRow {
   notes: string | null;
   status: string;
   customers: { first_name: string; last_name: string; email: string } | null;
-  order_items: { quantity: number; plants: { tag_id: string; common_name: string | null; species: string } | null }[];
+  order_items: { quantity: number; cultivar_plants: { tag_id: string; common_name: string | null; species: string } | null }[];
 }
 
 const TRANSPORT_ICON: Record<string, React.ReactNode> = {
@@ -48,7 +48,7 @@ export function Orders() {
         id, created_at, total_amount, transport_method,
         leakage_flag, notes, status,
         customers ( first_name, last_name, email ),
-        order_items ( quantity, plants ( tag_id, common_name, species ) )
+        order_items ( quantity, cultivar_plants ( tag_id, common_name, species ) )
       `)
       .eq('business_id', businessId)
       .order('created_at', { ascending: false })
@@ -110,7 +110,7 @@ export function Orders() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {orders.map(order => {
           const item    = order.order_items?.[0];
-          const plant   = item?.plants;
+          const plant   = item?.cultivar_plants;
           const qty     = item?.quantity ?? 1;
           const tagId   = plant?.tag_id ?? '—';
           const plantName = plant?.common_name ?? plant?.species ?? 'Unknown plant';

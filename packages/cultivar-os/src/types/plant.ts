@@ -1,28 +1,34 @@
+// business_inventory fields joined via inventory_id FK (null when no lot is linked yet)
+export interface PlantInventory {
+  id: string;
+  qty: number;
+  unit_cost: number | null;
+  status: string;
+  received_at: string | null;
+}
+
 export interface Plant {
   id: string;
-  nursery_id?: string;
   business_id: string;
+  inventory_id: string | null;
   tag_id: string;
   species: string;
   common_name: string | null;
   plant_type: 'tree' | 'shrub' | 'perennial' | 'annual' | 'garden';
   current_container: string;
   location_zone: string | null;
-  status: 'available' | 'reserved' | 'sold' | 'lost' | 'donated';
-  base_price: number;
-  install_price: number;
   warranty_months: number;
-  arrived_at: string | null;
   photo_url: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
+  // Populated by PostgREST FK join in usePlant — null when inventory_id is null
+  business_inventory?: PlantInventory | null;
 }
 
 export interface PlantEvent {
   id: string;
   plant_id: string;
-  nursery_id?: string;
   business_id: string;
   event_type:
     | 'arrived'
@@ -44,7 +50,6 @@ export interface PlantEvent {
 
 export interface Addon {
   id: string;
-  nursery_id?: string;
   business_id: string;
   name: string;
   description: string | null;

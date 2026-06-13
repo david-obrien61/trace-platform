@@ -96,12 +96,12 @@ export default async function handler(req: any, res: any) {
   if (orderIds.length > 0) {
     const { data: items } = await db
       .from('order_items')
-      .select('plants(common_name, species)')
+      .select('cultivar_plants(common_name, species)')
       .in('order_id', orderIds);
 
     const plantNames = [...new Set(
       (items ?? [])
-        .map((i: any) => i.plants?.common_name ?? i.plants?.species)
+        .map((i: any) => i.cultivar_plants?.common_name ?? i.cultivar_plants?.species)
         .filter(Boolean),
     )].slice(0, 6) as string[];
 

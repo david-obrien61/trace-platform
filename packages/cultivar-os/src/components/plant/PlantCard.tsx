@@ -31,13 +31,17 @@ export function PlantCard({ plant }: PlantCardProps) {
           </div>
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <div style={{ fontWeight: 700, color: 'var(--green-primary)' }}>
-            ${plant.base_price.toLocaleString()}
-          </div>
-          <span className={`badge ${plant.status === 'available' ? 'badge-green' : 'badge-gray'}`}
-            style={{ fontSize: '0.65rem' }}>
-            {plant.status}
-          </span>
+          {plant.business_inventory?.unit_cost != null && (
+            <div style={{ fontWeight: 700, color: 'var(--green-primary)' }}>
+              ${plant.business_inventory.unit_cost.toLocaleString()}
+            </div>
+          )}
+          {plant.business_inventory?.status && (
+            <span className={`badge ${plant.business_inventory.status === 'available' ? 'badge-green' : 'badge-gray'}`}
+              style={{ fontSize: '0.65rem' }}>
+              {plant.business_inventory.status}
+            </span>
+          )}
         </div>
       </div>
     </Link>

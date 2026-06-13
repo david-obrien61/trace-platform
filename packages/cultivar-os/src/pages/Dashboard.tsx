@@ -134,8 +134,8 @@ export function Dashboard() {
         .single(),
 
       supabase
-        .from('plants')
-        .select('id, base_price')
+        .from('business_inventory')
+        .select('qty, unit_cost')
         .eq('business_id', businessId!)
         .eq('status', 'available'),
 
@@ -173,9 +173,11 @@ export function Dashboard() {
       setProfileIncomplete(!businessRes.data.phone || !businessRes.data.address);
     }
 
-    const plants = plantsRes.data ?? [];
-    setPlantCount(plants.length);
-    setInventoryValue(plants.reduce((sum, p) => sum + (p.base_price ?? 0), 0));
+    const inventoryLots = plantsRes.data ?? [];
+    // plant_count from cultivar_plants identity rows is provided by api/dashboard.ts;
+    // this client path uses business_inventory lot count as a proxy until the API is called.
+    setPlantCount(inventoryLots.reduce((sum: number, l: any) => sum + Number(l.qty), 0));
+    setInventoryValue(inventoryLots.reduce((sum: number, l: any) => sum + (Number(l.qty) * Number(l.unit_cost ?? 0)), 0));
 
     const todayOrders = todayRes.data ?? [];
     setTodayOrderCount(todayOrders.length);

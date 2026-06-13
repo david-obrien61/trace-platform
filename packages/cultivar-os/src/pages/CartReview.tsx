@@ -50,7 +50,7 @@ export function CartReview() {
     return sum + p;
   }, 0);
 
-  const plantSubtotal = plant.base_price * quantity;
+  const plantSubtotal = (plant.business_inventory?.unit_cost ?? 0) * quantity;
   const addonsAmount  = transportAmount + nettingTotal + otherTotal;
   const subtotal      = plantSubtotal + addonsAmount;
   const taxAmount     = Math.round(subtotal * TAX_RATE * 100) / 100;
