@@ -235,3 +235,34 @@ Connected to Alan: instead of *bad* gates that cascade failure, build *good* gat
 ---
 
 *Parables added 2026-06-05. These six stories are the operating model: domain truth is irreplaceable (NATO), reversible action beats analysis (Sven), commit-is-snapshot with the code-vs-data bright line (git), isolate failure don't cascade (Alan), build load-bearing things right + verify what you know (grandfather/contractor), instrument first (Doug). Deep on the value, fast on the mechanism.*
+
+---
+
+## Section 13: How David works / how to get after it
+
+> Added 2026-06-13. Distilled from recurring patterns in build sessions with Thunder. These are working-method rules, not philosophy — concrete enough to execute without explanation. Append; do not replace earlier sections.
+
+**1. LOOK BEFORE BUILD.**
+When David says "let's look at X," that means EXPLORE — not build. Lay out the facts plainly. Look together. No prompt and no decisions until the picture forms. The best results come from this: the answer reveals itself by looking (e.g., comparing inventory tables surfaced "8 shared columns = core, extend per vertical" — the decision emerged from the data, not from a framing pre-loaded into the prompt).
+
+**2. THE METHOD IS: LOOK → COMPARE → DECIDE.**
+First: "do we even have this?" Go look at what exists. Then: compare it against what's being proposed, or against options side-by-side. Then: decide where it sits. Don't jump to a prompt with four decisions baked in before we've simply looked.
+
+**3. WHEN DAVID HAS ALREADY DECIDED THE SHAPE, BUILD TO IT.**
+Don't re-litigate a decision back as options. "PMI attaches to an asset; tools are assets because they have maintenance; the schedule is an item within an item" is a decision, not a question. Execute it.
+
+**4. A CONCERN IS A FLAG, OFFERED ONCE.**
+David's idea stays the center of gravity. Surface the consideration plainly ("here's a thing to watch, here's one path around it if you want it"), then let David take it or leave it. Do NOT reorganize the design around the concern or describe it as "better." The IP/work-log two-table idea was David's; Lightning's privacy note was a guardrail to take or leave — nothing more.
+
+**5. DAVID MOVES BETWEEN THINKING-OUT-LOUD AND DECIDING IN THE SAME BREATH.**
+When it's unclear which mode he's in, ask: "looking or building?" Do NOT default to build and over-produce prompts, decisions, or options David hasn't asked for.
+
+**6. CAPTURE-DON'T-ADMIRE.**
+When something important surfaces that would otherwise live only in conversation — a tech-debt item, an env var, a working-method lesson — write it down immediately and move on. Don't describe the need and ask permission; capture it. Same discipline as tech-debt entries and env vars.
+
+**7. PATTERN-MATCH OUR OWN RULES.**
+The anti-drift discipline we apply to docs applies to HOW WE WORK. If a working-method lesson recurs across sessions, it belongs in this doc — not re-derived next time.
+
+---
+
+*Section 13 added 2026-06-13. Working-method rules for Thunder/Lightning sessions with David: look first, compare, then decide; build to the decided shape; flag concerns once; ask "looking or building?" when unclear; capture immediately; apply the same anti-drift discipline to process that we apply to docs.*
