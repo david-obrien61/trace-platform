@@ -15,3 +15,5 @@ venv/
 scratch/
 # Local Claude Code permission prefs — stays on David's machine, never commit
 .claude/settings.json
+# Personal-financial / personal-sensitive decisions — never commit (family reads the repo)
+decisions/PERSONAL-FINANCIAL.local.md

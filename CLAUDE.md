@@ -354,13 +354,16 @@ Wrote **[docs/architecture/LAYER-DEFINITIONS.md](docs/architecture/LAYER-DEFINIT
 
 ---
 
-### 2026-06-14 — THUNDER HOUSEKEEPING: track recon artifacts + CLAUDE.md back under budget
+### 2026-06-14 — THUNDER SWEEP: canonical decisions home established + undocumented decisions captured
 
-**Type:** Docs/git only. Zero code/schema/migrations/shared-module edits. Two commits:
-1. Tracked the two read-only margin-leakage recon artifacts that were `??` (`MARGIN-LEAKAGE-PRECONDITIONS.md` + `MARGIN-SYSTEM-INVENTORY.md` under docs/cost-to-produce/) — content unchanged — so `MARGIN-LEAKAGE-RESEARCH-LOG.md`'s citations point at repo files, not just disk.
-2. Archived superseded 2026-06-13 FINISH + UNTANGLE handoffs to `docs/handoff-archive.md` (reverse-chron). **CLAUDE.md 703 → 582** (under 600). Clean text move; only RECORD + this entry remain inline.
+**Type:** Docs only. Zero code/schema/migrations/shared-module edits. One commit.
+Established the missing home for the **decisions class** (business/policy/operating decisions had no equivalent of BUILT-INVENTORY). Created **[docs/DECISIONS.md](docs/DECISIONS.md)** — tagged ledger + drift-detection reference (re-test decisions against behavior via their *reasoning*). Sensitivity split honored: personal-financial → **`decisions/PERSONAL-FINANCIAL.local.md`** (GITIGNORED, family reads the repo).
 
-**Left unstaged (pre-existing, not mine):** `.claude/settings.json`, `docs/cost-to-produce/LOT-POPULATION-PRECONDITIONS.md`. AC: N/A. **Next steps:** unchanged from RECORD below; plus decide on the unstaged LOT-POPULATION change.
+**Verified-then-captured (4 already-canonical → pointer; 4 captured):**
+- **FOUND (pointer, not re-documented):** BD-1 departure/data policy (`STANDARDS.md:539-540`); BD-2 trial mechanic (`COST-TO-PRODUCE-DESIGN.md:594-601`); BD-4 anti-exploitation (`COST-TO-PRODUCE-DESIGN.md:606-610`); OP-2 composite register (partnership doc §2-3).
+- **CAPTURED (only in THOUGHTS log before now):** BD-3 activation-value fuzz mechanic; OP-1 "any ethical means within covenant" doctrine; OP-3 reconsider-framework; PF-1/2/3/4 draw model + family billing + Option C house-sale trigger + the 5+1 triggers (→ local file).
+
+**Flagged for David (not invented):** PF-2 draw cap figure marked `[PENDING DAVID]`; final placement of the personal file is *proposed* (gitignored local vs. memory vs. off-repo) — David decides. ⚠️ Pre-existing: `THOUGHTS.md` is git-tracked and already holds the draw/house/VA/Regina content — separate exposure for David to weigh. **Enforcement gap (decisions written AT the moment made) is David's open process Q — not addressed here.** AC: N/A.
 
 ---
 

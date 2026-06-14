@@ -7,6 +7,16 @@
 
 ---
 
+### 2026-06-14 — THUNDER HOUSEKEEPING: track recon artifacts + CLAUDE.md back under budget
+
+**Type:** Docs/git only. Zero code/schema/migrations/shared-module edits. Two commits:
+1. Tracked the two read-only margin-leakage recon artifacts that were `??` (`MARGIN-LEAKAGE-PRECONDITIONS.md` + `MARGIN-SYSTEM-INVENTORY.md` under docs/cost-to-produce/) — content unchanged — so `MARGIN-LEAKAGE-RESEARCH-LOG.md`'s citations point at repo files, not just disk.
+2. Archived superseded 2026-06-13 FINISH + UNTANGLE handoffs to `docs/handoff-archive.md` (reverse-chron). **CLAUDE.md 703 → 582** (under 600). Clean text move; only RECORD + this entry remain inline.
+
+**Left unstaged (pre-existing, not mine):** `.claude/settings.json`, `docs/cost-to-produce/LOT-POPULATION-PRECONDITIONS.md`. AC: N/A. **Next steps:** unchanged from RECORD below; plus decide on the unstaged LOT-POPULATION change.
+
+---
+
 ### 2026-06-13 — THUNDER RECORD: cultivar_plants cleanup + PMI result field VERIFIED & recorded; CLAUDE.md trimmed; lot-population recon
 
 **Type:** Docs-only (record verified state + CLAUDE.md archive cut) + read-only recon. Zero code, zero schema, zero migrations, zero shared-module logic.
