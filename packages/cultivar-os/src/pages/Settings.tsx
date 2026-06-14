@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Settings as SharedSettings } from '@trace/shared/pages/Settings';
+import { CostToProduceSettings } from '@trace/shared/components/CostToProduceSettings';
 import { useBusinessContext } from '@trace/shared/context';
 import { supabase } from '../lib/supabase';
 import {
@@ -543,6 +544,7 @@ export function Settings() {
 
   const verticalContent = businessId ? (
     <>
+      <CostToProduceSettings />
       <NurserySection businessId={businessId} />
       <TeamSection businessId={businessId} />
     </>

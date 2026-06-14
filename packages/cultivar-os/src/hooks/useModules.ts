@@ -3,7 +3,7 @@ import type { ComponentType } from 'react';
 import type { LucideProps } from 'lucide-react';
 import {
   QrCode, BookOpen, ShoppingBag, Share2, MessageCircle,
-  Map, Users, Leaf, BarChart2, Camera,
+  Map, Users, Leaf, BarChart2, Camera, Calculator,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -41,12 +41,14 @@ const MODULE_META: Record<string, ModuleMeta> = {
   seasonal_module:   { icon: Leaf,            color: '#4ade80', bg: '#1e293b', name: 'Seasonal'     },
   business_insights: { icon: BarChart2,       color: '#818cf8', bg: '#1e293b', name: 'Insights'     },
   inventory_intake:  { icon: Camera,          color: '#fb7185', bg: '#1e293b', name: 'Inventory'    },
+  cost_to_produce:   { icon: Calculator,      color: '#2dd4bf', bg: '#1e293b', name: 'Cost'        },
 };
 
 const MODULE_ORDER = [
   'qr_checkout', 'qb_invoicing', 'online_shop', 'social_media',
   'followup_engine', 'delivery_routing', 'contractor_tiers',
   'seasonal_module', 'business_insights', 'inventory_intake',
+  'cost_to_produce',
 ] as const;
 
 interface BusinessModuleRow {

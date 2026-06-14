@@ -151,7 +151,7 @@ Code anchor: `// FLAG: REQ-2` in `packages/cultivar-os/src/pages/ReceiptKeeper.t
 - ~~PMI module UI — BROKEN~~ → **WIRED 2026-06-13**: `packages/shared/src/modules/PMI.tsx` fully rewired onto business_assets + business_pmi_schedule + business_service_log. barcode_id, task checklist, PASS/NEEDS_ATTENTION/FAIL result, AI suggest. See PMI Module section below.
 - ~~`pmi_suggest` AIEngine route DARK~~ → **New Vercel endpoint 2026-06-13**: `api/pmi/suggest.ts` (Claude Sonnet 4.6, text-only). Input: `{businessId, name, asset_type, make, model, year}`. Output: `{ok: true, tasks: [{name, interval}]}`. ⚠️ 13th Vercel function — exceeds Hobby limit; David must upgrade to Pro or free a slot.
 - ~~Business Service Log UI — no app module~~ → **WIRED 2026-06-13**: PMI.tsx handleLogService() writes to business_service_log (result column requires 20260613 migration).
-- **Cost-to-Produce tile** — the dashboard tile that aggregates all four tables into margin insight. Design doc: `docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md`. **Not yet built.**
+- ~~**Cost-to-Produce tile** — the dashboard tile that aggregates all four tables into margin insight.~~ → **BUILT (config + display + tune loop) 2026-06-14** — see "Cost-to-Produce — Config + Tile" section below. (Asset-table aggregation into the rollup remains future; this build is the period-pool engine + honest display + tune loop. Design doc: `docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md`.)
 
 **Seams declared:**
 - `business_inventory.receipt_id` FK→`receipts.id` (SET NULL) — COUNT-ONCE dedup seam. Presence = receipt is authoritative cost; absence = inventory's `unit_cost` stands. receipt_id is intentionally absent in the manual-entry form; linked only through the receipt flow.
@@ -161,6 +161,30 @@ Code anchor: `// FLAG: REQ-2` in `packages/cultivar-os/src/pages/ReceiptKeeper.t
 **AC compliance:** AC-1 ✅ — all table/column names use `business_` prefix; no vertical nouns. businessId from session context, never hardcoded. AC-2 ✅ — dual RLS policies (owner_all + member_all) match the receipts table pattern.
 
 ⚠️ **Tech Debt #29 (OPEN):** `receipts` table should be renamed `business_receipts` for full AC-1 compliance. All receipt callers reference `receipts` currently. Deferred until after LAWNS demo. See `docs/tech-debt-log.md` #29.
+
+---
+
+## Cost-to-Produce — Config + Tile (period-pool engine + honest display + tune loop)
+
+**What:** The Cost-to-Produce CONFIG (Settings) + DISPLAY (dashboard tile), MarginEngine-fed. Accumulates loaded monthly cost by confidence grade, divides by N target customers, and suggests a price at the configured margin — as a confidence-aware RANGE, never a false-precise single number.
+**Status:** ✅ BUILT 2026-06-14 (THUNDER). Engine numerically verified; cultivar production build passes. ⚠️ David must run the seed migration to activate the TRACE tile.
+**Vertical:** built into cultivar (forward vertical); engine + config panel are shared/general (promotable). **Type:** business-logic + UI
+**Scope boundary:** config + engine + honest display + tune loop ONLY. **NOT** leakage capture, **NOT** per-sale actor/override store, **NOT** scan→QBO — all separate, sequenced after.
+
+**What is built (2026-06-14):**
+- `packages/shared/src/business-logic/CostToProduce.ts` — period-pool engine (the §3 "ACCUMULATOR/POOL" fork). `accumulate()` buckets cost lines by confidence (CONFIRMED+DERIVED floor / ESTIMATED soft / UNKNOWN never-zeroed); `analyze()` runs the sensitivity curve (cost ÷ N → suggested price via shared `MarginEngine.calculateRetail` with a target-margin slab); `marginConfigForTarget()` bridges margin→MarginEngine config. Pure, no DB/React. Exported via shared barrel + `business-logic` barrel.
+- `packages/shared/src/components/CostToProduceSettings.tsx` — the TUNE surface. Reads/writes `business_modules.config` (module_key='cost_to_produce'). Editable: recurring lines (label/amount/period/confidence — selecting UNKNOWN clears the amount), labor (rate×hours), overheadPerUnit, margin baseline + per-tier policy, denominator sensitivity set, reference price. Mounted in Cultivar `pages/Settings.tsx` verticalSection (shared slot).
+- `packages/cultivar-os/src/pages/CostToProduce.tsx` — the SEE-IT surface at `/costs`. Reads config + `business_inventory` (unit_cost/cost_confidence), runs the engine, displays: confidence mix (floor + estimated + UNKNOWN list), sensitivity table (cost & price per N as a range), material-cost panel. Surface Honesty: non-computable (no floor) → LABELED empty state, never a fake $0 price.
+- Tile registry: `cost_to_produce` added to `useModules.ts` MODULE_META + MODULE_ORDER (Calculator icon). Dashboard `handleNavigate` → `/costs`; `handleEnable` → `/settings`. Route registered in `router.tsx`.
+- Seed: `supabase/migrations/20260614_cost_to_produce_trace_seed.sql` — TRACE tenant-zero real numbers into `business_modules.config` (idempotent, data-only, no schema change).
+
+**Verified (executed, not asserted):** engine run against the exact seed (`scripts/verify-cost-to-produce.ts`): floor **$40.00/mo**, suggested price at N=1/5/20/100 = **$66.99 / $13.99 / $3.99 / $0.99** (40% margin), **6 UNKNOWN** costs surfaced (not zeroed); tune proof (labor 75×10hr → **$790/mo** recompute); all-unknown → **non-computable, no fake price**. `npm run build:cultivar` passes (2192 modules).
+
+**Config home:** `business_modules.config` (business_id-scoped JSON; reversible). Multi-location-capable: `config.locations[]` array from day one (engine sums across all locations); UI edits a single default location but persists in the array, so N locations are not precluded (per `docs/strategy/MULTI-LOCATION-OPERATING-MODEL.md`).
+
+**[NEEDS DAVID]:** (1) Claude Pro $17 vs Pro Max ~$100 — verify current plan. (2) Labor hours/month (seeded 0 → labor contributes $0 until set). (3) Tiered pricing ($149/$199/$249/$299) vs flat — tiers stored as policy, default tier priced. (4) Seed resolver targets `business_type='general'`/name ILIKE 'TRACE%' — confirm target business. (5) Settings-UI tuning needs David as an active `business_members` row for the TRACE business (membership-scoped RLS).
+
+**Follow-up (flagged, not done):** `docs/trace-expenses.md` is the single-source-of-truth for expenses; the tile config should eventually read from it (today the config holds the values).
 
 ---
 

@@ -39,6 +39,29 @@ export type {
   MarginAnalysis,
 } from './business-logic/MarginEngine';
 
+// Cost-to-Produce — period-pool engine (THUNDER · 2026-06-14). MarginEngine-fed.
+export {
+  accumulate as accumulateCost,
+  analyze as analyzeCostToProduce,
+  confidenceMix,
+  marginConfigForTarget,
+  EMPTY_COST_CONFIG,
+} from './business-logic/CostToProduce';
+export type {
+  CostConfidence,
+  CostPeriod,
+  CostLine,
+  LaborConfig,
+  MarginTier,
+  MarginPolicy,
+  CostLocation,
+  CostToProduceConfig,
+  Accumulation,
+  SensitivityRow,
+  ConfidenceMix,
+  CostToProduceResult,
+} from './business-logic/CostToProduce';
+
 // Utils
 export { formatDollars, formatMoney, formatMoneyOrDash } from './utils/formatCurrency';
 export { formatDateShort, formatDateTimeShort, todayRange, daysBetween } from './utils/dateHelpers';
