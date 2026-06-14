@@ -323,6 +323,30 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-14 — THUNDER HOUSEKEEPING: track recon artifacts + CLAUDE.md back under budget
+
+**Type:** Docs/git only. Zero code, schema, migrations, shared-module edits.
+
+**Done (two separate commits):**
+1. Tracked the two read-only margin-leakage recon artifacts that were `??` —
+   `docs/cost-to-produce/MARGIN-LEAKAGE-PRECONDITIONS.md` + `MARGIN-SYSTEM-INVENTORY.md` —
+   so `MARGIN-LEAKAGE-RESEARCH-LOG.md`'s citation chain points at files in the repo, not just on disk.
+   Content unchanged — tracked as-is.
+2. Archived the superseded 2026-06-13 FINISH + UNTANGLE handoffs to `docs/handoff-archive.md`
+   (top, reverse-chron: FINISH → UNTANGLE → existing VALIDATE-THEN-CLOSE). **CLAUDE.md 703 → 582** (under 600).
+   Clean text move — kept content unchanged; only RECORD (prior most-recent) + this entry remain inline.
+
+**Left untouched (flagged, not mine to commit):** `.claude/settings.json` (M, pre-existing) and
+`docs/cost-to-produce/LOT-POPULATION-PRECONDITIONS.md` (M, pre-existing) — both still unstaged.
+
+**AC compliance:** N/A (docs only). No env/functions/pages/migrations.
+
+**Next steps for David:** unchanged from RECORD below — lot population (gated on LAWNS yes),
+MarginEngine config source decision. Plus: decide what to do with the unstaged
+`LOT-POPULATION-PRECONDITIONS.md` change.
+
+---
+
 ### 2026-06-13 — THUNDER RECORD: cultivar_plants cleanup + PMI result field VERIFIED & recorded; CLAUDE.md trimmed; lot-population recon
 
 **Type:** Docs-only (record verified state + CLAUDE.md archive cut) + read-only recon. Zero code, zero schema, zero migrations, zero shared-module logic.
