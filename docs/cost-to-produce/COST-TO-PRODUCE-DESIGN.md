@@ -764,6 +764,126 @@ Steps 5–8 add the core pillars. Steps 9–14 complete the full design.
 
 ---
 
+## 16. ACTIVATABLE INSIGHT TILES (BENCHED — Kind-2: design + bench, build when triggered)
+
+**STATE: DESIGN + BENCH-SIZED (2026-06-14). Not on the build path. David triggers each tile
+individually.** These are NOT the core Cost-to-Produce engine (§5–§9). They are *insight tiles*
+that ride on top of it, deepening cost/margin visibility. Captured here so the design doesn't
+evaporate; sized against existing plumbing in the bench look below.
+
+### 16.0 The day-1-sharp / day-14-fuzzy behavior (one coherent system)
+
+Both tiles are **ACTIVE DAY 1** — full real insight during the 2-week trial, computed from the
+customer's own data. At **DAY 14, IF NO SIGNUP**, they go **FUZZY**: the **aggregate dollar value
+stays SHARP** (it's real — computed from their own two weeks of captured receipts/inventory/sales),
+the **line-item DETAIL blurs**. Framed as **KEEP, not TAKE**: "you had this; here's what it was
+worth; sign up to see it clearly again."
+
+This is not a new mechanic — it is the concrete application of three already-decided things, which
+together form **one system**:
+- **BD-2 · Trial mechanic** (the policy: 2 weeks all-on, Core stays, framed as KEEP) —
+  [DECISIONS.md](../DECISIONS.md) BD-2 · also §10 *Trial model* above.
+- **BD-3 · Fuzz mechanic** (the how: deactivated tiles still display, fuzzed, with a real aggregate
+  dollar estimate) — [DECISIONS.md](../DECISIONS.md) BD-3. These tiles are *what fuzzes* at day 14.
+  The blur uses the existing `LockedOverlay.tsx` + data-blur components in `packages/shared`.
+- **BD-4 · Anti-exploitation** (capture is never paywalled; the *intelligence* is the optional
+  upside) — [DECISIONS.md](../DECISIONS.md) BD-4 · §10 above.
+
+Do not re-litigate the mechanic here; this section only states *which tiles* it applies to.
+
+### 16.1 TILE A — Cost-Intake Reconciliation (item ↔ receipt)
+
+**Class:** GENERAL capability (shared substrate, AC-1 clean — operates on `receipts` +
+`business_inventory`, no vertical noun), surfaced as an **activatable Pro tile** (the fuzz tile of
+§16.0). See [TILE-CLASSIFICATION.md](../architecture/TILE-CLASSIFICATION.md) — Cost-to-Produce family.
+
+**What it surfaces (activation value):** every inventory item resolved to a *confirmed* cost with
+receipt provenance — turning "I think this cost ~$X" into "this cost $X, here's the receipt."
+
+**Two independent capture paths into one inventory item, arriving in EITHER order:**
+- (A) photograph the THING (asset/inventory capture) → item exists, **cost UNKNOWN**.
+- (B) photograph the RECEIPT (Receipt Keeper) → a **cost looking for an item**.
+
+**Four item states:** (1) item / no-cost = **UNKNOWN**; (2) cost / no-item = **orphan receipt line**;
+(3) item + confirmed cost = **CONFIRMED** (with `receipt_id` provenance); (4) item + typed cost =
+**ESTIMATED**. (Mirrors the `cost_confidence` enum already on `business_inventory` /
+`business_assets`.)
+
+**Reconciliation = HUMAN-CONFIRMED SUGGESTION, not auto-join.** Item-by-item: "this item has no
+cost; I found this receipt line that might be it — is this the correct cost?" UNKNOWN is **never
+silently zeroed**.
+
+**ANTI-DOUBLE-COUNT:** when a receipt line is confirmed as an item's cost, it is **CLAIMED** (marked
+consumed via `receipt_id`) so the same dollar can't also count as a loose expense. One dollar, one
+home. This is the same count-once concern as the **RECEIPT ROUTING SEAM** (§14) — that seam's
+`receipt_id` join is exactly the link this tile populates.
+
+**Day-1 sharp / day-14 fuzz:** sharp = "$X of inventory cost confirmed, $Y still UNKNOWN, $Z orphan
+receipt dollars" (aggregate). Fuzz = the item-by-item match list blurs; the aggregate stays.
+
+**Dependencies:** `receipts.line_items` (FOUND), `business_inventory.receipt_id` +
+`cost_confidence` (FOUND), an inventory-write path from the photo-the-thing capture (PARTIAL — see
+bench), and the **match/claim engine** (NET-NEW). See bench §16.3.
+
+### 16.2 TILE B — Three-Way Margin Check (receipt ↔ inventory ↔ invoice)
+
+**Class:** GENERAL concept (shared), but its third corner — the **sale/invoice** record — is
+**vertical-shaped today** (`order_items` is Cultivar-local), so TILE B needs a vertical-agnostic
+sale/invoice abstraction to be cross-vertical. Until then it is general-in-concept,
+Cultivar-first-in-impl. See [TILE-CLASSIFICATION.md](../architecture/TILE-CLASSIFICATION.md).
+
+**The reconciliation triangle:** receipt = what you **PAID**, inventory = what you **HAVE**,
+invoice/sale = what you **SOLD it for**. Every sale should trace back through inventory to a receipt.
+
+**The accountability questions it surfaces (these ARE the insight — knowledge-management framing,
+each break in the chain is a FINDING, not an error to suppress):**
+- Sold item X — when, and what did you buy it for? **Did it MEET MARGIN?** (suggested vs actual)
+- Sold but **NOT in inventory** → "how did you sell something you weren't tracking?"
+- Sold but **NO cost captured** → "you made money on this but can't tell how much."
+- Cost but **no sale** → dead stock.
+
+**"Did it meet margin" is the LEAKAGE calc** — the gap between the suggested (margin-correct) price
+and what was actually charged. This triangle is the **DATA MODEL leakage reads from**; the margin
+math and the actor/per-sale-override capture live in
+[MARGIN-LEAKAGE-RESEARCH-LOG.md](MARGIN-LEAKAGE-RESEARCH-LOG.md) — do NOT duplicate that thinking
+here. (Note: the actor / per-sale override capture from that log is still its own net-new build,
+sequenced separately — it is not part of this tile.)
+
+**Day-1 sharp / day-14 fuzz:** sharp = "$X total margin captured this period, $Y margin leaked, N
+sales with no cost basis" (aggregate). Fuzz = the per-sale margin/leakage line list blurs; the
+aggregate stays.
+
+**Dependencies:** TILE A's confirmed costs (so a sale has a cost to compare against), a sale↔cost
+join (PARTIAL — `order_items.plant_id` → `business_inventory.unit_cost` exists but cost and
+sold-price are conflated today), and MarginEngine wired as a live caller (BUILT but ORPHANED, §9).
+See bench §16.3.
+
+### 16.3 BENCH LOOK — sizing each tile against existing plumbing (read-only, file:line-backed)
+
+| # | Corner the tiles need | Verdict | Evidence |
+|---|---|---|---|
+| 1 | **Receipt LINE extraction w/ prices** (the HINGE for TILE A) | **FOUND** | OCR prompt extracts `line_items: [{description, quantity, unit_price, amount}]` — `packages/cultivar-os/api/receipts/ocr.ts:63`. Stored to `receipts.line_items` jsonb — `ReceiptKeeper.tsx:290`, migration `supabase/migrations/20260613_receipts_add_line_items.sql:12`. A priced receipt line exists to match an item against. |
+| 2 | **`receipt_id` provenance link on inventory** | **FOUND (schema) / NOT WIRED (write)** | Column + FK + `cost_confidence` enum: `supabase/migrations/20260612_business_assets_inventory_cost_confidence.sql:55-59`. But it is never populated — `BusinessInventory.tsx:50,155` explicitly leaves `receipt_id` absent ("linked by receipt flow later"). The slot exists; nothing fills it. |
+| 3 | **Invoice/sale → inventory + cost comparison** (TILE B's 3rd corner) | **PARTIAL** | `order_items` carries `plant_id, quantity, unit_price` — `packages/cultivar-os/api/orders/submit.ts:165-169`. Join path order_items → `plant_id` → `cultivar_plants` → `business_inventory.unit_cost` exists. BUT `unit_price` is *set to* `unit_cost` (submit.ts:169, :121) — cost and sold-price are **conflated** (no margin, because price==cost). No sold-vs-cost comparison is computed or stored today; MarginEngine is BUILT-ORPHANED (§9). |
+| 4 | **Asset/photo capture → `business_inventory`** | **NOT FOUND (net-new)** | `BusinessAssets.tsx` writes only to `business_assets` via a manual form (`:131,:179`); no photo/AI-vision pipeline — `CONFIRMED requires a receipt link (future flow)` and `DERIVED = AI-only` are label comments only (`:11`). `BusinessInventory.tsx` is a manual form with no image input. Routing a photo → AI appraisal → `business_inventory` is net-new. |
+| — | **Existing reconcile = item-match?** | **NO** | `computeReconcile()` in `packages/cultivar-os/src/utils/receiptReconciliation.ts:25` is LINE-vs-TOTAL *within one receipt* (sum of lines vs header amount). It is NOT cross-object item↔receipt-line matching. TILE A's matcher is net-new. |
+
+### 16.4 BOTTOM LINE — per-tile sizing
+
+- **TILE A — Cost-Intake Reconciliation: WIRING on data, BUILD on the engine.** Both data inputs are
+  FOUND (priced receipt lines #1, the `receipt_id` slot #2). The **single biggest net-new piece is
+  the match/claim engine**: the item↔receipt-line suggestion (item-by-item, human-confirmed) plus the
+  "claimed" state on a receipt line that prevents double-count. The photo→inventory write path (#4)
+  is a secondary net-new dependency. Net: a focused engine build on top of mostly-present plumbing.
+- **TILE B — Three-Way Margin Check: mostly BUILD.** The join plumbing only PARTIALLY exists (#3) and
+  is corrupted by the cost/price conflation; MarginEngine is orphaned (§9). The **single biggest
+  net-new piece is the cost↔sale comparison wired through a (currently vertical) sale record** —
+  which requires un-conflating cost from sold-price first, then a vertical-agnostic sale/invoice
+  abstraction to make the tile cross-vertical. TILE B depends on TILE A landing first (a sale needs a
+  confirmed cost to compare against).
+
+---
+
 *TRACE Enterprises · Built with CAI*
 *This document is a design capture. It is not a build record.*
 *Source of truth for what is built: `PLATFORM_STATE.md` + `PLATFORM_AUDIT.md`.*
