@@ -1,7 +1,7 @@
 # Schema Verification — cultivar_plants untangle + policy cleanup
 # Migrations:
 #   supabase/migrations/20260613_cultivar_plants_untangle.sql        (RUN, catalog-confirmed)
-#   supabase/migrations/20260613_cultivar_plants_policy_cleanup.sql  (WRITTEN — pending David apply)
+#   supabase/migrations/20260613_cultivar_plants_policy_cleanup.sql  (RUN, catalog-confirmed 2026-06-13)
 # Project: bgobkjcopcxusjsetfob (cultivar-os Supabase)
 # Two-half protocol per Tech Debt #31: Thunder writes the doc + JS checks; David runs catalog SQL.
 
@@ -14,8 +14,8 @@ FOUR policies — two of them redundant/over-broad leftovers from the old `plant
 
 The cleanup migration (`20260613_cultivar_plants_policy_cleanup.sql`) drops the redundant
 public-read policy and replaces the public/ALL owner policy with an authenticated-scoped ALL
-policy (so owners keep write access without the public write-hole shape). It is WRITTEN but
-NOT YET APPLIED — V1–V3 below are PENDING David's run.
+policy (so owners keep write access without the public write-hole shape). It was RUN and
+catalog-confirmed by David on 2026-06-13 — V1–V3 below are CLEAN (results recorded).
 
 PostgREST on this project returns 406 for `information_schema`/`pg_catalog`, so the catalog
 checks (C1–C6, V1–V3) are run by David in the Supabase SQL editor. Results recorded below.
@@ -42,7 +42,7 @@ checks (C1–C6, V1–V3) are run by David in the Supabase SQL editor. Results r
 
 ---
 
-## PART B — Cleanup catalog checks (PENDING — David runs after applying the cleanup migration)
+## PART B — Cleanup catalog checks (RUN — catalog-confirmed by David 2026-06-13)
 
 ### V1 — Exactly THREE policies remain, leftovers gone
 **Query:** (embedded as comment in `20260613_cultivar_plants_policy_cleanup.sql`)
@@ -52,9 +52,13 @@ checks (C1–C6, V1–V3) are run by David in the Supabase SQL editor. Results r
 - `cultivar_plants_owner_select` — SELECT — authenticated
 - ABSENT: `plants_business_owner`, `plants_select_public`
 
-**Result:** _PENDING — David to run V1 in SQL editor and paste result here._
+**Result:** ✅ PASS — exactly 3 policies present: `anon_select_plants` (anon/SELECT),
+`cultivar_plants_owner_select` (authenticated/SELECT), `cultivar_plants_owner_all`
+(authenticated/ALL). `plants_business_owner` and `plants_select_public` are GONE.
+`cultivar_plants_owner_all` carries the owner-or-member predicate on BOTH `qual` AND
+`with_check` — reads and writes are tenant-scoped.
 
-**Verdict: PENDING**
+**Verdict: ✅ PASS**
 
 ---
 
@@ -62,9 +66,9 @@ checks (C1–C6, V1–V3) are run by David in the Supabase SQL editor. Results r
 **Query:** count of policies with `polcmd = '*'` AND `polroles = '{0}'` (public).
 **Expected:** `0`
 
-**Result:** _PENDING — David to run V2 and paste result here._
+**Result:** ✅ PASS — public/ALL policy count = 0. Write-hole shape eliminated (AC-3).
 
-**Verdict: PENDING**
+**Verdict: ✅ PASS**
 
 ---
 
@@ -72,9 +76,9 @@ checks (C1–C6, V1–V3) are run by David in the Supabase SQL editor. Results r
 **Query:** `relrowsecurity` on `cultivar_plants`.
 **Expected:** `true`
 
-**Result:** _PENDING — David to run V3 and paste result here._
+**Result:** ✅ PASS — `rowsecurity = true`.
 
-**Verdict: PENDING**
+**Verdict: ✅ PASS**
 
 ---
 
@@ -87,11 +91,10 @@ checks (C1–C6, V1–V3) are run by David in the Supabase SQL editor. Results r
 | C3: policy list (drove cleanup) | ⚠️ 4 policies — addressed by cleanup migration |
 | C4: identity-only cols + inventory_id FK | ✅ PASS |
 | C5: inventory_id FK → business_inventory | ✅ PASS |
-| V1: exactly 3 policies post-cleanup | ⏳ PENDING David |
-| V2: no public/ALL policy | ⏳ PENDING David |
-| V3: RLS still enabled | ⏳ PENDING David |
+| V1: exactly 3 policies post-cleanup | ✅ PASS |
+| V2: no public/ALL policy | ✅ PASS |
+| V3: RLS still enabled | ✅ PASS |
 
-**Status:** Untangle VERIFIED CLEAN (catalog-confirmed). Policy cleanup migration WRITTEN —
-flips to VERIFIED once David runs the cleanup migration and pastes V1–V3 results above.
-PLATFORM_STATE reflects this split: `cultivar_plants` = WIRED (untangle catalog-confirmed;
-policy cleanup pending David apply + V1–V3).
+**Status:** ✅ VERIFIED — both halves complete (catalog-confirmed 2026-06-13). Untangle
+(C1–C5) CLEAN; policy cleanup (V1–V3) CLEAN. No pending migrations remain for `cultivar_plants`.
+PLATFORM_STATE: `cultivar_plants` = WIRED (verified, catalog-confirmed).
