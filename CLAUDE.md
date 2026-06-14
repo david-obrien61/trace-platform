@@ -344,6 +344,24 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 ---
 
+### 2026-06-14 — THUNDER DESIGN-CAPTURE: activatable insight tiles benched + sized
+
+**Type:** Docs only + read-only bench. Zero code/schema/migrations. One commit (`882ff2d`).
+Added §16 to [COST-TO-PRODUCE-DESIGN.md](docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md) — two
+**benched** (Kind-2) activatable insight tiles + bench sizing. Cross-ref'd (not duplicated) to BD-2/
+BD-3/BD-4 (trial/fuzz/anti-exploitation — one coherent day-1-sharp/day-14-fuzz system),
+TILE-CLASSIFICATION, and MARGIN-LEAKAGE-RESEARCH-LOG. Not on build path; David triggers each tile.
+
+**Bench (file:line-backed): HINGE answered — receipt LINE extraction = FOUND** (`ocr.ts:63` priced
+line_items → `receipts.line_items`, mig `20260613`). `business_inventory.receipt_id`+`cost_confidence`
+= FOUND schema, NOT wired (`BusinessInventory.tsx:50,155`). Sale↔cost = PARTIAL (`submit.ts:165-169`;
+cost/price **conflated** at :169). Photo→inventory = NOT FOUND. Existing `computeReconcile` is
+line-vs-total, NOT item-match.
+**Sizing: TILE A (reconciliation) = WIRING on data / BUILD on match+claim engine. TILE B (3-way
+margin) = mostly BUILD (un-conflate cost/price, wire orphaned MarginEngine, depends on TILE A).**
+
+---
+
 ### 2026-06-14 — THUNDER TILE-CLASS: canonical tile classification written + verified vs live registries
 
 **Type:** Docs only + read-only verify. Zero code/schema/migrations/shared-module edits. One commit (`5aede89`).
