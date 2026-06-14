@@ -7,6 +7,38 @@
 
 ---
 
+### 2026-06-13 — THUNDER RECORD: cultivar_plants cleanup + PMI result field VERIFIED & recorded; CLAUDE.md trimmed; lot-population recon
+
+**Type:** Docs-only (record verified state + CLAUDE.md archive cut) + read-only recon. Zero code, zero schema, zero migrations, zero shared-module logic.
+
+**Session mandate:** Record the two now-RUN-and-catalog-verified migrations, archive pre-UNTANGLE handoff entries to get CLAUDE.md back toward budget, and run a read-only LOOK that sizes the first Cost-to-Produce build (lot population + first MarginEngine caller).
+
+**STEP 0 GATE confirmed:** Last handoff = THUNDER FINISH (cultivar_plants policy cleanup). No shared modules touched. Off Limits (Part 7) clear (oauth.ts, auth.ts, old project, run migrations untouched).
+
+**PART 1 — RECORDED (both migrations now RUN + catalog-confirmed by David):**
+- **cultivar_plants policy cleanup** (`20260613_cultivar_plants_policy_cleanup.sql`) — V1 (exactly 3 policies: anon_select_plants + cultivar_plants_owner_select + cultivar_plants_owner_all), V2 (zero public/ALL — write-hole shape gone, AC-3), V3 (RLS enabled) ALL PASS. `cultivar_plants_owner_all` carries owner-or-member predicate on qual AND with_check.
+- **PMI result field** (`20260613_business_service_log_result.sql`) — `business_service_log.result` column present (text, nullable) with CHECK `business_service_log_result_check` = (PASS / NEEDS_ATTENTION / FAIL).
+- Verification doc `docs/verification/20260613_cultivar_plants_verification.md` Part B filled → doc marked VERIFIED (both halves).
+- PLATFORM_STATE: `cultivar_plants` → **WIRED (verified, catalog-confirmed)** (dropped the "policy cleanup pending" qualifier); `business_service_log.result` → schema VERIFIED; stale "David must run" warnings removed from PMI.tsx + PMI page rows.
+- **No pending migrations remain.** PMI/cleanup carry-forward items dropped from David's next-steps.
+
+**PART 2 — CLAUDE.md archive cut:** Moved the 5 pre-UNTANGLE 2026-06-13 entries (VALIDATE-THEN-CLOSE, VOICE-SCHEMA, INVENTORIES, PMI, AC-5) to `docs/handoff-archive.md` (top, reverse-chron). **CLAUDE.md: 880 → 671 lines.** Kept: rules/standards, Part 9 protocol, FINISH + UNTANGLE handoffs. ⚠️ Still ~71 over the 600 soft budget — the two kept handoffs (FINISH + UNTANGLE) are large; archive them next session once superseded, or trim §2 reference blocks (deliberately NOT done here per "clean cut — move text, change nothing else").
+
+**PART 3 — LOT-POPULATION RECON (read-only, sizes next build):** persisted to `docs/cost-to-produce/LOT-POPULATION-PRECONDITIONS.md`. Bottom line:
+1. **Lot row creation = WIRING** — `BusinessInventory.tsx:168` already INSERTs business_inventory rows via the `/inventory` form. The missing piece is the LINK: nothing yet sets `cultivar_plants.inventory_id`, so a small linking step/UI is the only net-new work.
+2. **FK supports it cleanly** — `cultivar_plants.inventory_id → business_inventory(id) ON DELETE SET NULL` (untangle migration line 55); many identity rows → one qty-of-SKU lot (many-to-one). Matches the settled mapping.
+3. **MarginEngine config = NET-NEW for Cultivar** — shared `MarginEngine.ts` takes `config: MarginEngineConfig = DEFAULT_MARGIN_CONFIG` ({slabs[], pricingTiers[], overheadPerUnit}). Ignition callers source config from DataBridge localStorage (`MarginEngine.getConfig()`); Cultivar has NO equivalent config source (business_modules.config unused). Cost input is solved (`business_inventory.unit_cost`); the config object is the gap.
+
+**AC compliance:** N/A — docs + read-only only. No schema, no shared identifiers.
+**No new env vars, functions, pages, or migrations.**
+
+**Next steps for David:**
+1. **Lot population** (next build step, gated separately on LAWNS yes) — INSERT business_inventory rows for LAWNS SKUs via `/inventory` (UI exists), then build the small link step that sets `cultivar_plants.inventory_id` per tag → restores QR checkout.
+2. Decide config source for the first Cultivar MarginEngine caller (constants file vs. new table vs. business_modules.config) — see LOT-POPULATION-PRECONDITIONS.md §3.
+3. (Optional housekeeping) Archive FINISH + UNTANGLE handoffs next session to push CLAUDE.md under 600.
+
+---
+
 ### 2026-06-13 — THUNDER FINISH: cultivar_plants policy cleanup — drop redundant public-read, scope owner write (AC-3)
 
 **Type:** RLS-policy-only migration. Zero code. Zero shared-module edits. Zero new pages/functions/env. Closes the cultivar_plants thread.
