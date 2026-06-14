@@ -323,6 +323,27 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-14 — THUNDER BUILD: Cost-to-Produce config + tile (period-pool engine, MarginEngine-fed, tune loop)
+
+**Type:** Code build (shared engine + shared config panel + Cultivar tile/page) + data-only seed migration + docs. Two commits (`931c8e2` config+tile, `bd50b96` trace-expenses.md). NO schema change (seed is a data-only INSERT into existing `business_modules`) → schema-verification gate N/A.
+
+**Built (BUILT-INVENTORY "Cost-to-Produce — Config + Tile" section is authoritative):**
+- `packages/shared/src/business-logic/CostToProduce.ts` — period-pool engine. `accumulate()` buckets cost by confidence (CONFIRMED+DERIVED floor / ESTIMATED soft / UNKNOWN never-zeroed); `analyze()` runs N-sensitivity, pricing cost÷N via shared `MarginEngine.calculateRetail` (target-margin slab). Exported via both barrels. Headed.
+- `packages/shared/src/components/CostToProduceSettings.tsx` — TUNE surface; reads/writes `business_modules.config` (module_key='cost_to_produce'). Mounted in Cultivar `pages/Settings.tsx` verticalSection. Headed.
+- `packages/cultivar-os/src/pages/CostToProduce.tsx` (`/costs`) — SEE-IT surface; confidence mix + sensitivity range + material panel; non-computable → LABELED, never fake $0. Headed.
+- Tile `cost_to_produce` in `useModules.ts` + Dashboard nav + `router.tsx`. Seed `supabase/migrations/20260614_cost_to_produce_trace_seed.sql` (TRACE real numbers).
+- `docs/trace-expenses.md` — expense single-source-of-truth (D2 item fulfilled).
+
+**VERIFY-BEFORE-BUILD:** confirmed no existing Cost-to-Produce/pricing UI (PROT field list harvested, screen NOT restored); businessId reaches the path via `useBusinessContext()` (client components — no plumbing needed; the social/campaigns gap was server callers).
+
+**Verified (executed, not asserted):** `scripts/verify-cost-to-produce.ts` → floor **$40.00/mo**, price at N=1/5/20/100 = **$66.99/$13.99/$3.99/$0.99** (40% margin), **6 UNKNOWN** surfaced not zeroed; tune proof (labor 10hr → **$790/mo**); all-unknown → **non-computable**. `npm run build:cultivar` passes (2192 modules).
+
+**Scope held:** config + engine + honest display + tune loop ONLY. NO leakage capture, NO per-sale actor/override store, NO scan→QBO — all separate, sequenced after.
+
+**[NEEDS DAVID]:** (1) run the seed migration to activate the TRACE tile; (2) Claude Pro $17 vs Pro Max ~$100; (3) labor hours/month (seeded 0); (4) tiered $149/$199/$249/$299 vs flat (tiers stored, default priced); (5) seed targets `business_type='general'`/name ILIKE 'TRACE%' — confirm; (6) Settings-UI tuning of the TRACE config needs David as an active `business_members` row (membership-scoped RLS on business_modules — seed bypasses it, UI does not).
+
+---
+
 ### 2026-06-14 — THUNDER TILE-CLASS: canonical tile classification written + verified vs live registries
 
 **Type:** Docs only + read-only verify. Zero code/schema/migrations/shared-module edits. One commit (`5aede89`).
