@@ -286,3 +286,22 @@ The anti-drift discipline we apply to docs applies to HOW WE WORK. If a working-
 **Overrides get logged.** When a seat raises a real objection and David overrides it and proceeds anyway, that goes in `decisions/override-log.md`. An override is not a failure of the method — it's the method working (David is the Kirk seat; overriding informed-Spock is his job). An *undocumented* override is the dangerous thing. See the override log for the three reasons it has to be written.
 
 *Section 14 added 2026-06-13. The pre-commit red-team pass: on load-bearing/irreversible decisions, run the empty seat (usually contrarian-as-the-customer), one honest paragraph trying to kill the idea, state which seat won. Lightning owns the obligation to flag; David owns the throttle; a skip is a logged one-liner. Overrides go in decisions/override-log.md.*
+
+---
+
+## Section 15: The Widget Header Standard + Verify-Before-Build (binding)
+
+> Added 2026-06-14. David's standing instruction from the start, decided long ago but never encoded as a binding rule — so it kept getting re-addressed every session. This makes it a gate, not a memory. Append; do not replace earlier sections.
+
+Every widget, tile, component, module, page, API endpoint, or built artifact carries a HEADER that declares, at minimum:
+- **PURPOSE** — what it does, in one line.
+- **DEPENDENCIES** — what it requires (other modules, tables, env, capabilities; cross-vertical 'requires X' declarations).
+- **OUTPUTS** — what it produces/returns/writes.
+
+This is not optional and not new — it is the standing standard. Its job is to make every built thing SELF-DESCRIBING so capability is never re-derived from memory and never rebuilt because nobody looked.
+
+**VERIFY-BEFORE-BUILD** is its companion: before building anything, check BUILT-INVENTORY.md AND the codebase for existing capability. If it exists, extend/reuse — do not rebuild. BUILT-INVENTORY.md was created precisely because this wasn't followed and things got rebuilt that already existed. (David's words: "if the campaign widget isn't in [the inventory] then it is only in my memory.")
+
+Together these are the two primary mechanisms that keep the platform on track: the header makes a thing knowable; the inventory + verify-before-build makes it findable before duplicating it. Bound into the completion gate at CLAUDE.md §9 and `docs/end-of-session-protocol.md` Step 10 + Step 17 — a built artifact without a header is an incomplete task.
+
+*Section 15 added 2026-06-14. The widget-header standard (PURPOSE · DEPENDENCIES · OUTPUTS on every built artifact) + verify-before-build (check inventory + codebase before building; extend, don't rebuild). Header makes it knowable; inventory makes it findable. Bound into the Step 10/17 completion gate.*

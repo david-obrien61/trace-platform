@@ -1,11 +1,15 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-06-13
+# Last updated: 2026-06-14
 
 **Purpose:** Sessions keep rebuilding things that exist. This document is the single answer to "was X ever built?" Organized by capability, not by file. For file locations, see PLATFORM_AUDIT.md.
 
 **Convention:** This is a LEAN index. Each entry = capability + status + one-line location + POINTER to the authoritative doc for detail. Never inline audit/spec content here — link to it. Keep this file scannable.
+
+**Widget-header standard (binding — partnership doc §15, gated at end-of-session-protocol.md Step 10 + Step 17):** every built artifact (widget·tile·component·module·page·endpoint) carries an in-code HEADER declaring **PURPOSE** (one line) · **DEPENDENCIES** (modules/tables/env/capabilities; cross-vertical `requires X`) · **OUTPUTS** (what it produces/returns/writes). Each entry added below describes an artifact that must carry that header in code — the inventory makes a thing *findable*, the header makes it *knowable*. Verify-before-build is the companion: before building, check this index + grep the codebase; if it exists, extend, don't rebuild. A listing without a header — or a header without a listing — is an incomplete task.
+
+> **⚠️ Header backfill debt (flagged 2026-06-14, Tech Debt #33):** the widget-header standard is now binding going forward, but existing artifacts predate it. Top 3 header-less load-bearing widgets to backfill first: (1) `packages/shared/src/campaigns/generate.ts` — David's referenced "campaign widget", no header; (2) `packages/cultivar-os/src/pages/Campaigns.tsx` — customer-facing campaign widget, no header; (3) `packages/shared/src/discovery/engine.ts` — discovery engine, no header. NOT backfilling all now — flagged as debt; backfill on next touch of each file. See `docs/tech-debt-log.md` #33.
 
 > **Audit reconciliation (2026-06-05):** Three stale bootstrap beliefs corrected. (1) AI Engine is already shared, NOT trapped in Ignition — promote already happened; what remains is unifying a split-brain. (2) RBAC is split — identity/invites shared; enforcement still Ignition-side and duplicated. (3) DataBridge footprint confirmed (~45 files, load-bearing) but characterization disputed: this doc says "localStorage-first, intentionally not shared," bootstrap says "offline-sync engine, promote" — unresolved, see NEEDS DAVID'S CALL.
 >

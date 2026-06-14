@@ -102,10 +102,13 @@ ORDER BY ordinal_position;
    3. Does `docs/built-inventory.md` reflect current state?
    4. Are there any `// FLAG:` placeholders this session's work fulfills? If so, replace with real content.
    5. Does any error message or in-app help text need to be added or updated?
+   6. **Widget-header gate (binding):** does every new/modified widget·tile·component·module·page·endpoint carry a HEADER declaring PURPOSE · DEPENDENCIES · OUTPUTS, AND is it listed in BUILT-INVENTORY.md (Step 17)? A built artifact without a header is an INCOMPLETE task — the header makes it self-describing so capability is never re-derived from memory or rebuilt because nobody looked. Doctrine: partnership doc §15.
 
    **If yes to any:** make the updates in this session's commit. Propagation is part of the work.
    **If no to all:** state explicitly: "No customer-facing documentation propagation needed for this session."
    This step is mandatory.
+
+   **VERIFY-BEFORE-BUILD (build-gate companion, applies at session open, not close):** before building any new capability, check BUILT-INVENTORY.md AND grep the codebase for existing capability. If it exists, extend/reuse — do NOT rebuild. BUILT-INVENTORY.md exists precisely because this wasn't followed and things got rebuilt that already existed. (Mirrored as confirm #6 in CLAUDE.md §10 Session Starter.)
 
 11. **Factual correction capture** — Triggered when:
    - An audit revealed something different from what was previously asserted
@@ -186,6 +189,7 @@ A labeled gap is roadmap. Tech debt is a defect. Don't conflate them.
     - Capability promoted (gap → resolved) → move from "What Is NOT Yet Built" to "✅ Resolved Gaps."
     - No capability changed this session → write `<!-- No capability changes: YYYY-MM-DD -->` as the last line of the file before the footer.
     - **Always:** bump `Last updated:` on line 4 to today's date.
+    - **Header reaffirm (binding, pairs with Step 10 q6):** every entry added here describes an artifact that MUST also carry its in-code HEADER (PURPOSE · DEPENDENCIES · OUTPUTS). The inventory makes a thing findable; the header makes it knowable. Listing without a header — or a header without a listing — is an incomplete task. Doctrine: partnership doc §15.
 
     **VERIFY before committing:** open line 4 of `docs/built-inventory.md` — if the date is not today's date, this step was skipped.
 
