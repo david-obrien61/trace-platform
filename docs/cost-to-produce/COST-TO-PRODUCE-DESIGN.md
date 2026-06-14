@@ -9,6 +9,13 @@
 **Audit authority:** `PLATFORM_AUDIT.md` wins on any conflict about what is currently built.
 **Companion docs:** `PLATFORM_STATE.md` (LEVEL/LOCATION/EVIDENCE), `CLAUDE.md` Tech Debt Log
 
+> ⚠️ **BUILD-GATING CONSTRAINT — `cost_profile` is MULTI-LOCATION.** `cost_profile` must be designed
+> for **N locations of varying duration** (a base + a stream of operating locations, permanent AND
+> transient) — NOT single-location and NOT two-fixed-base. Transient is the general case; permanent =
+> "a transient location that doesn't end." Cheap now, painful to retrofit. Full rationale + the two
+> proof cases (David roaming→dual-use Europe; John's unplanned estate-month counterexample) live in
+> **`docs/strategy/MULTI-LOCATION-OPERATING-MODEL.md`**. Read it before designing the `cost_profile` schema.
+
 ---
 
 ## 0. STEP 0 GATE ECHO
