@@ -323,6 +323,21 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-14 — THUNDER TILE-CLASS: canonical tile classification written + verified vs live registries
+
+**Type:** Docs only + read-only verify. Zero code/schema/migrations/shared-module edits. One commit (`5aede89`).
+Wrote **[docs/architecture/TILE-CLASSIFICATION.md](docs/architecture/TILE-CLASSIFICATION.md)** — companion to LAYER-DEFINITIONS.md; the authority for general/vertical/cross-vertical per tile. Reference only (classifying ≠ building the App Store, which stays NORTH-STAR). Doc carries its own "Verification 2026-06-14" proof (every row file:line-backed).
+
+**Verified findings (bottom line):**
+- **Cultivar:** 10 tiles in `business_modules` registry (`useModules.ts:33-50`, rendered `Dashboard.tsx:743-759`, seed `20260604_business_modules.sql:82-92`). **Ignition:** 19 tiles hardcoded `DASH_APPS` at `CoreApp.jsx:53-73` (flat-file, no DB registry — confirms separate shell).
+- **3 classes:** GENERAL = always-present substrate (Settings, ADMIN/RBAC, MARKETPLACE/billing, Cost-to-Produce, the registry itself, Notifications, Discovery, PMI). CROSS-VERTICAL = installable, may declare "requires X" (QuickBooks/`qb_invoicing`+INVOICE, Social, Campaign Engine/`seasonal_module`, AUDIT, PREDICTIVE, PORT). VERTICAL = one collection only (Cultivar QR checkout; Ignition INTAKE/EVAL/HUB/CIPHER/COMPLIANCE/etc.).
+- **Registry-naming violation CONFIRMED (prime suspect):** the tile registry is a GENERAL concept that wore a VERTICAL noun (`nursery_modules`). Already migrated → `business_modules` (2026-06-04, AC-2 RLS clean); legacy table still EXISTS **pending DROP**. Flagged only, not renamed. Plus `Dashboard.tsx:540` UI text "nursery profile". Rest of Noun-Purge backlog unchanged.
+- **Cost-to-Produce = GENERAL, confirmed:** `MarginEngine.ts` shared + config/`businessType`-driven; nothing forces it vertical. Drops into shared `Settings.tsx` `verticalSection` slot + a tile via shared `Tile`/`TileGrid` primitives. Matches LAYER-DEFINITIONS verdict.
+
+**Left unstaged (pre-existing, not mine):** `.claude/settings.json`, `docs/cost-to-produce/LOT-POPULATION-PRECONDITIONS.md`. AC: N/A (docs only; flags AC-1 debt, creates none). **Next steps for David:** unchanged — finish the `nursery_modules` DROP; build Cost-to-Produce shared-first per the now-settled layer + tile classification.
+
+---
+
 ### 2026-06-14 — THUNDER LAYER-DEFS: canonical layer definitions written + verified vs live code
 
 **Type:** Docs only + read-only verify. Zero code/schema/migrations/shared-module edits. One commit (`a409029`).
