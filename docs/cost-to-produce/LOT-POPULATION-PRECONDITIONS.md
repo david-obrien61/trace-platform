@@ -3,6 +3,12 @@
 > **Type:** Read-only recon. This LOOK *sizes* the first Cost-to-Produce build
 > (lot population + first MarginEngine caller); it does NOT design or start it.
 > Created 2026-06-13 (THUNDER RECORD session). Evidence is file:line.
+> **Re-verified 2026-06-14 (THUNDER LOOK)** — all 3 answers re-checked against live code, unchanged:
+> U1 `BusinessInventory.tsx:168` INSERT + `:155` receipt_id-absent + `:119–131` load confirmed;
+> U2 FK `20260613_cultivar_plants_untangle.sql:55` + grain `20260612_..._pmi_service.sql:103–104` confirmed;
+> U3 shared `MarginEngine.ts` default = Ignition slabs/tiers; Ignition JS callers pass no config (engine
+> pulls `DataBridge.load('margin_config')`, `MarginEngine.js:42–45`); Cultivar has **zero** MarginEngine
+> usage and **zero** `business_modules` pricing-config use (grep clean) → config is net-new.
 > Context: `cultivar_plants` is live + catalog-VERIFIED (untangle C1–C5 + cleanup
 > V1–V3 all PASS — see `docs/verification/20260613_cultivar_plants_verification.md`).
 > All existing `cultivar_plants` rows have `inventory_id = NULL` → QR checkout shows

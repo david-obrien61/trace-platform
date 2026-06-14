@@ -13,3 +13,5 @@ venv/
 .env.vercel.*
 # Scratch / throwaway work — never commit
 scratch/
+# Local Claude Code permission prefs — stays on David's machine, never commit
+.claude/settings.json
