@@ -325,25 +325,11 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 ### 2026-06-14 — THUNDER HOUSEKEEPING: track recon artifacts + CLAUDE.md back under budget
 
-**Type:** Docs/git only. Zero code, schema, migrations, shared-module edits.
+**Type:** Docs/git only. Zero code/schema/migrations/shared-module edits. Two commits:
+1. Tracked the two read-only margin-leakage recon artifacts that were `??` (`MARGIN-LEAKAGE-PRECONDITIONS.md` + `MARGIN-SYSTEM-INVENTORY.md` under docs/cost-to-produce/) — content unchanged — so `MARGIN-LEAKAGE-RESEARCH-LOG.md`'s citations point at repo files, not just disk.
+2. Archived superseded 2026-06-13 FINISH + UNTANGLE handoffs to `docs/handoff-archive.md` (reverse-chron). **CLAUDE.md 703 → 582** (under 600). Clean text move; only RECORD + this entry remain inline.
 
-**Done (two separate commits):**
-1. Tracked the two read-only margin-leakage recon artifacts that were `??` —
-   `docs/cost-to-produce/MARGIN-LEAKAGE-PRECONDITIONS.md` + `MARGIN-SYSTEM-INVENTORY.md` —
-   so `MARGIN-LEAKAGE-RESEARCH-LOG.md`'s citation chain points at files in the repo, not just on disk.
-   Content unchanged — tracked as-is.
-2. Archived the superseded 2026-06-13 FINISH + UNTANGLE handoffs to `docs/handoff-archive.md`
-   (top, reverse-chron: FINISH → UNTANGLE → existing VALIDATE-THEN-CLOSE). **CLAUDE.md 703 → 582** (under 600).
-   Clean text move — kept content unchanged; only RECORD (prior most-recent) + this entry remain inline.
-
-**Left untouched (flagged, not mine to commit):** `.claude/settings.json` (M, pre-existing) and
-`docs/cost-to-produce/LOT-POPULATION-PRECONDITIONS.md` (M, pre-existing) — both still unstaged.
-
-**AC compliance:** N/A (docs only). No env/functions/pages/migrations.
-
-**Next steps for David:** unchanged from RECORD below — lot population (gated on LAWNS yes),
-MarginEngine config source decision. Plus: decide what to do with the unstaged
-`LOT-POPULATION-PRECONDITIONS.md` change.
+**Left unstaged (pre-existing, not mine):** `.claude/settings.json`, `docs/cost-to-produce/LOT-POPULATION-PRECONDITIONS.md`. AC: N/A. **Next steps:** unchanged from RECORD below; plus decide on the unstaged LOT-POPULATION change.
 
 ---
 
