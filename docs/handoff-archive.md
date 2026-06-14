@@ -7,6 +7,215 @@
 
 ---
 
+### 2026-06-13 — THUNDER VALIDATE-THEN-CLOSE: business_voice_samples catalog proof persisted + PLATFORM_STATE WIRED
+
+**Type:** Docs-only close-out. No code, no schema, no migrations, no shared-module edits.
+
+**Session mandate:** Confirm the catalog verification (C1–C6) from the VOICE-SCHEMA session was actually done & passed, persist the proof into the repo so it outlives the chat, then record WIRED in PLATFORM_STATE against the persisted proof.
+
+**STAGE A gate result:** A1 PASS (3/3 JS-client checks pass — table queryable, old table gone, anon blocked). A2 NOT FOUND (C1–C6 results existed only in chat, not in repo). Gate decision: STAGE A INCOMPLETE — proceeded to STAGE B per protocol (persist first, then record).
+
+**What was done:**
+- Created `docs/verification/20260613_business_voice_samples_verification.md` — C1–C6 verdicts recorded verbatim (all PASS). This is now the durable proof in the repo.
+- `PLATFORM_STATE.md` line 103 updated: `WIRED` → **`WIRED (verified 2026-06-13, catalog-confirmed)`**. ⚠️ warning removed (migration confirmed applied). Proof path cited.
+- `docs/built-inventory.md` schema line updated: `campaign_tone_samples` → `business_voice_samples`, date bumped to 2026-06-13.
+- `docs/tech-debt-log.md` entries #30 and #31 added (RLS scope inconsistency; PostgREST catalog doctrine).
+
+**AC compliance:** N/A — docs-only session. No schema, no shared identifiers.
+**No new Vercel env vars. No new functions. No migrations.**
+
+**PLATFORM_STATE.md level changes:**
+- `business_voice_samples table`: WIRED → **WIRED (verified 2026-06-13, catalog-confirmed)**. Proof: `docs/verification/20260613_business_voice_samples_verification.md`.
+
+**Voice thread closed.** Schema VERIFIED and proof in repo. Campaigns repointed. Social read-back deferred. Returning to Cost-to-Produce.
+
+**Next steps for David:**
+1. ✅ (carry-forward) **Run `20260613_business_service_log_result.sql`** in bgobkjcopcxusjsetfob — required before PMI log result field works
+2. ✅ (carry-forward) Navigate to `/pmi`, add asset, log service — verify INSERTs succeed
+3. ✅ (carry-forward) Click "Suggest Schedule" — verify AI returns tasks list
+4. ✅ (carry-forward) **`20260613_business_voice_samples.sql`** — confirmed APPLIED (VERIFIED). No action needed.
+5. **Next session: Cost-to-Produce** — BusinessAssets + BusinessInventory live INSERTs + receipt routing seam. Confirm whether `docs/cost-to-produce/COST-DATA-DISCOVERY.md` ran & reported.
+
+---
+
+### 2026-06-13 — THUNDER VOICE-SCHEMA: rename campaign_tone_samples → business_voice_samples + source column
+
+**Type:** Schema rename + one new column + campaigns repoint. Zero new pages. Zero router changes. No env/infra changes.
+
+**Session mandate:** Cheap-now irreversible schema move — generalize the voice store away from campaigns before it holds real learned voice. Social read-back explicitly deferred. Return to Cost-to-Produce after this.
+
+**What was done:**
+- Migration `supabase/migrations/20260613_business_voice_samples.sql` written:
+  - `ALTER TABLE campaign_tone_samples RENAME TO business_voice_samples` (rows + UUIDs ride along)
+  - RLS policy renamed `tone_samples_owner` → `business_voice_samples_owner`
+  - `source text NOT NULL` added with temporary DEFAULT `'campaign_generate'` → backfilled → DEFAULT dropped (explicit-on-insert required)
+  - `COMMENT ON COLUMN` documents convention: source values are capability keys from `shared/src/ai/capabilities.ts`
+- `packages/cultivar-os/api/campaigns.ts` repointed:
+  - READ site (line 66): `campaign_tone_samples` → `business_voice_samples` (filter: `business_id` only — already pooled)
+  - WRITE site (line 155): `campaign_tone_samples` → `business_voice_samples` + `source: 'campaign_generate'` added
+- Build: `npm run build:cultivar` ✅ 2187 modules, 0 errors (unchanged count)
+- Social NOT touched — `social/generate.ts` has zero voice-sample references (grep confirmed)
+- Deferred work documented in `docs/ai-gateway/VOICE-LOOP-PRECONDITIONS.md` DEFERRED section
+
+**AC compliance:** AC-1 ✅ — `business_` prefix, no vertical noun, business_id-scoped. AC-2 ✅ — existing RLS policy followed through table rename.
+
+**⚠️ David must run `20260613_business_voice_samples.sql`** in bgobkjcopcxusjsetfob SQL editor before `business_voice_samples` exists. Until then, campaigns write/read will 404.
+
+**PLATFORM_STATE.md level changes:**
+- Added row: `business_voice_samples table` → WIRED (pending David running migration)
+- Updated: `Social campaign generator` row — notes added re: reads/writes to `business_voice_samples`
+
+**No new Vercel env vars. No new Vercel functions. No new pages.**
+
+**Voice thread parked.** Schema locked, campaigns repointed. Returning to Cost-to-Produce.
+
+**Next steps for David:**
+1. ✅ (carry-forward) **Run `20260613_business_service_log_result.sql`** in bgobkjcopcxusjsetfob — required before PMI log result field works
+2. ✅ (carry-forward) Navigate to `/pmi`, add asset, log service — verify INSERTs succeed
+3. ✅ (carry-forward) Click "Suggest Schedule" — verify AI returns tasks list
+4. **NEW: Run `20260613_business_voice_samples.sql`** in bgobkjcopcxusjsetfob — renames `campaign_tone_samples` → `business_voice_samples`, adds `source` column
+5. After migration: use Campaigns → edit a generated post → verify pair saved to `business_voice_samples` with `source='campaign_generate'`
+6. Next session: **Cost-to-Produce** — BusinessAssets + BusinessInventory live INSERTs + receipt routing seam
+
+---
+
+### 2026-06-13 — THUNDER INVENTORIES: standing inventory docs created + protocol wired
+
+**Type:** Docs-only session. No code, no schema, no migrations. Zero code changes.
+
+**What was done:**
+- Created `docs/inventory-functions.md` — 13 deployed functions enumerated (count, Hobby limit status, purpose/calls/env vars per function, 2 FILE-ONLY undeployed files flagged, deleted function history).
+- Created `docs/inventory-env.md` — all Vercel env vars cataloged: 14 confirmed live, 2 orphaned (BLOTATO_API_KEY + VITE_APP_URL — no code refs), 8 referenced-in-code but not confirmed in Vercel.
+- Created `docs/inventory-ai.md` — AI architecture documented: WORKS (Receipt Keeper OCR + social generate), WIRED (discovery 3-stage + campaigns + PMI suggest), DEPRECATED (AIEngine/Railway path). Capability registry quick-ref included.
+- Reconciled DB table situation: **PLATFORM_STATE.md is canonical for table state.** CLAUDE.md §2 table list was missing `businesses`, `business_members`, `platform_config` — those 3 added to list with ⚠️ note. `nursery_modules` pending DROP flagged.
+- Wired all three inventory docs into: CLAUDE.md §2 health check (check 6), CLAUDE.md §10 Session Starter (check 5), docs/end-of-session-protocol.md (step 18).
+
+**Flags for David (enumeration, not cleanup — nothing deleted):**
+- ⚠️ `api/services/` directory in root api/ is **empty** — leftover after `customer-match.ts` deletion. Safe to remove when convenient.
+- ⚠️ `BLOTATO_API_KEY` set in Vercel but **zero code references** — orphaned after social/publish.ts deletion (2026-06-08). Safe to remove from Vercel after confirming no other use.
+- ⚠️ `VITE_APP_URL` set in Vercel but **zero code references** — possibly orphaned. Confirm before removing.
+- ⚠️ `packages/cultivar-os/api/members/accept-invite.ts` and `preview-invite.ts` — **no root shims, NOT deployed**. Logic appears duplicated in deployed `invite.ts`. Verify then remove if truly redundant.
+- ⚠️ 13 of 12 Vercel Hobby functions — **deploy blocked** until David upgrades to Pro or removes one function.
+
+**No PLATFORM_STATE.md level changes this session.** (docs-only)
+**No BUILT-INVENTORY.md changes this session.** (docs-only)
+**No AC compliance issues** — session did not touch shared schema, RLS, or shared identifiers.
+**No runbook needed** — pure docs session.
+
+---
+
+### 2026-06-13 — THUNDER PMI: rewire shared PMI module + AI suggest endpoint
+
+**Type:** Module rewire + new Vercel API endpoint + migration. Zero new pages. Zero router changes. No env/infra changes.
+
+**Session mandate:** THUNDER · rewire `packages/shared/src/modules/PMI.tsx` off dead `pmi_assets`/`pmi_service_logs` onto 3 live Supabase tables (`business_assets`, `business_pmi_schedule`, `business_service_log`); port task checklist + inspection result enum from `PredictiveKey.jsx`; add `barcode_id` to asset form; wire AI schedule suggest via new Vercel function using proven receipts/ocr.ts gateway pattern.
+
+**PRE-BUILD VERIFY completed:**
+- `barcode_id text` confirmed in base migration (20260612, line 36) — no ALTER needed
+- `business_pmi_schedule.tasks jsonb DEFAULT '[]'` confirmed — tasks column exists
+- `business_service_log` has NO `result` column — new migration required (20260613)
+- `last_service_at` is on `business_pmi_schedule`, NOT `business_assets`
+- Receipt Keeper gateway pattern confirmed at `packages/cultivar-os/api/receipts/ocr.ts`
+
+**TASK 1 — Migration** (`supabase/migrations/20260613_business_service_log_result.sql`):
+- `ALTER TABLE business_service_log ADD COLUMN IF NOT EXISTS result text CHECK (result IN ('PASS', 'NEEDS_ATTENTION', 'FAIL'))`
+- ⚠️ **David must run this in Supabase SQL editor BEFORE using the log service form** — result field INSERT will error without it
+
+**TASK 2 — PMI.tsx rewire** (`packages/shared/src/modules/PMI.tsx`):
+- `loadAssets()`: two-query (business_assets .neq RETIRED + business_pmi_schedule by asset_id IDs), merged client-side into `PMIAsset[]`. `getPMIStatus()`/`daysUntilDue()` unchanged.
+- `handleAddAsset()`: INSERT business_assets (with barcode_id); if interval set, INSERT business_pmi_schedule. barcode_id field added to form.
+- `handleLogService()`: INSERT business_service_log (result nullable — PASS/NEEDS_ATTENTION/FAIL); UPDATE business_pmi_schedule.last_service_at via schedule_id.
+- Task checklist: `business_pmi_schedule.tasks` jsonb `[{name, interval}]`. Per-task card in log form. `openLogForm()` seeds logTasks from selected.tasks.
+- Inspection result: 3-button PASS/NEEDS_ATTENTION/FAIL picker in log form. `RESULT_STYLE` constant for badge colors.
+- `handleSuggestSchedule()`: POST `/api/pmi/suggest` → UPSERT business_pmi_schedule.tasks. "Suggest Schedule" button in detail view.
+- AC-1 ✅: no vertical nouns anywhere in rewired code. businessId from useBusinessContext(), never hardcoded.
+
+**TASK 3 — api/pmi/suggest.ts** (`packages/cultivar-os/api/pmi/suggest.ts` + root shim `api/pmi/suggest.ts`):
+- Claude Sonnet 4.6, text-only (no vision stage), `ANTHROPIC_API_KEY` server-side only
+- Input: `{businessId, name, asset_type, make, model, year}`. Output: `{ok: true, tasks: [{name, interval}]}`
+- `ANTHROPIC_API_KEY` already set in Vercel cultivar-os project — no new env var needed
+- ⚠️ **13th Vercel function — exceeds Hobby limit (cap = 12)**. Vercel will refuse deploy until David either (a) upgrades to Pro or (b) removes one existing function. See PLATFORM_STATE.md Vercel functions row.
+
+**Build:** `npm run build:cultivar` — ✅ clean (2187 modules, 0 errors)
+**Grep proof:** ZERO references to `pmi_assets` or `pmi_service_logs` in shared/, cultivar-os/, api/ directories.
+
+**AC compliance:** AC-1 ✅ — `business_` prefix only; no vertical nouns. businessId from session.
+
+**STANDARDS compliance:**
+- STD-001: ✅ WIRED — INSERT path wired and build-verified; live data not yet confirmed by David in browser.
+- STD-005 (AI calls): `api/pmi/suggest.ts` uses `ANTHROPIC_API_KEY` server-side only, never exposed to client. ✅
+
+**No new Vercel env vars needed.** `ANTHROPIC_API_KEY` already set.
+
+**Documentation propagation check:** No Help.tsx update needed (PMI is internal owner tool). No onboarding path touches this page.
+
+**Gap graduation sweep:** PMI module BROKEN→WIRED. business_pmi_schedule EXISTS→WIRED. business_service_log EXISTS→WIRED. PMI page BROKEN→WIRED.
+
+**PLATFORM_STATE.md level changes:**
+- Modules · PMI.tsx: BROKEN → WIRED
+- PMI page: BROKEN → WIRED
+- business_pmi_schedule table: EXISTS → WIRED
+- business_service_log table: EXISTS → WIRED
+- Vercel functions: updated to flag 13th function + limit breach
+
+**Next steps for David:**
+1. **Run `20260613_business_service_log_result.sql`** in Supabase SQL editor (bgobkjcopcxusjsetfob) — required before log result field works
+2. Navigate to `/pmi`, add an asset, set a maintenance schedule, log a service — verify all INSERTs succeed
+3. Click "Suggest Schedule" on an asset — verify AI returns tasks list
+4. ~~**Resolve Vercel 13-function limit**~~ ✅ resolved same day — QBO consolidated 13→11 (THUNDER AC-5 session below)
+
+---
+
+### 2026-06-13 — THUNDER AC-5: write constant + consolidate QBO behind one router
+
+**Type:** Docs (PART 1) + refactor (PART 2). Zero new pages. Zero schema changes. Zero env/infra changes.
+
+**Session mandate:** THUNDER · write AC-5 (one-integration-one-router) as architecture constant; then execute to it by consolidating `api/qbo/auth-url.ts`, `api/qbo/callback.ts`, `api/qbo/status.ts` into one connector (`api/qbo-connector.ts`). Clear the Vercel Hobby deploy gate (13→11 functions). Unblock AI-router build for next session.
+
+**PART 1 — AC-5 written (commit b4450c9):**
+- `PLATFORM_STRATEGY.md` — AC-5 appended after AC-4, before Exception Log: one integration = one connector = one router; endpoints are internal routes (path/method dispatch); consolidate-when-touched; cross-integration routers forbidden (Alan Effect); accepted deviations logged in `decisions/override-log.md`.
+- `CLAUDE.md §1.5` — one-line enforcement hook added: AC-5 check triggers on any connector/third-party-integration work.
+
+**PART 2 — QBO consolidated (commit fcdfa97):**
+- Created `packages/cultivar-os/api/qbo/router.ts` — single AC-5 connector with `handleAuthUrl()`, `handleCallback()`, `handleStatus()` dispatched by `req.query._route`. Shared `supabase()` factory, shared QB constants. Zero logic change.
+- Created `api/qbo-connector.ts` — single root shim (replaces 3 shims).
+- Deleted: `api/qbo/auth-url.ts`, `api/qbo/callback.ts`, `api/qbo/status.ts` (root shims) + `packages/cultivar-os/api/qbo/auth-url.ts`, `packages/cultivar-os/api/qbo/callback.ts`, `packages/cultivar-os/api/qbo/status.ts` (implementations).
+- Updated `vercel.json`: three specific rewrites added before SPA catch-all:
+  - `/api/qbo/auth-url` → `/api/qbo-connector?_route=auth-url`
+  - `/api/qbo/callback` → `/api/qbo-connector?_route=callback`
+  - `/api/qbo/status` → `/api/qbo-connector?_route=status`
+- All three public paths preserved byte-exactly. `/api/qbo/callback` = Intuit-registered URI unchanged.
+
+**VERIFY-FIRST result (Parable 3 — irreversible-external):**
+- Registered URI: `https://cultivar-os.vercel.app/api/qbo/callback` (from `QBO_REDIRECT_URI` env var)
+- Preserved via vercel.json rewrite source: `/api/qbo/callback` — byte-identical ✅
+
+**Invoice call (reported as required):** `api/qbo/invoice/cultivar.ts` left separate. Different caller (orders/submit flow vs. OAuth lifecycle), different failure domain. 13→11 matches expected without including it.
+
+**Frontend changes:** Zero. Settings.tsx:541, shared oauth.ts:60/72, QuickBooksConnector.jsx:18 all reference the same public paths — preserved via rewrites. OFF LIMITS oauth.ts not touched.
+
+**Build:** `npm run build:cultivar` — ✅ clean (2187 modules, 0 errors — same as last session).
+**Function count:** 13 → 11. Vercel Hobby cap = 12. Deploy gate cleared with 1 slot headroom.
+**AC-5 compliance:** One QBO connector (`router.ts`), one Vercel function (`qbo-connector.ts`), internal path dispatch — ✅ satisfied.
+**CLAUDE.md flag:** 636 lines (just over 600-line context budget threshold) — note for David; trim handoff history to `docs/handoff-archive.md` when convenient.
+
+**No new env vars needed.** No schema changes. No migrations.
+**No runbook needed** — pure refactor; Vercel routing change is git-snapshotted.
+
+**PLATFORM_STATE.md level changes:**
+- Vercel functions: "12 + 1 pending / OVER LIMIT" → "11 of 12 / 1 slot headroom / deploy unblocked"
+
+**docs/inventory-functions.md updated:** Function count header updated (13→11), table collapsed (rows 3+4+6 → row 3 = qbo-connector), deleted-functions table updated with three QBO files + reason.
+
+**Next steps for David:**
+1. ✅ (carry-forward from PMI session) **Run `20260613_business_service_log_result.sql`** in Supabase SQL editor (bgobkjcopcxusjsetfob) — required before PMI log result field works
+2. ✅ (carry-forward) Navigate to `/pmi`, add asset, log service — verify INSERTs succeed
+3. ✅ (carry-forward) Click "Suggest Schedule" — verify AI returns tasks list
+4. **Next session: AI-router BUILD** — ordered-provider failover in `executeCapability`, route `/api/pmi/suggest` through it, build `ai_usage` table + INSERT. Deploy gate now cleared (11 functions, 1 slot headroom).
+5. No Vercel project upgrade needed — QBO consolidation cleared the gate within Hobby plan.
+
+---
+
 ### 2026-06-11 — THUNDER doc-sync + date-drift sweep
 
 **Type:** Docs-only. Zero code changes, zero migrations, zero schema changes, zero API changes.
@@ -5658,3 +5867,49 @@ Completed:
 
 **Anchors:** `docs/built-inventory.md` (PENDING REQUIREMENTS block) + `packages/cultivar-os/src/pages/ReceiptKeeper.tsx` (two `// FLAG:` comment blocks at idle step entry point).
 
+
+---
+
+
+### 2026-06-12 — THUNDER Cost-to-Produce design doc
+
+**Type:** Design capture only. Zero code changes, zero migrations, zero schema changes.
+
+**Session mandate:** THUNDER · WRITE COST-TO-PRODUCE DESIGN DOC — capture the fully resolved
+architecture for Cost-to-Produce as a single authoritative design document. No build.
+
+**Deliverables:**
+- `docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md` — canonical design doc
+- `docs/cost-to-produce/diagrams-2026-06-12.html` — companion diagrams (revisit artifact; not the canonical doc)
+
+**What's in the doc (14 sections):**
+- Spine: accumulate honestly → emit `cost: number` → divide → surface confidence → never rule on tax/legal
+- Core boundary: capture/surface/model; never take tax or legal position. Every cost line carries cash timing.
+- The fork: accumulator (upstream, event-sourced) → period pool (downstream, snapshot ÷ denominator). One-directional. No reverse writes.
+- Four cost feeds: Receipt Keeper [WORKS], Recurring [DESIGN], Labor + imputed [DESIGN], Asset Manager (Andrew's [BUILT, separate repo]; shared promote-and-consolidate [DESIGN])
+- Cost-object node model: ASSET | PROJECT | PRODUCT as `node_type` discriminator on one `cost_objects` table (AC-1). Containment edges (tree) + contribution edges (DAG for shared costs). COUNT-ONCE rule. PROJECT→PRODUCT conversion lifecycle (CoolRunnings worked case). Shared-cost allocation: owner assigns basis, TRACE does arithmetic, labels it MODEL not FACT.
+- Five pillars (all [DESIGN]): cash-today vs accrual; cost-of-capital; estimate→actual variance + bias learning; confidence-mix rollups (confirmed/derived/estimated/UNKNOWN — never silently zero); payback/break-even clock (F&F hole + discount leakage)
+- Denominator: per `business_type` config (item | customer-month | billable-hour). TRACE self-pricing = sensitivity CURVE at N=1,5,20,100.
+- AI cost: `ai_usage_log` shared table [DESIGN]; `ocr_raw` / receipts provider columns [WORKS]; Tier 2 routing intelligence [DESIGN]
+- MarginEngine: BUILT (canonical, 2026-06-10), ORPHANED for Cultivar. `overheadPerUnit` is the absorption hook. `plants.cost_price` column is the first-caller blocker.
+- Two-tier model: Core = "What did I spend?" (WORKS — Receipt Keeper v1); Pro = "What does it cost me to MAKE this?" (DESIGN — entire intelligence layer). Trial: 2 weeks all-on → Core stays. Fractal rule. Anti-exploitation stance. TRACE eats own cooking (CUSTOMER-ZERO).
+- Surface constraint: `/costs` owns Cost-to-Produce. Dashboard.tsx gets ONE read-only tile max. (Dashboard.tsx: 936 lines, 27 commits/90d, named highest collision risk in code-health audit.)
+- Audit conflict log: 4 entries (asset manager, MarginEngine staleness, ai_usage_log, plants.cost_price) — all resolved consistently with audit-wins rule.
+- Honest inventory: 15 items that do NOT exist yet (code/schema/migration) vs 3 that are built.
+- Build sequencing: 14-step logical dependency order (not committed sprint plan).
+
+**AC compliance:** No AC issues — session did not touch shared schema, RLS, or shared identifiers.
+
+**STANDARDS compliance:**
+- STD-001: ✅ Read-only diagnosis throughout. Checked PLATFORM_AUDIT, PLATFORM_STATE, built-inventory before writing.
+- STD-002 through STD-010: N/A — design-capture session; no code written, no bug fix, no migration, no integration surface touched.
+
+**Factual corrections captured:** None surfaced. PLATFORM_AUDIT §3 staleness on MarginEngine (was "17-line stub", now canonical BUILT) was already documented in PLATFORM_STATE.md. No new corrections.
+
+**No runbook needed** — pure design-capture session.
+
+**Documentation propagation check:** No customer-facing feature built. No Help.tsx, onboarding, or error message changes. No `// FLAG:` fulfillments. `docs/built-inventory.md` not updated (no state changed — all items in this doc are DESIGN; the only WORKS items already have correct state in built-inventory). Explicit: no customer-facing documentation propagation needed for this session.
+
+**Gap graduation sweep:** No gap graduations this session.
+
+**PLATFORM_STATE.md level changes:** None — design session only. No new files wired, no builds confirmed, no migrations applied.
