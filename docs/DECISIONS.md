@@ -149,6 +149,58 @@ proves them, or is debug being stripped/silenced at builder-complete?
 `docs/operating-doctrine/lightning-david-partnership.md` §16 (the doctrine).
 **Date captured:** 2026-06-14 · **Status:** Active doctrine / enforced gate.
 
+### OP-5 · Good-enough model + AI-as-equalizer (the design north star) — `[CAPTURED]`
+**Decision:** Build the **good-enough** model and let AI close the gap to precision. Do NOT engineer the
+perfect mousetrap that demands meticulous labor the owner will never give. When choosing between an
+elaborate-but-precise build and a simple-but-AI-assisted one, the tiebreaker **defaults to simple + AI
+equalizer** unless the elaborate path is proven necessary.
+**Reasoning:** A model that requires meticulous owner bookkeeping turns the platform INTO the accountant —
+the exact anti-Nelson failure the platform exists to avoid (we pull labor off the owner, we do not push it
+on). AI is what makes "good enough" actually good: cheap signals the owner already generates + inference
+close the precision gap that manual data entry would otherwise demand. Re-test on drift: is a new build
+asking the owner to maintain records they won't maintain? If so, it has drifted from good-enough toward
+perfect-mousetrap — flip it to simple + AI.
+**Companion principles:** [[OP-6]] is the floor this must hold to (it must work when the owner does
+nothing); [[OP-7]] is the mechanism (AI does the bookkeeping labor as one-tap proposals).
+**Canonical home:** this entry (design discussion 2026-06-15) · applied in `COST-TO-PRODUCE-DESIGN.md` §5.9.
+**Date captured:** 2026-06-15 · **Status:** Active doctrine / design north star.
+
+### OP-6 · Graceful degradation / fidelity tiers — `[CAPTURED]`
+**Decision:** Every model MUST produce honest value when the owner does **nothing**. Three fidelity tiers:
+- **(a) owner maintains it** — rare; clean records, full precision.
+- **(b) owner confirms inferred transitions** — achievable; system proposes, owner taps once (see OP-7).
+- **(c) owner does nothing** — default/common; cost sits at its last-known state, **flagged unconfirmed**,
+  honest-but-imprecise.
+The model MUST work at tier (c). A model that only works at tier (a) is a product that fails its own customer.
+**Reasoning:** The owner-does-nothing case is not the edge case — it is the common case. A model that lies
+when unmaintained (false precision) or blocks when unmaintained (demands data entry) fails the actual user.
+Honest-but-imprecise (cost held at last-known, confidence-tagged) is always available and never lies. Re-test
+on drift: does the feature still return an honest number when the owner ignores it for a month?
+**Companion principles:** the floor that [[OP-5]] builds to; tier (b) is achievable only because of [[OP-7]] —
+without AI-propose, the middle tier collapses to manual reassignment the owner won't do.
+**Canonical home:** this entry · applied in `COST-TO-PRODUCE-DESIGN.md` §5.9 (cost_confidence on allocations,
+fallback-to-domain).
+**Date captured:** 2026-06-15 · **Status:** Active doctrine.
+
+### OP-7 · AI infers → proposes → owner confirms (BuiltwithCAI earning its keep) — `[CAPTURED]`
+**Decision:** AI reads the cheap signals the owner ALREADY generates (receipts, activity shifts, feed
+purchases) and **PROPOSES** the expensive records they'd never hand-keep (asset reassignment, cost
+allocation, receipt↔item reconciliation, project transitions) as **one-tap confirmations**. AI does the
+bookkeeping labor; the owner does one tap. AI **NEVER auto-commits a structural change** — it surfaces with
+a confidence tag, the owner is the authority, and anything unconfirmed stays in the honest-degraded state
+(OP-6 tier c), confidence-tagged.
+**Reasoning:** This is the MECHANISM that makes OP-6's middle tier (b) achievable — without AI-propose,
+tier (b) collapses to manual reassignment, which the owner won't do, so the system falls to tier (c) for
+everything. A confident-wrong auto-committed record is WORSE than no record (a silent data lie — the failure
+mode this project has repeatedly bled from), so AI proposes and never commits structure on its own. This is
+the anti-Nelson flip operationalized: labor comes OFF the owner, not onto them. It generalizes across the
+platform — reconciliation, allocation, and lifecycle transitions all use this same infer→propose→confirm move.
+**Companion principles:** the mechanism behind [[OP-5]] (AI closes the precision gap) and [[OP-6]] (makes
+tier b real).
+**Canonical home:** this entry · applied in `COST-TO-PRODUCE-DESIGN.md` §5.9 (AI-inferred reassignment,
+allocation confidence).
+**Date captured:** 2026-06-15 · **Status:** Active doctrine.
+
 ---
 
 ## PERSONAL-FINANCIAL

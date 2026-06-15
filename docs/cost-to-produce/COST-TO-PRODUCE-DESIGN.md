@@ -13,6 +13,10 @@ real-customer worked cases, the separation event, the lane, and a recorded red-t
 · **Two-vocabulary layer:** 2026-06-15 (THUNDER CAPTURE — added §5.8: the four established costing
 methods we already implement, mapped owner-plain-language ↔ formal/accountant terms; owner UI is plain,
 formal terms live only at the QB-mapping + accountant-export seams)
+· **Asset-lifecycle model:** 2026-06-15 (THUNDER CAPTURE — added §5.9: asset outlives product (separate
+status columns), reuse across sequential projects by assignment period, conversion-as-cost-event, idle/
+unassigned state, asset-to-project as time-bounded assignment, fallback-to-domain, allocation confidence,
+carry-in basis lane held; grounded in the rabbit/tractor farm history)
 **Author:** David O'Brien + Claude Code (THUNDER design series)
 **Audit authority:** `PLATFORM_AUDIT.md` wins on any conflict about what is currently built.
 **Companion docs:** `PLATFORM_STATE.md` (LEVEL/LOCATION/EVIDENCE), `CLAUDE.md` Tech Debt Log
@@ -523,6 +527,84 @@ export layers may carry the formal terms (cost pool, cost driver, variance, job/
 renders only the plain-language column. The map itself — formal ↔ plain — is a translation table, not a
 new engine; it lives in the same surface that does QB field mapping and accountant export. **Verify the
 exact QB field names by inspection at build time — do not bake QB's schema into this design from memory.**
+
+### 5.9 ASSET LIFECYCLE — asset outlives product, reused across sequential projects (capture, 2026-06-15)
+
+**STATE: DESIGN (benched)**
+
+> **Grounded in real history, not a hunch.** David's rabbit/tractor farm: bought breeding stock + tractors →
+> built breeding cages (new-build) → ran the rabbit-meat PRODUCT → **converted** the tractors into chicken
+> tractors → ran the chicken-meat PRODUCT → the tractors now sit **IDLE** between projects. This concrete
+> sequence is the evidence behind every bullet below. It corrects an implicit §5.1/§5.3 assumption that an
+> asset's life is bounded by the product it was bought for. It is not.
+
+**ASSET OUTLIVES PRODUCT (two independent lifecycles on one tree — THIS is why statuses are separate).**
+When a PRODUCT retires it closes its **LEDGER**: a final realized cost-vs-revenue that persists as HISTORY
+and is never deleted (the rabbit P&L — ~$11,736 cost vs ~$1,215 income, §5.7 — is a completed cycle kept as
+the truthful record). But the product's ASSETS do **not** retire with it. **product-retired ≠ asset-retired.**
+The tractors outlived the rabbit product. An asset and the product it served run on two independent
+lifecycles hanging off one node tree — which is precisely why `status` (asset) and `product_status` must be
+SEPARATE columns (see SEPARATE STATUS COLUMNS below), not one polymorphic state.
+
+**ASSET REUSED ACROSS SEQUENTIAL PROJECTS — cost allocates by ASSIGNMENT PERIOD (time axis).** One asset
+serves multiple projects/products over time (rabbit tractors → chicken tractors). Asset cost therefore
+allocates across **sequential** projects by **assignment period** — a TIME axis, not only the
+simultaneous-node DAG of §5.2 (which splits a shared cost across *concurrent* products). Do NOT dump the full
+asset cost on the first project it touched; spread it across the periods it actually served.
+
+**CONVERSION IS A COST EVENT — asset cost ACCUMULATES.** Repurposing an asset (rabbit cage → chicken tractor)
+accrues ADDITIONAL cost (the conversion labor + materials) that lands on the **receiving** project, not the
+one being left. So an asset's cost is not a fixed `acquisition_cost` — it ACCUMULATES (acquisition + each
+conversion event over its life). The §5.4 count-once rule still holds per event; the asset's running total is
+the sum of its acquisition plus every conversion.
+
+**IDLE / UNASSIGNED is a real cost-carrying STATE the current enum lacks.** The tractors now: owned,
+functional, serving no current project. The asset enum (ACTIVE/IN_REPAIR/OFFLINE/RETIRED) has no slot for
+this. Idle capital is a real hidden cost / opportunity — surfacing "you have $X of capital sitting idle
+between projects" is a differentiator insight (cross-ref §16 insight tiles), not a gap to ignore.
+
+**ASSET-TO-PROJECT = a TIME-BOUNDED ASSIGNMENT, not containment.** The assignment edge carries a start and
+an end; the **idle gap is simply the absence of an active assignment edge.** This is distinct from the §5.2
+containment edge (A ⊂ B, structural) — an assignment is temporal and many-over-time, the same primitive idea
+as the multi-location model's time-dimension on `cost_profile` and the §5.7 use-fraction "permanent =
+transient that doesn't end."
+
+**FALLBACK-TO-DOMAIN — the graceful-degradation application (OP-6).** When a project closes or goes quiet,
+its assets **fall back to the domain** (e.g. Farm) **automatically**. The owner does NOT fire a "revert"
+event — they won't, so the model must not require it. **Idle = unclaimed = held by the domain, by default, no
+owner action.** The next reassignment to a new project is AI-inferred + owner-confirmed (OP-7: infer →
+propose → one-tap confirm), never auto-committed. This is `[[OP-6]]` graceful degradation and `[[OP-7]]`
+infer-propose-confirm made concrete on the asset tree.
+
+**COST_CONFIDENCE EXTENDED TO ALLOCATION (not just dollar amounts).** `cost_confidence` (§5.4/§6.4, today a
+flag on whether a dollar figure is known) extends to **allocation**: an assignment can be "AI-inferred,
+unconfirmed" vs "owner-confirmed." An unmaintained record produces an honest-but-imprecise number — cost sits
+at the last-known assignment, flagged — **never a false-precise lie, never a blocking demand for data entry**
+(OP-6 tier c). This is the confidence machinery already in the model, applied to the time-bounded assignment
+edge.
+
+**ASSET REUSE FEEDS A NEW PROJECT — the loop, and the carry-in basis (LANE HELD).** A retired product's
+reused asset becomes a new project's input — **at what carry-in value?** (original / depreciated / salvage /
+$0). That is the **ACCOUNTANT's call.** The platform SURFACES "these assets carried over from the retired X
+project, original cost $Y — you decide the basis" and flags it; it **never** sets the depreciated value. Same
+lane as the carried-lot valuation in the grower model (§5.6, §14 carried-lot seam) — we surface the existence
+of the question and the record needed to answer it; the accountant rules.
+
+**SEPARATE STATUS COLUMNS (David's decision).** Three independent status columns, never mixed into one
+polymorphic column; `node_type` selects which is meaningful for a given row:
+- `status` — ASSET-only enum (ACTIVE / IN_REPAIR / OFFLINE / RETIRED, **+ an IDLE/UNASSIGNED state per
+  above**).
+- `project_status` — PROJECT-only (open / closed / converted).
+- `product_status` — PRODUCT-only (active / retired).
+This is the schema consequence of "asset outlives product": two independent lifecycles cannot share one
+state column. (Resolves the lone `status` CHECK conflict the asset-node schema decision flagged — see
+`ASSET-NODE-SCHEMA-DECISION.md` / `-3LENS.md`.)
+
+**Cross-refs.** §5.2 (containment vs contribution edges — assignment is a third, temporal edge type); the
+multi-location operating model (`docs/strategy/MULTI-LOCATION-OPERATING-MODEL.md` — assignment shares the
+time-dimension idea); §16 reconciliation/insight tiles (idle-capital + carried-asset insights). Operating
+principles: `[[OP-5]]` good-enough + AI-equalizer, `[[OP-6]]` graceful degradation, `[[OP-7]]`
+infer→propose→confirm (DECISIONS.md). **DESIGN-benched — capture only; Core-1 builds the schema.**
 
 ---
 
