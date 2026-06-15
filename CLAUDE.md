@@ -323,6 +323,16 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-15 — THUNDER CAPTURE: cost-accounting two-vocabulary layer + competitive landscape doctrine
+
+**Type:** Docs only. Two commits (`aaff697` captures; trim commit follows). No schema/code/migration/build → schema-verification gate N/A. CAPTURE only — no build (accumulator verify-before-build remains the separate next step).
+
+**Part 1 — two-vocabulary translation layer (`COST-TO-PRODUCE-DESIGN.md` §5.8, new).** David's framing: owners speak PLAIN language; formal accounting terms are needed only at two seams — (a) QuickBooks field mapping, (b) accountant handoff. So the design carries TWO vocabularies + an explicit map. We do NOT invent a method; we implement four established ones — named so we don't reinvent and can speak QB's/the accountant's language at the seams. The method→model→owner-language table: **JOB/JOB-ORDER COSTING** = ACCUMULATOR path (node model §5) → "what this project cost"; **PROCESS COSTING** = PERIOD-POOL ÷ N tile (§7) → "your cost per customer/unit"; **HYBRID JOB/PROCESS** = the platform overall (recognized, not novel); **ABC** (formal: COST POOL = common costs, COST DRIVER = owner-set basis) = §5.5 allocation + §5.7 carve-out basis → "how we split the shared bills"; **STANDARD COSTING/VARIANCE** (standard=estimate, actual=receipt, variance=gap) = §6.3 estimate→actual → "what you thought vs what it really cost." Owner UI = plain column only; formal terms live in QB-mapping + accountant-export + internal naming. Header changelog bumped. Bar: DESIGN.
+
+**Part 2 — competitive landscape doctrine (`MASTER_BRIEF.md` PART 7, new "Tier 2" subsection; existing PART 7 already had direct-vertical-SaaS table + moats).** Research-backed, 2026, with verify-by-search-at-build note: job-costing software is vertical-specific + built for the post-garage crew business (~$6–50/mo/user up to ~$499/mo); top end is six-figure ERP. **The gap (wedge):** nobody serves the garage-genesis owner-operator combining residence-root awareness + connector-not-replacement + the honesty layer + multi-vertical. **Connector strategy market-validated:** ~2/3 of SMBs run ≤2 paid tools, are software-cost-sensitive (41% cite rising costs), won't rip out QB. **Philosophy industry-recognized:** broad averages hide the truth on custom/service work; "record→close→file away, margin chance gone" is the named failure mode; surfacing cost while there's still time to act is the recognized gap. **The real threat is an INCUMBENT** (Intuit shipping good-enough cost intel), NOT a startup — watch incumbents. **$149/mo sits in a defensible band.**
+
+**Verified:** both captures grep-confirmed present (§5.8 table with all 4 methods + owner-plain/formal split; PART 7 with gap/connector/philosophy/incumbent/price). **Trim:** moved the four 2026-06-14 handoff entries → `docs/handoff-archive.md` (clean date boundary; kept three 06-15 entries + this one). **CLAUDE.md 633 → 589 — back under the ~600 budget.** No BUILT-INVENTORY change (no capability built — design/strategy docs only).
+
 ### 2026-06-15 — THUNDER SMALL MOVE: [TRACE:COST] instrumentation (STD-003 gate's first live test) + cleared 2 console errors
 
 **Type:** Code (1 shared engine, 1 shared panel, 2 cultivar pages) + docs. One commit. NO schema/migration → schema-verification gate N/A.
@@ -350,50 +360,6 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 **Type:** Docs only. One commit (`263a618`). No schema/code/migration/build. Capture+verify+red-team.
 
 **Verdict (MIXED — one real correction, one clarification):** §5 was **business-rooted** — every node `business_id`-scoped, types ASSET|PROJECT|PRODUCT only, no node above the business (verified §5.1:215-216; the lone residence in §5.2:240 is a *PRODUCT*, the home-value case). So the ROOT assumption was a genuine **correction**: small businesses are **residence-rooted, business-emergent** (garage genesis — Apple/Amazon/Dell/MSFT; clean business-root is the post-migration fiction). Captured as new **§5.0**. The COST-FLOW correction: **CARVE-OUT** (personal-origin cost → business via a use-fraction; remainder stays personal, OUTSIDE the rollup) is a **distinct direction**, NOT allocation-in-reverse — it REUSES §5.5's owner-set-fraction arithmetic but obeys a different conservation rule (remainder leaks to personal). Captured as new **§5.7** with 4 real customers (David homestead/water-catchment DAG + rabbit P&L $11,736 vs $1,215; Terry/LAWNS 20ac homestead; Lauren office-part-of-house; John residence+designated-office+hotel-as-transient-office), the **separation event** (sell business/keep residence → carve-out becomes literal survey/deed/asset-transfer; we build the RECORD, not the survey), and the **lane** (surface that standard methods EXIST, verify by search at build, never rule on tax). use-fraction unifies permanent+transient office → ties to MULTI-LOCATION doc (cross-ref, not duplicated). **Red-team: no argument broke it** — #1 simpler-business-root fails the in-garage customer; #2 resolved distinct (remainder-inside vs remainder-personal); #3 privacy bounded (carve-out IS the membrane; flagged UX seam); #4 lane holds. Two OPEN seams logged in §14: household-root schema shape + personal-vs-business visibility UX. **Single-source: augmented §5 in place, no duplicate.** Bar: DESIGN-benched (no build). **⚠️ CLAUDE.md over ~600 lines — trim handoff history to docs/handoff-archive.md next session.**
-
-### 2026-06-14 — THUNDER VERIFY+CAPTURE: cost-object NODE MODEL confirmed canonical, four gaps filled (DESIGN, benched)
-
-**Type:** Docs only. One commit (`74dfd89`). No schema/code/migration/build. Capture-only — did NOT build the node model.
-
-**Finding (risk hypothesis disproven):** the ASSET|PROJECT|PRODUCT node model was ALREADY canonical — `docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md` §5 (5.1–5.6) + §6. 7 elements: **5 FOUND** (node discriminator §5.1; containment/contribution→DAG edges §5.2; count-once §5.4; cash-today-vs-amortized §6.1; allocation arithmetic §5.5); **4 gaps CAPTURED** by augmenting existing sections (NOT duplicating §5 — would violate Doc-Reorg single-source): (1) LAWNS-greenhouse worked case §5.3 (cash-today project cost, accountant amortizes, contribution-not-containment); (2) cost-of-capital two-layer + credit-card "pay off→$0 / roll→APR" scenario lever §6.2; (3) shared-labor/resource allocation OPEN seam §14 (David's hours, shared server — flagged not solved); (4) §5 multi-location cross-ref. CoolRunnings + greenhouse both worked cases now. **Built tile this session = period-pool ÷ N only; node/accumulator model BENCHED — biggest net-new piece = `cost_objects` accumulator + the shared-cost no-double-count slice seam (§14).**
-
-### 2026-06-14 — THUNDER ENFORCE STD-003: debug-on-until-owner-proven bound into the build gate + CLAUDE.md trimmed
-
-**Type:** Docs only. Zero code/schema/migrations/shared-module edits. Two commits (enforcement fix; archive trim).
-
-**The fix — written ≠ enforced.** STD-003 (instrumentation born-ON, commented-out only when proven) was in STANDARDS.md but only applied when a prompt remembered to ask — so the same-session Cost-to-Produce build shipped WITHOUT it. Bound it into the gate so it fires regardless:
-- **CLAUDE.md §9** gate item 9 + **Session Starter** check 7: every build adding/changing a capability ships `[TRACE:area]` ON BY DEFAULT (emitting, not flagged-off/silent/deleted); omitting/pre-silencing = INCOMPLETE, same force as the header gate; commented-out only AFTER owner-proof. Fires even if the prompt forgot.
-- **Two completion bars** (§9 + partnership doc **§16**): BUILDER-COMPLETE (Thunder: builds/round-trip) vs OWNER-PROVEN (David, real UI under RLS). Debug stays on between them; builder-complete does NOT authorize removing it — anchored to the live proof (Cost-to-Produce round-trip passed while UI-save-under-RLS stayed unproven). **DECISIONS.md OP-4** captures the reasoning.
-
-**Trim:** archived BUILD/DESIGN-CAPTURE/TILE-CLASS/LAYER-DEFS/SWEEP (oldest-first); kept rules/standards/Part 9 + two newest prior handoffs. **CLAUDE.md 670 → 599.** **[NEXT BUILD-TOUCH — flag only]:** Cost-to-Produce tile shipped WITHOUT `[TRACE:COST]` — add per the now-enforced gate next time that code is touched (NOT this docs-only pass).
-
----
-
-### 2026-06-14 — THUNDER CLEAN THOUGHTS: personal-financial content moved out of git-tracked THOUGHTS.md
-
-**Type:** Docs only. One commit (`THOUGHTS.md` move) — the gitignored `decisions/PERSONAL-FINANCIAL.local.md` is NOT committed. Closes the privacy-split gap left by the 2026-06-14 SWEEP (PF capture went to the local file, but THOUGHTS.md — family-readable, git-tracked — still held the old copy).
-
-**Moved (4 personal-financial DECISION blocks) → local file, replaced with pointer stubs:** (A) "Financial decisions" + "this isn't working" trigger criteria (was THOUGHTS.md:723–777); (B) full 2026-06-03 "Family Compensation Structure and Role Casting" entry incl. the $4,000/mo draw cap + ~$90K/kid billing (was 1198–1327); (C) Section 8 trigger restatement (was 1559–1573, surgical — kept the "keep moving" doctrine); (D) the OKC-house psychological/marriage paragraph (was 2010, surgical — kept the Risk-5 business framing). Local file: PF-1–4 distilled ledger kept + a **verbatim Source A/B/C archive** appended (preserves ALL detail, deduped); PF-2 draw figure updated with the $4,000 cap (still `[PENDING DAVID]`). Verified: grep-clean in THOUGHTS for draw-cap/Option-C/VA/retirement-income/divorce-trigger; local file gitignored + absent from `git status`.
-
-**⚠️ FLAGGED FOR DAVID — two honest caveats:**
-1. **Git history NOT scrubbed.** The moved content was previously committed, so it remains in prior commits. This move removes it from the *current* file only. History-scrubbing (git-filter-repo/BFG) would be needed to purge it — destructive, force-push, your call; NOT performed.
-2. **Residual personal *narrative* deliberately left in THOUGHTS** (it's journal/operating-doctrine, not personal-financial *decisions* — gutting it would violate "don't touch business/strategy"): `:225` faith + "OKC house not selling" pressure; `:462` Andrew's $48–72K min-viable-salary; `:1695` Regina-will-divorce operating constraint (most explicit marriage line); `:1786` Connor imposter-syndrome; `:1827` OKC-house risk-factor line; `:1985` "OKC won't sell" life-lessons line. Decide if you want these moved/redacted too.
-
-**⚠️ CLAUDE.md is 651 lines — over the ~600 budget.** Recommend trimming older Part-3 handoff entries to `docs/handoff-archive.md` before next session.
-
-### 2026-06-14 — THUNDER PRIORITY FIX: Cost-to-Produce panel was silently truncating cost lines on save (data loss)
-
-**Type:** Code fix (1 shared component) + data restore (1 data-only migration, applied live) + docs. Two commits (`db0…` panel fix, restore migration). NO schema change → schema-verification gate N/A.
-
-**PART 0 — verified root cause (source ≠ the reported mechanism):** the panel has **no load-time filter** — load (`CostToProduceSettings.tsx:73-94`) and save (`:117-128`) were both faithful and identical across both prior commits. A clean session can't truncate. The real defect is the **combination**: load **swallowed read errors** and silently substituted `EMPTY_COST_CONFIG` on any null/odd-shape read (RLS race, transient failure, config-as-JSON-string), and save **overwrote `recurring[]` unconditionally** — so ANY short load was persisted as permanent truncation, invisibly. (RLS is `FOR ALL` membership-scoped → an RLS-hidden row reads as `null`, indistinguishable from "no row" — which is why the silent-EMPTY fallback is dangerous.) Live read confirmed business 45830ba7 sat at 2 lines (Claude Pro $100, Gemini $20) — matching the evidence.
-
-**PART 1/2 — fix (`CostToProduceSettings.tsx`, header updated):** load now captures the read error and **blocks editing** (error panel) instead of substituting EMPTY; parses string-shaped configs; surfaces ALL lines incl. UNKNOWN/null. Save **re-reads** the stored array and **REFUSES** to write fewer recurring lines than stored unless the user explicitly deleted them (`removedCount`); `addLine` raises the count so legit edits never trip.
-
-**PART 3 — restore (`20260614_cost_to_produce_restore_truncated_lines.sql`, applied live AFTER the fix):** business 45830ba7 back to canonical 10 lines, preserving David's Claude Pro $100 + Gemini $20 + 6 UNKNOWN (null, not zeroed).
-
-**Verified — REAL DB round-trip (not the JSON-logic test that missed this):** STEP1 restore→10 lines/6 UNKNOWN; STEP2 DB→edit Gemini 20→25→save→DB = count held at **10**, edit landed, Claude $100 + 6 UNKNOWN intact; STEP3 guard vs short load (form=2, stored=10, removed=0) → **REFUSED**; left canonical (10 lines, Gemini $20). `npm run build:cultivar` passes. (Round-trip used the service key → proves the data-loss invariant; the RLS/membership save path remains David's separate [NEEDS DAVID] item from the seed.)
-
-**[NEEDS DAVID]:** (1) restore was applied to the live DB this session; the committed migration is the reproducible record (idempotent re-run if needed). (2) RLS still requires David be an active `business_members` row to save from the Settings UI (unchanged). **FLAG:** CLAUDE.md is ~660 lines — over the ~600 budget; trim handoff history to `docs/handoff-archive.md` next session.
 
 ---
 
