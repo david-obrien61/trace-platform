@@ -350,6 +350,54 @@ propose → confirm, because only the owner knows purpose).
 
 ---
 
+### D-8 · Cost carries a usage-coupling shape: RECURRING-FIXED vs PER-OCCASION — `[CAPTURED]`
+**Decision:** Every cost carries a **shape**. **RECURRING-FIXED** = subscription, **usage-decoupled**, paid
+on a cadence regardless of use (→ ÷N monthly pool). **PER-OCCASION** = a discrete event (a one-off purchase
+or service). The same merchant category can be **either** — the shape, not the category, decides where the
+cost belongs.
+**Reasoning (founding case — David's car-wash subscriptions):** $9.99/month per vehicle, billed whether or
+not the car is washed, whether or not the owner travels for a month. Usage is **decoupled** from cost —
+which is exactly why it hides: small, automatic, paid without being felt. The recurring-fixed subscription
+is the hidden-cost **ARCHETYPE** (the [[D-6]] decision-changing few). A one-off cash wash at $15 is
+per-occasion — **different shape, same category.** The engine must distinguish them, because one belongs in
+the monthly pool and one is a discrete event.
+**Companion principles:** [[D-5]] (cost event is truth — the shape is a property of the event), [[D-6]]
+(recurring-fixed is the archetype of the surprising few worth surfacing).
+**Canonical home:** this entry.
+**Date captured:** 2026-06-15 · **Status:** Active doctrine.
+
+---
+
+### D-9 · The honesty contract: KNOW / THINK / REASON / NEED-CLARIFICATION, and acceptance is the pivot — `[CAPTURED]`
+**Decision:** Every output the cost engine surfaces is **labeled by epistemic state** — **KNOW**
+(substantiated + certain; stated flat), **THINK** (inferred, labeled as inference), **REASON** (the
+derivation shown, not just the verdict), **NEED-CLARIFICATION** (data-unresolvable ambiguity → a real
+question with a **SUGGESTED disposition** + candidate interpretations; a first-class outcome, not a
+failure). The platform **NEVER** auto-categorizes ambiguous costs as if certain. A cost moves **SUGGESTED →
+owner disposes (ACCEPTED / REJECTED / EDITED) → counted.** **NOTHING counts as business cost until
+ACCEPTED.**
+**Reasoning:** Auto-categorizing wrong is worse than asking — one confident error poisons trust in every
+number, including the correct ones (**credibility is fragile, not additive**). Asking BUILDS credibility: it
+shows the system knows the limits of what it knows. The AI's job is to make acceptance **CHEAP** — surface a
+hidden cost AND propose a plausible home ("car wash often = vehicle maintenance; business or personal?") so
+the owner accepts with one tap instead of constructing the answer himself (labor flip; a blank "what is
+this?" is the Nelson model). Acceptance is the **capture of owner INTENT** — business-vs-personal,
+which-asset, why — the one signal no receipt, feed, or AI can supply ([[D-7]]: owner is sole source). This
+RESOLVES the [[D-6]] tension: surface **GENEROUSLY** as suggestions (wide discovery net, zero credibility
+cost because a suggestion makes no claim) but **COUNT** nothing until accepted. Disposition is also a
+**learning signal** — it teaches the system this owner's cost reality, sharpening later suggestions. This is
+surface-honesty applied to **CONFIDENCE itself**, and it is the differentiator vs auto-categorizing
+competitors (QB/Dext/Expensify) whose buried uncertainty surfaces as silent error at tax time. Governs
+**ALL** engine output, not just `sameCost()`.
+**Companion principles:** [[D-5]] (event is truth), [[D-6]] (surface the decision-changing few), [[D-7]]
+(owner is sole source of intent), [[D-8]] (cost shape is one of the things proposed and accepted), [[OP-5]]
+(good-enough + AI-as-equalizer), [[OP-6]] (graceful degradation), [[OP-7]] (AI infers → proposes → owner
+confirms — the mechanism acceptance rides on).
+**Canonical home:** this entry.
+**Date captured:** 2026-06-15 · **Status:** Active doctrine.
+
+---
+
 ## PERSONAL-FINANCIAL
 
 > Not in this file by design — see **`decisions/PERSONAL-FINANCIAL.local.md`** (gitignored).
