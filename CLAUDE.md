@@ -323,6 +323,18 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-14 — THUNDER ENFORCE STD-003: debug-on-until-owner-proven bound into the build gate + CLAUDE.md trimmed
+
+**Type:** Docs only. Zero code/schema/migrations/shared-module edits. Two commits (enforcement fix; archive trim).
+
+**The fix — written ≠ enforced.** STD-003 (instrumentation born-ON, commented-out only when proven) was in STANDARDS.md but only applied when a prompt remembered to ask — so the same-session Cost-to-Produce build shipped WITHOUT it. Bound it into the gate so it fires regardless:
+- **CLAUDE.md §9** gate item 9 + **Session Starter** check 7: every build adding/changing a capability ships `[TRACE:area]` ON BY DEFAULT (emitting, not flagged-off/silent/deleted); omitting/pre-silencing = INCOMPLETE, same force as the header gate; commented-out only AFTER owner-proof. Fires even if the prompt forgot.
+- **Two completion bars** (§9 + partnership doc **§16**): BUILDER-COMPLETE (Thunder: builds/round-trip) vs OWNER-PROVEN (David, real UI under RLS). Debug stays on between them; builder-complete does NOT authorize removing it — anchored to the live proof (Cost-to-Produce round-trip passed while UI-save-under-RLS stayed unproven). **DECISIONS.md OP-4** captures the reasoning.
+
+**Trim:** archived BUILD/DESIGN-CAPTURE/TILE-CLASS/LAYER-DEFS/SWEEP (oldest-first); kept rules/standards/Part 9 + two newest prior handoffs. **CLAUDE.md 670 → 599.** **[NEXT BUILD-TOUCH — flag only]:** Cost-to-Produce tile shipped WITHOUT `[TRACE:COST]` — add per the now-enforced gate next time that code is touched (NOT this docs-only pass).
+
+---
+
 ### 2026-06-14 — THUNDER CLEAN THOUGHTS: personal-financial content moved out of git-tracked THOUGHTS.md
 
 **Type:** Docs only. One commit (`THOUGHTS.md` move) — the gitignored `decisions/PERSONAL-FINANCIAL.local.md` is NOT committed. Closes the privacy-split gap left by the 2026-06-14 SWEEP (PF capture went to the local file, but THOUGHTS.md — family-readable, git-tracked — still held the old copy).
@@ -351,90 +363,7 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 ---
 
-### 2026-06-14 — THUNDER BUILD: Cost-to-Produce config + tile (period-pool engine, MarginEngine-fed, tune loop)
-
-**Type:** Code build (shared engine + shared config panel + Cultivar tile/page) + data-only seed migration + docs. Two commits (`931c8e2` config+tile, `bd50b96` trace-expenses.md). NO schema change (seed is a data-only INSERT into existing `business_modules`) → schema-verification gate N/A.
-
-**Built (BUILT-INVENTORY "Cost-to-Produce — Config + Tile" section is authoritative):**
-- `packages/shared/src/business-logic/CostToProduce.ts` — period-pool engine. `accumulate()` buckets cost by confidence (CONFIRMED+DERIVED floor / ESTIMATED soft / UNKNOWN never-zeroed); `analyze()` runs N-sensitivity, pricing cost÷N via shared `MarginEngine.calculateRetail` (target-margin slab). Exported via both barrels. Headed.
-- `packages/shared/src/components/CostToProduceSettings.tsx` — TUNE surface; reads/writes `business_modules.config` (module_key='cost_to_produce'). Mounted in Cultivar `pages/Settings.tsx` verticalSection. Headed.
-- `packages/cultivar-os/src/pages/CostToProduce.tsx` (`/costs`) — SEE-IT surface; confidence mix + sensitivity range + material panel; non-computable → LABELED, never fake $0. Headed.
-- Tile `cost_to_produce` in `useModules.ts` + Dashboard nav + `router.tsx`. Seed `supabase/migrations/20260614_cost_to_produce_trace_seed.sql` (TRACE real numbers).
-- `docs/trace-expenses.md` — expense single-source-of-truth (D2 item fulfilled).
-
-**VERIFY-BEFORE-BUILD:** confirmed no existing Cost-to-Produce/pricing UI (PROT field list harvested, screen NOT restored); businessId reaches the path via `useBusinessContext()` (client components — no plumbing needed; the social/campaigns gap was server callers).
-
-**Verified (executed, not asserted):** `scripts/verify-cost-to-produce.ts` → floor **$40.00/mo**, price at N=1/5/20/100 = **$66.99/$13.99/$3.99/$0.99** (40% margin), **6 UNKNOWN** surfaced not zeroed; tune proof (labor 10hr → **$790/mo**); all-unknown → **non-computable**. `npm run build:cultivar` passes (2192 modules).
-
-**Scope held:** config + engine + honest display + tune loop ONLY. NO leakage capture, NO per-sale actor/override store, NO scan→QBO — all separate, sequenced after.
-
-**[NEEDS DAVID]:** (1) run the seed migration to activate the TRACE tile; (2) Claude Pro $17 vs Pro Max ~$100; (3) labor hours/month (seeded 0); (4) tiered $149/$199/$249/$299 vs flat (tiers stored, default priced); (5) seed targets `business_type='general'`/name ILIKE 'TRACE%' — confirm; (6) Settings-UI tuning of the TRACE config needs David as an active `business_members` row (membership-scoped RLS on business_modules — seed bypasses it, UI does not).
-
----
-
-### 2026-06-14 — THUNDER DESIGN-CAPTURE: activatable insight tiles benched + sized
-
-**Type:** Docs only + read-only bench. Zero code/schema/migrations. One commit (`882ff2d`).
-Added §16 to [COST-TO-PRODUCE-DESIGN.md](docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md) — two
-**benched** (Kind-2) activatable insight tiles + bench sizing. Cross-ref'd (not duplicated) to BD-2/
-BD-3/BD-4 (trial/fuzz/anti-exploitation — one coherent day-1-sharp/day-14-fuzz system),
-TILE-CLASSIFICATION, and MARGIN-LEAKAGE-RESEARCH-LOG. Not on build path; David triggers each tile.
-
-**Bench (file:line-backed): HINGE answered — receipt LINE extraction = FOUND** (`ocr.ts:63` priced
-line_items → `receipts.line_items`, mig `20260613`). `business_inventory.receipt_id`+`cost_confidence`
-= FOUND schema, NOT wired (`BusinessInventory.tsx:50,155`). Sale↔cost = PARTIAL (`submit.ts:165-169`;
-cost/price **conflated** at :169). Photo→inventory = NOT FOUND. Existing `computeReconcile` is
-line-vs-total, NOT item-match.
-**Sizing: TILE A (reconciliation) = WIRING on data / BUILD on match+claim engine. TILE B (3-way
-margin) = mostly BUILD (un-conflate cost/price, wire orphaned MarginEngine, depends on TILE A).**
-
----
-
-### 2026-06-14 — THUNDER TILE-CLASS: canonical tile classification written + verified vs live registries
-
-**Type:** Docs only + read-only verify. Zero code/schema/migrations/shared-module edits. One commit (`5aede89`).
-Wrote **[docs/architecture/TILE-CLASSIFICATION.md](docs/architecture/TILE-CLASSIFICATION.md)** — companion to LAYER-DEFINITIONS.md; the authority for general/vertical/cross-vertical per tile. Reference only (classifying ≠ building the App Store, which stays NORTH-STAR). Doc carries its own "Verification 2026-06-14" proof (every row file:line-backed).
-
-**Verified findings (bottom line):**
-- **Cultivar:** 10 tiles in `business_modules` registry (`useModules.ts:33-50`, rendered `Dashboard.tsx:743-759`, seed `20260604_business_modules.sql:82-92`). **Ignition:** 19 tiles hardcoded `DASH_APPS` at `CoreApp.jsx:53-73` (flat-file, no DB registry — confirms separate shell).
-- **3 classes:** GENERAL = always-present substrate (Settings, ADMIN/RBAC, MARKETPLACE/billing, Cost-to-Produce, the registry itself, Notifications, Discovery, PMI). CROSS-VERTICAL = installable, may declare "requires X" (QuickBooks/`qb_invoicing`+INVOICE, Social, Campaign Engine/`seasonal_module`, AUDIT, PREDICTIVE, PORT). VERTICAL = one collection only (Cultivar QR checkout; Ignition INTAKE/EVAL/HUB/CIPHER/COMPLIANCE/etc.).
-- **Registry-naming violation CONFIRMED (prime suspect):** the tile registry is a GENERAL concept that wore a VERTICAL noun (`nursery_modules`). Already migrated → `business_modules` (2026-06-04, AC-2 RLS clean); legacy table still EXISTS **pending DROP**. Flagged only, not renamed. Plus `Dashboard.tsx:540` UI text "nursery profile". Rest of Noun-Purge backlog unchanged.
-- **Cost-to-Produce = GENERAL, confirmed:** `MarginEngine.ts` shared + config/`businessType`-driven; nothing forces it vertical. Drops into shared `Settings.tsx` `verticalSection` slot + a tile via shared `Tile`/`TileGrid` primitives. Matches LAYER-DEFINITIONS verdict.
-
-**Left unstaged (pre-existing, not mine):** `.claude/settings.json`, `docs/cost-to-produce/LOT-POPULATION-PRECONDITIONS.md`. AC: N/A (docs only; flags AC-1 debt, creates none). **Next steps for David:** unchanged — finish the `nursery_modules` DROP; build Cost-to-Produce shared-first per the now-settled layer + tile classification.
-
----
-
-### 2026-06-14 — THUNDER LAYER-DEFS: canonical layer definitions written + verified vs live code
-
-**Type:** Docs only + read-only verify. Zero code/schema/migrations/shared-module edits. One commit (`a409029`).
-Wrote **[docs/architecture/LAYER-DEFINITIONS.md](docs/architecture/LAYER-DEFINITIONS.md)** — the canonical authority for layer/placement questions (stops the shared-vs-core / dashboard-vs-settings / where-does-cost-to-produce-live re-litigation). Audit-wins rule: code is authority, doc is the claim, re-validate on structure change. Doc carries its own "Verification 2026-06-14" proof section (every claim file:line-backed).
-
-**Verified findings (bottom line):**
-- **Two-layer model accurate** — shared=general=core (`packages/shared/`, `business_` tables); verticals layer config+feeds (`cultivar_`/`ignition_`). One correction baked in: the grid *shell* is NOT shared — only **tile primitives** (`shared/src/components/tiles/`) and the **Settings page** (`shared/src/pages/Settings.tsx`, has a `verticalSection` slot, Cultivar already wraps it) are shared.
-- **Dashboard grid shell is vertical-local:** Cultivar `Dashboard.tsx` (consumes shared `TileGrid`/`Tile`) + Ignition `IgnitionHub.jsx`/`IgnitionOmniDashboard.jsx` (flat files, not in `src/`).
-- **MarginEngine confirmed shared** (`shared/src/business-logic/MarginEngine.ts`). PROT = `IgnitionProt.jsx` (harvest fields, don't restore).
-- **Cost-to-Produce = DROP-IN, no shell extraction blocking:** add config as a `SectionCard`/`verticalSection` in shared `Settings.tsx` (engine already shared); add the tile to each vertical dashboard via shared `Tile` primitives (normal vertical wiring). Dashboard-*layout* extraction stays optional housekeeping, NOT on the critical path.
-- Known AC-1 noun-purge violations (`nurseries`/`nursery_modules` pending DROP/`nursery_profiles`) still live in cultivar `Settings.tsx`+`OnboardingWizard.tsx` — already tracked, not new.
-
-**Left unstaged (pre-existing, not mine):** `.claude/settings.json`, `docs/cost-to-produce/LOT-POPULATION-PRECONDITIONS.md`. AC: N/A. **Next steps for David:** unchanged from prior (lot population + MarginEngine config source per LOT-POPULATION-PRECONDITIONS.md); the shell question is now settled in writing — Cost-to-Produce can be built shared-first without extracting the dashboard layout.
-
----
-
-### 2026-06-14 — THUNDER SWEEP: canonical decisions home established + undocumented decisions captured
-
-**Type:** Docs only. Zero code/schema/migrations/shared-module edits. One commit.
-Established the missing home for the **decisions class** (business/policy/operating decisions had no equivalent of BUILT-INVENTORY). Created **[docs/DECISIONS.md](docs/DECISIONS.md)** — tagged ledger + drift-detection reference (re-test decisions against behavior via their *reasoning*). Sensitivity split honored: personal-financial → **`decisions/PERSONAL-FINANCIAL.local.md`** (GITIGNORED, family reads the repo).
-
-**Verified-then-captured (4 already-canonical → pointer; 4 captured):**
-- **FOUND (pointer, not re-documented):** BD-1 departure/data policy (`STANDARDS.md:539-540`); BD-2 trial mechanic (`COST-TO-PRODUCE-DESIGN.md:594-601`); BD-4 anti-exploitation (`COST-TO-PRODUCE-DESIGN.md:606-610`); OP-2 composite register (partnership doc §2-3).
-- **CAPTURED (only in THOUGHTS log before now):** BD-3 activation-value fuzz mechanic; OP-1 "any ethical means within covenant" doctrine; OP-3 reconsider-framework; PF-1/2/3/4 draw model + family billing + Option C house-sale trigger + the 5+1 triggers (→ local file).
-
-**Flagged for David (not invented):** PF-2 draw cap figure marked `[PENDING DAVID]`; final placement of the personal file is *proposed* (gitignored local vs. memory vs. off-repo) — David decides. ⚠️ Pre-existing: `THOUGHTS.md` is git-tracked and already holds the draw/house/VA/Regina content — separate exposure for David to weigh. **Enforcement gap (decisions written AT the moment made) is David's open process Q — not addressed here.** AC: N/A.
-
----
-
-> Older session history (all entries before this one) archived at [docs/handoff-archive.md](docs/handoff-archive.md) — NOT loaded at session start.
+> Older session history (BUILD/DESIGN-CAPTURE/TILE-CLASS/LAYER-DEFS/SWEEP and all earlier entries) archived at [docs/handoff-archive.md](docs/handoff-archive.md) — NOT loaded at session start.
 
 ## 4. ACTIVE TASKS
 
