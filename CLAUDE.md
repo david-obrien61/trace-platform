@@ -628,6 +628,12 @@ Full protocol (steps 1–16, file-size check, gap/debt routing, gap graduation, 
 6. Gap graduation sweep · PLATFORM_STATE.md level changes
 7. **Update BUILT-INVENTORY.md** — bump `Last updated:` to today + add/update every capability changed this session. **Verify line 4 date = today before committing.** (Full protocol: step 17 in docs/end-of-session-protocol.md)
 8. **Widget-header gate (binding):** every new/modified widget·tile·component·module·page·endpoint carries a HEADER (PURPOSE · DEPENDENCIES · OUTPUTS) AND is listed in BUILT-INVENTORY.md — a built artifact without a header is an incomplete task. (Doctrine: partnership doc §15; full gate: protocol Step 10 + Step 17.)
+9. **STD-003 instrumentation gate (binding):** every build that adds/changes a capability ships TRACE instrumentation (`[TRACE:area]`) **ON BY DEFAULT** — actively emitting, NOT wrapped behind a false flag, NOT default-silent, NOT deleted. It stays ON until the feature is **OWNER-PROVEN** by David through the actual UI under real RLS (see the two-bar rule below). A build that strips, omits, or pre-silences debug before owner-proof is an **INCOMPLETE task** — same force as the header gate. Only AFTER owner-proof does debug get **COMMENTED OUT** (not deleted) — dormant, re-enabled by uncommenting next time the code is touched. "On by birth, commented out by earning it." This gate fires whether or not a prompt remembers to ask: if a build prompt omits STD-003, the prompt is itself incomplete and Thunder adds the instrumentation anyway. (Doctrine: STANDARDS.md STD-003; partnership doc §16; DECISIONS.md OP-4.)
+
+   **The two completion bars — state which one a deliverable is at:**
+   - **BUILDER-COMPLETE (Thunder):** code works, builds pass, verified against data / service-key round-trip.
+   - **OWNER-PROVEN (David):** David has used the feature through the ACTUAL UI, under REAL permissions (RLS), and confirmed it does what it should.
+   - Instrumentation stays ON between the two bars. **Thunder reporting "builder-complete" does NOT authorize removing debug — only owner-proof does.** Builder verification ≠ owner verification: a service-key round-trip can pass while the RLS/UI path still fails (demonstrated by the Cost-to-Produce fix, 2026-06-14 — round-trip green, UI-save-under-RLS unproven). Thunder must state which bar each deliverable is at.
 
 ---
 
@@ -649,8 +655,9 @@ Before writing any code confirm:
 4. `docs/built-inventory.md` `Last updated:` is not older than the latest capability commit — if stale, FLAG before using it to answer "was X built?"
 5. `docs/inventory-functions.md`, `docs/inventory-env.md`, `docs/inventory-ai.md` dates — if any is older than the latest commit touching its domain, FLAG as stale before answering "what functions/vars/AI routes do we have?"
 6. **Verify-before-build:** before building NEW capability, check BUILT-INVENTORY.md + grep the codebase for existing capability — if it exists, extend/reuse, do NOT rebuild (partnership doc §15).
+7. **STD-003 instrumentation (binding gate):** any build that adds/changes a capability ships `[TRACE:area]` instrumentation ON BY DEFAULT (emitting, not flagged-off, not silent, not deleted) and keeps it on until OWNER-PROVEN by David through the real UI under RLS. Omitting/pre-silencing debug = INCOMPLETE. Fires even if this prompt didn't ask. State which bar each deliverable is at: BUILDER-COMPLETE vs OWNER-PROVEN (§9, partnership doc §16, DECISIONS.md OP-4).
 
-Do not start until you confirm all six.
+Do not start until you confirm all seven.
 Do not touch ignition-os, old Supabase project,
 or QB oauth.ts.
 ```

@@ -305,3 +305,17 @@ This is not optional and not new — it is the standing standard. Its job is to 
 Together these are the two primary mechanisms that keep the platform on track: the header makes a thing knowable; the inventory + verify-before-build makes it findable before duplicating it. Bound into the completion gate at CLAUDE.md §9 and `docs/end-of-session-protocol.md` Step 10 + Step 17 — a built artifact without a header is an incomplete task.
 
 *Section 15 added 2026-06-14. The widget-header standard (PURPOSE · DEPENDENCIES · OUTPUTS on every built artifact) + verify-before-build (check inventory + codebase before building; extend, don't rebuild). Header makes it knowable; inventory makes it findable. Bound into the Step 10/17 completion gate.*
+
+## Section 16: STD-003 instrumentation-as-gate + the two completion bars (binding)
+
+> Added 2026-06-14. STD-003 (instrumentation born-ON, commented-out only when proven) was WRITTEN in STANDARDS.md but NOT ENFORCED — it got applied only when a prompt remembered to hand-write it. The Cost-to-Produce build this same session shipped WITHOUT the STD-003 instrumentation instruction: the standard fell through exactly as feared. This section binds it into the gate so it fires whether or not anyone remembers. Append; do not replace earlier sections.
+
+**Instrumentation is born ON and stays ON until earned.** Every build that adds or changes a capability ships TRACE instrumentation (`[TRACE:area]`) actively emitting — not wrapped behind a false flag, not default-silent, not deleted. Omitting or pre-silencing debug before the feature is proven is an INCOMPLETE task, the same force as a missing widget header. The gate is owner-independent: a build prompt that omits STD-003 is itself incomplete, and the instrumentation gets added regardless. Only AFTER owner-proof is debug COMMENTED OUT (dormant, re-enableable by uncommenting), never deleted. "On by birth, commented out by earning it."
+
+**A build has TWO completion bars, not one:**
+- **BUILDER-COMPLETE (Thunder):** code works, builds pass, verified against data / service-key round-trip.
+- **OWNER-PROVEN (David):** David has used the feature through the ACTUAL UI, under REAL permissions (RLS), and confirmed it does what it should.
+
+Builder verification ≠ owner verification. Instrumentation stays ON between the two bars. **Thunder reporting "builder-complete" does NOT authorize removing debug — only owner-proof does**, because a builder test can pass while the real path fails: the Cost-to-Produce fix (2026-06-14) had a green service-key round-trip while UI-save-under-RLS stayed unproven. Thunder states which bar every deliverable is at. The instrument exists to be visible while the thing it was added to catch is unproven; silencing it before proof defeats its purpose.
+
+*Section 16 added 2026-06-14. STD-003 bound from written standard into an enforced build gate (CLAUDE.md §9 + Session Starter), plus the builder-complete-vs-owner-proven distinction that retires debug only on owner-proof. Captured as DECISIONS.md OP-4.*

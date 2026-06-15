@@ -129,6 +129,26 @@ health) → captured in **`decisions/PERSONAL-FINANCIAL.local.md`**, NOT here. T
 recoverable from the repo (`THOUGHTS.md:764-790`, restated `1555-1575`) — not invented.
 **Date captured:** 2026-06-14 (established 2026-06-02) · **Status:** Active framework.
 
+### OP-4 · STD-003 instrumentation-as-gate + two completion bars — `[CAPTURED]`
+**Decision:** Instrumentation (`[TRACE:area]`) is born ON and stays ON by default on every build that
+adds/changes a capability — never flagged-off, never silent, never deleted — and is COMMENTED OUT only
+after **owner-proof**. A build has two completion bars: **BUILDER-COMPLETE** (Thunder: builds pass,
+verified vs data / service-key round-trip) and **OWNER-PROVEN** (David: used through the real UI under
+real RLS). Debug stays on between the bars; builder-complete does NOT authorize removing it — only
+owner-proof does. Bound as an enforced gate in CLAUDE.md §9 + Session Starter and partnership doc §16,
+with the same force as the widget-header gate.
+**Reasoning:** Instrumentation is born-on so the thing it was added to catch stays visible while the
+feature is unproven; silencing it before proof defeats the instrument. Owner-proof through the real UI
+is the only bar that retires debug, because a builder test can pass while the RLS/UI path still fails —
+demonstrated 2026-06-14 by the Cost-to-Produce service-key round-trip passing while UI-save under RLS
+stayed unproven. STD-003 was written in STANDARDS.md but went unenforced (applied only when a prompt
+remembered it) — the same-session Cost-to-Produce build shipped without it. Making it a gate, not a
+memory, is the fix: written ≠ enforced. Re-test on drift: are new builds shipping debug ON until David
+proves them, or is debug being stripped/silenced at builder-complete?
+**Canonical home:** `STANDARDS.md` STD-003 (the standard) · `CLAUDE.md` §9 + §10 (the gate) ·
+`docs/operating-doctrine/lightning-david-partnership.md` §16 (the doctrine).
+**Date captured:** 2026-06-14 · **Status:** Active doctrine / enforced gate.
+
 ---
 
 ## PERSONAL-FINANCIAL
