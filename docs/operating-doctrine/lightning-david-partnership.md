@@ -319,3 +319,18 @@ Together these are the two primary mechanisms that keep the platform on track: t
 Builder verification ≠ owner verification. Instrumentation stays ON between the two bars. **Thunder reporting "builder-complete" does NOT authorize removing debug — only owner-proof does**, because a builder test can pass while the real path fails: the Cost-to-Produce fix (2026-06-14) had a green service-key round-trip while UI-save-under-RLS stayed unproven. Thunder states which bar every deliverable is at. The instrument exists to be visible while the thing it was added to catch is unproven; silencing it before proof defeats its purpose.
 
 *Section 16 added 2026-06-14. STD-003 bound from written standard into an enforced build gate (CLAUDE.md §9 + Session Starter), plus the builder-complete-vs-owner-proven distinction that retires debug only on owner-proof. Captured as DECISIONS.md OP-4.*
+
+## Section 17: The HAVE / NEED / WANT three-lens recon standard (binding)
+
+> Added 2026-06-15. The three-lens method earned its place by A/B test: the asset-node schema decision was first run as a flat A/B/C recon, then re-run through HAVE/NEED/WANT — the re-run surfaced two new options, killed two objections, and upgraded the rationale (one-table moved from a want to a need) without changing the final call. Bound here so every recon uses it whether or not a prompt asks. Append; do not replace earlier sections.
+
+Every verify-before-build pass and every decision recon ("LOOK") reports in **three lenses** and presents OPTIONS spanning them — never one pre-collapsed recommendation:
+- **HAVE** — current state, evidenced with `file:line` (what actually exists).
+- **NEED** — the irreducible minimum to meet the requirement, stripped of all preference.
+- **WANT** — the desired end-state / clean architecture, explicitly labeled as a want.
+
+The recon then lays out options across the **NEED → WANT** spectrum (cheapest-meets-need → fullest-meets-want), so the real trade space is on the table.
+
+**Why it is binding.** Collapsing NEED and WANT smuggles wants in as requirements and hides options — the recon arrives pre-decided. Separating the lenses makes "need or want?" an explicit, testable question and forces the cheapest option onto the table beside the clean-architecture one. A recon that does not separate the three lenses is an INCOMPLETE task — the same force as the widget-header gate (§15) and the STD-003 instrumentation gate (§16). It fires owner-independent: a recon prompt that omits the three lenses is itself incomplete, and the lenses get applied regardless.
+
+*Section 17 added 2026-06-15. HAVE/NEED/WANT three-lens recon standard — every recon reports current state (file:line) / irreducible minimum / desired end-state and presents options across the spectrum. Proven by A/B test on the asset-node schema decision. Bound as a recon/LOOK gate. Captured as DECISIONS.md OP-8.*

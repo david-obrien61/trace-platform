@@ -201,6 +201,29 @@ tier b real).
 allocation confidence).
 **Date captured:** 2026-06-15 · **Status:** Active doctrine.
 
+### OP-8 · HAVE / NEED / WANT three-lens recon standard — `[CAPTURED]`
+**Decision:** Every verify-before-build / decision recon reports in **three lenses**, and presents OPTIONS
+spanning the spectrum between them — NOT one collapsed recommendation:
+- **HAVE** — current state, with `file:line` evidence (what actually exists).
+- **NEED** — the irreducible minimum to meet the requirement, stripped of all preference.
+- **WANT** — the desired end-state / clean architecture, explicitly LABELED as a want.
+The recon then lays out options spanning **NEED → WANT** (cheapest-meets-need → fullest-meets-want), so the
+real trade space is visible. A recon that does not separate the three lenses is **incomplete** — bound as a
+recon/LOOK gate in CLAUDE.md, same enforcement pattern as STD-003 (OP-4) and the widget-header gate ([[OP-4]]),
+so it fires whether or not a prompt asks for it.
+**Reasoning:** Collapsing NEED and WANT hides options and smuggles wants in as requirements — the recon
+arrives pre-decided and the trade space never surfaces. Separating them forces the cheapest-meets-need option
+onto the table next to the clean-architecture option, and makes "is this a need or a want?" an explicit,
+testable question. **Proven by A/B test on the asset-node schema decision (2026-06-15):** the flat A/B/C first
+run was re-run through HAVE/NEED/WANT and produced strictly more — two NEW options (D defer-rename, E
+view-bridge), killed objections (B's data-migration cost, A's dominance), and an UPGRADED rationale (one-table
+moved from a tidiness-WANT to a structural edge-NEED) — same final call (C), but firmer and wider. The three
+lenses earned their keep on option-coverage and rationale, not by overturning the answer. Re-test on drift:
+does a recon present HAVE/NEED/WANT with options across the spectrum, or a single pre-collapsed recommendation?
+**Canonical home:** this entry · `CLAUDE.md` (recon/LOOK gate) · `docs/operating-doctrine/lightning-david-partnership.md`
+§17 (doctrine). Worked exemplar: `docs/cost-to-produce/ASSET-NODE-SCHEMA-DECISION-3LENS.md`.
+**Date captured:** 2026-06-15 · **Status:** Active doctrine / enforced gate.
+
 ---
 
 ## PERSONAL-FINANCIAL

@@ -7,6 +7,24 @@
 
 ---
 
+### 2026-06-15 — THUNDER SMALL MOVE: [TRACE:COST] instrumentation (STD-003 gate's first live test) + cleared 2 console errors
+
+**Type:** Code (1 shared engine, 1 shared panel, 2 cultivar pages) + docs. One commit. NO schema/migration → schema-verification gate N/A.
+
+**STD-003 GATE FIRED — its first real exercise.** This was the flagged "[NEXT BUILD-TOUCH]" from the 2026-06-14 PRIORITY-FIX handoff: the Cost-to-Produce tile had shipped WITHOUT `[TRACE:COST]`. Touching the code triggered the now-enforced gate, so instrumentation was added ON BY DEFAULT (emitting, not flagged-off, not deleted) across all three artifacts:
+- **Engine** (`shared/business-logic/CostToProduce.ts`) — `analyze()` emits `[TRACE:COST] compute` (loaded floor/known cost · N set · per-N cost+price). **VERIFIED firing standalone** (`npx tsx` probe, David's shape: $120 floor, 2 unknowns, full perN table).
+- **Config panel** (`shared/components/CostToProduceSettings.tsx`) — `[TRACE:COST] config load` (lines read + business_id, or load-FAILED→save-blocked) and `[TRACE:COST] save` (lines in/out + the truncation guard's REFUSED/OK decision — the instrument for owner-proving the data-loss fix).
+- **Tile** (`cultivar-os/pages/CostToProduce.tsx`) — `[TRACE:COST] tile load` (config found? · inventory rows · unknown count).
+- Stays ON until David OWNER-PROVES the save path through the real UI under RLS; only then commented out (not deleted). **Bar: engine emit = builder-verified; load/save/tile emits = BUILDER-COMPLETE (compile + code-path), pending owner-proof.** All 4 modified artifacts kept/extended their PURPOSE·DEPENDENCIES·OUTPUTS headers.
+
+**FIX — nursery_profiles 406 (#35, now 🟢):** `Settings.tsx:43` `.single()` → `.maybeSingle()`. Zero-row first-run (no profile until OnboardingWizard upsert) now returns `{data:null}` instead of HTTP 406/PGRST116; existing `data?.default_install_price != null` guard handles null cleanly. AC-1 rename `nursery_profiles → business_profiles` stays SEPARATE Noun-Purge work (flagged, not done).
+
+**FIX — qbo/status 500 (#34, loop-guarded — root cause UNCONFIRMED):** could NOT access Vercel function logs from this environment, and the prompt forbade guess-fixing the cross-package import (`router.ts:15`) without evidence — so did the sanctioned MINIMUM: a consecutive-failure circuit-breaker on the Connect poll (`Dashboard.tsx` `qbStatusFailRef` + `QB_STATUS_FAIL_LIMIT=5`; `checkQbStatus` counts non-ok/network failures, resets on `res.ok`; poll stops + surfaces `qbError` after 5). A persistent 500 no longer hammers every 2s. **[NEEDS DAVID]:** pull the Vercel log for `/api/qbo-connector?_route=status` — if `FUNCTION_INVOCATION_FAILED` / `refreshQBToken` module-resolution error, make the cross-package `.ts` import resolvable at runtime (inline/built-path).
+
+**Verified:** engine `[TRACE:COST] compute` emits (sample shown); `npm run build:cultivar` passes (2192 modules, twice). BUILT-INVENTORY bumped to 2026-06-15 + instrumentation note; tech-debt #34/#35 updated. **Note:** prompt's tech-debt numbers were swapped vs the log — used the log's canonical mapping (#34=qbo, #35=nursery_profiles).
+
+---
+
 ### 2026-06-15 — THUNDER VERIFY-BEFORE-BUILD: accumulator core sized + 2 schema questions resolved (RECON)
 
 **Type:** Docs only. One commit (`fc8d7d3`). READ-ONLY — no schema/code/migration/build. Sole write: `docs/cost-to-produce/ACCUMULATOR-PRECONDITIONS.md`.
