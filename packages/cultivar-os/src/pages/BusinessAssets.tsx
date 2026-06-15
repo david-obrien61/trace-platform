@@ -1,3 +1,13 @@
+// ============================================================
+// BusinessAssets — asset registry page (Cultivar OS)
+// PURPOSE:      List + add ASSET-type cost objects for a business.
+// DEPENDENCIES: supabase (cost_objects table, node_type='ASSET'),
+//               useBusinessContext (businessId → RLS scope).
+// OUTPUTS:      Reads/writes cost_objects rows where node_type='ASSET'.
+// NOTE:         Table renamed business_assets → cost_objects (2026-06-15,
+//               Core-1). Queries are now ASSET-scoped via node_type since
+//               cost_objects also holds PROJECT/PRODUCT nodes.
+// ============================================================
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, X, Package } from 'lucide-react';
@@ -128,14 +138,17 @@ export function BusinessAssets() {
   async function loadAssets() {
     setListLoading(true);
     setListError(null);
+    console.log('[TRACE:assets] loadAssets → cost_objects (node_type=ASSET)', { businessId });
     const { data, error } = await supabase
-      .from('business_assets')
+      .from('cost_objects')
       .select('id,name,asset_type,make,model,year,location,status,acquisition_cost,cost_confidence,serial_number,notes,created_at')
       .eq('business_id', businessId)
+      .eq('node_type', 'ASSET')
       .eq('is_active', true)
       .order('created_at', { ascending: false });
 
-    if (error) { setListError(error.message); setListLoading(false); return; }
+    if (error) { console.error('[TRACE:assets] loadAssets error', error.message); setListError(error.message); setListLoading(false); return; }
+    console.log('[TRACE:assets] loadAssets ok', { count: data?.length ?? 0 });
     setAssets((data ?? []) as AssetRow[]);
     setListLoading(false);
   }
@@ -159,6 +172,7 @@ export function BusinessAssets() {
 
     const payload: Record<string, unknown> = {
       business_id: businessId,
+      node_type: 'ASSET',
       name: form.name.trim(),
       status: form.status,
       cost_confidence: form.cost_confidence,
@@ -176,13 +190,16 @@ export function BusinessAssets() {
       if (!isNaN(parsed)) payload.acquisition_cost = parsed;
     }
 
-    const { error } = await supabase.from('business_assets').insert(payload);
+    console.log('[TRACE:assets] insert → cost_objects', { node_type: 'ASSET', name: payload.name });
+    const { error } = await supabase.from('cost_objects').insert(payload);
 
     if (error) {
+      console.error('[TRACE:assets] insert error', error.message);
       setSaveError(error.message);
       setSaving(false);
       return;
     }
+    console.log('[TRACE:assets] insert ok');
 
     setSaveSuccess(true);
     setSaving(false);

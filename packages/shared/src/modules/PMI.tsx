@@ -1,9 +1,18 @@
+// ============================================================
+// PMI — shared preventive-maintenance / inspection module (Cultivar + Ignition)
+// PURPOSE:      Asset registry + PMI schedules + service-log ledger for any vertical.
+// DEPENDENCIES: supabase (cost_objects [node_type=ASSET], business_pmi_schedule,
+//               business_service_log), /api/pmi/suggest (AI schedule).
+// OUTPUTS:      Reads/writes cost_objects ASSET rows + schedule/service-log rows.
+// NOTE:         Table renamed business_assets → cost_objects (2026-06-15, Core-1).
+//               PMI/service-log .asset_id FK still points at cost_objects (ASSET nodes).
+// ============================================================
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase/client';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-// Raw row from business_assets
+// Raw row from cost_objects (node_type='ASSET')
 interface AssetRow {
   id: string;
   business_id: string;
@@ -142,10 +151,12 @@ export function PMI({
 
   async function loadAssets() {
     setLoading(true);
+    console.log('[TRACE:pmi] loadAssets → cost_objects (node_type=ASSET)', { businessId });
     const { data: assetRows, error: assetErr } = await supabase
-      .from('business_assets')
+      .from('cost_objects')
       .select('*')
       .eq('business_id', businessId)
+      .eq('node_type', 'ASSET')
       .neq('status', 'RETIRED')
       .order('name');
 
@@ -211,10 +222,12 @@ export function PMI({
     setSaving(true);
     setError('');
 
+    console.log('[TRACE:pmi] addAsset → cost_objects', { node_type: 'ASSET', name: assetForm.name.trim() });
     const { data: assetData, error: assetErr } = await supabase
-      .from('business_assets')
+      .from('cost_objects')
       .insert({
         business_id:      businessId,
+        node_type:        'ASSET',
         name:             assetForm.name.trim(),
         asset_type:       assetForm.asset_type  || null,
         make:             assetForm.make.trim()  || null,
@@ -288,7 +301,7 @@ export function PMI({
 
     // Refresh selected asset with updated schedule data
     const { data: updatedRows } = await supabase
-      .from('business_assets')
+      .from('cost_objects')
       .select('*')
       .eq('id', selected.id)
       .single();
@@ -358,7 +371,7 @@ export function PMI({
       await loadAssets();
       // Refresh selected with new data
       const { data: freshAsset } = await supabase
-        .from('business_assets').select('*').eq('id', selected.id).single();
+        .from('cost_objects').select('*').eq('id', selected.id).single();
       const { data: freshSched } = await supabase
         .from('business_pmi_schedule').select('*').eq('asset_id', selected.id).single();
       if (freshAsset) {
