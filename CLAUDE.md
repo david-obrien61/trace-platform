@@ -323,6 +323,18 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-14 — THUNDER CLEAN THOUGHTS: personal-financial content moved out of git-tracked THOUGHTS.md
+
+**Type:** Docs only. One commit (`THOUGHTS.md` move) — the gitignored `decisions/PERSONAL-FINANCIAL.local.md` is NOT committed. Closes the privacy-split gap left by the 2026-06-14 SWEEP (PF capture went to the local file, but THOUGHTS.md — family-readable, git-tracked — still held the old copy).
+
+**Moved (4 personal-financial DECISION blocks) → local file, replaced with pointer stubs:** (A) "Financial decisions" + "this isn't working" trigger criteria (was THOUGHTS.md:723–777); (B) full 2026-06-03 "Family Compensation Structure and Role Casting" entry incl. the $4,000/mo draw cap + ~$90K/kid billing (was 1198–1327); (C) Section 8 trigger restatement (was 1559–1573, surgical — kept the "keep moving" doctrine); (D) the OKC-house psychological/marriage paragraph (was 2010, surgical — kept the Risk-5 business framing). Local file: PF-1–4 distilled ledger kept + a **verbatim Source A/B/C archive** appended (preserves ALL detail, deduped); PF-2 draw figure updated with the $4,000 cap (still `[PENDING DAVID]`). Verified: grep-clean in THOUGHTS for draw-cap/Option-C/VA/retirement-income/divorce-trigger; local file gitignored + absent from `git status`.
+
+**⚠️ FLAGGED FOR DAVID — two honest caveats:**
+1. **Git history NOT scrubbed.** The moved content was previously committed, so it remains in prior commits. This move removes it from the *current* file only. History-scrubbing (git-filter-repo/BFG) would be needed to purge it — destructive, force-push, your call; NOT performed.
+2. **Residual personal *narrative* deliberately left in THOUGHTS** (it's journal/operating-doctrine, not personal-financial *decisions* — gutting it would violate "don't touch business/strategy"): `:225` faith + "OKC house not selling" pressure; `:462` Andrew's $48–72K min-viable-salary; `:1695` Regina-will-divorce operating constraint (most explicit marriage line); `:1786` Connor imposter-syndrome; `:1827` OKC-house risk-factor line; `:1985` "OKC won't sell" life-lessons line. Decide if you want these moved/redacted too.
+
+**⚠️ CLAUDE.md is 651 lines — over the ~600 budget.** Recommend trimming older Part-3 handoff entries to `docs/handoff-archive.md` before next session.
+
 ### 2026-06-14 — THUNDER PRIORITY FIX: Cost-to-Produce panel was silently truncating cost lines on save (data loss)
 
 **Type:** Code fix (1 shared component) + data restore (1 data-only migration, applied live) + docs. Two commits (`db0…` panel fix, restore migration). NO schema change → schema-verification gate N/A.
