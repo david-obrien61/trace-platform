@@ -328,6 +328,12 @@ export function PMI({
     if (!selected) return;
     setAiLoading(true);
     setAiError('');
+    // [TRACE:ai] (STD-003) — on by default; fires the billable /api/pmi/suggest Claude call.
+    // Stays emitting until owner-proven by David, then comment out (don't delete).
+    const t0 = Date.now();
+    console.log('[TRACE:ai] pmi/suggest request', {
+      businessId, assetId: selected.id, name: selected.name, asset_type: selected.asset_type,
+    });
     try {
       const res = await fetch('/api/pmi/suggest', {
         method: 'POST',
@@ -343,10 +349,18 @@ export function PMI({
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
+        console.error('[TRACE:ai] pmi/suggest error', {
+          businessId, assetId: selected.id, ok: false,
+          error: json.error ?? 'AI suggest failed', latency_ms: Date.now() - t0,
+        });
         setAiError(json.error ?? 'AI suggest failed');
         return;
       }
       const suggestedTasks: Array<{ name: string; interval: string }> = json.tasks ?? [];
+      console.log('[TRACE:ai] pmi/suggest response', {
+        businessId, assetId: selected.id, ok: true,
+        taskCount: suggestedTasks.length, latency_ms: Date.now() - t0,
+      });
 
       if (selected.schedule_id) {
         // Update existing schedule tasks

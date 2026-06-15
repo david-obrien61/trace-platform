@@ -38,10 +38,18 @@ export default async function handler(req: any, res: any) {
     year ? `Year: ${year}` : '',
   ].filter(Boolean).join(' ');
 
+  // [TRACE:ai] (STD-003) — on by default; this is a live billable Claude call.
+  // Stays emitting until owner-proven by David, then comment out (don't delete).
+  const MODEL = 'claude-sonnet-4-6';
+  const t0 = Date.now();
+  console.log('[TRACE:ai] pmi/suggest request', {
+    businessId, asset: name, asset_type: asset_type ?? null, model: MODEL,
+  });
+
   try {
     const client = new Anthropic({ apiKey: claudeKey });
     const msg = await client.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: MODEL,
       max_tokens: 512,
       messages: [{
         role: 'user',
@@ -72,12 +80,30 @@ export default async function handler(req: any, res: any) {
     }
 
     if (tasks.length === 0) {
+      // [TRACE:ai] (STD-003) — call succeeded but yielded nothing usable.
+      console.error('[TRACE:ai] pmi/suggest error', {
+        businessId, asset: name, model: MODEL, ok: false,
+        reason: 'no_tasks', latency_ms: Date.now() - t0,
+      });
       return res.status(500).json({ ok: false, error: 'AI returned no tasks — try again' });
     }
 
+    // [TRACE:ai] (STD-003) — success: how many tasks, tokens, and how long the billable call took.
+    console.log('[TRACE:ai] pmi/suggest response', {
+      businessId, asset: name, model: MODEL, ok: true,
+      taskCount: tasks.length,
+      inTok: msg.usage?.input_tokens ?? 0,
+      outTok: msg.usage?.output_tokens ?? 0,
+      latency_ms: Date.now() - t0,
+    });
     return res.json({ ok: true, tasks });
   } catch (err: any) {
-    console.error('[TRACE:PMI] Anthropic error:', err?.message?.slice(0, 200));
+    // [TRACE:ai] (STD-003) — the billable call (or SDK) threw: WHEN and WHAT, not silence.
+    console.error('[TRACE:ai] pmi/suggest error', {
+      businessId, asset: name, model: MODEL, ok: false,
+      error: err?.message?.slice(0, 200) ?? String(err),
+      latency_ms: Date.now() - t0,
+    });
     return res.status(503).json({ ok: false, error: 'AI suggest failed — try again' });
   }
 }
