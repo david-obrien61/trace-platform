@@ -4,7 +4,9 @@
 # Cost-to-Produce — Resolved Design
 
 **Status:** DESIGN capture. Not a build session. No schema, no code, no migrations.
-**Date resolved:** 2026-06-12
+**Date resolved:** 2026-06-12 · **Node-model augment:** 2026-06-14 (THUNDER VERIFY+CAPTURE — node
+model verified already present as §5; added LAWNS-greenhouse worked case, shared-labor allocation
+OPEN seam, cost-of-capital two-layer + credit-card scenario lever, §5 multi-location cross-ref)
 **Author:** David O'Brien + Claude Code (THUNDER design series)
 **Audit authority:** `PLATFORM_AUDIT.md` wins on any conflict about what is currently built.
 **Companion docs:** `PLATFORM_STATE.md` (LEVEL/LOCATION/EVIDENCE), `CLAUDE.md` Tech Debt Log
@@ -198,6 +200,13 @@ standalone product; the shared version is DESIGN.
 
 **STATE: DESIGN**
 
+> ⚠️ **Cross-ref — the node model must not assume single-location.** `cost_profile` is
+> N-locations (see the build-gating constraint at the top of this doc and
+> `docs/strategy/MULTI-LOCATION-OPERATING-MODEL.md`). A PROJECT, ASSET, or PRODUCT node can
+> belong to one of several locations (permanent or transient), so location is a dimension ON
+> the cost object, never an assumption baked into the rollup. Designing `cost_objects` as if
+> there is one site is a known trap.
+
 ### 5.1 Node types — one table, type discriminator
 
 ```
@@ -252,6 +261,28 @@ CoolRunnings is the worked case:
    (maintenance events) attach to the ASSET nodes under the product, not to the
    closed project.
 
+**LAWNS new greenhouse is the second worked case** (capture 2026-06-14 — the contribution
+edge in §5.2 is the same physical greenhouse seen from the other end):
+1. Greenhouse PROJECT accumulates **cash-today** cost as it is built — water line, framing
+   and glazing materials, utility hookups, slab/infrastructure. Every line is cash that
+   left LAWNS's account this season.
+2. Project closes → the greenhouse becomes an ASSET that **contributes** overhead to every
+   plant PRODUCT grown inside it (§5.2 contribution edge: greenhouse → plant). It is NOT
+   contained-in a single plant — one greenhouse → many plant products (shared cost).
+3. **The cash-today vs amortized split bites hardest here.** The owner paid for the whole
+   greenhouse in the build season (margin crater this year — see §6.1). The accountant
+   amortizes that capex over the structure's useful life (smooth, multi-year). TRACE shows
+   the cash-out-today line and FLAGS that the accountant amortizes differently — TRACE never
+   computes the accrual schedule (§6.1 boundary).
+4. The greenhouse's contributed overhead reaches each plant product through the period-pool
+   allocation seam, NOT by containment rollup — which is exactly where the shared-cost
+   no-double-count rule (§5.4, SLICE SEAM §14) has to hold.
+
+The two cases differ on purpose: **CoolRunnings** (garden wall → outdoor-living PRODUCT) is
+*containment* — the project's cost rolls into one product it becomes. **LAWNS greenhouse** is
+*contribution* — the project becomes a durable asset whose cost is shared across many products.
+The node model must handle both with the same `cost_objects` table.
+
 ### 5.4 COUNT-ONCE rule
 
 Three things that look like cost but must not all be counted:
@@ -280,6 +311,11 @@ TRACE surfaces: "18.67% allocation basis (owner-set). Accountant determines dedu
 
 These are two different numbers: the project cost and the allocation. Both are shown.
 The allocation is labeled MODEL, not FACT.
+
+The sq-ft office case above is the EASY allocation — a fixed physical basis the owner can
+state once. Shared **labor and fungible resources split across concurrent projects** is the
+HARD allocation, and it is where allocation first bites in practice. It is flagged, not
+solved — see KNOWN OPEN SEAMS → SHARED-LABOR / SHARED-RESOURCE ALLOCATION (§14).
 
 **STATE: DESIGN** — no allocation UI, no basis-assignment table, no rollup query.
 
@@ -332,6 +368,14 @@ actuals) is part of the variance loop — see §6.3.
 
 **STATE: DESIGN**
 
+**Two layers, captured 2026-06-14.** Every cost has two dimensions, and the system must hold
+both:
+- **Layer 1 — cash leaves today** (the §6.1 cash-today view): the dollars that went out.
+- **Layer 2 — that cash had a PRICE to obtain**: it came from somewhere, and the source
+  carries a cost. Borrowed money accrues interest; savings spent has an opportunity cost.
+  Cost-of-capital is layer 2 made visible — it is NOT the same as the cash-out and must not
+  be blended into the asset cost.
+
 Funding source per cost node:
 - `card_paid` — cash equivalent (unless card is rolled)
 - `card_rolled` — interest accruing; card APR as the rate
@@ -345,6 +389,14 @@ over the period.
 
 Interest appears as its own cost line, labeled "cost of capital — [source]".
 Not blended into the asset cost. The accountant decides deductibility.
+
+**Credit-card discipline is the scenario lever.** The `card_paid` vs `card_rolled` distinction
+is not just a funding-source label — it is the owner's most actionable control, so the system
+exposes it as a what-if: "Pay this card off this cycle → cost of capital on this line is **$0**.
+Let it roll → here is the interest cost at [APR] for each month it carries." TRACE displays
+both branches and the dollar delta between them; it NEVER advises which to choose. The point is
+that disciplined card use can zero out a cost-of-capital line the amortized books would never
+even show — making the lever visible is the feature.
 
 ### 6.3 ESTIMATE → ACTUAL VARIANCE
 
@@ -737,6 +789,28 @@ the accumulator is built and the count-once rule is enforced in code, not just i
 **Status: OPEN — receipt_id seam exists in schema (2026-06-12); accumulator enforcement
 not yet built. Flag for test coverage at the accumulator → pool slice (same risk class as
 SLICE SEAM above).**
+
+### SHARED-LABOR / SHARED-RESOURCE ALLOCATION (OPEN — where allocation first bites)
+
+§5.5 handles fixed-basis allocation (sq ft, %): the owner states the basis once, TRACE does
+the arithmetic. The hard case is a SINGLE labor or resource pool consumed by MULTIPLE
+concurrent projects, with no fixed physical basis to anchor it:
+- **David's hours** split across platform development vs the CoolRunnings build vs other jobs
+  — one person's time, several cost objects, a split that changes week to week.
+- **A shared server / shared equipment** running CoolRunnings AND other jobs at once — one
+  recurring cost, no natural sq-ft-style ratio.
+
+Why it is hard: there is no objective ground-truth ratio. Any split (by hours logged, by
+revenue, by headcount, by gut) is a MODEL, and a contestable one — and unlike the office
+sq-ft, the basis is not stable, so a single owner-declared number does not hold across periods.
+
+TRACE's stance is unchanged and is the whole point: **surface the pool and the candidate
+bases, let the OWNER assign the split, label the result a MODEL, and hand the package to the
+accountant who RULES.** TRACE never picks the split itself. This seam is captured so the build
+does not silently assume fixed-basis allocation covers all cases — it does not. **Do not solve
+here; the resolution is an owner-input UX + accountant-handoff design, deferred.**
+
+**Status: OPEN**
 
 ---
 
