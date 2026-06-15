@@ -7,6 +7,9 @@
 **Date resolved:** 2026-06-12 · **Node-model augment:** 2026-06-14 (THUNDER VERIFY+CAPTURE — node
 model verified already present as §5; added LAWNS-greenhouse worked case, shared-labor allocation
 OPEN seam, cost-of-capital two-layer + credit-card scenario lever, §5 multi-location cross-ref)
+· **Root/carve-out correction:** 2026-06-15 (THUNDER VERIFY+CAPTURE — §5 was business-rooted;
+added §5.0 residence-root/business-emergent genesis + §5.7 carve-out cost-flow direction with four
+real-customer worked cases, the separation event, the lane, and a recorded red-team)
 **Author:** David O'Brien + Claude Code (THUNDER design series)
 **Audit authority:** `PLATFORM_AUDIT.md` wins on any conflict about what is currently built.
 **Companion docs:** `PLATFORM_STATE.md` (LEVEL/LOCATION/EVIDENCE), `CLAUDE.md` Tech Debt Log
@@ -207,6 +210,40 @@ standalone product; the shared version is DESIGN.
 > the cost object, never an assumption baked into the rollup. Designing `cost_objects` as if
 > there is one site is a known trap.
 
+### 5.0 ROOT & GENESIS — residence-rooted, business-emergent (correction, 2026-06-15)
+
+**STATE: DESIGN (benched)**
+
+> **Correction to a load-bearing assumption.** §5.1 as written is BUSINESS-ROOTED: every node hangs
+> off `business_id`, and the only node types are ASSET|PROJECT|PRODUCT. There is no node ABOVE the
+> business representing the place the business grew out of. Verified 2026-06-15 against §5.1:215-216
+> and §5.2:240 (where a residence appears only as a *PRODUCT*, the home-value-added case). The
+> business-root is not wrong for the post-migration state — it is just not where the real customer
+> starts. **Evidenced by real data and four real customers (§5.0 + §5.7), not a hunch.**
+
+**The genesis order.** Small businesses start at the PRIMARY RESIDENCE and accrete. The business
+EMERGES from and overlaps the home; it does not precede it. The true root node is the
+**residence / property / household**; the business is an **emergent child** that carves itself out
+over time. The "incorporate first, then buy property under the entity" case is the RARE SPECIAL CASE
+(a homestead formalized on day one), not the default.
+
+**Why it is the general case, not David's case.** Apple (Jobs's garage), Amazon (Bezos's
+garage / door-desk), Dell (a dorm room), Microsoft (an apartment) — all residence-rooted, the business
+carved out of a personal space, migrated to "a business" only when they outgrew the garage. The clean
+top-down business-root describes ONLY the post-migration state — the retrospective founding-story
+fiction, cleaned up after the fact. A tool that forces every owner to declare the business as root
+forces the Apple-after-the-garage story onto the owner who is still IN the garage.
+
+**Design consequence (benched, not built).** The root node is the residence/household, not the
+business. The business is a child node that draws cost from the root via CARVE-OUT (§5.7). Common
+costs (mortgage, utilities, a shared water catchment) live ON the root and sit OUTSIDE the business
+domains — the business never "owned" them; it draws a use-fraction share. This does NOT require a new
+table: a residence/household is itself a cost-object node (a PROPERTY-flavored node, or the existing
+ASSET type used as a root with `parent_id = null`). The correction is to the **assumed direction of
+cost flow and the meaning of the root**, not to the one-table discriminator design of §5.1. The
+explicit schema shape (a HOUSEHOLD/RESIDENCE root node type vs. reusing ASSET-as-root) is OPEN — flag
+at build time, do not bake in here.
+
 ### 5.1 Node types — one table, type discriminator
 
 ```
@@ -312,6 +349,10 @@ TRACE surfaces: "18.67% allocation basis (owner-set). Accountant determines dedu
 These are two different numbers: the project cost and the allocation. Both are shown.
 The allocation is labeled MODEL, not FACT.
 
+This owner-set-fraction arithmetic is also the machinery the CARVE-OUT direction reuses — when the
+source cost is **personal in origin** (a slice of the mortgage, not a business project cost), the same
+basis × cost computation applies but only the fraction crosses into the business. See §5.7.
+
 The sq-ft office case above is the EASY allocation — a fixed physical basis the owner can
 state once. Shared **labor and fungible resources split across concurrent projects** is the
 HARD allocation, and it is where allocation first bites in practice. It is flagged, not
@@ -336,6 +377,105 @@ LOT's horizon does. A single business runs accumulator-path and period-path lots
   raises a writedown question (is a year-old, harder-to-sell plant worth full accrued cost?).
   That is the accountant's call — we surface "this lot carried $X accrued into this season"
   and hand the package over. (See KNOWN OPEN SEAMS — carried-lot valuation.)
+
+### 5.7 CARVE-OUT — the cost-flow direction (correction, 2026-06-15)
+
+**STATE: DESIGN (benched)**
+
+The companion to the §5.0 residence-root. If the root is the household, cost does not only flow
+top-down by allocation — it flows by **CARVE-OUT**: a cost that is **100% personal in origin** has a
+**use-fraction** designated as business, and only that fraction crosses into the business. The
+remainder stays personal and **never enters the business rollup at all**.
+
+**Carve-out is a distinct direction, NOT allocation-in-reverse.** §5.5 allocation distributes the
+*whole* of an already-business cost across multiple business products — the cost is conserved INSIDE
+the business. Carve-out admits only a fraction of a personal-origin cost and intentionally leaves the
+remainder OUTSIDE the business domain. The two obey different conservation rules; carve-out is not a
+sign convention on the §5.5 edge. **But it REUSES §5.5's machinery** — owner-declares-the-basis, TRACE
+does the arithmetic, the result is labeled a MODEL. "Office = % of mortgage" is the carve-out: the
+mortgage is 100% personal in origin; the owner designates a use-fraction; that slice — and only that
+slice — becomes a business cost line. (§5.5 is the arithmetic; §5.7 is the direction and the origin.)
+
+**The use-fraction unifies permanent and transient space (ties carve-out to multi-location).**
+"Office = % of the mortgage" (a permanent home-office) and "office = this hotel room for these four
+days" (a transient travel-office) are the SAME operation: designate a fraction of a personal/temporary
+space as business-use, carve the cost. Permanent is just "a transient location that doesn't end." This
+is the same insight as the multi-location operating model — see
+`docs/strategy/MULTI-LOCATION-OPERATING-MODEL.md` (do not duplicate it here). The use-fraction is the
+single primitive shared by the carve-out edge and the `cost_profile` N-location design.
+
+**Four real-customer worked cases** (David's stated evidence — the data that supports the decision;
+the spreadsheets and P&L below are David's records, not read by this capture):
+- **DAVID — homestead genesis.** Bought a primary residence → accreted Farm / orchard / garden /
+  chickens / rabbits → TRACE emerged (real-estate rehab, then morphed to software). Common costs
+  (mortgage, utilities, and a water **catchment** that supports BOTH the Farm AND CoolRunnings — one
+  asset feeding two domains = a DAG edge, §5.2 contribution) sit OUTSIDE the business domains: they
+  were never business costs, they are household costs the businesses draw a share of. Real expense
+  data (2023–2025 farm spreadsheets) shows the raw feed carries NO project tags — ~54 rows of Tractor
+  Supply / Home Depot / Lowe's — so **retroactive project-assignment is the core work**, exactly the
+  §6.3 variance-capture problem seen from the front. The rabbit P&L is a COMPLETED project→product
+  cycle (§5.3) with a brutally honest answer: ~$11,736 cash-out vs ~$1,215 income, including "death of
+  rabbits" as a cull/loss event (§5.6) — cost-to-produce telling a truth a guesstimate never would.
+- **TERRY / LAWNS — first paying customer.** 20+ acres of PERSONAL property; lives in his house; part
+  of the house is the office. The nursery is carved out of a homestead. Land personal, home personal,
+  business carved from both — the residence-root with a business emergent on top.
+- **LAUREN.** Works from "the office part of the house." Even staff operate from the carved-out
+  fraction of someone's residence.
+- **JOHN (brother-in-law).** Personal residence with a room DESIGNATED office; when he travels to
+  Florida for estate business he "rents an office" = his hotel room. Residence-root + carve-out +
+  transient location in one person — the single case that ties carve-out and multi-location together.
+
+**THE SEPARATION EVENT (the other end of the lifecycle).** If a business runs on the owner's property
+and the owner sells the BUSINESS but keeps the RESIDENCE, the carve-out must become LITERAL: survey
+the land, deed the business parcel, transfer business ASSETS to the LLC. The accounting carve-out
+(office = X% of mortgage) becomes a legal/physical separation at exit. **Platform value:** the owner
+who associated cost-to-project CONTINUOUSLY already holds the record the survey/transfer needs (which
+assets are the business's, the project history, the office-fraction basis). The owner who didn't faces
+reconstructing years of tangled spending. Same insight as "documentation value is highest in the
+transition phase" (multi-location §4). **We build the RECORD that makes separation tractable — NOT the
+survey, NOT the transfer.** This is the project→product lifecycle (§5.3) extended to its terminal
+event, the mirror of the season-end events in §5.6.
+
+**THE LANE (held throughout).** We ASSOCIATE cost to projects and SURFACE the bases, the events
+(project→product, separation), and the EXISTENCE of standard methods — we NEVER rule on tax,
+deductibility, entity structure, or filing (§1, §2). Small-business cost rules exist (IRS
+business-use-of-home, asset basis, etc.) and are searchable; a future build MAY point to "a standard
+method exists (e.g. a square-footage % for home-office) — confirm with your accountant," surfacing the
+EXISTENCE of the method WITHOUT interpreting the owner's case. Verify such rules by SEARCH at build
+time (they change); do NOT bake tax assumptions into the model. The accountant advises; we surface.
+
+**RED-TEAM (the empty seat — strongest arguments against, and which seat won):**
+
+1. *"Just make users put the business as root — simpler schema."* — **Residence-root wins.** The
+   simpler schema fails the ACTUAL customer, who is in the garage, not post-migration. Forcing
+   business-as-root imposes the Apple-after-the-garage fiction on Apple-in-the-garage, and demands the
+   owner pre-classify which household costs are "business" before the business has a clean boundary —
+   the exact thing they cannot yet do. The clean root is an output of migration, not an input to it.
+
+2. *"Carve-out is just allocation in reverse — no separate concept needed."* — **Distinct concept
+   wins, honestly resolved.** §5.5 allocation distributes 100% of a business cost across business
+   products (cost conserved inside the business). Carve-out admits only a use-fraction of a
+   personal-origin cost and leaves the remainder OUTSIDE the business entirely — a different
+   conservation rule, not a sign flip. It is a distinct DIRECTION that REUSES §5.5's owner-set-fraction
+   arithmetic. (If anyone later collapses them, the test is: does the remainder stay inside the
+   business, or leak to personal? Allocation → inside. Carve-out → personal. They are not the same edge.)
+
+3. *"Residence-root drags personal data into a business tool — privacy/scope risk."* — **Carve-out IS
+   the boundary; risk is bounded, seat split but model holds.** Personal stays personal; only the
+   declared use-fraction crosses into the business rollup. The household root holds personal costs
+   that the business never sees the rest of. The residual risk — capturing personal household data at
+   all — is real and is the owner's choice to make; the model's answer is that the carve-out fraction
+   is the membrane, not that there is no personal data. Flag the UX consequence (personal-vs-business
+   visibility) at build time; the model is not broken by it.
+
+4. *"This is tax modeling in disguise."* — **The lane wins.** We associate cost and surface the
+   EXISTENCE of standard methods; we never rule on deductibility, basis, or entity structure (§1, §2,
+   and the lane above). Surfacing "a home-office method exists, ask your accountant" is not taking a
+   tax position — taking the position would be computing the deduction. We do not.
+
+**No red-team argument broke the model.** #1 and #4 the model answers cleanly; #2 resolves to a genuine
+distinction; #3 bounds a real (owner-accepted) risk and flags a build-time UX seam rather than a model
+defect.
 
 ---
 
@@ -789,6 +929,19 @@ the accumulator is built and the count-once rule is enforced in code, not just i
 **Status: OPEN — receipt_id seam exists in schema (2026-06-12); accumulator enforcement
 not yet built. Flag for test coverage at the accumulator → pool slice (same risk class as
 SLICE SEAM above).**
+
+### RESIDENCE-ROOT & CARVE-OUT SHAPE (OPEN — captured 2026-06-15, §5.0 / §5.7)
+
+The residence-root/business-emergent model (§5.0) and the carve-out cost-flow direction (§5.7) are
+DESIGN-benched, and two pieces are explicitly OPEN: (1) the **schema shape of the root** — a dedicated
+HOUSEHOLD/RESIDENCE node type vs. reusing the ASSET type as a `parent_id = null` root — is not decided;
+(2) the **personal-vs-business visibility UX** — carve-out captures personal household cost so a
+fraction can cross into the business, which means the tool holds personal data the business never sees
+the rest of; the membrane is the use-fraction, but how that boundary is surfaced/hidden in the UI is a
+build-time design question. Do NOT assume either is settled. Carve-out reuses §5.5 arithmetic but is a
+distinct conservation rule (remainder leaves the business) — see the §5.7 red-team.
+
+**Status: OPEN**
 
 ### SHARED-LABOR / SHARED-RESOURCE ALLOCATION (OPEN — where allocation first bites)
 
