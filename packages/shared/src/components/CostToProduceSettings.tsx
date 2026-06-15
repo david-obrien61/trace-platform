@@ -28,6 +28,14 @@
  *   overhead, reference price) display as $X.XX on blur via the local MoneyInput; the raw
  *   numeric string shows while focused so typing isn't fought. Stored values stay numeric
  *   (cents-rounded on blur) — this is display formatting only, not a data change.
+ * DATA-LOSS GUARD (2026-06-14 punch-list FIX 3): the prior load swallowed read errors and
+ *   silently substituted EMPTY on any null/odd-shape read (RLS race, transient failure,
+ *   config-as-string), and save overwrote the full recurring[] array unconditionally — so
+ *   ANY short load was persisted as permanent truncation, invisibly. Now: (a) load captures
+ *   the read error and parses string configs, blocking save on a failed read instead of
+ *   substituting EMPTY; (b) save RE-READS the stored array and REFUSES to write fewer
+ *   recurring lines than are stored unless the user explicitly deleted them (removedCount).
+ *   A cost-capture tool must never silently lose cost data.
  */
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabase/client';
@@ -60,12 +68,31 @@ const cell: React.CSSProperties = {
 
 function deepClone<T>(v: T): T { return JSON.parse(JSON.stringify(v)); }
 
+/** Total recurring cost lines across ALL locations (save writes the whole config). */
+function countRecurring(cfg: CostToProduceConfig): number {
+  return (cfg.locations ?? []).reduce((s, l) => s + (l.recurring?.length ?? 0), 0);
+}
+
+/** Defensive parse: jsonb columns usually arrive as objects, but tolerate a JSON string. */
+function parseConfig(raw: unknown): CostToProduceConfig | null {
+  let c: unknown = raw;
+  if (typeof c === 'string') { try { c = JSON.parse(c); } catch { return null; } }
+  if (c && typeof c === 'object' && Array.isArray((c as CostToProduceConfig).locations)) {
+    return c as CostToProduceConfig;
+  }
+  return null;
+}
+
 export function CostToProduceSettings() {
   const { businessId } = useBusinessContext();
   const [config, setConfig]   = useState<CostToProduceConfig>(() => deepClone(EMPTY_COST_CONFIG));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+  // Read failed at load (RLS/transient/shape) — do NOT let a save overwrite real data blind.
+  const [loadError, setLoadError] = useState('');
+  // Recurring lines the user EXPLICITLY deleted this session — the only sanctioned shrink.
+  const [removedCount, setRemovedCount] = useState(0);
 
   // Single editable location for this build (multi-location persisted but UI edits locations[0])
   const loc: CostLocation = config.locations[0] ?? deepClone(EMPTY_COST_CONFIG.locations[0]);
@@ -75,17 +102,29 @@ export function CostToProduceSettings() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const { data } = await supabase
+      setLoadError('');
+      setRemovedCount(0);
+      const { data, error } = await supabase
         .from('business_modules')
         .select('config')
         .eq('business_id', businessId)
         .eq('module_key', MODULE_KEY)
         .maybeSingle();
       if (cancelled) return;
-      const stored = data?.config as CostToProduceConfig | undefined;
-      if (stored && Array.isArray(stored.locations) && stored.locations.length) {
+      if (error) {
+        // Read failed. NEVER substitute EMPTY and let a save overwrite stored data —
+        // surface the failure and block saving until a clean read succeeds.
+        setLoadError(error.message);
+        setLoading(false);
+        return;
+      }
+      // jsonb normally arrives as an object; parseConfig also tolerates a JSON string and
+      // surfaces ALL recurring lines (UNKNOWN/null-amount lines included — never dropped).
+      const stored = parseConfig(data?.config);
+      if (stored && stored.locations.length) {
         setConfig(stored);
       } else {
+        // Genuinely no stored config — start from EMPTY (nothing to lose).
         setConfig(deepClone(EMPTY_COST_CONFIG));
       }
       setLoading(false);
@@ -109,22 +148,48 @@ export function CostToProduceSettings() {
   function addLine() {
     patchLoc(l => l.recurring.push({ label: '', amount: 0, period: 'monthly', confidence: 'ESTIMATED' }));
   }
-  function removeLine(i: number) { patchLoc(l => l.recurring.splice(i, 1)); }
+  function removeLine(i: number) { patchLoc(l => l.recurring.splice(i, 1)); setRemovedCount(c => c + 1); }
   function editLine(i: number, patch: Partial<CostLine>) {
     patchLoc(l => { l.recurring[i] = { ...l.recurring[i], ...patch }; });
   }
 
   async function save() {
     if (!businessId) return;
+    if (loadError) { setSaveMsg('Cannot save: config did not load (' + loadError + '). Reload before editing.'); return; }
     setSaving(true);
     setSaveMsg('');
+
+    // ── DEFENSE-IN-DEPTH: re-read the stored array right before writing. A cost-capture
+    // tool must NEVER silently shrink the user's cost data. If the DB holds MORE recurring
+    // lines than we're about to write, and the user didn't explicitly delete that many, the
+    // form must have loaded short (RLS race, transient read failure, shape drift, or a
+    // concurrent edit) — REFUSE to overwrite rather than truncate. addLine raises the count
+    // naturally, so legitimate edits/additions never trip this.
+    const { data: fresh, error: readErr } = await supabase
+      .from('business_modules').select('config')
+      .eq('business_id', businessId).eq('module_key', MODULE_KEY).maybeSingle();
+    if (readErr) {
+      setSaving(false);
+      setSaveMsg('Error: could not verify stored data — NOT saving (' + readErr.message + ')');
+      return;
+    }
+    const storedCfg = parseConfig(fresh?.config);
+    const storedCount = storedCfg ? countRecurring(storedCfg) : 0;
+    const writingCount = countRecurring(config);
+    if (writingCount < storedCount - removedCount) {
+      const lost = storedCount - removedCount - writingCount;
+      setSaving(false);
+      setSaveMsg(`Refused: this save would drop ${lost} cost line${lost === 1 ? '' : 's'} you didn't delete (form has ${writingCount}, stored has ${storedCount}). Reload the page before saving.`);
+      return;
+    }
+
     const { error } = await supabase.from('business_modules').upsert(
       { business_id: businessId, module_key: MODULE_KEY, enabled: true, configured: true, config },
       { onConflict: 'business_id,module_key' },
     );
     setSaving(false);
     if (error) setSaveMsg('Error: ' + error.message);
-    else { setSaveMsg('Saved'); setTimeout(() => setSaveMsg(''), 2000); }
+    else { setSaveMsg('Saved'); setRemovedCount(0); setTimeout(() => setSaveMsg(''), 2000); }
   }
 
   if (loading) {
@@ -132,6 +197,24 @@ export function CostToProduceSettings() {
       <div style={cardStyle}>
         <Heading />
         <p style={{ fontSize: '0.875rem', color: '#9ca3af' }}>Loading…</p>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    // Read failed — do NOT render the editable form (an accidental save here would overwrite
+    // real stored data with this empty default). Surface the failure instead.
+    return (
+      <div style={cardStyle}>
+        <Heading />
+        <p style={{ fontSize: '0.875rem', color: RED, lineHeight: 1.5 }}>
+          Couldn’t load your Cost-to-Produce config: {loadError}
+        </p>
+        <p style={{ fontSize: '0.8125rem', color: GRAY, lineHeight: 1.5 }}>
+          Editing is disabled until it loads cleanly (this protects your stored cost lines from
+          being overwritten). Reload the page; if it persists, confirm you’re an active member of
+          this business.
+        </p>
       </div>
     );
   }
