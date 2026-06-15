@@ -323,6 +323,12 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-14 — THUNDER VERIFY+CAPTURE: cost-object NODE MODEL confirmed canonical, four gaps filled (DESIGN, benched)
+
+**Type:** Docs only. One commit (`74dfd89`). No schema/code/migration/build. Capture-only — did NOT build the node model.
+
+**Finding (risk hypothesis disproven):** the ASSET|PROJECT|PRODUCT node model was ALREADY canonical — `docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md` §5 (5.1–5.6) + §6. 7 elements: **5 FOUND** (node discriminator §5.1; containment/contribution→DAG edges §5.2; count-once §5.4; cash-today-vs-amortized §6.1; allocation arithmetic §5.5); **4 gaps CAPTURED** by augmenting existing sections (NOT duplicating §5 — would violate Doc-Reorg single-source): (1) LAWNS-greenhouse worked case §5.3 (cash-today project cost, accountant amortizes, contribution-not-containment); (2) cost-of-capital two-layer + credit-card "pay off→$0 / roll→APR" scenario lever §6.2; (3) shared-labor/resource allocation OPEN seam §14 (David's hours, shared server — flagged not solved); (4) §5 multi-location cross-ref. CoolRunnings + greenhouse both worked cases now. **Built tile this session = period-pool ÷ N only; node/accumulator model BENCHED — biggest net-new piece = `cost_objects` accumulator + the shared-cost no-double-count slice seam (§14).**
+
 ### 2026-06-14 — THUNDER ENFORCE STD-003: debug-on-until-owner-proven bound into the build gate + CLAUDE.md trimmed
 
 **Type:** Docs only. Zero code/schema/migrations/shared-module edits. Two commits (enforcement fix; archive trim).
