@@ -36,6 +36,10 @@
  *   substituting EMPTY; (b) save RE-READS the stored array and REFUSES to write fewer
  *   recurring lines than are stored unless the user explicitly deleted them (removedCount).
  *   A cost-capture tool must never silently lose cost data.
+ * INSTRUMENTATION (STD-003, added 2026-06-15): `[TRACE:COST]` emits on LOAD (lines read +
+ *   business_id, or load-FAILED→save-blocked) and on SAVE (lines in/out + the truncation
+ *   guard's REFUSED/OK decision) — ON BY DEFAULT. Comment out only after David owner-proves
+ *   the save path through the real UI under RLS; do not delete.
  */
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabase/client';
@@ -114,6 +118,8 @@ export function CostToProduceSettings() {
       if (error) {
         // Read failed. NEVER substitute EMPTY and let a save overwrite stored data —
         // surface the failure and block saving until a clean read succeeds.
+        // [TRACE:COST] (STD-003) — load FAILED, save is now blocked.
+        console.log('[TRACE:COST] config load FAILED (save blocked)', { businessId, error: error.message });
         setLoadError(error.message);
         setLoading(false);
         return;
@@ -121,6 +127,12 @@ export function CostToProduceSettings() {
       // jsonb normally arrives as an object; parseConfig also tolerates a JSON string and
       // surfaces ALL recurring lines (UNKNOWN/null-amount lines included — never dropped).
       const stored = parseConfig(data?.config);
+      // [TRACE:COST] (STD-003) — the LOAD emit: how many recurring lines were read, for whom.
+      console.log('[TRACE:COST] config load', {
+        businessId,
+        hadStoredConfig: !!(stored && stored.locations.length),
+        recurringLinesRead: stored ? countRecurring(stored) : 0,
+      });
       if (stored && stored.locations.length) {
         setConfig(stored);
       } else {
@@ -176,6 +188,12 @@ export function CostToProduceSettings() {
     const storedCfg = parseConfig(fresh?.config);
     const storedCount = storedCfg ? countRecurring(storedCfg) : 0;
     const writingCount = countRecurring(config);
+    // [TRACE:COST] (STD-003) — the SAVE emit: lines in vs lines out + the truncation guard's
+    // decision. This is the line David reads to confirm a save didn't silently drop cost data.
+    console.log('[TRACE:COST] save', {
+      businessId, writingCount, storedCount, removedCount,
+      decision: writingCount < storedCount - removedCount ? 'REFUSED (would truncate)' : 'OK',
+    });
     if (writingCount < storedCount - removedCount) {
       const lost = storedCount - removedCount - writingCount;
       setSaving(false);

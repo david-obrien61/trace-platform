@@ -117,6 +117,10 @@ export function Dashboard() {
   const [accountingNeedsReconnect, setAccountingNeedsReconnect] = useState(false);
   const [profileIncomplete, setProfileIncomplete] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Consecutive /api/qbo/status failures (non-ok / network). Circuit-breaker for the connect
+  // poll so a persistently-erroring status endpoint (tech-debt #34) stops hammering every 2s
+  // instead of looping until the popup closes. Reset to 0 on any healthy (res.ok) response.
+  const qbStatusFailRef = useRef(0);
   const { modules } = useModules(businessId);
 
   // ── Data loading ─────────────────────────────────────────────────────────
@@ -267,6 +271,7 @@ export function Dashboard() {
     try {
       const res = await fetch(`/api/qbo/status?business_id=${businessId!}`);
       if (res.ok) {
+        qbStatusFailRef.current = 0; // endpoint healthy — reset the breaker
         const data = await res.json();
         if (data.connected) {
           setQbConnected(true);
@@ -277,10 +282,20 @@ export function Dashboard() {
           setAccountingNeedsReconnect(data.needsReconnect ?? false);
           return true;
         }
+        return false; // healthy response, just not connected yet
       }
-    } catch { /* QB unavailable — non-fatal */ }
+      // non-ok (e.g. 500 — tech-debt #35): count it so the poll can break the loop.
+      qbStatusFailRef.current += 1;
+    } catch {
+      // network / function-invocation failure — also a breaker hit, non-fatal for one-shots.
+      qbStatusFailRef.current += 1;
+    }
     return false;
   }
+
+  // After this many consecutive failed status checks, stop polling and surface the error
+  // rather than hammering /api/qbo/status every 2s while the popup stays open.
+  const QB_STATUS_FAIL_LIMIT = 5;
 
   async function handleConnect() {
     setConnecting(true);
@@ -317,6 +332,7 @@ export function Dashboard() {
       }
 
       step = 'poll';
+      qbStatusFailRef.current = 0; // fresh poll session — reset the breaker
       pollingRef.current = setInterval(async () => {
         const connected = await checkQbStatus();
         if (connected) {
@@ -324,6 +340,16 @@ export function Dashboard() {
           pollingRef.current = null;
           setConnecting(false);
           loadMetrics();
+          return;
+        }
+        // Circuit-breaker: a persistently-erroring /api/qbo/status (tech-debt #34) must not
+        // poll forever. Stop after N consecutive failures and surface what to check.
+        if (qbStatusFailRef.current >= QB_STATUS_FAIL_LIMIT) {
+          clearInterval(pollingRef.current!);
+          pollingRef.current = null;
+          setConnecting(false);
+          setQbError('[step:poll] QuickBooks status check is failing repeatedly — the /api/qbo/status endpoint may be erroring (check Vercel function logs). Stopped polling.');
+          return;
         }
         if (!popup || popup.closed) {
           clearInterval(pollingRef.current!);

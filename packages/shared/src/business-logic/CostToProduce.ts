@@ -17,6 +17,10 @@
  *   - ./MarginEngine  (calculateRetail, getProfitMargin) — canonical price authority.
  *   No DB, no Supabase, no React, no vertical imports. Pure functions only.
  *
+ * INSTRUMENTATION (STD-003, added 2026-06-15): analyze() emits one `[TRACE:COST] compute`
+ *   line per call (loaded cost · N set · per-N results) — ON BY DEFAULT. Stays on until
+ *   David owner-proves the tile through the UI; only then is it commented out, not deleted.
+ *
  * OUTPUTS
  *   - CostToProduceConfig / CostLine / etc. — the JSON shape stored in
  *     business_modules.config (business_id-scoped; reversible, multi-location-capable).
@@ -299,6 +303,22 @@ export function analyze(
           };
         })
     : [];
+
+  // [TRACE:COST] (STD-003, on by default — commented out only after David owner-proves
+  // the tile through the UI). The COMPUTE emit: loaded cost, the N set, and per-N results.
+  console.log('[TRACE:COST] compute', {
+    unitLabel: config.unitLabel ?? 'unit',
+    floorMonthly: acc.floorMonthly,
+    estimatedMonthly: acc.estimatedMonthly,
+    knownMonthly: acc.knownMonthly,
+    unknownCount: acc.unknownLines.length,
+    denominators: config.denominators ?? [],
+    computable: acc.computable,
+    perN: sensitivity.map((s) => ({
+      n: s.n, costFloor: s.costFloor, costKnown: s.costKnown,
+      priceFloor: s.priceFloor, priceKnown: s.priceKnown,
+    })),
+  });
 
   return {
     unitLabel: config.unitLabel ?? 'unit',

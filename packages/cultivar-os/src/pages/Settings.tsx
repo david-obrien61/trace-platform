@@ -36,11 +36,13 @@ function NurserySection({ businessId }: { businessId: string }) {
   const [saveMsg, setSaveMsg]           = useState('');
 
   useEffect(() => {
+    // maybeSingle (not single): zero rows → { data: null } instead of a 406 error
+    // (tech-debt #35). A nursery with no profile row yet is the normal first-run case.
     supabase
       .from('nursery_profiles')
       .select('default_install_price')
       .eq('business_id', businessId)
-      .single()
+      .maybeSingle()
       .then(({ data }) => {
         if (data?.default_install_price != null) {
           setInstallPrice(String(data.default_install_price));

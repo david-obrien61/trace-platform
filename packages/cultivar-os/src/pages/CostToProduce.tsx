@@ -20,6 +20,11 @@
  * SURFACE HONESTY
  *   - UNKNOWN costs are listed, never folded into $0. If there is no solid floor, the
  *     page shows a LABELED "not enough confirmed cost to compute" state — never a fake price.
+ *
+ * INSTRUMENTATION (STD-003, added 2026-06-15): emits one `[TRACE:COST] tile load` line per
+ *   view (config found? · inventory rows · unknown count); the shared engine emits the paired
+ *   `[TRACE:COST] compute` line. ON BY DEFAULT — comment out only after David owner-proves
+ *   the tile through the UI; do not delete.
  */
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -68,6 +73,15 @@ export function CostToProduce() {
       setInventory(inv);
       // Fold inventory rows with UNKNOWN cost into the engine's unknown count (Surface Honesty)
       const unknownInv = inv.filter(r => (r.cost_confidence ?? '').toUpperCase() === 'UNKNOWN' || r.unit_cost == null).map(r => `Inventory: ${r.name}`);
+
+      // [TRACE:COST] (STD-003) — tile load: what the SEE-IT surface read before computing.
+      // The engine then emits its own `[TRACE:COST] compute` line from analyze().
+      console.log('[TRACE:COST] tile load', {
+        businessId,
+        hasConfig: !!cfg,
+        inventoryRows: inv.length,
+        unknownInventory: unknownInv.length,
+      });
 
       setResult(analyze(cfg ?? EMPTY_COST_CONFIG, unknownInv));
       setLoading(false);

@@ -286,7 +286,7 @@ Full log (entries #1–#28): **[docs/tech-debt-log.md](docs/tech-debt-log.md)**
 
 Quick-reference status: 🟢 = resolved · 🟡 = open · (#) = entry number
 
-Active open items: #2 (QB hardcode), #3 (social in cultivar), #4 (nursery footer), #8 (RLS unverified), #10 (SavingsReport missing), #12 (Ignition AI dark / Railway kill path), #13 (stub duplication), #16 (MarginEngine orphaned — A callers + plants.cost_price), #17 (dead migration), #18 (pin_hash unverified), #19 (instagram fallback), #20 (platform union), #21 (orphaned campaigns files), #22 (platform_check migration — David must apply), #23 (STD-008 inverse sweep pending), #24 (opaque names), #25 (6 AI features dark), #26 (orphaned DataBridge keys), #27 (10 tables no migrations), #28 (pilot_all RLS open), #29 (receipts naming), #30 (voice-samples RLS scope), #31 (catalog-verify process), #32 (cultivar_plants anon read open), #33 (widget-header backfill), #34 (qbo/status 500 loop — diagnosis), #35 (nursery_profiles 406 — diagnosis)
+Active open items: #2 (QB hardcode), #3 (social in cultivar), #4 (nursery footer), #8 (RLS unverified), #10 (SavingsReport missing), #12 (Ignition AI dark / Railway kill path), #13 (stub duplication), #16 (MarginEngine orphaned — A callers + plants.cost_price), #17 (dead migration), #18 (pin_hash unverified), #19 (instagram fallback), #20 (platform union), #21 (orphaned campaigns files), #22 (platform_check migration — David must apply), #23 (STD-008 inverse sweep pending), #24 (opaque names), #25 (6 AI features dark), #26 (orphaned DataBridge keys), #27 (10 tables no migrations), #28 (pilot_all RLS open), #29 (receipts naming), #30 (voice-samples RLS scope), #31 (catalog-verify process), #32 (cultivar_plants anon read open), #33 (widget-header backfill), #34 (qbo/status 500 — loop-guarded 2026-06-15, root cause needs Vercel logs) · #35 ✅ resolved 2026-06-15 (nursery_profiles 406 → maybeSingle)
 
 ---
 
@@ -322,6 +322,22 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-15 — THUNDER SMALL MOVE: [TRACE:COST] instrumentation (STD-003 gate's first live test) + cleared 2 console errors
+
+**Type:** Code (1 shared engine, 1 shared panel, 2 cultivar pages) + docs. One commit. NO schema/migration → schema-verification gate N/A.
+
+**STD-003 GATE FIRED — its first real exercise.** This was the flagged "[NEXT BUILD-TOUCH]" from the 2026-06-14 PRIORITY-FIX handoff: the Cost-to-Produce tile had shipped WITHOUT `[TRACE:COST]`. Touching the code triggered the now-enforced gate, so instrumentation was added ON BY DEFAULT (emitting, not flagged-off, not deleted) across all three artifacts:
+- **Engine** (`shared/business-logic/CostToProduce.ts`) — `analyze()` emits `[TRACE:COST] compute` (loaded floor/known cost · N set · per-N cost+price). **VERIFIED firing standalone** (`npx tsx` probe, David's shape: $120 floor, 2 unknowns, full perN table).
+- **Config panel** (`shared/components/CostToProduceSettings.tsx`) — `[TRACE:COST] config load` (lines read + business_id, or load-FAILED→save-blocked) and `[TRACE:COST] save` (lines in/out + the truncation guard's REFUSED/OK decision — the instrument for owner-proving the data-loss fix).
+- **Tile** (`cultivar-os/pages/CostToProduce.tsx`) — `[TRACE:COST] tile load` (config found? · inventory rows · unknown count).
+- Stays ON until David OWNER-PROVES the save path through the real UI under RLS; only then commented out (not deleted). **Bar: engine emit = builder-verified; load/save/tile emits = BUILDER-COMPLETE (compile + code-path), pending owner-proof.** All 4 modified artifacts kept/extended their PURPOSE·DEPENDENCIES·OUTPUTS headers.
+
+**FIX — nursery_profiles 406 (#35, now 🟢):** `Settings.tsx:43` `.single()` → `.maybeSingle()`. Zero-row first-run (no profile until OnboardingWizard upsert) now returns `{data:null}` instead of HTTP 406/PGRST116; existing `data?.default_install_price != null` guard handles null cleanly. AC-1 rename `nursery_profiles → business_profiles` stays SEPARATE Noun-Purge work (flagged, not done).
+
+**FIX — qbo/status 500 (#34, loop-guarded — root cause UNCONFIRMED):** could NOT access Vercel function logs from this environment, and the prompt forbade guess-fixing the cross-package import (`router.ts:15`) without evidence — so did the sanctioned MINIMUM: a consecutive-failure circuit-breaker on the Connect poll (`Dashboard.tsx` `qbStatusFailRef` + `QB_STATUS_FAIL_LIMIT=5`; `checkQbStatus` counts non-ok/network failures, resets on `res.ok`; poll stops + surfaces `qbError` after 5). A persistent 500 no longer hammers every 2s. **[NEEDS DAVID]:** pull the Vercel log for `/api/qbo-connector?_route=status` — if `FUNCTION_INVOCATION_FAILED` / `refreshQBToken` module-resolution error, make the cross-package `.ts` import resolvable at runtime (inline/built-path).
+
+**Verified:** engine `[TRACE:COST] compute` emits (sample shown); `npm run build:cultivar` passes (2192 modules, twice). BUILT-INVENTORY bumped to 2026-06-15 + instrumentation note; tech-debt #34/#35 updated. **Note:** prompt's tech-debt numbers were swapped vs the log — used the log's canonical mapping (#34=qbo, #35=nursery_profiles). **⚠️ CLAUDE.md now ~635 lines — over the ~600 budget; trim handoff history to docs/handoff-archive.md next session.**
 
 ### 2026-06-15 — THUNDER VERIFY+CAPTURE: residence-root + carve-out correction to the node model (DESIGN, benched)
 

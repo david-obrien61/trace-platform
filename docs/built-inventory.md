@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-06-14
+# Last updated: 2026-06-15
 
 **Purpose:** Sessions keep rebuilding things that exist. This document is the single answer to "was X ever built?" Organized by capability, not by file. For file locations, see PLATFORM_AUDIT.md.
 
@@ -186,6 +186,8 @@ Code anchor: `// FLAG: REQ-2` in `packages/cultivar-os/src/pages/ReceiptKeeper.t
 **[NEEDS DAVID]:** (1) Claude Pro $17 vs Pro Max ~$100 — verify current plan. (2) Labor hours/month (seeded 0 → labor contributes $0 until set). (3) Tiered pricing ($149/$199/$249/$299) vs flat — tiers stored as policy, default tier priced. (4) Seed resolver targets `business_type='general'`/name ILIKE 'TRACE%' — confirm target business. (5) Settings-UI tuning needs David as an active `business_members` row for the TRACE business (membership-scoped RLS).
 
 **Follow-up (flagged, not done):** `docs/trace-expenses.md` is the single-source-of-truth for expenses; the tile config should eventually read from it (today the config holds the values).
+
+**Instrumentation (STD-003, 2026-06-15 — the gate's first live test):** `[TRACE:COST]` logging is ON BY DEFAULT across all three artifacts — config panel emits on LOAD (lines read + business_id, or load-FAILED→save-blocked) and SAVE (lines in/out + the truncation guard's REFUSED/OK decision); the tile emits `tile load` (config found? · inventory rows · unknown count); the shared engine `analyze()` emits `compute` (loaded cost · N set · per-N cost+price). This is the instrument David reads to OWNER-PROVE the save path through the real UI under RLS. Engine `compute` emit verified firing standalone (David's shape: $120 floor, 2 unknowns); load/save/tile emits are BUILDER-COMPLETE (compile + code-path), pending owner-proof. Stays ON until proven — then commented out, not deleted.
 
 ---
 
