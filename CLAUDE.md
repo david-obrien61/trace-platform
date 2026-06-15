@@ -323,6 +323,22 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-14 — THUNDER PRIORITY FIX: Cost-to-Produce panel was silently truncating cost lines on save (data loss)
+
+**Type:** Code fix (1 shared component) + data restore (1 data-only migration, applied live) + docs. Two commits (`db0…` panel fix, restore migration). NO schema change → schema-verification gate N/A.
+
+**PART 0 — verified root cause (source ≠ the reported mechanism):** the panel has **no load-time filter** — load (`CostToProduceSettings.tsx:73-94`) and save (`:117-128`) were both faithful and identical across both prior commits. A clean session can't truncate. The real defect is the **combination**: load **swallowed read errors** and silently substituted `EMPTY_COST_CONFIG` on any null/odd-shape read (RLS race, transient failure, config-as-JSON-string), and save **overwrote `recurring[]` unconditionally** — so ANY short load was persisted as permanent truncation, invisibly. (RLS is `FOR ALL` membership-scoped → an RLS-hidden row reads as `null`, indistinguishable from "no row" — which is why the silent-EMPTY fallback is dangerous.) Live read confirmed business 45830ba7 sat at 2 lines (Claude Pro $100, Gemini $20) — matching the evidence.
+
+**PART 1/2 — fix (`CostToProduceSettings.tsx`, header updated):** load now captures the read error and **blocks editing** (error panel) instead of substituting EMPTY; parses string-shaped configs; surfaces ALL lines incl. UNKNOWN/null. Save **re-reads** the stored array and **REFUSES** to write fewer recurring lines than stored unless the user explicitly deleted them (`removedCount`); `addLine` raises the count so legit edits never trip.
+
+**PART 3 — restore (`20260614_cost_to_produce_restore_truncated_lines.sql`, applied live AFTER the fix):** business 45830ba7 back to canonical 10 lines, preserving David's Claude Pro $100 + Gemini $20 + 6 UNKNOWN (null, not zeroed).
+
+**Verified — REAL DB round-trip (not the JSON-logic test that missed this):** STEP1 restore→10 lines/6 UNKNOWN; STEP2 DB→edit Gemini 20→25→save→DB = count held at **10**, edit landed, Claude $100 + 6 UNKNOWN intact; STEP3 guard vs short load (form=2, stored=10, removed=0) → **REFUSED**; left canonical (10 lines, Gemini $20). `npm run build:cultivar` passes. (Round-trip used the service key → proves the data-loss invariant; the RLS/membership save path remains David's separate [NEEDS DAVID] item from the seed.)
+
+**[NEEDS DAVID]:** (1) restore was applied to the live DB this session; the committed migration is the reproducible record (idempotent re-run if needed). (2) RLS still requires David be an active `business_members` row to save from the Settings UI (unchanged). **FLAG:** CLAUDE.md is ~660 lines — over the ~600 budget; trim handoff history to `docs/handoff-archive.md` next session.
+
+---
+
 ### 2026-06-14 — THUNDER BUILD: Cost-to-Produce config + tile (period-pool engine, MarginEngine-fed, tune loop)
 
 **Type:** Code build (shared engine + shared config panel + Cultivar tile/page) + data-only seed migration + docs. Two commits (`931c8e2` config+tile, `bd50b96` trace-expenses.md). NO schema change (seed is a data-only INSERT into existing `business_modules`) → schema-verification gate N/A.
