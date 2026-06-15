@@ -28,6 +28,7 @@ Every decision is tagged so it can be re-addressed by class:
 
 - **BUSINESS-DOCTRINE** — how TRACE treats customers, money, data. Customer-facing policy. Safe in repo.
 - **OPERATING-PRINCIPLE** — how the work itself is run (method, register, when-to-reconsider framework). Safe in repo.
+- **ARCHITECTURE-DECISION** — concrete schema / data-model / structural choices (table shape, FK behavior, edge modeling). Safe in repo.
 - **PERSONAL-FINANCIAL** — David's draw, family compensation figures, personal triggers. **NOT in this file** — see local file.
 
 ## How to use (audit-wins rule)
@@ -223,6 +224,92 @@ does a recon present HAVE/NEED/WANT with options across the spectrum, or a singl
 **Canonical home:** this entry · `CLAUDE.md` (recon/LOOK gate) · `docs/operating-doctrine/lightning-david-partnership.md`
 §17 (doctrine). Worked exemplar: `docs/cost-to-produce/ASSET-NODE-SCHEMA-DECISION-3LENS.md`.
 **Date captured:** 2026-06-15 · **Status:** Active doctrine / enforced gate.
+
+---
+
+## ARCHITECTURE-DECISION
+
+### D-1 · Schema approach C (rename-in-place) for cost-object node model — `[CAPTURED]`
+**Decision:** `business_assets` renamed in place to `cost_objects`; node fields added in place.
+**Reasoning:** §5.2 attribution edges are cross-node-type (ASSET→PROJECT→PRODUCT) → need ONE
+FK-able id-space → "one table" is a structural NEED, not a preference. C dominates: no data
+migration (`business_assets` ~0 rows beyond UI inserts), FK dependents auto-carry on rename, no
+permanent-drift risk (vs bridge/view approaches). Confirmed catalog-proven at build: rename landed,
+2 FK dependents auto-carried with CASCADE intact.
+**Canonical home:** `docs/cost-to-produce/ASSET-NODE-SCHEMA-DECISION-3LENS.md` (3-lens decision) ·
+migration `supabase/migrations/20260615_cost_objects_rename_and_node_schema.sql` · design `COST-TO-PRODUCE-DESIGN.md` §5.2.
+**Date captured:** 2026-06-15 · **Status:** Active / built (Core-1, BUILDER-COMPLETE).
+
+### D-2 · FK child column stays `asset_id` (not renamed to `cost_object_id`) — `[CAPTURED]`
+**Decision:** `business_pmi_schedule.asset_id` and `business_service_log.asset_id` keep the name
+`asset_id` after the parent rename.
+**Reasoning:** PMI and service-log are asset-maintenance tables that reference ASSET nodes
+specifically — `asset_id` is semantically correct for them even though the parent table is now
+node-general. Renaming would churn 8+ call sites for zero functional gain; parent rename is
+transparent to the child column. Blast-radius minimization.
+**Canonical home:** migration `20260615_cost_objects_rename_and_node_schema.sql` (FK column-name decision block).
+**Date captured:** 2026-06-15 · **Status:** Active / built (Core-1).
+
+### D-3 · `parent_id` ON DELETE SET NULL (orphan-to-root, never cascade-destroy) — `[CAPTURED]`
+**Decision:** `cost_objects.parent_id` self-FK uses ON DELETE SET NULL.
+**Reasoning:** cascade-destroy would mean deleting a project nukes its assets — but an asset
+OUTLIVES the product/project it served (§5.9). SET NULL = asset falls back to root/domain when its
+parent is removed, with no owner "revert" action required. This is graceful degradation ([[OP-6]])
+expressed at the DB level: the honest fallback state is automatic.
+**Canonical home:** migration `20260615_cost_objects_rename_and_node_schema.sql` (parent_id column) · design `COST-TO-PRODUCE-DESIGN.md` §5.9 · [[OP-6]].
+**Date captured:** 2026-06-15 · **Status:** Active / built (Core-1).
+
+### D-4 · Two edge tables: structural (`cost_object_edges`) vs temporal (`cost_object_assignments`) — `[CAPTURED]`
+**Decision:** Attribution modeled as two tables — `cost_object_edges` (containment + contribution
+DAG, carries `use_fraction` + basis) and `cost_object_assignments` (time-bounded, `start_at`/
+`end_at`, `conversion_cost`).
+**Reasoning:** Structural containment/contribution is a different axis from temporal assignment;
+collapsing them into one table would force a single row to mean both "A is part of B" and "A was
+assigned to B from T1 to T2." Separating them keeps each edge's semantics clean.
+**Consequence for Core-2:** the rollup must traverse BOTH tables, and count-once enforcement (§14
+slice-seam) must reason across both — the highest-risk seam inherits this split.
+**Canonical home:** migration `20260615_cost_objects_rename_and_node_schema.sql` (§4a/§4b edge tables) · design `COST-TO-PRODUCE-DESIGN.md` §5.2 / §5.9 / §14.
+**Date captured:** 2026-06-15 · **Status:** Active / built (Core-1).
+
+### D-5 · Cost event is truth; receipt is a signal AND a substantiation marker; we surface, not reconcile — `[CAPTURED]`
+**Decision:** The accumulator models the **COST EVENT** as the unit of truth. Receipts, vendor feeds,
+QB lines, service-logs, asset-entries, and config-lines are **SIGNALS** that an event occurred — not the
+event itself. Every cost carries **two independent axes**:
+1. **amount confidence** — `CONFIRMED` / `DERIVED` / `ESTIMATED` / `UNKNOWN`
+2. **substantiation** — `SUBSTANTIATED` (has a document) / `OWNER-ASSERTED` (typed, no proof)
+
+**Count-once = count each EVENT once across N signals** (the same purchase arriving via card-feed *and* a
+forwarded text is one event, two signals). Capex events accumulate on the node; recurring events flow to
+the ÷N period pool. `receipt_id` is **demoted from key to one high-confidence / substantiating signal**.
+**Reasoning:** In real owner-operator use the receipt is the *least* reliable element — forgotten, doubled,
+or fed twice from a vendor channel under a different id for the same purchase. So count-once cannot key on
+`receipt_id` alone. Separately: a real operating cost the owner incurred (e.g. a $50 fuel filter recalled
+from memory) MUST be surfaced so he sees his true cost-to-operate — that is the hidden-cost problem we exist
+to solve. But without a receipt that cost is unsubstantiated: his accountant likely cannot deduct it, a
+tax-time dollar loss he'd otherwise eat silently. The platform **SURFACES** this (count the cost + flag
+substantiation-at-risk + make capture the easy path) and explicitly does **NOT** do bookkeeping or assert
+deductibility — that is the accountant's domain. This flips labor from owner to tool (anti-Nelson, [[OP-5]])
+without crossing into accounting.
+
+**FOUNDING EVIDENCE (the real-world case this resolves):** the owner's actual workspace is a pile of
+uncaptured paper, scattered email/SMS receipts, and curling thermal slips. Hidden operating costs (car wash,
+small parts, fuel-filter-from-memory) evaporate not because the owner is negligent but because the only
+capture path is after-the-fact reconciliation AT a desk — which is the Nelson model (labor pushed onto the
+owner). **DIRECTION OF LABOR (corrects "make the owner capture"):** the signals already exist and are
+abundant — email, SMS/text, card-statement feed, physical receipts. What's scarce is **frictionless capture
+at the moment cost happens.** The platform intercepts the signal where it is born (point of purchase,
+drag-from-email, forward-a-text, card-feed) so the pile never forms. This is *why* count-once must treat the
+receipt as a SIGNAL not a spine: the same car wash may arrive as a card-feed line AND a forwarded text — two
+signals, one event. NON-GOAL stands: surface cost + substantiation-at-risk; do not do the owner's bookkeeping
+or claim deductibility.
+**Consequence for Core-2:** Core-2a carries **both axes** through the seam (no UI yet). Core-2b: full
+multi-signal event reconcile (AI-proposes / owner-confirms, [[OP-7]]) + the substantiation-at-risk surfacing.
+The count-once enforcement at the §14 slice-seam keys on the EVENT, not on `receipt_id`.
+**Companion principles:** [[OP-5]] (anti-Nelson — labor off the owner), [[OP-6]] (works when the owner does
+nothing — unsubstantiated costs still surface, flagged), [[OP-7]] (multi-signal reconcile is infer→propose→confirm).
+**Canonical home:** this entry · design `COST-TO-PRODUCE-DESIGN.md` §14 / §5.4 (the seam this resolves).
+**NON-GOAL:** bookkeeping / tax filing / deductibility claims — accountant's domain, explicitly out of scope.
+**Date captured:** 2026-06-15 · **Status:** Active doctrine / design (Core-2 pending build).
 
 ---
 
