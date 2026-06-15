@@ -18,6 +18,7 @@ import {
   fromCostObject,
   fromRecurringLine,
   sameCost,
+  classifyShape,
   type CostEvent,
 } from './CountOnceSeam';
 import {
@@ -26,6 +27,12 @@ import {
   ECOBEE_RETURN,
   NABU_CASA_RECURRING,
   NSPANEL_DUP_AS_RECURRING,
+  CARWASH_A,
+  CARWASH_B,
+  PART_CARD_LINE,
+  PART_EMAIL_RECEIPT,
+  CASH_WASH_ONE_OFF,
+  SUBSCRIPTION_WASH,
 } from './__fixtures__/coolrunnings-corpus';
 
 // ── tiny harness ─────────────────────────────────────────────────────────────────
@@ -61,12 +68,72 @@ test('0. sameCost: receipt is a container of line events, not the identity', () 
   const nspanel = evs.find((e) => e.id === 'cr-nspanel-pro-120')!;
   const meross = evs.find((e) => e.id === 'cr-meross-mts300hk')!;
   // Same receipt (amzn-114-2466808), DIFFERENT line items → must NOT collapse.
-  ok(sameCost(nspanel, meross) === 'DIFFERENT',
-    'NSPanel vs meross share a receipt but are distinct line items — expected DIFFERENT');
-  // Same receipt + same amount → SAME (the genuine duplicate).
+  ok(sameCost(nspanel, meross).outcome === 'DISTINCT',
+    'NSPanel vs meross share a receipt but are distinct line items — expected DISTINCT');
+  ok(sameCost(nspanel, meross).bucket === 'KNOW',
+    '...and the data proves it (same receipt, both amounts known, differ) → KNOW');
+  // Same receipt + same amount → MERGE (the genuine duplicate).
   const dup = fromRecurringLine(NSPANEL_DUP_AS_RECURRING);
-  ok(sameCost(nspanel, dup) === 'SAME',
-    'NSPanel node vs its duplicate recurring line (same receipt+amount) — expected SAME');
+  ok(sameCost(nspanel, dup).outcome === 'MERGE',
+    'NSPanel node vs its duplicate recurring line (same receipt+amount) — expected MERGE');
+});
+
+// ── 0b. CANONICAL: car-wash subscription — the under-count trap ─────────────────────
+test('0b. two same-merchant $9.99 charges a month apart → DISTINCT×2 + RECURRING_FIXED + NEED_CLARIFICATION', () => {
+  const m = sameCost(CARWASH_A, CARWASH_B);
+  // Must NOT merge (that would under-count to $9.99 instead of the real $19.98 exposure).
+  ok(m.outcome === 'NEED_CLARIFICATION',
+    `two monthly car-wash charges → NEED_CLARIFICATION (not a silent merge); got ${m.outcome}`);
+  ok(m.outcome !== 'MERGE',
+    'assertion has teeth: a naive same-merchant+amount deduper would MERGE and under-count');
+  // Must recognize the RECURRING shape (inferred from ~monthly spacing) — NOT per-occasion.
+  ok(m.shape === 'RECURRING_FIXED',
+    `recurring shape recognized from spacing; got ${m.shape}`);
+  ok(m.shape !== 'PER_OCCASION',
+    'assertion has teeth: treating these as per-occasion washes would mis-shape the cost');
+  // Must carry a GOOD suggested disposition (acceptance-cheap), not a bare "is this a dup?".
+  ok(m.suggestion?.proposed === 'DISTINCT',
+    'suggested disposition proposes keeping both (DISTINCT) so the recurring cost is not under-counted');
+  ok(!!m.suggestion && /vehicle|business|personal|subscription/i.test(m.suggestion.question),
+    `the question names the real interpretations (vehicles / business+personal); got: ${m.suggestion?.question}`);
+  ok((m.suggestion?.candidates.length ?? 0) >= 2,
+    'the disposition offers the candidate interpretations to choose between');
+  ok(!/^is this a duplicate\??$/i.test(m.suggestion?.question ?? ''),
+    'assertion has teeth: the question is specific, not a bare "is this a duplicate?"');
+  // Prove the recurring shape is reachable from SPACING ALONE — strip the pool-bucket and
+  // cadence signals so classifyShape() yields UNKNOWN_SHAPE; only the ~31-day gap is left.
+  const aBare: CostEvent = { ...CARWASH_A, bucket: 'CAPEX', cadence: undefined };
+  const bBare: CostEvent = { ...CARWASH_B, bucket: 'CAPEX', cadence: undefined };
+  const mBare = sameCost(aBare, bBare);
+  ok(classifyShape(aBare) === 'UNKNOWN_SHAPE' && mBare.shape === 'RECURRING_FIXED',
+    'with no bucket/cadence hint, the ~31-day spacing alone infers RECURRING_FIXED');
+  console.log('   ↳ suggested disposition:', JSON.stringify(m.suggestion, null, 2));
+});
+
+// ── 0c. card line + email receipt for ONE purchase → MERGE ──────────────────────────
+test('0c. card line + email receipt (same merchant/amount/day) → MERGE, count once', () => {
+  const m = sameCost(PART_CARD_LINE, PART_EMAIL_RECEIPT);
+  ok(m.outcome === 'MERGE',
+    `one purchase corroborated by card line + receipt → MERGE; got ${m.outcome}`);
+  ok(m.matchedOn === 'merchant+amount+date',
+    `merged on the fuzzy same-purchase signal; got ${m.matchedOn}`);
+  // Through the seam, it counts ONCE and the SUBSTANTIATED record wins.
+  const r = enforceCountOnce([PART_CARD_LINE, PART_EMAIL_RECEIPT]);
+  ok(r.deduped.length === 1 && r.capexKnown === 48.27,
+    `counted once = 48.27; got deduped=${r.deduped.length}, capex=${r.capexKnown}`);
+  ok(r.deduped[0]?.droppedId === 'part-card',
+    'the owner-asserted card line is dropped in favor of the substantiated receipt');
+  ok(r.capexKnown !== 96.54, 'assertion has teeth: not merging would double-count to 96.54');
+});
+
+// ── 0d. one-off cash wash vs subscription wash → different SHAPE ─────────────────────
+test('0d. classifyShape separates a one-off wash from a subscription, even at equal $', () => {
+  ok(classifyShape(CASH_WASH_ONE_OFF) === 'PER_OCCASION',
+    `explicit one-off wash → PER_OCCASION; got ${classifyShape(CASH_WASH_ONE_OFF)}`);
+  ok(classifyShape(SUBSCRIPTION_WASH) === 'RECURRING_FIXED',
+    `monthly wash club → RECURRING_FIXED; got ${classifyShape(SUBSCRIPTION_WASH)}`);
+  ok(classifyShape(CASH_WASH_ONE_OFF) !== classifyShape(SUBSCRIPTION_WASH),
+    'assertion has teeth: equal $9.99 amounts do NOT collapse the shape distinction');
 });
 
 // ── 1. Capex-no-leak (Shape 2) ─────────────────────────────────────────────────────

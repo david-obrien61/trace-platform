@@ -29,10 +29,16 @@
  *
  * EVENT, NOT RECEIPT, IS THE UNIT OF TRUTH (David, 2026-06-15):
  *   sameCost() matches cost EVENTS. receipt_id is ONE high-confidence signal that two
- *   records are the same event — not THE key. Minimal here: match on receipt_id where
- *   both carry one; coarse event-identity fallback (vendor/label + amount + date
- *   proximity) otherwise; FLAG-don't-merge when unsure. Single swappable function.
- *   Full multi-signal reconcile is Core-2b — NOT this spike.
+ *   records are the same event — not THE key.
+ *   Core-2a shipped a minimal body (receipt_id + coarse fallback). Core-2b (THUNDER ·
+ *   2026-06-15) upgrades it IN PLACE to the full multi-signal matcher: three honest
+ *   outcomes — MERGE | DISTINCT | NEED_CLARIFICATION — each carrying its epistemic bucket
+ *   (D-9: KNOW/THINK/REASON/NEED-CLARIFICATION) + reasoning, plus the cost SHAPE
+ *   (D-8: RECURRING_FIXED | PER_OCCASION). NEED_CLARIFICATION carries a SUGGESTED
+ *   DISPOSITION (proposed home + question + candidates + reasoning) as DATA, phrased so
+ *   acceptance is cheap. It does NOT build the accept/reject/edit workflow, the
+ *   counting-on-acceptance wiring, or any UI — all downstream (#38). Still the single
+ *   swappable function: only enforceCountOnce() consumes it.
  *
  * GRACEFUL DEGRADATION (OP-5 / OP-6): produces an HONEST number when the owner does
  *   NOTHING. UNKNOWN amounts are surfaced, never zeroed. UNCONFIRMED-realization
@@ -51,7 +57,9 @@
  *
  * OUTPUTS
  *   - CostEvent              — the event-granular unit the seam reconciles.
- *   - sameCost(a, b)         — SAME | DIFFERENT | UNSURE event-identity verdict (swappable).
+ *   - sameCost(a, b)         — CostMatch: MERGE | DISTINCT | NEED_CLARIFICATION + bucket +
+ *                              reasoning + cost shape (+ suggested disposition) (swappable).
+ *   - classifyShape(e)       — D-8 cost shape of one event (RECURRING_FIXED | PER_OCCASION).
  *   - enforceCountOnce(evts) — SeamResult: capex (separate) + monthly pool + honest
  *                              residue (unknown / unconfirmed / net-zero / possible-dups),
  *                              both axes preserved on every counted event.
@@ -75,6 +83,21 @@ export type Realization = 'REALIZED' | 'UNCONFIRMED';
 /** CAPEX never divides into the ÷N monthly pool; MONTHLY_POOL is the denominator feed. */
 export type CostBucket = 'CAPEX' | 'MONTHLY_POOL';
 
+/**
+ * Cost SHAPE (D-8 — usage-coupling). RECURRING_FIXED = a subscription billed on a
+ * cadence REGARDLESS of use (gym, car-wash plan, SaaS seat). PER_OCCASION = a cost tied
+ * to a discrete usage event (a single wash, a one-off part). UNKNOWN_SHAPE = not yet
+ * determinable from the signals present. The shape decides whether two same-merchant
+ * same-amount charges are two billings of one plan, two separate plans, or two washes.
+ */
+export type CostShape = 'RECURRING_FIXED' | 'PER_OCCASION' | 'UNKNOWN_SHAPE';
+
+/**
+ * Billing cadence hint, when known (from a subscription record / owner statement).
+ * Absent cadence does NOT mean one-off — shape is then inferred from date spacing.
+ */
+export type Cadence = 'ONE_OFF' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'ANNUAL';
+
 /** The unit of truth. A cost EVENT — from a node, a recurring line, or a reversal. */
 export interface CostEvent {
   id: string;
@@ -93,17 +116,73 @@ export interface CostEvent {
   date?: string | null;
   /** Links a refund/return event to the id of the purchase it reverses. */
   reversalOf?: string | null;
+  /** Known billing cadence (D-8 shape hint). Absent → shape inferred from date spacing. */
+  cadence?: Cadence | null;
   /** Provenance, e.g. 'cost_objects:<uuid>' | 'config.recurring'. */
   source: string;
 }
 
-// ── sameCost() — event-identity matcher (SWAPPABLE; full reconcile = Core-2b) ───────
+// ── sameCost() — full multi-signal event matcher (Core-2b; honest outcomes) ─────────
 
-export type SameCostVerdict = 'SAME' | 'DIFFERENT' | 'UNSURE';
+/**
+ * Three honest outcomes (Core-2b, replacing Core-2a's SAME/DIFFERENT/UNSURE):
+ *   MERGE              — same event, corroborating signal → count once.
+ *   DISTINCT           — different events → count both (incl. same merchant + amount on
+ *                        DIFFERENT occasions — the under-count trap).
+ *   NEED_CLARIFICATION — data-unresolvable; carries a suggested disposition so acceptance
+ *                        is cheap (D-9). Treated downstream as flag-don't-merge (no under-count).
+ */
+export type MatchOutcome = 'MERGE' | 'DISTINCT' | 'NEED_CLARIFICATION';
+
+/**
+ * Epistemic bucket the verdict rides in (D-9 honesty contract).
+ *   KNOW              — the data proves it (e.g. different receipt ids; same receipt + amount).
+ *   REASON            — a defensible deduction from partial signals (e.g. amounts don't line up).
+ *   THINK             — a best-guess inference (used inside a suggested disposition).
+ *   NEED_CLARIFICATION— data cannot resolve it; the owner must decide.
+ */
+export type EpistemicBucket = 'KNOW' | 'THINK' | 'REASON' | 'NEED_CLARIFICATION';
+
+/**
+ * A proposed resolution for a NEED_CLARIFICATION, phrased to make acceptance cheap (D-9).
+ * DATA ONLY — SUB-1 does not build the accept/reject/edit workflow (downstream, #38).
+ */
+export interface SuggestedDisposition {
+  /** The home we propose if the owner just taps "yes" — the cheap-to-accept default. */
+  proposed: MatchOutcome;
+  /** Phrased so a tap confirms it; never a bare "is this a duplicate?". */
+  question: string;
+  /** The candidate interpretations the owner is choosing between. */
+  candidates: string[];
+  /** Why we propose what we propose (THINK-level). */
+  reasoning: string;
+}
+
+/** The full verdict: outcome + epistemic bucket + reasoning + cost shape (+ suggestion). */
+export interface CostMatch {
+  outcome: MatchOutcome;
+  bucket: EpistemicBucket;
+  reasoning: string;
+  /** D-8 cost shape of the relationship (recurring-fixed vs per-occasion). */
+  shape: CostShape;
+  /** The signal that drove the verdict — 'receipt_id' | 'amount' | 'merchant+amount+date' | 'merchant+amount+cadence'. */
+  matchedOn: string;
+  /** Present iff outcome === NEED_CLARIFICATION. */
+  suggestion?: SuggestedDisposition;
+}
 
 /** Coarse-match tolerances. Deliberately conservative — over-merge silently drops cost. */
 const AMOUNT_TOL = 0.02;        // dollars — same MATCH_TOLERANCE as Receipt Keeper
-const DATE_PROX_DAYS = 3;       // event-date proximity window
+const DATE_PROX_DAYS = 3;       // same-purchase proximity window (card line vs its receipt)
+
+/** Period windows (days) used to INFER a recurring cadence from date spacing. */
+const PERIOD_WINDOWS: Array<{ cadence: Cadence; lo: number; hi: number }> = [
+  { cadence: 'WEEKLY', lo: 6, hi: 8 },
+  { cadence: 'MONTHLY', lo: 27, hi: 32 },
+  { cadence: 'QUARTERLY', lo: 86, hi: 95 },
+  { cadence: 'ANNUAL', lo: 358, hi: 372 },
+];
+const RECURRING_CADENCES: Cadence[] = ['WEEKLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL'];
 
 function norm(s: string | null | undefined): string {
   return (s ?? '').trim().toLowerCase();
@@ -117,25 +196,68 @@ function daysApart(a: string | null | undefined, b: string | null | undefined): 
   return Math.abs(da - db) / 86_400_000;
 }
 
+/** Does a day-gap land in a recognized billing window? Returns the cadence or null. */
+function gapToCadence(gap: number | null): Cadence | null {
+  if (gap == null) return null;
+  for (const w of PERIOD_WINDOWS) if (gap >= w.lo && gap <= w.hi) return w.cadence;
+  return null;
+}
+
 /**
- * Are two events the SAME underlying cost?
- *
- * EVENT, not receipt, is the unit of truth: ONE receipt holds MANY line-item events
- * (NSPanel and meross on the same Amazon order). So receipt_id is a strong SIGNAL, not
- * the identity — equal receipt_id must be CONFIRMED at the line level (amount) before
- * collapsing two events, or two distinct items on one order would be wrongly merged.
- *
- *   1. same receipt_id + amount-close → SAME (same line item / same cost recorded twice).
- *   1b. same receipt_id + amounts differ (both known) → DIFFERENT (distinct line items).
- *   1c. same receipt_id + an amount UNKNOWN → UNSURE (can't confirm at line level).
- *   1d. different receipt_id (both present) → DIFFERENT.
- *   2. no shared receipt → coarse fallback: (vendor OR label) + amount-close + date-close → SAME.
- *   3. partial overlap → UNSURE (flag, do NOT merge — over-correction drops real cost).
- *   4. otherwise → DIFFERENT.
- * Single swappable function: Core-2b replaces the body with full multi-signal reconcile.
+ * D-8 shape of a SINGLE event, from explicit cadence or its pool provenance.
+ * UNKNOWN_SHAPE when nothing on the event itself reveals it (the pair matcher can still
+ * infer a recurring shape from spacing — see sameCost).
  */
-export function sameCost(a: CostEvent, b: CostEvent): SameCostVerdict {
-  if (a.id === b.id) return 'SAME';
+export function classifyShape(e: CostEvent): CostShape {
+  if (e.cadence === 'ONE_OFF') return 'PER_OCCASION';
+  if (e.cadence && RECURRING_CADENCES.includes(e.cadence)) return 'RECURRING_FIXED';
+  if (e.bucket === 'MONTHLY_POOL') return 'RECURRING_FIXED'; // came from config.recurring[]
+  return 'UNKNOWN_SHAPE';
+}
+
+/** Shape of the RELATIONSHIP between two events (explicit cadence wins; else infer from spacing). */
+function shapeOfPair(a: CostEvent, b: CostEvent, gap: number | null): CostShape {
+  const sa = classifyShape(a);
+  const sb = classifyShape(b);
+  if (sa === 'RECURRING_FIXED' || sb === 'RECURRING_FIXED') return 'RECURRING_FIXED';
+  if (gapToCadence(gap)) return 'RECURRING_FIXED'; // periodic spacing → inferred subscription cadence
+  if (sa === 'PER_OCCASION' && sb === 'PER_OCCASION') return 'PER_OCCASION';
+  return 'UNKNOWN_SHAPE';
+}
+
+const merge = (reasoning: string, bucket: EpistemicBucket, shape: CostShape, matchedOn: string): CostMatch =>
+  ({ outcome: 'MERGE', bucket, reasoning, shape, matchedOn });
+const distinct = (reasoning: string, bucket: EpistemicBucket, shape: CostShape, matchedOn: string): CostMatch =>
+  ({ outcome: 'DISTINCT', bucket, reasoning, shape, matchedOn });
+const needClarification = (
+  reasoning: string, shape: CostShape, matchedOn: string, suggestion: SuggestedDisposition,
+): CostMatch => ({ outcome: 'NEED_CLARIFICATION', bucket: 'NEED_CLARIFICATION', reasoning, shape, matchedOn, suggestion });
+
+/**
+ * Are two events the SAME underlying cost? Returns an honest, reasoned verdict (D-9) with
+ * the cost shape (D-8). EVENT — not receipt — is the unit of truth: ONE receipt holds MANY
+ * line-item events (NSPanel and meross on one Amazon order), so receipt_id is a strong
+ * SIGNAL, confirmed at the line level (amount) before collapsing.
+ *
+ * Decision order:
+ *   1. receipt_id present on both → container rules (KNOW): different receipt → DISTINCT;
+ *      same receipt + amount-close → MERGE; same receipt + amounts differ → DISTINCT (line
+ *      items); same receipt + an amount unknown → NEED_CLARIFICATION.
+ *   2. no shared receipt, amounts don't line up → DISTINCT (REASON).
+ *   3. amounts line up + merchant/label match:
+ *        a. RECURRING_FIXED shape (explicit cadence OR periodic spacing) → NEED_CLARIFICATION
+ *           (one subscription across periods, or N separate subscriptions? — the under-count
+ *           trap; never merge, never treat as per-occasion).
+ *        b. within a few days → MERGE (one purchase corroborated by two records, e.g. card
+ *           line + email receipt) (REASON).
+ *        c. otherwise (irregular spacing) → NEED_CLARIFICATION (repeat purchase or dup record?).
+ *   4. amounts line up but no merchant/label in common → NEED_CLARIFICATION (too weak to merge).
+ */
+export function sameCost(a: CostEvent, b: CostEvent): CostMatch {
+  const gap = daysApart(a.date, b.date);
+  const shape = shapeOfPair(a, b, gap);
+
+  if (a.id === b.id) return merge('same event id', 'KNOW', shape, 'id');
 
   const bothAmountsKnown = a.amount != null && b.amount != null;
   const amountClose =
@@ -143,22 +265,84 @@ export function sameCost(a: CostEvent, b: CostEvent): SameCostVerdict {
 
   // (1) receipt_id — strong signal, but a receipt is a CONTAINER of line events.
   if (a.receiptId && b.receiptId) {
-    if (a.receiptId !== b.receiptId) return 'DIFFERENT';   // (1d)
-    if (amountClose) return 'SAME';                         // (1) same receipt, same line
-    if (bothAmountsKnown) return 'DIFFERENT';               // (1b) distinct line items
-    return 'UNSURE';                                        // (1c) can't confirm at line level
+    if (a.receiptId !== b.receiptId)
+      return distinct('different receipt ids → different purchases', 'KNOW', shape, 'receipt_id');
+    if (amountClose)
+      return merge('same receipt + matching line amount → one line item recorded twice', 'KNOW', shape, 'receipt_id');
+    if (bothAmountsKnown)
+      return distinct('same receipt, different line amounts → distinct line items on one order', 'KNOW', shape, 'receipt_id');
+    // same order, an amount UNKNOWN → can't confirm at the line level.
+    return needClarification(
+      'same order, but one amount is unknown — cannot confirm these are the same line item',
+      shape, 'receipt_id',
+      {
+        proposed: 'DISTINCT',
+        question: `Two charges on the same order (${a.label} / ${b.label}) — are these the same item recorded twice, or two different items?`,
+        candidates: ['Same item, recorded twice (merge)', 'Two different items on one order (keep both)'],
+        reasoning: 'Same receipt id but one line amount is unknown; default to keeping both so a real second cost is not silently dropped.',
+      },
+    );
   }
 
-  // (2)/(3) coarse fallback. UNKNOWN amounts can't be amount-matched → never auto-merge.
+  // (2) no shared receipt — amounts must line up to even be considered the same cost.
+  if (!amountClose)
+    return distinct('amounts do not line up → different cost events', bothAmountsKnown ? 'KNOW' : 'REASON', shape, 'amount');
+
+  // (3) amounts line up. Need a merchant/label identity signal too.
   const vendorMatch = norm(a.vendor) !== '' && norm(a.vendor) === norm(b.vendor);
   const labelMatch = norm(a.label) !== '' && norm(a.label) === norm(b.label);
-  const gap = daysApart(a.date, b.date);
-  const dateClose = gap != null && gap <= DATE_PROX_DAYS;
+  const identityMatch = vendorMatch || labelMatch;
+  const who = norm(a.vendor) || norm(a.label) || 'this merchant';
 
-  if (!amountClose) return 'DIFFERENT';                 // amount must line up to even consider
-  if ((vendorMatch || labelMatch) && dateClose) return 'SAME';
-  if (vendorMatch || labelMatch) return 'UNSURE';       // amount lines up, weak identity → flag
-  return 'DIFFERENT';
+  if (identityMatch) {
+    // (3a) RECURRING_FIXED shape: same merchant + identical fixed amount on a cadence.
+    //      The under-count trap — do NOT merge, do NOT treat as per-occasion. Ask.
+    if (shape === 'RECURRING_FIXED') {
+      const inferred = a.cadence ?? b.cadence ?? gapToCadence(gap) ?? 'MONTHLY';
+      return needClarification(
+        `same merchant + identical fixed amount on a ${inferred.toLowerCase()} cadence: a fixed recurring subscription billed regardless of use — could be one subscription across two periods, or two separate subscriptions on one card`,
+        'RECURRING_FIXED', 'merchant+amount+cadence',
+        {
+          proposed: 'DISTINCT', // keep both → surfaces the full recurring cost; owner can collapse
+          question: `Two ${who} charges of the same fixed amount — two separate subscriptions (e.g. two vehicles, or one business + one personal), or the same subscription seen across two billing periods?`,
+          candidates: [
+            'Two separate subscriptions (count both — e.g. two vehicles)',
+            'One subscription, two billing periods (same recurring cost)',
+          ],
+          reasoning: 'A fixed amount billed on a regular cadence regardless of use is a recurring-fixed subscription. Whether it is one plan or several cannot be told from the charges alone; default to keeping both so the recurring cost is not under-counted.',
+        },
+      );
+    }
+    // (3b) same merchant + matching amount within a few days → one purchase, two records.
+    if (gap != null && gap <= DATE_PROX_DAYS)
+      return merge(
+        'same merchant + matching amount within a few days → one purchase corroborated by two records (e.g. card line + email receipt)',
+        'REASON', shape, 'merchant+amount+date',
+      );
+    // (3c) matches on merchant + amount but spacing is neither tight nor cleanly periodic.
+    return needClarification(
+      'same merchant and amount but the dates are neither close (one purchase) nor cleanly periodic (a subscription) — a repeat purchase or a duplicate record?',
+      shape, 'merchant+amount',
+      {
+        proposed: 'DISTINCT',
+        question: `Two ${who} charges of the same amount on different dates — a repeat purchase, or the same purchase recorded twice?`,
+        candidates: ['Repeat purchase (keep both)', 'Duplicate record of one purchase (merge)'],
+        reasoning: 'Identical amount and merchant but irregular spacing; default to keeping both so a real repeat cost is not silently dropped.',
+      },
+    );
+  }
+
+  // (4) amounts match but no merchant/label in common → too weak to merge on amount alone.
+  return needClarification(
+    'amounts match but nothing else (no shared merchant or label) — too weak a signal to merge',
+    shape, 'amount',
+    {
+      proposed: 'DISTINCT',
+      question: `Two unrelated-looking charges of the same amount (${a.label} / ${b.label}) — the same cost recorded twice, or a coincidence?`,
+      candidates: ['Same cost, recorded twice (merge)', 'Two different costs that happen to match (keep both)'],
+      reasoning: 'Only the amount matches; with no merchant or label in common this is most likely a coincidence — default to keeping both.',
+    },
+  );
 }
 
 // ── Result shape ────────────────────────────────────────────────────────────────────
@@ -189,7 +373,7 @@ export interface ResidueLine {
 export interface DedupRecord {
   keptId: string;
   droppedId: string;
-  verdict: SameCostVerdict;
+  verdict: MatchOutcome;
   amount: number | null;
 }
 
@@ -207,8 +391,10 @@ export interface SeamResult {
   unconfirmedLines: ResidueLine[];    // not-yet-a-cost (realization UNCONFIRMED)
   // ── count-once provenance ──
   counted: CountedEvent[];            // every quantified, realized, deduped event (both axes)
-  deduped: DedupRecord[];             // SAME pairs collapsed (Shape 1 proof)
-  possibleDuplicates: Array<{ a: string; b: string }>; // UNSURE — flagged, NOT merged
+  deduped: DedupRecord[];             // MERGE pairs collapsed (Shape 1 proof)
+  // NEED_CLARIFICATION — flagged, NOT merged. Carries the full match (incl. suggested
+  // disposition) so the downstream accept/reject workflow (#38) needs no recomputation.
+  possibleDuplicates: Array<{ a: string; b: string; match?: CostMatch }>;
   netZeroPairs: Array<{ purchaseId: string; reversalId: string; net: number }>;
   // ── substantiation rollup (the second axis, preserved to output) ──
   substantiatedTotal: number;         // counted $ that has a receipt/document
@@ -257,8 +443,8 @@ export function enforceCountOnce(events: CostEvent[]): SeamResult {
     for (let j = i + 1; j < working.length; j++) {
       const b = working[j];
       if (dropped.has(b.id)) continue;
-      const verdict = sameCost(a, b);
-      if (verdict === 'SAME') {
+      const match = sameCost(a, b);
+      if (match.outcome === 'MERGE') {
         // Keep the better-substantiated / higher-confidence representative.
         const loser = weaker(a, b);
         const keeper = loser.id === a.id ? b : a;
@@ -266,12 +452,13 @@ export function enforceCountOnce(events: CostEvent[]): SeamResult {
         deduped.push({
           keptId: keeper.id,
           droppedId: loser.id,
-          verdict,
+          verdict: match.outcome,
           amount: loser.amount,
         });
         if (loser.id === a.id) break; // a is gone; move outer loop on
-      } else if (verdict === 'UNSURE') {
-        possibleDuplicates.push({ a: a.id, b: b.id }); // flag, do NOT drop (over-correction guard)
+      } else if (match.outcome === 'NEED_CLARIFICATION') {
+        // flag + carry the suggestion, do NOT drop (over-correction guard / under-count guard).
+        possibleDuplicates.push({ a: a.id, b: b.id, match });
       }
     }
   }
@@ -394,7 +581,9 @@ export interface CostObjectNodeRow {
   conversion_cost?: number | null;   // §5.9 cost event on repurpose
   cost_confidence: AmountConfidence;
   substantiation?: Substantiation;   // defaults OWNER_ASSERTED (no proof unless stated)
-  status?: string | null;            // ACTIVE/IDLE/... ; UNCONFIRMED-ish → realization
+  status?: string | null;            // ASSET-only lifecycle (ACTIVE/IDLE/...); §5.9 separate columns
+  project_status?: string | null;    // PROJECT-only (open/closed/converted) — migration 20260615
+  product_status?: string | null;    // PRODUCT-only (active/retired) — migration 20260615
   realization?: Realization;
   receipt_id?: string | null;
   vendor?: string | null;

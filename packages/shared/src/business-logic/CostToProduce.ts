@@ -40,6 +40,8 @@
 
 import { calculateRetail, getProfitMargin } from './MarginEngine';
 import type { MarginEngineConfig } from './MarginEngine';
+import { enforceCountOnce } from './CountOnceSeam';
+import type { CostEvent } from './CountOnceSeam';
 
 // ── Confidence + period vocab (mirrors business_inventory.cost_confidence CHECK) ──
 
@@ -149,6 +151,13 @@ export interface Accumulation {
   knownLines: AccumulatedLine[];
   /** True if there is a non-zero floor to compute from. */
   computable: boolean;
+  // ── seam-reconciled extras — present ONLY when fed real captured cost_objects (SUB-3). ──
+  /** Captured CAPEX (one-time capital), kept OUT of the ÷N monthly pool, surfaced separately. */
+  capexExcluded?: number;
+  /** Cross-source possible duplicates the seam FLAGGED (not silently merged or doubled). */
+  possibleDuplicateCount?: number;
+  /** True when this accumulation was reconciled against real captured cost_objects. */
+  fedFromRollup?: boolean;
 }
 
 /** annual → monthly; monthly passes through. */
@@ -156,7 +165,70 @@ function toMonthly(amount: number, period: CostPeriod): number {
   return period === 'annual' ? amount / 12 : amount;
 }
 
-export function accumulate(config: CostToProduceConfig): Accumulation {
+/** Optional feed for accumulate() — the count-once bridge from the accumulator to the pool. */
+export interface AccumulateOptions {
+  /**
+   * Cost EVENTS from REAL captured cost_objects (built via CountOnceSeam.fromCostObject).
+   * When present, the typed config (recurring + labor) AND these are reconciled through the
+   * ONE count-once seam (CountOnceSeam.enforceCountOnce), so a cost present in BOTH the typed
+   * config and a captured object is counted ONCE, and CAPEX is excluded from the ÷N monthly
+   * pool. Absent/empty → the config-only path below is byte-for-byte the live tile's proven
+   * behavior (zero regression). The seam is the single reconciliation gate (design §14).
+   */
+  rollupEvents?: CostEvent[];
+}
+
+/**
+ * Build CostEvents from the typed config (recurring lines + labor) so they can be reconciled
+ * against captured cost_objects in the ONE seam. Typed config has no receipt/vendor/date, so
+ * the seam will FLAG (not silently merge) cross-source look-alikes — honest, not lossy.
+ */
+function costConfigToEvents(config: CostToProduceConfig): CostEvent[] {
+  const events: CostEvent[] = [];
+  (config.locations ?? []).forEach((loc, li) => {
+    const locKey = loc.id ?? String(li);
+    (loc.recurring ?? []).forEach((line, idx) => {
+      events.push({
+        id: `cfg:${locKey}:rec:${idx}`,
+        label: line.label,
+        amount: line.amount == null ? null : toMonthly(line.amount, line.period),
+        bucket: 'MONTHLY_POOL',
+        amountConfidence: line.confidence,
+        substantiation: 'OWNER_ASSERTED', // typed config = no proof document
+        realization: 'REALIZED',
+        source: `config.recurring@${loc.name}`,
+      });
+    });
+    const lab = loc.labor;
+    if (lab && lab.rate != null && lab.hours != null) {
+      events.push({
+        id: `cfg:${locKey}:labor`,
+        label: `Labor (${lab.rate}/hr × ${lab.hours} ${lab.period === 'annual' ? 'hr/yr' : 'hr/mo'})`,
+        amount: toMonthly(lab.rate * lab.hours, lab.period),
+        bucket: 'MONTHLY_POOL',
+        amountConfidence: lab.confidence,
+        substantiation: 'OWNER_ASSERTED',
+        realization: 'REALIZED',
+        source: `config.labor@${loc.name}`,
+      });
+    } else if (lab && lab.confidence === 'UNKNOWN') {
+      events.push({
+        id: `cfg:${locKey}:labor`,
+        label: 'Labor (hours not set)',
+        amount: null,
+        bucket: 'MONTHLY_POOL',
+        amountConfidence: 'UNKNOWN',
+        substantiation: 'OWNER_ASSERTED',
+        realization: 'REALIZED',
+        source: `config.labor@${loc.name}`,
+      });
+    }
+  });
+  return events;
+}
+
+export function accumulate(config: CostToProduceConfig, opts: AccumulateOptions = {}): Accumulation {
+  // ── Config-only path (the live tile's proven computation — UNCHANGED). ──
   let floorMonthly = 0;
   let estimatedMonthly = 0;
   const unknownLines: AccumulatedLine[] = [];
@@ -190,14 +262,39 @@ export function accumulate(config: CostToProduceConfig): Accumulation {
     }
   }
 
-  const knownMonthly = floorMonthly + estimatedMonthly;
+  const rollupEvents = opts.rollupEvents ?? [];
+  if (rollupEvents.length === 0) {
+    // No real captured data (e.g. cost_objects migration not yet applied) → config-only,
+    // identical to the proven live tile. The seam is not invoked.
+    const knownMonthly = floorMonthly + estimatedMonthly;
+    return {
+      floorMonthly, estimatedMonthly, knownMonthly, unknownLines, knownLines,
+      computable: floorMonthly > 0 || estimatedMonthly > 0,
+    };
+  }
+
+  // ── Seam-fed path (SUB-3): typed config + captured cost_objects through the ONE seam. ──
+  // Capex is excluded from the monthly pool by the seam; cross-source dups count once.
+  const seam = enforceCountOnce([...costConfigToEvents(config), ...rollupEvents]);
+
+  const fedKnownLines: AccumulatedLine[] = seam.counted
+    .filter((c) => c.bucket === 'MONTHLY_POOL')
+    .map((c) => ({ label: c.label, monthly: c.amount, confidence: c.amountConfidence, location: c.source }));
+  const fedUnknownLines: AccumulatedLine[] = [
+    ...seam.unknownLines.map((l) => ({ label: l.label, monthly: null, confidence: 'UNKNOWN' as const, note: l.note, location: l.source })),
+    ...seam.unconfirmedLines.map((l) => ({ label: l.label, monthly: null, confidence: l.amountConfidence, note: l.note ?? 'not yet confirmed a cost', location: l.source })),
+  ];
+
   return {
-    floorMonthly,
-    estimatedMonthly,
-    knownMonthly,
-    unknownLines,
-    knownLines,
-    computable: floorMonthly > 0 || estimatedMonthly > 0,
+    floorMonthly: seam.poolFloorMonthly,
+    estimatedMonthly: seam.poolEstimatedMonthly,
+    knownMonthly: seam.poolKnownMonthly,
+    unknownLines: fedUnknownLines,
+    knownLines: fedKnownLines,
+    computable: seam.poolFloorMonthly > 0 || seam.poolEstimatedMonthly > 0,
+    capexExcluded: seam.capexKnown,
+    possibleDuplicateCount: seam.possibleDuplicates.length,
+    fedFromRollup: true,
   };
 }
 
@@ -242,6 +339,10 @@ export interface ConfidenceMix {
   hasUnknown: boolean;
   /** True when there is a real floor to compute a price from. */
   computable: boolean;
+  // ── seam-reconciled extras (present only when fed real captured cost_objects, SUB-3). ──
+  capexExcluded?: number;
+  possibleDuplicateCount?: number;
+  fedFromRollup?: boolean;
 }
 
 export interface CostToProduceResult {
@@ -263,6 +364,9 @@ export function confidenceMix(acc: Accumulation): ConfidenceMix {
     unknownLabels: acc.unknownLines.map((l) => l.label),
     hasUnknown: acc.unknownLines.length > 0,
     computable: acc.computable,
+    capexExcluded: acc.capexExcluded,
+    possibleDuplicateCount: acc.possibleDuplicateCount,
+    fedFromRollup: acc.fedFromRollup,
   };
 }
 
@@ -274,8 +378,9 @@ export function confidenceMix(acc: Accumulation): ConfidenceMix {
 export function analyze(
   config: CostToProduceConfig,
   extraUnknownInventory: string[] = [],
+  opts: AccumulateOptions = {},
 ): CostToProduceResult {
-  const acc = accumulate(config);
+  const acc = accumulate(config, opts);
   if (extraUnknownInventory.length) {
     for (const label of extraUnknownInventory) {
       acc.unknownLines.push({ label, monthly: null, confidence: 'UNKNOWN', location: 'inventory' });
@@ -314,6 +419,11 @@ export function analyze(
     unknownCount: acc.unknownLines.length,
     denominators: config.denominators ?? [],
     computable: acc.computable,
+    // SUB-3 seam-feed telemetry (present when real cost_objects fed the pool):
+    fedFromRollup: acc.fedFromRollup ?? false,
+    rollupEventsIn: opts.rollupEvents?.length ?? 0,
+    capexExcluded: acc.capexExcluded ?? 0,
+    possibleDuplicateCount: acc.possibleDuplicateCount ?? 0,
     perN: sensitivity.map((s) => ({
       n: s.n, costFloor: s.costFloor, costKnown: s.costKnown,
       priceFloor: s.priceFloor, priceKnown: s.priceKnown,

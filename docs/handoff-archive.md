@@ -7,6 +7,30 @@
 
 ---
 
+### 2026-06-15 — THUNDER CAPTURE: cost-accounting two-vocabulary layer + competitive landscape doctrine
+
+**Type:** Docs only. Two commits (`aaff697` captures; trim commit follows). No schema/code/migration/build → schema-verification gate N/A. CAPTURE only — no build (accumulator verify-before-build remains the separate next step).
+
+**Part 1 — two-vocabulary translation layer (`COST-TO-PRODUCE-DESIGN.md` §5.8, new).** David's framing: owners speak PLAIN language; formal accounting terms are needed only at two seams — (a) QuickBooks field mapping, (b) accountant handoff. So the design carries TWO vocabularies + an explicit map. We do NOT invent a method; we implement four established ones — named so we don't reinvent and can speak QB's/the accountant's language at the seams. The method→model→owner-language table: **JOB/JOB-ORDER COSTING** = ACCUMULATOR path (node model §5) → "what this project cost"; **PROCESS COSTING** = PERIOD-POOL ÷ N tile (§7) → "your cost per customer/unit"; **HYBRID JOB/PROCESS** = the platform overall (recognized, not novel); **ABC** (formal: COST POOL = common costs, COST DRIVER = owner-set basis) = §5.5 allocation + §5.7 carve-out basis → "how we split the shared bills"; **STANDARD COSTING/VARIANCE** (standard=estimate, actual=receipt, variance=gap) = §6.3 estimate→actual → "what you thought vs what it really cost." Owner UI = plain column only; formal terms live in QB-mapping + accountant-export + internal naming. Header changelog bumped. Bar: DESIGN.
+
+**Part 2 — competitive landscape doctrine (`MASTER_BRIEF.md` PART 7, new "Tier 2" subsection; existing PART 7 already had direct-vertical-SaaS table + moats).** Research-backed, 2026, with verify-by-search-at-build note: job-costing software is vertical-specific + built for the post-garage crew business (~$6–50/mo/user up to ~$499/mo); top end is six-figure ERP. **The gap (wedge):** nobody serves the garage-genesis owner-operator combining residence-root awareness + connector-not-replacement + the honesty layer + multi-vertical. **Connector strategy market-validated:** ~2/3 of SMBs run ≤2 paid tools, are software-cost-sensitive (41% cite rising costs), won't rip out QB. **Philosophy industry-recognized:** broad averages hide the truth on custom/service work; "record→close→file away, margin chance gone" is the named failure mode; surfacing cost while there's still time to act is the recognized gap. **The real threat is an INCUMBENT** (Intuit shipping good-enough cost intel), NOT a startup — watch incumbents. **$149/mo sits in a defensible band.**
+
+**Verified:** both captures grep-confirmed present (§5.8 table with all 4 methods + owner-plain/formal split; PART 7 with gap/connector/philosophy/incumbent/price). **Trim:** moved the four 2026-06-14 handoff entries → `docs/handoff-archive.md` (clean date boundary; kept three 06-15 entries + this one). **CLAUDE.md 633 → 589 — back under the ~600 budget.** No BUILT-INVENTORY change (no capability built — design/strategy docs only).
+
+### 2026-06-15 — THUNDER CAPTURE: 3 operating principles + asset-lifecycle model (§5.9) + encoded HAVE/NEED/WANT recon standard
+
+**Type:** Docs only. Two commits. READ-ONLY — no schema/code/migration/build → schema-verification gate N/A, no BUILT-INVENTORY change (no capability built). CAPTURE + ENCODE only — Core-1 build is the separate next step (now unblocked by the confirmed C decision).
+
+**Why:** a rich design discussion (real rabbit/tractor farm history) produced durable doctrine that a future compaction would compress — captured to repo NOW, with reasoning preserved so it can be designed/tested against the next case.
+
+**Part 1 — three OPERATING-PRINCIPLEs → DECISIONS.md (OP-5/6/7, with reasoning, cross-linked):** **OP-5 · Good-enough + AI-as-equalizer** (north star): build good-enough, let AI close the gap; never the perfect mousetrap demanding labor the owner won't give — tiebreaker defaults to simple+AI; meticulous-bookkeeping model = being the accountant = the anti-Nelson failure. **OP-6 · Graceful degradation / fidelity tiers:** must produce honest value when owner does NOTHING — tiers (a) maintains/rare, (b) confirms/achievable, (c) does-nothing/default; MUST work at (c): cost at last-known, flagged unconfirmed. **OP-7 · AI infers→proposes→owner confirms:** AI reads cheap signals, PROPOSES the expensive records (reassignment/allocation/reconciliation/transitions) as one-tap; NEVER auto-commits structure (confident-wrong > none); the MECHANISM making OP-6 tier (b) real, generalizes platform-wide.
+
+**Part 2 — asset-lifecycle model → COST-TO-PRODUCE-DESIGN.md §5.9 (new, single-source, DESIGN-benched), grounded in the rabbit/tractor history:** ASSET OUTLIVES PRODUCT (product-retired ≠ asset-retired → SEPARATE `status`/`project_status`/`product_status`); reuse across SEQUENTIAL projects → cost allocates by ASSIGNMENT PERIOD (time axis); CONVERSION = cost event on the receiving project → asset cost ACCUMULATES (not fixed acquisition_cost); IDLE/UNASSIGNED state the enum lacks; asset-to-project = TIME-BOUNDED ASSIGNMENT not containment; FALLBACK-TO-DOMAIN automatic (owner fires no revert — OP-6/7); cost_confidence EXTENDED to allocation; carry-in basis = ACCOUNTANT's call, LANE HELD. Header changelog bumped.
+
+**Part 3 — encoded HAVE/NEED/WANT three-lens recon standard (earned via the asset-node A/B test):** **DECISIONS.md OP-8** (recon reports HAVE/file:line · NEED/irreducible · WANT/clean-end-state + OPTIONS across NEED→WANT, not one collapsed rec) + **CLAUDE.md §9 item 10** (binding recon/LOOK gate, fires at recon time) + **partnership doc §17** (doctrine).
+
+**Verified:** OP-5/6/7/8 in DECISIONS.md w/ reasoning; §5.9 all bullets + separate-status + carry-in lane + DESIGN-benched; §17; recon gate item 10. Moved oldest handoff (SMALL MOVE) → `docs/handoff-archive.md`. **CLAUDE.md ~597 — under the ~600 budget.**
+
 ### 2026-06-15 — THUNDER SMALL MOVE: [TRACE:COST] instrumentation (STD-003 gate's first live test) + cleared 2 console errors
 
 **Type:** Code (1 shared engine, 1 shared panel, 2 cultivar pages) + docs. One commit. NO schema/migration → schema-verification gate N/A.

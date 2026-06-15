@@ -32,6 +32,7 @@ export type {
   MarginPolicy,
   CostLocation,
   CostToProduceConfig,
+  AccumulateOptions,
   AccumulatedLine,
   Accumulation,
   SensitivityRow,
@@ -43,6 +44,7 @@ export type {
 // accumulator→pool edge (§14). Query-time reconciliation; event is the unit of truth.
 export {
   sameCost,
+  classifyShape,
   enforceCountOnce,
   fromCostObject,
   fromRecurringLine,
@@ -53,8 +55,13 @@ export type {
   Substantiation,
   Realization,
   CostBucket,
+  CostShape,
+  Cadence,
   CostEvent,
-  SameCostVerdict,
+  MatchOutcome,
+  EpistemicBucket,
+  SuggestedDisposition,
+  CostMatch,
   CountedEvent,
   ResidueLine,
   DedupRecord,
@@ -62,3 +69,17 @@ export type {
   CostObjectNodeRow,
   RecurringLineRow,
 } from './CountOnceSeam';
+
+// Dual-edge cost rollup — Core-2b SUB-2 (THUNDER · 2026-06-15). Traverses BOTH edge
+// tables (structural use_fraction + temporal period-share, §5.2/§5.9) and feeds the
+// attributed events THROUGH the count-once seam. Pure; no DB.
+export { rollup } from './CostRollup';
+
+export type {
+  CostObjectEdgeRow,
+  CostObjectAssignmentRow,
+  CostGraph,
+  Contribution,
+  IdleCapital,
+  NodeRollup,
+} from './CostRollup';

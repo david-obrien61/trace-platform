@@ -9,12 +9,21 @@
  *   confidence-aware RANGE. Recomputes whenever the owner re-saves config in Settings.
  *
  * DEPENDENCIES
- *   - ../lib/supabase (business_modules + business_inventory reads)
+ *   - ../lib/supabase (business_modules + business_inventory + cost_objects reads)
  *   - @trace/shared/context (businessId)
  *   - @trace/shared/business-logic CostToProduce.analyze (period-pool + sensitivity)
+ *   - @trace/shared/business-logic fromCostObject (real cost_objects rows → CostEvents)
+ *
+ * SUB-3 SEAM FEED (Core-2b, 2026-06-15): when the cost_objects table exists and has rows,
+ *   this page feeds the captured objects' events into analyze() via { rollupEvents }, where
+ *   the count-once seam reconciles them with the typed config — CAPEX excluded from the ÷N
+ *   pool, cross-source duplicates counted once. DEFENSIVE: the cost_objects migration is
+ *   gated/unapplied; a relation error or no rows → rollupEvents=[] → the proven config-only
+ *   path (zero change to the live tile until the migration is applied + data captured).
  *
  * OUTPUTS
  *   - Read-only display: confidence mix (confirmed floor + estimated + UNKNOWN list),
+ *     captured-capital (one-time, excluded) + flagged-duplicates panel when seam-fed,
  *     sensitivity table (one row per N), material-cost confidence panel. No DB writes.
  *
  * SURFACE HONESTY
@@ -31,8 +40,8 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calculator, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
-import { analyze, EMPTY_COST_CONFIG } from '@trace/shared/business-logic';
-import type { CostToProduceConfig, CostToProduceResult } from '@trace/shared/business-logic';
+import { analyze, EMPTY_COST_CONFIG, fromCostObject } from '@trace/shared/business-logic';
+import type { CostToProduceConfig, CostToProduceResult, CostObjectNodeRow, CostEvent } from '@trace/shared/business-logic';
 
 const GREEN = '#27500A';
 const SAGE  = '#EAF3DE';
@@ -74,6 +83,32 @@ export function CostToProduce() {
       // Fold inventory rows with UNKNOWN cost into the engine's unknown count (Surface Honesty)
       const unknownInv = inv.filter(r => (r.cost_confidence ?? '').toUpperCase() === 'UNKNOWN' || r.unit_cost == null).map(r => `Inventory: ${r.name}`);
 
+      // SUB-3 — feed REAL captured cost_objects into the period-pool tile THROUGH the seam.
+      // DEFENSIVE: the cost_objects migration (20260615) is gated/unapplied. If the table is
+      // absent (relation error) or empty, rollupEvents = [] → analyze() falls back to the
+      // proven config-only path (zero change to the live tile). When David applies the
+      // migration + captures objects, this lights up automatically — no code change.
+      // The DB column is `name` (not `label`) and there is no conversion_cost/vendor/receipt
+      // column yet, so we map name→label and let fromCostObject default the rest.
+      let rollupEvents: CostEvent[] = [];
+      const objRes = await supabase
+        .from('cost_objects')
+        .select('id,name,node_type,domain,acquisition_cost,cost_confidence,status')
+        .eq('business_id', businessId);
+      if (!cancelled && !objRes.error && Array.isArray(objRes.data) && objRes.data.length) {
+        rollupEvents = (objRes.data as Array<Record<string, unknown>>).flatMap((r) =>
+          fromCostObject({
+            id: String(r.id),
+            label: String(r.name ?? 'Unnamed cost object'),
+            node_type: (r.node_type as CostObjectNodeRow['node_type']) ?? 'ASSET',
+            domain: (r.domain as string | null) ?? null,
+            acquisition_cost: (r.acquisition_cost as number | null) ?? null,
+            cost_confidence: (r.cost_confidence as CostObjectNodeRow['cost_confidence']) ?? 'UNKNOWN',
+            status: (r.status as string | null) ?? null,
+          }),
+        );
+      }
+
       // [TRACE:COST] (STD-003) — tile load: what the SEE-IT surface read before computing.
       // The engine then emits its own `[TRACE:COST] compute` line from analyze().
       console.log('[TRACE:COST] tile load', {
@@ -81,9 +116,11 @@ export function CostToProduce() {
         hasConfig: !!cfg,
         inventoryRows: inv.length,
         unknownInventory: unknownInv.length,
+        costObjects: objRes.error ? `unavailable (${objRes.error.code ?? 'err'})` : (objRes.data?.length ?? 0),
+        rollupEvents: rollupEvents.length,
       });
 
-      setResult(analyze(cfg ?? EMPTY_COST_CONFIG, unknownInv));
+      setResult(analyze(cfg ?? EMPTY_COST_CONFIG, unknownInv, { rollupEvents }));
       setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -138,6 +175,22 @@ export function CostToProduce() {
                   <p style={{ margin: '6px 0 0', fontSize: '0.6875rem', color: '#9a6a2c' }}>
                     These are shown as unknown, never counted as $0.
                   </p>
+                </div>
+              )}
+              {/* SUB-3 — captured cost_objects fed through the count-once seam. */}
+              {result.confidence.fedFromRollup && (
+                <div style={{ marginTop: 12, background: '#f0f7ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '10px 12px' }}>
+                  {(result.confidence.capexExcluded ?? 0) > 0 && (
+                    <Row label="Captured capital (one-time)" value={`${money(result.confidence.capexExcluded ?? 0)}`} />
+                  )}
+                  <p style={{ margin: '6px 0 0', fontSize: '0.6875rem', color: '#1e40af', lineHeight: 1.5 }}>
+                    From your captured assets/receipts. One-time capital is excluded from the monthly cost above — it does not inflate your per-customer price.
+                  </p>
+                  {(result.confidence.possibleDuplicateCount ?? 0) > 0 && (
+                    <p style={{ margin: '6px 0 0', fontSize: '0.6875rem', color: '#1e40af' }}>
+                      {result.confidence.possibleDuplicateCount} possible duplicate{result.confidence.possibleDuplicateCount === 1 ? '' : 's'} flagged for review — counted once, never silently doubled.
+                    </p>
+                  )}
                 </div>
               )}
             </Card>
