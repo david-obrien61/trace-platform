@@ -720,61 +720,9 @@ The doctrine needed sharpening beyond Scott Morrison's "any means." Clarified to
 
 ---
 
-### Financial decisions
+### Financial decisions & reconsider-trigger criteria
 
-#### Labor rate
-- **$75/hr stands.** Federal civilian equivalent. Conservative. Defensible.
-- Lightning pushed for $150 based on market rate for David's actual experience level and domain expertise.
-- David held at $75 with explicit reasoning: conservative undercount preferred to overcount during build phase. Undercount during foundation-building is honest; overcounting would inflate perceived cost basis and create pressure to justify.
-- Lightning accepted David's reasoning and agreed the $75 is the right call at this stage.
-- Strategic work (strategy sessions, architecture decisions) happens after-hours and weekends as contribution above the rate — not billed at all, not billed at a different rate.
-- Core hours: 35/week Monday–Friday since April start.
-- Approximate total TRACE work hours to date: 295–300.
-
-#### Family compensation structure
-All family members as contractors with their own companies, deliverable-based billing — not salary, not equity.
-
-- **Andrew:** Has own company. Charges per input/deliverable. Specifics TBD.
-- **Connor:** Contractor. Friends-and-family rate — NOT the Doug $200/hr rate. Specific architecture work scoped per engagement.
-- **Erin:** TBD when she arrives June 29. David said she can think about it during the trek.
-- **Regina:** Separate. OLH employment is her primary. KINNA contribution is either voluntary or compensation from KINNA operational revenue when that exists.
-- **David draw target:** $3–4K/month.
-
-#### David draw timing — Option C (OKC house sale trigger)
-- OKC house has a tight 90-day deadline.
-- Currently dropping price. May need a broker if it doesn't move.
-- If sells before August → clean cash position for Europe trip.
-- If not → broker conversation needed, draw timing slides.
-- **30-day check-in: July 2** — broker decision point. Either the house is under contract or the broker conversation happens that week.
-
-#### Retirement income context (changes runway picture materially)
-This was clarified today and changes the story about financial pressure. TRACE is deliberate restraint, not financial necessity.
-
-- Military retirement — active
-- Federal retirement — active
-- Social Security — not yet applied. Regina and the FA say wait. David reevaluates periodically.
-- VA disability 70% — active, approximately $1,800–2,000/month tax-free
-- VA 100% application in progress — if approved, adds approximately $1,800–2,000/month additional tax-free
-- Household is not burning savings. TRACE build cost (AI subscriptions, small infra) is covered by existing income streams.
-- **The pressure is emotional and presence-based (Regina wanting David present), not financial.**
-- Runway for TRACE operations is effectively indefinite at current burn rate.
-
----
-
-### "This isn't working" trigger criteria
-
-Five hard triggers and one soft, established today. These are **decision points, not failure points** — the question at each is "what changes?" not "do we quit?"
-
-**Hard triggers:**
-1. **Customer acquisition failure:** < 5 paying customers by month 12 (June 2027) → reconsider self-serve thesis
-2. **Family contributor disengagement:** Andrew, Connor, and Erin all decline or disengage by month 9 → reconsider family-team thesis
-3. **Regina relationship strain:** explicit divorce-pattern recurrence → immediate stop and reconsider, non-negotiable, takes precedence over all other considerations
-4. **Personal health/capacity change:** reduce pace, not existence of TRACE
-5. **Financial floor:** recurring burn > $1,000/month without revenue trajectory → scope review
-
-**Soft trigger:** The deadness pattern returning. Not measurable from outside. David knows the feeling. **Regina is the canary if his own perception is unreliable.** If she notices before he does, that counts.
-
-Each trigger was framed as a question: "If this fires, what specifically changes?" Not "do we stop?" The framing keeps decision-making rational when the trigger fires under pressure.
+> Personal-financial decisions (labor rate, family/contractor compensation, David's draw cap + Option C house-sale timing trigger, retirement/VA income context) and the personal "this isn't working" reconsider-trigger criteria live in `decisions/PERSONAL-FINANCIAL.local.md` (gitignored, not in repo). Moved out of this tracked file 2026-06-14.
 
 ---
 
@@ -1197,132 +1145,10 @@ End of 2026-06-03 entry.
 
 ## Wednesday 2026-06-03 — Family Compensation Structure and Role Casting
 
-Back-porch thinking that clarified the financial and role structure for TRACE as a family-built company. Capturing before the detail drifts.
+_Personal-financial + family-personal content moved out of this tracked file 2026-06-14._
 
----
+> This entry — David's draw cap, each child's ~$90K/yr billing target and per-member compensation, the family-as-builders structure, and role casting — was personal-financial and family-personal. It now lives in full in `decisions/PERSONAL-FINANCIAL.local.md` (gitignored, not in repo).
 
-### David's draw
-
-$4,000/month. Intentional cap, not aspirational placeholder. TRACE isn't being built to make millions — it's being built to cover specific expenses and leave a multi-generational ownership structure. The number is honest.
-
-Annualized: $48K/year from TRACE. Supplemented by other income streams as they develop. Not a hardship number, not a lottery number.
-
----
-
-### Each kid targets approximately $90K/year billing
-
-Structure: each kid runs their own business that invoices TRACE. TRACE pays the invoices. Each kid handles their own taxes through their own entity (LLC, S-corp, sole proprietor — their choice, their problem).
-
-Why this structure:
-- TRACE carries no payroll overhead — no W-2 administration, no withholding, no benefits coordination
-- Tax responsibility sits with each person's entity, not with TRACE
-- Scales without HR complexity as family builds out
-- $90K/year is honest — respectable living, not a millionaire pitch, not an insult
-
-Revenue math: three kids at $90K ($270K total) plus David's $48K plus operational costs puts TRACE's break-even around $400–500K annual revenue. At $149–199/month per customer, that's 200–300 paying customers. Achievable over 18–24 months in realistic acquisition scenarios. Not a hockey stick, not a lottery.
-
----
-
-### Andrew as the natural salesperson
-
-Andrew is the extrovert among the kids — talks to anyone, comfortable in conversation, effective in customer-facing settings. He's the natural choice for prospect development work.
-
-Potential Andrew role structure:
-- Base retainer for ongoing prospect development
-- Per-meeting fee for in-person sales calls
-- Per-signed-customer bonus
-- MicroGrant Sniper work as a separate billing stream (his own product, not TRACE's — TRACE is a customer)
-
-With reasonable TRACE acquisition pace, his annual could legitimately reach $90K through this structure.
-
-Noted: Andrew currently uses Gemini because he can't afford Claude. If TRACE pays for family contractor Claude subscriptions ($20–100/month per person), that's worth doing as a business expense. Removes friction in their work. The compounding return on better tooling for people building TRACE is higher than the subscription cost.
-
----
-
-### Erin in customer service and structured discovery
-
-Erin is more introverted — functional in controlled social settings, not a cold prospector. Scheduled discovery calls, structured demos, and ongoing customer relationship management are likely fits. Cold outreach probably is not.
-
-Compensation TBD when she's home (June 29+). Three structures considered:
-
-**Option A — Pure hourly** ($60–75/hr): Clean, no incentive warping, lower psychological pressure for someone in burnout recovery.
-
-**Option B — Hourly plus signing bonus** ($60–75/hr plus $500–1,000 per signed customer she facilitated): Rewards outcomes without requiring aggressive sales behavior.
-
-**Option C — Percentage of sales**: Risk is behavioral warping — pressure on wrong prospects, focus on easy closes over strategic ones, potential to burn customer relationships.
-
-Leaning toward Option B as the middle ground. Avoids pure-commission pressure while connecting compensation to outcomes. Final structure is a conversation with Erin directly, based on her preferences and where she is in burnout recovery.
-
----
-
-### Connor in technical and infrastructure
-
-Connor is introverted, currently at HD pursuing Kubernetes certification. His natural zone is bounded technical work, not customer interaction. Right role for him: infrastructure, DevOps, technical architecture.
-
-Compensation: contractor rate, specific work assignments, invoiced like the others. His $90K target is competitive with his current HD salary. No pressure to leave before he's ready — but the door is open.
-
----
-
-### David as introvert founder
-
-David is an extreme introvert. Roles that fit: strategy, operations, technical direction, relationship management with key customers in controlled/structured settings. Roles that don't fit: cold sales, trade show booth, networking with strangers.
-
-This is honest casting, not a deficit acknowledgment. Most family businesses fail by casting people in roles that don't fit their nature. TRACE is positioned to do the opposite — each person in the role that fits their wiring, no one pushed into roles that require faking who they are.
-
----
-
-### Regina as separate from TRACE operations
-
-Regina is the household extrovert (inherited from her dad). She has her OLH work, which uses that capacity productively. Her TRACE contribution isn't operational — it's surfacing real customer pain from lived experience.
-
-The roofer scheduling problem came from a porch conversation, not a focus group. Regina asking "why isn't this solved?" and David evaluating it strategically is a genuine division of labor. She provides ground-truth customer perspective. He filters it through TRACE's vertical strategy. That's worth more than pulling her out of OLH to do customer calls.
-
-TRACE doesn't need to recruit Regina away from her work. Her contribution happens naturally through conversations like the back-porch sessions.
-
----
-
-### The family-as-builders pattern
-
-Worth naming that this is genuinely unusual. Most family businesses are one of three patterns:
-
-- **Family-by-default**: Kids work in it because they grew up in it, often resentfully
-- **Family-as-management**: Family runs it, non-family operates it
-- **Family-as-investment**: Family owns it, professionals run it, family collects distributions
-
-What TRACE is building is **family-as-builders**. Each kid runs their own business that interfaces with TRACE through invoicing. Each person's business focuses on what they're naturally good at. Family relationships stay personal. Business relationships stay professional — the invoice/payment interface creates clean accountability without requiring family conflict to enforce it.
-
-This is rare. Most family businesses either blur personal and professional completely (and pay the relationship cost) or professionalize so heavily that family connection is irrelevant. The invoice structure threads that needle.
-
----
-
-### Honest enforcement requirement
-
-This structure requires more discipline than alternatives. Each kid has to be honestly evaluated as a contractor — not included as family, not protected from accountability because of relationship.
-
-If someone's work isn't producing $90K of value to TRACE, they don't get paid $90K from TRACE. That conversation might never be needed — the kids sound capable and motivated. But the structure has to be honest enough to have it if it comes up.
-
-Invoice-based payment handles this without drama: an invoice represents specific work delivered. If the work isn't delivered, the invoice doesn't get paid. No performance review conversation required. Clean.
-
----
-
-### Connection to existing TRACE principles
-
-- **Covenant**: Non-extractive defaults extend to family. Kids aren't being used; they're being paid honestly for honest work.
-- **Operating doctrine**: Each person in the role that fits their wiring, not the role someone assumes they should have.
-- **Multi-generational structure**: Family ownership designed to prevent leadership-change dismantlement; family compensation designed to be sustainable across generations.
-- **"If I make you successful, I'm ultimately successful"**: Applies internally as well as to customers. Kids' success is TRACE's success.
-
----
-
-### Open items for resolution
-
-- Erin's compensation structure: conversation when she's home June 29
-- Andrew's role formalization: conversation about August Liberty Hill rep possibility while David is in Europe
-- TRACE business profile for Andrew's MicroGrant Sniper JSON: needs writing
-- Family Claude subscriptions as TRACE business expense: decision pending
-- Customer acquisition pace projections: need to model 200–300 customers over 18–24 months realistically
-
----
 
 End of Wednesday 2026-06-03 — Family Compensation Structure and Role Casting entry.
 
@@ -1560,14 +1386,7 @@ David's job in this combination is forward motion. When David is in "just shut u
 
 The principle has one obvious failure mode: pursuing the wrong thing at high speed.
 
-The check on that is the trigger criteria captured in the June 2 session — five hard triggers and one soft:
-
-1. Fewer than 5 paying customers by month 12
-2. Andrew/Connor/Erin all decline or disengage by month 9
-3. Regina explicitly names divorce-pattern recurrence
-4. Personal health or capacity change
-5. Recurring burn over $1,000/month without revenue trajectory
-6. Soft: the deadness pattern returning
+The check on that is the personal reconsider-trigger criteria captured in the June 2 session — kept in `decisions/PERSONAL-FINANCIAL.local.md` (gitignored, not in repo), not reproduced here.
 
 Outside those triggers, the principle holds: keep moving. Don't stop because something is difficult. Don't stop because someone else doesn't believe it's possible. Don't stop because the destination looks like science fiction.
 
@@ -2007,7 +1826,7 @@ Mitigation:
 
 OKC house remains unsold, financial pressure compounds. Regina's OLH commitment intensifies. Family member needs sustained help. David's energy at 64.
 
-The OKC house is the residual psychological weight of a previous plan that didn't work. David spent a year in Oklahoma working on a renovation alone, contractor having taken money and fled to Dominican Republic. The year drew David apart from Regina, tested the marriage. The house sale (whenever it closes) will be a real psychological inflection point for TRACE's pace.
+The OKC house's personal and psychological weight, and its bearing on TRACE's pace, is recorded in `decisions/PERSONAL-FINANCIAL.local.md` (gitignored, not in repo).
 
 Mitigation: TRACE must operate without David for stretches; structural protection against unplanned absence is the same as protection against the European trip absence.
 
