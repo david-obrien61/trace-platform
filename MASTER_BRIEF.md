@@ -599,6 +599,42 @@ Ranked by: needed by 2+ verticals, hard to rebuild, highest strategic value.
 5. **Sub-$50 CAC** — hardware kit creates switching cost before first invoice
 6. **Loose coupling** — we enhance existing tools, not replace them
 
+### Tier 2 — Job-Costing / Cost-to-Produce Landscape (2026, research-backed)
+
+*Captured 2026-06-15 (THUNDER). The Cost-to-Produce design (`docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md`)
+needed a read on who else does cost intelligence for small businesses. Reasoning below; **verify by search
+at decision/build time — the market moves, treat none of this as frozen.***
+
+**What exists.** Job-costing software today is mostly **vertical-specific** and built for the
+**post-garage business with crews** (construction / job-shop, ~$6–50/mo/user up to ~$499/mo). The top end
+is **ERP** (NetSuite et al.) at six-figure implementations. Pricing tools do the margin math; ERPs do
+everything at six figures. Nothing in the middle is built for the solo, residence-rooted owner-operator.
+
+**The gap (our wedge).** NEITHER tier serves the **garage-genesis owner-operator** — solo, residence-rooted,
+no crew to track by job code, can't afford or implement ERP. No tool found combines all four of:
+(a) garage-genesis / residence-root awareness (see node-model §5.0), (b) connector-not-replacement,
+(c) the **honesty layer** (`cost_confidence`, cash-today, hidden-cost surfacing), (d) multi-vertical.
+
+**Connector strategy is market-validated.** ~2/3 of small businesses run lean stacks (≤2 paid tools), are
+cost-sensitive about software (41% report rising software costs), and will **not rip out QuickBooks** to
+re-platform onto us. This validates TRACE's founding philosophy — *"we don't replace your systems, we
+connect them and fill the gaps"* — OVER rip-and-replace. Most existing job-costing tools ask the owner to
+**live inside them**; our differentiation is that we don't. They keep QB; we connect and surface what
+QB / those tools don't.
+
+**The philosophy is industry-recognized.** 2026 sources independently state our thesis: broad averages hide
+the truth on custom / mixed / service work, and the failure mode is *"record costs, close the month, file
+the report away — by then the chance to protect margin is gone."* Surfacing cost **while there's still time
+to act** is the recognized gap existing tools don't close. That is our wedge, externally confirmed.
+
+**The real threat — name it honestly.** NOT a direct competitor doing our exact thing. It is an **INCUMBENT**
+(QuickBooks / Intuit, or a tool already in the stack) adding *"good enough"* cost intelligence. Incumbents
+own the connection; if Intuit ships cost-to-produce, our connector advantage shrinks. **Watch the
+incumbents, not startups.**
+
+**Price band — defensible.** Comparable tools run $6–50/mo/user up to ~$499/mo; ERP is six figures. Our
+**$149/mo founding rate** sits in a defensible band. The market supports the price.
+
 ---
 
 ## PART 8 — THE PHYSICAL GTM SYSTEM

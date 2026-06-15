@@ -10,6 +10,9 @@ OPEN seam, cost-of-capital two-layer + credit-card scenario lever, §5 multi-loc
 · **Root/carve-out correction:** 2026-06-15 (THUNDER VERIFY+CAPTURE — §5 was business-rooted;
 added §5.0 residence-root/business-emergent genesis + §5.7 carve-out cost-flow direction with four
 real-customer worked cases, the separation event, the lane, and a recorded red-team)
+· **Two-vocabulary layer:** 2026-06-15 (THUNDER CAPTURE — added §5.8: the four established costing
+methods we already implement, mapped owner-plain-language ↔ formal/accountant terms; owner UI is plain,
+formal terms live only at the QB-mapping + accountant-export seams)
 **Author:** David O'Brien + Claude Code (THUNDER design series)
 **Audit authority:** `PLATFORM_AUDIT.md` wins on any conflict about what is currently built.
 **Companion docs:** `PLATFORM_STATE.md` (LEVEL/LOCATION/EVIDENCE), `CLAUDE.md` Tech Debt Log
@@ -476,6 +479,50 @@ time (they change); do NOT bake tax assumptions into the model. The accountant a
 **No red-team argument broke the model.** #1 and #4 the model answers cleanly; #2 resolves to a genuine
 distinction; #3 bounds a real (owner-accepted) risk and flags a build-time UX seam rather than a model
 defect.
+
+### 5.8 TWO-VOCABULARY TRANSLATION LAYER (organizing principle, 2026-06-15)
+
+**STATE: DESIGN**
+
+> **We did not invent a new accounting method — we implement four established ones.** Naming them does
+> two things: it keeps us from reinventing the wheel, and it lets us speak the right language at the two
+> seams where formal terms are actually required (QuickBooks field mapping; the owner's accountant). The
+> research is general cost-accounting standard methods; this is internal design, not a cited claim.
+
+**The core framing (David's point — get this right).** Small-business OWNERS do not speak accounting
+vocabulary; they speak plain everyday language. A tool that makes the owner read "activity-based cost
+driver" loses the owner. The formal terms are needed at exactly two seams, and nowhere else:
+
+- **(a) Integration seam** — where we connect to QuickBooks / other tools. Their fields use these terms.
+- **(b) Accountant-handoff seam** — where the owner's data is handed to their accountant, who speaks formal.
+
+So the design carries **two vocabularies with an explicit map between them**:
+
+- **OWNER-FACING = plain language.** *"What did this actually cost you?" · "You're leaving money on the
+  table." · "This job lost money." · "Cash out the door today."* This is what the UI renders. Always.
+- **SYSTEM / ACCOUNTANT-FACING = the formal terms below.** Used ONLY for QB field mapping, accountant
+  export, and internal model naming — never surfaced to the owner in the UI.
+
+**The method → model → owner-language map** (we already implement all four — names so we don't reinvent,
+and so we can speak QB's / the accountant's language at the seams):
+
+| Formal method (system/accountant) | Our model element | Owner-facing plain language |
+|---|---|---|
+| **JOB / JOB-ORDER COSTING** | ACCUMULATOR path — cost objects own lifetime cost (the project / greenhouse / rehab / CoolRunnings). Node model §5. | "What this project cost / is costing." |
+| **PROCESS COSTING** | PERIOD-POOL ÷ N tile — loaded monthly cost ÷ units (or customers) → cost per unit. §7 Denominator. | "Your cost per customer / per unit." |
+| **HYBRID JOB/PROCESS COSTING** | The platform overall — different verticals are different production shapes; some are customizable-yet-identical. A recognized hybrid, not a TRACE novelty. | (No owner term — this is an architecture statement, not a tile.) |
+| **ACTIVITY-BASED COSTING (ABC)** — formal sub-terms: **COST POOL** (our "common costs" — mortgage, catchment, utilities) and **COST DRIVER** (our owner-assigned allocation basis — sq ft / % / usage / miles / labor hours) | SHARED-COST ALLOCATION (§5.5) + the carve-out basis (§5.7). | "How we split the shared bills across what you do." |
+| **STANDARD COSTING / VARIANCE** — formal sub-terms: **STANDARD** (the estimate), **ACTUAL** (the receipt), **VARIANCE** (the gap) | ESTIMATE → ACTUAL VARIANCE (§6.3) — the garden-wall case: estimate is the standard, receipt is the actual, the delta is the variance. | "What you thought it'd cost vs what it really cost." |
+
+**Cross-refs.** This layer organizes the methods already designed elsewhere in this doc: JOB costing =
+the §5 node model (this section's parent); PROCESS costing = §7; ABC = §5.5 (cost pool / cost driver are
+the formal names for the §5.5 allocation and the §5.7 carve-out basis); STANDARD/VARIANCE = §6.3.
+
+**Design consequence (benched, not built).** Internal model field names and the QB-mapping / accountant-
+export layers may carry the formal terms (cost pool, cost driver, variance, job/process). The owner UI
+renders only the plain-language column. The map itself — formal ↔ plain — is a translation table, not a
+new engine; it lives in the same surface that does QB field mapping and accountant export. **Verify the
+exact QB field names by inspection at build time — do not bake QB's schema into this design from memory.**
 
 ---
 
