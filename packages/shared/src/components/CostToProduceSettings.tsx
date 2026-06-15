@@ -24,6 +24,10 @@
  *   inside the locations[] array, so the structure does not preclude N locations later.
  * SURFACE HONESTY: every cost line carries a confidence grade; UNKNOWN lines hold no
  *   amount and are stored as UNKNOWN — never written as 0.
+ * CURRENCY (2026-06-14 punch-list FIX 2): money fields (labor rate, cost-line amount,
+ *   overhead, reference price) display as $X.XX on blur via the local MoneyInput; the raw
+ *   numeric string shows while focused so typing isn't fought. Stored values stay numeric
+ *   (cents-rounded on blur) — this is display formatting only, not a data change.
  */
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabase/client';
@@ -157,11 +161,10 @@ export function CostToProduceSettings() {
                   placeholder="Cost name (e.g. Claude Pro)"
                   style={{ ...cell, flex: 2 }}
                 />
-                <input
-                  type="number" step="0.01"
-                  value={isUnknown || line.amount == null ? '' : String(line.amount)}
-                  onChange={e => editLine(i, { amount: e.target.value === '' ? null : parseFloat(e.target.value) })}
-                  placeholder={isUnknown ? 'unknown' : '0.00'}
+                <MoneyInput
+                  value={isUnknown ? null : line.amount}
+                  onChange={v => editLine(i, { amount: v })}
+                  placeholder={isUnknown ? 'unknown' : '$0.00'}
                   disabled={isUnknown}
                   style={{ ...cell, flex: 1, background: isUnknown ? '#f3f4f6' : '#fff', color: isUnknown ? '#9ca3af' : DARK }}
                 />
@@ -196,10 +199,9 @@ export function CostToProduceSettings() {
       {/* ── Labor ── */}
       <SubLabel>Labor</SubLabel>
       <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-        <input
-          type="number" step="0.01"
-          value={loc.labor.rate == null ? '' : String(loc.labor.rate)}
-          onChange={e => patchLoc(l => { l.labor.rate = e.target.value === '' ? null : parseFloat(e.target.value); })}
+        <MoneyInput
+          value={loc.labor.rate}
+          onChange={v => patchLoc(l => { l.labor.rate = v; })}
           placeholder="rate $/hr"
           style={{ ...cell, flex: 1 }}
         />
@@ -221,11 +223,10 @@ export function CostToProduceSettings() {
 
       {/* ── Overhead per unit ── */}
       <SubLabel>Overhead per unit (optional)</SubLabel>
-      <input
-        type="number" step="0.01"
-        value={String(loc.overheadPerUnit ?? 0)}
-        onChange={e => patchLoc(l => { l.overheadPerUnit = parseFloat(e.target.value) || 0; })}
-        placeholder="0.00"
+      <MoneyInput
+        value={loc.overheadPerUnit ?? 0}
+        onChange={v => patchLoc(l => { l.overheadPerUnit = v ?? 0; })}
+        placeholder="$0.00"
         style={{ ...cell, width: '100%', marginBottom: 4 }}
       />
       <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: '0 0 12px' }}>
@@ -284,11 +285,10 @@ export function CostToProduceSettings() {
       </p>
 
       <SubLabel>Reference price (optional)</SubLabel>
-      <input
-        type="number" step="0.01"
-        value={config.priceReference == null ? '' : String(config.priceReference)}
-        onChange={e => patchConfig(c => { c.priceReference = e.target.value === '' ? null : parseFloat(e.target.value); })}
-        placeholder="149.00"
+      <MoneyInput
+        value={config.priceReference ?? null}
+        onChange={v => patchConfig(c => { c.priceReference = v; })}
+        placeholder="$149.00"
         style={{ ...cell, width: '100%', marginBottom: 16 }}
       />
 
@@ -320,5 +320,44 @@ function SubLabel({ children }: { children: React.ReactNode }) {
     <p style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '4px 0 8px' }}>
       {children}
     </p>
+  );
+}
+
+/**
+ * Money input (FIX 2): displays $X.XX when blurred, the raw numeric string while focused.
+ * Stored value stays a number (cents-rounded on blur) — null when empty. Display-only format.
+ */
+function MoneyInput({
+  value, onChange, placeholder, disabled, style,
+}: {
+  value: number | null;
+  onChange: (v: number | null) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  style?: React.CSSProperties;
+}) {
+  const [focused, setFocused] = useState(false);
+  const [text, setText] = useState('');
+  const display = focused ? text : (value == null ? '' : `$${value.toFixed(2)}`);
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={display}
+      placeholder={placeholder}
+      disabled={disabled}
+      onFocus={() => { setFocused(true); setText(value == null ? '' : String(value)); }}
+      onChange={e => {
+        const raw = e.target.value.replace(/[^0-9.\-]/g, '');
+        setText(raw);
+        const n = parseFloat(raw);
+        onChange(raw === '' || !Number.isFinite(n) ? null : n);
+      }}
+      onBlur={() => {
+        setFocused(false);
+        if (value != null) onChange(Math.round(value * 100) / 100); // cents-round, no value change for clean inputs
+      }}
+      style={style}
+    />
   );
 }
