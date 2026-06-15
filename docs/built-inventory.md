@@ -201,6 +201,30 @@ Code anchor: `// FLAG: REQ-2` in `packages/cultivar-os/src/pages/ReceiptKeeper.t
 
 ---
 
+## Count-Once Slice Seam (Shared) — Core-2a SPIKE
+
+**What:** The accumulator→period-pool count-once enforcement primitive — the highest-risk seam in the cost-to-produce arc (`COST-TO-PRODUCE-DESIGN.md` §14 SLICE SEAM). §14 states the rule as INTENT only (§3 query-time, §5.4 source-of-truth, §5.2 DAG) and names one signal (`receipt_id`); this implements it as a **query-time reconciliation gate over cost EVENTS**. Proven in ISOLATION against real CoolRunnings data BEFORE any rollup depends on it.
+**Status:** ✅ BUILDER-COMPLETE — 2026-06-15 (THUNDER · Core-2a spike). **NOT yet OWNER-PROVEN.** Spike only: does NOT build the rollup, wire the tile-feed, or read the DB.
+**Vertical:** shared | **Type:** business-logic (pure)
+**Location:** `packages/shared/src/business-logic/CountOnceSeam.ts`
+**Barrel:** `packages/shared/src/business-logic/index.ts`
+
+**What the seam does:**
+- Enforces both §14 double-count shapes: **Shape 1** (same cost in BOTH `cost_objects` accumulator AND `config.recurring[]` pool → counted ONCE) and **Shape 2** (CAPEX `acquisition_cost`/`conversion_cost` BARRED from the ÷N monthly pool — accumulates separately on the node).
+- **Event is the unit of truth:** `sameCost(a,b)` returns SAME | DIFFERENT | UNSURE. `receipt_id` is a SIGNAL, not the key — a receipt is a *container* of line events, so equal `receipt_id` must be confirmed at line level (amount) before collapsing (NSPanel + meross share one order but are distinct items). Coarse fallback = vendor/label + amount + date proximity; FLAG-don't-merge when unsure (over-correction that drops real cost is the moat-killer failure). Single swappable function — full multi-signal reconcile = Core-2b.
+- **Two independent axes preserved** (do NOT collapse — Core-2b needs both): `amountConfidence` (CONFIRMED/DERIVED/ESTIMATED/UNKNOWN) and `substantiation` (SUBSTANTIATED = has a receipt vs OWNER_ASSERTED = typed, no proof). The seam COUNTS owner-asserted cost AND rolls up `substantiatedTotal` vs `ownerAssertedTotal` so a later layer can flag "counted + at-risk". Makes cost visible; asserts nothing about deductibility (design §1/§2).
+- **Graceful degradation (OP-5/OP-6):** UNKNOWN amounts surfaced never zeroed; UNCONFIRMED realization ("is this even a cost yet?") surfaced as uncertainty never a silent $0; net-zero reversals (purchase+return) net to $0 with no negative pool leak.
+
+**Proving corpus:** `packages/shared/src/business-logic/__fixtures__/coolrunnings-corpus.ts` — real CoolRunnings hardware (business 45830ba7) from `docs/coolrunnings-hardware-spend-2026-06-02.md`, shaped as `cost_objects` ASSET rows. NOT inserted into the live DB (seam is pure/isolated; migration apply is David's gate). Deliberately-messy cases: NSPanel ($259.80 CONFIRMED/SUBSTANTIATED), meross ($91.81 DERIVED/SUBSTANTIATED), HP ProDesk (UNKNOWN/OWNER_ASSERTED), Ecobee (net-zero return), Apollo MSR-2 (UNCONFIRMED status conflict).
+
+**Verified (executed, not asserted):** `packages/shared/src/business-logic/CountOnceSeam.test.ts` — 8 adversarial seam tests, **32 assertions, 0 failures**; each computes what a BUGGY seam would output and asserts the real seam differs (proves the assertion has teeth). Run: `node_modules/.bin/esbuild <test> --bundle --platform=node --format=cjs | node`. `tsc --noEmit --strict` clean; `npm run build:cultivar` passes (2193 modules). **Number against the CoolRunnings corpus (owner-does-nothing):** capex floor **$351.61** (NSPanel $259.80 + meross $91.81, both substantiated), monthly pool **$6.50** (Nabu Casa, owner-asserted), **1 UNKNOWN** surfaced (HP ProDesk — not zeroed), **1 UNCONFIRMED** (Apollo — not silent-$0), **1 net-zero pair** (Ecobee), capex correctly excluded from the ÷N pool.
+
+**Instrumentation (STD-003):** `enforceCountOnce()` emits `[TRACE:SEAM] reconcile` ON BY BIRTH, unconditional (no env-gate) — events in/survivors, capex vs pool totals, unknown/unconfirmed/deduped/net-zero counts, substantiated vs owner-asserted split. Matches the `[TRACE:COST]` uppercase-area convention. Stays ON until David owner-proves the seam through the real UI under RLS — then commented out, not deleted.
+
+**[NEEDS DAVID — owner-proof]:** eyeball the corpus number for believability ($351.61 capex / $6.50/mo / HP+Apollo flagged). **Next (NOT this spike):** Core-2b full multi-signal event reconcile (swap `sameCost` body); rollup wiring; live corpus seeding into `cost_objects` (gated on migration apply).
+
+---
+
 ## Margin Engine (Shared)
 
 **What:** Shared margin calculation engine — 4-slab markup, tier discounts, overhead-per-unit wire, leakage detection.

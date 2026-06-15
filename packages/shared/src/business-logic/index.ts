@@ -38,3 +38,27 @@ export type {
   ConfidenceMix,
   CostToProduceResult,
 } from './CostToProduce';
+
+// Count-once slice seam — Core-2a SPIKE (THUNDER · 2026-06-15). The highest-risk
+// accumulator→pool edge (§14). Query-time reconciliation; event is the unit of truth.
+export {
+  sameCost,
+  enforceCountOnce,
+  fromCostObject,
+  fromRecurringLine,
+} from './CountOnceSeam';
+
+export type {
+  AmountConfidence,
+  Substantiation,
+  Realization,
+  CostBucket,
+  CostEvent,
+  SameCostVerdict,
+  CountedEvent,
+  ResidueLine,
+  DedupRecord,
+  SeamResult,
+  CostObjectNodeRow,
+  RecurringLineRow,
+} from './CountOnceSeam';

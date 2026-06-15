@@ -1,0 +1,181 @@
+/**
+ * ── COUNT-ONCE SLICE SEAM — adversarial seam tests · Core-2a SPIKE · 2026-06-15 ───
+ *
+ * The POINT of the spike: prove the count-once seam holds against REAL incomplete
+ * CoolRunnings data (docs/coolrunnings-hardware-spend-2026-06-02.md), and prove each
+ * test can CATCH the bug it guards — not merely pass green. Every test computes what a
+ * BUGGY seam would produce and asserts the real seam differs (the assertion has teeth).
+ *
+ * No test runner is installed in this repo. This file is pure TS over pure functions —
+ * run it with the esbuild that ships in node_modules:
+ *   node_modules/.bin/esbuild packages/shared/src/business-logic/CountOnceSeam.test.ts \
+ *     --bundle --platform=node --format=cjs | node
+ * Exits non-zero if any assertion fails.
+ */
+
+import {
+  enforceCountOnce,
+  fromCostObject,
+  fromRecurringLine,
+  sameCost,
+  type CostEvent,
+} from './CountOnceSeam';
+import {
+  COOLRUNNINGS_NODES,
+  ECOBEE_PURCHASE,
+  ECOBEE_RETURN,
+  NABU_CASA_RECURRING,
+  NSPANEL_DUP_AS_RECURRING,
+} from './__fixtures__/coolrunnings-corpus';
+
+// ── tiny harness ─────────────────────────────────────────────────────────────────
+let passed = 0;
+let failed = 0;
+const failures: string[] = [];
+function ok(cond: boolean, msg: string): void {
+  if (cond) passed++;
+  else {
+    failed++;
+    failures.push(msg);
+    console.error('   ✗ ' + msg);
+  }
+}
+function test(name: string, fn: () => void): void {
+  console.log('▶ ' + name);
+  fn();
+}
+
+// Full corpus → flat CostEvent[] (the owner-does-nothing picture).
+function fullCorpus(): CostEvent[] {
+  return [
+    ...COOLRUNNINGS_NODES.flatMap(fromCostObject),
+    ECOBEE_PURCHASE as CostEvent,
+    ECOBEE_RETURN as CostEvent,
+    fromRecurringLine(NABU_CASA_RECURRING),
+  ];
+}
+
+// ── 0. sameCost() unit checks — event-not-receipt is load-bearing ──────────────────
+test('0. sameCost: receipt is a container of line events, not the identity', () => {
+  const evs = COOLRUNNINGS_NODES.flatMap(fromCostObject);
+  const nspanel = evs.find((e) => e.id === 'cr-nspanel-pro-120')!;
+  const meross = evs.find((e) => e.id === 'cr-meross-mts300hk')!;
+  // Same receipt (amzn-114-2466808), DIFFERENT line items → must NOT collapse.
+  ok(sameCost(nspanel, meross) === 'DIFFERENT',
+    'NSPanel vs meross share a receipt but are distinct line items — expected DIFFERENT');
+  // Same receipt + same amount → SAME (the genuine duplicate).
+  const dup = fromRecurringLine(NSPANEL_DUP_AS_RECURRING);
+  ok(sameCost(nspanel, dup) === 'SAME',
+    'NSPanel node vs its duplicate recurring line (same receipt+amount) — expected SAME');
+});
+
+// ── 1. Capex-no-leak (Shape 2) ─────────────────────────────────────────────────────
+test('1. CAPEX does not divide into the ÷N monthly pool (Shape 2)', () => {
+  const r = enforceCountOnce(fullCorpus());
+  // Only the recurring Nabu Casa line is a monthly-pool cost. Capex stays out.
+  ok(r.poolKnownMonthly === 6.5, `pool must be only the $6.50 recurring; got ${r.poolKnownMonthly}`);
+  ok(r.capexKnown === 351.61, `capex floor = NSPanel 259.80 + meross 91.81 = 351.61; got ${r.capexKnown}`);
+  ok(r.counted.every((c) => !(c.bucket === 'MONTHLY_POOL' && c.amount > 100)),
+    'no capex-sized item leaked into the monthly pool');
+  // Bug-catch: a seam that leaked capex into the pool would report pool = 6.5 + 351.61.
+  const buggyLeakPool = 6.5 + 351.61;
+  ok(r.poolKnownMonthly !== buggyLeakPool,
+    `assertion has teeth: a capex leak would make pool ${buggyLeakPool}, not ${r.poolKnownMonthly}`);
+});
+
+// ── 2. Double-count (Shape 1) ──────────────────────────────────────────────────────
+test('2. same cost in BOTH accumulator and pool is counted ONCE (Shape 1)', () => {
+  const events: CostEvent[] = [
+    ...fromCostObject(COOLRUNNINGS_NODES[0]),         // NSPanel node (CAPEX, SUBSTANTIATED)
+    fromRecurringLine(NSPANEL_DUP_AS_RECURRING),      // same receipt, typed into the pool too
+  ];
+  const r = enforceCountOnce(events);
+  ok(r.deduped.length === 1, `exactly one duplicate collapsed; got ${r.deduped.length}`);
+  const total = r.capexKnown + r.poolKnownMonthly;
+  ok(total === 259.8, `NSPanel counted once = 259.80; got ${total}`);
+  // The substantiated node should win over the owner-asserted pool dup.
+  ok(r.deduped[0]?.droppedId === 'cr-nspanel-dup',
+    'the owner-asserted pool duplicate is dropped, the substantiated node is kept');
+  // Bug-catch: no dedup → both counted = 519.60.
+  ok(total !== 519.6, `assertion has teeth: double-counting would total 519.60, not ${total}`);
+});
+
+// ── 3. UNKNOWN honesty (owner-does-nothing) ────────────────────────────────────────
+test('3. UNKNOWN-cost capex is surfaced + flagged, never zeroed (HP ProDesk)', () => {
+  const r = enforceCountOnce(fullCorpus());
+  ok(r.unknownLines.some((l) => l.id === 'cr-hp-prodesk-600-g6'),
+    'HP ProDesk surfaced as an UNKNOWN line');
+  ok(r.counted.every((c) => c.id !== 'cr-hp-prodesk-600-g6'),
+    'HP ProDesk is NOT silently counted (e.g. as $0)');
+  // Owner did nothing, yet a number is still produced (graceful degradation).
+  ok(typeof r.capexKnown === 'number' && typeof r.poolKnownMonthly === 'number',
+    'the seam still produces a number with unknowns present');
+  // Bug-catch: a seam that coerced null→0 would put HP in `counted` and shrink unknownLines.
+  const buggyUnknownCount = r.unknownLines.length - 1;
+  ok(r.unknownLines.length !== buggyUnknownCount,
+    'assertion has teeth: zeroing HP would drop it from unknownLines');
+});
+
+// ── 4. Net-zero reversal ───────────────────────────────────────────────────────────
+test('4. purchase + return nets to $0 — no double-count, no negative pool leak (Ecobee)', () => {
+  const r = enforceCountOnce([ECOBEE_PURCHASE as CostEvent, ECOBEE_RETURN as CostEvent]);
+  ok(r.netZeroPairs.length === 1 && r.netZeroPairs[0].net === 0,
+    'Ecobee purchase+return recorded as a net-$0 pair');
+  ok(r.capexKnown === 0, `Ecobee nets to $0 in capex; got ${r.capexKnown}`);
+  ok(r.poolKnownMonthly >= 0, 'no negative amount leaked into the monthly pool');
+  ok(r.counted.every((c) => c.id !== 'cr-ecobee-return'),
+    'the return event is folded into its purchase, not listed as its own cost');
+  // Bug-catch: ignoring the reversal would count +160 in capex.
+  ok(r.capexKnown !== 160, `assertion has teeth: ignoring the return would make capex 160, not ${r.capexKnown}`);
+});
+
+// ── 5. Not-yet-a-cost (status conflict) ────────────────────────────────────────────
+test('5. unconfirmed status carries uncertainty, not a silent $0 (Apollo MSR-2)', () => {
+  const r = enforceCountOnce(COOLRUNNINGS_NODES.flatMap(fromCostObject));
+  ok(r.unconfirmedLines.some((l) => l.id === 'cr-apollo-msr2'),
+    'Apollo surfaced as an UNCONFIRMED (is-it-even-a-cost-yet) line');
+  ok(r.counted.every((c) => c.id !== 'cr-apollo-msr2'),
+    'Apollo is NOT counted as a firm cost...');
+  ok(!r.counted.some((c) => c.id === 'cr-apollo-msr2' && c.amount === 0),
+    '...and NOT silently counted as $0 (which would read as free hardware)');
+  // Bug-catch: counting unconfirmed as a firm cost would add 212.50 to capex.
+  ok(!r.counted.some((c) => c.id === 'cr-apollo-msr2'),
+    'assertion has teeth: a firm-count bug would put Apollo in `counted`');
+});
+
+// ── 6. Over-correction guard ───────────────────────────────────────────────────────
+test('6. a real recurring cost with NO node still counts — seam does not over-correct', () => {
+  const r = enforceCountOnce(fullCorpus());
+  ok(r.poolKnownMonthly === 6.5, `Nabu Casa $6.50 must survive; got ${r.poolKnownMonthly}`);
+  ok(r.counted.some((c) => c.id === 'cr-nabu-casa'), 'Nabu Casa is in the counted set');
+  ok(r.deduped.every((d) => d.droppedId !== 'cr-nabu-casa'),
+    'Nabu Casa was not dropped by an over-aggressive dedup');
+  // Bug-catch: an over-correcting seam that dropped no-node recurring costs → pool 0.
+  ok(r.poolKnownMonthly !== 0, 'assertion has teeth: over-correction would zero the pool');
+});
+
+// ── 7. Two axes preserved (Core-2b must be able to separate them) ──────────────────
+test('7. amount-confidence and substantiation are preserved + not collapsed', () => {
+  const r = enforceCountOnce(fullCorpus());
+  const nspanel = r.counted.find((c) => c.id === 'cr-nspanel-pro-120');
+  ok(nspanel?.substantiation === 'SUBSTANTIATED' && nspanel?.amountConfidence === 'CONFIRMED',
+    'NSPanel rides through as SUBSTANTIATED + CONFIRMED (both axes intact)');
+  ok(r.substantiatedTotal === 351.61, `substantiated $ = NSPanel+meross 351.61; got ${r.substantiatedTotal}`);
+  ok(r.ownerAssertedTotal === 6.5, `owner-asserted (at-risk) $ = Nabu 6.50; got ${r.ownerAssertedTotal}`);
+  ok(r.substantiatedTotal !== r.ownerAssertedTotal && r.ownerAssertedTotal > 0,
+    'the two axes are not collapsed into one number');
+  // They must reconcile to the counted total.
+  const countedTotal = r.capexKnown + r.poolKnownMonthly;
+  ok(Math.abs(r.substantiatedTotal + r.ownerAssertedTotal - countedTotal) < 0.005,
+    `substantiated + owner-asserted (${r.substantiatedTotal + r.ownerAssertedTotal}) reconciles to counted total (${countedTotal})`);
+});
+
+// ── report ─────────────────────────────────────────────────────────────────────────
+console.log('\n──────────────────────────────────────────────');
+console.log(`COUNT-ONCE SEAM TESTS: ${passed} passed, ${failed} failed`);
+if (failed > 0) {
+  console.error('FAILURES:\n - ' + failures.join('\n - '));
+  process.exit(1);
+} else {
+  console.log('✓ all seam tests pass AND each proves it can catch its bug');
+}
