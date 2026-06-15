@@ -313,6 +313,43 @@ nothing — unsubstantiated costs still surface, flagged), [[OP-7]] (multi-signa
 
 ---
 
+### D-6 · Surface the decision-changing few, not the complete many (the data ceiling) — `[CAPTURED]`
+**Decision:** The platform's job is to surface the **SMALL** number of hidden costs that **change an
+owner's decision** — not to show everything the data can see. The split is asymmetric by design:
+**catch-everything (capture), surface-almost-nothing (display)** — only what moves a decision reaches the
+owner.
+**Reasoning:** More data improves decisions only up to the point the owner can act on it; past that ceiling
+it causes paralysis, false confidence, and signal-drowning. This is the wargaming finding — perfect
+battlefield information still produces wrong decisions, because **data quality and decision quality are
+different axes.** Dumping N categorized transactions on the owner rebuilds the perfect-information /
+wrong-decision failure mode. The value is in surfacing the **surprising few** (e.g. "6 car washes, $90,
+never counted"), then **stopping.** This DISCIPLINES every "should we show them X?" question — the default
+is **no** unless X changes a decision.
+**Companion principles:** [[OP-5]] (good-enough — build to the point of owner action, not past it). Sets the
+display-side discipline that pairs with [[D-5]]'s capture-side abundance (catch all signals, surface few costs).
+**Canonical home:** this entry.
+**Date captured:** 2026-06-15 · **Status:** Active doctrine.
+
+---
+
+### D-7 · Card is not the unit of truth, and not a proxy for business-vs-personal — `[CAPTURED]`
+**Decision:** Cost classification is by **EVENT** (what was bought, for what purpose) — **never** by which
+card or account paid. A charge's card tells you almost nothing about business-vs-personal.
+**Reasoning (founding reality, David's actual finances):** the personal card carries mixed business +
+personal; the business card is clean EXCEPT when maxed → business costs then fall back onto the personal
+card; the spouse's points card is mostly personal but **recently carries business purchases the accountant
+doesn't yet know about.** No card cleanly maps to business-vs-personal. This is the strongest case for
+[[D-5]] (event-is-truth): the card and the receipt are **signals, not keys.**
+**Consequence:** AI-proposes / owner-confirms classification ([[OP-7]]) is **load-bearing, not optional** —
+the owner is the only one who knows a given charge's purpose. It also names a strong hidden-cost surface:
+**business costs sitting on cards the books don't reflect.**
+**Companion principles:** [[D-5]] (card/receipt are signals not keys), [[OP-7]] (classification = infer →
+propose → confirm, because only the owner knows purpose).
+**Canonical home:** this entry.
+**Date captured:** 2026-06-15 · **Status:** Active doctrine.
+
+---
+
 ## PERSONAL-FINANCIAL
 
 > Not in this file by design — see **`decisions/PERSONAL-FINANCIAL.local.md`** (gitignored).
