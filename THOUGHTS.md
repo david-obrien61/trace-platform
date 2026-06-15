@@ -1692,7 +1692,7 @@ David's daughter Kaitlyn died at some point in the past. David "died" when she d
 
 The work animating TRACE is not optimism. It is the renewed capacity to care about outcomes. Different physics than typical founder energy. More stable against setbacks (David has already survived worse than business failure). More fragile in dependence on the work staying alive for him.
 
-The operational constraint that flows from this: **TRACE cannot recreate the "all go no stop" pattern that David operated under during his military career and that left Regina effectively unseen for thirty-plus years.** Regina has explicitly stated she will divorce David if that pattern returns. David survived 23 years of military deployment intensity and decided in the year following his thumb injury (approximately mid-2025) that the pattern absolutely will not happen again.
+The operational constraint that flows from this is a hard sustainability requirement on TRACE's pace: the work cannot recreate the unsustainable "all go no stop" intensity pattern of David's military career. *(Personal detail moved to gitignored `decisions/PERSONAL-FINANCIAL.local.md` — see Source D.)*
 
 This means: TRACE's design must accommodate a sustainable pace, regular Regina presence, deliberate drift-correction with her as a structural feature rather than an exception, and willingness to scope work down rather than expand it when the trade is between TRACE progress and Regina being seen.
 
