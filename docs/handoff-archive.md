@@ -7,6 +7,12 @@
 
 ---
 
+### 2026-06-15 — THUNDER VERIFY+CAPTURE: residence-root + carve-out correction to the node model (DESIGN, benched)
+
+**Type:** Docs only. One commit (`263a618`). No schema/code/migration/build. Capture+verify+red-team.
+
+**Verdict (MIXED — one real correction, one clarification):** §5 was **business-rooted** — every node `business_id`-scoped, types ASSET|PROJECT|PRODUCT only, no node above the business (verified §5.1:215-216; the lone residence in §5.2:240 is a *PRODUCT*, the home-value case). So the ROOT assumption was a genuine **correction**: small businesses are **residence-rooted, business-emergent** (garage genesis — Apple/Amazon/Dell/MSFT; clean business-root is the post-migration fiction). Captured as new **§5.0**. The COST-FLOW correction: **CARVE-OUT** (personal-origin cost → business via a use-fraction; remainder stays personal, OUTSIDE the rollup) is a **distinct direction**, NOT allocation-in-reverse — it REUSES §5.5's owner-set-fraction arithmetic but obeys a different conservation rule (remainder leaks to personal). Captured as new **§5.7** with 4 real customers (David homestead/water-catchment DAG + rabbit P&L $11,736 vs $1,215; Terry/LAWNS 20ac homestead; Lauren office-part-of-house; John residence+designated-office+hotel-as-transient-office), the **separation event** (sell business/keep residence → carve-out becomes literal survey/deed/asset-transfer; we build the RECORD, not the survey), and the **lane** (surface that standard methods EXIST, verify by search at build, never rule on tax). use-fraction unifies permanent+transient office → ties to MULTI-LOCATION doc (cross-ref, not duplicated). **Red-team: no argument broke it** — #1 simpler-business-root fails the in-garage customer; #2 resolved distinct (remainder-inside vs remainder-personal); #3 privacy bounded (carve-out IS the membrane; flagged UX seam); #4 lane holds. Two OPEN seams logged in §14: household-root schema shape + personal-vs-business visibility UX. **Single-source: augmented §5 in place, no duplicate.** Bar: DESIGN-benched (no build).
+
 ### 2026-06-14 — THUNDER BUILD: Cost-to-Produce config + tile (period-pool engine, MarginEngine-fed, tune loop)
 
 **Type:** Code build (shared engine + shared config panel + Cultivar tile/page) + data-only seed migration + docs. Two commits (`931c8e2` config+tile, `bd50b96` trace-expenses.md). NO schema change (seed is a data-only INSERT into existing `business_modules`) → schema-verification gate N/A.
