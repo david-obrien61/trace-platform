@@ -398,6 +398,39 @@ confirms — the mechanism acceptance rides on).
 
 ---
 
+### D-10 · Cost-to-Produce primary lens is BY PROJECT, not flat business pool — `[CAPTURED]`
+**Decision:** The lens David actually thinks in — and the one the `/costs` surface should make
+**primary** — is **Company (TRACE) → Project (CoolRunnings / BuiltWithCAI / each vertical) → the costs
+associated to that project**, with cost entry able to **ASSIGN an item to a project**. The current
+`/costs` tile shows a correct but **FLAT business-level pool (÷N)**; that is the **company-total** cut and
+stays as the top-line. The project-grouped cut is **added**, not substituted. **Both cuts are valid** — flat
+= company total, rollup = per-project — and this surfaces an existing capability rather than introducing new
+architecture.
+**Reasoning (already-built bones — this is surfacing, not new architecture):** (1) `cost_objects.node_type`
+already includes **PROJECT** and the `parent_id` self-FK already exists ([[D-1]] Core-1) → a PROJECT node
+with cost children via `parent_id` **IS** "a project with its costs." (2) `CostRollup.ts` (Core-2b SUB-2)
+already traverses **both** edge tables ([[D-4]]) for a per-node rollup → "CoolRunnings + all under it" already
+computes; it simply isn't surfaced as a grouped view. (3) Core-2b deliberately kept the **business level
+FLAT (count-once)** because rollup-sum **double-counts** parent+child at business scope ([[D-7]] flat
+top-line) — so the flat feed is the company-total view (**keep**) and rollup is the **per-project** surface
+(**surface it**). Adding the project cut does **not** alter the honesty engine ([[D-9]]), which is
+**OWNER-PROVEN correct as-is**.
+**Verify-first finding (this session, read-only):** **CONFIRMED FLAT.** The **only** insert path into
+`cost_objects` is the asset form in `packages/cultivar-os/src/pages/BusinessAssets.tsx:173-194`, which
+hardcodes `node_type:'ASSET'` and **never writes `parent_id`** → every UI-created row is a **flat, parentless
+ASSET node**. No UI creates `PROJECT` nodes and no UI sets `parent_id`. The schema axes (PROJECT node_type +
+`parent_id` self-FK) exist but are **unpopulated** by any cost-entry path. `CostToProduce.tsx:96` reads
+`node_type` but selects no `parent_id` and does no grouping. David's Image-3 read (everything flat) is
+correct — that is the scope of the gap below.
+**Companion principles:** [[D-1]] (one node table, PROJECT node_type + parent_id), [[D-4]] (dual-edge rollup
+the project cut reads through), [[D-7]] (flat business top-line is the count-once truth — rollup is the
+per-node cut, not a replacement), [[D-9]] (honesty engine unchanged — OWNER-PROVEN).
+**Canonical home:** this entry · NAMED GAP in `docs/built-inventory.md` (project-grouped cost view +
+parent-picker on cost entry — UNBUILT) · `CostRollup.ts` (per-node rollup the project view reads through).
+**Date captured:** 2026-06-16 · **Status:** Active decision — surfacing UNBUILT (verify-first done).
+
+---
+
 ## PERSONAL-FINANCIAL
 
 > Not in this file by design — see **`decisions/PERSONAL-FINANCIAL.local.md`** (gitignored).
