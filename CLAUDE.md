@@ -323,6 +323,20 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-16 — THUNDER D-10: Project-Lens BUILT (cost-to-produce BY PROJECT) — BUILDER-COMPLETE, owner-proof owed
+
+**Type:** Code (1 shared adapter + its test + 2 cultivar components + 1 page wire) + built-inventory. No schema touched (reads live `cost_objects`, writes only `parent_id`/`cost_confidence`/PROJECT rows via existing RLS) → schema-verification gate N/A. **BUILDER-COMPLETE, NOT owner-proven.** Gate re-confirmed against the final design before building; David settled all four open questions (wiring=PATH A, placement approved, cadence deferred, owner-proof=two-tenant test).
+
+**What:** the "By project" lens on `/costs` (DECISION-project-lens-ui-design.md). Collapsible tree — tenant business-NAME as visual root (rendered, NOT stored — §2 tenant≠project), `parent_id`-null costs as "Platform overhead", each PROJECT node with its rollup total (capex one-time vs /mo separated, unknowns surfaced never $0). Flat company top-line RETAINED above (D-10: project cut ADDED). Click-to-edit confidence + parent-reassignment (a MOVE, single-parent §3); cadence DEFERRED (no column — would be a fake surface, D-9). Projects manager modal creates/renames/deactivates PROJECT buckets (deactivate re-points children → company-level, never cascade-destroyed).
+
+**PATH A wiring (the load-bearing note):** `CostRollup.rollup()` traverses the `cost_object_edges` *table*, NOT the `cost_objects.parent_id` column — two different mechanisms. The shared `ProjectLens.ts` adapter bridges them: synthesizes containment edges (`use_fraction=1.0`) from `parent_id` at read time, rolls each group up THROUGH `CostRollup` + the count-once seam. Single-parent + fraction 1.0 ⇒ identical number today; composes for free when real edges/assignments rows arrive (AC-4, settle once). Honesty engine (D-9) UNTOUCHED — re-cuts the same honest data.
+
+**Files:** `packages/shared/src/business-logic/ProjectLens.ts` (+ `.test.ts`, exported via index) · `packages/cultivar-os/src/components/ProjectCostTree.tsx` · `…/ProjectsManager.tsx` · `…/pages/CostToProduce.tsx` (renders the tree below the top-line).
+
+**Verified:** `ProjectLens.test.ts` **26/0** (each catches its bug — grouping, overhead bucket, UNKNOWN surfaced never $0, reassignment-as-MOVE recomputes both totals, single-parent no-double-count, dangling-parent fallback+flag, count-once company total). **Bug caught + fixed mid-run:** a PROJECT node's null own cost leaked into the flat total as a phantom unknown → now filtered (mirrors CostRollup gather step 1). Siblings unbroken: CostRollup **21** / CountOnceSeam **50** / CostToProduce **17**. `npm run build:cultivar` **2197 modules** (+3); `tsc --noEmit` clean for all four files (pre-existing `Confirmation.tsx` cart-store errors unrelated). `[TRACE:PROJECTLENS]` ON by default until owner-proof.
+
+**NEXT — David's two-tenant owner-proof (proves lens AND tenant isolation in one pass):** (1) logged into **TRACE** tenant (`45830ba7…`, where seeded hardware lives) — create CoolRunnings + BuiltWithCAI, assign hardware, reassign one cost (e.g. tractor overhead→project) and watch BOTH totals recompute, confirm no double-count + collapse/expand + click-to-edit. (2) logged into **LAWNS** — confirm TRACE's hardware is ABSENT ("right kind of empty" = RLS/AC-3 holds). Build is tenant-agnostic (reads `businessId` from context). `[TRACE:PROJECTLENS]` stays ON until both pass.
+
 ### 2026-06-16 — THUNDER Core-1 ACTIVATION: D-5 substantiation ALTER applied + real CoolRunnings seed (LIVE WRITE)
 
 **Type:** Live schema apply + live data seed + doc housekeeping. Migration committed (`4da0b47`); doc + seed this session. **BUILDER-COMPLETE + catalog-PROVEN, NOT owner-proven.**

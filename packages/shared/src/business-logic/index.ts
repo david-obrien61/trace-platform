@@ -83,3 +83,14 @@ export type {
   IdleCapital,
   NodeRollup,
 } from './CostRollup';
+
+// Project-lens adapter — D-10 (THUNDER · 2026-06-16). Re-cuts the SAME honest cost data
+// BY PROJECT: synthesizes containment edges from cost_objects.parent_id (PATH A) and rolls
+// each group up THROUGH CostRollup + the count-once seam. Pure; no DB.
+export { buildProjectLens, OVERHEAD_GROUP_ID } from './ProjectLens';
+
+export type {
+  ProjectLensRow,
+  ProjectGroup,
+  ProjectLensView,
+} from './ProjectLens';

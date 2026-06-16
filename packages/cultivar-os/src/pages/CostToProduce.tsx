@@ -42,6 +42,7 @@ import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { analyze, EMPTY_COST_CONFIG, fromCostObject } from '@trace/shared/business-logic';
 import type { CostToProduceConfig, CostToProduceResult, CostObjectNodeRow, CostEvent } from '@trace/shared/business-logic';
+import { ProjectCostTree } from '../components/ProjectCostTree';
 
 const GREEN = '#27500A';
 const SAGE  = '#EAF3DE';
@@ -269,6 +270,13 @@ export function CostToProduce() {
               Tune costs in Settings →
             </button>
           </>
+        )}
+
+        {/* D-10 — the "By project" lens. ADDED below the flat company top-line (not a
+            substitute). Reads captured cost_objects directly, so it shows even before the
+            cost-to-produce config is set. */}
+        {!loading && businessId && (
+          <ProjectCostTree businessId={businessId} businessName={business?.name} />
         )}
       </div>
     </div>
