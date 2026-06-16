@@ -429,6 +429,9 @@ per-node cut, not a replacement), [[D-9]] (honesty engine unchanged — OWNER-PR
 parent-picker on cost entry — UNBUILT) · `CostRollup.ts` (per-node rollup the project view reads through).
 **Full UI design:** [`docs/DECISION-project-lens-ui-design.md`](DECISION-project-lens-ui-design.md) — extends
 this decision with the tree / tenant-as-root / single-parent / overhead / click-to-edit / reassignment design.
+**Cost model that reshapes the lens:** [`docs/DECISION-small-business-cost-accounting-model.md`](DECISION-small-business-cost-accounting-model.md)
+— the small-business cost-accounting model (CapEx / COGS / OpEx + payback & margin) that the project lens
+groups and rolls up; supersedes/absorbs the narrower [`DECISION-unified-cost-model-option2.md`](DECISION-unified-cost-model-option2.md) framing.
 **Date captured:** 2026-06-16 · **Status:** Active decision — surfacing UNBUILT (verify-first done).
 
 ---
