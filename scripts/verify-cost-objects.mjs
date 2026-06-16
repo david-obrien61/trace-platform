@@ -127,6 +127,39 @@ async function catalogProof() {
   has('cost_object_assignments','start_at') && has('cost_object_assignments','end_at')
     ? pass('(F) assignments.start_at + end_at') : fail('(F) assignments period columns missing');
   has('cost_object_assignments','conversion_cost') ? pass('(F) assignments.conversion_cost') : fail('(F) conversion_cost missing');
+
+  // (G) D-5 substantiation axis — type / nullability / default (20260615_..._substantiation_d5)
+  const g = await execSQL(`SELECT column_name, data_type, is_nullable, column_default
+    FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='cost_objects'
+      AND column_name IN ('substantiation','receipt_id');`);
+  const gc = Object.fromEntries(g.map(r => [r.column_name, r]));
+  gc.substantiation && gc.substantiation.data_type === 'text'
+    && gc.substantiation.is_nullable === 'NO'
+    && /OWNER_ASSERTED/.test(gc.substantiation.column_default || '')
+    ? pass('(G) substantiation text NOT NULL default OWNER_ASSERTED')
+    : fail('(G) substantiation column', JSON.stringify(gc.substantiation));
+  gc.receipt_id && gc.receipt_id.data_type === 'uuid' && gc.receipt_id.is_nullable === 'YES'
+    ? pass('(G) receipt_id uuid nullable') : fail('(G) receipt_id column', JSON.stringify(gc.receipt_id));
+
+  // (H) substantiation CHECK enumerates exactly the two values
+  const h = await execSQL(`SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+    WHERE conrelid='cost_objects'::regclass AND conname='cost_objects_substantiation_check';`);
+  const hdef = h[0]?.def || '';
+  /SUBSTANTIATED/.test(hdef) && /OWNER_ASSERTED/.test(hdef)
+    ? pass('(H) substantiation CHECK has both values') : fail('(H) substantiation CHECK', hdef);
+
+  // (I) receipt_id FK → receipts ON DELETE SET NULL
+  const i = await execSQL(`SELECT ccu.table_name AS refs, rc.delete_rule
+    FROM information_schema.table_constraints tc
+    JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name
+    JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name=ccu.constraint_name
+    JOIN information_schema.referential_constraints rc ON tc.constraint_name=rc.constraint_name
+    WHERE tc.constraint_type='FOREIGN KEY' AND tc.table_name='cost_objects'
+      AND kcu.column_name='receipt_id';`);
+  const irow = i[0];
+  irow && irow.refs === 'receipts' && irow.delete_rule === 'SET NULL'
+    ? pass('(I) receipt_id → receipts ON DELETE SET NULL') : fail('(I) receipt_id FK', JSON.stringify(irow));
 }
 
 // ── ROUND-TRIP mode — service-key data proof (fallback) ─────────────────────
@@ -137,9 +170,15 @@ async function roundTrip() {
     const { error } = await sb.from(t).select('*', { count: 'exact', head: true });
     error ? fail(`${t} queryable`, error.message) : pass(`${t} queryable`);
   }
-  // Old name should now 404
-  const { error: oldErr } = await sb.from('business_assets').select('*', { head: true });
-  oldErr ? pass('business_assets gone (old name 404)', oldErr.message.slice(0, 40)) : fail('business_assets still queryable');
+  // Old name should now be absent. Use a real row select (not head:true — a HEAD
+  // request does not surface the missing-table error); PGRST205 / 42P01 = gone.
+  const { error: oldErr } = await sb.from('business_assets').select('id').limit(1);
+  const gone = oldErr && /PGRST205|42P01|Could not find the table/i.test(`${oldErr.code} ${oldErr.message}`);
+  gone ? pass('business_assets gone (old name absent)', oldErr.code || oldErr.message.slice(0, 40))
+       : fail('business_assets still queryable', oldErr ? `${oldErr.code} ${oldErr.message}` : 'no error');
+  // D-5 columns reachable via the data path (column existence, not catalog metadata)
+  const { error: subErr } = await sb.from('cost_objects').select('id,substantiation,receipt_id', { head: true });
+  subErr ? fail('substantiation + receipt_id columns selectable', subErr.message) : pass('substantiation + receipt_id columns selectable');
 }
 
 async function main() {
