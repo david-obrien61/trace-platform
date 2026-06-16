@@ -7,6 +7,14 @@
 
 ---
 
+### 2026-06-15 — THUNDER SCHEMA LOOK: business_assets vs cost_objects — recommend RENAME-IN-PLACE (RECON)
+
+**Type:** Docs only. One commit. READ-ONLY — no schema/code/migration/build. Sole write: `docs/cost-to-produce/ASSET-NODE-SCHEMA-DECISION.md`. Resolves the accumulator recon's discovered **Q-C** (does `cost_objects` subsume/bridge/rename `business_assets`?).
+
+**Result — recommend C (RENAME-IN-PLACE → `cost_objects`).** Pulled `business_assets`'s real shape (20 cols, both migrations): 8 generic cols serve every node type, `acquisition_cost` = the node `purchase_cost`, `cost_confidence` is cross-type. Node fields (`node_type`,`parent_id`,`domain`,`purchase_date`,`vendor_id`,`budget_estimate`,`unit_type`,`selling_price`) are net-new with **no name collision** (notably no existing `parent_id`). **Compose test: COMPOSES with exactly ONE conflict — `status`** (asset-only NOT-NULL CHECK `ACTIVE/IN_REPAIR/OFFLINE/RETIRED` vs PROJECT's `open/closed/converted`); fix = broaden/drop the CHECK or add `project_status` (one-line). Plus a tolerable ~9-col always-null asset pile on PROJECT/PRODUCT rows (all nullable). **2 FK dependents** = `business_pmi_schedule.asset_id` + `business_service_log.asset_id` (both ON DELETE CASCADE) → auto-follow a rename (proven on plants→cultivar_plants). **Code blast-radius SMALL:** ~6 `.from('business_assets')` call sites in 2 files (`BusinessAssets.tsx` ×2, `PMI.tsx` ×4) + add `.eq('node_type','ASSET')` to asset queries — far below the 17-file plants repoint. **Dominance insight:** B (subsume) and C reach the SAME end state (one table) but C needs no data migration → **B eliminated.** Real choice is A (bridge — two-source-of-truth/drift, contradicts §5.1 "one table") vs C — recommend **C**, not 50/50; A wins only if you weight "touch zero asset code now" above "no permanent dual-write drift," which the project's silent-data-bug history argues against. Build-prompt notes for Core-1 are in the doc. **David decides A/B/C** — recon only, no migration written.
+
+---
+
 ### 2026-06-15 — THUNDER CAPTURE: cost-accounting two-vocabulary layer + competitive landscape doctrine
 
 **Type:** Docs only. Two commits (`aaff697` captures; trim commit follows). No schema/code/migration/build → schema-verification gate N/A. CAPTURE only — no build (accumulator verify-before-build remains the separate next step).
