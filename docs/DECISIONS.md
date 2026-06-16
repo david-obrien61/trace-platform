@@ -427,6 +427,8 @@ the project cut reads through), [[D-7]] (flat business top-line is the count-onc
 per-node cut, not a replacement), [[D-9]] (honesty engine unchanged — OWNER-PROVEN).
 **Canonical home:** this entry · NAMED GAP in `docs/built-inventory.md` (project-grouped cost view +
 parent-picker on cost entry — UNBUILT) · `CostRollup.ts` (per-node rollup the project view reads through).
+**Full UI design:** [`docs/DECISION-project-lens-ui-design.md`](DECISION-project-lens-ui-design.md) — extends
+this decision with the tree / tenant-as-root / single-parent / overhead / click-to-edit / reassignment design.
 **Date captured:** 2026-06-16 · **Status:** Active decision — surfacing UNBUILT (verify-first done).
 
 ---
