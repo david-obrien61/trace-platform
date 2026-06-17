@@ -432,6 +432,9 @@ this decision with the tree / tenant-as-root / single-parent / overhead / click-
 **Cost model that reshapes the lens:** [`docs/DECISION-small-business-cost-accounting-model.md`](DECISION-small-business-cost-accounting-model.md)
 — the small-business cost-accounting model (CapEx / COGS / OpEx + payback & margin) that the project lens
 groups and rolls up; supersedes/absorbs the narrower [`DECISION-unified-cost-model-option2.md`](DECISION-unified-cost-model-option2.md) framing.
+**Nested projects + the deferred BI insight wedge:** [`docs/DECISION-nested-projects-and-BI-whatif-blocker.md`](DECISION-nested-projects-and-BI-whatif-blocker.md)
+— projects nest (single-parent holds, no migration; rollup recurses); "Platform overhead" → "Overhead";
+the BI-Claude what-if / blocker insight layer is the deferred wedge until the cost spine is rich enough.
 **Date captured:** 2026-06-16 · **Status:** Active decision — surfacing UNBUILT (verify-first done).
 
 ---

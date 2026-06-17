@@ -112,3 +112,14 @@ nature field.
 - Sequencing vs the in-flight migration: fold cost_nature into the same schema delta, or stage it?
   (Lightning lean: fold it in — it's the same migration, and building the views without nature would
   just need redo.)
+
+---
+
+## Related decision — nested projects + the BI what-if/blocker wedge
+
+[`docs/DECISION-nested-projects-and-BI-whatif-blocker.md`](DECISION-nested-projects-and-BI-whatif-blocker.md)
+— the project tags this model rolls up are NESTED (TRACE → Farm → {meat birds, rabbits, egg birds};
+LAWNS → greenhouse → inventory). That decision: nesting = build now (single-parent holds, no migration —
+`parent_id` self-FK already supports it; rollup must recurse); the BI-Claude what-if / blocker insight
+layer = deferred wedge until the cost spine is rich enough to reason over. Also renames
+"Platform overhead" → "Overhead" (company-level, `parent_id` null).
