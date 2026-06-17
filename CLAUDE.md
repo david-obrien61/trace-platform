@@ -323,6 +323,17 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-17 — THUNDER Project-Lens display fix: full-inline edit + column headers + confidence↔amount coherence (BUILDER-COMPLETE, owner-proof owed)
+
+**Type:** Display/input layer ONLY — `packages/cultivar-os/src/components/ProjectCostTree.tsx`. Engine (CostRollup/CountOnceSeam/analyze/ProjectLens math) UNTOUCHED. Fixes 3 gaps David found in the live by-project tree after owner-proof:
+- **(A) column headers** Cost · Confidence · Project · Amount.
+- **(B) amount column** now reads the REAL value (`recurring_amount` + cadence suffix $/mo·$/yr for recurring; `acquisition_cost` one-time for capex) and is **inline-editable**. Root cause of "CONFIRMED…unknown": the column read `acquisition_cost` for every row → recurring rows (value in `recurring_amount`) showed "unknown". Fix = the tree now SELECTs + passes `cost_shape`/`cadence`/`recurring_amount` (ProjectLensRow already extends CostObjectNodeRow) so the already-shape-aware `fromCostObject`/`CostRollup` bucket recurring into the pool. NO engine change. Free side effect: group totals + root "Captured" now include recurring (overhead $279.67/mo).
+- **(C) confidence↔amount coherence** (D-9 at input — CONFIRMED-but-unknown UNREACHABLE): UNKNOWN ⟺ no amount; →UNKNOWN clears amount; →other grade on an amountless row opens the amount editor first (David's HP ProDesk flow); setting an amount on UNKNOWN bumps to ESTIMATED.
+
+**Verified:** build:cultivar clean (2197); tsc clean for the file. Data-level proof (service-key → buildProjectLens): Claude Pro $100/mo, Claude API $110/mo, domains $200/yr, capex one-time; per-row + group totals correct. **Live pre-existing incoherent row surfaced:** `HP ProDesk 600 G6` = ESTIMATED + no amount (David's earlier edit) — display flags it (shows "unknown"); fix makes it resolvable inline (click amount → enter), never fabricated. `[TRACE:PROJECTLENS]` STAYS ON (David's standing decision until Andrew's asset/inventory add widget is online — do NOT comment out).
+
+**OWNER-PROOF owed (David, live UI under RLS):** open /costs by-project tree → columns labeled → every known cost shows its real amount (Claude Pro $100/mo etc.), no CONFIRMED-but-unknown → edit an amount inline + save → recomputes → set HP ProDesk (or any UNKNOWN) → pick a non-UNKNOWN grade → amount editor opens → enter value → saves coherently → Resend/Twilio still "unknown" → cannot leave a non-UNKNOWN cost with no amount.
+
 ### 2026-06-17 — THUNDER Unified Cost Model BUILD steps 0-3: schema delta WRITTEN/GATED + read-path made shape-aware (byte-identical) — STOPPED for backfill confirm
 
 **Type:** Code (1 shared fn + its tests + 1 capture script + verify-script extension) + 1 GATED migration + docs. **STAGED BUILD-GO** — built the SAFE foundation (steps 0-3) per my own verify-first plan; the data-move (steps 4-8) is HELD for David's fresh confirm. Canonical spec: `DECISION-small-business-cost-accounting-model.md` (reshapes Option 2 — adds cost-NATURE). Three orthogonal tags on every cost: **PROJECT** (`parent_id`, built) × **NATURE** (CapEx/COGS/OpEx, NEW) × **SHAPE** (six shapes). Nature = how recovered; shape = how money behaves; node_type = what kind of thing.
