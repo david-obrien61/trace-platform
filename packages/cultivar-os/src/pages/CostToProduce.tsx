@@ -63,6 +63,12 @@ export function CostToProduce() {
   const [hasConfig, setHasConfig] = useState(false);
   const [inventory, setInventory] = useState<InventoryRow[]>([]);
   const [loading, setLoading] = useState(true);
+  // FIX 2 (2026-06-17) — the resolve modal is owned HERE (controlled) so the page-level
+  // "unquantified costs" block AND the by-project tree's block open the SAME modal.
+  const [resolveOpen, setResolveOpen] = useState(false);
+  // FIX 1 (2026-06-17) — bumped by ProjectCostTree's onChanged after a resolve/edit so analyze()
+  // re-runs against fresh cost_objects; the page top-line count was going stale until a refresh.
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!businessId) return;
@@ -154,7 +160,7 @@ export function CostToProduce() {
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [businessId]);
+  }, [businessId, reloadKey]);
 
   return (
     <div style={{ minHeight: '100vh', background: SAGE, paddingBottom: 48 }}>
@@ -194,8 +200,15 @@ export function CostToProduce() {
                 <Row label="Estimated (soft)" value={`+ ${money(result.confidence.estimatedMonthly)}/mo`} />
               )}
               <Row label="Known monthly cost" value={`${money(result.confidence.knownMonthly)}/mo`} strong />
+              {/* FIX 2 — clickable: opens the SAME resolve worklist modal the by-project tree
+                  uses (one modal, one canonical set). FIX 1 — unknownCount recomputes live when
+                  a cost is resolved (analyze() re-runs via reloadKey), so it never goes stale. */}
               {result.confidence.hasUnknown && (
-                <div style={{ marginTop: 12, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '10px 12px' }}>
+                <button
+                  onClick={() => { console.log('[TRACE:COST] open resolve worklist (page block)', { unknownCount: result.confidence.unknownCount }); setResolveOpen(true); }}
+                  title="Click to resolve these costs"
+                  style={{ width: '100%', textAlign: 'left', display: 'block', marginTop: 12, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '10px 12px', cursor: 'pointer' }}
+                >
                   <p style={{ margin: 0, fontSize: '0.8125rem', fontWeight: 700, color: AMBER, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <AlertTriangle size={14} /> {result.confidence.unknownCount} unquantified cost{result.confidence.unknownCount === 1 ? '' : 's'} — your real cost is higher
                   </p>
@@ -205,7 +218,8 @@ export function CostToProduce() {
                   <p style={{ margin: '6px 0 0', fontSize: '0.6875rem', color: '#9a6a2c' }}>
                     These are shown as unknown, never counted as $0.
                   </p>
-                </div>
+                  <span style={{ display: 'block', margin: '6px 0 0', fontSize: '0.6875rem', fontWeight: 700, color: AMBER }}>Resolve →</span>
+                </button>
               )}
               {/* SUB-3 — captured cost_objects fed through the count-once seam. */}
               {result.confidence.fedFromRollup && (
@@ -227,7 +241,7 @@ export function CostToProduce() {
 
             {/* Sensitivity */}
             <Card>
-              <SectionTitle>Cost &amp; price by target customers (N)</SectionTitle>
+              <SectionTitle onClick={() => navigate('/settings')}>Cost &amp; price by target customers (N)</SectionTitle>
               {!result.confidence.computable ? (
                 <p style={{ fontSize: '0.875rem', color: AMBER, lineHeight: 1.5 }}>
                   Not enough confirmed cost to compute a price yet. Add at least one CONFIRMED or DERIVED
@@ -273,7 +287,7 @@ export function CostToProduce() {
 
             {/* Material / inventory costs */}
             <Card>
-              <SectionTitle>Material costs (inventory)</SectionTitle>
+              <SectionTitle onClick={() => navigate('/inventory')}>Material costs (inventory)</SectionTitle>
               {inventory.length === 0 ? (
                 <p style={{ fontSize: '0.8125rem', color: '#9ca3af' }}>No inventory rows recorded yet.</p>
               ) : (
@@ -305,7 +319,13 @@ export function CostToProduce() {
             substitute). Reads captured cost_objects directly, so it shows even before the
             cost-to-produce config is set. */}
         {!loading && businessId && (
-          <ProjectCostTree businessId={businessId} businessName={business?.name} />
+          <ProjectCostTree
+            businessId={businessId}
+            businessName={business?.name}
+            resolveOpen={resolveOpen}
+            onResolveOpenChange={setResolveOpen}
+            onChanged={() => setReloadKey(k => k + 1)}
+          />
         )}
       </div>
     </div>
@@ -319,8 +339,21 @@ const td: React.CSSProperties = { padding: '8px' };
 function Card({ children }: { children: React.ReactNode }) {
   return <div style={{ background: '#fff', borderRadius: 14, padding: '18px 16px', border: '1px solid #e5e7eb' }}>{children}</div>;
 }
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <p style={{ fontSize: '0.6875rem', fontWeight: 700, color: GRAY, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 14px' }}>{children}</p>;
+// FIX 3 (2026-06-17) — a SectionTitle with an onClick becomes a link to that section's EDIT
+// surface (margin inputs → Settings · material costs → /inventory). Rendered as a button so it's
+// keyboard-reachable; green + a ▸ chevron signal it navigates. Plain <p> when not clickable.
+function SectionTitle({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) {
+  const base: React.CSSProperties = { fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 14px' };
+  if (!onClick) return <p style={{ ...base, color: GRAY }}>{children}</p>;
+  return (
+    <button
+      onClick={onClick}
+      title="Edit this section"
+      style={{ ...base, color: GREEN, background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+    >
+      {children} <span aria-hidden style={{ fontSize: '0.75rem' }}>›</span>
+    </button>
+  );
 }
 function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (

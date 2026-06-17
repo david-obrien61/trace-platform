@@ -439,6 +439,33 @@ the BI-Claude what-if / blocker insight layer is the deferred wedge until the co
 
 ---
 
+### D-11 · Cost Category dimension is Schedule C–aligned / QBO-mappable (adopt the standard, don't invent) — `[POINTER]`
+**Decision:** Every cost carries a **category** drawn from the standard small-business chart of accounts
+(IRS Schedule C / QBO chart-of-accounts), NOT a TRACE-invented taxonomy. This is the dimension behind the
+categorized P&L top block and the spreadsheet-grid view. Orthogonal to the existing axes — PROJECT
+(`parent_id`, [[D-10]]) × NATURE (CapEx/COGS/OpEx) × SHAPE ([[D-8]]) × **CATEGORY** (this). Labor categories
+(category=labor / contract-labor) live inside this dimension and hand off to [[D-12]].
+**Why a pointer:** full taxonomy + QBO mapping + grid design live in the canonical doc; this entry exists so
+the category dimension is discoverable from the ledger as next-build foundation.
+**Canonical home:** [`docs/DECISION-cost-category-dimension.md`](DECISION-cost-category-dimension.md).
+**Companion:** [[D-8]] (shape), [[D-10]] (project lens this categorizes), [[D-12]] (labor categories),
+`DECISION-small-business-cost-accounting-model.md` (the CapEx/COGS/OpEx nature axis).
+**Date captured:** 2026-06-17 · **Status:** Canonical — adopt the standard; next-build foundation (UNBUILT).
+
+### D-12 · Labor Cost Model — robust schema now, UI depth incremental, intelligence deferred — `[POINTER]`
+**Decision:** Build the labor MODEL **robust now** (fully-burdened rate, cost-vs-bill, Schedule C
+employee-vs-contractor), **populate to the depth each business needs**, and **defer the analysis/what-if
+intelligence** until real data populates the spine. Labor is a category inside the [[D-11]] dimension, not a
+bolt-on. Margin-sensitivity is itself a what-if → links forward to the deferred BI wedge.
+**Why a pointer:** research grounding + schema spine + the incremental-depth / deferred-intelligence staging
+live in the canonical doc; this entry makes the labor model discoverable from the ledger.
+**Canonical home:** [`docs/DECISION-labor-cost-model.md`](DECISION-labor-cost-model.md).
+**Companion:** [[D-11]] (category dimension labor lives in), [[D-10]] (project lens), `DECISION-small-business-cost-accounting-model.md`,
+`DECISION-nested-projects-and-BI-whatif-blocker.md` (margin-sensitivity = a what-if, deferred).
+**Date captured:** 2026-06-17 · **Status:** Canonical model decision; next-build foundation (UNBUILT).
+
+---
+
 ## PERSONAL-FINANCIAL
 
 > Not in this file by design — see **`decisions/PERSONAL-FINANCIAL.local.md`** (gitignored).

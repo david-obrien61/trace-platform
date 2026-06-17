@@ -323,6 +323,18 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-17 — THUNDER Project-Lens small fixes: live top-count + one resolve modal + clickable section titles (BUILDER-COMPLETE, owner-proof owed)
+
+**Type:** Display/input layer ONLY — `ProjectCostTree.tsx` + `CostToProduce.tsx`. Engine/math UNTOUCHED (OWNER-PROVEN). No schema → verification gate N/A. Three independent fixes from David's live owner-proof of the ordering build (3252c1d). The big model work (cost-category dimension, labor model) is SEPARATE — see the two new DECISION docs, NOT in this pass.
+
+- **FIX 1 — page top count no longer stale on resolve.** The page-level "What we know" unquantified count is `analyze()` output (keyed `businessId`) — resolving a cost in the tree's modal updated the bottom (tree) but the top card lagged (3 vs 2) until refresh. `ProjectCostTree` now fires `onChanged` after every write (`reloadAll`); `CostToProduce` bumps a `reloadKey` in the analyze effect deps → top recomputes from the same fresh `cost_objects` immediately, no refresh.
+- **FIX 2 — one resolve modal, reachable top OR bottom (also the structural fix for FIX 1).** The resolve modal is now CONTROLLED by the page (`resolveOpen`/`onResolveOpenChange` props; internal-state fallback when omitted). The page-level "N unquantified costs" block is a clickable button opening the SAME modal as the tree's block — one modal, one canonical set, the SAME shared `CostRow` editor (no second editor). Single source ⇒ can't drift.
+- **FIX 3 — clickable section titles → edit surface.** "Cost & price by target customers (N)" → `/settings` (CostToProduceSettings: target-N/margin/reference). "Material costs (inventory)" → `/inventory` (existing `BusinessInventory` add/list page — clickable even when empty so David can hand-jam test rows; no new route needed, it already exists). `SectionTitle` gained optional `onClick` (green button + `›` chevron).
+
+**Verified:** `build:cultivar` clean (2197 modules); `tsc` clean for both files. `[TRACE:PROJECTLENS]` STAYS ON (standing decision until Andrew's asset/inventory widget is online); `[TRACE:COST]` emits on page-block resolve-open.
+
+**OWNER-PROOF owed (David, live /costs under RLS):** *FIX 1/2* — click the page-top "unquantified costs" block → it opens the same resolve modal the by-project block opens → resolve an unknown (ESTIMATED + amount) → it drops off the modal AND the top count decrements IMMEDIATELY (no refresh) → top and bottom agree. *FIX 3* — click "Cost & price by target customers" title → lands on Settings (the margin/target-N inputs); click "Material costs (inventory)" title → lands on `/inventory` (blank is fine) → add a hand-jammed test row.
+
 ### 2026-06-17 — THUNDER Project-Lens: group ordering + unknown-accounting honesty (BUILDER-COMPLETE, owner-proof owed)
 
 **Type:** Display/input layer ONLY — `ProjectCostTree.tsx` (+ 1-line input filter in `CostToProduce.tsx`). Engine UNTOUCHED (CostRollup/CountOnceSeam/analyze/ProjectLens math). No schema → schema-verification gate N/A. Two fixes, same surface, one owner-proof.

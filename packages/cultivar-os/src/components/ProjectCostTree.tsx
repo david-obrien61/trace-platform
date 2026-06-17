@@ -33,6 +33,13 @@
  *   • Resolve modal: just the unknown costs, the same 4 columns + the SAME inline editor
  *     (CostRow — one editor, reused). Resolve one → it drops off → the block shrinks.
  *
+ * ONE RESOLVE MODAL, LIVE PARENT COUNT (small-fixes, 2026-06-17):
+ *   The resolve modal is CONTROLLED by the page (resolveOpen / onResolveOpenChange props) so the
+ *   page-level "unquantified costs" block opens the SAME modal as this tree's block — one modal,
+ *   one canonical set, reachable from top OR bottom. Every WRITE calls reloadAll(), which reloads
+ *   these rows AND fires onChanged() so the page recomputes its own count from the same fresh data
+ *   — the page count can no longer go stale on resolve (it used to lag until a manual refresh).
+ *
  * ROW CONTROLS (§4 — ALL THREE fields click-to-edit inline; 2026-06-17 + column headers):
  *   • confidence badge → dropdown (writes cost_confidence).
  *   • parent badge → dropdown of PROJECTs + "Company-level" (writes parent_id; a MOVE, §3).
@@ -114,7 +121,24 @@ interface RawRow {
   recurring_amount: number | null;
 }
 
-export function ProjectCostTree({ businessId, businessName }: { businessId: string; businessName?: string }) {
+export function ProjectCostTree({
+  businessId,
+  businessName,
+  resolveOpen: resolveOpenProp,
+  onResolveOpenChange,
+  onChanged,
+}: {
+  businessId: string;
+  businessName?: string;
+  // FIX 2 (2026-06-17) — the resolve modal can be CONTROLLED by the parent page so the
+  // page-level "unquantified costs" block opens the SAME modal as the tree's own block. When
+  // these props are omitted the component falls back to internal state (standalone use).
+  resolveOpen?: boolean;
+  onResolveOpenChange?: (open: boolean) => void;
+  // FIX 1 (2026-06-17) — fired after every WRITE-triggered reload so the parent can recompute
+  // its own count from the same fresh data (the page top count was going stale on resolve).
+  onChanged?: () => void;
+}) {
   const [rows, setRows] = useState<ProjectLensRow[]>([]);
   const [view, setView] = useState<ProjectLensView | null>(null);
   const [loading, setLoading] = useState(true);
@@ -125,7 +149,12 @@ export function ProjectCostTree({ businessId, businessName }: { businessId: stri
   // (David's HP ProDesk flow): committing the amount also writes that confidence.
   const [editing, setEditing] = useState<EditState>(null);
   const [managerOpen, setManagerOpen] = useState(false);
-  const [resolveOpen, setResolveOpen] = useState(false); // FIX 2c — the unknown-cost worklist modal
+  // FIX 2c — the unknown-cost worklist modal. Controlled by the parent when the prop is passed
+  // (so the page top block opens it), else internal (standalone). One modal, one canonical set.
+  const [resolveOpenInternal, setResolveOpenInternal] = useState(false);
+  const resolveOpen = resolveOpenProp ?? resolveOpenInternal;
+  const setResolveOpen = (open: boolean) =>
+    onResolveOpenChange ? onResolveOpenChange(open) : setResolveOpenInternal(open);
 
   const load = useCallback(async () => {
     if (!businessId) return;
@@ -175,13 +204,21 @@ export function ProjectCostTree({ businessId, businessName }: { businessId: stri
 
   useEffect(() => { load(); }, [load]);
 
+  // FIX 1 — reload after a WRITE and notify the parent page so its top-line count recomputes
+  // from the SAME fresh data (no second copy of the count to go stale). Initial-mount load()
+  // stays plain; only owner edits ripple up.
+  const reloadAll = useCallback(async () => {
+    await load();
+    onChanged?.();
+  }, [load, onChanged]);
+
   async function reassign(rowId: string, parentSel: string) {
     const parent_id = parentSel === COMPANY_LEVEL ? null : parentSel;
     setEditing(null);
     console.log('[TRACE:PROJECTLENS] reassign (MOVE)', { rowId, parent_id });
     const { error } = await supabase.from('cost_objects').update({ parent_id }).eq('id', rowId).eq('business_id', businessId);
     if (error) { console.error('[TRACE:PROJECTLENS] reassign error', error.message); return; }
-    await load(); // reload → rebuild lens → recompute BOTH affected totals through the seam
+    await reloadAll(); // reload → rebuild lens → recompute BOTH affected totals + parent count through the seam
   }
 
   async function writeRow(rowId: string, patch: Record<string, unknown>): Promise<boolean> {
@@ -200,7 +237,7 @@ export function ProjectCostTree({ businessId, businessName }: { businessId: stri
     const field = amountFieldOf(row);
     if (newConf === 'UNKNOWN') {
       console.log('[TRACE:PROJECTLENS] regrade → UNKNOWN (clear amount, coherence)', { rowId: row.id });
-      if (await writeRow(row.id, { cost_confidence: 'UNKNOWN', [field]: null })) await load();
+      if (await writeRow(row.id, { cost_confidence: 'UNKNOWN', [field]: null })) await reloadAll();
       return;
     }
     if (amountOf(row) == null) {
@@ -209,7 +246,7 @@ export function ProjectCostTree({ businessId, businessName }: { businessId: stri
       return;
     }
     console.log('[TRACE:PROJECTLENS] regrade', { rowId: row.id, confidence: newConf });
-    if (await writeRow(row.id, { cost_confidence: newConf })) await load();
+    if (await writeRow(row.id, { cost_confidence: newConf })) await reloadAll();
   }
 
   // Amount commit (the inline amount editor). value=null means "cleared".
@@ -223,12 +260,12 @@ export function ProjectCostTree({ businessId, businessName }: { businessId: stri
     if (value == null) {
       if (pendingConfidence) { console.log('[TRACE:PROJECTLENS] amount entry cancelled — confidence change reverted', { rowId: row.id }); return; }
       console.log('[TRACE:PROJECTLENS] amount cleared → UNKNOWN (coherence)', { rowId: row.id });
-      if (await writeRow(row.id, { [field]: null, cost_confidence: 'UNKNOWN' })) await load();
+      if (await writeRow(row.id, { [field]: null, cost_confidence: 'UNKNOWN' })) await reloadAll();
       return;
     }
     const conf = pendingConfidence ?? (row.cost_confidence === 'UNKNOWN' ? 'ESTIMATED' : row.cost_confidence);
     console.log('[TRACE:PROJECTLENS] set amount', { rowId: row.id, field, value, confidence: conf });
-    if (await writeRow(row.id, { [field]: value, cost_confidence: conf })) await load();
+    if (await writeRow(row.id, { [field]: value, cost_confidence: conf })) await reloadAll();
   }
 
   const toggle = (id: string) => setExpanded((prev) => {
