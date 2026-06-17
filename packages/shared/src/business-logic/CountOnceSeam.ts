@@ -642,7 +642,10 @@ export function fromCostObject(row: CostObjectNodeRow): CostEvent[] {
   if (row.cost_shape && RECURRING_SHAPES.has(row.cost_shape)) {
     const monthly = row.recurring_amount == null
       ? null // UNKNOWN amount — never coerced to 0 (Surface Honesty)
-      : round2(cadenceToMonthly(row.recurring_amount, row.cadence));
+      // Unrounded — mirrors the config path's toMonthly (CostToProduce.ts); the seam
+      // round2s the aggregate (poolEstimatedMonthly), so per-event rounding here would
+      // risk diverging from the config-derived before-number. Equivalence by construction.
+      : cadenceToMonthly(row.recurring_amount, row.cadence);
     return [{
       ...base,
       id: row.id,
