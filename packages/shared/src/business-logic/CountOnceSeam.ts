@@ -575,7 +575,7 @@ function round2(n: number): number {
 export interface CostObjectNodeRow {
   id: string;
   label: string;
-  node_type: 'ASSET' | 'PROJECT' | 'PRODUCT';
+  node_type: 'ASSET' | 'PROJECT' | 'PRODUCT' | 'COST';
   domain?: string | null;
   acquisition_cost: number | null;   // null = UNKNOWN, never 0
   conversion_cost?: number | null;   // §5.9 cost event on repurpose
@@ -588,16 +588,47 @@ export interface CostObjectNodeRow {
   receipt_id?: string | null;
   vendor?: string | null;
   acquired_on?: string | null;
+  // ── Unified-cost-model fields (migration 20260617). Optional: ABSENT on every row
+  //    until the migration is applied AND the read path selects them — so the default
+  //    branch below (no shape) is byte-for-byte the prior CAPEX-only behavior. ──
+  /** The six shapes (how money behaves). Absent/ONE_TIME → CAPEX; recurring → MONTHLY_POOL. */
+  cost_shape?: CostShape | 'ONE_TIME' | 'PREPAID_AMORTIZED' | 'INCREMENTAL_PREPAID' | 'VARIABLE' | null;
+  /** Billing cadence for recurring shapes. Used to normalize recurring_amount → monthly. */
+  cadence?: Cadence | null;
+  /** Per-cadence charge for recurring shapes — DISTINCT from acquisition_cost (capex). */
+  recurring_amount?: number | null;
+}
+
+/** Recurring shapes feed the ÷N MONTHLY_POOL; everything else accumulates as CAPEX. */
+const RECURRING_SHAPES = new Set(['RECURRING_FIXED', 'PER_OCCASION']);
+
+/** Per-period charge → monthly. ONE_OFF/absent passes through (treated as already-monthly). */
+function cadenceToMonthly(amount: number, cadence: Cadence | null | undefined): number {
+  switch (cadence) {
+    case 'WEEKLY':    return amount * 52 / 12;
+    case 'QUARTERLY': return amount / 3;
+    case 'ANNUAL':    return amount / 12;
+    case 'MONTHLY':
+    case 'ONE_OFF':
+    default:          return amount; // MONTHLY (or unknown cadence) is already a monthly figure
+  }
 }
 
 /**
- * A cost_objects node → CAPEX event(s). acquisition_cost is the node's capital cost;
- * conversion_cost (if present) is a second capital event. Both are CAPEX — they
- * accumulate on the node and NEVER divide into the monthly pool (Shape 2).
+ * A cost_objects node → CostEvent(s), SHAPE-AWARE (migration 20260617).
+ *
+ *   • RECURRING_FIXED / PER_OCCASION → ONE MONTHLY_POOL event from recurring_amount,
+ *     normalized to monthly by cadence. This is the period-pool feed (÷N denominator).
+ *   • ONE_TIME / PREPAID_AMORTIZED / INCREMENTAL_PREPAID / VARIABLE / absent → CAPEX
+ *     from acquisition_cost (+ conversion_cost) exactly as before. Capex never divides
+ *     into the monthly pool (Shape 2).
+ *
+ * BYTE-IDENTICAL GUARANTEE: until the 20260617 migration is applied AND the read path
+ * selects cost_shape, every row arrives with cost_shape ABSENT → the CAPEX branch →
+ * identical to the prior implementation. The recurring branch is dormant until then.
  */
 export function fromCostObject(row: CostObjectNodeRow): CostEvent[] {
   const base = {
-    bucket: 'CAPEX' as const,
     substantiation: row.substantiation ?? 'OWNER_ASSERTED',
     realization: row.realization ?? 'REALIZED',
     receiptId: row.receipt_id ?? null,
@@ -605,9 +636,29 @@ export function fromCostObject(row: CostObjectNodeRow): CostEvent[] {
     date: row.acquired_on ?? null,
     source: `cost_objects:${row.id}`,
   };
+
+  // ── Recurring shapes → the monthly pool (the $0-collapse pivot: a migrated
+  //    recurring cost must feed ÷N, not CAPEX). recurring_amount, NOT acquisition_cost. ──
+  if (row.cost_shape && RECURRING_SHAPES.has(row.cost_shape)) {
+    const monthly = row.recurring_amount == null
+      ? null // UNKNOWN amount — never coerced to 0 (Surface Honesty)
+      : round2(cadenceToMonthly(row.recurring_amount, row.cadence));
+    return [{
+      ...base,
+      id: row.id,
+      label: row.label,
+      amount: monthly,
+      bucket: 'MONTHLY_POOL',
+      amountConfidence: row.cost_confidence,
+      cadence: row.cadence ?? null,
+    }];
+  }
+
+  // ── Default: CAPEX (one-time capital). Unchanged from the prior implementation. ──
+  const capexBase = { ...base, bucket: 'CAPEX' as const };
   const events: CostEvent[] = [
     {
-      ...base,
+      ...capexBase,
       id: row.id,
       label: row.label,
       amount: row.acquisition_cost,
@@ -616,7 +667,7 @@ export function fromCostObject(row: CostObjectNodeRow): CostEvent[] {
   ];
   if (row.conversion_cost != null) {
     events.push({
-      ...base,
+      ...capexBase,
       id: `${row.id}:conversion`,
       label: `${row.label} (conversion)`,
       amount: row.conversion_cost,

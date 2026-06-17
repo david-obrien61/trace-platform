@@ -160,6 +160,73 @@ async function catalogProof() {
   const irow = i[0];
   irow && irow.refs === 'receipts' && irow.delete_rule === 'SET NULL'
     ? pass('(I) receipt_id → receipts ON DELETE SET NULL') : fail('(I) receipt_id FK', JSON.stringify(irow));
+
+  // ── Unified Cost Model — shape × nature × source (20260617_cost_objects_shape_nature_source) ──
+
+  // (J) cost_shape — text NOT NULL default 'ONE_TIME', CHECK has all six values.
+  const j = await execSQL(`SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='cost_objects' AND column_name='cost_shape';`);
+  const jc = j[0];
+  jc && jc.data_type === 'text' && jc.is_nullable === 'NO' && /ONE_TIME/.test(jc.column_default || '')
+    ? pass('(J) cost_shape text NOT NULL default ONE_TIME') : fail('(J) cost_shape column', JSON.stringify(jc));
+  const jChk = await execSQL(`SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+    WHERE conrelid='cost_objects'::regclass AND conname='cost_objects_cost_shape_check';`);
+  const jdef = jChk[0]?.def || '';
+  ['ONE_TIME','RECURRING_FIXED','PER_OCCASION','PREPAID_AMORTIZED','INCREMENTAL_PREPAID','VARIABLE'].every(v => jdef.includes(v))
+    ? pass('(J) cost_shape CHECK has all six shapes') : fail('(J) cost_shape CHECK', jdef);
+
+  // (K) cadence — text nullable, CHECK has the five cadence values.
+  const kChk = await execSQL(`SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+    WHERE conrelid='cost_objects'::regclass AND conname='cost_objects_cadence_check';`);
+  const kdef = kChk[0]?.def || '';
+  ['ONE_OFF','WEEKLY','MONTHLY','QUARTERLY','ANNUAL'].every(v => kdef.includes(v))
+    ? pass('(K) cadence CHECK has the five cadences') : fail('(K) cadence CHECK', kdef);
+
+  // (L) recurring_amount — numeric(10,2), nullable.
+  const l = await execSQL(`SELECT data_type, numeric_precision, numeric_scale, is_nullable FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='cost_objects' AND column_name='recurring_amount';`);
+  const lc = l[0];
+  lc && lc.data_type === 'numeric' && Number(lc.numeric_precision) === 10 && Number(lc.numeric_scale) === 2 && lc.is_nullable === 'YES'
+    ? pass('(L) recurring_amount numeric(10,2) nullable') : fail('(L) recurring_amount column', JSON.stringify(lc));
+
+  // (M) node_type CHECK WIDENED to include 'COST' (+ original three).
+  const m = await execSQL(`SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+    WHERE conrelid='cost_objects'::regclass AND conname='cost_objects_node_type_check';`);
+  const mdef = m[0]?.def || '';
+  ['ASSET','PROJECT','PRODUCT','COST'].every(v => mdef.includes(v))
+    ? pass('(M) node_type CHECK widened with COST') : fail('(M) node_type CHECK', mdef);
+
+  // (N) cost_nature — text NOT NULL default 'CAPEX', CHECK = CAPEX|COGS|OPEX.
+  const n = await execSQL(`SELECT column_name, is_nullable, column_default FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='cost_objects' AND column_name='cost_nature';`);
+  const nc = n[0];
+  nc && nc.is_nullable === 'NO' && /CAPEX/.test(nc.column_default || '')
+    ? pass('(N) cost_nature text NOT NULL default CAPEX') : fail('(N) cost_nature column', JSON.stringify(nc));
+  const nChk = await execSQL(`SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+    WHERE conrelid='cost_objects'::regclass AND conname='cost_objects_cost_nature_check';`);
+  const ndef = nChk[0]?.def || '';
+  ['CAPEX','COGS','OPEX'].every(v => ndef.includes(v))
+    ? pass('(N) cost_nature CHECK = CAPEX|COGS|OPEX') : fail('(N) cost_nature CHECK', ndef);
+
+  // (O) cost_source — text NOT NULL default 'MANUAL', and NO CHECK constraint (loose by design).
+  const o = await execSQL(`SELECT column_name, is_nullable, column_default FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='cost_objects' AND column_name='cost_source';`);
+  const oc = o[0];
+  oc && oc.is_nullable === 'NO' && /MANUAL/.test(oc.column_default || '')
+    ? pass('(O) cost_source text NOT NULL default MANUAL') : fail('(O) cost_source column', JSON.stringify(oc));
+  const oChk = await execSQL(`SELECT COUNT(*)::int AS c FROM pg_constraint
+    WHERE conrelid='cost_objects'::regclass AND conname='cost_objects_cost_source_check';`);
+  Number(oChk[0]?.c) === 0
+    ? pass('(O) cost_source has NO CHECK (loose — sources grow without a migration)')
+    : fail('(O) cost_source unexpectedly constrained', JSON.stringify(oChk));
+
+  // (P) existing rows correctly defaulted — no row mis-tagged by the new NOT NULL defaults.
+  const p = await execSQL(`SELECT node_type, cost_shape, cost_nature, cost_source, COUNT(*)::int AS c
+    FROM cost_objects GROUP BY 1,2,3,4 ORDER BY 1,2,3,4;`);
+  const misTagged = p.filter(r => !(r.cost_shape === 'ONE_TIME' && r.cost_nature === 'CAPEX' && r.cost_source === 'MANUAL'));
+  misTagged.length === 0
+    ? pass('(P) all pre-existing rows defaulted ONE_TIME/CAPEX/MANUAL (true provenance)', JSON.stringify(p))
+    : fail('(P) some rows mis-tagged by defaults (expected only ASSET/ONE_TIME/CAPEX/MANUAL pre-backfill)', JSON.stringify(misTagged));
 }
 
 // ── ROUND-TRIP mode — service-key data proof (fallback) ─────────────────────

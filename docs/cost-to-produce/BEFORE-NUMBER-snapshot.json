@@ -1,0 +1,44 @@
+[
+  {
+    "businessId": "45830ba7-9961-403f-b048-77f022fb48dc",
+    "unitLabel": "customer-month",
+    "floorMonthly": 12223,
+    "estimatedMonthly": 16.67,
+    "knownMonthly": 12239.67,
+    "unknownCount": 5,
+    "computable": true,
+    "fedFromRollup": true,
+    "capexExcluded": 10417.31,
+    "costObjects": 7,
+    "sensitivity": [
+      {
+        "n": 1,
+        "costFloor": 12223,
+        "costKnown": 12239.67,
+        "priceFloor": 20371.99,
+        "priceKnown": 20399.99
+      },
+      {
+        "n": 5,
+        "costFloor": 2444.6,
+        "costKnown": 2447.93,
+        "priceFloor": 4074.99,
+        "priceKnown": 4079.99
+      },
+      {
+        "n": 20,
+        "costFloor": 611.15,
+        "costKnown": 611.98,
+        "priceFloor": 1018.99,
+        "priceKnown": 1019.99
+      },
+      {
+        "n": 100,
+        "costFloor": 122.23,
+        "costKnown": 122.4,
+        "priceFloor": 203.99,
+        "priceKnown": 203.99
+      }
+    ]
+  }
+]

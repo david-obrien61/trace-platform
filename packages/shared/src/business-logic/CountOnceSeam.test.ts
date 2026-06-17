@@ -237,6 +237,64 @@ test('7. amount-confidence and substantiation are preserved + not collapsed', ()
     `substantiated + owner-asserted (${r.substantiatedTotal + r.ownerAssertedTotal}) reconciles to counted total (${countedTotal})`);
 });
 
+// ── 8. fromCostObject SHAPE-AWARENESS (migration 20260617 — the $0-collapse pivot) ──
+test('8a. RECURRING_FIXED cost_object → MONTHLY_POOL, recurring_amount normalized by cadence', () => {
+  const [ev] = fromCostObject({
+    id: 'co-claude-pro', label: 'Claude Pro', node_type: 'COST',
+    acquisition_cost: null, cost_confidence: 'CONFIRMED',
+    cost_shape: 'RECURRING_FIXED', cadence: 'MONTHLY', recurring_amount: 17,
+  });
+  // A buggy CAPEX-only path (the old impl) would bucket this as CAPEX with amount=null
+  // (acquisition_cost) and silently drop the $17/mo from the ÷N pool.
+  ok(ev.bucket === 'MONTHLY_POOL', `recurring cost feeds the monthly pool, not CAPEX; got ${ev.bucket}`);
+  ok(ev.amount === 17, `monthly cadence passes through: $17/mo; got ${ev.amount}`);
+  ok(ev.amountConfidence === 'CONFIRMED', 'confidence rides through');
+});
+
+test('8b. ANNUAL recurring_amount is normalized to monthly (÷12)', () => {
+  const [ev] = fromCostObject({
+    id: 'co-domains', label: '6 domains (GoDaddy)', node_type: 'COST',
+    acquisition_cost: null, cost_confidence: 'ESTIMATED',
+    cost_shape: 'RECURRING_FIXED', cadence: 'ANNUAL', recurring_amount: 120,
+  });
+  // Buggy: treat the annual figure as monthly → $120/mo (10× overstatement).
+  ok(ev.bucket === 'MONTHLY_POOL', 'annual recurring is still a pool feed');
+  ok(ev.amount === 10, `$120/yr → $10.00/mo; got ${ev.amount}`);
+});
+
+test('8c. BYTE-IDENTICAL regression: absent cost_shape → CAPEX from acquisition_cost', () => {
+  // This is the live state until the migration is applied + the read path selects shape.
+  const [ev, ...rest] = fromCostObject({
+    id: 'co-tractor', label: 'Mahindra tractor', node_type: 'ASSET',
+    acquisition_cost: 5000, cost_confidence: 'ESTIMATED',
+    // no cost_shape / cadence / recurring_amount — exactly what today's select returns
+  });
+  ok(ev.bucket === 'CAPEX', `no shape → CAPEX (byte-identical to prior impl); got ${ev.bucket}`);
+  ok(ev.amount === 5000, `CAPEX amount = acquisition_cost 5000; got ${ev.amount}`);
+  ok(rest.length === 0, 'one event, no conversion (none supplied)');
+});
+
+test('8d. UNKNOWN recurring_amount → null, NEVER coerced to $0 (Surface Honesty)', () => {
+  const [ev] = fromCostObject({
+    id: 'co-api', label: 'Claude API usage', node_type: 'COST',
+    acquisition_cost: null, cost_confidence: 'UNKNOWN',
+    cost_shape: 'RECURRING_FIXED', cadence: 'MONTHLY', recurring_amount: null,
+  });
+  ok(ev.bucket === 'MONTHLY_POOL', 'still a pool feed even when amount is unknown');
+  ok(ev.amount === null, `unknown amount stays null, not 0; got ${ev.amount}`);
+});
+
+test('8e. PIVOT: a recurring cost_object lands in the monthly pool (poolKnownMonthly), not capex', () => {
+  const r = enforceCountOnce(fromCostObject({
+    id: 'co-gemini', label: 'Gemini Advanced', node_type: 'COST',
+    acquisition_cost: null, cost_confidence: 'CONFIRMED',
+    cost_shape: 'RECURRING_FIXED', cadence: 'MONTHLY', recurring_amount: 20,
+  }));
+  // Buggy CAPEX path would put $20 in capexKnown and $0 in the pool → tile reads $0/mo.
+  ok(r.poolKnownMonthly === 20, `recurring $20 feeds the ÷N pool; got ${r.poolKnownMonthly}`);
+  ok(r.capexKnown === 0, `nothing leaks into capex; got ${r.capexKnown}`);
+});
+
 // ── report ─────────────────────────────────────────────────────────────────────────
 console.log('\n──────────────────────────────────────────────');
 console.log(`COUNT-ONCE SEAM TESTS: ${passed} passed, ${failed} failed`);
