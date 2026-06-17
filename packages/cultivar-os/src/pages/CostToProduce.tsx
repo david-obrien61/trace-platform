@@ -92,9 +92,10 @@ export function CostToProduce() {
       // The DB column is `name` (not `label`) and there is no conversion_cost/vendor/receipt
       // column yet, so we map name→label and let fromCostObject default the rest.
       let rollupEvents: CostEvent[] = [];
+      let hasMigratedRecurring = false;
       const objRes = await supabase
         .from('cost_objects')
-        .select('id,name,node_type,domain,acquisition_cost,cost_confidence,status')
+        .select('id,name,node_type,domain,acquisition_cost,cost_confidence,status,cost_shape,cadence,recurring_amount')
         .eq('business_id', businessId);
       if (!cancelled && !objRes.error && Array.isArray(objRes.data) && objRes.data.length) {
         rollupEvents = (objRes.data as Array<Record<string, unknown>>).flatMap((r) =>
@@ -106,9 +107,28 @@ export function CostToProduce() {
             acquisition_cost: (r.acquisition_cost as number | null) ?? null,
             cost_confidence: (r.cost_confidence as CostObjectNodeRow['cost_confidence']) ?? 'UNKNOWN',
             status: (r.status as string | null) ?? null,
+            // STEP 6 FLIP (2026-06-17): the shape columns now drive bucketing — RECURRING_FIXED
+            // COST rows feed the monthly pool via fromCostObject (the migrated recurring costs).
+            cost_shape: (r.cost_shape as CostObjectNodeRow['cost_shape']) ?? null,
+            cadence: (r.cadence as CostObjectNodeRow['cadence']) ?? null,
+            recurring_amount: (r.recurring_amount as number | null) ?? null,
           }),
         );
+        // Recurring costs now live as cost_objects (node_type='COST'). When ANY exist for this
+        // business they are the source of truth for the monthly pool, so we STOP counting
+        // config.recurring[] (no R2 double-count). SAFE FALLBACK (R1 guard): a tenant with NO
+        // migrated COST rows keeps its config.recurring[] (legacy path, byte-identical) — the
+        // flip never zeroes an un-migrated tenant.
+        hasMigratedRecurring = (objRes.data as Array<Record<string, unknown>>).some((r) => r.node_type === 'COST');
       }
+
+      // The config the engine prices from. Labor / margin / denominators STAY in config (R3).
+      // Only recurring[] is dropped, and only once cost_objects supplies it — so the pool is
+      // fed from exactly one source.
+      const baseCfg = cfg ?? EMPTY_COST_CONFIG;
+      const pricingCfg: CostToProduceConfig = hasMigratedRecurring
+        ? { ...baseCfg, locations: baseCfg.locations.map((l) => ({ ...l, recurring: [] })) }
+        : baseCfg;
 
       // [TRACE:COST] (STD-003) — tile load: what the SEE-IT surface read before computing.
       // The engine then emits its own `[TRACE:COST] compute` line from analyze().
@@ -119,9 +139,11 @@ export function CostToProduce() {
         unknownInventory: unknownInv.length,
         costObjects: objRes.error ? `unavailable (${objRes.error.code ?? 'err'})` : (objRes.data?.length ?? 0),
         rollupEvents: rollupEvents.length,
+        flippedToCostObjects: hasMigratedRecurring, // STEP 6: recurring sourced from cost_objects
+        configRecurringCounted: !hasMigratedRecurring,
       });
 
-      setResult(analyze(cfg ?? EMPTY_COST_CONFIG, unknownInv, { rollupEvents }));
+      setResult(analyze(pricingCfg, unknownInv, { rollupEvents }));
       setLoading(false);
     })();
     return () => { cancelled = true; };

@@ -1,5 +1,9 @@
 /**
- * capture-cost-before.ts — Unified Cost Model, BUILD step 0: the BEFORE-NUMBER anchor.
+ * capture-cost-before.ts — Unified Cost Model cost-tile MIRROR.
+ *   • Step 0 produced the locked BEFORE-NUMBER anchor (docs/.../BEFORE-NUMBER-snapshot.json).
+ *   • Step 6 (FLIPPED): now mirrors the post-flip /costs tile (selects shape columns, feeds
+ *     migrated COST rows as the pool, strips config.recurring when migrated) and writes
+ *     AFTER-FLIP-snapshot.json, asserting the live KNOWN total == the locked anchor.
  *
  * Trust-but-verify gate for the staged migration. Reads the LIVE production state and
  * runs the REAL shared engine (not a re-implementation) EXACTLY as the /costs tile does
@@ -59,11 +63,13 @@ async function main() {
       .filter((r: any) => (r.cost_confidence ?? '').toUpperCase() === 'UNKNOWN' || r.unit_cost == null)
       .map((r: any) => `Inventory: ${r.name}`);
 
-    // cost_objects → rollupEvents (mirrors the page select EXACTLY — no cost_shape selected
-    // yet, so fromCostObject's recurring branch is dormant; everything is CAPEX → excluded).
+    // cost_objects → rollupEvents. STEP 6 FLIP (2026-06-17): mirrors the FLIPPED page —
+    // selects the shape columns so RECURRING_FIXED COST rows feed the monthly pool, and
+    // strips config.recurring once migrated COST rows exist (R1-safe guard).
     let rollupEvents: CostEvent[] = [];
+    let hasMigratedRecurring = false;
     const { data: objs, error: objErr } = await sb
-      .from('cost_objects').select('id,name,node_type,domain,acquisition_cost,cost_confidence,status')
+      .from('cost_objects').select('id,name,node_type,domain,acquisition_cost,cost_confidence,status,cost_shape,cadence,recurring_amount')
       .eq('business_id', businessId);
     if (!objErr && Array.isArray(objs) && objs.length) {
       rollupEvents = (objs as Array<Record<string, unknown>>).flatMap((r) => fromCostObject({
@@ -74,10 +80,18 @@ async function main() {
         acquisition_cost: (r.acquisition_cost as number | null) ?? null,
         cost_confidence: (r.cost_confidence as CostObjectNodeRow['cost_confidence']) ?? 'UNKNOWN',
         status: (r.status as string | null) ?? null,
+        cost_shape: (r.cost_shape as CostObjectNodeRow['cost_shape']) ?? null,
+        cadence: (r.cadence as CostObjectNodeRow['cadence']) ?? null,
+        recurring_amount: (r.recurring_amount as number | null) ?? null,
       }));
+      hasMigratedRecurring = (objs as Array<Record<string, unknown>>).some((r) => r.node_type === 'COST');
     }
 
-    const result = analyze(cfg, unknownInv, { rollupEvents });
+    // Labor/margin/denominators stay in config (R3); recurring dropped only when sourced from cost_objects.
+    const pricingCfg = hasMigratedRecurring
+      ? { ...cfg, locations: (cfg.locations ?? []).map((l) => ({ ...l, recurring: [] })) }
+      : cfg;
+    const result = analyze(pricingCfg, unknownInv, { rollupEvents });
     const row = {
       businessId,
       unitLabel: result.unitLabel,
@@ -98,9 +112,18 @@ async function main() {
 
   const outDir = join(repoRoot, 'docs/cost-to-produce');
   mkdirSync(outDir, { recursive: true });
-  const outFile = join(outDir, 'BEFORE-NUMBER-snapshot.json');
-  writeFileSync(outFile, JSON.stringify(snapshot, null, 2) + '\n');
-  console.log(`\n✓ captured ${snapshot.length} tenant(s) → ${outFile}`);
-  console.log('  Re-run AFTER the fromCostObject change; diff this file — it MUST be identical.');
+  // STEP 6: write the AFTER-FLIP snapshot (preserve the locked BEFORE anchor) and compare.
+  const afterFile = join(outDir, 'AFTER-FLIP-snapshot.json');
+  writeFileSync(afterFile, JSON.stringify(snapshot, null, 2) + '\n');
+  const anchor: any[] = JSON.parse(readFileSync(join(outDir, 'BEFORE-NUMBER-snapshot.json'), 'utf8'));
+  let failed = 0;
+  for (const row of snapshot) {
+    const a = anchor.find((x) => x.businessId === row.businessId);
+    const ok = a && Math.abs(a.knownMonthly - row.knownMonthly) < 0.005;
+    if (!ok) failed++;
+    console.log(`  ${ok ? '✅' : '❌'} ${row.businessId}: live KNOWN $${row.knownMonthly.toFixed(2)}/mo vs anchor $${(a?.knownMonthly ?? NaN).toFixed?.(2)}/mo`);
+  }
+  console.log(`\n${failed === 0 ? '✓ LIVE POST-FLIP TILE MATCHES the locked before-number' : '✗ MISMATCH — do not proceed'} → ${afterFile}`);
+  process.exit(failed ? 1 : 0);
 }
 main();
