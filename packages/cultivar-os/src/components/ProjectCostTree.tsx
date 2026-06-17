@@ -17,6 +17,22 @@
  *   CostRollup + the count-once seam — so reassignment recomputes via an honest re-derive,
  *   never a local +/− shortcut (§5). The honesty engine (D-9) is untouched.
  *
+ * GROUP ORDER (FIX 1, 2026-06-17 — display sort, engine untouched):
+ *   Overhead (company-level) is PINNED to the top — it's the base layer serving the whole
+ *   business, not a project competing alphabetically. Projects follow, sorted alphanumerically
+ *   (A-Z, numeric-aware). That gives owner-controlled order with NO new UI: prefix a project
+ *   "1."/"A." and the prefix becomes the sort key.
+ *
+ * UNKNOWN-ACCOUNTING (FIX 2, 2026-06-17 — one honest definition everywhere):
+ *   "unknown" = a COST (ASSET/COST node) with genuinely no amount. NEVER a project, NEVER a
+ *   non-unknown cost (isUnknownCost). The top unquantified-costs block, the resolve modal, the
+ *   per-group pills, and the root count ALL read this one set, so they can never disagree (the
+ *   old pills under-counted COST-typed nulls; the analyze card over-counted via projects).
+ *   • Top block: lists the genuine unknown COSTS grouped by project-as-LABEL (context, not a
+ *     listed cost). Click → resolve modal.
+ *   • Resolve modal: just the unknown costs, the same 4 columns + the SAME inline editor
+ *     (CostRow — one editor, reused). Resolve one → it drops off → the block shrinks.
+ *
  * ROW CONTROLS (§4 — ALL THREE fields click-to-edit inline; 2026-06-17 + column headers):
  *   • confidence badge → dropdown (writes cost_confidence).
  *   • parent badge → dropdown of PROJECTs + "Company-level" (writes parent_id; a MOVE, §3).
@@ -72,6 +88,20 @@ const isRecurringShape = (s: string | null | undefined) => s === 'RECURRING_FIXE
 const amountFieldOf = (r: ProjectLensRow) => (isRecurringShape(r.cost_shape) ? 'recurring_amount' : 'acquisition_cost');
 const amountOf = (r: ProjectLensRow) => (isRecurringShape(r.cost_shape) ? (r.recurring_amount ?? null) : (r.acquisition_cost ?? null));
 
+/** A "cost" node — an ASSET or a COST line. PROJECT/PRODUCT are buckets, never costs. */
+const isCostNode = (r: ProjectLensRow) => r.node_type === 'ASSET' || r.node_type === 'COST';
+/**
+ * THE ONE honest definition of "unknown" (FIX 2 — used by the top block, the resolve modal,
+ * the group pills, AND the root count, so every surface agrees on the SAME set): a COST with
+ * genuinely no amount. NEVER a project. NEVER a non-unknown cost. Because confidence and amount
+ * are kept coherent at input (UNKNOWN ⟺ no amount), amount==null is the load-bearing test — not
+ * the confidence label — so a COST-typed null node (Resend/Twilio) counts the same as an ASSET one.
+ */
+const isUnknownCost = (r: ProjectLensRow) => isCostNode(r) && amountOf(r) == null;
+
+/** Inline-edit state, shared by the tree rows and the resolve-modal rows (one editor, FIX 2c). */
+type EditState = { rowId: string; field: 'confidence' | 'parent' | 'amount'; pendingConfidence?: string } | null;
+
 interface RawRow {
   id: string;
   name: string | null;
@@ -93,8 +123,9 @@ export function ProjectCostTree({ businessId, businessName }: { businessId: stri
   // 'amount' joins confidence + parent as a third inline-editable field. pendingConfidence is
   // set when a confidence→non-UNKNOWN change opened the amount editor to collect the number
   // (David's HP ProDesk flow): committing the amount also writes that confidence.
-  const [editing, setEditing] = useState<{ rowId: string; field: 'confidence' | 'parent' | 'amount'; pendingConfidence?: string } | null>(null);
+  const [editing, setEditing] = useState<EditState>(null);
   const [managerOpen, setManagerOpen] = useState(false);
+  const [resolveOpen, setResolveOpen] = useState(false); // FIX 2c — the unknown-cost worklist modal
 
   const load = useCallback(async () => {
     if (!businessId) return;
@@ -214,6 +245,38 @@ export function ProjectCostTree({ businessId, businessName }: { businessId: stri
   const parentLabel = (parentId: string | null) =>
     parentId == null ? 'Company-level' : (projectChoices.find((p) => p.id === parentId)?.label ?? 'Company-level');
 
+  // FIX 2 — the ONE canonical unknown set, derived from the live rows. Genuine unknown COSTS
+  // only (never a project, never a non-unknown cost). The top block, the resolve modal, the
+  // group pills, and the root count all read THIS, so they can never disagree.
+  const unknownCosts = rows.filter(isUnknownCost);
+  // Grouped by the project the unknown lives under, project-as-LABEL (context, not a listed cost).
+  const unknownByProject: Array<{ project: string; costs: ProjectLensRow[] }> = (() => {
+    const m = new Map<string, ProjectLensRow[]>();
+    for (const r of unknownCosts) {
+      const k = parentLabel(r.parent_id);
+      (m.get(k) ?? (m.set(k, []), m.get(k)!)).push(r);
+    }
+    // Company-level first, then projects alphanumerically — mirrors the tree's group order.
+    return [...m.entries()]
+      .sort(([a], [b]) =>
+        a === 'Company-level' ? -1 : b === 'Company-level' ? 1 : a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
+      .map(([project, costs]) => ({ project, costs }));
+  })();
+
+  // FIX 1 — group ORDER: Overhead (company-level) pinned to TOP, then PROJECTS alphanumerically
+  // (A-Z). Alphanumeric + naming freedom = owner-controlled order via "1."/"A." prefixes (the
+  // prefix is the sort key — no drag-reorder, no order column). Display-only sort; the engine
+  // returns groups in input order, this just renders them ordered.
+  const orderedGroups = view
+    ? [...view.groups].sort((a, b) =>
+        a.isOverhead !== b.isOverhead
+          ? (a.isOverhead ? -1 : 1)
+          : a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' }))
+    : [];
+
+  // Shared row-edit handlers, bundled so the tree rows and the modal rows use the SAME editor.
+  const rowHandlers = { editing, setEditing, projectChoices, parentLabel, commitConfidence, reassign, commitAmount };
+
   return (
     <div style={S.card}>
       <div style={S.sectionHead}>
@@ -238,20 +301,43 @@ export function ProjectCostTree({ businessId, businessName }: { businessId: stri
           </div>
         ) : (
           <>
-            {/* ROOT — the tenant business NAME (rendered, not stored). Captured total = count-once. */}
+            {/* FIX 2a — UNQUANTIFIED-COSTS BLOCK (the top block). Lists ONLY genuine unknown
+                COSTS, GROUPED BY PROJECT with the project as a LABEL (context), never a listed
+                cost. Count = the real number of unknown costs. Click → resolve worklist modal. */}
+            {unknownCosts.length > 0 && (
+              <button style={S.unknownBlock} title="Click to resolve these costs"
+                onClick={() => { console.log('[TRACE:PROJECTLENS] open resolve worklist', { unknownCount: unknownCosts.length }); setResolveOpen(true); }}>
+                <span style={S.unknownBlockHead}>
+                  <AlertTriangle size={14} /> {unknownCosts.length} unquantified cost{unknownCosts.length === 1 ? '' : 's'} — your real cost is higher
+                </span>
+                <span style={S.unknownBlockBody}>
+                  {unknownByProject.map(({ project, costs }) => (
+                    <span key={project} style={{ display: 'block' }}>
+                      <b>{project}:</b> {costs.map((c) => c.label).join(', ')}
+                    </span>
+                  ))}
+                </span>
+                <span style={S.unknownBlockCta}>Resolve →</span>
+              </button>
+            )}
+
+            {/* ROOT — the tenant business NAME (rendered, not stored). Captured total = count-once.
+                Unknown COUNT uses the canonical set (FIX 2) so it agrees with the block + pills. */}
             <div style={S.rootRow}>
               <span style={{ fontWeight: 800, color: GREEN, fontSize: '0.95rem' }}>{view.rootLabel}</span>
               <span style={{ fontSize: '0.75rem', color: GRAY }}>
                 Captured: <b style={{ color: DARK }}>{money(view.flatCompanyTotal.capexKnown)}</b> one-time
                 {view.flatCompanyTotal.poolKnownMonthly > 0 && <> · <b style={{ color: DARK }}>{money(view.flatCompanyTotal.poolKnownMonthly)}</b>/mo</>}
-                {view.flatCompanyTotal.unknownLines.length > 0 && <> · <span style={{ color: AMBER }}>{view.flatCompanyTotal.unknownLines.length} unknown</span></>}
+                {unknownCosts.length > 0 && <> · <span style={{ color: AMBER }}>{unknownCosts.length} unknown</span></>}
               </span>
             </div>
 
-            {/* GROUPS — overhead first, then projects. */}
-            {view.groups.map((g) => {
+            {/* GROUPS — overhead pinned first (FIX 1), then projects alphanumerically. */}
+            {orderedGroups.map((g) => {
               const isOpen = expanded.has(g.id);
-              const unknowns = g.rollup.seam.unknownLines.length;
+              // FIX 2b — count the SAME canonical set (incl. COST-typed null nodes the rollup
+              // seam dropped), so the group pill agrees with the top block and the root count.
+              const unknowns = g.children.filter(isUnknownCost).length;
               return (
                 <div key={g.id} style={S.group}>
                   <button style={S.groupHead} onClick={() => toggle(g.id)}>
@@ -279,61 +365,9 @@ export function ProjectCostTree({ businessId, businessName }: { businessId: stri
                           <span style={S.colAmt}>Amount</span>
                         </div>
                       )}
-                      {g.children.map((c) => {
-                        const conf = (c.cost_confidence ?? 'UNKNOWN');
-                        const amt = amountOf(c);              // recurring_amount OR acquisition_cost
-                        const unknown = amt == null;          // "unknown" ONLY when truly no amount
-                        const recurring = isRecurringShape(c.cost_shape);
-                        const suffix = recurring ? (CADENCE_SUFFIX[c.cadence ?? 'MONTHLY'] ?? '') : '';
-                        return (
-                          <div key={c.id} style={S.childRow}>
-                            <span style={{ flex: 1, color: DARK, fontSize: '0.875rem' }}>{c.label}</span>
-
-                            {/* confidence badge → dropdown on click (coherence-enforced) */}
-                            {editing?.rowId === c.id && editing.field === 'confidence' ? (
-                              <select autoFocus style={{ ...S.select, ...S.colConf }} defaultValue={conf}
-                                onChange={(e) => commitConfidence(c, e.target.value)} onBlur={() => setEditing(null)}>
-                                {CONFIDENCE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-                              </select>
-                            ) : (
-                              <button style={{ ...S.badge(conf), ...S.colConf }} onClick={() => setEditing({ rowId: c.id, field: 'confidence' })} title="Click to change confidence">
-                                {conf}
-                              </button>
-                            )}
-
-                            {/* parent badge → dropdown on click (the reassignment control) */}
-                            {editing?.rowId === c.id && editing.field === 'parent' ? (
-                              <select autoFocus style={{ ...S.select, ...S.colProj }} defaultValue={c.parent_id ?? COMPANY_LEVEL}
-                                onChange={(e) => reassign(c.id, e.target.value)} onBlur={() => setEditing(null)}>
-                                <option value={COMPANY_LEVEL}>Company-level</option>
-                                {projectChoices.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-                              </select>
-                            ) : (
-                              <button style={{ ...S.parentBadge, ...S.colProj }} onClick={() => setEditing({ rowId: c.id, field: 'parent' })} title="Click to move to another project">
-                                {parentLabel(c.parent_id)} ▾
-                              </button>
-                            )}
-
-                            {/* amount → inline input on click (third inline-editable field, fix B+C) */}
-                            {editing?.rowId === c.id && editing.field === 'amount' ? (
-                              <AmountInput
-                                initial={amt}
-                                suffix={recurring ? suffix : 'one-time'}
-                                onCommit={(v) => commitAmount(c, v, editing?.pendingConfidence)}
-                                onCancel={() => setEditing(null)}
-                              />
-                            ) : (
-                              <button
-                                style={{ ...S.amountBtn, color: unknown ? AMBER : DARK }}
-                                onClick={() => setEditing({ rowId: c.id, field: 'amount' })}
-                                title="Click to edit amount"
-                              >
-                                {unknown ? 'unknown' : `${money(amt as number)}${suffix}`}
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
+                      {g.children.map((c) => (
+                        <CostRow key={c.id} c={c} {...rowHandlers} />
+                      ))}
                       {/* honest flags from this group's rollup (open period / multi-path / cycle) */}
                       {g.rollup.flags.length > 0 && (
                         <p style={S.flagNote}>{g.rollup.flags.join(' · ')}</p>
@@ -365,6 +399,112 @@ export function ProjectCostTree({ businessId, businessName }: { businessId: stri
           onChanged={load}
           onClose={() => setManagerOpen(false)}
         />
+      )}
+
+      {/* FIX 2c — RESOLVE WORKLIST modal. Just the unknown costs, the SAME 4 columns and the
+          SAME coherent inline editor (CostRow) as the tree — resolving one drops it off the
+          list (the modal reads the live canonical set) and shrinks the top block. */}
+      {resolveOpen && (
+        <div style={S.modalBackdrop} onClick={() => setResolveOpen(false)}>
+          <div style={S.modalCard} onClick={(e) => e.stopPropagation()}>
+            <div style={S.modalHead}>
+              <p style={S.modalTitle}><AlertTriangle size={15} color={AMBER} /> Resolve unquantified costs</p>
+              <button style={S.modalClose} onClick={() => setResolveOpen(false)}>Done</button>
+            </div>
+            {unknownCosts.length === 0 ? (
+              <p style={{ ...S.muted, padding: '8px 2px' }}>Every captured cost has an amount — nothing left to resolve. 🎉</p>
+            ) : (
+              <>
+                <p style={S.modalSub}>
+                  These costs have no amount yet, so your real cost is higher than shown. Add an amount
+                  (or set a confidence) to fold each into the total. Genuine unknowns stay honest.
+                </p>
+                <div style={S.childHeader}>
+                  <span style={{ flex: 1 }}>Cost</span>
+                  <span style={S.colConf}>Confidence</span>
+                  <span style={S.colProj}>Project</span>
+                  <span style={S.colAmt}>Amount</span>
+                </div>
+                {unknownCosts.map((c) => (
+                  <CostRow key={c.id} c={c} {...rowHandlers} />
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One cost row — the SHARED coherent inline editor (FIX 2c reuse): confidence badge, project
+ * (parent) badge, and amount, each click-to-edit. Used by both the by-project tree and the
+ * resolve modal so there is exactly ONE editor. Coherence (UNKNOWN ⟺ no amount) is enforced
+ * by the commit* handlers passed in.
+ */
+function CostRow({
+  c, editing, setEditing, projectChoices, parentLabel, commitConfidence, reassign, commitAmount,
+}: {
+  c: ProjectLensRow;
+  editing: EditState;
+  setEditing: (e: EditState) => void;
+  projectChoices: { id: string; label: string }[];
+  parentLabel: (parentId: string | null) => string;
+  commitConfidence: (row: ProjectLensRow, v: string) => void;
+  reassign: (rowId: string, sel: string) => void;
+  commitAmount: (row: ProjectLensRow, v: number | null, pendingConfidence?: string) => void;
+}) {
+  const conf = c.cost_confidence ?? 'UNKNOWN';
+  const amt = amountOf(c);              // recurring_amount OR acquisition_cost
+  const unknown = amt == null;          // "unknown" ONLY when truly no amount
+  const recurring = isRecurringShape(c.cost_shape);
+  const suffix = recurring ? (CADENCE_SUFFIX[c.cadence ?? 'MONTHLY'] ?? '') : '';
+  return (
+    <div style={S.childRow}>
+      <span style={{ flex: 1, color: DARK, fontSize: '0.875rem' }}>{c.label}</span>
+
+      {/* confidence badge → dropdown on click (coherence-enforced) */}
+      {editing?.rowId === c.id && editing.field === 'confidence' ? (
+        <select autoFocus style={{ ...S.select, ...S.colConf }} defaultValue={conf}
+          onChange={(e) => commitConfidence(c, e.target.value)} onBlur={() => setEditing(null)}>
+          {CONFIDENCE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+      ) : (
+        <button style={{ ...S.badge(conf), ...S.colConf }} onClick={() => setEditing({ rowId: c.id, field: 'confidence' })} title="Click to change confidence">
+          {conf}
+        </button>
+      )}
+
+      {/* parent badge → dropdown on click (the reassignment control) */}
+      {editing?.rowId === c.id && editing.field === 'parent' ? (
+        <select autoFocus style={{ ...S.select, ...S.colProj }} defaultValue={c.parent_id ?? COMPANY_LEVEL}
+          onChange={(e) => reassign(c.id, e.target.value)} onBlur={() => setEditing(null)}>
+          <option value={COMPANY_LEVEL}>Company-level</option>
+          {projectChoices.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+        </select>
+      ) : (
+        <button style={{ ...S.parentBadge, ...S.colProj }} onClick={() => setEditing({ rowId: c.id, field: 'parent' })} title="Click to move to another project">
+          {parentLabel(c.parent_id)} ▾
+        </button>
+      )}
+
+      {/* amount → inline input on click (third inline-editable field) */}
+      {editing?.rowId === c.id && editing.field === 'amount' ? (
+        <AmountInput
+          initial={amt}
+          suffix={recurring ? suffix : 'one-time'}
+          onCommit={(v) => commitAmount(c, v, editing?.pendingConfidence)}
+          onCancel={() => setEditing(null)}
+        />
+      ) : (
+        <button
+          style={{ ...S.amountBtn, color: unknown ? AMBER : DARK }}
+          onClick={() => setEditing({ rowId: c.id, field: 'amount' })}
+          title="Click to edit amount"
+        >
+          {unknown ? 'unknown' : `${money(amt as number)}${suffix}`}
+        </button>
       )}
     </div>
   );
@@ -400,6 +540,18 @@ const S = {
   colProj: { width: 116, textAlign: 'center', flex: 'none' } as React.CSSProperties,
   colAmt:  { width: 84, textAlign: 'right', flex: 'none' } as React.CSSProperties,
   amountBtn: { width: 84, textAlign: 'right', fontWeight: 600, fontSize: '0.8125rem', background: 'none', border: 'none', borderBottom: '1px dashed #d1d5db', cursor: 'pointer', padding: '2px 0', whiteSpace: 'nowrap' } as React.CSSProperties,
+  // FIX 2a — the top unquantified-costs block (a button: click → resolve modal).
+  unknownBlock: { width: '100%', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 4, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '10px 12px', marginBottom: 12, cursor: 'pointer' } as React.CSSProperties,
+  unknownBlockHead: { display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8125rem', fontWeight: 700, color: AMBER } as React.CSSProperties,
+  unknownBlockBody: { fontSize: '0.75rem', color: '#9a6a2c', lineHeight: 1.6 } as React.CSSProperties,
+  unknownBlockCta: { fontSize: '0.6875rem', fontWeight: 700, color: AMBER, marginTop: 2 } as React.CSSProperties,
+  // FIX 2c — resolve worklist modal.
+  modalBackdrop: { position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 50 } as React.CSSProperties,
+  modalCard: { background: '#fff', borderRadius: 14, padding: '18px 16px', border: '1px solid #e5e7eb', width: '100%', maxWidth: 520, maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 12px 40px rgba(0,0,0,0.18)' } as React.CSSProperties,
+  modalHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 } as React.CSSProperties,
+  modalTitle: { fontSize: '0.9375rem', fontWeight: 800, color: DARK, margin: 0, display: 'flex', alignItems: 'center', gap: 7 } as React.CSSProperties,
+  modalClose: { background: GREEN, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 14px', fontSize: '0.8125rem', fontWeight: 700, cursor: 'pointer' } as React.CSSProperties,
+  modalSub: { fontSize: '0.8125rem', color: GRAY, lineHeight: 1.5, margin: '0 0 12px' } as React.CSSProperties,
 };
 
 /**

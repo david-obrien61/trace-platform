@@ -98,7 +98,14 @@ export function CostToProduce() {
         .select('id,name,node_type,domain,acquisition_cost,cost_confidence,status,cost_shape,cadence,recurring_amount')
         .eq('business_id', businessId);
       if (!cancelled && !objRes.error && Array.isArray(objRes.data) && objRes.data.length) {
-        rollupEvents = (objRes.data as Array<Record<string, unknown>>).flatMap((r) =>
+        rollupEvents = (objRes.data as Array<Record<string, unknown>>)
+          // FIX 2 (2026-06-17): PROJECT/PRODUCT rows are BUCKETS, not costs — a bucket with a
+          // null amount used to surface here as a phantom "unquantified cost" (CoolRunnings,
+          // Farm). Feed only actual cost nodes (ASSET/COST) so the unknown list matches the
+          // one honest definition used by the by-project tree. No dollar figure changes — a
+          // null-amount bucket contributed $0; this only stops it inflating the unknown count.
+          .filter((r) => r.node_type === 'ASSET' || r.node_type === 'COST')
+          .flatMap((r) =>
           fromCostObject({
             id: String(r.id),
             label: String(r.name ?? 'Unnamed cost object'),

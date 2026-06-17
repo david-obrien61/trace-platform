@@ -323,6 +323,21 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-17 — THUNDER Project-Lens: group ordering + unknown-accounting honesty (BUILDER-COMPLETE, owner-proof owed)
+
+**Type:** Display/input layer ONLY — `ProjectCostTree.tsx` (+ 1-line input filter in `CostToProduce.tsx`). Engine UNTOUCHED (CostRollup/CountOnceSeam/analyze/ProjectLens math). No schema → schema-verification gate N/A. Two fixes, same surface, one owner-proof.
+
+- **FIX 1 — group order:** Overhead (company-level) PINNED to top (base layer, not a project competing alphabetically); projects below, sorted alphanumerically (A-Z, numeric-aware). Owner-controlled order via naming — prefix "1."/"A." = the sort key (no drag-reorder, no order column). Display-only sort over `view.groups`; adapter still returns input order.
+- **FIX 2 — one honest definition of "unknown" everywhere** (`isUnknownCost` = ASSET/COST node with genuinely no amount; NEVER a project, NEVER a non-unknown cost). Top block + resolve modal + group pills + root count ALL read this ONE set → can't disagree. Before: analyze card OVER-counted (listed PROJECT nodes as unknown costs) while group pills UNDER-counted (`rollup.seam.unknownLines` dropped COST-typed nulls Resend/Twilio).
+  - **(2a)** top block lists genuine unknown COSTS grouped by project-as-LABEL (`"CoolRunnings: HP ProDesk"` / `"Company-level: Resend, Twilio"`) — project = context, never a listed cost; count = real unknowns.
+  - **(2b)** group pills count `g.children.filter(isUnknownCost)` (display count, engine untouched) → includes COST-typed nulls, matches the block.
+  - **(2c)** click the block → resolve worklist modal: JUST the unknown costs, same 4 columns + the SAME coherent inline editor (extracted the row JSX → shared `CostRow`, used by both tree and modal — one editor). Resolve one → drops off the live set → block + modal shrink.
+  - **`CostToProduce.tsx`:** `rollupEvents` now filters to `node_type ASSET|COST` before `fromCostObject` → PROJECT/PRODUCT buckets stop surfacing as phantom unquantified costs in the analyze card. NO dollar change (null bucket = $0; only the unknown count drops); the $12,239.67/mo KNOWN floor anchor is unaffected.
+
+**Verified:** `build:cultivar` clean (2197 modules); `tsc` clean for both files. `[TRACE:PROJECTLENS]` STAYS ON (David's standing decision; + emits on resolve-worklist open). **Note on placement:** the new top block lives at the top of the by-project CARD (where the editor + canonical set live), not the very top of /costs — say the word to relocate it.
+
+**OWNER-PROOF owed (David, live /costs under RLS):** *Ordering* — Overhead first → projects alphabetical (BuiltWithCAI, CoolRunnings, Farm) → rename a project with a "1."/"A." prefix → re-sorts. *Unknown-accounting* — top block lists only unknown COSTS grouped by project-as-label (no project listed as a cost; count = real unknowns) → group pills count the same set (Resend/Twilio included) → click the block → resolve modal lists just the unknowns with the 4 columns → resolve one inline (ESTIMATED + amount) → it drops off, block count shrinks, totals recompute → genuine unknowns still show "unknown".
+
 ### 2026-06-17 — THUNDER Project-Lens display fix: full-inline edit + column headers + confidence↔amount coherence (BUILDER-COMPLETE, owner-proof owed)
 
 **Type:** Display/input layer ONLY — `packages/cultivar-os/src/components/ProjectCostTree.tsx`. Engine (CostRollup/CountOnceSeam/analyze/ProjectLens math) UNTOUCHED. Fixes 3 gaps David found in the live by-project tree after owner-proof:
