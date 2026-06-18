@@ -71,11 +71,15 @@
  *   not delete.
  */
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { ChevronRight, ChevronDown, FolderTree, AlertTriangle, Layers } from 'lucide-react';
+import { ChevronRight, ChevronDown, FolderTree, AlertTriangle, Layers, Calculator } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { buildProjectLens, OVERHEAD_GROUP_ID } from '@trace/shared/business-logic';
-import type { ProjectLensRow, ProjectLensView } from '@trace/shared/business-logic';
+import type { ProjectLensRow, ProjectLensView, ProjectGroup } from '@trace/shared/business-logic';
 import { ProjectsManager, type ManagedProject } from './ProjectsManager';
+import { ProjectCostDrillIn } from './ProjectCostDrillIn';
+
+/** Lens row carrying cost_category (D-14 Phase 1 — real column, fetched for the by-category split). */
+type LensRowWithCat = ProjectLensRow & { cost_category: string | null };
 
 const GREEN = '#27500A';
 const GRAY = '#6b7280';
@@ -119,6 +123,7 @@ interface RawRow {
   cost_shape: string | null;
   cadence: string | null;
   recurring_amount: number | null;
+  cost_category: string | null;
 }
 
 export function ProjectCostTree({
@@ -139,11 +144,13 @@ export function ProjectCostTree({
   // its own count from the same fresh data (the page top count was going stale on resolve).
   onChanged?: () => void;
 }) {
-  const [rows, setRows] = useState<ProjectLensRow[]>([]);
+  const [rows, setRows] = useState<LensRowWithCat[]>([]);
   const [view, setView] = useState<ProjectLensView | null>(null);
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false); // cost_objects relation absent (defensive)
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // D-14 Phase 1 — the selected group's per-project cost-to-produce drill-in (null = closed).
+  const [drillGroup, setDrillGroup] = useState<ProjectGroup | null>(null);
   // 'amount' joins confidence + parent as a third inline-editable field. pendingConfidence is
   // set when a confidence→non-UNKNOWN change opened the amount editor to collect the number
   // (David's HP ProDesk flow): committing the amount also writes that confidence.
@@ -161,7 +168,7 @@ export function ProjectCostTree({
     setLoading(true);
     const { data, error } = await supabase
       .from('cost_objects')
-      .select('id,name,node_type,parent_id,acquisition_cost,cost_confidence,cost_shape,cadence,recurring_amount')
+      .select('id,name,node_type,parent_id,acquisition_cost,cost_confidence,cost_shape,cadence,recurring_amount,cost_category')
       .eq('business_id', businessId)
       .eq('is_active', true);
 
@@ -173,7 +180,7 @@ export function ProjectCostTree({
       setLoading(false);
       return;
     }
-    const mapped: ProjectLensRow[] = ((data ?? []) as RawRow[]).map((r) => ({
+    const mapped: LensRowWithCat[] = ((data ?? []) as RawRow[]).map((r) => ({
       id: r.id,
       label: r.name ?? 'Unnamed',
       node_type: r.node_type ?? 'ASSET',
@@ -186,6 +193,10 @@ export function ProjectCostTree({
       cost_shape: (r.cost_shape as ProjectLensRow['cost_shape']) ?? undefined,
       cadence: (r.cadence as ProjectLensRow['cadence']) ?? undefined,
       recurring_amount: r.recurring_amount ?? null,
+      // D-14 Phase 1 — carried for the drill-in's by-category split (Labor vs Other recurring).
+      // The grouping adapter passes child row objects through by reference, so this survives
+      // onto group.children at runtime even though ProjectLensRow doesn't type it.
+      cost_category: r.cost_category ?? null,
     }));
     const v = buildProjectLens(mapped, businessName || 'My business', today());
     console.log('[TRACE:PROJECTLENS] load', {
@@ -377,18 +388,25 @@ export function ProjectCostTree({
               const unknowns = g.children.filter(isUnknownCost).length;
               return (
                 <div key={g.id} style={S.group}>
-                  <button style={S.groupHead} onClick={() => toggle(g.id)}>
-                    {isOpen ? <ChevronDown size={16} color={GRAY} /> : <ChevronRight size={16} color={GRAY} />}
-                    <span style={{ fontWeight: 700, color: g.isOverhead ? GRAY : DARK, flex: 1, textAlign: 'left' }}>
-                      {g.label}
-                    </span>
-                    <span style={S.groupTotals}>
-                      {g.rollup.capexKnown > 0 && <span>{money(g.rollup.capexKnown)} <span style={S.dim}>one-time</span></span>}
-                      {g.rollup.poolKnownMonthly > 0 && <span>{money(g.rollup.poolKnownMonthly)}<span style={S.dim}>/mo</span></span>}
-                      {g.rollup.capexKnown === 0 && g.rollup.poolKnownMonthly === 0 && <span style={S.dim}>—</span>}
-                      {unknowns > 0 && <span style={S.unknownPill}><AlertTriangle size={11} /> {unknowns}</span>}
-                    </span>
-                  </button>
+                  <div style={S.groupHeadRow}>
+                    <button style={S.groupHead} onClick={() => toggle(g.id)}>
+                      {isOpen ? <ChevronDown size={16} color={GRAY} /> : <ChevronRight size={16} color={GRAY} />}
+                      <span style={{ fontWeight: 700, color: g.isOverhead ? GRAY : DARK, flex: 1, textAlign: 'left' }}>
+                        {g.label}
+                      </span>
+                      <span style={S.groupTotals}>
+                        {g.rollup.capexKnown > 0 && <span>{money(g.rollup.capexKnown)} <span style={S.dim}>one-time</span></span>}
+                        {g.rollup.poolKnownMonthly > 0 && <span>{money(g.rollup.poolKnownMonthly)}<span style={S.dim}>/mo</span></span>}
+                        {g.rollup.capexKnown === 0 && g.rollup.poolKnownMonthly === 0 && <span style={S.dim}>—</span>}
+                        {unknowns > 0 && <span style={S.unknownPill}><AlertTriangle size={11} /> {unknowns}</span>}
+                      </span>
+                    </button>
+                    {/* D-14 Phase 1 — drill into THIS group's cost-to-produce in isolation. */}
+                    <button style={S.drillBtn} title={`See ${g.label}'s cost to produce`}
+                      onClick={() => setDrillGroup(g)}>
+                      <Calculator size={13} /> Cost to produce
+                    </button>
+                  </div>
 
                   {isOpen && (
                     <div style={S.children}>
@@ -435,6 +453,16 @@ export function ProjectCostTree({
           projects={managedProjects}
           onChanged={load}
           onClose={() => setManagerOpen(false)}
+        />
+      )}
+
+      {/* D-14 Phase 1 — per-project cost-to-produce drill-in. Reuses the selected group's
+          existing rollup (no recompute) so its totals reconcile with the tree exactly. */}
+      {drillGroup && (
+        <ProjectCostDrillIn
+          group={drillGroup}
+          businessName={businessName}
+          onClose={() => setDrillGroup(null)}
         />
       )}
 
@@ -557,7 +585,9 @@ const S = {
   empty: { textAlign: 'center', padding: '20px 0' } as React.CSSProperties,
   rootRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '6px 4px 12px', borderBottom: '1px solid #f0f0f0', marginBottom: 6, gap: 8, flexWrap: 'wrap' } as React.CSSProperties,
   group: { borderBottom: '1px solid #f6f6f6' } as React.CSSProperties,
-  groupHead: { width: '100%', display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: '10px 4px' } as React.CSSProperties,
+  groupHeadRow: { display: 'flex', alignItems: 'center', gap: 8 } as React.CSSProperties,
+  groupHead: { flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: '10px 4px' } as React.CSSProperties,
+  drillBtn: { display: 'inline-flex', alignItems: 'center', gap: 4, flex: 'none', background: '#fff', border: `1.5px solid ${GREEN}`, color: GREEN, borderRadius: 8, padding: '5px 9px', fontSize: '0.6875rem', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' } as React.CSSProperties,
   groupTotals: { display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.8125rem', fontWeight: 700, color: DARK } as React.CSSProperties,
   dim: { fontSize: '0.6875rem', fontWeight: 500, color: GRAY } as React.CSSProperties,
   unknownPill: { display: 'inline-flex', alignItems: 'center', gap: 3, background: '#fff7ed', color: AMBER, borderRadius: 10, padding: '1px 7px', fontSize: '0.6875rem', fontWeight: 700 } as React.CSSProperties,
