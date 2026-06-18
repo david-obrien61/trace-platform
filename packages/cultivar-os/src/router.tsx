@@ -25,6 +25,7 @@ import { ReceiptKeeper }     from './pages/ReceiptKeeper';
 import { BusinessAssets }    from './pages/BusinessAssets';
 import { BusinessInventory } from './pages/BusinessInventory';
 import { CostToProduce }     from './pages/CostToProduce';
+import { OperatingCosts }    from './pages/OperatingCosts';
 import PMI                   from './pages/PMI';
 import { AcceptInvite }      from '@trace/shared/auth';
 import { auth }              from './lib/auth';
@@ -75,6 +76,7 @@ export function AppRouter() {
         <Route path="/assets"            element={<BusinessAssets />} />
         <Route path="/inventory"         element={<BusinessInventory />} />
         <Route path="/costs"             element={<CostToProduce />} />
+        <Route path="/operating-costs"   element={<OperatingCosts />} />
       </Route>
 
       {/* DEMO — QB invoice preview (no auth, for demo fallback) */}

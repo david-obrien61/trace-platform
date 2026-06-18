@@ -203,6 +203,18 @@ export function CostToProduce() {
       <div style={{ padding: '20px 16px', maxWidth: 600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {loading && <p style={{ color: GRAY }}>Loading…</p>}
 
+        {/* Entry point to the recurring/operating-cost datasheet (the durable home for
+            subscriptions, utilities, fees). Always available so the first cost can be added
+            before cost-to-produce is configured. */}
+        {!loading && (
+          <button
+            onClick={() => navigate('/operating-costs')}
+            style={{ width: '100%', padding: '12px', borderRadius: 10, border: `1.5px solid ${GREEN}`, background: '#fff', color: GREEN, fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+          >
+            <Calculator size={16} /> Manage recurring &amp; operating costs →
+          </button>
+        )}
+
         {!loading && !hasConfig && (
           <Card>
             <EmptyState
