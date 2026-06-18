@@ -323,6 +323,37 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-18 — THUNDER D-13 captured (DEFERRED) + handoff/state synced to current reality (docs + handoff only)
+
+**Type:** Docs/handoff only. No schema, no code, no build → verification gate N/A. Two jobs: (1) committed `docs/DECISION-unified-margin-store-and-history.md` (D-13) + cross-linked from `DECISIONS.md`; (2) synced this Handoff + PLATFORM_STATE.md to where things actually stand. `git status --short` before: only `?? docs/DECISION-unified-margin-store-and-history.md` untracked, nothing else.
+
+**D-13 (DEFERRED — future cross-vertical arc, NOT near-term):** captured from a read-only margin/history verify-first. The shared `MarginEngine.ts` is already a pure shared calculator (both verticals feed it — AC-4 holds for the engine); margin STORAGE is fragmented (Cultivar `config.margin` blob + Ignition's 3 stores, the DB one orphaned/display-only); NO DB-level cost/margin history exists anywhere (last-write-wins). Target = ONE DB-backed RLS margin store the engine reads + a history table with the BI layer — sequenced WITH/AFTER the BI what-if wedge. Real debt, breaks nothing today → deferred.
+
+**DONE / OWNER-PROVEN (current reality):**
+- **D-12 LABOR MODEL — OWNER-PROVEN under RLS.** Owner labor migrated into a `cost_object` (floor held **$12,123**); contractor labor works (Connor $1,000/mo, Andrew $450/mo as `contract-labor` with `labor_resources` rows + applied `cost_objects` + `resource_id` links; known moved by exactly the **$1,450** delta, coherent). 4-block Settings reorg live. `config.labor` clear + button relabel done (`fe94ded`). **D-11 cost_category dimension live** + category picker on recurring rows.
+- **Stages 1–4 of the D-11/D-12 build all complete**; schema proven (catalog checks Q–W); migrations byte-identical through every gate.
+
+**NOT FULLY CLOSED — D-11/D-12 foundation has small open items (the LABOR MODEL itself IS proven):**
+- save-button vs inline-edit consistency (some edits inline, project-assignment needs Save — decide ONE model)
+- label the two per-project numbers clearly (one-time capital vs /mo)
+
+**NEAR-TERM BANKED FINDINGS (real, closer to presentable — pick next build from here):**
+- **`/assets` page is READ-ONLY with NO project assignment** → assets can't be edited or assigned to a project (real capability gap; relates to Andrew's asset/inventory widget, still pending).
+- **PER-PROJECT cost-to-produce drill-in:** select a project (e.g. BuiltWithCAI) → see ITS full cost-to-produce (labor/recurring/capital/margin) in isolation, like the company view scoped to one project (David's ask; lead-in to nesting + BI).
+
+**DEFERRED DECISIONS (future arcs, banked, NOT near-term):**
+- **D-13** unified margin store + cost/margin history (cross-vertical, with/after BI) — `docs/DECISION-unified-margin-store-and-history.md`.
+- **nested projects** (Farm→meat birds/rabbits/egg birds; LAWNS→greenhouse→inventory) — build when real.
+- **BI what-if/blocker** (the wedge — after the spine is rich + populated).
+
+**KNOWN TECH DEBT (not blocking):** `/api/qbo/status` 500 still firing (pre-existing, unrelated to cost model — tech-debt #34).
+
+**STANDING / INSTRUMENTATION (do NOT comment out any):**
+- `[TRACE:COST]` / `[TRACE:SEAM]` **STAY ON** — D-11/D-12 is NOT fully closed (open items above).
+- `[TRACE:PROJECTLENS]` **STAYS ON** (Andrew asset/inventory widget not yet online + tested).
+
+> Do NOT mark D-11/D-12 "fully owner-proven / closed." The LABOR MODEL is proven; the foundation has the open items listed above.
+
 ### 2026-06-18 — THUNDER D-11/D-12 Stages 1-3: category dimension + labor model FOUNDATION + owner labor migrated (OWNER-PROVEN; Stage 4 owed)
 
 **Type:** Schema (Stage 2, catalog-proven) + code (read path + capture mirror) + service-key seed. Staged verify-first, byte-identical proofs at each gate. **Stages 1-3 OWNER-PROVEN by David through live `/costs` under RLS.** Stage 4 (Settings reorg + write-path flip) OWED. Canonical: `docs/DECISION-cost-category-dimension.md` (D-11) + `docs/DECISION-labor-cost-model.md` (D-12).
