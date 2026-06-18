@@ -95,14 +95,16 @@ export function CostToProduce() {
       // absent (relation error) or empty, rollupEvents = [] → analyze() falls back to the
       // proven config-only path (zero change to the live tile). When David applies the
       // migration + captures objects, this lights up automatically — no code change.
-      // The DB column is `name` (not `label`) and there is no conversion_cost/vendor/receipt
-      // column yet, so we map name→label and let fromCostObject default the rest.
+      // The DB column is `name` (not `label`) and there is no conversion_cost/vendor column
+      // yet, so we map name→label and let fromCostObject default those. receipt_id IS selected
+      // and fed (2026-06-18) so the count-once seam gets its strongest dedup signal on the LIVE
+      // path — it was previously stripped here, leaving enforceCountOnce blind to receipts.
       let rollupEvents: CostEvent[] = [];
       let hasMigratedRecurring = false;
       let hasMigratedLabor = false;
       const objRes = await supabase
         .from('cost_objects')
-        .select('id,name,node_type,domain,acquisition_cost,cost_confidence,status,cost_shape,cadence,recurring_amount,cost_category')
+        .select('id,name,node_type,domain,acquisition_cost,cost_confidence,status,cost_shape,cadence,recurring_amount,cost_category,receipt_id')
         .eq('business_id', businessId);
       if (!cancelled && !objRes.error && Array.isArray(objRes.data) && objRes.data.length) {
         rollupEvents = (objRes.data as Array<Record<string, unknown>>)
@@ -126,6 +128,11 @@ export function CostToProduce() {
             cost_shape: (r.cost_shape as CostObjectNodeRow['cost_shape']) ?? null,
             cadence: (r.cadence as CostObjectNodeRow['cadence']) ?? null,
             recurring_amount: (r.recurring_amount as number | null) ?? null,
+            // 2026-06-18: feed receipt_id → fromCostObject maps it to event.receiptId, the
+            // count-once seam's strongest signal (sameCost receipt-container rules). Was omitted
+            // before, so the live seam never saw receipts. Dedup LOGIC is unchanged — this only
+            // delivers the signal it was already built to consume.
+            receipt_id: (r.receipt_id as string | null) ?? null,
           }),
         );
         // Recurring costs now live as cost_objects (node_type='COST'). When ANY exist for this
