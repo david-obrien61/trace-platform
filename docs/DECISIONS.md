@@ -498,6 +498,26 @@ doc; this entry makes the attribution/pricing model discoverable from the ledger
 
 ---
 
+### D-15 · Cost object is the COMPRESSED industry-standard cost record — adopt/deviate/add/skip, each logged — `[POINTER]`
+**Decision:** Start from the industry-standard small-business cost record; deviate deliberately to solve OUR
+problem; document every deviation. Build the 20% a two-person business needs — NOT full GAAP. Each field on
+`cost_objects` is tagged: **ADOPTED** (spine: amount, name/description, type via [[D-1]] node_type; source-doc
+ref = `receipt_id` ([[D-5]]); context tags `parent_id` ([[D-10]]) / `resource_id` ([[D-12]]) / nature / shape
+([[D-8]])), **DEVIATED** (dedup = receipt_id + line identity, not receipt_id alone; `cost_category` Schedule
+C–narrowed per [[D-11]]), **ADDED** (`cost_confidence` ladder — honest estimate over fake-precise zero,
+[[OP-5]] / [[D-9]]), **SKIPPED** (double-entry debits/credits / trial balance — the bookkeeping engine, left
+to QuickBooks). Mission frame: give a small business the cost capacity of a large company's accounting
+department, at a scaled price, by replacing the department with AI + owner + builder.
+**Why a pointer:** the field-by-field adopt/deviate/add/skip table + the standard-record reference live in the
+canonical doc; this entry settles the cost object so future builds CONFORM rather than rediscover it.
+**Canonical home:** [`docs/DECISION-cost-object-model-of-record.md`](DECISION-cost-object-model-of-record.md).
+**Companion:** [[D-1]] (node model), [[D-5]] (receipt as signal + substantiation), [[D-8]] (shape), [[D-9]]
+(honesty contract), [[D-10]] (project lens), [[D-11]] (category dimension), [[D-12]] (labor model), [[OP-5]]
+(good-enough + AI-as-equalizer).
+**Date captured:** 2026-06-18 · **Status:** ACCEPTED.
+
+---
+
 ## PERSONAL-FINANCIAL
 
 > Not in this file by design — see **`decisions/PERSONAL-FINANCIAL.local.md`** (gitignored).

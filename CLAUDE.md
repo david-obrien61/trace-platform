@@ -323,6 +323,16 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-18 — THUNDER D-15: Cost Object Model-of-Record captured + live column confirm (RECON + docs only)
+
+**Type:** RECON (live column pull) + docs only. NO schema, NO migration, NO code, NO build → schema-verification gate N/A, no BUILT-INVENTORY change. Two jobs: (1) confirmed the live `cost_objects` column set against the model David authored; (2) committed `docs/DECISION-cost-object-model-of-record.md` (D-15) + cross-linked from `DECISIONS.md` as the next free id. Content was provided verbatim by David (adopt/deviate/add/skip calls already made) — NOT re-decided here. `git status --short` before: clean.
+
+**STANDING INSTRUCTION (carried):** TRACE instrumentation `[TRACE:*]` is ON by OWNER instruction — do NOT comment out or delete any emit until David explicitly lifts it. Overrides the STD-003 post-OWNER-PROVEN comment-out default.
+
+**LIVE COLUMN CONFIRM (service-key `select('*')` on tenant 45830ba7, PAT revoked so catalog gate N/A — column existence proven via the data path):** `cost_objects` has **35 columns**. Every field the D-15 doc NAMES exists and is NOT contradicted: amount (`acquisition_cost` + `recurring_amount`), `name`/`notes`, `node_type` (ASSET/PROJECT/PRODUCT + COST), `receipt_id`, `cost_category`, `parent_id`, `resource_id`, `cost_nature`, `cost_shape`, `cost_confidence`. ⇒ doc written as-given, no field adjusted.
+
+**Two semantic columns the doc does NOT individually name (non-contradicting — surfaced for David, NOT a blocker):** `cost_source` (provenance MANUAL/API… — unified cost model, 20260617) and `substantiation` (SUBSTANTIATED/OWNER_ASSERTED — D-5 axis 2). The remaining unnamed columns are ASSET-node specialization (`asset_type`, `make`, `model`, `serial_number`, `year`, `warranty_months`, `photo_url`, `barcode_id`, `location`, `assigned_to`), node-status (`status`, `project_status`, `product_status`, `domain`), `cadence` (subsumed under shape), and infra (`id`, `business_id`, `is_active`, `created_at`, `updated_at`) — all subsumed by the doc's spine/node-type/context-tag frame. If David wants `cost_source`/`substantiation` named explicitly as ADDED axes, that's a one-line doc edit next session.
+
 ### 2026-06-18 — THUNDER D-14 Phase 1.1: drill-in aggregates EXPAND to line items + Other-recurring honesty fix (BUILDER-COMPLETE, owner-proof owed)
 
 **Type:** Code, view-layer ONLY (`ProjectCostDrillIn.tsx` + `ProjectCostTree.tsx`). **NO schema, NO migration, NO new query** (`receipt_id` added to the tree's EXISTING SELECT — +1 column, carried by reference) → schema-verification gate N/A. **BUILDER-COMPLETE (service-key reconciliation proof PASSED both ways), NOT owner-proven.** Extends the Phase 1 drill-in (`68ee49a`).
