@@ -478,6 +478,24 @@ makes the deferred consolidation discoverable from the ledger.
 (the BI wedge this sequences with).
 **Date captured:** 2026-06-18 · **Status:** DEFERRED — future arc, sequenced with/after BI (UNBUILT).
 
+### D-14 · Cost attribution follows consumption; shared cost flows by use-fraction carve-out — `[POINTER]`
+**Decision:** Attribution follows CONSUMPTION, not design intent — a cost is vertical-specific only while
+exactly ONE vertical consumes it; a 2nd adopter promotes it to shared (mirrors the code-sharing rule).
+Shared (80%) cost reaches a vertical by a cross-branch **use_fraction carve-out** (the same primitive as
+personal→business — the `cost_object_edges.use_fraction` of [[D-4]] / PATH A), conserved (carved +
+BuiltWithCAI remainder ≤ 1.0, never multiplied).
+**Cost truth ≠ price strategy** from the same data: a vertical's drill-in shows its ACTUAL burden (today
+Cultivar is the sole consumer → its carved share ≈ 1.0, and the books must SHOW that — Surface Honesty),
+while PRICING is its own 20% specific + amortized fair share of the 80% + margin (loading the full platform
+burden on the sole customer is a pricing error, not a cost error). **Unrecovered platform investment**
+(shared incurred − shared recovered) is a first-class surfaced number that dilutes as verticals onboard.
+**Why a pointer:** the five sub-decisions, deferred basis knob, and build sequencing live in the canonical
+doc; this entry makes the attribution/pricing model discoverable from the ledger.
+**Canonical home:** [`docs/DECISION-cost-attribution-and-shared-cost.md`](DECISION-cost-attribution-and-shared-cost.md).
+**Companion:** [[D-10]] (project lens — the cost cut this prices), [[D-11]] (category dimension), [[D-13]]
+(unified margin store — Phase 2 pricing sequences with it), `DECISION-nested-projects-and-BI-whatif-blocker.md`.
+**Date captured:** 2026-06-18 · **Status:** ACCEPTED. Phase 1 (cost-only drill-in) building now; Phase 2 (pricing) deferred.
+
 ---
 
 ## PERSONAL-FINANCIAL
