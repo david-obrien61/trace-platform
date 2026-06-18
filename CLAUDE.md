@@ -323,6 +323,22 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-18 — THUNDER D-14 Phase 1.1: drill-in aggregates EXPAND to line items + Other-recurring honesty fix (BUILDER-COMPLETE, owner-proof owed)
+
+**Type:** Code, view-layer ONLY (`ProjectCostDrillIn.tsx` + `ProjectCostTree.tsx`). **NO schema, NO migration, NO new query** (`receipt_id` added to the tree's EXISTING SELECT — +1 column, carried by reference) → schema-verification gate N/A. **BUILDER-COMPLETE (service-key reconciliation proof PASSED both ways), NOT owner-proven.** Extends the Phase 1 drill-in (`68ee49a`).
+
+**What:** the three drill-in aggregates (Labor / Other recurring / Captured capital) are now click-to-EXPAND to their constituent line items (read-only). Each line item: name · amount (`Intl USD`) · confidence badge · `cost_category` · 🧾 receipt link if `receipt_id`. **HONESTY FIX (required, the point of the feature):** "Other recurring" is now a REAL positive group-by of the project's non-labor monthly rows — NOT pool-minus-labor — so a row with null/blank `cost_category` surfaces as its OWN **Uncategorized** line item (amber-flagged, visible, never absorbed into a remainder). A mistagged cost becomes VISIBLE.
+
+**Reconciliation (proven two ways):** Σ line items === each aggregate (by construction), AND labor+other === `poolKnownMonthly` / Σ capital === `capexKnown` (the tree totals). A penny-level divergence (seam-merged dup) is surfaced via `reconcile-drift`, never hidden.
+
+**SCOPE FENCE held:** read-only — NO inline edit, NO reassign, NO project-assignment (that's the separate banked `/assets` write gap). 🟡 honest-debt: per-receipt deep-link `/receipts/:id` does not exist → the receipt link goes to `/receipts` (Receipt Keeper).
+
+**Service-key proof PASSED (`scripts/verify-project-drill-in.ts`, extended, read-only):** ALL groups reconcile both ways on real TRACE tenant `45830ba7…`: **CoolRunnings capital $917.31** → 4 hardware rows itemize+sum (NSPanel Pro $259.80 🧾, MINI Duo-L $65.70 🧾, meross $91.81, HP ProDesk $500.00); **BuiltWithCAI Other $156.67** → 4 real non-labor rows (domains $16.67, Open AI API $30, Infrastructure $0 CONFIRMED, Claude API $110), + Resend/Twilio unknown (no amount, not summed); labor $1,000 = Connor contract-labor. **UNCATEGORIZED SURFACED WIDELY** — nearly every non-labor row is currently untagged (honest visibility, working as intended, NOT a failure). `build:cultivar` clean (2199 modules); `tsc` clean for both files.
+
+**Instrumentation (STD-003):** `[TRACE:PROJECTLENS] drill-in expand` (projectId, aggregate, lineItemCount, anyUncategorized) added; `drill-in open` extended (lineItemCounts, anyUncategorized); `reconcile-drift` now guards pool AND capex. ALL ON BY DEFAULT until owner-proven.
+
+**NEXT — David's OWNER-PROOF (live `/costs` under RLS):** open a project drill-in → expand Labor / Other recurring / Captured capital → line items sum visibly to each aggregate → confirm the Uncategorized rows are the real untagged costs (CoolRunnings hardware, BuiltWithCAI subscriptions). Note: actually CATEGORIZING them is the separate `/assets` write gap, NOT this read-only pass. Then comment out the new `[TRACE:PROJECTLENS]` emits (don't delete). **Phase 2 (deferred):** pricing layer per D-14.
+
 ### 2026-06-18 — THUNDER D-14 banked + Phase 1 per-project cost-to-produce DRILL-IN built (BUILDER-COMPLETE, owner-proof owed)
 
 **Type:** Job 1 = doc/decision (committed `96d4ab1`). Job 2 = code (1 new cultivar component + tree wiring + 1 verify script). **NO schema, NO migration** → schema-verification gate N/A. **BUILDER-COMPLETE (service-key reconciliation proof PASSED), NOT owner-proven.**

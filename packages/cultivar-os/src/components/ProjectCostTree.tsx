@@ -78,8 +78,9 @@ import type { ProjectLensRow, ProjectLensView, ProjectGroup } from '@trace/share
 import { ProjectsManager, type ManagedProject } from './ProjectsManager';
 import { ProjectCostDrillIn } from './ProjectCostDrillIn';
 
-/** Lens row carrying cost_category (D-14 Phase 1 — real column, fetched for the by-category split). */
-type LensRowWithCat = ProjectLensRow & { cost_category: string | null };
+/** Lens row carrying cost_category + receipt_id (D-14 Phase 1/1.1 — real columns, fetched for the
+ *  by-category split + line-item receipt links). Carried onto group.children by reference. */
+type LensRowWithCat = ProjectLensRow & { cost_category: string | null; receipt_id: string | null };
 
 const GREEN = '#27500A';
 const GRAY = '#6b7280';
@@ -124,6 +125,7 @@ interface RawRow {
   cadence: string | null;
   recurring_amount: number | null;
   cost_category: string | null;
+  receipt_id: string | null;
 }
 
 export function ProjectCostTree({
@@ -168,7 +170,7 @@ export function ProjectCostTree({
     setLoading(true);
     const { data, error } = await supabase
       .from('cost_objects')
-      .select('id,name,node_type,parent_id,acquisition_cost,cost_confidence,cost_shape,cadence,recurring_amount,cost_category')
+      .select('id,name,node_type,parent_id,acquisition_cost,cost_confidence,cost_shape,cadence,recurring_amount,cost_category,receipt_id')
       .eq('business_id', businessId)
       .eq('is_active', true);
 
@@ -197,6 +199,8 @@ export function ProjectCostTree({
       // The grouping adapter passes child row objects through by reference, so this survives
       // onto group.children at runtime even though ProjectLensRow doesn't type it.
       cost_category: r.cost_category ?? null,
+      // D-14 Phase 1.1 — carried for the drill-in line-item receipt links.
+      receipt_id: r.receipt_id ?? null,
     }));
     const v = buildProjectLens(mapped, businessName || 'My business', today());
     console.log('[TRACE:PROJECTLENS] load', {
