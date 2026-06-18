@@ -464,6 +464,20 @@ live in the canonical doc; this entry makes the labor model discoverable from th
 `DECISION-nested-projects-and-BI-whatif-blocker.md` (margin-sensitivity = a what-if, deferred).
 **Date captured:** 2026-06-17 · **Status:** Canonical model decision; next-build foundation (UNBUILT).
 
+### D-13 · Unified margin store + cost/margin history — DEFERRED (future cross-vertical arc) — `[POINTER]`
+**Decision:** The margin ENGINE is already shared and correct (`MarginEngine.ts` — stateless pure
+calculator both verticals feed); the divergence is in STORAGE. Margin is stored in 4 fragmented places
+(Cultivar's `config.margin` blob + Ignition's 3 stores, the DB one orphaned/display-only), and there is
+**no DB-level cost/margin history anywhere** (last-write-wins). Target = ONE DB-backed RLS margin store
+the engine reads + a history table, landed WITH/AFTER the BI what-if layer. Real debt, breaks nothing
+today → **deferred**, not near-term.
+**Why a pointer:** the full storage inventory + history finding live in the canonical doc; this entry
+makes the deferred consolidation discoverable from the ledger.
+**Canonical home:** [`docs/DECISION-unified-margin-store-and-history.md`](DECISION-unified-margin-store-and-history.md).
+**Companion:** [[D-11]] (category dimension), [[D-12]] (labor model), `DECISION-nested-projects-and-BI-whatif-blocker.md`
+(the BI wedge this sequences with).
+**Date captured:** 2026-06-18 · **Status:** DEFERRED — future arc, sequenced with/after BI (UNBUILT).
+
 ---
 
 ## PERSONAL-FINANCIAL
