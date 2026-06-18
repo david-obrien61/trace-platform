@@ -18,9 +18,11 @@
  *   - labor_resources: one row per labor role/person; cost_rate = base_wage + burden (UI COMPUTES it
  *     on every edit so it can't drift). Per-row writes.
  *   - business_modules.config: margin / denominators / overhead / reference. config.labor is NO
- *     LONGER WRITTEN (D-12 Stage 4 — labor is now a cost_object) but is PRESERVED untouched in the
- *     blob so an un-migrated tenant's read-path R1 fallback still works (the read guard ignores it
- *     once a labor cost_object exists). config.recurring also preserved (dormant backup).
+ *     LONGER WRITTEN from any UI input (D-12 Stage 4 — labor is now a cost_object). On save, for a
+ *     MIGRATED tenant (a labor cost_object exists) config.labor.rate/hours are CLEARED so the dead
+ *     value isn't carried forever; un-migrated tenants KEEP config.labor for the read-path R1 fallback.
+ *     Byte-identical either way — the read guard strips config.labor when a labor cost_object exists.
+ *     config.recurring preserved (dormant backup). Button: "Save Cost-to-Produce" (saves costs + config).
  *
  * TRUNCATION-GUARD INTENT (preserved): rows/resources are deleted ONLY when the owner explicitly
  *   removes them (tracked in removedIds / removedLabor) — never because a short/failed read showed
@@ -408,12 +410,21 @@ export function CostToProduceSettings() {
       if (d.resourceId) { const { error } = await supabase.from('labor_resources').delete().eq('id', d.resourceId).eq('business_id', businessId); if (error) { err = error; break; } }
     }
 
-    // ── 4. config: margin / denominators / overhead / reference. config.labor + config.recurring
-    //       PRESERVED untouched (D-12 Stage 4 — labor no longer written here; left for R1 fallback). ──
+    // ── 4. config: margin / denominators / overhead / reference. config.recurring PRESERVED.
+    //    config.labor — D-12 Stage 4: labor now lives as a cost_object. For a MIGRATED tenant (a
+    //    labor cost_object will exist after this save) we CLEAR the now-dead config.labor.rate/hours
+    //    so the stale value isn't carried forever. BYTE-IDENTICAL: the read-path guard already strips
+    //    config.labor when a labor cost_object exists (hasMigratedLabor), so the stored value never
+    //    reaches the floor math — clearing it changes no number. Un-migrated tenants (no labor line)
+    //    KEEP config.labor untouched (R1 read fallback). ──
+    const hasLaborObject = namedLabor.length > 0;
+    const configToWrite = hasLaborObject
+      ? { ...config, locations: config.locations.map(l => ({ ...l, labor: { ...l.labor, rate: null, hours: null } })) }
+      : config;
     let cfgErr: { message: string } | null = null;
     if (!err) {
       const { error } = await supabase.from('business_modules').upsert(
-        { business_id: businessId, module_key: MODULE_KEY, enabled: true, configured: true, config },
+        { business_id: businessId, module_key: MODULE_KEY, enabled: true, configured: true, config: configToWrite },
         { onConflict: 'business_id,module_key' },
       );
       cfgErr = error;
@@ -664,7 +675,7 @@ export function CostToProduceSettings() {
 
       <button onClick={save} disabled={saving}
         style={{ width: '100%', padding: '13px 20px', background: saving ? '#e5e7eb' : GREEN, color: saving ? GRAY : '#fff', fontWeight: 700, fontSize: '0.9375rem', borderRadius: 10, border: 'none', cursor: saving ? 'default' : 'pointer', marginTop: 4 }}>
-        {saving ? 'Saving…' : 'Save Cost-to-Produce config'}
+        {saving ? 'Saving…' : 'Save Cost-to-Produce'}
       </button>
       {saveMsg && <p style={{ fontSize: '0.875rem', color: saveMsg.startsWith('Error') ? RED : GREEN, marginTop: 8, textAlign: 'center' }}>{saveMsg}</p>}
     </div>
