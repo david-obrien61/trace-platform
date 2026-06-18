@@ -99,9 +99,10 @@ export function CostToProduce() {
       // column yet, so we map name→label and let fromCostObject default the rest.
       let rollupEvents: CostEvent[] = [];
       let hasMigratedRecurring = false;
+      let hasMigratedLabor = false;
       const objRes = await supabase
         .from('cost_objects')
-        .select('id,name,node_type,domain,acquisition_cost,cost_confidence,status,cost_shape,cadence,recurring_amount')
+        .select('id,name,node_type,domain,acquisition_cost,cost_confidence,status,cost_shape,cadence,recurring_amount,cost_category')
         .eq('business_id', businessId);
       if (!cancelled && !objRes.error && Array.isArray(objRes.data) && objRes.data.length) {
         rollupEvents = (objRes.data as Array<Record<string, unknown>>)
@@ -133,15 +134,28 @@ export function CostToProduce() {
         // migrated COST rows keeps its config.recurring[] (legacy path, byte-identical) — the
         // flip never zeroes an un-migrated tenant.
         hasMigratedRecurring = (objRes.data as Array<Record<string, unknown>>).some((r) => r.node_type === 'COST');
+        // D-12 STEP 3 — labor now lives as a cost_objects COST row tagged cost_category
+        // 'labor' | 'contract-labor' (EXACT lowercase, matches the seed + the column comment).
+        // GUARD: strip config.labor IF AND ONLY IF such a row exists for this business → labor is
+        // sourced from the cost_object, not config (no R2 double-count). R1-safe: a tenant with NO
+        // migrated labor row keeps config.labor (legacy path, byte-identical) — the flip never
+        // zeroes an un-migrated tenant. Dormant until the labor row is seeded (STEP 3b).
+        hasMigratedLabor = (objRes.data as Array<Record<string, unknown>>).some(
+          (r) => r.node_type === 'COST' && (r.cost_category === 'labor' || r.cost_category === 'contract-labor'));
       }
 
-      // The config the engine prices from. Labor / margin / denominators STAY in config (R3).
-      // Only recurring[] is dropped, and only once cost_objects supplies it — so the pool is
-      // fed from exactly one source.
+      // The config the engine prices from. Margin / denominators STAY in config (R3). recurring[]
+      // is dropped once cost_objects supplies it; config.labor is dropped once a labor cost_object
+      // exists (hasMigratedLabor) — each pool input fed from exactly one source, no double-count.
       const baseCfg = cfg ?? EMPTY_COST_CONFIG;
-      const pricingCfg: CostToProduceConfig = hasMigratedRecurring
-        ? { ...baseCfg, locations: baseCfg.locations.map((l) => ({ ...l, recurring: [] })) }
-        : baseCfg;
+      const pricingCfg: CostToProduceConfig = {
+        ...baseCfg,
+        locations: baseCfg.locations.map((l) => ({
+          ...l,
+          recurring: hasMigratedRecurring ? [] : l.recurring,
+          labor: hasMigratedLabor ? { ...l.labor, rate: null, hours: null } : l.labor,
+        })),
+      };
 
       // [TRACE:COST] (STD-003) — tile load: what the SEE-IT surface read before computing.
       // The engine then emits its own `[TRACE:COST] compute` line from analyze().
@@ -154,6 +168,8 @@ export function CostToProduce() {
         rollupEvents: rollupEvents.length,
         flippedToCostObjects: hasMigratedRecurring, // STEP 6: recurring sourced from cost_objects
         configRecurringCounted: !hasMigratedRecurring,
+        flippedLaborToCostObjects: hasMigratedLabor, // D-12 STEP 3: labor sourced from cost_objects
+        configLaborCounted: !hasMigratedLabor,
       });
 
       setResult(analyze(pricingCfg, unknownInv, { rollupEvents }));

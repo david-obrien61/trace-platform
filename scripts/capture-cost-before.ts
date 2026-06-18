@@ -68,29 +68,44 @@ async function main() {
     // strips config.recurring once migrated COST rows exist (R1-safe guard).
     let rollupEvents: CostEvent[] = [];
     let hasMigratedRecurring = false;
+    let hasMigratedLabor = false;
     const { data: objs, error: objErr } = await sb
-      .from('cost_objects').select('id,name,node_type,domain,acquisition_cost,cost_confidence,status,cost_shape,cadence,recurring_amount')
+      .from('cost_objects').select('id,name,node_type,domain,acquisition_cost,cost_confidence,status,cost_shape,cadence,recurring_amount,cost_category')
       .eq('business_id', businessId);
     if (!objErr && Array.isArray(objs) && objs.length) {
-      rollupEvents = (objs as Array<Record<string, unknown>>).flatMap((r) => fromCostObject({
-        id: String(r.id),
-        label: String(r.name ?? 'Unnamed cost object'),
-        node_type: (r.node_type as CostObjectNodeRow['node_type']) ?? 'ASSET',
-        domain: (r.domain as string | null) ?? null,
-        acquisition_cost: (r.acquisition_cost as number | null) ?? null,
-        cost_confidence: (r.cost_confidence as CostObjectNodeRow['cost_confidence']) ?? 'UNKNOWN',
-        status: (r.status as string | null) ?? null,
-        cost_shape: (r.cost_shape as CostObjectNodeRow['cost_shape']) ?? null,
-        cadence: (r.cadence as CostObjectNodeRow['cadence']) ?? null,
-        recurring_amount: (r.recurring_amount as number | null) ?? null,
-      }));
+      rollupEvents = (objs as Array<Record<string, unknown>>)
+        // Match the live read path (CostToProduce.tsx): PROJECT/PRODUCT rows are buckets, not costs.
+        .filter((r) => r.node_type === 'ASSET' || r.node_type === 'COST')
+        .flatMap((r) => fromCostObject({
+          id: String(r.id),
+          label: String(r.name ?? 'Unnamed cost object'),
+          node_type: (r.node_type as CostObjectNodeRow['node_type']) ?? 'ASSET',
+          domain: (r.domain as string | null) ?? null,
+          acquisition_cost: (r.acquisition_cost as number | null) ?? null,
+          cost_confidence: (r.cost_confidence as CostObjectNodeRow['cost_confidence']) ?? 'UNKNOWN',
+          status: (r.status as string | null) ?? null,
+          cost_shape: (r.cost_shape as CostObjectNodeRow['cost_shape']) ?? null,
+          cadence: (r.cadence as CostObjectNodeRow['cadence']) ?? null,
+          recurring_amount: (r.recurring_amount as number | null) ?? null,
+        }));
       hasMigratedRecurring = (objs as Array<Record<string, unknown>>).some((r) => r.node_type === 'COST');
+      // D-12 STEP 3 GUARD — MUST mirror CostToProduce.tsx exactly, or the byte-identical proof reads
+      // the double-count and FALSE-passes. Strip config.labor iff a COST row tagged cost_category
+      // 'labor'|'contract-labor' (exact lowercase) exists. R1-safe (un-migrated tenant keeps config.labor).
+      hasMigratedLabor = (objs as Array<Record<string, unknown>>).some(
+        (r) => r.node_type === 'COST' && (r.cost_category === 'labor' || r.cost_category === 'contract-labor'));
     }
 
-    // Labor/margin/denominators stay in config (R3); recurring dropped only when sourced from cost_objects.
-    const pricingCfg = hasMigratedRecurring
-      ? { ...cfg, locations: (cfg.locations ?? []).map((l) => ({ ...l, recurring: [] })) }
-      : cfg;
+    // Margin/denominators stay in config (R3). recurring dropped once cost_objects supplies it;
+    // config.labor dropped once a labor cost_object exists — exactly one source per pool input.
+    const pricingCfg = {
+      ...cfg,
+      locations: (cfg.locations ?? []).map((l) => ({
+        ...l,
+        recurring: hasMigratedRecurring ? [] : l.recurring,
+        labor: hasMigratedLabor ? { ...l.labor, rate: null, hours: null } : l.labor,
+      })),
+    };
     const result = analyze(pricingCfg, unknownInv, { rollupEvents });
     const row = {
       businessId,
@@ -112,7 +127,33 @@ async function main() {
 
   const outDir = join(repoRoot, 'docs/cost-to-produce');
   mkdirSync(outDir, { recursive: true });
-  // STEP 6: write the AFTER-FLIP snapshot (preserve the locked BEFORE anchor) and compare.
+
+  // D-12 STEP 3 labor-stage modes (do NOT touch the unified-model BEFORE/AFTER-FLIP snapshots):
+  //   LABOR_STAGE=3a → record the guard-DORMANT baseline (no labor row seeded yet).
+  //   LABOR_STAGE=3b → compare the guard-ACTIVE result (labor seeded) to the 3a baseline; floor AND
+  //                    known must be byte-identical (the guard prevented the R2 double-count).
+  const stage = process.env.LABOR_STAGE;
+  if (stage === '3a' || stage === '3b') {
+    const baseFile  = join(outDir, 'LABOR-3a-snapshot.json');
+    const stageFile = join(outDir, `LABOR-${stage}-snapshot.json`);
+    writeFileSync(stageFile, JSON.stringify(snapshot, null, 2) + '\n');
+    if (stage === '3a') {
+      console.log(`\n✓ STEP 3a baseline recorded (labor guard DORMANT — no labor cost_object) → ${stageFile}`);
+      process.exit(0);
+    }
+    const base: any[] = JSON.parse(readFileSync(baseFile, 'utf8'));
+    let failed = 0;
+    for (const row of snapshot) {
+      const a = base.find((x) => x.businessId === row.businessId);
+      const ok = a && Math.abs(a.floorMonthly - row.floorMonthly) < 0.005 && Math.abs(a.knownMonthly - row.knownMonthly) < 0.005;
+      if (!ok) failed++;
+      console.log(`  ${ok ? '✅' : '❌'} ${row.businessId}: 3b floor=$${row.floorMonthly.toFixed(2)} known=$${row.knownMonthly.toFixed(2)} vs 3a floor=$${a?.floorMonthly?.toFixed?.(2)} known=$${a?.knownMonthly?.toFixed?.(2)}`);
+    }
+    console.log(`\n${failed === 0 ? '✓ 3b == 3a — labor migrated byte-identical; guard prevented the double-count' : '✗ MISMATCH — labor double-counted or guard failed; STOP'} → ${stageFile}`);
+    process.exit(failed ? 1 : 0);
+  }
+
+  // Legacy unified-model behavior (LABOR_STAGE unset): AFTER-FLIP vs locked BEFORE-NUMBER.
   const afterFile = join(outDir, 'AFTER-FLIP-snapshot.json');
   writeFileSync(afterFile, JSON.stringify(snapshot, null, 2) + '\n');
   const anchor: any[] = JSON.parse(readFileSync(join(outDir, 'BEFORE-NUMBER-snapshot.json'), 'utf8'));
