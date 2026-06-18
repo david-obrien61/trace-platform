@@ -168,6 +168,8 @@
 
 | ITEM | STATUS | BLOCKER / NEXT ACTION |
 |---|---|---|
+| **Cost-to-produce + project-lens** | ✅ OWNER-PROVEN 2026-06-18 | Live `/costs` reads **$12,279.67/mo** (floor $12,123 + est $156.67); 8 migrated recurring costs edit/assign/add/delete under RLS; project-lens tree (group ordering, unknown-honesty, inline-edit + confidence↔amount coherence) proven end-to-end. `[TRACE:PROJECTLENS]` stays ON until Andrew's asset/inventory widget online+tested. See CLAUDE.md §HANDOFF 2026-06-18. |
+| **D-11 category + D-12 labor foundation** | Next build (separate prompt) | `docs/THUNDER-PROMPT-D11-D12-category-labor-foundation.md` + model `docs/DECISION-labor-cost-model.md` · staged verify-first migration · owner labor $75×160 (single line) → `cost_objects` byte-identical · +category (Schedule C) + robust labor schema · contractor (Connor/Andrew) usable · Settings reorg (recurring/labor/margin/target) · margin engine + P&L + grid DEFERRED onto robust schema (no re-migration) |
 | **advert_channels migration** | David must apply | `supabase/migrations/20260608_advert_channels_config.sql` → bgobkjcopcxusjsetfob · run VERIFICATION QUERY |
 | **social_drafts platform_check** | David must apply | `supabase/migrations/20260609_social_drafts_platform_check.sql` → bgobkjcopcxusjsetfob · run VERIFICATION QUERY |
 | **nursery_modules DROP** | David must run | After smoke test passes: `DROP TABLE nursery_modules CASCADE;` in bgobkjcopcxusjsetfob |

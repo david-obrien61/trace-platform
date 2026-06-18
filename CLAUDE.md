@@ -323,6 +323,20 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-18 — THUNDER Housekeeping: handoff CORRECTED + D-12 prompt/labor-addendum committed (docs only)
+
+**Type:** Docs/handoff only. No schema, no code, no build → verification gate N/A. This entry SUPERSEDES the "owner-proof owed" wording in the 2026-06-17 entries below — both proofs are now DONE. Committed today: `docs/THUNDER-PROMPT-D11-D12-category-labor-foundation.md` (new, the D-12 build prompt), `docs/THUNDER-PROMPT-projectlens-ordering-and-unknown-accounting.md` (new), and the 2026-06-18 addendum on `docs/DECISION-labor-cost-model.md` ($12k = single owner-labor estimation line; Ignition is the labor exemplar).
+
+**DONE / OWNER-PROVEN (no longer owed — the 2026-06-17 entries below are history):**
+- **Unified cost model — OWNER-PROVEN (Step 8 passed).** Live `/costs` reads **$12,279.67/mo** (floor $12,123 + estimated $156.67); the 8 migrated recurring costs edit/assign/add/delete through the live UI under RLS; UNKNOWN stays unknown (no $0 fabrication).
+- **Project-lens — OWNER-PROVEN end to end.** Inline-edit + confidence↔amount coherence (CONFIRMED-but-unknown unreachable); column headers (Cost · Confidence · Project · Amount) with real amounts; group ordering (Overhead pinned top, projects alphabetical, prefix-override via "1."/"A." naming); unknown-accounting honesty (one `isUnknownCost` predicate — top block lists genuine unknown COSTS grouped-by-project-as-label; group pills + top count agree); the 3 small fixes (live top-count via `onChanged`/`reloadKey`, ONE page-controlled resolve modal reachable top-or-bottom, clickable section titles → `/settings` and `/inventory`). Latest capability commit `27d28b4`.
+- **Inventory page (`/inventory`) navigable** — David added a test row; shows on dashboard.
+
+**NEXT BUILD (the open work — separate prompt):**
+- **D-11 (cost category dimension) + D-12 (labor model FOUNDATION)**, bounded scope, per `docs/THUNDER-PROMPT-D11-D12-category-labor-foundation.md`. Staged verify-first migration. Pulls owner labor ($75×160, a SINGLE owner line) out of config into `cost_objects` byte-identical; adds category (Schedule C) + the robust labor schema; contractor case (Connor/Andrew) usable; Settings reorg into 4 blocks (recurring / labor / margin / target). Margin engine + P&L display + grid DEFERRED onto the robust schema (no future re-migration). Model decision: `docs/DECISION-labor-cost-model.md`.
+
+**STANDING:** `[TRACE:PROJECTLENS]` stays ON until Andrew's asset/inventory widget is online + tested.
+
 ### 2026-06-17 — THUNDER Project-Lens small fixes: live top-count + one resolve modal + clickable section titles (BUILDER-COMPLETE, owner-proof owed)
 
 **Type:** Display/input layer ONLY — `ProjectCostTree.tsx` + `CostToProduce.tsx`. Engine/math UNTOUCHED (OWNER-PROVEN). No schema → verification gate N/A. Three independent fixes from David's live owner-proof of the ordering build (3252c1d). The big model work (cost-category dimension, labor model) is SEPARATE — see the two new DECISION docs, NOT in this pass.

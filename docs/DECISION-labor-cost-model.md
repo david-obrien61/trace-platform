@@ -113,3 +113,28 @@ their terms"). Employee burden+bill_rate FIELDS exist (robust) even if only Igni
   field; not a migration.
 - Effective margin across billable+free hours (unbilled drags real margin): part of the margin engine.
 - Workforce mix / role counts (Jr→Sr promotion changes blended cost): margin-engine layer.
+
+---
+
+## ADDENDUM (2026-06-18) — origin of the $12k line + Ignition as the labor exemplar
+
+**The current $12,000/mo labor figure ($75/hr × 160hr) is a SINGLE OWNER-LABOR line, in an ESTIMATION
+context.** It was David estimating his OWN time to cost the platform build — not a fully-burdened rate,
+not contractor. So the D-12 migration moves exactly ONE owner-labor cost_object (category=labor),
+byte-identical. Contractor/burden/bill-rate were not yet considered when that figure was set; they are
+the robust-schema fields that exist but aren't populated by this line.
+
+**Ignition is the REFERENCE IMPLEMENTATION / exemplar for the labor model.** David's framing: "labor
+would be pulled in from Ignition as an example." The labor primitive lives in the shared spine (built
+once, robust — D-12 governing principle), and IGNITION is where it gets populated MOST FULLY — the
+real Sr Tech / Tech / Jr Tech roles, real burden, real bill rates, real billable-vs-free — because
+trades is where fully-burdened multi-role labor economics are essential. Other contexts (the
+platform-costing exercise, Cultivar, Backbone Valley) pull from / learn from the same shared primitive
+at whatever depth they need. This is the SAME role Ignition already plays as "the reference vertical
+and prototype of the shared spine" — labor is another instance of it.
+
+Implication (reinforces, does not change, the build): build the labor SCHEMA robust NOW even though
+only owner/contractor populate it in TRACE — because Ignition WILL populate the full depth (burden,
+bill rate, roles), and the schema must already be shaped for it so Ignition snaps in without
+re-migration. The full employee burden/bill/margin ENGINE is still deferred and is expected to be
+designed AGAINST REAL IGNITION DATA (like the stage-cost ladder needs a real plant).
