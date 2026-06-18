@@ -12,7 +12,9 @@
  * TWO MODES:
  *   1. CATALOG mode (the real gate) — requires a Supabase PAT:
  *        SUPABASE_PAT=sbp_xxx node scripts/verify-cost-objects.mjs
- *      Runs queries (A)-(F) from the migration footer via the Management API.
+ *      Runs queries (A)-(W) via the Management API: (A)-(I) Core-1 rename + node/D-5,
+ *      (J)-(P) unified-cost-model shape/nature/source (20260617), (Q)-(W) D-11 category +
+ *      D-12 labor foundation (20260618 — cost_category, labor_resources, resource_id, labor_hours).
  *   2. ROUND-TRIP mode (fallback) — service key only, always runs:
  *        node scripts/verify-cost-objects.mjs
  *      Proves cost_objects/edges/assignments are queryable + insert ASSET/
@@ -227,6 +229,85 @@ async function catalogProof() {
   misTagged.length === 0
     ? pass('(P) all pre-existing rows defaulted ONE_TIME/CAPEX/MANUAL (true provenance)', JSON.stringify(p))
     : fail('(P) some rows mis-tagged by defaults (expected only ASSET/ONE_TIME/CAPEX/MANUAL pre-backfill)', JSON.stringify(misTagged));
+
+  // ── D-11 category + D-12 labor foundation (20260618_cost_category_and_labor_resources) ──
+
+  // (Q) cost_category — text, nullable, and NO CHECK (loose by design, per-business value set).
+  const q = await execSQL(`SELECT data_type, is_nullable FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='cost_objects' AND column_name='cost_category';`);
+  const qc = q[0];
+  qc && qc.data_type === 'text' && qc.is_nullable === 'YES'
+    ? pass('(Q) cost_category text nullable') : fail('(Q) cost_category column', JSON.stringify(qc));
+  const qChk = await execSQL(`SELECT COUNT(*)::int AS c FROM pg_constraint
+    WHERE conrelid='cost_objects'::regclass AND conname='cost_objects_cost_category_check';`);
+  Number(qChk[0]?.c) === 0
+    ? pass('(Q) cost_category has NO CHECK (loose — categories grow without a migration)')
+    : fail('(Q) cost_category unexpectedly constrained', JSON.stringify(qChk));
+
+  // (R) labor_resources — all robust D-12 columns present.
+  const r = await execSQL(`SELECT column_name FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='labor_resources';`);
+  const rCols = r.map(x => x.column_name);
+  const rNeed = ['id','business_id','resource_type','name','rate_basis','base_wage','burden',
+    'cost_rate','bill_rate','rate','pass_through_expenses','created_at','updated_at'];
+  const rMissing = rNeed.filter(c => !rCols.includes(c));
+  rMissing.length === 0
+    ? pass('(R) labor_resources all columns present', rNeed.join(', '))
+    : fail('(R) labor_resources missing columns', rMissing.join(', ') || 'table absent');
+
+  // (S) resource_type CHECK = EMPLOYEE|CONTRACTOR.
+  const s = await execSQL(`SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+    WHERE conrelid='labor_resources'::regclass AND conname='labor_resources_resource_type_check';`);
+  const sdef = s[0]?.def || '';
+  /EMPLOYEE/.test(sdef) && /CONTRACTOR/.test(sdef)
+    ? pass('(S) resource_type CHECK = EMPLOYEE|CONTRACTOR') : fail('(S) resource_type CHECK', sdef);
+
+  // (T) rate_basis CHECK = HOURLY|FLAT_FEE.
+  const t = await execSQL(`SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+    WHERE conrelid='labor_resources'::regclass AND conname='labor_resources_rate_basis_check';`);
+  const tdef = t[0]?.def || '';
+  /HOURLY/.test(tdef) && /FLAT_FEE/.test(tdef)
+    ? pass('(T) rate_basis CHECK = HOURLY|FLAT_FEE') : fail('(T) rate_basis CHECK', tdef);
+
+  // (U) labor_resources RLS — owner_all + member_all + rowsecurity=true (AC-2).
+  const u = await execSQL(`SELECT policyname FROM pg_policies
+    WHERE schemaname='public' AND tablename='labor_resources' ORDER BY policyname;`);
+  const uPol = u.map(x => x.policyname);
+  uPol.includes('labor_resources_owner_all') && uPol.includes('labor_resources_member_all')
+    ? pass('(U) labor_resources RLS owner_all + member_all', uPol.join(', '))
+    : fail('(U) labor_resources RLS policies', uPol.join(',') || 'none');
+  const uSec = await execSQL(`SELECT relrowsecurity FROM pg_class WHERE relname='labor_resources';`);
+  uSec[0]?.relrowsecurity === true
+    ? pass('(U) labor_resources rowsecurity=true') : fail('(U) labor_resources rowsecurity', JSON.stringify(uSec));
+
+  // (V) labor_resources.business_id FK → businesses ON DELETE CASCADE.
+  const v = await execSQL(`SELECT ccu.table_name AS refs, rc.delete_rule
+    FROM information_schema.table_constraints tc
+    JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name
+    JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name=ccu.constraint_name
+    JOIN information_schema.referential_constraints rc ON tc.constraint_name=rc.constraint_name
+    WHERE tc.constraint_type='FOREIGN KEY' AND tc.table_name='labor_resources'
+      AND kcu.column_name='business_id';`);
+  const vrow = v[0];
+  vrow && vrow.refs === 'businesses' && vrow.delete_rule === 'CASCADE'
+    ? pass('(V) labor_resources.business_id → businesses CASCADE') : fail('(V) business_id FK', JSON.stringify(vrow));
+
+  // (W) cost_objects.resource_id FK → labor_resources ON DELETE SET NULL + labor_hours numeric nullable no default.
+  const w = await execSQL(`SELECT ccu.table_name AS refs, rc.delete_rule
+    FROM information_schema.table_constraints tc
+    JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name
+    JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name=ccu.constraint_name
+    JOIN information_schema.referential_constraints rc ON tc.constraint_name=rc.constraint_name
+    WHERE tc.constraint_type='FOREIGN KEY' AND tc.table_name='cost_objects'
+      AND kcu.column_name='resource_id';`);
+  const wrow = w[0];
+  wrow && wrow.refs === 'labor_resources' && wrow.delete_rule === 'SET NULL'
+    ? pass('(W) cost_objects.resource_id → labor_resources SET NULL') : fail('(W) resource_id FK', JSON.stringify(wrow));
+  const wh = await execSQL(`SELECT data_type, is_nullable, column_default FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='cost_objects' AND column_name='labor_hours';`);
+  const whc = wh[0];
+  whc && whc.data_type === 'numeric' && whc.is_nullable === 'YES' && whc.column_default == null
+    ? pass('(W) labor_hours numeric nullable, NO default') : fail('(W) labor_hours column', JSON.stringify(whc));
 }
 
 // ── ROUND-TRIP mode — service-key data proof (fallback) ─────────────────────
@@ -246,6 +327,13 @@ async function roundTrip() {
   // D-5 columns reachable via the data path (column existence, not catalog metadata)
   const { error: subErr } = await sb.from('cost_objects').select('id,substantiation,receipt_id', { head: true });
   subErr ? fail('substantiation + receipt_id columns selectable', subErr.message) : pass('substantiation + receipt_id columns selectable');
+  // D-11/D-12 columns + table reachable via the data path.
+  const { error: catErr } = await sb.from('cost_objects').select('id,cost_category,resource_id,labor_hours', { head: true });
+  catErr ? fail('cost_category + resource_id + labor_hours columns selectable', catErr.message) : pass('cost_category + resource_id + labor_hours columns selectable');
+  // Real row select (NOT head:true) — a HEAD request does not surface a missing-TABLE error
+  // (same PostgREST quirk handled for business_assets above). PGRST205/42P01 = table absent.
+  const { error: lrErr } = await sb.from('labor_resources').select('id').limit(1);
+  lrErr ? fail('labor_resources queryable', `${lrErr.code} ${lrErr.message}`.slice(0, 60)) : pass('labor_resources queryable');
 }
 
 async function main() {
