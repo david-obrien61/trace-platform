@@ -1,26 +1,46 @@
 // ============================================================
 // BusinessAssets — asset registry page (Cultivar OS)
-// PURPOSE:      List + add ASSET-type cost objects for a business.
-// DEPENDENCIES: supabase (cost_objects table, node_type='ASSET'),
-//               useBusinessContext (businessId → RLS scope).
-// OUTPUTS:      Reads/writes cost_objects rows where node_type='ASSET'.
-// NOTE:         Table renamed business_assets → cost_objects (2026-06-15,
-//               Core-1). Queries are now ASSET-scoped via node_type since
-//               cost_objects also holds PROJECT/PRODUCT nodes.
+// PURPOSE:      List + add ASSET-type cost objects for a business, AND edit each row
+//               inline: project assignment (parent_id), Schedule C category
+//               (cost_category), amount (acquisition_cost), confidence (cost_confidence).
+//               Edits write immediately (reassign() pattern) under RLS — categorizing /
+//               assigning here recomputes the /costs flat + by-project totals, which read
+//               the SAME cost_objects rows (THUNDER 2026-06-18 editable-assign pass).
+// DEPENDENCIES: supabase (cost_objects, node_type='ASSET' rows + node_type='PROJECT' for
+//               the project picker), useBusinessContext (businessId → RLS scope),
+//               @trace/shared/business-logic CATEGORY_OPTS (the shared Schedule C set).
+// OUTPUTS:      Reads cost_objects ASSET rows; per-row immediate UPDATEs of parent_id,
+//               cost_category, acquisition_cost, cost_confidence (RLS-scoped by business_id).
+// SCOPE:        EDIT ONLY — no split, no delete. The existing Add-Asset form (create) stays.
+// NOTE:         Table renamed business_assets → cost_objects (2026-06-15, Core-1). Queries are
+//               ASSET-scoped via node_type since cost_objects also holds PROJECT/PRODUCT nodes.
+// SURFACE HONESTY: every inline control writes or is absent — UNKNOWN ⟺ no amount (setting a
+//               confidence of UNKNOWN clears the amount; entering an amount on an UNKNOWN row
+//               bumps it to ESTIMATED), mirroring the by-project tree's coherence rule.
+// INSTRUMENTATION (STD-003): `[TRACE:assets]` emits on load + every inline edit
+//               (assetId, field, from→to). ON BY DEFAULT (standing owner instruction — do NOT
+//               comment out until David lifts it, even after owner-proof).
 // ============================================================
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, X, Package } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
+import { CATEGORY_OPTS } from '@trace/shared/business-logic';
 
 const STATUS_OPTIONS = ['ACTIVE', 'IN_REPAIR', 'OFFLINE', 'RETIRED'] as const;
 type AssetStatus = typeof STATUS_OPTIONS[number];
 
 // Surface Honesty: manual cost entry = ESTIMATED unless receipt-backed.
 // CONFIRMED requires a receipt link (future flow). DERIVED is AI-only.
-const CONFIDENCE_OPTIONS = ['ESTIMATED', 'UNKNOWN'] as const;
+// The Add form offers only ESTIMATED/UNKNOWN, but inline edit shows the FULL set so a seeded
+// CONFIRMED/DERIVED row displays and stays selectable.
+const CONFIDENCE_EDIT_OPTIONS = ['CONFIRMED', 'DERIVED', 'ESTIMATED', 'UNKNOWN'] as const;
 type CostConfidence = 'CONFIRMED' | 'DERIVED' | 'ESTIMATED' | 'UNKNOWN';
+
+const COMPANY_LEVEL = '__company__'; // <select> sentinel for parent_id = null
+
+interface ProjectOption { id: string; name: string; }
 
 interface AssetRow {
   id: string;
@@ -33,6 +53,8 @@ interface AssetRow {
   status: AssetStatus;
   acquisition_cost: number | null;
   cost_confidence: CostConfidence | null;
+  parent_id: string | null;        // project (PROJECT node) or null = company-level
+  cost_category: string | null;    // Schedule C category or null = uncategorized
   serial_number: string | null;
   notes: string | null;
   created_at: string;
@@ -86,13 +108,21 @@ const S = {
   success: { color: '#166534', background: '#dcfce7', borderRadius: 8, padding: '0.6rem 0.875rem', fontSize: '0.88rem', marginBottom: 12 } as React.CSSProperties,
   addBtn: { display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: '1.5px solid #27500A', borderRadius: 8, padding: '0.5rem 0.875rem', color: '#27500A', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer' } as React.CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: '0.88rem' } as React.CSSProperties,
-  th: { textAlign: 'left' as const, padding: '0.5rem 0.75rem', borderBottom: '2px solid #e5e7eb', color: '#374151', fontWeight: 600, fontSize: '0.8rem', textTransform: 'uppercase' as const } as React.CSSProperties,
+  th: { textAlign: 'left' as const, padding: '0.5rem 0.75rem', borderBottom: '2px solid #e5e7eb', color: '#374151', fontWeight: 600, fontSize: '0.8rem', textTransform: 'uppercase' as const, whiteSpace: 'nowrap' as const } as React.CSSProperties,
   td: { padding: '0.625rem 0.75rem', borderBottom: '1px solid #f3f4f6', color: '#111827', verticalAlign: 'top' as const } as React.CSSProperties,
   badge: (color: string): React.CSSProperties => ({ display: 'inline-block', padding: '2px 8px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, background: color === 'green' ? '#dcfce7' : color === 'amber' ? '#fef3c7' : color === 'red' ? '#fee2e2' : '#f3f4f6', color: color === 'green' ? '#166534' : color === 'amber' ? '#92400e' : color === 'red' ? '#b91c1c' : '#6b7280' }),
   empty: { textAlign: 'center' as const, color: '#6b7280', padding: '2rem', fontSize: '0.9rem' } as React.CSSProperties,
   modal: { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 100 } as React.CSSProperties,
   sheet: { background: '#fff', borderRadius: '16px 16px 0 0', padding: '1.5rem', width: '100%', maxWidth: 640, maxHeight: '92vh', overflowY: 'auto' as const } as React.CSSProperties,
   sheetHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' } as React.CSSProperties,
+  // Inline-edit controls (immediate write). Compact, obviously editable, match the cell idiom.
+  inlineSelect: { border: '1.5px solid #d1d5db', borderRadius: 7, padding: '4px 6px', fontSize: '0.8rem', color: '#111827', background: '#fff', cursor: 'pointer', maxWidth: 160 } as React.CSSProperties,
+  inlineAmount: { width: 84, border: '1.5px solid #d1d5db', borderRadius: 7, padding: '4px 6px', fontSize: '0.8rem', color: '#111827', background: '#fff', textAlign: 'right' as const } as React.CSSProperties,
+  confSelect: (c: CostConfidence | null): React.CSSProperties => {
+    const weak = c === 'UNKNOWN' || c === 'ESTIMATED' || c == null;
+    return { border: '1.5px solid #d1d5db', borderRadius: 7, padding: '4px 6px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', background: weak ? '#fee2e2' : '#dcfce7', color: weak ? '#991b1b' : '#166534' };
+  },
+  catUncat: { color: '#92400e', fontStyle: 'italic' as const } as React.CSSProperties,
 };
 
 const STATUS_COLOR: Record<AssetStatus, string> = {
@@ -101,16 +131,6 @@ const STATUS_COLOR: Record<AssetStatus, string> = {
   OFFLINE: 'amber',
   RETIRED: 'red',
 };
-
-function confidenceLabel(c: CostConfidence | null): string {
-  if (!c) return '—';
-  return { CONFIRMED: 'Confirmed', DERIVED: 'AI-Derived', ESTIMATED: 'Estimated', UNKNOWN: 'Unknown' }[c];
-}
-
-function fmtMoney(n: number | null) {
-  if (n == null) return '—';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
-}
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -121,6 +141,7 @@ export function BusinessAssets() {
   const { businessId } = useBusinessContext();
 
   const [assets, setAssets] = useState<AssetRow[]>([]);
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
 
@@ -133,6 +154,7 @@ export function BusinessAssets() {
   useEffect(() => {
     if (!businessId) return;
     loadAssets();
+    loadProjects();
   }, [businessId]);
 
   async function loadAssets() {
@@ -141,7 +163,7 @@ export function BusinessAssets() {
     console.log('[TRACE:assets] loadAssets → cost_objects (node_type=ASSET)', { businessId });
     const { data, error } = await supabase
       .from('cost_objects')
-      .select('id,name,asset_type,make,model,year,location,status,acquisition_cost,cost_confidence,serial_number,notes,created_at')
+      .select('id,name,asset_type,make,model,year,location,status,acquisition_cost,cost_confidence,parent_id,cost_category,serial_number,notes,created_at')
       .eq('business_id', businessId)
       .eq('node_type', 'ASSET')
       .eq('is_active', true)
@@ -151,6 +173,59 @@ export function BusinessAssets() {
     console.log('[TRACE:assets] loadAssets ok', { count: data?.length ?? 0 });
     setAssets((data ?? []) as AssetRow[]);
     setListLoading(false);
+  }
+
+  // PROJECT nodes for the inline project picker (same source the Settings + tree pickers use).
+  async function loadProjects() {
+    const { data, error } = await supabase
+      .from('cost_objects')
+      .select('id,name')
+      .eq('business_id', businessId)
+      .eq('node_type', 'PROJECT')
+      .eq('is_active', true);
+    if (error) { console.warn('[TRACE:assets] loadProjects error', error.message); return; }
+    setProjects((data ?? []).map((p: any) => ({ id: String(p.id), name: p.name ?? 'Untitled project' })));
+  }
+
+  // ── Inline edit: one immediate write per field, matching reassign()'s pattern, RLS-scoped. ──
+  async function writeAsset(asset: AssetRow, patch: Record<string, unknown>, field: string, to: unknown) {
+    const from = (asset as any)[field];
+    console.log('[TRACE:assets] edit', { assetId: asset.id, field, from, to });
+    const { error } = await supabase
+      .from('cost_objects')
+      .update(patch)
+      .eq('id', asset.id)
+      .eq('business_id', businessId)
+      .eq('node_type', 'ASSET');
+    if (error) { console.error('[TRACE:assets] edit error', field, error.message); setListError(error.message); return; }
+    await loadAssets(); // reload → /costs (flat + by-project) recomputes from the same fresh rows
+  }
+
+  function onProject(asset: AssetRow, sel: string) {
+    const parent_id = sel === COMPANY_LEVEL ? null : sel;
+    if (parent_id === asset.parent_id) return;
+    writeAsset(asset, { parent_id }, 'parent_id', parent_id);
+  }
+  function onCategory(asset: AssetRow, val: string) {
+    const cost_category = val || null;
+    if (cost_category === asset.cost_category) return;
+    writeAsset(asset, { cost_category }, 'cost_category', cost_category);
+  }
+  // Coherence (UNKNOWN ⟺ no amount): UNKNOWN clears the amount; any other grade keeps it.
+  function onConfidence(asset: AssetRow, conf: CostConfidence) {
+    if (conf === asset.cost_confidence) return;
+    const patch = conf === 'UNKNOWN'
+      ? { cost_confidence: 'UNKNOWN', acquisition_cost: null }
+      : { cost_confidence: conf };
+    writeAsset(asset, patch, 'cost_confidence', conf);
+  }
+  // Coherence: clearing the amount → UNKNOWN; entering an amount on an UNKNOWN row → ESTIMATED.
+  function onAmount(asset: AssetRow, value: number | null) {
+    if (value === (asset.acquisition_cost ?? null)) return;
+    const patch = value == null
+      ? { acquisition_cost: null, cost_confidence: 'UNKNOWN' }
+      : { acquisition_cost: value, cost_confidence: asset.cost_confidence === 'UNKNOWN' ? 'ESTIMATED' : (asset.cost_confidence ?? 'ESTIMATED') };
+    writeAsset(asset, patch, 'acquisition_cost', value);
   }
 
   function set(field: keyof FormState, value: string) {
@@ -243,52 +318,95 @@ export function BusinessAssets() {
           </div>
         )}
         {!listLoading && assets.length > 0 && (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={S.table}>
-              <thead>
-                <tr>
-                  <th style={S.th}>Name</th>
-                  <th style={S.th}>Type</th>
-                  <th style={S.th}>Make / Model</th>
-                  <th style={S.th}>Location</th>
-                  <th style={S.th}>Status</th>
-                  <th style={S.th}>Cost</th>
-                  <th style={S.th}>Added</th>
-                </tr>
-              </thead>
-              <tbody>
-                {assets.map(a => (
-                  <tr key={a.id}>
-                    <td style={{ ...S.td, fontWeight: 600 }}>
-                      {a.name}
-                      {a.serial_number && (
-                        <span style={{ display: 'block', fontSize: '0.75rem', color: '#6b7280', fontWeight: 400 }}>
-                          S/N {a.serial_number}
-                        </span>
-                      )}
-                    </td>
-                    <td style={S.td}>{a.asset_type ?? '—'}</td>
-                    <td style={S.td}>
-                      {[a.make, a.model, a.year ? String(a.year) : null].filter(Boolean).join(' ') || '—'}
-                    </td>
-                    <td style={S.td}>{a.location ?? '—'}</td>
-                    <td style={S.td}>
-                      <span style={S.badge(STATUS_COLOR[a.status])}>{a.status}</span>
-                    </td>
-                    <td style={S.td}>
-                      {fmtMoney(a.acquisition_cost)}
-                      {a.cost_confidence && (
-                        <span style={{ display: 'block', fontSize: '0.72rem', color: '#9ca3af' }}>
-                          {confidenceLabel(a.cost_confidence)}
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ ...S.td, color: '#6b7280', fontSize: '0.8rem' }}>{fmtDate(a.created_at)}</td>
+          <>
+            <p style={{ ...S.hint, marginTop: 0, marginBottom: 10 }}>
+              Assign each asset to a project and give it a category — those choices feed your
+              cost-to-produce by project. Changes save as you make them.
+            </p>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={S.table}>
+                <thead>
+                  <tr>
+                    <th style={S.th}>Name</th>
+                    <th style={S.th}>Make / Model</th>
+                    <th style={S.th}>Location</th>
+                    <th style={S.th}>Status</th>
+                    <th style={S.th}>Project</th>
+                    <th style={S.th}>Category</th>
+                    <th style={S.th}>Amount</th>
+                    <th style={S.th}>Confidence</th>
+                    <th style={S.th}>Added</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {assets.map(a => (
+                    <tr key={a.id}>
+                      <td style={{ ...S.td, fontWeight: 600 }}>
+                        {a.name}
+                        {a.serial_number && (
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: '#6b7280', fontWeight: 400 }}>
+                            S/N {a.serial_number}
+                          </span>
+                        )}
+                      </td>
+                      <td style={S.td}>
+                        {[a.make, a.model, a.year ? String(a.year) : null].filter(Boolean).join(' ') || '—'}
+                      </td>
+                      <td style={S.td}>{a.location ?? '—'}</td>
+                      <td style={S.td}>
+                        <span style={S.badge(STATUS_COLOR[a.status])}>{a.status}</span>
+                      </td>
+
+                      {/* ── Project (parent_id) — immediate write ── */}
+                      <td style={S.td}>
+                        <select
+                          style={S.inlineSelect}
+                          value={a.parent_id ?? COMPANY_LEVEL}
+                          onChange={e => onProject(a, e.target.value)}
+                          title="Assign this asset to a project"
+                        >
+                          <option value={COMPANY_LEVEL}>Company-level</option>
+                          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                      </td>
+
+                      {/* ── Category (cost_category) — immediate write ── */}
+                      <td style={S.td}>
+                        <select
+                          style={{ ...S.inlineSelect, ...(a.cost_category ? {} : S.catUncat) }}
+                          value={a.cost_category ?? ''}
+                          onChange={e => onCategory(a, e.target.value)}
+                          title="Schedule C category"
+                        >
+                          <option value="">uncategorized</option>
+                          {CATEGORY_OPTS.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </td>
+
+                      {/* ── Amount (acquisition_cost) — immediate write on blur/Enter ── */}
+                      <td style={S.td}>
+                        <AmountCell key={String(a.acquisition_cost)} value={a.acquisition_cost} onCommit={v => onAmount(a, v)} />
+                      </td>
+
+                      {/* ── Confidence (cost_confidence) — immediate write ── */}
+                      <td style={S.td}>
+                        <select
+                          style={S.confSelect(a.cost_confidence)}
+                          value={a.cost_confidence ?? 'ESTIMATED'}
+                          onChange={e => onConfidence(a, e.target.value as CostConfidence)}
+                          title="How sure are you of this cost?"
+                        >
+                          {CONFIDENCE_EDIT_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </td>
+
+                      <td style={{ ...S.td, color: '#6b7280', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{fmtDate(a.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
@@ -387,5 +505,30 @@ export function BusinessAssets() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Inline amount cell — text input that commits the parsed number on blur/Enter (null when empty).
+ * Mirrors the by-project tree's AmountInput coherence: empty → null routes to UNKNOWN upstream.
+ * Re-syncs to the latest stored value via key when the row reloads.
+ */
+function AmountCell({ value, onCommit }: { value: number | null; onCommit: (v: number | null) => void }) {
+  const [text, setText] = useState(value == null ? '' : String(value));
+  const commit = () => {
+    const raw = text.replace(/[^0-9.]/g, '');
+    const n = parseFloat(raw);
+    onCommit(raw === '' || !Number.isFinite(n) ? null : Math.round(n * 100) / 100);
+  };
+  return (
+    <input
+      inputMode="decimal"
+      value={text}
+      placeholder="unknown"
+      onChange={e => setText(e.target.value)}
+      onKeyDown={e => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }}
+      onBlur={commit}
+      style={S.inlineAmount}
+    />
   );
 }

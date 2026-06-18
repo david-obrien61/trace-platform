@@ -45,6 +45,8 @@ import { supabase } from '../supabase/client';
 import { useBusinessContext } from '../context/BusinessProvider';
 import { EMPTY_COST_CONFIG } from '../business-logic/CostToProduce';
 import type { CostToProduceConfig, CostConfidence, CostLocation } from '../business-logic/CostToProduce';
+// D-11 Schedule C category set — SHARED canonical list (also used by /assets capital-row picker).
+import { CATEGORY_OPTS } from '../business-logic/costCategories';
 
 const MODULE_KEY = 'cost_to_produce';
 
@@ -71,14 +73,7 @@ const SHAPE_OPTS: CostShape[]  = ['RECURRING_FIXED', 'PER_OCCASION'];
 const NATURE_OPTS: CostNature[] = ['OPEX', 'COGS', 'CAPEX'];
 const SUBSTANTIATION_OPTS: Substantiation[] = ['OWNER_ASSERTED', 'SUBSTANTIATED'];
 
-// D-11 — the Schedule C / QBO-mappable category set (~15-20). EXACT lowercase (column comment is
-// canonical). '' = uncategorized (honest null). 'labor'/'contract-labor' are auto-applied by the
-// LABOR block and intentionally NOT offered for recurring rows (a recurring row isn't labor).
-const CATEGORY_OPTS: string[] = [
-  'software-subscriptions', 'utilities', 'supplies', 'materials', 'rent', 'insurance',
-  'taxes-licenses', 'repairs', 'advertising', 'vehicle-fuel', 'professional-fees',
-  'bank-fees', 'equipment', 'other',
-];
+// CATEGORY_OPTS is imported above from the SHARED canonical list (business-logic/costCategories).
 
 type ResourceType = 'EMPLOYEE' | 'CONTRACTOR';
 type RateBasis = 'HOURLY' | 'FLAT_FEE';

@@ -94,3 +94,7 @@ export type {
   ProjectGroup,
   ProjectLensView,
 } from './ProjectLens';
+
+// Schedule C cost-category set + label — shared by every cost-categorize surface
+// (CostToProduceSettings recurring rows, BusinessAssets capital rows) so they can't drift.
+export { CATEGORY_OPTS, UNCATEGORIZED, categoryLabel } from './costCategories';

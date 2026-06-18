@@ -353,6 +353,27 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 **NEXT — David's OWNER-PROOF (live `/costs` under RLS):** By-project → click "Cost to produce" on BuiltWithCAI (or any project) → headline pool/capital MATCH that group's tree row → Labor/Other split sums to the pool → confidence mix + unknown labels right → NO pricing panel shown. Then comment out the new `[TRACE:PROJECTLENS]` drill-in emits (don't delete). **Phase 2 (deferred):** pricing layer — settable N + margin + cross-branch carve-out for shared cost → fair-share price + unrecovered-investment gap (staged migration, cross-branch-edge verify-first, per D-14).
 
+### 2026-06-18 — THUNDER editable assign + categorize on /assets (BUILDER-COMPLETE, owner-proof owed) + shared Schedule C category de-dup
+
+**Type:** Code only — 1 new shared module + 1 cultivar page rewrite + 1 shared-component de-dup + built-inventory. NO schema, NO migration (every target field — parent_id, cost_category, acquisition_cost, recurring_amount, cadence, cost_confidence — is an EXISTING column; verified before building) → schema-verification gate N/A. EDIT-ONLY pass (no create/split/delete). Build clean (2199 modules, +2); the 3 changed files tsc-clean (pre-existing Confirmation/Orders/etc. errors unrelated).
+
+**STANDING INSTRUCTION (Part 7):** TRACE instrumentation `[TRACE:*]` is ON by OWNER instruction — do NOT comment out or delete any emit (incl. the new `[TRACE:assets] edit`) until David explicitly lifts it. This OVERRIDES the STD-003 post-OWNER-PROVEN comment-out default.
+
+**VERIFY-FIRST (reported before building):**
+- **(A) Receipt Keeper → cost object:** Receipt Keeper STOPS at the `receipts` table. `doSave()` (`ReceiptKeeper.tsx:277`) inserts ONE `receipts` row with `line_items` as a JSON column — creates NO `cost_objects` row, no parent_id/cost_category, writes no receipt_id onto any cost object. Cost objects are born on /assets (ASSET), Settings (COST/labor), ProjectsManager (PROJECT), seed scripts. `receipts` = provenance only ⇒ the receipt→cost-object bridge (1 receipt → N cost objects sharing one receipt_id, across N projects) is genuinely the NEXT pass, not built here.
+- **(B) RLS (shown, not assumed):** `cost_objects_owner_all` + `cost_objects_member_all` are both `FOR ALL` (covers UPDATE), USING+WITH CHECK scoped to `businesses.owner_id=auth.uid()` / active `business_members` (orig `20260612_business_assets_inventory_pmi_service.sql:51-83`, renamed `20260615_..._rename...:54`). reassign()'s parent_id UPDATE already rides this in prod.
+- **Settings already did it:** `CostToProduceSettings.tsx` recurring rows ALREADY edit category(D-11)/project/amount/cadence/confidence via the batch Save (built today, Stage 4). The real gap was /assets (read-only). So this pass = /assets; Settings needed no new capability (its BUILDER-COMPLETE proof = categorize Claude Pro through the existing picker).
+
+**BUILT:**
+- `packages/shared/src/business-logic/costCategories.ts` (NEW) — shared `CATEGORY_OPTS` (14 Schedule C values) + `categoryLabel`; exported via `@trace/shared/business-logic`. `CostToProduceSettings.tsx` re-pointed to import it (de-dup — the two pickers can't drift). `ProjectCostDrillIn`'s tiny local `categoryLabel` left as-is (owner-proven, out of scope).
+- `BusinessAssets.tsx` — REWRITE: each ASSET row gets 4 inline controls, each an IMMEDIATE write (reassign() pattern, `.eq(node_type,'ASSET')`-guarded, reload after): **project** (parent_id → PROJECT/Company-level), **category** (shared picker), **amount** (acquisition_cost, blur-commit), **confidence** (full set). Coherence enforced (UNKNOWN ⟺ no amount). Add-Asset form (create) untouched. `[TRACE:assets] edit {assetId,field,from→to}` ON.
+
+**BUILDER-COMPLETE — service-key proof (TRACE 45830ba7):** uncategorized (ASSET+COST null cost_category) **15→12** (HP ProDesk + SONOFF MINI Duo-L → `equipment`; Claude Pro → `software-subscriptions`). Flat ASSET capex UNCHANGED $6917.31 (categorize/reassign capex never moves the company total). Reassign recompute: NSPanel $259.80 CoolRunnings→Farm moved BOTH group totals (Cool $917.31→$657.51, Farm $6000→$6259.80), then restored. Categories KEPT (real values).
+
+**OWNER-PROOF owed (David, live /assets under RLS):** open /assets → each row shows project + category + amount + confidence inline → set a category on an uncategorized asset (e.g. tractor, meross) → it persists + the row's "uncategorized" styling clears → assign an asset to a different project → on /costs the by-project tree/drill-in reflects it (capex moves between groups, flat unchanged) → blank an amount → confidence flips UNKNOWN. Then categorize Claude Pro on Settings (already-built picker) → Save → null-category count drops.
+
+**Open items inherited (not this pass):** the banked save-vs-inline consistency — /assets is now INLINE (matches the tree); Settings stays batch-Save. Two models still coexist; David to decide if Settings should go inline too. receipt→cost-object bridge = next pass.
+
 ### 2026-06-18 — THUNDER D-13 captured (DEFERRED) + handoff/state synced to current reality (docs + handoff only)
 
 **Type:** Docs/handoff only. No schema, no code, no build → verification gate N/A. Two jobs: (1) committed `docs/DECISION-unified-margin-store-and-history.md` (D-13) + cross-linked from `DECISIONS.md`; (2) synced this Handoff + PLATFORM_STATE.md to where things actually stand. `git status --short` before: only `?? docs/DECISION-unified-margin-store-and-history.md` untracked, nothing else.
