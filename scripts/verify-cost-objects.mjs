@@ -308,6 +308,62 @@ async function catalogProof() {
   const whc = wh[0];
   whc && whc.data_type === 'numeric' && whc.is_nullable === 'YES' && whc.column_default == null
     ? pass('(W) labor_hours numeric nullable, NO default') : fail('(W) labor_hours column', JSON.stringify(whc));
+
+  // ── D-16 Pricing Model B — recovery_basis split (20260619_cost_objects_recovery_basis) ──
+
+  // (X) recovery_basis — text, nullable, and NO CHECK (loose by design, AC-4).
+  const x = await execSQL(`SELECT data_type, is_nullable FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='cost_objects' AND column_name='recovery_basis';`);
+  const xc = x[0];
+  xc && xc.data_type === 'text' && xc.is_nullable === 'YES'
+    ? pass('(X) recovery_basis text nullable') : fail('(X) recovery_basis column', JSON.stringify(xc));
+  const xChk = await execSQL(`SELECT COUNT(*)::int AS c FROM pg_constraint
+    WHERE conrelid='cost_objects'::regclass AND conname='cost_objects_recovery_basis_check';`);
+  Number(xChk[0]?.c) === 0
+    ? pass('(X) recovery_basis has NO CHECK (loose — values grow without a migration)')
+    : fail('(X) recovery_basis unexpectedly constrained', JSON.stringify(xChk));
+
+  // (Y) recovery_basis_source — text, nullable, NO CHECK.
+  const y = await execSQL(`SELECT data_type, is_nullable FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='cost_objects' AND column_name='recovery_basis_source';`);
+  const yc = y[0];
+  yc && yc.data_type === 'text' && yc.is_nullable === 'YES'
+    ? pass('(Y) recovery_basis_source text nullable') : fail('(Y) recovery_basis_source column', JSON.stringify(yc));
+  const yChk = await execSQL(`SELECT COUNT(*)::int AS c FROM pg_constraint
+    WHERE conrelid='cost_objects'::regclass AND conname='cost_objects_recovery_basis_source_check';`);
+  Number(yChk[0]?.c) === 0
+    ? pass('(Y) recovery_basis_source has NO CHECK')
+    : fail('(Y) recovery_basis_source unexpectedly constrained', JSON.stringify(yChk));
+
+  // (Z) backfill populated every row by the derived-default rule — NO nulls, correct split,
+  //     all DERIVED, and the lone PLATFORM_INVESTMENT row is the EMPLOYEE owner labor.
+  const zNull = await execSQL(`SELECT COUNT(*)::int AS c FROM cost_objects WHERE recovery_basis IS NULL OR recovery_basis_source IS NULL;`);
+  Number(zNull[0]?.c) === 0
+    ? pass('(Z) backfill left NO nulls (every row classified)')
+    : fail('(Z) some rows un-backfilled (null recovery_basis/source)', JSON.stringify(zNull));
+  const zGrp = await execSQL(`SELECT recovery_basis, recovery_basis_source, COUNT(*)::int AS c
+    FROM cost_objects GROUP BY 1,2 ORDER BY 1,2;`);
+  const allDerived = zGrp.every(r => r.recovery_basis_source === 'DERIVED');
+  const onlyTwoBases = zGrp.every(r => r.recovery_basis === 'COST_TO_SERVE' || r.recovery_basis === 'PLATFORM_INVESTMENT');
+  allDerived && onlyTwoBases
+    ? pass('(Z) all rows DERIVED + only COST_TO_SERVE/PLATFORM_INVESTMENT', JSON.stringify(zGrp))
+    : fail('(Z) backfill split off-rule', JSON.stringify(zGrp));
+  // The PLATFORM_INVESTMENT set must be EXACTLY the EMPLOYEE owner-labor rows (rule integrity).
+  const zPi = await execSQL(`SELECT co.id, co.name, co.cost_category, lr.resource_type
+    FROM cost_objects co LEFT JOIN labor_resources lr ON lr.id = co.resource_id
+    WHERE co.recovery_basis = 'PLATFORM_INVESTMENT';`);
+  const piOk = zPi.length > 0 && zPi.every(r => r.cost_category === 'labor' && r.resource_type === 'EMPLOYEE');
+  piOk
+    ? pass('(Z) every PLATFORM_INVESTMENT row is EMPLOYEE owner labor', zPi.map(r => r.name).join(', '))
+    : fail('(Z) a PLATFORM_INVESTMENT row is NOT EMPLOYEE owner labor', JSON.stringify(zPi));
+  // And no EMPLOYEE owner-labor row was left as COST_TO_SERVE (rule completeness).
+  const zMiss = await execSQL(`SELECT co.id, co.name FROM cost_objects co
+    JOIN labor_resources lr ON lr.id = co.resource_id
+    WHERE co.cost_category = 'labor' AND lr.resource_type = 'EMPLOYEE'
+      AND co.recovery_basis <> 'PLATFORM_INVESTMENT';`);
+  Number(zMiss.length) === 0
+    ? pass('(Z) no EMPLOYEE owner-labor row left as COST_TO_SERVE (rule complete)')
+    : fail('(Z) EMPLOYEE owner-labor row not promoted', JSON.stringify(zMiss));
 }
 
 // ── ROUND-TRIP mode — service-key data proof (fallback) ─────────────────────
@@ -330,6 +386,9 @@ async function roundTrip() {
   // D-11/D-12 columns + table reachable via the data path.
   const { error: catErr } = await sb.from('cost_objects').select('id,cost_category,resource_id,labor_hours', { head: true });
   catErr ? fail('cost_category + resource_id + labor_hours columns selectable', catErr.message) : pass('cost_category + resource_id + labor_hours columns selectable');
+  // D-16 recovery_basis columns reachable via the data path.
+  const { error: recErr } = await sb.from('cost_objects').select('id,recovery_basis,recovery_basis_source', { head: true });
+  recErr ? fail('recovery_basis + recovery_basis_source columns selectable', recErr.message) : pass('recovery_basis + recovery_basis_source columns selectable');
   // Real row select (NOT head:true) — a HEAD request does not surface a missing-TABLE error
   // (same PostgREST quirk handled for business_assets above). PGRST205/42P01 = table absent.
   const { error: lrErr } = await sb.from('labor_resources').select('id').limit(1);
