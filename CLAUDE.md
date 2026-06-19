@@ -323,6 +323,31 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-19 — THUNDER D-16 Phase 2a: recovery_basis flag WRITTEN/GATED + DERIVED backfill + catalog gate (X)-(Z) (schema + proof, NOT applied — owner-apply + owner-proof owed)
+
+**Type:** ONE gated migration + verify-script extension + built-inventory. **NO UI, NO pricing readout, NO dials** (Phase 2a scope). Migration is **STAGED/GATED — NOT applied** → schema-verification gate is OWED (runs after David applies + mints PAT). `git status --short` before: clean. `[TRACE:*]` STAYS ON (standing owner instruction — Part 7). Commit **`779542c`** (migration + `verify-cost-objects.mjs` (X)-(Z) + built-inventory).
+
+**THE FLAG (the D-16-recon's "ONE flag", now written):** `supabase/migrations/20260619_cost_objects_recovery_basis.sql` adds two columns to `cost_objects`, both **text, NULLABLE, NO CHECK** (AC-4 — value-set grows without a migration, cost_source precedent):
+- **`recovery_basis`** — `COST_TO_SERVE` (feeds the ÷N per-unit price) | `PLATFORM_INVESTMENT` (feeds the separate payback line — NEVER divided into per-unit price). The Model B split.
+- **`recovery_basis_source`** — `DERIVED` (the system's default guess, owner has NOT vetted) | `EXPLICIT` (owner-set). The "derived first, then explicit" honesty axis — surfaces which classifications still run on the guess. ALL backfilled rows = DERIVED.
+
+**THE BACKFILL (in-migration, same transaction, derived-default RULE — a SUGGESTION, 2b makes it owner-overridable):** (a) every row → COST_TO_SERVE / DERIVED; (b) PROMOTE EMPLOYEE owner/founder labor (`cost_category='labor'` AND `resource_id`→`labor_resources.resource_type='EMPLOYEE'`) → PLATFORM_INVESTMENT. **Live TRACE split (45830ba7, 21 rows, verified service-key 2026-06-19): 1 PLATFORM_INVESTMENT** (Owner (labor), the sole EMPLOYEE-resource labor row) **+ 20 COST_TO_SERVE** (Connor/Andrew contract-labor are CONTRACTOR → cost-to-serve; + 10 subs/other COST; 5 ASSET capital; 3 PROJECT buckets). **Documented known limitation (by design, in migration comment + doc):** the labor=investment proxy holds ONLY for a two-person business — a future customer-serving EMPLOYEE would be mis-tagged investment, and owner per-tenant support time is really cost-to-serve; both are corrected in 2b by an EXPLICIT override. The flag exists precisely so it can be corrected.
+
+**BYTE-IDENTICAL GATE (stated, must hold — recovery_basis is a CLASSIFICATION, not an amount):** the live `/costs` tile SELECT + `fromCostObject` never read recovery_basis → after backfill the totals MUST be unchanged. **Live floor captured THIS session as the gating anchor (TRACE 45830ba7, read-only mirror): floor `$11,323`/mo · estimated `$1,607.67`/mo · known `$12,930.67`/mo · capexExcluded `$6,917.31` · unknown 2 · 21 cost_objects.** (Confirms the D-16 floor; the old `$12,239.67` BEFORE-NUMBER anchor is stale — David has since added Connor/Andrew labor.) If ANY of those move after apply, that is a BUG — STOP.
+
+**Proof (catalog gate, OWED — runs post-apply):** `verify-cost-objects.mjs` extended with (X) recovery_basis text/nullable/NO-CHECK, (Y) recovery_basis_source text/nullable/NO-CHECK, (Z) backfill = NO nulls + only the two bases + all DERIVED + every PLATFORM_INVESTMENT row IS EMPLOYEE owner labor + no EMPLOYEE owner-labor row left COST_TO_SERVE. Round-trip selectability check added too. **Pre-apply proof the migration is gated:** ran `node scripts/verify-cost-objects.mjs` (round-trip, no PAT) → recovery_basis columns SELECT-fail (absent) → confirms unapplied.
+
+**SEQUENCE FOR DAVID (the only path that closes Phase 2a):**
+1. ✅ Thunder: gated migration + backfill + (X)-(Z) written, committed `779542c`, pushed.
+2. **David: apply `20260619_cost_objects_recovery_basis.sql`** in Supabase SQL editor (project bgobkjcopcxusjsetfob).
+3. **David: mint a short-lived `SUPABASE_PAT`** (https://supabase.com/dashboard/account/tokens).
+4. **Thunder: run** `SUPABASE_PAT=sbp_xxx node scripts/verify-cost-objects.mjs` → (X)-(Z) green + COST_TO_SERVE/PLATFORM_INVESTMENT counts (expect 20 / 1).
+5. **David: paste the proof to Lightning** to confirm.
+6. **David: REVOKE the PAT immediately** (confirm zero tokens).
+7. **David: OWNER-PROVE** — open `/costs`, confirm floor + all totals are byte-identical (floor $11,323/mo, known $12,930.67/mo, capex $6,917.31) — the classification changed nothing.
+
+**NEXT (Phase 2b, when greenlit — NOT this pass):** make recovery_basis owner-overridable (DERIVED→EXPLICIT) in the UI → feed ONLY cost-to-serve rows into the ÷N price pool → compute the payback line from the PLATFORM_INVESTMENT rows → per-project N + margin dials (today both business-level only). LAWNS per-item feed after.
+
 ### 2026-06-19 — THUNDER D-16 BANKED (pricing Model B) + verify-first recon: cost-to-serve split NEEDS A FLAG; N + margin EXIST business-level, ABSENT per-project (docs + recon only)
 
 **Type:** ONE decision doc + read-only verify-first recon. NO dial build, NO schema, NO migration, NO code → schema-verification gate N/A, no BUILT-INVENTORY change. `git status --short` before: clean. `[TRACE:*]` STAYS ON (standing owner instruction — Part 7).
