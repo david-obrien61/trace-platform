@@ -560,6 +560,35 @@ record, (c) customer view last (needs a settled price to present).
 
 ---
 
+### D-18 · Platform overhead is HAND-ALLOCATED across verticals; platform = computed remainder, guarded at 100% — `[POINTER]`
+**Decision (amends [[D-14]]):** TRACE's shared-spine overhead (founder/platform labor $11,200/mo, shared
+domains/APIs) is allocated across TRACE's OWN verticals (Farm, Real Estate, BuiltWithCAI, Cultivar, Ignition…) by
+OWNER HAND-SET shares — NOT an automatic even or usage split — because the verticals are few and lopsided in
+platform usage (Farm uses almost nothing; BuiltWithCAI is heavy). **Platform's share is the COMPUTED REMAINDER**
+(100% − sum(vertical shares)), never typed; a large remainder is legitimate overhead the owner has consciously
+chosen not to push onto a vertical yet. **Over-allocation guard is structural:** because platform = remainder,
+sum > 100% computes a NEGATIVE remainder → RED, cannot save — TRACE can never claim >100% of any overhead pool.
+On a NEW entrant the system SUGGESTS a default starting share (configurable, default 20%) and shows the impact,
+but does NOT apply it and does NOT propose rebalancing existing shares (Option A over a rebalance-suggesting
+Option B — auto-rebalance would creep back to the rejected auto-split); the owner rebalances by hand. **Suggested
+vs CONFIRMED provenance mirrors the recovery_basis derived/explicit pattern** — a suggested share is visually
+distinct until the owner accepts/edits it. A SOLE active vertical may be hand-set to 100% (remainder 0). Overhead
+ALLOCATION (what % of the shared spine a vertical carries) is kept distinct from cost ATTRIBUTION (a specific cost
+object that belongs to a vertical gets that vertical's parent_id) — two seams, not conflated.
+**Why a pointer:** the seven rules, the hand-vs-auto rationale, the attribution/allocation distinction, the
+LAWNS-out-of-scope note, and the sequencing live in the canonical doc.
+**Canonical home:** [`docs/DECISION-platform-overhead-carveout.md`](DECISION-platform-overhead-carveout.md).
+**Companion:** [[D-14]] (amended — fair-share of shared cost feeds cost-to-serve), [[D-16]] (Model B — per-vertical
+price = vertical cost-to-serve ÷ N + carved fair-share of platform overhead).
+**Out of scope:** a customer (LAWNS) allocates ITS overhead per-item (overhead ÷ units sold), not by hand-weighted
+vertical shares — rides with the deferred [[D-16]] LAWNS per-item pricing feed; only the universal "never >100% of
+any overhead pool" guard is shared.
+**Sequencing:** build the carve-out engine BEFORE the per-vertical drill-in price (per-vertical price needs the
+carved fair-share); until then the drill-in correctly footnotes "fair-share platform cost added next."
+**Date captured:** 2026-06-19 · **Status:** ACCEPTED.
+
+---
+
 ## PERSONAL-FINANCIAL
 
 > Not in this file by design — see **`decisions/PERSONAL-FINANCIAL.local.md`** (gitignored).
