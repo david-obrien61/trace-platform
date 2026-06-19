@@ -4,17 +4,25 @@
  *   D-11/D-12 STAGE 4 (2026-06-18): reorganized into 4 DISTINCT blocks; LABOR is now its own
  *   real labor-model block (reads/writes labor_resources + applied-labor cost_objects);
  *   cost_category picker added to cost rows (D-11); config.labor write-path debt CLOSED.
+ *   D-14.6 SEVER (2026-06-18): BLOCK 1 (recurring & operating costs) NO LONGER WRITES cost_objects.
+ *   It is now a READ-ONLY pricing scratchpad — it DISPLAYS the recurring costs and points to
+ *   /operating-costs (the owner-proven datasheet HOME) for all add/edit/delete. /operating-costs is
+ *   the SOLE writer of recurring COST rows; the two-surface/two-save-model split is ended. Block 2
+ *   (LABOR, D-12) is UNTOUCHED and remains a live cost_objects writer.
  *
  * PURPOSE
  *   The TUNE surface for Cost-to-Produce, in 4 clearly-separated blocks:
- *     1. RECURRING & OPERATING COSTS → cost_objects (node_type=COST, NOT labor category).
+ *     1. RECURRING & OPERATING COSTS → READ-ONLY scratchpad (DISPLAY only). Entry/edit lives at
+ *                                      /operating-costs. This block writes NOTHING (D-14.6 sever).
  *     2. LABOR                       → labor_resources (role/rate) + applied-labor cost_objects
  *                                      (node_type=COST, cost_category 'labor'|'contract-labor').
  *     3. MARGIN POLICY               → business_modules.config (baseline margin, overhead, reference).
  *     4. TARGET CUSTOMERS            → business_modules.config (denominator sensitivity set).
  *
  * STORAGE
- *   - cost_objects: recurring rows AND applied-labor rows. Per-ROW writes (insert/update/delete-by-id).
+ *   - cost_objects: applied-labor rows ONLY (Block 2). Per-ROW writes (insert/update/delete-by-id).
+ *     Recurring COST rows are READ here (for the Block-1 scratchpad display) but WRITTEN only by
+ *     /operating-costs (OperatingCosts.tsx) — this component no longer inserts/updates/deletes them.
  *   - labor_resources: one row per labor role/person; cost_rate = base_wage + burden (UI COMPUTES it
  *     on every edit so it can't drift). Per-row writes.
  *   - business_modules.config: margin / denominators / overhead / reference. config.labor is NO
@@ -24,8 +32,8 @@
  *     Byte-identical either way — the read guard strips config.labor when a labor cost_object exists.
  *     config.recurring preserved (dormant backup). Button: "Save Cost-to-Produce" (saves costs + config).
  *
- * TRUNCATION-GUARD INTENT (preserved): rows/resources are deleted ONLY when the owner explicitly
- *   removes them (tracked in removedIds / removedLabor) — never because a short/failed read showed
+ * TRUNCATION-GUARD INTENT (preserved, LABOR): labor resources are deleted ONLY when the owner
+ *   explicitly removes them (tracked in removedLabor) — never because a short/failed read showed
  *   fewer rows. No bulk array overwrite. A failed cost_objects/labor_resources read BLOCKS saving.
  *
  * SURFACE HONESTY
@@ -69,6 +77,7 @@ type CostShape = 'RECURRING_FIXED' | 'PER_OCCASION';   // only the two fully-cap
 type CostNature = 'OPEX' | 'COGS' | 'CAPEX';
 type Substantiation = 'OWNER_ASSERTED' | 'SUBSTANTIATED';
 const CADENCE_OPTS: Cadence[] = ['WEEKLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL'];
+const CADENCE_LABEL: Record<Cadence, string> = { WEEKLY: '/wk', MONTHLY: '/mo', QUARTERLY: '/qtr', ANNUAL: '/yr' };
 const SHAPE_OPTS: CostShape[]  = ['RECURRING_FIXED', 'PER_OCCASION'];
 const NATURE_OPTS: CostNature[] = ['OPEX', 'COGS', 'CAPEX'];
 const SUBSTANTIATION_OPTS: Substantiation[] = ['OWNER_ASSERTED', 'SUBSTANTIATED'];
@@ -152,11 +161,7 @@ function parseConfig(raw: unknown): CostToProduceConfig | null {
   return null;
 }
 
-const newLine = (): CostObjectLine => ({
-  id: null, name: '', recurring_amount: 0, cadence: 'MONTHLY', cost_confidence: 'ESTIMATED',
-  cost_shape: 'RECURRING_FIXED', cost_nature: 'OPEX', cost_category: null, substantiation: 'OWNER_ASSERTED',
-  parent_id: null, notes: null,
-});
+// (newLine removed 2026-06-18 D-14.6 — Block 1 no longer adds/edits recurring rows; entry is at /operating-costs.)
 
 const newLabor = (): LaborEntry => ({
   resourceId: null, costId: null, resource_type: 'CONTRACTOR', name: '', rate_basis: 'HOURLY',
@@ -167,8 +172,7 @@ const newLabor = (): LaborEntry => ({
 export function CostToProduceSettings() {
   const { businessId } = useBusinessContext();
   const [config, setConfig]   = useState<CostToProduceConfig>(() => deepClone(EMPTY_COST_CONFIG));
-  const [rows, setRows]       = useState<CostObjectLine[]>([]);
-  const [removedIds, setRemovedIds] = useState<string[]>([]);  // explicit recurring deletes only
+  const [rows, setRows]       = useState<CostObjectLine[]>([]);  // recurring rows — READ-ONLY display (D-14.6)
   const [labor, setLabor]     = useState<LaborEntry[]>([]);
   const [removedLabor, setRemovedLabor] = useState<Array<{ costId: string | null; resourceId: string | null }>>([]);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
@@ -186,7 +190,6 @@ export function CostToProduceSettings() {
     (async () => {
       setLoading(true);
       setLoadError('');
-      setRemovedIds([]);
       setRemovedLabor([]);
       const [modRes, objRes, projRes, resRes] = await Promise.all([
         supabase.from('business_modules').select('config').eq('business_id', businessId).eq('module_key', MODULE_KEY).maybeSingle(),
@@ -300,17 +303,8 @@ export function CostToProduceSettings() {
   function patchConfig(mut: (c: CostToProduceConfig) => void) {
     setConfig(prev => { const next = deepClone(prev); mut(next); return next; });
   }
-  function addRow() { setRows(rs => [...rs, newLine()]); }
-  function editRow(i: number, patch: Partial<CostObjectLine>) {
-    setRows(rs => rs.map((r, idx) => idx === i ? { ...r, ...patch } : r));
-  }
-  function removeRow(i: number) {
-    setRows(rs => {
-      const r = rs[i];
-      if (r?.id) setRemovedIds(ids => [...ids, r.id as string]);
-      return rs.filter((_, idx) => idx !== i);
-    });
-  }
+  // (Recurring mutators addRow/editRow/removeRow removed 2026-06-18 D-14.6 — Block 1 is read-only;
+  //  recurring costs are added/edited/deleted at /operating-costs, the sole writer.)
   function addLabor() { setLabor(ls => [...ls, newLabor()]); }
   function editLabor(i: number, patch: Partial<LaborEntry>) {
     setLabor(ls => ls.map((e, idx) => idx === i ? { ...e, ...patch } : e));
@@ -329,26 +323,10 @@ export function CostToProduceSettings() {
     setSaving(true);
     setSaveMsg('');
 
-    // ── 1. RECURRING cost_objects: per-row writes. UNKNOWN ⇒ amount NULL. Skip blank names. ──
-    const recPayload = (r: CostObjectLine) => ({
-      business_id: businessId, node_type: 'COST', cost_source: 'MANUAL',
-      name: r.name.trim(),
-      recurring_amount: r.cost_confidence === 'UNKNOWN' ? null : r.recurring_amount,
-      cadence: r.cadence, cost_confidence: r.cost_confidence, cost_shape: r.cost_shape,
-      cost_nature: r.cost_nature, cost_category: r.cost_category, substantiation: r.substantiation,
-      parent_id: r.parent_id, notes: r.notes, acquisition_cost: null,
-    });
-    const namedRows = rows.filter(r => r.name.trim().length > 0);
-    const recInserts = namedRows.filter(r => !r.id).map(recPayload);
-    const recUpdates = namedRows.filter(r => r.id);
-
+    // ── 1. RECURRING cost_objects: SEVERED (D-14.6, 2026-06-18). Block 1 no longer writes recurring
+    //    COST rows — they are added/edited/deleted at /operating-costs (the owner-proven sole writer).
+    //    This save() persists ONLY labor (Block 2) + config (Blocks 3/4). `rows` is read-only display. ──
     let err: { message: string } | null = null;
-    if (recInserts.length) { const { error } = await supabase.from('cost_objects').insert(recInserts); if (error) err = error; }
-    for (const r of recUpdates) {
-      if (err) break;
-      const { error } = await supabase.from('cost_objects').update(recPayload(r)).eq('id', r.id as string).eq('business_id', businessId);
-      if (error) err = error;
-    }
 
     // ── 2. LABOR: labor_resources (role/rate) + applied-labor cost_objects. Per-row. ──
     let laborInserts = 0, laborUpdates = 0;
@@ -394,11 +372,8 @@ export function CostToProduceSettings() {
       }
     }
 
-    // ── 3. Deletes: ONLY explicitly-removed rows (recurring + labor). ──
-    if (!err && removedIds.length) {
-      const { error } = await supabase.from('cost_objects').delete().in('id', removedIds).eq('business_id', businessId).eq('node_type', 'COST');
-      if (error) err = error;
-    }
+    // ── 3. Deletes: ONLY explicitly-removed LABOR rows. (Recurring deletes severed — D-14.6;
+    //    recurring costs are removed at /operating-costs.) ──
     for (const d of removedLabor) {
       if (err) break;
       if (d.costId) { const { error } = await supabase.from('cost_objects').delete().eq('id', d.costId).eq('business_id', businessId).eq('node_type', 'COST'); if (error) { err = error; break; } }
@@ -426,7 +401,7 @@ export function CostToProduceSettings() {
     }
 
     console.log('[TRACE:COST] settings save', {
-      businessId, recInserts: recInserts.length, recUpdates: recUpdates.length, recDeletes: removedIds.length,
+      businessId, recurring: 'READ_ONLY (severed D-14.6 — managed at /operating-costs)',
       laborInserts, laborUpdates, laborDeletes: removedLabor.length,
       result: err ? 'COST_ERR' : cfgErr ? 'CONFIG_ERR' : 'OK',
     });
@@ -434,7 +409,7 @@ export function CostToProduceSettings() {
     setSaving(false);
     const finalErr = err || cfgErr;
     if (finalErr) { setSaveMsg('Error: ' + finalErr.message); return; }
-    setSaveMsg('Saved'); setRemovedIds([]); setRemovedLabor([]);
+    setSaveMsg('Saved'); setRemovedLabor([]);
     // Reload so new rows pick up DB ids (avoids duplicate insert on next save).
     await reload();
     setTimeout(() => setSaveMsg(''), 2000);
@@ -514,56 +489,45 @@ export function CostToProduceSettings() {
         your margin.
       </p>
 
-      {/* ════ BLOCK 1 — RECURRING & OPERATING COSTS ════ */}
-      <Block title="1 · Recurring & operating costs" hint="Subscriptions, utilities, fees — the costs that recur regardless of labor.">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-          {rows.map((r, i) => {
-            const cc = CONFIDENCE_COLOR[r.cost_confidence];
-            const isUnknown = r.cost_confidence === 'UNKNOWN';
-            return (
-              <div key={r.id ?? `new-${i}`} style={rowBox}>
-                <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-                  <input value={r.name} onChange={e => editRow(i, { name: e.target.value })}
-                    placeholder="Cost name (e.g. Claude Pro)" style={{ ...cell, flex: 2 }} />
-                  <MoneyInput value={isUnknown ? null : r.recurring_amount} onChange={v => editRow(i, { recurring_amount: v })}
-                    placeholder={isUnknown ? 'unknown' : '$0.00'} disabled={isUnknown}
-                    style={{ ...cell, flex: 1, background: isUnknown ? '#f3f4f6' : '#fff', color: isUnknown ? '#9ca3af' : DARK }} />
-                </div>
-                <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
-                  <select value={r.cadence} onChange={e => editRow(i, { cadence: e.target.value as Cadence })} style={{ ...cell, flex: 1, minWidth: 110 }}>
-                    {CADENCE_OPTS.map(c => <option key={c} value={c}>{c.toLowerCase()}</option>)}
-                  </select>
-                  <select value={r.cost_confidence}
-                    onChange={e => { const v = e.target.value as CostConfidence; editRow(i, v === 'UNKNOWN' ? { cost_confidence: v, recurring_amount: null } : { cost_confidence: v, recurring_amount: r.recurring_amount ?? 0 }); }}
-                    style={{ ...cell, flex: 1, minWidth: 110, background: cc.bg, color: cc.fg, fontWeight: 700 }}>
-                    {CONFIDENCE_OPTS.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  <button onClick={() => removeRow(i)} style={removeBtn}>✕</button>
-                </div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {/* D-11 category picker — real Schedule C values; "" = uncategorized (honest). */}
-                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1.4, minWidth: 140 }}>
-                    <span style={pickLabel}>category</span>
-                    <select value={r.cost_category ?? ''} onChange={e => editRow(i, { cost_category: e.target.value || null })} style={{ ...cell }}>
-                      <option value="">uncategorized</option>
-                      {CATEGORY_OPTS.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
+      {/* ════ BLOCK 1 — RECURRING & OPERATING COSTS · READ-ONLY SCRATCHPAD (D-14.6) ════ */}
+      {/* Severed 2026-06-18: this block no longer writes cost_objects. It DISPLAYS the recurring
+          costs (so the page still shows what feeds the price) and points to /operating-costs — the
+          owner-proven datasheet HOME — for all add/edit/delete. No editable field, no Save here. */}
+      <Block title="1 · Recurring & operating costs (read-only)" hint="Subscriptions, utilities, fees that recur regardless of labor. Shown here for reference — add or edit them on the Operating Costs page.">
+        {rows.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+            {rows.map((r) => {
+              const cc = CONFIDENCE_COLOR[r.cost_confidence];
+              const isUnknown = r.cost_confidence === 'UNKNOWN';
+              const projName = r.parent_id ? (projects.find(p => p.id === r.parent_id)?.name ?? 'Project') : 'Company-level';
+              return (
+                <div key={r.id ?? r.name} style={{ ...rowBox, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                    <span style={{ fontWeight: 700, color: DARK, fontSize: '0.875rem' }}>{r.name}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
+                      <span style={{ fontWeight: 700, color: isUnknown ? '#9ca3af' : GREEN, fontSize: '0.875rem' }}>
+                        {isUnknown || r.recurring_amount == null ? 'unknown' : `$${r.recurring_amount.toFixed(2)} ${CADENCE_LABEL[r.cadence]}`}
+                      </span>
+                      <span style={{ fontSize: '0.625rem', fontWeight: 700, padding: '2px 7px', borderRadius: 12, background: cc.bg, color: cc.fg }}>{r.cost_confidence}</span>
+                    </span>
                   </div>
-                  <LabeledSelect label="nature" value={r.cost_nature} onChange={v => editRow(i, { cost_nature: v as CostNature })} opts={NATURE_OPTS} />
-                  <LabeledSelect label="shape" value={r.cost_shape} onChange={v => editRow(i, { cost_shape: v as CostShape })} opts={SHAPE_OPTS} />
-                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1.4, minWidth: 140 }}>
-                    <span style={pickLabel}>project</span>
-                    <select value={r.parent_id ?? ''} onChange={e => editRow(i, { parent_id: e.target.value || null })} style={{ ...cell }}>
-                      <option value="">None (company-level)</option>
-                      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                  </div>
+                  <span style={{ fontSize: '0.6875rem', color: GRAY }}>
+                    {r.cost_category ?? 'uncategorized'} · {projName}
+                  </span>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-        <button onClick={addRow} style={dashedBtn}>+ Add cost</button>
+              );
+            })}
+          </div>
+        ) : (
+          <p style={{ fontSize: '0.8125rem', color: '#9ca3af', margin: '0 0 12px' }}>
+            No recurring costs yet — add your first subscription, utility, or fee on the Operating Costs page.
+          </p>
+        )}
+        {/* Pointer to the sole writer. Plain anchor (shared component stays router-agnostic; the
+            authenticated Supabase session re-hydrates on load, /operating-costs is a PrivateRoute). */}
+        <a href="/operating-costs" style={{ ...dashedBtn, display: 'block', textAlign: 'center', textDecoration: 'none', boxSizing: 'border-box' }}>
+          Manage recurring &amp; operating costs →
+        </a>
       </Block>
 
       {/* ════ BLOCK 2 — LABOR (labor_resources + applied-labor cost_objects) ════ */}

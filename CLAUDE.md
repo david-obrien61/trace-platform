@@ -323,6 +323,20 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-19 — THUNDER D-14.6 SEVER: estimator Block 1 → read-only scratchpad; /operating-costs is sole recurring writer (BUILDER-COMPLETE, owner-proof owed)
+
+**Type:** Code — 1 shared component (`CostToProduceSettings.tsx`) write-path sever + UI relabel + D-14.6 doc + built-inventory. NO schema, NO migration → schema-verification gate N/A. **NO existing `cost_objects` row created/modified/deleted by the build** (proofs created+deleted only `__PROOF` test rows). `[TRACE:*]` STAYS ON (standing owner instruction — Part 7); the `[TRACE:COST]` save emit was KEPT and now reports `recurring: READ_ONLY (severed)`.
+
+**CONTEXT:** `/operating-costs` was OWNER-PROVEN 2026-06-18 as the recurring-cost home. Until now the estimator's Block 1 ALSO wrote the same recurring `cost_objects` rows → same cost editable from two surfaces with two different save models (estimator batch-Save vs /operating-costs immediate-save). **This pass ended that split.**
+
+**SEVER (Block 1 ONLY):** In `CostToProduceSettings.tsx`, Block 1 "Recurring & operating costs" is now a **READ-ONLY pricing scratchpad** — it DISPLAYS the recurring costs (name · amount+cadence · confidence badge · category · project) and links **"Manage recurring & operating costs →" to `/operating-costs`** (plain `<a>` — shared component stays router-agnostic). It **no longer inserts/updates/deletes `cost_objects`**: removed the recurring write block + `removedIds` delete from `save()`, removed `addRow`/`editRow`/`removeRow`/`newLine`/`removedIds` state, replaced the editable inputs/Add/remove controls with the read-only list. No field that looks editable but doesn't persist; no Block-1 Save that does nothing (the global Save now persists ONLY labor + config).
+
+**UNTOUCHED (verified):** Block 2 **LABOR (D-12)** still writes `labor_resources` + applied-labor `cost_objects` exactly as before (insert/update/delete intact). Blocks 3 (margin) + 4 (target customers) still write `business_modules.config`. `/costs` and `/operating-costs` unchanged — `/operating-costs` remains the SOLE writer of recurring COST rows.
+
+**BUILDER-COMPLETE — proofs (TRACE 45830ba7):** (a) Block 1 no longer writes — structural: recurring INSERT/UPDATE/DELETE removed from `save()` (grep: only labor writes + reads remain), UI controls replaced with read-only display + pointer. (b) **Labor STILL writes** — service-key round-trip of the labor `resPayload`+`costPayload` (insert→edit→cleanup) passes. (c) **/operating-costs STILL writes** — recurring insert→edit→delete round-trip passes. Existing named rows (recurring: Claude Pro/Gemini/TX tax/domains; labor: Owner/Connor/Andrew) **byte-identical untouched**; count 21→21, no `__PROOF` leak. `build:cultivar` clean; `CostToProduceSettings.tsx` tsc-clean.
+
+**NEXT — David's OWNER-PROOF (live `/settings` → Cost-to-Produce under RLS):** Block 1 shows the recurring costs READ-ONLY (no editable fields, no Add/remove) + the "Manage recurring & operating costs →" link → click it lands on `/operating-costs` → add/edit/delete a recurring cost THERE → it reflects on `/costs` and in the Block 1 read-only display → in Settings, edit a LABOR line + Save → it still persists (Block 2 intact) → margin/target Save still works. Then `[TRACE:COST]`/`[TRACE:opcosts]` stay ON (standing).
+
 ### 2026-06-18 — THUNDER Operating Costs datasheet built (recurring-cost HOME) — estimator NOT severed (BUILDER-COMPLETE, owner-proof owed)
 
 **Type:** Code — 1 NEW cultivar page + router + 1 entry-point button on `/costs` + D-14.6 doc clause + built-inventory. NO schema, NO migration → schema-verification gate N/A. **NO existing `cost_objects` row created/modified/deleted by the build** (the service-key PROOF created+deleted a `__PROOF` test row only). `[TRACE:*]` STAYS ON (standing owner instruction — Part 7).
