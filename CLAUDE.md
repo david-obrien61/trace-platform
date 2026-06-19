@@ -323,6 +323,20 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-19 — THUNDER RECON: "scheduling widget" contradiction resolved — NO delivery scheduler exists (read-only)
+
+**Type:** RECON ONLY — read-only, no schema/code/migration/build → schema-verification gate N/A, no BUILT-INVENTORY change. `[TRACE:*]` STAYS ON (standing owner instruction — Part 7). Sole question: David said "we have the scheduling widget in the build"; the capability recon (e508455) flagged scheduling (3.4) NET-NEW + delivery (3.5) partial. Resolved against the code.
+
+**VERDICT — the capability recon is right; there is NO real, writable delivery/appointment scheduler.** What David likely remembers is one of two real-but-different things: the PMI interval-schedule, or the `/deliveries` routing tile. Neither schedules a delivery date; neither is writable as one.
+
+1. **No scheduling/calendar/booking widget for deliveries.** The only "schedule" surfaces: (a) PMI — `business_pmi_schedule` (`interval_days`/`last_service_at`/`tasks[]`, [20260612…:163-172]) + `PMI.tsx:1-9` = preventive-maintenance INTERVAL recurrence, not a date/appointment scheduler; (b) `campaign_posts.scheduled_date` ([20260529_campaigns.sql:28]) = social-post scheduling. No delivery/appointment slot anywhere.
+2. **DELIVERY tile = REAL but route-builder only.** `Dashboard.tsx:384` `handleEnable('delivery_routing')` → `/deliveries` → `DeliveryRoute.tsx` (355 lines, real). Reads `orders WHERE transport_method='delivery'` (`:67-78`), builds a Google Maps directions URL (`:37-40`), copy/text. **Writes NOTHING to the DB — no date, no status, no schedule.** Routes existing deliveries; does not schedule them.
+3. **No delivery-date/appointment/slot field — live or in migrations.** No `delivery_date`/`scheduled_at`/`appointments`/`service_slots` on `orders`. A `delivery_scheduled` notification template exists (`cultivar.ts:103-131`, fields deliveryDate/deliveryWindow) but is **ORPHANED** — defined, never invoked (same for Ignition `appointment_24h`). Checkout (Confirmation/CartReview/CustomerCapture) writes no scheduled date.
+4. **OCR engine BUILT + solid, but RECEIPT-shaped; prompt NOT swappable without a code edit.** `api/receipts/ocr.ts` — Gemini 2.5 Flash→Claude Haiku fallback, STD-010, model swappable via `platform_config`. Schema is a single hardcoded `const PROMPT` (`:53-72`) = vendor/date/amount/subtotal/tax/category/line_items/payment_method/receipt_number. **No shape param, no invoice schema** (customer/ship-to/bill-to/totals/due-date). Invoice extraction = new prompt + parse shape + a select param; provider chain reuses as-is.
+5. **OCR dead-ends at `receipts`.** `ReceiptKeeper.tsx:277-297` `doSave` inserts ONE `receipts` row and stops — no order, no delivery, no schedule, no cost_object. Zero write-onward from a captured doc to any action.
+
+**Scoping truth for "capture invoice image → schedule a delivery":** capture+OCR ✅ exists (receipt-shaped) · invoice-shape OCR 🟡 net-new (small, reuses provider chain) · OCR→order/delivery write-onward 🔴 net-new (none exists) · delivery-date scheduler widget+column 🔴 net-new (none exists) · delivery routing ✅ exists (route-builder, writes nothing). Essentially the whole chain after capture is net-new. **Recommended nothing — David scopes the build.**
+
 ### 2026-06-19 — THUNDER WAVE 0+1: QB 500 ROOT-CAUSE FIXED + live spine verified + discrepancy-compare + sandbox seeder + checkout relabel
 
 **Type:** 1 code fix (QB router) + 1 verify script + tech-debt log + 1 shared capability (+test) + 1 seeder script + 1 wording fix + docs. NO schema, NO migration → schema-verification gate N/A. `[TRACE:*]` STAYS ON (standing owner instruction — Part 7). Commits: `14a9a82` (QB fix), `e678754` (spine verify + tech debt), `4633884` (1A+1C), `ef4b0cd` (1B). All pushed.
