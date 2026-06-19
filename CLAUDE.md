@@ -323,6 +323,25 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-19 — THUNDER D-16 Phase 2b/2c: Model B price split + payback line + overridable recovery_basis + N-list (BUILDER-COMPLETE, owner-proof owed)
+
+**Type:** Code — 2 shared engine files (`CountOnceSeam.ts` + `CostToProduce.ts`) + 1 page (`CostToProduce.tsx`) + 2 edit surfaces (`OperatingCosts.tsx`, `CostToProduceSettings.tsx`) + 1 engine test + 1 proof script + built-inventory. **NO schema, NO migration** — Phase-2a `recovery_basis`/`recovery_basis_source` already LIVE (verified service-key this session: 20 COST_TO_SERVE / 1 PLATFORM_INVESTMENT, all DERIVED — so the 2a "owner-apply OWED" wording below is now SUPERSEDED: the migration IS applied). Schema-verification gate N/A. `[TRACE:*]` STAYS ON (standing owner instruction — Part 7). **Wires the 2a flag into the live price (compute + UI), the work the 2a handoff named NEXT.**
+
+**VERIFY-FIRST (reported before building):** (1) the ÷N divide was `acc.knownMonthly / n` (`CostToProduce.ts`) — summed the WHOLE pool incl. the $11,200 PLATFORM_INVESTMENT owner-labor row, never reading recovery_basis (Model A confirmed). (2) the live `/costs` SELECT omitted `recovery_basis` (same gap the receipt_id fix had) — added. (3) live anchor confirmed: floor **$11,323** · est **$1,607.67** · known **$12,930.67** · capex **$6,917.31** · unknown 2.
+
+**2c — COMPUTE:** the count-once seam partitions the monthly pool by recovery_basis — `enforceCountOnce` emits `poolCostToServeFloorMonthly`/`poolCostToServeKnownMonthly`/`poolInvestmentMonthly` (UNROUNDED accumulators → reconcile to `poolKnownMonthly` by construction); `CostEvent`/`CountedEvent` carry `recoveryBasis` (default COST_TO_SERVE = Model A byte-identical for un-migrated); `fromCostObject` reads `row.recovery_basis`. The engine repoints the ÷N sensitivity to **COST_TO_SERVE ONLY** (`costToServe ÷ N`, price via UNCHANGED `MarginEngine.calculateRetail`), adds `costToServeMonthly`+`platformInvestmentMonthly`+per-N `contributionMonthly`. The page rewrites the footnote + adds a **Payback Card** (investment $/mo · per-N contribution · "covers it / X% of it"). **Honest-totals block UNCHANGED** (it shows total cost truth, not price).
+
+**2b — OVERRIDABLE (derived→explicit loop):** `/operating-costs` (20 recurring COST rows) AND Settings Block-2 LABOR (the Owner-labor PLATFORM_INVESTMENT row lives there — confirmed from code) each gain a per-row recovery-basis control + derived/explicit tag; override writes `recovery_basis_source='EXPLICIT'` immediately under RLS. **N-list (Block 4):** arbitrary list via text buffer, dedupe+sort on blur, one row per value.
+
+**BUILDER-COMPLETE — service-key proofs (live TRACE 45830ba7):**
+- Honest-totals UNCHANGED: floor $11,323 · est $1,607.67 · known $12,930.67 · capex $6,917.31 · unknown 2. ✓
+- **Split: cost-to-serve $1,730.67 + investment $11,200 = $12,930.67 (`splitReconciles: true`)** — money moved divide→payback, none created/destroyed. ✓
+- **Price moved exactly as investment left the divide:** N=20 Model A ~$1,077.56 → **Model B $144.99** (floor $10.99); N=1 $21,551→$2,884.99; N=5 $4,310→$576.99. ✓
+- **Override round-trip:** Gemini Advanced COST_TO_SERVE→PLATFORM_INVESTMENT flipped source→EXPLICIT, moved cts −$20 / inv +$20, known conserved → **restored** (TRACE data untouched). ✓
+- Tests: `CostToProduce.test.ts` 17→**25** (test 5 = Model B split); CountOnceSeam **62** / CostRollup **21** / ProjectLens **26** unbroken. `build:cultivar` clean (2200 modules); changed files tsc-clean (8 pre-existing Confirmation/Orders/DeliveryRoute/SocialSetup errors unrelated). Proof: `scripts/verify-model-b-split.ts`.
+
+**NEXT — David's OWNER-PROOF (live under RLS):** (1) `/costs` price table reads cost-to-serve ÷ N (N=20 ≈ $145, NOT ~$1,078) + footnote says cost-to-serve + Payback Card shows $11,200/mo separately; honest-totals still $11,323 floor / $12,930.67 known. (2) `/operating-costs` recovery-basis control + derived tag per row; flip one to "investment" → tag "you set this" + /costs price drops further. (3) Settings Block 2: Owner labor shows "investment" + re-classify control. (4) Block 4: type "1, 5, 20, 100, 500, 1000" → blur → six sorted rows. `[TRACE:*]` stays ON. **Phase 2d (deferred):** per-PROJECT N + margin dials; LAWNS per-item feed.
+
 ### 2026-06-19 — THUNDER D-16 Phase 2a: recovery_basis flag WRITTEN/GATED + DERIVED backfill + catalog gate (X)-(Z) (schema + proof, NOT applied — owner-apply + owner-proof owed)
 
 **Type:** ONE gated migration + verify-script extension + built-inventory. **NO UI, NO pricing readout, NO dials** (Phase 2a scope). Migration is **STAGED/GATED — NOT applied** → schema-verification gate is OWED (runs after David applies + mints PAT). `git status --short` before: clean. `[TRACE:*]` STAYS ON (standing owner instruction — Part 7). Commit **`779542c`** (migration + `verify-cost-objects.mjs` (X)-(Z) + built-inventory).
@@ -795,6 +814,8 @@ packages/shared/src/
 - Any already-run Supabase migrations
 - ~~nursery_modules RLS policy authenticated_select_nursery_modules~~ — retired 2026-06-04, replaced by business_modules membership-scoped policy
 - main branch — multi-tenant-extraction was merged 2026-06-03. All work now goes directly to main or feature branches as appropriate.
+
+**STANDING INSTRUCTION (owner, do NOT cross without David):** TRACE instrumentation `[TRACE:*]` is ON by OWNER instruction — do NOT comment out or delete any emit until David explicitly lifts it. This OVERRIDES the STD-003 post-OWNER-PROVEN comment-out default. Applies to `[TRACE:COST]`, `[TRACE:SEAM]`, `[TRACE:opcosts]`, `[TRACE:PROJECTLENS]`, and any new area.
 
 ---
 

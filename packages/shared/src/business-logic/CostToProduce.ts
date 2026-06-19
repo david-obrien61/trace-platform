@@ -158,6 +158,14 @@ export interface Accumulation {
   possibleDuplicateCount?: number;
   /** True when this accumulation was reconciled against real captured cost_objects. */
   fedFromRollup?: boolean;
+  // ── Model B split (D-16). Present on every path; for the config-only path the whole pool is
+  //    cost-to-serve and investment is 0 (so Model B == Model A for un-migrated tenants). ──
+  /** COST_TO_SERVE floor within the monthly pool. */
+  costToServeFloorMonthly?: number;
+  /** COST_TO_SERVE floor+estimated — the ÷N price pool (the ONLY thing divided per customer). */
+  costToServeKnownMonthly?: number;
+  /** PLATFORM_INVESTMENT monthly — the payback line; NEVER divided into per-unit price. */
+  platformInvestmentMonthly?: number;
 }
 
 /** annual → monthly; monthly passes through. */
@@ -270,6 +278,11 @@ export function accumulate(config: CostToProduceConfig, opts: AccumulateOptions 
     return {
       floorMonthly, estimatedMonthly, knownMonthly, unknownLines, knownLines,
       computable: floorMonthly > 0 || estimatedMonthly > 0,
+      // Config-only path (un-migrated tenant): no recovery_basis tags exist → the whole pool is
+      // cost-to-serve and investment is 0. Model B price == Model A price (byte-identical).
+      costToServeFloorMonthly: floorMonthly,
+      costToServeKnownMonthly: knownMonthly,
+      platformInvestmentMonthly: 0,
     };
   }
 
@@ -295,6 +308,11 @@ export function accumulate(config: CostToProduceConfig, opts: AccumulateOptions 
     capexExcluded: seam.capexKnown,
     possibleDuplicateCount: seam.possibleDuplicates.length,
     fedFromRollup: true,
+    // Model B (D-16): the seam partitioned the monthly pool by recovery basis. The ÷N price
+    // pool is COST_TO_SERVE only; PLATFORM_INVESTMENT goes to the payback line.
+    costToServeFloorMonthly: seam.poolCostToServeFloorMonthly,
+    costToServeKnownMonthly: seam.poolCostToServeKnownMonthly,
+    platformInvestmentMonthly: seam.poolInvestmentMonthly,
   };
 }
 
@@ -328,6 +346,14 @@ export interface SensitivityRow {
   priceKnown: number;
   /** Realized gross margin of priceKnown vs costKnown (sanity echo, MarginEngine). */
   marginPct: string;
+  /**
+   * Model B (D-16) payback indicator: monthly contribution ABOVE cost-to-serve at the
+   * suggested (known) price and this N = priceKnown × N − costToServeKnownMonthly. This is the
+   * dollars/month available to recover the platform investment. NOT a fabricated payback period —
+   * the investment is an ongoing monthly accrual (owner labor), so the page shows this figure
+   * beside the monthly investment and lets the owner read coverage (Surface Honesty).
+   */
+  contributionMonthly: number;
 }
 
 export interface ConfidenceMix {
@@ -353,6 +379,11 @@ export interface CostToProduceResult {
   confidence: ConfidenceMix;
   /** One row per denominator. Empty when not computable. */
   sensitivity: SensitivityRow[];
+  // ── Model B (D-16) top-line split for the page. ──
+  /** The ÷N price pool — COST_TO_SERVE known monthly (what the sensitivity table divides). */
+  costToServeMonthly: number;
+  /** The payback line — PLATFORM_INVESTMENT monthly, shown separately, never divided per customer. */
+  platformInvestmentMonthly: number;
 }
 
 export function confidenceMix(acc: Accumulation): ConfidenceMix {
@@ -390,14 +421,23 @@ export function analyze(
   const baseline = config.margin?.baseline ?? 0.4;
   const mc = marginConfigForTarget(baseline);
 
+  // ── Model B (D-16): the ÷N price pool is COST_TO_SERVE only. PLATFORM_INVESTMENT is held out
+  //    (payback line). The ?? fallbacks keep an un-migrated config-only accumulation = Model A. ──
+  const ctsFloorMonthly = acc.costToServeFloorMonthly ?? acc.floorMonthly;
+  const ctsKnownMonthly  = acc.costToServeKnownMonthly  ?? acc.knownMonthly;
+  const investmentMonthly = acc.platformInvestmentMonthly ?? 0;
+
   const sensitivity: SensitivityRow[] = acc.computable
     ? (config.denominators ?? [])
         .filter((n) => n > 0)
         .map((n) => {
-          const costFloor = acc.floorMonthly / n;
-          const costKnown = acc.knownMonthly / n;
+          // Model B: divide ONLY cost-to-serve by N (NOT the whole loaded floor).
+          const costFloor = ctsFloorMonthly / n;
+          const costKnown = ctsKnownMonthly / n;
           const priceFloor = calculateRetail(costFloor, mc);
           const priceKnown = calculateRetail(costKnown, mc);
+          // Payback: dollars/month above cost-to-serve at the suggested price + this N.
+          const contributionMonthly = round2(priceKnown * n - ctsKnownMonthly);
           return {
             n,
             costFloor: round2(costFloor),
@@ -405,6 +445,7 @@ export function analyze(
             priceFloor,
             priceKnown,
             marginPct: getProfitMargin(costKnown, priceKnown),
+            contributionMonthly,
           };
         })
     : [];
@@ -424,6 +465,11 @@ export function analyze(
     rollupEventsIn: opts.rollupEvents?.length ?? 0,
     capexExcluded: acc.capexExcluded ?? 0,
     possibleDuplicateCount: acc.possibleDuplicateCount ?? 0,
+    // Model B (D-16) split — the divide pool vs the payback line. They MUST sum to knownMonthly
+    // (no money created or destroyed; the investment moved out of the divide, not away).
+    costToServeMonthly: round2(ctsKnownMonthly),
+    platformInvestmentMonthly: round2(investmentMonthly),
+    splitReconciles: round2(ctsKnownMonthly + investmentMonthly) === round2(acc.knownMonthly),
     perN: sensitivity.map((s) => ({
       n: s.n, costFloor: s.costFloor, costKnown: s.costKnown,
       priceFloor: s.priceFloor, priceKnown: s.priceKnown,
@@ -437,6 +483,8 @@ export function analyze(
     accumulation: acc,
     confidence: confidenceMix(acc),
     sensitivity,
+    costToServeMonthly: round2(ctsKnownMonthly),
+    platformInvestmentMonthly: round2(investmentMonthly),
   };
 }
 

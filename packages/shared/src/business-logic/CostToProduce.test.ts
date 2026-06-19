@@ -103,6 +103,32 @@ test('4. a captured MONTHLY recurring cost folds into the pool on top of config'
   ok(a.floorMonthly !== 6.5, 'assertion has teeth: dropping the captured recurring cost would keep floor at 6.50');
 });
 
+// ── 5. MODEL B (D-16): PLATFORM_INVESTMENT is held OUT of the ÷N price, kept in known. ──
+test('5. a PLATFORM_INVESTMENT cost leaves the divide but stays in known-monthly (payback line)', () => {
+  // $1000/mo owner labor tagged PLATFORM_INVESTMENT + $200/mo COST_TO_SERVE subs (both CONFIRMED).
+  const events: CostEvent[] = [
+    { id: 'labor', label: 'Owner labor', amount: 1000, bucket: 'MONTHLY_POOL', amountConfidence: 'CONFIRMED', substantiation: 'OWNER_ASSERTED', recoveryBasis: 'PLATFORM_INVESTMENT', source: 'cost_objects:labor' },
+    { id: 'subs', label: 'Subs', amount: 200, bucket: 'MONTHLY_POOL', amountConfidence: 'CONFIRMED', substantiation: 'OWNER_ASSERTED', recoveryBasis: 'COST_TO_SERVE', source: 'cost_objects:subs' },
+  ];
+  // A recurring-free, labor-free config so the ONLY pool inputs are these two events.
+  const bare: CostToProduceConfig = { ...cfg(), denominators: [10], locations: [{ ...cfg().locations[0], recurring: [] }] };
+  const r = analyze(bare, [], { rollupEvents: events });
+  ok(r.confidence.knownMonthly === 1200, `known-monthly = 1000 + 200 = 1200 (honest total UNCHANGED); got ${r.confidence.knownMonthly}`);
+  ok(r.costToServeMonthly === 200, `÷N price pool = COST_TO_SERVE only = 200; got ${r.costToServeMonthly}`);
+  ok(r.platformInvestmentMonthly === 1000, `payback line = PLATFORM_INVESTMENT = 1000; got ${r.platformInvestmentMonthly}`);
+  ok(r.costToServeMonthly + r.platformInvestmentMonthly === r.confidence.knownMonthly, 'split reconciles: cts + investment === known');
+  // At N=10 the price divides ONLY cost-to-serve (200/10 = 20), NOT the whole 1200/10 = 120.
+  ok(r.sensitivity[0].costKnown === 20, `per-N=10 cost uses cost-to-serve 200/10 = 20, NOT 1200/10 = 120; got ${r.sensitivity[0].costKnown}`);
+  ok(r.sensitivity[0].costKnown !== 120, 'assertion has teeth: Model A would divide the whole 1200 → cost 120');
+  // Contribution = priceKnown × N − cost-to-serve (the dollars/mo toward the investment). The
+  // charm-rounded price ($33.99, not the raw $33.33) drives it, so assert against the definition.
+  const expectedContrib = Math.round((r.sensitivity[0].priceKnown * 10 - 200) * 100) / 100;
+  ok(r.sensitivity[0].contributionMonthly === expectedContrib,
+    `contribution = priceKnown×N − cts = ${expectedContrib}; got ${r.sensitivity[0].contributionMonthly}`);
+  ok(r.sensitivity[0].contributionMonthly < r.platformInvestmentMonthly,
+    'honest payback: at this price+N the monthly contribution does NOT cover the $1000 investment');
+});
+
 // ── report ─────────────────────────────────────────────────────────────────────────
 console.log('\n──────────────────────────────────────────────');
 console.log(`COST-TO-PRODUCE SEAM-FEED TESTS: ${passed} passed, ${failed} failed`);

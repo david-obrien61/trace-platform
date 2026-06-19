@@ -84,6 +84,18 @@ export type Realization = 'REALIZED' | 'UNCONFIRMED';
 export type CostBucket = 'CAPEX' | 'MONTHLY_POOL';
 
 /**
+ * D-16 Model B recovery basis (cost_objects.recovery_basis). ORTHOGONAL to amountConfidence
+ * (floor/estimated) and to bucket (capex/pool):
+ *   COST_TO_SERVE     — marginal / per-tenant cost → feeds the ÷N per-customer price pool.
+ *   PLATFORM_INVESTMENT — founder/platform labor → NEVER divided into the per-unit price;
+ *                       surfaced on a SEPARATE payback line (D-16: dividing the whole floor
+ *                       by N makes low-N unsellable + conflates investment with COGS).
+ * Absent → COST_TO_SERVE: the conservative default an untagged cost feeds the divide, exactly
+ * the pre-Model-B (Model A) behavior, so un-migrated tenants are byte-identical.
+ */
+export type RecoveryBasis = 'COST_TO_SERVE' | 'PLATFORM_INVESTMENT';
+
+/**
  * Cost SHAPE (D-8 — usage-coupling). RECURRING_FIXED = a subscription billed on a
  * cadence REGARDLESS of use (gym, car-wash plan, SaaS seat). PER_OCCASION = a cost tied
  * to a discrete usage event (a single wash, a one-off part). UNKNOWN_SHAPE = not yet
@@ -107,6 +119,8 @@ export interface CostEvent {
   bucket: CostBucket;
   amountConfidence: AmountConfidence;
   substantiation: Substantiation;
+  /** D-16 Model B: COST_TO_SERVE (÷N pool) vs PLATFORM_INVESTMENT (payback line). Absent → COST_TO_SERVE. */
+  recoveryBasis?: RecoveryBasis;
   /** Defaults to REALIZED when omitted. */
   realization?: Realization;
   // ── event-identity signals for sameCost() ──
@@ -356,6 +370,8 @@ export interface CountedEvent {
   bucket: CostBucket;
   amountConfidence: AmountConfidence;
   substantiation: Substantiation;
+  /** D-16 Model B basis preserved to output (default COST_TO_SERVE). */
+  recoveryBasis: RecoveryBasis;
   source: string;
 }
 
@@ -386,6 +402,17 @@ export interface SeamResult {
   poolFloorMonthly: number;
   poolEstimatedMonthly: number;
   poolKnownMonthly: number;
+  // ── MODEL B (D-16): the monthly pool partitioned by recovery basis. Invariant (proven):
+  //    poolKnownMonthly === poolCostToServeKnownMonthly + poolInvestmentMonthly. No money is
+  //    created or destroyed — it moves from the ÷N divide to the separate payback line. ──
+  /** COST_TO_SERVE floor (CONFIRMED+DERIVED) within the monthly pool. */
+  poolCostToServeFloorMonthly: number;
+  /** COST_TO_SERVE estimated within the monthly pool. */
+  poolCostToServeEstimatedMonthly: number;
+  /** COST_TO_SERVE floor+estimated — the ÷N price pool (the ONLY thing divided per customer). */
+  poolCostToServeKnownMonthly: number;
+  /** PLATFORM_INVESTMENT floor+estimated — the payback line; NEVER divided into per-unit price. */
+  poolInvestmentMonthly: number;
   // ── honest residue — surfaced, NEVER zeroed/dropped ──
   unknownLines: ResidueLine[];        // amount UNKNOWN
   unconfirmedLines: ResidueLine[];    // not-yet-a-cost (realization UNCONFIRMED)
@@ -469,6 +496,11 @@ export function enforceCountOnce(events: CostEvent[]): SeamResult {
   let capexEstimated = 0;
   let poolFloorMonthly = 0;
   let poolEstimatedMonthly = 0;
+  // Model B (D-16): the monthly pool split by recovery basis (unrounded accumulators so the
+  // split reconciles to poolKnownMonthly by construction — same discipline as the floor/est split).
+  let ctsFloorMonthly = 0;      // COST_TO_SERVE, floor-grade
+  let ctsEstimatedMonthly = 0;  // COST_TO_SERVE, estimated-grade
+  let investmentMonthly = 0;    // PLATFORM_INVESTMENT (floor + estimated)
   let substantiatedTotal = 0;
   let ownerAssertedTotal = 0;
   const unknownLines: ResidueLine[] = [];
@@ -498,10 +530,13 @@ export function enforceCountOnce(events: CostEvent[]): SeamResult {
       continue;
     }
 
+    const recoveryBasis: RecoveryBasis = e.recoveryBasis ?? 'COST_TO_SERVE';
+
     // (4) Quantified + realized → count once, in the right bucket.
     counted.push({
       id: e.id, label: e.label, amount: round2(amount), bucket: e.bucket,
-      amountConfidence: e.amountConfidence, substantiation: e.substantiation, source: e.source,
+      amountConfidence: e.amountConfidence, substantiation: e.substantiation,
+      recoveryBasis, source: e.source,
     });
 
     const isFloor = FLOOR_GRADES.includes(e.amountConfidence);
@@ -511,6 +546,15 @@ export function enforceCountOnce(events: CostEvent[]): SeamResult {
     } else {
       if (isFloor) poolFloorMonthly += amount;
       else poolEstimatedMonthly += amount;
+      // Model B (D-16): partition the monthly pool. PLATFORM_INVESTMENT is held OUT of the ÷N
+      // price pool (payback line); COST_TO_SERVE (default) feeds the per-customer divide.
+      if (recoveryBasis === 'PLATFORM_INVESTMENT') {
+        investmentMonthly += amount;
+      } else if (isFloor) {
+        ctsFloorMonthly += amount;
+      } else {
+        ctsEstimatedMonthly += amount;
+      }
     }
 
     // (5) Second axis: substantiated vs counted-but-at-risk.
@@ -525,6 +569,10 @@ export function enforceCountOnce(events: CostEvent[]): SeamResult {
     poolFloorMonthly: round2(poolFloorMonthly),
     poolEstimatedMonthly: round2(poolEstimatedMonthly),
     poolKnownMonthly: round2(poolFloorMonthly + poolEstimatedMonthly),
+    poolCostToServeFloorMonthly: round2(ctsFloorMonthly),
+    poolCostToServeEstimatedMonthly: round2(ctsEstimatedMonthly),
+    poolCostToServeKnownMonthly: round2(ctsFloorMonthly + ctsEstimatedMonthly),
+    poolInvestmentMonthly: round2(investmentMonthly),
     unknownLines,
     unconfirmedLines,
     counted,
@@ -542,6 +590,9 @@ export function enforceCountOnce(events: CostEvent[]): SeamResult {
     survivors: survivors.length,
     capexKnown: result.capexKnown,
     poolKnownMonthly: result.poolKnownMonthly,
+    // Model B (D-16) split — these two MUST sum to poolKnownMonthly (no money created/destroyed).
+    poolCostToServeKnownMonthly: result.poolCostToServeKnownMonthly,
+    poolInvestmentMonthly: result.poolInvestmentMonthly,
     unknown: result.unknownLines.length,
     unconfirmed: result.unconfirmedLines.length,
     deduped: result.deduped.length,
@@ -597,6 +648,10 @@ export interface CostObjectNodeRow {
   cadence?: Cadence | null;
   /** Per-cadence charge for recurring shapes — DISTINCT from acquisition_cost (capex). */
   recurring_amount?: number | null;
+  // ── D-16 Model B (migration 20260619). Optional: ABSENT until the read path selects it →
+  //    the default below (COST_TO_SERVE) reproduces Model A exactly. ──
+  /** COST_TO_SERVE (÷N price pool) vs PLATFORM_INVESTMENT (payback line). */
+  recovery_basis?: RecoveryBasis | null;
 }
 
 /** Recurring shapes feed the ÷N MONTHLY_POOL; everything else accumulates as CAPEX. */
@@ -634,6 +689,9 @@ export function fromCostObject(row: CostObjectNodeRow): CostEvent[] {
     receiptId: row.receipt_id ?? null,
     vendor: row.vendor ?? null,
     date: row.acquired_on ?? null,
+    // D-16 Model B: carry the recovery basis onto every event the row produces. Absent →
+    // COST_TO_SERVE (Model A behavior). Only MONTHLY_POOL events use it (capex is excluded anyway).
+    recoveryBasis: row.recovery_basis ?? 'COST_TO_SERVE',
     source: `cost_objects:${row.id}`,
   };
 

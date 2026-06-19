@@ -104,7 +104,7 @@ export function CostToProduce() {
       let hasMigratedLabor = false;
       const objRes = await supabase
         .from('cost_objects')
-        .select('id,name,node_type,domain,acquisition_cost,cost_confidence,status,cost_shape,cadence,recurring_amount,cost_category,receipt_id')
+        .select('id,name,node_type,domain,acquisition_cost,cost_confidence,status,cost_shape,cadence,recurring_amount,cost_category,receipt_id,recovery_basis')
         .eq('business_id', businessId);
       if (!cancelled && !objRes.error && Array.isArray(objRes.data) && objRes.data.length) {
         rollupEvents = (objRes.data as Array<Record<string, unknown>>)
@@ -133,6 +133,10 @@ export function CostToProduce() {
             // before, so the live seam never saw receipts. Dedup LOGIC is unchanged — this only
             // delivers the signal it was already built to consume.
             receipt_id: (r.receipt_id as string | null) ?? null,
+            // D-16 Model B (2026-06-19): feed recovery_basis so the seam partitions the monthly
+            // pool — COST_TO_SERVE feeds the ÷N price, PLATFORM_INVESTMENT goes to the payback
+            // line (never divided per customer). Absent → COST_TO_SERVE (Model A behavior).
+            recovery_basis: (r.recovery_basis as CostObjectNodeRow['recovery_basis']) ?? null,
           }),
         );
         // Recurring costs now live as cost_objects (node_type='COST'). When ANY exist for this
@@ -310,8 +314,12 @@ export function CostToProduce() {
                     </table>
                   </div>
                   <p style={{ margin: '12px 0 0', fontSize: '0.75rem', color: GRAY, lineHeight: 1.5 }}>
-                    Loaded monthly cost ÷ N, priced at your {Math.round(result.baselineMargin * 100)}% baseline margin
-                    (via the shared MarginEngine).
+                    {/* D-16 Model B — the label MUST match the math (Surface Honesty): only
+                        cost-to-serve is divided by N; platform investment is shown separately below. */}
+                    Cost-to-serve ({money(result.costToServeMonthly)}/mo) ÷ N, priced at your{' '}
+                    {Math.round(result.baselineMargin * 100)}% baseline margin (via the shared MarginEngine).
+                    Platform investment is <b>not</b> divided into this price — it is shown as a separate
+                    payback line below.
                     {result.priceReference != null && (
                       <> Reference price: <b>{money(result.priceReference)}</b>.</>
                     )}
@@ -319,6 +327,54 @@ export function CostToProduce() {
                 </>
               )}
             </Card>
+
+            {/* D-16 Model B — PAYBACK LINE. The platform investment (founder/platform labor) is
+                surfaced here, NEVER folded into the per-customer price. For each N we show the
+                monthly contribution ABOVE cost-to-serve at the suggested price; the owner reads
+                whether it covers the investment. No fabricated payback period — the investment is
+                an ongoing monthly accrual, so we show the figures and let them be read honestly. */}
+            {result.platformInvestmentMonthly > 0 && result.confidence.computable && (
+              <Card>
+                <SectionTitle>Platform investment — payback</SectionTitle>
+                <Row label="Platform investment (founder/platform labor)" value={`${money(result.platformInvestmentMonthly)}/mo`} strong />
+                <p style={{ margin: '4px 0 12px', fontSize: '0.6875rem', color: GRAY, lineHeight: 1.5 }}>
+                  This is investment recovered over time, not a per-customer cost. It is excluded from the
+                  suggested price above so a low customer count stays sellable.
+                </p>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
+                    <thead>
+                      <tr style={{ textAlign: 'left', color: GRAY }}>
+                        <th style={th}>N</th>
+                        <th style={th}>Contribution / mo</th>
+                        <th style={th}>Covers investment</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.sensitivity.map(s => {
+                        const covers = s.contributionMonthly >= result.platformInvestmentMonthly;
+                        const pct = result.platformInvestmentMonthly > 0
+                          ? Math.round((s.contributionMonthly / result.platformInvestmentMonthly) * 100) : 0;
+                        return (
+                          <tr key={s.n} style={{ borderTop: '1px solid #f0f0f0' }}>
+                            <td style={{ ...td, fontWeight: 700, color: GREEN }}>{s.n}</td>
+                            <td style={{ ...td, color: s.contributionMonthly >= 0 ? DARK : RED }}>{money(s.contributionMonthly)}</td>
+                            <td style={{ ...td, color: covers ? '#166534' : AMBER, fontWeight: 600 }}>
+                              {covers ? 'covers it' : `${pct}% of it`}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p style={{ margin: '12px 0 0', fontSize: '0.6875rem', color: GRAY, lineHeight: 1.5 }}>
+                  Contribution = (suggested price × N) − cost-to-serve: the dollars/month available to recover
+                  the {money(result.platformInvestmentMonthly)}/mo investment. As you add customers and verticals,
+                  this share of the investment falls.
+                </p>
+              </Card>
+            )}
 
             {/* Material / inventory costs */}
             <Card>

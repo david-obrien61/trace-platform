@@ -39,6 +39,17 @@ const CADENCE_OPTS: Cadence[] = ['WEEKLY', 'MONTHLY', 'QUARTERLY', 'ANNUAL'];
 const CONFIDENCE_OPTS = ['CONFIRMED', 'DERIVED', 'ESTIMATED', 'UNKNOWN'] as const;
 type CostConfidence = typeof CONFIDENCE_OPTS[number];
 
+// D-16 Model B — recovery basis. COST_TO_SERVE feeds the ÷N per-customer price; PLATFORM_INVESTMENT
+// is held out on the payback line (founder/platform labor). recovery_basis_source = DERIVED (the
+// system's backfill guess, owner has NOT vetted) | EXPLICIT (owner-set). An owner override here
+// flips DERIVED → EXPLICIT — the "derived first, then explicit" learning loop.
+const RECOVERY_BASIS_OPTS = ['COST_TO_SERVE', 'PLATFORM_INVESTMENT'] as const;
+type RecoveryBasis = typeof RECOVERY_BASIS_OPTS[number];
+const RECOVERY_BASIS_LABEL: Record<RecoveryBasis, string> = {
+  COST_TO_SERVE: 'cost to serve',
+  PLATFORM_INVESTMENT: 'investment',
+};
+
 const COMPANY_LEVEL = '__company__'; // <select> sentinel for parent_id = null
 // Labor categories live on the Settings labor block — a row here can never carry one.
 const LABOR_CATS = new Set(['labor', 'contract-labor']);
@@ -53,6 +64,8 @@ interface CostRow {
   cost_category: string | null;
   cost_confidence: CostConfidence | null;
   parent_id: string | null;         // project (PROJECT node) or null = company-level
+  recovery_basis: RecoveryBasis;            // D-16 Model B classification
+  recovery_basis_source: 'DERIVED' | 'EXPLICIT'; // DERIVED = system guess; EXPLICIT = owner-vetted
   created_at: string;
 }
 
@@ -106,6 +119,8 @@ const S = {
     return { border: '1.5px solid #d1d5db', borderRadius: 7, padding: '4px 6px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', background: weak ? '#fee2e2' : '#dcfce7', color: weak ? '#991b1b' : '#166534' };
   },
   catUncat: { color: '#92400e', fontStyle: 'italic' as const } as React.CSSProperties,
+  derivedTag: { fontSize: '0.625rem', fontWeight: 700, color: '#92400e', background: '#fef3c7', borderRadius: 5, padding: '1px 5px', textTransform: 'uppercase' as const, letterSpacing: '0.04em' } as React.CSSProperties,
+  explicitTag: { fontSize: '0.625rem', fontWeight: 700, color: '#166534', background: '#dcfce7', borderRadius: 5, padding: '1px 5px' } as React.CSSProperties,
   removeBtn: { background: '#fef2f2', border: 'none', borderRadius: 7, padding: '4px 9px', color: '#A32D2D', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' } as React.CSSProperties,
 };
 
@@ -142,7 +157,7 @@ export function OperatingCosts() {
     console.log('[TRACE:opcosts] loadCosts → cost_objects (node_type=COST, non-labor)', { businessId });
     const { data, error } = await supabase
       .from('cost_objects')
-      .select('id,name,recurring_amount,cadence,cost_category,cost_confidence,parent_id,created_at')
+      .select('id,name,recurring_amount,cadence,cost_category,cost_confidence,parent_id,recovery_basis,recovery_basis_source,created_at')
       .eq('business_id', businessId)
       .eq('node_type', 'COST')
       .order('created_at', { ascending: false });
@@ -158,6 +173,8 @@ export function OperatingCosts() {
       cost_category: r.cost_category ?? null,
       cost_confidence: (r.cost_confidence ?? null) as CostConfidence | null,
       parent_id: r.parent_id ?? null,
+      recovery_basis: (RECOVERY_BASIS_OPTS.includes(r.recovery_basis) ? r.recovery_basis : 'COST_TO_SERVE') as RecoveryBasis,
+      recovery_basis_source: (r.recovery_basis_source === 'EXPLICIT' ? 'EXPLICIT' : 'DERIVED'),
       created_at: r.created_at,
     })));
     setListLoading(false);
@@ -211,6 +228,13 @@ export function OperatingCosts() {
       ? { cost_confidence: 'UNKNOWN', recurring_amount: null }
       : { cost_confidence: conf };
     writeCost(row, patch, 'cost_confidence', conf);
+  }
+  // D-16 Model B override: changing the basis flips recovery_basis_source DERIVED → EXPLICIT (the
+  // owner has now vetted it). Writes both columns in one immediate write. The /costs price table
+  // re-partitions the pool on reload — a row moved to PLATFORM_INVESTMENT leaves the ÷N divide.
+  function onRecoveryBasis(row: CostRow, val: RecoveryBasis) {
+    if (val === row.recovery_basis) return;
+    writeCost(row, { recovery_basis: val, recovery_basis_source: 'EXPLICIT' }, 'recovery_basis', val);
   }
   // Coherence: clearing the amount → UNKNOWN; entering an amount on an UNKNOWN row → ESTIMATED.
   function onAmount(row: CostRow, value: number | null) {
@@ -279,6 +303,10 @@ export function OperatingCosts() {
       substantiation: 'OWNER_ASSERTED',
       parent_id: form.parent_id === COMPANY_LEVEL ? null : form.parent_id,
       acquisition_cost: null,
+      // D-16 Model B: a new operating cost is marginal cost-to-serve by default (the system's
+      // guess); recovery_basis_source DERIVED until the owner vets it on the row control.
+      recovery_basis: 'COST_TO_SERVE',
+      recovery_basis_source: 'DERIVED',
     };
 
     console.log('[TRACE:opcosts] insert → cost_objects', { name: payload.name, cadence: payload.cadence, amount });
@@ -348,6 +376,7 @@ export function OperatingCosts() {
                     <th style={S.th}>Cadence</th>
                     <th style={S.th}>Category</th>
                     <th style={S.th}>Project</th>
+                    <th style={S.th}>Recovery basis</th>
                     <th style={S.th}>Confidence</th>
                     <th style={S.th}>Added</th>
                     <th style={S.th}></th>
@@ -397,6 +426,23 @@ export function OperatingCosts() {
                           <option value={COMPANY_LEVEL}>Company-level</option>
                           {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
+                      </td>
+
+                      {/* ── Recovery basis (D-16 Model B) — immediate write; flips source to EXPLICIT ── */}
+                      <td style={S.td}>
+                        <span style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
+                          <select
+                            style={{ ...S.inlineSelect, ...(c.recovery_basis === 'PLATFORM_INVESTMENT' ? { background: '#eef2ff', color: '#3730a3', fontWeight: 700 } : {}) }}
+                            value={c.recovery_basis}
+                            onChange={e => onRecoveryBasis(c, e.target.value as RecoveryBasis)}
+                            title="Cost to serve feeds the per-customer price; investment is shown separately on the payback line."
+                          >
+                            {RECOVERY_BASIS_OPTS.map(rb => <option key={rb} value={rb}>{RECOVERY_BASIS_LABEL[rb]}</option>)}
+                          </select>
+                          {c.recovery_basis_source === 'DERIVED'
+                            ? <span style={S.derivedTag} title="The system's guess — not yet vetted. Change it to confirm.">derived</span>
+                            : <span style={S.explicitTag} title="You set this.">✓ you set this</span>}
+                        </span>
                       </td>
 
                       {/* ── Confidence (cost_confidence) — immediate write ── */}

@@ -89,6 +89,13 @@ type RateBasis = 'HOURLY' | 'FLAT_FEE';
 const RESOURCE_TYPE_OPTS: ResourceType[] = ['EMPLOYEE', 'CONTRACTOR'];
 const RATE_BASIS_OPTS: RateBasis[] = ['HOURLY', 'FLAT_FEE'];
 
+// D-16 Model B — recovery basis (cost_objects.recovery_basis). COST_TO_SERVE feeds the ÷N price;
+// PLATFORM_INVESTMENT is the payback line (never divided per customer).
+type RecoveryBasis = 'COST_TO_SERVE' | 'PLATFORM_INVESTMENT';
+type RecoveryBasisSource = 'DERIVED' | 'EXPLICIT';
+const RECOVERY_BASIS_OPTS: RecoveryBasis[] = ['COST_TO_SERVE', 'PLATFORM_INVESTMENT'];
+const RECOVERY_BASIS_LABEL: Record<RecoveryBasis, string> = { COST_TO_SERVE: 'cost to serve', PLATFORM_INVESTMENT: 'investment' };
+
 /** An editable recurring cost — backed by a cost_objects row (id null = new, unsaved). */
 interface CostObjectLine {
   id: string | null;
@@ -124,6 +131,11 @@ interface LaborEntry {
   cost_confidence: CostConfidence;
   cost_nature: CostNature;
   parent_id: string | null;
+  // D-16 Model B — recovery basis. Owner/founder labor is PLATFORM_INVESTMENT (payback line, NOT
+  // divided per customer); a customer-serving contractor is COST_TO_SERVE. source DERIVED (the
+  // backfill guess) → EXPLICIT once the owner sets it via the control.
+  recovery_basis: RecoveryBasis;
+  recovery_basis_source: RecoveryBasisSource;
 }
 interface ProjectOption { id: string; name: string; }
 
@@ -167,6 +179,7 @@ const newLabor = (): LaborEntry => ({
   resourceId: null, costId: null, resource_type: 'CONTRACTOR', name: '', rate_basis: 'HOURLY',
   base_wage: null, burden: null, bill_rate: null, rate: null, pass_through_expenses: null,
   labor_hours: null, flat_amount: null, cost_confidence: 'ESTIMATED', cost_nature: 'OPEX', parent_id: null,
+  recovery_basis: 'COST_TO_SERVE', recovery_basis_source: 'DERIVED',
 });
 
 export function CostToProduceSettings() {
@@ -174,6 +187,9 @@ export function CostToProduceSettings() {
   const [config, setConfig]   = useState<CostToProduceConfig>(() => deepClone(EMPTY_COST_CONFIG));
   const [rows, setRows]       = useState<CostObjectLine[]>([]);  // recurring rows — READ-ONLY display (D-14.6)
   const [labor, setLabor]     = useState<LaborEntry[]>([]);
+  // N-list (Block 4) text buffer — lets the owner type an arbitrary list (1, 5, 20, 100, 500, 1000)
+  // smoothly; dedupe+sort is applied to config on blur so the cursor never fights a live re-sort.
+  const [denomText, setDenomText] = useState('');
   const [removedLabor, setRemovedLabor] = useState<Array<{ costId: string | null; resourceId: string | null }>>([]);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -194,7 +210,7 @@ export function CostToProduceSettings() {
       const [modRes, objRes, projRes, resRes] = await Promise.all([
         supabase.from('business_modules').select('config').eq('business_id', businessId).eq('module_key', MODULE_KEY).maybeSingle(),
         supabase.from('cost_objects')
-          .select('id,name,recurring_amount,cadence,cost_confidence,cost_shape,cost_nature,cost_category,substantiation,parent_id,notes,resource_id,labor_hours')
+          .select('id,name,recurring_amount,cadence,cost_confidence,cost_shape,cost_nature,cost_category,substantiation,parent_id,notes,resource_id,labor_hours,recovery_basis,recovery_basis_source')
           .eq('business_id', businessId).eq('node_type', 'COST'),
         supabase.from('cost_objects').select('id,name').eq('business_id', businessId).eq('node_type', 'PROJECT'),
         supabase.from('labor_resources')
@@ -213,7 +229,9 @@ export function CostToProduceSettings() {
       }
 
       const stored = parseConfig(modRes.data?.config);
-      setConfig(stored && stored.locations.length ? stored : deepClone(EMPTY_COST_CONFIG));
+      const loadedCfg = stored && stored.locations.length ? stored : deepClone(EMPTY_COST_CONFIG);
+      setConfig(loadedCfg);
+      setDenomText((loadedCfg.denominators ?? []).join(', ')); // seed the N-list text buffer
 
       const allCost = (objRes.data ?? []) as any[];
       const isLaborCat = (c: any) => c === 'labor' || c === 'contract-labor';
@@ -260,6 +278,8 @@ export function CostToProduceSettings() {
           cost_confidence: (CONFIDENCE_OPTS.includes(r.cost_confidence) ? r.cost_confidence : 'ESTIMATED') as CostConfidence,
           cost_nature: (NATURE_OPTS.includes(r.cost_nature) ? r.cost_nature : 'OPEX') as CostNature,
           parent_id: r.parent_id ?? null,
+          recovery_basis: (RECOVERY_BASIS_OPTS.includes(r.recovery_basis) ? r.recovery_basis : 'COST_TO_SERVE') as RecoveryBasis,
+          recovery_basis_source: (r.recovery_basis_source === 'EXPLICIT' ? 'EXPLICIT' : 'DERIVED') as RecoveryBasisSource,
         };
       });
       // Resources with no applied-labor cost yet → surface as empty entries (don't lose them).
@@ -275,6 +295,7 @@ export function CostToProduceSettings() {
           rate: res.rate == null ? null : Number(res.rate),
           pass_through_expenses: res.pass_through_expenses == null ? null : Number(res.pass_through_expenses),
           labor_hours: null, flat_amount: null, cost_confidence: 'ESTIMATED', cost_nature: 'OPEX', parent_id: null,
+          recovery_basis: 'COST_TO_SERVE', recovery_basis_source: 'DERIVED',
         });
       }
       setLabor(entries);
@@ -362,6 +383,10 @@ export function CostToProduceSettings() {
         cadence: 'MONTHLY' as const, recurring_amount: monthly, cost_confidence: e.cost_confidence,
         substantiation: 'OWNER_ASSERTED', acquisition_cost: null, parent_id: e.parent_id,
         resource_id: resourceId, labor_hours: e.rate_basis === 'HOURLY' ? e.labor_hours : null,
+        // D-16 Model B — persist the recovery basis (default for new labor is the loaded/derived
+        // value). Writing the loaded value preserves the backfilled PLATFORM_INVESTMENT on Owner
+        // labor; the control flips source → EXPLICIT when the owner changes it.
+        recovery_basis: e.recovery_basis, recovery_basis_source: e.recovery_basis_source,
       };
       if (!e.costId) {
         const { error } = await supabase.from('cost_objects').insert(costPayload); if (error) { err = error; break; }
@@ -419,7 +444,7 @@ export function CostToProduceSettings() {
     if (!businessId) return;
     const [objRes, resRes] = await Promise.all([
       supabase.from('cost_objects')
-        .select('id,name,recurring_amount,cadence,cost_confidence,cost_shape,cost_nature,cost_category,substantiation,parent_id,notes,resource_id,labor_hours')
+        .select('id,name,recurring_amount,cadence,cost_confidence,cost_shape,cost_nature,cost_category,substantiation,parent_id,notes,resource_id,labor_hours,recovery_basis,recovery_basis_source')
         .eq('business_id', businessId).eq('node_type', 'COST'),
       supabase.from('labor_resources')
         .select('id,resource_type,name,rate_basis,base_wage,burden,cost_rate,bill_rate,rate,pass_through_expenses')
@@ -450,6 +475,8 @@ export function CostToProduceSettings() {
         labor_hours: r.labor_hours == null ? null : Number(r.labor_hours),
         flat_amount: rb === 'FLAT_FEE' ? (r.recurring_amount == null ? null : Number(r.recurring_amount) - (rt === 'CONTRACTOR' ? num(res?.pass_through_expenses) : 0)) : null,
         cost_confidence: r.cost_confidence, cost_nature: r.cost_nature, parent_id: r.parent_id ?? null,
+        recovery_basis: (RECOVERY_BASIS_OPTS.includes(r.recovery_basis) ? r.recovery_basis : 'COST_TO_SERVE') as RecoveryBasis,
+        recovery_basis_source: (r.recovery_basis_source === 'EXPLICIT' ? 'EXPLICIT' : 'DERIVED') as RecoveryBasisSource,
       };
     });
     for (const [id, res] of resById) {
@@ -459,7 +486,8 @@ export function CostToProduceSettings() {
         base_wage: res.base_wage == null ? null : Number(res.base_wage), burden: res.burden == null ? null : Number(res.burden),
         bill_rate: res.bill_rate == null ? null : Number(res.bill_rate), rate: res.rate == null ? null : Number(res.rate),
         pass_through_expenses: res.pass_through_expenses == null ? null : Number(res.pass_through_expenses),
-        labor_hours: null, flat_amount: null, cost_confidence: 'ESTIMATED', cost_nature: 'OPEX', parent_id: null });
+        labor_hours: null, flat_amount: null, cost_confidence: 'ESTIMATED', cost_nature: 'OPEX', parent_id: null,
+        recovery_basis: 'COST_TO_SERVE', recovery_basis_source: 'DERIVED' });
     }
     setLabor(entries);
   }
@@ -595,6 +623,26 @@ export function CostToProduceSettings() {
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </div>
+                  {/* D-16 Model B — recovery basis. Owner/founder labor = PLATFORM_INVESTMENT (payback
+                      line, NOT in the per-customer price); a customer-serving contractor = COST_TO_SERVE.
+                      Changing it flips source DERIVED → EXPLICIT (the owner has now vetted it). */}
+                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1.4, minWidth: 140 }}>
+                    <span style={pickLabel}>recovery basis</span>
+                    <select
+                      value={e.recovery_basis}
+                      onChange={ev => editLabor(i, { recovery_basis: ev.target.value as RecoveryBasis, recovery_basis_source: 'EXPLICIT' })}
+                      title="Cost to serve feeds the per-customer price; investment is held out on the payback line."
+                      style={{ ...cell, ...(e.recovery_basis === 'PLATFORM_INVESTMENT' ? { background: '#eef2ff', color: '#3730a3', fontWeight: 700 } : {}) }}>
+                      {RECOVERY_BASIS_OPTS.map(rb => <option key={rb} value={rb}>{RECOVERY_BASIS_LABEL[rb]}</option>)}
+                    </select>
+                    <span style={{ marginTop: 3, fontSize: '0.625rem', fontWeight: 700, alignSelf: 'flex-start', borderRadius: 5, padding: '1px 5px',
+                      ...(e.recovery_basis_source === 'DERIVED'
+                        ? { color: '#92400e', background: '#fef3c7', textTransform: 'uppercase' as const, letterSpacing: '0.04em' }
+                        : { color: '#166534', background: '#dcfce7' }) }}
+                      title={e.recovery_basis_source === 'DERIVED' ? "The system's guess — not yet vetted. Change it to confirm." : 'You set this.'}>
+                      {e.recovery_basis_source === 'DERIVED' ? 'derived' : '✓ you set this'}
+                    </span>
+                  </div>
                 </div>
                 <p style={{ margin: 0, fontSize: '0.6875rem', color: GRAY }}>
                   Monthly cost: <b style={{ color: isUnknown ? '#9ca3af' : GREEN }}>{isUnknown ? 'unknown' : `$${monthly.toFixed(2)}/mo`}</b>
@@ -626,10 +674,23 @@ export function CostToProduceSettings() {
       </Block>
 
       {/* ════ BLOCK 4 — TARGET CUSTOMERS ════ */}
-      <Block title="4 · Target customers" hint="The sensitivity set — your loaded cost ÷ each N gives the per-customer cost + suggested price.">
-        <input value={config.denominators.join(', ')}
-          onChange={e => patchConfig(c => { c.denominators = e.target.value.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isFinite(n) && n > 0); })}
-          placeholder="1, 5, 20, 100" style={{ ...cell, width: '100%' }} />
+      <Block title="4 · Target customers" hint="The sensitivity set — your cost-to-serve ÷ each N gives the per-customer cost + suggested price. Enter ANY list (e.g. 1, 5, 20, 100, 500, 1000) — one table row per value.">
+        <input
+          value={denomText}
+          onChange={e => {
+            // Live: update the buffer + feed config in typed order (so the table updates as you type).
+            setDenomText(e.target.value);
+            patchConfig(c => { c.denominators = e.target.value.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isFinite(n) && n > 0); });
+          }}
+          onBlur={() => {
+            // Normalize once focus leaves: parse → dedupe → sort ascending → render all.
+            const cleaned = Array.from(new Set(
+              denomText.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isFinite(n) && n > 0)
+            )).sort((a, b) => a - b);
+            patchConfig(c => { c.denominators = cleaned; });
+            setDenomText(cleaned.join(', '));
+          }}
+          placeholder="1, 5, 20, 100, 500, 1000" style={{ ...cell, width: '100%' }} />
       </Block>
 
       <button onClick={save} disabled={saving}

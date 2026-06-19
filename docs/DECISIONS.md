@@ -538,6 +538,28 @@ will live), [[D-14]] (carve-out — fair-share of shared cost feeds cost-to-serv
 
 ---
 
+### D-17 · One pricing engine, four display surfaces, three audiences — prospects never see owner economics — `[POINTER]`
+**Decision:** The Model B engine ([[D-16]]) is ONE computation; WHERE its output displays depends on the
+AUDIENCE. Four surfaces, three audiences, never conflated: (1) **/costs table** — OWNER's authoritative readout,
+real numbers from the real cost record (EXISTS; made honest by 2b/2c); (2) **the estimator** (severed Block 1,
+read-only to the cost model — [[D-14]].6) — OWNER's WHAT-IF scratchpad, same math fed by HYPOTHETICAL inputs,
+NEVER written to the books (EXISTS read-only; what-if compute is a future build — read-only-to-the-model is the
+correct role, not a limitation); (3) **customer-facing price view** — PROSPECT's view (LAWNS/Lauren, an Ignition
+buyer), shows THEIR price + value, MUST NOT show cost-to-serve, labor, margin, or payback (does NOT exist —
+future); (4) **decision record** — the captured, dated, durable priced-decision, not re-derived each time (does
+NOT exist — future). One line: /costs shows WHAT IS · the estimator explores WHAT IF · the customer view shows
+THEIR PRICE · the record captures WHAT WAS DECIDED.
+**Why a pointer:** the surface-by-surface definitions + the audience-separation rule + the build sequencing live
+in the canonical doc; this entry settles that the surfaces stay distinct so future builds CONFORM.
+**Canonical home:** [`docs/DECISION-pricing-display-surfaces.md`](DECISION-pricing-display-surfaces.md).
+**Companion:** [[D-16]] (the one engine these surfaces display), [[D-14]] (estimator sever — surface 2's role),
+[[D-9]] (honesty contract — soft cost-to-serve yields a soft price on every surface).
+**Sequencing:** build nothing until 2b/2c computes honest Model B; then (a) estimator what-if, (b) decision
+record, (c) customer view last (needs a settled price to present).
+**Date captured:** 2026-06-19 · **Status:** ACCEPTED.
+
+---
+
 ## PERSONAL-FINANCIAL
 
 > Not in this file by design — see **`decisions/PERSONAL-FINANCIAL.local.md`** (gitignored).
