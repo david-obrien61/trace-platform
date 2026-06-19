@@ -518,6 +518,26 @@ canonical doc; this entry settles the cost object so future builds CONFORM rathe
 
 ---
 
+### D-16 · Pricing is set by COST-TO-SERVE + a separate payback line, NOT fully-loaded cost (Model B) — `[POINTER]`
+**Decision:** Price = cost-to-serve ÷ N ÷ (1 − margin); founder/platform labor is INVESTMENT recovered on a
+separate **payback line** ("at this price and N, the platform investment recovers in X months"), NEVER divided
+into the per-unit price. Subscription shape (BuiltWithCAI/Cultivar — what TRACE charges) uses an N_customers
+denominator; product shape (LAWNS — what the nursery charges) uses a per-item denominator. **Same MarginEngine,
+same cost spine; only the DENOMINATOR and FEED vary by business shape — unit of production is config, not engine
+branching ([[AC-1]]).** Model A (fully-loaded: divide the whole floor — mostly founder labor — by N) was
+**rejected** — it makes low-N prices unsellable ($11,323 ÷ 10 ≈ $1,913/customer) and conflates investment with
+cost-of-goods (the root of the untrustworthy old $149 guesstimate). Investment recovers over time across volume,
+not per-unit. **Build dependency:** computing cost-to-serve requires separating, per cost object, COST-TO-SERVE
+(marginal/per-tenant) from PLATFORM INVESTMENT (founder labor on the spine) — the honesty/confidence stack
+([[D-9]]) is unchanged, a soft cost-to-serve yields a soft price.
+**Why a pointer:** the model formulas, the Model-A rejection, and the build dependency live in the canonical doc.
+**Canonical home:** [`docs/DECISION-pricing-model.md`](DECISION-pricing-model.md).
+**Companion:** [[D-12]] (labor — the investment being recovered), [[D-13]] (margin store — where target_margin
+will live), [[D-14]] (carve-out — fair-share of shared cost feeds cost-to-serve), [[D-15]] (cost-object model).
+**Date captured:** 2026-06-19 · **Status:** ACCEPTED. Phase 2 (dials + payback line) deferred to post-recon.
+
+---
+
 ## PERSONAL-FINANCIAL
 
 > Not in this file by design — see **`decisions/PERSONAL-FINANCIAL.local.md`** (gitignored).
