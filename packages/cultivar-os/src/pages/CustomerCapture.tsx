@@ -227,7 +227,7 @@ export function CustomerCapture() {
         </div>
 
         <p style={{ fontSize: '0.8125rem', color: '#9ca3af', lineHeight: 1.5, marginBottom: 20 }}>
-          We'll send your invoice here. You can pay now or when you get home.
+          We'll email your invoice here. No payment is taken now — pay in person at the office, or online from the invoice we send.
         </p>
 
         {/* Marketing opt-in */}
