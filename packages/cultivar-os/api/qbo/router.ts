@@ -12,7 +12,7 @@
 
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
-import { refreshQBToken } from '../../../../shared/src/quickbooks/refresh';
+import { refreshQBToken } from '../../../shared/src/quickbooks/refresh';
 
 // ─── shared constants ────────────────────────────────────────────────────────
 
