@@ -921,6 +921,25 @@ While creation is private/invite-only (David + family), guards may stay OFF — 
 **remaining:**
 - Discovery persistence — NOT built. `seed.ts` wired in-memory via `ingest.ts`; v0 admin sends analysis live with no retained copy. DB persistence (`discovery_sessions`, `business_discovery_profiles`), seed-at-signup via lookup, and retained session copies = v2 (gated surface + one-auth). GAP not debt. Horizon: v2/later.
 
+### Discrepancy-Compare — entered data vs LIVE site (capability 1.1) — added 2026-06-19
+
+**What:** During onboarding, compares the business data an owner ENTERED against what their OWN live website actually says, and surfaces honest, **hedged** discrepancies ("Your site shows X for your phone, but you entered Y — should we update it?"). Closes the gap between stale entered data and the public site without ever asserting a correction.
+**Status:** ✅ BUILDER-COMPLETE (2026-06-19); owner-proof = run against a real entered-vs-site mismatch. **Type:** capability | **Vertical:** cross-vertical (shared).
+**Location:** `packages/shared/src/discovery/compare.ts` (+ `compare.test.ts`, 17/17), exported from `discovery/index.ts`; AI capability `discovery_compare` in `ai/capabilities.ts`.
+- `compareEnteredVsSite(entered, {apiKey})` — interrogates the **LIVE** site via `fetchWebsiteContent` (no cache/history; `fetchedAt` carried through proves freshness), extracts site values through the AI gateway, returns D-9-gated discrepancies.
+- **Honesty (D-9), three gates in `filterDiscrepancies`:** (1) site must state a value; (2) entered vs site must genuinely differ (`looksSame` ignores case/punctuation/spacing); (3) confidence must clear threshold (default drops `low`). The owner-facing message is built by `buildDiscrepancyMessage` — always a QUESTION, never declares which value is correct (hedge = code guarantee, not model prose). Unreachable site → zero fabricated discrepancies, AI not even called.
+- Emits `[TRACE:DISCOVERY]` (compare:start / compare:unreachable / compare:done) ON by default.
+
+### Sandbox Seeder — branded 7-day sample data (capability 1.2, onboarding Phase 2) — added 2026-06-19
+
+**What:** Makes a brand-new vertical's dashboard ALIVE on arrival instead of empty — seeds a believable, BRANDED 7-day slice of sample sales/activity under the business's own name. Every row is labelled sample/sandbox so it is unmistakable and EXACTLY removable; the label "comes off" when real data loads (`clear()`). Also the reusable `clear()` the Wave-2 real-populate will call.
+**Status:** ✅ BUILDER-COMPLETE (2026-06-19) — `--verify` proves seed→count→clear leaves exactly zero sandbox rows and real data untouched (run against demo tenant: 6 customers / 5 plants / 5 inventory lots / 12 orders incl. 2 leakage, branded "LAWNS Tree Farm LLC"). **Type:** tool/script | **Vertical:** cultivar (tenant-agnostic by `business_id`).
+**Location:** `scripts/seed-sandbox.mjs` — `seed()` / `clear()` for one `business_id`.
+- Markers (clear deletes ONLY these, never real rows): `customers.source='sandbox'`, `cultivar_plants.tag_id LIKE 'SMPL-%'`, `business_inventory.sku LIKE 'SMPL-%'`, `orders.notes LIKE '[SANDBOX]%'`.
+- Seeds: customers, cultivar_plants (identity), business_inventory (lots — also lights up the empty-5.1 inventory surface), orders spread over the last 7 days (varied totals, 2 leakage flags) → Dashboard today-revenue / week-orders / leakage tiles all populate.
+- Emits `[TRACE:SEED]` (seed/clear with counts) ON by default.
+- Usage: `node scripts/seed-sandbox.mjs --business=<uuid>` (clear+seed), `--clear`, `--verify`.
+
 ---
 
 ## CoolRunnings
