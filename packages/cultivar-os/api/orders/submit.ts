@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { sendNotification } from '../../../shared/src/notifications/send';
+import { findOrCreateCustomer } from '../../../shared/src/business-logic/customerUpsert';
 
 const TAX_RATE        = 0.0825;
 const LARGE_CONTAINERS = ['15 gal', '30 gal', '45 gal', '60 gal', '100 gal'];
@@ -45,49 +46,9 @@ export default async function handler(req: any, res: any) {
 
   try {
     // ── 1. Find or create customer ─────────────────────────────────────────
-    let customerId: string;
-
-    const { data: existing } = await db
-      .from('customers')
-      .select('id')
-      .eq('business_id', businessId)
-      .eq('email', customer.email)
-      .limit(1);
-
-    if (existing && existing.length > 0) {
-      customerId = existing[0].id;
-      await db.from('customers').update({
-        first_name:       customer.first_name,
-        last_name:        customer.last_name,
-        phone:            customer.phone    ?? null,
-        address_line1:    customer.address_line1 ?? null,
-        city:             customer.city     ?? null,
-        state:            customer.state    ?? 'TX',
-        zip:              customer.zip      ?? null,
-        marketing_opt_in: customer.marketing_opt_in ?? true,
-      }).eq('id', customerId);
-    } else {
-      const { data: newCustomer, error: custErr } = await db
-        .from('customers')
-        .insert({
-          business_id:      businessId,
-          first_name:       customer.first_name,
-          last_name:        customer.last_name,
-          email:            customer.email,
-          phone:            customer.phone    ?? null,
-          address_line1:    customer.address_line1 ?? null,
-          city:             customer.city     ?? null,
-          state:            customer.state    ?? 'TX',
-          zip:              customer.zip      ?? null,
-          marketing_opt_in: customer.marketing_opt_in ?? true,
-          source:           'qr-scan',
-        })
-        .select('id')
-        .single();
-
-      if (custErr) throw new Error(`Customer: ${custErr.message}`);
-      customerId = newCustomer!.id;
-    }
+    // Shared write path (extracted to customerUpsert so an OCR'd invoice can create a
+    // customer without an order). Dedup-by-email + 'qr-scan' provenance preserved.
+    const { customerId } = await findOrCreateCustomer(db, businessId, customer, 'qr-scan');
 
     // ── 2. Calculate totals ────────────────────────────────────────────────
     const transportMode = selectedTransport?.transport_mode ?? 'self';

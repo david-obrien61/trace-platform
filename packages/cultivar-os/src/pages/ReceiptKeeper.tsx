@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
@@ -12,6 +12,48 @@ import { ConflictDialog } from '../components/ConflictDialog';
 import { LineItemGrid } from '../components/LineItemGrid';
 
 const TRACE_RECEIPT = true; // [TRACE:RECEIPT] STD-003 — comment out when David says "proven"
+const TRACE_OCR     = true; // [TRACE:OCR] STD-003 — capture + device-detect path
+const TRACE_ROUTER  = true; // [TRACE:ROUTER] STD-003 — infer-then-confirm destinations
+
+// VERTICALIZATION NOTE: this surface is shared across verticals. These strings are nursery
+// defaults until packages/shared/src/config/VerticalConfig.ts lands (CLAUDE.md Housekeeping →
+// Vertical Config Extraction). Pull title/subtitle/dropZone from that config per business_type
+// then. The old "Capture truck receipts" copy was an Ignition leak onto the nursery dashboard.
+const CAPTURE_COPY = {
+  title:    'Snap a receipt or invoice',
+  subtitle: 'Point, snap — AI reads it for you',
+  dropZone: 'Tap or drop a receipt or invoice here',
+};
+
+// OCR extraction shape this surface uses. Invoice is a superset of receipt (keeps
+// vendor/date/lines/total, adds customer/address/delivery), so a plain expense receipt
+// still reads correctly — its customer/delivery fields just come back empty (D-9).
+const OCR_SHAPE: 'receipt' | 'invoice' = 'invoice';
+
+// Device-aware capture: mobile → camera-first; desktop → file upload (no camera).
+// Combines a coarse-pointer/narrow-viewport check with a UA fallback so a phone in
+// landscape or a tablet still resolves to mobile.
+function detectMobile(): boolean {
+  if (typeof window === 'undefined') return false;
+  const coarse = window.matchMedia?.('(pointer: coarse)')?.matches ?? false;
+  const narrow = window.matchMedia?.('(max-width: 820px)')?.matches ?? false;
+  const ua     = /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle/i.test(navigator.userAgent || '');
+  return (coarse && (narrow || ua)) || (ua && narrow);
+}
+function useIsMobile(): boolean {
+  const [isMobile, setIsMobile] = useState<boolean>(detectMobile);
+  useEffect(() => {
+    const recompute = () => setIsMobile(detectMobile());
+    window.addEventListener('resize', recompute);
+    const mq = window.matchMedia?.('(max-width: 820px)');
+    mq?.addEventListener?.('change', recompute);
+    return () => {
+      window.removeEventListener('resize', recompute);
+      mq?.removeEventListener?.('change', recompute);
+    };
+  }, []);
+  return isMobile;
+}
 
 // STD-010: allowed types + size — must mirror the server-side constants in ocr.ts
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'];
@@ -22,6 +64,7 @@ const CATEGORIES = ['fuel', 'supplies', 'meals', 'parts', 'equipment', 'maintena
 
 type Step = 'idle' | 'uploading' | 'ocr_running' | 'confirm' | 'saving' | 'done' | 'error';
 
+interface OcrAddress { line1?: string | null; city?: string | null; state?: string | null; zip?: string | null; }
 interface OcrResult {
   provider: 'gemini' | 'claude';
   parsed: {
@@ -31,9 +74,17 @@ interface OcrResult {
     subtotal?: number | null;
     tax?: number | null;
     category?: string | null;
-    line_items?: Array<{ description: string; amount: number; quantity?: number | null; unit_price?: number | null }> | null;
+    line_items?: Array<{ description: string; amount: number; sku?: string | null; quantity?: number | null; unit_price?: number | null }> | null;
     receipt_number?: string | null;
     payment_method?: string | null;
+    // Invoice-shape fields (Wave 2) — null/absent for plain receipts
+    customer_name?: string | null;
+    customer_phone?: string | null;
+    customer_email?: string | null;
+    bill_to?: OcrAddress | null;
+    ship_to?: OcrAddress | null;
+    due_date?: string | null;
+    delivery_date?: string | null;
   } | null;
   ocr_raw: any;
   parseError: string | null;
@@ -41,6 +92,23 @@ interface OcrResult {
   outputTokens: number | null;
   ocr_cost_estimate: number | null;
 }
+
+// Invoice fields surfaced for human validation before any write (D-9: validate-before-write)
+interface InvoiceFields {
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  billLine1: string; billCity: string; billState: string; billZip: string;
+  shipLine1: string; shipCity: string; shipState: string; shipZip: string;
+  dueDate: string;
+  deliveryDate: string;
+}
+const EMPTY_INVOICE: InvoiceFields = {
+  customerName: '', customerPhone: '', customerEmail: '',
+  billLine1: '', billCity: '', billState: '', billZip: '',
+  shipLine1: '', shipCity: '', shipState: '', shipZip: '',
+  dueDate: '', deliveryDate: '',
+};
 
 interface EditableFields {
   vendor: string;
@@ -52,7 +120,9 @@ interface EditableFields {
 export function ReceiptKeeper() {
   const navigate = useNavigate();
   const { businessId } = useBusinessContext();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const isMobile = useIsMobile();
+  const fileInputRef   = useRef<HTMLInputElement>(null); // gallery / file picker (no camera)
+  const cameraInputRef = useRef<HTMLInputElement>(null); // mobile camera (capture attr)
 
   const [step, setStep]                 = useState<Step>('idle');
   const [errorMsg, setErrorMsg]         = useState<string | null>(null);
@@ -64,6 +134,17 @@ export function ReceiptKeeper() {
   const [ocrResult, setOcrResult]       = useState<OcrResult | null>(null);
   const [fields, setFields]             = useState<EditableFields>({ vendor: '', date: '', amount: '', category: '' });
   const [savedReceiptId, setSavedReceiptId] = useState<string | null>(null);
+
+  // Invoice-shape + infer-then-confirm router state (Wave 2)
+  const [invoice, setInvoice]           = useState<InvoiceFields>(EMPTY_INVOICE);
+  const [docType, setDocType]           = useState<'invoice-customer' | 'receipt'>('receipt');
+  const [addCustomer, setAddCustomer]   = useState(false); // destination: create a customer
+  const [customerResult, setCustomerResult] = useState<{ id: string; created: boolean } | null>(null);
+  const [customerWarn, setCustomerWarn] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (TRACE_OCR) console.log('[TRACE:OCR] device-detect — isMobile:', isMobile, 'layout:', isMobile ? 'camera-first' : 'file-upload', 'shape:', OCR_SHAPE);
+  }, [isMobile]);
 
   // Line items state — user-editable grid from OCR output
   const [lineItems, setLineItems]               = useState<LineItem[]>([]);
@@ -101,6 +182,7 @@ export function ReceiptKeeper() {
     setMimeType(mt);
     setFileSizeBytes(sizeBytes);
 
+    if (TRACE_OCR) console.log('[TRACE:OCR] capture —', isMobile ? 'mobile' : 'desktop', 'name:', file.name, 'original:', file.size, 'compressed:', sizeBytes, 'type:', mt);
     if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] file selected — name:', file.name, 'original:', file.size, 'compressed:', sizeBytes, 'type:', mt);
   }
 
@@ -113,13 +195,13 @@ export function ReceiptKeeper() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setErrorMsg('Not authenticated'); setStep('error'); return; }
 
-    if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] sending to OCR — businessId:', businessId);
+    if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] sending to OCR — businessId:', businessId, 'shape:', OCR_SHAPE);
 
     try {
       const res = await fetch('/api/receipts/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ businessId, userId: user.id, imageBase64, mimeType, fileSizeBytes }),
+        body: JSON.stringify({ businessId, userId: user.id, imageBase64, mimeType, fileSizeBytes, shape: OCR_SHAPE }),
       });
 
       let data: any = {};
@@ -160,6 +242,34 @@ export function ReceiptKeeper() {
       setLineItems(initialLineItems);
       setLineItemsOriginal(ocrLines.length > 0 ? ocrLines : null);
       setAmountOriginal(data.parsed?.amount ?? null);
+
+      // ── Invoice fields + infer-then-confirm router (Wave 2) ──────────────
+      const p = data.parsed ?? {};
+      const inv: InvoiceFields = {
+        customerName:  p.customer_name  ?? '',
+        customerPhone: p.customer_phone ?? '',
+        customerEmail: p.customer_email ?? '',
+        billLine1: p.bill_to?.line1 ?? '', billCity: p.bill_to?.city ?? '', billState: p.bill_to?.state ?? '', billZip: p.bill_to?.zip ?? '',
+        shipLine1: p.ship_to?.line1 ?? '', shipCity: p.ship_to?.city ?? '', shipState: p.ship_to?.state ?? '', shipZip: p.ship_to?.zip ?? '',
+        dueDate:      p.due_date      ?? '',
+        deliveryDate: p.delivery_date ?? '',
+      };
+      setInvoice(inv);
+
+      // Inference: a customer name (with or without an address) → looks like an invoice
+      // for a customer; otherwise treat as a plain expense receipt. Best-guess pre-check,
+      // always overridable by the user on the confirm screen.
+      const hasCustomer = !!inv.customerName.trim();
+      const inferred: 'invoice-customer' | 'receipt' = hasCustomer ? 'invoice-customer' : 'receipt';
+      setDocType(inferred);
+      setAddCustomer(hasCustomer);
+      setCustomerResult(null);
+      setCustomerWarn(null);
+      if (TRACE_ROUTER) console.log('[TRACE:ROUTER] inferred docType:', inferred,
+        '— customer:', inv.customerName || '(none)',
+        'hasAddress:', !!(inv.billLine1 || inv.shipLine1),
+        'deliveryDate:', inv.deliveryDate || '(none)',
+        'preCheck addCustomer:', hasCustomer);
 
       setStep('confirm');
     } catch (err: any) {
@@ -312,6 +422,50 @@ export function ReceiptKeeper() {
       'reconcile_delta:', rs.status !== 'no_lines' ? rs.delta.toFixed(2) : 'n/a');
 
     setSavedReceiptId(data?.id ?? receiptId);
+
+    // ── Router destination: Add customer (the only functional destination this build) ──
+    // Runs AFTER the receipt + image are safely stored, so a customer-create failure never
+    // loses the captured document. Validate-before-write: uses the owner-confirmed invoice
+    // fields, splits the name, prefers bill-to (falls back to ship-to) for the address.
+    if (addCustomer && invoice.customerName.trim() && businessId) {
+      const nameParts = invoice.customerName.trim().split(/\s+/);
+      const first_name = nameParts[0];
+      const last_name  = nameParts.slice(1).join(' '); // '' when single-word name (customers.last_name is NOT NULL)
+      const custBody = {
+        businessId,
+        source: 'ocr-invoice',
+        customer: {
+          first_name,
+          last_name,
+          email:         invoice.customerEmail.trim() || null,
+          phone:         invoice.customerPhone.trim() || null,
+          address_line1: invoice.billLine1.trim() || invoice.shipLine1.trim() || null,
+          city:          invoice.billCity.trim()  || invoice.shipCity.trim()  || null,
+          state:         invoice.billState.trim() || invoice.shipState.trim() || null,
+          zip:           invoice.billZip.trim()   || invoice.shipZip.trim()   || null,
+        },
+      };
+      if (TRACE_ROUTER) console.log('[TRACE:ROUTER] creating customer from invoice —', first_name, last_name ?? '', 'email:', custBody.customer.email ?? '(none)');
+      try {
+        const cRes  = await fetch('/api/customers/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(custBody),
+        });
+        const cData = await cRes.json().catch(() => ({}));
+        if (cRes.ok && cData.ok) {
+          setCustomerResult({ id: cData.customerId, created: cData.created });
+          if (TRACE_ROUTER) console.log('[TRACE:ROUTER] customer', cData.created ? 'created' : 'matched', '— id:', cData.customerId);
+        } else {
+          setCustomerWarn(cData.error || 'Customer could not be added — the document was still saved.');
+          console.error('[TRACE:ROUTER] customer create failed:', cData.error);
+        }
+      } catch (e: any) {
+        setCustomerWarn('Customer could not be added (network) — the document was still saved.');
+        console.error('[TRACE:ROUTER] customer create network error:', e.message);
+      }
+    }
+
     setStep('done');
   }
 
@@ -356,6 +510,11 @@ export function ReceiptKeeper() {
     setLineItemsOriginal(null);
     setAmountOriginal(null);
     setShowConflictDialog(false);
+    setInvoice(EMPTY_INVOICE);
+    setDocType('receipt');
+    setAddCustomer(false);
+    setCustomerResult(null);
+    setCustomerWarn(null);
   }
 
   // ── Styles ─────────────────────────────────────────────────────────────────
@@ -423,6 +582,20 @@ export function ReceiptKeeper() {
     marginTop: 16,
   };
 
+  const CAMERA_BTN: React.CSSProperties = {
+    width: '100%',
+    background: '#27500A',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 12,
+    padding: '28px 0',
+    fontSize: '1.25rem',
+    fontWeight: 800,
+    cursor: 'pointer',
+    marginBottom: 12,
+    lineHeight: 1.2,
+  };
+
   const BTN_GHOST: React.CSSProperties = {
     width: '100%',
     background: 'transparent',
@@ -437,6 +610,38 @@ export function ReceiptKeeper() {
   };
 
   const FIELD_ROW: React.CSSProperties = { marginBottom: 16 };
+
+  const ROUTER_PANEL: React.CSSProperties = {
+    background: '#f9fbf7',
+    border: '1px solid #cfe3b6',
+    borderRadius: 10,
+    padding: '14px',
+    margin: '4px 0 16px',
+  };
+
+  const DEST_ROW: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: '8px 0',
+    fontSize: '0.9375rem',
+    color: '#1f2937',
+    cursor: 'pointer',
+  };
+
+  const DEST_SUB: React.CSSProperties = { fontSize: '0.75rem', color: '#64748b' };
+
+  const COMING: React.CSSProperties = {
+    fontSize: '0.6875rem',
+    fontWeight: 700,
+    color: '#92400e',
+    background: '#fef3c7',
+    borderRadius: 6,
+    padding: '1px 6px',
+    marginLeft: 4,
+  };
+
+  const TRIPLE_ROW: React.CSSProperties = { display: 'flex', gap: 8 };
 
   const DROP_ZONE: React.CSSProperties = {
     border: '2px dashed #a7c985',
@@ -496,8 +701,8 @@ export function ReceiptKeeper() {
           ← Dashboard
         </button>
 
-        <h1 style={TITLE}>Receipt Keeper</h1>
-        <p style={SUBTITLE}>Capture truck receipts — OCR reads, you confirm</p>
+        <h1 style={TITLE}>{CAPTURE_COPY.title}</h1>
+        <p style={SUBTITLE}>{CAPTURE_COPY.subtitle}</p>
 
         {/* ── IDLE / FILE SELECT ─────────────────────────────────── */}
         {/* FLAG: REQ-1 — WIDGET CONSENT-TO-USE (REQUIRED before this step renders):
@@ -513,24 +718,40 @@ export function ReceiptKeeper() {
         {step === 'idle' && (
           <>
             {!imageBase64 ? (
-              <div
-                style={DROP_ZONE}
-                onClick={() => fileInputRef.current?.click()}
-                onDragOver={e => e.preventDefault()}
-                onDrop={e => {
-                  e.preventDefault();
-                  const f = e.dataTransfer.files[0];
-                  if (f) handleFileSelect(f);
-                }}
-              >
-                📷 Tap or drop receipt here
-                <div style={{ fontSize: '0.75rem', color: '#78a55a', marginTop: 6, fontWeight: 400 }}>
-                  JPEG · PNG · WEBP · HEIC · PDF · Max {MAX_MB}MB
+              isMobile ? (
+                // ── MOBILE: camera-first. Big tap target → straight to the camera. ──
+                <>
+                  <button style={CAMERA_BTN} onClick={() => cameraInputRef.current?.click()}>
+                    📷 Take Photo
+                    <div style={{ fontSize: '0.8125rem', fontWeight: 400, marginTop: 4, opacity: 0.9 }}>
+                      Point at the invoice or receipt
+                    </div>
+                  </button>
+                  <button style={BTN_GHOST} onClick={() => fileInputRef.current?.click()}>
+                    Choose from photos / files
+                  </button>
+                </>
+              ) : (
+                // ── DESKTOP: file upload / drag-drop (no camera). ──
+                <div
+                  style={DROP_ZONE}
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => {
+                    e.preventDefault();
+                    const f = e.dataTransfer.files[0];
+                    if (f) handleFileSelect(f);
+                  }}
+                >
+                  📄 {CAPTURE_COPY.dropZone}
+                  <div style={{ fontSize: '0.75rem', color: '#78a55a', marginTop: 6, fontWeight: 400 }}>
+                    JPEG · PNG · WEBP · HEIC · PDF · Max {MAX_MB}MB
+                  </div>
                 </div>
-              </div>
+              )
             ) : (
               <>
-                {imagePreview && <img src={imagePreview} alt="Receipt preview" style={PREVIEW_IMG} />}
+                {imagePreview && <img src={imagePreview} alt="Document preview" style={PREVIEW_IMG} />}
                 {!imagePreview && (
                   <div style={{ ...OCR_BOX, background: '#f9fafb', borderColor: '#e5e7eb', color: '#374151', marginBottom: 12 }}>
                     📄 {fileName} ready for OCR
@@ -539,6 +760,16 @@ export function ReceiptKeeper() {
               </>
             )}
 
+            {/* Camera input — mobile only path triggers this; capture hints rear camera */}
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
+            />
+            {/* File / gallery input — no capture, so it opens the picker not the camera */}
             <input
               ref={fileInputRef}
               type="file"
@@ -559,7 +790,7 @@ export function ReceiptKeeper() {
                   Read with AI →
                 </button>
                 <button style={BTN_GHOST} onClick={() => { setImageBase64(null); setImagePreview(null); setFileName(''); }}>
-                  Choose a different file
+                  {isMobile ? 'Retake / choose another' : 'Choose a different file'}
                 </button>
               </>
             )}
@@ -654,6 +885,109 @@ export function ReceiptKeeper() {
               </select>
             </div>
 
+            {/* ── INFER-THEN-CONFIRM ROUTER (Wave 2) ────────────────────────── */}
+            <div style={ROUTER_PANEL}>
+              <div style={{ fontWeight: 700, color: '#27500A', marginBottom: 2 }}>
+                {docType === 'invoice-customer'
+                  ? '🧾 This looks like an invoice for a customer'
+                  : '🧾 This looks like a receipt / expense'}
+              </div>
+              <div style={{ fontSize: '0.8125rem', color: '#64748b', marginBottom: 8 }}>
+                What should we do with it? You can change these.
+              </div>
+
+              {/* Functional destination this build */}
+              <label style={DEST_ROW}>
+                <input
+                  type="checkbox"
+                  checked={addCustomer}
+                  style={{ marginTop: 3, width: 18, height: 18 }}
+                  onChange={e => { setAddCustomer(e.target.checked); if (TRACE_ROUTER) console.log('[TRACE:ROUTER] toggle addCustomer:', e.target.checked); }}
+                />
+                <span><b>Add customer</b><br /><span style={DEST_SUB}>Create or update the customer from this invoice</span></span>
+              </label>
+
+              {/* Shown-but-coming destinations — not functional this build */}
+              <div style={{ ...DEST_ROW, cursor: 'default', opacity: 0.6 }}>
+                <input type="checkbox" disabled style={{ marginTop: 3, width: 18, height: 18 }} />
+                <span><b>Schedule delivery</b><span style={COMING}>coming</span><br /><span style={DEST_SUB}>Use the delivery date on this invoice</span></span>
+              </div>
+              <div style={{ ...DEST_ROW, cursor: 'default', opacity: 0.6 }}>
+                <input type="checkbox" disabled style={{ marginTop: 3, width: 18, height: 18 }} />
+                <span><b>Analyze sale</b><span style={COMING}>coming</span><br /><span style={DEST_SUB}>Feed this into sales / leakage insights</span></span>
+              </div>
+            </div>
+
+            {/* ── CUSTOMER & DELIVERY — validate before write (D-9) ──────────── */}
+            {addCustomer && (
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ ...LABEL, fontWeight: 700, color: '#27500A', marginBottom: 8 }}>
+                  Customer &amp; delivery — review before saving
+                </div>
+
+                <div style={FIELD_ROW}>
+                  <label style={LABEL}>Customer name</label>
+                  <input style={INPUT} value={invoice.customerName}
+                    onChange={e => setInvoice(p => ({ ...p, customerName: e.target.value }))}
+                    placeholder="Name on the invoice" />
+                </div>
+
+                <div style={TRIPLE_ROW}>
+                  <div style={{ ...FIELD_ROW, flex: 1 }}>
+                    <label style={LABEL}>Phone</label>
+                    <input style={INPUT} value={invoice.customerPhone}
+                      onChange={e => setInvoice(p => ({ ...p, customerPhone: e.target.value }))} placeholder="(optional)" />
+                  </div>
+                  <div style={{ ...FIELD_ROW, flex: 1 }}>
+                    <label style={LABEL}>Email</label>
+                    <input style={INPUT} value={invoice.customerEmail}
+                      onChange={e => setInvoice(p => ({ ...p, customerEmail: e.target.value }))} placeholder="(optional)" />
+                  </div>
+                </div>
+
+                <div style={FIELD_ROW}>
+                  <label style={LABEL}>Bill-to address</label>
+                  <input style={{ ...INPUT, marginBottom: 6 }} value={invoice.billLine1}
+                    onChange={e => setInvoice(p => ({ ...p, billLine1: e.target.value }))} placeholder="Street" />
+                  <div style={TRIPLE_ROW}>
+                    <input style={{ ...INPUT, flex: 2 }} value={invoice.billCity}
+                      onChange={e => setInvoice(p => ({ ...p, billCity: e.target.value }))} placeholder="City" />
+                    <input style={{ ...INPUT, flex: 1 }} value={invoice.billState}
+                      onChange={e => setInvoice(p => ({ ...p, billState: e.target.value }))} placeholder="State" />
+                    <input style={{ ...INPUT, flex: 1 }} value={invoice.billZip}
+                      onChange={e => setInvoice(p => ({ ...p, billZip: e.target.value }))} placeholder="ZIP" />
+                  </div>
+                </div>
+
+                <div style={FIELD_ROW}>
+                  <label style={LABEL}>Ship-to / delivery address</label>
+                  <input style={{ ...INPUT, marginBottom: 6 }} value={invoice.shipLine1}
+                    onChange={e => setInvoice(p => ({ ...p, shipLine1: e.target.value }))} placeholder="Street (if different)" />
+                  <div style={TRIPLE_ROW}>
+                    <input style={{ ...INPUT, flex: 2 }} value={invoice.shipCity}
+                      onChange={e => setInvoice(p => ({ ...p, shipCity: e.target.value }))} placeholder="City" />
+                    <input style={{ ...INPUT, flex: 1 }} value={invoice.shipState}
+                      onChange={e => setInvoice(p => ({ ...p, shipState: e.target.value }))} placeholder="State" />
+                    <input style={{ ...INPUT, flex: 1 }} value={invoice.shipZip}
+                      onChange={e => setInvoice(p => ({ ...p, shipZip: e.target.value }))} placeholder="ZIP" />
+                  </div>
+                </div>
+
+                <div style={TRIPLE_ROW}>
+                  <div style={{ ...FIELD_ROW, flex: 1 }}>
+                    <label style={LABEL}>Due date</label>
+                    <input style={INPUT} type="date" value={invoice.dueDate}
+                      onChange={e => setInvoice(p => ({ ...p, dueDate: e.target.value }))} />
+                  </div>
+                  <div style={{ ...FIELD_ROW, flex: 1 }}>
+                    <label style={LABEL}>Delivery date</label>
+                    <input style={INPUT} type="date" value={invoice.deliveryDate}
+                      onChange={e => setInvoice(p => ({ ...p, deliveryDate: e.target.value }))} />
+                  </div>
+                </div>
+              </div>
+            )}
+
             {errorMsg && (
               <div style={{ color: '#A32D2D', fontSize: '0.875rem', margin: '0 0 12px', padding: '10px 12px', background: '#fef2f2', borderRadius: 8 }}>
                 {errorMsg}
@@ -661,7 +995,7 @@ export function ReceiptKeeper() {
             )}
 
             <button style={BTN_PRIMARY} onClick={handleConfirm}>
-              Save Receipt ✓
+              {addCustomer ? 'Save & add customer ✓' : 'Save ✓'}
             </button>
             <button style={BTN_GHOST} onClick={handleReset}>
               Start over
@@ -682,8 +1016,18 @@ export function ReceiptKeeper() {
           <div style={DONE_BOX}>
             <div style={{ fontSize: '3rem', marginBottom: 12 }}>✅</div>
             <div style={{ fontWeight: 700, fontSize: '1.125rem', color: '#27500A', marginBottom: 6 }}>
-              Receipt saved
+              Saved
             </div>
+            {customerResult && (
+              <div style={{ fontSize: '0.875rem', color: '#27500A', marginBottom: 8 }}>
+                👤 Customer {customerResult.created ? 'added' : 'updated'}
+              </div>
+            )}
+            {customerWarn && (
+              <div style={{ fontSize: '0.8125rem', color: '#92400e', background: '#fef3c7', borderRadius: 8, padding: '8px 12px', marginBottom: 8 }}>
+                {customerWarn}
+              </div>
+            )}
             <div style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: 24 }}>
               {savedReceiptId && <span style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{savedReceiptId.slice(0, 8)}…</span>}
             </div>

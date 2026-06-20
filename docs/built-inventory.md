@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-06-19
+# Last updated: 2026-06-20
 
 **Purpose:** Sessions keep rebuilding things that exist. This document is the single answer to "was X ever built?" Organized by capability, not by file. For file locations, see PLATFORM_AUDIT.md.
 
@@ -105,8 +105,18 @@
 - `receipts` table — 14 cols + 6 reconciliation cols. Migrations: `20260612_receipts.sql`, `20260613_receipts_add_line_items.sql`, `20260614_receipts_reconciliation.sql`. All applied to bgobkjcopcxusjsetfob 2026-06-11 (confirmed live test).
 - `receipts` Supabase storage bucket — RLS: `20260613_receipts_storage_rls.sql` (3 policies).
 - `platform_config` table — `20260611_platform_config.sql`. Holds `ocr_primary_model` + `ocr_fallback_model` (swappable without code change per BENCH-E Rule 7).
-- Receipt Keeper v1 UI: `src/pages/ReceiptKeeper.tsx` (~727 lines) + extracted modules: `src/utils/receiptReconciliation.ts`, `src/utils/imageCompression.ts`, `src/components/LineItemGrid.tsx`, `src/components/ConflictDialog.tsx`.
+- Receipt Keeper v1 UI: `src/pages/ReceiptKeeper.tsx` + extracted modules: `src/utils/receiptReconciliation.ts`, `src/utils/imageCompression.ts`, `src/components/LineItemGrid.tsx`, `src/components/ConflictDialog.tsx`.
 - API: `api/receipts/ocr.ts` — Gemini 2.5 Flash primary → Claude Haiku 4.5 fallback → 503.
+
+**Wave 2 — mobile-native invoice capture + infer-then-confirm router (2026-06-20, BUILDER-COMPLETE / owner-proof owed):**
+- **Device-aware capture** (`ReceiptKeeper.tsx` `useIsMobile`): MOBILE → camera-first (big "Take Photo", `<input capture="environment">`) + "choose from photos/files" secondary; DESKTOP → drag-drop file upload (no camera). `[TRACE:OCR]`.
+- **Relabel** — killed the "Capture truck receipts" Ignition leak. Copy now from `CAPTURE_COPY` (nursery default "Snap a receipt or invoice"); marked for VerticalConfig when that lands.
+- **Invoice-shape OCR** (`api/receipts/ocr.ts`): `shape` param (`receipt` default = unchanged for all existing callers | `invoice` new). Invoice prompt is a superset — keeps vendor/date/line_items(+sku)/subtotal/tax/total, ADDS customer_name/phone/email, bill_to + ship_to addresses, due_date, delivery_date. Same provider chain (Gemini→Haiku, platform_config models, image-to-Supabase write). UNKNOWN/null for absent fields (D-9, never 0/fabricated).
+- **Review-before-write**: the confirm screen now shows the invoice fields (customer, bill-to/ship-to, due/delivery dates) as editable inputs for human validation before any write.
+- **Infer-then-confirm router** (`[TRACE:ROUTER]`): after OCR, infers doc type (customer present → "invoice for a customer" else "receipt/expense"), presents destinations multi-select, best-guess pre-checked, always overridable — **Add customer** (functional) + Schedule delivery / Analyze sale (shown, marked "coming"). Question-depth dial-able.
+- **OCR → standalone customer create**: `findOrCreateCustomer` extracted to `packages/shared/src/business-logic/customerUpsert.ts` (the cart's customer write, now callable without an order). New endpoint `api/customers/create.ts` (+ cultivar impl). Confirming "Add customer" creates/updates a customer tagged `source='ocr-invoice'`, dedup-by-email preserved. The CART path (`api/orders/submit.ts`) now calls the SAME shared fn (`source='qr-scan'`) — regression-proven still creating customers.
+- **NO migration** — writes existing `customers` columns only. Proof: `scripts/verify-customer-upsert.mjs` (service-key, 7/7 PASS: ocr-invoice create + tag, dedup-by-email, cart path resolves, provenance preserved, email-less safe, cleanup). `[TRACE:OCR]`/`[TRACE:ROUTER]` ON until owner-proven.
+- **Owner-proof owed**: real photographed LAWNS invoices on David's phone — camera-first few-tap capture, invoice fields extracted + shown, image in storage, confirm "Add customer" creates the customer.
 
 **What is NOT yet built:**
 - `expenses (id, business_id, receipt_id, source CHECK IN ('receipt','bank_csv','manual'), amount, category, occurred_at)` — structured expense records from all sources

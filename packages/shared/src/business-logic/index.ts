@@ -98,3 +98,8 @@ export type {
 // Schedule C cost-category set + label — shared by every cost-categorize surface
 // (CostToProduceSettings recurring rows, BusinessAssets capital rows) so they can't drift.
 export { CATEGORY_OPTS, UNCATEGORIZED, categoryLabel } from './costCategories';
+
+// Customer find-or-create — the ONE shared customer write (cart + OCR-invoice both call it).
+// Extracted from api/orders/submit.ts so a customer can be created without an order (Wave 2).
+export { findOrCreateCustomer } from './customerUpsert';
+export type { CustomerInput, CustomerUpsertResult } from './customerUpsert';

@@ -71,6 +71,46 @@ Rules:
 - For amounts: numeric values only — no currency symbols, no commas.
 - Return ONLY the JSON object. No explanation, no markdown fences, no commentary.`;
 
+// INVOICE shape (Wave 2) — superset of the receipt shape. Reuses the SAME "extract only
+// what's printed" discipline (no hallucination on missing fields — D-9) and keeps the
+// proven vendor/date/line_items/subtotal/tax/total fields so the receipt-save path is
+// unchanged, then ADDS the customer / addresses / phone / due-date / delivery-date that
+// the live LAWNS-invoice test showed dropped. Selected via the `shape` request param.
+const INVOICE_PROMPT = `You are an invoice parser. Extract ONLY what is literally printed on this invoice — do not infer, estimate, or fill in values that are not visible.
+
+Return a JSON object with these exact fields (use null for any field you cannot read directly from the invoice — never guess, never use 0 for a missing value):
+{
+  "vendor": "string — the business that ISSUED the invoice (the seller), as printed",
+  "date": "string — invoice date in YYYY-MM-DD, or as printed if unclear",
+  "due_date": "string or null — payment due date in YYYY-MM-DD if printed",
+  "delivery_date": "string or null — delivery / ship / service date in YYYY-MM-DD if printed",
+  "customer_name": "string or null — the bill-to / sold-to customer name (person or company)",
+  "customer_phone": "string or null — the customer's phone if printed",
+  "customer_email": "string or null — the customer's email if printed",
+  "bill_to": {"line1": "string or null", "city": "string or null", "state": "string or null", "zip": "string or null"} or null,
+  "ship_to": {"line1": "string or null", "city": "string or null", "state": "string or null", "zip": "string or null"} or null,
+  "line_items": array or null — each item as: {"description": "as printed", "sku": "string or null", "quantity": number or null, "unit_price": number or null, "amount": number} — null if no itemized list is visible,
+  "subtotal": number or null — subtotal before tax if printed,
+  "tax": number or null — tax amount if printed,
+  "amount": number — invoice total (numeric only, no currency symbol),
+  "category": "string — best fit from: fuel, supplies, meals, parts, equipment, maintenance, office, other",
+  "payment_method": "string or null — cash, credit, debit, check, as indicated",
+  "receipt_number": "string or null — invoice / order number if printed"
+}
+
+Rules:
+- Extract ONLY values that appear on the invoice. Do not infer or estimate missing values.
+- Distinguish the VENDOR (seller, usually top/letterhead) from the CUSTOMER (bill-to / sold-to / ship-to).
+- bill_to is the customer's billing address; ship_to is the delivery address — keep them separate even if identical.
+- For line_items: include sku, quantity, unit_price only if printed; otherwise set to null.
+- For amounts: numeric values only — no currency symbols, no commas.
+- Return ONLY the JSON object. No explanation, no markdown fences, no commentary.`;
+
+type OcrShape = 'receipt' | 'invoice';
+function promptForShape(shape: OcrShape): string {
+  return shape === 'invoice' ? INVOICE_PROMPT : PROMPT;
+}
+
 interface ProviderResult {
   provider: 'gemini' | 'claude';
   rawText: string;
@@ -132,7 +172,7 @@ function parseOcrText(rawText: string): { parsed: Record<string, any> | null; pa
 
 // Provider 1: Gemini (primary) — cheapest, fastest, supports HEIC/PDF
 // model param comes from getOcrModels() — never hardcoded here
-async function tryGemini(imageBase64: string, mimeType: string, geminiKey: string, model: string): Promise<ProviderResult> {
+async function tryGemini(imageBase64: string, mimeType: string, geminiKey: string, model: string, prompt: string): Promise<ProviderResult> {
   const startMs = Date.now();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 9000);
@@ -145,7 +185,7 @@ async function tryGemini(imageBase64: string, mimeType: string, geminiKey: strin
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({
-          contents: [{ parts: [{ text: PROMPT }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }],
+          contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }],
           // thinkingBudget: 0 disables gemini-2.5-flash's extended reasoning layer.
           // Thinking adds 10-20s latency for large images (McCoy's 2.2MB) with no accuracy
           // benefit for fixed-schema receipt extraction. Without this, thinking reliably
@@ -183,7 +223,7 @@ async function tryGemini(imageBase64: string, mimeType: string, geminiKey: strin
 
 // Provider 2: Claude (fallback) — supports jpeg/png/gif/webp only; throws for unsupported types
 // model param comes from getOcrModels() — never hardcoded here
-async function tryClaude(imageBase64: string, mimeType: string, claudeKey: string, model: string): Promise<ProviderResult> {
+async function tryClaude(imageBase64: string, mimeType: string, claudeKey: string, model: string, prompt: string): Promise<ProviderResult> {
   if (!CLAUDE_VISION_TYPES.has(mimeType)) {
     throw new Error(`Claude vision does not support ${mimeType} — skipping`);
   }
@@ -199,7 +239,7 @@ async function tryClaude(imageBase64: string, mimeType: string, claudeKey: strin
     messages: [{
       role: 'user',
       content: [
-        { type: 'text', text: PROMPT },
+        { type: 'text', text: prompt },
         { type: 'image', source: { type: 'base64', media_type: mediaMime, data: imageBase64 } },
       ],
     }],
@@ -236,6 +276,10 @@ export default async function handler(req: any, res: any) {
   }
 
   const { businessId, userId, imageBase64, mimeType, fileSizeBytes } = req.body ?? {};
+  // shape selects the extraction prompt — 'receipt' (default, backward-compatible for all
+  // existing callers) or 'invoice' (Wave 2 superset). Same provider chain either way.
+  const shape: OcrShape = req.body?.shape === 'invoice' ? 'invoice' : 'receipt';
+  const activePrompt = promptForShape(shape);
 
   if (!businessId || !userId || !imageBase64 || !mimeType) {
     return res.status(400).json({ error: 'businessId, userId, imageBase64, and mimeType are required' });
@@ -254,7 +298,7 @@ export default async function handler(req: any, res: any) {
     return res.status(413).json({ error: `File too large (${Math.round(sizeBytes / 1024)}KB). Max: 10MB.` });
   }
 
-  if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] OCR request — businessId:', businessId, 'mimeType:', mimeType, 'sizeBytes:', sizeBytes);
+  if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] OCR request — businessId:', businessId, 'mimeType:', mimeType, 'sizeBytes:', sizeBytes, 'shape:', shape);
 
   // Resolve model names from config (DB → env var → hardcoded default)
   const { primaryModel, fallbackModel } = await getOcrModels();
@@ -263,8 +307,8 @@ export default async function handler(req: any, res: any) {
   // Provider chain — each entry: { name, canHandle, fn }
   // canHandle prevents unnecessary attempts (missing key, unsupported type)
   const providers: Array<{ name: 'gemini' | 'claude'; canHandle: boolean; fn: () => Promise<ProviderResult> }> = [
-    { name: 'gemini', canHandle: !!geminiKey, fn: () => tryGemini(imageBase64, mimeType, geminiKey, primaryModel) },
-    { name: 'claude', canHandle: !!claudeKey && CLAUDE_VISION_TYPES.has(mimeType), fn: () => tryClaude(imageBase64, mimeType, claudeKey, fallbackModel) },
+    { name: 'gemini', canHandle: !!geminiKey, fn: () => tryGemini(imageBase64, mimeType, geminiKey, primaryModel, activePrompt) },
+    { name: 'claude', canHandle: !!claudeKey && CLAUDE_VISION_TYPES.has(mimeType), fn: () => tryClaude(imageBase64, mimeType, claudeKey, fallbackModel, activePrompt) },
     // provider 3 slot: { name: 'azure', canHandle: !!azureKey, fn: () => tryAzure(imageBase64, mimeType, azureKey, azureModel) },
   ];
 
