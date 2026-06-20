@@ -12,9 +12,10 @@ import { toISODate } from '../utils/dateParse';
 import { ConflictDialog } from '../components/ConflictDialog';
 import { LineItemGrid } from '../components/LineItemGrid';
 
-const TRACE_RECEIPT = true; // [TRACE:RECEIPT] STD-003 — comment out when David says "proven"
-const TRACE_OCR     = true; // [TRACE:OCR] STD-003 — capture + device-detect path
-const TRACE_ROUTER  = true; // [TRACE:ROUTER] STD-003 — infer-then-confirm destinations
+const TRACE_RECEIPT  = true; // [TRACE:RECEIPT] STD-003 — comment out when David says "proven"
+const TRACE_OCR      = true; // [TRACE:OCR] STD-003 — capture + device-detect path
+const TRACE_ROUTER   = true; // [TRACE:ROUTER] STD-003 — infer-then-confirm destinations
+const TRACE_DELIVERY = true; // [TRACE:DELIVERY] STD-003 — OCR → scheduled delivery (loop close)
 
 // VERTICALIZATION NOTE: this surface is shared across verticals. These strings are nursery
 // defaults until packages/shared/src/config/VerticalConfig.ts lands (CLAUDE.md Housekeeping →
@@ -140,8 +141,11 @@ export function ReceiptKeeper() {
   const [invoice, setInvoice]           = useState<InvoiceFields>(EMPTY_INVOICE);
   const [docType, setDocType]           = useState<'invoice-customer' | 'receipt'>('receipt');
   const [addCustomer, setAddCustomer]   = useState(false); // destination: create a customer
+  const [scheduleDelivery, setScheduleDelivery] = useState(false); // destination: create a dated delivery
   const [customerResult, setCustomerResult] = useState<{ id: string; created: boolean } | null>(null);
   const [customerWarn, setCustomerWarn] = useState<string | null>(null);
+  const [deliveryResult, setDeliveryResult] = useState<{ id: string } | null>(null);
+  const [deliveryWarn, setDeliveryWarn] = useState<string | null>(null);
 
   useEffect(() => {
     if (TRACE_OCR) console.log('[TRACE:OCR] device-detect — isMobile:', isMobile, 'layout:', isMobile ? 'camera-first' : 'file-upload', 'shape:', OCR_SHAPE);
@@ -269,15 +273,22 @@ export function ReceiptKeeper() {
       // always overridable by the user on the confirm screen.
       const hasCustomer = !!inv.customerName.trim();
       const inferred: 'invoice-customer' | 'receipt' = hasCustomer ? 'invoice-customer' : 'receipt';
+      // A delivery needs a customer to link to + somewhere to go: suggest scheduling when
+      // we have a customer AND a delivery date or a ship-to address. Best-guess, overridable.
+      const suggestDelivery = hasCustomer && (!!inv.deliveryDate || !!inv.shipLine1.trim());
       setDocType(inferred);
-      setAddCustomer(hasCustomer);
+      setAddCustomer(hasCustomer || suggestDelivery);
+      setScheduleDelivery(suggestDelivery);
       setCustomerResult(null);
       setCustomerWarn(null);
+      setDeliveryResult(null);
+      setDeliveryWarn(null);
       if (TRACE_ROUTER) console.log('[TRACE:ROUTER] inferred docType:', inferred,
         '— customer:', inv.customerName || '(none)',
         'hasAddress:', !!(inv.billLine1 || inv.shipLine1),
         'deliveryDate:', inv.deliveryDate || '(none)',
-        'preCheck addCustomer:', hasCustomer);
+        'preCheck addCustomer:', hasCustomer || suggestDelivery,
+        'preCheck scheduleDelivery:', suggestDelivery);
 
       setStep('confirm');
     } catch (err: any) {
@@ -435,7 +446,12 @@ export function ReceiptKeeper() {
     // Runs AFTER the receipt + image are safely stored, so a customer-create failure never
     // loses the captured document. Validate-before-write: uses the owner-confirmed invoice
     // fields, splits the name, prefers bill-to (falls back to ship-to) for the address.
-    if (addCustomer && invoice.customerName.trim() && businessId) {
+    // A delivery is always linked to a customer, so scheduling a delivery implies adding
+    // one. We resolve the customer ONCE here and reuse that id for the delivery — never a
+    // second customer (the no-double-create contract: one customer, one delivery, linked).
+    const needCustomer = addCustomer || scheduleDelivery;
+    let resolvedCustomerId: string | null = null;
+    if (needCustomer && invoice.customerName.trim() && businessId) {
       const nameParts = invoice.customerName.trim().split(/\s+/);
       const first_name = nameParts[0];
       const last_name  = nameParts.slice(1).join(' '); // '' when single-word name (customers.last_name is NOT NULL)
@@ -462,6 +478,7 @@ export function ReceiptKeeper() {
         });
         const cData = await cRes.json().catch(() => ({}));
         if (cRes.ok && cData.ok) {
+          resolvedCustomerId = cData.customerId;
           setCustomerResult({ id: cData.customerId, created: cData.created });
           if (TRACE_ROUTER) console.log('[TRACE:ROUTER] customer', cData.created ? 'created' : 'matched', '— id:', cData.customerId);
         } else {
@@ -472,6 +489,50 @@ export function ReceiptKeeper() {
         setCustomerWarn('Customer could not be added (network) — the document was still saved.');
         console.error('[TRACE:ROUTER] customer create network error:', e.message);
       }
+    }
+
+    // ── Router destination: Schedule delivery (loop close) ──
+    // Reuses the customer just resolved above (resolvedCustomerId) — NEVER a second
+    // customer. Prefers the ship-to address (the destination), falling back to bill-to.
+    // Runs after the receipt + customer are stored so a delivery failure loses nothing.
+    if (scheduleDelivery && resolvedCustomerId && businessId) {
+      const deliveryBody = {
+        businessId,
+        customerId: resolvedCustomerId,
+        deliveryDate: invoice.deliveryDate || null, // ISO YYYY-MM-DD (now parsing correctly)
+        address: {
+          line1: invoice.shipLine1.trim() || invoice.billLine1.trim() || null,
+          city:  invoice.shipCity.trim()  || invoice.billCity.trim()  || null,
+          state: invoice.shipState.trim() || invoice.billState.trim() || null,
+          zip:   invoice.shipZip.trim()   || invoice.billZip.trim()   || null,
+        },
+        source: 'ocr-invoice',
+        notes: invoice.customerName.trim() ? `Delivery for ${invoice.customerName.trim()}` : null,
+      };
+      if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] scheduling from invoice — customerId:', resolvedCustomerId,
+        'date:', deliveryBody.deliveryDate ?? '(none)',
+        'addr:', [deliveryBody.address.line1, deliveryBody.address.city, deliveryBody.address.state, deliveryBody.address.zip].filter(Boolean).join(', ') || '(none)');
+      try {
+        const dRes  = await fetch('/api/deliveries/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(deliveryBody),
+        });
+        const dData = await dRes.json().catch(() => ({}));
+        if (dRes.ok && dData.ok) {
+          setDeliveryResult({ id: dData.deliveryId });
+          if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] scheduled — id:', dData.deliveryId, 'linked customer:', resolvedCustomerId);
+        } else {
+          setDeliveryWarn(dData.error || 'Delivery could not be scheduled — the document and customer were still saved.');
+          console.error('[TRACE:DELIVERY] schedule failed:', dData.error);
+        }
+      } catch (e: any) {
+        setDeliveryWarn('Delivery could not be scheduled (network) — the document and customer were still saved.');
+        console.error('[TRACE:DELIVERY] schedule network error:', e.message);
+      }
+    } else if (scheduleDelivery && !resolvedCustomerId) {
+      setDeliveryWarn('Delivery needs a customer — add a customer name to schedule it.');
+      if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] skipped — no resolved customer to link');
     }
 
     setStep('done');
@@ -521,8 +582,11 @@ export function ReceiptKeeper() {
     setInvoice(EMPTY_INVOICE);
     setDocType('receipt');
     setAddCustomer(false);
+    setScheduleDelivery(false);
     setCustomerResult(null);
     setCustomerWarn(null);
+    setDeliveryResult(null);
+    setDeliveryWarn(null);
   }
 
   // ── Styles ─────────────────────────────────────────────────────────────────
@@ -904,22 +968,41 @@ export function ReceiptKeeper() {
                 What should we do with it? You can change these.
               </div>
 
-              {/* Functional destination this build */}
+              {/* Functional destination — create / update the customer */}
               <label style={DEST_ROW}>
                 <input
                   type="checkbox"
                   checked={addCustomer}
                   style={{ marginTop: 3, width: 18, height: 18 }}
-                  onChange={e => { setAddCustomer(e.target.checked); if (TRACE_ROUTER) console.log('[TRACE:ROUTER] toggle addCustomer:', e.target.checked); }}
+                  onChange={e => {
+                    const on = e.target.checked;
+                    setAddCustomer(on);
+                    // Unchecking the customer also drops the delivery — a delivery needs a customer.
+                    if (!on) setScheduleDelivery(false);
+                    if (TRACE_ROUTER) console.log('[TRACE:ROUTER] toggle addCustomer:', on);
+                  }}
                 />
                 <span><b>Add customer</b><br /><span style={DEST_SUB}>Create or update the customer from this invoice</span></span>
               </label>
 
-              {/* Shown-but-coming destinations — not functional this build */}
-              <div style={{ ...DEST_ROW, cursor: 'default', opacity: 0.6 }}>
-                <input type="checkbox" disabled style={{ marginTop: 3, width: 18, height: 18 }} />
-                <span><b>Schedule delivery</b><span style={COMING}>coming</span><br /><span style={DEST_SUB}>Use the delivery date on this invoice</span></span>
-              </div>
+              {/* Functional destination — schedule a dated, addressed delivery (loop close) */}
+              <label style={DEST_ROW}>
+                <input
+                  type="checkbox"
+                  checked={scheduleDelivery}
+                  style={{ marginTop: 3, width: 18, height: 18 }}
+                  onChange={e => {
+                    const on = e.target.checked;
+                    setScheduleDelivery(on);
+                    // A delivery links to a customer — turning this on turns Add customer on too.
+                    if (on) setAddCustomer(true);
+                    if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] toggle scheduleDelivery:', on);
+                  }}
+                />
+                <span><b>Schedule delivery</b><br /><span style={DEST_SUB}>Use the delivery date &amp; ship-to address on this invoice</span></span>
+              </label>
+
+              {/* Shown-but-coming destination — not functional this build */}
               <div style={{ ...DEST_ROW, cursor: 'default', opacity: 0.6 }}>
                 <input type="checkbox" disabled style={{ marginTop: 3, width: 18, height: 18 }} />
                 <span><b>Analyze sale</b><span style={COMING}>coming</span><br /><span style={DEST_SUB}>Feed this into sales / leakage insights</span></span>
@@ -1003,7 +1086,9 @@ export function ReceiptKeeper() {
             )}
 
             <button style={BTN_PRIMARY} onClick={handleConfirm}>
-              {addCustomer ? 'Save & add customer ✓' : 'Save ✓'}
+              {scheduleDelivery ? 'Save, add customer & schedule delivery ✓'
+                : addCustomer   ? 'Save & add customer ✓'
+                : 'Save ✓'}
             </button>
             <button style={BTN_GHOST} onClick={handleReset}>
               Start over
@@ -1035,6 +1120,21 @@ export function ReceiptKeeper() {
               <div style={{ fontSize: '0.8125rem', color: '#92400e', background: '#fef3c7', borderRadius: 8, padding: '8px 12px', marginBottom: 8 }}>
                 {customerWarn}
               </div>
+            )}
+            {deliveryResult && (
+              <div style={{ fontSize: '0.875rem', color: '#27500A', marginBottom: 8 }}>
+                🚚 Delivery scheduled{invoice.deliveryDate ? ` for ${invoice.deliveryDate}` : ''}
+              </div>
+            )}
+            {deliveryWarn && (
+              <div style={{ fontSize: '0.8125rem', color: '#92400e', background: '#fef3c7', borderRadius: 8, padding: '8px 12px', marginBottom: 8 }}>
+                {deliveryWarn}
+              </div>
+            )}
+            {deliveryResult && (
+              <button style={{ ...BTN_GHOST, marginBottom: 8 }} onClick={() => navigate('/delivery-schedule')}>
+                View scheduled deliveries →
+              </button>
             )}
             <div style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: 24 }}>
               {savedReceiptId && <span style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{savedReceiptId.slice(0, 8)}…</span>}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Truck, MapPin, Navigation, Copy, Send,
   CheckSquare, Square, Plus, X, Phone,
@@ -39,8 +39,15 @@ function buildMapsUrl(addresses: string[]): string {
   return `https://www.google.com/maps/dir/${stops}/`;
 }
 
+// [TRACE:DELIVERY] STD-003 — ON until David owner-proves the scheduled-deliveries route
+const TRACE_DELIVERY = true;
+
 export function DeliveryRoute() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // When ?date=YYYY-MM-DD is present we route SCHEDULED deliveries (the `deliveries`
+  // table) for that day. Absent → the original cart-order route path, unchanged.
+  const dateParam = searchParams.get('date');
   const { businessId } = useBusinessContext();
 
   const [orders, setOrders]     = useState<DeliveryOrder[]>([]);
@@ -60,10 +67,55 @@ export function DeliveryRoute() {
   useEffect(() => {
     if (!businessId) return;
     load();
-  }, [businessId]);
+  }, [businessId, dateParam]);
 
   async function load() {
     setLoading(true);
+    setError(null);
+
+    // ── SCHEDULED-DELIVERIES MODE (?date=) — the OCR-invoice loop close ──
+    // Loads the `deliveries` table for the day and maps each row into the existing
+    // DeliveryOrder shape (address lives on the delivery row, surfaced via the synthetic
+    // `customers` object) so the route UI + buildMapsUrl below are reused verbatim.
+    if (dateParam) {
+      const { data, error: err } = await supabase
+        .from('deliveries')
+        .select(`
+          id, created_at, delivery_date, notes, address_line1, city, state, zip,
+          customers ( first_name, last_name, phone )
+        `)
+        .eq('business_id', businessId!)
+        .eq('delivery_date', dateParam)
+        .neq('status', 'cancelled')
+        .order('created_at', { ascending: true })
+        .limit(50);
+
+      if (err) { setError(err.message); setLoading(false); return; }
+
+      const rows: DeliveryOrder[] = (data ?? []).map((d: any) => ({
+        id: d.id,
+        created_at: d.delivery_date ?? d.created_at,
+        notes: d.notes ?? null,
+        customers: d.customers ? {
+          first_name: d.customers.first_name,
+          last_name:  d.customers.last_name,
+          phone:      d.customers.phone,
+          address_line1: d.address_line1, // address is on the delivery row, not the customer
+          city:  d.city,
+          state: d.state,
+          zip:   d.zip,
+        } : null,
+        order_items: [],
+      }));
+      setOrders(rows);
+      const withAddr = new Set(rows.filter(o => fullAddress(o.customers).length > 0).map(o => o.id));
+      setSelected(withAddr);
+      setLoading(false);
+      if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] route mode — date:', dateParam, 'stops:', rows.length, 'withAddr:', withAddr.size);
+      return;
+    }
+
+    // ── DEFAULT MODE — cart-order deliveries (unchanged) ──
     const { data, error: err } = await supabase
       .from('orders')
       .select(`
@@ -137,13 +189,17 @@ export function DeliveryRoute() {
 
       {/* Header */}
       <div style={{ background: GREEN, padding: '20px 16px', color: '#fff', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={() => navigate('/dashboard')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+        <button onClick={() => navigate(dateParam ? '/delivery-schedule' : '/dashboard')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
           <ArrowLeft size={22} color="#fff" />
         </button>
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>Delivery Routing</h1>
+          <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>
+            {dateParam ? 'Route — Scheduled Day' : 'Delivery Routing'}
+          </h1>
           <p style={{ margin: 0, fontSize: '0.75rem', color: '#a8c890' }}>
-            {loading ? 'Loading…' : `${orders.length} pending deliver${orders.length !== 1 ? 'ies' : 'y'}`}
+            {loading ? 'Loading…'
+              : dateParam ? `${dateParam} · ${orders.length} stop${orders.length !== 1 ? 's' : ''}`
+              : `${orders.length} pending deliver${orders.length !== 1 ? 'ies' : 'y'}`}
           </p>
         </div>
       </div>

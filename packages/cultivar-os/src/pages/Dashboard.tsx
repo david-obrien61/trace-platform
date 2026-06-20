@@ -381,7 +381,7 @@ export function Dashboard() {
       case 'social_media':
         if (SM_DEBUG) console.log('[SM-TRACE] Dashboard handleEnable: social_media tile was AVAILABLE → navigate /social/setup. businessId:', businessId);
         return navigate('/social/setup');
-      case 'delivery_routing': return navigate('/deliveries');
+      case 'delivery_routing': return navigate('/delivery-schedule');
       case 'cost_to_produce': return navigate('/settings'); // configure in Settings, then it computes
       case 'online_shop':     return showComingSoon('Online Shop');
       case 'followup_engine': return showComingSoon('Follow-Up Engine');
@@ -396,7 +396,7 @@ export function Dashboard() {
       case 'social_media':
         if (SM_DEBUG) console.log('[SM-TRACE] Dashboard handleNavigate: social_media tile was ACTIVE → navigate /social/setup. businessId:', businessId);
         return navigate('/social/setup');
-      case 'delivery_routing': return navigate('/deliveries');
+      case 'delivery_routing': return navigate('/delivery-schedule');
       case 'cost_to_produce':  return navigate('/costs');
       case 'receipt_keeper':   return navigate('/receipts');
       default:                return showComingSoon(key.replace(/_/g, ' '));
