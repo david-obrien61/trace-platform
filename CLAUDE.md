@@ -323,6 +323,22 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-20 — THUNDER DELIVERY TOGGLE DIAGNOSIS (= STALE DEPLOY, not unwired) + service_type (planting vs delivery_only) added (BUILDER-COMPLETE, migration GATED, owner-proof owed)
+
+**Type:** Diagnosis + 1 GATED migration + verify-script extension + 3 code edits (ReceiptKeeper, deliveries/create endpoint, DeliverySchedule) + built-inventory. **MIGRATION `20260620_deliveries_service_type.sql` NOT applied** → schema gate (G) OWED. NO other table touched. `[TRACE:*]` STAYS ON. Commit **`634b990`** (pushed).
+
+**DIAGNOSIS (owner saw "Schedule delivery — coming" on phone) — it was a STALE DEPLOY, NOT an unwired front-end.** The toggle was ALREADY functional in `253cf49`: `ReceiptKeeper.tsx:988-1003` is a live checkbox with **no "coming" badge** (only "Analyze sale" carries it, line 1008); `doSave` (`:498-532`) calls `/api/deliveries/create` with the resolved customer id. The endpoint + table are live (14/14 last session). ⇒ the phone hit a Vercel bundle predating 253cf49. **A fresh deploy of `main` fixes the "coming" badge.** This commit (634b990) forces that redeploy AND ships the genuinely-new service_type work.
+
+**service_type (the net-new piece):**
+- **Schema (GATED):** `ALTER TABLE deliveries ADD COLUMN service_type text` (nullable, NO CHECK, AC-4). Append-only. `verify-deliveries.mjs` extended with **(G)** service_type text/nullable/no-CHECK + round-trip now inserts `service_type:'planting'`. Pre-apply round-trip honestly FAILS ("Could not find the 'service_type' column") = proves gated; base table still queryable.
+- **Inference (`ReceiptKeeper.tsx` `inferServiceType`):** INSTALL/WARRANTY/plant line → `'planting'`, else `'delivery_only'`. Set on OCR from `ocrLines`. Confirm screen shows a correctable `<select>` (when Schedule delivery checked), default = inference (D-9). `[TRACE:DELIVERY] serviceType set`.
+- **Endpoint (`packages/cultivar-os/api/deliveries/create.ts`):** writes `service_type`; **migration-window-resilient** — on 42703/PGRST204 (column missing) retries WITHOUT it so delivery creation never breaks before the column applies (honest debt, logged; remove fallback once (G) green).
+- **Day view (`DeliverySchedule.tsx`):** service_type badge (planting=blue / delivery_only=green).
+
+**BUILDER-COMPLETE proofs:** `build:cultivar` clean (2203 modules); changed files tsc-clean; regression `verify-customer-upsert.mjs` **7/7 PASS** (no double-create preserved — customer resolved once, that id reused for the delivery; delivery endpoint never creates a customer). "Analyze sale" stays honestly "coming". Migration gated-state confirmed (service_type absent pre-apply).
+
+**OWED — David's SEQUENCE:** (1) apply `20260620_deliveries_service_type.sql` in SQL editor (project bgobkjcopcxusjsetfob) — safe with both old + new code (column-add); (2) mint short-lived PAT; (3) Thunder runs `SUPABASE_PAT=sbp_xxx node scripts/verify-deliveries.mjs` → (A)-(G) green + round-trip incl. service_type; (4) REVOKE PAT; (5) confirm Vercel deployed `main` ≥634b990; (6) **OWNER-PROVE on phone:** snap Marcus Webb invoice → "Schedule delivery" is LIVE (no "coming") → service type inferred + correctable → confirm → Marcus Webb under **Jun 25, 2026** with service_type badge in the day view → "Route this day" plots. Until owner-proven, `[TRACE:DELIVERY]` stays ON.
+
 ### 2026-06-20 — THUNDER DELIVERY LOOP CLOSED: OCR invoice → scheduled delivery → day view → existing route map (BUILDER-COMPLETE, schema GATED, owner-proof owed)
 
 **Type:** 1 migration + 1 verify script + 1 new endpoint (+root shim) + 1 new page + 3 edits (ReceiptKeeper, DeliveryRoute, Dashboard, router) + built-inventory. **MIGRATION APPLIED + CATALOG-PROVEN this session** (David applied + minted PAT → verify 14/14 → PAT revoked) → schema-verification gate SATISFIED. NO existing table altered. `[TRACE:*]` STAYS ON (standing owner instruction — Part 7). Commit **`253cf49`** (code) / **`f141e25`** (handoff), pushed. This flips the OCR-router's "Schedule delivery — coming" badge to FUNCTIONAL — the moment the reader becomes a doer. **Only owner-proof on phone remains.**
