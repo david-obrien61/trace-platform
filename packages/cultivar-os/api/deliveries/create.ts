@@ -27,7 +27,7 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { businessId, customerId, deliveryDate, address, source, notes } = req.body ?? {};
+  const { businessId, customerId, deliveryDate, address, serviceType, source, notes } = req.body ?? {};
 
   // customerId is required — a delivery is always tied to a customer (the loop links
   // the OCR-resolved customer; we never create a second one here).
@@ -37,35 +37,54 @@ export default async function handler(req: any, res: any) {
 
   const addr = address ?? {};
   if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] create — businessId:', businessId,
-    'customerId:', customerId, 'date:', deliveryDate ?? '(none)',
+    'customerId:', customerId, 'date:', deliveryDate ?? '(none)', 'serviceType:', serviceType ?? '(none)',
     'addr:', [addr.line1, addr.city, addr.state, addr.zip].filter(Boolean).join(', ') || '(none)',
     'source:', source ?? 'ocr-invoice');
 
   const db = adminDb();
+
+  // Base row (no service_type) — always valid against the deliveries schema.
+  const baseRow: Record<string, any> = {
+    business_id:   businessId,
+    customer_id:   customerId,
+    delivery_date: deliveryDate || null, // YYYY-MM-DD or null
+    address_line1: addr.line1 || null,
+    city:          addr.city  || null,
+    state:         addr.state || null,
+    zip:           addr.zip   || null,
+    status:        'scheduled',
+    source:        source || 'ocr-invoice',
+    notes:         notes || null,
+  };
+
+  // HONEST DEBT (migration window): service_type rides on the 20260620_deliveries_service_type
+  // gated migration. If this code deploys before David applies it, inserting the column would
+  // fail (42703 / PGRST204). We attempt WITH service_type, and on a missing-column error retry
+  // WITHOUT it so delivery creation never breaks during the apply window. Remove the fallback
+  // once the migration is confirmed applied (verify-deliveries.mjs (G) green).
+  function isMissingServiceTypeColumn(error: any): boolean {
+    const s = `${error?.code} ${error?.message}`;
+    return /42703|PGRST204/.test(s) || /service_type/i.test(s) && /column|schema cache/i.test(s);
+  }
+
   try {
-    const { data, error } = await db
+    let { data, error } = await db
       .from('deliveries')
-      .insert({
-        business_id:   businessId,
-        customer_id:   customerId,
-        delivery_date: deliveryDate || null, // YYYY-MM-DD or null
-        address_line1: addr.line1 || null,
-        city:          addr.city  || null,
-        state:         addr.state || null,
-        zip:           addr.zip   || null,
-        status:        'scheduled',
-        source:        source || 'ocr-invoice',
-        notes:         notes || null,
-      })
+      .insert({ ...baseRow, service_type: serviceType || null }) // 'planting' | 'delivery_only'
       .select('id')
       .single();
+
+    if (error && isMissingServiceTypeColumn(error)) {
+      console.warn('[TRACE:DELIVERY] service_type column absent — retrying without it (apply 20260620_deliveries_service_type.sql)');
+      ({ data, error } = await db.from('deliveries').insert(baseRow).select('id').single());
+    }
 
     if (error) {
       console.error('[TRACE:DELIVERY] create failed:', error.message);
       return res.status(500).json({ ok: false, error: error.message });
     }
 
-    if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] created — id:', data?.id, 'linked customer:', customerId);
+    if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] created — id:', data?.id, 'linked customer:', customerId, 'serviceType:', serviceType ?? '(none)');
     return res.json({ ok: true, deliveryId: data?.id });
   } catch (err: any) {
     console.error('[TRACE:DELIVERY] create exception:', err.message);

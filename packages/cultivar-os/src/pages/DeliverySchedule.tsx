@@ -32,9 +32,15 @@ interface DeliveryRow {
   state: string | null;
   zip: string | null;
   status: string | null;
+  service_type: string | null;
   notes: string | null;
   customers: { first_name: string; last_name: string; phone: string | null } | null;
 }
+
+const SERVICE_TYPE_LABEL: Record<string, string> = {
+  planting:      'Planting / install',
+  delivery_only: 'Delivery only',
+};
 
 function fullAddress(d: DeliveryRow): string {
   return [d.address_line1, d.city, d.state, d.zip].filter(Boolean).join(', ');
@@ -69,7 +75,7 @@ export function DeliverySchedule() {
     const { data, error: err } = await supabase
       .from('deliveries')
       .select(`
-        id, delivery_date, address_line1, city, state, zip, status, notes,
+        id, delivery_date, address_line1, city, state, zip, status, service_type, notes,
         customers ( first_name, last_name, phone )
       `)
       .eq('business_id', businessId!)
@@ -173,7 +179,19 @@ export function DeliverySchedule() {
                       background: '#fff', borderRadius: 12, padding: '14px 16px',
                       boxShadow: '0 1px 3px rgba(0,0,0,0.07)', borderLeft: `4px solid ${GREEN}`,
                     }}>
-                      <div style={{ fontWeight: 700, fontSize: '0.9375rem', color: DARK, marginBottom: 4 }}>{name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 700, fontSize: '0.9375rem', color: DARK }}>{name}</span>
+                        {d.service_type && (
+                          <span style={{
+                            fontSize: '0.6875rem', fontWeight: 700,
+                            color: d.service_type === 'planting' ? '#1d4ed8' : '#4b7a2e',
+                            background: d.service_type === 'planting' ? '#eff6ff' : '#f0f7e6',
+                            borderRadius: 6, padding: '1px 7px',
+                          }}>
+                            {SERVICE_TYPE_LABEL[d.service_type] ?? d.service_type}
+                          </span>
+                        )}
+                      </div>
                       {addr ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <MapPin size={13} color={GREEN} />

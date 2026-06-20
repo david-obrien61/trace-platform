@@ -57,6 +57,19 @@ function useIsMobile(): boolean {
   return isMobile;
 }
 
+// Service-type inference for a scheduled delivery: a job that INSTALLS/PLANTS (or carries a
+// warranty implying installed work) is 'planting'; anything else is a 'delivery_only' drop.
+// Best-guess from the invoice line items, always correctable on the confirm screen (D-9).
+type ServiceType = 'planting' | 'delivery_only';
+function inferServiceType(lines: Array<{ description?: string | null }>): ServiceType {
+  const hasPlanting = lines.some(l => /install|warrant|plant/i.test(l.description ?? ''));
+  return hasPlanting ? 'planting' : 'delivery_only';
+}
+const SERVICE_TYPE_LABEL: Record<ServiceType, string> = {
+  planting:      'Planting / installation',
+  delivery_only: 'Delivery only',
+};
+
 // STD-010: allowed types + size — must mirror the server-side constants in ocr.ts
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'];
 const MAX_MB = 10;
@@ -142,6 +155,7 @@ export function ReceiptKeeper() {
   const [docType, setDocType]           = useState<'invoice-customer' | 'receipt'>('receipt');
   const [addCustomer, setAddCustomer]   = useState(false); // destination: create a customer
   const [scheduleDelivery, setScheduleDelivery] = useState(false); // destination: create a dated delivery
+  const [serviceType, setServiceType]   = useState<ServiceType>('delivery_only'); // inferred, correctable
   const [customerResult, setCustomerResult] = useState<{ id: string; created: boolean } | null>(null);
   const [customerWarn, setCustomerWarn] = useState<string | null>(null);
   const [deliveryResult, setDeliveryResult] = useState<{ id: string } | null>(null);
@@ -276,6 +290,8 @@ export function ReceiptKeeper() {
       // A delivery needs a customer to link to + somewhere to go: suggest scheduling when
       // we have a customer AND a delivery date or a ship-to address. Best-guess, overridable.
       const suggestDelivery = hasCustomer && (!!inv.deliveryDate || !!inv.shipLine1.trim());
+      const inferredService = inferServiceType(ocrLines);
+      setServiceType(inferredService);
       setDocType(inferred);
       setAddCustomer(hasCustomer || suggestDelivery);
       setScheduleDelivery(suggestDelivery);
@@ -506,11 +522,12 @@ export function ReceiptKeeper() {
           state: invoice.shipState.trim() || invoice.billState.trim() || null,
           zip:   invoice.shipZip.trim()   || invoice.billZip.trim()   || null,
         },
+        serviceType, // 'planting' | 'delivery_only' — inferred from lines, owner-correctable
         source: 'ocr-invoice',
         notes: invoice.customerName.trim() ? `Delivery for ${invoice.customerName.trim()}` : null,
       };
       if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] scheduling from invoice — customerId:', resolvedCustomerId,
-        'date:', deliveryBody.deliveryDate ?? '(none)',
+        'date:', deliveryBody.deliveryDate ?? '(none)', 'serviceType:', serviceType,
         'addr:', [deliveryBody.address.line1, deliveryBody.address.city, deliveryBody.address.state, deliveryBody.address.zip].filter(Boolean).join(', ') || '(none)');
       try {
         const dRes  = await fetch('/api/deliveries/create', {
@@ -583,6 +600,7 @@ export function ReceiptKeeper() {
     setDocType('receipt');
     setAddCustomer(false);
     setScheduleDelivery(false);
+    setServiceType('delivery_only');
     setCustomerResult(null);
     setCustomerWarn(null);
     setDeliveryResult(null);
@@ -1076,6 +1094,25 @@ export function ReceiptKeeper() {
                       onChange={e => setInvoice(p => ({ ...p, deliveryDate: e.target.value }))} />
                   </div>
                 </div>
+
+                {/* Service type — inferred from line items (INSTALL/WARRANTY → planting), correctable */}
+                {scheduleDelivery && (
+                  <div style={FIELD_ROW}>
+                    <label style={LABEL}>Service type</label>
+                    <select style={SELECT} value={serviceType}
+                      onChange={e => {
+                        const v = e.target.value as ServiceType;
+                        setServiceType(v);
+                        if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] serviceType set:', v);
+                      }}>
+                      <option value="delivery_only">{SERVICE_TYPE_LABEL.delivery_only}</option>
+                      <option value="planting">{SERVICE_TYPE_LABEL.planting}</option>
+                    </select>
+                    <div style={{ fontSize: '0.6875rem', color: '#64748b', marginTop: 3 }}>
+                      Inferred from the invoice lines — change if it's wrong.
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

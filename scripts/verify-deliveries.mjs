@@ -123,6 +123,15 @@ async function catalogProof() {
   const f = await execSQL(`SELECT indexname FROM pg_indexes
     WHERE schemaname='public' AND tablename='deliveries';`);
   f.some(r => /business_date/.test(r.indexname)) ? pass('(F) deliveries_business_date_idx present', f.map(r=>r.indexname).join(', ')) : fail('(F) day index missing', f.map(r=>r.indexname).join(','));
+
+  // (G) service_type column — text, nullable, NO CHECK (20260620_deliveries_service_type)
+  const g = await execSQL(`SELECT data_type, is_nullable FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='deliveries' AND column_name='service_type';`);
+  g[0] && g[0].data_type === 'text' && g[0].is_nullable === 'YES'
+    ? pass('(G) service_type text, nullable') : fail('(G) service_type column', JSON.stringify(g[0] ?? 'absent'));
+  const gck = await execSQL(`SELECT conname FROM pg_constraint
+    WHERE conrelid='deliveries'::regclass AND contype='c' AND pg_get_constraintdef(oid) ILIKE '%service_type%';`);
+  gck.length === 0 ? pass('(G) no CHECK on service_type (AC-4)') : fail('(G) unexpected service_type CHECK', JSON.stringify(gck));
 }
 
 // ── ROUND-TRIP mode (fallback) ──────────────────────────────────────────────
@@ -148,12 +157,13 @@ async function roundTrip() {
       business_id, customer_id,
       delivery_date: '2026-06-25',
       address_line1: '__VERIFY__ 1208 Ranch Road 12', city: 'Wimberley', state: 'TX', zip: '78676',
-      status: 'scheduled', source: 'verify-script', notes: '__VERIFY__ round-trip',
-    }).select('id,customer_id,delivery_date').single();
+      status: 'scheduled', source: 'verify-script', service_type: 'planting', notes: '__VERIFY__ round-trip',
+    }).select('id,customer_id,delivery_date,service_type').single();
     if (insErr) { fail('insert delivery linked to customer', insErr.message); }
     else {
       pass('insert delivery linked to customer', `id ${ins.id.slice(0,8)}… date ${ins.delivery_date}`);
       ins.customer_id === customer_id ? pass('customer_id FK linked correctly') : fail('customer_id mismatch', ins.customer_id);
+      ins.service_type === 'planting' ? pass('service_type persisted', ins.service_type) : fail('service_type not persisted', String(ins.service_type));
       await sb.from('deliveries').delete().eq('id', ins.id);
       pass('cleanup — verify row deleted');
     }
