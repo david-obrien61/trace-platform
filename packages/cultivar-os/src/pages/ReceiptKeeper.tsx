@@ -8,6 +8,7 @@ import {
   computeReconcile,
 } from '../utils/receiptReconciliation';
 import { resizeAndCompressImage } from '../utils/imageCompression';
+import { toISODate } from '../utils/dateParse';
 import { ConflictDialog } from '../components/ConflictDialog';
 import { LineItemGrid } from '../components/LineItemGrid';
 
@@ -221,7 +222,7 @@ export function ReceiptKeeper() {
       // Pre-fill editable fields from OCR output
       setFields({
         vendor:   data.parsed?.vendor   ?? '',
-        date:     data.parsed?.date     ?? '',
+        date:     toISODate(data.parsed?.date),   // normalize → YYYY-MM-DD for <input type="date">
         amount:   data.parsed?.amount != null ? Number(data.parsed.amount).toFixed(2) : '',
         category: data.parsed?.category ?? '',
       });
@@ -251,10 +252,17 @@ export function ReceiptKeeper() {
         customerEmail: p.customer_email ?? '',
         billLine1: p.bill_to?.line1 ?? '', billCity: p.bill_to?.city ?? '', billState: p.bill_to?.state ?? '', billZip: p.bill_to?.zip ?? '',
         shipLine1: p.ship_to?.line1 ?? '', shipCity: p.ship_to?.city ?? '', shipState: p.ship_to?.state ?? '', shipZip: p.ship_to?.zip ?? '',
-        dueDate:      p.due_date      ?? '',
-        deliveryDate: p.delivery_date ?? '',
+        dueDate:      toISODate(p.due_date),       // normalize → YYYY-MM-DD for <input type="date">
+        deliveryDate: toISODate(p.delivery_date),
       };
       setInvoice(inv);
+
+      // [TRACE:OCR] date parse — raw (as OCR returned) vs normalized ISO, so the next
+      // test is auditable. A raw value present but ISO empty = unparseable format, not a read miss.
+      if (TRACE_OCR) console.log('[TRACE:OCR] date parse —',
+        'date:', JSON.stringify(p.date), '→', JSON.stringify(toISODate(p.date)),
+        '| due:', JSON.stringify(p.due_date), '→', JSON.stringify(inv.dueDate),
+        '| delivery:', JSON.stringify(p.delivery_date), '→', JSON.stringify(inv.deliveryDate));
 
       // Inference: a customer name (with or without an address) → looks like an invoice
       // for a customer; otherwise treat as a plain expense receipt. Best-guess pre-check,
