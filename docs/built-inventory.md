@@ -971,6 +971,18 @@ While creation is private/invite-only (David + family), guards may stay OFF — 
 - Emits `[TRACE:SEED]` (seed/clear with counts) ON by default.
 - Usage: `node scripts/seed-sandbox.mjs --business=<uuid>` (clear+seed), `--clear`, `--verify`.
 
+### Catalog-Populate — read live site → write their REAL catalog (capability 1.3, the onboarding wow) — added 2026-06-21
+
+**What:** Reads a nursery's LIVE website, extracts their REAL catalog (varieties + category, per-item extraction confidence), CLEARS the sandbox sample data, and writes their actual varieties into `business_inventory` — so a new dashboard shows THEIR trees, not generic samples. The existing discovery engine extracts services/identity only; this is the missing CATALOG cut.
+**Status:** ✅ BUILDER-COMPLETE (2026-06-21) — proven live against **lawnstrees.com**: 30 pages crawled → **114 real varieties** extracted (Oak, Crape Myrtle, Cypress, Redbud, Vitex …) → written to `business_inventory`, idempotent (clear→populate→clear leaves 0 orphans), real LAWNS rows untouched. **OWNER-PROOF owed** (David: run on his LAWNS tenant with the Vercel ANTHROPIC key, watch the catalog materialize on `/inventory`, then clear). **Type:** capability | **Vertical:** cross-vertical (shared), proven on cultivar.
+**Location:** `packages/shared/src/discovery/catalog.ts` (crawler + AI extractor + D-9 mapping) + `discovery/populate.ts` (orchestration) + `catalog.test.ts` (35/35 adversarial), exported from `discovery/index.ts`; AI capability `discovery_catalog` (Haiku) in `ai/capabilities.ts`; runner `scripts/populate-catalog.ts`; gated table `business_discovery_profiles` (migration `20260621`, gate `scripts/verify-discovery-profiles.mjs`).
+- **Crawl:** `fetchCatalogPages` does a bounded 2-level crawl (entry → hub pages like `/shop/` → category pages), reuses `fetchWebsiteContent` per page; generic link heuristics (WooCommerce `/product-category/` + hand-rolled patterns); degrades to the entry page when no catalog links exist.
+- **Extract:** `extractCatalog` runs the `discovery_catalog` model per batched page → `{variety, botanical, category, confidence}`; dedups by variety (keeps highest confidence; tie-breaks prefer a SPECIFIC category over a catch-all like "All Trees", and an item carrying a botanical name).
+- **Honesty (D-9 — the whole contract):** low-confidence OR no-clear-category items are **FLAGGED** (`status='review'`, reason in `notes`), never silently coerced; **price is UNKNOWN** (`unit_cost=null`, `cost_confidence='UNKNOWN'`) — never 0 (the site has no prices); **qty=0** (never fabricated); **`cultivar_plants` deliberately NOT populated** (per-specimen/QR identity doesn't exist on a bare-domain QR — writing it would be fabrication). The dashboard's `status` + `cost_confidence` badges visibly separate "sure" from "verify me".
+- **Idempotent markers:** `business_inventory.sku LIKE 'DISC-%'` / `notes LIKE '[DISCOVERY]%'`. Populate clears BOTH the 1.2 sandbox (`SMPL-`/`[SANDBOX]`, reusing `clearSandbox`) and prior discovery rows before writing.
+- **`business_discovery_profiles`** (gated migration) stores the full `raw_extract` (items + confidences + counts) as the honesty/audit trail — upsert on `(business_id, source_url)`.
+- Emits `[TRACE:POPULATE]` (crawl / extract / clear / populate) ON by default.
+
 ---
 
 ## CoolRunnings

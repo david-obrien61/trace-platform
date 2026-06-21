@@ -6,5 +6,14 @@ export { compareEnteredVsSite, filterDiscrepancies, buildDiscrepancyMessage, loo
 export type { EnteredBusinessData, Discrepancy, CompareResult, DiscrepancyConfidence, CompareOpts } from './compare';
 export { nurserySchema } from './verticals/nursery';
 export { seedServiceOfferings } from './seed';
+export {
+  fetchCatalogPages, discoverCatalogLinks, categoryHintFromUrl,
+  extractCatalog, mapRawToCatalogItem, buildCatalogPrompt,
+} from './catalog';
+export type { CatalogPage, CatalogItem, CatalogExtract, CatalogConfidence, CrawlOpts, ExtractOpts } from './catalog';
+export {
+  populateCatalog, clearSandbox, clearDiscovery, catalogItemToInventoryRow,
+} from './populate';
+export type { PopulateOpts, PopulateResult } from './populate';
 // DiscoveryGlimpse is client-side only — import directly from
 // '@trace/shared/discovery/DiscoveryGlimpse' to avoid bundling server-side engine deps.
