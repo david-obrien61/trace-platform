@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-06-20
+# Last updated: 2026-06-21
 
 **Purpose:** Sessions keep rebuilding things that exist. This document is the single answer to "was X ever built?" Organized by capability, not by file. For file locations, see PLATFORM_AUDIT.md.
 
@@ -623,6 +623,8 @@ Each test computes what a buggy build would output and asserts the real one diff
 
 **✅ RESOLVED 2026-06-08 — proactive expiry surfacing live.** `qbo/status.ts` now checks `accounting_token_expires_at` on every dashboard load; attempts silent `refreshQBToken()` if expired; returns `needsReconnect: true` if refresh fails. `Dashboard.tsx` derives the banner immediately from `accounting_token_expires_at` client-side and applies the authoritative server result from `checkQbStatus()`. A dead/expired connection now announces itself on page load — no mid-use 401 required. STD-007 added as the class-of-bug record.
 
+**✅ RESOLVED 2026-06-19 — QB routes 500 root-caused + fixed (commit `14a9a82`, tech-debt #34).** Both `/api/qbo/auth-url` and `/api/qbo/status` returned `FUNCTION_INVOCATION_FAILED`. Root cause: `packages/cultivar-os/api/qbo/router.ts:15` imported `refreshQBToken` from `../../../../shared/...` (FOUR `../` → nonexistent `<repo-root>/shared/`); router.ts sits at `api/qbo/` so the correct depth is THREE `../` (now `../../../shared/src/quickbooks/refresh` — confirmed `router.ts:15`). The unresolved import crashed the function at module load → 500 on every qbo route regardless of token state. Proven via esbuild (old path fails resolution, new bundles clean). Connect flow now reaches the auth-url link instead of 500.
+
 ---
 
 ## Notification System
@@ -707,6 +709,8 @@ Each test computes what a buggy build would output and asserts the real one diff
 
 **Install price:** Legacy `plants.install_price` column DROPPED 2026-06-13 (THUNDER UNTANGLE). QB install line now defaults to $0 until install pricing is wired through service_offerings (correct long-term model). Scheduling not built.  
 **Leakage flag:** Set in `api/orders/submit.ts` when add-ons declined and transport is self-only.
+
+**Checkout payment-copy relabel (2026-06-19):** `CustomerCapture.tsx:230` now reads "We'll email your invoice here. No payment is taken now — pay in person at the office, or online from the invoice we send." (was "You can pay now or when you get home"). Wording-only — no behavior change; checkout already takes no money and CartReview offers email-invoice vs pay-at-office.
 
 ---
 
