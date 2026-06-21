@@ -985,6 +985,14 @@ While creation is private/invite-only (David + family), guards may stay OFF — 
 
 ---
 
+### Decision Record — Role-Based Financial Permissions v1 (DOC ONLY) — added 2026-06-21
+
+**What:** Sign-off artifact for the role-permission hardening build that follows — NOT a build. Records the verified problem (role enforcement is RENDER-ONLY: `business_members.permissions` JSONB read into context but consulted by no RLS policy or API; exactly one render gate fires; ~26 sensitive columns across 6 tables sit owner_all+member_all only; tenant isolation AC-2/AC-3 intact and SEPARATE). Decides the **four permissions** (view_wages, view_pricing_config, view_costs, view_margin — view_margin requires view_costs), **role defaults** (Owner=all four; Manager=costs+margin not pricing-config/wages; Tech=none), and the **hybrid enforcement by data class** (HARD data-layer wall via RLS + column masking for wages + pricing_config; ROLE-AWARE RESPONSE SHAPING for costs + margin because the server consumes unit_cost in checkout #11/#12 + dashboard rollups and a flat RLS-deny would NULL totals across 14 multi-role SELECT sites; render gates are the top convenience layer only). Binding doctrine: DEFAULT-DENY · SINGLE CHOKEPOINT (can()/checkPermission()) · RESTRICTIVE-FIRST/EXPAND-ONLY · PROOF BAR (low-role direct query refused at network response, not render-absence).
+**Status:** ✅ Doc written. Decision LOCKED; **enforcement unbuilt** (build owes: mint+seed four permissions + backfill current owners before flipping on · wire dormant chokepoint · column-masking approach chosen at build · per-site hand-verify the 14 SELECT sites · resolve checkout public-path unit_cost shaping). Two-bar / RLS gates N/A this pass; the build owes both bars. **Type:** decision record | **Vertical:** cross-vertical.
+**Location:** [docs/decisions/2026-06-21-role-financial-permissions.md](decisions/2026-06-21-role-financial-permissions.md). Source recon: `data/grower-scan/role-enforcement-ground-truth.md`.
+
+---
+
 ## CoolRunnings
 
 **What:** Separate vertical for homes. Not part of trace-platform monorepo.  
