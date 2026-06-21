@@ -55,6 +55,14 @@ import { EMPTY_COST_CONFIG } from '../business-logic/CostToProduce';
 import type { CostToProduceConfig, CostConfidence, CostLocation } from '../business-logic/CostToProduce';
 // D-11 Schedule C category set — SHARED canonical list (also used by /assets capital-row picker).
 import { CATEGORY_OPTS } from '../business-logic/costCategories';
+// Phase 2 financial wall (decision 2026-06-21): wages + pricing config go through the gated
+// child tables via this seam (migration-window-resilient). The wall itself is RLS, not this read.
+import {
+  readLaborResources,
+  writeLaborResource,
+  readPricingConfig,
+  writePricingConfig,
+} from '../business-logic/financialDataAccess';
 
 const MODULE_KEY = 'cost_to_produce';
 
@@ -208,14 +216,14 @@ export function CostToProduceSettings() {
       setLoadError('');
       setRemovedLabor([]);
       const [modRes, objRes, projRes, resRes] = await Promise.all([
-        supabase.from('business_modules').select('config').eq('business_id', businessId).eq('module_key', MODULE_KEY).maybeSingle(),
+        // pricing config: gated table (Phase 2 wall) with legacy fallback — see financialDataAccess
+        readPricingConfig(supabase, businessId),
         supabase.from('cost_objects')
           .select('id,name,recurring_amount,cadence,cost_confidence,cost_shape,cost_nature,cost_category,substantiation,parent_id,notes,resource_id,labor_hours,recovery_basis,recovery_basis_source')
           .eq('business_id', businessId).eq('node_type', 'COST'),
         supabase.from('cost_objects').select('id,name').eq('business_id', businessId).eq('node_type', 'PROJECT'),
-        supabase.from('labor_resources')
-          .select('id,resource_type,name,rate_basis,base_wage,burden,cost_rate,bill_rate,rate,pass_through_expenses')
-          .eq('business_id', businessId),
+        // labor resources with wages merged from the gated child (Phase 2 wall)
+        readLaborResources(supabase, businessId),
       ]);
       if (cancelled) return;
 
@@ -356,8 +364,10 @@ export function CostToProduceSettings() {
       if (err) break;
       const category = e.resource_type === 'EMPLOYEE' ? 'labor' : 'contract-labor';
       // 2a. resource (cost_rate recomputed every save — never drifts from base_wage+burden).
-      const resPayload = {
-        business_id: businessId, resource_type: e.resource_type, name: e.name.trim(), rate_basis: e.rate_basis,
+      //     Phase 2 wall: non-wage fields → labor_resources; WAGE fields → the gated child
+      //     (labor_resource_wages). writeLaborResource splits the write + is migration-resilient.
+      const resFields = {
+        resource_type: e.resource_type, name: e.name.trim(), rate_basis: e.rate_basis,
         base_wage: e.resource_type === 'EMPLOYEE' ? e.base_wage : null,
         burden: e.resource_type === 'EMPLOYEE' ? e.burden : null,
         cost_rate: e.resource_type === 'EMPLOYEE' ? computeCostRate(e) : null,
@@ -365,15 +375,8 @@ export function CostToProduceSettings() {
         rate: e.resource_type === 'CONTRACTOR' ? (e.rate_basis === 'FLAT_FEE' ? e.flat_amount : e.rate) : null,
         pass_through_expenses: e.resource_type === 'CONTRACTOR' ? e.pass_through_expenses : null,
       };
-      let resourceId = e.resourceId;
-      if (!resourceId) {
-        const { data, error } = await supabase.from('labor_resources').insert(resPayload).select('id').single();
-        if (error) { err = error; break; }
-        resourceId = String(data.id);
-      } else {
-        const { error } = await supabase.from('labor_resources').update(resPayload).eq('id', resourceId).eq('business_id', businessId);
-        if (error) { err = error; break; }
-      }
+      const { resourceId, error: resErr } = await writeLaborResource(supabase, businessId, e.resourceId, resFields);
+      if (resErr || !resourceId) { err = resErr ?? { message: 'labor resource write failed' }; break; }
       // 2b. applied-labor cost_object. UNKNOWN ⇒ amount NULL (coherence).
       const monthly = e.cost_confidence === 'UNKNOWN' ? null : Math.round(computeLaborMonthly(e) * 100) / 100;
       const costPayload = {
@@ -418,10 +421,9 @@ export function CostToProduceSettings() {
       : config;
     let cfgErr: { message: string } | null = null;
     if (!err) {
-      const { error } = await supabase.from('business_modules').upsert(
-        { business_id: businessId, module_key: MODULE_KEY, enabled: true, configured: true, config: configToWrite },
-        { onConflict: 'business_id,module_key' },
-      );
+      // Phase 2 wall: pricing config → the gated business_pricing_config table (legacy fallback
+      // pre-migration). writePricingConfig also keeps the business_modules enablement flags set.
+      const { error } = await writePricingConfig(supabase, businessId, configToWrite);
       cfgErr = error;
     }
 
@@ -446,9 +448,8 @@ export function CostToProduceSettings() {
       supabase.from('cost_objects')
         .select('id,name,recurring_amount,cadence,cost_confidence,cost_shape,cost_nature,cost_category,substantiation,parent_id,notes,resource_id,labor_hours,recovery_basis,recovery_basis_source')
         .eq('business_id', businessId).eq('node_type', 'COST'),
-      supabase.from('labor_resources')
-        .select('id,resource_type,name,rate_basis,base_wage,burden,cost_rate,bill_rate,rate,pass_through_expenses')
-        .eq('business_id', businessId),
+      // labor wages via the gated child (Phase 2 wall) — same shape as the legacy single-table read
+      readLaborResources(supabase, businessId),
     ]);
     if (objRes.error || resRes.error) return;
     const allCost = (objRes.data ?? []) as any[];

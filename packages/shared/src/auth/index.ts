@@ -50,6 +50,20 @@ export type { OwnerSignupConfig, VerticalStep, VerticalStepProps } from './Owner
 export { can, hasRole, canAccessModule, expandRoles, deriveAllowed } from './permissions';
 export type { PermissionPolicy, SessionLike } from './permissions';
 
+// Financial-data permission vocabulary (the v1 role wall) — single source of truth
+export {
+  VIEW_COSTS,
+  VIEW_PRICING_CONFIG,
+  VIEW_WAGES,
+  VIEW_MARGIN,
+  FINANCIAL_PERMISSIONS,
+  ALL_FINANCIAL_PERMISSIONS,
+  FINANCIAL_ROLE_DEFAULTS,
+  financialDefaultsForRole,
+  applyFinancialDependencies,
+} from './financialPermissions';
+export type { FinancialPermission } from './financialPermissions';
+
 // Abuse guards for business creation — shipped OFF, genuine kill-switches
 export { runBusinessCreationGuards } from './businessGuards';
 export type { GuardResult } from './businessGuards';

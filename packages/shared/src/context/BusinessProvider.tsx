@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../supabase/client';
+import { can as sharedCan } from '../auth/permissions';
+import { applyFinancialDependencies } from '../auth/financialPermissions';
 
 const SM_DEBUG = false; // flip to true to re-enable legacy [SM-TRACE] diagnostics
 
@@ -43,6 +45,11 @@ export interface BusinessContextValue {
   // null = owner (full access implied). string[] = member's explicit permission list.
   userPermissions: string[] | null;
   isOwner: boolean;
+  // THE permission chokepoint (decision 2026-06-21). Single true checker for the
+  // active business: owner ⇒ true; member ⇒ shared can() over their explicit list
+  // with the view_margin⊆view_costs dependency applied. DEFAULT-DENY. Route every
+  // permission gate through this — do not inline `.includes()` at call sites.
+  can: (permissionId: string) => boolean;
 }
 
 const BusinessContext = createContext<BusinessContextValue>({
@@ -56,6 +63,7 @@ const BusinessContext = createContext<BusinessContextValue>({
   reload: () => {},
   userPermissions: null,
   isOwner: false,
+  can: () => false,
 });
 
 // ─── Business picker ──────────────────────────────────────────────────────────
@@ -326,6 +334,38 @@ export function BusinessProvider({
   const activeBusiness = activeResolved?.business ?? null;
   const allBusinesses = resolvedBusinesses.map(r => r.business);
 
+  // ─── Permission chokepoint ───────────────────────────────────────────────────
+  // The single true checker for the active business. Owner ⇒ full access (matches
+  // the existing isOwner=>userPermissions=null contract). Member ⇒ the shared can()
+  // helper over their explicit list, with view_margin⊆view_costs enforced so the
+  // margin verdict never resolves true for a session denied its cost inputs.
+  // Phase 1: this ESTABLISHES the chokepoint. It is not yet wired into every gate
+  // (the existing inline .includes() gates are migrated in the render-gate phase).
+  const isOwnerActive = activeResolved?.isOwner ?? false;
+  const activePermissions = activeResolved?.permissions ?? null;
+  const can = React.useCallback(
+    (permissionId: string): boolean => {
+      if (isOwnerActive) return true; // owner: full access (userPermissions === null)
+      const effective = applyFinancialDependencies(activePermissions ?? []);
+      return sharedCan({ permissions: effective }, permissionId);
+    },
+    [isOwnerActive, activePermissions],
+  );
+
+  // [TRACE:PERM] resolved permission snapshot for the active business — ON by
+  // default (STD-003). Emits once per active-business resolution, not per can() call.
+  useEffect(() => {
+    if (!activeResolved) return;
+    console.log('[TRACE:PERM] active business permissions', {
+      businessId: activeResolved.business.id,
+      isOwner: isOwnerActive,
+      // owner ⇒ all access implied; member ⇒ dependency-resolved explicit list
+      effectivePermissions: isOwnerActive
+        ? 'OWNER_ALL'
+        : applyFinancialDependencies(activePermissions ?? []),
+    });
+  }, [activeResolved, isOwnerActive, activePermissions]);
+
   // Picker is needed when: not loading, no error, 2+ businesses, no valid selection
   const needsPicker =
     !loading &&
@@ -344,7 +384,8 @@ export function BusinessProvider({
       loading,
       reload: () => setTick(t => t + 1),
       userPermissions: activeResolved?.permissions ?? null,
-      isOwner: activeResolved?.isOwner ?? false,
+      isOwner: isOwnerActive,
+      can,
     }}>
       {needsPicker
         ? <BusinessPicker businesses={allBusinesses} onSelect={setActiveBusinessId} addBusinessHref={addBusinessHref} />
@@ -355,4 +396,10 @@ export function BusinessProvider({
 
 export function useBusinessContext(): BusinessContextValue {
   return useContext(BusinessContext);
+}
+
+// Convenience hook for the permission chokepoint. Prefer this over inline
+// userPermissions.includes() at gate sites so all checks route through one path.
+export function useCan(): (permissionId: string) => boolean {
+  return useContext(BusinessContext).can;
 }

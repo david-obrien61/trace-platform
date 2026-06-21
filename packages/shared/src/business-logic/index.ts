@@ -103,3 +103,13 @@ export { CATEGORY_OPTS, UNCATEGORIZED, categoryLabel } from './costCategories';
 // Extracted from api/orders/submit.ts so a customer can be created without an order (Wave 2).
 export { findOrCreateCustomer } from './customerUpsert';
 export type { CustomerInput, CustomerUpsertResult } from './customerUpsert';
+
+// Financial-wall data access (Phase 2, decision 2026-06-21) — the ONE seam that reads/writes
+// the walled surfaces (labor WAGES child + PRICING CONFIG child), migration-window-resilient.
+export {
+  readLaborResources,
+  writeLaborResource,
+  readPricingConfig,
+  writePricingConfig,
+} from './financialDataAccess';
+export type { LaborResourceRow } from './financialDataAccess';

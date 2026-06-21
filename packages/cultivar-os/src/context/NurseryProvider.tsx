@@ -1,1 +1,1 @@
-export { BusinessProvider as NurseryProvider, useBusinessContext as useNursery } from '@trace/shared/context';
+export { BusinessProvider as NurseryProvider, useBusinessContext as useNursery, useCan } from '@trace/shared/context';

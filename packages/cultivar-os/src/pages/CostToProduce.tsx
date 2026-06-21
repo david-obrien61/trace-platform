@@ -40,7 +40,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calculator, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
-import { analyze, EMPTY_COST_CONFIG, fromCostObject } from '@trace/shared/business-logic';
+import { analyze, EMPTY_COST_CONFIG, fromCostObject, readPricingConfig } from '@trace/shared/business-logic';
 import type { CostToProduceConfig, CostToProduceResult, CostObjectNodeRow, CostEvent } from '@trace/shared/business-logic';
 import { ProjectCostTree } from '../components/ProjectCostTree';
 
@@ -76,7 +76,8 @@ export function CostToProduce() {
     (async () => {
       setLoading(true);
       const [modRes, invRes] = await Promise.all([
-        supabase.from('business_modules').select('config').eq('business_id', businessId).eq('module_key', 'cost_to_produce').maybeSingle(),
+        // pricing config via the gated table (Phase 2 wall) with legacy fallback
+        readPricingConfig(supabase, businessId),
         supabase.from('business_inventory').select('name, unit_cost, cost_confidence').eq('business_id', businessId),
       ]);
       if (cancelled) return;
