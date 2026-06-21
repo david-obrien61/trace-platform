@@ -25,8 +25,21 @@
 ## AI Engine
 
 **What:** Unified multi-provider AI router. Single interface for all AI tasks across all verticals.  
-**Status:** ✅ Built — TypeScript  
+**Status:** 🪦 BACKEND-DEAD / MODULE-STRANDED — **REMOVAL BLOCKED** (deprecated in place, do NOT delete) · ⚠️ lifecycle below  
 **Vertical:** shared | **Type:** capability  
+
+> **Lifecycle (2026-06-21) — DEPRECATED IN PLACE, removal blocked:**
+> - **Backend dead, logic has no replacement.** Railway backend is killed; AIEngine's client-side task routing + tier-gating (TRIAL/STARTER/PROFESSIONAL/PREMIER) logic has **NO replacement**. The new shared AI gateway (`capabilities.ts` / `execute.ts`) covers **Cultivar server-side tasks only** — the 9 Ignition tasks and the tier-gating logic are **unique to AIEngine** and live nowhere else.
+> - **3 live callers in the active build target `ignition-os`** — deleting now breaks `build:ignition`:
+>   - `packages/ignition-os/modules/IgnitionAudit.jsx:16` (import) / `:459` (`AIEngine.auditInvoice`)
+>   - `packages/ignition-os/modules/IgnitionCipher.jsx:10` (import) / `:74` (`AIEngine.decodeDTC`)
+>   - `packages/ignition-os/modules/PredictiveKey.jsx:16` (import) / `:406` (`AIEngine.suggestPMI`)
+>   - barrel re-export `packages/shared/src/index.ts:15-16`
+> - **DARK in prod but live code.** No endpoint (`VITE_API_URL` unset) → every `AIEngine.call()` returns `{ ok: false }`. Features are dark, but the code is wired and compiled into `build:ignition`.
+> - **Stale `gemini-2.0-flash` ×4** (`AIEngine.ts:35-38`) are **harmless while the backend is dead** — they are never called. They are eliminated on eventual removal, **not before** (see config-ground-truth.md store #4).
+> - **REMOVAL UNBLOCKED BY:** porting the 9 Ignition tasks + tier-gating to Vercel serverless functions, then repointing the 3 modules. Until then this entry stays BACKEND-DEAD / MODULE-STRANDED, NOT resolved.
+> - **Links:** `MASTER_BRIEF.md:444` (Ignition-AI→Vercel port) · Tech Debt #25 + #12 (`docs/tech-debt-log.md`).
+
 **Location:** `packages/shared/src/ai/AIEngine.ts`  
 **Original source:** `CAI/AIEngine.js` (archive — do not edit)  
 **Backend:** `CAI/ai_router.py` (FastAPI, Railway) — **LEGACY for web builds.** AIEngine.call() fails gracefully (`{ ok: false }`) when no backend is reachable. Port to Vercel serverless functions when activating AI features. See Tech Debt #12 in CLAUDE.md.  
