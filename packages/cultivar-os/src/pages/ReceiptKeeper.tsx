@@ -458,20 +458,18 @@ export function ReceiptKeeper() {
 
     setSavedReceiptId(data?.id ?? receiptId);
 
-    // ── Router destination: Add customer (the only functional destination this build) ──
-    // Runs AFTER the receipt + image are safely stored, so a customer-create failure never
-    // loses the captured document. Validate-before-write: uses the owner-confirmed invoice
-    // fields, splits the name, prefers bill-to (falls back to ship-to) for the address.
-    // A delivery is always linked to a customer, so scheduling a delivery implies adding
-    // one. We resolve the customer ONCE here and reuse that id for the delivery — never a
-    // second customer (the no-double-create contract: one customer, one delivery, linked).
+    // ── Router destinations: Add customer (+ optionally Schedule delivery) ──
+    // ONE call to /api/customers/create resolves the customer and, when Schedule delivery is
+    // checked, creates the single linked delivery in the SAME request. One round-trip → one
+    // customer → at most one delivery: no-double-create is now structural, not just careful
+    // ordering. Runs AFTER the receipt + image are safely stored, so a failure here never
+    // loses the captured document. A delivery needs a customer, so scheduling implies adding.
     const needCustomer = addCustomer || scheduleDelivery;
-    let resolvedCustomerId: string | null = null;
     if (needCustomer && invoice.customerName.trim() && businessId) {
       const nameParts = invoice.customerName.trim().split(/\s+/);
       const first_name = nameParts[0];
       const last_name  = nameParts.slice(1).join(' '); // '' when single-word name (customers.last_name is NOT NULL)
-      const custBody = {
+      const custBody: any = {
         businessId,
         source: 'ocr-invoice',
         customer: {
@@ -485,7 +483,24 @@ export function ReceiptKeeper() {
           zip:           invoice.billZip.trim()   || invoice.shipZip.trim()   || null,
         },
       };
-      if (TRACE_ROUTER) console.log('[TRACE:ROUTER] creating customer from invoice —', first_name, last_name ?? '', 'email:', custBody.customer.email ?? '(none)');
+      // Attach the delivery block only when scheduling — prefers ship-to (the destination),
+      // falls back to bill-to. The endpoint links it to the SAME resolved customer.
+      if (scheduleDelivery) {
+        custBody.delivery = {
+          deliveryDate: invoice.deliveryDate || null, // ISO YYYY-MM-DD (parses correctly)
+          address: {
+            line1: invoice.shipLine1.trim() || invoice.billLine1.trim() || null,
+            city:  invoice.shipCity.trim()  || invoice.billCity.trim()  || null,
+            state: invoice.shipState.trim() || invoice.billState.trim() || null,
+            zip:   invoice.shipZip.trim()   || invoice.billZip.trim()   || null,
+          },
+          serviceType, // 'planting' | 'delivery_only' — inferred from lines, owner-correctable
+          notes: `Delivery for ${invoice.customerName.trim()}`,
+        };
+      }
+      if (TRACE_ROUTER) console.log('[TRACE:ROUTER] creating customer from invoice —', first_name, last_name ?? '', 'email:', custBody.customer.email ?? '(none)', 'withDelivery:', scheduleDelivery);
+      if (scheduleDelivery && TRACE_DELIVERY) console.log('[TRACE:DELIVERY] scheduling in same call — date:', custBody.delivery.deliveryDate ?? '(none)', 'serviceType:', serviceType,
+        'addr:', [custBody.delivery.address.line1, custBody.delivery.address.city, custBody.delivery.address.state, custBody.delivery.address.zip].filter(Boolean).join(', ') || '(none)');
       try {
         const cRes  = await fetch('/api/customers/create', {
           method: 'POST',
@@ -494,9 +509,17 @@ export function ReceiptKeeper() {
         });
         const cData = await cRes.json().catch(() => ({}));
         if (cRes.ok && cData.ok) {
-          resolvedCustomerId = cData.customerId;
           setCustomerResult({ id: cData.customerId, created: cData.created });
           if (TRACE_ROUTER) console.log('[TRACE:ROUTER] customer', cData.created ? 'created' : 'matched', '— id:', cData.customerId);
+          if (scheduleDelivery) {
+            if (cData.deliveryId) {
+              setDeliveryResult({ id: cData.deliveryId });
+              if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] scheduled — id:', cData.deliveryId, 'linked customer:', cData.customerId);
+            } else {
+              setDeliveryWarn(cData.deliveryError || 'Delivery could not be scheduled — the document and customer were still saved.');
+              console.error('[TRACE:DELIVERY] schedule failed:', cData.deliveryError);
+            }
+          }
         } else {
           setCustomerWarn(cData.error || 'Customer could not be added — the document was still saved.');
           console.error('[TRACE:ROUTER] customer create failed:', cData.error);
@@ -505,51 +528,9 @@ export function ReceiptKeeper() {
         setCustomerWarn('Customer could not be added (network) — the document was still saved.');
         console.error('[TRACE:ROUTER] customer create network error:', e.message);
       }
-    }
-
-    // ── Router destination: Schedule delivery (loop close) ──
-    // Reuses the customer just resolved above (resolvedCustomerId) — NEVER a second
-    // customer. Prefers the ship-to address (the destination), falling back to bill-to.
-    // Runs after the receipt + customer are stored so a delivery failure loses nothing.
-    if (scheduleDelivery && resolvedCustomerId && businessId) {
-      const deliveryBody = {
-        businessId,
-        customerId: resolvedCustomerId,
-        deliveryDate: invoice.deliveryDate || null, // ISO YYYY-MM-DD (now parsing correctly)
-        address: {
-          line1: invoice.shipLine1.trim() || invoice.billLine1.trim() || null,
-          city:  invoice.shipCity.trim()  || invoice.billCity.trim()  || null,
-          state: invoice.shipState.trim() || invoice.billState.trim() || null,
-          zip:   invoice.shipZip.trim()   || invoice.billZip.trim()   || null,
-        },
-        serviceType, // 'planting' | 'delivery_only' — inferred from lines, owner-correctable
-        source: 'ocr-invoice',
-        notes: invoice.customerName.trim() ? `Delivery for ${invoice.customerName.trim()}` : null,
-      };
-      if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] scheduling from invoice — customerId:', resolvedCustomerId,
-        'date:', deliveryBody.deliveryDate ?? '(none)', 'serviceType:', serviceType,
-        'addr:', [deliveryBody.address.line1, deliveryBody.address.city, deliveryBody.address.state, deliveryBody.address.zip].filter(Boolean).join(', ') || '(none)');
-      try {
-        const dRes  = await fetch('/api/deliveries/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(deliveryBody),
-        });
-        const dData = await dRes.json().catch(() => ({}));
-        if (dRes.ok && dData.ok) {
-          setDeliveryResult({ id: dData.deliveryId });
-          if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] scheduled — id:', dData.deliveryId, 'linked customer:', resolvedCustomerId);
-        } else {
-          setDeliveryWarn(dData.error || 'Delivery could not be scheduled — the document and customer were still saved.');
-          console.error('[TRACE:DELIVERY] schedule failed:', dData.error);
-        }
-      } catch (e: any) {
-        setDeliveryWarn('Delivery could not be scheduled (network) — the document and customer were still saved.');
-        console.error('[TRACE:DELIVERY] schedule network error:', e.message);
-      }
-    } else if (scheduleDelivery && !resolvedCustomerId) {
+    } else if (scheduleDelivery && !invoice.customerName.trim()) {
       setDeliveryWarn('Delivery needs a customer — add a customer name to schedule it.');
-      if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] skipped — no resolved customer to link');
+      if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] skipped — no customer name to link');
     }
 
     setStep('done');
