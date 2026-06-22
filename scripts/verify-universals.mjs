@@ -13,12 +13,15 @@
  *   migrations: the effective policy = the last CREATE POLICY for a name). The live-catalog
  *   proof is the SEPARATE schema-verification gate (CLAUDE.md §9).
  *
- * THE FIVE UNIVERSALS (asserted below):
+ * THE UNIVERSALS (asserted below):
  *   1. Persistent identity indicator mounted in the per-page layout/header (not dashboard-only)
  *   2. Financial/cost tables gated by has_permission on every read path (RLS policy shape)
  *   3. Dual RLS (owner + is_active_member) on every tenant table
  *   4. Membership filters use the canonical is_active_member (no hand-spelled active checks)
  *   5. confidence enum honored (no silent $0)
+ *   6. Cost-wall regression guard — READ side (Gate 3 / Staff HAR encoded structurally)
+ *   7. WRITE-WALL — write side (Gate-3b): cost-apply service-key write is caller-permission-gated
+ *      AND cost member policies carry has_permission in WITH CHECK. (Was acceptance (h); flipped live.)
  *
  * SCOPE PER VERTICAL (honest, not a rug): capabilities 2-5 are MULTI-TENANT-RLS capabilities.
  *   Cultivar OS is multi-tenant Supabase RLS → all five are IN SCOPE. Ignition OS is a
@@ -375,6 +378,54 @@ function cap6(key, v) {
   return FAIL(`cost-wall regression — Gate 3 leak path re-opened: ${problems.join(' | ')}`);
 }
 
+// ════════════════════════════════════════════════════════════════════════════════
+// CAPABILITY 7 — WRITE-WALL: cost WRITES are permission-gated (the write-side twin of cap #6)
+//   Was acceptance assertion (h); flipped LIVE 2026-06-22 (Gate-3b). Two structural guarantees,
+//   both decidable from source (no live DB):
+//   (a) the only service-key cost write — cost-apply in api/discovery/ingest.ts — gates the CALLER
+//       on view_costs (resolved from the auth context) BEFORE the applyCostReasoning write, and
+//       emits [TRACE:WRITEWALL] on refusal. No ungated service-key bypass.
+//   (b) the HAR-triplet member policies carry has_permission in WITH CHECK (not only USING), so
+//       INSERT/UPDATE by a member lacking the permission is RLS-refused — the write-side of the wall.
+//   Behavioral proof of (a): scripts/verify-write-wall.ts (deterministic, injected RPC seam).
+// ════════════════════════════════════════════════════════════════════════════════
+function cap7(key, v) {
+  if (!isMultiTenant(v)) return SKIP(v.scopeNote);
+  const problems = [];
+  // (a) endpoint gate — the caller-permission check precedes the service-key write
+  const ep = read('packages/cultivar-os/api/discovery/ingest.ts');
+  const gateIdx = ep.indexOf('callerHoldsPermission(req');
+  const writeIdx = ep.indexOf('applyCostReasoning(costLine');
+  if (gateIdx < 0) problems.push('cost-apply: no callerHoldsPermission gate on the request');
+  else if (writeIdx < 0) problems.push('cost-apply: applyCostReasoning write not found (endpoint shape changed?)');
+  else if (gateIdx > writeIdx) problems.push('cost-apply: permission gate runs AFTER the write (bypass)');
+  if (!/\[TRACE:WRITEWALL\]/.test(ep)) problems.push('cost-apply: no [TRACE:WRITEWALL] refusal emit');
+  if (!/VIEW_COSTS/.test(ep)) problems.push('cost-apply: gate does not reference VIEW_COSTS');
+  // (b) RLS WITH CHECK write gate on the HAR triplet (write-side of cap #6)
+  const sql = concatSql(v.migrationsDir);
+  for (const [table, perm] of HAR_COST_TABLES) {
+    let writeGated = false;
+    for (const name of policyNamesOnTable(sql, table)) {
+      const body = effectivePolicy(sql, name);
+      if (!body || /AS\s+RESTRICTIVE/i.test(body)) continue;
+      const wc = body.search(/WITH CHECK/i);
+      if (wc < 0) continue;
+      const after = body.slice(wc);
+      if (new RegExp(`has_permission\\([^)]*'${perm}'`).test(after) ||
+          new RegExp(`permissions\\s*\\?\\s*'${perm}'`).test(after)) writeGated = true;
+    }
+    if (!writeGated) problems.push(`${table}: no member policy with has_permission('${perm}') in WITH CHECK → INSERT/UPDATE ungated`);
+  }
+  if (problems.length === 0) {
+    return PASS(
+      `cost WRITES are gated: cost-apply service-key write requires view_costs (caller-context, pre-write, ` +
+      `[TRACE:WRITEWALL] on refusal); HAR-triplet member policies carry has_permission in WITH CHECK → RLS ` +
+      `refuses INSERT/UPDATE for a member without the permission. Write-side twin of cap #6 (behavioral proof: scripts/verify-write-wall.ts).`,
+    );
+  }
+  return FAIL(`write-wall gap (Gate-3b regression): ${problems.join(' | ')}`);
+}
+
 // ── capability registry ──────────────────────────────────────────────────────────
 const CAPS = [
   ['1', 'Persistent identity indicator in per-page layout/header', cap1],
@@ -382,7 +433,8 @@ const CAPS = [
   ['3', 'Dual RLS (owner + is_active_member) on every tenant table', cap3],
   ['4', 'Membership filters use canonical is_active_member', cap4],
   ['5', 'confidence enum honored (no silent $0)', cap5],
-  ['6', 'Cost-wall regression guard (Gate 3 / Staff HAR encoded)', cap6],
+  ['6', 'Cost-wall regression guard (Gate 3 / Staff HAR encoded — READ side)', cap6],
+  ['7', 'WRITE-WALL: cost writes permission-gated (endpoint + RLS WITH CHECK)', cap7],
 ];
 
 // ── ACCEPTANCE — Role Machine definition-of-done (NOT yet built) ────────────────────
@@ -403,8 +455,9 @@ const ACCEPTANCE = [
   ['e', "A newly registered tile's required_permission is selectable in the role-builder without a separate edit (D-010/D-012)", ACCEPTANCE_REASON],
   ['f', 'A tenant custom role + per-tenant override are NOT visible cross-tenant; a tenant edit never mutates the shared system-role definition (D-010, AC-3)', ACCEPTANCE_REASON],
   ['g', 'Reset of a tuned system role removes the override → permission set byte-identical to shared floor; floor unchanged; reset writes an audit row (D-010)', ACCEPTANCE_REASON],
-  ['h', 'WRITE-WALL: a role without the cost permission cannot INSERT/UPDATE cost_objects, business_inventory.unit_cost, business_pricing_config, OR operating-cost — at the data layer. Write-side twin of cap #6 (read wall) (D-015, tech-debt #46)',
-        ACCEPTANCE_REASON + ' (h) is EXPECTED-FAIL once asserted live (open: operating-cost +cost save; costDiscovery cost-apply bypass) until Gate-3b.'],
+  // (h) WRITE-WALL — PROMOTED to live cap #7 (Gate-3b, 2026-06-22). No longer a SKIP: the data-layer
+  //     write wall holds (RLS WITH CHECK has_permission) and the one service-key bypass (cost-apply)
+  //     is now caller-permission-gated. See cap #7 + scripts/verify-write-wall.ts.
 ];
 
 // ── run the audit ─────────────────────────────────────────────────────────────────

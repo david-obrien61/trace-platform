@@ -323,6 +323,22 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-22 — THUNDER Gate-3b: close the one real write hole + write-tamper proof (3 scoped commits)
+
+**Type:** Ledger honesty + ONE app-code gate + a test. NO migrations (the data-layer write wall already holds via existing policies — recon-confirmed `20260622_…cost_wall.sql:141-212`, FOR ALL + has_permission in USING+WITH CHECK). Three commits.
+
+**The corrected picture (recon, then closed):** the WRITE-wall was NOT wide open — the anon-key cost/wage write paths (operating-cost +cost, BusinessAssets, CostToProduceSettings, BusinessInventory) are already RLS-refused for a member lacking the permission (FOR ALL policy WITH CHECK has_permission). The operating-cost "+cost" button is render-layer LEAKAGE, not a data breach. The ONE genuine hole was the **costDiscovery `cost-apply` service-key endpoint** (bypassed RLS, no caller check).
+
+**Commit A — `a3ea095` — ledger honesty + recon doc.** built-inventory: stripe seed "reuses" → **BUILDS** `shared/stripe/{billing,trial}.ts` (they don't exist — recon-confirmed); Gate-3b + cost-wall Status corrected (data-layer write wall HOLDS; one service-key hole). tech-debt #46 retuned (#46.1 gate cost-apply [done]; #46.2 render-layer button hide [defense-in-depth, NOT security-critical — RLS refuses the write]). Landed `data/grower-scan/role-machine-and-signing-recon.md` (other data/grower-scan files left untracked for David).
+
+**Commit B — `6259f43` — gate the cost-apply endpoint.** `api/discovery/ingest.ts`: new `callerHoldsPermission()` resolves the caller from the **auth-context Bearer token (NEVER the request body)** → checks `has_permission(business_id,'view_costs')` via the caller's anon client (RPC runs as `auth.uid()`; a forged businessId returns false). cost-apply refuses with 403 + `[TRACE:WRITEWALL]` and writes nothing when the caller lacks view_costs; the service key is used ONLY for the write AFTER the gate passes. esbuild-clean. Scope: only the cost-apply path. The service-key bypass is closed — write-wall now data-layer-enforced AND the one bypass gated (MB_D-015 write-authority ≥ read-authority).
+
+**Commit C — this commit — write-tamper proof + assertion (h) live.** `scripts/verify-write-wall.ts` (run via `npm run verify:write-wall`) — deterministic 7/7: no-token refused (RPC never consulted), no-view_costs caller REFUSED (write blocked), view_costs caller allowed, token sourced from auth context. verify-universals assertion **(h) PROMOTED to live cap #7** (write-side twin of cap #6: endpoint gate + RLS WITH CHECK has_permission) — **PASS**. Matrix: green-except-cap#1 (persistent identity header, next build); cap #7 PASS.
+
+**Two completion bars:** BUILDER-COMPLETE (gate wired, esbuild-clean, 7/7 deterministic proof, cap #7 live). OWNER-PROVEN owed = the live role-driven HTTP HAR with two real JWTs (a no-view_costs session gets 403 on cost-apply; an owner succeeds) — the behavioral live proof. Render-layer button gates remain as tech-debt #46.2 (defense-in-depth; RLS is the boundary).
+
+**Next:** stand up the bench — ShopBanner→shared `<AppHeader>` (closes cap #1), then the single tile registry (D-012).
+
 ### 2026-06-22 — THUNDER (Prompt 1 of 3): MAP + bank costDiscovery + baseline Gate-3 close-out (TWO scoped commits, honesty-corrected)
 
 **Type:** Git baselining — MAP-first (read-only), then two scoped commits. NO migrations (all live), NO new app code. Working tree had multiple uncommitted workstreams with no clean baseline; this establishes honest baselines before Prompt 2 (Role Machine doctrine).

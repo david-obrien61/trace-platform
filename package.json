@@ -11,6 +11,7 @@
     "build:cultivar": "npm run build --workspace=packages/cultivar-os",
     "build:ignition": "npm run build --workspace=packages/ignition-os",
     "build:trace":    "npm run build --workspace=packages/trace-app",
-    "verify:universals": "node scripts/verify-universals.mjs"
+    "verify:universals": "node scripts/verify-universals.mjs",
+    "verify:write-wall": "node_modules/.bin/esbuild scripts/verify-write-wall.ts --bundle --platform=node --format=cjs --external:@supabase/supabase-js --external:@anthropic-ai/sdk | node"
   }
 }
