@@ -453,6 +453,68 @@ AI endpoint. Every storage write that originates from user-supplied content.
 
 ---
 
+### STD-011 — ONE CANONICAL REPRESENTATION PER FACT (no ambiguity in state/access/value)
+
+**Rule:** A fact with a single true meaning MUST have exactly ONE canonical
+representation across the entire platform — one column, one enum, one predicate, one
+helper function — referenced everywhere, never re-derived, re-spelled, or duplicated.
+When the fact changes, it changes in ONE place and the whole platform inherits it
+correctly, because nothing else CONTAINS the fact to drift out of sync.
+
+**Why this is a security/correctness standard, not style:** Two representations of one
+fact can disagree, and when they disagree nothing errors — it silently does the wrong
+thing. In access, tenant-boundary, and value facts, that silence IS the leak. Examples
+of the disease, all the same root (duplicated representation of a single fact):
+- "active member" spelled `active = true` (EXISTS) AND `IN (...)` AND one policy
+  omitting the active filter entirely (the `md_self` leak — a revoked member kept
+  access).
+- tax rate as both a `VITE_TAX_RATE` env var (unread) and a hardcoded `TAX_RATE`
+  constant (the one actually used) — the documented knob is decorative; the real value
+  is buried.
+- model ids split across `platform_config`, inline `CAPABILITIES` literals, and a
+  hardcoded endpoint — no single source, drift-prone (the opus-4-1 vs 4-8 near-miss).
+- `unit_cost` meaning both private cost AND public sell price on the same column.
+
+**Encoding (how to make a fact canonical):**
+- Boolean/state fact → ONE column, checked via ONE shared helper (e.g. SECURITY DEFINER
+  `is_active_member(business_id)` — referenced by every member-scoped RLS policy, never
+  re-written inline). Helpers also resolve RLS recursion safely.
+- Enum/status fact → ONE definition of the allowed value set (DB CHECK or enum), one
+  source the app and UI reference — never re-spell the values in app constants or UI
+  literals.
+- Config/driftable value (model ids, rates, thresholds) → ONE findable, swappable home
+  per the config doctrine; never inline-and-forgotten, never duplicated.
+
+**Enforcement:**
+- New sensitive columns/policies that re-derive a fact instead of referencing its
+  canonical form are INCOMPLETE — same force as the two-bar and verify-before-build
+  gates.
+- A consistency sweep (auditing every representation of a fact) is a recognized
+  hardening tool: it finds CORRECTNESS bugs, not just style. The membership-active
+  sweep found a live leak (`md_self`) and a functional cliff (Staff blocked from
+  owner-only operational tables) that single-instance fixing would have missed.
+
+**Cross-references:**
+- AC-4 (settle once, encode as variable) — this is AC-4 promoted to a data-integrity
+  invariant with a security consequence.
+- AC-2/AC-3 (membership-scoped RLS, tenant isolation absolute).
+- Config doctrine (one home per driftable value) — same disease, value-fact flavor.
+
+**Recorded open items spawned by the first application of this standard:**
+- Owner-only operational tables (`orders`, `customers`, plants, `order_items`,
+  pre-2026-06 operational tables) have NO member policy → STAFF resolves but is
+  RLS-blocked from `orders`/`customers` despite `view_orders`/`qr_checkout`. NEXT
+  hardening item: decide and apply Staff-appropriate member RLS — a PRODUCT decision
+  (what does Staff see, scoped how, PII?), not a mechanical refactor. Link to this
+  standard + the member-rls audit (`data/grower-scan/member-rls-consistency-audit.md`).
+
+**Scope:** Every fact with a single true meaning that is read in more than one place —
+access/state booleans (membership, active, role), tenant-boundary predicates, enum/
+status value sets, and driftable config values (model ids, rates, thresholds). Every
+new sensitive column, RLS policy, or shared predicate.
+
+---
+
 ## ENFORCEMENT
 
 | Standard | Applies to | Gate type |
@@ -467,6 +529,7 @@ AI endpoint. Every storage write that originates from user-supplied content.
 | STD-008 | Every migration session | Verification query in SQL editor; confirmation in Handoff |
 | STD-009 | Every AI generation path + every config field for channel/cadence/count | Config-read required; no hardcoded channel names or counts in generator |
 | STD-010 | Every file-accepting code path, every OCR/vision ingest, every storage write from user-supplied content | Content-type validation + size limit + per-tenant storage path + no raw-file trust |
+| STD-011 | Every fact read in more than one place (access/state booleans, tenant predicates, enum/status sets, driftable config values); every new sensitive column/policy/shared predicate | One canonical representation referenced everywhere; new column/policy re-deriving a fact instead of referencing its canonical form = INCOMPLETE |
 | BENCH-A, BENCH-C, BENCH-D | Every session (STEP 0 roster match against ACTIVATE WHEN triggers) | Catastrophic-class match → stop and ask David; hygiene-class match → apply and report |
 | BENCH-E | Any session that adds an external AI provider call that is user-facing | Apply try-chain pattern; provider 3 slot in comments; operator log on fallback; clean user error on all-fail |
 
@@ -680,6 +743,7 @@ a standard's application."
 | 1.6 | 2026-06-10 | BENCH-B promoted to STD-010 (FILE UPLOAD / INGEST SAFETY). David's explicit go confirmed 2026-06-10 — triggered by Receipt Keeper v1 Gemini Flash vision ingest path. STD-010 rule: real content-type validation, explicit size limits, per-tenant storage path, never-trust-content, OCR result is the artifact (not the raw file). BENCH-B entry replaced with promotion tombstone. ENFORCEMENT table: STD-010 row added; bench row updated to BENCH-A, BENCH-C, BENCH-D. |
 | 1.7 | 2026-06-11 | BENCH-E added — EXTERNAL AI PROVIDER RESILIENCE (provider chain / graceful degradation). TRACE scar: `gemini-1.5-flash` deprecated mid-session → Google 404 → our own `res.status(502)` on every receipt OCR request until the model was updated. No fallback existed → feature was 100% dark on model deprecation. Fixed 2026-06-11: `ocr.ts` now uses `gemini-2.0-flash` (primary) + Claude Haiku 4.5 vision (fallback) + clean 503 all-fail. Rule: try-chain with isolated catches, one-failure-never-kills-chain, all-fail clean user error, operator-greppable fallback log, provider 3+ slot in comments. Hygiene-class: apply and report, no stop-and-ask. |
 | 1.8 | 2026-06-11 | BENCH-E Rule 7 added — MODEL NAMES ARE VALUES, NOT SOURCE CONSTANTS. Second scar added: `gemini-2.0-flash` deprecated 3 days after the first fix, again requiring a source-code edit + deploy cycle. Fix: model names externalized to `platform_config` table (Layer 1) → `OCR_PRIMARY_MODEL` env var (Layer 2) → hardcoded default (Layer 3, last resort). Model is now `gemini-2.5-flash` (validated in bake-off). A future deprecation = one DB row edit, no code change. |
+| 1.9 | 2026-06-22 | STD-011 added — ONE CANONICAL REPRESENTATION PER FACT. Origin: the membership-active RLS consistency sweep (`data/grower-scan/member-rls-consistency-audit.md`) found "active member" spelled 3 ways across policies, with one (`md_self`) omitting the active filter entirely → a revoked member kept self-device access (live leak). Same disease as the `VITE_TAX_RATE` decorative env var, split model ids, and `unit_cost` dual-meaning. Rule: a single-meaning fact has exactly ONE canonical representation (one column/enum/predicate/helper) referenced everywhere, never re-derived. Promotes AC-4 to a data-integrity invariant with a security consequence; a consistency sweep is a recognized correctness-hardening tool. Open item recorded: owner-only operational tables have no member policy → Staff RLS-blocked despite perms (a product decision, next hardening item). |
 
 ---
 

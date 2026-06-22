@@ -1,0 +1,422 @@
+#!/usr/bin/env node
+/**
+ * verify-universals.mjs — CROSS-VERTICAL UNIVERSAL-CAPABILITY AUDIT + BUILD GATE
+ *
+ * PURPOSE: assert, MECHANICALLY and per vertical, that the five universal platform
+ *   capabilities below are actually present in the repo. The capability list lives here
+ *   AS ASSERTIONS (not as a prose doc) — the first run IS the cross-vertical audit. Wire
+ *   into the build gate: `node scripts/verify-universals.mjs` exits NON-ZERO on any FAIL,
+ *   naming the vertical + capability + the file/policy it checked.
+ *
+ *   This is a STRUCTURAL gate over the repo (migration SQL + source) — it needs NO live DB,
+ *   NO service key, NO network. It verifies what version control DEFINES (append-only
+ *   migrations: the effective policy = the last CREATE POLICY for a name). The live-catalog
+ *   proof is the SEPARATE schema-verification gate (CLAUDE.md §9).
+ *
+ * THE FIVE UNIVERSALS (asserted below):
+ *   1. Persistent identity indicator mounted in the per-page layout/header (not dashboard-only)
+ *   2. Financial/cost tables gated by has_permission on every read path (RLS policy shape)
+ *   3. Dual RLS (owner + is_active_member) on every tenant table
+ *   4. Membership filters use the canonical is_active_member (no hand-spelled active checks)
+ *   5. confidence enum honored (no silent $0)
+ *
+ * SCOPE PER VERTICAL (honest, not a rug): capabilities 2-5 are MULTI-TENANT-RLS capabilities.
+ *   Cultivar OS is multi-tenant Supabase RLS → all five are IN SCOPE. Ignition OS is a
+ *   single-device, local-first PIN vertical — its permissive RLS is an intentional, DOCUMENTED
+ *   exception (CLAUDE.md "Auth Architecture — Locked Rule": "not a pattern to reuse in
+ *   multi-tenant contexts"). For Ignition, 2-5 are reported SKIP-with-reason (visible in the
+ *   matrix, NOT silently passed, NOT a hard FAIL). Capability 1 is in scope for both.
+ *
+ * EXIT: non-zero iff any IN-SCOPE assertion FAILs. KNOWN-GAP sub-findings (documented,
+ *   tracked product decisions) are printed but do not by themselves fail the gate.
+ *
+ * Usage:  node scripts/verify-universals.mjs
+ */
+
+import { readFileSync, readdirSync, existsSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+// ── tiny repo readers (no deps) ────────────────────────────────────────────────
+const read = (rel) => {
+  try { return readFileSync(join(ROOT, rel), 'utf8'); } catch { return ''; }
+};
+/** Concatenate every .sql in a migrations dir, in filename (= chronological) order. */
+const concatSql = (relDir) => {
+  const abs = join(ROOT, relDir);
+  if (!existsSync(abs)) return '';
+  return readdirSync(abs)
+    .filter((f) => f.endsWith('.sql'))
+    .sort()
+    .map((f) => `\n-- FILE: ${f}\n` + readFileSync(join(abs, f), 'utf8'))
+    .join('\n');
+};
+/** 1-based line of the first regex hit, or null. */
+const lineOf = (text, re) => {
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) if (re.test(lines[i])) return i + 1;
+  return null;
+};
+/**
+ * Effective body of a policy across append-only migrations: the LAST `CREATE POLICY <name>`
+ * statement (to its terminating `;`), but only if it is not DROP'd again afterward without
+ * a later re-CREATE. Returns the statement text, or null if absent / dropped-last.
+ */
+const effectivePolicy = (sql, name) => {
+  const q = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const createRe = new RegExp(`CREATE POLICY\\s+"?${q}"?\\b`, 'g');
+  const dropRe = new RegExp(`DROP POLICY[^;]*\\b"?${q}"?\\b`, 'g');
+  let lastCreate = -1, m;
+  while ((m = createRe.exec(sql))) lastCreate = m.index;
+  if (lastCreate < 0) return null;
+  // any DROP after the last CREATE with no further CREATE => dropped-last
+  let lastDrop = -1;
+  while ((m = dropRe.exec(sql))) lastDrop = m.index;
+  if (lastDrop > lastCreate) return null;
+  const end = sql.indexOf(';', lastCreate);
+  return sql.slice(lastCreate, end < 0 ? undefined : end + 1);
+};
+/** True if any `CREATE POLICY ... ON <table> ...` statement carries `owner_id = auth.uid()`. */
+const tableHasOwnerPolicy = (sql, table) => {
+  const re = new RegExp(`CREATE POLICY[\\s\\S]*?ON\\s+(?:public\\.)?${table}\\b[\\s\\S]*?;`, 'g');
+  let m;
+  while ((m = re.exec(sql))) if (/owner_id\s*=\s*auth\.uid\(\)/.test(m[0])) return true;
+  return false;
+};
+/** Distinct policy NAMES ever declared on a table (any CREATE POLICY <name> ON <table>). */
+const policyNamesOnTable = (sql, table) => {
+  const re = new RegExp(`CREATE POLICY\\s+"?([A-Za-z0-9_]+)"?\\s+ON\\s+(?:public\\.)?${table}\\b`, 'g');
+  const names = new Set();
+  let m;
+  while ((m = re.exec(sql))) names.add(m[1]);
+  return [...names];
+};
+
+// ── verticals ───────────────────────────────────────────────────────────────────
+const VERTICALS = {
+  ignition: {
+    label: 'Ignition OS',
+    tenancy: 'local-first-pin',
+    migrationsDir: 'packages/ignition-os/supabase/migrations',
+    scopeNote:
+      'single-device PIN vertical — multi-tenant RLS capabilities are an intentional, ' +
+      'documented exception (CLAUDE.md "Auth Architecture — Locked Rule").',
+  },
+  cultivar: {
+    label: 'Cultivar OS',
+    tenancy: 'multi-tenant-rls',
+    migrationsDir: 'supabase/migrations',
+  },
+};
+const isMultiTenant = (v) => v.tenancy === 'multi-tenant-rls';
+
+// ── result helpers ───────────────────────────────────────────────────────────────
+const PASS = (detail, gaps = []) => ({ status: 'PASS', detail, gaps });
+const FAIL = (detail, gaps = []) => ({ status: 'FAIL', detail, gaps });
+const SKIP = (detail) => ({ status: 'SKIP', detail, gaps: [] });
+
+// ════════════════════════════════════════════════════════════════════════════════
+// CAPABILITY 1 — Persistent identity indicator mounted in the per-page layout/header
+//   Signal: a layout/shell component that renders the business/shop identity AND is
+//   mounted in the persistent route/app shell (wraps many pages — not a single dashboard).
+// ════════════════════════════════════════════════════════════════════════════════
+function cap1(key) {
+  if (key === 'ignition') {
+    // CoreApp.jsx is the persistent app shell: <header> + <ShopBanner name={shopName}/> + the
+    // bottom <nav> tab bar all render around EVERY operational tab (not a dashboard-only view).
+    const core = read('packages/ignition-os/CoreApp.jsx');
+    const defined = /const\s+ShopBanner\s*=|function\s+ShopBanner\b/.test(core);
+    const mounted = /<ShopBanner[\s/>]/.test(core);
+    const shellNav = /<nav\b/.test(core) && /<header\b/.test(core);
+    const identity = /shopName/.test(core);
+    if (defined && mounted && shellNav && identity) {
+      return PASS(
+        `ShopBanner defined (CoreApp.jsx:${lineOf(core, /const\s+ShopBanner\s*=/)}) and mounted ` +
+        `in the persistent app shell (CoreApp.jsx:${lineOf(core, /<ShopBanner[\s/>]/)}), ` +
+        `alongside the shell <header>/<nav> — visible across all tabs, not dashboard-only.`,
+      );
+    }
+    return FAIL(
+      `CoreApp.jsx: ShopBanner ${mounted ? 'mounted' : 'NOT mounted'} / ${defined ? 'defined' : 'NOT defined'} / ` +
+      `shell ${shellNav ? 'present' : 'MISSING'}.`,
+    );
+  }
+  // cultivar: a persistent identity header must be mounted as a wrapper around the private
+  // routes (router.tsx) OR rendered by PrivateRoute — and must render the business identity.
+  const router = read('packages/cultivar-os/src/router.tsx');
+  const priv = read('packages/cultivar-os/src/components/layout/PrivateRoute.tsx');
+  const sharedPriv = read('packages/shared/src/auth/configureAuth.tsx');
+  const navbar = read('packages/cultivar-os/src/components/layout/NavBar.tsx');
+
+  // (a) a layout/shell wraps the private routes in the router
+  const routerWraps = /element=\{<(?:App)?(?:Layout|Shell|Chrome|NavBar|Header)[\s/>]/.test(router);
+  // (b) the auth PrivateRoute renders an identity header rather than a bare <Outlet/>
+  const privIdentity =
+    (/useBusinessContext|business\??\.name|nursery\??\.name/.test(priv) ||
+      /useBusinessContext|business\??\.name|nursery\??\.name/.test(sharedPriv)) &&
+    /<header|Banner|NavBar/.test(priv + sharedPriv);
+  // (c) does a layout component even pull identity from context? (NavBar.tsx today does NOT —
+  //     it only renders a `title` prop and is unmounted)
+  const navbarIdentity = /useBusinessContext|business\??\.name|nursery\??\.name/.test(navbar);
+
+  if (routerWraps && (privIdentity || navbarIdentity)) {
+    return PASS('A persistent identity layout wraps the private routes and renders business identity.');
+  }
+  return FAIL(
+    `No persistent identity header is mounted across pages. PrivateRoute renders a bare <Outlet/> ` +
+    `(configureAuth.tsx:${lineOf(sharedPriv, /return user \? <Outlet/) || '?'}); BusinessProvider ` +
+    `(App.tsx) holds identity in CONTEXT only (no visible indicator); NavBar.tsx exists but is ` +
+    `unmounted and renders only a \`title\` prop (no context identity); each page renders its own ` +
+    `ad-hoc header. Fix: mount a shared identity header in the PrivateRoute layout.`,
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// CAPABILITY 2 — Financial/cost tables gated by has_permission on every read path
+//   Signal: each financial/cost table's effective member RLS policy gates on the permission
+//   (canonical has_permission(...,'perm') OR the equivalent inline `permissions ? 'perm'`).
+// ════════════════════════════════════════════════════════════════════════════════
+const FINANCIAL_POLICIES = [
+  ['cost_objects_member_all', 'view_costs'],
+  ['business_inventory_member_all', 'view_costs'],
+  ['cost_object_edges_member_all', 'view_costs'],
+  ['cost_object_assignments_member_all', 'view_costs'],
+  ['business_service_log_member_all', 'view_costs'],
+  ['receipts_member_all', 'view_costs'],
+  ['labor_resources_member_all', 'view_wages'],
+  ['lrw_member_view_wages', 'view_wages'], // labor_resource_wages
+  ['bpc_member_view_pricing', 'view_pricing_config'], // business_pricing_config
+];
+function cap2(key, v) {
+  if (!isMultiTenant(v)) return SKIP(v.scopeNote);
+  const sql = concatSql(v.migrationsDir);
+  const misses = [];
+  for (const [policy, perm] of FINANCIAL_POLICIES) {
+    const body = effectivePolicy(sql, policy);
+    const gated =
+      body &&
+      (new RegExp(`has_permission\\([^)]*'${perm}'`).test(body) ||
+        new RegExp(`permissions\\s*\\?\\s*'${perm}'`).test(body));
+    if (!gated) misses.push(`${policy} (needs ${perm})${body ? '' : ' — policy absent'}`);
+  }
+  if (misses.length === 0) {
+    return PASS(`all ${FINANCIAL_POLICIES.length} financial/cost member policies gate on their permission (has_permission / permissions ?).`);
+  }
+  return FAIL(`ungated financial read path(s): ${misses.join('; ')}`);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// CAPABILITY 3 — Dual RLS (owner + is_active_member) on every tenant table
+//   Signal: each member-scoped tenant table has BOTH an owner policy (owner_id = auth.uid())
+//   and a member policy referencing is_active_member. Owner-only operational tables (no member
+//   policy yet — documented product decision, fail-closed) are reported as KNOWN-GAP.
+// ════════════════════════════════════════════════════════════════════════════════
+const DUAL_TABLES = [
+  ['businesses', 'businesses_member_select'],
+  ['receipts', 'receipts_member_all'],
+  ['cost_objects', 'cost_objects_member_all'],
+  ['business_inventory', 'business_inventory_member_all'],
+  ['business_pmi_schedule', 'business_pmi_schedule_member_all'],
+  ['business_service_log', 'business_service_log_member_all'],
+  ['labor_resources', 'labor_resources_member_all'],
+  ['cost_object_edges', 'cost_object_edges_member_all'],
+  ['cost_object_assignments', 'cost_object_assignments_member_all'],
+  ['deliveries', 'deliveries_member_all'],
+  ['business_modules', 'business_modules_member_access'],
+  ['cultivar_plants', 'cultivar_plants_owner_all'], // member branch fused (owner_id OR is_active_member)
+];
+// Documented owner-only operational tables (CLAUDE migration §"NOT TOUCHED"): member-read is a
+// pending PRODUCT decision; they fail CLOSED today (not a leak). Tracked, not a hard FAIL.
+const OWNER_ONLY_PENDING = [
+  'orders', 'customers', 'order_items', 'order_service_selections',
+  'order_compliance_records', 'nursery_profiles', 'plant_events',
+  'addons', 'social_drafts',
+];
+function cap3(key, v) {
+  if (!isMultiTenant(v)) return SKIP(v.scopeNote);
+  const sql = concatSql(v.migrationsDir);
+  const misses = [];
+  for (const [table, memberPolicy] of DUAL_TABLES) {
+    const body = effectivePolicy(sql, memberPolicy);
+    const hasMember = body && /is_active_member\s*\(/.test(body);
+    const hasOwner = tableHasOwnerPolicy(sql, table) || (body && /owner_id\s*=\s*auth\.uid\(\)/.test(body));
+    if (!hasMember || !hasOwner) {
+      misses.push(`${table}: ${hasOwner ? '' : 'owner policy MISSING; '}${hasMember ? '' : 'member is_active_member policy MISSING'}`.trim());
+    }
+  }
+  const gaps = OWNER_ONLY_PENDING
+    .filter((t) => tableHasOwnerPolicy(sql, t) && !DUAL_TABLES.some(([d]) => d === t))
+    .map((t) => `${t}: owner-only (member-read pending — documented product decision, fail-closed)`);
+  if (misses.length === 0) {
+    return PASS(`all ${DUAL_TABLES.length} member-scoped tenant tables carry dual RLS (owner + is_active_member).`, gaps);
+  }
+  return FAIL(`tables missing dual RLS: ${misses.join(' | ')}`, gaps);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// CAPABILITY 4 — Membership filters use the canonical is_active_member (no hand-spelled active)
+//   Signal: every effective member policy (financial + dual) calls is_active_member(...), not an
+//   inline EXISTS(... active = true ...). Documented exception: member_devices.md_self is a
+//   self-device (member_id) scope that intentionally keeps a narrow inline `active = true`.
+// ════════════════════════════════════════════════════════════════════════════════
+function cap4(key, v) {
+  if (!isMultiTenant(v)) return SKIP(v.scopeNote);
+  const sql = concatSql(v.migrationsDir);
+  const policies = [...new Set([...DUAL_TABLES.map(([, p]) => p), ...FINANCIAL_POLICIES.map(([p]) => p)])];
+  const handSpelled = [];
+  for (const policy of policies) {
+    const body = effectivePolicy(sql, policy);
+    if (!body) continue; // absence is cap2/cap3's concern, not cap4's
+    const usesCanonical = /is_active_member\s*\(/.test(body);
+    const inlineActive = /active\s*=\s*true/.test(body);
+    if (!usesCanonical && inlineActive) handSpelled.push(policy);
+  }
+  // md_self documented exception (self-device member_id scope)
+  const mdSelf = effectivePolicy(sql, 'md_self');
+  const mdNote = mdSelf && /active\s*=\s*true/.test(mdSelf)
+    ? 'member_devices.md_self keeps a narrow inline `active = true` (self-device member_id scope — documented exception, not widened to is_active_member).'
+    : '';
+  if (handSpelled.length === 0) {
+    return PASS(
+      `all ${policies.length} effective member policies route membership through is_active_member().` +
+      (mdNote ? ` Exception: ${mdNote}` : ''),
+    );
+  }
+  return FAIL(`member policies still hand-spelling \`active = true\` instead of is_active_member(): ${handSpelled.join(', ')}`);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// CAPABILITY 5 — confidence enum honored (no silent $0)
+//   Signal: the four-value confidence enum is defined (type + DB CHECK), amounts are nullable
+//   ("null = UNKNOWN", never coerced to 0), and the discovery layer actively ENFORCES it
+//   (CostConfidenceViolation thrown; "NEVER fabricate a number to fill a gap").
+// ════════════════════════════════════════════════════════════════════════════════
+function cap5(key, v) {
+  if (!isMultiTenant(v)) {
+    return SKIP(v.scopeNote + ' (cost-discovery confidence is a multi-tenant cost-model primitive; Ignition pricing uses MarginEngine, not this enum).');
+  }
+  const c2p = read('packages/shared/src/business-logic/CostToProduce.ts');
+  const seam = read('packages/shared/src/business-logic/CountOnceSeam.ts');
+  const disc = read('packages/shared/src/discovery/costDiscovery.ts');
+  const mig = concatSql(v.migrationsDir);
+
+  const ENUM = /'CONFIRMED'\s*\|\s*'DERIVED'\s*\|\s*'ESTIMATED'\s*\|\s*'UNKNOWN'/;
+  const checks = {
+    'CostConfidence type (4 values)': ENUM.test(c2p),
+    'DB CHECK on cost_confidence (4 values)': /cost_confidence IN \('CONFIRMED', 'DERIVED', 'ESTIMATED', 'UNKNOWN'\)/.test(mig),
+    'seam amount typed nullable (null = UNKNOWN)': /amount:\s*number\s*\|\s*null/.test(seam),
+    'discovery enforces (CostConfidenceViolation thrown)': /throw new CostConfidenceViolation\(/.test(disc),
+    'no-fabrication rule present ("NEVER fabricate")': /NEVER fabricate a number/.test(disc),
+  };
+  const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([k]) => k);
+  if (failed.length === 0) {
+    return PASS(`confidence enum defined + DB-checked; amounts nullable; discovery throws CostConfidenceViolation; unknown stays UNKNOWN (no silent $0).`);
+  }
+  return FAIL(`confidence/no-silent-$0 signals missing: ${failed.join('; ')}`);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// CAPABILITY 6 — Cost-wall regression guard (Gate 3 / Staff HAR, encoded permanently)
+//   The Staff HAR proved a member WITHOUT view_costs got `200 []` on every cost read
+//   (cost_objects, business_inventory…unit_cost, business_pricing_config). That runtime
+//   "zero rows" is STRUCTURALLY GUARANTEED by the RLS policy shape: each table's member
+//   policy gates on the permission AND there is NO other permissive member policy that
+//   provides an ungated read path. This guard encodes the HAR so the leak cannot silently
+//   re-open (e.g. someone adds a permissive `USING(is_active_member(...))` SELECT policy
+//   without the permission gate — Postgres ORs permissive policies, so that would leak).
+//   This is the structural form of the HAR; the live dual-session HAR remains the
+//   owner-proof. It needs NO live session — it is decidable from the migration SQL.
+// ════════════════════════════════════════════════════════════════════════════════
+const HAR_COST_TABLES = [
+  ['cost_objects', 'view_costs'],
+  ['business_inventory', 'view_costs'],
+  ['business_pricing_config', 'view_pricing_config'],
+];
+function cap6(key, v) {
+  if (!isMultiTenant(v)) return SKIP(v.scopeNote);
+  const sql = concatSql(v.migrationsDir);
+  const problems = [];
+  for (const [table, perm] of HAR_COST_TABLES) {
+    let permGatedMemberPolicy = false;
+    for (const name of policyNamesOnTable(sql, table)) {
+      const body = effectivePolicy(sql, name); // null = dropped-last (no effect)
+      if (!body) continue;
+      if (/AS\s+RESTRICTIVE/i.test(body)) continue; // restrictive only narrows; cannot leak
+      const ownerScoped = /owner_id\s*=\s*auth\.uid\(\)/.test(body);
+      const permGated =
+        new RegExp(`has_permission\\([^)]*'${perm}'`).test(body) ||
+        new RegExp(`permissions\\s*\\?\\s*'${perm}'`).test(body);
+      if (permGated) permGatedMemberPolicy = true;
+      // a permissive policy that is neither owner-scoped nor permission-gated = ungated read path
+      if (!ownerScoped && !permGated) {
+        problems.push(`${table}: permissive policy \`${name}\` is neither owner-scoped nor ${perm}-gated → ungated member read path (the leak re-opened)`);
+      }
+    }
+    if (!permGatedMemberPolicy) {
+      problems.push(`${table}: NO ${perm}-gated member policy — the cost wall for this table is GONE`);
+    }
+  }
+  if (problems.length === 0) {
+    return PASS(
+      `HAR triplet (cost_objects, business_inventory, business_pricing_config) has NO ungated ` +
+      `member read path: a member without view_costs/view_pricing_config matches zero rows (200 []). ` +
+      `Encodes the Staff HAR (tamper 3/0) as a permanent structural guard.`,
+    );
+  }
+  return FAIL(`cost-wall regression — Gate 3 leak path re-opened: ${problems.join(' | ')}`);
+}
+
+// ── capability registry ──────────────────────────────────────────────────────────
+const CAPS = [
+  ['1', 'Persistent identity indicator in per-page layout/header', cap1],
+  ['2', 'Financial/cost tables gated by has_permission', cap2],
+  ['3', 'Dual RLS (owner + is_active_member) on every tenant table', cap3],
+  ['4', 'Membership filters use canonical is_active_member', cap4],
+  ['5', 'confidence enum honored (no silent $0)', cap5],
+  ['6', 'Cost-wall regression guard (Gate 3 / Staff HAR encoded)', cap6],
+];
+
+// ── run the audit ─────────────────────────────────────────────────────────────────
+const C = { reset: '\x1b[0m', green: '\x1b[32m', red: '\x1b[31m', dim: '\x1b[2m', yellow: '\x1b[33m', bold: '\x1b[1m' };
+const mark = (s) => ({ PASS: `${C.green}PASS${C.reset}`, FAIL: `${C.red}FAIL${C.reset}`, SKIP: `${C.dim}SKIP${C.reset}` }[s]);
+
+console.log(`${C.bold}verify-universals — cross-vertical capability audit${C.reset}`);
+console.log(`${C.dim}repo: ${ROOT}${C.reset}\n`);
+
+let fails = 0;
+const matrix = [];
+for (const [key, v] of Object.entries(VERTICALS)) {
+  console.log(`${C.bold}▸ ${v.label}${C.reset} ${C.dim}(${v.tenancy})${C.reset}`);
+  for (const [id, title, fn] of CAPS) {
+    const r = fn(key, v);
+    matrix.push([v.label, id, r.status]);
+    if (r.status === 'FAIL') fails++;
+    console.log(`  ${mark(r.status)}  #${id} ${title}`);
+    console.log(`        ${C.dim}${r.detail}${C.reset}`);
+    for (const g of r.gaps || []) console.log(`        ${C.yellow}↳ KNOWN-GAP:${C.reset} ${C.dim}${g}${C.reset}`);
+  }
+  console.log('');
+}
+
+// ── matrix summary ─────────────────────────────────────────────────────────────────
+console.log(`${C.bold}MATRIX${C.reset}`);
+const verts = Object.values(VERTICALS).map((v) => v.label);
+const w = Math.max(...verts.map((s) => s.length));
+console.log(`  ${' '.repeat(38)}${verts.map((s) => s.padEnd(w + 2)).join('')}`);
+for (const [id, title] of CAPS) {
+  const cells = verts.map((label) => {
+    const cell = matrix.find(([l, i]) => l === label && i === id)[2];
+    return mark(cell) + ' '.repeat(w + 2 - 4);
+  });
+  console.log(`  #${id} ${title.slice(0, 34).padEnd(35)}${cells.join('')}`);
+}
+
+console.log('');
+if (fails > 0) {
+  console.log(`${C.red}${C.bold}✗ ${fails} in-scope capability assertion(s) FAILED.${C.reset} See FAIL lines above.`);
+  process.exit(1);
+}
+console.log(`${C.green}${C.bold}✓ all in-scope capability assertions passed.${C.reset}`);
+process.exit(0);
