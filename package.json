@@ -10,6 +10,7 @@
     "dev:trace":    "npm run dev --workspace=packages/trace-app",
     "build:cultivar": "npm run build --workspace=packages/cultivar-os",
     "build:ignition": "npm run build --workspace=packages/ignition-os",
-    "build:trace":    "npm run build --workspace=packages/trace-app"
+    "build:trace":    "npm run build --workspace=packages/trace-app",
+    "verify:universals": "node scripts/verify-universals.mjs"
   }
 }
