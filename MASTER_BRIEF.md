@@ -1061,6 +1061,75 @@ lot (e.g., "250 Liberty Maples — 2024 crop")
 
 ---
 
+> **Role Machine doctrine (D-010 through D-015), settled 2026-06-22.** Decisions D-010 through D-014 are the role/marketplace architecture (system roles, two-axis permissions, single tile registry, tile trial lifecycle, customer entity + signing); D-015 is the write-wall invariant surfaced by the Gate-3 close-out. These are the spec the Role Machine build is proven against. (MASTER_BRIEF's D-0XX log is a separate namespace from `DECISIONS.md`/`docs/DECISION-*.md`, which use D-10..D-16 for the cost-model decisions.) Checkable acceptance lives in `scripts/verify-universals.mjs`, not duplicated here.
+
+### D-010 — ROLE ARCHITECTURE: SYSTEM ROLES ARE LOCKED ANCHORS, CUSTOM ROLES ARE FREE
+
+**Decision:** Five out-of-box PLATFORM SYSTEM ROLES ship per tenant: OWNER, MANAGER, TECH, SERVICE (front-office). (CUSTOMER is NOT a member role — see D-014.) OWNER is a fully-locked superuser floor (not editable, not deletable). The others are tunable in permission *sets* (expand-only) but not deletable or renamable — code references them as floors.
+
+**Three-tier storage (do not fuse):**
+1. **Shared system-role definition** — the platform floor, ONE canonical representation, never tenant-mutated.
+2. **Per-tenant `(business_id, role_key)` override** — "adjust Tech in place," exists only when the owner changed something (AC-1; the platform cannot know nursery-tech vs diesel-tech).
+3. **Per-tenant custom role** — a new `business_id`-scoped row. "Add perms onto Tech" = **CLONE Tech into a new role and extend**, NOT mutate the system role.
+
+**Read-time:** shared floor → apply override → custom alongside; all RLS-scoped via `is_active_member`; tenant rows private (AC-3). Identity is the key `(business_id, role_key)`, never the label.
+
+**Owner composes, does not mint:** the owner builds/clones roles from the LISTED catalog (the registry auto-extends it — a new tile's `required_permission` is selectable WITHOUT a separate edit); the owner cannot create a permission primitive with no code behind it.
+
+**Reset to factory = delete the tier-2 override and re-inherit the incorruptible shared floor** (NOT a snapshot restore — restoring *nothing* is what makes it incorruptible). Role-admin-gated + audited. Custom roles have no factory default (reset-to-seed or delete, separately confirmed). The owner must never lose the keys — reset is the recovery.
+
+---
+
+### D-011 — TWO-AXIS PERMISSION MODEL: VISIBILITY AND ACTIVATION AUTHORITY NEVER FUSE
+
+**Decision:** Two orthogonal axes, never collapsed into one grant.
+- **VISIBILITY** = who sees/uses a tile (owner-configured per role).
+- **ACTIVATION AUTHORITY** = who can activate/trial/convert/restore a tile (a *money* action). Defaults to OWNER; ONE delegable blanket permission; every activation AND every delegation writes an audit row; revocation is live/immediate (live `has_permission`, not cached); a lapsed-restore uses the same permission.
+
+Per-tile accountability comes from the audit trail, not from per-tile granting. The app manages state up to the payment step; the Stripe Checkout the human confirms is what commits the charge.
+
+---
+
+### D-012 — SINGLE TILE REGISTRY IS THE ONE SOURCE FOR VISIBILITY, ROLE-CONFIG, AND MARKETPLACE
+
+**Decision:** One declared list `{key, label, group, required_permission}` + marketplace metadata, read by the dashboard + role-config + marketplace. No tile is rendered or governed from any other list. Adding a tile = ONE entry → it appears on all three surfaces. This kills the three-list drift (Ignition's grid is hardcoded). AC-1 + AC-4.
+
+---
+
+### D-013 — TILE TRIAL LIFECYCLE + LAPSED-FUZZY STATE
+
+**Decision:** Per tile, per business: `inactive → trial → active`, transitioning to `lapsed` on expiry-without-payment. The per-tile countdown persists the end date as **stored state, not a client timer**. Lifecycle: Day 1 start → Day 7 nudge → Day 12 savings report → Day 14 gray → Day 15 real data BLURRED + subscribe → Day 30 archived (not deleted). **Fuzzy = real data blurred, restored on payment** — NOT placeholders, NOT deletion. State is per `business_id`, dual RLS. App = state, Stripe = money.
+
+---
+
+### D-014 — CUSTOMER ENTITY + DOCUMENT-SIGNING (DOCUSIGN-LITE, CHANNEL-VALIDATED)
+
+**Decision:** CUSTOMER is NOT a member role — it is a per-vertical ENTITY (outside-party data, no login, no authority). Member roles are owner, manager, front-office (Lexicon display per vertical), tech. (Ignition's vestigial customer role existed only for kiosk sign — left behind.)
+
+**Channel validated ONCE up front** (a test SMS confirms the phone; an email link confirms the address) → the customer becomes a VERIFIED CONTACT; after that, sending docs is routine with NO per-document re-auth (verify-the-contact-then-trust-it). Validation is LAZY (on first signable send).
+
+**Signing UX:** scribble OR typed-name + script font (a consent gesture, not the security). **Proof = a bound record, always captured:** a content snapshot/hash of EXACTLY what was shown + the verified channel + the consent artifact, on the standard who/what/when audit.
+
+**Honest limits:** possession-of-channel proves the channel, not the biometric person; **biometric/face capture is OUT OF SCOPE entirely** (BIPA-class liability, disproportionate); observed identifiers (device ID) are not in the always-on floor. **Legal ESIGN ceremony = optional, default OFF** (proof always; ceremony on demand).
+
+Platform-shared primitive (Cultivar quote, Conduit sign-off, KINNA pledge). Design discipline: proof PROPORTIONATE to stakes — stop climbing the assurance ladder when it costs more than the dispute it prevents; do not build a per-document gauntlet.
+
+---
+
+### D-015 — WRITE AUTHORITY ≥ READ AUTHORITY ON PROTECTED DATA (THE WRITE-WALL INVARIANT)
+
+**Decision:** For any permission that gates READING a class of data, the SAME permission (or stricter) must gate WRITING/creating/updating that data, enforced at the DATA layer (an RLS INSERT/UPDATE policy + an endpoint permission check) — never by hiding a UI button. **You may never write what you cannot see.**
+
+**Reasoning to defend later:**
+1. A blind write is worse than a blind read — the actor corrupts protected data (e.g. operating-cost, `unit_cost` — the moat) without ever being able to view what they corrupt, silently.
+2. Gate 3 was scoped as a READ wall and proven only on SELECT (HAR: cost reads return `200 []`); the INSERT/UPDATE side was never proven, so every financial write path is currently unproven.
+3. Two confirmed open instances: the operating-cost "+cost" save (writes with no view-permission gate) and the costDiscovery cost-apply endpoint (service-key, no caller permission check, tunnels under RLS).
+4. Hiding the button is render-layer theater; the database must refuse the write for a JWT lacking the permission.
+
+**Remediation = "Gate-3b write-wall,"** built and proven against real roles via Role Machine. AC-4: settle all financial-write gates once, not piecemeal. Cross-ref: STD-011 (one canonical representation), tech-debt #46, verify-universals assertion (h).
+
+---
+
 ### Open Threads for Next Session
 
 *(Not decisions — active uncertainties that must be resolved before the affected features advance.)*

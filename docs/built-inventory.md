@@ -1071,6 +1071,21 @@ While creation is private/invite-only (David + family), guards may stay OFF — 
 
 ---
 
+### Role Machine — PLANNED (doctrine D-010..D-015; seeded 2026-06-22)
+
+*Doctrine settled in MASTER_BRIEF.md D-010 through D-015. Checkable acceptance lives in `scripts/verify-universals.mjs` (assertions a–h + cap #1), not duplicated here. All ⬜ PLANNED — not built.*
+
+- **Role Machine = the role/permission TEST HARNESS** (built first; the bench every gate is proven against). — ⬜ PLANNED.
+- **Tile Registry (single source)** — ⬜ PLANNED. `{key, label, group, required_permission}` + marketplace metadata. On `has_permission`/`is_active_member` (live). (D-012)
+- **Role-config UI (visibility axis)** — ⬜ PLANNED. Create/clone custom roles + tune own system roles; three-tier storage; factory-reset = override-delete; system roles locked. Cultivar-native rebuild of the Ignition console. (D-010, D-011)
+- **Tile Marketplace + activation authority (money axis)** — ⬜ PLANNED. `trial → active → lapsed-fuzzy`; activation owner-default/delegable/audited/live-revocable; Stripe human-confirmed. Reuses shared `stripe/{billing,trial}.ts`. (D-011, D-013)
+- **Persistent identity header** — ⬜ PLANNED (absorbs verify-universals cap #1 FAIL). Rebuild of the Ignition IDENTITY MATRIX strip.
+- **Gate-3b WRITE-WALL** — ⬜ PLANNED. RLS INSERT/UPDATE policies + endpoint permission gates so no role can write cost/operating-cost it can't read. Confirmed open: operating-cost +cost save; costDiscovery cost-apply. Proven via a Role-Machine role-driven assertion. (D-015, tech-debt #46, verify-universals assertion (h))
+
+**Type:** capability (PLANNED) | **Vertical:** shared. **Cross-refs:** MASTER_BRIEF D-010..D-015 · PLATFORM_STRATEGY § Role / Marketplace Layer · STD-011 · tech-debt #46.
+
+---
+
 ## CoolRunnings
 
 **What:** Separate vertical for homes. Not part of trace-platform monorepo.  

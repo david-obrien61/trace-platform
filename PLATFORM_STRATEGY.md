@@ -1,6 +1,7 @@
 # TRACE Platform — Multi-Vertical Strategy & Architecture
-# Last updated: 2026-06-11
+# Last updated: 2026-06-22
 # Changelog:
+# 2026-06-22 — Role/Marketplace layer invariant pointer added (§ ROLE / MARKETPLACE LAYER): two-axis permissions, single tile registry, write-authority ≥ read-authority (write-wall), app-state/Stripe-money boundary. Doctrine in MASTER_BRIEF D-010..D-015; acceptance in verify-universals.mjs.
 # 2026-06-11 — target architecture set: one-source/many-views model, schema naming convention, one-DB decision (red-teamed); general-target reframe (§ TARGET ARCHITECTURE)
 # 2026-06-10 — Capability/Composition Model formalized (§ CAPABILITY / COMPOSITION MODEL); STD reference updated
 # 2026-05-29 — Architecture Constants added (AC-1 through AC-4)
@@ -96,6 +97,19 @@ decisions are encoded as variables and executed against, not reopened.
 
 **Exception Log:**
 - (none)
+
+---
+
+## ROLE / MARKETPLACE LAYER — INVARIANT POINTER
+
+*Doctrine is settled in MASTER_BRIEF.md (D-010 through D-015); not duplicated here. This pointer records the architecture invariants the Role Machine build must hold to.*
+
+- **Two-axis permissions (D-011):** VISIBILITY (who sees a tile) and ACTIVATION AUTHORITY (who can spend money to activate it) are orthogonal and never fuse. Activation defaults to OWNER, is delegable, and every activation/delegation is audited.
+- **Single tile registry (D-012):** ONE declared list `{key, label, group, required_permission}` + marketplace metadata drives the dashboard, role-config, and marketplace — no tile governed from any other list.
+- **Write-authority ≥ read-authority (D-015, the write-wall):** any permission that gates reading a data class gates writing it too, enforced at the DATA layer (RLS INSERT/UPDATE + endpoint permission check), never by hiding a button. *You may never write what you cannot see.* This is an architecture invariant, not a feature.
+- **App-state / Stripe-money boundary holds:** the app manages tile state up to the payment step; the Stripe Checkout the human confirms is what commits the charge.
+
+Checkable acceptance for all of the above lives in `scripts/verify-universals.mjs`, not in prose.
 
 ---
 

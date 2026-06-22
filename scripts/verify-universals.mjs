@@ -27,8 +27,15 @@
  *   multi-tenant contexts"). For Ignition, 2-5 are reported SKIP-with-reason (visible in the
  *   matrix, NOT silently passed, NOT a hard FAIL). Capability 1 is in scope for both.
  *
+ * ACCEPTANCE BLOCK (Role Machine definition-of-done, D-010..D-015): assertions (a)-(h)
+ *   are the checkable definition-of-done for the not-yet-built Role Machine. They print
+ *   SKIP-with-reason ("flip to live-assert when green"), do NOT enter the matrix, and NEVER
+ *   touch the fail counter — so the gate is not chained on unbuilt work (green-then-guards:
+ *   chain only when green). (h) is the write-side twin of cap #6 and is EXPECTED-FAIL once
+ *   asserted live, until the Gate-3b write-wall lands.
+ *
  * EXIT: non-zero iff any IN-SCOPE assertion FAILs. KNOWN-GAP sub-findings (documented,
- *   tracked product decisions) are printed but do not by themselves fail the gate.
+ *   tracked product decisions) and the ACCEPTANCE block do not by themselves fail the gate.
  *
  * Usage:  node scripts/verify-universals.mjs
  */
@@ -378,6 +385,28 @@ const CAPS = [
   ['6', 'Cost-wall regression guard (Gate 3 / Staff HAR encoded)', cap6],
 ];
 
+// ── ACCEPTANCE — Role Machine definition-of-done (NOT yet built) ────────────────────
+// Checkable acceptance for the Role Machine doctrine (MASTER_BRIEF D-010..D-015). These
+// ARE the definition-of-done — but they are reported SKIP-with-reason today ("not yet
+// built; acceptance test, flip to live-assert when green") so the run stays clean and the
+// gate is NOT chained on unbuilt work (green-then-guards: chain only when green). They do
+// NOT enter the matrix and NEVER touch the fail counter. Each names the decision it proves.
+// (h) is the write-side twin of cap #6 (the read wall) — the one that is EXPECTED-FAIL once
+// asserted live, until the Gate-3b write-wall lands.
+// (cap #1, the persistent identity header, is the existing acceptance test for that piece.)
+const ACCEPTANCE_REASON = 'not yet built — acceptance test (definition-of-done); flip to live-assert when green.';
+const ACCEPTANCE = [
+  ['a', 'Tile visibility driven by the registry, not hardcoded (D-012)', ACCEPTANCE_REASON],
+  ['b', 'Activation authority defaults to owner; revocation live/immediate (D-011)', ACCEPTANCE_REASON],
+  ['c', 'Every activation writes an audit row (D-011)', ACCEPTANCE_REASON],
+  ['d', 'Lapsed tile data obscured (fuzzy) not deleted; countdown end date persists across reload; restore requires payment (D-013)', ACCEPTANCE_REASON],
+  ['e', "A newly registered tile's required_permission is selectable in the role-builder without a separate edit (D-010/D-012)", ACCEPTANCE_REASON],
+  ['f', 'A tenant custom role + per-tenant override are NOT visible cross-tenant; a tenant edit never mutates the shared system-role definition (D-010, AC-3)', ACCEPTANCE_REASON],
+  ['g', 'Reset of a tuned system role removes the override → permission set byte-identical to shared floor; floor unchanged; reset writes an audit row (D-010)', ACCEPTANCE_REASON],
+  ['h', 'WRITE-WALL: a role without the cost permission cannot INSERT/UPDATE cost_objects, business_inventory.unit_cost, business_pricing_config, OR operating-cost — at the data layer. Write-side twin of cap #6 (read wall) (D-015, tech-debt #46)',
+        ACCEPTANCE_REASON + ' (h) is EXPECTED-FAIL once asserted live (open: operating-cost +cost save; costDiscovery cost-apply bypass) until Gate-3b.'],
+];
+
 // ── run the audit ─────────────────────────────────────────────────────────────────
 const C = { reset: '\x1b[0m', green: '\x1b[32m', red: '\x1b[31m', dim: '\x1b[2m', yellow: '\x1b[33m', bold: '\x1b[1m' };
 const mark = (s) => ({ PASS: `${C.green}PASS${C.reset}`, FAIL: `${C.red}FAIL${C.reset}`, SKIP: `${C.dim}SKIP${C.reset}` }[s]);
@@ -411,6 +440,16 @@ for (const [id, title] of CAPS) {
     return mark(cell) + ' '.repeat(w + 2 - 4);
   });
   console.log(`  #${id} ${title.slice(0, 34).padEnd(35)}${cells.join('')}`);
+}
+
+// ── acceptance summary (Role Machine definition-of-done) ───────────────────────────
+// All SKIP today — printed for visibility, NOT counted toward fails, NOT chained into the gate.
+console.log('');
+console.log(`${C.bold}ACCEPTANCE — Role Machine (definition-of-done, not yet built)${C.reset}`);
+console.log(`${C.dim}SKIP today; flip each to a live assertion when its piece is green. NOT chained into the build gate.${C.reset}`);
+for (const [id, title, reason] of ACCEPTANCE) {
+  console.log(`  ${mark('SKIP')}  (${id}) ${title}`);
+  console.log(`        ${C.dim}${reason}${C.reset}`);
 }
 
 console.log('');
