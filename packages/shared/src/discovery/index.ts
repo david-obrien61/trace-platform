@@ -15,5 +15,13 @@ export {
   populateCatalog, clearSandbox, clearDiscovery, catalogItemToInventoryRow,
 } from './populate';
 export type { PopulateOpts, PopulateResult } from './populate';
+export {
+  reasonCostTurn, guardReasoning, buildCostPrompt, costReasoningToInventoryUpdate,
+  applyCostReasoning, CostConfidenceViolation,
+} from './costDiscovery';
+export type {
+  CostDiscoveryLine, CostQuestion, CostAnswer, CostReasoning, CostTurn, CostTurnOpts,
+  ApplyResult, InventoryCostConfidence, DiscoveredCostConfidence,
+} from './costDiscovery';
 // DiscoveryGlimpse is client-side only — import directly from
 // '@trace/shared/discovery/DiscoveryGlimpse' to avoid bundling server-side engine deps.
