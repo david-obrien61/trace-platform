@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { writeQBSecrets } from './secrets';
 
 const QBO_CLIENT_ID     = process.env.QBO_CLIENT_ID!;
 const QBO_CLIENT_SECRET = process.env.QBO_CLIENT_SECRET!;
@@ -54,9 +55,12 @@ export async function refreshQBToken(
   const data = await resp.json();
   const newExpiresAt = new Date(Date.now() + (data.expires_in ?? 3600) * 1000).toISOString();
 
+  // Bearer secrets → owner-only secrets table; non-secret connection state → businesses.
+  await writeQBSecrets(db, businessId, {
+    accounting_token:         data.access_token,
+    accounting_refresh_token: data.refresh_token || accounting_refresh_token,
+  });
   await db.from('businesses').update({
-    accounting_token:           data.access_token,
-    accounting_refresh_token:   data.refresh_token || accounting_refresh_token,
     accounting_token_expires_at: newExpiresAt,
     accounting_needs_reconnect:  false,
   }).eq('id', businessId);

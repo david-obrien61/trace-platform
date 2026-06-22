@@ -13,6 +13,7 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { refreshQBToken } from '../../../shared/src/quickbooks/refresh';
+import { readQBSecrets, writeQBSecrets } from '../../../shared/src/quickbooks/secrets';
 
 // ─── shared constants ────────────────────────────────────────────────────────
 
@@ -128,10 +129,13 @@ async function handleCallback(req: any, res: any) {
   if (businessId) {
     try {
       const db = supabase();
+      // Bearer secrets → owner-only secrets table; non-secret connection state → businesses.
+      await writeQBSecrets(db, businessId, {
+        accounting_token:         tokens.access_token,
+        accounting_refresh_token: tokens.refresh_token,
+      });
       await db.from('businesses').update({
         accounting_type:              'quickbooks',
-        accounting_token:             tokens.access_token,
-        accounting_refresh_token:     tokens.refresh_token,
         accounting_company_id:        realmId,
         accounting_token_expires_at:  new Date(Date.now() + (tokens.expires_in ?? 3600) * 1000).toISOString(),
         accounting_needs_reconnect:   false,
@@ -168,22 +172,25 @@ async function handleStatus(req: any, res: any) {
     const db = supabase();
     const { data } = await db
       .from('businesses')
-      .select('accounting_company_id, name, accounting_token, accounting_refresh_token, accounting_token_expires_at')
+      .select('accounting_company_id, name, accounting_token_expires_at')
       .eq('id', businessId)
       .single();
 
     if (!data?.accounting_company_id) return res.json({ connected: false });
 
+    // Bearer secrets come from the owner-only secrets table (not the businesses row).
+    const secrets = await readQBSecrets(db, businessId);
+
     const expiresAt   = data.accounting_token_expires_at
       ? new Date(data.accounting_token_expires_at).getTime()
       : 0;
-    const tokenExpired = !data.accounting_token || expiresAt < Date.now();
+    const tokenExpired = !secrets.accounting_token || expiresAt < Date.now();
 
     let needsReconnect = false;
     if (tokenExpired) {
       const freshToken = await refreshQBToken(businessId, {
-        accounting_token:             data.accounting_token,
-        accounting_refresh_token:     data.accounting_refresh_token,
+        accounting_token:             secrets.accounting_token,
+        accounting_refresh_token:     secrets.accounting_refresh_token,
         accounting_token_expires_at:  data.accounting_token_expires_at,
       });
       needsReconnect = freshToken === null;

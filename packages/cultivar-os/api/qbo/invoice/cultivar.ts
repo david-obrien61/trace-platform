@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { refreshQBToken } from '../../../../shared/src/quickbooks/refresh';
+import { readQBSecrets } from '../../../../shared/src/quickbooks/secrets';
 
 const QBO_ENVIRONMENT = process.env.QBO_ENVIRONMENT || 'sandbox';
 const QBO_API_BASE =
@@ -99,7 +100,7 @@ export default async function handler(req: any, res: any) {
     // Fetch business accounting tokens
     const { data: business, error: bizErr } = await db
       .from('businesses')
-      .select('accounting_token, accounting_refresh_token, accounting_token_expires_at, accounting_company_id, tax_rate, name')
+      .select('accounting_token_expires_at, accounting_company_id, tax_rate, name')
       .eq('id', business_id)
       .single();
 
@@ -107,9 +108,11 @@ export default async function handler(req: any, res: any) {
       return res.status(503).json({ error: 'QuickBooks not connected — connect from dashboard first' });
     }
 
+    // Bearer secrets come from the owner-only secrets table (not the businesses row).
+    const secrets = await readQBSecrets(db, business_id);
     const token = await refreshQBToken(business_id, {
-      accounting_token:            business.accounting_token,
-      accounting_refresh_token:    business.accounting_refresh_token,
+      accounting_token:            secrets.accounting_token,
+      accounting_refresh_token:    secrets.accounting_refresh_token,
       accounting_token_expires_at: business.accounting_token_expires_at,
     });
     if (!token) {
