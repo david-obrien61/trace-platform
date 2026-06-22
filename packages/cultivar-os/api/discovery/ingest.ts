@@ -1,3 +1,14 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// PURPOSE: discovery endpoint — multiplexes several POST actions through ONE Vercel
+//   function (12-fn ceiling): website identity/analysis/synthesis, service-offering
+//   seed, recipient send, and the cost-to-produce reasoning flow (cost-discovery /
+//   cost-apply). cost-apply WRITES protected financial data, so it is permission-gated.
+// DEPENDENCIES: @supabase/supabase-js (service key for writes, anon key for the
+//   caller permission check), shared discovery engine + costDiscovery, shared
+//   financialPermissions (VIEW_COSTS), shared notifications.
+// OUTPUTS: JSON per action. cost-apply: writes business_inventory.unit_cost ONLY
+//   after the caller is proven to hold view_costs (MB_D-015 write-wall).
+// ─────────────────────────────────────────────────────────────────────────────
 import { createClient } from '@supabase/supabase-js';
 import { fetchWebsiteContent } from '../../../shared/src/discovery/adapters/website';
 import { runIdentity, runAnalysis } from '../../../shared/src/discovery/engine';
@@ -6,12 +17,38 @@ import { nurserySchema } from '../../../shared/src/discovery/verticals/nursery';
 import { seedServiceOfferings } from '../../../shared/src/discovery/seed';
 import { reasonCostTurn, applyCostReasoning } from '../../../shared/src/discovery/costDiscovery';
 import type { CostDiscoveryLine, CostAnswer, CostReasoning } from '../../../shared/src/discovery/costDiscovery';
+import { VIEW_COSTS } from '../../../shared/src/auth/financialPermissions';
 import { sendNotification } from '../../../shared/src/notifications/send';
 import type { VerticalSchema, SilentPartnerAnalysis } from '../../../shared/src/discovery/types';
 
 const VERTICAL_SCHEMAS: Record<string, VerticalSchema> = {
   nursery: nurserySchema,
 };
+
+// WRITE-WALL gate (MB_D-015 — write-authority ≥ read-authority). Resolve the caller from the
+// request AUTH CONTEXT (the Bearer token), NEVER the request body, and confirm they hold `perm`
+// for the TARGET business via the canonical has_permission RPC. That RPC is SECURITY DEFINER and
+// reads business_members for auth.uid(), so running it under the caller's anon-key+token returns
+// true only for an active member of that business holding the permission — a forged businessId the
+// caller doesn't belong to returns false. The service key is the write MECHANISM (below); this is
+// the GATE. `_rpc` is an injectable test seam that replaces ONLY the network call, never the token
+// guard (so the no-token refusal is always exercised). Returns true only on an explicit grant.
+export async function callerHoldsPermission(
+  authHeader: string | undefined,
+  businessId: string,
+  perm: string,
+  _rpc?: (token: string, businessId: string, perm: string) => Promise<boolean>,
+): Promise<boolean> {
+  const token = String(authHeader || '').replace(/^Bearer\s+/i, '').trim();
+  if (!token) return false; // no caller token → refuse (the auth guard, runs before any RPC)
+  if (_rpc) return _rpc(token, businessId, perm);
+  const url = process.env.SUPABASE_URL;
+  const anon = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  if (!url || !anon) return false;
+  const caller = createClient(url, anon, { global: { headers: { Authorization: `Bearer ${token}` } } });
+  const { data, error } = await caller.rpc('has_permission', { p_business_id: businessId, p_perm: perm });
+  return !error && data === true;
+}
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -50,6 +87,14 @@ export default async function handler(req: any, res: any) {
     const r = reasoning as CostReasoning | undefined;
     if (!costLine?.id || !costLine?.businessId || !r) {
       return res.status(400).json({ error: 'line { id, businessId } and reasoning required' });
+    }
+    // WRITE-WALL (MB_D-015): the caller must hold view_costs for THIS business, resolved from the
+    // auth context (never the body). The service-key write below runs ONLY after this gate passes —
+    // closing the bypass where a service-key write tunneled under the cost-wall RLS.
+    const allowed = await callerHoldsPermission(req.headers?.authorization, costLine.businessId, VIEW_COSTS);
+    if (!allowed) {
+      console.warn(`[TRACE:WRITEWALL] cost-apply REFUSED — caller lacks ${VIEW_COSTS} for business ${costLine.businessId}`);
+      return res.status(403).json({ ok: false, error: `forbidden: ${VIEW_COSTS} required` });
     }
     const supabaseUrl = process.env.SUPABASE_URL;
     const serviceKey  = process.env.SUPABASE_SERVICE_KEY;
