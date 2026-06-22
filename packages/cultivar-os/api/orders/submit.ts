@@ -79,7 +79,25 @@ export default async function handler(req: any, res: any) {
       return sum + p;
     }, 0);
 
-    const plantSubtotal = Number(plant.business_inventory?.unit_cost ?? 0) * quantity;
+    // AUTHORITATIVE unit cost — server-fetched, NEVER the client-POSTed value. The charge
+    // must not be client-controllable (price-tamper hole, decision 2026-06-21 Part B). The
+    // customer-facing DISPLAY is unchanged; only the CHARGED amount is server-authoritative.
+    // (unit_cost is the nursery's per-plant price on this surface — out of scope of the
+    // view_costs wall, which governs owner cost-analysis surfaces; see grower-import sell_price gap.)
+    const { data: invRow } = await db
+      .from('cultivar_plants')
+      .select('business_inventory ( unit_cost )')
+      .eq('id', plant.id)
+      .eq('business_id', businessId)
+      .single();
+    const serverUnitCost   = Number((invRow as any)?.business_inventory?.unit_cost ?? 0);
+    const clientClaimedCost = Number(plant.business_inventory?.unit_cost ?? 0);
+    if (clientClaimedCost !== serverUnitCost) {
+      console.log('[TRACE:CHECKOUT] unit_cost mismatch — charging SERVER value (tamper defeated)', {
+        plantId: plant.id, clientClaimedCost, serverUnitCost,
+      });
+    }
+    const plantSubtotal = serverUnitCost * quantity;
     const addonsAmount  = transportAmount + nettingTotal + otherTotal;
     const subtotal      = plantSubtotal + addonsAmount;
     const taxAmount     = Math.round(subtotal * TAX_RATE * 100) / 100;
@@ -127,7 +145,7 @@ export default async function handler(req: any, res: any) {
       order_id:   orderId,
       plant_id:   plant.id,
       quantity,
-      unit_price: plant.business_inventory?.unit_cost ?? 0,
+      unit_price: serverUnitCost,   // server-authoritative (not the client-POSTed value)
       subtotal:   plantSubtotal,
     });
     if (itemErr) throw new Error(`Order item: ${itemErr.message}`);

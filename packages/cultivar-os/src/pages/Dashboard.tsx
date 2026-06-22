@@ -79,8 +79,9 @@ const PLATFORM_URLS: Record<string, string> = {
 export function Dashboard() {
   const { user } = auth.useSession();
   const navigate  = useNavigate();
-  const { businessId, loading: businessLoading, businessError, userPermissions, isOwner } = useBusinessContext();
+  const { businessId, loading: businessLoading, businessError, userPermissions, isOwner, can } = useBusinessContext();
   const canManageSettings = isOwner || (userPermissions ?? []).includes('manage_settings');
+  const canViewCosts = can('view_costs'); // gates the cost-derived inventory-value metric
 
   const [businessName, setBusinessName]       = useState('');
   const [plantCount, setPlantCount]           = useState(0);
@@ -139,7 +140,9 @@ export function Dashboard() {
 
       supabase
         .from('business_inventory')
-        .select('qty, unit_cost')
+        // view_costs gate: a member without it never receives unit_cost (cost absent from
+        // the network response); qty is still read for the plant-count metric.
+        .select(canViewCosts ? 'qty, unit_cost' : 'qty')
         .eq('business_id', businessId!)
         .eq('status', 'available'),
 
@@ -181,7 +184,8 @@ export function Dashboard() {
     // plant_count from cultivar_plants identity rows is provided by api/dashboard.ts;
     // this client path uses business_inventory lot count as a proxy until the API is called.
     setPlantCount(inventoryLots.reduce((sum: number, l: any) => sum + Number(l.qty), 0));
-    setInventoryValue(inventoryLots.reduce((sum: number, l: any) => sum + (Number(l.qty) * Number(l.unit_cost ?? 0)), 0));
+    // inventory value is cost-derived — only computed when the session holds view_costs
+    setInventoryValue(canViewCosts ? inventoryLots.reduce((sum: number, l: any) => sum + (Number(l.qty) * Number(l.unit_cost ?? 0)), 0) : 0);
 
     const todayOrders = todayRes.data ?? [];
     setTodayOrderCount(todayOrders.length);
@@ -665,13 +669,15 @@ export function Dashboard() {
                   sub={`${plantCount} available`}
                 />
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <MetricCard
-                  label="Inventory value"
-                  value={fmt$(inventoryValue)}
-                  sub="at base price"
-                />
-              </div>
+              {canViewCosts && (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <MetricCard
+                    label="Inventory value"
+                    value={fmt$(inventoryValue)}
+                    sub="at base price"
+                  />
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', gap: 12 }}>

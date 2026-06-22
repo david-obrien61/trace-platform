@@ -1,5 +1,7 @@
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { PrivateRoute }    from './components/layout/PrivateRoute';
+import { PermissionRoute } from './components/layout/PermissionRoute';
+import { VIEW_COSTS }      from '@trace/shared/auth';
 import { PlantProfile }    from './pages/PlantProfile';
 import { AddOns }          from './pages/AddOns';
 import { CustomerCapture } from './pages/CustomerCapture';
@@ -72,13 +74,18 @@ export function AppRouter() {
         <Route path="/onboarding"        element={<OnboardingWizard />} />
         <Route path="/campaigns"         element={<Campaigns />} />
         <Route path="/campaigns/:id"     element={<CampaignDetail />} />
-        <Route path="/pmi"               element={<PMI />} />
         <Route path="/add-business"      element={<AddBusiness />} />
         <Route path="/receipts"          element={<ReceiptKeeper />} />
-        <Route path="/assets"            element={<BusinessAssets />} />
-        <Route path="/inventory"         element={<BusinessInventory />} />
-        <Route path="/costs"             element={<CostToProduce />} />
-        <Route path="/operating-costs"   element={<OperatingCosts />} />
+
+        {/* COST-ANALYSIS surfaces — require view_costs (decision 2026-06-21, Phase 3/4).
+            A low-role member is redirected to /dashboard, so the cost SELECT never fires. */}
+        <Route element={<PermissionRoute permission={VIEW_COSTS} />}>
+          <Route path="/assets"            element={<BusinessAssets />} />
+          <Route path="/inventory"         element={<BusinessInventory />} />
+          <Route path="/costs"             element={<CostToProduce />} />
+          <Route path="/operating-costs"   element={<OperatingCosts />} />
+          <Route path="/pmi"               element={<PMI />} />
+        </Route>
       </Route>
 
       {/* DEMO — QB invoice preview (no auth, for demo fallback) */}
