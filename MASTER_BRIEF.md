@@ -894,6 +894,8 @@ This section is the live snapshot of where each near-term customer relationship 
 
 These decisions were settled in the 2026-06-11 session while building Receipt Keeper v1 (OCR → DB pipeline) and reviewing the grower inventory model. They are recorded here — not in code or migration files — because they shape the product thesis and constrain future feature work. They are locked; if a subsequent session challenges one of these, it must first read this section.
 
+> **Decision-citation convention (binding):** Decision citations are source-prefixed: `MB_D-NNN` = MASTER_BRIEF decisions (this log, D-001..D-015); `D_D-NN` = DECISIONS.md decisions (D-10..D-16, the cost-model namespace). Never cite a bare D-number. Existing decisions keep their numbers — only the citation FORM changes going forward.
+
 ---
 
 ### D-001 — PLATFORM IDENTITY CONSTRAINT
