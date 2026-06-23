@@ -323,6 +323,22 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-23 — THUNDER Tile Registry: vertical-aware (additive `vertical` field) — one registry serves generalist/nursery/auto from one source; Ignition-reconnection bridge (BUILDER-COMPLETE, owner-proof owed)
+
+**Type:** App code ONLY — additive `vertical` field on the existing code registry (`tileRegistry.ts`) + vertical-aware enablement in `useModules` + Dashboard passes the business's vertical + 1 verify-universals assertion. **NO migration, NO schema, NO new parallel list.** `[TRACE:*]` STAYS ON. Commit `__PENDING__`. Build clean (2209 modules); registry/useModules/Dashboard tsc-clean; verify-universals exit 0 (caps #a/#e PASS, with the new vertical check folded into #a).
+
+**THE FIELD:** `vertical: TileVertical` (`general | cultivar | ignition | conduit | kinna`) on every `TileEntry`. **Every current entry = `general`** (the shared platform spine — costs/assets/receipts/PMI/inventory/delivery/social/QB/settings/identity — IS mostly general; verticals add a thin specific layer). `cultivar` reserved for plant surfaces (plant profile/QR-plant/addons) when registered; `ignition` reserved for VIN/DTC/compliance-waiver/tooling/estimate/vendor/AI-audit when reconnection brings them in. Default-home = `general`; verticalize only what's genuinely vertical-bound.
+
+**ENABLEMENT now vertical-aware (by DATA, not forks):** `useModules(businessId, can, businessType)` reads the business's vertical, maps via `verticalsForBusinessType()` and renders `dashboardTilesForVerticals(verticals)` — a business gets its vertical's tiles **+ all `general`**. So a **generalist (TRACE) → general only**; a **nursery (LAWNS) → general + cultivar**; an **auto shop → general + ignition** — same registry, three live dashboards. Behavior is UNCHANGED today (all entries general → everyone gets them; the field is the bridge, no regression). This is the **Ignition-reconnection path: tag → enable, not rebuild.**
+
+**WHERE the business-vertical lives — NO GAP:** `businesses.business_type` (the column that already exists — `text NOT NULL DEFAULT 'nursery'`; live values `general` [TRACE 45830ba7] / `nursery` [LAWNS]). `useModules` reads `business.business_type` from the BusinessProvider context (the per-business row, NOT the app-skin `BusinessProvider businessType="nursery"` prop — so a `general` business opened in the Cultivar app correctly enables general-only). The map `verticalsForBusinessType`: general→[general], nursery→[general,cultivar], diesel/auto→[general,ignition] (forward); unknown/null fails SAFE to [general] (never hides the spine, never shows a wrong vertical — AC-3). New verticals = new `business_type` rows; the column is ready. The ONLY small thing is the value-translation (nursery→cultivar), which is this in-code map — not a schema gap.
+
+**TESTS:** verify-universals cap #a extended (in-scope, not forced): every entry declares a `vertical` from the known set, `general` tiles exist, `dashboardTilesForVerticals` present, `useModules` scopes by vertical. Cultivar #1–7 + #a + #e PASS; Ignition SKIPs unchanged. Exit 0.
+
+**Two bars:** BUILDER-COMPLETE (field added, every entry tagged, enablement vertical-aware, build+tsc clean, matrix green). **OWNER-PROVEN owed** = the live grid is unchanged for the nursery/generalist today (all-general), proving no regression; the vertical split proves out when the first `cultivar`/`ignition` tile is registered.
+
+**NEXT Role Machine rung: role-config UI (visibility axis)** — reads `allTiles()`/`registryPermissions()` from this registry. (Then marketplace + activation authority. Ignition reconnection = register its tiles tagged `ignition`.)
+
 ### 2026-06-23 — THUNDER Tile Registry STAGE 2: the ONE registry built + every surface reads it → three drift-lists KILLED → verify-universals caps #a + #e FAIL→live PASS (BUILDER-COMPLETE, owner-proof owed)
 
 **Type:** App code ONLY — 1 new registry module + useModules rewrite + Dashboard rewire + verify-universals (a)/(e) promoted live. **NO schema, NO RLS, NO migration.** `[TRACE:*]` STAYS ON. Commit `__PENDING__`. Build clean (2209 modules, +1); registry/useModules/Dashboard tsc-clean (only the 4 documented pre-existing errors remain — Confirmation/Orders/DeliveryRoute/SocialSetup; Dashboard left the error list).

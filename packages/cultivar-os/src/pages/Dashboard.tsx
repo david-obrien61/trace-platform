@@ -80,7 +80,7 @@ const PLATFORM_URLS: Record<string, string> = {
 export function Dashboard() {
   const { user } = auth.useSession();
   const navigate  = useNavigate();
-  const { businessId, loading: businessLoading, businessError, userPermissions, isOwner, can } = useBusinessContext();
+  const { business, businessId, loading: businessLoading, businessError, userPermissions, isOwner, can } = useBusinessContext();
   const canManageSettings = isOwner || (userPermissions ?? []).includes('manage_settings');
   const canViewCosts = can('view_costs'); // gates the cost-derived inventory-value metric
   // Readout visibility is registry-driven (MB_D-012): a readout LEAKS data by rendering, so it
@@ -127,7 +127,7 @@ export function Dashboard() {
   // poll so a persistently-erroring status endpoint (tech-debt #34) stops hammering every 2s
   // instead of looping until the popup closes. Reset to 0 on any healthy (res.ok) response.
   const qbStatusFailRef = useRef(0);
-  const { modules } = useModules(businessId, can);
+  const { modules } = useModules(businessId, can, business?.business_type ?? null);
 
   // ── Data loading ─────────────────────────────────────────────────────────
 

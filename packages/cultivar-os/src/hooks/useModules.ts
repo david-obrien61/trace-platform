@@ -11,7 +11,8 @@
  * OUTPUTS:      { modules, loading, error } — modules = ModuleTile[] (dashboard grid only).
  *
  * Visibility rule (the wiring point of D-012): a tile renders iff
- *   placement==dashboard (registry) AND the role holds required_permission (can()).
+ *   placement==dashboard (registry) AND the tile's vertical is in the business's vertical set
+ *   (business_type → general + its own vertical) AND the role holds required_permission (can()).
  * Status drives interactivity: status==planned → 'locked' (greyed); status==live → 'active'
  * (navigable) or 'available' (has a module_key but not yet enabled+configured → tap to set up).
  */
@@ -19,7 +20,7 @@ import { useEffect, useState } from 'react';
 import type { ComponentType } from 'react';
 import type { LucideProps } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { dashboardTiles } from '../registry/tileRegistry';
+import { dashboardTilesForVerticals, verticalsForBusinessType } from '../registry/tileRegistry';
 
 export type TileState = 'active' | 'available' | 'locked';
 
@@ -42,11 +43,17 @@ interface BusinessModuleRow {
 }
 
 /**
- * @param businessId active business
- * @param can        permission chokepoint (BusinessProvider). Owner ⇒ true for all; member ⇒
- *                    their explicit list. A tile the session can't see is filtered out.
+ * @param businessId   active business
+ * @param can          permission chokepoint (BusinessProvider). Owner ⇒ true for all; member ⇒
+ *                     their explicit list. A tile the session can't see is filtered out.
+ * @param businessType the business's vertical (businesses.business_type). Drives vertical-aware
+ *                     enablement: the business gets `general` tiles + its own vertical's tiles.
  */
-export function useModules(businessId: string | null, can: (permissionId: string) => boolean) {
+export function useModules(
+  businessId: string | null,
+  can: (permissionId: string) => boolean,
+  businessType: string | null,
+) {
   const [modules, setModules] = useState<ModuleTile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
@@ -74,8 +81,10 @@ export function useModules(businessId: string | null, can: (permissionId: string
           nmByKey[row.module_key] = row;
         }
 
-        const result: ModuleTile[] = dashboardTiles()
-          // visibility: registry placement is already dashboard; gate on the locked permission.
+        // vertical-aware: only this business's verticals (general + its own) reach the grid.
+        const verticals = verticalsForBusinessType(businessType);
+        const result: ModuleTile[] = dashboardTilesForVerticals(verticals)
+          // visibility: vertical-scoped + dashboard placement; gate on the locked permission.
           .filter((t) => can(t.required_permission))
           .map((t) => {
             let state: TileState;
@@ -104,7 +113,7 @@ export function useModules(businessId: string | null, can: (permissionId: string
 
     load();
     return () => { cancelled = true; };
-  }, [businessId, can]);
+  }, [businessId, can, businessType]);
 
   return { modules, loading, error };
 }

@@ -446,6 +446,18 @@ function capA(key, v) {
   // (i) the registry exists and IS the source
   if (!/export const TILE_REGISTRY/.test(reg)) problems.push('tileRegistry.ts: no exported TILE_REGISTRY');
   if (!/export function dashboardTiles\b/.test(reg)) problems.push('tileRegistry.ts: no dashboardTiles() selector');
+  // (i.b) vertical scope: every entry declares a vertical from the known set; enablement is
+  //       vertical-aware (general tiles + the business's own vertical). general tiles must exist.
+  const entryCountA = (reg.match(/\bkey:\s*'/g) || []).length;
+  const verticalDecls = reg.match(/vertical:\s*'(general|cultivar|ignition|conduit|kinna)'/g) || [];
+  if (entryCountA === 0 || verticalDecls.length < entryCountA) {
+    problems.push(`not every entry declares a vertical from the known set (${verticalDecls.length}/${entryCountA})`);
+  }
+  if (!verticalDecls.some((d) => /'general'/.test(d))) problems.push('no general-vertical tiles (the shared spine)');
+  if (!/export function dashboardTilesForVerticals\b/.test(reg)) problems.push('no dashboardTilesForVerticals() — enablement is not vertical-aware');
+  if (!/from '\.\.\/registry\/tileRegistry'/.test(um) || !/verticalsForBusinessType|dashboardTilesForVerticals/.test(um)) {
+    problems.push('useModules.ts: does not scope tiles by the business vertical');
+  }
   // (ii) useModules reads the registry and no longer owns the catalog/order
   if (!/from '\.\.\/registry\/tileRegistry'/.test(um)) problems.push('useModules.ts: does not import the registry');
   // match the DECLARATION, not a mention in a docstring (the doc names them to say they're gone)
