@@ -3,6 +3,7 @@ import { PrivateRoute }    from './components/layout/PrivateRoute';
 import { AppLayout }       from './components/layout/AppLayout';
 import { PermissionRoute } from './components/layout/PermissionRoute';
 import { VIEW_COSTS }      from '@trace/shared/auth';
+import { PERMISSIONS }     from './auth/roles';
 import { PlantProfile }    from './pages/PlantProfile';
 import { AddOns }          from './pages/AddOns';
 import { CustomerCapture } from './pages/CustomerCapture';
@@ -31,6 +32,7 @@ import { BusinessInventory } from './pages/BusinessInventory';
 import { CostToProduce }     from './pages/CostToProduce';
 import { OperatingCosts }    from './pages/OperatingCosts';
 import PMI                   from './pages/PMI';
+import { RoleConfig }        from './pages/RoleConfig';
 import { AcceptInvite }      from '@trace/shared/auth';
 import { auth }              from './lib/auth';
 
@@ -79,6 +81,13 @@ export function AppRouter() {
           <Route path="/campaigns/:id"     element={<CampaignDetail />} />
           <Route path="/add-business"      element={<AddBusiness />} />
           <Route path="/receipts"          element={<ReceiptKeeper />} />
+
+          {/* ROLE-CONFIG console (visibility axis) — owner-only. manage_settings is held by
+              OWNER alone in Cultivar today, so PermissionRoute effectively owner-gates it; the
+              page also writes only tenant role rows (RLS owner-only). */}
+          <Route element={<PermissionRoute permission={PERMISSIONS.MANAGE_SETTINGS} />}>
+            <Route path="/roles"           element={<RoleConfig />} />
+          </Route>
 
           {/* COST-ANALYSIS surfaces — require view_costs (decision 2026-06-21, Phase 3/4).
               A low-role member is redirected to /dashboard, so the cost SELECT never fires. */}

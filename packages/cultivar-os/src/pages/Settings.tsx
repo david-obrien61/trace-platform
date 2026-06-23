@@ -122,6 +122,7 @@ function NurserySection({ businessId }: { businessId: string }) {
 type InvitePhase = 'list' | 'form' | 'link';
 
 function TeamSection({ businessId }: { businessId: string }) {
+  const navigate = useNavigate();
   const [members, setMembers]         = useState<Member[]>([]);
   const [pending, setPending]         = useState<Invitation[]>([]);
   const [loading, setLoading]         = useState(true);
@@ -253,15 +254,26 @@ function TeamSection({ businessId }: { businessId: string }) {
           Team
         </p>
         {phase === 'list' && (
-          <button
-            onClick={() => setPhase('form')}
-            style={{
-              background: GREEN, color: '#fff', border: 'none', borderRadius: 8,
-              padding: '8px 16px', fontWeight: 700, fontSize: '0.8125rem', cursor: 'pointer',
-            }}
-          >
-            + Invite Team Member
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              onClick={() => navigate('/roles')}
+              style={{
+                background: 'none', color: GREEN, border: `1px solid ${GREEN}`, borderRadius: 8,
+                padding: '8px 14px', fontWeight: 700, fontSize: '0.8125rem', cursor: 'pointer',
+              }}
+            >
+              Manage roles →
+            </button>
+            <button
+              onClick={() => setPhase('form')}
+              style={{
+                background: GREEN, color: '#fff', border: 'none', borderRadius: 8,
+                padding: '8px 16px', fontWeight: 700, fontSize: '0.8125rem', cursor: 'pointer',
+              }}
+            >
+              + Invite Team Member
+            </button>
+          </div>
         )}
       </div>
 

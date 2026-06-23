@@ -26,6 +26,15 @@ export {
   checkPermission,
 } from './members';
 
+// Three-tier role-definition store (role-config console — visibility axis, MB_D-010)
+export {
+  getRoleDefinitions,
+  resolveRoles,
+  upsertTenantRole,
+  deleteTenantRole,
+} from './roleDefinitions';
+export type { RoleDefinitionRow, ResolvedRole, RoleSource } from './roleDefinitions';
+
 // Client-side invite management (owner session) + server-side expiry cleanup
 export {
   createInvitation,

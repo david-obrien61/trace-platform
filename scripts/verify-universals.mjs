@@ -484,6 +484,7 @@ function capA(key, v) {
 function capE(key, v) {
   if (!isMultiTenant(v)) return SKIP('role-config/marketplace are Cultivar surfaces over the Cultivar registry (out of scope for Ignition).');
   const reg = read('packages/cultivar-os/src/registry/tileRegistry.ts');
+  const console_ = read('packages/cultivar-os/src/pages/RoleConfig.tsx');
   const problems = [];
   if (!/required_permission:\s*string/.test(reg)) problems.push('TileEntry has no required_permission field');
   if (!/export function registryPermissions\b/.test(reg)) problems.push('no registryPermissions() enumerator (role-builder source)');
@@ -494,10 +495,93 @@ function capE(key, v) {
   if (entryCount === 0 || permCount < entryCount) {
     problems.push(`not every entry declares required_permission (${permCount}/${entryCount})`);
   }
+  // NOW EXERCISED: the role-config console must actually FEED its chips from registryPermissions()
+  // (B2 one-source guarantee) — not a hardcoded permission list. This is what makes (e) real.
+  if (!console_) problems.push('RoleConfig console (RoleConfig.tsx) not found — (e) cannot be exercised');
+  else if (!/registryPermissions\(\)/.test(console_)) problems.push('RoleConfig console does not read registryPermissions() (chip list must be registry-fed, not hardcoded)');
   if (problems.length === 0) {
-    return PASS(`every registry entry declares required_permission and registryPermissions()/allTiles() expose the full set → a newly registered tile's permission is role-builder-selectable with no separate edit.`);
+    return PASS(`every registry entry declares required_permission; registryPermissions()/allTiles() expose the full set AND the role-config console feeds its chips from registryPermissions() → a newly registered tile's permission is role-builder-selectable with no separate edit.`);
   }
   return FAIL(`role-builder single-source not established: ${problems.join('; ')}`);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// CAPABILITY s — SELF-GRANT CLOSED: a member cannot widen its OWN role/permissions
+//   (the bm_self_update hole). Highest-priority new assertion. Source-decidable from the
+//   migration: bm_self_update now carries a WITH CHECK (was USING-only) AND a BEFORE UPDATE
+//   trigger makes role/permissions immutable except by the owner. MB_D-015 on the perm table.
+// ════════════════════════════════════════════════════════════════════════════════
+function capS(key, v) {
+  if (!isMultiTenant(v)) return SKIP('business_members self-grant guard is a multi-tenant RLS concern; Ignition is PIN/local-first (out of scope).');
+  const sql = concatSql(v.migrationsDir);
+  const problems = [];
+  // (i) bm_self_update now carries a WITH CHECK (the hole was USING-only → could widen own row)
+  const selfUpd = effectivePolicy(sql, 'bm_self_update');
+  if (!selfUpd) problems.push('bm_self_update policy not found');
+  else if (!/WITH CHECK/i.test(selfUpd)) problems.push('bm_self_update still has no WITH CHECK (self-grant hole open)');
+  // (ii) authority-immutability trigger + function block role/permissions change except by owner
+  if (!/CREATE OR REPLACE FUNCTION\s+public\.enforce_member_authority_immutability/.test(sql))
+    problems.push('enforce_member_authority_immutability() not defined');
+  if (!/CREATE TRIGGER\s+trg_business_members_authority_guard[\s\S]*?ON\s+business_members/.test(sql))
+    problems.push('authority-guard trigger not installed on business_members');
+  // (iii) the trigger actually compares role/permissions OLD vs NEW (not a no-op)
+  if (!/NEW\.role\s+IS DISTINCT FROM\s+OLD\.role/.test(sql) || !/NEW\.permissions\s+IS DISTINCT FROM\s+OLD\.permissions/.test(sql))
+    problems.push('trigger does not compare role/permissions OLD vs NEW');
+  if (problems.length === 0) {
+    return PASS('bm_self_update carries a WITH CHECK and a BEFORE UPDATE trigger blocks self-elevation — a member cannot widen its own role/permissions; only the owner can change them (MB_D-015).');
+  }
+  return FAIL(`self-grant guard incomplete: ${problems.join('; ')}`);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// CAPABILITY f — Tenant role override/custom not visible cross-tenant; a tenant edit never
+//   mutates the shared floor (clone-not-mutate). Promoted from ACCEPTANCE (f) → live 2026-06-23.
+//   Source-decidable: role_definitions RLS (floor not tenant-writable, tenant rows owner-only +
+//   member-scoped) + the console writes tenant rows via upsertTenantRole, never the floor.
+// ════════════════════════════════════════════════════════════════════════════════
+function capF(key, v) {
+  if (!isMultiTenant(v)) return SKIP('role_definitions store is a Cultivar multi-tenant surface (out of scope for Ignition).');
+  const sql = concatSql(v.migrationsDir);
+  const mod = read('packages/shared/src/auth/roleDefinitions.ts');
+  const ui  = read('packages/cultivar-os/src/pages/RoleConfig.tsx');
+  const problems = [];
+  if (!/CREATE TABLE IF NOT EXISTS role_definitions/.test(sql)) problems.push('role_definitions table not created');
+  if (!/ALTER TABLE role_definitions ENABLE ROW LEVEL SECURITY/.test(sql)) problems.push('role_definitions RLS not enabled');
+  // tenant writes owner-only AND business_id-scoped → floor (business_id NULL) not tenant-writable; cross-tenant invisible (AC-3)
+  const ownerWrite = effectivePolicy(sql, 'rd_owner_write');
+  if (!ownerWrite) problems.push('rd_owner_write policy not found');
+  else {
+    if (!/business_id IS NOT NULL/.test(ownerWrite)) problems.push('rd_owner_write does not exclude the shared floor (business_id IS NOT NULL missing)');
+    if (!/owner_id\s*=\s*auth\.uid\(\)/.test(ownerWrite)) problems.push('rd_owner_write not owner-scoped');
+  }
+  const readPol = effectivePolicy(sql, 'rd_read');
+  if (!readPol || !/is_active_member/.test(readPol)) problems.push('rd_read does not scope tenant rows to active members (cross-tenant leak)');
+  // clone-not-mutate at the code layer: tenant writes force non-system rows; console never mutates the floor
+  if (!/is_system\s*\?\?\s*false/.test(mod)) problems.push('roleDefinitions: tenant insert does not force is_system=false');
+  if (!/upsertTenantRole/.test(ui)) problems.push('console does not write via upsertTenantRole (clone-not-mutate)');
+  if (!/!role\.locked/.test(ui)) problems.push('console does not lock system roles from delete (locked-role check)');
+  if (problems.length === 0) {
+    return PASS('role_definitions: shared floor is not tenant-writable; tenant rows are owner-only + member-scoped (cross-tenant invisible, AC-3); the console clones-not-mutates and locks system roles.');
+  }
+  return FAIL(`role-store isolation/clone-not-mutate gaps: ${problems.join('; ')}`);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// CAPABILITY g — Factory-reset of a tuned system role DELETES the tenant override → the shared
+//   floor shows through unchanged (NOT a snapshot restore). Promoted from ACCEPTANCE (g) → live.
+// ════════════════════════════════════════════════════════════════════════════════
+function capG(key, v) {
+  if (!isMultiTenant(v)) return SKIP('role override / factory-reset is a Cultivar surface (out of scope for Ignition).');
+  const mod = read('packages/shared/src/auth/roleDefinitions.ts');
+  const ui  = read('packages/cultivar-os/src/pages/RoleConfig.tsx');
+  const problems = [];
+  if (!/export async function deleteTenantRole/.test(mod) || !/\.delete\(\)/.test(mod)) problems.push('deleteTenantRole (override delete) missing');
+  if (!/\.eq\('business_id', businessId\)/.test(mod)) problems.push('deleteTenantRole not business_id-scoped (could touch the floor)');
+  if (!/factoryReset/.test(ui) || !/deleteTenantRole/.test(ui)) problems.push('console factory-reset does not delete the tenant override');
+  if (problems.length === 0) {
+    return PASS('factory-reset deletes the per-tenant override row (business_id-scoped) → the shared floor shows through unchanged; not a snapshot restore (MB_D-010).');
+  }
+  return FAIL(`factory-reset gaps: ${problems.join('; ')}`);
 }
 
 // ── capability registry ──────────────────────────────────────────────────────────
@@ -509,8 +593,11 @@ const CAPS = [
   ['5', 'confidence enum honored (no silent $0)', cap5],
   ['6', 'Cost-wall regression guard (Gate 3 / Staff HAR encoded — READ side)', cap6],
   ['7', 'WRITE-WALL: cost writes permission-gated (endpoint + RLS WITH CHECK)', cap7],
+  ['s', 'SELF-GRANT CLOSED: member cannot widen own role/permissions (bm_self_update WITH CHECK + authority trigger)', capS],
   ['a', 'Tile visibility driven by the registry, not hardcoded (D-012)', capA],
   ['e', "New tile's required_permission selectable in role-builder w/o separate edit (D-010/D-012)", capE],
+  ['f', 'Tenant override/custom not cross-tenant; floor not tenant-writable; clone-not-mutate (D-010, AC-3)', capF],
+  ['g', 'Factory-reset deletes the tenant override → shared floor unchanged (D-010)', capG],
 ];
 
 // ── ACCEPTANCE — Role Machine definition-of-done (NOT yet built) ────────────────────
@@ -532,9 +619,15 @@ const ACCEPTANCE = [
   ['d', 'Lapsed tile data obscured (fuzzy) not deleted; countdown end date persists across reload; restore requires payment (D-013)', ACCEPTANCE_REASON],
   // (e) New tile's required_permission selectable in role-builder — PROMOTED to live cap #e
   //     (Tile Registry STAGE 2, 2026-06-23): every entry carries required_permission and
-  //     registryPermissions()/allTiles() expose the full set. See cap #e.
-  ['f', 'A tenant custom role + per-tenant override are NOT visible cross-tenant; a tenant edit never mutates the shared system-role definition (D-010, AC-3)', ACCEPTANCE_REASON],
-  ['g', 'Reset of a tuned system role removes the override → permission set byte-identical to shared floor; floor unchanged; reset writes an audit row (D-010)', ACCEPTANCE_REASON],
+  //     registryPermissions()/allTiles() expose the full set; the role-config console now feeds
+  //     its chips from registryPermissions() (exercised). See cap #e.
+  // (f) Tenant override/custom NOT cross-tenant; tenant edit never mutates the shared floor —
+  //     PROMOTED to live cap #f (role-config console, 2026-06-23): role_definitions RLS keeps the
+  //     floor non-tenant-writable + tenant rows owner/member-scoped; the console clones-not-mutates.
+  // (g) Reset of a tuned system role removes the override → floor shows through unchanged —
+  //     PROMOTED to live cap #g (2026-06-23): deleteTenantRole is business_id-scoped; the console
+  //     factory-reset deletes the override. (Audit-row on reset is activation-authority's concern,
+  //     a later rung — NOT this visibility-axis pass.)
   // (h) WRITE-WALL — PROMOTED to live cap #7 (Gate-3b, 2026-06-22). No longer a SKIP: the data-layer
   //     write wall holds (RLS WITH CHECK has_permission) and the one service-key bypass (cost-apply)
   //     is now caller-permission-gated. See cap #7 + scripts/verify-write-wall.ts.
