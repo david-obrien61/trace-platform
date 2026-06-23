@@ -433,6 +433,16 @@ packages/shared/src/suggestions/
 
 Every decline is tracked. Dashboard shows: "X customers declined mulch refresh this month — est. $Y missed."
 
+### The social-intelligence surface — `[POINTER]`
+
+Same surfacing family as the Regina Principle, applied to social/campaign output. **Scheduling layer**
+(platform·day slots on a dual-layer calendar — steady cadence markers overlaid with event-bounded campaign
+bands; one weekly aggregation rendered per-audience in the one voice; copy-and-go preserved, no auto-publish)
+**+ measurement layer** (Erin O'Brien's design — 5 variations, owner-picks-vs-reality, the view→click→schedule
+funnel, guided by **sales-correlation BI** as the honest first signal). Rides on the locked social doctrine
+(weekly-aggregate · two-generators-one-voice · per-platform cadence · copy-and-go v1). Full record:
+**`docs/CONCEPT-social-scheduling-and-measurement.md`**.
+
 ---
 
 ## PART 5 — VERTICAL ROADMAP
