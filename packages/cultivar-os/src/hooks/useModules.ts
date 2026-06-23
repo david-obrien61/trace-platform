@@ -1,55 +1,38 @@
+/**
+ * useModules — builds the Dashboard tile grid FROM the single tile registry (MB_D-012).
+ *
+ * PURPOSE:      Return the dashboard grid tiles the active session is permitted to see, in
+ *               registry order, with their per-tenant state overlaid. The catalog (label, icon,
+ *               color, order, route, required_permission) comes from tileRegistry.ts — the ONE
+ *               source. The three drifting lists this used to own (MODULE_META, MODULE_ORDER,
+ *               and the Dashboard routing switches) are GONE.
+ * DEPENDENCIES: tileRegistry.ts (catalog); business_modules (per-tenant enablement overlay);
+ *               the permission chokepoint `can` (BusinessProvider) for visibility gating.
+ * OUTPUTS:      { modules, loading, error } — modules = ModuleTile[] (dashboard grid only).
+ *
+ * Visibility rule (the wiring point of D-012): a tile renders iff
+ *   placement==dashboard (registry) AND the role holds required_permission (can()).
+ * Status drives interactivity: status==planned → 'locked' (greyed); status==live → 'active'
+ * (navigable) or 'available' (has a module_key but not yet enabled+configured → tap to set up).
+ */
 import { useEffect, useState } from 'react';
 import type { ComponentType } from 'react';
 import type { LucideProps } from 'lucide-react';
-import {
-  QrCode, BookOpen, ShoppingBag, Share2, MessageCircle,
-  Map, Users, Leaf, BarChart2, Camera, Calculator,
-} from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { dashboardTiles } from '../registry/tileRegistry';
 
 export type TileState = 'active' | 'available' | 'locked';
 
-export interface ModuleData {
+export interface ModuleTile {
   key: string;
-  name: string;
-  description: string | null;
+  label: string;
   icon: ComponentType<LucideProps>;
   color: string;
   bg: string;
-  tier_required: string | null;
   state: TileState;
-  enabled: boolean;
-  configured: boolean;
-  config: Record<string, unknown> | null;
+  /** Navigation target (from the registry) — Dashboard navigates here on tap. */
+  route?: string;
 }
-
-interface ModuleMeta {
-  icon: ComponentType<LucideProps>;
-  color: string;
-  bg: string;
-  name: string;
-}
-
-const MODULE_META: Record<string, ModuleMeta> = {
-  qr_checkout:       { icon: QrCode,         color: '#34d399', bg: '#1e293b', name: 'QR Checkout'  },
-  qb_invoicing:      { icon: BookOpen,        color: '#60a5fa', bg: '#1e293b', name: 'QuickBooks'   },
-  online_shop:       { icon: ShoppingBag,     color: '#c084fc', bg: '#1e293b', name: 'Online Shop'  },
-  social_media:      { icon: Share2,          color: '#f472b6', bg: '#1e293b', name: 'Social'       },
-  followup_engine:   { icon: MessageCircle,   color: '#fbbf24', bg: '#1e293b', name: 'Follow-Up'    },
-  delivery_routing:  { icon: Map,             color: '#22d3ee', bg: '#1e293b', name: 'Delivery'     },
-  contractor_tiers:  { icon: Users,           color: '#fb923c', bg: '#1e293b', name: 'Contractors'  },
-  seasonal_module:   { icon: Leaf,            color: '#4ade80', bg: '#1e293b', name: 'Seasonal'     },
-  business_insights: { icon: BarChart2,       color: '#818cf8', bg: '#1e293b', name: 'Insights'     },
-  inventory_intake:  { icon: Camera,          color: '#fb7185', bg: '#1e293b', name: 'Inventory'    },
-  cost_to_produce:   { icon: Calculator,      color: '#2dd4bf', bg: '#1e293b', name: 'Cost'        },
-};
-
-const MODULE_ORDER = [
-  'qr_checkout', 'qb_invoicing', 'online_shop', 'social_media',
-  'followup_engine', 'delivery_routing', 'contractor_tiers',
-  'seasonal_module', 'business_insights', 'inventory_intake',
-  'cost_to_produce',
-] as const;
 
 interface BusinessModuleRow {
   module_key: string;
@@ -58,15 +41,13 @@ interface BusinessModuleRow {
   config: Record<string, unknown> | null;
 }
 
-interface ModuleRow {
-  key: string;
-  name: string;
-  description: string | null;
-  tier_required: string | null;
-}
-
-export function useModules(businessId: string | null) {
-  const [modules, setModules] = useState<ModuleData[]>([]);
+/**
+ * @param businessId active business
+ * @param can        permission chokepoint (BusinessProvider). Owner ⇒ true for all; member ⇒
+ *                    their explicit list. A tile the session can't see is filtered out.
+ */
+export function useModules(businessId: string | null, can: (permissionId: string) => boolean) {
+  const [modules, setModules] = useState<ModuleTile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
 
@@ -79,70 +60,37 @@ export function useModules(businessId: string | null) {
       setError(null);
 
       try {
-        const [businessRes, nmRes, modsRes] = await Promise.all([
-          supabase
-            .from('businesses')
-            .select('accounting_company_id')
-            .eq('id', businessId)
-            .single(),
-
-          supabase
-            .from('business_modules')
-            .select('module_key, enabled, configured, config')
-            .eq('business_id', businessId),
-
-          supabase
-            .from('modules')
-            .select('key, name, description, tier_required'),
-        ]);
+        // Per-tenant enablement overlay — registry is the catalog; business_modules is the
+        // tenant's enabled/configured state (used only for active-vs-available styling/badge).
+        const { data: nmData } = await supabase
+          .from('business_modules')
+          .select('module_key, enabled, configured, config')
+          .eq('business_id', businessId);
 
         if (cancelled) return;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const accountingCompanyId = (businessRes.data as any)?.accounting_company_id ?? null;
-        const businessPlan = 'starter'; // post-demo: fetch from subscription table
-
         const nmByKey: Record<string, BusinessModuleRow> = {};
-        for (const row of (nmRes.data ?? []) as BusinessModuleRow[]) {
+        for (const row of (nmData ?? []) as BusinessModuleRow[]) {
           nmByKey[row.module_key] = row;
         }
 
-        const modByKey: Record<string, ModuleRow> = {};
-        for (const row of (modsRes.data ?? []) as ModuleRow[]) {
-          modByKey[row.key] = row;
-        }
-
-        const result: ModuleData[] = MODULE_ORDER.map((key) => {
-          const meta = MODULE_META[key];
-          const nm   = nmByKey[key] ?? null;
-          const mod  = modByKey[key] ?? null;
-
-          const name          = mod?.name          ?? meta.name;
-          const description   = mod?.description   ?? null;
-          const tier_required = mod?.tier_required ?? null;
-          const enabled       = nm?.enabled        ?? false;
-          const configured    = nm?.configured     ?? false;
-          const config        = nm?.config         ?? null;
-
-          const base = { key, name, description, icon: meta.icon, color: meta.color, bg: meta.bg, tier_required, enabled, configured, config };
-
-          // QB: active if business has a connected accounting company
-          if (key === 'qb_invoicing') {
-            return { ...base, state: (accountingCompanyId ? 'active' : 'available') as TileState };
-          }
-
-          // Growth-tier module on starter plan → locked
-          if (tier_required === 'growth' && businessPlan === 'starter') {
-            return { ...base, state: 'locked' as TileState };
-          }
-
-          // Enabled and configured → active
-          if (enabled && configured) {
-            return { ...base, state: 'active' as TileState };
-          }
-
-          return { ...base, state: 'available' as TileState };
-        });
+        const result: ModuleTile[] = dashboardTiles()
+          // visibility: registry placement is already dashboard; gate on the locked permission.
+          .filter((t) => can(t.required_permission))
+          .map((t) => {
+            let state: TileState;
+            if (t.status === 'planned') {
+              state = 'locked'; // greyed/disabled forward declaration
+            } else if (t.module_key) {
+              // a tile backed by an enablement row: active once enabled+configured, else available
+              const nm = nmByKey[t.module_key] ?? null;
+              state = nm?.enabled && nm?.configured ? 'active' : 'available';
+            } else {
+              // a live surface with no enablement gate (cost/assets/etc.) — directly navigable
+              state = 'active';
+            }
+            return { key: t.key, label: t.label, icon: t.icon, color: t.color, bg: t.bg, state, route: t.route };
+          });
 
         setModules(result);
       } catch (err: unknown) {
@@ -156,7 +104,7 @@ export function useModules(businessId: string | null) {
 
     load();
     return () => { cancelled = true; };
-  }, [businessId]);
+  }, [businessId, can]);
 
   return { modules, loading, error };
 }

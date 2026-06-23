@@ -430,6 +430,64 @@ function cap7(key, v) {
   return FAIL(`write-wall gap (Gate-3b regression): ${problems.join(' | ')}`);
 }
 
+// ════════════════════════════════════════════════════════════════════════════════
+// CAPABILITY a — Tile visibility driven by the SINGLE registry, not hardcoded (D-012)
+//   Promoted from ACCEPTANCE (a) → live 2026-06-23 (Tile Registry STAGE 2). Structural,
+//   source-decidable: the registry is the one declared source; the three drift-lists that used
+//   to define the dashboard grid (MODULE_META, MODULE_ORDER, Dashboard routing switches) are
+//   GONE; useModules + Dashboard read the registry.
+// ════════════════════════════════════════════════════════════════════════════════
+function capA(key, v) {
+  if (!isMultiTenant(v)) return SKIP('tile registry is a Cultivar multi-surface concern; Ignition tiles render from CoreApp (out of scope).');
+  const reg  = read('packages/cultivar-os/src/registry/tileRegistry.ts');
+  const um   = read('packages/cultivar-os/src/hooks/useModules.ts');
+  const dash = read('packages/cultivar-os/src/pages/Dashboard.tsx');
+  const problems = [];
+  // (i) the registry exists and IS the source
+  if (!/export const TILE_REGISTRY/.test(reg)) problems.push('tileRegistry.ts: no exported TILE_REGISTRY');
+  if (!/export function dashboardTiles\b/.test(reg)) problems.push('tileRegistry.ts: no dashboardTiles() selector');
+  // (ii) useModules reads the registry and no longer owns the catalog/order
+  if (!/from '\.\.\/registry\/tileRegistry'/.test(um)) problems.push('useModules.ts: does not import the registry');
+  // match the DECLARATION, not a mention in a docstring (the doc names them to say they're gone)
+  if (/const\s+MODULE_META\b/.test(um)) problems.push('useModules.ts: MODULE_META drift-list still declared');
+  if (/const\s+MODULE_ORDER\b/.test(um)) problems.push('useModules.ts: MODULE_ORDER drift-list still declared');
+  // (iii) Dashboard reads the registry and no longer hardcodes the routing switches
+  if (!/registry\/tileRegistry/.test(dash)) problems.push('Dashboard.tsx: does not read the registry');
+  if (/function handleEnable\b/.test(dash) || /function handleNavigate\b/.test(dash)) {
+    problems.push('Dashboard.tsx: hardcoded handleEnable/handleNavigate switch still present (routing must come from registry route)');
+  }
+  if (problems.length === 0) {
+    return PASS('dashboard tile visibility + routing come from the single tileRegistry.ts; MODULE_META / MODULE_ORDER / routing-switch drift-lists are gone (useModules + Dashboard read the registry).');
+  }
+  return FAIL(`tile-registry single-source not established: ${problems.join('; ')}`);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// CAPABILITY e — A newly registered tile's required_permission is selectable in the
+//   role-builder WITHOUT a separate edit (D-010/D-012). Promoted from ACCEPTANCE (e) → live
+//   2026-06-23. Structural: every registry entry carries required_permission AND a single
+//   enumerator (registryPermissions / allTiles) exposes the whole set — so a role-builder that
+//   reads those selectors picks up a new tile's permission automatically (no second list to edit).
+// ════════════════════════════════════════════════════════════════════════════════
+function capE(key, v) {
+  if (!isMultiTenant(v)) return SKIP('role-config/marketplace are Cultivar surfaces over the Cultivar registry (out of scope for Ignition).');
+  const reg = read('packages/cultivar-os/src/registry/tileRegistry.ts');
+  const problems = [];
+  if (!/required_permission:\s*string/.test(reg)) problems.push('TileEntry has no required_permission field');
+  if (!/export function registryPermissions\b/.test(reg)) problems.push('no registryPermissions() enumerator (role-builder source)');
+  if (!/export function allTiles\b/.test(reg)) problems.push('no allTiles() selector (role-config/marketplace source)');
+  // every entry must actually declare required_permission (count entries vs occurrences)
+  const entryCount = (reg.match(/\bkey:\s*'/g) || []).length;
+  const permCount  = (reg.match(/required_permission:\s*'/g) || []).length;
+  if (entryCount === 0 || permCount < entryCount) {
+    problems.push(`not every entry declares required_permission (${permCount}/${entryCount})`);
+  }
+  if (problems.length === 0) {
+    return PASS(`every registry entry declares required_permission and registryPermissions()/allTiles() expose the full set → a newly registered tile's permission is role-builder-selectable with no separate edit.`);
+  }
+  return FAIL(`role-builder single-source not established: ${problems.join('; ')}`);
+}
+
 // ── capability registry ──────────────────────────────────────────────────────────
 const CAPS = [
   ['1', 'Persistent identity indicator in per-page layout/header', cap1],
@@ -439,6 +497,8 @@ const CAPS = [
   ['5', 'confidence enum honored (no silent $0)', cap5],
   ['6', 'Cost-wall regression guard (Gate 3 / Staff HAR encoded — READ side)', cap6],
   ['7', 'WRITE-WALL: cost writes permission-gated (endpoint + RLS WITH CHECK)', cap7],
+  ['a', 'Tile visibility driven by the registry, not hardcoded (D-012)', capA],
+  ['e', "New tile's required_permission selectable in role-builder w/o separate edit (D-010/D-012)", capE],
 ];
 
 // ── ACCEPTANCE — Role Machine definition-of-done (NOT yet built) ────────────────────
@@ -452,11 +512,15 @@ const CAPS = [
 // (cap #1, the persistent identity header, is the existing acceptance test for that piece.)
 const ACCEPTANCE_REASON = 'not yet built — acceptance test (definition-of-done); flip to live-assert when green.';
 const ACCEPTANCE = [
-  ['a', 'Tile visibility driven by the registry, not hardcoded (D-012)', ACCEPTANCE_REASON],
+  // (a) Tile visibility driven by the registry — PROMOTED to live cap #a (Tile Registry STAGE 2,
+  //     2026-06-23). No longer a SKIP: the single tileRegistry.ts is the source; the three
+  //     drift-lists are gone. See cap #a.
   ['b', 'Activation authority defaults to owner; revocation live/immediate (D-011)', ACCEPTANCE_REASON],
   ['c', 'Every activation writes an audit row (D-011)', ACCEPTANCE_REASON],
   ['d', 'Lapsed tile data obscured (fuzzy) not deleted; countdown end date persists across reload; restore requires payment (D-013)', ACCEPTANCE_REASON],
-  ['e', "A newly registered tile's required_permission is selectable in the role-builder without a separate edit (D-010/D-012)", ACCEPTANCE_REASON],
+  // (e) New tile's required_permission selectable in role-builder — PROMOTED to live cap #e
+  //     (Tile Registry STAGE 2, 2026-06-23): every entry carries required_permission and
+  //     registryPermissions()/allTiles() expose the full set. See cap #e.
   ['f', 'A tenant custom role + per-tenant override are NOT visible cross-tenant; a tenant edit never mutates the shared system-role definition (D-010, AC-3)', ACCEPTANCE_REASON],
   ['g', 'Reset of a tuned system role removes the override → permission set byte-identical to shared floor; floor unchanged; reset writes an audit row (D-010)', ACCEPTANCE_REASON],
   // (h) WRITE-WALL — PROMOTED to live cap #7 (Gate-3b, 2026-06-22). No longer a SKIP: the data-layer

@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { auth } from '../lib/auth';
 import { useBusinessContext } from '@trace/shared/context';
 import { useModules } from '../hooks/useModules';
+import { requiredPermissionFor } from '../registry/tileRegistry';
 import { TileGrid } from '@trace/shared/components/tiles/TileGrid';
 import { Tile } from '@trace/shared/components/tiles/Tile';
 
@@ -82,6 +83,10 @@ export function Dashboard() {
   const { businessId, loading: businessLoading, businessError, userPermissions, isOwner, can } = useBusinessContext();
   const canManageSettings = isOwner || (userPermissions ?? []).includes('manage_settings');
   const canViewCosts = can('view_costs'); // gates the cost-derived inventory-value metric
+  // Readout visibility is registry-driven (MB_D-012): a readout LEAKS data by rendering, so it
+  // shows only if the session holds the registry's required_permission for that readout key.
+  // (today_sales is now view_costs-gated — revenue is moat-class. Was ungated.)
+  const canSeeReadout = (key: string) => can(requiredPermissionFor(key) ?? 'owner-only');
 
   const [businessName, setBusinessName]       = useState('');
   const [plantCount, setPlantCount]           = useState(0);
@@ -122,7 +127,7 @@ export function Dashboard() {
   // poll so a persistently-erroring status endpoint (tech-debt #34) stops hammering every 2s
   // instead of looping until the popup closes. Reset to 0 on any healthy (res.ok) response.
   const qbStatusFailRef = useRef(0);
-  const { modules } = useModules(businessId);
+  const { modules } = useModules(businessId, can);
 
   // ── Data loading ─────────────────────────────────────────────────────────
 
@@ -380,31 +385,14 @@ export function Dashboard() {
     setComingSoonMsg(label);
   }
 
-  function handleEnable(key: string) {
-    switch (key) {
-      case 'social_media':
-        if (SM_DEBUG) console.log('[SM-TRACE] Dashboard handleEnable: social_media tile was AVAILABLE → navigate /social/setup. businessId:', businessId);
-        return navigate('/social/setup');
-      case 'delivery_routing': return navigate('/delivery-schedule');
-      case 'cost_to_produce': return navigate('/settings'); // configure in Settings, then it computes
-      case 'online_shop':     return showComingSoon('Online Shop');
-      case 'followup_engine': return showComingSoon('Follow-Up Engine');
-      default:                return showComingSoon(key.replace(/_/g, ' '));
-    }
-  }
-
-  function handleNavigate(key: string) {
-    switch (key) {
-      case 'qr_checkout':     return navigate('/orders');
-      case 'qb_invoicing':    return navigate('/settings');
-      case 'social_media':
-        if (SM_DEBUG) console.log('[SM-TRACE] Dashboard handleNavigate: social_media tile was ACTIVE → navigate /social/setup. businessId:', businessId);
-        return navigate('/social/setup');
-      case 'delivery_routing': return navigate('/delivery-schedule');
-      case 'cost_to_produce':  return navigate('/costs');
-      case 'receipt_keeper':   return navigate('/receipts');
-      default:                return showComingSoon(key.replace(/_/g, ' '));
-    }
+  // Single registry-driven open handler (replaces the old handleEnable/handleNavigate switch
+  // statements — that routing now lives in tileRegistry.ts as each entry's `route`, MB_D-012).
+  // Fires for both 'available' (onEnable) and 'active' (onNavigate) tiles; 'locked'/planned tiles
+  // are non-interactive (no route) and show the coming-soon notice.
+  function openTile(tile: { key: string; label: string; route?: string }) {
+    if (SM_DEBUG && tile.key === 'social_media') console.log('[SM-TRACE] Dashboard openTile: social_media →', tile.route);
+    if (tile.route) return navigate(tile.route);
+    return showComingSoon(tile.label);
   }
 
   // ── Effects ───────────────────────────────────────────────────────────────
@@ -588,8 +576,8 @@ export function Dashboard() {
           </div>
         )}
 
-        {/* ── QB status banner ── */}
-        {!qbConnected ? (
+        {/* ── QB status banner (readout: qb_status → manage_settings) ── */}
+        {canSeeReadout('qb_status') && (!qbConnected ? (
           <div id="qb-section" style={{ background: '#fff', border: '2px solid var(--green-primary)', borderRadius: 12, padding: '16px' }}>
             <p style={{
               fontSize: '0.6875rem', fontWeight: 600, color: 'var(--green-primary)',
@@ -645,7 +633,7 @@ export function Dashboard() {
               Disconnect
             </button>
           </div>
-        )}
+        ))}
 
         {/* ── Metric cards 2×2 ── */}
         {loading ? (
@@ -662,13 +650,15 @@ export function Dashboard() {
         ) : (
           <>
             <div style={{ display: 'flex', gap: 12 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <MetricCard
-                  label="Plants tracked"
-                  value={String(plantCount)}
-                  sub={`${plantCount} available`}
-                />
-              </div>
+              {canSeeReadout('metric_plants') && (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <MetricCard
+                    label="Plants tracked"
+                    value={String(plantCount)}
+                    sub={`${plantCount} available`}
+                  />
+                </div>
+              )}
               {canViewCosts && (
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <MetricCard
@@ -681,24 +671,29 @@ export function Dashboard() {
             </div>
 
             <div style={{ display: 'flex', gap: 12 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <MetricCard
-                  label="Today's sales"
-                  value={String(todayOrderCount)}
-                  sub={todayOrderCount > 0 ? `${fmt$(todayRevenue)} revenue` : 'No orders yet today'}
-                />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <MetricCard
-                  label="Installs this week"
-                  value={String(installsThisWeek)}
-                  sub={installsThisWeek === 1 ? '1 scheduled' : `${installsThisWeek} scheduled`}
-                />
-              </div>
+              {/* Today's sales is a readout that exposes revenue → view_costs-gated (moat-class). */}
+              {canSeeReadout('metric_today_sales') && (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <MetricCard
+                    label="Today's sales"
+                    value={String(todayOrderCount)}
+                    sub={todayOrderCount > 0 ? `${fmt$(todayRevenue)} revenue` : 'No orders yet today'}
+                  />
+                </div>
+              )}
+              {canSeeReadout('metric_installs') && (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <MetricCard
+                    label="Installs this week"
+                    value={String(installsThisWeek)}
+                    sub={installsThisWeek === 1 ? '1 scheduled' : `${installsThisWeek} scheduled`}
+                  />
+                </div>
+              )}
             </div>
 
-            {/* ── Leakage alert tile ── */}
-            {leakageCount > 0 ? (
+            {/* ── Leakage alert tile (readout: leakage_alert → view_orders) ── */}
+            {canSeeReadout('leakage_alert') && (leakageCount > 0 ? (
               <div style={{
                 background: 'var(--amber-bg)',
                 border: '1.5px solid var(--amber-border)',
@@ -741,7 +736,7 @@ export function Dashboard() {
                   </p>
                 </div>
               </div>
-            )}
+            ))}
           </>
         )}
 
@@ -779,14 +774,13 @@ export function Dashboard() {
               <Tile
                 key={mod.key}
                 id={mod.key}
-                label={mod.name}
+                label={mod.label}
                 icon={mod.icon}
                 color={mod.color}
                 bg={mod.bg}
                 state={mod.state}
-                onEnable={() => handleEnable(mod.key)}
-                onNavigate={() => handleNavigate(mod.key)}
-                tierRequired={mod.tier_required ?? undefined}
+                onEnable={() => openTile(mod)}
+                onNavigate={() => openTile(mod)}
                 count={mod.key === 'social_media' ? socialDrafts.length : undefined}
               />
             ))}
