@@ -323,6 +323,22 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-22 — THUNDER persistent identity header: shared `<AppHeader>` mounted once → verify-universals cap #1 FAIL → PASS (BUILDER-COMPLETE, owner-proof owed-after-deploy)
+
+**Type:** App code ONLY — 1 new shared component + 1 new cultivar layout + 1 router mount + canonical-context extension + verify-universals cap #1 rewrite. **NO schema, NO RLS, NO migration.** Closes the only red assertion (Cultivar cap #1). `[TRACE:*]` STAYS ON; new `[TRACE:HEADER]` emits ON. Commit `__PENDING__`.
+
+**What:** every authenticated Cultivar page now shows a persistent identity strip — **active business name + signed-in email + role badge** (OWNER/MANAGER/STAFF, the 3 roles Cultivar runs today; it reads the resolved role, not a hardcoded list, so it inherits the D-010 5-role model for free when Role Machine lands). Cultivar-native rebuild of Ignition's `ShopBanner` (shape ported, not code).
+
+**Canonical identity, one source:** `<AppHeader>` (`packages/shared/src/components/AppHeader.tsx`) is FED BY `useBusinessContext` (BusinessProvider) — it NEVER fetches on its own. BusinessProvider was EXTENDED (not duplicated) to expose `userEmail` (from `supabase.auth.getUser()`, already called) + a display-ready `role` (owner ⇒ OWNER; member ⇒ `business_members.role` uppercased — the role column was already SELECTed and discarded; now captured). One canonical representation per fact — same principle the RBAC line rests on.
+
+**Mounted ONCE, not per-page:** new `AppLayout` (`packages/cultivar-os/src/components/layout/AppLayout.tsx`) renders `<AppHeader/>` + `<Outlet/>`; `router.tsx` nests it inside `<Route element={<PrivateRoute/>}>` so it wraps EVERY private route from one mount. Unauthenticated routes never get it (PrivateRoute gates first). Kills the ad-hoc per-page header pattern the recon flagged.
+
+**verify-universals cap #1 — rewritten to assert the REAL mount (honestly, not rubber-stamped):** the cultivar branch now checks (a) a layout route wraps the private routes, (b) `AppLayout` mounts `<AppHeader/>` + `<Outlet/>`, (c) the header pulls identity from the canonical context, (d) it does NOT query the DB itself, (e) it renders business name + role. **Full matrix all-green, exit 0:** Cultivar #1–7 ALL PASS (#1 flipped FAIL→PASS); Ignition #1 PASS / #2–7 SKIP (documented PIN-vertical exception). `build:cultivar` clean (2208 modules, +1); AppHeader/AppLayout/router/BusinessProvider tsc-clean.
+
+**Two bars:** BUILDER-COMPLETE (cap #1 PASS + compiles). **OWNER-PROVEN owed-after-deploy** = David sees the header live on multiple pages under a real session (role badge correct for owner vs a staff session) — owed alongside the Part A render-layer + write-wall HARs already owed.
+
+**Next:** the bench foundation is ready → the single **Tile Registry (MB_D-012)** is next.
+
 ### 2026-06-22 — THUNDER Gate-3b: close the one real write hole + write-tamper proof (3 scoped commits)
 
 **Type:** Ledger honesty + ONE app-code gate + a test. NO migrations (the data-layer write wall already holds via existing policies — recon-confirmed `20260622_…cost_wall.sql:141-212`, FOR ALL + has_permission in USING+WITH CHECK). Three commits.

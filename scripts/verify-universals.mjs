@@ -153,33 +153,37 @@ function cap1(key) {
       `shell ${shellNav ? 'present' : 'MISSING'}.`,
     );
   }
-  // cultivar: a persistent identity header must be mounted as a wrapper around the private
-  // routes (router.tsx) OR rendered by PrivateRoute — and must render the business identity.
+  // cultivar: a persistent identity header (<AppHeader>) must be mounted ONCE as a layout
+  // wrapping the private routes, and that header must render the business identity from the
+  // canonical BusinessProvider context — not per-page, not from its own fetch.
   const router = read('packages/cultivar-os/src/router.tsx');
-  const priv = read('packages/cultivar-os/src/components/layout/PrivateRoute.tsx');
-  const sharedPriv = read('packages/shared/src/auth/configureAuth.tsx');
-  const navbar = read('packages/cultivar-os/src/components/layout/NavBar.tsx');
+  const layout = read('packages/cultivar-os/src/components/layout/AppLayout.tsx');
+  const header = read('packages/shared/src/components/AppHeader.tsx');
 
-  // (a) a layout/shell wraps the private routes in the router
+  // (a) a layout/shell route wraps the private routes in the router
   const routerWraps = /element=\{<(?:App)?(?:Layout|Shell|Chrome|NavBar|Header)[\s/>]/.test(router);
-  // (b) the auth PrivateRoute renders an identity header rather than a bare <Outlet/>
-  const privIdentity =
-    (/useBusinessContext|business\??\.name|nursery\??\.name/.test(priv) ||
-      /useBusinessContext|business\??\.name|nursery\??\.name/.test(sharedPriv)) &&
-    /<header|Banner|NavBar/.test(priv + sharedPriv);
-  // (c) does a layout component even pull identity from context? (NavBar.tsx today does NOT —
-  //     it only renders a `title` prop and is unmounted)
-  const navbarIdentity = /useBusinessContext|business\??\.name|nursery\??\.name/.test(navbar);
+  // (b) that layout mounts the shared header AND the route <Outlet/> (one mount, wraps every page)
+  const layoutMountsHeader = /<AppHeader[\s/>]/.test(layout) && /<Outlet[\s/>]/.test(layout);
+  // (c) the header pulls identity from the canonical context — and does NOT fetch on its own
+  const headerFromContext = /useBusinessContext/.test(header);
+  const headerNoOwnFetch = !/supabase|\.from\(|fetch\(/.test(header);
+  // (d) the header actually renders the identity: business name + the role badge
+  const headerRendersIdentity = /business\??\.name|business\.name/.test(header) && /\brole\b/.test(header);
 
-  if (routerWraps && (privIdentity || navbarIdentity)) {
-    return PASS('A persistent identity layout wraps the private routes and renders business identity.');
+  if (routerWraps && layoutMountsHeader && headerFromContext && headerNoOwnFetch && headerRendersIdentity) {
+    return PASS(
+      `Persistent <AppHeader> mounted once via AppLayout wrapping the private routes ` +
+      `(router.tsx:${lineOf(router, /element=\{<AppLayout/) || '?'}); it renders business name + ` +
+      `email + role badge from the canonical BusinessProvider context (no own fetch) — visible on ` +
+      `every authenticated page, not dashboard-only.`,
+    );
   }
   return FAIL(
-    `No persistent identity header is mounted across pages. PrivateRoute renders a bare <Outlet/> ` +
-    `(configureAuth.tsx:${lineOf(sharedPriv, /return user \? <Outlet/) || '?'}); BusinessProvider ` +
-    `(App.tsx) holds identity in CONTEXT only (no visible indicator); NavBar.tsx exists but is ` +
-    `unmounted and renders only a \`title\` prop (no context identity); each page renders its own ` +
-    `ad-hoc header. Fix: mount a shared identity header in the PrivateRoute layout.`,
+    `No persistent identity header mounted across pages. ` +
+    `routerWraps=${routerWraps} layoutMountsHeader=${layoutMountsHeader} ` +
+    `headerFromContext=${headerFromContext} headerNoOwnFetch=${headerNoOwnFetch} ` +
+    `headerRendersIdentity=${headerRendersIdentity}. ` +
+    `Fix: mount the shared <AppHeader> in a layout (AppLayout) wrapping the PrivateRoute routes.`,
   );
 }
 

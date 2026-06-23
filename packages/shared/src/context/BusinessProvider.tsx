@@ -31,6 +31,7 @@ interface ResolvedBusiness {
   business: Business;
   isOwner: boolean;
   permissions: string[] | null; // null = owner (full access implied)
+  role: string | null;          // member's raw business_members.role; null for owners
 }
 
 export interface BusinessContextValue {
@@ -45,6 +46,13 @@ export interface BusinessContextValue {
   // null = owner (full access implied). string[] = member's explicit permission list.
   userPermissions: string[] | null;
   isOwner: boolean;
+  // Canonical identity surface for the persistent header (consumed by <AppHeader>, never
+  // re-fetched). userEmail = the signed-in Supabase user's email. role = display-ready role
+  // for the ACTIVE business: 'OWNER' for owners, else the member's role uppercased (the 3
+  // roles Cultivar runs today — OWNER / MANAGER / STAFF; inherits the 5-role model for free
+  // when Role Machine lands, because it reads the resolved role, not a hardcoded list).
+  userEmail: string | null;
+  role: string | null;
   // THE permission chokepoint (decision 2026-06-21). Single true checker for the
   // active business: owner ⇒ true; member ⇒ shared can() over their explicit list
   // with the view_margin⊆view_costs dependency applied. DEFAULT-DENY. Route every
@@ -63,6 +71,8 @@ const BusinessContext = createContext<BusinessContextValue>({
   reload: () => {},
   userPermissions: null,
   isOwner: false,
+  userEmail: null,
+  role: null,
   can: () => false,
 });
 
@@ -176,6 +186,8 @@ export function BusinessProvider({
   const [businessError, setBusinessError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
+  // Signed-in user's email — the canonical identity value the header displays (no re-fetch).
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   // Persisted active selection — initialized from localStorage, survives reload
   const [activeBusinessId, setActiveBusinessIdState] = useState<string | null>(() => {
@@ -210,10 +222,13 @@ export function BusinessProvider({
         if (!cancelled) {
           setResolvedBusinesses([]);
           setBusinessError(null);
+          setUserEmail(null);
           setLoading(false);
         }
         return;
       }
+
+      if (!cancelled) setUserEmail(user.email ?? null);
 
       const resolved: ResolvedBusiness[] = [];
 
@@ -236,7 +251,7 @@ export function BusinessProvider({
       });
 
       for (const biz of (ownedBizzes ?? [])) {
-        resolved.push({ business: biz as Business, isOwner: true, permissions: null });
+        resolved.push({ business: biz as Business, isOwner: true, permissions: null, role: null });
       }
 
       // 2. Member path — fetch ALL business_members rows for this user, active=true
@@ -266,6 +281,7 @@ export function BusinessProvider({
           business: memberBiz,
           isOwner: false,
           permissions: (m.permissions as string[]) ?? [],
+          role: (m.role as string) ?? null,
         });
       }
 
@@ -343,6 +359,13 @@ export function BusinessProvider({
   // (the existing inline .includes() gates are migrated in the render-gate phase).
   const isOwnerActive = activeResolved?.isOwner ?? false;
   const activePermissions = activeResolved?.permissions ?? null;
+
+  // Display-ready role for the active business. Owner ⇒ OWNER; member ⇒ their raw role
+  // uppercased (the role they ACTUALLY hold — rendered live, not a hardcoded list; falls
+  // back to STAFF only when a member row carries no role). null when nothing is resolved.
+  const activeRole: string | null = activeResolved
+    ? (isOwnerActive ? 'OWNER' : (activeResolved.role ?? 'STAFF').toUpperCase())
+    : null;
   const can = React.useCallback(
     (permissionId: string): boolean => {
       if (isOwnerActive) return true; // owner: full access (userPermissions === null)
@@ -385,6 +408,8 @@ export function BusinessProvider({
       reload: () => setTick(t => t + 1),
       userPermissions: activeResolved?.permissions ?? null,
       isOwner: isOwnerActive,
+      userEmail,
+      role: activeRole,
       can,
     }}>
       {needsPicker

@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { PrivateRoute }    from './components/layout/PrivateRoute';
+import { AppLayout }       from './components/layout/AppLayout';
 import { PermissionRoute } from './components/layout/PermissionRoute';
 import { VIEW_COSTS }      from '@trace/shared/auth';
 import { PlantProfile }    from './pages/PlantProfile';
@@ -63,28 +64,31 @@ export function AppRouter() {
       <Route path="/terms"   element={<Terms />} />
       <Route path="/help"    element={<Help />} />
 
-      {/* PRIVATE — nursery owner/staff */}
+      {/* PRIVATE — nursery owner/staff. AppLayout mounts the persistent identity header ONCE
+          around every authenticated route (one mount, not per-page). */}
       <Route element={<PrivateRoute />}>
-        <Route path="/dashboard"    element={<Dashboard />} />
-        <Route path="/orders"       element={<Orders />} />
-        <Route path="/deliveries"   element={<DeliveryRoute />} />
-        <Route path="/delivery-schedule" element={<DeliverySchedule />} />
-        <Route path="/social/setup" element={<SocialSetup />} />
-        <Route path="/settings"          element={<Settings />} />
-        <Route path="/onboarding"        element={<OnboardingWizard />} />
-        <Route path="/campaigns"         element={<Campaigns />} />
-        <Route path="/campaigns/:id"     element={<CampaignDetail />} />
-        <Route path="/add-business"      element={<AddBusiness />} />
-        <Route path="/receipts"          element={<ReceiptKeeper />} />
+        <Route element={<AppLayout />}>
+          <Route path="/dashboard"    element={<Dashboard />} />
+          <Route path="/orders"       element={<Orders />} />
+          <Route path="/deliveries"   element={<DeliveryRoute />} />
+          <Route path="/delivery-schedule" element={<DeliverySchedule />} />
+          <Route path="/social/setup" element={<SocialSetup />} />
+          <Route path="/settings"          element={<Settings />} />
+          <Route path="/onboarding"        element={<OnboardingWizard />} />
+          <Route path="/campaigns"         element={<Campaigns />} />
+          <Route path="/campaigns/:id"     element={<CampaignDetail />} />
+          <Route path="/add-business"      element={<AddBusiness />} />
+          <Route path="/receipts"          element={<ReceiptKeeper />} />
 
-        {/* COST-ANALYSIS surfaces — require view_costs (decision 2026-06-21, Phase 3/4).
-            A low-role member is redirected to /dashboard, so the cost SELECT never fires. */}
-        <Route element={<PermissionRoute permission={VIEW_COSTS} />}>
-          <Route path="/assets"            element={<BusinessAssets />} />
-          <Route path="/inventory"         element={<BusinessInventory />} />
-          <Route path="/costs"             element={<CostToProduce />} />
-          <Route path="/operating-costs"   element={<OperatingCosts />} />
-          <Route path="/pmi"               element={<PMI />} />
+          {/* COST-ANALYSIS surfaces — require view_costs (decision 2026-06-21, Phase 3/4).
+              A low-role member is redirected to /dashboard, so the cost SELECT never fires. */}
+          <Route element={<PermissionRoute permission={VIEW_COSTS} />}>
+            <Route path="/assets"            element={<BusinessAssets />} />
+            <Route path="/inventory"         element={<BusinessInventory />} />
+            <Route path="/costs"             element={<CostToProduce />} />
+            <Route path="/operating-costs"   element={<OperatingCosts />} />
+            <Route path="/pmi"               element={<PMI />} />
+          </Route>
         </Route>
       </Route>
 
