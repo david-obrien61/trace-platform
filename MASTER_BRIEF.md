@@ -309,6 +309,55 @@ Every tile beyond core is a billable module. Owner enables/disables from dashboa
 
 Every completed transaction is a revenue opportunity. The suggestion engine fires after every order, service, or interaction.
 
+### The Regina Principle — the thesis behind the engine
+
+*(Doctrine-tier. This is the platform's reason to exist, stated in a demonstrable form. Anchor it with Regina the way the anti-Nelson story (DECISIONS.md OP-5) anchors the cost thesis.)*
+
+**Thesis.** The owner already HAS the data and already KNOWS the business principles. What they cannot do is VISUALIZE the action hiding inside their own data. The platform's job is to **surface owner-known business principles against existing data, so the action becomes visible at the right moment and place** — moving the labor of *noticing what to do* off the owner's overloaded head and onto the tool. This is the same anti-Nelson spine as the cost thesis (flip the labor from owner to tool), applied to customer relationships and revenue rather than cost.
+
+**The worked example — Regina (the anchor story).** Regina bought trees. We planted them. The data knows this. Months later the engine surfaces her: *"you're driving out her way — the trees are due a look."* That one prompted touch compounds into three stacked actions in a single visit:
+
+1. **Courtesy check** — "we're in your area, want us to look at the trees?" (warranty / relationship principle; costs nothing, already there).
+2. **Soft upsell, in context** — "by the way, we've got a fertilizer that'd be wonderful for these" (new-service-to-proven-buyer; offered standing in the yard, not cold).
+3. **Free consult on the rest** — "and while we're here, we'll look at your other trees" (expand-the-relationship; seeds the NEXT opportunity).
+
+One surfaced reminder → one visit → three services → trust → repeat business → word of mouth. The engine did exactly one thing to make the whole chain possible: **it reminded the owner that Regina existed, at the moment they were near her.** They'd have driven past. The data knew not to let them.
+
+**The flywheel (the pitch to the customer, e.g. Lauren).** courtesy service → service sale → free consult → trust → repeat business → word of mouth. The owner KNOWS this is how a nursery grows; they just can't act on it systematically because nobody surfaces "here are the people this applies to, this week, on your way." The pitch is not "we schedule deliveries" — it is **"a delivery run becomes three sales you'd otherwise have missed."** That is revenue left on the table today, made visible.
+
+**The principle set (a GROWING list — owner head-rules made systematic).** Each principle = a rule the owner holds + the data it runs on + the action it surfaces:
+
+- **Warranty / courtesy-by-window** — a planted tree carries a ~6-month warranty → before it lapses is the moment to check in. *Data: customer + sale date (plant date ≈ sale date).*
+- **New-service-to-proven-buyer** — a proven buyer is a warm candidate for a newly-offered service (e.g. fertilizer). *Data: purchase history + services catalog.*
+- **Consult-to-expand** — while on-site, a free consult on their other trees seeds the next sale. *Data: customer relationship.*
+- **Proximity-to-route** — a past customer near today's route is an almost-free touch. *Data: address + route (geocoding).*
+- *(The list grows as the owner names more of their head-rules. The engine is the framework; principles are data/config added over time.)*
+
+**Confidence honesty (the ladder applies here too).** Plant date is DERIVED from sale date (within a few days), NOT CONFIRMED. The surfaced action must show its precision honestly — "warranty closing ~late next month (est. from sale date)," never "expires July 28" when we don't hold an exact plant date. Same epistemic discipline as the cost engine (CONFIRMED / DERIVED / ESTIMATED; see DECISIONS.md D-9): the engine tells you what it knows AND how well it knows it. A surfaced opportunity is a human follow-up prompt, not an automated legal deadline — derived precision is correct and sufficient; precision theater would be the smoke.
+
+**Services as the spine (the key dependency).** The Regina chain only works because the system knows three SERVICES: **planting** (→ warranty + relationship), **fertilizer** (→ new-service upsell), **consult** (→ expand). Services are currently UNMODELED. They are the spine the surfacing chain hangs on — not a side dependency. *Open question for the services model (captured, not resolved):* is a service a cost-ledger object (cost-to-produce + price, like a 30-gal Live Oak) or a JOB-like object (labor + visit + materials + schedule)? "Courtesy inspection" / "fertilizer visit" lean closer to a JOB than a product — resolve when services is built. Demo-seedable: planting + fertilizer + consult is enough to demo the full Regina chain end-to-end.
+
+**Visualization layers (engine ≠ lens).** The surfacing ENGINE (principles → actions) is separate from how actions are SHOWN:
+
+- **List / morning briefing** — near-term, NO map dependency. "This week's opportunities: Regina (warranty closing + fertilizer candidate), …" The engine earns its keep the moment the first principle fires into a list.
+- **Map** — the NORTH-STAR lens that makes proximity visible (the showstopper demo: "you're driving past these 3 lapsed customers Tuesday"). Geocoding/maps is a Kind-2 vendor dependency — and an API-neutrality call per the platform's data covenant (a neutral utility, not a provider that buys loyalty). Map is map-ONLY; warranty/repeat principles surface fine as a list without it.
+
+**Honest dependency ledger.**
+
+- Customer entity — EXISTS (MB_D-014) ✓
+- Purchase history (what + when) — exists / derivable from sale ✓
+- Plant date — DERIVED from sale date (±days), no new capture needed ✓ (DERIVED confidence)
+- Services catalog — UNMODELED; seedable as demo data ⚠️
+- Address → proximity / geocoding — Kind-2 vendor (map lens only); list surfacing needs none ⚠️
+
+**Build path (incremental — proves the thesis before the big build).**
+
+1. **Principles → list** (near-term): warranty-closing + repeat-candidate fire from data we already hold; Regina appears in "this week's opportunities" with NO map. Proves the thesis cheaply.
+2. **Services model + seed** (unlocks the upsell half).
+3. **Principles → map** (NORTH-STAR): geocoding + route + proximity flags — the showstopper lens.
+
+The three suggestion types below are the surface this thesis fires through.
+
 ### Three Suggestion Types
 
 **1. IMMEDIATE ADD-ONS (during checkout)**

@@ -225,6 +225,30 @@ does a recon present HAVE/NEED/WANT with options across the spectrum, or a singl
 §17 (doctrine). Worked exemplar: `docs/cost-to-produce/ASSET-NODE-SCHEMA-DECISION-3LENS.md`.
 **Date captured:** 2026-06-15 · **Status:** Active doctrine / enforced gate.
 
+### OP-9 · The Regina Principle — the surfacing engine (the product north star) — `[POINTER]`
+**Decision:** The platform's job is to **surface owner-known business principles against existing data, so the
+action becomes visible at the right moment and place** — moving the labor of *noticing what to do* off the
+owner's head and onto the tool. The owner already HAS the data and KNOWS the principles; what they can't do is
+visualize the action hiding inside their own data. Each principle = an owner head-rule + the data it runs on +
+the action it surfaces (warranty-by-window, new-service-to-proven-buyer, consult-to-expand, proximity-to-route —
+a GROWING list). The surfacing ENGINE is separate from the LENS that shows it (list/morning-briefing first, no
+map; map is the north-star proximity lens, a Kind-2 vendor + API-neutrality call). Surfaced precision is shown
+honestly on the [[D-9]] ladder (plant date is DERIVED from sale date, never false-CONFIRMED) — a human
+follow-up prompt, not an automated legal deadline.
+**Reasoning:** This is the anti-Nelson flip ([[OP-5]], [[OP-7]]) applied to customer relationships and revenue,
+not just cost: labor comes OFF the owner. Anchor story — **Regina**: she bought trees, we planted them, the data
+knows; months later the engine surfaces her when the owner is driving past, and one reminder compounds into three
+services in one visit (courtesy check → soft upsell → free consult) → trust → repeat business → word of mouth.
+The pitch is not "we schedule deliveries" but "a delivery run becomes three sales you'd otherwise have missed."
+Key dependency: **services are UNMODELED** and are the spine the chain hangs on (open question: cost-ledger
+object vs JOB-like object — resolve when services is built). Build path proves the thesis cheaply first:
+principles → list (data we already hold) → services model + seed → principles → map.
+**Companion principles:** [[OP-5]]/[[OP-7]] (anti-Nelson, labor off the owner); [[D-9]] (honesty ladder on
+surfaced precision); [[OP-6]] (works when the owner does nothing).
+**Canonical home:** `MASTER_BRIEF.md` PART 4 — THE SUGGESTION ENGINE (full doctrine + worked example + flywheel
++ principle set + dependency ledger + build path). The "Regina moment" is also cited in PART 1's Two Pitches.
+**Date captured:** 2026-06-22 · **Status:** Active doctrine / product north star (build deferred; thesis durable).
+
 ---
 
 ## ARCHITECTURE-DECISION
