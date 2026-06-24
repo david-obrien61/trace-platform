@@ -625,7 +625,7 @@ Each test computes what a buggy build would output and asserts the real one diff
 **Context values:**
 - `business: Business | null` — full businesses row
 - `businessId: string | null`
-- `businessError: string | null` — `'no_business'` when neither path resolves
+- `businessError: string | null` — `'no_business'` when both paths genuinely return zero rows; `'read_error'` when a resolution SELECT ERRORED (data=null, rows may exist). Distinct since 2026-06-24 (`__PENDING__`): the owner + member SELECTs now capture `{ error }` and emit `[TRACE:BUSINESS] owner/member path ERROR {code,message,details,hint}`, so an errored read no longer masquerades as `no_business` and bounce-loops onboarding. Query shape + RLS unchanged (surface-only diagnostic; read root-cause fix is a follow-up once the surfaced error text is reported).
 - `loading: boolean`
 - `reload: () => void`
 - `userPermissions: string[] | null` — null = owner, string[] = member's DB-stored permissions
@@ -754,6 +754,8 @@ Each test computes what a buggy build would output and asserts the real one diff
 **Retry-aware:** If "User already registered" → attempts signIn → if no businesses row → continues business creation. Handles orphaned auth users from partial prior signups.
 
 **Person-name (full_name) layer — 2026-06-24 (`73498ca`):** the LOCKED identity model is implemented at the name write/seed layer. PERSON NAME source of truth = `auth.user_metadata.full_name`; `business_members.name` = invite-bootstrap / display-fallback only; display precedence everywhere = `full_name → member.name → email`. `signUp` now seeds `options.data.full_name` from the typed ownerName (was stranded — wrote only to the member row). Same `full_name` seed mirrored in the legacy `configureAuth.tsx` and `OnboardingWizard.tsx` signup paths. `acceptInvitation.ts` seeds `user_metadata.full_name` for new invitees and bridges an existing user who has no `full_name` yet (never overwrites a real name). `Profile.tsx` member self-edit writes `auth.updateUser({full_name})` first (unified with the owner path; member.name kept in sync as fallback; authority boundary held — name/phone/email only, never role/permissions). `BusinessProvider` member display precedence corrected to `authName ?? memberName ?? email`. NO schema/RLS/owner_id changes. **BUILDER-COMPLETE; owner-proof owed** (new owner signup → header shows name not email; member name self-edit persists/displays; invite accept carries name).
+
+**Onboarding bounce-loop fixes — 2026-06-24 (`__PENDING__`):** two independent swallow fixes in `OnboardingWizard.finalize()` + a gated migration. (1) **finalize now checks the `nursery_profiles` upsert `{ error }`** — on error it emits `[TRACE:BUSINESS] onboarding finalize: nursery_profiles upsert ERROR` and sets `finalizeError` (blocking the false "is live"/DONE screen) instead of advancing over a failed write. (2) **`20260624_nursery_profiles_business_id_unique.sql`** (gated, NOT applied) adds `UNIQUE (business_id)` so the `onConflict:'business_id'` upsert stops raising 42P10 → 400 (a `nursery_profiles` row is 1:1 with a business). Pre-existing bugs, NOT caused by `73498ca`. **BUILDER-COMPLETE; owner-proof owed** (apply the migration as postgres + catalog-verify the UNIQUE; finalize over a failed write shows an error, not "is live"). See also the `BusinessProvider` `read_error` distinction above (the masked dashboard-read error that caused the bounce).
 
 ---
 

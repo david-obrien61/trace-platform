@@ -521,7 +521,25 @@ export function OnboardingWizard() {
       }
 
       // nursery_profiles row — upsert so it's safe whether or not it already exists.
-      await supabase.from('nursery_profiles').upsert({ business_id: businessId }, { onConflict: 'business_id' });
+      // Check { error }: a failed write must NOT show the "is live" screen over it
+      // (was swallowed — the upsert 400s when business_id has no unique constraint
+      // for ON CONFLICT to target; see Fix 2 migration). nursery_profiles is not
+      // critical to business existence, so block-with-message rather than fake success.
+      const { error: profileError } = await supabase
+        .from('nursery_profiles')
+        .upsert({ business_id: businessId }, { onConflict: 'business_id' });
+      if (profileError) {
+        console.log('[TRACE:BUSINESS] onboarding finalize: nursery_profiles upsert ERROR', {
+          businessId,
+          code: profileError.code,
+          message: profileError.message,
+          details: profileError.details,
+          hint: profileError.hint,
+        });
+        setFinalizeError('Could not finish setup: ' + profileError.message);
+        setFinalizing(false);
+        return;
+      }
       setStepIndex(STEPS.indexOf('DONE'));
     } catch {
       setFinalizeError('Something went wrong. Please try again.');

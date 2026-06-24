@@ -254,7 +254,7 @@ export function BusinessProvider({
       //    businesses to operate now (TRACE Enterprises=general, LAWNS=nursery, etc.).
       //    Re-scope to per-app-type model later when one-app-skinned routing is built.
       //    Restore: uncomment the .eq('business_type', businessType) line below.
-      const { data: ownedBizzes } = await supabase
+      const { data: ownedBizzes, error: ownerError } = await supabase
         .from('businesses')
         .select('*')
         .eq('owner_id', user.id);
@@ -267,6 +267,20 @@ export function BusinessProvider({
         ids: ownedBizzes?.map(b => b.id) ?? [],
       });
 
+      // Surface a query error instead of letting null data masquerade as "no rows".
+      // A SELECT that ERRORS (RLS reject, embed/recursion) returns data=null — without
+      // this, data?.length ?? 0 reads it as an empty result → false no_business.
+      if (ownerError) {
+        console.log('[TRACE:BUSINESS] owner path ERROR', {
+          userId: user.id,
+          businessType,
+          code: ownerError.code,
+          message: ownerError.message,
+          details: ownerError.details,
+          hint: ownerError.hint,
+        });
+      }
+
       for (const biz of (ownedBizzes ?? [])) {
         resolved.push({ business: biz as Business, isOwner: true, permissions: null, role: null, memberName: null });
       }
@@ -274,7 +288,7 @@ export function BusinessProvider({
       // 2. Member path — fetch ALL business_members rows for this user, active=true
       //    Filter by business_type to prevent cross-vertical data exposure (audit #13)
       //    (was .single(); now returns the full array)
-      const { data: memberships } = await supabase
+      const { data: memberships, error: memberError } = await supabase
         .from('business_members')
         .select('business_id, role, permissions, name, businesses(*)')
         .eq('user_id', user.id)
@@ -285,6 +299,19 @@ export function BusinessProvider({
         businessType,
         membershipCount: memberships?.length ?? 0,
       });
+
+      // Same surfacing for the member path. Note the businesses(*) embed: if the
+      // join/RLS errors, memberships is null here, not an empty member list.
+      if (memberError) {
+        console.log('[TRACE:BUSINESS] member path ERROR', {
+          userId: user.id,
+          businessType,
+          code: memberError.code,
+          message: memberError.message,
+          details: memberError.details,
+          hint: memberError.hint,
+        });
+      }
 
       const ownedIds = new Set(resolved.map(r => r.business.id));
       for (const m of (memberships ?? [])) {
@@ -306,6 +333,21 @@ export function BusinessProvider({
       if (cancelled) return;
 
       if (resolved.length === 0) {
+        // Distinguish an errored read (rows may exist but the SELECT failed) from a
+        // genuinely empty result. Without this, an RLS/embed error looks identical to
+        // a brand-new user with no business → false no_business → onboarding bounce.
+        if (ownerError || memberError) {
+          console.log('[TRACE:BUSINESS] result: read_error — a resolution query errored (rows may exist)', {
+            userId: user.id,
+            businessType,
+            ownerErrorCode: ownerError?.code ?? null,
+            memberErrorCode: memberError?.code ?? null,
+          });
+          setBusinessError('read_error');
+          setResolvedBusinesses([]);
+          setLoading(false);
+          return;
+        }
         console.log('[TRACE:BUSINESS] result: no_business — both paths returned nothing', { userId: user.id, businessType });
         setBusinessError('no_business');
         setResolvedBusinesses([]);
