@@ -9,6 +9,13 @@
 // ============================================================
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase/client';
+import {
+  deriveIntervalDays,
+  isUsageBasedInterval,
+  pmiStatusFrom,
+  daysUntilDueFrom,
+  type ScheduleTask,
+} from './pmiInterval';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -72,18 +79,13 @@ export interface PMIProps {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Status + due-date math live in the shared pmiInterval helper (one source, unit-tested).
 function getPMIStatus(asset: PMIAsset): PMIStatus {
-  if (!asset.pmi_interval_days || !asset.last_service_at) return 'NONE';
-  const daysSince = (Date.now() - new Date(asset.last_service_at).getTime()) / 86_400_000;
-  if (daysSince > asset.pmi_interval_days) return 'OVERDUE';
-  if (daysSince > asset.pmi_interval_days - 7) return 'DUE_SOON';
-  return 'OK';
+  return pmiStatusFrom(asset.pmi_interval_days, asset.last_service_at);
 }
 
 function daysUntilDue(asset: PMIAsset): number | null {
-  if (!asset.pmi_interval_days || !asset.last_service_at) return null;
-  const daysSince = (Date.now() - new Date(asset.last_service_at).getTime()) / 86_400_000;
-  return Math.ceil(asset.pmi_interval_days - daysSince);
+  return daysUntilDueFrom(asset.pmi_interval_days, asset.last_service_at);
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -146,6 +148,10 @@ export function PMI({
   const [saving,       setSaving]       = useState(false);
   const [aiLoading,    setAiLoading]    = useState(false);
   const [aiError,      setAiError]      = useState('');
+  // Preview→accept gate: the AI suggestion is held here (NOT written) until accepted.
+  const [preview,      setPreview]      = useState<{ tasks: ScheduleTask[]; unconvertible: ScheduleTask[] } | null>(null);
+  const [previewInterval, setPreviewInterval] = useState('');  // editable derived interval_days
+  const [accepting,    setAccepting]    = useState(false);
 
   // ── Load assets + schedules, merge ──────────────────────────────────────────
 
@@ -356,51 +362,83 @@ export function PMI({
         setAiError(json.error ?? 'AI suggest failed');
         return;
       }
-      const suggestedTasks: Array<{ name: string; interval: string }> = json.tasks ?? [];
+      const suggestedTasks: ScheduleTask[] = json.tasks ?? [];
+      // Derive interval_days from the suggested tasks — soonest convertible cadence drives it.
+      // Usage-based / non-standard intervals do NOT contribute (no fabricated cadence).
+      const { intervalDays, unconvertible } = deriveIntervalDays(suggestedTasks);
       console.log('[TRACE:ai] pmi/suggest response', {
         businessId, assetId: selected.id, ok: true,
-        taskCount: suggestedTasks.length, latency_ms: Date.now() - t0,
+        taskCount: suggestedTasks.length, derivedIntervalDays: intervalDays,
+        usageBasedCount: unconvertible.length, latency_ms: Date.now() - t0,
       });
 
-      if (selected.schedule_id) {
-        // Update existing schedule tasks
-        const { error: upErr } = await supabase
-          .from('business_pmi_schedule')
-          .update({ tasks: suggestedTasks })
-          .eq('id', selected.schedule_id);
-        if (upErr) { setAiError(upErr.message); return; }
-      } else {
-        // Create schedule row with suggested tasks
-        const { error: insErr } = await supabase
-          .from('business_pmi_schedule')
-          .insert({
-            business_id: businessId,
-            asset_id:    selected.id,
-            tasks:       suggestedTasks,
-          });
-        if (insErr) { setAiError(insErr.message); return; }
-      }
-
-      // Reload to pick up updated tasks + schedule_id
-      await loadAssets();
-      // Refresh selected with new data
-      const { data: freshAsset } = await supabase
-        .from('cost_objects').select('*').eq('id', selected.id).single();
-      const { data: freshSched } = await supabase
-        .from('business_pmi_schedule').select('*').eq('asset_id', selected.id).single();
-      if (freshAsset) {
-        const s = freshSched as ScheduleRow | null;
-        setSelected({
-          ...(freshAsset as AssetRow),
-          pmi_interval_days: s?.interval_days ?? null,
-          last_service_at:   s?.last_service_at ?? null,
-          tasks:             s?.tasks ?? [],
-          schedule_id:       s?.id ?? null,
-        });
-      }
+      // PREVIEW — hold the suggestion; nothing is written until the owner accepts.
+      setPreview({ tasks: suggestedTasks, unconvertible });
+      setPreviewInterval(intervalDays != null ? String(intervalDays) : '');
     } finally {
       setAiLoading(false);
     }
+  }
+
+  // ── Accept the previewed schedule → write tasks AND interval_days ───────────────
+
+  async function refreshSelected(assetId: string) {
+    const { data: freshAsset } = await supabase
+      .from('cost_objects').select('*').eq('id', assetId).single();
+    const { data: freshSched } = await supabase
+      .from('business_pmi_schedule').select('*').eq('asset_id', assetId).maybeSingle();
+    if (freshAsset) {
+      const s = freshSched as ScheduleRow | null;
+      setSelected({
+        ...(freshAsset as AssetRow),
+        pmi_interval_days: s?.interval_days ?? null,
+        last_service_at:   s?.last_service_at ?? null,
+        tasks:             s?.tasks ?? [],
+        schedule_id:       s?.id ?? null,
+      });
+    }
+  }
+
+  async function handleAcceptSchedule() {
+    if (!selected || !preview) return;
+    setAccepting(true);
+    setAiError('');
+    // Editable override: blank → no auto due date (null); else the entered cadence.
+    const parsed = previewInterval.trim() ? parseInt(previewInterval, 10) : NaN;
+    const intervalToWrite = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    console.log('[TRACE:pmi] schedule accept', {
+      businessId, assetId: selected.id, taskCount: preview.tasks.length, interval_days: intervalToWrite,
+    });
+    try {
+      if (selected.schedule_id) {
+        const { error: upErr } = await supabase
+          .from('business_pmi_schedule')
+          .update({ tasks: preview.tasks, interval_days: intervalToWrite })
+          .eq('id', selected.schedule_id);
+        if (upErr) { setAiError(upErr.message); return; }
+      } else {
+        const { error: insErr } = await supabase
+          .from('business_pmi_schedule')
+          .insert({
+            business_id:   businessId,
+            asset_id:      selected.id,
+            tasks:         preview.tasks,
+            interval_days: intervalToWrite,
+          });
+        if (insErr) { setAiError(insErr.message); return; }
+      }
+      setPreview(null);
+      setPreviewInterval('');
+      await loadAssets();
+      await refreshSelected(selected.id);
+    } finally {
+      setAccepting(false);
+    }
+  }
+
+  function discardPreview() {
+    setPreview(null);
+    setPreviewInterval('');
   }
 
   // ── Detail view ───────────────────────────────────────────────────────────────
@@ -413,7 +451,7 @@ export function PMI({
     return (
       <div style={S.page}>
         <div style={{ ...S.row, marginBottom: 20 }}>
-          <button style={S.btnGhost} onClick={() => { setSelected(null); setShowLog(false); setAiError(''); }}>← Back</button>
+          <button style={S.btnGhost} onClick={() => { setSelected(null); setShowLog(false); setAiError(''); discardPreview(); }}>← Back</button>
           <button style={S.btnGreen} onClick={openLogForm}>+ Log Service</button>
         </div>
 
@@ -465,6 +503,64 @@ export function PMI({
             </button>
           </div>
           {aiError && <p style={{ color: '#f87171', fontSize: '0.75rem', marginBottom: 8 }}>{aiError}</p>}
+
+          {/* PREVIEW → ACCEPT gate — review the AI suggestion before anything is written */}
+          {preview && (
+            <div style={{ marginTop: 8, marginBottom: 12, padding: '12px 14px', background: '#020617', border: '1px solid #1d4ed8', borderRadius: 10 }}>
+              <p style={{ fontSize: '0.72rem', fontWeight: 700, color: '#93c5fd', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 10 }}>
+                Review suggested schedule
+              </p>
+
+              {/* Suggested tasks */}
+              <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 6, marginBottom: 12 }}>
+                {preview.tasks.map((task, i) => {
+                  const usageBased = isUsageBasedInterval(task.interval);
+                  const noDueDate  = preview.unconvertible.some(u => u === task || (u.name === task.name && u.interval === task.interval));
+                  return (
+                    <div key={i} style={{ background: '#0f172a', padding: '8px 12px', borderRadius: 8, border: '1px solid #1e293b' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <p style={{ fontSize: '0.82rem', color: '#e2e8f0', margin: 0 }}>{task.name}</p>
+                        <p style={{ fontSize: '0.72rem', color: '#475569', margin: 0, textTransform: 'uppercase' as const }}>{task.interval}</p>
+                      </div>
+                      {noDueDate && (
+                        <p style={{ fontSize: '0.68rem', color: '#fdba74', margin: '4px 0 0' }}>
+                          {usageBased ? 'usage-based' : 'non-standard interval'} — no automatic due date
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Derived (editable) interval_days */}
+              <p style={S.label}>Service every (days) — derived from the soonest task</p>
+              <input
+                style={{ ...S.input, marginTop: 4 }}
+                type="number"
+                min="1"
+                placeholder="No automatic due date"
+                value={previewInterval}
+                onChange={e => setPreviewInterval(e.target.value)}
+              />
+              <p style={{ fontSize: '0.68rem', color: '#64748b', margin: '6px 0 0' }}>
+                {previewInterval.trim()
+                  ? `Once accepted, this asset goes OVERDUE ${previewInterval} days after its last service.`
+                  : 'No cadence could be derived (all tasks usage-based). Enter a day cadence to get a due date, or accept without one.'}
+              </p>
+
+              <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                <button
+                  style={{ ...S.btnGreen, flex: 1, opacity: accepting ? 0.6 : 1 }}
+                  onClick={handleAcceptSchedule}
+                  disabled={accepting}
+                >
+                  {accepting ? 'Saving…' : 'Accept schedule'}
+                </button>
+                <button style={S.btnGhost} onClick={discardPreview} disabled={accepting}>Discard</button>
+              </div>
+            </div>
+          )}
+
           {selected.tasks.length === 0 ? (
             <p style={{ color: '#334155', fontSize: '0.8rem', marginTop: 8 }}>No tasks — click "Suggest Schedule" to generate with AI.</p>
           ) : (
@@ -714,7 +810,7 @@ export function PMI({
             <div
               key={asset.id}
               style={{ ...S.card, cursor: 'pointer', borderColor: st === 'OVERDUE' ? '#7f1d1d' : st === 'DUE_SOON' ? '#7c2d12' : '#1e293b' }}
-              onClick={() => { setSelected(asset); setShowLog(false); }}
+              onClick={() => { setSelected(asset); setShowLog(false); discardPreview(); setAiError(''); }}
             >
               <div style={S.row}>
                 <div>

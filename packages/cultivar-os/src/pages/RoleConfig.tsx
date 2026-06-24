@@ -19,6 +19,7 @@ import {
   getMembersByBusiness,
   updateMemberRole,
   ALL_FINANCIAL_PERMISSIONS,
+  ALL_ACTION_PERMISSIONS,
 } from '@trace/shared/auth';
 import type { ResolvedRole, RoleDefinitionRow, Member } from '@trace/shared/auth';
 import { allTiles, registryPermissions } from '../registry/tileRegistry';
@@ -74,11 +75,17 @@ export function RoleConfig() {
   const catalog = useMemo<PermChip[]>(() => {
     const tilesByPerm: Record<string, string[]> = {};
     for (const t of allTiles()) (tilesByPerm[t.required_permission] ||= []).push(t.label);
-    const ids = [...new Set([...registryPermissions(), ...ALL_FINANCIAL_PERMISSIONS])].filter((p) => p !== 'owner-only');
+    // ALL_ACTION_PERMISSIONS = behavior-gating perms (e.g. override_maintenance) that gate an
+    // ACTION rather than a tile, so they're absent from registryPermissions() — unioned here from
+    // their canonical shared home (same one-source guarantee as the financial-wall perms).
+    const ids = [...new Set([...registryPermissions(), ...ALL_FINANCIAL_PERMISSIONS, ...ALL_ACTION_PERMISSIONS])].filter((p) => p !== 'owner-only');
     return ids.map((id) => {
       const tiles = tilesByPerm[id] ?? [];
       const fromTile = allTiles().find((t) => t.required_permission === id)?.group;
-      const group = fromTile ?? (ALL_FINANCIAL_PERMISSIONS.includes(id) ? 'financial' : 'other');
+      const group = fromTile
+        ?? (ALL_FINANCIAL_PERMISSIONS.includes(id) ? 'financial'
+          : ALL_ACTION_PERMISSIONS.includes(id) ? 'fulfilment'
+          : 'other');
       return { id, label: humanize(id), group: GROUP_ORDER.includes(group) ? group : 'other', tiles };
     });
   }, []);

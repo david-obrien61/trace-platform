@@ -20,6 +20,7 @@ import {
   VIEW_WAGES,
   VIEW_MARGIN,
 } from '@trace/shared/auth/financialPermissions';
+import { OVERRIDE_MAINTENANCE } from '@trace/shared/auth/actionPermissions';
 
 export const ROLES = ['OWNER', 'MANAGER', 'STAFF'] as const;
 export type CultivarRole = typeof ROLES[number];
@@ -38,6 +39,8 @@ export const PERMISSIONS = {
   VIEW_PRICING_CONFIG,                     // pricing recipe / moat (hard wall)
   VIEW_WAGES,                              // HR pay (hard wall)
   VIEW_MARGIN,                             // margin verdict (shaping; requires VIEW_COSTS)
+  // ── action permissions (gate a behavior, not a tile) ──
+  OVERRIDE_MAINTENANCE,                    // defer/use an asset against its PMI schedule (mechanism not yet built)
 } as const;
 
 export const DEFAULT_PERMISSIONS: Record<CultivarRole, string[]> = {
@@ -55,6 +58,8 @@ export const DEFAULT_PERMISSIONS: Record<CultivarRole, string[]> = {
     PERMISSIONS.VIEW_PRICING_CONFIG,
     PERMISSIONS.VIEW_COSTS,
     PERMISSIONS.VIEW_MARGIN,
+    // action permissions — owner may override a maintenance schedule
+    PERMISSIONS.OVERRIDE_MAINTENANCE,
   ],
   MANAGER: [
     PERMISSIONS.VIEW_DASHBOARD,
@@ -67,6 +72,8 @@ export const DEFAULT_PERMISSIONS: Record<CultivarRole, string[]> = {
     // financial wall — ops see what's selling short, NOT the pricing recipe, NOT payroll
     PERMISSIONS.VIEW_COSTS,
     PERMISSIONS.VIEW_MARGIN,
+    // action permissions — manager runs the floor; may keep equipment moving
+    PERMISSIONS.OVERRIDE_MAINTENANCE,
   ],
   STAFF: [
     PERMISSIONS.VIEW_DASHBOARD,

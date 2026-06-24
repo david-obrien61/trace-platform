@@ -73,6 +73,16 @@ export {
 } from './financialPermissions';
 export type { FinancialPermission } from './financialPermissions';
 
+// Action-permission vocabulary — behavior-gating perms (not tile perms) — single source
+export {
+  OVERRIDE_MAINTENANCE,
+  ACTION_PERMISSIONS,
+  ALL_ACTION_PERMISSIONS,
+  ACTION_ROLE_DEFAULTS,
+  actionDefaultsForRole,
+} from './actionPermissions';
+export type { ActionPermission } from './actionPermissions';
+
 // Abuse guards for business creation — shipped OFF, genuine kill-switches
 export { runBusinessCreationGuards } from './businessGuards';
 export type { GuardResult } from './businessGuards';
