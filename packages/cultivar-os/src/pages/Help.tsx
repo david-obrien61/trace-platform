@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { AppNav } from '../components/nav/AppNav';
+import { Breadcrumb } from '../components/nav/Breadcrumb';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cultivar OS — Help & FAQ
@@ -7,6 +9,13 @@ import { useState } from 'react';
 // Keep this page honest: if a feature doesn't exist or works differently than
 // described, it is flagged with a // FLAG: comment below. David and Andrew
 // review and fill in flagged items before publication.
+//
+// NAV (Nav C2 fix-pass): Help carries the same nav chrome as every other surface —
+// the section rail + an "up" breadcrumb (Dashboard / Help, via the nav_help NAV_IA
+// node). Because /help is PUBLIC (outside the authenticated AppLayout that mounts the
+// chrome once), it mounts <AppNav/> + <Breadcrumb/> itself rather than being moved
+// inside AppLayout — that keeps prospects' public access intact. Both components read
+// the single tileRegistry IA; for a logged-out visitor the rail is simply empty.
 //
 // Styled to match the Privacy and Terms pages (inline styles, no Tailwind).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -130,6 +139,12 @@ export function Help() {
         <p style={{ fontSize: '0.8125rem', color: '#a8c890', marginTop: 4 }}>
           Common questions about using Cultivar OS
         </p>
+      </div>
+
+      {/* ── Nav chrome (same rail + "up" breadcrumb as every authenticated surface) ── */}
+      <div className="appchrome">
+        <AppNav />
+        <Breadcrumb />
       </div>
 
       {/* ── Content ── */}

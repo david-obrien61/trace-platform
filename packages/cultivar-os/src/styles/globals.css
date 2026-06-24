@@ -199,6 +199,21 @@ img {
 .appnav-link:hover { background: var(--sage-bg); color: var(--green-primary); }
 .appnav-link[aria-current="page"] { color: var(--green-primary); background: var(--sage-bg); }
 
+/* Landing-less section (Admin): a label + its child links. display:contents lets the heading and
+   the sub-links flow as direct flex items of the rail (horizontal) or drawer (vertical) — one rule,
+   both orientations. */
+.appnav-group { display: contents; }
+.appnav-heading {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gray-400);
+  padding: 6px 4px 6px 8px;
+  align-self: center;
+}
+.appnav-sublink { color: var(--gray-700); }
+
 /* Drawer (mobile) — the section list the hamburger toggles */
 .appnav-drawer {
   display: flex;
@@ -216,6 +231,8 @@ img {
   z-index: 30;
 }
 .appnav-drawer .appnav-link { text-align: left; padding: 10px 12px; }
+.appnav-drawer .appnav-heading { padding: 10px 12px 4px; }
+.appnav-drawer .appnav-sublink { padding-left: 22px; }
 
 /* Breadcrumb — full trail on desktop, single "‹ parent" on mobile */
 .breadcrumb {

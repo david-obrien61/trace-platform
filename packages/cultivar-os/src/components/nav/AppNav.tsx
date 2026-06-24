@@ -8,9 +8,14 @@
  * DEPENDENCIES: tileRegistry — navSections/navRoute/navPermission/navChildrenOf/navNodeForPath
  *               (the ONE IA source) · useBusinessContext.can (the permission chokepoint) ·
  *               react-router useNavigate/useLocation.
- * OUTPUTS:      Visible top-level section links. The Admin section renders ONLY when the session can
- *               see ≥1 of its (owner-scoped) children — a Staff session never sees an Admin entry
- *               that opens onto nothing. Consistent with the Gate-3 permission wall.
+ * OUTPUTS:      Visible top-level section links. A section that has its OWN landing page (Dashboard,
+ *               Settings) renders as a single link. A section with NO landing route (Admin) renders
+ *               as a heading + its visible children as sub-links — those children (Add Business,
+ *               Cost-to-Produce) are admin-placement, NOT dashboard-grid tiles, so the rail is their
+ *               only home; collapsing the section to a single first-child link stranded the rest
+ *               (Cost-to-Produce was unreachable). The Admin section still renders ONLY when the
+ *               session can see ≥1 of its (owner-scoped) children — a Staff/Manager session never
+ *               sees an Admin entry that opens onto nothing. Consistent with the Gate-3 wall.
  * INSTRUMENTATION (STD-003): [TRACE:NAV] rail — ON by default (standing owner instruction).
  */
 import { useState } from 'react';
@@ -44,31 +49,62 @@ export function AppNav() {
     return child ? navRoute(child) : null;
   };
 
-  const sections = navSections().filter(isVisible);
-  const activeSection = navNodeForPath(location.pathname)?.section ?? null;
+  // A landing-less section's visible children = those the session can see AND that link somewhere.
+  const visibleChildren = (section: NavNode) =>
+    navChildrenOf(section.key).filter((c) => can(navPermission(c)) && navRoute(c));
 
-  // [TRACE:NAV] which top-level sections the active session can see (ON by default, STD-003).
+  const sections = navSections().filter(isVisible);
+  const activeNode = navNodeForPath(location.pathname);
+  const activeSection = activeNode?.section ?? null;
+  const activeNodeKey = activeNode?.key ?? null;
+
+  // [TRACE:NAV] which top-level sections the active session can see + the admin children exposed
+  // directly in the rail (ON by default, STD-003).
   console.log('[TRACE:NAV] rail', {
     visibleSections: sections.map((s) => s.key),
+    railChildren: sections
+      .filter((s) => navRoute(s) === null)
+      .map((s) => ({ section: s.key, children: visibleChildren(s).map((c) => c.key) })),
     activeSection,
   });
 
-  const go = (section: NavNode) => {
-    const t = targetOf(section);
+  const go = (route: string | null) => {
     setOpen(false);
-    if (t) navigate(t);
+    if (route) navigate(route);
   };
 
-  const renderLink = (section: NavNode) => (
-    <button
-      key={section.key}
-      className="appnav-link"
-      aria-current={section.section === activeSection ? 'page' : undefined}
-      onClick={() => go(section)}
-    >
-      {navLabel(section)}
-    </button>
-  );
+  // A section with its own landing → one link. A landing-less section (Admin) → a heading + each
+  // visible child as a sub-link (so a multi-child admin section never strands its 2nd+ child).
+  const renderSection = (section: NavNode) => {
+    const own = navRoute(section);
+    if (own !== null) {
+      return (
+        <button
+          key={section.key}
+          className="appnav-link"
+          aria-current={section.section === activeSection ? 'page' : undefined}
+          onClick={() => go(targetOf(section))}
+        >
+          {navLabel(section)}
+        </button>
+      );
+    }
+    return (
+      <div key={section.key} className="appnav-group">
+        <span className="appnav-heading">{navLabel(section)}</span>
+        {visibleChildren(section).map((child) => (
+          <button
+            key={child.key}
+            className="appnav-link appnav-sublink"
+            aria-current={activeNodeKey === child.key ? 'page' : undefined}
+            onClick={() => go(navRoute(child))}
+          >
+            {navLabel(child)}
+          </button>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -84,13 +120,13 @@ export function AppNav() {
 
       {/* Inline rail (wide screens) */}
       <div className="appnav-rail">
-        {sections.map(renderLink)}
+        {sections.map(renderSection)}
       </div>
 
       {/* Drawer (narrow screens — toggled by the hamburger) */}
       {open && (
         <div className="appnav-drawer" role="menu">
-          {sections.map(renderLink)}
+          {sections.map(renderSection)}
         </div>
       )}
     </>

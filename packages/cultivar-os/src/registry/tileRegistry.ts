@@ -343,6 +343,11 @@ export const NAV_IA: NavNode[] = [
   // leaf stays 3-deep (ratified). parent stays nav_campaigns for section grouping; breadcrumb override
   // controls the displayed trail.
   { key: 'nav_campaign_detail', section: 'dashboard', parent: 'nav_campaigns',       label: 'Campaign', route: '/campaigns/:id', matchRoute: '/campaigns/:id', required_permission: 'manage_campaigns', breadcrumb: ['sec_dashboard', 'nav_campaigns'] },
+  // Help — reached from the Dashboard header's Help button, so the IA parent is Dashboard
+  // (breadcrumb: Dashboard / Help). view_dashboard = visible to every authenticated session. The
+  // /help page is PUBLIC (prospects can read it) so it mounts the nav chrome itself rather than via
+  // AppLayout — this node supplies its breadcrumb trail + active-section highlight either way.
+  { key: 'nav_help',            section: 'dashboard', parent: 'sec_dashboard',        label: 'Help', route: '/help', required_permission: 'view_dashboard' },
 
   // ── Settings branch ──
   { key: 'nav_roles',           section: 'settings',  parent: 'sec_settings',        label: 'Roles & Permissions', route: '/roles', required_permission: 'manage_settings' },

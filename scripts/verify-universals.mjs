@@ -620,7 +620,7 @@ function capN(key, v) {
     'sec_dashboard', 'sec_settings', 'sec_admin',
     'nav_orders', 'nav_delivery', 'nav_delivery_route', 'nav_operating_costs',
     'nav_assets', 'nav_inventory', 'nav_receipts', 'nav_pmi', 'nav_social',
-    'nav_campaigns', 'nav_campaign_detail', 'nav_roles', 'nav_add_business', 'nav_cost_to_produce',
+    'nav_campaigns', 'nav_campaign_detail', 'nav_help', 'nav_roles', 'nav_add_business', 'nav_cost_to_produce',
   ];
   const missing = REQUIRED_NAV_KEYS.filter((k) => !navBlock.includes(`'${k}'`));
   if (missing.length) problems.push(`navigable surfaces with no IA node: ${missing.join(', ')}`);
