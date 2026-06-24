@@ -376,11 +376,6 @@ export function Dashboard() {
 
   // ── Auth ──────────────────────────────────────────────────────────────────
 
-  async function handleSignOut() {
-    await auth.signOut();
-    navigate('/login');
-  }
-
   function showComingSoon(label: string) {
     setComingSoonMsg(label);
   }
@@ -449,64 +444,9 @@ export function Dashboard() {
             <p style={{ fontSize: '0.75rem', color: '#a8c890', marginTop: 4 }}>{user.email}</p>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
-          <button
-            onClick={() => navigate('/help')}
-            style={{
-              background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8,
-              padding: '8px 12px', color: '#fff', fontSize: '0.8125rem',
-              fontWeight: 600, cursor: 'pointer',
-            }}
-          >
-            Help
-          </button>
-          {canManageSettings && (
-            <button
-              onClick={() => navigate('/settings')}
-              style={{
-                background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8,
-                padding: '8px 12px', color: '#fff', fontSize: '0.8125rem',
-                fontWeight: 600, cursor: 'pointer',
-              }}
-            >
-              Settings
-            </button>
-          )}
-          {isOwner && (
-            <button
-              onClick={() => navigate('/receipts')}
-              style={{
-                background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8,
-                padding: '8px 12px', color: '#fff', fontSize: '0.8125rem',
-                fontWeight: 600, cursor: 'pointer',
-              }}
-            >
-              Receipts
-            </button>
-          )}
-          {isOwner && (
-            <button
-              onClick={() => navigate('/add-business')}
-              style={{
-                background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8,
-                padding: '8px 12px', color: '#fff', fontSize: '0.8125rem',
-                fontWeight: 600, cursor: 'pointer',
-              }}
-            >
-              + Business
-            </button>
-          )}
-          <button
-            onClick={handleSignOut}
-            style={{
-              background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8,
-              padding: '8px 12px', color: '#fff', fontSize: '0.8125rem',
-              fontWeight: 600, cursor: 'pointer',
-            }}
-          >
-            Sign out
-          </button>
-        </div>
+        {/* Account-action row removed — account actions (Help · + Business · Sign out) now live in
+            the header avatar menu (AppHeader); Settings and Receipts are reachable via the nav rail
+            / IA. This resolves the duplicate-nav (Settings-listed-twice) bug. */}
       </div>
 
       {comingSoonMsg && (

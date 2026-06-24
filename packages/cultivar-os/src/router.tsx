@@ -33,6 +33,7 @@ import { CostToProduce }     from './pages/CostToProduce';
 import { OperatingCosts }    from './pages/OperatingCosts';
 import PMI                   from './pages/PMI';
 import { RoleConfig }        from './pages/RoleConfig';
+import { Profile }            from './pages/Profile';
 import { AcceptInvite }      from '@trace/shared/auth';
 import { auth }              from './lib/auth';
 
@@ -80,6 +81,7 @@ export function AppRouter() {
           <Route path="/campaigns"         element={<Campaigns />} />
           <Route path="/campaigns/:id"     element={<CampaignDetail />} />
           <Route path="/add-business"      element={<AddBusiness />} />
+          <Route path="/profile"           element={<Profile />} />
           <Route path="/receipts"          element={<ReceiptKeeper />} />
 
           {/* ROLE-CONFIG console (visibility axis) — owner-only. manage_settings is held by

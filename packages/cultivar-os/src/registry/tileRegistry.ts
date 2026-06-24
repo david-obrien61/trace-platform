@@ -351,6 +351,11 @@ export const NAV_IA: NavNode[] = [
 
   // ── Settings branch ──
   { key: 'nav_roles',           section: 'settings',  parent: 'sec_settings',        label: 'Roles & Permissions', route: '/roles', required_permission: 'manage_settings' },
+  // Your Profile — the personal identity surface (name/phone/email). PRIMARY entry is the header
+  // avatar menu; this node is the secondary nav entry. view_dashboard = reachable by EVERY
+  // authenticated role (incl. STAFF — every person can edit their own profile). Breadcrumb:
+  // Settings / Your Profile.
+  { key: 'nav_profile',         section: 'settings',  parent: 'sec_settings',        label: 'Your Profile', route: '/profile', required_permission: 'view_dashboard' },
 
   // ── Admin branch (owner-scoped) ──
   { key: 'nav_add_business',    section: 'admin',     parent: 'sec_admin',           tileKey: 'add_business' },
