@@ -407,6 +407,9 @@ export function Dashboard() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  // While the provider is resolving — including its bounded write-then-read retry for a
+  // fresh signup — businessLoading stays true. Render the loading state, NOT a redirect:
+  // the new business row may be a few ms behind the first read.
   if (businessLoading) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--sage-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -415,6 +418,10 @@ export function Dashboard() {
     );
   }
 
+  // SETTLED-only redirect: businessLoading === false means the provider has finished
+  // resolving (rows found, or retries exhausted). Only then is an empty result a genuine
+  // no-business → send a real new user to onboarding. This no longer fires on the first
+  // transient empty read (that window is held in the loading branch above).
   if (!businessLoading && (businessError || !businessId)) {
     navigate('/onboarding', { replace: true });
     return null;

@@ -5,6 +5,16 @@ import { applyFinancialDependencies } from '../auth/financialPermissions';
 
 const SM_DEBUG = false; // flip to true to re-enable legacy [SM-TRACE] diagnostics
 
+// Write-then-read race guard (HAR-confirmed 2026-06-24): a brand-new signup creates the
+// businesses row and runs the dashboard resolution read ~1ms later, before the write is
+// visible to that request — so the first read returns empty even though the row exists and
+// every read is 200 (no RLS reject). Retry the resolution a SMALL bounded number of times
+// before settling on no_business. TIGHT bound: this is "row is a few ms behind," not "user
+// has no business" — a genuinely business-less user must settle within the cap, never spin.
+const RESOLVE_MAX_ATTEMPTS = 3;       // first attempt + up to 2 retries
+const RESOLVE_RETRY_DELAY_MS = 500;   // ~1s total wait across 2 retries — well under a 2s cap
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
 // Per-vertical localStorage key — isolates Cultivar selection from Ignition selection
 const activeBusinessKey = (businessType: string) =>
   `trace_active_business_${businessType}`;
@@ -247,88 +257,129 @@ export function BusinessProvider({
         setAuthName(fullName?.trim() || null);
       }
 
-      const resolved: ResolvedBusiness[] = [];
+      // Capture once in the narrowed (non-null) outer scope — TS narrowing from the
+      // `if (!user) return` above does not flow into the nested attemptResolution().
+      const userId = user.id;
 
-      // 1. Owner path — fetch ALL businesses this user owns
-      //    [TEMP — OPEN ACCESS] business_type filter bypassed so David sees ALL his
-      //    businesses to operate now (TRACE Enterprises=general, LAWNS=nursery, etc.).
-      //    Re-scope to per-app-type model later when one-app-skinned routing is built.
-      //    Restore: uncomment the .eq('business_type', businessType) line below.
-      const { data: ownedBizzes, error: ownerError } = await supabase
-        .from('businesses')
-        .select('*')
-        .eq('owner_id', user.id);
-        // .eq('business_type', businessType); // [TEMP — OPEN ACCESS] restore to re-scope
+      // Owner + member resolution as ONE retryable unit. The two reads + the resolved[]
+      // build are wrapped so the write-then-read race can be retried without duplicating
+      // logic. Returns the resolved list + any query errors.
+      async function attemptResolution() {
+        const resolved: ResolvedBusiness[] = [];
 
-      console.log('[TRACE:BUSINESS] owner path', {
-        userId: user.id,
-        businessType,
-        count: ownedBizzes?.length ?? 0,
-        ids: ownedBizzes?.map(b => b.id) ?? [],
-      });
+        // 1. Owner path — fetch ALL businesses this user owns
+        //    [TEMP — OPEN ACCESS] business_type filter bypassed so David sees ALL his
+        //    businesses to operate now (TRACE Enterprises=general, LAWNS=nursery, etc.).
+        //    Re-scope to per-app-type model later when one-app-skinned routing is built.
+        //    Restore: uncomment the .eq('business_type', businessType) line below.
+        const { data: ownedBizzes, error: ownerError } = await supabase
+          .from('businesses')
+          .select('*')
+          .eq('owner_id', userId);
+          // .eq('business_type', businessType); // [TEMP — OPEN ACCESS] restore to re-scope
 
-      // Surface a query error instead of letting null data masquerade as "no rows".
-      // A SELECT that ERRORS (RLS reject, embed/recursion) returns data=null — without
-      // this, data?.length ?? 0 reads it as an empty result → false no_business.
-      if (ownerError) {
-        console.log('[TRACE:BUSINESS] owner path ERROR', {
-          userId: user.id,
+        console.log('[TRACE:BUSINESS] owner path', {
+          userId: userId,
           businessType,
-          code: ownerError.code,
-          message: ownerError.message,
-          details: ownerError.details,
-          hint: ownerError.hint,
+          count: ownedBizzes?.length ?? 0,
+          ids: ownedBizzes?.map(b => b.id) ?? [],
         });
-      }
 
-      for (const biz of (ownedBizzes ?? [])) {
-        resolved.push({ business: biz as Business, isOwner: true, permissions: null, role: null, memberName: null });
-      }
+        // Surface a query error instead of letting null data masquerade as "no rows".
+        // A SELECT that ERRORS (RLS reject, embed/recursion) returns data=null — without
+        // this, data?.length ?? 0 reads it as an empty result → false no_business.
+        if (ownerError) {
+          console.log('[TRACE:BUSINESS] owner path ERROR', {
+            userId: userId,
+            businessType,
+            code: ownerError.code,
+            message: ownerError.message,
+            details: ownerError.details,
+            hint: ownerError.hint,
+          });
+        }
 
-      // 2. Member path — fetch ALL business_members rows for this user, active=true
-      //    Filter by business_type to prevent cross-vertical data exposure (audit #13)
-      //    (was .single(); now returns the full array)
-      const { data: memberships, error: memberError } = await supabase
-        .from('business_members')
-        .select('business_id, role, permissions, name, businesses(*)')
-        .eq('user_id', user.id)
-        .eq('active', true);
+        for (const biz of (ownedBizzes ?? [])) {
+          resolved.push({ business: biz as Business, isOwner: true, permissions: null, role: null, memberName: null });
+        }
 
-      console.log('[TRACE:BUSINESS] member path', {
-        userId: user.id,
-        businessType,
-        membershipCount: memberships?.length ?? 0,
-      });
+        // 2. Member path — fetch ALL business_members rows for this user, active=true
+        //    Filter by business_type to prevent cross-vertical data exposure (audit #13)
+        //    (was .single(); now returns the full array)
+        const { data: memberships, error: memberError } = await supabase
+          .from('business_members')
+          .select('business_id, role, permissions, name, businesses(*)')
+          .eq('user_id', userId)
+          .eq('active', true);
 
-      // Same surfacing for the member path. Note the businesses(*) embed: if the
-      // join/RLS errors, memberships is null here, not an empty member list.
-      if (memberError) {
-        console.log('[TRACE:BUSINESS] member path ERROR', {
-          userId: user.id,
+        console.log('[TRACE:BUSINESS] member path', {
+          userId: userId,
           businessType,
-          code: memberError.code,
-          message: memberError.message,
-          details: memberError.details,
-          hint: memberError.hint,
+          membershipCount: memberships?.length ?? 0,
         });
+
+        // Same surfacing for the member path. Note the businesses(*) embed: if the
+        // join/RLS errors, memberships is null here, not an empty member list.
+        if (memberError) {
+          console.log('[TRACE:BUSINESS] member path ERROR', {
+            userId: userId,
+            businessType,
+            code: memberError.code,
+            message: memberError.message,
+            details: memberError.details,
+            hint: memberError.hint,
+          });
+        }
+
+        const ownedIds = new Set(resolved.map(r => r.business.id));
+        for (const m of (memberships ?? [])) {
+          const memberBiz = (m.businesses as any) as Business | null;
+          if (!memberBiz) continue;
+          // [TEMP — OPEN ACCESS] vertical fence bypassed — all member businesses resolve
+          // regardless of type. Restore line below to re-scope:
+          // if (memberBiz.business_type !== businessType) continue; // vertical fence (audit #13)
+          if (ownedIds.has(memberBiz.id)) continue; // already included via owner path
+          resolved.push({
+            business: memberBiz,
+            isOwner: false,
+            permissions: (m.permissions as string[]) ?? [],
+            role: (m.role as string) ?? null,
+            memberName: ((m as { name?: string | null }).name ?? null) || null,
+          });
+        }
+
+        return { resolved, ownerError, memberError };
       }
 
-      const ownedIds = new Set(resolved.map(r => r.business.id));
-      for (const m of (memberships ?? [])) {
-        const memberBiz = (m.businesses as any) as Business | null;
-        if (!memberBiz) continue;
-        // [TEMP — OPEN ACCESS] vertical fence bypassed — all member businesses resolve
-        // regardless of type. Restore line below to re-scope:
-        // if (memberBiz.business_type !== businessType) continue; // vertical fence (audit #13)
-        if (ownedIds.has(memberBiz.id)) continue; // already included via owner path
-        resolved.push({
-          business: memberBiz,
-          isOwner: false,
-          permissions: (m.permissions as string[]) ?? [],
-          role: (m.role as string) ?? null,
-          memberName: ((m as { name?: string | null }).name ?? null) || null,
+      // Bounded retry (write-then-read race): a fresh signup may run this read a few ms
+      // before the create write is visible to it (HAR-confirmed — every read 200, just
+      // empty). Re-resolve up to RESOLVE_MAX_ATTEMPTS times; STOP early on first non-empty
+      // result OR on a real query error (an error is a different problem than empty —
+      // read_error handling below surfaces it; retrying wouldn't help). loading stays true
+      // across retries → the redirect guard renders the loading state, not a bounce, until
+      // the resolution is SETTLED (rows found, or retries exhausted).
+      let resolution = await attemptResolution();
+      if (cancelled) return;
+      for (
+        let attempt = 1;
+        attempt < RESOLVE_MAX_ATTEMPTS
+          && resolution.resolved.length === 0
+          && !resolution.ownerError && !resolution.memberError;
+        attempt++
+      ) {
+        console.log('[TRACE:BUSINESS] resolution retry', {
+          attempt,
+          of: RESOLVE_MAX_ATTEMPTS - 1,
+          reason: 'empty_with_session',
+          delayMs: RESOLVE_RETRY_DELAY_MS,
         });
+        await sleep(RESOLVE_RETRY_DELAY_MS);
+        if (cancelled) return;
+        resolution = await attemptResolution();
+        if (cancelled) return;
       }
+
+      const { resolved, ownerError, memberError } = resolution;
 
       if (cancelled) return;
 
@@ -338,7 +389,7 @@ export function BusinessProvider({
         // a brand-new user with no business → false no_business → onboarding bounce.
         if (ownerError || memberError) {
           console.log('[TRACE:BUSINESS] result: read_error — a resolution query errored (rows may exist)', {
-            userId: user.id,
+            userId: userId,
             businessType,
             ownerErrorCode: ownerError?.code ?? null,
             memberErrorCode: memberError?.code ?? null,
@@ -348,7 +399,10 @@ export function BusinessProvider({
           setLoading(false);
           return;
         }
-        console.log('[TRACE:BUSINESS] result: no_business — both paths returned nothing', { userId: user.id, businessType });
+        // SETTLED no_business — reached only after the bounded retry above is exhausted,
+        // so this is a genuine business-less user, not the in-flight race. loading→false
+        // here is the settled signal the redirect guard waits for.
+        console.log('[TRACE:BUSINESS] result: no_business (settled) — both paths empty after retries', { userId: userId, businessType });
         setBusinessError('no_business');
         setResolvedBusinesses([]);
         setLoading(false);
