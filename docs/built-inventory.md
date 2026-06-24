@@ -753,6 +753,8 @@ Each test computes what a buggy build would output and asserts the real one diff
 
 **Retry-aware:** If "User already registered" → attempts signIn → if no businesses row → continues business creation. Handles orphaned auth users from partial prior signups.
 
+**Person-name (full_name) layer — 2026-06-24 (`73498ca`):** the LOCKED identity model is implemented at the name write/seed layer. PERSON NAME source of truth = `auth.user_metadata.full_name`; `business_members.name` = invite-bootstrap / display-fallback only; display precedence everywhere = `full_name → member.name → email`. `signUp` now seeds `options.data.full_name` from the typed ownerName (was stranded — wrote only to the member row). Same `full_name` seed mirrored in the legacy `configureAuth.tsx` and `OnboardingWizard.tsx` signup paths. `acceptInvitation.ts` seeds `user_metadata.full_name` for new invitees and bridges an existing user who has no `full_name` yet (never overwrites a real name). `Profile.tsx` member self-edit writes `auth.updateUser({full_name})` first (unified with the owner path; member.name kept in sync as fallback; authority boundary held — name/phone/email only, never role/permissions). `BusinessProvider` member display precedence corrected to `authName ?? memberName ?? email`. NO schema/RLS/owner_id changes. **BUILDER-COMPLETE; owner-proof owed** (new owner signup → header shows name not email; member name self-edit persists/displays; invite accept carries name).
+
 ---
 
 ## Business Creation Abuse Guards (Shared)

@@ -323,6 +323,23 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-24 — THUNDER Identity name-layer alignment: 5 divergences closed → full_name is the person source of truth (BUILDER-COMPLETE, owner-proof owed)
+
+**Type:** App code ONLY — name WRITE/SEED layer + ONE read-precedence line. **NO schema, NO SQL, NO RLS, NO new table, NO owner_id change** → schema-verification gate N/A. The identity model was LOCKED by recon; this implements it, does not redesign. Commit **`73498ca`** (pushed). Build clean; changed files tsc-clean; **verify-universals exit 0**. Close-out ledger row **#25**.
+
+**THE LOCKED MODEL (implemented to, not re-decided):** PERSON NAME source of truth = `auth.user_metadata.full_name`; `business_members.name` = invite-bootstrap / display-fallback only; DISPLAY PRECEDENCE everywhere = `full_name → member.name → email`; `owner_id` = principal anchor, UNTOUCHED.
+
+**FIVE FIXES (the 5 divergences the recon found):**
+- **FIX 1 (div 1&2) — owner signup sets full_name.** `OwnerSignup.tsx:371` `signUp` now passes `options:{ data:{ full_name: ownerName.trim() } }`. The typed ownerName was being written ONLY to `business_members.name` (display-fallback) and was stranded out of auth metadata, so the owner's name never displayed → header fell back to email. Now it lands in the source of truth. owner_id untouched; the member/business writes kept.
+- **FIX 2 (div 3) — member self-edit writes the person, not the membership.** `Profile.tsx` `saveMemberField('name')` now writes `auth.updateUser({ data:{ full_name } })` FIRST (same call the owner path already used — unified), then keeps `business_members.name` in sync as the display-fallback so Team lists don't show a stale copy. **AUTHORITY BOUNDARY ABSOLUTE:** still touches name/phone/email ONLY — role/permissions never written.
+- **FIX 3 (div 4) — inverted member display precedence corrected.** `BusinessProvider.tsx:393` member name was `memberName ?? authName ?? email` (member.name first — wrong, it's only a fallback). Now `authName ?? memberName ?? email` (full_name first). AppHeader (`:47`) consumes `userName` unchanged.
+- **FIX 4 (div 5) — invite acceptance seeds full_name + bridges existing users.** `acceptInvitation.ts`: new-user branch seeds `user_metadata.full_name` (was only `name`); existing-user branch seeds `full_name` from the invite name ONLY if the user has none yet (the missing bootstrap→person bridge) — never overwrites a real person name (their own identity wins).
+- **FIX 5 (div 6) — legacy signup paths set full_name.** `configureAuth.tsx` `signUp` + `OnboardingWizard.tsx` legacy member-insert now seed `full_name` from the captured name (wizard reads full_name first, seeds it if the legacy user lacks one). Mirrors FIX 1.
+
+**SCOPE HELD:** no schema/migration/SQL/RLS; no owner_id reassignment (stays the anchor, INSERT-only at creation); no principal/operating-owner decoupling (deferred); no nav / Cost-to-Produce / profile-UI changes beyond the FIX-2 write-target. Name edits touch name only — never role/permissions.
+
+**OWNER-PROVEN owed (David, live deploy):** (a) a NEW owner signup → header shows the typed name, not the email; (b) a member self-edits their name on `/profile` → it persists and displays via `full_name` (and the Team list isn't stale); (c) accept an invite → the bootstrap name carries to the new person's identity. `[TRACE:PROFILE]`/`[TRACE:HEADER]` stay ON until owner-proven.
+
 ### 2026-06-24 — THUNDER Personal profile (`/profile`) + header avatar menu + delete old dashboard account-action row (RESOLVES nav Decision A) — BUILDER-COMPLETE, owner-proof owed
 
 **Type:** App code ONLY — 1 new cultivar page (`Profile.tsx`) + 1 NAV_IA node + AppHeader rewrite (avatar account menu) + AppLayout (injects sign-out) + Dashboard (delete account-action row) + router route. **NO schema, NO SQL, NO migration** → schema-verification gate N/A. ONE source held (NAV_IA in `tileRegistry.ts`; no parallel nav list). New `[TRACE:PROFILE]` emits ON; `[TRACE:HEADER]` STAYS ON. Build commit **`33f8324`** + SHA-fill **`41eb9fd`** (pushed). Build clean (2216 modules); changed files tsc-clean (only the 4 documented pre-existing errors — Confirmation/Orders/DeliveryRoute/SocialSetup); **verify-universals exit 0** (Cultivar #1–7 + #s + #n + #a + #e + #f + #g PASS — **cap #1 held PASS** through the AppHeader rewrite; Ignition #1 PASS / rest SKIP). Close-out ledger row **#24**. This builds the standard identity surface and adds the owner display-name WRITER that fix-pass #3 (below) deferred.
