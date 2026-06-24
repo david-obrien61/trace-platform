@@ -6,9 +6,11 @@
  *               Closes verify-universals cap #1 (persistent identity indicator). Cultivar-native
  *               rebuild of Ignition's ShopBanner shape (porting intent, not code).
  * DEPENDENCIES: useBusinessContext (BusinessProvider) — the ONE canonical identity source.
- *               Reads business.name, userEmail, role, loading. It NEVER queries the database
- *               itself (no client, query, or network call here) — one canonical fact, one source.
- * OUTPUTS:      A single sticky strip (business name · email · role pill). Renders nothing until
+ *               Reads business.name, userName, userEmail, role, loading. It NEVER queries the
+ *               database itself (no client, query, or network call here) — one canonical fact,
+ *               one source.
+ * OUTPUTS:      A single sticky strip (business name · person name · role pill). The signed-in
+ *               email is demoted to a hover title on the name (secondary). Renders nothing until
  *               an active business resolves (avoids an identity flash during auth resolution).
  *
  * Reused across verticals: display values come from context, not props, so the same strip works
@@ -26,17 +28,21 @@ const ROLE_ACCENT: Record<string, { bg: string; fg: string }> = {
 };
 
 export function AppHeader() {
-  const { business, userEmail, role, loading } = useBusinessContext();
+  const { business, userName, userEmail, role, loading } = useBusinessContext();
 
   // Nothing to show until identity resolves — no flash of an empty strip.
   if (loading || !business) return null;
 
   const accent = (role && ROLE_ACCENT[role]) || ROLE_ACCENT.STAFF;
+  // Primary = the person's name; email is the secondary (hover) detail. Fall back to email when
+  // no name resolved (userName already falls back to email at the context layer; belt-and-suspenders).
+  const displayName = userName ?? userEmail;
 
   // [TRACE:HEADER] identity actually rendered for the active business (STD-003, ON by default).
   console.log('[TRACE:HEADER] render', {
     businessId: business.id,
     businessName: business.name,
+    name: userName,
     email: userEmail,
     role,
   });
@@ -73,21 +79,22 @@ export function AppHeader() {
         {business.name}
       </span>
 
-      {/* RIGHT — who is signed in + the role they hold */}
+      {/* RIGHT — who is signed in (name; email on hover) + the role they hold */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-        {userEmail && (
+        {displayName && (
           <span
             style={{
-              fontSize: '0.75rem',
-              color: 'rgba(255,255,255,0.78)',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              color: 'rgba(255,255,255,0.92)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
               maxWidth: '40vw',
             }}
-            title={userEmail}
+            title={userEmail ?? undefined}
           >
-            {userEmail}
+            {displayName}
           </span>
         )}
         {role && (

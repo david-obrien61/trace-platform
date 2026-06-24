@@ -32,6 +32,7 @@ interface ResolvedBusiness {
   isOwner: boolean;
   permissions: string[] | null; // null = owner (full access implied)
   role: string | null;          // member's raw business_members.role; null for owners
+  memberName: string | null;    // business_members.name for members; null for owners (no member row)
 }
 
 export interface BusinessContextValue {
@@ -51,7 +52,10 @@ export interface BusinessContextValue {
   // for the ACTIVE business: 'OWNER' for owners, else the member's role uppercased (the 3
   // roles Cultivar runs today — OWNER / MANAGER / STAFF; inherits the 5-role model for free
   // when Role Machine lands, because it reads the resolved role, not a hardcoded list).
+  // userName = the person's display name: the member's business_members.name for a member,
+  // else the signed-in user's auth metadata full name, else the email (never blank).
   userEmail: string | null;
+  userName: string | null;
   role: string | null;
   // THE permission chokepoint (decision 2026-06-21). Single true checker for the
   // active business: owner ⇒ true; member ⇒ shared can() over their explicit list
@@ -72,6 +76,7 @@ const BusinessContext = createContext<BusinessContextValue>({
   userPermissions: null,
   isOwner: false,
   userEmail: null,
+  userName: null,
   role: null,
   can: () => false,
 });
@@ -188,6 +193,9 @@ export function BusinessProvider({
   const [tick, setTick] = useState(0);
   // Signed-in user's email — the canonical identity value the header displays (no re-fetch).
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  // Signed-in user's auth display name (user_metadata.full_name / name) — the owner-path name
+  // source (owners have no business_members row). Falls back to email at the context layer.
+  const [authName, setAuthName] = useState<string | null>(null);
 
   // Persisted active selection — initialized from localStorage, survives reload
   const [activeBusinessId, setActiveBusinessIdState] = useState<string | null>(() => {
@@ -223,12 +231,21 @@ export function BusinessProvider({
           setResolvedBusinesses([]);
           setBusinessError(null);
           setUserEmail(null);
+          setAuthName(null);
           setLoading(false);
         }
         return;
       }
 
-      if (!cancelled) setUserEmail(user.email ?? null);
+      if (!cancelled) {
+        setUserEmail(user.email ?? null);
+        // Owner display-name source: auth metadata (full_name, else name). Null → context
+        // falls back to email. Stated at build: owners have no business_members row, so this
+        // (not the member name) is the owner-name source.
+        const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+        const fullName = (meta.full_name ?? meta.name) as string | undefined;
+        setAuthName(fullName?.trim() || null);
+      }
 
       const resolved: ResolvedBusiness[] = [];
 
@@ -251,7 +268,7 @@ export function BusinessProvider({
       });
 
       for (const biz of (ownedBizzes ?? [])) {
-        resolved.push({ business: biz as Business, isOwner: true, permissions: null, role: null });
+        resolved.push({ business: biz as Business, isOwner: true, permissions: null, role: null, memberName: null });
       }
 
       // 2. Member path — fetch ALL business_members rows for this user, active=true
@@ -259,7 +276,7 @@ export function BusinessProvider({
       //    (was .single(); now returns the full array)
       const { data: memberships } = await supabase
         .from('business_members')
-        .select('business_id, role, permissions, businesses(*)')
+        .select('business_id, role, permissions, name, businesses(*)')
         .eq('user_id', user.id)
         .eq('active', true);
 
@@ -282,6 +299,7 @@ export function BusinessProvider({
           isOwner: false,
           permissions: (m.permissions as string[]) ?? [],
           role: (m.role as string) ?? null,
+          memberName: ((m as { name?: string | null }).name ?? null) || null,
         });
       }
 
@@ -366,6 +384,14 @@ export function BusinessProvider({
   const activeRole: string | null = activeResolved
     ? (isOwnerActive ? 'OWNER' : (activeResolved.role ?? 'STAFF').toUpperCase())
     : null;
+
+  // Display name for the active session. Member ⇒ business_members.name; owner ⇒ auth metadata
+  // name; both fall back to email so the header never shows a blank. Null only before resolve.
+  const activeName: string | null = activeResolved
+    ? (isOwnerActive
+        ? (authName ?? userEmail)
+        : (activeResolved.memberName ?? authName ?? userEmail))
+    : (authName ?? userEmail);
   const can = React.useCallback(
     (permissionId: string): boolean => {
       if (isOwnerActive) return true; // owner: full access (userPermissions === null)
@@ -409,6 +435,7 @@ export function BusinessProvider({
       userPermissions: activeResolved?.permissions ?? null,
       isOwner: isOwnerActive,
       userEmail,
+      userName: activeName,
       role: activeRole,
       can,
     }}>

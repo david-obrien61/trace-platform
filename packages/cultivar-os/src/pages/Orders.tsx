@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, AlertTriangle, Truck, Package, Wrench } from 'lucide-react';
+import { AlertTriangle, Truck, Package, Wrench } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 
@@ -29,7 +28,6 @@ const TRANSPORT_LABEL: Record<string, string> = {
 };
 
 export function Orders() {
-  const navigate              = useNavigate();
   const { businessId }        = useBusinessContext();
   const [orders, setOrders]   = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,12 +70,6 @@ export function Orders() {
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <button
-          onClick={() => navigate('/dashboard')}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
-        >
-          <ArrowLeft size={22} color="#27500A" />
-        </button>
         <div>
           <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#27500A' }}>
             Orders

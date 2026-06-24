@@ -107,12 +107,6 @@ export function Campaigns() {
     <div style={{ minHeight: '100vh', background: SAGE, paddingBottom: 60 }}>
 
       <div style={{ background: GREEN, padding: '20px 16px', color: '#fff' }}>
-        <button
-          onClick={() => navigate('/dashboard')}
-          style={{ background: 'none', border: 'none', color: '#a8c890', fontSize: '0.8125rem', cursor: 'pointer', padding: 0, marginBottom: 6 }}
-        >
-          ← Dashboard
-        </button>
         <h1 style={{ fontSize: '1.375rem', fontWeight: 700, margin: 0 }}>Campaign Scheduler</h1>
         <p style={{ fontSize: '0.8125rem', color: '#c8e6b0', margin: '4px 0 0' }}>
           Plan, draft, and publish seasonal content

@@ -94,9 +94,16 @@ export function AppRouter() {
           <Route element={<PermissionRoute permission={VIEW_COSTS} />}>
             <Route path="/assets"            element={<BusinessAssets />} />
             <Route path="/inventory"         element={<BusinessInventory />} />
-            <Route path="/costs"             element={<CostToProduce />} />
             <Route path="/operating-costs"   element={<OperatingCosts />} />
             <Route path="/pmi"               element={<PMI />} />
+          </Route>
+
+          {/* COST-TO-PRODUCE — OWNER-ONLY (Nav C2 access change, ratified 2026-06-24). Moved out
+              of the view_costs group: even a Manager who holds view_costs must NOT reach /costs by
+              URL. Matches the registry tile (placement=admin, required_permission=owner-only) so the
+              nav AND the route agree. can('owner-only') → owner true, everyone else redirected. */}
+          <Route element={<PermissionRoute permission="owner-only" />}>
+            <Route path="/costs"             element={<CostToProduce />} />
           </Route>
         </Route>
       </Route>

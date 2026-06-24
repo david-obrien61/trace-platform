@@ -150,6 +150,103 @@ img {
   100% { background-position: -200% 0; }
 }
 
+/* ── App chrome: nav-rail / hamburger + breadcrumb (Nav C2) ─────────────────────
+   One sticky bar under the identity header. Token-driven, no animations. Responsive
+   breakpoint = 768px (the platform's tile-grid breakpoint). */
+.appchrome {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--white);
+  border-bottom: 1px solid var(--gray-200);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Hamburger toggle — shown on narrow screens only */
+.appnav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: var(--sage-bg);
+  border: 1px solid var(--sage-border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  color: var(--green-primary);
+  flex-shrink: 0;
+}
+
+/* Horizontal section rail — shown on wide screens */
+.appnav-rail {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.appnav-link {
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--gray-600);
+}
+.appnav-link:hover { background: var(--sage-bg); color: var(--green-primary); }
+.appnav-link[aria-current="page"] { color: var(--green-primary); background: var(--sage-bg); }
+
+/* Drawer (mobile) — the section list the hamburger toggles */
+.appnav-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: absolute;
+  top: 100%;
+  left: 16px;
+  min-width: 180px;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  padding: 6px;
+  z-index: 30;
+}
+.appnav-drawer .appnav-link { text-align: left; padding: 10px 12px; }
+
+/* Breadcrumb — full trail on desktop, single "‹ parent" on mobile */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+.breadcrumb-seg {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--green-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.breadcrumb-seg.is-current { color: var(--gray-600); font-weight: 700; }
+.breadcrumb-sep { color: var(--gray-400); font-size: 0.75rem; flex-shrink: 0; }
+.breadcrumb-mobile { display: none; }
+
+@media (max-width: 767px) {
+  .appnav-toggle { display: inline-flex; }
+  .appnav-rail   { display: none; }
+  .breadcrumb-full   { display: none; }
+  .breadcrumb-mobile { display: flex; align-items: center; gap: 4px; }
+}
+
 /* Error state */
 .error-state {
   padding: 40px 24px;

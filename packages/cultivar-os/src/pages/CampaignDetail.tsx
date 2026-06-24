@@ -201,12 +201,6 @@ export function CampaignDetail() {
 
       {/* Header */}
       <div style={{ background: GREEN, padding: '20px 16px', color: '#fff' }}>
-        <button
-          onClick={() => navigate('/campaigns')}
-          style={{ background: 'none', border: 'none', color: '#a8c890', fontSize: '0.8125rem', cursor: 'pointer', padding: 0, marginBottom: 6 }}
-        >
-          ← Campaigns
-        </button>
         <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>{campaign.name}</h1>
         {campaign.start_date && (
           <p style={{ fontSize: '0.8125rem', color: '#c8e6b0', margin: '3px 0 0' }}>

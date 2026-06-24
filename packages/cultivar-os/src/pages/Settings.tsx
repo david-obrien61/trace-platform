@@ -564,9 +564,9 @@ export function Settings() {
     </>
   ) : undefined;
 
+  // No onBack: the persistent breadcrumb (AppLayout) is the canonical "up" affordance (Nav C2).
   return (
     <SharedSettings
-      onBack={() => navigate('/dashboard')}
       accountingConnectUrl={accountingConnectUrl}
       verticalSection={verticalContent}
     />

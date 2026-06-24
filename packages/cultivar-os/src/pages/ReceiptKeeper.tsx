@@ -751,27 +751,12 @@ export function ReceiptKeeper() {
     padding: '24px 0',
   };
 
-  const BACK: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    color: '#64748b',
-    fontSize: '0.875rem',
-    cursor: 'pointer',
-    border: 'none',
-    background: 'transparent',
-    padding: '0 0 16px',
-  };
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div style={PAGE}>
       <div style={CARD}>
-        <button style={BACK} onClick={() => navigate('/dashboard')}>
-          ← Dashboard
-        </button>
-
         <h1 style={TITLE}>{CAPTURE_COPY.title}</h1>
         <p style={SUBTITLE}>{CAPTURE_COPY.subtitle}</p>
 
@@ -1160,9 +1145,6 @@ export function ReceiptKeeper() {
             <button style={{ ...BTN_PRIMARY, marginTop: 0 }} onClick={handleReset}>
               Capture another
             </button>
-            <button style={BTN_GHOST} onClick={() => navigate('/dashboard')}>
-              Back to Dashboard
-            </button>
           </div>
         )}
 
@@ -1174,9 +1156,6 @@ export function ReceiptKeeper() {
             </div>
             <button style={BTN_PRIMARY} onClick={handleReset}>
               Try again
-            </button>
-            <button style={BTN_GHOST} onClick={() => navigate('/dashboard')}>
-              Back to Dashboard
             </button>
           </div>
         )}

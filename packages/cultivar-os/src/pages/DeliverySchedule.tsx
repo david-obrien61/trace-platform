@@ -13,7 +13,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Truck, MapPin, Navigation, Phone, Calendar } from 'lucide-react';
+import { Truck, MapPin, Navigation, Phone, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 
@@ -108,9 +108,6 @@ export function DeliverySchedule() {
   return (
     <div style={{ minHeight: '100vh', background: SAGE, paddingBottom: 40 }}>
       <div style={{ background: GREEN, padding: '20px 16px', color: '#fff', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={() => navigate('/dashboard')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
-          <ArrowLeft size={22} color="#fff" />
-        </button>
         <div>
           <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>Scheduled Deliveries</h1>
           <p style={{ margin: 0, fontSize: '0.75rem', color: '#a8c890' }}>

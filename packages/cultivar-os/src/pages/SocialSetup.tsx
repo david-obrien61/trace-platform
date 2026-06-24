@@ -125,20 +125,6 @@ export function SocialSetup() {
         alignItems: 'center',
         gap: 12,
       }}>
-        <button
-          onClick={() => {
-            if (SM_DEBUG) console.log('[SM-TRACE] Back button clicked → /dashboard');
-            navigate('/dashboard');
-          }}
-          style={{
-            background: 'rgba(255,255,255,0.12)',
-            border: 'none', borderRadius: 8,
-            padding: '6px 12px', color: '#fff',
-            fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer',
-          }}
-        >
-          ← Back
-        </button>
         <div>
           <p style={{ fontSize: '0.6875rem', color: '#a8c890', marginBottom: 2, letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase' }}>
             Social Media

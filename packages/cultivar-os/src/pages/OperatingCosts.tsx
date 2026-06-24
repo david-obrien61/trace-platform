@@ -27,8 +27,7 @@
 //               even after owner-proof).
 // ============================================================
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, X, Repeat } from 'lucide-react';
+import { Plus, X, Repeat } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { CATEGORY_OPTS } from '@trace/shared/business-logic';
@@ -130,7 +129,6 @@ function fmtDate(iso: string) {
 const cadenceSuffix: Record<Cadence, string> = { WEEKLY: '/wk', MONTHLY: '/mo', QUARTERLY: '/qtr', ANNUAL: '/yr' };
 
 export function OperatingCosts() {
-  const navigate = useNavigate();
   const { businessId } = useBusinessContext();
 
   const [costs, setCosts] = useState<CostRow[]>([]);
@@ -335,9 +333,6 @@ export function OperatingCosts() {
 
       {/* Header */}
       <div style={S.header}>
-        <button style={S.backBtn} onClick={() => navigate('/costs')}>
-          <ArrowLeft size={22} color="#27500A" />
-        </button>
         <h1 style={S.title}>Operating Costs</h1>
         <div style={{ flex: 1 }} />
         <button style={S.addBtn} onClick={() => { setShowForm(true); setSaveError(null); setSaveSuccess(false); }}>

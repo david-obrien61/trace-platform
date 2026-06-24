@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, X, Archive } from 'lucide-react';
+import { Plus, X, Archive } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 
@@ -98,7 +97,6 @@ function fmtDate(iso: string | null) {
 }
 
 export function BusinessInventory() {
-  const navigate = useNavigate();
   const { businessId } = useBusinessContext();
 
   const [items, setItems] = useState<InventoryRow[]>([]);
@@ -188,9 +186,6 @@ export function BusinessInventory() {
 
       {/* Header */}
       <div style={S.header}>
-        <button style={S.backBtn} onClick={() => navigate('/dashboard')}>
-          <ArrowLeft size={22} color="#27500A" />
-        </button>
         <h1 style={S.title}>Inventory</h1>
         <div style={{ flex: 1 }} />
         <button style={S.addBtn} onClick={() => { setShowForm(true); setSaveError(null); setSaveSuccess(false); }}>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft, Truck, MapPin, Navigation, Copy, Send,
+  Truck, MapPin, Navigation, Copy, Send,
   CheckSquare, Square, Plus, X, Phone,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -43,7 +43,6 @@ function buildMapsUrl(addresses: string[]): string {
 const TRACE_DELIVERY = true;
 
 export function DeliveryRoute() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   // When ?date=YYYY-MM-DD is present we route SCHEDULED deliveries (the `deliveries`
   // table) for that day. Absent → the original cart-order route path, unchanged.
@@ -189,9 +188,6 @@ export function DeliveryRoute() {
 
       {/* Header */}
       <div style={{ background: GREEN, padding: '20px 16px', color: '#fff', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={() => navigate(dateParam ? '/delivery-schedule' : '/dashboard')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
-          <ArrowLeft size={22} color="#fff" />
-        </button>
         <div>
           <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>
             {dateParam ? 'Route — Scheduled Day' : 'Delivery Routing'}

@@ -111,15 +111,14 @@ const DASH_BG = '#1e293b'; // dashboard tile icon-box background (dark slate, es
 // ════════════════════════════════════════════════════════════════════════════════
 export const TILE_REGISTRY: TileEntry[] = [
   // ── Dashboard — actions & contexts (live) ──────────────────────────────────────
-  { key: 'qr_checkout',      vertical: 'general', label: 'QR Checkout',               group: 'checkout',  kind: 'action',  placement: 'dashboard', nav_eligible: true,  required_permission: 'qr_checkout',        status: 'live',    depends_on: null,
+  // Label 'Orders' (was 'QR Checkout') — QR is the capture METHOD, not the surface's name (Nav C2).
+  { key: 'qr_checkout',      vertical: 'general', label: 'Orders',                   group: 'checkout',  kind: 'action',  placement: 'dashboard', nav_eligible: true,  required_permission: 'qr_checkout',        status: 'live',    depends_on: null,
     icon: QrCode,      color: '#34d399', bg: DASH_BG, route: '/orders',            module_key: 'qr_checkout' },
   // Delivery = ONE evolving context entry. Live capability inside it = delivery_routing.
   // `opportunities` (Regina surfacing) is a PLANNED capability inside this same context.
   // Driver-handoff mechanism = UNDECIDED (do NOT build — see note).
   { key: 'delivery',         vertical: 'general', label: 'Delivery',                  group: 'fulfilment', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'manage_deliveries',  status: 'live',    depends_on: null,
     icon: Truck,       color: '#22d3ee', bg: DASH_BG, route: '/delivery-schedule', module_key: 'delivery_routing', note: 'driver-handoff mechanism UNDECIDED' },
-  { key: 'cost_to_produce',  vertical: 'general', label: 'Cost-to-Produce',           group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'view_costs',         status: 'live',    depends_on: null,
-    icon: Calculator,  color: '#2dd4bf', bg: DASH_BG, route: '/costs',             module_key: 'cost_to_produce' },
   { key: 'operating_costs',  vertical: 'general', label: 'Operating Costs',           group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'view_costs',         status: 'live',    depends_on: null,
     icon: HandCoins,   color: '#fbbf24', bg: DASH_BG, route: '/operating-costs' },
   { key: 'assets',           vertical: 'general', label: 'Assets',                    group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'view_costs',         status: 'live',    depends_on: null,
@@ -174,6 +173,11 @@ export const TILE_REGISTRY: TileEntry[] = [
   // ── Admin ─────────────────────────────────────────────────────────────────────
   { key: 'add_business',     vertical: 'general', label: 'Add Business',              group: 'admin',    kind: 'action',  placement: 'admin',    nav_eligible: false, required_permission: 'owner-only',       status: 'live',    depends_on: null,
     icon: Plus,        color: '#34d399', bg: DASH_BG, route: '/add-business' },
+  // Cost-to-Produce — MOVED Dashboard→Admin + view_costs→owner-only (Nav C2 access change, ratified
+  // 2026-06-24). Owner-default + delegable is a future Role-Machine concern; today the gate is
+  // owner-only, so a Staff/Manager session sees it nowhere (nav AND route, see router.tsx /costs).
+  { key: 'cost_to_produce',  vertical: 'general', label: 'Cost-to-Produce',           group: 'admin',    kind: 'context', placement: 'admin',    nav_eligible: false, required_permission: 'owner-only',       status: 'live',    depends_on: null,
+    icon: Calculator,  color: '#2dd4bf', bg: DASH_BG, route: '/costs',             module_key: 'cost_to_produce' },
 
   // ── Planned (greyed) — forward declarations. Permissions marked PROVISIONAL where the
   //    seed did not pin one (adjustable); the seed-pinned ones are locked like all others.
@@ -273,4 +277,161 @@ export function requiredPermissionFor(key: string): string | undefined {
  */
 export function registryPermissions(): string[] {
   return [...new Set(TILE_REGISTRY.map((t) => t.required_permission))].sort();
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NAVIGATION IA — Model C2 (ratified by David 2026-06-24).
+//
+// The navigation hierarchy is registry DATA living in THIS one module. The breadcrumb component
+// AND the hamburger/nav-rail BOTH read it — there is NO parallel nav-config list that could drift
+// (the exact three-list failure already killed for the tile grid). A nav node that IS a registry
+// tile references it by `tileKey` and INHERITS the tile's label/route/required_permission, so the
+// security gate cannot diverge from the tile catalog. The handful of nav surfaces that are NOT
+// dashboard tiles — the three section roots (Dashboard/Settings/Admin), the /settings root, /roles,
+// the /deliveries "Route a day" sub-view, and the /campaigns/:id detail — are declared inline here:
+// the irreducible minimum the IA needs that the tile entries do not already carry. (Reported at
+// build time: TileEntry alone cannot carry the full IA because several IA nodes are not tiles —
+// hence this companion tree in the SAME source module, referencing tiles by key, not re-declaring.)
+// ════════════════════════════════════════════════════════════════════════════════
+
+export type NavSection = 'dashboard' | 'settings' | 'admin';
+
+export interface NavNode {
+  /** Unique nav key. */
+  key: string;
+  /** Top-level section this node lives under (drives the hamburger/nav-rail grouping). */
+  section: NavSection;
+  /** Parent nav key, or null for a section root. */
+  parent: string | null;
+  /** If this node IS a registry tile: its key — label/route/required_permission inherit from it. */
+  tileKey?: string;
+  /** Inline label (non-tile nodes); overrides the tile label when both are present. */
+  label?: string;
+  /** Inline route (non-tile nodes); `null` = a non-linking heading (e.g. the Admin section). */
+  route?: string | null;
+  /** Inline permission (non-tile nodes); falls back to the tile's permission, then 'view_dashboard'. */
+  required_permission?: string;
+  /** Concrete route PATTERN used to match the active pathname (handles params/aliases, e.g.
+   *  '/campaigns/:id', '/deliveries'). Defaults to the resolved route. */
+  matchRoute?: string;
+  /** Explicit breadcrumb ANCESTOR keys (root → parent), used ONLY where the ratified path deviates
+   *  from the parent walk — the /campaigns/:id collapse that drops "Social". Omit to walk `parent`. */
+  breadcrumb?: string[];
+}
+
+export const NAV_IA: NavNode[] = [
+  // ── Top-level sections (the hamburger / nav-rail) ──
+  { key: 'sec_dashboard', section: 'dashboard', parent: null, label: 'Dashboard', route: '/dashboard', required_permission: 'view_dashboard' },
+  { key: 'sec_settings',  section: 'settings',  parent: null, label: 'Settings',  route: '/settings',  required_permission: 'manage_settings' },
+  // Admin = a section heading with no landing page → non-linking (route:null). The rail shows it
+  // iff the session can see ≥1 admin child (both children are owner-scoped).
+  { key: 'sec_admin',     section: 'admin',     parent: null, label: 'Admin',     route: null },
+
+  // ── Dashboard branch ──
+  { key: 'nav_orders',          section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'qr_checkout' },
+  { key: 'nav_delivery',        section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'delivery' },
+  { key: 'nav_delivery_route',  section: 'dashboard', parent: 'nav_delivery',        label: 'Route a day', route: '/deliveries', matchRoute: '/deliveries', required_permission: 'manage_deliveries' },
+  { key: 'nav_operating_costs', section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'operating_costs' },
+  { key: 'nav_assets',          section: 'dashboard', parent: 'nav_operating_costs', tileKey: 'assets' },
+  // /inventory is served by two tiles (manual + intake); the nav node owns the route once, label 'Inventory'.
+  { key: 'nav_inventory',       section: 'dashboard', parent: 'nav_operating_costs', label: 'Inventory', route: '/inventory', required_permission: 'view_costs' },
+  { key: 'nav_receipts',        section: 'dashboard', parent: 'nav_operating_costs', tileKey: 'receipt_keeper' },
+  { key: 'nav_pmi',             section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'pmi' },
+  { key: 'nav_social',          section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'social_media' },
+  { key: 'nav_campaigns',       section: 'dashboard', parent: 'nav_social',          tileKey: 'campaigns', label: 'Campaigns', route: '/campaigns' },
+  // Campaign detail — COLLAPSED breadcrumb (Dashboard / Campaigns / Campaign): drops "Social" so the
+  // leaf stays 3-deep (ratified). parent stays nav_campaigns for section grouping; breadcrumb override
+  // controls the displayed trail.
+  { key: 'nav_campaign_detail', section: 'dashboard', parent: 'nav_campaigns',       label: 'Campaign', route: '/campaigns/:id', matchRoute: '/campaigns/:id', required_permission: 'manage_campaigns', breadcrumb: ['sec_dashboard', 'nav_campaigns'] },
+
+  // ── Settings branch ──
+  { key: 'nav_roles',           section: 'settings',  parent: 'sec_settings',        label: 'Roles & Permissions', route: '/roles', required_permission: 'manage_settings' },
+
+  // ── Admin branch (owner-scoped) ──
+  { key: 'nav_add_business',    section: 'admin',     parent: 'sec_admin',           tileKey: 'add_business' },
+  { key: 'nav_cost_to_produce', section: 'admin',     parent: 'sec_admin',           tileKey: 'cost_to_produce' },
+];
+
+/** A single nav node by key. */
+export function navByKey(key: string): NavNode | undefined {
+  return NAV_IA.find((n) => n.key === key);
+}
+
+/** Display label for a nav node (inline label wins, else the referenced tile's, else the key). */
+export function navLabel(node: NavNode): string {
+  if (node.label) return node.label;
+  if (node.tileKey) return tileByKey(node.tileKey)?.label ?? node.key;
+  return node.key;
+}
+
+/** Resolved route for a nav node, or null when it is a non-linking heading. */
+export function navRoute(node: NavNode): string | null {
+  if (node.route !== undefined) return node.route;          // inline route (may be null)
+  if (node.tileKey) return tileByKey(node.tileKey)?.route ?? null;
+  return null;
+}
+
+/** Permission required to SEE a nav node (inline wins, else the tile's, else view_dashboard). */
+export function navPermission(node: NavNode): string {
+  if (node.required_permission) return node.required_permission;
+  if (node.tileKey) return tileByKey(node.tileKey)?.required_permission ?? 'view_dashboard';
+  return 'view_dashboard';
+}
+
+/** Match a route PATTERN ('/campaigns/:id') against a concrete pathname. */
+function routeMatches(pattern: string, pathname: string): boolean {
+  if (pattern === pathname) return true;
+  const pp = pattern.split('/');
+  const xp = pathname.split('/');
+  if (pp.length !== xp.length) return false;
+  return pp.every((seg, i) => seg.startsWith(':') || seg === xp[i]);
+}
+
+/** The nav node whose route matches a pathname — most-specific (longest) pattern wins. */
+export function navNodeForPath(pathname: string): NavNode | null {
+  const candidates = NAV_IA
+    .map((n) => ({ n, pat: n.matchRoute ?? navRoute(n) ?? '' }))
+    .filter((c) => c.pat !== '' && routeMatches(c.pat, pathname))
+    .sort((a, b) => b.pat.split('/').length - a.pat.split('/').length);
+  return candidates[0]?.n ?? null;
+}
+
+/** One breadcrumb segment. The current page has route=null (never links). */
+export interface Crumb { label: string; route: string | null; current: boolean; }
+
+/**
+ * The breadcrumb trail for a pathname, root → current. Ancestors come from the explicit
+ * `breadcrumb` override when present (the campaign-detail collapse), otherwise from walking
+ * `parent`. The current node is appended as a non-linking leaf. Empty when no node matches.
+ */
+export function breadcrumbForPath(pathname: string): Crumb[] {
+  const node = navNodeForPath(pathname);
+  if (!node) return [];
+  let ancestorKeys: string[];
+  if (node.breadcrumb) {
+    ancestorKeys = node.breadcrumb;
+  } else {
+    ancestorKeys = [];
+    let p = node.parent;
+    while (p) {
+      ancestorKeys.unshift(p);
+      p = navByKey(p)?.parent ?? null;
+    }
+  }
+  const crumbs: Crumb[] = ancestorKeys
+    .map((k) => navByKey(k))
+    .filter((n): n is NavNode => !!n)
+    .map((n) => ({ label: navLabel(n), route: navRoute(n), current: false }));
+  crumbs.push({ label: navLabel(node), route: null, current: true });
+  return crumbs;
+}
+
+/** The top-level nav sections (Dashboard · Settings · Admin), in declared order. */
+export function navSections(): NavNode[] {
+  return NAV_IA.filter((n) => n.parent === null);
+}
+
+/** Direct children of a nav node (used to gate the Admin heading on "can see ≥1 child"). */
+export function navChildrenOf(navKey: string): NavNode[] {
+  return NAV_IA.filter((n) => n.parent === navKey);
 }

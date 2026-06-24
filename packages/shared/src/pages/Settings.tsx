@@ -84,7 +84,10 @@ const TIMING_LABEL: Record<string, string> = {
 };
 
 interface SettingsProps {
-  onBack: () => void;
+  // Optional: the persistent breadcrumb (AppLayout) is the canonical "up" affordance now, so the
+  // host may omit this. When omitted, no back button renders (Nav C2). Kept for any host that
+  // still wants its own control.
+  onBack?: () => void;
   verticalSection?: React.ReactNode;
   accountingConnectUrl?: string;
 }
@@ -295,12 +298,14 @@ export function Settings({ onBack, verticalSection, accountingConnectUrl }: Sett
 
       {/* Header */}
       <div style={{ background: GREEN, padding: '20px 16px', color: '#fff', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button
-          onClick={onBack}
-          style={{ background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8, padding: '8px 14px', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem' }}
-        >
-          ← Back
-        </button>
+        {onBack && (
+          <button
+            onClick={onBack}
+            style={{ background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8, padding: '8px 14px', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem' }}
+          >
+            ← Back
+          </button>
+        )}
         <div>
           <p style={{ fontSize: '0.6875rem', color: '#a8c890', margin: 0, letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase' }}>
             {business?.name}

@@ -37,7 +37,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calculator, AlertTriangle } from 'lucide-react';
+import { Calculator, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { analyze, EMPTY_COST_CONFIG, fromCostObject, readPricingConfig } from '@trace/shared/business-logic';
@@ -194,9 +194,6 @@ export function CostToProduce() {
     <div style={{ minHeight: '100vh', background: SAGE, paddingBottom: 48 }}>
       {/* Header */}
       <div style={{ background: GREEN, padding: '20px 16px', color: '#fff', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={() => navigate('/dashboard')} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 8, padding: '8px 12px', color: '#fff', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <ArrowLeft size={16} /> Back
-        </button>
         <div>
           <p style={{ fontSize: '0.6875rem', color: '#a8c890', margin: 0, letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase' }}>{business?.name}</p>
           <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>

@@ -448,8 +448,12 @@ function capA(key, v) {
   if (!/export function dashboardTiles\b/.test(reg)) problems.push('tileRegistry.ts: no dashboardTiles() selector');
   // (i.b) vertical scope: every entry declares a vertical from the known set; enablement is
   //       vertical-aware (general tiles + the business's own vertical). general tiles must exist.
-  const entryCountA = (reg.match(/\bkey:\s*'/g) || []).length;
-  const verticalDecls = reg.match(/vertical:\s*'(general|cultivar|ignition|conduit|kinna)'/g) || [];
+  //       NOTE: count over the TILE_REGISTRY block only — NAV_IA nodes below also use `key:` but
+  //       are nav nodes, not tiles (they carry no vertical/required_permission).
+  const navIaStart = reg.indexOf('export const NAV_IA');
+  const tileBlockA = navIaStart > 0 ? reg.slice(0, navIaStart) : reg;
+  const entryCountA = (tileBlockA.match(/\bkey:\s*'/g) || []).length;
+  const verticalDecls = tileBlockA.match(/vertical:\s*'(general|cultivar|ignition|conduit|kinna)'/g) || [];
   if (entryCountA === 0 || verticalDecls.length < entryCountA) {
     problems.push(`not every entry declares a vertical from the known set (${verticalDecls.length}/${entryCountA})`);
   }
@@ -489,9 +493,12 @@ function capE(key, v) {
   if (!/required_permission:\s*string/.test(reg)) problems.push('TileEntry has no required_permission field');
   if (!/export function registryPermissions\b/.test(reg)) problems.push('no registryPermissions() enumerator (role-builder source)');
   if (!/export function allTiles\b/.test(reg)) problems.push('no allTiles() selector (role-config/marketplace source)');
-  // every entry must actually declare required_permission (count entries vs occurrences)
-  const entryCount = (reg.match(/\bkey:\s*'/g) || []).length;
-  const permCount  = (reg.match(/required_permission:\s*'/g) || []).length;
+  // every entry must actually declare required_permission (count entries vs occurrences).
+  // Scope to the TILE_REGISTRY block — NAV_IA nodes below also use `key:` but are not tiles.
+  const navIaStartE = reg.indexOf('export const NAV_IA');
+  const tileBlockE = navIaStartE > 0 ? reg.slice(0, navIaStartE) : reg;
+  const entryCount = (tileBlockE.match(/\bkey:\s*'/g) || []).length;
+  const permCount  = (tileBlockE.match(/required_permission:\s*'/g) || []).length;
   if (entryCount === 0 || permCount < entryCount) {
     problems.push(`not every entry declares required_permission (${permCount}/${entryCount})`);
   }
@@ -584,6 +591,45 @@ function capG(key, v) {
   return FAIL(`factory-reset gaps: ${problems.join('; ')}`);
 }
 
+// ════════════════════════════════════════════════════════════════════════════════
+// CAPABILITY n — Navigation IA lives in the SINGLE registry; every navigable surface declares a
+//   breadcrumb path; breadcrumb + nav-rail both read it; mounted ONCE in the app layout (Nav C2).
+//   Structural, source-decidable: the IA (NAV_IA) is registry data — NOT a parallel nav config that
+//   could drift (the same three-list failure killed for the tile grid). The key guarantee: a new
+//   navigable surface cannot ship without an IA node (same force as the tile assertion, cap #a).
+// ════════════════════════════════════════════════════════════════════════════════
+function capN(key, v) {
+  if (!isMultiTenant(v)) return SKIP('navigation IA + breadcrumb/nav-rail are Cultivar multi-surface concerns; Ignition renders nav from CoreApp (out of scope).');
+  const reg    = read('packages/cultivar-os/src/registry/tileRegistry.ts');
+  const layout = read('packages/cultivar-os/src/components/layout/AppLayout.tsx');
+  const crumb  = read('packages/cultivar-os/src/components/nav/Breadcrumb.tsx');
+  const nav    = read('packages/cultivar-os/src/components/nav/AppNav.tsx');
+  const problems = [];
+  // (i) the IA lives in the registry (one source) + its readers are exported
+  if (!/export const NAV_IA/.test(reg)) problems.push('tileRegistry.ts: no exported NAV_IA (the IA is not registry data)');
+  if (!/export function breadcrumbForPath\b/.test(reg)) problems.push('tileRegistry.ts: no breadcrumbForPath() selector');
+  if (!/export function navSections\b/.test(reg)) problems.push('tileRegistry.ts: no navSections() selector');
+  // (ii) BOTH renderings read the ONE registry IA (no parallel nav list)
+  if (!/breadcrumbForPath/.test(crumb)) problems.push('Breadcrumb.tsx does not read breadcrumbForPath() from the registry');
+  if (!/navSections/.test(nav)) problems.push('AppNav.tsx does not read navSections() from the registry');
+  // (iii) both are mounted once in the app layout (one mount, wraps every page)
+  if (!/<Breadcrumb[\s/>]/.test(layout) || !/<AppNav[\s/>]/.test(layout)) problems.push('AppLayout does not mount <AppNav/> + <Breadcrumb/>');
+  // (iv) every navigable private surface declares an IA node — a surface cannot ship without nav.
+  const navBlock = reg.slice(reg.indexOf('export const NAV_IA'));
+  const REQUIRED_NAV_KEYS = [
+    'sec_dashboard', 'sec_settings', 'sec_admin',
+    'nav_orders', 'nav_delivery', 'nav_delivery_route', 'nav_operating_costs',
+    'nav_assets', 'nav_inventory', 'nav_receipts', 'nav_pmi', 'nav_social',
+    'nav_campaigns', 'nav_campaign_detail', 'nav_roles', 'nav_add_business', 'nav_cost_to_produce',
+  ];
+  const missing = REQUIRED_NAV_KEYS.filter((k) => !navBlock.includes(`'${k}'`));
+  if (missing.length) problems.push(`navigable surfaces with no IA node: ${missing.join(', ')}`);
+  if (problems.length === 0) {
+    return PASS('navigation IA lives in the single tileRegistry (NAV_IA); breadcrumb + nav-rail both read it; AppLayout mounts both once; every navigable surface declares a breadcrumb path — a new surface cannot ship without nav.');
+  }
+  return FAIL(`navigation IA single-source not established: ${problems.join('; ')}`);
+}
+
 // ── capability registry ──────────────────────────────────────────────────────────
 const CAPS = [
   ['1', 'Persistent identity indicator in per-page layout/header', cap1],
@@ -594,6 +640,7 @@ const CAPS = [
   ['6', 'Cost-wall regression guard (Gate 3 / Staff HAR encoded — READ side)', cap6],
   ['7', 'WRITE-WALL: cost writes permission-gated (endpoint + RLS WITH CHECK)', cap7],
   ['s', 'SELF-GRANT CLOSED: member cannot widen own role/permissions (bm_self_update WITH CHECK + authority trigger)', capS],
+  ['n', 'Navigation IA in the registry — every surface has a breadcrumb path (Nav C2)', capN],
   ['a', 'Tile visibility driven by the registry, not hardcoded (D-012)', capA],
   ['e', "New tile's required_permission selectable in role-builder w/o separate edit (D-010/D-012)", capE],
   ['f', 'Tenant override/custom not cross-tenant; floor not tenant-writable; clone-not-mutate (D-010, AC-3)', capF],
