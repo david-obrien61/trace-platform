@@ -625,8 +625,8 @@ Each test computes what a buggy build would output and asserts the real one diff
 **Context values:**
 - `business: Business | null` — full businesses row
 - `businessId: string | null`
-- `businessError: string | null` — `'no_business'` when both paths genuinely return zero rows; `'read_error'` when a resolution SELECT ERRORED (data=null, rows may exist). Distinct since 2026-06-24 (`97118ef`): the owner + member SELECTs now capture `{ error }` and emit `[TRACE:BUSINESS] owner/member path ERROR {code,message,details,hint}`, so an errored read no longer masquerades as `no_business` and bounce-loops onboarding. Query shape + RLS unchanged (surface-only diagnostic; read root-cause fix is a follow-up once the surfaced error text is reported).
-- `loading: boolean`
+- `businessError: string | null` — `'no_business'` when both paths genuinely return zero rows; `'read_error'` when a resolution SELECT ERRORED (data=null, rows may exist). Distinct since 2026-06-24 (`97118ef`): the owner + member SELECTs capture `{ error }` and emit `[TRACE:BUSINESS] owner/member path ERROR {code,message,details,hint}`, so an errored read no longer masquerades as `no_business`. Query shape + RLS unchanged.
+- `loading: boolean` — stays `true` across the **bounded write-then-read retry** (2026-06-24 `56c7f81`): a fresh signup runs the resolution read ~1ms before the create write is visible (HAR-confirmed — every read 200, just empty). The owner+member resolution (`attemptResolution()`) re-runs up to `RESOLVE_MAX_ATTEMPTS=3` times, `~500ms` apart (~1s total), stopping early on first non-empty result or a real query error; `no_business` is set only after retries exhaust (SETTLED). Emits `[TRACE:BUSINESS] resolution retry {attempt, reason:'empty_with_session'}`. Consumers (Dashboard) redirect to `/onboarding` ONLY when settled (`loading===false`), so the first transient empty read no longer bounce-loops onboarding.
 - `reload: () => void`
 - `userPermissions: string[] | null` — null = owner, string[] = member's DB-stored permissions
 - `isOwner: boolean`
