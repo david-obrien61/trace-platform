@@ -443,6 +443,18 @@ funnel, guided by **sales-correlation BI** as the honest first signal). Rides on
 (weekly-aggregate · two-generators-one-voice · per-platform cadence · copy-and-go v1). Full record:
 **`docs/CONCEPT-social-scheduling-and-measurement.md`**.
 
+### The PMI operational-intelligence surface — `[POINTER]`
+
+Same surfacing family as the Regina Principle, pointed at **equipment** instead of customers: the platform
+knows a maintenance fact and surfaces its **operational consequence**. Three cross-links, one idea — **PMI→Receipts**
+(part costs attribute to the asset they service; derive-or-owner-identifies), **PMI→Assets** (a downtime / "what's
+down" state), and the payoff **PMI↔Delivery** (*tractor's PMI overdue and Tuesday's planting needs it → your job is
+at risk*; *truck's oil change can wait, you have a run → override*). Natural home for the deferred
+**`override_maintenance`** mechanism (reason-required · authorizer-logged · single-session, donor = Ignition
+bypassLog/AccessGatekeeper; store = the latent `business_pmi_schedule.overrides jsonb`; writes an `audit_log` row).
+Plus a shared-`<Calendar>` component note (PMI/Delivery/Social all want one day-grid). Full record:
+**`docs/CONCEPT-pmi-operational-intelligence.md`**.
+
 ---
 
 ## PART 5 — VERTICAL ROADMAP
