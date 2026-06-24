@@ -174,6 +174,14 @@ export function Profile() {
   // RLS). AUTHORITY BOUNDARY: this update lists ONLY name/phone/email — never role or permissions.
   async function saveMemberField(field: 'name' | 'phone' | 'email', next: string) {
     if (!userId || !businessId) throw new Error('Not signed in.');
+    // PERSON NAME source of truth = auth.user_metadata.full_name (same write the owner
+    // path uses). A member editing their OWN name writes full_name first; the
+    // business_members.name row is kept in sync only as a display-fallback so Team
+    // lists don't show a stale copy. phone/email stay on the membership row.
+    if (field === 'name') {
+      const { error: authErr } = await supabase.auth.updateUser({ data: { full_name: next } });
+      if (authErr) throw authErr;
+    }
     const patch: Record<string, string | null> = { [field]: field === 'name' ? next : (next || null) };
     const { error } = await supabase
       .from('business_members')

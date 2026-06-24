@@ -110,7 +110,13 @@ function buildEmailAuth(config: AuthConfig): AuthObject {
       setIsLoading(true);
       setError('');
 
-      const { data, error: authErr } = await supabase.auth.signUp({ email, password });
+      // PERSON NAME source of truth = auth.user_metadata.full_name — seed it from the
+      // captured signup name (mirrors OwnerSignup) so the person displays, not the email.
+      const { data, error: authErr } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: name } },
+      });
       if (authErr) {
         setError(authErr.message);
         setIsLoading(false);

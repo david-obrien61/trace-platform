@@ -79,11 +79,16 @@ export async function acceptInvitation(
   // 3. Create or find Supabase auth account
   let userId: string;
 
+  const inviteName = input.displayName ?? invitation.name;
+
   const { data: created, error: createErr } = await serviceSupabase.auth.admin.createUser({
     email: input.email,
     password: input.password,
     email_confirm: true,
-    user_metadata: { name: input.displayName ?? invitation.name },
+    // PERSON NAME source of truth = auth.user_metadata.full_name. Seed it (NOT 'name')
+    // from the invite so the bootstrap name becomes the new person's identity on account
+    // creation. Keep legacy 'name' too for any older readers.
+    user_metadata: { full_name: inviteName, name: inviteName },
   });
 
   if (createErr) {
@@ -98,6 +103,15 @@ export async function acceptInvitation(
       const existing = list?.users?.find(u => u.email === input.email);
       if (!existing) throw new Error('USER_LOOKUP_FAILED');
       userId = existing.id;
+      // Bootstrap→person bridge: an existing user accepting an invite may have no
+      // full_name yet. Seed it from the invite name ONLY if absent — never overwrite a
+      // real person name the user already set (their own identity wins).
+      const existingFullName = (existing.user_metadata as { full_name?: string } | null)?.full_name;
+      if (!existingFullName || !existingFullName.trim()) {
+        await serviceSupabase.auth.admin.updateUserById(userId, {
+          user_metadata: { ...(existing.user_metadata ?? {}), full_name: inviteName },
+        });
+      }
     } else {
       throw new Error(`AUTH_CREATE_FAILED: ${createErr.message}`);
     }
@@ -111,7 +125,7 @@ export async function acceptInvitation(
     .update({
       user_id: userId,
       active: true,
-      name: input.displayName ?? invitation.name,
+      name: inviteName,            // display-fallback copy on the membership row
     })
     .eq('id', member.id);
 

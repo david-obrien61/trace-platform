@@ -500,10 +500,17 @@ export function OnboardingWizard() {
         businessId = newBusinessId;
 
         // business_members row only needed on the legacy path; OwnerSignup already creates it.
+        // PERSON NAME source of truth = auth.user_metadata.full_name. Prefer it; if this legacy
+        // user has none yet, seed it so the person displays (bootstrap→person bridge, name-layer).
+        const meta = (user.user_metadata as { full_name?: string; name?: string } | null) ?? {};
+        const personName = meta.full_name ?? meta.name ?? nurseryInfo.name;
+        if (!meta.full_name || !meta.full_name.trim()) {
+          await supabase.auth.updateUser({ data: { full_name: personName } });
+        }
         await supabase.from('business_members').insert({
           business_id: businessId,
           user_id: user.id,
-          name: (user.user_metadata as { name?: string } | null)?.name ?? nurseryInfo.name,
+          name: personName,           // display-fallback copy on the membership row
           email: user.email ?? null,
           phone: null,
           role: 'OWNER',

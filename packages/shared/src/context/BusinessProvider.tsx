@@ -385,12 +385,13 @@ export function BusinessProvider({
     ? (isOwnerActive ? 'OWNER' : (activeResolved.role ?? 'STAFF').toUpperCase())
     : null;
 
-  // Display name for the active session. Member ⇒ business_members.name; owner ⇒ auth metadata
-  // name; both fall back to email so the header never shows a blank. Null only before resolve.
+  // Display name for the active session. PERSON NAME source of truth = auth full_name, so
+  // precedence is full_name → business_members.name → email (member.name is invite-bootstrap /
+  // display-fallback only). Owner has no member row → full_name → email. Null only before resolve.
   const activeName: string | null = activeResolved
     ? (isOwnerActive
         ? (authName ?? userEmail)
-        : (activeResolved.memberName ?? authName ?? userEmail))
+        : (authName ?? activeResolved.memberName ?? userEmail))
     : (authName ?? userEmail);
   const can = React.useCallback(
     (permissionId: string): boolean => {

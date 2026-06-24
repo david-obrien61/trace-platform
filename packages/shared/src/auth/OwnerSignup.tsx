@@ -371,6 +371,10 @@ export function OwnerSignup({ config, navigate }: Props) {
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: email.trim(),
           password,
+          // PERSON NAME source of truth = auth.user_metadata.full_name. The typed
+          // ownerName (also written to business_members.name as display-fallback) must
+          // land in auth metadata so the header/profile show the person, not the email.
+          options: { data: { full_name: ownerName.trim() } },
         });
 
         if (signUpError) {
