@@ -241,14 +241,14 @@ All domains registered at GoDaddy under David's account.
 | Desktop Folder | GitHub Repo | Deployed Vertical | Status |
 |---|---|---|---|
 | `~/Desktop/trace-platform/` | `david-obrien61/trace-platform` | Cultivar OS (active) · ignition-os (planned) | **Active — primary monorepo** |
-| `~/Desktop/CAI/` | `david-obrien61/CAI` | Ignition OS (original) | **Archive (2026-05-28)** — Ignition OS web build is now live in `trace-platform/packages/ignition-os/`. CAI/ is read-only. Keep for `ai_router.py` reference only until Railway is decommissioned. |
+| `~/Desktop/CAI-archive/` | `david-obrien61/CAI` | Ignition OS (original) | **Archive — RENAMED from `CAI` (archived, NOT deleted; a search for `CAI/` returns nothing because of the rename).** Reference-only: the historical original to consult **only if** the live donor below is missing something. **The LIVE Ignition donor is `trace-platform/packages/ignition-os/`** (files already copied + rewritten there — web-ported inline styles + instrumentation; confirmed a superset of the archive, e.g. PMI/`PredictiveKey.jsx` 710 vs 537 lines). Use the shared package as the donor; treat `CAI-archive` as historical original + `ai_router.py` reference until Railway is decommissioned. |
 | `~/Desktop/CoolRunning/` | `david-obrien61/CoolRunning` | CoolRunnings (home automation) | Active — separate vertical, separate repo |
 | `~/Desktop/IgnitionMobile/` | `david-obrien61/ignition` *(archived)* | Ignition OS mobile prototype | **Archive** — GitHub repo is archived. Rename desktop folder to `IgnitionMobile-archive`. Keep for migration reference until ignition-os web build is complete. |
 | `~/Desktop/Cultivar-os/` | *(none — no git)* | — | **Empty folder** — safe to delete. Real Cultivar OS is in `trace-platform/packages/cultivar-os/`. |
 | `~/Desktop/trace-assessment-app/` | *(none — no git)* | CoolRunnings assessment tool | Standalone app, no git. Contains `src/lib/AIEngine.js` (Claude Vision, device identification — different from Ignition AIEngine). |
 | `~/Desktop/CoolRunning/` | `david-obrien61/CoolRunning` | CoolRunnings | See above. |
 
-**Rule:** `trace-platform/` is the only folder that deploys to Vercel. All Cultivar OS work goes here. All Ignition OS work goes here — migration is complete as of 2026-05-28. CAI/ is archive.
+**Rule:** `trace-platform/` is the only folder that deploys to Vercel. All Cultivar OS work goes here. All Ignition OS work goes here — migration is complete as of 2026-05-28. **Ignition is donor-reference-only, not a peer system to maintain.** Live work is trace-platform / Cultivar (Supabase `bgobkjcopcxusjsetfob`). Live Ignition **donor code** = `packages/ignition-os/`. Live Ignition **data** (if ever needed) = Ignition Supabase project `ufsgqckbxdtwviqjjtos` (anon-key only locally; temp service key on request). `CAI-archive/` (renamed from `CAI`, not deleted) is the historical original, reference-only.
 
 ---
 
@@ -322,6 +322,18 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-24 — THUNDER audit_log spine #19 OWNER-PROVEN (David at postgres) — TRUNCATE hole closed + cascade-teardown proven · ledger/handoff/repo synced (DOCS + 1 repo-authority migration, NO SQL run)
+
+**Type:** Documentation + ONE repo-authority migration file (`20260624_audit_log_truncate_revoke.sql`, **WRITTEN, NOT run** — records an already-applied owner change). NO SQL executed; audit_log table/function/trigger/policies/grants untouched. `[TRACE:*]` STAYS ON. Commit `__PENDING__`.
+
+**#19 audit_log spine — OWNER-PROVEN today (was WRITTEN+GATED).** David applied `20260623_audit_log_spine.sql` as postgres and proved it: **9/9 catalog (A)–(I)** (RLS on; envelope correct — action/outcome/detail NOT NULL, actor/target nullable; exactly 2 policies audit_insert(a)/audit_owner_read(r), no update/delete; trigger trg_audit_log_immutable enabled tgtype=27 BEFORE/ROW/UPDATE+DELETE; reject_audit_log_mutation SECURITY DEFINER owner=postgres; UPDATE/DELETE absent from grants; both indexes; FK ON DELETE CASCADE; UPDATE refused 42501) + **both behavioral halves** (UPDATE **and** DELETE proven refused → 42501 "append-only", inside BEGIN…ROLLBACK with real rows). **TWO FLAGS found + resolved:** (1) **TRUNCATE side door** — TRUNCATE bypasses BOTH RLS and FOR EACH ROW triggers; grantee check found it held by anon/authenticated/service_role → David REVOKEd it from the 3 untrusted roles (grantee now postgres-only); repo record = the new `20260624` migration. (2) **CASCADE vs immutability** — tested via throwaway business → audit row → `DELETE FROM businesses` in BEGIN…ROLLBACK: cascade DELETE SUCCEEDED (did not abort against the DELETE guard) → audit rows are immutable in place but ride the business lifecycle + clear on tenant teardown; SUPPORTS the customer-departure policy, proven by test not assumed. **#19B (factory-reset audit writer) now UNBLOCKED.** Two durable lessons appended to `data/grower-scan/audit-spine-recon.md` + ledger #19 evidence.
+
+**#22 PMI accept-flow + `interval_days` fix — BUILDER-COMPLETE (`ecedf49`), OWNER-PROOF still owed:** the AI suggest path now opens a preview→accept gate; shared `pmiInterval.ts` derives `interval_days` and on ACCEPT writes `tasks` AND `interval_days` so `getPMIStatus` finally returns OVERDUE/DUE_SOON/OK. Owner-prove: select asset → "Suggest Schedule" → preview shows derived cadence → Accept → real OVERDUE/DUE_SOON status (given a last service). `22B` `override_maintenance` permission DECLARED (mechanism deferred to PMI↔Delivery).
+
+**Navigation IA — Model C2 RATIFIED by David** (Orders rename; Delivery-as-context; Operating-Costs-as-financial-parent on Dashboard; Cost-to-Produce → Admin owner-only delegable; Social/Campaign pairing; Campaign-detail breadcrumb collapses to 3; Delivery route-map as sub-view). **Nav STAGE 2 build UNBLOCKED, not yet run** (ledger #17).
+
+**PMI per-task-grain + basis field migration — decision-ready** against real schema (confirmed scalar `interval_days`, one row per asset; no basis column). Own cycle, not done.
 
 ### 2026-06-23 — THUNDER Role-config console (visibility axis): PART A self-grant fix APPLIED + 8/8 catalog-verified · PART B console BUILDER-COMPLETE (owner-proof owed)
 
