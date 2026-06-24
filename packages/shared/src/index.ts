@@ -67,6 +67,7 @@ export { formatDollars, formatMoney, formatMoneyOrDash } from './utils/formatCur
 export { formatDateShort, formatDateTimeShort, todayRange, daysBetween } from './utils/dateHelpers';
 export { STATUS_COLORS, PMI_STATUS_COLORS, ORDER_STATUS_COLORS } from './utils/statusColors';
 export type { StatusLevel } from './utils/statusColors';
+export { normalizePhone } from './utils/normalizePhone';
 
 // Components
 export { FormField, inputStyle, inputErrorStyle } from './components/FormField';

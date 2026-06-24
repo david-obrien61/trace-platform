@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabase/client';
 import { useBusinessContext } from '../context/BusinessProvider';
+import { normalizePhone } from '../utils/normalizePhone';
 
 const GREEN = '#27500A';
 const SAGE  = '#EAF3DE';
@@ -120,7 +121,7 @@ export function Settings({ onBack, verticalSection, accountingConnectUrl }: Sett
     setSaveMsg('');
     const { error } = await supabase.from('businesses').update({
       name:     form.name.trim(),
-      phone:    form.phone.trim()    || null,
+      phone:    normalizePhone(form.phone),   // ONE shared storage normalization (R1/R3/profile)
       address:  form.address.trim()  || null,
       email:    form.email.trim()    || null,
       website:  form.website.trim()  || null,

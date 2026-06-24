@@ -17,6 +17,7 @@
 import { useEffect, useState } from 'react';
 import { Card } from '@trace/shared/components/Card';
 import { useBusinessContext } from '@trace/shared/context';
+import { normalizePhone } from '@trace/shared/utils/normalizePhone';
 import { supabase } from '../lib/supabase';
 
 const GREEN = '#27500A';
@@ -131,7 +132,10 @@ function EditableRow({
 export function Profile() {
   const { isOwner, userName, userEmail, businessId, reload, loading } = useBusinessContext();
 
-  // Member-row fields (name/phone/email) — fetched for the member path; owner path edits auth metadata.
+  // business_members-row fields. Owner AND member both HAVE a member row (OwnerSignup creates the
+  // owner's at signup; BusinessProvider just dedupes it out of resolution when the owner is resolved
+  // via businesses.owner_id). Personal PHONE lives on that row for both; name/email are member-only
+  // here (owner name = full_name in auth metadata, owner login email = userEmail).
   const [memberName, setMemberName] = useState('');
   const [memberPhone, setMemberPhone] = useState('');
   const [memberEmail, setMemberEmail] = useState('');
@@ -145,7 +149,9 @@ export function Profile() {
       if (cancelled) return;
       setUserId(user?.id ?? null);
       console.log('[TRACE:PROFILE] load', { path: isOwner ? 'owner' : 'member', userId: user?.id, businessId });
-      if (!isOwner && user && businessId) {
+      if (user && businessId) {
+        // Owner and member both read their own member row here — the owner needs it for PHONE
+        // (their name/email come from auth metadata, so memberName/memberEmail are member-only).
         const { data } = await supabase
           .from('business_members')
           .select('name, phone, email')
@@ -153,16 +159,19 @@ export function Profile() {
           .eq('business_id', businessId)
           .maybeSingle();
         if (cancelled) return;
-        setMemberName((data?.name as string) ?? userName ?? '');
         setMemberPhone((data?.phone as string) ?? '');
-        setMemberEmail((data?.email as string) ?? user.email ?? '');
+        if (!isOwner) {
+          setMemberName((data?.name as string) ?? userName ?? '');
+          setMemberEmail((data?.email as string) ?? user.email ?? '');
+        }
       }
       setFetching(false);
     })();
     return () => { cancelled = true; };
   }, [isOwner, businessId, userName]);
 
-  // OWNER: name only → auth metadata (owners have no member row). NEVER role/permissions.
+  // OWNER NAME → auth metadata (full_name is the person source of truth). NEVER role/permissions.
+  // (Owner PHONE is handled by saveMemberField('phone') below — it writes the owner's own member row.)
   async function saveOwnerName(next: string) {
     const { error } = await supabase.auth.updateUser({ data: { full_name: next } });
     if (error) throw error;
@@ -182,7 +191,12 @@ export function Profile() {
       const { error: authErr } = await supabase.auth.updateUser({ data: { full_name: next } });
       if (authErr) throw authErr;
     }
-    const patch: Record<string, string | null> = { [field]: field === 'name' ? next : (next || null) };
+    // PHONE goes through the ONE shared storage normalization (R1/R3/profile); name/email keep
+    // their existing trim-to-null behavior.
+    const normalizedPhone = field === 'phone' ? normalizePhone(next) : null;
+    const patch: Record<string, string | null> = {
+      [field]: field === 'name' ? next : field === 'phone' ? normalizedPhone : (next || null),
+    };
     const { error } = await supabase
       .from('business_members')
       .update(patch)            // name/phone/email ONLY — role/permissions intentionally absent
@@ -190,7 +204,7 @@ export function Profile() {
       .eq('business_id', businessId);
     if (error) throw error;
     if (field === 'name') setMemberName(next);
-    if (field === 'phone') setMemberPhone(next);
+    if (field === 'phone') setMemberPhone(normalizedPhone ?? '');
     if (field === 'email') setMemberEmail(next);
     console.log('[TRACE:PROFILE] save', { path: 'member', field, ok: true });
     reload();
@@ -239,6 +253,13 @@ export function Profile() {
                   placeholder="Your name"
                   required
                   onSave={saveOwnerName}
+                />
+                <EditableRow
+                  label="Phone"
+                  value={memberPhone}
+                  placeholder="Your phone number"
+                  type="tel"
+                  onSave={(v) => saveMemberField('phone', v)}
                 />
                 <EditableRow
                   label="Login email"

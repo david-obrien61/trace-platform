@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase/client';
 import { hashPin } from '../supabase/auth';
 import { runBusinessCreationGuards } from './businessGuards';
+import { normalizePhone } from '../utils/normalizePhone';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -255,7 +256,8 @@ export function OwnerSignup({ config, navigate }: Props) {
       email:         email.trim(),
       business_type: businessType,
     };
-    if (collectPhone && phone.trim())     bizInsert.phone   = phone.trim();
+    const normalizedPhone = normalizePhone(phone);   // ONE shared storage normalization (R1/R3/profile)
+    if (collectPhone && normalizedPhone)  bizInsert.phone   = normalizedPhone;
     if (collectAddress && address.trim()) bizInsert.address = address.trim();
     if (collectWebsite && website.trim()) bizInsert.website = website.trim();
 

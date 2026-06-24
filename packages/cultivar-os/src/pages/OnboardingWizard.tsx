@@ -257,7 +257,7 @@ function CheckoutPath({ onFinalize, finalizing, finalizeError, onBack }: PathPro
 }
 
 function SetupPath({ onFinalize, finalizing, finalizeError, onBack, nurseryInfo }: PathProps & {
-  nurseryInfo: { name: string; phone: string; address: string };
+  nurseryInfo: { name: string; address: string };
 }) {
   return (
     <div>
@@ -270,7 +270,6 @@ function SetupPath({ onFinalize, finalizing, finalizeError, onBack, nurseryInfo 
         </p>
         {([
           ['Name', nurseryInfo.name],
-          ['Phone', nurseryInfo.phone || '—'],
           ['Address', nurseryInfo.address || '—'],
         ] as [string, string][]).map(([label, value]) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 8, marginBottom: 8, borderBottom: '1px solid #f3f4f6' }}>
@@ -418,7 +417,7 @@ export function OnboardingWizard() {
 
   const [stepIndex, setStepIndex]   = useState(0);
   const [path, setPath]             = useState<Path | null>(null);
-  const [nurseryInfo, setNurseryInfo] = useState({ name: '', phone: '', address: '' });
+  const [nurseryInfo, setNurseryInfo] = useState({ name: '', address: '' });
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeError, setFinalizeError] = useState('');
   // When truthy, a businesses row already exists (OwnerSignup created it). Skip NURSERY_SETUP.
@@ -481,13 +480,33 @@ export function OnboardingWizard() {
       let businessId = existingBusinessId;
 
       if (!businessId) {
-        // Legacy path: wizard reached directly without OwnerSignup (e.g. manual /onboarding nav)
+        // DUPLICATE-CREATE GUARD: the mount-time checkExisting() can miss a just-created business
+        // under the write-then-read race (the row isn't visible yet → existingBusinessId stayed
+        // null). A blind INSERT here would create a SECOND businesses row. Re-resolve authoritatively
+        // at finalize time — the race window is long closed by now — and reuse the row if it exists.
+        // Only a genuinely business-less user (manual /onboarding nav, the real legacy path) falls
+        // through to create. finalize can therefore NEVER insert a duplicate businesses row.
+        const { data: existing } = await supabase
+          .from('businesses')
+          .select('id')
+          .eq('owner_id', user.id)
+          .eq('business_type', 'nursery')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (existing) {
+          businessId = existing.id as string;
+          console.log('[TRACE:BUSINESS] onboarding finalize: recovered existing business (duplicate-create guard)', { businessId });
+        } else {
+        // Legacy path: wizard reached directly without OwnerSignup (e.g. manual /onboarding nav),
+        // user genuinely has no business → create it. Phone is NOT collected here anymore (set at
+        // signup R1, edited in Settings R3, personal phone on /profile).
         const newBusinessId = crypto.randomUUID();
         const { error } = await supabase.from('businesses').insert({
           id: newBusinessId,
           owner_id: user.id,
           name: nurseryInfo.name.trim(),
-          phone: nurseryInfo.phone.trim() || null,
           address: nurseryInfo.address.trim() || null,
           business_type: 'nursery',
           trial_started_at: new Date().toISOString(),
@@ -518,6 +537,7 @@ export function OnboardingWizard() {
           active: true,
           invite_id: null,
         });
+        }
       }
 
       // nursery_profiles row — upsert so it's safe whether or not it already exists.
@@ -603,8 +623,6 @@ export function OnboardingWizard() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 24 }}>
           <Field label="Nursery Name" required value={nurseryInfo.name}
             onChange={v => setNurseryInfo(n => ({ ...n, name: v }))} placeholder="Green Thumb Nursery" />
-          <Field label="Phone" value={nurseryInfo.phone}
-            onChange={v => setNurseryInfo(n => ({ ...n, phone: v }))} placeholder="(512) 555-0100" />
           <Field label="Address" value={nurseryInfo.address}
             onChange={v => setNurseryInfo(n => ({ ...n, address: v }))} placeholder="123 Garden Rd, Austin, TX" />
         </div>
