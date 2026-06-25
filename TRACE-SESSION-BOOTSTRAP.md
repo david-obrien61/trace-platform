@@ -2,7 +2,17 @@
 
 > **What this is:** the single front-door doc — and the CANONICAL status front-page. Paste this at the start of every new Lightning (Claude-in-chat) session to get current in ~90 seconds. It is the MAP, not the territory — deep detail lives in the reference library (§7) and the feeder docs each ⚡ line links to. Structure is FIXED; only the values change. Update at session-end (see END-OF-SESSION PROTOCOL doc + CLAUDE.md §9).
 >
-> **Last updated:** 2026-06-25 (VERIFY-BEFORE-BUILD added as the top-level standing principle in ⚡ OPERATING FACTS — cross-refs §0 #1, CLAUDE.md §10 #6, DECISIONS.md OP-8, no duplicate copies; ⚡ OPERATING FACTS constants block at top; ⚡ ACTIVE STATUS + 📋 24-CAPABILITY BOARD = canonical status front-page; feeder docs point up to it. Seeded from the 4 demo-fixes batch + OCR-into-inventory reuse-verify + CAPABILITY-PACKAGE-GROUNDTRUTH reconciled to today.)
+> **Last updated:** 2026-06-25 (Lightning load-menu added (§7b: subject → verified .md files to drag) + COLD-START ritual at top + two standing WORKFLOW rules banked (prompt format = one copy-paste block · humor = Cleese/Fawlty/Python deadpan, full mode earned). Prior: VERIFY-BEFORE-BUILD as the top-level standing principle in ⚡ OPERATING FACTS — cross-refs §0 #1, CLAUDE.md §10 #6, DECISIONS.md OP-8, no duplicate copies; ⚡ OPERATING FACTS constants block at top; ⚡ ACTIVE STATUS + 📋 24-CAPABILITY BOARD = canonical status front-page; feeder docs point up to it.)
+
+> **COLD-START (how to get Lightning current fast):** Paste TWO things at session start —
+> (1) this file (TRACE-SESSION-BOOTSTRAP.md), and (2) the current HANDOFF — which lives in
+> **CLAUDE.md Part 3 (HANDOFF)**, rewritten every session as the "what were we mid-sentence on"
+> record. *(There is no `docs/handoffs/` folder — the canonical session handoff is CLAUDE.md
+> Part 3; `docs/handoff-archive.md` holds older rolled-off entries.)* Then state the session goal.
+> If the goal touches a specific subsystem, ALSO drag over the .md files listed for that subject
+> in the LIGHTNING LOAD-MENU (§7b). Lightning can read past CONVERSATIONS on its own (just ask:
+> "pull up where we left off on X") but CANNOT open repo files — those must be pasted/dragged.
+> Conversations = what we said; docs = what's written in the repo.
 
 ---
 
@@ -26,6 +36,8 @@
 **WORKFLOW**
 - Lightning writes prompts (never touches the repo) · Thunder executes · **David applies ALL SQL as `postgres`** and owner-proves live. Two bars: **BUILDER-COMPLETE** (committed, verify green) ≠ **OWNER-PROVEN** (David live-confirms via the TRACE trail).
 - **Prompt authorship:** Lightning writes ALL Thunder prompts (full context + verify-first + standing rules baked in). David relays them verbatim and decides/owner-proves — **David does NOT compose Thunder instructions from scratch** (avoids underspecified/iffy instructions). Path when David needs Thunder to do something: **David tells Lightning the goal → Lightning writes the prompt → David relays it.**
+- **Prompt format:** Lightning delivers every Thunder task as ONE clean copy-paste block (so David uses the copy icon and pastes verbatim) — never a goal for David to assemble, never split across prose.
+- **Humor (working method):** the register is John Cleese / Fawlty Towers / Monty Python deadpan, and full "Cleese mode" is EARNED — fired only on a NAMED, proven problem, never on a hope (premature celebration = smoke). Deadpan-precise with codename whimsy by default. (Full doctrine: `docs/operating-doctrine/lightning-david-partnership.md`.)
 - **ALL `[TRACE:*]` emits stay ON** until David explicitly lifts them.
 
 **IDENTITY / CONSTANTS**
@@ -218,6 +230,24 @@ A composable AI operating system for owner-operated small businesses. **One code
 | AI Gateway spec (unified routing, cost control, insight capture) | `docs/specs/SPEC-ai-gateway-2026-06-05.md` |
 
 **Conflict rule:** for what's *built*, PLATFORM_AUDIT.md wins. For *strategy*, MASTER_BRIEF. For *architecture*, PLATFORM_STRATEGY. This bootstrap is the map; those are the territory.
+
+---
+
+## 7b. LIGHTNING LOAD-MENU (drag these by subject — Lightning can't open repo files)
+
+> Cold-start by subject: name today's subsystem, drag over the .md files in its row. §7 is the *reference library* (what each doc is); this is the *load-by-task index* (what to paste for a given job). All paths verified present at write-time (2026-06-25).
+
+| SUBJECT | DRAG THESE .md FILES (verified paths) |
+|---|---|
+| **Discovery** | `DISCOVERY_MODULE_BRIEF.md` · `docs/DISCOVERY-ONBOARDING-CONCEPT-COMPILED.md` · `docs/built-inventory.md` (Discovery Module section) · `data/grower-scan/role-and-discovery-recon.md` |
+| **OCR / document routing** | `docs/decisions/OCR-router-spine-recon.md` · `docs/decisions/OCR-into-inventory-reuse-verify.md` · `docs/built-inventory.md` (Receipt Keeper / OCR entries) |
+| **Address / delivery / geo-seeder** | `docs/decisions/2026-06-25-address-spine-defect-recon.md` · `docs/decisions/2026-06-25-routing-seeder-seam-recon.md` |
+| **Cost / margin / cost-to-produce** | `docs/strategy/cost-to-serve-framework.md` · `docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md` · `docs/built-inventory.md` (Cost-to-Produce / Cost-Discovery entries) · `docs/DECISIONS.md` |
+| **Identity / roles / security** | `docs/specs/SPEC-identity-and-access-2026-06-04.md` · `docs/specs/SPEC-identity-and-access-addendum-2026-06-04.md` · `data/grower-scan/cost-wall-leak-scope.md` · `data/grower-scan/role-machine-and-signing-recon.md` · `docs/built-inventory.md` (RLS / security entries) |
+| **Architecture / where-things-live** | `PLATFORM_STRATEGY.md` · `data/grower-scan/dual-inventory-cultivar-ignition.md` |
+| **Working method / voice / humor** | `docs/operating-doctrine/lightning-david-partnership.md` |
+
+Lightning can't open these — drag the rows matching today's subject. When a new subject-area doc is written, add it here (same discipline as the §7 reference library): verify the path exists before listing it, and never list a file that isn't there.
 
 ---
 
