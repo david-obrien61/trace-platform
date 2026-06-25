@@ -155,15 +155,15 @@ function LeakagePath({ onFinalize, finalizing, finalizeError, onBack }: PathProp
         borderRadius: 16, padding: 20, marginBottom: 16,
       }}>
         <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: GRAY, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Annual revenue left on the table
+          Estimated annual leakage at your volume
         </p>
         <p style={{ margin: 0, fontSize: '2.5rem', fontWeight: 800, color: annualLeakage > 0 ? RED : GREEN, lineHeight: 1.1 }}>
           ${annualLeakage.toLocaleString('en-US')}
         </p>
         <p style={{ margin: '6px 0 0', fontSize: '0.8125rem', color: GRAY }}>
           {weeklyLeakage > 0
-            ? `That's $${weeklyLeakage}/week in missed add-on revenue.`
-            : 'Great — your customers are taking add-ons. Cultivar OS will protect that.'}
+            ? `Projection based on the figures above — about $${weeklyLeakage}/week in potential missed add-on revenue.`
+            : 'Great — at these figures your customers are taking add-ons. Cultivar OS will protect that.'}
         </p>
       </div>
 
@@ -435,13 +435,16 @@ export function OnboardingWizard() {
       if (bizIdFromUrl) {
         const { data: biz } = await supabase
           .from('businesses')
-          .select('id, name')
+          .select('id, name, address')
           .eq('id', bizIdFromUrl)
           .eq('owner_id', user.id)
           .maybeSingle();
         if (biz) {
           setExistingBusinessId(biz.id);
-          setNurseryInfo(n => ({ ...n, name: biz.name ?? '' }));
+          // Load name AND address so the address field/review isn't blank and a typed
+          // value round-trips (the load effect previously loaded only name).
+          setNurseryInfo(n => ({ ...n, name: biz.name ?? '', address: biz.address ?? '' }));
+          console.info('[TRACE:ONBOARD] address loaded', { businessId: biz.id, hasAddress: !!biz.address });
           setStepIndex(STEPS.indexOf('CHOOSE_PATH'));
           return;
         }
@@ -451,7 +454,7 @@ export function OnboardingWizard() {
       // Uses order + limit(1) to avoid maybeSingle() error on multiple rows.
       const { data: biz } = await supabase
         .from('businesses')
-        .select('id, name')
+        .select('id, name, address')
         .eq('owner_id', user.id)
         .eq('business_type', 'nursery')
         .order('created_at', { ascending: false })
@@ -459,7 +462,8 @@ export function OnboardingWizard() {
         .maybeSingle();
       if (biz) {
         setExistingBusinessId(biz.id);
-        setNurseryInfo(n => ({ ...n, name: biz.name ?? '' }));
+        setNurseryInfo(n => ({ ...n, name: biz.name ?? '', address: biz.address ?? '' }));
+        console.info('[TRACE:ONBOARD] address loaded', { businessId: biz.id, hasAddress: !!biz.address });
         setStepIndex(STEPS.indexOf('CHOOSE_PATH'));
       }
     }
@@ -537,6 +541,23 @@ export function OnboardingWizard() {
           active: true,
           invite_id: null,
         });
+        }
+      }
+
+      // Persist the nursery address back to businesses on the NORMAL path. The wizard now
+      // loads businesses.address into the field on mount, so this round-trips a typed/edited
+      // address — previously only the legacy create branch wrote it, dropping it otherwise.
+      // owner-scoped UPDATE (businesses_owner_*), idempotent on the legacy create path. RLS untouched.
+      {
+        const trimmedAddr = nurseryInfo.address.trim() || null;
+        const { error: addrError } = await supabase
+          .from('businesses')
+          .update({ address: trimmedAddr })
+          .eq('id', businessId);
+        if (addrError) {
+          console.warn('[TRACE:ONBOARD] address save ERROR', { businessId, error: addrError.message });
+        } else {
+          console.info('[TRACE:ONBOARD] address saved', { businessId, hasAddress: !!trimmedAddr });
         }
       }
 

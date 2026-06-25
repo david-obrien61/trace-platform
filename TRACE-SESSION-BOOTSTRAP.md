@@ -1,8 +1,97 @@
 # TRACE — SESSION BOOTSTRAP (paste this FIRST in any new chat)
 
-> **What this is:** the single front-door doc. Paste this at the start of every new Lightning (Claude-in-chat) session to get current in ~90 seconds. It is the MAP, not the territory — deep detail lives in the reference library (§7). Structure is FIXED; only the values change. Update at session-end (see END-OF-SESSION PROTOCOL doc).
+> **What this is:** the single front-door doc — and the CANONICAL status front-page. Paste this at the start of every new Lightning (Claude-in-chat) session to get current in ~90 seconds. It is the MAP, not the territory — deep detail lives in the reference library (§7) and the feeder docs each ⚡ line links to. Structure is FIXED; only the values change. Update at session-end (see END-OF-SESSION PROTOCOL doc + CLAUDE.md §9).
 >
-> **Last updated:** 2026-06-04 (end of session: identity/access spec + RBAC-already-built discovery)
+> **Last updated:** 2026-06-25 (⚡ OPERATING FACTS constants block added at top; ⚡ ACTIVE STATUS + 📋 24-CAPABILITY BOARD = canonical status front-page; feeder docs point up to it. Seeded from the 4 demo-fixes batch + OCR-into-inventory reuse-verify + CAPABILITY-PACKAGE-GROUNDTRUTH reconciled to today.)
+
+---
+
+## ⚡ OPERATING FACTS — the constants (rarely change)
+
+> Stable project constants Lightning otherwise re-derives or guesses at session-start. NOT task-state (that lives in ⚡ ACTIVE STATUS below, which changes every close). Pointers over detail. Inclusion test: *true across sessions AND Lightning gets it wrong without it.* If a value changes session-to-session it does NOT belong here.
+
+**DEPLOY / ENV**
+- Deploy = **merge to `main` → Vercel auto-deploys from main**. No per-branch previews — to test a branch, merge it first. Merge-to-main is **David's explicit go**, not automatic.
+- Vercel plan: **Hobby — 12 serverless-function ceiling** (`api/` is AT the cap; a 13th function silently fails the deploy → consolidate or upgrade to Pro — tech-debt #41). Supabase: **free tier**. Both → Pro at the first-paying-customer launch gate (PLATFORM_STATE ⛔).
+- Live prod env keys (cultivar `bgobkjcopcxusjsetfob`, names only — already set, don't re-suggest creating): `VITE_SUPABASE_URL`/`ANON_KEY`, `SUPABASE_URL`/`SERVICE_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `QBO_CLIENT_ID`/`SECRET`/`REDIRECT_URI`/`ENVIRONMENT`, `OCR_PRIMARY_MODEL`/`FALLBACK_MODEL`, `BLOTATO_API_KEY`, `VITE_DEMO_BUSINESS_ID`, `VITE_TAX_RATE`, `VITE_APP_URL`. Full list → `docs/inventory-env.md`.
+
+**DATA / RISK**
+- **ZERO real users — the DB is ALL TEST DATA** until David explicitly says otherwise. No production-data risk; changes can be **bold**. ONE exception: **RLS / tenant-isolation is sacred** (the security architecture ships to real nurseries). Posture: **data bold, security careful**.
+
+**WORKFLOW**
+- Lightning writes prompts (never touches the repo) · Thunder executes · **David applies ALL SQL as `postgres`** and owner-proves live. Two bars: **BUILDER-COMPLETE** (committed, verify green) ≠ **OWNER-PROVEN** (David live-confirms via the TRACE trail).
+- **Prompt authorship:** Lightning writes ALL Thunder prompts (full context + verify-first + standing rules baked in). David relays them verbatim and decides/owner-proves — **David does NOT compose Thunder instructions from scratch** (avoids underspecified/iffy instructions). Path when David needs Thunder to do something: **David tells Lightning the goal → Lightning writes the prompt → David relays it.**
+- **ALL `[TRACE:*]` emits stay ON** until David explicitly lifts them.
+
+**IDENTITY / CONSTANTS**
+- Supabase: cultivar (active) **`bgobkjcopcxusjsetfob`** · Ignition (do-not-touch from cultivar code) `ufsgqckbxdtwviqjjtos`.
+- David: `david_obrien2016@outlook.com` · user_id `98f4e56b-cd27-4099-a9d8-5c8cbb63d00f`. TRACE business_id **`45830ba7…` [confirm full UUID]**. LAWNS (demo) business_id `a1b2c3d4-0000-0000-0000-000000000001`.
+- Architecture Constants **AC-1..AC-4** + naming (`platform_`/`business_`, no vertical nouns in shared schema) → detail in **PLATFORM_STRATEGY.md** (named here, not inlined).
+- Demo target **LAWNS** (Leander, TX). **Terry** = owner (tech-shy, approval gatekeeper) · **Lauren Bishop** = manager (the real economic buyer). Demo date **[confirm with David — TBD]**.
+
+**DON'T-RE-LITIGATE** (pointers, not detail → `DECISIONS.md`)
+- `person_id` = **overlay, never the auth principal** (RLS stays on `auth.uid()`). · Standard-by-value rule (CLAUDE.md §6 r10). · Semantic-dup / rule-of-three (§6.8). · "Contractor" = **customer tier**, not an entity.
+
+---
+
+## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
+
+> One screen. Statuses + pointers ONLY — never inline depth (depth lives in the linked feeders).
+> Legend: 🔴 not-started / fake / broken · 🟡 in-flight (built-not-wired OR wired-not-proven) · 🟢 live + proven (demoable). States stack.
+> LIFECYCLE: when an item is 🟢-proven AND no longer demo-active it ARCHIVES to §A (bottom). The active list stays one screen because DONE leaves.
+> Line shape: `[●] Item · state · priority · reuse · deps · → pointer`
+
+**— DEMO-BLOCKERS (in-flight) —**
+- 🟡 **Discovery: fail-loud + persistence** (FIX 1) · wired, owner-proof owed · DEMO · reuse: discovery engine (real) · deps: ANTHROPIC_KEY[live] · → `DiscoveryGlimpse.tsx`, commit `c8094e1`
+- 🟡 **Onboarding address round-trip** (FIX 2) · wired, owner-proof owed · DEMO · reuse: businesses.address · deps: signup→wizard · → `OnboardingWizard.tsx`, commit `2c7bf08`
+- 🟡 **OCR → inventory intake** (NEXT build) · reuse-and-wire (~70% reuse) · DEMO · reuse: `api/receipts/ocr.ts`(100%, shape:invoice), mobile capture+compress(100%) · deps: line-items→`business_inventory` mapper[M] · → `docs/decisions/OCR-into-inventory-reuse-verify.md`
+- 🟡 **1.3 Catalog-populate (real LAWNS varieties)** · built, migration-gated, owner-proof owed · DEMO · reuse: discovery engine + sandbox `clear()` · deps: `business_discovery_profiles`[applied] · → `discovery/catalog.ts`, built-inventory 1.3
+- 🟡 **1.2 Sandbox seeder (alive dashboard)** · built, owner-proof owed · DEMO · reuse: target tables exist · deps: none · → `scripts/seed-sandbox.mjs`
+- 🟡 **Person-spine CP1/CP2** (global people + person_id overlay) · wired, migration STAGED, owner-apply owed · DEMO-adjacent · reuse: business_members · deps: full-nuke wipe · → built-inventory Person-Spine, commits `8eda8e3`/`c1f8be3`
+
+**— POLISH (demo-facing, smaller) —**
+- 🟡 **Leakage calc relabel → estimate** (FIX 3) · wired, owner-proof owed (visual) · POLISH · reuse: n/a (wording) · → `OnboardingWizard.tsx` LeakagePath, commit `0a18ca1`
+- 🟡 **Delivery route round-trip anchor** (FIX 4) · wired, owner-proof owed · POLISH · reuse: `DeliveryRoute.buildMapsUrl` · deps: businesses.address · seam: one-way/custom-end + stop-order optimize (deferred) · → commit `769933f`
+- 🟡 **1.1 Recognition discrepancy-compare** · built, owner-proof owed · POLISH · reuse: website-read + AI gateway · → `discovery/compare.ts`
+
+**— LIVE SPINE (demoable today) —**
+- 🟢 **Demo spine: QR checkout · netting/compliance · leakage · insights · QB invoice · inventory · PMI · delivery loop** (8 live caps) · live · DEMO · → §📋 board (2.1/2.2/3.1/3.5/3.6/4.1/5.1/5.2) · `verify-universals` matrix exit 0
+- 🟡 **Owner-proof-owed deploy bundle** (Part-A render-wall · write-wall Gate-3b · tile registry · vertical field · identity header) · built, ONE deploy + two-JWT session closes all · INFRA · → `docs/CLOSE-OUT-LEDGER.md` "OWNER-PROOF OWED"
+
+---
+
+## 📋 24-CAPABILITY BOARD — the full platform map (L1–L5)
+
+> Grouped by layer (fixed grouping). Each cap: `[●] id name · reuse/Ignition tag · → feeder`. Reconciled to today's code from `docs/CAPABILITY-PACKAGE-GROUNDTRUTH.md` (2026-06-19 baseline 7 live/8 partial/9 net-new).
+> **Today: 8 live · 9 partial · 8 net-new** — moved since baseline: 3.5 partial→🟢 (delivery loop closed 06-20); 1.2 + 1.3 net-new→🟡 (built 06-19/06-21, owner-proof owed).
+
+| ● | Cap | State / note | → feeder |
+|---|---|---|---|
+| 🟡 | **0.1** Vertical-as-pointer | partial — `business_type`+registry vertical field live; typed `VerticalConfig.ts` still [M] | GROUNDTRUTH 0.1 |
+| 🟡 | **1.1** Recognition + discrepancy | recognition live; discrepancy-compare built 06-19, owner-proof owed | `discovery/compare.ts` |
+| 🟡 | **1.2** Sandbox (alive dashboard) | built 06-19, owner-proof owed | `scripts/seed-sandbox.mjs` |
+| 🟡 | **1.3** Clear→real catalog-populate (D-9) | built 06-21 (114 real LAWNS varieties), migration-gated | `discovery/catalog.ts` |
+| 🟡 | **1.4** AI-assisted questions→config | partial — scaffolding only; answer-capture/setup-write [M] | GROUNDTRUTH 1.4 |
+| 🟡 | **1.5** Handshake (one auth, two products) | one auth live; `business_discovery_profiles` applied; Person-spine 06-25 advances identity | GROUNDTRUTH 1.5 |
+| 🟢 | **2.1** Cart / QR checkout (no money) | live | built-inventory 2.1 |
+| 🟢 | **2.2** Compliance / netting (TX Ch.725) | live, persisted + immutable | `order_compliance_records` |
+| 🟡 | **2.3** Walk-and-count inventory | reuse-and-wire — OCR-into-inventory scoped today (NEXT build) | OCR reuse-verify doc |
+| 🟢 | **3.1** Leakage / missed-upsell visibility | live | Dashboard leakage tile |
+| 🟡 | **3.2** Suggestion engine (at-sale upsell) | partial — declarative trigger only; engine [M] | GROUNDTRUTH 3.2 |
+| 🔴 | **3.3** Post-sale service engine | net-new — dead schema scaffolding (`timing`/`recurrence_days` cols exist, no firing) | GROUNDTRUTH 3.3 |
+| 🔴 | **3.4** Scheduling (self-book + calendar) | net-new — no calendar/booking table | GROUNDTRUTH 3.4 |
+| 🟢 | **3.5** Routing / delivery | live — delivery loop closed 06-20; round-trip anchor 06-25; optimize deferred | `DeliveryRoute.tsx` |
+| 🟢 | **3.6** Insights / analytics dashboard | live | `api/dashboard.ts` |
+| 🟢 | **4.1** QuickBooks (invoice/refresh/source) | live (500 fix `14a9a82`); reconnect owner-proof caveat | `api/qbo/*` |
+| 🔴 | **4.2** Reconciliation double-whammy | net-new — double-blocked on 4.1 live + 2.3 count | GROUNDTRUTH 4.2 |
+| 🟡 | **4.3** Social media (gen + publish) | partial — generation live; publisher (Blotato) removed by design | `social/generate-posts.ts` |
+| 🟢 | **5.1** Inventory management | live (create+read; no inline edit) | `BusinessInventory.tsx` |
+| 🟢 | **5.2** Equipment PMI | live — **proven-in-Ignition, already extracted** | `shared/modules/PMI.tsx` |
+| 🔴 | **5.3** Water system | net-new | — |
+| 🔴 | **5.4** Greenhouse | net-new | — |
+| 🔴 | **5.5** Seasonal | net-new (tile stub) | GROUNDTRUTH 5.5 |
+| 🔴 | **5.6** Online shop | net-new (coming-soon stub); may reuse 2.1 checkout | GROUNDTRUTH 5.6 |
+| 🔴 | **5.7** Contractors portal | net-new (tile stub) | GROUNDTRUTH 5.7 |
 
 ---
 
@@ -127,4 +216,13 @@ A composable AI operating system for owner-operated small businesses. **One code
 
 ---
 
-*Paste this first. Then state the session goal. Lightning: confirm you've read §0, then engage. Don't re-ask for context this doc already provides.*
+## §A. ✅ DONE / ARCHIVED (graduated out of ⚡ ACTIVE STATUS)
+
+> 🟢-proven items that are no longer demo-active land here so the active list stays one screen.
+> Keep one line each (state + date + pointer); full detail in the feeders / CLOSE-OUT-LEDGER.
+
+- *(none yet — the first ⚡ items archive here when David owner-proves them post-deploy.)*
+
+---
+
+*Paste this first. Then state the session goal. Lightning: confirm you've read §0 + ⚡ ACTIVE STATUS, then engage. Don't re-ask for context this doc already provides.*

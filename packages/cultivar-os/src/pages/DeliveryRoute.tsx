@@ -63,6 +63,9 @@ export function DeliveryRoute() {
   const [routeUrl, setRouteUrl] = useState<string | null>(null);
   const [copied, setCopied]     = useState(false);
 
+  // Business address — injected as the route origin/destination (round-trip anchor).
+  const [originAddress, setOriginAddress] = useState<string>('');
+
   useEffect(() => {
     if (!businessId) return;
     load();
@@ -71,6 +74,12 @@ export function DeliveryRoute() {
   async function load() {
     setLoading(true);
     setError(null);
+
+    // Anchor address for the route (origin + destination) = the business's own address.
+    // Both modes (scheduled + cart) use it; loaded once per businessId.
+    const { data: bizRow } = await supabase
+      .from('businesses').select('address').eq('id', businessId!).maybeSingle();
+    setOriginAddress(bizRow?.address?.trim() ?? '');
 
     // ── SCHEDULED-DELIVERIES MODE (?date=) — the OCR-invoice loop close ──
     // Loads the `deliveries` table for the day and maps each row into the existing
@@ -161,7 +170,25 @@ export function DeliveryRoute() {
       .filter(Boolean);
 
     if (stops.length === 0) return;
-    setRouteUrl(buildMapsUrl(stops));
+
+    // Anchor the route at the business address. DEFAULT = round-trip (farm → stops → farm):
+    // origin injected as BOTH start and end; customer stops stay in their entered order between.
+    //
+    // SEAM (AC-4 — settle once, encode as variable; DEFERRED, do NOT build here):
+    //   • endpointMode — future settable option: 'round_trip' (default) | 'one_way' | 'custom_end'
+    //   • stop-order OPTIMIZATION (reorder stops for shortest path) — deferred
+    // Encoded as a variable so round-trip is the default, never welded as the only possibility.
+    const endpointMode: 'round_trip' | 'one_way' | 'custom_end' = 'round_trip';
+    const origin = originAddress.trim();
+    const ordered = [...stops];
+    if (origin) {
+      ordered.unshift(origin);                               // start at the farm
+      if (endpointMode === 'round_trip') ordered.push(origin); // …and return to it
+      if (TRACE_DELIVERY) console.log('[TRACE:ROUTE] anchor injected', { endpointMode, origin, stops: stops.length, total: ordered.length });
+    } else if (TRACE_DELIVERY) {
+      console.warn('[TRACE:ROUTE] no business address — route built without anchor', { stops: stops.length });
+    }
+    setRouteUrl(buildMapsUrl(ordered));
   }
 
   function copyLink() {

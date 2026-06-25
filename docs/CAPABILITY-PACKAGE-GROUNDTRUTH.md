@@ -1,5 +1,7 @@
 # CAPABILITY PACKAGE — GROUND-TRUTH RECON
 
+> ↑ **FEEDER doc.** The canonical live-status front-page is `TRACE-SESSION-BOOTSTRAP.md` → 📋 24-CAPABILITY BOARD (this recon is its 2026-06-19 baseline, reconciled to today there). For current colors/state, read the board.
+
 **Date:** 2026-06-19 · **Author:** Thunder (Claude Code) · **Type:** verify-first recon, READ-ONLY
 **Verifies:** `docs/customer-onboarding-capability_v1.md` (Lightning's 24-capability synthesis)
 **Method:** Four sources, only two are authority. (A) the v1 package = a claim. (B) `built-inventory.md` = a claim (same artifact-class as PLATFORM_STATE.md, which produced the phantom `pmi_assets`). (C) Cultivar code + tables + endpoints = authority. (D) Ignition code = authority for "already-proven-elsewhere." Every verdict below was formed from the CODE first (file:line), THEN compared to the flags. **Anti-anchoring held:** I did not confirm a flag because the doc said so.

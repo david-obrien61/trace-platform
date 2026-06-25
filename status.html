@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TRACE — Status Board</title>
+<!--
+  PURE RENDERER. Holds ZERO status data of its own.
+  The ONLY source of truth is TRACE-SESSION-BOOTSTRAP.md (its ⚡ ACTIVE STATUS,
+  📋 24-CAPABILITY BOARD, and §A DONE/ARCHIVED sections). This file PARSES that
+  markdown at open-time and renders it — it never duplicates or hardcodes statuses.
+  Delete the .md and this shows "no data", never a stale board.
+  Open: double-click → "Open TRACE-SESSION-BOOTSTRAP.md" (or drag-drop it).
+-->
+<style>
+  :root{
+    --red:#dc2626; --amber:#d97706; --green:#16a34a; --grey:#9ca3af;
+    --bg:#f5f7f2; --card:#ffffff; --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#27500A;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{position:sticky;top:0;z-index:5;background:var(--accent);color:#fff;
+    padding:14px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    box-shadow:0 1px 6px rgba(0,0,0,.15)}
+  header h1{margin:0;font-size:1.05rem;font-weight:800;letter-spacing:.01em}
+  header .sub{font-size:.72rem;opacity:.85;font-weight:500}
+  .spacer{flex:1}
+  .btn{background:#fff;color:var(--accent);border:none;border-radius:8px;
+    padding:8px 14px;font-weight:700;font-size:.82rem;cursor:pointer}
+  .btn.ghost{background:rgba(255,255,255,.15);color:#fff}
+  .wrap{max-width:1100px;margin:0 auto;padding:18px 20px 60px}
+  /* tabs */
+  .tabs{display:flex;gap:8px;margin:6px 0 18px}
+  .tab{background:var(--card);border:1.5px solid var(--line);border-radius:999px;
+    padding:7px 16px;font-weight:700;font-size:.82rem;cursor:pointer;color:var(--muted)}
+  .tab.active{border-color:var(--accent);color:var(--accent);background:#eef4e6}
+  /* legend + summary */
+  .legend{display:flex;gap:16px;flex-wrap:wrap;align-items:center;
+    font-size:.76rem;color:var(--muted);margin-bottom:16px}
+  .legend .k{display:inline-flex;align-items:center;gap:6px}
+  .tally{display:inline-flex;gap:10px;font-weight:800}
+  .dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;display:inline-block}
+  .d-red{background:var(--red)} .d-amber{background:var(--amber)}
+  .d-green{background:var(--green)} .d-grey{background:var(--grey)}
+  /* band / layer section */
+  .band{margin:22px 0 8px;font-size:.74rem;font-weight:800;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--muted)}
+  .band:first-child{margin-top:4px}
+  /* cards */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:10px}
+  .card{background:var(--card);border:1px solid var(--line);border-left-width:5px;
+    border-radius:10px;padding:11px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .card.c-red{border-left-color:var(--red)}
+  .card.c-amber{border-left-color:var(--amber)}
+  .card.c-green{border-left-color:var(--green)}
+  .card.c-grey{border-left-color:var(--grey)}
+  .card .top{display:flex;align-items:center;gap:8px;margin-bottom:3px}
+  .card .name{font-weight:700;font-size:.92rem}
+  .card .meta{font-size:.78rem;color:var(--muted);line-height:1.45}
+  .card .state{display:inline-block;font-size:.7rem;font-weight:700;
+    padding:1px 7px;border-radius:999px;margin-left:auto;white-space:nowrap}
+  .s-red{background:#fee2e2;color:#991b1b}
+  .s-amber{background:#fef3c7;color:#92400e}
+  .s-green{background:#dcfce7;color:#166534}
+  .s-grey{background:#f3f4f6;color:#4b5563}
+  .ptr{display:inline-block;margin-top:6px;font-size:.72rem;color:var(--accent);
+    background:#eef4e6;border-radius:6px;padding:2px 7px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  code{background:#f1f3ee;border-radius:4px;padding:.5px 4px;font-size:.85em;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  /* archived */
+  .archived{margin-top:30px;opacity:.7}
+  .archived summary{cursor:pointer;font-weight:700;color:var(--muted);font-size:.82rem}
+  .archived .card{filter:grayscale(.4)}
+  /* empty / dropzone */
+  .empty{text-align:center;padding:60px 20px;color:var(--muted)}
+  .empty h2{color:var(--ink);margin:0 0 8px}
+  .drop{margin:22px auto 0;max-width:480px;border:2px dashed var(--line);
+    border-radius:14px;padding:34px 20px;background:var(--card);transition:.15s}
+  .drop.over{border-color:var(--accent);background:#eef4e6}
+  .hint{font-size:.76rem;color:var(--muted);margin-top:10px}
+  .srcline{font-size:.72rem;color:var(--muted)}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ TRACE — Status Board</h1>
+  <span class="sub" id="srcInfo">pure renderer · reads TRACE-SESSION-BOOTSTRAP.md</span>
+  <span class="spacer"></span>
+  <span class="tally" id="tally"></span>
+  <button class="btn" id="openBtn">Open .md</button>
+  <button class="btn ghost" id="reloadBtn">↻</button>
+  <input type="file" id="file" accept=".md,.markdown,text/markdown,text/plain" class="hide" />
+</header>
+
+<div class="wrap">
+  <!-- EMPTY STATE (no data) -->
+  <div id="emptyState" class="empty">
+    <h2>No data — open the bootstrap</h2>
+    <p>This board holds no status of its own. It renders only what it reads from
+       <code>TRACE-SESSION-BOOTSTRAP.md</code>.</p>
+    <div class="drop" id="drop">
+      <strong>Drop TRACE-SESSION-BOOTSTRAP.md here</strong>
+      <div class="hint">or click “Open .md” above and pick it from your desktop.</div>
+    </div>
+    <p class="hint" id="autoNote"></p>
+  </div>
+
+  <!-- BOARD -->
+  <div id="board" class="hide">
+    <div class="tabs">
+      <button class="tab active" data-view="active">⚡ Active</button>
+      <button class="tab" data-view="board">📋 24-Capability Board</button>
+    </div>
+    <div class="legend">
+      <span class="k"><span class="dot d-red"></span>not-started / fake / broken</span>
+      <span class="k"><span class="dot d-amber"></span>in-flight (wired / not-proven)</span>
+      <span class="k"><span class="dot d-green"></span>live + proven</span>
+      <span class="srcline" id="srcline"></span>
+    </div>
+    <div id="viewActive"></div>
+    <div id="viewBoard" class="hide"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ───────────────────────── markdown helpers ───────────────────────── */
+function esc(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+// light inline render: escape, then **bold**, `code`, [text](url)→text. strip leading/trailing ws.
+function md(s){
+  let t = esc(s||"");
+  t = t.replace(/\[([^\]]+)\]\([^)]*\)/g,"$1");      // links → text
+  t = t.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>");
+  t = t.replace(/`([^`]+)`/g,"<code>$1</code>");
+  return t.trim();
+}
+function colorOf(line){
+  if(line.indexOf("🟢")>-1) return "green";
+  if(line.indexOf("🟡")>-1) return "amber";
+  if(line.indexOf("🔴")>-1) return "red";
+  return "grey";
+}
+// strip every status emoji + markdown bold/code markers for plain extraction
+function stripEmoji(s){ return s.replace(/🟢|🟡|🔴|✅|⚡|📋/g,"").trim(); }
+
+/* ───────────────────────── section slicing ───────────────────────── */
+// return the text between a heading matching `re` and the next "## " heading (or EOF)
+function sliceSection(mdText, re){
+  const lines = mdText.split(/\r?\n/);
+  let start=-1;
+  for(let i=0;i<lines.length;i++){ if(re.test(lines[i])){start=i;break;} }
+  if(start<0) return null;
+  const out=[];
+  for(let i=start+1;i<lines.length;i++){
+    if(/^##\s/.test(lines[i])) break;
+    out.push(lines[i]);
+  }
+  return out;
+}
+
+/* ───────────────────────── parse ⚡ ACTIVE ───────────────────────── */
+function parseActive(mdText){
+  const body = sliceSection(mdText, /^##\s*⚡\s*ACTIVE STATUS/i);
+  if(!body) return null;
+  const bands=[]; let cur=null;
+  for(const raw of body){
+    const line = raw.trim();
+    // band header: **— NAME —**
+    const bh = line.match(/^\*\*—\s*(.+?)\s*—\*\*$/);
+    if(bh){ cur={name:bh[1], items:[]}; bands.push(cur); continue; }
+    // item line: starts with "- " and carries a status emoji
+    if(/^-\s+/.test(line) && /🟢|🟡|🔴/.test(line)){
+      if(!cur){ cur={name:"", items:[]}; bands.push(cur); }
+      cur.items.push(parseItemLine(line));
+    }
+  }
+  return bands.filter(b=>b.items.length);
+}
+// "- 🟡 **Name** (tag) · state · priority · … · → pointer"
+function parseItemLine(line){
+  const color = colorOf(line);
+  let rest = line.replace(/^-\s+/,"");
+  rest = stripEmoji(rest);                         // drop the leading status emoji
+  // pointer = everything after the last "→"
+  let pointer="";
+  const arrowIdx = rest.lastIndexOf("→");
+  if(arrowIdx>-1){ pointer = rest.slice(arrowIdx+1).trim(); rest = rest.slice(0,arrowIdx).trim(); }
+  if(rest.endsWith("·")) rest = rest.slice(0,-1).trim();
+  // name = first **bold**, else text up to first "·"
+  let name="", meta="";
+  const b = rest.match(/\*\*([^*]+)\*\*/);
+  if(b){
+    name = b[1];
+    meta = rest.replace(/\*\*[^*]+\*\*/,"").replace(/^\s*[·:–-]\s*/,"").trim();
+  }else{
+    const dot = rest.indexOf("·");
+    name = dot>-1 ? rest.slice(0,dot).trim() : rest.trim();
+    meta = dot>-1 ? rest.slice(dot+1).trim() : "";
+  }
+  // state label = first segment of meta (before the first "·"), trimmed for a chip
+  let state="";
+  const segs = meta.split("·").map(s=>s.trim()).filter(Boolean);
+  if(segs.length){ state = segs[0]; }
+  return {color, name, meta, state, pointer};
+}
+
+/* ───────────────────────── parse 📋 BOARD ───────────────────────── */
+const LAYERS = {
+  "0":"L0 — Foundation","1":"L1 — Onboarding arc","2":"L2 — Point of sale",
+  "3":"L3 — Gap-fillers","4":"L4 — Connectors","5":"L5 — Operational"
+};
+function parseBoard(mdText){
+  const body = sliceSection(mdText, /^##\s*📋\s*24-CAPABILITY BOARD/i);
+  if(!body) return null;
+  const rows=[];
+  for(const raw of body){
+    const line = raw.trim();
+    if(line[0] !== "|") continue;                 // table rows only
+    if(!/🟢|🟡|🔴/.test(line)) continue;          // skip header + separator
+    const cells = line.split("|").map(c=>c.trim());
+    // leading "" from the first pipe → cells: ["", emoji, cap, note, feeder, ""]
+    const c = cells.filter((_,i)=>i>0 && i<cells.length-1);
+    if(c.length<2) continue;
+    const color = colorOf(c[0]);
+    const capCell = c[1] || "";
+    const note = c[2] || "";
+    const feeder = c[3] || "";
+    // id = first **bold** token; name = remainder
+    let id="", name=capCell;
+    const b = capCell.match(/\*\*([^*]+)\*\*\s*(.*)$/);
+    if(b){ id=b[1].trim(); name=b[2].trim(); }
+    const layerKey = (id.match(/^(\d)/)||[])[1] || "?";
+    rows.push({color,id,name,note,feeder,layerKey});
+  }
+  // group by layer in id order
+  const groups={};
+  for(const r of rows){ (groups[r.layerKey] ||= []).push(r); }
+  return Object.keys(groups).sort().map(k=>({
+    layer: LAYERS[k] || ("L"+k), rows: groups[k]
+  }));
+}
+
+/* ───────────────────────── parse §A ARCHIVED ───────────────────────── */
+function parseArchived(mdText){
+  const body = sliceSection(mdText, /^##\s*§A\.?\s*✅?\s*DONE/i);
+  if(!body) return [];
+  const items=[];
+  for(const raw of body){
+    const line = raw.trim();
+    if(/^-\s+/.test(line)){
+      const txt = line.replace(/^-\s+/,"");
+      const isNone = /\*\(none/.test(txt);
+      items.push({text:txt, none:isNone, color: colorOf(line)});
+    }
+  }
+  return items;
+}
+
+/* ───────────────────────── render ───────────────────────── */
+function chipClass(state){
+  const s=(state||"").toLowerCase();
+  if(/proven|live/.test(s) && !/owed|not-proven|not proven/.test(s)) return "s-green";
+  if(/owed|wired|in-flight|in flight|built|reuse|partial|gated|staged/.test(s)) return "s-amber";
+  if(/broken|fake|not-started|net-new/.test(s)) return "s-red";
+  return "s-grey";
+}
+function cardHTML(it){
+  return `<div class="card c-${it.color}">
+    <div class="top">
+      <span class="dot d-${it.color}"></span>
+      <span class="name">${md(it.name)}</span>
+      ${it.state?`<span class="state ${chipClass(it.state)}">${md(it.state)}</span>`:""}
+    </div>
+    ${it.meta?`<div class="meta">${md(it.meta)}</div>`:""}
+    ${it.pointer?`<div class="ptr">→ ${md(it.pointer)}</div>`:""}
+  </div>`;
+}
+function boardCardHTML(r){
+  const title = (r.id?`<strong>${esc(r.id)}</strong> `:"") + esc(r.name);
+  return `<div class="card c-${r.color}">
+    <div class="top">
+      <span class="dot d-${r.color}"></span>
+      <span class="name">${title}</span>
+    </div>
+    ${r.note?`<div class="meta">${md(r.note)}</div>`:""}
+    ${r.feeder?`<div class="ptr">→ ${md(r.feeder)}</div>`:""}
+  </div>`;
+}
+
+function render(mdText, srcLabel){
+  const active = parseActive(mdText);
+  const board  = parseBoard(mdText);
+  const archived = parseArchived(mdText);
+
+  if(!active && !board){
+    showEmpty("No status sections found — is this TRACE-SESSION-BOOTSTRAP.md?");
+    return;
+  }
+  document.getElementById("emptyState").classList.add("hide");
+  document.getElementById("board").classList.remove("hide");
+  document.getElementById("srcline").textContent = "source: " + srcLabel;
+  document.getElementById("srcInfo").textContent = "rendering: " + srcLabel;
+
+  // tally from PARSED data (never hardcoded)
+  const all = [].concat(
+    ...(active||[]).map(b=>b.items),
+    ...(board||[]).map(g=>g.rows)
+  );
+  const t={green:0,amber:0,red:0};
+  all.forEach(x=>{ if(t[x.color]!=null) t[x.color]++; });
+  document.getElementById("tally").innerHTML =
+    `<span style="color:#bbf7d0">${t.green}🟢</span>`+
+    `<span style="color:#fde68a">${t.amber}🟡</span>`+
+    `<span style="color:#fecaca">${t.red}🔴</span>`;
+
+  // ── active view ──
+  let aHTML = "";
+  if(active){
+    for(const band of active){
+      if(band.name) aHTML += `<div class="band">${esc(band.name)}</div>`;
+      aHTML += `<div class="grid">${band.items.map(cardHTML).join("")}</div>`;
+    }
+  }else{
+    aHTML = `<p class="hint">No ⚡ ACTIVE STATUS section found.</p>`;
+  }
+  // archived (collapsed, under active)
+  if(archived.length){
+    const inner = archived.map(a=>{
+      if(a.none) return `<p class="hint">${md(a.text)}</p>`;
+      return cardHTML({color:a.color||"grey",name:a.text,meta:"",state:"",pointer:""});
+    }).join("");
+    aHTML += `<details class="archived"><summary>✅ Done / Archived (${archived.filter(a=>!a.none).length})</summary>
+      <div class="grid" style="margin-top:10px">${inner}</div></details>`;
+  }
+  document.getElementById("viewActive").innerHTML = aHTML;
+
+  // ── board view ──
+  let bHTML = "";
+  if(board){
+    for(const g of board){
+      bHTML += `<div class="band">${esc(g.layer)}</div>`;
+      bHTML += `<div class="grid">${g.rows.map(boardCardHTML).join("")}</div>`;
+    }
+  }else{
+    bHTML = `<p class="hint">No 📋 24-CAPABILITY BOARD section found.</p>`;
+  }
+  document.getElementById("viewBoard").innerHTML = bHTML;
+}
+
+/* ───────────────────────── views / empty ───────────────────────── */
+function showEmpty(msg){
+  document.getElementById("board").classList.add("hide");
+  const e=document.getElementById("emptyState");
+  e.classList.remove("hide");
+  if(msg) e.querySelector("h2").textContent = msg;
+  document.getElementById("tally").textContent="";
+}
+function setView(v){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
+  document.getElementById("viewActive").classList.toggle("hide",v!=="active");
+  document.getElementById("viewBoard").classList.toggle("hide",v!=="board");
+}
+
+/* ───────────────────────── file loading ───────────────────────── */
+let lastFileName="";
+function loadText(text, label){ lastFileName=label; render(text, label); }
+function readFile(file){
+  const r=new FileReader();
+  r.onload=()=>loadText(String(r.result), file.name);
+  r.onerror=()=>showEmpty("Couldn't read that file.");
+  r.readAsText(file);
+}
+
+document.getElementById("openBtn").onclick=()=>document.getElementById("file").click();
+document.getElementById("file").onchange=e=>{ if(e.target.files[0]) readFile(e.target.files[0]); };
+document.getElementById("reloadBtn").onclick=()=>{ tryAutoFetch(true); };
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>setView(t.dataset.view));
+
+// drag-drop
+const drop=document.getElementById("drop");
+["dragenter","dragover"].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();if(ev==="dragleave"&&e.relatedTarget)return;drop.classList.remove("over");}));
+document.addEventListener("drop",e=>{const f=e.dataTransfer.files[0]; if(f) readFile(f);});
+
+/* auto-fetch (works when served via a local server; file:// will throw → picker) */
+function tryAutoFetch(manual){
+  fetch("./TRACE-SESSION-BOOTSTRAP.md",{cache:"no-store"})
+    .then(r=>{ if(!r.ok) throw new Error(r.status); return r.text(); })
+    .then(t=>loadText(t,"./TRACE-SESSION-BOOTSTRAP.md (auto)"))
+    .catch(()=>{
+      document.getElementById("autoNote").textContent =
+        "Auto-load blocked by the browser for local files — pick or drop the .md (this is normal for double-click open).";
+      if(manual) showEmpty("No data — open the bootstrap");
+    });
+}
+tryAutoFetch(false);
+</script>
+</body>
+</html>

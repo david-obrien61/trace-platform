@@ -6,6 +6,8 @@
 <!-- Last verified: 2026-06-13 (THUNDER RECORD: cultivar_plants policy cleanup V1–V3 + PMI business_service_log.result both RUN + catalog-confirmed by David → cultivar_plants = WIRED verified; no pending migrations remain. Prior: THUNDER UNTANGLE plants → cultivar_plants identity-only join, inventory_id FK → business_inventory, stock-fact cols dropped, nursery_id dropped (AC-1), 17 code sites repointed) -->
 <!-- Detail docs: built-inventory.md, CLAUDE.md, STANDARDS.md, PLATFORM_STRATEGY.md -->
 
+> ↑ **FEEDER doc.** The canonical live-status front-page is `TRACE-SESSION-BOOTSTRAP.md` → ⚡ ACTIVE STATUS. This doc is the per-module verified ledger (LEVEL + LOCATION + EVIDENCE) it links to for depth.
+
 ## VERIFICATION KEY
 - **EXISTS** — file present; Claude read it. Cite path.
 - **WIRED** — EXISTS + has caller(s) in a vertical; grep found them. Cite caller file:line.
