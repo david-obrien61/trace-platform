@@ -2,7 +2,34 @@
 
 > **What this is:** the single front-door doc — and the CANONICAL status front-page. Paste this at the start of every new Lightning (Claude-in-chat) session to get current in ~90 seconds. It is the MAP, not the territory — deep detail lives in the reference library (§7) and the feeder docs each ⚡ line links to. Structure is FIXED; only the values change. Update at session-end (see END-OF-SESSION PROTOCOL doc + CLAUDE.md §9).
 >
-> **Last updated:** 2026-06-25 (⚡ ACTIVE STATUS + 📋 24-CAPABILITY BOARD added — this is now the canonical status front-page; feeder docs point up to it. Seeded from the 4 demo-fixes batch + OCR-into-inventory reuse-verify + CAPABILITY-PACKAGE-GROUNDTRUTH reconciled to today.)
+> **Last updated:** 2026-06-25 (⚡ OPERATING FACTS constants block added at top; ⚡ ACTIVE STATUS + 📋 24-CAPABILITY BOARD = canonical status front-page; feeder docs point up to it. Seeded from the 4 demo-fixes batch + OCR-into-inventory reuse-verify + CAPABILITY-PACKAGE-GROUNDTRUTH reconciled to today.)
+
+---
+
+## ⚡ OPERATING FACTS — the constants (rarely change)
+
+> Stable project constants Lightning otherwise re-derives or guesses at session-start. NOT task-state (that lives in ⚡ ACTIVE STATUS below, which changes every close). Pointers over detail. Inclusion test: *true across sessions AND Lightning gets it wrong without it.* If a value changes session-to-session it does NOT belong here.
+
+**DEPLOY / ENV**
+- Deploy = **merge to `main` → Vercel auto-deploys from main**. No per-branch previews — to test a branch, merge it first. Merge-to-main is **David's explicit go**, not automatic.
+- Vercel plan: **Hobby — 12 serverless-function ceiling** (`api/` is AT the cap; a 13th function silently fails the deploy → consolidate or upgrade to Pro — tech-debt #41). Supabase: **free tier**. Both → Pro at the first-paying-customer launch gate (PLATFORM_STATE ⛔).
+- Live prod env keys (cultivar `bgobkjcopcxusjsetfob`, names only — already set, don't re-suggest creating): `VITE_SUPABASE_URL`/`ANON_KEY`, `SUPABASE_URL`/`SERVICE_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `QBO_CLIENT_ID`/`SECRET`/`REDIRECT_URI`/`ENVIRONMENT`, `OCR_PRIMARY_MODEL`/`FALLBACK_MODEL`, `BLOTATO_API_KEY`, `VITE_DEMO_BUSINESS_ID`, `VITE_TAX_RATE`, `VITE_APP_URL`. Full list → `docs/inventory-env.md`.
+
+**DATA / RISK**
+- **ZERO real users — the DB is ALL TEST DATA** until David explicitly says otherwise. No production-data risk; changes can be **bold**. ONE exception: **RLS / tenant-isolation is sacred** (the security architecture ships to real nurseries). Posture: **data bold, security careful**.
+
+**WORKFLOW**
+- Lightning writes prompts (never touches the repo) · Thunder executes · **David applies ALL SQL as `postgres`** and owner-proves live. Two bars: **BUILDER-COMPLETE** (committed, verify green) ≠ **OWNER-PROVEN** (David live-confirms via the TRACE trail).
+- **ALL `[TRACE:*]` emits stay ON** until David explicitly lifts them.
+
+**IDENTITY / CONSTANTS**
+- Supabase: cultivar (active) **`bgobkjcopcxusjsetfob`** · Ignition (do-not-touch from cultivar code) `ufsgqckbxdtwviqjjtos`.
+- David: `david_obrien2016@outlook.com` · user_id **[confirm with David]**. TRACE business_id **`45830ba7…` [confirm full UUID]**. LAWNS (demo) business_id `a1b2c3d4-0000-0000-0000-000000000001`.
+- Architecture Constants **AC-1..AC-4** + naming (`platform_`/`business_`, no vertical nouns in shared schema) → detail in **PLATFORM_STRATEGY.md** (named here, not inlined).
+- Demo target **LAWNS** (Leander, TX). **Terry** = owner (tech-shy, approval gatekeeper) · **Lauren Bishop** = manager (the real economic buyer). Demo date **[confirm with David — TBD]**.
+
+**DON'T-RE-LITIGATE** (pointers, not detail → `DECISIONS.md`)
+- `person_id` = **overlay, never the auth principal** (RLS stays on `auth.uid()`). · Standard-by-value rule (CLAUDE.md §6 r10). · Semantic-dup / rule-of-three (§6.8). · "Contractor" = **customer tier**, not an entity.
 
 ---
 
