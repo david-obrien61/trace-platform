@@ -173,11 +173,25 @@ still exists. David's call: **FULL NUKE** (all data expendable; real demo comes 
 
 Order that satisfies the FK web:
 1. Enumerate every `public` table carrying a `business_id` column **against the live catalog** (do not
-   trust a hand-list) + `businesses` + the legacy `nurseries` anchor.
-2. `TRUNCATE … RESTART IDENTITY CASCADE` the whole set in one statement (CASCADE pulls in any
-   referencing table not in the list; one statement = no order problem).
+   trust a hand-list) + `businesses` + the legacy `nurseries` anchor + **discover every append-only
+   guarded table** (any `reject_*_mutation` trigger, via `pg_trigger`).
+2. **Privileged one-time teardown (labeled STEP B2):** DISABLE every append-only guard → `TRUNCATE …
+   RESTART IDENTITY CASCADE` the set (guarded tables excluded from the explicit list but emptied via
+   cascade) → RE-ENABLE every guard — all in ONE transaction (a failure auto-restores the guards).
 3. `DELETE FROM auth.users` (now unreferenced by `businesses.owner_id`; Supabase cascades
    `auth.identities/sessions/refresh_tokens`).
+4. **Verify (STEP C):** every guard is back ON (`pg_trigger.tgenabled <> 'D'`) + 0 rows everywhere.
+
+**Append-only guard (audit_log) — why a privileged teardown, not a workaround.** `audit_log` is
+append-only: a `reject_*_mutation` guard rejects mutation/TRUNCATE (a first wipe run rolled back on
+it — the guard working as designed). David's decision: the orphaned audit rows must NOT persist
+(they would reference non-existent business IDs and weaken the LAWNS-demo audit log's credibility).
+So `audit_log` is cleared as an EXPLICIT, ONE-TIME, PRIVILEGED teardown of the whole test
+environment — loud, labeled, on the record — never a quiet/reusable normal-path move. It FK-cascades
+from `businesses` (ON DELETE CASCADE), so truncating `businesses` necessarily truncates `audit_log`
+via cascade — which is why the guard-disabled window must bracket the whole truncate, then restore +
+verify. David owner-proves restoration: a manual `UPDATE` on `audit_log` after the reset must be
+rejected.
 
 Storage objects (receipt files) are path-based, not FK-linked — left as harmless orphans for David to
 clear via the dashboard if desired.
