@@ -20,11 +20,12 @@
 
 **WORKFLOW**
 - Lightning writes prompts (never touches the repo) · Thunder executes · **David applies ALL SQL as `postgres`** and owner-proves live. Two bars: **BUILDER-COMPLETE** (committed, verify green) ≠ **OWNER-PROVEN** (David live-confirms via the TRACE trail).
+- **Prompt authorship:** Lightning writes ALL Thunder prompts (full context + verify-first + standing rules baked in). David relays them verbatim and decides/owner-proves — **David does NOT compose Thunder instructions from scratch** (avoids underspecified/iffy instructions). Path when David needs Thunder to do something: **David tells Lightning the goal → Lightning writes the prompt → David relays it.**
 - **ALL `[TRACE:*]` emits stay ON** until David explicitly lifts them.
 
 **IDENTITY / CONSTANTS**
 - Supabase: cultivar (active) **`bgobkjcopcxusjsetfob`** · Ignition (do-not-touch from cultivar code) `ufsgqckbxdtwviqjjtos`.
-- David: `david_obrien2016@outlook.com` · user_id **[confirm with David]**. TRACE business_id **`45830ba7…` [confirm full UUID]**. LAWNS (demo) business_id `a1b2c3d4-0000-0000-0000-000000000001`.
+- David: `david_obrien2016@outlook.com` · user_id `98f4e56b-cd27-4099-a9d8-5c8cbb63d00f`. TRACE business_id **`45830ba7…` [confirm full UUID]**. LAWNS (demo) business_id `a1b2c3d4-0000-0000-0000-000000000001`.
 - Architecture Constants **AC-1..AC-4** + naming (`platform_`/`business_`, no vertical nouns in shared schema) → detail in **PLATFORM_STRATEGY.md** (named here, not inlined).
 - Demo target **LAWNS** (Leander, TX). **Terry** = owner (tech-shy, approval gatekeeper) · **Lauren Bishop** = manager (the real economic buyer). Demo date **[confirm with David — TBD]**.
 
