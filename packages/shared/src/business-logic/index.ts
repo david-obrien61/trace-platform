@@ -104,6 +104,12 @@ export { CATEGORY_OPTS, UNCATEGORIZED, categoryLabel } from './costCategories';
 export { findOrCreateCustomer } from './customerUpsert';
 export type { CustomerInput, CustomerUpsertResult } from './customerUpsert';
 
+// Person create-or-link — the ONE shared write for the global `people` spine (Person-spine
+// build, 2026-06-25). Owner signup / invite accept / customer upsert all call it. person_id
+// is an OVERLAY, never the auth principal. See data/grower-scan/person-spine-recon.md.
+export { findOrCreatePerson } from './personUpsert';
+export type { PersonInput, PersonResult } from './personUpsert';
+
 // Financial-wall data access (Phase 2, decision 2026-06-21) — the ONE seam that reads/writes
 // the walled surfaces (labor WAGES child + PRICING CONFIG child), migration-window-resilient.
 export {
