@@ -63,6 +63,7 @@ export function DiscoveryGlimpse({
     if (analysisStarted.current) return;
     analysisStarted.current = true;
     setPhase('analyzing');
+    console.info('[TRACE:DISCOVERY] run', { businessId, url, vertical });
 
     stageTimer.current = setInterval(() => {
       setStageIdx(i => {
@@ -74,25 +75,38 @@ export function DiscoveryGlimpse({
       });
     }, 5000);
 
+    // Pass businessId so the endpoint persists the result (seedServiceOfferings,
+    // ingest.ts:171). Without it the analysis ran but nothing was saved.
     fetch(discoveryEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, vertical }),
+      body: JSON.stringify({ url, vertical, businessId }),
     })
-      .then(r => r.json())
-      .then(data => {
+      .then(async r => ({ ok: r.ok, data: await r.json().catch(() => null) }))
+      .then(({ ok, data }) => {
         if (stageTimer.current) clearInterval(stageTimer.current);
-        if (data?.profile) {
+        // FAIL LOUD: only a real profile counts as success. A non-2xx response,
+        // an {error} body, or a missing profile is surfaced honestly as 'error'
+        // — never canned seedInsights dressed up as "what we found".
+        if (ok && data?.profile) {
           setProfile(data.profile);
           setPhase('done');
+          console.info('[TRACE:DISCOVERY] success', {
+            businessId, seeded: data.seeded ?? 0,
+            strengths: data.profile?.strengths?.length ?? 0,
+          });
         } else {
-          // API returned no profile — show seed insights as the result
-          setPhase('done');
+          const msg = data?.error || 'We couldn’t read your website automatically.';
+          setErrMsg(msg);
+          setPhase('error');
+          console.warn('[TRACE:DISCOVERY] failure', { businessId, ok, error: msg });
         }
       })
-      .catch(() => {
+      .catch(err => {
         if (stageTimer.current) clearInterval(stageTimer.current);
-        setPhase('done'); // fall through to seed insights
+        setErrMsg('We couldn’t reach the analysis service.');
+        setPhase('error');
+        console.warn('[TRACE:DISCOVERY] failure (network)', { businessId, error: String(err?.message ?? err) });
       });
   }
 
@@ -164,6 +178,59 @@ export function DiscoveryGlimpse({
     );
   }
 
+  // Honest failure: never show canned seedInsights as findings. Offer manual entry.
+  if (phase === 'error') {
+    return (
+      <div>
+        <h2 style={{ margin: '0 0 6px', fontSize: '1.3rem', fontWeight: 800, color: green }}>
+          We couldn’t analyze your site
+        </h2>
+        <p style={{ margin: '0 0 16px', fontSize: '0.875rem', color: '#555', lineHeight: 1.5 }}>
+          {errMsg || 'We couldn’t read your website automatically.'} You can try a different
+          URL, or skip and add your details in the dashboard — nothing is lost.
+        </p>
+        <input
+          style={{
+            width: '100%', boxSizing: 'border-box', padding: '12px 14px',
+            border: '1.5px solid #d1d5db', borderRadius: 8, fontSize: '1rem',
+            fontFamily: 'inherit', outline: 'none', marginBottom: 12,
+          }}
+          type="url"
+          placeholder="https://yoursite.com"
+          value={websiteInput}
+          onChange={e => setWebsiteInput(e.target.value)}
+        />
+        <button
+          onClick={() => {
+            const url = websiteInput.trim();
+            if (!url || !url.startsWith('http')) { setErrMsg('Enter a full URL starting with https://'); return; }
+            setErrMsg('');
+            analysisStarted.current = false; // allow a retry
+            setStageIdx(0);
+            setWebsite(url);
+            startAnalysis(url);
+          }}
+          style={{
+            width: '100%', padding: '13px 0', background: green, color: '#fff',
+            border: 'none', borderRadius: 10, fontWeight: 700, fontSize: '0.9375rem',
+            cursor: 'pointer', marginBottom: 8,
+          }}
+        >
+          Try again →
+        </button>
+        <button
+          onClick={onNext}
+          style={{
+            width: '100%', padding: '10px 0', background: 'none', border: 'none',
+            color: '#888', fontSize: '0.85rem', cursor: 'pointer',
+          }}
+        >
+          Skip — I’ll add details later →
+        </button>
+      </div>
+    );
+  }
+
   if (phase === 'analyzing') {
     const insights = seedInsights.length > 0 ? seedInsights : [
       'Reading your services and pricing signals…',
@@ -187,6 +254,12 @@ export function DiscoveryGlimpse({
           </span>
         </div>
 
+        <p style={{
+          margin: '0 0 8px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase',
+          letterSpacing: '0.08em', color: '#777',
+        }}>
+          What we look for
+        </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
           {insights.map((insight, i) => (
             <div key={i} style={{
@@ -217,7 +290,9 @@ export function DiscoveryGlimpse({
   }
 
   // ── DONE ─────────────────────────────────────────────────────────────────────
-  const strengths = profile?.strengths ?? seedInsights.slice(0, 3);
+  // Real analysis only. We reach 'done' solely when a real profile came back, so
+  // there is no canned fallback here — a failed analysis lands on 'error' instead.
+  const strengths = profile?.strengths ?? [];
   const gaps      = profile?.gaps      ?? [];
 
   return (
