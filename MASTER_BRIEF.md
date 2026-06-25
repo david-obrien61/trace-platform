@@ -31,7 +31,7 @@ We come alongside, quietly. We connect what you already use. We fill the gaps no
 The one-sentence version: We don't replace your systems. We connect them, surface what matters, and fill the gaps you couldn't fill yourself.
 
 > **TRACE Enterprises — Built with CAI**
-> Last updated: 2026-06-11
+> Last updated: 2026-06-25 (PART 4 surfacing thesis extended — warranty principle split planted-vs-purchased, did-we-plant-it claim-governor flag, customer-photo-in channel [5th image→AI primitive], 2×2 touch matrix; Regina anchor conflict flagged for reconciliation)
 > Maintained by: David O'Brien
 > **Purpose:** Single source of truth for strategy, build priorities, and competitive positioning.
 > Both Claude.ai (strategy) and Claude Code (build) read this file at the start of every session.
@@ -327,15 +327,34 @@ One surfaced reminder → one visit → three services → trust → repeat busi
 
 **The principle set (a GROWING list — owner head-rules made systematic).** Each principle = a rule the owner holds + the data it runs on + the action it surfaces:
 
-- **Warranty / courtesy-by-window** — a planted tree carries a ~6-month warranty → before it lapses is the moment to check in. *Data: customer + sale date (plant date ≈ sale date).*
+- **Warranty / courtesy-by-window (PLANTED-by-us)** — a tree LAWNS PLANTED carries a ~6-month warranty → before it lapses is the moment to check in. The touch is warranty FULFILLMENT (an obligation we hold). *Data: customer + sale date + planted-by-us flag.* (The old "plant date ≈ sale date" approximation only holds when LAWNS did the planting — hence the split below.)
+- **Proximity-to-buyer addon (PURCHASED-only, self-planted)** — a customer who BOUGHT a tree and planted it themselves has NO warranty, so the nearby courtesy inspection is a pure ADDON BUSINESS OPPORTUNITY, not an obligation — "we're near you, bought trees in spring, can we drop by." The engine MUST NOT say "warranty" for these; it surfaces a relationship/upsell touch. (The Regina case: she hauled her trees off — no warranty — so the touch CREATES the opportunity rather than honoring one.) *Data: customer + sale date + planted-by-us flag (FALSE).*
 - **New-service-to-proven-buyer** — a proven buyer is a warm candidate for a newly-offered service (e.g. fertilizer). *Data: purchase history + services catalog.*
 - **Consult-to-expand** — while on-site, a free consult on their other trees seeds the next sale. *Data: customer relationship.*
 - **Proximity-to-route** — a past customer near today's route is an almost-free touch. *Data: address + route (geocoding).*
 - *(The list grows as the owner names more of their head-rules. The engine is the framework; principles are data/config added over time.)*
 
+**The "did-we-plant-it" flag (the fact that decides which principle fires).** A single planted-by-us boolean on the sale is the pivot: it decides *which* principle fires AND what the surfaced action is ALLOWED to claim. PLANTED-by-us → the warranty-fulfillment touch may say "warranty." PURCHASED-only → the engine may only surface a relationship/addon touch and must NOT invoke warranty. The flag is a claim-governor, not just a filter — it keeps the surfaced copy honest about what obligation, if any, we actually hold.
+
 **Confidence honesty (the ladder applies here too).** Plant date is DERIVED from sale date (within a few days), NOT CONFIRMED. The surfaced action must show its precision honestly — "warranty closing ~late next month (est. from sale date)," never "expires July 28" when we don't hold an exact plant date. Same epistemic discipline as the cost engine (CONFIRMED / DERIVED / ESTIMATED; see DECISIONS.md D-9): the engine tells you what it knows AND how well it knows it. A surfaced opportunity is a human follow-up prompt, not an automated legal deadline — derived precision is correct and sufficient; precision theater would be the smoke.
 
-**Services as the spine (the key dependency).** The Regina chain only works because the system knows three SERVICES: **planting** (→ warranty + relationship), **fertilizer** (→ new-service upsell), **consult** (→ expand). Services are currently UNMODELED. They are the spine the surfacing chain hangs on — not a side dependency. *Open question for the services model (captured, not resolved):* is a service a cost-ledger object (cost-to-produce + price, like a 30-gal Live Oak) or a JOB-like object (labor + visit + materials + schedule)? "Courtesy inspection" / "fertilizer visit" lean closer to a JOB than a product — resolve when services is built. Demo-seedable: planting + fertilizer + consult is enough to demo the full Regina chain end-to-end.
+**The customer-photo-in channel (the customer does the work, not the truck).** A touch does not always require a truck leaving the lot. The customer snaps their tree and sends the image to LAWNS. Two payoffs:
+
+- **Warranty health-check (planted-by-us)** — the photo is remote warranty evidence: "send a pic, we'll confirm it's establishing." Warranty honored at near-zero cost, no truck dispatched.
+- **AI care advice (any tree)** — vision AI reads the photo and surfaces care guidance in the owner's voice — e.g. "looks like it needs a bit more water; we're entering the hot months — increase watering until it establishes." A relationship touch that costs one AI call and builds trust (feeds the flywheel above: courtesy → trust → repeat → word of mouth).
+
+This is a **fifth instance of the platform's image → AI-extract → confidence-flagged-output primitive** (receipts / inventory / assets / VIN are the others), now pointed at plant health. Confidence honesty (above) applies: the advice is a human-helpful prompt, not a diagnosis. *(Captured dependency, not scoped here: the photo-in channel needs an inbound intake path — a link the customer taps, a number they text, or ride the existing QR + plant-profile system. Net-new but small; reuses the OCR/vision plumbing.)*
+
+**The touch matrix (the actual product shape — one engine, four cells).** Plant-vs-purchase (the "did-we-plant-it" flag) and remote-vs-in-person (the channel) are two axes; together they give four touch cells, each with different framing, cost, and what the system may honestly CLAIM:
+
+|                          | Remote (photo-in)                          | In-person (we drive out)                        |
+|--------------------------|--------------------------------------------|-------------------------------------------------|
+| **PLANTED (warranty)**   | photo → AI health check + warranty advice  | warranty courtesy inspection on the route       |
+| **PURCHASED (no warranty)** | photo → AI care advice (relationship)   | proximity drop-by → fertilizer + free consult   |
+
+Every cell is the same surfacing engine (right touch, right moment); the plant-vs-purchase flag and the remote-vs-in-person channel decide the framing and what may honestly be claimed.
+
+**Services as the spine (the key dependency).** The Regina chain only works because the system knows three SERVICES: **planting** (→ warranty + relationship), **fertilizer** (→ new-service upsell), **consult** (→ expand). Services are currently UNMODELED. They are the spine the surfacing chain hangs on — not a side dependency. *Open question for the services model (captured, not resolved):* is a service a cost-ledger object (cost-to-produce + price, like a 30-gal Live Oak) or a JOB-like object (labor + visit + materials + schedule)? "Courtesy inspection" / "fertilizer visit" lean closer to a JOB than a product — resolve when services is built. The planted-vs-purchased split above gives this a concrete reason to lean JOB-like for at least one service: **PLANTING is a service that LEAVES A WARRANTY BEHIND** (labor + visit + a clock that keeps ticking after the visit ends — JOB-like), whereas **PURCHASE is a product sale that leaves only a relationship** (no obligation clock). So the services model must carry a **service-rendered (planted) vs product-only (purchased)** distinction — and that distinction is exactly the "did-we-plant-it" flag, surfacing in the data model as the difference between a JOB-like service object and a plain product line. Demo-seedable: planting + fertilizer + consult is enough to demo the full Regina chain end-to-end.
 
 **Visualization layers (engine ≠ lens).** The surfacing ENGINE (principles → actions) is separate from how actions are SHOWN:
 
