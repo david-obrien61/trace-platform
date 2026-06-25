@@ -155,15 +155,15 @@ function LeakagePath({ onFinalize, finalizing, finalizeError, onBack }: PathProp
         borderRadius: 16, padding: 20, marginBottom: 16,
       }}>
         <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: GRAY, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Annual revenue left on the table
+          Estimated annual leakage at your volume
         </p>
         <p style={{ margin: 0, fontSize: '2.5rem', fontWeight: 800, color: annualLeakage > 0 ? RED : GREEN, lineHeight: 1.1 }}>
           ${annualLeakage.toLocaleString('en-US')}
         </p>
         <p style={{ margin: '6px 0 0', fontSize: '0.8125rem', color: GRAY }}>
           {weeklyLeakage > 0
-            ? `That's $${weeklyLeakage}/week in missed add-on revenue.`
-            : 'Great — your customers are taking add-ons. Cultivar OS will protect that.'}
+            ? `Projection based on the figures above — about $${weeklyLeakage}/week in potential missed add-on revenue.`
+            : 'Great — at these figures your customers are taking add-ons. Cultivar OS will protect that.'}
         </p>
       </div>
 
