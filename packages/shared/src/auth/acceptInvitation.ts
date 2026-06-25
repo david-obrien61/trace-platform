@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AcceptInviteResult, InvitePreview } from './types';
+import { findOrCreatePerson } from '../business-logic/personUpsert';
 
 // Server-side functions. Must be called from a Vercel serverless function
 // that initialises Supabase with the service role key (bypasses RLS).
@@ -119,22 +120,45 @@ export async function acceptInvitation(
     userId = created.user.id;
   }
 
-  // 4. Activate the business_members row
+  // 3b. Person-spine: create-or-link the accepting user's global person (service key).
+  //     Non-blocking overlay — a person failure must NOT block member activation.
+  let personId: string | null = null;
+  try {
+    const person = await findOrCreatePerson(serviceSupabase, {
+      authUserId: userId,
+      fullName:   inviteName,
+      email:      input.email,
+    });
+    personId = person.personId;
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.log('[TRACE:PERSON] invite-accept person link failed — proceeding without person link', {
+      userId, businessId: invitation.business_id, error: msg,
+    });
+  }
+
+  // 4. Activate the business_members row (link the person if resolved)
+  const activatePatch: Record<string, unknown> = {
+    user_id: userId,
+    active: true,
+    name: inviteName,            // display-fallback copy on the membership row
+  };
+  if (personId) activatePatch.person_id = personId;
+
   const { error: activateErr } = await serviceSupabase
     .from('business_members')
-    .update({
-      user_id: userId,
-      active: true,
-      name: inviteName,            // display-fallback copy on the membership row
-    })
+    .update(activatePatch)
     .eq('id', member.id);
 
   if (activateErr) throw new Error(`ACTIVATE_FAILED: ${activateErr.message}`);
 
-  // 5. Mark invitation used (do this after activation so partial failures don't consume the token)
+  // 5. Mark invitation used + link the person (after activation so partial failures don't
+  //    consume the token). person_id is overlay — its absence never fails the accept.
+  const invitePatch: Record<string, unknown> = { used: true };
+  if (personId) invitePatch.person_id = personId;
   await serviceSupabase
     .from('invitations')
-    .update({ used: true })
+    .update(invitePatch)
     .eq('id', invitation.id);
 
   const biz = invitation.businesses as unknown as { id: string; name: string } | null;

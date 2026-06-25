@@ -3,6 +3,7 @@ import { supabase } from '../supabase/client';
 import { hashPin } from '../supabase/auth';
 import { runBusinessCreationGuards } from './businessGuards';
 import { normalizePhone } from '../utils/normalizePhone';
+import { findOrCreatePerson } from '../business-logic/personUpsert';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -293,6 +294,28 @@ export function OwnerSignup({ config, navigate }: Props) {
     // 2. Hash PIN using same algorithm as authenticate() in auth.ts
     const pinHash = await hashPin(businessId, pinVal);
 
+    // 2b. Person-spine: create-or-link the owner's global person under RLS (people_self_all,
+    //     auth_user_id = self). Non-blocking overlay — a person failure must NOT block the
+    //     owner from being created (the proven onboarding path must still land on dashboard).
+    //     business_members only (the people spine lives in the cultivar project).
+    let personId: string | null = null;
+    if (memberTable === 'business_members') {
+      try {
+        const person = await findOrCreatePerson(supabase, {
+          authUserId: userId,
+          fullName:   ownerName.trim(),
+          email:      email.trim(),
+          phone:      normalizedPhone,
+        });
+        personId = person.personId;
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.log('[TRACE:PERSON] owner person link failed — proceeding without person link', {
+          userId, businessId, error: msg,
+        });
+      }
+    }
+
     // 3. Create member row (owner) in the vertical's member table
     const memberInsert: Record<string, unknown> = {
       [memberFKColumn]: businessId,
@@ -306,6 +329,7 @@ export function OwnerSignup({ config, navigate }: Props) {
     // business_members also needs user_id for Supabase auth linkage
     if (memberTable === 'business_members') {
       memberInsert.user_id = userId;
+      if (personId) memberInsert.person_id = personId;
     }
 
     const { data: memberData, error: memberError } = await supabase

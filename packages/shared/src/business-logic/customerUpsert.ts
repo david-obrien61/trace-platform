@@ -14,13 +14,21 @@
 // within a business. Extracted from api/orders/submit.ts (cart checkout) so it can be
 // called WITHOUT an order — e.g. when an OCR'd invoice surfaces a new customer.
 //
-// Dedup-by-email within business_id is preserved (the cart path's contract). When the
-// caller has no email (an OCR'd invoice may genuinely lack one — D-9), dedup is skipped
-// and a new customer is inserted; we never fabricate a key to match on.
+// PERSON-SPINE (2026-06-25): the dedup key is now the global PERSON, resolved at SOURCE via
+// findOrCreatePerson (email → phone among auth-less people). This FIXES the email-only-dedup
+// bug: a phone-only customer (null email) no longer double-inserts — the repeat matches the
+// existing person by phone and resolves to the same customer row (the Marcus-Webb-dupe class).
+// The customer is then deduped WITHIN the business by person_id.
+//
+// Graceful degradation (rule 6 — integration failure never blocks an order): if person
+// resolution fails (e.g. the people table isn't applied yet, mid-migration), we fall back to
+// the legacy email-only dedup with a null person_id — never worse than the prior behavior.
 //
 // `db` is any supabase client — the cart + OCR endpoints pass a service-key admin client
 // (mirrors submit.ts). `source` records provenance ('qr-scan' for cart, 'ocr-invoice' for
 // invoice capture), mirroring the existing column convention.
+
+import { findOrCreatePerson } from './personUpsert';
 
 export interface CustomerInput {
   first_name: string;
@@ -45,50 +53,75 @@ export async function findOrCreateCustomer(
   customer: CustomerInput,
   source: string,
 ): Promise<CustomerUpsertResult> {
-  // Dedup only when we actually have an email to match on. A null/blank email
-  // must NOT collapse onto other email-less customers, so skip the lookup entirely.
-  if (customer.email) {
-    const { data: existing } = await db
-      .from('customers')
-      .select('id')
-      .eq('business_id', businessId)
-      .eq('email', customer.email)
-      .limit(1);
+  // 1. Resolve the global PERSON at source (the dedup key). Graceful: a person-layer failure
+  //    must never block customer creation (rule 6) — fall back to the legacy email dedup.
+  let personId: string | null = null;
+  try {
+    const person = await findOrCreatePerson(db, {
+      firstName: customer.first_name,
+      lastName:  customer.last_name,
+      email:     customer.email,
+      phone:     customer.phone,
+    });
+    personId = person.personId;
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.log('[TRACE:PERSON] customer person resolution failed — proceeding without person link', {
+      businessId, source, error: msg,
+    });
+  }
 
-    if (existing && existing.length > 0) {
-      const customerId = existing[0].id;
-      await db.from('customers').update({
-        first_name:       customer.first_name,
-        last_name:        customer.last_name ?? '', // customers.last_name is NOT NULL — empty string, never null
-        phone:            customer.phone ?? null,
-        address_line1:    customer.address_line1 ?? null,
-        city:             customer.city ?? null,
-        state:            customer.state ?? 'TX',
-        zip:              customer.zip ?? null,
-        marketing_opt_in: customer.marketing_opt_in ?? true,
-      }).eq('id', customerId);
-      return { customerId, created: false };
-    }
+  // Fields written on both update and insert.
+  const fields: Record<string, unknown> = {
+    first_name:       customer.first_name,
+    last_name:        customer.last_name ?? '', // customers.last_name is NOT NULL — empty string, never null
+    phone:            customer.phone ?? null,
+    address_line1:    customer.address_line1 ?? null,
+    city:             customer.city ?? null,
+    state:            customer.state ?? 'TX',
+    zip:              customer.zip ?? null,
+    marketing_opt_in: customer.marketing_opt_in ?? true,
+  };
+  if (personId) fields.person_id = personId;
+
+  // 2. Dedup WITHIN the business. Prefer person_id (the fix — covers the phone-only repeat,
+  //    since the person was already deduped by phone). Fall back to email only when the
+  //    person layer was unavailable. A null/blank email must NOT collapse email-less customers.
+  let existingId: string | null = null;
+  if (personId) {
+    const { data } = await db
+      .from('customers').select('id')
+      .eq('business_id', businessId).eq('person_id', personId).limit(1);
+    if (data && data.length > 0) existingId = data[0].id;
+  } else if (customer.email) {
+    const { data } = await db
+      .from('customers').select('id')
+      .eq('business_id', businessId).eq('email', customer.email).limit(1);
+    if (data && data.length > 0) existingId = data[0].id;
+  }
+
+  if (existingId) {
+    await db.from('customers').update(fields).eq('id', existingId);
+    console.log('[TRACE:PERSON] link: customer resolved to existing row', {
+      customerId: existingId, personId, businessId, source,
+    });
+    return { customerId: existingId, created: false };
   }
 
   const { data: newCustomer, error: custErr } = await db
     .from('customers')
     .insert({
-      business_id:      businessId,
-      first_name:       customer.first_name,
-      last_name:        customer.last_name ?? '', // customers.last_name is NOT NULL — empty string, never null
-      email:            customer.email ?? null,
-      phone:            customer.phone ?? null,
-      address_line1:    customer.address_line1 ?? null,
-      city:             customer.city ?? null,
-      state:            customer.state ?? 'TX',
-      zip:              customer.zip ?? null,
-      marketing_opt_in: customer.marketing_opt_in ?? true,
+      business_id: businessId,
+      email:       customer.email ?? null,
       source,
+      ...fields,
     })
     .select('id')
     .single();
 
   if (custErr) throw new Error(`Customer: ${custErr.message}`);
+  console.log('[TRACE:PERSON] link: new customer linked to person', {
+    customerId: newCustomer!.id, personId, businessId, source,
+  });
   return { customerId: newCustomer!.id, created: true };
 }
