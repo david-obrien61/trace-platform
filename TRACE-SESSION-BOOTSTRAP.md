@@ -2,13 +2,18 @@
 
 > **What this is:** the single front-door doc — and the CANONICAL status front-page. Paste this at the start of every new Lightning (Claude-in-chat) session to get current in ~90 seconds. It is the MAP, not the territory — deep detail lives in the reference library (§7) and the feeder docs each ⚡ line links to. Structure is FIXED; only the values change. Update at session-end (see END-OF-SESSION PROTOCOL doc + CLAUDE.md §9).
 >
-> **Last updated:** 2026-06-25 (⚡ OPERATING FACTS constants block added at top; ⚡ ACTIVE STATUS + 📋 24-CAPABILITY BOARD = canonical status front-page; feeder docs point up to it. Seeded from the 4 demo-fixes batch + OCR-into-inventory reuse-verify + CAPABILITY-PACKAGE-GROUNDTRUTH reconciled to today.)
+> **Last updated:** 2026-06-25 (VERIFY-BEFORE-BUILD added as the top-level standing principle in ⚡ OPERATING FACTS — cross-refs §0 #1, CLAUDE.md §10 #6, DECISIONS.md OP-8, no duplicate copies; ⚡ OPERATING FACTS constants block at top; ⚡ ACTIVE STATUS + 📋 24-CAPABILITY BOARD = canonical status front-page; feeder docs point up to it. Seeded from the 4 demo-fixes batch + OCR-into-inventory reuse-verify + CAPABILITY-PACKAGE-GROUNDTRUTH reconciled to today.)
 
 ---
 
 ## ⚡ OPERATING FACTS — the constants (rarely change)
 
 > Stable project constants Lightning otherwise re-derives or guesses at session-start. NOT task-state (that lives in ⚡ ACTIVE STATUS below, which changes every close). Pointers over detail. Inclusion test: *true across sessions AND Lightning gets it wrong without it.* If a value changes session-to-session it does NOT belong here.
+
+**VERIFY-BEFORE-BUILD (always, no exceptions)** — the standing principle above all build work.
+> Before building ANYTHING, look at what already exists first — read the code, the tables, the existing capability. Never build from memory, assumption, or "I think we have X." Every build/recon starts by confirming current state against the repo (file:line evidence), THEN scoping the delta. This prevents: rebuilding what exists, drift, wrong-target edits, and scope creep. The pattern is always: (1) what do we have, (2) what's the real delta, (3) build only the delta. A recon or a verify-first pass is NOT overhead — it's the cheapest insurance against the most expensive mistakes. When in doubt, read before you write.
+>
+> Reinforced by (point here, don't duplicate): **§0 #1 CHECK-BEFORE-BUILD GATE** (the anti-rebuild special case — assume it may already exist, esp. in Ignition) · **CLAUDE.md §10 Session Starter #6** (verify-before-build: check built-inventory + grep before NEW capability) · **DECISIONS.md OP-8** (HAVE/NEED/WANT three-lens recon — how a verify-first LOOK reports, bound as a recon gate in CLAUDE.md §9 #10). This bootstrap line is the canonical top-level statement of the principle; those are its enforcement points.
 
 **DEPLOY / ENV**
 - Deploy = **merge to `main` → Vercel auto-deploys from main**. No per-branch previews — to test a branch, merge it first. Merge-to-main is **David's explicit go**, not automatic.
