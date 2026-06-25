@@ -435,13 +435,16 @@ export function OnboardingWizard() {
       if (bizIdFromUrl) {
         const { data: biz } = await supabase
           .from('businesses')
-          .select('id, name')
+          .select('id, name, address')
           .eq('id', bizIdFromUrl)
           .eq('owner_id', user.id)
           .maybeSingle();
         if (biz) {
           setExistingBusinessId(biz.id);
-          setNurseryInfo(n => ({ ...n, name: biz.name ?? '' }));
+          // Load name AND address so the address field/review isn't blank and a typed
+          // value round-trips (the load effect previously loaded only name).
+          setNurseryInfo(n => ({ ...n, name: biz.name ?? '', address: biz.address ?? '' }));
+          console.info('[TRACE:ONBOARD] address loaded', { businessId: biz.id, hasAddress: !!biz.address });
           setStepIndex(STEPS.indexOf('CHOOSE_PATH'));
           return;
         }
@@ -451,7 +454,7 @@ export function OnboardingWizard() {
       // Uses order + limit(1) to avoid maybeSingle() error on multiple rows.
       const { data: biz } = await supabase
         .from('businesses')
-        .select('id, name')
+        .select('id, name, address')
         .eq('owner_id', user.id)
         .eq('business_type', 'nursery')
         .order('created_at', { ascending: false })
@@ -459,7 +462,8 @@ export function OnboardingWizard() {
         .maybeSingle();
       if (biz) {
         setExistingBusinessId(biz.id);
-        setNurseryInfo(n => ({ ...n, name: biz.name ?? '' }));
+        setNurseryInfo(n => ({ ...n, name: biz.name ?? '', address: biz.address ?? '' }));
+        console.info('[TRACE:ONBOARD] address loaded', { businessId: biz.id, hasAddress: !!biz.address });
         setStepIndex(STEPS.indexOf('CHOOSE_PATH'));
       }
     }
@@ -537,6 +541,23 @@ export function OnboardingWizard() {
           active: true,
           invite_id: null,
         });
+        }
+      }
+
+      // Persist the nursery address back to businesses on the NORMAL path. The wizard now
+      // loads businesses.address into the field on mount, so this round-trips a typed/edited
+      // address — previously only the legacy create branch wrote it, dropping it otherwise.
+      // owner-scoped UPDATE (businesses_owner_*), idempotent on the legacy create path. RLS untouched.
+      {
+        const trimmedAddr = nurseryInfo.address.trim() || null;
+        const { error: addrError } = await supabase
+          .from('businesses')
+          .update({ address: trimmedAddr })
+          .eq('id', businessId);
+        if (addrError) {
+          console.warn('[TRACE:ONBOARD] address save ERROR', { businessId, error: addrError.message });
+        } else {
+          console.info('[TRACE:ONBOARD] address saved', { businessId, hasAddress: !!trimmedAddr });
         }
       }
 
