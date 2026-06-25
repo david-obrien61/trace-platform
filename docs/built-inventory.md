@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-06-24
+# Last updated: 2026-06-24 (added Quality Gate — ESLint + knip baseline-and-ratchet, commit 73d82a0)
 
 **Purpose:** Sessions keep rebuilding things that exist. This document is the single answer to "was X ever built?" Organized by capability, not by file. For file locations, see PLATFORM_AUDIT.md.
 
@@ -553,6 +553,20 @@ Each test computes what a buggy build would output and asserts the real one diff
 **Scope honesty:** caps 2–5 are multi-tenant-RLS capabilities → IN SCOPE for Cultivar, reported **SKIP-with-reason** for Ignition (single-device PIN vertical, documented "Auth Architecture — Locked Rule" exception — visible in the matrix, not silently passed). Documented owner-only operational tables (orders/customers/…) print as **KNOWN-GAP** (tracked product decision, fail-closed), not a hard FAIL.  
 **MATRIX (current, 2026-06-22 — caps grew to 7):** Ignition #1 PASS · #2–7 SKIP (single-device PIN vertical, documented exception). Cultivar **#1–7 ALL PASS** → gate exits **0**. (#1 flipped **FAIL → PASS** 2026-06-22 when the shared `<AppHeader>` was mounted once via `AppLayout` around the PrivateRoute routes; #6 read-wall + #7 write-wall added with Gate-3.) #2 PASS (9 financial policies gated) · #3 PASS (12 member-scoped tables dual-RLS; 9 owner-only tables KNOWN-GAP) · #4 PASS (14 member policies canonical; `md_self` documented exception) · #5 PASS. NOT auto-chained into `build:*` — run as its own gate.  
 **OUTPUTS:** colored PASS/FAIL/SKIP/KNOWN-GAP matrix + `process.exit(1)` on any in-scope FAIL.
+
+---
+
+## Quality Gate — ESLint + knip (baseline-and-ratchet)
+
+**What:** Two standing build gates mapped to bug CLASSES the platform has actually hit (dead code, unused vars, swallowed async errors, stale-closure deps) — NOT a style linter. Baseline-and-ratchet: records current debt and fails the build on NET-NEW only.
+**Status:** ✅ Built 2026-06-24 — commit `73d82a0`. Fail-on-new PROVEN both directions (probe file → eslint 267→269 + knip 10→11 files, gate exit 1; removed → green exit 0).
+**Vertical:** shared (root tooling) | **Type:** infrastructure
+**Files:** `eslint.config.mjs` (flat config), `knip.json`, `packages/shared/tsconfig.json` (lint-only, NOT a build tsc), `quality-baseline.json`, `scripts/quality-gate.mjs` (HEADER in-file). npm scripts: `lint`, `knip`, `quality:gate`, `quality:baseline`, `verify`.
+**ESLint rules (bug-class only):** `no-unused-vars`, `no-unreachable`, **`@typescript-eslint/no-floating-promises` + `no-misused-promises`** (type-aware — scoped to the active TS `src` dirs with tsconfigs: cultivar-os/shared/trace-app; api/+scripts/ get non-typed rules), `react-hooks/rules-of-hooks` + `exhaustive-deps`. **`no-explicit-any` deliberately OFF** (type-hygiene, not a bug class — would bury the signal under ~200 hits).
+**knip scope:** accurate dead-code on cultivar-os + trace-app; `shared` = **all-entry** (deep-import lib consumed via relative `../../../shared/src/...` from api/ that knip can't trace cross-workspace → file claims suppressed to keep the ratchet trustworthy); ignition-os/assessment/coolrunnings ignored (frozen donor / empty); root `scripts/**` + `*.test.*` declared entries.
+**Baseline (2026-06-24):** tsc **10** (8 cultivar + 2 trace-app, all documented pre-existing) · eslint **267** (84 unused-vars, 69 floating-promises, 67 misused-promises, 24 exhaustive-deps, rest minor) · knip **10** orphan files + **14** unused exports + **15** unused types. `npm run verify` = quality-gate + verify-universals; fails on NET-NEW only; `npm run quality:baseline` re-snapshots when debt drops.
+**Out of scope (separate value-review, NOT installed):** jscpd, Prettier, npm-audit gate, test suite.
+**OUTPUTS:** per-metric baseline-vs-current table + `process.exit(1)` on any net-new.
 
 ---
 
