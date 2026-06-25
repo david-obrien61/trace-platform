@@ -7,11 +7,25 @@
   "scripts": {
     "dev:cultivar": "npm run dev --workspace=packages/cultivar-os",
     "dev:ignition": "npm run dev --workspace=packages/ignition-os",
-    "dev:trace":    "npm run dev --workspace=packages/trace-app",
+    "dev:trace": "npm run dev --workspace=packages/trace-app",
     "build:cultivar": "npm run build --workspace=packages/cultivar-os",
     "build:ignition": "npm run build --workspace=packages/ignition-os",
-    "build:trace":    "npm run build --workspace=packages/trace-app",
+    "build:trace": "npm run build --workspace=packages/trace-app",
     "verify:universals": "node scripts/verify-universals.mjs",
-    "verify:write-wall": "node_modules/.bin/esbuild scripts/verify-write-wall.ts --bundle --platform=node --format=cjs --external:@supabase/supabase-js --external:@anthropic-ai/sdk | node"
+    "verify:write-wall": "node_modules/.bin/esbuild scripts/verify-write-wall.ts --bundle --platform=node --format=cjs --external:@supabase/supabase-js --external:@anthropic-ai/sdk | node",
+    "lint": "eslint \"packages/**/*.{ts,tsx,js,jsx}\"",
+    "knip": "knip",
+    "quality:gate": "node scripts/quality-gate.mjs",
+    "quality:baseline": "node scripts/quality-gate.mjs --update",
+    "verify": "node scripts/quality-gate.mjs && npm run verify:universals"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^15.15.0",
+    "knip": "^5.88.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.62.0"
   }
 }

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "paths": {
+    "@trace/shared": ["packages/shared/src/index.ts"],
+    "@trace/shared/*": ["packages/shared/src/*"]
+  },
+  "ignore": ["**/dist/**", "**/*.native.js", "**/*.d.ts"],
+  "ignoreWorkspaces": [
+    "packages/ignition-os",
+    "packages/assessment-app",
+    "packages/coolrunnings"
+  ],
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/**/*.{ts,mjs}"],
+      "project": ["scripts/**/*.{ts,mjs}"]
+    },
+    "packages/cultivar-os": {
+      "entry": ["src/main.tsx", "api/**/*.ts", "**/*.test.{ts,tsx}"],
+      "project": "src/**/*.{ts,tsx}"
+    },
+    "packages/shared": {
+      "entry": ["src/**/*.{ts,tsx}"],
+      "project": "src/**/*.{ts,tsx}"
+    },
+    "packages/trace-app": {
+      "entry": ["src/main.tsx", "**/*.test.{ts,tsx}"],
+      "project": "src/**/*.{ts,tsx}"
+    }
+  }
+}
