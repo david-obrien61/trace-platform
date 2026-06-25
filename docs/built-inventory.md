@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-06-24 (added Quality Gate — ESLint + knip baseline-and-ratchet, commit 73d82a0)
+# Last updated: 2026-06-25 (added Person Spine — global people table + person_id overlay + create-or-link, CP1 8eda8e3 / CP2 c1f8be3; STAGED migration + full-nuke wipe)
 
 **Purpose:** Sessions keep rebuilding things that exist. This document is the single answer to "was X ever built?" Organized by capability, not by file. For file locations, see PLATFORM_AUDIT.md.
 
@@ -127,7 +127,7 @@
 - **Invoice-shape OCR** (`api/receipts/ocr.ts`): `shape` param (`receipt` default = unchanged for all existing callers | `invoice` new). Invoice prompt is a superset — keeps vendor/date/line_items(+sku)/subtotal/tax/total, ADDS customer_name/phone/email, bill_to + ship_to addresses, due_date, delivery_date. Same provider chain (Gemini→Haiku, platform_config models, image-to-Supabase write). UNKNOWN/null for absent fields (D-9, never 0/fabricated).
 - **Review-before-write**: the confirm screen now shows the invoice fields (customer, bill-to/ship-to, due/delivery dates) as editable inputs for human validation before any write.
 - **Infer-then-confirm router** (`[TRACE:ROUTER]`): after OCR, infers doc type (customer present → "invoice for a customer" else "receipt/expense"), presents destinations multi-select, best-guess pre-checked, always overridable — **Add customer** (functional) + Schedule delivery / Analyze sale (shown, marked "coming"). Question-depth dial-able.
-- **OCR → standalone customer create**: `findOrCreateCustomer` extracted to `packages/shared/src/business-logic/customerUpsert.ts` (the cart's customer write, now callable without an order). New endpoint `api/customers/create.ts` (+ cultivar impl). Confirming "Add customer" creates/updates a customer tagged `source='ocr-invoice'`, dedup-by-email preserved. The CART path (`api/orders/submit.ts`) now calls the SAME shared fn (`source='qr-scan'`) — regression-proven still creating customers.
+- **OCR → standalone customer create**: `findOrCreateCustomer` extracted to `packages/shared/src/business-logic/customerUpsert.ts` (the cart's customer write, now callable without an order). New endpoint `api/customers/create.ts` (+ cultivar impl). Confirming "Add customer" creates/updates a customer tagged `source='ocr-invoice'`. The CART path (`api/orders/submit.ts`) now calls the SAME shared fn (`source='qr-scan'`) — regression-proven still creating customers. **Dedup upgraded to PERSON-based (Person-spine, 2026-06-25, `c1f8be3`):** resolves the global person at SOURCE (email→phone) then dedups the customer WITHIN the business by `person_id` — a phone-only repeat no longer double-inserts (the old email-only dedup let it through). Graceful fallback to legacy email-dedup if the person layer is unavailable. See the Person Spine section.
 - **NO migration** — writes existing `customers` columns only. Proof: `scripts/verify-customer-upsert.mjs` (service-key, 7/7 PASS: ocr-invoice create + tag, dedup-by-email, cart path resolves, provenance preserved, email-less safe, cleanup). `[TRACE:OCR]`/`[TRACE:ROUTER]` ON until owner-proven.
 - **Owner-proof owed**: real photographed LAWNS invoices on David's phone — camera-first few-tap capture, invoice fields extracted + shown, image in storage, confirm "Add customer" creates the customer.
 - **Date-field fix (2026-06-20, owner-proof owed):** invoice Date/Due/Delivery rendered EMPTY — OCR returned dates "as printed" (US MM/DD/YYYY) but `<input type="date">` requires ISO YYYY-MM-DD (read worked, parse was the bug). New `src/utils/dateParse.ts` `toISODate` normalizes (MM/DD/YYYY · M/D/YYYY · dash/dot seps · 2-digit year · textual month · ISO passthrough); absent/unparseable → '' (D-9). Applied to all three date fields + `[TRACE:OCR] date parse` raw→iso log. Proof: `scripts/verify-date-parse.mjs` 14/14 (06/22/2026→2026-06-22, 06/25/2026→2026-06-25).
@@ -569,6 +569,21 @@ Each test computes what a buggy build would output and asserts the real one diff
 **OUTPUTS:** per-metric baseline-vs-current table + `process.exit(1)` on any net-new.
 
 ---
+
+## Person Spine — global human backbone (Shared) — Person-spine build 2026-06-25
+
+**What:** A global `people` table (one row per human) behind every role a person plays — lead/customer/member/invited-worker/labor-resource. The three-entity identity standard: Person × Organization (`businesses`) × Membership/role. `person_id` is an **OVERLAY, NEVER the auth principal** — RLS stays on `user_id = auth.uid()` (documented divergence, §6.10: textbook would make the person id the principal; we don't, because RLS is proven on auth.uid() and person↔auth is 1:many).
+**Status:** ✅ BUILDER-COMPLETE (CP1 `8eda8e3` + CP2 `c1f8be3`); migration + full-nuke wipe STAGED (David applies as postgres) — schema-verification gate + owner-proof OWED. Close-out ledger rows #31/#32.
+**Vertical:** shared | **Type:** infrastructure
+**Location:** `supabase/migrations/20260625_person_spine.sql` · `scripts/wipe-for-person-spine.sql` · `packages/shared/src/business-logic/personUpsert.ts` · recon `data/grower-scan/person-spine-recon.md`
+
+**Schema (cultivar-os Supabase project — bgobkjcopcxusjsetfob, STAGED):**
+- `people` (NEW) — `id` (person_id), `auth_user_id` (nullable UNIQUE FK→auth.users ON DELETE SET NULL — nullable because invited-not-enrolled workers / captured customers have no auth account), `first_name`/`last_name`/`full_name`, `email`/`phone`. **NO `business_id`** (global). RLS `people_self_all` (FOR ALL, `auth_user_id = auth.uid()`) — self-only; customer/worker persons (auth-less) created server-side with the service key. updated_at trigger + auth-less `email`/`phone` lookup indexes.
+- Nullable `person_id` overlay (FK→people ON DELETE SET NULL) added to `business_members`, `customers`, `labor_resources`, `invitations`. `customers.price_tier` (text, default `'retail'`, no CHECK — AC-4; retail/wholesale/contractor as a TIER not an entity). Nothing forced NOT NULL.
+- Migration ALTERS no existing policy/function/trigger (is_active_member, has_permission, bm_* , self-grant trigger, customers_business_owner all untouched — overlay only).
+- **Full-nuke wipe** (`scripts/wipe-for-person-spine.sql`, run once before the migration): enumerates every `business_id`-bearing table from the live catalog → `TRUNCATE … CASCADE` → `DELETE FROM auth.users`. David chose FULL NUKE (all data expendable); the real LAWNS demo returns via Build B (per-tenant seed/reset, queued).
+
+**Create-or-link — ONE shared function (§6.8):** `findOrCreatePerson(db, input)` resolves a human to one person row. Precedence: (1) `auth_user_id` (strongest); (2) auth-less → email then phone (global, auth-less-only); (3) no identifier → insert (D-9, never fabricate a key). `[TRACE:PERSON]` on every create/link/resolve. Wired (CP2) into: OwnerSignup (browser-RLS, links `business_members.person_id`), acceptInvitation (service-key, links `invitations.person_id` + activated member), customerUpsert (service-key, person-based dedup). All non-blocking (overlay; rule 6 — never blocks an order). **Fixes the email-only-dedup bug:** a phone-only customer repeat matches the existing person by phone → no second customer (Marcus-Webb-dupe class), with graceful fallback to legacy email-dedup if the person layer is unavailable.
 
 ## Multi-Tenant Auth System (Shared)
 
