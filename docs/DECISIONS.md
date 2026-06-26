@@ -678,6 +678,49 @@ primitive + the JOB-like service object are net-new and DEFERRED — built when 
 
 ---
 
+### D-20 · Geocoder needs ZERO new serverless functions — two keys, fold into `ingest.ts`, stand up at front-door re-staging — `[CAPTURED]`
+**Decision:** Enabling a geocoder (Google) for the three address-aware consumers — address-validation @ signup, the
+customer map, and the geo-seeder — forces NO 13th serverless function and is NOT blocked on the Hobby 12-function
+ceiling ([[tech-debt #41]]). The deployed surface stays **12/12**. The Vercel Pro upgrade is therefore **NOT a
+prerequisite** for the geocoder. The real net-new infra is **env keys, not functions** — and there are **two distinct
+keys**, one secret-server and one referrer-locked-browser, which must NOT be the same key.
+
+**The three consumers and how each is wired (verified, file:line-grounded against the 2026-06-26 recon):**
+- **Address-validation @ signup** → a new `action='validate-address'` branch on the EXISTING
+  `api/discovery/ingest.ts` multiplexer (server-side). Same additive consolidation already used by
+  `populate` / `compare` / `cost-apply` / `cost-discovery` / `send`. The entered address is already available in the
+  `compare` branch (reads the `businesses` row via the service key). Returns `{valid, formatted, lat, lng, confidence}`
+  for the reveal to raise. **ZERO new functions.**
+- **Customer map** → client-side Google Maps JS in the browser (no map page exists today — `DeliveryRoute` only
+  builds a string URL). Not a serverless function at all. **ZERO new functions.**
+- **Geo-seeder** → a CLI/batch script under `scripts/` (not deployed, never counts toward the ceiling). If it ever needs
+  to run on-demand, it becomes another `ingest.ts` action. **ZERO new functions.**
+
+**The two keys (the only net-new infra):**
+- A **secret server-side Geocoding key** (e.g. `GOOGLE_GEOCODING_API_KEY`) — read via `process.env` inside the
+  `ingest.ts` branch, never bundled; same trust class as `ANTHROPIC_API_KEY` / `SUPABASE_SERVICE_KEY`.
+- A **referrer-locked browser Maps-JS key** — exposed in the bundle by design (like the Supabase anon key), but it
+  MUST be HTTP-referrer-restricted to `cultivar-os.vercel.app` (+ `.app`/`.com` if served there) and API-restricted to
+  the Maps JavaScript API only.
+- **Do NOT reuse the secret server key in the browser.** The owner sets a **daily quota cap** on the Google keys to
+  control spend.
+
+**Verdict:** function count stays **12/12**; the geocoder does NOT block on the Hobby ceiling.
+
+**TIMING (when to stand it up):** **at the front-door re-staging build** — that's when the address-validation branch is
+first exercised (the no-website path on screen 1). Standing the keys up earlier just parks an unused key. The customer
+map is independent and can come whenever the visual lens is wanted. The current queue (nav fix, datasheet inventory
+view) is geocoder-free and unaffected by this.
+
+**Companion:** [[D-14]] / [[D-16]] (the address branch feeds the per-vertical/per-job cost & pricing surfaces), the
+front-door arc (the address-conflict reveal where validation lands — ledger #47, [[deferred address→geocode branch]]).
+**Canonical home:** this entry + the recon at
+[`docs/decisions/2026-06-26-front-door-arc-recon.md`](decisions/2026-06-26-front-door-arc-recon.md).
+**Date captured:** 2026-06-26 · **Status:** CAPTURED — DEFERRED. No code/keys this pass; stand up the two keys as part
+of the front-door re-staging build.
+
+---
+
 ## PERSONAL-FINANCIAL
 
 > Not in this file by design — see **`decisions/PERSONAL-FINANCIAL.local.md`** (gitignored).

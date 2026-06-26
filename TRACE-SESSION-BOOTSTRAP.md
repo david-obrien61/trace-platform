@@ -184,6 +184,7 @@
 | D-17 | DECISIONS.md:565 | One pricing engine, four display surfaces, three audiences | cost / discovery |
 | D-18 | DECISIONS.md:587 | Platform overhead HAND-allocated; platform = computed remainder | cost / platform |
 | D-19 | DECISIONS.md:616 | A priced service carries THREE cost layers; the hidden third = OPPORTUNITY COST | cost / suggestion |
+| D-20 | DECISIONS.md (D-20) | Geocoder needs ZERO new functions — two keys, fold into `ingest.ts`, stand up at front-door re-staging | front-door / discovery |
 
 **MASTER_BRIEF.md PART 4 — surfacing / Regina captures** *(arc = suggestion/surfacing unless noted)*
 | NAME | HOME | WHAT IT SAYS | ARC |
