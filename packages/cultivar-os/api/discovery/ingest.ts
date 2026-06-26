@@ -17,6 +17,8 @@ import { nurserySchema } from '../../../shared/src/discovery/verticals/nursery';
 import { seedServiceOfferings } from '../../../shared/src/discovery/seed';
 import { reasonCostTurn, applyCostReasoning } from '../../../shared/src/discovery/costDiscovery';
 import type { CostDiscoveryLine, CostAnswer, CostReasoning } from '../../../shared/src/discovery/costDiscovery';
+import { compareEnteredVsSite, type Discrepancy } from '../../../shared/src/discovery/compare';
+import { populateCatalog } from '../../../shared/src/discovery/populate';
 import { VIEW_COSTS } from '../../../shared/src/auth/financialPermissions';
 import { sendNotification } from '../../../shared/src/notifications/send';
 import type { VerticalSchema, SilentPartnerAnalysis } from '../../../shared/src/discovery/types';
@@ -134,6 +136,35 @@ export default async function handler(req: any, res: any) {
     return res.json({ ok: true, demo: result.demo });
   }
 
+  // ── action='populate' — seed a new business's catalog FROM their live site ─────
+  // Crawls the site → extracts the real catalog → clears sandbox + prior-discovery rows →
+  // writes THEIR varieties into business_inventory (D-9 flagged). Service-key WRITE, routed
+  // through this existing function (NO new Vercel function — 12-fn ceiling, tech-debt #41).
+  // Ungated by design, matching the sibling seedServiceOfferings write below: it touches only
+  // namespaced sandbox/DISC- rows (never real inventory) and sets unit_cost=null (UNKNOWN),
+  // so it never crosses the view_costs cost-wall. Degrades gracefully if business_discovery_profiles
+  // is unapplied (populateCatalog treats the profile upsert as non-fatal — inventory still seeds).
+  if (action === 'populate') {
+    const aiKey = process.env.ANTHROPIC_API_KEY;
+    if (!aiKey) return res.status(503).json({ error: 'AI unavailable' });
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const serviceKey  = process.env.SUPABASE_SERVICE_KEY;
+    if (!supabaseUrl || !serviceKey) return res.status(503).json({ error: 'DB unavailable' });
+    if (!businessId || !url) return res.status(400).json({ error: 'businessId and url required' });
+    try {
+      console.log(`[TRACE:POPULATE] ingest action=populate business=${businessId} url=${url}`);
+      const db = createClient(supabaseUrl, serviceKey);
+      const result = await populateCatalog(businessId, url, db, { apiKey: aiKey });
+      return res.json({
+        ok: !result.error, inserted: result.inserted, flaggedInserted: result.flaggedInserted,
+        status: result.status, error: result.error,
+      });
+    } catch (err: any) {
+      console.error('[discovery/ingest] populate:', err.message);
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  }
+
   // ── Normal ingest flow ────────────────────────────────────────────────────────
   if (!url) {
     return res.status(400).json({ error: 'url is required' });
@@ -182,10 +213,45 @@ export default async function handler(req: any, res: any) {
       }
     }
 
+    // Step 2d: Entered-vs-site discrepancy compare (capability 1.1). Reads the entered
+    // onboarding data from the businesses row (service-key) and compares it against the
+    // ALREADY-FETCHED `content` (injected — NO second site fetch). Surfaces hedged, D-9-gated
+    // discrepancies (incl. ADDRESS) for the reveal to raise gracefully. Non-fatal: a compare
+    // failure (or a business-less call) returns an empty list and never blocks the reveal.
+    let discrepancies: Discrepancy[] = [];
+    if (businessId) {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceKey  = process.env.SUPABASE_SERVICE_KEY;
+      if (supabaseUrl && serviceKey) {
+        try {
+          const db = createClient(supabaseUrl, serviceKey);
+          const { data: biz } = await db
+            .from('businesses')
+            .select('name, address, phone, email, website')
+            .eq('id', businessId)
+            .maybeSingle();
+          if (biz) {
+            const cmp = await compareEnteredVsSite(
+              {
+                businessName: biz.name,  address: biz.address,
+                phone:        biz.phone, email:   biz.email,
+                website:      url,
+              },
+              { apiKey, _fetchContent: async () => content },
+            );
+            discrepancies = cmp.discrepancies;
+            console.log(`[TRACE:DISCOVERY] ingest compare business=${businessId} surfaced=${discrepancies.length} fields=${discrepancies.map(d => d.field).join(',')}`);
+          }
+        } catch (cmpErr: any) {
+          console.error('[discovery/ingest] compare (non-fatal):', cmpErr.message);
+        }
+      }
+    }
+
     // Step 3: Silent partner email from the deep analysis (unchanged)
     const analysis = await runSynthesis(profile, apiKey);
 
-    res.json({ identity, profile, analysis, fetchError: content.error ?? null, seeded });
+    res.json({ identity, profile, analysis, discrepancies, fetchError: content.error ?? null, seeded });
 
   } catch (err: any) {
     console.error('[discovery/ingest]', err.message);

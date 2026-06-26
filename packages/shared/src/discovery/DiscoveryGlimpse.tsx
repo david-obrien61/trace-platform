@@ -2,6 +2,19 @@ import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '../supabase/client';
 import type { VerticalStepProps } from '../auth/OwnerSignup';
 import type { BusinessDiscoveryProfile } from './types';
+import type { Discrepancy } from './compare';
+
+// Fields whose site value can be written straight back to the businesses row (owner RLS UPDATE).
+// Other compare fields (location/services/hours/yearsInBusiness) have no businesses column, so we
+// surface the question but never offer a write that would silently no-op.
+const WRITABLE_COLUMN: Record<string, string> = {
+  businessName: 'name',
+  address:      'address',
+  phone:        'phone',
+  email:        'email',
+};
+
+type SeedStatus = 'idle' | 'running' | 'done' | 'error';
 
 export interface DiscoveryGlimpseProps extends VerticalStepProps {
   discoveryEndpoint: string;   // e.g. '/api/discovery/ingest'
@@ -36,8 +49,17 @@ export function DiscoveryGlimpse({
   const [stageIdx, setStageIdx]   = useState(0);
   const [profile, setProfile]     = useState<BusinessDiscoveryProfile | null>(null);
   const [errMsg, setErrMsg]       = useState('');
+  // Entered-vs-site conflicts surfaced by the reveal (capability 1.1). resolved holds the fields
+  // the owner has already addressed (kept-mine or used-site) so each conflict shows once.
+  const [discrepancies, setDiscrepancies] = useState<Discrepancy[]>([]);
+  const [resolved, setResolved]   = useState<Record<string, 'kept' | 'updated'>>({});
+  // Catalog seed (capability 1.3) — fired in the foreground once the reveal lands.
+  const [seedStatus, setSeedStatus]   = useState<SeedStatus>('idle');
+  const [seedInserted, setSeedInserted] = useState(0);
+  const [seedFlagged, setSeedFlagged] = useState(0);
   const stageTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const analysisStarted = useRef(false);
+  const seedStarted = useRef(false);
 
   // Step 1: load business.website
   useEffect(() => {
@@ -90,11 +112,19 @@ export function DiscoveryGlimpse({
         // — never canned seedInsights dressed up as "what we found".
         if (ok && data?.profile) {
           setProfile(data.profile);
+          const found: Discrepancy[] = Array.isArray(data.discrepancies) ? data.discrepancies : [];
+          setDiscrepancies(found);
           setPhase('done');
           console.info('[TRACE:DISCOVERY] success', {
             businessId, seeded: data.seeded ?? 0,
             strengths: data.profile?.strengths?.length ?? 0,
+            conflicts: found.length,
           });
+          if (found.length) {
+            console.info('[TRACE:DISCOVERY] conflict', { businessId, fields: found.map(d => d.field) });
+          }
+          // Seed the catalog from the live site in the foreground (capability 1.3).
+          startSeed(url);
         } else {
           const msg = data?.error || 'We couldn’t read your website automatically.';
           setErrMsg(msg);
@@ -112,7 +142,56 @@ export function DiscoveryGlimpse({
 
   useEffect(() => () => { if (stageTimer.current) clearInterval(stageTimer.current); }, []);
 
+  // Seed the new business's catalog FROM their live site (capability 1.3). Foreground, in-session
+  // (NOT the deferred scrape-while-away path) — fires once the reveal lands so the dashboard is
+  // alive on arrival. Routed through the existing discovery endpoint (action=populate). Non-fatal:
+  // a failure just leaves the empty dashboard, surfaced honestly, never blocks "Open my dashboard".
+  function startSeed(url: string) {
+    if (seedStarted.current || !url) return;
+    seedStarted.current = true;
+    setSeedStatus('running');
+    console.info('[TRACE:ONBOARD] seed fired', { businessId, url });
+    fetch(discoveryEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'populate', businessId, url }),
+    })
+      .then(async r => ({ ok: r.ok, data: await r.json().catch(() => null) }))
+      .then(({ ok, data }) => {
+        if (ok && data?.ok) {
+          setSeedInserted(data.inserted ?? 0);
+          setSeedFlagged(data.flaggedInserted ?? 0);
+          setSeedStatus('done');
+          console.info('[TRACE:ONBOARD] seed done', { businessId, inserted: data.inserted ?? 0, flagged: data.flaggedInserted ?? 0 });
+        } else {
+          setSeedStatus('error');
+          console.warn('[TRACE:ONBOARD] seed failed', { businessId, error: data?.error ?? 'unknown' });
+        }
+      })
+      .catch(err => {
+        setSeedStatus('error');
+        console.warn('[TRACE:ONBOARD] seed failed (network)', { businessId, error: String(err?.message ?? err) });
+      });
+  }
+
+  // Resolve one entered-vs-site conflict. 'updated' writes the site value back to the businesses
+  // row (owner RLS UPDATE — NOT the signUp/insert path); 'kept' simply dismisses (entered wins).
+  // Only WRITABLE_COLUMN fields offer the update; the owner always chooses — we never auto-correct.
+  async function resolveConflict(d: Discrepancy, useSite: boolean) {
+    const col = WRITABLE_COLUMN[d.field];
+    if (useSite && col && d.site) {
+      const { error } = await supabase.from('businesses').update({ [col]: d.site }).eq('id', businessId);
+      if (error) {
+        console.warn('[TRACE:DISCOVERY] conflict update ERROR', { businessId, field: d.field, error: error.message });
+        return;
+      }
+    }
+    setResolved(r => ({ ...r, [d.field]: useSite ? 'updated' : 'kept' }));
+    console.info('[TRACE:DISCOVERY] conflict resolved', { businessId, field: d.field, choice: useSite ? 'updated' : 'kept' });
+  }
+
   const green = primaryColor;
+  const openConflicts = discrepancies.filter(d => !resolved[d.field]);
 
   // ── Render phases ────────────────────────────────────────────────────────────
 
@@ -304,6 +383,56 @@ export function DiscoveryGlimpse({
         <p style={{ margin: '0 0 16px', fontSize: '0.8rem', color: '#888' }}>{website}</p>
       )}
 
+      {/* Entered-vs-site conflicts (capability 1.1). Silent-partner tone — we ask, we never
+          assert which value is right. The owner picks; "Use site value" writes it back. */}
+      {openConflicts.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <p style={{
+            margin: '0 0 8px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase',
+            letterSpacing: '0.08em', color: '#b45309',
+          }}>
+            A couple of things to confirm
+          </p>
+          {openConflicts.map((d) => (
+            <div key={d.field} style={{
+              background: '#fff7ed', border: '1px solid #fcd34d', borderRadius: 10,
+              padding: '12px 14px', marginBottom: 10,
+            }}>
+              <p style={{ margin: '0 0 10px', fontSize: '0.875rem', color: '#7c2d12', lineHeight: 1.45 }}>
+                {d.message}
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10, fontSize: '0.8125rem', color: '#555' }}>
+                <span>You entered: <strong style={{ color: '#333' }}>{d.entered ?? '—'}</strong></span>
+                <span>Your site lists: <strong style={{ color: '#333' }}>{d.site ?? '—'}</strong></span>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {WRITABLE_COLUMN[d.field] && d.site && (
+                  <button
+                    onClick={() => resolveConflict(d, true)}
+                    style={{
+                      flex: 1, padding: '9px 0', background: green, color: '#fff', border: 'none',
+                      borderRadius: 8, fontWeight: 700, fontSize: '0.8125rem', cursor: 'pointer',
+                    }}
+                  >
+                    Use site value
+                  </button>
+                )}
+                <button
+                  onClick={() => resolveConflict(d, false)}
+                  style={{
+                    flex: 1, padding: '9px 0', background: '#fff', color: '#555',
+                    border: '1.5px solid #e5e7eb', borderRadius: 8, fontWeight: 600,
+                    fontSize: '0.8125rem', cursor: 'pointer',
+                  }}
+                >
+                  Keep mine
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {strengths.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <p style={{
@@ -363,6 +492,20 @@ export function DiscoveryGlimpse({
             </p>
           ))}
         </div>
+      )}
+
+      {/* Catalog seed status (capability 1.3) — honest about what was stocked; never blocks. */}
+      {seedStatus !== 'idle' && (
+        <p style={{
+          fontSize: '0.8125rem', textAlign: 'center', marginBottom: 12, lineHeight: 1.5,
+          color: seedStatus === 'error' ? '#b45309' : '#555',
+        }}>
+          {seedStatus === 'running' && 'Stocking your dashboard from your site…'}
+          {seedStatus === 'done' && (seedInserted > 0
+            ? `Added ${seedInserted} item${seedInserted !== 1 ? 's' : ''} to your inventory${seedFlagged > 0 ? ` · ${seedFlagged} flagged for review` : ''}.`
+            : 'Your dashboard is ready — add inventory any time.')}
+          {seedStatus === 'error' && 'We couldn’t auto-stock your catalog — add inventory from the dashboard any time.'}
+        </p>
       )}
 
       <button

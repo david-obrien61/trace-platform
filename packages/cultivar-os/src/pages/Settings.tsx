@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Settings as SharedSettings } from '@trace/shared/pages/Settings';
 import { CostToProduceSettings } from '@trace/shared/components/CostToProduceSettings';
 import { useBusinessContext } from '@trace/shared/context';
+import { useQboConnect } from '@trace/shared/quickbooks/useQboConnect';
 import { supabase } from '../lib/supabase';
 import {
   getMembersByBusiness,
@@ -542,7 +543,15 @@ function TeamSection({ businessId }: { businessId: string }) {
 
 export function Settings() {
   const navigate = useNavigate();
-  const { businessId, isOwner, userPermissions } = useBusinessContext();
+  const { businessId, isOwner, userPermissions, reload } = useBusinessContext();
+
+  // The SAME QBO connect action the Dashboard uses (popup + poll). On connect, reload the
+  // business context so the Accounting card flips to "connected". Fixes the broken Settings
+  // path, which used a dead <a href> that navigated away with no OAuth poll.
+  const { connect: qbConnect, connecting: qbConnecting, error: qbConnectError } = useQboConnect({
+    businessId,
+    onConnected: () => { reload(); },
+  });
 
   const canManageSettings = isOwner || (userPermissions ?? []).includes('manage_settings');
 
@@ -568,6 +577,9 @@ export function Settings() {
   return (
     <SharedSettings
       accountingConnectUrl={accountingConnectUrl}
+      onConnectAccounting={() => void qbConnect()}
+      accountingConnecting={qbConnecting}
+      accountingError={qbConnectError}
       verticalSection={verticalContent}
     />
   );

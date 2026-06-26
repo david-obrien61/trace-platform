@@ -217,7 +217,7 @@ export function DeliveryRoute() {
       <div style={{ background: GREEN, padding: '20px 16px', color: '#fff', display: 'flex', alignItems: 'center', gap: 12 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>
-            {dateParam ? 'Route — Scheduled Day' : 'Delivery Routing'}
+            {dateParam ? 'Delivery — Scheduled Day' : 'Delivery'}
           </h1>
           <p style={{ margin: 0, fontSize: '0.75rem', color: '#a8c890' }}>
             {loading ? 'Loading…'

@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { sendNotification } from '../../../shared/src/notifications/send';
 import { findOrCreateCustomer } from '../../../shared/src/business-logic/customerUpsert';
 
-const TAX_RATE        = 0.0825;
+const TAX_RATE_FALLBACK = 0.0825; // only for a business row predating the tax_rate column
 const LARGE_CONTAINERS = ['15 gal', '30 gal', '45 gal', '60 gal', '100 gal'];
 
 function adminDb() {
@@ -97,10 +97,17 @@ export default async function handler(req: any, res: any) {
         plantId: plant.id, clientClaimedCost, serverUnitCost,
       });
     }
+    // AUTHORITATIVE tax rate — the business's own setting (businesses.tax_rate, editable in
+    // Settings), server-fetched so the invoiced tax matches the displayed tax (CartReview reads
+    // the same column). Falls back to the constant only for a row predating the column.
+    const { data: bizTaxRow } = await db
+      .from('businesses').select('tax_rate').eq('id', businessId).maybeSingle();
+    const taxRate = Number((bizTaxRow as any)?.tax_rate ?? TAX_RATE_FALLBACK);
+
     const plantSubtotal = serverUnitCost * quantity;
     const addonsAmount  = transportAmount + nettingTotal + otherTotal;
     const subtotal      = plantSubtotal + addonsAmount;
-    const taxAmount     = Math.round(subtotal * TAX_RATE * 100) / 100;
+    const taxAmount     = Math.round(subtotal * taxRate * 100) / 100;
     const total         = subtotal + taxAmount;
 
     // ── 3. Leakage flag (missed add-on opportunities) ──────────────────────

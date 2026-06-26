@@ -306,14 +306,26 @@ const DEMO_STOPS = [
   { id: '3', name: 'Williams Property', address: '567 Elm Creek Dr, Round Rock, TX 78664' },
 ];
 
-function DeliveryWizardPath({ onFinalize, finalizing, finalizeError, onBack }: PathProps) {
+function DeliveryWizardPath({ onFinalize, finalizing, finalizeError, onBack, businessAddress }: PathProps & {
+  businessAddress: string;
+}) {
   const [stops, setStops]   = useState(DEMO_STOPS);
   const [routeUrl, setRouteUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const origin = businessAddress.trim();
+
   function buildRoute() {
-    const addresses = stops.filter(s => s.address.trim()).map(s => encodeURIComponent(s.address));
-    setRouteUrl(`https://www.google.com/maps/dir/${addresses.join('/')}/`);
+    const stopAddrs = stops.filter(s => s.address.trim()).map(s => s.address.trim());
+    if (stopAddrs.length === 0) return;
+    // Bookend the route at the nursery address (farm → stops → farm), mirroring the LIVE
+    // /deliveries seam (DeliveryRoute.buildRoute round-trip anchor). The demo previously
+    // built stops-only with no anchor — so the route didn't start or return to the business.
+    const ordered = [...stopAddrs];
+    if (origin) { ordered.unshift(origin); ordered.push(origin); }
+    const encoded = ordered.map(a => encodeURIComponent(a)).join('/');
+    setRouteUrl(`https://www.google.com/maps/dir/${encoded}/`);
+    console.log('[TRACE:ROUTE] demo route built', { origin: origin || null, stops: stopAddrs.length, total: ordered.length, bookended: !!origin });
   }
 
   function textDriver() {
@@ -373,6 +385,11 @@ function DeliveryWizardPath({ onFinalize, finalizing, finalizeError, onBack }: P
             <Navigation size={18} color={GREEN} />
             <span style={{ fontWeight: 700, color: GREEN }}>Route ready — {stops.length} stops</span>
           </div>
+          {origin && (
+            <p style={{ margin: '0 0 12px', fontSize: '0.75rem', color: GRAY }}>
+              Starts &amp; returns to your nursery — {origin}
+            </p>
+          )}
           {stops.map((s, i) => (
             <div key={s.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
               <span style={{ width: 22, height: 22, borderRadius: '50%', background: GREEN, color: '#fff', fontSize: '0.6875rem', fontWeight: 700, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{i + 1}</span>
@@ -771,7 +788,7 @@ export function OnboardingWizard() {
         if (path === 'LEAKAGE')  return <LeakagePath {...pathProps} />;
         if (path === 'CHECKOUT') return <CheckoutPath {...pathProps} />;
         if (path === 'SETUP')    return <SetupPath {...pathProps} nurseryInfo={nurseryInfo} />;
-        if (path === 'DELIVERY') return <DeliveryWizardPath {...pathProps} />;
+        if (path === 'DELIVERY') return <DeliveryWizardPath {...pathProps} businessAddress={nurseryInfo.address} />;
         return null;
       case 'DONE':          return renderDone();
       default:              return null;

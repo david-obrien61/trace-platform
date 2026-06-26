@@ -50,10 +50,14 @@ export function CartReview() {
     return sum + p;
   }, 0);
 
+  // Tax rate from the business's own setting (businesses.tax_rate, editable in Settings);
+  // the hardcoded TAX_RATE constant is only a fallback for a row that predates the column.
+  // The server (orders/submit) recomputes from the same column — display and invoice agree.
+  const taxRate       = business?.tax_rate ?? TAX_RATE;
   const plantSubtotal = (plant.business_inventory?.unit_cost ?? 0) * quantity;
   const addonsAmount  = transportAmount + nettingTotal + otherTotal;
   const subtotal      = plantSubtotal + addonsAmount;
-  const taxAmount     = Math.round(subtotal * TAX_RATE * 100) / 100;
+  const taxAmount     = Math.round(subtotal * taxRate * 100) / 100;
   const total         = subtotal + taxAmount;
 
   async function handleSubmit(online: boolean) {
@@ -182,7 +186,7 @@ export function CartReview() {
             <span>${subtotal.toFixed(2)}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#6b7280' }}>
-            <span>Tax (8.25%)</span>
+            <span>Tax ({(taxRate * 100).toFixed(2).replace(/\.00$/, '')}%)</span>
             <span>${taxAmount.toFixed(2)}</span>
           </div>
           <div style={{

@@ -4,6 +4,7 @@ import { Card } from '@trace/shared/components/Card';
 import { supabase } from '../lib/supabase';
 import { auth } from '../lib/auth';
 import { useBusinessContext } from '@trace/shared/context';
+import { useQboConnect } from '@trace/shared/quickbooks/useQboConnect';
 import { useModules } from '../hooks/useModules';
 import { requiredPermissionFor } from '../registry/tileRegistry';
 import { TileGrid } from '@trace/shared/components/tiles/TileGrid';
@@ -118,15 +119,17 @@ export function Dashboard() {
 
   const [qbConnected, setQbConnected]         = useState(false);
   const [qbCompany, setQbCompany]             = useState('');
-  const [connecting, setConnecting]           = useState(false);
-  const [qbError, setQbError]                 = useState('');
   const [accountingNeedsReconnect, setAccountingNeedsReconnect] = useState(false);
   const [profileIncomplete, setProfileIncomplete] = useState(false);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Consecutive /api/qbo/status failures (non-ok / network). Circuit-breaker for the connect
-  // poll so a persistently-erroring status endpoint (tech-debt #34) stops hammering every 2s
-  // instead of looping until the popup closes. Reset to 0 on any healthy (res.ok) response.
+  // Consecutive /api/qbo/status failures (non-ok / network). Circuit-breaker for the on-load
+  // status check (tech-debt #34). Reset to 0 on any healthy (res.ok) response.
   const qbStatusFailRef = useRef(0);
+  // QBO connect is the SHARED action (also used by Settings → Accounting). On a confirmed
+  // connect, refresh the banner (checkQbStatus flips qbConnected) and the metrics.
+  const { connect: qbConnect, connecting, error: qbError } = useQboConnect({
+    businessId,
+    onConnected: () => { void checkQbStatus(); void loadMetrics(); },
+  });
   const { modules } = useModules(businessId, can, business?.business_type ?? null);
 
   // ── Data loading ─────────────────────────────────────────────────────────
@@ -302,77 +305,8 @@ export function Dashboard() {
     return false;
   }
 
-  // After this many consecutive failed status checks, stop polling and surface the error
-  // rather than hammering /api/qbo/status every 2s while the popup stays open.
-  const QB_STATUS_FAIL_LIMIT = 5;
-
-  async function handleConnect() {
-    setConnecting(true);
-    setQbError('');
-
-    let popup: Window | null = null;
-    let step = 'init';
-
-    try {
-      step = 'open-popup';
-      popup = window.open('', 'qb-connect', 'width=720,height=640,left=200,top=100');
-
-      step = 'fetch';
-      const res = await fetch(`/api/qbo/auth-url?business_id=${businessId!}`);
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(`[step:${step}] ` + (body.error || `Server error ${res.status}`));
-      }
-
-      step = 'parse';
-      const { url } = await res.json();
-
-      step = 'validate-url';
-      try { new URL(url); } catch {
-        throw new Error(`[step:${step}] Malformed URL returned by server — check QBO env vars`);
-      }
-
-      step = 'navigate';
-      if (popup && !popup.closed) {
-        popup.location.href = url;
-      } else {
-        window.location.href = url;
-        return;
-      }
-
-      step = 'poll';
-      qbStatusFailRef.current = 0; // fresh poll session — reset the breaker
-      pollingRef.current = setInterval(async () => {
-        const connected = await checkQbStatus();
-        if (connected) {
-          clearInterval(pollingRef.current!);
-          pollingRef.current = null;
-          setConnecting(false);
-          loadMetrics();
-          return;
-        }
-        // Circuit-breaker: a persistently-erroring /api/qbo/status (tech-debt #34) must not
-        // poll forever. Stop after N consecutive failures and surface what to check.
-        if (qbStatusFailRef.current >= QB_STATUS_FAIL_LIMIT) {
-          clearInterval(pollingRef.current!);
-          pollingRef.current = null;
-          setConnecting(false);
-          setQbError('[step:poll] QuickBooks status check is failing repeatedly — the /api/qbo/status endpoint may be erroring (check Vercel function logs). Stopped polling.');
-          return;
-        }
-        if (!popup || popup.closed) {
-          clearInterval(pollingRef.current!);
-          pollingRef.current = null;
-          setConnecting(false);
-        }
-      }, 2000);
-    } catch (err: any) {
-      popup?.close();
-      const msg = String(err?.message || err || 'Unknown error');
-      setQbError(msg.startsWith('[step:') ? msg : `[step:${step}] ${msg}`);
-      setConnecting(false);
-    }
-  }
+  // QBO connect handshake (popup + poll + circuit-breaker) now lives in the shared
+  // useQboConnect hook (above) — one action, mounted here AND in Settings → Accounting.
 
   // ── Auth ──────────────────────────────────────────────────────────────────
 
@@ -398,7 +332,7 @@ export function Dashboard() {
     checkQbStatus();
     loadSocialDrafts();
     loadCampaignDrafts();
-    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+    // The connect poll's interval is owned + cleaned up by useQboConnect itself.
   }, [businessId]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
@@ -539,7 +473,7 @@ export function Dashboard() {
               Every checkout automatically creates an invoice — no typing required.
             </p>
             <button
-              onClick={handleConnect}
+              onClick={() => void qbConnect()}
               disabled={connecting}
               className="btn btn-primary"
               style={{ opacity: connecting ? 0.7 : 1 }}

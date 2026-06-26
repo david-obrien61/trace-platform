@@ -35,6 +35,11 @@ import { executeCapability } from '../ai/execute';
 
 export interface EnteredBusinessData {
   businessName?:    string | null;
+  /** Street address as entered (e.g. "400 Honeycomb Mesa, Leander TX"). Distinct from
+   *  `location` (a looser city/region). Added so the entered-vs-site ADDRESS conflict
+   *  surfaces — the exact gap from the 2026-06-26 test (typed address, site address differed,
+   *  no conflict raised). */
+  address?:         string | null;
   location?:        string | null;
   phone?:           string | null;
   email?:           string | null;
@@ -73,6 +78,7 @@ interface RawCandidate {
 
 const FIELD_LABELS: Record<string, string> = {
   businessName:    'your business name',
+  address:         'your address',
   location:        'your location',
   phone:           'your phone number',
   email:           'your email',
@@ -85,6 +91,7 @@ const FIELD_LABELS: Record<string, string> = {
 function enteredAsStrings(entered: EnteredBusinessData): Record<string, string | null> {
   return {
     businessName:    entered.businessName ?? null,
+    address:         entered.address ?? null,
     location:        entered.location ?? null,
     phone:           entered.phone ?? null,
     email:           entered.email ?? null,
@@ -169,7 +176,7 @@ ${content.text || '(empty — could not extract text)'}
 For each field where the website CLEARLY STATES a value, return what the site says.
 Omit any field the site does not clearly address. Return a JSON array:
 [
-  { "field": "phone | businessName | location | email | services | hours | yearsInBusiness",
+  { "field": "phone | businessName | address | location | email | services | hours | yearsInBusiness",
     "siteValue": "the value as the site states it",
     "confidence": "high | medium | low — how sure you are the SITE states this value" }
 ]

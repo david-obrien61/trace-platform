@@ -153,7 +153,7 @@ export function Confirmation() {
             <span>Subtotal</span><span>${subtotal.toFixed(2)}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#9ca3af' }}>
-            <span>Tax (8.25%)</span><span>${taxAmount.toFixed(2)}</span>
+            <span>Tax ({subtotal > 0 ? ((taxAmount / subtotal) * 100).toFixed(2).replace(/\.00$/, '') : '0'}%)</span><span>${taxAmount.toFixed(2)}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '1.0625rem', color: '#1f2937', paddingTop: 6, borderTop: '1px solid #e5e7eb' }}>
             <span>Total</span><span>${total.toFixed(2)}</span>

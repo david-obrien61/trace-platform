@@ -91,9 +91,19 @@ interface SettingsProps {
   onBack?: () => void;
   verticalSection?: React.ReactNode;
   accountingConnectUrl?: string;
+  // Preferred: the SAME connect action the Dashboard uses (useQboConnect — popup + poll).
+  // When provided, the Accounting card triggers it via a button instead of a dead <a href>
+  // (which navigated away with no OAuth poll → the broken Settings connect path). The plain
+  // accountingConnectUrl link remains the fallback for hosts that don't pass an action.
+  onConnectAccounting?: () => void;
+  accountingConnecting?: boolean;
+  accountingError?: string;
 }
 
-export function Settings({ onBack, verticalSection, accountingConnectUrl }: SettingsProps) {
+export function Settings({
+  onBack, verticalSection, accountingConnectUrl,
+  onConnectAccounting, accountingConnecting, accountingError,
+}: SettingsProps) {
   const { business, businessId, reload } = useBusinessContext();
 
   // ── Business profile ───────────────────────────────────────────────────────
@@ -358,7 +368,15 @@ export function Settings({ onBack, verticalSection, accountingConnectUrl }: Sett
                   )}
                 </div>
               </div>
-              {accountingConnectUrl && (
+              {onConnectAccounting ? (
+                <button
+                  onClick={onConnectAccounting}
+                  disabled={accountingConnecting}
+                  style={{ background: 'none', border: 'none', padding: 0, fontSize: '0.8125rem', color: GREEN, fontWeight: 600, cursor: accountingConnecting ? 'default' : 'pointer' }}
+                >
+                  {accountingConnecting ? 'Reconnecting…' : 'Reconnect'}
+                </button>
+              ) : accountingConnectUrl && (
                 <a href={accountingConnectUrl} style={{ fontSize: '0.8125rem', color: GREEN, fontWeight: 600, textDecoration: 'none' }}>
                   Reconnect
                 </a>
@@ -369,7 +387,20 @@ export function Settings({ onBack, verticalSection, accountingConnectUrl }: Sett
               <p style={{ fontSize: '0.875rem', color: GRAY, marginBottom: 12, lineHeight: 1.5 }}>
                 Connect an accounting system to automatically create invoices after each sale.
               </p>
-              {accountingConnectUrl ? (
+              {onConnectAccounting ? (
+                <>
+                  <button
+                    onClick={onConnectAccounting}
+                    disabled={accountingConnecting}
+                    style={{ width: '100%', padding: '13px 20px', background: accountingConnecting ? '#e5e7eb' : GREEN, color: accountingConnecting ? GRAY : '#fff', fontWeight: 700, fontSize: '0.9375rem', borderRadius: 10, border: 'none', cursor: accountingConnecting ? 'default' : 'pointer' }}
+                  >
+                    {accountingConnecting ? 'Opening QuickBooks…' : 'Connect QuickBooks'}
+                  </button>
+                  {accountingError && (
+                    <p style={{ fontSize: '0.8125rem', color: RED, marginTop: 10 }}>Error: {accountingError}</p>
+                  )}
+                </>
+              ) : accountingConnectUrl ? (
                 <a href={accountingConnectUrl} style={{ display: 'block', textAlign: 'center', padding: '13px 20px', background: GREEN, color: '#fff', fontWeight: 700, fontSize: '0.9375rem', borderRadius: 10, textDecoration: 'none' }}>
                   Connect QuickBooks
                 </a>
