@@ -613,6 +613,71 @@ carved fair-share); until then the drill-in correctly footnotes "fair-share plat
 
 ---
 
+### D-19 · A priced service carries THREE cost layers; the hidden third is OPPORTUNITY COST (the cost of pulled labor) — `[CAPTURED]`
+**Decision:** A priced service (LAWNS charges $400 to plant trees) carries **three cost layers**, not one. The
+owner sees only the lump sum and so under-prices service work without knowing why they're busy-but-not-profitable.
+The cost engine's scope is to surface all three:
+
+1. **Direct cost** — what the JOB consumes: labor hours + materials (mulch, fertilizer) + the visit (fuel). This
+   is what the cost-to-produce engine already models ([[D-10]] project lens, [[D-12]] labor). On a $400 install,
+   ~$100.
+2. **Decomposed price (legibility / trust)** — the same $400 shown as its parts: 2 hr labor + $45 mulch + $45
+   fertilizer + $10 fuel + margin. **The number does not change; its LEGIBILITY does.** A lump "$400" reads as
+   "too much"; the breakdown reads as fair. This is the customer-facing VIEW of layer 1 — **one source, many
+   views**: the cost ledger is the source, the owner's margin view and the customer's justification view are two
+   lenses (it IS [[D-17]] surface 3, the customer-facing price view). David's own reaction is the proof — he sees
+   "$400" and balks until he sees it broken down; the customer does exactly the same.
+3. **Opportunity cost — the cost of ABSENCE (the hidden, genuinely novel layer).** When crew (Juan) plants trees
+   3 days a week, Juan is NOT at the farm those days. The farm work does not vanish — it goes undone or someone
+   backfills it (overtime / an extra hire / the owner). Pull Juan AND Jose and the farm is short two people and
+   someone scrambles. This cost is **real**, is **caused by the planting job**, and appears on **no invoice** —
+   because an absence is not a line item. So a $400 install that looks profitable against $100 direct cost may be
+   thin or negative once the farm's lost throughput during those crew-days is counted.
+
+**Reasoning (the anti-Nelson thesis applied to opportunity cost):** the owner KNOWS intuitively that pulling crew
+hurts the farm — they FEEL the scramble — but cannot QUANTIFY it, so they price as if it's free. That is the exact
+[[OP-5]]/[[OP-7]] failure the platform exists to flip: the labor of *computing the absence* comes OFF the owner's
+head and ONTO the tool. The platform can quantify it because it already models labor as a resource ([[D-12]]
+`labor_resources`) and knows the job consumes crew-days. The surfaced insight: *"this $400 install consumes 2
+crew-days; the farm loses ~$X of normal throughput during them; true job cost is ~$Y, not $100."* Same surfacing
+spine as the customer-relations engine ([[OP-9]] Regina Principle) — make visible a cost the owner's own head
+knows exists but cannot compute — pointed at COST instead of revenue. The point is not precision; it is making the
+ABSENCE VISIBLE so service work stops being priced as if the farm runs itself while the crew is away.
+
+**The new primitive this requires (a dependency, NOT a build here):** to cost an absence the model needs a notion
+of a resource's **VALUE AT ITS PRIMARY WORK** — e.g. an owner-set *"a farm crew-day is worth ~$X to me."* Rough is
+fine. The [[D-9]] confidence ladder carries it honestly: this is **ESTIMATED**, labeled as such (*"you told us a
+farm crew-day is ~$300, so this install's true cost including pulled labor is ~$700"*) — never false-CONFIRMED. A
+soft value-at-primary-work yields a soft opportunity cost, surfaced with its softness shown, same discipline as a
+soft cost-to-serve yielding a soft price ([[D-16]]). The absence is attributable like any other cost — it is a
+cost the JOB causes, so it attributes to the job's project ([[D-14]] attribution-follows-consumption).
+
+**This RESOLVES the services-model open question** (`MASTER_BRIEF.md` PART 4, the "is a service a cost-ledger
+object or a JOB-like object?" question, currently captured-not-resolved): the $400 decomposition answers it —
+**PLANTING is JOB-LIKE** (labor + materials + visit, and it leaves a warranty clock ticking after the visit ends),
+**a 30-gal Live Oak is a PRODUCT** (cost-to-produce + price). The **JOB-like service object is the single
+structural foundation** that unlocks all three layers above AND the invoice-audit (missing-charge detection,
+`MASTER_BRIEF.md` line 182) AND the Regina-chain relationship services ([[OP-9]]). **Settle it once, shared
+([[AC-4]] structural design shared / [[AC-1]] unit-of-production is config, not a vertical noun)** — audit,
+decomposition, opportunity-cost, and relationship-services all hang off the one object. (This SHARPENS, does not
+replace, anything built: layers 1 and the labor substrate exist; layer 2 is [[D-17]] surface 3; layer 3 and the
+value-at-primary-work primitive are net-new and deferred.)
+
+**Companion principles:** [[OP-5]]/[[OP-7]] (anti-Nelson — labor of computing the absence comes off the owner),
+[[OP-9]] (Regina Principle — same surfacing spine, pointed at cost), [[D-9]] (confidence ladder carries
+value-at-primary-work as ESTIMATED), [[D-12]] (labor model — the resource substrate the absence is computed
+against), [[D-14]] (attribution — the absence attributes to the job that caused it), [[D-16]] (soft input → soft
+output; opportunity cost feeds true job cost feeds price), [[D-17]] (layer 2 = customer-facing price view, surface
+3), [[D-10]] (project lens — where job cost rolls up).
+**Canonical home:** this entry (no other doc held the three-layer / opportunity-cost thesis or the
+value-at-primary-work primitive). The services-model resolution is cross-referenced FROM `MASTER_BRIEF.md` PART 4;
+its open-question passage should gain a one-line "→ resolved, see D-19" pointer on a future MASTER_BRIEF edit (not
+taken here, to honor the docs-only single-doc scope).
+**Date captured:** 2026-06-25 · **Status:** CAPTURED doctrine. Layer 3 (opportunity cost) + the value-at-primary-work
+primitive + the JOB-like service object are net-new and DEFERRED — built when the services model is built; demo-seedable.
+
+---
+
 ## PERSONAL-FINANCIAL
 
 > Not in this file by design — see **`decisions/PERSONAL-FINANCIAL.local.md`** (gitignored).
