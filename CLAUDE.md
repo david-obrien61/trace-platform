@@ -325,7 +325,7 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 ### 2026-06-26 — THUNDER Story Board system: `user_stories.md` + `stories.html` (pure renderer) — second lens beside the Status Board (BUILDER-COMPLETE, owner-proof owed; ledger #56)
 
-**Type:** TWO standalone root files (beside `status.html` / `TRACE-SESSION-BOOTSTRAP.md`). **NO app code, NO schema, NO migration, NO `[TRACE:*]`** → schema-verification gate N/A. `npm run verify` exit 0 zero NET-NEW (standalone root files don't trip the gate, like `status.html`). Commit `__PENDING__`.
+**Type:** TWO standalone root files (beside `status.html` / `TRACE-SESSION-BOOTSTRAP.md`). **NO app code, NO schema, NO migration, NO `[TRACE:*]`** → schema-verification gate N/A. `npm run verify` exit 0 zero NET-NEW (standalone root files don't trip the gate, like `status.html`). Commit `29487f1`.
 
 **THE TWO BOARDS, ONE SYSTEM:** **`status.html` = what's BUILT** (capabilities, green/amber/red ← `TRACE-SESSION-BOOTSTRAP.md`). **`stories.html` = what we're BUILDING TOWARD** (day-in-the-life user need ← `user_stories.md`). They LINK by **capability id (`MAPS-TO`) + arc**, so a reader sees which capabilities have a story (vs build-blind) and which stories have no built pieces yet (gaps).
 
