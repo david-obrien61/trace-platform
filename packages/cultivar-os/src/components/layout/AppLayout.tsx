@@ -28,10 +28,14 @@ export function AppLayout() {
 
   return (
     <>
-      <AppHeader onSignOut={handleSignOut} />
-      <div className="appchrome">
-        <AppNav />
-        <Breadcrumb />
+      {/* Header + nav chrome are ONE sticky stack, so the nav pins WITH the banner and never
+          slides under it (the prior bug: two independent sticky siblings both at top:0). */}
+      <div className="appchrome-stack">
+        <AppHeader onSignOut={handleSignOut} />
+        <div className="appchrome">
+          <AppNav />
+          <Breadcrumb />
+        </div>
       </div>
       <Outlet />
     </>

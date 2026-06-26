@@ -150,13 +150,20 @@ img {
   100% { background-position: -200% 0; }
 }
 
-/* ── App chrome: nav-rail / hamburger + breadcrumb (Nav C2) ─────────────────────
-   One sticky bar under the identity header. Token-driven, no animations. Responsive
-   breakpoint = 768px (the platform's tile-grid breakpoint). */
-.appchrome {
+/* ── App chrome: hamburger nav + breadcrumb (Nav C2) ────────────────────────────
+   The identity header AND this chrome bar are wrapped in ONE sticky stack
+   (.appchrome-stack) so they pin together and the page scrolls beneath — the nav
+   can no longer slide UNDER the banner (the old bug: header and chrome were two
+   independent sticky siblings both pinned to top:0, so the lower-z chrome hid
+   behind the higher-z header). Token-driven, no animations. */
+.appchrome-stack {
   position: sticky;
   top: 0;
-  z-index: 15;
+  z-index: 20;
+  background: var(--white);
+}
+.appchrome {
+  position: relative; /* positioning context for the absolute drawer; NOT independently sticky */
   display: flex;
   align-items: center;
   gap: 12px;
@@ -166,9 +173,11 @@ img {
   font-family: system-ui, -apple-system, sans-serif;
 }
 
-/* Hamburger toggle — shown on narrow screens only */
+/* Hamburger toggle — ALWAYS visible (every width); opens the full nav tree. The deep
+   3-level structure (sections → surfaces → sub-pages) reads as a vertical tree, so the
+   hamburger drawer is the single nav surface on phone and desktop alike. */
 .appnav-toggle {
-  display: none;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   background: var(--sage-bg);
@@ -176,14 +185,6 @@ img {
   border-radius: 8px;
   padding: 6px 8px;
   color: var(--green-primary);
-  flex-shrink: 0;
-}
-
-/* Horizontal section rail — shown on wide screens */
-.appnav-rail {
-  display: flex;
-  align-items: center;
-  gap: 4px;
   flex-shrink: 0;
 }
 
@@ -222,7 +223,9 @@ img {
   position: absolute;
   top: 100%;
   left: 16px;
-  min-width: 180px;
+  min-width: 200px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
   background: var(--white);
   border: 1px solid var(--gray-200);
   border-radius: 10px;
@@ -258,8 +261,6 @@ img {
 .breadcrumb-mobile { display: none; }
 
 @media (max-width: 767px) {
-  .appnav-toggle { display: inline-flex; }
-  .appnav-rail   { display: none; }
   .breadcrumb-full   { display: none; }
   .breadcrumb-mobile { display: flex; align-items: center; gap: 4px; }
 }

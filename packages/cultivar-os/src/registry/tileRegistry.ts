@@ -330,7 +330,7 @@ export const NAV_IA: NavNode[] = [
   // ── Dashboard branch ──
   { key: 'nav_orders',          section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'qr_checkout' },
   { key: 'nav_delivery',        section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'delivery' },
-  { key: 'nav_delivery_route',  section: 'dashboard', parent: 'nav_delivery',        label: 'Route a day', route: '/deliveries', matchRoute: '/deliveries', required_permission: 'manage_deliveries' },
+  { key: 'nav_delivery_route',  section: 'dashboard', parent: 'nav_delivery',        label: 'Route', route: '/deliveries', matchRoute: '/deliveries', required_permission: 'manage_deliveries' },
   { key: 'nav_operating_costs', section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'operating_costs' },
   { key: 'nav_assets',          section: 'dashboard', parent: 'nav_operating_costs', tileKey: 'assets' },
   // /inventory is served by two tiles (manual + intake); the nav node owns the route once, label 'Inventory'.
