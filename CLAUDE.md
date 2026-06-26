@@ -325,7 +325,7 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 ### 2026-06-26 — THUNDER WALK-AND-COUNT inventory loop (cap 2.3): scan → resolve → qty → save → next → complete — RECONCILE DEFERRED (BUILDER-COMPLETE, owner-proof owed; ledger #54)
 
-**Type:** App code (2 new + 2 edited cultivar files) + 1 NEW dep (`jsqr`) + ONE GATED migration (WRITTEN, NOT applied) + docs. **NO auth, NO RLS on existing tables, NO schema change on existing tables** → schema-verification gate runs AFTER David applies the new migration. `[TRACE:*]` STAYS ON; new `[TRACE:COUNT]` emits ON. Commit `__PENDING__`. `npm run verify` exit 0 zero NET-NEW (tsc 10, eslint 266, knip 10/14/15); `build:cultivar` clean (2226 modules).
+**Type:** App code (2 new + 2 edited cultivar files) + 1 NEW dep (`jsqr`) + ONE GATED migration (WRITTEN, NOT applied) + docs. **NO auth, NO RLS on existing tables, NO schema change on existing tables** → schema-verification gate runs AFTER David applies the new migration. `[TRACE:*]` STAYS ON; new `[TRACE:COUNT]` emits ON. Commit `ea2ea14`. `npm run verify` exit 0 zero NET-NEW (tsc 10, eslint 266, knip 10/14/15); `build:cultivar` clean (2226 modules).
 
 **VERIFY-FIRST (two gates, homed permanently this time in `docs/decisions/walk-and-count-inventory-verify-first.md` — the prior recon's answers got lost):**
 - **GATE 1 (scan-to-resolve):** did NOT exist. Only `qrcode` GENERATION (`qr/generate.ts` → `${baseUrl}/plant/${id}`) + OS-camera scan-to-PROFILE-via-URL (`/plant/:tagId`→`PlantProfile`; `usePlant` resolves `cultivar_plants ilike tag_id` + `business_inventory` FK join). NO in-app decoder anywhere (no jsqr/zxing/BarcodeDetector). The URL-strip + in-app resolve is net-new.
