@@ -250,14 +250,22 @@ img {
   user-select: none;
 }
 
-/* Breadcrumb — full trail on desktop, single "‹ parent" on mobile */
+/* Breadcrumb — ONE trail (no separate desktop/mobile DOM variants). On narrow screens the row
+   scrolls horizontally instead of wrapping, so the full clickable trail is always reachable and
+   nothing can double-render. */
 .breadcrumb {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;          /* Firefox — no scrollbar chrome on the trail */
 }
+.breadcrumb::-webkit-scrollbar { display: none; }
+.breadcrumb-item { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .breadcrumb-seg {
   background: none;
   border: none;
@@ -266,17 +274,11 @@ img {
   font-weight: 600;
   color: var(--green-primary);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  cursor: pointer;
 }
-.breadcrumb-seg.is-current { color: var(--gray-600); font-weight: 700; }
+button.breadcrumb-seg:hover { text-decoration: underline; }
+.breadcrumb-seg.is-current { color: var(--gray-600); font-weight: 700; cursor: default; }
 .breadcrumb-sep { color: var(--gray-400); font-size: 0.75rem; flex-shrink: 0; }
-.breadcrumb-mobile { display: none; }
-
-@media (max-width: 767px) {
-  .breadcrumb-full   { display: none; }
-  .breadcrumb-mobile { display: flex; align-items: center; gap: 4px; }
-}
 
 /* Error state */
 .error-state {

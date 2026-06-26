@@ -222,7 +222,7 @@ export function CostToProduce() {
             <EmptyState
               title="Not configured yet"
               body="Add your recurring costs, labor, margin, and target customers in Settings → Cost-to-Produce. Once saved, this page computes your loaded cost and a suggested price."
-              cta={() => navigate('/settings')}
+              cta={() => navigate('/settings/all')}
             />
           </Card>
         )}
@@ -278,7 +278,7 @@ export function CostToProduce() {
 
             {/* Sensitivity */}
             <Card>
-              <SectionTitle onClick={() => navigate('/settings')}>Cost &amp; price by target customers (N)</SectionTitle>
+              <SectionTitle onClick={() => navigate('/settings/all')}>Cost &amp; price by target customers (N)</SectionTitle>
               {!result.confidence.computable ? (
                 <p style={{ fontSize: '0.875rem', color: AMBER, lineHeight: 1.5 }}>
                   Not enough confirmed cost to compute a price yet. Add at least one CONFIRMED or DERIVED
@@ -398,7 +398,7 @@ export function CostToProduce() {
               )}
             </Card>
 
-            <button onClick={() => navigate('/settings')} style={{ width: '100%', padding: '12px', borderRadius: 10, border: `1.5px solid ${GREEN}`, background: '#fff', color: GREEN, fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer' }}>
+            <button onClick={() => navigate('/settings/all')} style={{ width: '100%', padding: '12px', borderRadius: 10, border: `1.5px solid ${GREEN}`, background: '#fff', color: GREEN, fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer' }}>
               Tune costs in Settings →
             </button>
           </>

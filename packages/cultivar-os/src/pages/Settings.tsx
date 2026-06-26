@@ -589,11 +589,14 @@ export function Settings() {
   return (
     <SharedSettings
       section={section}
-      onMoreSettings={() => navigate('/settings')}
+      onMoreSettings={() => navigate('/settings/all')}
       accountingConnectUrl={accountingConnectUrl}
       onConnectAccounting={() => void qbConnect()}
       accountingConnecting={qbConnecting}
       accountingError={qbConnectError}
+      // Accounting has its own direct destination (/settings/accounting) + the Dashboard prompt,
+      // so the full page omits the redundant third copy (Item 4). Same useQboConnect hook drives all.
+      accountingHasOwnDestination
       verticalSection={verticalContent}
     />
   );

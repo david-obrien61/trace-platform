@@ -91,21 +91,21 @@ function daysUntilDue(asset: PMIAsset): number | null {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const S = {
-  page:     { minHeight: '100vh', background: '#020617', padding: '24px 16px', fontFamily: 'ui-sans-serif, system-ui, sans-serif', color: '#f1f5f9' },
-  card:     { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 14, padding: '16px 18px', marginBottom: 10 },
-  label:    { fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' as const, letterSpacing: '0.08em' },
-  input:    { width: '100%', boxSizing: 'border-box' as const, padding: '11px 13px', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none' },
-  btnGreen: { padding: '13px 18px', borderRadius: 10, border: 'none', background: '#22c55e', color: '#fff', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer' },
+  page:     { minHeight: '100vh', background: '#EAF3DE', padding: '24px 16px', fontFamily: 'ui-sans-serif, system-ui, sans-serif', color: '#111827' },
+  card:     { background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', marginBottom: 10 },
+  label:    { fontSize: '0.7rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.08em' },
+  input:    { width: '100%', boxSizing: 'border-box' as const, padding: '11px 13px', background: '#ffffff', border: '1px solid #d1d5db', borderRadius: 8, color: '#111827', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none' },
+  btnGreen: { padding: '13px 18px', borderRadius: 10, border: 'none', background: '#27500A', color: '#fff', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer' },
   btnBlue:  { padding: '10px 16px', borderRadius: 10, border: 'none', background: '#2563eb', color: '#fff', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' },
-  btnGhost: { background: 'none', border: '1px solid #334155', color: '#94a3b8', borderRadius: 8, padding: '8px 14px', fontSize: '0.8rem', cursor: 'pointer' },
+  btnGhost: { background: 'none', border: '1px solid #d1d5db', color: '#6b7280', borderRadius: 8, padding: '8px 14px', fontSize: '0.8rem', cursor: 'pointer' },
   row:      { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
 };
 
 const STATUS_STYLE: Record<PMIStatus, { background: string; color: string; label: string }> = {
-  OVERDUE:  { background: '#450a0a', color: '#fca5a5', label: 'PMI OVERDUE' },
-  DUE_SOON: { background: '#451a03', color: '#fdba74', label: 'DUE SOON' },
-  OK:       { background: '#052e16', color: '#86efac', label: 'PMI OK' },
-  NONE:     { background: '#1e293b', color: '#64748b', label: 'NO SCHEDULE' },
+  OVERDUE:  { background: '#fef2f2', color: '#b91c1c', label: 'PMI OVERDUE' },
+  DUE_SOON: { background: '#fffbeb', color: '#b45309', label: 'DUE SOON' },
+  OK:       { background: '#f0fdf4', color: '#166534', label: 'PMI OK' },
+  NONE:     { background: '#f3f4f6', color: '#6b7280', label: 'NO SCHEDULE' },
 };
 
 const RESULT_STYLE: Record<InspectionResult, { bg: string; border: string; label: string }> = {
@@ -457,36 +457,36 @@ export function PMI({
 
         {/* Asset info card */}
         <div style={S.card}>
-          <p style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f1f5f9', marginBottom: 4 }}>{selected.name}</p>
+          <p style={{ fontSize: '1.1rem', fontWeight: 800, color: '#111827', marginBottom: 4 }}>{selected.name}</p>
           {(selected.make || selected.model || selected.year) && (
-            <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: 8 }}>
+            <p style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: 8 }}>
               {[selected.year, selected.make, selected.model].filter(Boolean).join(' ')}
             </p>
           )}
           {selected.serial_number && (
-            <p style={{ fontSize: '0.75rem', color: '#475569', marginBottom: 4 }}>SN: {selected.serial_number}</p>
+            <p style={{ fontSize: '0.75rem', color: '#9ca3af', marginBottom: 4 }}>SN: {selected.serial_number}</p>
           )}
           {selected.barcode_id && (
-            <p style={{ fontSize: '0.75rem', color: '#475569', marginBottom: 8 }}>Barcode: {selected.barcode_id}</p>
+            <p style={{ fontSize: '0.75rem', color: '#9ca3af', marginBottom: 8 }}>Barcode: {selected.barcode_id}</p>
           )}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, marginTop: 8 }}>
             <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '4px 10px', borderRadius: 6, background: ss.background, color: ss.color }}>
               {ss.label}
             </span>
             {due !== null && (
-              <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '4px 10px', borderRadius: 6, background: '#0f172a', color: '#94a3b8', border: '1px solid #1e293b' }}>
+              <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '4px 10px', borderRadius: 6, background: '#f9fafb', color: '#6b7280', border: '1px solid #e5e7eb' }}>
                 {due > 0 ? `Due in ${due}d` : `${Math.abs(due)}d overdue`}
               </span>
             )}
           </div>
           {selected.pmi_interval_days && (
-            <p style={{ fontSize: '0.75rem', color: '#475569', marginTop: 10 }}>
+            <p style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: 10 }}>
               Service every {selected.pmi_interval_days} days
               {selected.last_service_at && ` · Last: ${new Date(selected.last_service_at).toLocaleDateString()}`}
             </p>
           )}
           {selected.notes && (
-            <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 10, padding: '10px 12px', background: '#020617', borderRadius: 8 }}>{selected.notes}</p>
+            <p style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: 10, padding: '10px 12px', background: '#f9fafb', borderRadius: 8 }}>{selected.notes}</p>
           )}
         </div>
 
@@ -502,12 +502,12 @@ export function PMI({
               {aiLoading ? 'Thinking…' : '✦ Suggest Schedule'}
             </button>
           </div>
-          {aiError && <p style={{ color: '#f87171', fontSize: '0.75rem', marginBottom: 8 }}>{aiError}</p>}
+          {aiError && <p style={{ color: '#b91c1c', fontSize: '0.75rem', marginBottom: 8 }}>{aiError}</p>}
 
           {/* PREVIEW → ACCEPT gate — review the AI suggestion before anything is written */}
           {preview && (
-            <div style={{ marginTop: 8, marginBottom: 12, padding: '12px 14px', background: '#020617', border: '1px solid #1d4ed8', borderRadius: 10 }}>
-              <p style={{ fontSize: '0.72rem', fontWeight: 700, color: '#93c5fd', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 10 }}>
+            <div style={{ marginTop: 8, marginBottom: 12, padding: '12px 14px', background: '#f9fafb', border: '1px solid #1d4ed8', borderRadius: 10 }}>
+              <p style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 10 }}>
                 Review suggested schedule
               </p>
 
@@ -517,13 +517,13 @@ export function PMI({
                   const usageBased = isUsageBasedInterval(task.interval);
                   const noDueDate  = preview.unconvertible.some(u => u === task || (u.name === task.name && u.interval === task.interval));
                   return (
-                    <div key={i} style={{ background: '#0f172a', padding: '8px 12px', borderRadius: 8, border: '1px solid #1e293b' }}>
+                    <div key={i} style={{ background: '#ffffff', padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <p style={{ fontSize: '0.82rem', color: '#e2e8f0', margin: 0 }}>{task.name}</p>
-                        <p style={{ fontSize: '0.72rem', color: '#475569', margin: 0, textTransform: 'uppercase' as const }}>{task.interval}</p>
+                        <p style={{ fontSize: '0.82rem', color: '#111827', margin: 0 }}>{task.name}</p>
+                        <p style={{ fontSize: '0.72rem', color: '#9ca3af', margin: 0, textTransform: 'uppercase' as const }}>{task.interval}</p>
                       </div>
                       {noDueDate && (
-                        <p style={{ fontSize: '0.68rem', color: '#fdba74', margin: '4px 0 0' }}>
+                        <p style={{ fontSize: '0.68rem', color: '#b45309', margin: '4px 0 0' }}>
                           {usageBased ? 'usage-based' : 'non-standard interval'} — no automatic due date
                         </p>
                       )}
@@ -542,7 +542,7 @@ export function PMI({
                 value={previewInterval}
                 onChange={e => setPreviewInterval(e.target.value)}
               />
-              <p style={{ fontSize: '0.68rem', color: '#64748b', margin: '6px 0 0' }}>
+              <p style={{ fontSize: '0.68rem', color: '#6b7280', margin: '6px 0 0' }}>
                 {previewInterval.trim()
                   ? `Once accepted, this asset goes OVERDUE ${previewInterval} days after its last service.`
                   : 'No cadence could be derived (all tasks usage-based). Enter a day cadence to get a due date, or accept without one.'}
@@ -562,13 +562,13 @@ export function PMI({
           )}
 
           {selected.tasks.length === 0 ? (
-            <p style={{ color: '#334155', fontSize: '0.8rem', marginTop: 8 }}>No tasks — click "Suggest Schedule" to generate with AI.</p>
+            <p style={{ color: '#9ca3af', fontSize: '0.8rem', marginTop: 8 }}>No tasks — click "Suggest Schedule" to generate with AI.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 6, marginTop: 4 }}>
               {selected.tasks.map((task, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', background: '#020617', padding: '8px 12px', borderRadius: 8 }}>
-                  <p style={{ fontSize: '0.82rem', color: '#e2e8f0', margin: 0 }}>{task.name}</p>
-                  <p style={{ fontSize: '0.72rem', color: '#475569', margin: 0, textTransform: 'uppercase' as const }}>{task.interval}</p>
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', background: '#f9fafb', padding: '8px 12px', borderRadius: 8 }}>
+                  <p style={{ fontSize: '0.82rem', color: '#111827', margin: 0 }}>{task.name}</p>
+                  <p style={{ fontSize: '0.72rem', color: '#9ca3af', margin: 0, textTransform: 'uppercase' as const }}>{task.interval}</p>
                 </div>
               ))}
             </div>
@@ -578,7 +578,7 @@ export function PMI({
         {/* Log service form */}
         {showLog && (
           <form onSubmit={handleLogService} style={{ ...S.card, display: 'flex', flexDirection: 'column' as const, gap: 12, marginBottom: 16 }}>
-            <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#22c55e', marginBottom: 4 }}>LOG SERVICE</p>
+            <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#27500A', marginBottom: 4 }}>LOG SERVICE</p>
 
             <div>
               <p style={S.label}>Service type *</p>
@@ -608,9 +608,9 @@ export function PMI({
                       style={{
                         flex: 1, padding: '8px 4px', borderRadius: 8,
                         fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase' as const,
-                        border: active ? `1px solid ${rs.border}` : '1px solid #334155',
-                        background: active ? rs.bg : '#1e293b',
-                        color: active ? '#fff' : '#64748b',
+                        border: active ? `1px solid ${rs.border}` : '1px solid #d1d5db',
+                        background: active ? rs.bg : '#f3f4f6',
+                        color: active ? '#fff' : '#6b7280',
                         cursor: 'pointer',
                       }}
                     >
@@ -632,18 +632,18 @@ export function PMI({
                       onClick={() => setLogTasks(prev => prev.map((t, idx) => idx === i ? { ...t, passed: !t.passed } : t))}
                       style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        background: '#020617', padding: '10px 12px', borderRadius: 8,
-                        border: '1px solid #1e293b', cursor: 'pointer',
+                        background: '#f9fafb', padding: '10px 12px', borderRadius: 8,
+                        border: '1px solid #e5e7eb', cursor: 'pointer',
                       }}
                     >
                       <div>
-                        <p style={{ fontSize: '0.82rem', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>{task.name}</p>
-                        <p style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase' as const, margin: 0 }}>{task.interval}</p>
+                        <p style={{ fontSize: '0.82rem', fontWeight: 700, color: '#111827', margin: 0 }}>{task.name}</p>
+                        <p style={{ fontSize: '0.68rem', color: '#6b7280', textTransform: 'uppercase' as const, margin: 0 }}>{task.interval}</p>
                       </div>
                       <div style={{
                         width: 20, height: 20, borderRadius: '50%',
-                        border: task.passed ? '2px solid #6ee7b7' : '2px solid #475569',
-                        background: task.passed ? '#10b981' : '#334155',
+                        border: task.passed ? '2px solid #6ee7b7' : '2px solid #d1d5db',
+                        background: task.passed ? '#10b981' : '#d1d5db',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                       }}>
                         {task.passed && <span style={{ color: '#fff', fontSize: '0.6rem', fontWeight: 900 }}>✓</span>}
@@ -681,31 +681,31 @@ export function PMI({
           </form>
         )}
 
-        {error && <p style={{ color: '#f87171', fontSize: '0.8rem', marginBottom: 12 }}>{error}</p>}
+        {error && <p style={{ color: '#b91c1c', fontSize: '0.8rem', marginBottom: 12 }}>{error}</p>}
 
         {/* Service history */}
         <p style={{ ...S.label, marginBottom: 10 }}>Service History</p>
         {logsLoading ? (
-          <p style={{ color: '#475569', fontSize: '0.8rem' }}>Loading…</p>
+          <p style={{ color: '#9ca3af', fontSize: '0.8rem' }}>Loading…</p>
         ) : logs.length === 0 ? (
-          <p style={{ color: '#334155', fontSize: '0.8rem', textAlign: 'center' as const, padding: '24px 0' }}>No service logged yet</p>
+          <p style={{ color: '#9ca3af', fontSize: '0.8rem', textAlign: 'center' as const, padding: '24px 0' }}>No service logged yet</p>
         ) : (
           logs.map(log => {
             const rs = log.result ? RESULT_STYLE[log.result as InspectionResult] : null;
             return (
               <div key={log.id} style={{ ...S.card, marginBottom: 8 }}>
                 <div style={S.row}>
-                  <p style={{ fontWeight: 700, fontSize: '0.875rem', color: '#f1f5f9' }}>{log.service_type}</p>
-                  <p style={{ fontSize: '0.75rem', color: '#475569' }}>{new Date(log.performed_at).toLocaleDateString()}</p>
+                  <p style={{ fontWeight: 700, fontSize: '0.875rem', color: '#111827' }}>{log.service_type}</p>
+                  <p style={{ fontSize: '0.75rem', color: '#9ca3af' }}>{new Date(log.performed_at).toLocaleDateString()}</p>
                 </div>
                 {rs && (
                   <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '3px 8px', borderRadius: 5, background: rs.bg, color: '#fff', display: 'inline-block', marginTop: 4 }}>
                     {rs.label}
                   </span>
                 )}
-                {log.performed_by && <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>By: {log.performed_by}</p>}
-                {log.cost != null && <p style={{ fontSize: '0.75rem', color: '#64748b' }}>Cost: ${Number(log.cost).toFixed(2)}</p>}
-                {log.notes && <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 6 }}>{log.notes}</p>}
+                {log.performed_by && <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: 4 }}>By: {log.performed_by}</p>}
+                {log.cost != null && <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>Cost: ${Number(log.cost).toFixed(2)}</p>}
+                {log.notes && <p style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: 6 }}>{log.notes}</p>}
               </div>
             );
           })
@@ -723,25 +723,25 @@ export function PMI({
     <div style={S.page}>
       <div style={{ ...S.row, marginBottom: 4 }}>
         <div>
-          <p style={{ fontSize: '0.65rem', fontWeight: 700, color: '#22c55e', letterSpacing: '0.15em', textTransform: 'uppercase' as const }}>PMI</p>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 900, color: '#f1f5f9', margin: 0 }}>{assetLabel} Registry</h1>
+          <p style={{ fontSize: '0.65rem', fontWeight: 700, color: '#27500A', letterSpacing: '0.15em', textTransform: 'uppercase' as const }}>PMI</p>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 900, color: '#111827', margin: 0 }}>{assetLabel} Registry</h1>
         </div>
         <button style={S.btnGreen} onClick={() => setShowAdd(s => !s)}>+ Add</button>
       </div>
 
       {(overdue > 0 || dueSoon > 0) && (
         <div style={{ display: 'flex', gap: 8, margin: '16px 0' }}>
-          {overdue > 0  && <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '6px 12px', borderRadius: 8, background: '#450a0a', color: '#fca5a5' }}>{overdue} OVERDUE</span>}
-          {dueSoon > 0 && <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '6px 12px', borderRadius: 8, background: '#451a03', color: '#fdba74' }}>{dueSoon} DUE SOON</span>}
+          {overdue > 0  && <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '6px 12px', borderRadius: 8, background: '#fef2f2', color: '#b91c1c' }}>{overdue} OVERDUE</span>}
+          {dueSoon > 0 && <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '6px 12px', borderRadius: 8, background: '#fffbeb', color: '#b45309' }}>{dueSoon} DUE SOON</span>}
         </div>
       )}
 
-      {error && <p style={{ color: '#f87171', fontSize: '0.8rem', marginBottom: 12 }}>{error}</p>}
+      {error && <p style={{ color: '#b91c1c', fontSize: '0.8rem', marginBottom: 12 }}>{error}</p>}
 
       {/* Add form */}
       {showAdd && (
         <form onSubmit={handleAddAsset} style={{ ...S.card, display: 'flex', flexDirection: 'column' as const, gap: 12, marginBottom: 20 }}>
-          <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#22c55e', marginBottom: 4 }}>NEW {assetLabel.toUpperCase()}</p>
+          <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#27500A', marginBottom: 4 }}>NEW {assetLabel.toUpperCase()}</p>
           <div>
             <p style={S.label}>Name *</p>
             <input style={S.input} placeholder="e.g. John Deere 5075E" value={assetForm.name} onChange={e => setAssetForm(p => ({ ...p, name: e.target.value }))} autoFocus required />
@@ -794,9 +794,9 @@ export function PMI({
 
       {/* Asset list */}
       {loading ? (
-        <p style={{ color: '#475569', fontSize: '0.8rem', textAlign: 'center' as const, padding: '40px 0' }}>Loading…</p>
+        <p style={{ color: '#9ca3af', fontSize: '0.8rem', textAlign: 'center' as const, padding: '40px 0' }}>Loading…</p>
       ) : assets.length === 0 && !showAdd ? (
-        <div style={{ textAlign: 'center' as const, padding: '60px 0', color: '#334155' }}>
+        <div style={{ textAlign: 'center' as const, padding: '60px 0', color: '#9ca3af' }}>
           <p style={{ fontSize: '2rem', marginBottom: 8 }}>🔧</p>
           <p style={{ fontWeight: 700, fontSize: '0.875rem' }}>No {assetLabel.toLowerCase()}s registered</p>
           <p style={{ fontSize: '0.8rem', marginTop: 4 }}>Add your first {assetLabel.toLowerCase()} to start tracking maintenance.</p>
@@ -809,17 +809,17 @@ export function PMI({
           return (
             <div
               key={asset.id}
-              style={{ ...S.card, cursor: 'pointer', borderColor: st === 'OVERDUE' ? '#7f1d1d' : st === 'DUE_SOON' ? '#7c2d12' : '#1e293b' }}
+              style={{ ...S.card, cursor: 'pointer', borderColor: st === 'OVERDUE' ? '#fecaca' : st === 'DUE_SOON' ? '#fde68a' : '#e5e7eb' }}
               onClick={() => { setSelected(asset); setShowLog(false); discardPreview(); setAiError(''); }}
             >
               <div style={S.row}>
                 <div>
-                  <p style={{ fontWeight: 700, fontSize: '0.95rem', color: '#f1f5f9', marginBottom: 2 }}>{asset.name}</p>
+                  <p style={{ fontWeight: 700, fontSize: '0.95rem', color: '#111827', marginBottom: 2 }}>{asset.name}</p>
                   {(asset.make || asset.model || asset.year) && (
-                    <p style={{ fontSize: '0.8rem', color: '#64748b' }}>{[asset.year, asset.make, asset.model].filter(Boolean).join(' ')}</p>
+                    <p style={{ fontSize: '0.8rem', color: '#6b7280' }}>{[asset.year, asset.make, asset.model].filter(Boolean).join(' ')}</p>
                   )}
                   {asset.barcode_id && (
-                    <p style={{ fontSize: '0.7rem', color: '#334155', marginTop: 2 }}>Barcode: {asset.barcode_id}</p>
+                    <p style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: 2 }}>Barcode: {asset.barcode_id}</p>
                   )}
                 </div>
                 <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '4px 10px', borderRadius: 6, background: ss.background, color: ss.color, whiteSpace: 'nowrap' as const }}>
@@ -827,14 +827,14 @@ export function PMI({
                 </span>
               </div>
               {asset.pmi_interval_days && (
-                <p style={{ fontSize: '0.75rem', color: '#475569', marginTop: 8 }}>
+                <p style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: 8 }}>
                   Every {asset.pmi_interval_days}d
                   {due !== null && ` · ${due > 0 ? `${due}d until due` : `${Math.abs(due)}d overdue`}`}
                   {asset.last_service_at && ` · Last: ${new Date(asset.last_service_at).toLocaleDateString()}`}
                 </p>
               )}
               {asset.tasks.length > 0 && (
-                <p style={{ fontSize: '0.7rem', color: '#334155', marginTop: 4 }}>{asset.tasks.length} task{asset.tasks.length !== 1 ? 's' : ''} scheduled</p>
+                <p style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: 4 }}>{asset.tasks.length} task{asset.tasks.length !== 1 ? 's' : ''} scheduled</p>
               )}
             </div>
           );

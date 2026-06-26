@@ -16,8 +16,10 @@ const inputStyle: React.CSSProperties = {
 };
 
 // Collapsible card. Each card owns its OWN open state (RULE 2b, ledger #50): toggling one NEVER
-// closes another — no shared accordion, multiple open at once, owner may expand everything. Default
-// open, so the initial appearance is unchanged for every existing caller.
+// closes another — no shared accordion, multiple open at once, owner may expand everything (free
+// expand/collapse, D-21). The collapse control is a CLEARLY VISIBLE, operable pill — not a faint
+// decorative glyph (the prior ▾ was a 0.7rem gray char that read as static, so the page felt like
+// an un-collapsible scroll wall). `defaultOpen` keeps the initial appearance for existing callers.
 function SectionCard({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -38,7 +40,20 @@ function SectionCard({ title, children, defaultOpen = true }: { title: string; c
         }}>
           {title}
         </span>
-        <span style={{ color: '#9ca3af', fontSize: '0.7rem', flexShrink: 0 }} aria-hidden="true">{open ? '▾' : '▸'}</span>
+        {/* Visible, operable toggle — a bordered pill with a label + chevron, so it plainly reads
+            as a clickable collapse control. */}
+        <span
+          aria-hidden="true"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
+            fontSize: '0.6875rem', fontWeight: 700, color: GREEN,
+            border: `1px solid ${GREEN}`, borderRadius: 999, padding: '3px 9px',
+            background: '#f0f7e8', textTransform: 'uppercase', letterSpacing: '0.04em',
+          }}
+        >
+          {open ? 'Hide' : 'Show'}
+          <span style={{ fontSize: '0.6rem' }}>{open ? '▾' : '▸'}</span>
+        </span>
       </button>
       {open && children}
     </div>
@@ -118,6 +133,12 @@ interface SettingsProps {
   // ledger #50) — Business Profile or Accounting reached straight from the menu, no long scroll.
   // Undefined (default) → render the full page (UNCHANGED for every existing caller, incl. Ignition).
   section?: 'business' | 'accounting';
+  // When true, the Accounting card is NOT rendered on the full page — the host already exposes the
+  // SAME connect action elsewhere (its own /settings/accounting destination + the Dashboard prompt),
+  // so a third copy on the full page is redundant (Item 4). Default false → unchanged for any host
+  // that doesn't have a dedicated accounting destination. The underlying logic is one hook either
+  // way (onConnectAccounting / useQboConnect); this only drops the duplicate surface.
+  accountingHasOwnDestination?: boolean;
   // Footer link to the full settings page (the leftover sections — Services / vertical). Shown
   // ONLY on a section-isolated view, so nothing on the full page is orphaned.
   onMoreSettings?: () => void;
@@ -126,7 +147,7 @@ interface SettingsProps {
 export function Settings({
   onBack, verticalSection, accountingConnectUrl,
   onConnectAccounting, accountingConnecting, accountingError,
-  section, onMoreSettings,
+  section, onMoreSettings, accountingHasOwnDestination = false,
 }: SettingsProps) {
   // `full` = the unfiltered page (all sections + vertical). A section filter renders just one card.
   const full = !section;
@@ -383,8 +404,10 @@ export function Settings({
         </SectionCard>
         )}
 
-        {/* ── Accounting ── (full page OR the isolated /settings/accounting destination) */}
-        {(full || section === 'accounting') && (
+        {/* ── Accounting ── (the isolated /settings/accounting destination always; on the full page
+            only when the host has no dedicated accounting destination — Item 4: one connect action,
+            no redundant third card). */}
+        {(section === 'accounting' || (full && !accountingHasOwnDestination)) && (
         <SectionCard title="Accounting">
           {accountingConnected ? (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

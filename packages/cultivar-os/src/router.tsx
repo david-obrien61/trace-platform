@@ -34,6 +34,8 @@ import { OperatingCosts }    from './pages/OperatingCosts';
 import PMI                   from './pages/PMI';
 import { RoleConfig }        from './pages/RoleConfig';
 import { Profile }            from './pages/Profile';
+import { AdminIndex }         from './pages/AdminIndex';
+import { SettingsIndex }      from './pages/SettingsIndex';
 import { AcceptInvite }      from '@trace/shared/auth';
 import { auth }              from './lib/auth';
 
@@ -76,9 +78,12 @@ export function AppRouter() {
           <Route path="/deliveries"   element={<DeliveryRoute />} />
           <Route path="/delivery-schedule" element={<DeliverySchedule />} />
           <Route path="/social/setup" element={<SocialSetup />} />
-          <Route path="/settings"          element={<Settings />} />
+          {/* Settings lands on a SHORT index (user-level), NOT the business-settings wall (D-21). */}
+          <Route path="/settings"          element={<SettingsIndex />} />
           {/* Section-isolated Settings destinations (RULE 2a) — /settings/business, /settings/accounting
-              land on JUST that section, full screen, no long scroll. Same component, section-filtered. */}
+              land on JUST that section, full screen, no long scroll. /settings/all renders the FULL
+              business-settings page (Services/Team/cost config) as a deliberate destination reached
+              from the Settings index, not the default landing. Same component, section-filtered. */}
           <Route path="/settings/:section" element={<Settings />} />
           <Route path="/onboarding"        element={<OnboardingWizard />} />
           <Route path="/campaigns"         element={<Campaigns />} />
@@ -92,6 +97,9 @@ export function AppRouter() {
               page also writes only tenant role rows (RLS owner-only). */}
           <Route element={<PermissionRoute permission={PERMISSIONS.MANAGE_SETTINGS} />}>
             <Route path="/roles"           element={<RoleConfig />} />
+            {/* Admin landing index — business administration. Gated to manage_settings (owner
+                short-circuits); each card on the page additionally respects its own permission. */}
+            <Route path="/admin"           element={<AdminIndex />} />
           </Route>
 
           {/* COST-ANALYSIS surfaces — require view_costs (decision 2026-06-21, Phase 3/4).

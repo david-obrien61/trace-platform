@@ -322,14 +322,15 @@ export interface NavNode {
 export const NAV_IA: NavNode[] = [
   // ── Top-level sections (the hamburger / nav-rail) ──
   { key: 'sec_dashboard', section: 'dashboard', parent: null, label: 'Dashboard', route: '/dashboard', required_permission: 'view_dashboard' },
-  // SETTINGS = USER-level (what a person changes about THEMSELVES). A non-linking header (route:null)
-  // shown to EVERY authenticated user (view_dashboard); its child is Your Profile. Nothing business-
-  // level lives here — business administration is the Admin section (see RULE 1, ledger #50).
-  { key: 'sec_settings',  section: 'settings',  parent: null, label: 'Settings',  route: null, required_permission: 'view_dashboard' },
-  // ADMIN = BUSINESS-ENTITY administration (business-level config). A non-linking header (route:null);
-  // shown iff the session can see ≥1 admin child (all admin children are owner/manage_settings-scoped,
-  // so Staff never sees Admin).
-  { key: 'sec_admin',     section: 'admin',     parent: null, label: 'Admin',     route: null },
+  // SETTINGS = USER-level (what a person changes about THEMSELVES). NOW a real destination: clicking
+  // it lands on a SHORT index (/settings → SettingsIndex), NOT the long business-settings wall
+  // (direct-access over scroll, D-21). Shown to EVERY authenticated user (view_dashboard); its child
+  // is Your Profile. Business administration lives in the Admin section (RULE 1, ledger #50).
+  { key: 'sec_settings',  section: 'settings',  parent: null, label: 'Settings',  route: '/settings', required_permission: 'view_dashboard' },
+  // ADMIN = BUSINESS-ENTITY administration (business-level config). NOW a clickable destination
+  // (/admin → AdminIndex, a section index), gated to manage_settings so Staff never sees it (its
+  // children are all owner/manage_settings-scoped anyway). Owner short-circuits manage_settings.
+  { key: 'sec_admin',     section: 'admin',     parent: null, label: 'Admin',     route: '/admin', required_permission: 'manage_settings' },
 
   // ── Dashboard branch ──
   { key: 'nav_orders',          section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'qr_checkout' },
@@ -359,6 +360,11 @@ export const NAV_IA: NavNode[] = [
   // authenticated role (incl. STAFF — every person can edit their own profile). Breadcrumb:
   // Settings / Your Profile. (Roles & Permissions MOVED to Admin — it is business-level, ledger #50.)
   { key: 'nav_profile',         section: 'settings',  parent: 'sec_settings',        label: 'Your Profile', route: '/profile', required_permission: 'view_dashboard' },
+  // The full business-settings page (Services / Team / tax rate / install price / cost config) is no
+  // longer the default Settings landing — it is a deliberate destination reached from the Settings
+  // index. Declared here so it still gets a breadcrumb ("Settings / All settings"); EXCLUDED from the
+  // nav drawer (NAV_EXCLUDE in AppNav) so it doesn't clutter the menu — same pattern as nav_help.
+  { key: 'nav_all_settings',    section: 'settings',  parent: 'sec_settings',        label: 'All settings', route: '/settings/all', matchRoute: '/settings/all', required_permission: 'manage_settings' },
 
   // ── Admin branch (BUSINESS administration) — each a DIRECT menu destination (RULE 2a) ──
   // Business Profile + Accounting are section-isolated views of the /settings page (/settings/:section)

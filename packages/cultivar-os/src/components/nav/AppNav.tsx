@@ -33,7 +33,9 @@ import {
 
 // Help is reachable from the header account menu; keep it out of the structural nav so it doesn't
 // duplicate a surface that already has a home (the duplicate-nav class we removed for Settings).
-const NAV_EXCLUDE = new Set(['nav_help']);
+// nav_all_settings (the full business-settings page) is reached from the Settings index, not the
+// drawer — declared in the IA only for its breadcrumb, excluded here to keep the menu lean.
+const NAV_EXCLUDE = new Set(['nav_help', 'nav_all_settings']);
 
 export function AppNav() {
   const navigate = useNavigate();

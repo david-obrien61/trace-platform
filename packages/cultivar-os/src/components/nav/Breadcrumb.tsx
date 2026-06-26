@@ -7,8 +7,13 @@
  *               previously had NO back nav (PMI, /roles) — gets a consistent breadcrumb.
  * DEPENDENCIES: tileRegistry.breadcrumbForPath() — the ONE IA source (no per-page path literals);
  *               react-router useLocation/useNavigate.
- * OUTPUTS:      A breadcrumb trail. Full path on desktop; collapsed to a single "‹ parent" link on
- *               narrow screens (CSS-driven via .breadcrumb-full / .breadcrumb-mobile in globals.css).
+ * OUTPUTS:      ONE breadcrumb trail, root → current. Ancestor segments are clickable links;
+ *               the current page is plain (non-link) text. On narrow screens the single row
+ *               scrolls horizontally rather than wrapping — there is no separate "mobile" DOM
+ *               variant, which is what previously double-rendered (an inline display:flex on the
+ *               desktop span defeated the responsive display:none, so the collapsed "‹ parent"
+ *               span appeared ALONGSIDE the full trail → garbled "X / Y ‹ Z" strings + duplicate
+ *               leaf segment). One render, one source → that whole bug class is gone.
  *               Renders nothing when no IA node matches (public/auth surfaces never mount this).
  * INSTRUMENTATION (STD-003): [TRACE:NAV] breadcrumb — ON by default (standing owner instruction).
  */
@@ -28,42 +33,28 @@ export function Breadcrumb() {
     trail: crumbs.map((c) => c.label).join(' / '),
   });
 
-  // Mobile collapse: the immediate ancestor (the "up" target). Absent for a section root.
-  const parent = crumbs.length >= 2 ? crumbs[crumbs.length - 2] : null;
-
+  // ONE trail. Ancestors (route present) link; the current leaf is plain text. No second
+  // "mobile" span — the row scrolls horizontally on narrow screens (CSS), so there is no way
+  // for a collapsed variant to render at the same time as the full trail.
   return (
     <nav className="breadcrumb" aria-label="Breadcrumb">
-      {/* Desktop — full trail. Ancestors link; current is plain text. */}
-      <span className="breadcrumb-full" style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-        {crumbs.map((c, i) => (
-          <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-            {i > 0 && <span className="breadcrumb-sep">/</span>}
-            {c.route ? (
-              <button
-                className="breadcrumb-seg"
-                onClick={() => navigate(c.route!)}
-              >
-                {c.label}
-              </button>
-            ) : (
-              <span className={`breadcrumb-seg${c.current ? ' is-current' : ''}`} aria-current={c.current ? 'page' : undefined}>
-                {c.label}
-              </span>
-            )}
-          </span>
-        ))}
-      </span>
-
-      {/* Mobile — collapse to "‹ parent" (the up target). Section roots show just the label. */}
-      <span className="breadcrumb-mobile">
-        {parent && parent.route ? (
-          <button className="breadcrumb-seg" onClick={() => navigate(parent.route!)}>
-            ‹ {parent.label}
-          </button>
-        ) : (
-          <span className="breadcrumb-seg is-current">{crumbs[crumbs.length - 1].label}</span>
-        )}
-      </span>
+      {crumbs.map((c, i) => (
+        <span key={i} className="breadcrumb-item">
+          {i > 0 && <span className="breadcrumb-sep" aria-hidden="true">/</span>}
+          {c.route && !c.current ? (
+            <button className="breadcrumb-seg" onClick={() => navigate(c.route!)}>
+              {c.label}
+            </button>
+          ) : (
+            <span
+              className={`breadcrumb-seg${c.current ? ' is-current' : ''}`}
+              aria-current={c.current ? 'page' : undefined}
+            >
+              {c.label}
+            </span>
+          )}
+        </span>
+      ))}
     </nav>
   );
 }

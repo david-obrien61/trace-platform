@@ -445,7 +445,7 @@ export function Dashboard() {
               </p>
             </div>
             <button
-              onClick={() => navigate('/settings')}
+              onClick={() => navigate('/settings/business')}
               style={{
                 background: '#f59e0b', border: 'none', borderRadius: 8,
                 padding: '8px 14px', color: '#fff', fontWeight: 700,
