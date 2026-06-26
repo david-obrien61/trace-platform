@@ -7,7 +7,7 @@
 <!--
   PURE RENDERER. Holds ZERO status data of its own.
   The ONLY source of truth is TRACE-SESSION-BOOTSTRAP.md (its ⚡ ACTIVE STATUS,
-  📋 24-CAPABILITY BOARD, and §A DONE/ARCHIVED sections). This file PARSES that
+  📋 24-CAPABILITY BOARD, 🧵 ARC MAP, and §A DONE/ARCHIVED sections). This file PARSES that
   markdown at open-time and renders it — it never duplicates or hardcodes statuses.
   Delete the .md and this shows "no data", never a stale board.
   Open: double-click → "Open TRACE-SESSION-BOOTSTRAP.md" (or drag-drop it).
@@ -70,9 +70,23 @@
   code{background:#f1f3ee;border-radius:4px;padding:.5px 4px;font-size:.85em;
     font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
   /* archived */
-  .archived{margin-top:30px;opacity:.7}
+  .archived{margin-top:8px;opacity:.7}
   .archived summary{cursor:pointer;font-weight:700;color:var(--muted);font-size:.82rem}
   .archived .card{filter:grayscale(.4)}
+  /* arcs */
+  .arcgrid{display:grid;grid-template-columns:1fr;gap:10px}
+  .arc .name{font-size:.95rem}
+  .dot.sm{width:8px;height:8px}
+  .spine{display:flex;flex-wrap:wrap;align-items:center;gap:5px 6px;margin:8px 0 2px}
+  .pc{display:inline-flex;align-items:center;gap:4px;font-size:.75rem;
+    background:#f6f8f3;border:1px solid var(--line);border-radius:7px;padding:2px 7px;color:var(--ink)}
+  .pc .dot{margin:0}
+  .arw{color:var(--muted);font-size:.82rem}
+  .arcstat{font-size:.8rem;color:var(--ink);margin-top:7px;line-height:1.45}
+  .lm{margin-top:8px;font-size:.74rem;line-height:1.4;border-radius:7px;padding:5px 9px}
+  .lm-crit{background:#fee2e2;color:#991b1b;border-left:4px solid var(--red)}
+  .lm-warn{background:#fef3c7;color:#92400e;border-left:4px solid var(--amber)}
+  .lm-none{background:#f3f4f6;color:#4b5563}
   /* empty / dropzone */
   .empty{text-align:center;padding:60px 20px;color:var(--muted)}
   .empty h2{color:var(--ink);margin:0 0 8px}
@@ -113,15 +127,20 @@
     <div class="tabs">
       <button class="tab active" data-view="active">⚡ Active</button>
       <button class="tab" data-view="board">📋 24-Capability Board</button>
+      <button class="tab" data-view="arcs">🧵 Arcs</button>
+      <button class="tab" data-view="archived">🗄 Archived</button>
     </div>
     <div class="legend">
       <span class="k"><span class="dot d-red"></span>not-started / fake / broken</span>
       <span class="k"><span class="dot d-amber"></span>in-flight (wired / not-proven)</span>
       <span class="k"><span class="dot d-green"></span>live + proven</span>
+      <span class="k"><span class="dot d-grey"></span>conversation-only / n-a</span>
       <span class="srcline" id="srcline"></span>
     </div>
     <div id="viewActive"></div>
     <div id="viewBoard" class="hide"></div>
+    <div id="viewArcs" class="hide"></div>
+    <div id="viewArchived" class="hide"></div>
   </div>
 </div>
 
@@ -260,6 +279,68 @@ function parseArchived(mdText){
   return items;
 }
 
+/* ───────────────────────── parse 🧵 ARC MAP ───────────────────────── */
+// arc/piece color: ✅/🟢→green · 🟡→amber · ❌/🔴→red · ⚪→grey
+function arcColor(s){
+  const m = (s||"").match(/🟢|✅|🟡|🔴|❌|⚪/);
+  return m ? emColor(m[0]) : "grey";
+}
+function emColor(e){
+  if(e==="🟢"||e==="✅") return "green";
+  if(e==="🟡") return "amber";
+  if(e==="🔴"||e==="❌") return "red";
+  return "grey";                         // ⚪ / anything else
+}
+// piece label = text before the first status emoji, cut at "{", markers + trailing punct stripped
+function pieceLabel(seg){
+  let t = seg.split(/🟢|🟡|🔴|✅|❌|⚪/)[0];
+  const brace = t.indexOf("{"); if(brace>-1) t = t.slice(0,brace);
+  return t.replace(/\*\*/g,"").replace(/`/g,"").replace(/[·:–\-\s]+$/,"").trim();
+}
+function parseArcs(mdText){
+  const body = sliceSection(mdText, /^##\s*🧵\s*ARC MAP/i);
+  if(!body) return null;
+  const arcs=[]; let cur=null;
+  for(const raw of body){
+    const line = raw.trim();
+    const h = line.match(/^###\s+\d+\.\s*(.+)$/);          // "### 1. NAME — def"
+    if(h){ cur={title:h[1].split(/\s+—\s+/)[0].trim(), spine:"", status:"", landmine:"", home:""}; arcs.push(cur); continue; }
+    if(!cur) continue;
+    let m;
+    if((m=line.match(/^-\s+\*\*SPINE:\*\*\s*(.+)$/)))            cur.spine    = m[1].trim();
+    else if((m=line.match(/^-\s+\*\*ARC STATUS:\*\*\s*(.+)$/)))  cur.status   = m[1].trim();
+    else if((m=line.match(/^-\s+\*\*LANDMINE:\*\*\s*(.+)$/)))    cur.landmine = m[1].trim();
+    else if((m=line.match(/^-\s+\*\*HOME DOC\(S\):\*\*\s*(.+)$/))) cur.home    = m[1].trim();
+  }
+  return arcs.filter(a=>a.spine);
+}
+// spine: split on " → " (keeps "invoice→delivery" inside fan-out intact); each piece gets a dot per emoji
+function spineHTML(spine){
+  const segs = spine.split(/\s+→\s+/).map(s=>s.trim()).filter(Boolean);
+  return segs.map((seg,i)=>{
+    const emojis = seg.match(/🟢|🟡|🔴|✅|❌|⚪/g) || [];
+    const dots = (emojis.length?emojis:["⚪"]).map(e=>`<span class="dot sm d-${emColor(e)}"></span>`).join("");
+    const arrow = i<segs.length-1 ? `<span class="arw">→</span>` : "";
+    return `<span class="pc">${dots}<span>${esc(pieceLabel(seg)||seg)}</span></span>${arrow}`;
+  }).join("");
+}
+function landmineHTML(lm){
+  if(!lm) return "";
+  if(/^none\b/i.test(lm.replace(/\*\*/g,"").trim())) return `<div class="lm lm-none">✓ no landmine</div>`;
+  const crit = lm.indexOf("🚨")>-1;
+  return `<div class="lm ${crit?"lm-crit":"lm-warn"}">${md(lm)}</div>`;
+}
+function arcCardHTML(a){
+  const col = arcColor(a.status);
+  return `<div class="card c-${col} arc">
+    <div class="top"><span class="dot d-${col}"></span><span class="name">${esc(a.title)}</span></div>
+    <div class="spine">${spineHTML(a.spine)}</div>
+    ${a.status?`<div class="arcstat">${md(a.status)}</div>`:""}
+    ${landmineHTML(a.landmine)}
+    ${a.home?`<div class="ptr">→ ${md(a.home)}</div>`:""}
+  </div>`;
+}
+
 /* ───────────────────────── render ───────────────────────── */
 function chipClass(state){
   const s=(state||"").toLowerCase();
@@ -327,16 +408,28 @@ function render(mdText, srcLabel){
   }else{
     aHTML = `<p class="hint">No ⚡ ACTIVE STATUS section found.</p>`;
   }
-  // archived (collapsed, under active)
+  document.getElementById("viewActive").innerHTML = aHTML;
+
+  // ── arcs view (🧵 ARC MAP — the spine-level glance the flat board hides) ──
+  const arcs = parseArcs(mdText);
+  document.getElementById("viewArcs").innerHTML =
+    (arcs && arcs.length)
+      ? `<div class="arcgrid">${arcs.map(arcCardHTML).join("")}</div>`
+      : `<p class="hint">No 🧵 ARC MAP section found.</p>`;
+
+  // ── archived view (its own tab; same markup as before, open by default) ──
+  let vHTML = "";
   if(archived.length){
     const inner = archived.map(a=>{
       if(a.none) return `<p class="hint">${md(a.text)}</p>`;
       return cardHTML({color:a.color||"grey",name:a.text,meta:"",state:"",pointer:""});
     }).join("");
-    aHTML += `<details class="archived"><summary>✅ Done / Archived (${archived.filter(a=>!a.none).length})</summary>
+    vHTML = `<details class="archived" open><summary>✅ Done / Archived (${archived.filter(a=>!a.none).length})</summary>
       <div class="grid" style="margin-top:10px">${inner}</div></details>`;
+  }else{
+    vHTML = `<p class="hint">No §A DONE / ARCHIVED section found.</p>`;
   }
-  document.getElementById("viewActive").innerHTML = aHTML;
+  document.getElementById("viewArchived").innerHTML = vHTML;
 
   // ── board view ──
   let bHTML = "";
@@ -361,8 +454,8 @@ function showEmpty(msg){
 }
 function setView(v){
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
-  document.getElementById("viewActive").classList.toggle("hide",v!=="active");
-  document.getElementById("viewBoard").classList.toggle("hide",v!=="board");
+  const map={active:"viewActive",board:"viewBoard",arcs:"viewArcs",archived:"viewArchived"};
+  for(const name in map){ document.getElementById(map[name]).classList.toggle("hide", v!==name); }
 }
 
 /* ───────────────────────── file loading ───────────────────────── */

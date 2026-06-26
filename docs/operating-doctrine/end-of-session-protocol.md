@@ -28,7 +28,9 @@ At the end of each session, Lightning produces (or David requests) an updated bo
 
 5. **Update the `Last updated` date** at the top.
 
-That's it. Five minutes. The structure (§0–§7 headings) NEVER changes — you're only editing values. That's what makes it stop "changing every session": the shape is permanent, the contents are live.
+6. **Update the 🧵 ARC MAP and 📚 CAPTURE INDEX.** Ask three questions, fast: **(a)** did any arc's piece-status change this session (a piece went 🔴→🟡→🟢, or a spine became coherent / dead-ended)? Flip the emoji + the one-line ARC STATUS, and keep the file:line evidence current. **(b)** Did anything get CAPTURED to a doc (a new decision, doctrine, concept, or recon)? Add ONE pointer row to the CAPTURE INDEX — *a capture without an index row is not done.* **(c)** Did anything new get DISCUSSED that isn't placed in an arc yet (an off-course/extra idea, or a conversation-only capture owed a home)? Drop it in the relevant arc's **OFF-COURSE / EXTRA** lane (or the index's ⚠️ conversation-only list) so it isn't re-derived next session. Rule: every arc-piece status and every index row traces to a file:line or doc section — **never populate from memory** (that is the stale-board trap this whole protocol exists to kill); mark ⚪ unverified instead of guessing. This is what makes the two structures self-maintaining instead of one-time.
+
+That's it. Six steps, a few minutes. The structure (§0–§7 headings + the 🧵 ARC MAP / 📚 CAPTURE INDEX sections) NEVER changes — you're only editing values. That's what makes it stop "changing every session": the shape is permanent, the contents are live.
 
 ---
 
