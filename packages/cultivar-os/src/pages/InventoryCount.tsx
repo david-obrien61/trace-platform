@@ -3,23 +3,31 @@
 // PURPOSE:  Lauren walks the lot, scans a plant tag QR, the app strips the URL and
 //           resolves the item, she enters the counted qty, Save→Next reopens the
 //           camera; Complete ends the session. One item at a time, full focus (D-21).
+//           SOMETIMES-CONNECTED: every write routes through the shared SyncEngine —
+//           write-through when online, queue when offline (back-acre dead zones,
+//           ledger #54), drain on reconnect. A Save never fails in a dead zone.
 // DEPENDENCIES: QrScanner (jsQR camera), business_inventory (on-hand qty), cultivar_plants
 //           (tag→identity→lot), inventory_count_sessions + inventory_counts (durable record,
-//           gated migration 20260626 — degrades gracefully if not yet applied).
+//           gated migration 20260626 — degrades gracefully if not yet applied),
+//           @trace/shared/sync SyncEngine (offline durability + reconnect drain).
 // OUTPUTS:  SETS business_inventory.qty for the resolved lot; records each count in
-//           inventory_counts under a session. [TRACE:COUNT] on every step.
+//           inventory_counts under a session, identity-stamped (who + when via the
+//           envelope userId + session.counted_by). Surfaces a same-lot-twice-in-session
+//           recount as a conflict (sale / miscount / moved) — never silent overwrite.
+//           [TRACE:COUNT] on every step; [TRACE:SYNC] on the queue.
 // SCOPE:    count loop ONLY. Reconciliation (counted vs expected) is DEFERRED.
 // ============================================================
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, X, ScanLine } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, X, ScanLine, CloudOff, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
+import { SyncEngine } from '@trace/shared/sync';
 import { QrScanner } from '../components/inventory/QrScanner';
 
 const TRACE_COUNT = true; // [TRACE:COUNT] STD-003 — on until OWNER-PROVEN
 
-type Phase = 'idle' | 'scanning' | 'reviewing' | 'unknown' | 'done';
+type Phase = 'idle' | 'scanning' | 'reviewing' | 'unknown' | 'conflict' | 'done';
 
 interface Resolved {
   inventoryId: string | null;   // the business_inventory lot to set qty on (null = no linked lot)
@@ -30,6 +38,9 @@ interface Resolved {
 }
 
 interface CountedItem { label: string; qty: number; unknown: boolean; }
+
+// A same-lot-twice-in-session recount — surfaced, never silently overwritten.
+interface Conflict { key: string; label: string; prevQty: number; newQty: number; }
 
 // Scanned QR holds a URL like https://…/plant/SCV-0031 — strip the URL, keep the tag.
 function extractTag(raw: string): string {
@@ -52,6 +63,15 @@ function isMissingTable(err: { code?: string; message?: string } | null): boolea
   return m.includes('does not exist') || m.includes('schema cache') || m.includes('could not find the table');
 }
 
+// The within-session dedup key for a counted lot. A count session is one device,
+// one walk → "already counted this lot this session" lives in client state (no
+// DB read, no schema change).
+function lotKey(r: Resolved): string | null {
+  if (r.inventoryId) return `inv:${r.inventoryId}`;
+  if (r.plantTagId)  return `tag:${r.plantTagId}`;
+  return null;
+}
+
 export function InventoryCount() {
   const navigate = useNavigate();
   const { businessId } = useBusinessContext();
@@ -65,36 +85,82 @@ export function InventoryCount() {
   const [unknownTag, setUnknownTag] = useState('');
   const [unknownLabel, setUnknownLabel] = useState('');
   const [counted, setCounted]     = useState<CountedItem[]>([]);
+  const [sessionCounts, setSessionCounts] = useState<Record<string, number>>({}); // lotKey → last counted qty this session
+  const [conflict, setConflict]   = useState<Conflict | null>(null);
+  const [conflictReason, setConflictReason] = useState('');
   const [busy, setBusy]           = useState(false);
   const [error, setError]         = useState<string | null>(null);
 
+  // Identity — WHO is counting. Resolved on mount; a count cannot START until known.
+  const [userId, setUserId] = useState<string | null>(null);
+  // Connectivity — reactive, for the start-guard + the offline indicator.
+  const [online, setOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
+  const [pending, setPending] = useState(0); // ops waiting to sync
+
+  // ── SYNC ENGINE ───────────────────────────────────────────
+  // One engine per (business). Its queue is persisted by (businessId, domain), so
+  // it survives this re-creation when userId resolves and across a reload.
+  const engine = useMemo(
+    () => businessId
+      ? new SyncEngine({ supabase, businessId, userId, domain: 'inventory-count', onChange: setPending })
+      : null,
+    [businessId, userId],
+  );
+
+  useEffect(() => {
+    if (!engine) return;
+    engine.start();                 // attach reconnect listener + drain any leftover queue
+    setPending(engine.pendingCount());
+    return () => engine.stop();
+  }, [engine]);
+
+  useEffect(() => {
+    void (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserId(user?.id ?? null);
+    })();
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener('online', up);
+    window.addEventListener('offline', down);
+    return () => { window.removeEventListener('online', up); window.removeEventListener('offline', down); };
+  }, []);
+
   // ── START ─────────────────────────────────────────────────
   async function startCount() {
-    if (!businessId) return;
+    if (!businessId || !engine) return;
+    // GUARD: a count may only be started authenticated + with signal (so identity
+    // is real and the count tables can be probed). Offline counting is fine ONCE
+    // started — the dead zone is for the walk, not the cold start.
+    if (!userId) { setError('Confirming your sign-in — one moment.'); return; }
+    if (!online) {
+      setError("You're offline. Connect to start a count — once it's going you can keep counting in dead zones and it'll sync when you're back.");
+      return;
+    }
     setBusy(true); setError(null);
-    const { data: { user } } = await supabase.auth.getUser();
 
-    const { data, error: insErr } = await supabase
-      .from('inventory_count_sessions')
-      .insert({ business_id: businessId, status: 'in_progress', counted_by: user?.id ?? null })
-      .select('id')
-      .single();
+    const newSessionId = engine.newId();   // client-generated PK → children can reference it immediately
+    const res = await engine.insert({
+      table: 'inventory_count_sessions',
+      row: { id: newSessionId, business_id: businessId, status: 'in_progress', counted_by: userId },
+      clientId: newSessionId,
+    });
 
-    if (insErr) {
-      if (isMissingTable(insErr)) {
-        // Deploy window: migration 20260626 not applied yet. On-hand updates still work;
-        // count records are skipped with a loud warning until David applies the migration.
-        if (TRACE_COUNT) console.warn('[TRACE:COUNT] session start — count tables ABSENT (apply migration 20260626); on-hand will update without an audit record');
-        setTablesAbsent(true);
-        setSessionId(null);
-      } else {
-        setError(insErr.message); setBusy(false); return;
-      }
+    if (res.status === 'failed' && isMissingTable({ message: res.error })) {
+      // Deploy window: migration 20260626 not applied yet. On-hand updates still work;
+      // count records are skipped with a loud warning until David applies the migration.
+      if (TRACE_COUNT) console.warn('[TRACE:COUNT] session start — count tables ABSENT (apply migration 20260626); on-hand will update without an audit record');
+      engine.forget(newSessionId);
+      setTablesAbsent(true);
+      setSessionId(null);
+    } else if (res.status === 'failed') {
+      setError(res.error ?? 'Could not start the count.'); setBusy(false); return;
     } else {
-      setSessionId(data!.id);
-      if (TRACE_COUNT) console.log('[TRACE:COUNT] session start —', data!.id);
+      setSessionId(newSessionId); // works whether applied now or queued (start is online-guarded, so normally applied)
+      if (TRACE_COUNT) console.log('[TRACE:COUNT] session start —', newSessionId, 'by:', userId, 'status:', res.status);
     }
     setCounted([]);
+    setSessionCounts({});
     setPhase('scanning');
     setBusy(false);
   }
@@ -169,34 +235,78 @@ export function InventoryCount() {
     if (!resolved || !businessId) return;
     const qty = parseInt(qtyInput, 10);
     if (isNaN(qty) || qty < 0) { setError('Enter a count of 0 or more.'); return; }
+
+    // Same lot already counted this session? That's a REAL discrepancy (a tree may
+    // have sold during the gap) — surface it, let the counter decide. Never overwrite silently.
+    const key = lotKey(resolved);
+    if (key && sessionCounts[key] !== undefined) {
+      if (TRACE_COUNT) console.warn('[TRACE:COUNT] same-lot-twice this session —', resolved.label, sessionCounts[key], '→', qty);
+      setConflict({ key, label: resolved.label, prevQty: sessionCounts[key], newQty: qty });
+      setConflictReason('');
+      setError(null);
+      setPhase('conflict');
+      return;
+    }
+
+    await commitCount(qty);
+  }
+
+  // The actual persistence for a counted lot — on-hand SET + durable record.
+  // reason: optional note when this resolves a within-session recount.
+  async function commitCount(qty: number, reason?: string) {
+    if (!resolved || !businessId || !engine) return;
     setBusy(true); setError(null);
 
     // (i) SET the on-hand for the resolved lot (a physical count sets on-hand).
+    //     Routed through sync: online → applied now; offline → queued (never fails).
     if (resolved.inventoryId) {
-      const { error: upErr } = await supabase
-        .from('business_inventory')
-        .update({ qty })
-        .eq('id', resolved.inventoryId)
-        .eq('business_id', businessId);
-      if (upErr) { setError(`Couldn't update on-hand: ${upErr.message}`); setBusy(false); return; }
+      const res = await engine.update({
+        table: 'business_inventory',
+        set:   { qty },
+        match: { id: resolved.inventoryId, business_id: businessId },
+      });
+      if (res.status === 'failed') { setError(`Couldn't update on-hand: ${res.error}`); setBusy(false); return; }
     }
 
     // (ii) Record the durable count (skipped only in the pre-migration deploy window).
+    const rawScan = reason ? `${resolved.rawScan} | recount-reason: ${reason}` : resolved.rawScan;
     await recordCount({
       inventory_id: resolved.inventoryId,
       plant_tag_id: resolved.plantTagId,
       item_label:   resolved.label,
       counted_qty:  qty,
       was_unknown:  false,
-      raw_scan:     resolved.rawScan,
+      raw_scan:     rawScan,
     });
 
-    if (TRACE_COUNT) console.log('[TRACE:COUNT] save —', resolved.label, 'qty:', qty, 'lot:', resolved.inventoryId);
+    if (TRACE_COUNT) console.log('[TRACE:COUNT] save —', resolved.label, 'qty:', qty, 'lot:', resolved.inventoryId, reason ? `recount: ${reason}` : '');
+    const key = lotKey(resolved);
+    if (key) setSessionCounts(s => ({ ...s, [key]: qty }));
     setCounted(c => [...c, { label: resolved.label, qty, unknown: false }]);
     setResolved(null);
     setQtyInput('');
     setBusy(false);
     setPhase('scanning'); // → next
+  }
+
+  // ── CONFLICT: resolve a within-session recount ────────────
+  async function resolveConflict(keep: 'first' | 'second') {
+    if (!conflict) return;
+    if (keep === 'first') {
+      // The earlier count stands — discard this one, on-hand + prior record untouched.
+      if (TRACE_COUNT) console.log('[TRACE:COUNT] recount resolved — KEEP FIRST', conflict.label, conflict.prevQty);
+      setConflict(null); setConflictReason('');
+      setResolved(null); setQtyInput('');
+      setPhase('scanning');
+      return;
+    }
+    // KEEP SECOND — the new count holds: SET on-hand to it + record it (both counts
+    // remain as separate, honest historical rows). Optional reason rides the record.
+    const reason = conflictReason.trim();
+    if (TRACE_COUNT) console.log('[TRACE:COUNT] recount resolved — KEEP SECOND', conflict.label, conflict.newQty, 'reason:', reason || '(none)');
+    setConflict(null);
+    await commitCount(conflict.newQty, reason || undefined);
+    setConflictReason('');
   }
 
   // ── UNKNOWN branch: enter quickly, or skip & flag ─────────
@@ -228,45 +338,52 @@ export function InventoryCount() {
     setPhase('scanning'); // → next
   }
 
-  // Shared insert into inventory_counts + session item_count bump (graceful if tables absent).
+  // Shared insert into inventory_counts + session item_count bump (routed through
+  // sync; graceful if the migration's tables are absent).
   async function recordCount(row: {
     inventory_id: string | null; plant_tag_id: string | null; item_label: string;
     counted_qty: number; was_unknown: boolean; raw_scan: string;
   }) {
-    if (tablesAbsent || !sessionId) {
+    if (tablesAbsent || !sessionId || !engine) {
       if (TRACE_COUNT) console.warn('[TRACE:COUNT] count record SKIPPED (tables absent / no session) — on-hand only:', row.item_label);
       return;
     }
-    const { error: insErr } = await supabase.from('inventory_counts').insert({
-      session_id: sessionId, business_id: businessId, ...row,
+    const res = await engine.insert({
+      table: 'inventory_counts',
+      row: { session_id: sessionId, business_id: businessId, ...row },
     });
-    if (insErr) {
-      if (isMissingTable(insErr)) { setTablesAbsent(true); return; }
+    if (res.status === 'failed') {
+      if (isMissingTable({ message: res.error })) { engine.forget(res.clientId); setTablesAbsent(true); return; }
       // A real failure to record is worth surfacing, but the on-hand already moved — log loudly.
-      if (TRACE_COUNT) console.error('[TRACE:COUNT] count record FAILED —', insErr.message);
+      if (TRACE_COUNT) console.error('[TRACE:COUNT] count record FAILED —', res.error);
       return;
     }
-    await supabase
-      .from('inventory_count_sessions')
-      .update({ item_count: counted.length + 1 })
-      .eq('id', sessionId);
+    // Bump the denormalized counter (best-effort; absolute SET, idempotent on replay).
+    await engine.update({
+      table: 'inventory_count_sessions',
+      set:   { item_count: counted.length + 1 },
+      match: { id: sessionId },
+    });
   }
 
   // ── COMPLETE ──────────────────────────────────────────────
   async function complete() {
     setBusy(true);
-    if (sessionId && !tablesAbsent) {
-      await supabase
-        .from('inventory_count_sessions')
-        .update({ status: 'completed', completed_at: new Date().toISOString(), item_count: counted.length })
-        .eq('id', sessionId);
+    if (sessionId && !tablesAbsent && engine) {
+      await engine.update({
+        table: 'inventory_count_sessions',
+        set:   { status: 'completed', completed_at: new Date().toISOString(), item_count: counted.length },
+        match: { id: sessionId },
+      });
     }
-    if (TRACE_COUNT) console.log('[TRACE:COUNT] complete —', counted.length, 'items, session:', sessionId);
+    if (TRACE_COUNT) console.log('[TRACE:COUNT] complete —', counted.length, 'items, session:', sessionId, 'pending sync:', engine?.pendingCount() ?? 0);
     setBusy(false);
     setPhase('done');
   }
 
   function exit() { navigate('/inventory'); }
+
+  const counting = phase === 'scanning' || phase === 'reviewing' || phase === 'unknown' || phase === 'conflict';
 
   // ── RENDER ────────────────────────────────────────────────
   return (
@@ -275,12 +392,26 @@ export function InventoryCount() {
         <button style={S.backBtn} onClick={exit} aria-label="Back to inventory"><ArrowLeft size={22} color="#1a2e0a" /></button>
         <h1 style={S.title}>Walk &amp; count</h1>
         <div style={{ flex: 1 }} />
-        {(phase === 'scanning' || phase === 'reviewing' || phase === 'unknown') && (
-          <span style={S.tally}>{counted.length} counted</span>
-        )}
+        {counting && <span style={S.tally}>{counted.length} counted</span>}
       </div>
 
-      {tablesAbsent && (phase !== 'idle' && phase !== 'done') && (
+      {/* Connectivity + pending-sync strip (only while counting) */}
+      {counting && !online && (
+        <div style={S.offlineNote}>
+          <CloudOff size={15} /> Offline — counts are saved on this phone and will sync when you're back in signal.
+        </div>
+      )}
+      {counting && pending > 0 && (
+        <button
+          style={S.syncBtn}
+          disabled={!online || busy}
+          onClick={() => { if (engine) void engine.syncNow(); }}
+        >
+          <RefreshCw size={14} /> {online ? `Sync now (${pending} waiting)` : `${pending} waiting to sync`}
+        </button>
+      )}
+
+      {tablesAbsent && counting && (
         <div style={S.warn}>Counting on-hand now. Audit history will record once the count tables are applied.</div>
       )}
 
@@ -289,14 +420,16 @@ export function InventoryCount() {
         <div style={S.card}>
           <ScanLine size={40} color="#27500A" style={{ marginBottom: 12 }} />
           <p style={S.lead}>Walk the lot and scan each plant tag. Enter how many you count, save, and move to the next. Hit Complete when you're done.</p>
-          <button style={busy ? S.btnDisabled : S.btnPrimary} disabled={busy} onClick={() => void startCount()}>
-            {busy ? 'Starting…' : 'Start count'}
+          {!online && <div style={S.warn}>You're offline — connect to start. Once a count is going, dead zones are fine.</div>}
+          {error && <div style={S.error}>{error}</div>}
+          <button style={(busy || !online || !userId) ? S.btnDisabled : S.btnPrimary} disabled={busy || !online || !userId} onClick={() => void startCount()}>
+            {busy ? 'Starting…' : !userId ? 'Confirming sign-in…' : 'Start count'}
           </button>
         </div>
       )}
 
-      {/* SCANNING / REVIEWING / UNKNOWN — camera stays mounted, sheets overlay */}
-      {(phase === 'scanning' || phase === 'reviewing' || phase === 'unknown') && (
+      {/* SCANNING / REVIEWING / UNKNOWN / CONFLICT — camera stays mounted, sheets overlay */}
+      {counting && (
         <>
           <div style={S.card}>
             <QrScanner active={phase === 'scanning'} onScan={raw => void handleScan(raw)} />
@@ -334,6 +467,44 @@ export function InventoryCount() {
             />
             <button style={busy ? S.btnDisabled : S.btnPrimary} disabled={busy} onClick={() => void saveAndNext()}>
               {busy ? 'Saving…' : 'Save → Next'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CONFLICT sheet — same lot counted twice this session */}
+      {phase === 'conflict' && conflict && (
+        <div style={S.modal}>
+          <div style={S.sheet}>
+            <div style={S.sheetHeader}>
+              <h2 style={S.sheetTitle}>Already counted this one</h2>
+            </div>
+            <p style={S.subtle}>
+              You already counted <strong>{conflict.label}</strong> this session.
+            </p>
+            <div style={S.conflictRow}>
+              <div style={S.conflictCol}><div style={S.conflictNum}>{conflict.prevQty}</div><div style={S.conflictCap}>first count</div></div>
+              <div style={S.conflictArrow}>→</div>
+              <div style={S.conflictCol}><div style={S.conflictNum}>{conflict.newQty}</div><div style={S.conflictCap}>now</div></div>
+            </div>
+            <p style={S.subtleSm}>
+              {conflict.newQty === conflict.prevQty
+                ? 'Same as before — looks consistent. Which count should hold?'
+                : 'The difference could be a sale, a miscount, or a tree that moved. Which count holds?'}
+            </p>
+            <label style={S.label}>Why? (optional — recorded with the count)</label>
+            <input
+              style={S.input}
+              value={conflictReason}
+              onChange={e => setConflictReason(e.target.value)}
+              placeholder="e.g. one sold at lunch"
+            />
+            {error && <div style={S.error}>{error}</div>}
+            <button style={busy ? S.btnDisabled : S.btnPrimary} disabled={busy} onClick={() => void resolveConflict('second')}>
+              {busy ? 'Saving…' : `Use the new count (${conflict.newQty})`}
+            </button>
+            <button style={S.btnGhost} disabled={busy} onClick={() => void resolveConflict('first')}>
+              Keep the first count ({conflict.prevQty})
             </button>
           </div>
         </div>
@@ -381,6 +552,9 @@ export function InventoryCount() {
           <CheckCircle2 size={40} color="#27500A" style={{ marginBottom: 12 }} />
           <h2 style={S.doneTitle}>Count complete</h2>
           <p style={S.lead}>{counted.length} {counted.length === 1 ? 'item' : 'items'} counted.</p>
+          {pending > 0 && (
+            <div style={S.warn}>{pending} {pending === 1 ? 'count is' : 'counts are'} still waiting to sync — they'll go up automatically when you're back in signal.</div>
+          )}
           {counted.length > 0 && (
             <div style={S.summaryList}>
               {counted.map((c, i) => (
@@ -404,6 +578,8 @@ const S = {
   backBtn:    { background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' } as React.CSSProperties,
   title:      { fontSize: '1.25rem', fontWeight: 700, color: '#1a2e0a', margin: 0 } as React.CSSProperties,
   tally:      { background: '#27500A', color: '#fff', borderRadius: 20, padding: '3px 12px', fontSize: '0.82rem', fontWeight: 700 } as React.CSSProperties,
+  offlineNote:{ display: 'flex', alignItems: 'center', gap: 8, background: '#e5e7eb', color: '#374151', borderRadius: 10, padding: '0.55rem 0.85rem', fontSize: '0.82rem', marginBottom: 10 } as React.CSSProperties,
+  syncBtn:    { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', minHeight: 40, background: '#fff', color: '#27500A', border: '1.5px solid #27500A', borderRadius: 10, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', marginBottom: 10 } as React.CSSProperties,
   warn:       { background: '#fef3c7', color: '#92400e', borderRadius: 10, padding: '0.6rem 0.875rem', fontSize: '0.82rem', marginBottom: 12 } as React.CSSProperties,
   card:       { background: '#fff', borderRadius: 14, padding: '1.5rem', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: 14 } as React.CSSProperties,
   lead:       { color: '#374151', fontSize: '0.95rem', lineHeight: 1.5, margin: '0 0 1.25rem' } as React.CSSProperties,
@@ -417,12 +593,18 @@ const S = {
   sheetTitle: { fontSize: '1.15rem', fontWeight: 700, color: '#1a2e0a', margin: 0 } as React.CSSProperties,
   iconBtn:    { background: 'none', border: 'none', cursor: 'pointer', padding: 4 } as React.CSSProperties,
   subtle:     { color: '#6b7280', fontSize: '0.88rem', margin: '0 0 1rem' } as React.CSSProperties,
+  subtleSm:   { color: '#6b7280', fontSize: '0.82rem', margin: '0 0 1rem', lineHeight: 1.4 } as React.CSSProperties,
   note:       { background: '#eef2ff', color: '#3730a3', borderRadius: 8, padding: '0.6rem 0.75rem', fontSize: '0.82rem', marginBottom: 12 } as React.CSSProperties,
   code:       { background: '#f3f4f6', borderRadius: 4, padding: '1px 6px', fontSize: '0.82rem', color: '#374151' } as React.CSSProperties,
   label:      { display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: 6 } as React.CSSProperties,
   input:      { width: '100%', border: '1.5px solid #d1d5db', borderRadius: 8, padding: '0.7rem 0.85rem', fontSize: '1rem', color: '#111827', boxSizing: 'border-box', marginBottom: 14 } as React.CSSProperties,
   qtyInput:   { width: '100%', border: '1.5px solid #27500A', borderRadius: 8, padding: '0.8rem 0.85rem', fontSize: '1.5rem', fontWeight: 700, color: '#111827', boxSizing: 'border-box', marginBottom: 16, textAlign: 'center' } as React.CSSProperties,
   error:      { color: '#b91c1c', background: '#fee2e2', borderRadius: 8, padding: '0.55rem 0.85rem', fontSize: '0.86rem', marginBottom: 12 } as React.CSSProperties,
+  conflictRow:{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, margin: '0.25rem 0 1rem' } as React.CSSProperties,
+  conflictCol:{ textAlign: 'center' } as React.CSSProperties,
+  conflictNum:{ fontSize: '2rem', fontWeight: 800, color: '#1a2e0a', lineHeight: 1 } as React.CSSProperties,
+  conflictCap:{ fontSize: '0.72rem', color: '#9ca3af', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.04em' } as React.CSSProperties,
+  conflictArrow:{ fontSize: '1.5rem', color: '#d1d5db', fontWeight: 700 } as React.CSSProperties,
   doneTitle:  { fontSize: '1.25rem', fontWeight: 700, color: '#1a2e0a', margin: '0 0 0.5rem' } as React.CSSProperties,
   summaryList:{ textAlign: 'left', margin: '0 0 1.25rem', maxHeight: '40vh', overflowY: 'auto' } as React.CSSProperties,
   summaryRow: { display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid #f3f4f6' } as React.CSSProperties,
