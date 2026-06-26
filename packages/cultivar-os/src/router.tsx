@@ -29,6 +29,7 @@ import { DiscoveryInspect }  from './pages/DiscoveryInspect';
 import { ReceiptKeeper }     from './pages/ReceiptKeeper';
 import { BusinessAssets }    from './pages/BusinessAssets';
 import { BusinessInventory } from './pages/BusinessInventory';
+import { InventoryCount }    from './pages/InventoryCount';
 import { CostToProduce }     from './pages/CostToProduce';
 import { OperatingCosts }    from './pages/OperatingCosts';
 import PMI                   from './pages/PMI';
@@ -107,6 +108,7 @@ export function AppRouter() {
           <Route element={<PermissionRoute permission={VIEW_COSTS} />}>
             <Route path="/assets"            element={<BusinessAssets />} />
             <Route path="/inventory"         element={<BusinessInventory />} />
+            <Route path="/inventory/count"   element={<InventoryCount />} />
             <Route path="/operating-costs"   element={<OperatingCosts />} />
             <Route path="/pmi"               element={<PMI />} />
           </Route>

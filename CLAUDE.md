@@ -323,6 +323,25 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-26 — THUNDER WALK-AND-COUNT inventory loop (cap 2.3): scan → resolve → qty → save → next → complete — RECONCILE DEFERRED (BUILDER-COMPLETE, owner-proof owed; ledger #54)
+
+**Type:** App code (2 new + 2 edited cultivar files) + 1 NEW dep (`jsqr`) + ONE GATED migration (WRITTEN, NOT applied) + docs. **NO auth, NO RLS on existing tables, NO schema change on existing tables** → schema-verification gate runs AFTER David applies the new migration. `[TRACE:*]` STAYS ON; new `[TRACE:COUNT]` emits ON. Commit `__PENDING__`. `npm run verify` exit 0 zero NET-NEW (tsc 10, eslint 266, knip 10/14/15); `build:cultivar` clean (2226 modules).
+
+**VERIFY-FIRST (two gates, homed permanently this time in `docs/decisions/walk-and-count-inventory-verify-first.md` — the prior recon's answers got lost):**
+- **GATE 1 (scan-to-resolve):** did NOT exist. Only `qrcode` GENERATION (`qr/generate.ts` → `${baseUrl}/plant/${id}`) + OS-camera scan-to-PROFILE-via-URL (`/plant/:tagId`→`PlantProfile`; `usePlant` resolves `cultivar_plants ilike tag_id` + `business_inventory` FK join). NO in-app decoder anywhere (no jsqr/zxing/BarcodeDetector). The URL-strip + in-app resolve is net-new.
+- **GATE 2 (on-hand):** `business_inventory.qty int` IS the on-hand (directly updatable via the existing owner/member RLS). NO count-event / session / on_hand / adjustment notion exists anywhere → a durable count record needs a new table.
+
+**BUILT:**
+- **`components/inventory/QrScanner.tsx` (NEW)** — live `getUserMedia`+`jsQR` decode loop; `extractTag()` strips `/plant/<tag>` (keeps the tag), NEVER navigates; fires `onScan` once per physical scan (pauses on decode). Always-present manual tag-entry fallback so the loop never dead-ends. **Standard-by-value (§6 r10):** chose jsqr over the web-standard `BarcodeDetector` because iOS Safari (our target — Lauren on a phone) doesn't support it — divergence recorded.
+- **`pages/InventoryCount.tsx` (NEW, `/inventory/count`, under the existing `view_costs` route gate)** — state machine idle→scanning→reviewing/unknown→done. Resolve order: `cultivar_plants.tag_id` → `business_inventory.sku` fallback → UNKNOWN. Save→Next **SETS `business_inventory.qty`** for the resolved lot AND records the count. UNKNOWN branch = quick variety/size entry OR skip-&-flag (doesn't stall the loop, doesn't auto-create inventory). Complete ends the session + shows a summary.
+- **`/inventory` "Start count" button** + router route. `[TRACE:COUNT]` on session-start / scan-decode / resolve / save / unknown / complete.
+
+**RECORD MODEL — GATED MIGRATION, HANDED TO DAVID (NOT applied by Thunder):** `supabase/migrations/20260626_inventory_count_sessions.sql` — `inventory_count_sessions` + `inventory_counts` (durable per-item record reconciliation will read: counted_qty, item_label, inventory_id, plant_tag_id, was_unknown, session, timestamp). RLS owner_all + `is_active_member` member_all (AC-2/AC-3); CASCADE on session/business, SET NULL on inventory_id. **Deploy-window safe:** tables absent → on-hand still updates, count-record skipped with a loud `[TRACE:COUNT]` warning (mirrors the deliveries `service_type` fallback). Verification queries (A)–(E) embedded in the migration footer.
+
+**RECONCILIATION (counted-vs-expected, sold/dead/missing) NOT BUILT** — per instruction. The `inventory_counts` record model is shaped so reconciliation can read it later; room left, nothing built.
+
+**OWNER-PROVEN owed (David):** (1) apply `20260626_inventory_count_sessions.sql` as `postgres` → mint short-lived PAT → catalog-verify (A)–(E) → revoke PAT; (2) on a phone: Start count → scan a real test plant QR (URL stripped, item shown e.g. "Shoal Creek Vitex, 30 gal") → enter qty → Save→Next reopens the camera → an unrecognized scan is handled gracefully → Complete saves the session; confirm `business_inventory.qty` updated + an `inventory_counts` row per item; `[TRACE:COUNT]` trail visible. `[TRACE:COUNT]` stays ON until owner-proven.
+
 ### 2026-06-26 — THUNDER Front-door arc PROMOTION (synchronous, AUTH-FREE): wire reveal-conflict + catalog-seed + 4 bug-fixes (BUILDER-COMPLETE, owner-proof owed; ledger #47)
 
 **Type:** App code ONLY — 12 files (4 cultivar pages, 1 cultivar Settings, 2 cultivar api endpoints, 3 shared discovery files, 1 shared Settings, 1 NEW shared hook) + `quality-baseline.json` (eslint drop locked). **NO schema, NO migration, NO RLS** → schema-verification gate N/A. **AUTH BOUNDARY NEVER CROSSED** — no `OwnerSignup.signUp`, no businesses-insert order, no `acceptInvitation`. `[TRACE:*]` STAYS ON; new `[TRACE:ONBOARD]`/`[TRACE:DISCOVERY] conflict`/`[TRACE:ROUTE]`/`[TRACE:POPULATE]`/`[TRACE:QBO]` emits ON. Commit `dc74ebc`. `npm run verify` exit 0 zero NET-NEW (eslint 267→**266** locked, tsc 10, knip 10/14/15); `build:cultivar` clean (2219 modules); `api/discovery/ingest.ts` + `api/orders/submit.ts` esbuild-bundle OK.

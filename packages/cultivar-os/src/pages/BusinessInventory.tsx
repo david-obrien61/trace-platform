@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Plus, X, Archive } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, X, Archive, ScanLine } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 
@@ -70,6 +71,7 @@ const S = {
   error: { color: '#b91c1c', background: '#fee2e2', borderRadius: 8, padding: '0.6rem 0.875rem', fontSize: '0.88rem', marginBottom: 12 } as React.CSSProperties,
   success: { color: '#166534', background: '#dcfce7', borderRadius: 8, padding: '0.6rem 0.875rem', fontSize: '0.88rem', marginBottom: 12 } as React.CSSProperties,
   addBtn: { display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: '1.5px solid #27500A', borderRadius: 8, padding: '0.5rem 0.875rem', color: '#27500A', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer' } as React.CSSProperties,
+  countBtn: { display: 'flex', alignItems: 'center', gap: 6, background: '#27500A', border: '1.5px solid #27500A', borderRadius: 8, padding: '0.5rem 0.875rem', color: '#fff', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer' } as React.CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: '0.88rem' } as React.CSSProperties,
   th: { textAlign: 'left' as const, padding: '0.5rem 0.75rem', borderBottom: '2px solid #e5e7eb', color: '#374151', fontWeight: 600, fontSize: '0.8rem', textTransform: 'uppercase' as const } as React.CSSProperties,
   td: { padding: '0.625rem 0.75rem', borderBottom: '1px solid #f3f4f6', color: '#111827', verticalAlign: 'top' as const } as React.CSSProperties,
@@ -98,6 +100,7 @@ function fmtDate(iso: string | null) {
 
 export function BusinessInventory() {
   const { businessId } = useBusinessContext();
+  const navigate = useNavigate();
 
   const [items, setItems] = useState<InventoryRow[]>([]);
   const [listLoading, setListLoading] = useState(true);
@@ -188,6 +191,10 @@ export function BusinessInventory() {
       <div style={S.header}>
         <h1 style={S.title}>Inventory</h1>
         <div style={{ flex: 1 }} />
+        <button style={S.countBtn} onClick={() => navigate('/inventory/count')}>
+          <ScanLine size={16} />
+          Start count
+        </button>
         <button style={S.addBtn} onClick={() => { setShowForm(true); setSaveError(null); setSaveSuccess(false); }}>
           <Plus size={16} />
           Add Item
