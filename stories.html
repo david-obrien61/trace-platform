@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TRACE — Story Board</title>
+<!--
+  PURE RENDERER. Holds ZERO story data of its own.
+  The ONLY source of truth is user_stories.md (its ## ARC: sections + ## ARCHIVED).
+  This file PARSES that markdown at open-time and renders it — it never duplicates
+  or hardcodes stories. Delete the .md and this shows "no data", never a stale board.
+  Open: double-click → "Open user_stories.md" (or drag-drop it).
+
+  Sibling of status.html — same load/render pattern, mirrored styling.
+    status.html  = what's BUILT (capabilities, green/amber/red)
+    stories.html = what we're BUILDING TOWARD (day-in-the-life need)
+  Linked by MAPS-TO capability id + arc.
+-->
+<style>
+  :root{
+    --inbuild:#d97706; --active:#2563eb; --archived:#9ca3af; --gap:#dc2626;
+    --bg:#f5f7f2; --card:#ffffff; --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#27500A;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{position:sticky;top:0;z-index:5;background:var(--accent);color:#fff;
+    padding:14px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    box-shadow:0 1px 6px rgba(0,0,0,.15)}
+  header h1{margin:0;font-size:1.05rem;font-weight:800;letter-spacing:.01em}
+  header .sub{font-size:.72rem;opacity:.85;font-weight:500}
+  .spacer{flex:1}
+  .btn{background:#fff;color:var(--accent);border:none;border-radius:8px;
+    padding:8px 14px;font-weight:700;font-size:.82rem;cursor:pointer}
+  .btn.ghost{background:rgba(255,255,255,.15);color:#fff}
+  .wrap{max-width:1100px;margin:0 auto;padding:18px 20px 60px}
+  /* tabs */
+  .tabs{display:flex;gap:8px;margin:6px 0 18px}
+  .tab{background:var(--card);border:1.5px solid var(--line);border-radius:999px;
+    padding:7px 16px;font-weight:700;font-size:.82rem;cursor:pointer;color:var(--muted)}
+  .tab.active{border-color:var(--accent);color:var(--accent);background:#eef4e6}
+  /* legend + tally */
+  .legend{display:flex;gap:16px;flex-wrap:wrap;align-items:center;
+    font-size:.76rem;color:var(--muted);margin-bottom:16px}
+  .legend .k{display:inline-flex;align-items:center;gap:6px}
+  .tally{display:inline-flex;gap:10px;font-weight:800}
+  .dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;display:inline-block}
+  .d-inbuild{background:var(--inbuild)} .d-active{background:var(--active)}
+  .d-archived{background:var(--archived)} .d-gap{background:var(--gap)}
+  /* arc band */
+  .band{margin:22px 0 10px;font-size:.78rem;font-weight:800;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--accent);display:flex;align-items:baseline;gap:10px}
+  .band:first-child{margin-top:4px}
+  .band .arcdef{font-size:.7rem;font-weight:500;letter-spacing:0;text-transform:none;color:var(--muted)}
+  .band .arccount{font-size:.7rem;font-weight:700;color:var(--muted);background:#eef4e6;border-radius:999px;padding:1px 8px}
+  /* cards */
+  .grid{display:grid;grid-template-columns:1fr;gap:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-left-width:5px;
+    border-radius:10px;padding:13px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .card.c-inbuild{border-left-color:var(--inbuild)}
+  .card.c-active{border-left-color:var(--active)}
+  .card.c-archived{border-left-color:var(--archived);filter:grayscale(.4);opacity:.8}
+  .card .top{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:6px}
+  .card .name{font-weight:800;font-size:1rem;flex:1;min-width:200px}
+  .pill{display:inline-block;font-size:.68rem;font-weight:800;letter-spacing:.04em;
+    text-transform:uppercase;padding:2px 9px;border-radius:999px;white-space:nowrap}
+  .p-inbuild{background:#fef3c7;color:#92400e}
+  .p-active{background:#dbeafe;color:#1e40af}
+  .p-archived{background:#f3f4f6;color:#4b5563}
+  /* maps-to badges + piece chips */
+  .tagrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:2px 0 8px}
+  .maps{display:inline-flex;align-items:center;gap:5px;font-size:.74rem;font-weight:800;
+    color:#fff;background:var(--accent);border-radius:7px;padding:3px 9px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .maps.gap{background:var(--gap)}
+  .pieces{display:flex;flex-wrap:wrap;gap:5px}
+  .pc{display:inline-block;font-size:.72rem;background:#f6f8f3;border:1px solid var(--line);
+    border-radius:6px;padding:2px 7px;color:var(--ink);
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .lbl{font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  /* narrative */
+  .nar{font-size:.9rem;line-height:1.55;color:var(--ink)}
+  .nar p{margin:.45em 0}
+  .nar ul{margin:.45em 0;padding-left:20px}
+  .nar li{margin:.2em 0}
+  .nar em{color:var(--muted)}
+  code{background:#f1f3ee;border-radius:4px;padding:.5px 4px;font-size:.85em;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  /* empty / dropzone */
+  .empty{text-align:center;padding:60px 20px;color:var(--muted)}
+  .empty h2{color:var(--ink);margin:0 0 8px}
+  .drop{margin:22px auto 0;max-width:480px;border:2px dashed var(--line);
+    border-radius:14px;padding:34px 20px;background:var(--card);transition:.15s}
+  .drop.over{border-color:var(--accent);background:#eef4e6}
+  .hint{font-size:.76rem;color:var(--muted);margin-top:10px}
+  .srcline{font-size:.72rem;color:var(--muted)}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>📖 TRACE — Story Board</h1>
+  <span class="sub" id="srcInfo">pure renderer · reads user_stories.md</span>
+  <span class="spacer"></span>
+  <span class="tally" id="tally"></span>
+  <button class="btn" id="openBtn">Open .md</button>
+  <button class="btn ghost" id="reloadBtn">↻</button>
+  <input type="file" id="file" accept=".md,.markdown,text/markdown,text/plain" class="hide" />
+</header>
+
+<div class="wrap">
+  <!-- EMPTY STATE (no data) -->
+  <div id="emptyState" class="empty">
+    <h2>No data — open the story source</h2>
+    <p>This board holds no stories of its own. It renders only what it reads from
+       <code>user_stories.md</code>.</p>
+    <div class="drop" id="drop">
+      <strong>Drop user_stories.md here</strong>
+      <div class="hint">or click “Open .md” above and pick it from your desktop.</div>
+    </div>
+    <p class="hint" id="autoNote"></p>
+  </div>
+
+  <!-- BOARD -->
+  <div id="board" class="hide">
+    <div class="tabs">
+      <button class="tab active" data-view="active">⚡ Active</button>
+      <button class="tab" data-view="all">📚 All</button>
+      <button class="tab" data-view="archived">🗄 Archived</button>
+    </div>
+    <div class="legend">
+      <span class="k"><span class="dot d-inbuild"></span>in-build (a build is advancing it now)</span>
+      <span class="k"><span class="dot d-active"></span>active (a need we hold, not yet in build)</span>
+      <span class="k"><span class="dot d-archived"></span>archived (delivered / retired)</span>
+      <span class="k"><span class="dot d-gap"></span>gap (no capability yet — MAPS-TO —)</span>
+      <span class="srcline" id="srcline"></span>
+    </div>
+    <div id="view"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ───────────── canonical 8-arc order + display ───────────── */
+const ARCS = [
+  ["front-door",        "Front-Door",                 "register → invite → scrape-while-away → return → reveal → validate/conflict → seed → vertical → alive dashboard"],
+  ["ocr-doc-routing",   "OCR / Document-Routing",     "capture → extract (one engine) → infer type → confirm → fan-out to many destinations"],
+  ["cost-to-produce",   "Cost-to-Produce",            "recurring/operating costs → labor → margin → compute → (forward-run) suggestion engine"],
+  ["suggestion",        "Suggestion / Surfacing",     "pattern-surfacing from owned data (the Regina Principle, product north star)"],
+  ["delivery",          "Delivery / Routing",         "schedule → day-group → select stops → bookend (business→stops→business) → Google Maps handoff"],
+  ["discovery",         "Discovery",                  "website read → two-pass (Haiku identity / Sonnet analysis) → synthesis email → seed.ts → catalog-populate"],
+  ["identity-roles-sec","Identity / Roles / Security","auth principal → membership resolution → role/permission chokepoint → RLS wall → audit"],
+  ["asset-inventory-pmi","Asset / Inventory / PMI",   "assets → inventory → walk-and-count → preventive-maintenance schedule → service log"],
+];
+const ARC_NAME = Object.fromEntries(ARCS.map(a=>[a[0],a[1]]));
+const ARC_DEF  = Object.fromEntries(ARCS.map(a=>[a[0],a[2]]));
+const ARC_ORDER= ARCS.map(a=>a[0]);
+
+/* ───────────── tiny markdown (inline + block) ───────────── */
+function esc(s){return (s||"").replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function inlineMd(s){
+  let t = esc(s);
+  t = t.replace(/\[([^\]]+)\]\([^)]*\)/g,"$1");          // links → text
+  t = t.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>");
+  t = t.replace(/`([^`]+)`/g,"<code>$1</code>");
+  t = t.replace(/(^|[\s(])_([^_]+)_(?=[\s.,;:)]|$)/g,"$1<em>$2</em>"); // _italic_
+  return t;
+}
+// block render: bullet runs → <ul>, blank-separated runs → <p>
+function blockMd(raw){
+  const lines = (raw||"").split(/\n/);
+  let html="", list=[], para=[];
+  const flushP=()=>{ if(para.length){ html+=`<p>${inlineMd(para.join(" ").trim())}</p>`; para=[]; } };
+  const flushL=()=>{ if(list.length){ html+=`<ul>${list.map(li=>`<li>${inlineMd(li)}</li>`).join("")}</ul>`; list=[]; } };
+  for(const ln of lines){
+    const t = ln.trim();
+    if(!t){ flushP(); flushL(); continue; }
+    const m = t.match(/^[-*]\s+(.+)$/);
+    if(m){ flushP(); list.push(m[1]); }
+    else { flushL(); para.push(t); }
+  }
+  flushP(); flushL();
+  return html;
+}
+
+/* ───────────── parse user_stories.md ───────────── */
+function parseStories(mdText){
+  const lines = mdText.split(/\r?\n/);
+  const stories=[];
+  let curArc=null, inArchivedSection=false, cur=null;
+  const push=()=>{ if(cur){ cur.narrative = cur.narLines.join("\n").trim(); delete cur.narLines; stories.push(cur); cur=null; } };
+
+  for(const raw of lines){
+    const line = raw.replace(/\s+$/,"");
+    const t = line.trim();
+
+    // section headings (## …) — close any open story first
+    if(/^##\s/.test(t) && !/^###/.test(t)){
+      push();
+      const arcm = t.match(/^##\s*ARC:\s*([a-z0-9-]+)/i);
+      if(arcm){ curArc = arcm[1].toLowerCase(); inArchivedSection=false; }
+      else if(/^##\s*ARCHIVED/i.test(t)){ curArc=null; inArchivedSection=true; }
+      else { curArc=null; inArchivedSection=false; }   // some other ## section
+      continue;
+    }
+    // story heading
+    if(/^###\s+/.test(t)){
+      push();
+      cur = { title:t.replace(/^###\s+/,"").trim(),
+              status:"", arcTag:"", mapsTo:[], pieces:[], narLines:[],
+              sectionArc:curArc, inArchivedSection };
+      continue;
+    }
+    if(!cur) continue;            // ignore header/blockquote/comments outside any story
+    // tag lines
+    let m;
+    if((m=t.match(/^STATUS:\s*(.+)$/i)))   { cur.status = m[1].trim().toLowerCase(); continue; }
+    if((m=t.match(/^ARC:\s*(.+)$/i)))      { cur.arcTag = m[1].trim().toLowerCase(); continue; }
+    if((m=t.match(/^MAPS-TO:\s*(.+)$/i)))  { cur.mapsTo = splitIds(m[1]); continue; }
+    if((m=t.match(/^PIECES:\s*(.+)$/i)))   { cur.pieces = splitList(m[1]); continue; }
+    // skip stray html comments inside a story
+    if(/^<!--/.test(t)) continue;
+    cur.narLines.push(line);
+  }
+  push();
+
+  // resolve arc + archived; mapsTo "—" → gap (empty)
+  for(const s of stories){
+    s.arc = s.arcTag || s.sectionArc || "";
+    s.archived = (s.status==="archived") || s.inArchivedSection;
+    if(s.archived && s.status!=="archived") s.status = "archived";
+    s.gap = s.mapsTo.length===0;
+  }
+  return stories;
+}
+function splitIds(s){
+  return s.split(",").map(x=>x.trim()).filter(x=>x && x!=="—" && x!=="-");
+}
+function splitList(s){
+  return s.split(",").map(x=>x.replace(/`/g,"").trim()).filter(Boolean);
+}
+
+/* ───────────── render ───────────── */
+function statusClass(st){
+  if(st==="in-build") return "inbuild";
+  if(st==="archived") return "archived";
+  return "active";
+}
+function storyCard(s){
+  const sc = statusClass(s.status);
+  const pill = `<span class="pill p-${sc}">${esc(s.status||"active")}</span>`;
+  const maps = s.gap
+    ? `<span class="maps gap">→ no capability yet</span>`
+    : s.mapsTo.map(id=>`<span class="maps">→ ${esc(id)}</span>`).join("");
+  const pieces = s.pieces.length
+    ? `<span class="lbl">pieces</span><span class="pieces">${s.pieces.map(p=>`<span class="pc">${esc(p)}</span>`).join("")}</span>`
+    : "";
+  return `<div class="card c-${sc}">
+    <div class="top">
+      <span class="dot d-${s.gap?'gap':sc}"></span>
+      <span class="name">${inlineMd(s.title)}</span>
+      ${pill}
+    </div>
+    <div class="tagrow">${maps}${pieces}</div>
+    ${s.narrative?`<div class="nar">${blockMd(s.narrative)}</div>`:""}
+  </div>`;
+}
+function visibleFor(view,s){
+  if(view==="all") return true;
+  if(view==="archived") return s.archived;
+  return !s.archived;            // active view = active + in-build
+}
+function render(mdText, srcLabel){
+  const stories = parseStories(mdText);
+  if(!stories.length){
+    showEmpty("No stories found — is this user_stories.md?");
+    return;
+  }
+  document.getElementById("emptyState").classList.add("hide");
+  document.getElementById("board").classList.remove("hide");
+  document.getElementById("srcline").textContent = "source: " + srcLabel + " · " + stories.length + " stories";
+  document.getElementById("srcInfo").textContent = "rendering: " + srcLabel;
+
+  // tally (from parsed data, never hardcoded)
+  const t={inbuild:0,active:0,archived:0,gap:0};
+  stories.forEach(s=>{
+    if(s.status==="in-build") t.inbuild++;
+    else if(s.archived) t.archived++;
+    else t.active++;
+    if(s.gap && !s.archived) t.gap++;
+  });
+  document.getElementById("tally").innerHTML =
+    `<span style="color:#fde68a">${t.inbuild} in-build</span>`+
+    `<span style="color:#bfdbfe">${t.active} active</span>`+
+    `<span style="color:#fecaca">${t.gap} gap</span>`;
+
+  renderView(stories, currentView);
+  window.__stories = stories;    // keep for view toggle
+}
+function renderView(stories, view){
+  let html="";
+  for(const arcId of ARC_ORDER){
+    const inArc = stories.filter(s=>s.arc===arcId && visibleFor(view,s));
+    if(!inArc.length) continue;
+    html += `<div class="band">${esc(ARC_NAME[arcId]||arcId)}
+      <span class="arccount">${inArc.length}</span>
+      <span class="arcdef">${esc(ARC_DEF[arcId]||"")}</span></div>`;
+    html += `<div class="grid">${inArc.map(storyCard).join("")}</div>`;
+  }
+  // any stories whose arc isn't one of the 8 canonical ids
+  const orphans = stories.filter(s=>!ARC_ORDER.includes(s.arc) && visibleFor(view,s));
+  if(orphans.length){
+    html += `<div class="band">Unfiled <span class="arccount">${orphans.length}</span>
+      <span class="arcdef">no recognized ARC: tag</span></div>`;
+    html += `<div class="grid">${orphans.map(storyCard).join("")}</div>`;
+  }
+  if(!html){
+    const msg = view==="archived" ? "No archived stories yet." : "No stories in this view.";
+    html = `<p class="hint">${msg}</p>`;
+  }
+  document.getElementById("view").innerHTML = html;
+}
+
+/* ───────────── views / empty ───────────── */
+let currentView = "active";
+function showEmpty(msg){
+  document.getElementById("board").classList.add("hide");
+  const e=document.getElementById("emptyState");
+  e.classList.remove("hide");
+  if(msg) e.querySelector("h2").textContent = msg;
+  document.getElementById("tally").textContent="";
+}
+function setView(v){
+  currentView = v;
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
+  if(window.__stories) renderView(window.__stories, v);
+}
+
+/* ───────────── file loading ───────────── */
+function loadText(text, label){ render(text, label); }
+function readFile(file){
+  const r=new FileReader();
+  r.onload=()=>loadText(String(r.result), file.name);
+  r.onerror=()=>showEmpty("Couldn't read that file.");
+  r.readAsText(file);
+}
+document.getElementById("openBtn").onclick=()=>document.getElementById("file").click();
+document.getElementById("file").onchange=e=>{ if(e.target.files[0]) readFile(e.target.files[0]); };
+document.getElementById("reloadBtn").onclick=()=>{ tryAutoFetch(true); };
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>setView(t.dataset.view));
+
+// drag-drop
+const drop=document.getElementById("drop");
+["dragenter","dragover"].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();if(ev==="dragleave"&&e.relatedTarget)return;drop.classList.remove("over");}));
+document.addEventListener("drop",e=>{const f=e.dataTransfer.files[0]; if(f) readFile(f);});
+
+/* auto-fetch (works when served via a local server; file:// will throw → picker) */
+function tryAutoFetch(manual){
+  fetch("./user_stories.md",{cache:"no-store"})
+    .then(r=>{ if(!r.ok) throw new Error(r.status); return r.text(); })
+    .then(t=>loadText(t,"./user_stories.md (auto)"))
+    .catch(()=>{
+      document.getElementById("autoNote").textContent =
+        "Auto-load blocked by the browser for local files — pick or drop the .md (this is normal for double-click open).";
+      if(manual) showEmpty("No data — open the story source");
+    });
+}
+tryAutoFetch(false);
+</script>
+</body>
+</html>

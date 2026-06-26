@@ -323,6 +323,20 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-26 — THUNDER Story Board system: `user_stories.md` + `stories.html` (pure renderer) — second lens beside the Status Board (BUILDER-COMPLETE, owner-proof owed; ledger #56)
+
+**Type:** TWO standalone root files (beside `status.html` / `TRACE-SESSION-BOOTSTRAP.md`). **NO app code, NO schema, NO migration, NO `[TRACE:*]`** → schema-verification gate N/A. `npm run verify` exit 0 zero NET-NEW (standalone root files don't trip the gate, like `status.html`). Commit `__PENDING__`.
+
+**THE TWO BOARDS, ONE SYSTEM:** **`status.html` = what's BUILT** (capabilities, green/amber/red ← `TRACE-SESSION-BOOTSTRAP.md`). **`stories.html` = what we're BUILDING TOWARD** (day-in-the-life user need ← `user_stories.md`). They LINK by **capability id (`MAPS-TO`) + arc**, so a reader sees which capabilities have a story (vs build-blind) and which stories have no built pieces yet (gaps).
+
+**FILE 1 — `user_stories.md` (living source of truth):** format header explaining the tags, all **8 `## ARC:` sections** (front-door · ocr-doc-routing · cost-to-produce · suggestion · delivery · discovery · identity-roles-sec · asset-inventory-pmi) + `## ARCHIVED`. Each story = `### title` + `STATUS:` (active/in-build/archived) · `ARC:` · `MAPS-TO:` (status-board cap id(s), `—`=gap) · `PIECES:` + markdown narrative. **Seeded** with David's draft inventory/OCR stories using ONLY the provided metadata + narratives grounded in handoff facts (ledger #54, board 2.3), flagged `_(David to expand)_` — no invented scenarios.
+
+**FILE 2 — `stories.html` (PURE RENDERER, NEVER edited):** mirrors `status.html` — file-picker + drag-drop + auto-fetch + view tabs + empty state + matching styling; a tiny inline block-markdown renderer (works on `file://`, no CDN). Parses the tag format, groups by canonical 8-arc order, renders each story as a card: STATUS pill (in-build amber / active blue / archived muted), prominent `→ <cap id>` MAPS-TO badge (red `→ no capability yet` on a gap), monospace PIECE chips, narrative. **Active** (active+in-build) · **All** · **Archived** toggle (default Active); tally computed from parsed data, never hardcoded. **One-source discipline:** add stories to the `.md`, re-open the page — zero HTML edits.
+
+**PROVEN:** parser node-extracted vs the live `.md` → 4 stories parse with correct arc/status/maps/pieces; the format-example inside the blockquote correctly does NOT leak as a story.
+
+**OWNER-PROVEN owed (David):** open `stories.html` → pick `user_stories.md` → see the inventory stories by arc with their `→ 2.3`/`→ 4.2` badges + piece chips → toggle the three views → add a story to the `.md` and re-open to confirm it appears with no HTML edit.
+
 ### 2026-06-26 — THUNDER WALK-AND-COUNT inventory loop (cap 2.3): scan → resolve → qty → save → next → complete — RECONCILE DEFERRED (BUILDER-COMPLETE, owner-proof owed; ledger #54)
 
 **Type:** App code (2 new + 2 edited cultivar files) + 1 NEW dep (`jsqr`) + ONE GATED migration (WRITTEN, NOT applied) + docs. **NO auth, NO RLS on existing tables, NO schema change on existing tables** → schema-verification gate runs AFTER David applies the new migration. `[TRACE:*]` STAYS ON; new `[TRACE:COUNT]` emits ON. Commit `ea2ea14`. `npm run verify` exit 0 zero NET-NEW (tsc 10, eslint 266, knip 10/14/15); `build:cultivar` clean (2226 modules).
