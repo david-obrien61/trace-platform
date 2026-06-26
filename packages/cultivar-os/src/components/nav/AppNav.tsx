@@ -61,6 +61,12 @@ export function AppNav() {
   const activeNode = navNodeForPath(location.pathname);
   const activeKey = activeNode?.key ?? null;
 
+  // Route-null section nodes (e.g. ADMIN) are rendered as NON-INTERACTIVE group-header labels, not
+  // links — surfaced here so it's explicit which nodes are dividers vs navigable.
+  const groupHeaders = [dashboard, ...dashSurfaces, admin, settings]
+    .filter((n): n is NavNode => !!n && isVisible(n) && navRoute(n) === null)
+    .map((n) => n.key);
+
   // [TRACE:NAV] the structure the active session can see (ON by default, STD-003).
   console.log('[TRACE:NAV] menu', {
     dashboardHome: dashboard && isVisible(dashboard) ? dashboard.key : null,
@@ -69,6 +75,7 @@ export function AppNav() {
     settings: settings && isVisible(settings)
       ? { key: settings.key, subs: linkChildren(settings).map((c) => c.key) }
       : null,
+    groupHeaders, // rendered as labels (no onClick, no link wrapper), NOT dead links
     activeKey,
   });
 

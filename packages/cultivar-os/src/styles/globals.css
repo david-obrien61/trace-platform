@@ -219,7 +219,7 @@ img {
 .appnav-drawer {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0;
   position: absolute;
   top: 100%;
   left: 16px;
@@ -230,15 +230,25 @@ img {
   border: 1px solid var(--gray-200);
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-  padding: 6px;
+  padding: 4px;
   z-index: 30;
 }
-/* Compact density: ~6px vertical padding + tighter line-height keeps rows dense but tappable
-   (~30px tall) so the full tree no longer runs the page height. The 22px sub-page indent vs the
-   12px top-level indent is PRESERVED so the hierarchy still reads. */
-.appnav-drawer .appnav-link { text-align: left; padding: 6px 12px; line-height: 1.3; }
-.appnav-drawer .appnav-heading { padding: 6px 12px 2px; }
+/* Dense density: ~3px vertical padding + tight line-height → ~22px rows (full-width, still tappable)
+   so the full tree is a compact list, not a page-height drop. The 22px sub-page indent vs the 12px
+   top-level indent is PRESERVED so the hierarchy still reads (Route stays a child of Delivery). */
+.appnav-drawer .appnav-link { text-align: left; padding: 3px 12px; line-height: 1.2; }
 .appnav-drawer .appnav-sublink { padding-left: 22px; }
+
+/* ADMIN (and any route-null section node) = a NON-INTERACTIVE group-header label, NOT a link.
+   A top rule + muted micro-caps + default cursor make it unmistakably a divider, never tappable. */
+.appnav-drawer .appnav-heading {
+  align-self: stretch;
+  padding: 6px 12px 2px;
+  margin-top: 4px;
+  border-top: 1px solid var(--gray-200);
+  cursor: default;
+  user-select: none;
+}
 
 /* Breadcrumb — full trail on desktop, single "‹ parent" on mobile */
 .breadcrumb {
