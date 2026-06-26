@@ -77,6 +77,9 @@ export function AppRouter() {
           <Route path="/delivery-schedule" element={<DeliverySchedule />} />
           <Route path="/social/setup" element={<SocialSetup />} />
           <Route path="/settings"          element={<Settings />} />
+          {/* Section-isolated Settings destinations (RULE 2a) — /settings/business, /settings/accounting
+              land on JUST that section, full screen, no long scroll. Same component, section-filtered. */}
+          <Route path="/settings/:section" element={<Settings />} />
           <Route path="/onboarding"        element={<OnboardingWizard />} />
           <Route path="/campaigns"         element={<Campaigns />} />
           <Route path="/campaigns/:id"     element={<CampaignDetail />} />

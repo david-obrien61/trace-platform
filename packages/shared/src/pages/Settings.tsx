@@ -15,16 +15,32 @@ const inputStyle: React.CSSProperties = {
   outline: 'none', fontFamily: 'inherit', color: DARK, background: '#fff',
 };
 
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+// Collapsible card. Each card owns its OWN open state (RULE 2b, ledger #50): toggling one NEVER
+// closes another — no shared accordion, multiple open at once, owner may expand everything. Default
+// open, so the initial appearance is unchanged for every existing caller.
+function SectionCard({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div style={{ background: '#fff', borderRadius: 14, padding: '18px 16px', border: '1px solid #e5e7eb' }}>
-      <p style={{
-        fontSize: '0.6875rem', fontWeight: 700, color: GRAY,
-        textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14,
-      }}>
-        {title}
-      </p>
-      {children}
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          width: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+          marginBottom: open ? 14 : 0, textAlign: 'left',
+        }}
+      >
+        <span style={{
+          fontSize: '0.6875rem', fontWeight: 700, color: GRAY,
+          textTransform: 'uppercase', letterSpacing: '0.08em',
+        }}>
+          {title}
+        </span>
+        <span style={{ color: '#9ca3af', fontSize: '0.7rem', flexShrink: 0 }} aria-hidden="true">{open ? '▾' : '▸'}</span>
+      </button>
+      {open && children}
     </div>
   );
 }
@@ -98,12 +114,22 @@ interface SettingsProps {
   onConnectAccounting?: () => void;
   accountingConnecting?: boolean;
   accountingError?: string;
+  // When set, render ONLY that section as a direct-access full-screen destination (RULE 2a,
+  // ledger #50) — Business Profile or Accounting reached straight from the menu, no long scroll.
+  // Undefined (default) → render the full page (UNCHANGED for every existing caller, incl. Ignition).
+  section?: 'business' | 'accounting';
+  // Footer link to the full settings page (the leftover sections — Services / vertical). Shown
+  // ONLY on a section-isolated view, so nothing on the full page is orphaned.
+  onMoreSettings?: () => void;
 }
 
 export function Settings({
   onBack, verticalSection, accountingConnectUrl,
   onConnectAccounting, accountingConnecting, accountingError,
+  section, onMoreSettings,
 }: SettingsProps) {
+  // `full` = the unfiltered page (all sections + vertical). A section filter renders just one card.
+  const full = !section;
   const { business, businessId, reload } = useBusinessContext();
 
   // ── Business profile ───────────────────────────────────────────────────────
@@ -321,13 +347,16 @@ export function Settings({
           <p style={{ fontSize: '0.6875rem', color: '#a8c890', margin: 0, letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase' }}>
             {business?.name}
           </p>
-          <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>Settings</h1>
+          <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>
+            {section === 'business' ? 'Business Profile' : section === 'accounting' ? 'Accounting' : 'Settings'}
+          </h1>
         </div>
       </div>
 
       <div style={{ padding: '20px 16px', maxWidth: 540, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-        {/* ── Business Profile ── */}
+        {/* ── Business Profile ── (full page OR the isolated /settings/business destination) */}
+        {(full || section === 'business') && (
         <SectionCard title="Business Profile">
           <Field label="Business name"    value={form.name}     onChange={v => setForm(f => ({ ...f, name: v }))}     placeholder="LAWNS Tree Farm, LLC" />
           <Field label="Phone"            value={form.phone}    onChange={v => setForm(f => ({ ...f, phone: v }))}    placeholder="(512) 555-0100" type="tel" />
@@ -352,8 +381,10 @@ export function Settings({
             </p>
           )}
         </SectionCard>
+        )}
 
-        {/* ── Accounting ── */}
+        {/* ── Accounting ── (full page OR the isolated /settings/accounting destination) */}
+        {(full || section === 'accounting') && (
         <SectionCard title="Accounting">
           {accountingConnected ? (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -410,8 +441,10 @@ export function Settings({
             </div>
           )}
         </SectionCard>
+        )}
 
-        {/* ── Services ── */}
+        {/* ── Services ── (full page only; not a named direct destination this pass) */}
+        {full && (
         <SectionCard title="Services">
           <p style={{ fontSize: '0.8125rem', color: GRAY, marginBottom: 14, lineHeight: 1.5 }}>
             Everything you offer at checkout — transport options, add-ons, and future recurring services. Toggle off to hide from customers without deleting.
@@ -532,9 +565,10 @@ export function Settings({
             </>
           )}
         </SectionCard>
+        )}
 
         {/* ── Find Customers (AI match results) ── */}
-        {matchOfferingId && (
+        {full && matchOfferingId && (
           <SectionCard title={`Expand — ${matchOfferingName}`}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <p style={{ fontSize: '0.8125rem', color: GRAY, margin: 0, lineHeight: 1.5 }}>
@@ -618,8 +652,23 @@ export function Settings({
           </SectionCard>
         )}
 
-        {/* ── Vertical-specific section ── */}
-        {verticalSection}
+        {/* ── Vertical-specific section ── (full page only) */}
+        {full && verticalSection}
+
+        {/* On a section-isolated view, a quiet link to the rest so nothing is orphaned (RULE 2a;
+            the leftover sections — Services + vertical — still live on the full /settings page). */}
+        {!full && onMoreSettings && (
+          <button
+            type="button"
+            onClick={onMoreSettings}
+            style={{
+              background: 'none', border: 'none', padding: '4px 0', cursor: 'pointer',
+              color: GREEN, fontWeight: 600, fontSize: '0.8125rem', textAlign: 'left',
+            }}
+          >
+            More business settings →
+          </button>
+        )}
 
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Settings as SharedSettings } from '@trace/shared/pages/Settings';
 import { CostToProduceSettings } from '@trace/shared/components/CostToProduceSettings';
 import { useBusinessContext } from '@trace/shared/context';
@@ -543,7 +543,17 @@ function TeamSection({ businessId }: { businessId: string }) {
 
 export function Settings() {
   const navigate = useNavigate();
+  const { section: sectionParam } = useParams<{ section?: string }>();
   const { businessId, isOwner, userPermissions, reload } = useBusinessContext();
+
+  // RULE 2a (ledger #50): a section param renders JUST that section as a direct menu destination.
+  // Only Business Profile + Accounting are isolated this pass; an unknown param falls back to the
+  // full page rather than a blank screen.
+  const section: 'business' | 'accounting' | undefined =
+    sectionParam === 'business' || sectionParam === 'accounting' ? sectionParam : undefined;
+
+  // [TRACE:NAV] which Settings section-destination resolved (ON by default, STD-003).
+  console.log('[TRACE:NAV] settings section', { param: sectionParam ?? null, resolved: section ?? 'full' });
 
   // The SAME QBO connect action the Dashboard uses (popup + poll). On connect, reload the
   // business context so the Accounting card flips to "connected". Fixes the broken Settings
@@ -565,7 +575,9 @@ export function Settings() {
     ? `/api/qbo/auth-url?business_id=${businessId}`
     : undefined;
 
-  const verticalContent = businessId ? (
+  // The vertical sections (cost config / install price / team) live on the FULL page only — when a
+  // section filter is active the shared page renders just that one card, so we pass nothing here.
+  const verticalContent = (businessId && !section) ? (
     <>
       <CostToProduceSettings />
       <NurserySection businessId={businessId} />
@@ -576,6 +588,8 @@ export function Settings() {
   // No onBack: the persistent breadcrumb (AppLayout) is the canonical "up" affordance (Nav C2).
   return (
     <SharedSettings
+      section={section}
+      onMoreSettings={() => navigate('/settings')}
       accountingConnectUrl={accountingConnectUrl}
       onConnectAccounting={() => void qbConnect()}
       accountingConnecting={qbConnecting}

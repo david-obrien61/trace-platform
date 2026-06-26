@@ -322,9 +322,13 @@ export interface NavNode {
 export const NAV_IA: NavNode[] = [
   // ── Top-level sections (the hamburger / nav-rail) ──
   { key: 'sec_dashboard', section: 'dashboard', parent: null, label: 'Dashboard', route: '/dashboard', required_permission: 'view_dashboard' },
-  { key: 'sec_settings',  section: 'settings',  parent: null, label: 'Settings',  route: '/settings',  required_permission: 'manage_settings' },
-  // Admin = a section heading with no landing page → non-linking (route:null). The rail shows it
-  // iff the session can see ≥1 admin child (both children are owner-scoped).
+  // SETTINGS = USER-level (what a person changes about THEMSELVES). A non-linking header (route:null)
+  // shown to EVERY authenticated user (view_dashboard); its child is Your Profile. Nothing business-
+  // level lives here — business administration is the Admin section (see RULE 1, ledger #50).
+  { key: 'sec_settings',  section: 'settings',  parent: null, label: 'Settings',  route: null, required_permission: 'view_dashboard' },
+  // ADMIN = BUSINESS-ENTITY administration (business-level config). A non-linking header (route:null);
+  // shown iff the session can see ≥1 admin child (all admin children are owner/manage_settings-scoped,
+  // so Staff never sees Admin).
   { key: 'sec_admin',     section: 'admin',     parent: null, label: 'Admin',     route: null },
 
   // ── Dashboard branch ──
@@ -349,17 +353,23 @@ export const NAV_IA: NavNode[] = [
   // AppLayout — this node supplies its breadcrumb trail + active-section highlight either way.
   { key: 'nav_help',            section: 'dashboard', parent: 'sec_dashboard',        label: 'Help', route: '/help', required_permission: 'view_dashboard' },
 
-  // ── Settings branch ──
-  { key: 'nav_roles',           section: 'settings',  parent: 'sec_settings',        label: 'Roles & Permissions', route: '/roles', required_permission: 'manage_settings' },
+  // ── Settings branch (USER-level only) ──
   // Your Profile — the personal identity surface (name/phone/email). PRIMARY entry is the header
   // avatar menu; this node is the secondary nav entry. view_dashboard = reachable by EVERY
   // authenticated role (incl. STAFF — every person can edit their own profile). Breadcrumb:
-  // Settings / Your Profile.
+  // Settings / Your Profile. (Roles & Permissions MOVED to Admin — it is business-level, ledger #50.)
   { key: 'nav_profile',         section: 'settings',  parent: 'sec_settings',        label: 'Your Profile', route: '/profile', required_permission: 'view_dashboard' },
 
-  // ── Admin branch (owner-scoped) ──
-  { key: 'nav_add_business',    section: 'admin',     parent: 'sec_admin',           tileKey: 'add_business' },
-  { key: 'nav_cost_to_produce', section: 'admin',     parent: 'sec_admin',           tileKey: 'cost_to_produce' },
+  // ── Admin branch (BUSINESS administration) — each a DIRECT menu destination (RULE 2a) ──
+  // Business Profile + Accounting are section-isolated views of the /settings page (/settings/:section)
+  // so the owner lands on JUST that section, no long scroll. Add Business + Cost-to-Produce stay
+  // owner-only (account action / cost moat — D-009); the rest are manage_settings (owner-default,
+  // delegable to a manager via /roles). Staff holds neither → sees no Admin item.
+  { key: 'nav_add_business',     section: 'admin',     parent: 'sec_admin',           tileKey: 'add_business' },
+  { key: 'nav_business_profile', section: 'admin',     parent: 'sec_admin',           label: 'Business Profile', route: '/settings/business',    matchRoute: '/settings/business',    required_permission: 'manage_settings' },
+  { key: 'nav_accounting',       section: 'admin',     parent: 'sec_admin',           label: 'Accounting',       route: '/settings/accounting', matchRoute: '/settings/accounting', required_permission: 'manage_settings' },
+  { key: 'nav_roles',            section: 'admin',     parent: 'sec_admin',           label: 'Roles & Permissions', route: '/roles', required_permission: 'manage_settings' },
+  { key: 'nav_cost_to_produce',  section: 'admin',     parent: 'sec_admin',           tileKey: 'cost_to_produce' },
 ];
 
 /** A single nav node by key. */
