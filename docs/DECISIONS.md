@@ -721,6 +721,85 @@ of the front-door re-staging build.
 
 ---
 
+### D-21 · DESIGN LAW — Screen real estate is sacred; direct access over scroll (platform-wide) — `[CAPTURED]`
+**Class:** DESIGN-LAW (cross-cutting UX doctrine — governs every surface in every vertical, not a single-feature decision).
+**Decision:** No surface forces the user to scroll to find or see what they're working on. **Density is the default, not
+the polish.** This applies EVERYWHERE — onboarding, the discovery reveal, settings, admin, inventory, every vertical,
+every tile, every future build — not only where it has been retrofitted. Four concrete rules:
+
+1. **DIRECT ACCESS.** Where a menu/index exists, sections are reachable directly — the menu is the *table of contents*;
+   clicking a section lands the user on JUST that section, not a long page they scroll through. Parent nav items (Admin,
+   Settings, etc.) land on a short INDEX/landing, never a data wall.
+2. **COLLAPSIBLE SECTIONS.** Where blocks must coexist on one screen, they are genuinely collapsible — with a VISIBLE
+   collapse control the user can actually operate (not merely "default-open" with no affordance). Expand/collapse is
+   FREE: opening one never force-closes another; multiple may be open; the user may expand all. **No forced accordion.**
+3. **DENSE LISTS.** High-volume lists get a dense / datasheet / grid view, not an endless scroll-list (e.g. inventory at
+   100+ items).
+4. **COMPACT CHROME.** Navigation and chrome are compact and do not consume the page.
+
+**Reasoning (why this exists — it names one principle that was being re-invented per surface):** the LAWNS-era scroll
+problems were not separate UI bugs — they were ONE missing principle re-discovered on every screen: the onboarding /
+discovery reveal scrolling ~3 pages of stacked conflict cards; the long single-page Settings (Business Profile +
+Accounting + Services + Cost config stacked open); the 111-item inventory scroll-list; the loose / page-height nav
+drawer. Naming the law ONCE stops the re-fight — a build prompt cites D-21 instead of re-arguing density from scratch,
+and owner-prove checks against it instead of catching each scroll regression ad hoc.
+
+**ENFORCEMENT — DOCTRINE, not (yet) an automated gate.** Cited in relevant build prompts and verified at OWNER-PROVE.
+An automated "too-scrolly" check is hard to mechanize and would miss real cases; human owner-prove is the reliable check
+today. Gate-level teeth may be added later if a mechanical check becomes feasible (deliberate divergence-below-standard
+under [[OP-8]]/[[CLAUDE.md §6 rule 10]] — recorded, not silent: the lighter form suffices because owner-prove already
+walks every surface).
+
+**RETRO-APPLICATIONS OWED (tracked follow-ups, NOT built in this capture):**
+- **Onboarding / discovery reveal** — the conflict cards (ledger #47) must become collapsible/sectioned so the user
+  doesn't scroll ~3 pages past name/phone/address to reach services. Lands with the front-door re-staging build (the
+  front-door arc, [[D-20]] timing).
+- **Settings page** — sections were reported "collapsible" but render as stacked open cards with no visible collapse
+  control (i.e. NOT actually collapsible to the user). Owed: genuine, user-operable collapse + the landing/index so
+  Settings never dumps the full page. (Ledger #51 made Business Profile + Accounting direct destinations and added an
+  independently-collapsible `SectionCard`; the *fuller* split — Services / Team / cost config / install price as their
+  own direct destinations — is still owed, reported on #51.)
+- Any other surface that still long-scrolls.
+
+**Companion principles:** [[D-22]] (Admin-vs-Settings gating axis — the sibling principle flagged with this one at the
+Admin/Settings split, ledger #51; D-22 is the *what-goes-where* axis, D-21 is the *how-it-is-presented* law);
+[[OP-8]] (three-lens recon — a "WANT" density end-state is now a captured default, not re-derived per build);
+[[CLAUDE.md §6 rule 10]] (standard-by-value — the gate-deferral is a recorded divergence-below-standard).
+**Canonical home:** THIS entry. **D-21 is the canonical home for "direct access over scroll" (principle (ii) flagged on
+ledger #51) — it is the SUPERSET / platform-wide promotion of that principle, folded in here as rules 1–4 above.** Origin
+context: close-out ledger #51 (commit `2ee2853`).
+**Date captured:** 2026-06-26 · **Status:** CAPTURED doctrine — platform-wide, ENFORCED by citation + owner-prove. Retro-
+applications above are tracked, not built here. Build nothing.
+
+---
+
+### D-22 · Admin = business-entity config; Settings = user-self — the nav gating axis — `[CAPTURED]`
+**Class:** DESIGN-LAW / OPERATING-PRINCIPLE (cross-cutting — the *what-goes-where* axis for every config surface).
+**Decision:** Configuration splits on WHOSE thing it configures. **ADMIN** holds business-entity configuration —
+settings that change the BUSINESS and require business authority (Business Profile, Accounting, Roles & Permissions,
+Cost-to-Produce, Add Business). **SETTINGS** holds user-self configuration — settings about the signed-in PERSON
+(Your Profile). The gate follows the axis: business-entity items gate on `manage_settings` (owner-default, delegable via
+/roles) or `owner-only`; user-self items gate on `view_dashboard` (every authenticated user, including Staff). A Staff
+member holding neither `manage_settings` nor `owner-only` therefore sees NO Admin item, but always sees their own
+Settings.
+
+**Reasoning:** the old grouping mixed the two axes — Roles and Your Profile both sat under SETTINGS — so a user-self
+surface and a business-authority surface looked like peers, and the permission story read inconsistently. Splitting on
+"whose thing is it" makes the gate self-evident from the location: if it changes the business it lives in Admin behind
+business authority; if it changes you it lives in Settings and everyone has it. This is the gating axis; [[D-21]] is the
+presentation law that says each of those destinations is reached directly, not by scrolling one long page.
+
+**Companion principles:** [[D-21]] (direct-access-over-scroll design law — the sibling flagged together at ledger #51;
+D-22 decides placement, D-21 decides presentation); [[OP-1]] (covenant — authority boundaries are honest, never a UI
+accident).
+**Canonical home:** THIS entry (principle (i) flagged for capture on ledger #51; no prior DECISIONS home existed).
+Implementation + file:line evidence: close-out ledger #51 (commit `2ee2853`; `tileRegistry.ts` NAV_IA regroup,
+`BusinessProvider.tsx:492` `can()`).
+**Date captured:** 2026-06-26 · **Status:** CAPTURED doctrine. Implemented (ledger #51); a FULLER split (Services / Team /
+cost config / install price as their own Admin destinations) is still owed, reported on #51.
+
+---
+
 ## PERSONAL-FINANCIAL
 
 > Not in this file by design — see **`decisions/PERSONAL-FINANCIAL.local.md`** (gitignored).
