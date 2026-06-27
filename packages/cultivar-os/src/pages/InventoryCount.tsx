@@ -9,7 +9,16 @@
 // DEPENDENCIES: QrScanner (jsQR camera), business_inventory (on-hand qty), cultivar_plants
 //           (tag→identity→lot), inventory_count_sessions + inventory_counts (durable record,
 //           gated migration 20260626 — degrades gracefully if not yet applied),
-//           @trace/shared/sync SyncEngine (offline durability + reconnect drain).
+//           @trace/shared/sync SyncEngine (offline durability + reconnect drain),
+//           @trace/shared/utils/canonicalName (the token-set canonical key — L4 resolve).
+// RESOLVE:  layered, most-specific → least (grower-resolve design 2026-06-26):
+//           L1 cultivar_plants.tag_id exact → L2 business_inventory.sku exact →
+//           L3 stored product-slug exact (DEFERRED, no column yet) →
+//           L4 NAME token-set EQUALITY (scan slug tokens == catalog name tokens, order-
+//           insensitive — fixes the discovery-catalog false-UNKNOWN, e.g. vitex-shoal-creek
+//           ↔ "Shoal Creek Vitex"; >1 candidate ⇒ UNKNOWN, never auto-pick) → UNKNOWN.
+//           Guarded subset/superset (L5 → NEED_CLARIFICATION) + stemming (L6) are a
+//           deferred fast-follow with the seam left at L4. [TRACE:RESOLVE] shows the layer hit.
 // OUTPUTS:  SETS business_inventory.qty for the resolved lot; records each count in
 //           inventory_counts under a session, identity-stamped (who + when via the
 //           envelope userId + session.counted_by). Surfaces a same-lot-twice-in-session
@@ -23,9 +32,11 @@ import { ArrowLeft, CheckCircle2, X, ScanLine, CloudOff, RefreshCw } from 'lucid
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { SyncEngine } from '@trace/shared/sync';
+import { nameTokenSet, tokenSetsEqual } from '@trace/shared/utils/canonicalName';
 import { QrScanner } from '../components/inventory/QrScanner';
 
 const TRACE_COUNT = true; // [TRACE:COUNT] STD-003 — on until OWNER-PROVEN
+const TRACE_RESOLVE = true; // [TRACE:RESOLVE] STD-003 — which resolver layer hit; on until OWNER-PROVEN
 
 type Phase = 'idle' | 'scanning' | 'reviewing' | 'unknown' | 'conflict' | 'done';
 
@@ -191,11 +202,12 @@ export function InventoryCount() {
         currentQty:  lot?.qty ?? null,
         rawScan:     raw,
       };
+      if (TRACE_RESOLVE) console.log('[TRACE:RESOLVE] L1 tag_id exact —', tag, '→', label);
       openReview(r);
       return;
     }
 
-    // (2) Fall back to an inventory SKU (some QRs encode a SKU, not a plant tag).
+    // (L2) Fall back to an inventory SKU (some QRs encode a real SKU, not a plant tag).
     const { data: lot } = await supabase
       .from('business_inventory')
       .select('id, name, sku, qty')
@@ -204,6 +216,7 @@ export function InventoryCount() {
       .maybeSingle();
 
     if (lot) {
+      if (TRACE_RESOLVE) console.log('[TRACE:RESOLVE] L2 sku exact —', tag, '→', (lot as any).name);
       openReview({
         inventoryId: (lot as any).id,
         plantTagId:  null,
@@ -214,7 +227,49 @@ export function InventoryCount() {
       return;
     }
 
-    // (3) Unknown — don't dead-end the loop.
+    // (L3) stored product-slug exact — DEFERRED: no source_slug column exists today
+    //      (grower-resolve design §6 — a new column behind a gated migration). Skipped
+    //      cleanly; when that column lands, an exact norm(scan)==stored-slug check slots here.
+
+    // (L4) NAME TOKEN-SET EQUALITY — the canonical-key resolve. Fixes the discovery-
+    //      populated catalog case: a QR product-slug ("vitex-shoal-creek") and the
+    //      catalog row that holds it ("Shoal Creek Vitex", synthetic DISC- sku, no
+    //      cultivar_plants row) share only the WORDS of the name. Compare the scanned
+    //      slug's token set against each candidate's name token set; match on EQUALITY
+    //      (order-insensitive). EQUALITY ONLY this build — guarded subset/superset (L5,
+    //      → NEED_CLARIFICATION) and stemming (L6) are the deferred fast-follow and
+    //      slot in right here, after equality and before UNKNOWN.
+    const scannedKey = nameTokenSet(tag);
+    if (scannedKey.size > 0) {
+      const { data: rows } = await supabase
+        .from('business_inventory')
+        .select('id, name, sku, qty')
+        .eq('business_id', businessId);
+      const matches = (rows ?? []).filter(row =>
+        tokenSetsEqual(nameTokenSet((row as any).name), scannedKey));
+
+      if (matches.length === 1) {
+        const m = matches[0] as any;
+        if (TRACE_RESOLVE) console.log('[TRACE:RESOLVE] L4 name token-set equality —', tag, '→', m.name);
+        openReview({
+          inventoryId: m.id,
+          plantTagId:  null,
+          label:       m.name + (m.sku ? ` (SKU ${m.sku})` : ''),
+          currentQty:  m.qty ?? null,
+          rawScan:     raw,
+        });
+        return;
+      }
+      if (matches.length > 1) {
+        // EQUALITY guardrail (surface-don't-presume): more than one row reduces to the
+        // same token set — do NOT auto-pick. Fall to UNKNOWN. This is the seam where
+        // the deferred L5 NEED_CLARIFICATION candidate-picker will present the choice.
+        if (TRACE_RESOLVE) console.warn('[TRACE:RESOLVE] L4 AMBIGUOUS —', matches.length, 'equal-token candidates for', tag, '→ UNKNOWN (do not presume)');
+      }
+    }
+
+    // (L5/UNKNOWN) Unknown — don't dead-end the loop.
+    if (TRACE_RESOLVE) console.log('[TRACE:RESOLVE] UNKNOWN — no layer matched:', tag);
     if (TRACE_COUNT) console.log('[TRACE:COUNT] resolve UNKNOWN — tag:', tag);
     setUnknownRaw(raw);
     setUnknownTag(tag);

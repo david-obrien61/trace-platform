@@ -71,6 +71,7 @@ export { formatDateShort, formatDateTimeShort, todayRange, daysBetween } from '.
 export { STATUS_COLORS, PMI_STATUS_COLORS, ORDER_STATUS_COLORS } from './utils/statusColors';
 export type { StatusLevel } from './utils/statusColors';
 export { normalizePhone } from './utils/normalizePhone';
+export { nameTokenSet, canonicalNameKey, tokenSetsEqual } from './utils/canonicalName';
 
 // Components
 export { FormField, inputStyle, inputErrorStyle } from './components/FormField';
