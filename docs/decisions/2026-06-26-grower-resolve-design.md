@@ -164,3 +164,33 @@ The principle: **make the scan and the catalog share one key at write time**, so
 **Adopt the normalized name token-set as the canonical join key** (§4), behind the layered resolver (§5: tag_id → sku → stored-slug → token-set equality → guarded subset → stemmed → UNKNOWN), with the discovery-capture change (§6) so scan and catalog share a key by construction. This holds across the ~100-grower corpus because it rests on the **only universally-present field (the name)** and uses slug/SKU as precision boosters where the platform happens to expose them — variation in the data, one resolver.
 
 **Build nothing until David confirms the canonical key.** When greenlit, the build splits cleanly: (a) the resolver layers L3–L6 in `InventoryCount.tsx` (no schema), and (b) the discovery-capture column `source_slug` + normalized-name key in `catalog.ts`/`populate.ts` (gated migration → schema-verification gate). The LAWNS false-UNKNOWN is fixed by L4 alone — the rest is the ~100-grower generalization.
+
+---
+
+## Addendum — independent full-corpus re-verification (2026-06-27, Thunder)
+
+This recon was re-run as a **full-corpus churn** (every CSV parsed, not a 3-grower sample) to harden the §4 canonical-key recommendation before any build is greenlit. **The design above holds unchanged** — every load-bearing number reproduced independently, and the two code claims the §6 capture-change rests on were verified at the source.
+
+**Numbers reproduced (Python CSV parse over all 28 catalogs):**
+- **1,382** name-bearing catalog rows; **8** growers with a real per-item catalog (Austin Tree Farm's 12 are names-only / `has_catalog=N`, correctly excluded). ✓ matches §1.
+- **172 URL-slug rows / 1,382 = 12.4%**, all from 3 growers (93 Nursery 96, ATX 28, Calloway's 48). The other 1,210 rows (Far South 647, Native Texas 204, Hill Country 143, Vivero 129, Hope Valley 71, Austin 12) carry **no `item_url`**. ✓ matches §2.
+- **0 real POS SKUs** in the entire corpus — the only `sku` is discovery's synthetic `DISC-####`. ✓
+- **Collisions: 2 token-set groups across 1,382 rows, both same-plant punctuation artifacts** (`Gayfeather Texas`/`Gayfeather, Texas` — Far South; `Yesterday, Today and Tomorrow`/`Yesterday-Today-and-Tomorrow` — 93). Zero distinct plants collide. ✓ confirms §3's "token-set is collision-safe."
+- **Trademark/PPAF-suffixed: 22 / 1,382 ≈ 1.6%** (the `®™℠`/`PPAF`/`PP#####` normalization tail). ✓ within §7.
+
+**Sharper articulation of WHY token-set (not normalized-name-exact) — new this pass.** Breaking the 172 URL rows down by *slug-vs-name-slugify* exactness:
+
+| Grower | URL pattern | exact slugify(name)==url-slug | token-set / subset | neither |
+|---|---|---:|---:|---:|
+| ATX Trees | Wix `/product-page/<common-slug>` | **28 / 28** | 0 | 0 |
+| Calloway's | Woo `/<common-slug>/` | 44 / 48 | 3 | 1 |
+| 93 Nursery | ColdFusion `/Plant-Name/<Botanical-Common>` | **0 / 96** | 92 | 4 |
+
+The 93-Nursery row is the proof that **a normalized-name-EXACT key is insufficient**: its slug is *botanical-prefixed* (`Acer-palmatum-…-Japanese-Maple-Emperor`), so `slugify(common_name)` never equals the URL slug — yet the common-name tokens are a **subset** of the slug tokens in 92/96 cases. Only **token-set equality (L4) + guarded subset (L5)** spans all three regimes (common-first exact, common-first near-exact, botanical-prefixed superset). This is exactly why §5 needs both L4 and L5, not one normalized-string compare. LAWNS' `vitex-shoal-creek` ↔ `Shoal Creek Vitex` is the L4-equality case; 93-Nursery is the L5-subset case; ATX is the trivial case — all three fall out of the same token contract.
+
+**Code claims verified at source (the §6 capture-change foundation):**
+- `discoverCatalogLinks` (**`catalog.ts:77-101`**) harvests *every* `href` and matches `/product/<slug>` via `CATALOG_LINK_RE` (`catalog.ts:74`) — the per-product slug **is seen**, used purely for crawl navigation, then **discarded**; `CatalogItem` (`catalog.ts:48-58`) carries only `{variety, botanical, category, confidence, flagged, flagReason, sourceUrl}`, and `sourceUrl` is the *listing/category* page, not the product URL. ✓ confirms §6.
+- `catalogItemToInventoryRow` (**`populate.ts:87-98`**) writes `sku: 'DISC-' + (1001+index)` and buries `from <sourceUrl>` inside the free-text `notes` — **no matchable slug column**. ✓
+- **No `slug` / `source_slug` / `match_key` column exists in any `supabase/migrations/*.sql`** (grep-clean) — so §6's `source_slug` would be a NEW column → gated migration → schema-verification gate. ✓ flagged, not taken.
+
+**Verdict:** the §4 canonical key (normalized name token-set), the §5 layered resolver, and the §6 discovery-capture change are **confirmed against the complete corpus** and ready for David's go/no-go. No change to the recommendation. The LAWNS fix remains L4-token-equality-alone (no schema); the ~100-grower generalization remains L3 (stored `source_slug`, needs the §6 capture change + gated migration) + L4/L5 (no schema). **Still build-nothing until David confirms the key.**
