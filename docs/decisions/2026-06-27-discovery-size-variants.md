@@ -61,6 +61,8 @@ This keeps the division of labour honest: **the AI finds the variety set; a dete
 
 **Schema implication (B-clean):** a `size text` column + a grouping key (`variant_group text` *or* `parent_id uuid`). My lean within B-clean is `variant_group text` holding the parent product slug — simpler than a self-ref, no parent "header" row to manage, and the slug is already available from the product URL during the crawl. **Migration flagged, not written, not applied** — David picks A/B and (if B-clean) `variant_group` vs `parent_id` first.
 
+> **DECIDED (2026-06-27, David):** **B-clean with `size text` + `variant_group text`.** The build, when greenlit, will: (1) add `size text` (nullable, no CHECK) + `variant_group text` to `business_inventory` via an append-only **gated migration** (flagged, not auto-applied — schema-verification gate runs after David applies); (2) retain raw product-page HTML in the adapter + descend the crawl to `/product/<slug>` pages; (3) add a deterministic `extractSizeVariants(rawHtml)` parser (variation-form JSON primary, `<select>` options fallback); (4) write one `business_inventory` row per (variety × size) with `size` = the grower's published value and `variant_group` = the parent product slug; (5) prove on the LAWNS Vitex page (must capture 5/15/30/45 Gallon) with a new `[TRACE:POPULATE]` variant-capture emit. **Not started this pass — awaiting David's build greenlight.**
+
 ---
 
 ## CONFIRM (#6) — the size list is PER-GROWER, derived from their own site
