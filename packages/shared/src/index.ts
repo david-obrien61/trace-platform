@@ -22,6 +22,9 @@ export * from './notifications/index';
 export * from './qr/generate';
 export * from './qr/print';
 
+// Field-debug capture (console interceptor → persisted ring buffer → share/export)
+export * from './debug';
+
 // Pricing — canonical shared engine (business-logic/MarginEngine.ts, THUNDER · Build 1 · 2026-06-10)
 // Replaces dead stub at pricing/marginEngine.ts (broken Math.floor+0.99 rounding; zero callers).
 export {

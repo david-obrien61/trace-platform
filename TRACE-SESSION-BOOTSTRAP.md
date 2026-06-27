@@ -76,6 +76,8 @@
 **— LIVE SPINE (demoable today) —**
 - 🟢 **Demo spine: QR checkout · netting/compliance · leakage · insights · QB invoice · inventory · PMI · delivery loop** (8 live caps) · live · DEMO · → §📋 board (2.1/2.2/3.1/3.5/3.6/4.1/5.1/5.2) · `verify-universals` matrix exit 0
 - 🟡 **Owner-proof-owed deploy bundle** (Part-A render-wall · write-wall Gate-3b · tile registry · vertical field · identity header) · built, ONE deploy + two-JWT session closes all · INFRA · → `docs/CLOSE-OUT-LEDGER.md` "OWNER-PROOF OWED"
+- 🟡 **Field-debug capture** (ledger #60) · BUILDER-COMPLETE, phone owner-proof owed · TOOLING (the instrument for debugging the demo fixes) · console-interceptor → localStorage ring buffer (survives reload/crash) → `?debug=1` 🐞 panel: Share/Download/Copy the `[TRACE:*]` trail as a `.txt` to Lightning; zero per-site edits; decoupled from PWA · deps: none (works in a mobile tab) · → `packages/shared/src/debug/captureBuffer.ts`, `2026-06-27-wrap-and-capture.md`
+- 🔴 **PWA wrap** (recommended LAST, not built) · recon-only · thin ~3-4h additive (manifest+icons+apple-meta+app-shell SW), no native shell · sequencing: AFTER resolver+session fixes (SW interacts with the offline/session surface) · → `2026-06-27-wrap-and-capture.md`
 
 ---
 
