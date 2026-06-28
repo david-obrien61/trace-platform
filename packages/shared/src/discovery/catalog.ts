@@ -55,6 +55,9 @@ export interface CatalogItem {
   flagged:    boolean;           // true → owner must review before trusting (low conf OR no category)
   flagReason: string | null;     // why it was flagged — surfaced to the owner, never hidden
   sourceUrl:  string;            // which page this came from
+  // ── B-clean size variants (populated post-extraction by the product-page crawl) ──
+  sizes?:      string[];         // the grower's published size options, e.g. ["5 Gallon","15 Gallon"]
+  sourceSlug?: string | null;    // the parent product slug → business_inventory.variant_group
 }
 
 /** Raw shape the model returns — extraction only. */
@@ -373,4 +376,185 @@ export async function extractCatalog(pages: CatalogPage[], opts: ExtractOpts): P
   }));
 
   return extract;
+}
+
+// ── Size variants (DETERMINISTIC — WooCommerce variable products, NO AI) ──────────
+//
+// A WooCommerce variable product (e.g. the LAWNS Shoal Creek Vitex) carries its size
+// options as STRUCTURED data on the product page — in the `data-product_variations`
+// JSON attribute on the variations form, and again in the size `<select>` options.
+// We read those deterministically; the AI is never asked for a size. The catalog
+// extractor finds the VARIETY (the parent); this finds its SIZES (the countable lots).
+
+/** Decode the HTML entities WooCommerce uses inside the variations-JSON attribute and
+ *  option labels, so the JSON parses and labels read cleanly. `&amp;` is decoded last
+ *  to avoid double-decoding a `&amp;quot;`-style sequence. */
+function htmlUnescape(s: string): string {
+  return s
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;|&#0?39;|&#8216;|&#8217;/g, "'")
+    .replace(/&#8211;/g, '–').replace(/&#8212;/g, '—')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&#(\d+);/g, (_m, d) => { try { return String.fromCodePoint(Number(d)); } catch { return ''; } })
+    .replace(/&amp;/g, '&');
+}
+
+/**
+ * normalizeSize — canonical TRADE-size string. The gallon family ("5-gallon" / "5 gal"
+ * / "#5" / "5G" / "5 Gallon") collapses to one form "5 Gallon". Size spans systems
+ * (container gallons / caliper inches / height) across growers, so anything that is NOT
+ * a recognizable gallon form is passed through trimmed — kept as free TEXT, never forced
+ * into a gallon it isn't (ANSI Z60.1: "gallon" is a container-class trade label).
+ */
+export function normalizeSize(raw: string): string {
+  const s = raw.trim().toLowerCase().replace(/\s+/g, ' ');
+  const gal =
+    s.match(/(\d+(?:\.\d+)?)\s*-?\s*gal(?:lon)?s?\b/) ||   // 5 gallon / 5-gallon / 5gal / 5 gals
+    s.match(/(\d+(?:\.\d+)?)\s*g\b/) ||                    // 5g / 5 g
+    s.match(/^#\s*(\d+(?:\.\d+)?)\b/);                     // #5  (container-number = gallon-class)
+  if (gal) return `${gal[1].replace(/\.0+$/, '')} Gallon`;
+  return raw.trim().replace(/\s+/g, ' ');
+}
+
+/** /product/<slug>/ → "<slug>" (lowercased) — the variant_group grouping key. */
+export function productSlugFromUrl(url: string): string | null {
+  try {
+    const parts = new URL(url).pathname.split('/').filter(Boolean);
+    const i = parts.findIndex(p => p.toLowerCase() === 'product');
+    return i >= 0 && parts[i + 1] ? parts[i + 1].toLowerCase() : null;
+  } catch { return null; }
+}
+
+/**
+ * extractSizeVariants — pull the size options off a product page's raw HTML.
+ *   PRIMARY:  the WooCommerce variations-JSON (`data-product_variations`) — authoritative,
+ *             ordered, complete; collect every `attribute_*siz*` value across variations.
+ *   FALLBACK: the size `<select>` option labels (older themes / AJAX-only variation data).
+ * Each value is normalized + de-duped (order preserved). A simple product (no variations)
+ * yields []. Deterministic — never calls the AI.
+ */
+export function extractSizeVariants(rawHtml: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (raw: string): void => {
+    const n = normalizeSize(raw);
+    const key = n.toLowerCase();
+    if (n && !seen.has(key)) { seen.add(key); out.push(n); }
+  };
+
+  // PRIMARY — variations JSON attribute.
+  const jsonM = rawHtml.match(/data-product_variations\s*=\s*"([^"]*)"/i);
+  if (jsonM) {
+    try {
+      const parsed = JSON.parse(htmlUnescape(jsonM[1]));
+      if (Array.isArray(parsed)) {
+        for (const v of parsed) {
+          const attrs = (v && typeof v === 'object' ? (v.attributes ?? {}) : {}) as Record<string, unknown>;
+          for (const [k, val] of Object.entries(attrs)) {
+            if (/siz/i.test(k) && val != null && String(val).trim()) push(String(val));
+          }
+        }
+      }
+    } catch { /* malformed JSON → fall through to the select fallback */ }
+  }
+  if (out.length) return out;
+
+  // FALLBACK — size <select> option labels.
+  const selRe = /<select\b[^>]*name="attribute_[^"]*siz[^"]*"[^>]*>([\s\S]*?)<\/select>/gi;
+  let sm: RegExpExecArray | null;
+  while ((sm = selRe.exec(rawHtml)) !== null) {
+    const optRe = /<option\b[^>]*value="([^"]*)"[^>]*>([\s\S]*?)<\/option>/gi;
+    let om: RegExpExecArray | null;
+    while ((om = optRe.exec(sm[1])) !== null) {
+      const value = om[1].trim();
+      if (!value) continue;                                  // skip the "Choose an option" placeholder
+      const label = htmlUnescape(om[2].replace(/<[^>]+>/g, '').trim());
+      push(label || value);
+    }
+  }
+  return out;
+}
+
+/** Best-effort product title (WooCommerce `<h1 class="product_title">`, else <title>). */
+function extractProductName(rawHtml: string): string | null {
+  const h1 = rawHtml.match(/<h1[^>]*class="[^"]*product_title[^"]*"[^>]*>([\s\S]*?)<\/h1>/i);
+  const raw = h1 ? h1[1] : (rawHtml.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? '');
+  const name = htmlUnescape(raw.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+  return name || null;
+}
+
+/** Product-page links from a page's HTML — `/product/<slug>` but never `/product-category/`. */
+function discoverProductLinks(html: string, baseUrl: string): string[] {
+  return discoverCatalogLinks(html, baseUrl)
+    .filter(l => /\/product\//i.test(l) && !/\/product-category\//i.test(l));
+}
+
+export interface ProductVariants {
+  slug:      string;
+  name:      string | null;
+  sizes:     string[];        // normalized, de-duped, page order
+  sourceUrl: string;
+}
+
+export interface ProductCrawlOpts {
+  maxProducts?:     number;
+  maxCategoryScan?: number;
+  /** Injectable for tests/proofs — defaults to the real browser-headered fetch. */
+  _rawFetch?: (url: string) => Promise<string>;
+}
+
+/**
+ * fetchProductVariants — bounded second-pass crawl that visits individual
+ * /product/<slug> pages and reads their SIZE variants (extractSizeVariants — no AI).
+ * Returns only products that expose ≥1 size (variable products); simple products yield
+ * nothing here and stay single parent rows. Kept INDEPENDENT of fetchCatalogPages so the
+ * proven variety-extraction path is untouched (it returns CatalogPage[], tested as such).
+ */
+export async function fetchProductVariants(baseUrl: string, opts: ProductCrawlOpts = {}): Promise<ProductVariants[]> {
+  const maxProducts = opts.maxProducts ?? 100;
+  const maxCatScan  = opts.maxCategoryScan ?? 25;
+  const rawFetch    = opts._rawFetch ?? realRawFetch;
+
+  let normalized = baseUrl.trim();
+  if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`;
+
+  console.log(JSON.stringify({ tag: '[TRACE:POPULATE]', phase: 'variants:crawl-start', url: normalized }));
+
+  // entry page → direct product links + the category/shop pages that list product cards
+  let entryHtml = '';
+  try { entryHtml = await rawFetch(normalized); } catch { /* no entry → no products */ }
+
+  const productSet = new Set<string>();
+  if (entryHtml) for (const p of discoverProductLinks(entryHtml, normalized)) productSet.add(p.replace(/\/$/, ''));
+
+  const catPages = entryHtml
+    ? discoverCatalogLinks(entryHtml, normalized)
+        .filter(l => /\/(product-category|shop|catalog|catalogue|plants?|trees?|nursery-stock|availability)\b/i.test(l))
+        .slice(0, maxCatScan)
+    : [];
+  for (const cat of catPages) {
+    if (productSet.size >= maxProducts) break;
+    try {
+      const catHtml = await rawFetch(cat);
+      for (const p of discoverProductLinks(catHtml, cat)) productSet.add(p.replace(/\/$/, ''));
+    } catch { /* a dead category never sinks the crawl */ }
+  }
+
+  const productUrls = Array.from(productSet).slice(0, maxProducts).map(u => u + '/');
+  console.log(JSON.stringify({ tag: '[TRACE:POPULATE]', phase: 'variants:products-found', categoriesScanned: catPages.length, products: productUrls.length }));
+
+  const out: ProductVariants[] = [];
+  for (const url of productUrls) {
+    let html = '';
+    try { html = await rawFetch(url); } catch { continue; }
+    const sizes = extractSizeVariants(html);
+    if (!sizes.length) continue;                             // simple product → no variant rows
+    const slug = productSlugFromUrl(url);
+    if (!slug) continue;
+    out.push({ slug, name: extractProductName(html), sizes, sourceUrl: url });
+    console.log(JSON.stringify({ tag: '[TRACE:POPULATE]', phase: 'variants:captured', slug, sizes }));
+  }
+
+  console.log(JSON.stringify({ tag: '[TRACE:POPULATE]', phase: 'variants:done', variableProducts: out.length }));
+  return out;
 }

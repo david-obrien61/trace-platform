@@ -9,8 +9,9 @@ export { seedServiceOfferings } from './seed';
 export {
   fetchCatalogPages, discoverCatalogLinks, categoryHintFromUrl,
   extractCatalog, mapRawToCatalogItem, buildCatalogPrompt,
+  extractSizeVariants, normalizeSize, productSlugFromUrl, fetchProductVariants,
 } from './catalog';
-export type { CatalogPage, CatalogItem, CatalogExtract, CatalogConfidence, CrawlOpts, ExtractOpts } from './catalog';
+export type { CatalogPage, CatalogItem, CatalogExtract, CatalogConfidence, CrawlOpts, ExtractOpts, ProductVariants, ProductCrawlOpts } from './catalog';
 export {
   populateCatalog, clearSandbox, clearDiscovery, catalogItemToInventoryRow,
 } from './populate';

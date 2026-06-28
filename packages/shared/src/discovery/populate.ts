@@ -37,7 +37,11 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { fetchCatalogPages, extractCatalog, type CatalogItem, type CatalogExtract, type CrawlOpts } from './catalog';
+import {
+  fetchCatalogPages, extractCatalog, fetchProductVariants,
+  type CatalogItem, type CatalogExtract, type CrawlOpts, type ProductVariants,
+} from './catalog';
+import { canonicalNameKey } from '../utils/canonicalName';
 import type { WebsiteContent } from './adapters/website';
 
 const DISC_SKU_PREFIX = 'DISC-';
@@ -74,17 +78,28 @@ export async function clearDiscovery(businessId: string, supabase: SupabaseClien
 // ── Row mapping (D-9) ───────────────────────────────────────────────────────────
 
 /** Map an extracted catalog item to a business_inventory row. Pure + testable.
- *  Encodes the honesty contract: UNKNOWN cost, no fabricated qty, flagged→'review'. */
-export function catalogItemToInventoryRow(item: CatalogItem, businessId: string, index: number) {
+ *  Encodes the honesty contract: UNKNOWN cost, no fabricated qty, flagged→'review'.
+ *  When `size`/`variantGroup` are supplied (B-clean size variants), the row carries the
+ *  size dimension and the parent-plant grouping; when they are NOT supplied the size
+ *  columns are OMITTED entirely (a parent row — and a clean insert pre-migration). */
+export function catalogItemToInventoryRow(
+  item: CatalogItem, businessId: string, index: number,
+  size?: string | null, variantGroup?: string | null,
+) {
   const descParts = [item.botanical, item.category].filter(Boolean);
   const noteParts = [
     `${DISC_NOTE_TAG} from ${item.sourceUrl}`,
     `confidence: ${item.confidence}`,
     item.category ? `category: ${item.category}` : null,
   ].filter(Boolean);
+  if (size) noteParts.push(`size: ${size}`);
   if (item.flagged) noteParts.push(`${DISC_NOTE_TAG}:FLAGGED ${item.flagReason ?? 'needs review'}`);
 
-  return {
+  const row: {
+    business_id: string; sku: string; name: string; description: string | null;
+    qty: number; unit_cost: null; cost_confidence: string; status: string; notes: string;
+    size?: string | null; variant_group?: string | null;
+  } = {
     business_id:     businessId,
     sku:             `${DISC_SKU_PREFIX}${String(1001 + index)}`,
     name:            item.variety,
@@ -95,6 +110,11 @@ export function catalogItemToInventoryRow(item: CatalogItem, businessId: string,
     status:          item.flagged ? 'review' : 'available',
     notes:           noteParts.join(' · '),
   };
+  // Only attach the size columns when this is a size-variant row, so a parent row (and
+  // a pre-migration insert) carries no size/variant_group keys at all.
+  if (size !== undefined)         row.size = size;
+  if (variantGroup !== undefined) row.variant_group = variantGroup;
+  return row;
 }
 
 // ── Populate (orchestration) ────────────────────────────────────────────────────
@@ -148,14 +168,62 @@ export async function populateCatalog(
     };
   }
 
+  // ── Enrich with SIZE variants (B-clean) — bounded product-page crawl, deterministic ──
+  // The catalog extractor found the VARIETIES (parents); this reads each variable
+  // product's SIZE options off its product page (no AI) and matches them to a variety by
+  // the same name token-set key the resolver uses (the slug ↔ variety common name).
+  let variants: ProductVariants[] = [];
+  try {
+    variants = await fetchProductVariants(sourceUrl, { maxProducts: opts.maxPages, _rawFetch: opts._rawFetch });
+  } catch (err: any) {
+    console.log(JSON.stringify({ tag: '[TRACE:POPULATE]', phase: 'variants:error', error: err?.message ?? String(err) }));
+  }
+  const bySlugKey = new Map<string, ProductVariants>();
+  for (const v of variants) bySlugKey.set(canonicalNameKey(v.slug), v);
+  let itemsWithVariants = 0, totalSizeRows = 0;
+  for (const item of extract.items) {
+    const v = bySlugKey.get(canonicalNameKey(item.variety));
+    if (v && v.sizes.length) {
+      item.sizes = v.sizes;
+      item.sourceSlug = v.slug;
+      itemsWithVariants++;
+      totalSizeRows += v.sizes.length;
+    }
+  }
+  console.log(JSON.stringify({
+    tag: '[TRACE:POPULATE]', phase: 'variants:matched',
+    variableProducts: variants.length, varietiesMatched: itemsWithVariants, sizeRows: totalSizeRows,
+  }));
+
   // Clear sandbox + any prior discovery rows (idempotent re-populate).
   const sandboxCleared   = await clearSandbox(businessId, supabase);
   const discoveryCleared = await clearDiscovery(businessId, supabase);
   console.log(JSON.stringify({ tag: '[TRACE:POPULATE]', phase: 'populate:cleared', sandbox: sandboxCleared, discovery: discoveryCleared }));
 
-  // Write the real catalog.
-  const rows = extract.items.map((item, i) => catalogItemToInventoryRow(item, businessId, i));
-  const { error: insErr } = await supabase.from('business_inventory').insert(rows);
+  // Build rows: ONE row per (variety × size) where the product has size variants;
+  // otherwise one parent row (size NULL), exactly as before.
+  let skuIdx = 0;
+  const rows: ReturnType<typeof catalogItemToInventoryRow>[] = [];
+  for (const item of extract.items) {
+    if (item.sizes && item.sizes.length) {
+      for (const size of item.sizes) rows.push(catalogItemToInventoryRow(item, businessId, skuIdx++, size, item.sourceSlug ?? null));
+    } else {
+      rows.push(catalogItemToInventoryRow(item, businessId, skuIdx++));
+    }
+  }
+
+  let { error: insErr } = await supabase.from('business_inventory').insert(rows);
+
+  // Deploy-window safety: if size/variant_group are not applied yet, the per-size insert
+  // fails on the unknown column → collapse to ONE parent row per variety (no size cols)
+  // so populate still succeeds before the migration lands (mirrors the deliveries pattern).
+  let degradedNoSizes = false;
+  if (insErr && (insErr.code === 'PGRST204' || /\b(size|variant_group)\b|column/i.test(insErr.message))) {
+    degradedNoSizes = true;
+    console.log(JSON.stringify({ tag: '[TRACE:POPULATE]', phase: 'variants:columns-absent', note: 'size/variant_group not applied yet — writing parent rows only', error: insErr.message }));
+    const parentRows = extract.items.map((item, i) => catalogItemToInventoryRow(item, businessId, i));
+    ({ error: insErr } = await supabase.from('business_inventory').insert(parentRows));
+  }
   if (insErr) {
     console.log(JSON.stringify({ tag: '[TRACE:POPULATE]', phase: 'populate:insert-error', error: insErr.message }));
     return {
@@ -164,7 +232,10 @@ export async function populateCatalog(
       inserted: 0, flaggedInserted: 0, status: 'insert-failed', error: insErr.message,
     };
   }
-  const flaggedInserted = rows.filter(r => r.status === 'review').length;
+  const writtenRows     = degradedNoSizes ? extract.items.length : rows.length;
+  const flaggedInserted = degradedNoSizes
+    ? extract.items.filter(i => i.flagged).length
+    : rows.filter(r => r.status === 'review').length;
 
   // Persist the extraction profile (the honesty/audit trail) — upsert on (business, url).
   const profile = {
@@ -180,7 +251,9 @@ export async function populateCatalog(
         deduped:        extract.items.length,
         highConfidence: extract.highConfidence,
         flagged:        extract.flaggedCount,
-        inserted:       rows.length,
+        inserted:       writtenRows,
+        sizeRows:       degradedNoSizes ? 0 : totalSizeRows,
+        varietiesWithSizes: degradedNoSizes ? 0 : itemsWithVariants,
       },
     },
   };
@@ -194,15 +267,18 @@ export async function populateCatalog(
 
   console.log(JSON.stringify({
     tag: '[TRACE:POPULATE]', phase: 'populate:done',
-    inserted: rows.length, flaggedInserted, high: extract.highConfidence,
-    profilePersisted: !profErr,
+    inserted: writtenRows, sizeRows: degradedNoSizes ? 0 : totalSizeRows,
+    flaggedInserted, high: extract.highConfidence,
+    degradedNoSizes, profilePersisted: !profErr,
   }));
 
   return {
     businessId, sourceUrl, extract,
     cleared: { sandbox: sandboxCleared, discovery: discoveryCleared },
-    inserted: rows.length, flaggedInserted,
-    status: profErr ? 'populated-no-profile' : 'populated',
+    inserted: writtenRows, flaggedInserted,
+    status: degradedNoSizes
+      ? (profErr ? 'populated-no-sizes-no-profile' : 'populated-no-sizes')
+      : (profErr ? 'populated-no-profile' : 'populated'),
     error: null,
   };
 }
