@@ -2,6 +2,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { AppRouter } from './router';
 import { BusinessProvider } from '@trace/shared/context';
 import { DebugPanel } from './components/DebugPanel';
+import { RhythmLogger } from './components/RhythmLogger';
 import './styles/globals.css';
 
 export function App() {
@@ -12,6 +13,8 @@ export function App() {
       </BusinessProvider>
       {/* Field-debug panel — renders only when ?debug=1 (sticky) so demos stay clean. */}
       <DebugPanel />
+      {/* Customer-zero rhythm instrument — renders only when ?rhythm=1 (sticky). */}
+      <RhythmLogger />
     </BrowserRouter>
   );
 }
