@@ -31,7 +31,8 @@ import IgnitionEstimate from './modules/IgnitionEstimate';
 import IgnitionEval from './modules/IgnitionEval';
 import IgnitionInvoice from './modules/IgnitionInvoice';
 import IgnitionTools from './modules/IgnitionTools';
-import { Lock, LayoutDashboard, Truck, Activity, ShoppingCart, Search, Package, BarChart3, ShieldCheck, Users, Map, Store, ScanLine, QrCode, DollarSign, RefreshCw, UserPlus, ClipboardCheck, Cog, FileSearch, CheckCircle, ChevronRight, FilePlus, ClipboardList, Microscope, Receipt, Wrench } from 'lucide-react';
+import IgnitionAsset from './modules/IgnitionAsset';
+import { Lock, LayoutDashboard, Truck, Activity, ShoppingCart, Search, Package, BarChart3, ShieldCheck, Users, Map, Store, ScanLine, QrCode, DollarSign, RefreshCw, UserPlus, ClipboardCheck, Cog, FileSearch, CheckCircle, ChevronRight, FilePlus, ClipboardList, Microscope, Receipt, Wrench, FolderOpen } from 'lucide-react';
 
 const STYLE_DEBUG = true; // [TRACE:STYLE]
 
@@ -70,6 +71,7 @@ const DASH_APPS = [
   { id: 'AUDIT',       label: 'Audit',      icon: FileSearch,     iconColor: '#fb7185' },
   { id: 'ADMIN',       label: 'Admin',      icon: Cog,            iconColor: '#94a3b8' },
   { id: 'TOOLS',       label: 'Tools',      icon: Wrench,         iconColor: '#fb923c' },
+  { id: 'ASSETS',      label: 'Asset Lib',  icon: FolderOpen,     iconColor: '#38bdf8' },
 ];
 
 const NAV_ITEMS = [
@@ -1177,6 +1179,11 @@ const CoreApp = () => {
         {activeModule === 'TOOLS' && (
           <AccessGatekeeper requiredPermissions={['manage_users']}>
             <IgnitionTools />
+          </AccessGatekeeper>
+        )}
+        {activeModule === 'ASSETS' && (
+          <AccessGatekeeper requiredPermissions={[]}>
+            <IgnitionAsset onBack={() => setActiveModule('DASHBOARD')} />
           </AccessGatekeeper>
         )}
       </main>

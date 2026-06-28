@@ -26,6 +26,7 @@ import { Plus, X, Package } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { CATEGORY_OPTS } from '@trace/shared/business-logic';
+import AssetManager from '@trace/shared/components/AssetManager';
 
 const STATUS_OPTIONS = ['ACTIVE', 'IN_REPAIR', 'OFFLINE', 'RETIRED'] as const;
 type AssetStatus = typeof STATUS_OPTIONS[number];
@@ -148,6 +149,7 @@ export function BusinessAssets() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [viewMode, setViewMode] = useState<'table' | 'visual'>('table');
 
   useEffect(() => {
     if (!businessId) return;
@@ -285,6 +287,30 @@ export function BusinessAssets() {
     }, 900);
   }
 
+  if (viewMode === 'visual') {
+    return (
+      <AssetManager
+        supabase={supabase}
+        tableName="cost_objects"
+        businessId={businessId ?? ''}
+        businessIdColumn="business_id"
+        fieldMap={{
+          name: 'name',
+          category: 'asset_type',
+          brand: 'make',
+          model: 'model',
+          serialNumber: 'serial_number',
+          price: 'acquisition_cost',
+          notes: 'notes'
+        }}
+        filterQuery={(q) => q.eq('node_type', 'ASSET').eq('is_active', true)}
+        defaultInsertValues={{ node_type: 'ASSET', is_active: true, status: 'ACTIVE', cost_confidence: 'ESTIMATED' }}
+        theme="light"
+        onBack={() => setViewMode('table')}
+      />
+    );
+  }
+
   return (
     <div style={S.page}>
 
@@ -292,6 +318,12 @@ export function BusinessAssets() {
       <div style={S.header}>
         <h1 style={S.title}>Assets</h1>
         <div style={{ flex: 1 }} />
+        <button 
+          style={{ ...S.addBtn, marginRight: 8 }} 
+          onClick={() => setViewMode(viewMode === 'table' ? 'visual' : 'table')}
+        >
+          {viewMode === 'table' ? 'Switch to Visual View' : 'Switch to Editable Ledger'}
+        </button>
         <button style={S.addBtn} onClick={() => { setShowForm(true); setSaveError(null); setSaveSuccess(false); }}>
           <Plus size={16} />
           Add Asset

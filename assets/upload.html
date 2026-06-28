@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Raw Element Assets</title>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <style>
+        body { font-family: -apple-system, sans-serif; padding: 20px; background-color: #111111; color: white; text-align: center; }
+        h2 { margin-bottom: 30px; font-weight: 600; }
+        .btn { 
+            display: block; 
+            width: 100%; 
+            padding: 20px; 
+            margin: 15px 0; 
+            font-size: 18px; 
+            font-weight: bold; 
+            border-radius: 12px; 
+            border: none; 
+            cursor: pointer;
+        }
+        .btn-camera { background-color: #007bff; color: white; }
+        .btn-library { background-color: #28a745; color: white; }
+        #status { font-weight: bold; margin-top: 20px; padding: 10px; border-radius: 8px; }
+        input[type="file"] { display: none; }
+        .form-group { text-align: left; background: #1e1e1e; padding: 15px; border-radius: 12px; margin-bottom: 15px; }
+        .form-label { display: block; margin-bottom: 5px; color: #aaa; font-size: 14px; }
+        .form-control { width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 6px; border: none; background: #333; color: white; box-sizing: border-box; font-family: inherit; }
+    </style>
+</head>
+<body>
+    <h2>Raw Element Assets</h2>
+    
+    <div class="form-group">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+            <label class="form-label" style="margin-bottom: 0;">Folder / Category</label>
+            <button type="button" onclick="createNewFolder()" style="background: #28a745; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px; font-weight: bold;">➕ New</button>
+        </div>
+        <select id="assetFolder" class="form-control">
+            <option value="">-- Main Library --</option>
+        </select>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+            <label class="form-label" style="margin-bottom: 0;">Asset Name (Optional)</label>
+            <button type="button" onclick="document.getElementById('barcodeInput').click()" style="background: #007bff; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px; font-weight: bold;">📷 Scan Barcode</button>
+        </div>
+        <input type="file" id="barcodeInput" accept="image/*" capture="environment" onchange="scanBarcodeFile(this)" />
+        <div id="reader" style="display: none;"></div>
+        <input type="text" id="assetName" class="form-control" placeholder="e.g. Dell Monitor">
+        <label class="form-label">Location / Bin</label>
+        <input type="text" id="assetLocation" class="form-control" placeholder="e.g. Warehouse Rack A">
+        <label class="form-label">Notes / Description</label>
+        <textarea id="assetNotes" class="form-control" rows="2" placeholder="Condition, serial number..."></textarea>
+    </div>
+
+    <button class="btn btn-camera" onclick="document.getElementById('cameraInput').click()">📷 Take Picture</button>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" onchange="uploadFiles(this)" />
+    
+    <button class="btn btn-library" onclick="document.getElementById('libraryInput').click()">📁 Choose from Library</button>
+    <input type="file" id="libraryInput" accept="image/*" multiple onchange="uploadFiles(this)" />
+    
+    <div id="status"></div>
+
+    <script>
+        async function fetchFolders() {
+            try {
+                const res = await fetch('/api/assets/folders');
+                const data = await res.json();
+                const select = document.getElementById('assetFolder');
+                select.innerHTML = '<option value="">-- Main Library --</option>'; // Clear existing options before repopulating
+                data.folders.forEach(f => {
+                    const opt = document.createElement('option');
+                    opt.value = f;
+                    // Create visual nesting for subfolders
+                    const depth = (f.match(/\//g) || []).length;
+                    if (depth > 0) {
+                        opt.innerHTML = '&nbsp;'.repeat(depth * 3) + '┗ 📂 ' + f.split('/').pop();
+                    } else {
+                        opt.innerHTML = '📂 ' + f.split('/').pop();
+                    }
+                    select.appendChild(opt);
+                });
+            } catch (e) {
+                console.error("Failed to load folders");
+            }
+        }
+        window.onload = fetchFolders;
+
+        async function scanBarcodeFile(inputElement) {
+            if (!inputElement.files.length) return;
+            const file = inputElement.files[0];
+            const html5QrCode = new Html5Qrcode("reader");
+            try {
+                const decodedText = await html5QrCode.scanFile(file, true);
+                document.getElementById('assetName').value = decodedText;
+            } catch (err) {
+                console.error("Barcode scan failed", err);
+                alert("Could not detect a barcode in that picture. Please try again or type it manually.");
+            }
+            inputElement.value = '';
+        }
+
+        async function createNewFolder() {
+            const currentFolder = document.getElementById('assetFolder').value;
+            let promptText = "Enter new folder name:";
+            if (currentFolder) {
+                promptText = `Enter new folder name to create inside '${currentFolder}':`;
+            }
+            
+            const folderName = prompt(promptText);
+            if (!folderName) return;
+
+            const formData = new FormData();
+            formData.append('parent_folder', currentFolder);
+            formData.append('folder_name', folderName);
+
+            try {
+                const response = await fetch('/api/assets/create_folder', { method: 'POST', body: formData });
+                if (response.ok) {
+                    await fetchFolders(); // Refresh dropdown list
+                    const newPath = currentFolder ? `${currentFolder}/${folderName}` : folderName;
+                    document.getElementById('assetFolder').value = newPath; // Automatically select the new folder
+                } else alert("Failed to create folder on the PC.");
+            } catch (error) {
+                console.error("Error creating folder", error);
+                alert("Network error while trying to create folder.");
+            }
+        }
+
+        async function uploadFiles(inputElement) {
+            if (!inputElement.files.length) return;
+            
+            const statusDiv = document.getElementById('status');
+            statusDiv.style.backgroundColor = "#333";
+            statusDiv.style.color = "white";
+            statusDiv.innerText = `Uploading ${inputElement.files.length} file(s)...`;
+
+            let successCount = 0;
+            let failCount = 0;
+
+            const aName = document.getElementById('assetName').value;
+            const aLocation = document.getElementById('assetLocation').value;
+            const aNotes = document.getElementById('assetNotes').value;
+            const aFolder = document.getElementById('assetFolder').value;
+
+            for (let i = 0; i < inputElement.files.length; i++) {
+                const formData = new FormData();
+                formData.append('file', inputElement.files[i]);
+                formData.append('name', aName);
+                formData.append('location', aLocation);
+                formData.append('notes', aNotes);
+                formData.append('folder', aFolder);
+                formData.append('is_last', i === inputElement.files.length - 1 ? "true" : "false");
+
+                try {
+                    const response = await fetch('/api/assets/upload', { method: 'POST', body: formData });
+                    if (response.ok) successCount++;
+                    else failCount++;
+                } catch (error) {
+                    failCount++;
+                }
+            }
+            
+            if (failCount === 0) {
+                statusDiv.style.backgroundColor = "rgba(40, 167, 69, 0.2)";
+                statusDiv.style.color = "#4ade80";
+                statusDiv.innerText = `✅ Successfully sent ${successCount} file(s) to PC!`;
+            } else {
+                statusDiv.style.backgroundColor = "rgba(220, 53, 69, 0.2)";
+                statusDiv.style.color = "#ff6b6b";
+                statusDiv.innerText = `⚠️ Uploaded ${successCount}, Failed ${failCount}`;
+            }
+            
+            inputElement.value = '';
+            document.getElementById('assetName').value = '';
+            document.getElementById('assetLocation').value = '';
+            document.getElementById('assetNotes').value = '';
+        };
+    </script>
+</body>
+</html>

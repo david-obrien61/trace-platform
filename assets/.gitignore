@@ -1,0 +1,16 @@
+# Ignore local configuration and credentials
+config.json
+
+# Ignore built binaries and PyInstaller build directories
+build/
+dist/
+*.spec
+
+# Ignore local uploaded files/images
+RawElementAssets/**/*
+!RawElementAssets/**/*.gitkeep
+
+# Ignore logs and python cache
+*.log
+__pycache__/
+*.pyc
