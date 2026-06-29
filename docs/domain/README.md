@@ -2,7 +2,7 @@
 
 **Type:** The index + foundation for domain-correctness. Keeps builds from solving into a corner, and keeps the product **credible** by letting it speak the owner's language.
 **Created:** 2026-06-29 (THUNDER master bank of the 27–29 June session).
-**Status:** Active · living. The MAP is the index; [`ontology.md`](ontology.md) is its first deep reference.
+**Status:** Active · living. The MAP is the index; [`ontology.md`](ontology.md) is its first deep reference; [`field-notes-barryhill-2026-06.md`](field-notes-barryhill-2026-06.md) is the first primary-source grower field-research entry.
 
 > **Why this exists.** The [NORTH STAR](../../NORTH-STAR.md) §4 job is to **reason in the gap** — the owner half-says a thing, the system completes it from domain knowledge. That completion is only possible if the domain knowledge is real and correct. A scraper that drops size variants, a resolver that can't tell a Redbud cultivar from its parent, a Tier-0 suggestion that names a plant out of its zone — all are domain-knowledge failures, not code failures. This base is where that knowledge lives so builds conform to the trade instead of rediscovering it.
 
@@ -18,11 +18,11 @@
 |---|---|---|---|
 | 1 | **Size & measurement** | 🟢 | The `business_inventory.size` column ([[D-24]] spine) + voice/scan size normalization (ledger #62 `normalizeSize`). ANSI Z60.1 container/caliper systems. → [ontology §1](ontology.md#1-size) |
 | 2 | **Naming & nomenclature** | 🟢 | The token-set name resolver (ledger #61 `canonicalName.ts`) — botanical / common / cultivar layers, the 7× Redbud collision, trademark-noise stripping. → [ontology §2](ontology.md#2-naming) |
-| 3 | **Category taxonomy** | 🟢 | Category-driven reconciliation rhythm (seasonal vs specimen); the catalog category field. → [ontology §3](ontology.md#3-category) |
+| 3 | **Category taxonomy** | 🟢 | Category-driven reconciliation rhythm (seasonal vs specimen) — **field-CONFIRMED per-category** ([Barryhill notes §5](field-notes-barryhill-2026-06.md)); the catalog category field. → [ontology §3](ontology.md#3-category) |
 | 4 | **Supply chain** | 🟡 | Tier-0 sourcing suggestions ("low on 15-gal Live Oak → these wholesalers"). Grower-tier is researched; **upstream stubbed** (liner propagators, genetics/patents, pot/media/tag/irrigation makers). → [ontology §4](ontology.md#4-sourcing) |
 | 5 | **Growing calendar & climate** | 🟡 | The day-one **Tier-0 hook** ([[D-25]] — ZIP→zone→season→what's-seasonal-here). Framework clear; **per-zone planting-window data to fill.** |
 | 6 | **Plant lifecycle & culture** | 🟡 | Pot-size lifecycle ladder (a liner becomes a #1 becomes a #5); culture notes the AI reads from the blob ([[D-24]] edge). |
-| 7 | **Business mechanics** | 🟡 | Margin / markup / cash-flow advice (the anti-Nelson cost surfacing). Framework clear; **per-category markup + cash-flow norms to fill.** |
+| 7 | **Business mechanics** | 🟡 | Margin / markup / cash-flow advice (the anti-Nelson cost surfacing). **Suggest-LESS doctrine field-validated** — a savvy practitioner already runs lean + sees overextension as the industry's disease ([Barryhill notes §7](field-notes-barryhill-2026-06.md)); grocery-inventory crossover noted. Framework clear; **per-category markup + cash-flow norms still to fill.** |
 | 8 | **Pests / disease / regulatory** | 🔴 | Quarantine (citrus/tropicals), spray records, regulatory holds. Not yet researched — flag before any build touches it. |
 | 9 | **Trade institutions & standards** | 🟢 | The standards bodies the system speaks to: ANSI Z60.1 (AmericanHort), TNLA Green Buyer's Guide, TDA Floral Cert, Sales Tax Permit. → [ontology §1/§4](ontology.md) |
 

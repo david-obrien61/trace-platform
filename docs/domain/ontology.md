@@ -65,10 +65,12 @@ The working category set (drives reconciliation rhythm — §below):
 - **Groundcovers / vines** · **Succulents / cactus.**
 
 ### The split that matters: SEASONAL vs SPECIMEN
-This is the axis that drives **reconciliation rhythm** (the open research item, §5 / business-mechanics):
-- **Seasonal / fast-turn** (annuals, color, veg) — **fast clock, markdown-or-lose** ("in the ground by end of June").
-- **Specimen / slow-turn** (trees, specimen shrubs) — **slow clock, carries over, the stock APPRECIATES in value while held.**
-- **Tropicals** — **inverse seasonal**: must be moved OUT before winter (cold kills the held stock).
+This is the axis that drives **reconciliation rhythm** — **field-CONFIRMED per-category** (Barryhill / Trinten, 2026-06; co-constructed D→T, [field notes §5](field-notes-barryhill-2026-06.md)). No longer an open research item:
+- **Seasonal / fast-turn** (annuals, color, veg) — **fast clock, markdown-or-lose** ("gotta be in the ground by end of June… put it on sale, almost free, at least get our money back").
+- **Specimen / slow-turn** (trees, specimen shrubs) — **slow clock, carries over, the stock APPRECIATES in value while held** ("add fertilizer, it grows, may repot, still OK").
+- **Tropicals** — **inverse seasonal**: must be moved OUT before winter (cold kills the held stock — "get out as quick as possible going into wintertime").
+
+**Field corroboration (Barryhill, §below):** at a 4.5★ full-service garden center there is *no* per-variety inventory system and the POS is sales-only (does not decrement stock) — so on-hand drifts and the **walk-and-count → reconcile** loop (cap 2.3 / arc-8) fills a real, grower-stated gap. **Inventory cognition is distributed per-category across the buyers' heads** ("our buyers are on the floor… they know without having to walk over and check a table") → count + reconcile may be naturally scoped per-category.
 
 ---
 
@@ -99,7 +101,7 @@ The "who stocks it" layer (Texas wholesale — grounds Tier-0 sourcing suggestio
 
 - **§5 Growing calendar & climate** 🟡 — framework: ZIP → USDA hardiness zone → local season → what's seasonal here. Per-zone planting-window data is the **first deepening candidate** (the Tier-0 day-one hook, [[D-25]]).
 - **§6 Plant lifecycle & culture** 🟡 — the pot-size lifecycle ladder (a liner grows up the §1 container ladder); culture notes are blob-resident ([[D-24]] edge) for the AI to read.
-- **§7 Business mechanics** 🟡 — markup / margin / cash-flow (seasonal float; appreciating carry-over stock). **Second deepening candidate.**
+- **§7 Business mechanics** 🟡 — markup / margin / cash-flow (seasonal float; appreciating carry-over stock). **Field-validated ([Barryhill §7](field-notes-barryhill-2026-06.md)):** the **suggest-LESS** doctrine ([[D-25]]) is how a sharp small operator already thinks — runs lean, treats overextension ("reps buy to completely fill the nursery") as the industry's disease; budget-from-last-year +5–10%; nursery inventory borrows from grocery (perishable/seasonal/fast-turn). **Second deepening candidate** — per-category markup + cash-flow norms still to fill.
 - **§8 Pests / disease / regulatory** 🔴 — quarantine, spray records, regulatory holds. Research before any build touches it.
 - **§9 Trade institutions & standards** 🟢 — **ANSI Z60.1** (AmericanHort — the size standard, §1) · **TNLA Green Buyer's Guide** (the supplier directory, §4) · **TDA Floral Certificate + Sales Tax Permit** (the trade-buying credentials, §4).
 
