@@ -49,3 +49,5 @@ When time is spent enriching this base, do these first — they directly unlock 
 ---
 
 *Maintain like any reference: when a build needs a fact this base doesn't have, research it INTO the relevant section (raise its depth tag) rather than hard-coding the fact in app code. Domain truth lives here; code reads it.*
+
+> **NO PII IN THE REPO (standing rule):** no phone numbers, personal emails, or home addresses in version control — git history is permanent (a number deleted from a file later still lives in the commit log forever). Contact details live outside version control. Field notes record the *fact* of a contact, never the details.

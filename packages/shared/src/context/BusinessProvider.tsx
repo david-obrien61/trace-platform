@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '../supabase/client';
 import { can as sharedCan } from '../auth/permissions';
 import { applyFinancialDependencies } from '../auth/financialPermissions';
@@ -14,6 +14,21 @@ const SM_DEBUG = false; // flip to true to re-enable legacy [SM-TRACE] diagnosti
 const RESOLVE_MAX_ATTEMPTS = 3;       // first attempt + up to 2 retries
 const RESOLVE_RETRY_DELAY_MS = 500;   // ~1s total wait across 2 retries — well under a 2s cap
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+// Transient (offline/network) read failure vs a real server error (session-persistence fix,
+// 2026-06-29, recon #65 / docs/decisions/2026-06-29-session-persistence-recon.md). PostgREST
+// returns a non-empty `code` (a Postgres SQLSTATE like '42P17', or a 'PGRST…' code) ONLY when
+// a server actually responded with an error — an RLS reject, an embed/recursion, an expired-token
+// 401. A network/offline failure resolves with a CODELESS error ('' code, message ~ "Failed to
+// fetch"/"NetworkError"). So: codeless error ⇒ transport/offline ⇒ TRANSIENT (keep last-known,
+// the local session is still valid); coded error ⇒ a server spoke ⇒ NOT transient (existing
+// read_error path). This distinguishes "the network flickered" from "the query genuinely failed
+// server-side" without touching token validation or RLS.
+function isTransientReadError(err: { code?: string | null } | null | undefined): boolean {
+  if (!err) return false;                       // no error → not transient
+  const code = (err.code ?? '').toString().trim();
+  return code === '';                           // codeless ⇒ transport/offline flicker; coded ⇒ a server responded
+}
 
 // Per-vertical localStorage key — isolates Cultivar selection from Ignition selection
 const activeBusinessKey = (businessType: string) =>
@@ -198,6 +213,11 @@ export function BusinessProvider({
 }) {
   // All businesses this user can access in this vertical
   const [resolvedBusinesses, setResolvedBusinesses] = useState<ResolvedBusiness[]>([]);
+  // Ref mirror of resolvedBusinesses so resolve() (defined inside the [tick, businessType]
+  // effect, which closes over the mount-time state) can read the CURRENT last-known list when
+  // it re-runs via onAuthStateChange. Without this the keep-last-known guard would always see
+  // the stale [] captured at mount. (session-persistence fix, 2026-06-29.)
+  const resolvedRef = useRef<ResolvedBusiness[]>([]);
   const [businessError, setBusinessError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
@@ -217,6 +237,9 @@ export function BusinessProvider({
     setActiveBusinessIdState(id);
   };
 
+  // Keep the ref in sync with the latest resolved list (read by resolve()'s keep-last-known guard).
+  useEffect(() => { resolvedRef.current = resolvedBusinesses; }, [resolvedBusinesses]);
+
   // [SM-TRACE] legacy state transition log (gated — keep for re-enable)
   useEffect(() => {
     if (SM_DEBUG) console.log('[SM-TRACE] BusinessProvider state →', {
@@ -234,9 +257,27 @@ export function BusinessProvider({
       setLoading(true);
       setBusinessError(null);
 
-      const { data: { user } } = await supabase.auth.getUser();
+      // Read the LOCALLY persisted session (offline-safe), not the network getUser() that was
+      // here before — a transient offline getUser() returned null and was treated as a logout,
+      // wiping resolved context (recon #65). session.user is the SAME User object (id / email /
+      // user_metadata, all consumed locally). This matches the route guard's existing-correct
+      // getSession() pattern (configureAuth.tsx:65,96). NO token re-validation is removed: the
+      // bearer token is still sent on every PostgREST call and RLS still enforces tenant
+      // isolation server-side. (session-persistence fix, 2026-06-29.)
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user ?? null;
+
+      console.log('[TRACE:SESSION] resolve: session read (local getSession)', {
+        hasSession: !!session,
+        userId: user?.id ?? null,
+        businessType,
+      });
 
       if (!user) {
+        // Genuine no-session: getSession is LOCAL, so a null here means the stored session is
+        // actually absent (real sign-out / never-logged-in / cleared) — NOT a network flicker.
+        // Wipe is correct (real logout intact).
+        console.log('[TRACE:SESSION] resolve: no local session → settled logged-out (wipe)', { businessType });
         if (!cancelled) {
           setResolvedBusinesses([]);
           setBusinessError(null);
@@ -384,6 +425,26 @@ export function BusinessProvider({
       if (cancelled) return;
 
       if (resolved.length === 0) {
+        // KEEP-LAST-KNOWN (session-persistence fix, 2026-06-29 — Option B). When the owner/member
+        // SELECTs fail with a TRANSIENT (offline/network) error AND we already hold last-known
+        // resolved businesses in memory, do NOT wipe and do NOT set a booting error — the local
+        // session is still valid (getSession above succeeded), the network just flickered. Keeping
+        // resolvedBusinesses intact + businessError null means businessId stays populated, so
+        // Dashboard.tsx:359 (boots on businessError || !businessId) does NOT bounce to /onboarding.
+        // Read CURRENT state via the ref (resolve() closes over stale mount-time state).
+        const transient = isTransientReadError(ownerError) || isTransientReadError(memberError);
+        if (transient && resolvedRef.current.length > 0) {
+          console.log('[TRACE:SESSION] resolve: transient read error — KEEPING last-known businesses (no wipe, no bounce)', {
+            userId: userId,
+            businessType,
+            lastKnownCount: resolvedRef.current.length,
+            ownerErrorCode: ownerError?.code ?? null,
+            memberErrorCode: memberError?.code ?? null,
+          });
+          setLoading(false); // clear the skeleton; resolvedBusinesses + businessError left intact
+          return;
+        }
+
         // Distinguish an errored read (rows may exist but the SELECT failed) from a
         // genuinely empty result. Without this, an RLS/embed error looks identical to
         // a brand-new user with no business → false no_business → onboarding bounce.
