@@ -249,6 +249,36 @@ surfaced precision); [[OP-6]] (works when the owner does nothing).
 + principle set + dependency ledger + build path). The "Regina moment" is also cited in PART 1's Two Pitches.
 **Date captured:** 2026-06-22 · **Status:** Active doctrine / product north star (build deferred; thesis durable).
 
+### OP-10 · Structure-Last — the structure tax is paid by the MACHINE, not the human — `[CAPTURED]`
+**Class:** OPERATING-PRINCIPLE / PLATFORM-PRINCIPLE (cross-cutting — governs every capture, schema, and onboarding surface).
+**Decision:** The original sin of enterprise software is **"structure first, then we'll help"** — the human must pre-organize
+reality into the machine's schema *before* the machine does anything useful. With an LLM as the parser, **invert it**: take
+input **however it arrives** (voice, photo, typed, a scraped website, a QuickBooks export) and let **structure emerge on READ.**
+The grower's "structured mess" already IS structure — it is just **latent**. The **structure tax is paid by the MACHINE, in the
+backend, where it is cheap** — **never by the human, up front, where it is the wall that kept them out.**
+**Reasoning (the economic spine):** arbitrage **the falling cost of machine-structuring against the flat cost of human-
+structuring.** Asking the owner to pre-categorize is asking them to pay a tax that gets *more* expensive relative to the
+alternative every year an LLM gets cheaper — and it is exactly what incumbents are structured against and cannot follow without
+abandoning their data-entry-first products. This is the upstream principle behind the [[OP-5]] anti-Nelson flip (labor off the
+owner), [[D-9]] (the system reasons about confidence so the human doesn't have to assert it), and the [[NORTH-STAR]] "dump the
+stream, the system sorts it" core job. Re-test on drift: **does a new surface ask the owner to structure their world before it
+helps? If so it has drifted — push the structuring into the backend.**
+**THE SMALL-GROWER EXPRESSION (this principle, field-confirmed):** ~**88%** of scraped growers have **NO per-item structure**
+(name-only, no SKU, no per-item URL — see the [grower-resolve recon](decisions/2026-06-26-grower-resolve-design.md): 12.4%
+slug-capable / 87.6% name-only / 0% real SKU). **CONFIRMED in the field** at **Barryhill** (a 4.5★ full-service garden center):
+*"no official inventory system,"* the POS is sales-only and does not decrement, *"QR is not even set up,"* buyers **track stock in
+their heads.** We do **not** tell them they are wrong. We drive the **cost-of-feeding-the-system toward zero**: the system **builds
+itself from work they already do** (the [walk-and-count](../user_stories.md) IS the catalog-building — ledger #61); capture meets
+them **in their own words** ([[D-26]] dual lexicon); it **pays back before it asks for discipline** ([[OP-5]]/[[OP-6]]); and the
+accumulated **fit becomes a switching cost THEY built**, not one we imposed.
+**Companion principles:** [[OP-5]]/[[OP-6]]/[[OP-7]] (anti-Nelson — labor off the owner is the *consequence* of structure-last),
+[[D-9]] (machine reasons about confidence), [[D-23]] (faithful view = their structured-mess preserved), [[D-24]] (rigid-spine /
+flexible-edge = WHERE the machine pays the structure tax), [[D-26]] (dual lexicon — capture in their words), [[AC-1]] (variation
+in data, not schema). Named alongside VERIFY-BEFORE-BUILD in `TRACE-SESSION-BOOTSTRAP.md` ⚡ OPERATING FACTS.
+**Canonical home:** THIS entry · `TRACE-SESSION-BOOTSTRAP.md` ⚡ OPERATING FACTS (the named principle) · `NORTH-STAR.md` (the
+"dump the stream" core job it implements). Origin: 27–29 June 2026 strategy session (master-banked 2026-06-29).
+**Date captured:** 2026-06-29 · **Status:** Active doctrine / platform principle.
+
 ---
 
 ## ARCHITECTURE-DECISION
@@ -797,6 +827,101 @@ Implementation + file:line evidence: close-out ledger #51 (commit `2ee2853`; `ti
 `BusinessProvider.tsx:492` `can()`).
 **Date captured:** 2026-06-26 · **Status:** CAPTURED doctrine. Implemented (ledger #51); a FULLER split (Services / Team /
 cost config / install price as their own Admin destinations) is still owed, reported on #51.
+
+---
+
+### D-23 · FAITHFUL vs CONNECTED — one source, two renders, defaulting to faithful — `[CAPTURED]`
+**Class:** ARCHITECTURE-DECISION / product doctrine (the two-view contract for every grower's data).
+**Decision:** A grower's data has **ONE source** (their data exactly as given — *faithful*, preserved, the trust anchor) and **TWO
+RENDERS**, user-toggled, **defaulting to FAITHFUL**:
+- **FAITHFUL** — their data, their colors, their meaning. The message is *"we got it, untouched."* Never call this view
+  "disorganized" — it is the structured-mess that already works for them ([[OP-10]]).
+- **CONNECTED** — the **same data** with **AI-computed relationships surfaced**: color driven by learned sell-rate / reorder
+  point / season; cells become live links; the latent structure made visible.
+Both renders use an **identical visual language** (so the toggle never feels like a different product). Migration faithful→connected
+is **PULLED by benefit, never pushed** — the owner switches when the connected view earns it.
+**Reasoning:** the relationships were **always latent** in the faithful data; CONNECTED reveals them, it does not replace the
+source. Defaulting to faithful and never disparaging it is what makes the system a **trust anchor** instead of one more tool that
+tells the owner their way is wrong ([[OP-10]] structure-last; [[BD-3]]/[[BD-4]] non-extractive honesty). Re-test on drift: does a
+view ever **overwrite or hide** the owner's original data, or **default to the AI render** before the owner asks for it? Either is
+a drift from faithful-is-the-source.
+**Companion principles:** [[OP-10]] (structure-last — faithful = the latent structure preserved), [[D-26]] (the same faithful/
+connected split applied to VOCABULARY), [[D-25]] (CONNECTED's relationships are Tier-2 learned patterns), [[D-9]] (CONNECTED
+surfaces are honesty-laddered, never false-CONFIRMED).
+**Canonical home:** THIS entry · `NORTH-STAR.md` §4 (reasoning-in-the-gap consumes the connected render). Origin: 27–29 June 2026
+strategy session (master-banked 2026-06-29).
+**Date captured:** 2026-06-29 · **Status:** CAPTURED doctrine (UNBUILT — the JSONB attribute bag [[D-24]] is the dependency).
+
+### D-24 · RIGID SPINE / FLEXIBLE EDGE — the per-field decision rule (the blob, disciplined) — `[CAPTURED]`
+**Class:** ARCHITECTURE-DECISION (the schema decision rule — make this citable; cite it instead of re-arguing blob-vs-column).
+**Decision:** The data model is **NOT** "everything in a blob." It is a **RIGID SPINE** for what is invariant and universally
+operated-on, plus a **FLEXIBLE BLOB** (a JSONB attribute bag) for what varies by grower. **THE RULE, per field:**
+- **Will the system OPERATE on it** — count, query, group, reconcile, gate? → **RIGID COLUMN (spine).**
+- **Is it DESCRIPTION that varies by grower**, that the AI reads to reason / suggest? → **BLOB (edge).**
+
+**The worked example that defined the rule:** **SIZE** on `business_inventory` → a **rigid column** (you count per-size, query
+"all 45-gal", group by variant — see ledger #62 `size`/`variant_group`) = **spine**. The Vitex page's **mature-size / hardiness /
+foliage / flowers / growth-habit / tags / notes** → **blob** (description the AI reads; no operation runs on it). **Keep the spine
+NARROW.**
+**Reasoning:** a pure blob makes nothing queryable (you cannot count an attribute you cannot address); a fully-rigid schema forces
+every grower's idiosyncratic description into columns that do not fit (the structure-first wall, [[OP-10]]). The operate-on-it test
+is the clean cut: the machine pays the structure tax for the **few** fields it must compute on, and leaves the **many** descriptive
+fields latent in the blob where the AI reads them. **AC-1 extended from cross-vertical to cross-GROWER:** variation lives in DATA
+(the blob + per-grower size lists), not in schema. **Deterministic structured data (e.g. WooCommerce variants) is parsed
+DETERMINISTICALLY, NOT by AI** (ledger #62 `extractSizeVariants`); AI is reserved for **genuinely-latent** structure.
+**⚠️ NOTE — the JSONB attribute bag is NOT built yet.** It is the natural next architectural piece (likely lands with the
+connected-view arc [[D-23]]). This decision defines **what goes in it when it is built** so the build conforms rather than
+rediscovers the rule.
+**Companion principles:** [[OP-10]] (structure-last — this is WHERE/HOW the machine pays the tax), [[D-23]] (faithful = the blob
+preserved, connected = relationships computed off the spine + blob), [[AC-1]] (variation in data not schema, now cross-grower),
+[[D-1]]/[[D-4]] (the existing rigid cost-object spine + edge tables are the same spine/edge instinct applied to cost).
+**Canonical home:** THIS entry. Origin: 27–29 June 2026 strategy session (master-banked 2026-06-29).
+**Date captured:** 2026-06-29 · **Status:** CAPTURED decision rule. Spine examples built (size variants, ledger #62); the JSONB
+attribute-bag edge is UNBUILT (next architectural piece).
+
+### D-25 · INTELLIGENCE TIERS — Tier 0 (world knowledge) gives day-one value before the owner's data exists — `[CAPTURED]`
+**Class:** ARCHITECTURE-DECISION / product doctrine (where a vertical's intelligence comes from, and in what order).
+**Decision:** A vertical's intelligence comes in three tiers:
+- **Tier 0 — location / world knowledge.** Available **day one, with NO owner input.** ZIP → USDA hardiness zone → local season →
+  what is seasonal *here* → zone-appropriate plants → service-area demand. This is the **"how do you already know my business?"**
+  hook.
+- **Tier 1 — their faithful data** ([[D-23]] faithful view).
+- **Tier 2 — their learned patterns** (sell-rate, quirks, microclimate) — compounds over seasons ([[D-23]] connected view).
+**Reasoning:** day-one value **must not depend on the owner's data**, because at signup that data is **empty**. Tier 0 makes the
+system useful before the owner has done anything — the inverse of the cold-start "set everything up first" wall ([[OP-10]]).
+Suggestions stand on **authoritative facts** (a hardiness zone is a fact, not a guess) and are always a **strong prior the owner
+overrides** — **SUGGEST, never command** ([[D-9]] honesty ladder; [[OP-7]] propose-not-commit). This explicitly includes
+**suggesting the owner buy LESS** (margin-aware) — the one move a volume-optimizing big-box recommender structurally cannot make,
+because its incentive is to sell more, not to be right.
+**Companion principles:** [[D-23]] (Tiers 1/2 = faithful/connected), [[D-9]] (suggestions honesty-laddered + overridable),
+[[OP-7]] (propose, owner disposes), [[OP-9]] (the Regina surfacing engine consumes all three tiers), the [domain knowledge
+base](../docs/domain/) §5 climate/calendar (the Tier-0 data source).
+**Canonical home:** THIS entry · `docs/domain/` §5 (the per-zone planting-window data Tier 0 runs on — first deepening candidate).
+Origin: 27–29 June 2026 strategy session (master-banked 2026-06-29).
+**Date captured:** 2026-06-29 · **Status:** CAPTURED doctrine (UNBUILT — Tier-0 needs the §5 zone/calendar domain data populated).
+
+### D-26 · THE DUAL LEXICON ("Happy Hose") — speak both the trade's language and the owner's, and translate — `[CAPTURED]`
+**Class:** ARCHITECTURE-DECISION / product doctrine (vocabulary as a two-layer, AI-translated surface).
+**Decision:** Domain knowledge has **two language layers**, and the system **speaks both and TRANSLATES** between them:
+1. **Industry-standard** — ¾" black poly, ANSI #3, the botanical name. Lets the system talk to **suppliers and the trade**.
+2. **Local-lexicon** — what **THIS grower** calls it (Lauren: *"Happy hose,"* the ¾" poly that "smiles" in its curves).
+Neither is wrong; it is the **same object in two languages.** The **AI is the translator** — **her words on the front, the canonical
+term underneath, supplier-speak when she reorders.** This is [[D-23]] faithful/connected applied to **VOCABULARY.** The lexicon has
+**tiers** (private / regional / standard): the system **learns private terms** (accretion), **recognizes shared slang** (cross-grower
+learning compounds), and **always maps to canonical** — the canonical term is the **join key** that enables sourcing suggestions
+([[D-25]] Tier 0).
+**⚠️ HONESTY CORRECTION FOR THE RECORD (do not overclaim):** dual-lexicon is currently **SINGLE-SOURCE (Lauren only).** The
+Barryhill transcript *appeared* to confirm it cross-grower, but that capture had **no speaker separation** — the "Happy pipe"
+mention there was **DAVID reflecting Lauren's term**, not the grower using it independently. **Do NOT record cross-grower
+confirmation.** (Same correction applies to the "anti-Nelson accountant" story in that transcript: it was **David's own**, not the
+grower's.) This is a flagged data-attribution caveat — the *concept* is durable; the *cross-grower evidence* is not yet real.
+**Companion principles:** [[D-23]] (faithful/connected, applied to words), [[OP-10]] (capture in the owner's words = structure-last
+for vocabulary), [[D-25]] (canonical term = the Tier-0 sourcing join key), the [domain ontology](../docs/domain/ontology.md) §2
+naming + §1 size (the canonical layer the lexicon maps to).
+**Canonical home:** THIS entry · `docs/domain/ontology.md` (the canonical trade vocabulary the local lexicon maps onto). Origin:
+27–29 June 2026 strategy session (master-banked 2026-06-29).
+**Date captured:** 2026-06-29 · **Status:** CAPTURED doctrine (UNBUILT; SINGLE-SOURCE evidence — cross-grower learning is the durable
+intent, not yet observed).
 
 ---
 
