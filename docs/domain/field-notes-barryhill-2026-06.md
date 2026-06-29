@@ -7,6 +7,8 @@
 
 > **Why this is here.** This is PRIMARY-SOURCE testimony from someone who buys and tracks green-goods for a living — the evidence that keeps builds domain-correct and earns the product credibility. It supplements the [ontology](ontology.md); it does not replace it. Pointers, not duplication.
 
+> **NO PII IN THE REPO (standing rule):** no phone numbers, personal emails, or home addresses in version control — git history is permanent, so a number deleted from a file later still lives in the commit log forever. Contact details live outside version control (David's contacts / CRM). Record only the *fact* of a contact here, never the details.
+
 ---
 
 ## ⚠️ ATTRIBUTION CAVEAT (read before citing)
@@ -75,9 +77,9 @@ His store: minimal inventory, high specialization (African violets from just 3 s
 
 ## WARM RESEARCH CONTACT
 
-**Trinten** — category buyer, Barryhill Garden Center (Leander, TX). Offered to keep talking and take more questions. **Contact: 515-943-9755.**
+**Trinten** — a category buyer at Barryhill Garden Center (Leander, TX) — offered to keep talking and answer further questions; a warm interview contact. *(Contact details held by David outside the repo — see the no-PII rule below.)*
 
-A real practitioner willing to be interviewed — valuable for deepening this knowledge base (the §4/§7/§8 stubs especially) and a potential early design partner. *Contact detail kept here in the internal repo notes only — not for any public-facing / customer-shipped doc.*
+A real practitioner willing to be interviewed — valuable for deepening this knowledge base (the §4/§7/§8 stubs especially) and a potential early design partner. The *fact* of a willing field contact is preserved here; the contact details are not in version control.
 
 ---
 
