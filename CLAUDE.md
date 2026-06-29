@@ -323,6 +323,22 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-06-29 — THUNDER END-OF-SESSION RECONCILIATION: session fix → OWNER-PROVEN, assets review banked onto main, size-variant LANDMINE recorded (DOCS + GIT housekeeping only; ledger #70)
+
+**Type:** Docs + git housekeeping ONLY — NO app code, NO schema, NO migration, NO `[TRACE:*]` emit touched. Reconciled the repo with reality after the assets-review session left work on a feature branch. `npm run verify` exit 0 zero NET-NEW.
+
+**GIT STATE (clean main):** Got off the pre-existing-dirty `fix/session-persistence-offline-keep-last-known` branch onto **main**. The two assets-review doc writes (`docs/decisions/2026-06-29-assets-branch-review.md` + ledger #69) are committed onto main + pushed (`1a34cf1`). The stale working-tree ledger edit (built on the pre-merge base, missing main's #68 table row) was discarded and #69 re-applied fresh on main's correct ledger (preserves #67/#68). Pre-existing CLUTTER left **uncommitted** (David's): modified `docs/cost-to-produce/AFTER-FLIP-snapshot.json` + untracked `data/grower-scan/*` + the other `docs/decisions/*` recon files. `assets` branch (remote `5fc41e4`) UNTOUCHED.
+
+**SESSION-PERSISTENCE OFFLINE FIX → 🟢 OWNER-PROVEN (#67/#68).** David ran the airplane-mode owner-prove on deployed main (iPhone, `?debug=1`). The `[TRACE:SESSION]` trail confirmed the mechanism: going offline, owner/member reads failed codeless (`TypeError: Load failed`, code `""`) → `isTransientReadError` classified transient → "transient read error — KEEPING last-known businesses (no wipe, no bounce)" fired with `lastKnownCount:1` → the header kept rendering the OWNER session (`businessId f7ec5d67…`) → on reconnect the owner path returned `count:1` and resumed clean → never bounced to onboarding. PASS. Flipped to OWNER-PROVEN in CLOSE-OUT-LEDGER (#67/#68 + #70), built-inventory, and TRACE-SESSION-BOOTSTRAP (⚡ ACTIVE STATUS + ARC-MAP arc-8). Proof artifact = the airplane-mode `[TRACE:SESSION]` trail (LOCAL-ONLY — carries tenant ids, not committed). Branch `fix/session-persistence-offline-keep-last-known` is now retire-eligible (recommend delete local+remote; David confirms).
+
+**🚩 COUNT-SIDE SIZE-PICKER — gating next-build + LIVE LANDMINE.** The size-variant migration `20260628_inventory_size_variants.sql` is APPLIED + verified (cols `size`/`variant_group` live, nullable, **EMPTY**). **DO NOT populate per-size rows into `business_inventory` until the count-side size-picker exists** — else a scan of a multi-size variety returns >1 same-name match → `InventoryCount.tsx:263` AMBIGUOUS→UNKNOWN, **regressing the OWNER-PROVEN grower-resolve** (Vitex→DISC-1105→count-45, #61). The picker IS the L5 NEED_CLARIFICATION seam = the gating next-build. Recorded loud in CLOSE-OUT-LEDGER GENUINELY OPEN + ARC-MAP arc-8.
+
+**ASSETS BRANCH = next major integration (David-driven), banked at #69.** Andrew's `assets` branch reviewed read-only; conflict check NONE. Proposed sequence (recommend only): merge main→assets → verify zero-net-new → resolve camera-pipeline prod story (🚩 currently localhost:8000, tech-debt #41) + `cost_objects` D-9 coherence + Ignition route gating → THEN merge→main + owner-prove. See the review doc; not duplicated.
+
+**2 FINDINGS (honest-debt):** (1) the rhythm-logger location watcher does NOT recover after reconnect (`kCLErrorDomain 0` persists till the logger is restarted — small retry/re-subscribe fix owed); (2) `?debug=1`/`?rhythm=1` exports carry tenant identifiers (business_id, account email) = LOCAL-ONLY artifacts, never committed (standing note per the no-PII rule).
+
+**SHARED-MODULE NOTE:** the only shared file changed in the session being reconciled is `packages/shared/src/context/BusinessProvider.tsx` (the #67 fix, already on main); this closeout changed no shared code.
+
 ### 2026-06-26 — THUNDER Story Board system: `user_stories.md` + `stories.html` (pure renderer) — second lens beside the Status Board (BUILDER-COMPLETE, owner-proof owed; ledger #56)
 
 **Type:** TWO standalone root files (beside `status.html` / `TRACE-SESSION-BOOTSTRAP.md`). **NO app code, NO schema, NO migration, NO `[TRACE:*]`** → schema-verification gate N/A. `npm run verify` exit 0 zero NET-NEW (standalone root files don't trip the gate, like `status.html`). Commit `29487f1`.
