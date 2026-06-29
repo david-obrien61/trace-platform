@@ -61,6 +61,8 @@
 > LIFECYCLE: when an item is 🟢-proven AND no longer demo-active it ARCHIVES to §A (bottom). The active list stays one screen because DONE leaves.
 > Line shape: `[●] Item · state · priority · reuse · deps · → pointer`
 
+> 📖 **STORY BOARD = a working QUEUE now (ledger #71).** `stories.html` ← `user_stories.md` carries **STATUS** (owed: written/needs-input/needs-sub-stories/gap) + **SCOPE** (altitude: north-star/platform/vertical:*) on every story, with a default **⚠ What's owed** view + Status/Scope filters. **Future sessions: open the WHAT'S OWED view to see what stories are awaiting David** (15 owed today — incl. the count-side size-picker [the gating next-build], the timing-layer, assets+camera, and the 4 built-but-unstoried arcs). This is the standing "stories needed" surface.
+
 **— DEMO-BLOCKERS (in-flight) —**
 - 🟡 **Front-door PROMOTION: reveal-conflict + catalog-seed + 4 bug-fixes** (ledger #47) · BUILDER-COMPLETE, owner-proof owed (1 deploy), AUTH-FREE · DEMO · wired: `compareEnteredVsSite`+address into the reveal (owner-RLS write-back) · `populateCatalog` as `action=populate` · demo-route bookend · `businesses.tax_rate` (display+invoice) · shared `useQboConnect` (fixes Settings) · → `DiscoveryGlimpse.tsx` / `api/discovery/ingest.ts` / `useQboConnect.ts`, `npm run verify` exit 0 (eslint 267→266)
 - 🟡 **Discovery: fail-loud + persistence** (FIX 1) · wired, owner-proof owed · DEMO · reuse: discovery engine (real) · deps: ANTHROPIC_KEY[live] · → `DiscoveryGlimpse.tsx`, commit `c8094e1`

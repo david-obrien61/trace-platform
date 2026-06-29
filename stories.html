@@ -6,19 +6,25 @@
 <title>TRACE — Story Board</title>
 <!--
   PURE RENDERER. Holds ZERO story data of its own.
-  The ONLY source of truth is user_stories.md (its ## ARC: sections + ## ARCHIVED).
+  The ONLY source of truth is user_stories.md (its ## ARC: sections, ## NEEDED, ## ARCHIVED).
   This file PARSES that markdown at open-time and renders it — it never duplicates
   or hardcodes stories. Delete the .md and this shows "no data", never a stale board.
-  Open: double-click → "Open user_stories.md" (or drag-drop it).
+  Open: double-click → "Open .md" (or drag-drop user_stories.md).
 
   Sibling of status.html — same load/render pattern, mirrored styling.
     status.html  = what's BUILT (capabilities, green/amber/red)
-    stories.html = what we're BUILDING TOWARD (day-in-the-life need)
+    stories.html = what we're BUILDING TOWARD + what's OWED (day-in-the-life need)
   Linked by MAPS-TO capability id + arc.
+
+  TWO DIMENSIONS on every story (parsed from the .md, never invented here):
+    STATUS (owed lifecycle): written | needs-input | needs-sub-stories | gap
+    SCOPE  (altitude):       north-star | platform | vertical:<name>
+  Default view = "What's owed" (everything not yet written). Filter by status + scope.
 -->
 <style>
   :root{
-    --inbuild:#d97706; --active:#2563eb; --archived:#9ca3af; --gap:#dc2626;
+    --written:#16a34a; --needsinput:#d97706; --needssub:#7c3aed; --gap:#dc2626;
+    --archived:#9ca3af;
     --bg:#f5f7f2; --card:#ffffff; --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb;
     --accent:#27500A;
   }
@@ -36,18 +42,25 @@
   .btn.ghost{background:rgba(255,255,255,.15);color:#fff}
   .wrap{max-width:1100px;margin:0 auto;padding:18px 20px 60px}
   /* tabs */
-  .tabs{display:flex;gap:8px;margin:6px 0 18px}
+  .tabs{display:flex;gap:8px;margin:6px 0 10px;flex-wrap:wrap}
   .tab{background:var(--card);border:1.5px solid var(--line);border-radius:999px;
     padding:7px 16px;font-weight:700;font-size:.82rem;cursor:pointer;color:var(--muted)}
   .tab.active{border-color:var(--accent);color:var(--accent);background:#eef4e6}
+  /* filter bar */
+  .filters{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:0 0 14px}
+  .fgroup{display:inline-flex;align-items:center;gap:6px;font-size:.76rem;color:var(--muted);font-weight:700}
+  .fgroup select{font:inherit;font-size:.8rem;font-weight:600;color:var(--ink);
+    background:var(--card);border:1.5px solid var(--line);border-radius:8px;padding:5px 9px;cursor:pointer}
+  .clearf{font-size:.72rem;color:var(--accent);font-weight:700;cursor:pointer;text-decoration:underline}
   /* legend + tally */
-  .legend{display:flex;gap:16px;flex-wrap:wrap;align-items:center;
-    font-size:.76rem;color:var(--muted);margin-bottom:16px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;
+    font-size:.74rem;color:var(--muted);margin-bottom:16px}
   .legend .k{display:inline-flex;align-items:center;gap:6px}
-  .tally{display:inline-flex;gap:10px;font-weight:800}
+  .tally{display:inline-flex;gap:10px;font-weight:800;font-size:.82rem;flex-wrap:wrap}
   .dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;display:inline-block}
-  .d-inbuild{background:var(--inbuild)} .d-active{background:var(--active)}
-  .d-archived{background:var(--archived)} .d-gap{background:var(--gap)}
+  .d-written{background:var(--written)} .d-needsinput{background:var(--needsinput)}
+  .d-needssub{background:var(--needssub)} .d-gap{background:var(--gap)}
+  .d-archived{background:var(--archived)}
   /* arc band */
   .band{margin:22px 0 10px;font-size:.78rem;font-weight:800;letter-spacing:.06em;
     text-transform:uppercase;color:var(--accent);display:flex;align-items:baseline;gap:10px}
@@ -58,27 +71,43 @@
   .grid{display:grid;grid-template-columns:1fr;gap:12px}
   .card{background:var(--card);border:1px solid var(--line);border-left-width:5px;
     border-radius:10px;padding:13px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
-  .card.c-inbuild{border-left-color:var(--inbuild)}
-  .card.c-active{border-left-color:var(--active)}
+  .card.c-written{border-left-color:var(--written)}
+  .card.c-needsinput{border-left-color:var(--needsinput)}
+  .card.c-needssub{border-left-color:var(--needssub)}
+  .card.c-gap{border-left-color:var(--gap)}
   .card.c-archived{border-left-color:var(--archived);filter:grayscale(.4);opacity:.8}
   .card .top{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:6px}
   .card .name{font-weight:800;font-size:1rem;flex:1;min-width:200px}
   .pill{display:inline-block;font-size:.68rem;font-weight:800;letter-spacing:.04em;
     text-transform:uppercase;padding:2px 9px;border-radius:999px;white-space:nowrap}
-  .p-inbuild{background:#fef3c7;color:#92400e}
-  .p-active{background:#dbeafe;color:#1e40af}
+  .p-written{background:#dcfce7;color:#166534}
+  .p-needsinput{background:#fef3c7;color:#92400e}
+  .p-needssub{background:#ede9fe;color:#5b21b6}
+  .p-gap{background:#fee2e2;color:#991b1b}
   .p-archived{background:#f3f4f6;color:#4b5563}
-  /* maps-to badges + piece chips */
+  .buildbadge{display:inline-block;font-size:.64rem;font-weight:800;letter-spacing:.04em;
+    text-transform:uppercase;padding:2px 8px;border-radius:6px;white-space:nowrap;
+    background:#eef4e6;color:var(--accent);border:1px solid #d6e6c4}
+  /* scope + maps-to badges + piece chips */
   .tagrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:2px 0 8px}
+  .scope{display:inline-flex;align-items:center;gap:4px;font-size:.7rem;font-weight:800;
+    border-radius:7px;padding:3px 8px;text-transform:none;letter-spacing:.01em}
+  .scope.s-north{background:#1e1b4b;color:#fde68a}
+  .scope.s-platform{background:#0f3d2e;color:#a7f3d0}
+  .scope.s-vertical{background:#eef4e6;color:var(--accent);border:1px solid #d6e6c4}
   .maps{display:inline-flex;align-items:center;gap:5px;font-size:.74rem;font-weight:800;
     color:#fff;background:var(--accent);border-radius:7px;padding:3px 9px;
     font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-  .maps.gap{background:var(--gap)}
+  .maps.nocap{background:var(--gap)}
   .pieces{display:flex;flex-wrap:wrap;gap:5px}
   .pc{display:inline-block;font-size:.72rem;background:#f6f8f3;border:1px solid var(--line);
     border-radius:6px;padding:2px 7px;color:var(--ink);
     font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
   .lbl{font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  /* needs callout */
+  .needs{font-size:.82rem;line-height:1.45;background:#fffbeb;border:1px solid #fde68a;
+    border-radius:8px;padding:7px 11px;margin:0 0 8px;color:#78350f}
+  .needs b{color:#92400e}
   /* narrative */
   .nar{font-size:.9rem;line-height:1.55;color:var(--ink)}
   .nar p{margin:.45em 0}
@@ -125,15 +154,29 @@
   <!-- BOARD -->
   <div id="board" class="hide">
     <div class="tabs">
-      <button class="tab active" data-view="active">⚡ Active</button>
+      <button class="tab active" data-view="owed">⚠ What's owed</button>
       <button class="tab" data-view="all">📚 All</button>
       <button class="tab" data-view="archived">🗄 Archived</button>
     </div>
+    <div class="filters">
+      <span class="fgroup">Status
+        <select id="statusFilter">
+          <option value="all">all</option>
+          <option value="written">written</option>
+          <option value="needs-input">needs-input</option>
+          <option value="needs-sub-stories">needs-sub-stories</option>
+          <option value="gap">gap</option>
+        </select>
+      </span>
+      <span class="fgroup">Scope <select id="scopeFilter"><option value="all">all</option></select></span>
+      <span class="clearf" id="clearFilters">clear filters</span>
+    </div>
     <div class="legend">
-      <span class="k"><span class="dot d-inbuild"></span>in-build (a build is advancing it now)</span>
-      <span class="k"><span class="dot d-active"></span>active (a need we hold, not yet in build)</span>
-      <span class="k"><span class="dot d-archived"></span>archived (delivered / retired)</span>
-      <span class="k"><span class="dot d-gap"></span>gap (no capability yet — MAPS-TO —)</span>
+      <span class="k"><span class="dot d-written"></span>written (complete)</span>
+      <span class="k"><span class="dot d-needsinput"></span>needs-input (blocked on David)</span>
+      <span class="k"><span class="dot d-needssub"></span>needs-sub-stories</span>
+      <span class="k"><span class="dot d-gap"></span>gap (capability exists, no story)</span>
+      <span class="k"><span class="dot d-archived"></span>archived</span>
       <span class="srcline" id="srcline"></span>
     </div>
     <div id="view"></div>
@@ -157,6 +200,20 @@ const ARCS = [
 const ARC_NAME = Object.fromEntries(ARCS.map(a=>[a[0],a[1]]));
 const ARC_DEF  = Object.fromEntries(ARCS.map(a=>[a[0],a[2]]));
 const ARC_ORDER= ARCS.map(a=>a[0]);
+
+/* ───────────── scope altitude order + display ───────────── */
+const SCOPE_ORDER = ["north-star","platform","vertical:cultivar","vertical:coolrunnings","vertical:kinna","vertical:ignition"];
+const SCOPE_LABEL = {
+  "north-star":"★ North-star","platform":"▣ Platform",
+  "vertical:cultivar":"Cultivar","vertical:coolrunnings":"CoolRunnings",
+  "vertical:kinna":"KINNA","vertical:ignition":"Ignition"
+};
+function scopeClass(sc){ return sc==="north-star"?"s-north":(sc==="platform"?"s-platform":"s-vertical"); }
+function scopeLabel(sc){ return SCOPE_LABEL[sc] || sc; }
+
+/* ───────────── owed-status + build-progress vocab ───────────── */
+const OWED   = ["written","needs-input","needs-sub-stories","gap"];
+const BUILDV = ["active","in-build","archived"];
 
 /* ───────────── tiny markdown (inline + block) ───────────── */
 function esc(s){return (s||"").replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
@@ -202,36 +259,43 @@ function parseStories(mdText){
       const arcm = t.match(/^##\s*ARC:\s*([a-z0-9-]+)/i);
       if(arcm){ curArc = arcm[1].toLowerCase(); inArchivedSection=false; }
       else if(/^##\s*ARCHIVED/i.test(t)){ curArc=null; inArchivedSection=true; }
-      else { curArc=null; inArchivedSection=false; }   // some other ## section
+      else { curArc=null; inArchivedSection=false; }   // ## NEEDED or other ## section → no arc
       continue;
     }
     // story heading
     if(/^###\s+/.test(t)){
       push();
       cur = { title:t.replace(/^###\s+/,"").trim(),
-              status:"", arcTag:"", mapsTo:[], pieces:[], narLines:[],
+              statusRaw:"", scopes:[], buildTag:"", arcTag:"", mapsTo:[], pieces:[], needs:"", narLines:[],
               sectionArc:curArc, inArchivedSection };
       continue;
     }
     if(!cur) continue;            // ignore header/blockquote/comments outside any story
     // tag lines
     let m;
-    if((m=t.match(/^STATUS:\s*(.+)$/i)))   { cur.status = m[1].trim().toLowerCase(); continue; }
+    if((m=t.match(/^STATUS:\s*(.+)$/i)))   { cur.statusRaw = m[1].trim().toLowerCase(); continue; }
+    if((m=t.match(/^SCOPE:\s*(.+)$/i)))    { cur.scopes = splitList(m[1]).map(x=>x.toLowerCase()); continue; }
+    if((m=t.match(/^BUILD:\s*(.+)$/i)))    { cur.buildTag = m[1].trim().toLowerCase(); continue; }
     if((m=t.match(/^ARC:\s*(.+)$/i)))      { cur.arcTag = m[1].trim().toLowerCase(); continue; }
     if((m=t.match(/^MAPS-TO:\s*(.+)$/i)))  { cur.mapsTo = splitIds(m[1]); continue; }
     if((m=t.match(/^PIECES:\s*(.+)$/i)))   { cur.pieces = splitList(m[1]); continue; }
+    if((m=t.match(/^NEEDS:\s*(.+)$/i)))    { cur.needs = m[1].trim(); continue; }
     // skip stray html comments inside a story
     if(/^<!--/.test(t)) continue;
     cur.narLines.push(line);
   }
   push();
 
-  // resolve arc + archived; mapsTo "—" → gap (empty)
+  // resolve derived fields
   for(const s of stories){
     s.arc = s.arcTag || s.sectionArc || "";
-    s.archived = (s.status==="archived") || s.inArchivedSection;
-    if(s.archived && s.status!=="archived") s.status = "archived";
-    s.gap = s.mapsTo.length===0;
+    // build progress: explicit BUILD wins; else an old build-word left in STATUS; else active
+    s.build = BUILDV.includes(s.buildTag) ? s.buildTag
+            : (BUILDV.includes(s.statusRaw) ? s.statusRaw : "active");
+    // owed status: recognized owed value wins; an old build-word → assume complete (written); unknown → written
+    s.status = OWED.includes(s.statusRaw) ? s.statusRaw : "written";
+    s.archived = s.inArchivedSection || s.build==="archived" || s.statusRaw==="archived";
+    s.noCapability = s.mapsTo.length===0;   // story exists, MAPS-TO no capability (distinct from status:gap)
   }
   return stories;
 }
@@ -244,34 +308,48 @@ function splitList(s){
 
 /* ───────────── render ───────────── */
 function statusClass(st){
-  if(st==="in-build") return "inbuild";
+  if(st==="written") return "written";
+  if(st==="needs-input") return "needsinput";
+  if(st==="needs-sub-stories") return "needssub";
+  if(st==="gap") return "gap";
   if(st==="archived") return "archived";
-  return "active";
+  return "written";
 }
 function storyCard(s){
-  const sc = statusClass(s.status);
-  const pill = `<span class="pill p-${sc}">${esc(s.status||"active")}</span>`;
-  const maps = s.gap
-    ? `<span class="maps gap">→ no capability yet</span>`
+  const sc = s.archived ? "archived" : statusClass(s.status);
+  const pill = `<span class="pill p-${sc}">${esc(s.archived?"archived":s.status)}</span>`;
+  const build = (s.build && s.build!=="active" && !s.archived)
+    ? `<span class="buildbadge">${esc(s.build)}</span>` : "";
+  const scopes = s.scopes.map(sp=>`<span class="scope ${scopeClass(sp)}">${esc(scopeLabel(sp))}</span>`).join("");
+  const maps = s.noCapability
+    ? `<span class="maps nocap">→ no capability yet</span>`
     : s.mapsTo.map(id=>`<span class="maps">→ ${esc(id)}</span>`).join("");
   const pieces = s.pieces.length
     ? `<span class="lbl">pieces</span><span class="pieces">${s.pieces.map(p=>`<span class="pc">${esc(p)}</span>`).join("")}</span>`
     : "";
+  const needs = s.needs ? `<div class="needs"><b>Owed:</b> ${inlineMd(s.needs)}</div>` : "";
   return `<div class="card c-${sc}">
     <div class="top">
-      <span class="dot d-${s.gap?'gap':sc}"></span>
+      <span class="dot d-${sc}"></span>
       <span class="name">${inlineMd(s.title)}</span>
-      ${pill}
+      ${pill}${build}
     </div>
-    <div class="tagrow">${maps}${pieces}</div>
+    <div class="tagrow">${scopes}${maps}${pieces}</div>
+    ${needs}
     ${s.narrative?`<div class="nar">${blockMd(s.narrative)}</div>`:""}
   </div>`;
 }
-function visibleFor(view,s){
-  if(view==="all") return true;
-  if(view==="archived") return s.archived;
-  return !s.archived;            // active view = active + in-build
+
+/* visibility = view gate AND status filter AND scope filter */
+function visible(s){
+  if(currentView==="archived"){ if(!s.archived) return false; }
+  else { if(s.archived) return false; }                 // owed + all hide archived
+  if(currentView==="owed" && s.status==="written") return false;   // owed = not written
+  if(statusFilter!=="all" && s.status!==statusFilter) return false;
+  if(scopeFilter!=="all" && !s.scopes.includes(scopeFilter)) return false;
+  return true;
 }
+
 function render(mdText, srcLabel){
   const stories = parseStories(mdText);
   if(!stories.length){
@@ -283,48 +361,73 @@ function render(mdText, srcLabel){
   document.getElementById("srcline").textContent = "source: " + srcLabel + " · " + stories.length + " stories";
   document.getElementById("srcInfo").textContent = "rendering: " + srcLabel;
 
-  // tally (from parsed data, never hardcoded)
-  const t={inbuild:0,active:0,archived:0,gap:0};
+  // tally (from parsed data, never hardcoded) — owed-status counts among non-archived
+  const t={written:0,"needs-input":0,"needs-sub-stories":0,gap:0,archived:0};
   stories.forEach(s=>{
-    if(s.status==="in-build") t.inbuild++;
-    else if(s.archived) t.archived++;
-    else t.active++;
-    if(s.gap && !s.archived) t.gap++;
+    if(s.archived){ t.archived++; return; }
+    if(t[s.status]!==undefined) t[s.status]++;
   });
+  const owedTotal = t["needs-input"]+t["needs-sub-stories"]+t.gap;
   document.getElementById("tally").innerHTML =
-    `<span style="color:#fde68a">${t.inbuild} in-build</span>`+
-    `<span style="color:#bfdbfe">${t.active} active</span>`+
+    `<span style="color:#fde68a">${owedTotal} owed</span>`+
+    `<span style="color:#a7f3d0">${t.written} written</span>`+
     `<span style="color:#fecaca">${t.gap} gap</span>`;
 
-  renderView(stories, currentView);
-  window.__stories = stories;    // keep for view toggle
+  // scope filter options — only altitudes actually present, in canonical order
+  buildScopeFilter(stories);
+
+  window.__stories = stories;    // keep for view/filter toggles
+  renderView(stories);
 }
-function renderView(stories, view){
+
+function buildScopeFilter(stories){
+  const present = new Set();
+  stories.forEach(s=>s.scopes.forEach(sp=>present.add(sp)));
+  const sel = document.getElementById("scopeFilter");
+  const keep = sel.value;
+  let opts = `<option value="all">all</option>`;
+  SCOPE_ORDER.filter(sp=>present.has(sp)).forEach(sp=>{
+    opts += `<option value="${esc(sp)}">${esc(scopeLabel(sp))}</option>`;
+  });
+  // any non-canonical scopes that slipped in
+  [...present].filter(sp=>!SCOPE_ORDER.includes(sp)).sort().forEach(sp=>{
+    opts += `<option value="${esc(sp)}">${esc(sp)}</option>`;
+  });
+  sel.innerHTML = opts;
+  sel.value = [...sel.options].some(o=>o.value===keep) ? keep : "all";
+  scopeFilter = sel.value;
+}
+
+function renderView(stories){
   let html="";
   for(const arcId of ARC_ORDER){
-    const inArc = stories.filter(s=>s.arc===arcId && visibleFor(view,s));
+    const inArc = stories.filter(s=>s.arc===arcId && visible(s));
     if(!inArc.length) continue;
     html += `<div class="band">${esc(ARC_NAME[arcId]||arcId)}
       <span class="arccount">${inArc.length}</span>
       <span class="arcdef">${esc(ARC_DEF[arcId]||"")}</span></div>`;
     html += `<div class="grid">${inArc.map(storyCard).join("")}</div>`;
   }
-  // any stories whose arc isn't one of the 8 canonical ids
-  const orphans = stories.filter(s=>!ARC_ORDER.includes(s.arc) && visibleFor(view,s));
+  // cross-cutting / unfiled — stories whose arc isn't one of the 8 canonical ids (## NEEDED section, etc.)
+  const orphans = stories.filter(s=>!ARC_ORDER.includes(s.arc) && visible(s));
   if(orphans.length){
-    html += `<div class="band">Unfiled <span class="arccount">${orphans.length}</span>
-      <span class="arcdef">no recognized ARC: tag</span></div>`;
+    html += `<div class="band">Cross-cutting <span class="arccount">${orphans.length}</span>
+      <span class="arcdef">no single build-arc (north-star / platform / instrument owed)</span></div>`;
     html += `<div class="grid">${orphans.map(storyCard).join("")}</div>`;
   }
   if(!html){
-    const msg = view==="archived" ? "No archived stories yet." : "No stories in this view.";
+    let msg = "No stories in this view.";
+    if(currentView==="archived") msg = "No archived stories yet.";
+    else if(currentView==="owed") msg = "Nothing owed in this filter — every matching story is written. 🎉";
     html = `<p class="hint">${msg}</p>`;
   }
   document.getElementById("view").innerHTML = html;
 }
 
-/* ───────────── views / empty ───────────── */
-let currentView = "active";
+/* ───────────── views / filters / empty ───────────── */
+let currentView = "owed";
+let statusFilter = "all";
+let scopeFilter = "all";
 function showEmpty(msg){
   document.getElementById("board").classList.add("hide");
   const e=document.getElementById("emptyState");
@@ -335,7 +438,7 @@ function showEmpty(msg){
 function setView(v){
   currentView = v;
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
-  if(window.__stories) renderView(window.__stories, v);
+  if(window.__stories) renderView(window.__stories);
 }
 
 /* ───────────── file loading ───────────── */
@@ -350,6 +453,14 @@ document.getElementById("openBtn").onclick=()=>document.getElementById("file").c
 document.getElementById("file").onchange=e=>{ if(e.target.files[0]) readFile(e.target.files[0]); };
 document.getElementById("reloadBtn").onclick=()=>{ tryAutoFetch(true); };
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>setView(t.dataset.view));
+document.getElementById("statusFilter").onchange=e=>{ statusFilter=e.target.value; if(window.__stories) renderView(window.__stories); };
+document.getElementById("scopeFilter").onchange=e=>{ scopeFilter=e.target.value; if(window.__stories) renderView(window.__stories); };
+document.getElementById("clearFilters").onclick=()=>{
+  statusFilter="all"; scopeFilter="all";
+  document.getElementById("statusFilter").value="all";
+  document.getElementById("scopeFilter").value="all";
+  if(window.__stories) renderView(window.__stories);
+};
 
 // drag-drop
 const drop=document.getElementById("drop");
