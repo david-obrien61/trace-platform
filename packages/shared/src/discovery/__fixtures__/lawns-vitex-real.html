@@ -1,0 +1,1367 @@
+<!--
+  FIXTURE · lawns-vitex-real.html
+  PURPOSE:      Pinned REAL LAWNS "Shoal Creek Vitex" WooCommerce product page — the
+                canonical offline acceptance case for deterministic size-variant capture
+                (docs/decisions/2026-06-27-discovery-size-variants.md). Lets
+                extractSizeVariants be proven against real grower markup with NO network.
+  SOURCE:       https://lawnstrees.com/product/shoal-creek-vitex/  (fetched 2026-06-30, HTTP 200)
+  DEPENDENCIES: none — static file. Consumed by scripts/prove-vitex-variants.ts (default/offline).
+  OUTPUTS:      data-product_variations JSON (attribute_pa_tree-size: 5/15/30/45-gallon) +
+                the <select name="attribute_pa_tree-size"> fallback — both preserved BYTE-FOR-BYTE.
+  SANITIZED:    third-party secrets/identifiers redacted (NOT size markup): Mailchimp API key,
+                Mailchimp connected-site user/script ids, Google Analytics/GTM ids, business phone.
+                Redactions are outside the variation markup, so parser output is unaffected.
+-->
+<!DOCTYPE html>
+<html dir="ltr" lang="en-US" prefix="og: https://ogp.me/ns#">
+<head>
+	<meta charset="UTF-8">
+    <meta name='viewport' content='width=device-width, initial-scale=1'>	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<title>Shoal Creek Vitex (Vitex agnus-castus ‘Shoal Creek’) | LAWNS Tree Farm LLC.</title>
+<link href="https://fonts.googleapis.com/css?family=Lato:100,100i,200,200i,300,300i,400,400i,500,500i,600,600i,700,700i,800,800i,900,900i%7COpen+Sans:100,100i,200,200i,300,300i,400,400i,500,500i,600,600i,700,700i,800,800i,900,900i%7CIndie+Flower:100,100i,200,200i,300,300i,400,400i,500,500i,600,600i,700,700i,800,800i,900,900i%7COswald:100,100i,200,200i,300,300i,400,400i,500,500i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
+		<!-- All in One SEO 4.9.7.2 - aioseo.com -->
+	<meta name="description" content="The Shoal Creek Vitex grows 8–15 ft tall, 12–15 ft wide, with fragrant blue-violet flowers and gray-green leaves. Deciduous, drought-tolerant, full sun." />
+	<meta name="robots" content="max-image-preview:large" />
+	<meta name="google-site-verification" content="ibCScT5iV60fTWCcxPkmIF4LbHnRLJ2kr_o77k6pjaI" />
+	<link rel="canonical" href="https://lawnstrees.com/product/shoal-creek-vitex/" />
+	<meta name="generator" content="All in One SEO (AIOSEO) 4.9.7.2" />
+		<meta property="og:locale" content="en_US" />
+		<meta property="og:site_name" content="LAWNS Tree Farm LLC. | When Quality Counts, You Can Count On Us!" />
+		<meta property="og:type" content="article" />
+		<meta property="og:title" content="Shoal Creek Vitex (Vitex agnus-castus ‘Shoal Creek’) | LAWNS Tree Farm LLC." />
+		<meta property="og:description" content="The Shoal Creek Vitex grows 8–15 ft tall, 12–15 ft wide, with fragrant blue-violet flowers and gray-green leaves. Deciduous, drought-tolerant, full sun." />
+		<meta property="og:url" content="https://lawnstrees.com/product/shoal-creek-vitex/" />
+		<meta property="og:image" content="https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek2.jpg" />
+		<meta property="og:image:secure_url" content="https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek2.jpg" />
+		<meta property="og:image:width" content="879" />
+		<meta property="og:image:height" content="660" />
+		<meta property="article:published_time" content="2024-05-04T15:22:40+00:00" />
+		<meta property="article:modified_time" content="2026-01-11T19:57:29+00:00" />
+		<meta property="article:publisher" content="https://www.facebook.com/people/LAWNS-Tree-Farm/100064014818901/" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content="Shoal Creek Vitex (Vitex agnus-castus ‘Shoal Creek’) | LAWNS Tree Farm LLC." />
+		<meta name="twitter:description" content="The Shoal Creek Vitex grows 8–15 ft tall, 12–15 ft wide, with fragrant blue-violet flowers and gray-green leaves. Deciduous, drought-tolerant, full sun." />
+		<meta name="twitter:image" content="https://lawnstrees.com/wp-content/uploads/2025/08/Lawns-4x6-flag.jpg" />
+		<script type="application/ld+json" class="aioseo-schema">
+			{"@context":"https:\/\/schema.org","@graph":[{"@type":"BreadcrumbList","@id":"https:\/\/lawnstrees.com\/product\/shoal-creek-vitex\/#breadcrumblist","itemListElement":[{"@type":"ListItem","@id":"https:\/\/lawnstrees.com#listItem","position":1,"name":"Home","item":"https:\/\/lawnstrees.com","nextItem":{"@type":"ListItem","@id":"https:\/\/lawnstrees.com\/shop\/#listItem","name":"Trees"}},{"@type":"ListItem","@id":"https:\/\/lawnstrees.com\/shop\/#listItem","position":2,"name":"Trees","item":"https:\/\/lawnstrees.com\/shop\/","nextItem":{"@type":"ListItem","@id":"https:\/\/lawnstrees.com\/product-category\/all-trees\/#listItem","name":"All Trees"},"previousItem":{"@type":"ListItem","@id":"https:\/\/lawnstrees.com#listItem","name":"Home"}},{"@type":"ListItem","@id":"https:\/\/lawnstrees.com\/product-category\/all-trees\/#listItem","position":3,"name":"All Trees","item":"https:\/\/lawnstrees.com\/product-category\/all-trees\/","nextItem":{"@type":"ListItem","@id":"https:\/\/lawnstrees.com\/product\/shoal-creek-vitex\/#listItem","name":"Shoal Creek Vitex (Vitex agnus-castus &#8216;Shoal Creek&#8217;)"},"previousItem":{"@type":"ListItem","@id":"https:\/\/lawnstrees.com\/shop\/#listItem","name":"Trees"}},{"@type":"ListItem","@id":"https:\/\/lawnstrees.com\/product\/shoal-creek-vitex\/#listItem","position":4,"name":"Shoal Creek Vitex (Vitex agnus-castus &#8216;Shoal Creek&#8217;)","previousItem":{"@type":"ListItem","@id":"https:\/\/lawnstrees.com\/product-category\/all-trees\/#listItem","name":"All Trees"}}]},{"@type":"ItemPage","@id":"https:\/\/lawnstrees.com\/product\/shoal-creek-vitex\/#itempage","url":"https:\/\/lawnstrees.com\/product\/shoal-creek-vitex\/","name":"Shoal Creek Vitex (Vitex agnus-castus \u2018Shoal Creek\u2019) | LAWNS Tree Farm LLC.","description":"The Shoal Creek Vitex grows 8\u201315 ft tall, 12\u201315 ft wide, with fragrant blue-violet flowers and gray-green leaves. Deciduous, drought-tolerant, full sun.","inLanguage":"en-US","isPartOf":{"@id":"https:\/\/lawnstrees.com\/#website"},"breadcrumb":{"@id":"https:\/\/lawnstrees.com\/product\/shoal-creek-vitex\/#breadcrumblist"},"image":{"@type":"ImageObject","url":"https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2.jpg","@id":"https:\/\/lawnstrees.com\/product\/shoal-creek-vitex\/#mainImage","width":879,"height":660},"primaryImageOfPage":{"@id":"https:\/\/lawnstrees.com\/product\/shoal-creek-vitex\/#mainImage"},"datePublished":"2024-05-04T15:22:40+00:00","dateModified":"2026-01-11T19:57:29+00:00"},{"@type":"Organization","@id":"https:\/\/lawnstrees.com\/#organization","name":"LAWNS Tree Farm LLC.","description":"When Quality Counts, You Can Count On Us!","url":"https:\/\/lawnstrees.com\/","foundingDate":"1984-01-01","logo":{"@type":"ImageObject","url":"https:\/\/lawnstrees.com\/wp-content\/uploads\/2025\/08\/Lawns-4x6-flag.jpg","@id":"https:\/\/lawnstrees.com\/product\/shoal-creek-vitex\/#organizationLogo","width":838,"height":553},"image":{"@id":"https:\/\/lawnstrees.com\/product\/shoal-creek-vitex\/#organizationLogo"},"sameAs":["https:\/\/www.facebook.com\/people\/LAWNS-Tree-Farm\/100064014818901\/","https:\/\/www.instagram.com\/lawnstreefarm\/","https:\/\/www.tiktok.com\/@lawnstreefarm","https:\/\/www.youtube.com\/@lawnstreefarm","https:\/\/www.yelp.com\/biz\/lawns-tree-farm-leander","https:\/\/nextdoor.com\/pages\/lawns-tree-farm-leander-tx\/"]},{"@type":"WebSite","@id":"https:\/\/lawnstrees.com\/#website","url":"https:\/\/lawnstrees.com\/","name":"LAWNS Tree Farm LLC.","description":"When Quality Counts, You Can Count On Us!","inLanguage":"en-US","publisher":{"@id":"https:\/\/lawnstrees.com\/#organization"}}]}
+		</script>
+		<!-- All in One SEO -->
+
+<script>window._wca = window._wca || [];</script>
+<!-- Google tag (gtag.js) consent mode dataLayer added by Site Kit -->
+<script id="google_gtagjs-js-consent-mode-data-layer">
+window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}
+gtag('consent', 'default', {"ad_personalization":"denied","ad_storage":"denied","ad_user_data":"denied","analytics_storage":"denied","functionality_storage":"denied","security_storage":"denied","personalization_storage":"denied","region":["AT","BE","BG","CH","CY","CZ","DE","DK","EE","ES","FI","FR","GB","GR","HR","HU","IE","IS","IT","LI","LT","LU","LV","MT","NL","NO","PL","PT","RO","SE","SI","SK"],"wait_for_update":500});
+window._googlesitekitConsentCategoryMap = {"statistics":["analytics_storage"],"marketing":["ad_storage","ad_user_data","ad_personalization"],"functional":["functionality_storage","security_storage"],"preferences":["personalization_storage"]};
+window._googlesitekitConsents = {"ad_personalization":"denied","ad_storage":"denied","ad_user_data":"denied","analytics_storage":"denied","functionality_storage":"denied","security_storage":"denied","personalization_storage":"denied","region":["AT","BE","BG","CH","CY","CZ","DE","DK","EE","ES","FI","FR","GB","GR","HR","HU","IE","IS","IT","LI","LT","LU","LV","MT","NL","NO","PL","PT","RO","SE","SI","SK"],"wait_for_update":500};
+</script>
+<!-- End Google tag (gtag.js) consent mode dataLayer added by Site Kit -->
+<link rel='dns-prefetch' href='//www.googletagmanager.com' />
+<link rel='dns-prefetch' href='//stats.wp.com' />
+<link rel='dns-prefetch' href='//fonts.googleapis.com' />
+<link rel='dns-prefetch' href='//v0.wordpress.com' />
+<link href='//hb.wpmucdn.com' rel='preconnect' />
+<link href='http://fonts.googleapis.com' rel='preconnect' />
+<link href='//fonts.gstatic.com' crossorigin='' rel='preconnect' />
+<link rel="alternate" type="application/rss+xml" title="LAWNS Tree Farm LLC. &raquo; Feed" href="https://lawnstrees.com/feed/" />
+<link rel="alternate" type="application/rss+xml" title="LAWNS Tree Farm LLC. &raquo; Comments Feed" href="https://lawnstrees.com/comments/feed/" />
+<link rel="alternate" type="text/calendar" title="LAWNS Tree Farm LLC. &raquo; iCal Feed" href="https://lawnstrees.com/events/?ical=1" />
+<link rel="alternate" title="oEmbed (JSON)" type="application/json+oembed" href="https://lawnstrees.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Flawnstrees.com%2Fproduct%2Fshoal-creek-vitex%2F" />
+<link rel="alternate" title="oEmbed (XML)" type="text/xml+oembed" href="https://lawnstrees.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Flawnstrees.com%2Fproduct%2Fshoal-creek-vitex%2F&#038;format=xml" />
+		<style>
+			.lazyload,
+			.lazyloading {
+				max-width: 100%;
+			}
+		</style>
+				<!-- This site uses the Google Analytics by MonsterInsights plugin v10.2.2 - Using Analytics tracking - https://www.monsterinsights.com/ -->
+							<script src="//www.googletagmanager.com/gtag/js?id=G-REDACTED01"  data-cfasync="false" data-wpfc-render="false" type="text/javascript" async></script>
+			<script data-cfasync="false" data-wpfc-render="false" type="text/javascript">
+				var mi_version = '10.2.2';
+				var mi_track_user = true;
+				var mi_no_track_reason = '';
+								var MonsterInsightsDefaultLocations = {"page_location":"https:\/\/lawnstrees.com\/product\/shoal-creek-vitex\/"};
+								if ( typeof MonsterInsightsPrivacyGuardFilter === 'function' ) {
+					var MonsterInsightsLocations = (typeof MonsterInsightsExcludeQuery === 'object') ? MonsterInsightsPrivacyGuardFilter( MonsterInsightsExcludeQuery ) : MonsterInsightsPrivacyGuardFilter( MonsterInsightsDefaultLocations );
+				} else {
+					var MonsterInsightsLocations = (typeof MonsterInsightsExcludeQuery === 'object') ? MonsterInsightsExcludeQuery : MonsterInsightsDefaultLocations;
+				}
+
+								var disableStrs = [
+										'ga-disable-G-REDACTED01',
+									];
+
+				/* Function to detect opted out users */
+				function __gtagTrackerIsOptedOut() {
+					for (var index = 0; index < disableStrs.length; index++) {
+						if (document.cookie.indexOf(disableStrs[index] + '=true') > -1) {
+							return true;
+						}
+					}
+
+					return false;
+				}
+
+				/* Disable tracking if the opt-out cookie exists. */
+				if (__gtagTrackerIsOptedOut()) {
+					for (var index = 0; index < disableStrs.length; index++) {
+						window[disableStrs[index]] = true;
+					}
+				}
+
+				/* Opt-out function */
+				function __gtagTrackerOptout() {
+					for (var index = 0; index < disableStrs.length; index++) {
+						document.cookie = disableStrs[index] + '=true; expires=Thu, 31 Dec 2099 23:59:59 UTC; path=/';
+						window[disableStrs[index]] = true;
+					}
+				}
+
+				if ('undefined' === typeof gaOptout) {
+					function gaOptout() {
+						__gtagTrackerOptout();
+					}
+				}
+								window.dataLayer = window.dataLayer || [];
+
+				window.MonsterInsightsDualTracker = {
+					helpers: {},
+					trackers: {},
+				};
+				if (mi_track_user) {
+					function __gtagDataLayer() {
+						dataLayer.push(arguments);
+					}
+
+					function __gtagTracker(type, name, parameters) {
+						if (!parameters) {
+							parameters = {};
+						}
+
+						if (parameters.send_to) {
+							__gtagDataLayer.apply(null, arguments);
+							return;
+						}
+
+						if (type === 'event') {
+														parameters.send_to = monsterinsights_frontend.v4_id;
+							var hookName = name;
+							if (typeof parameters['event_category'] !== 'undefined') {
+								hookName = parameters['event_category'] + ':' + name;
+							}
+
+							if (typeof MonsterInsightsDualTracker.trackers[hookName] !== 'undefined') {
+								MonsterInsightsDualTracker.trackers[hookName](parameters);
+							} else {
+								__gtagDataLayer('event', name, parameters);
+							}
+							
+						} else {
+							__gtagDataLayer.apply(null, arguments);
+						}
+					}
+
+					__gtagTracker('js', new Date());
+					__gtagTracker('set', {
+						'developer_id.dZGIzZG': true,
+											});
+					if ( MonsterInsightsLocations.page_location ) {
+						__gtagTracker('set', MonsterInsightsLocations);
+					}
+										__gtagTracker('config', 'G-REDACTED01', {"forceSSL":"true","link_attribution":"true"} );
+										window.gtag = __gtagTracker;										(function () {
+						/* https://developers.google.com/analytics/devguides/collection/analyticsjs/ */
+						/* ga and __gaTracker compatibility shim. */
+						var noopfn = function () {
+							return null;
+						};
+						var newtracker = function () {
+							return new Tracker();
+						};
+						var Tracker = function () {
+							return null;
+						};
+						var p = Tracker.prototype;
+						p.get = noopfn;
+						p.set = noopfn;
+						p.send = function () {
+							var args = Array.prototype.slice.call(arguments);
+							args.unshift('send');
+							__gaTracker.apply(null, args);
+						};
+						var __gaTracker = function () {
+							var len = arguments.length;
+							if (len === 0) {
+								return;
+							}
+							var f = arguments[len - 1];
+							if (typeof f !== 'object' || f === null || typeof f.hitCallback !== 'function') {
+								if ('send' === arguments[0]) {
+									var hitConverted, hitObject = false, action;
+									if ('event' === arguments[1]) {
+										if ('undefined' !== typeof arguments[3]) {
+											hitObject = {
+												'eventAction': arguments[3],
+												'eventCategory': arguments[2],
+												'eventLabel': arguments[4],
+												'value': arguments[5] ? arguments[5] : 1,
+											}
+										}
+									}
+									if ('pageview' === arguments[1]) {
+										if ('undefined' !== typeof arguments[2]) {
+											hitObject = {
+												'eventAction': 'page_view',
+												'page_path': arguments[2],
+											}
+										}
+									}
+									if (typeof arguments[2] === 'object') {
+										hitObject = arguments[2];
+									}
+									if (typeof arguments[5] === 'object') {
+										Object.assign(hitObject, arguments[5]);
+									}
+									if ('undefined' !== typeof arguments[1].hitType) {
+										hitObject = arguments[1];
+										if ('pageview' === hitObject.hitType) {
+											hitObject.eventAction = 'page_view';
+										}
+									}
+									if (hitObject) {
+										action = 'timing' === arguments[1].hitType ? 'timing_complete' : hitObject.eventAction;
+										hitConverted = mapArgs(hitObject);
+										__gtagTracker('event', action, hitConverted);
+									}
+								}
+								return;
+							}
+
+							function mapArgs(args) {
+								var arg, hit = {};
+								var gaMap = {
+									'eventCategory': 'event_category',
+									'eventAction': 'event_action',
+									'eventLabel': 'event_label',
+									'eventValue': 'event_value',
+									'nonInteraction': 'non_interaction',
+									'timingCategory': 'event_category',
+									'timingVar': 'name',
+									'timingValue': 'value',
+									'timingLabel': 'event_label',
+									'page': 'page_path',
+									'location': 'page_location',
+									'title': 'page_title',
+									'referrer' : 'page_referrer',
+								};
+								for (arg in args) {
+																		if (!(!args.hasOwnProperty(arg) || !gaMap.hasOwnProperty(arg))) {
+										hit[gaMap[arg]] = args[arg];
+									} else {
+										hit[arg] = args[arg];
+									}
+								}
+								return hit;
+							}
+
+							try {
+								f.hitCallback();
+							} catch (ex) {
+							}
+						};
+						__gaTracker.create = newtracker;
+						__gaTracker.getByName = newtracker;
+						__gaTracker.getAll = function () {
+							return [];
+						};
+						__gaTracker.remove = noopfn;
+						__gaTracker.loaded = true;
+						window['__gaTracker'] = __gaTracker;
+					})();
+									} else {
+										console.log("");
+					(function () {
+						function __gtagTracker() {
+							return null;
+						}
+
+						window['__gtagTracker'] = __gtagTracker;
+						window['gtag'] = __gtagTracker;
+					})();
+									}
+			</script>
+							<!-- / Google Analytics by MonsterInsights -->
+		<style id="wp-img-auto-sizes-contain-inline-css">
+img:is([sizes=auto i],[sizes^="auto," i]){contain-intrinsic-size:3000px 1500px}
+/*# sourceURL=wp-img-auto-sizes-contain-inline-css */
+</style>
+<link rel='stylesheet' id='mailchimp-sms-consent-style-css' href='https://lawnstrees.com/wp-content/plugins/mailchimp-for-woocommerce/blocks/build/style-sms-consent-block.css?ver=1779391121' media='all' />
+<link rel='stylesheet' id='layerslider-css' href='https://lawnstrees.com/wp-content/plugins/LayerSlider/assets/static/layerslider/css/layerslider.css?ver=7.11.1' media='all' />
+<style id="wp-emoji-styles-inline-css">
+
+	img.wp-smiley, img.emoji {
+		display: inline !important;
+		border: none !important;
+		box-shadow: none !important;
+		height: 1em !important;
+		width: 1em !important;
+		margin: 0 0.07em !important;
+		vertical-align: -0.1em !important;
+		background: none !important;
+		padding: 0 !important;
+	}
+/*# sourceURL=wp-emoji-styles-inline-css */
+</style>
+<style id="wp-block-library-inline-css">
+:root{--wp-block-synced-color:#7a00df;--wp-block-synced-color--rgb:122,0,223;--wp-bound-block-color:var(--wp-block-synced-color);--wp-editor-canvas-background:#ddd;--wp-admin-theme-color:#007cba;--wp-admin-theme-color--rgb:0,124,186;--wp-admin-theme-color-darker-10:#006ba1;--wp-admin-theme-color-darker-10--rgb:0,107,160.5;--wp-admin-theme-color-darker-20:#005a87;--wp-admin-theme-color-darker-20--rgb:0,90,135;--wp-admin-border-width-focus:2px}@media (min-resolution:192dpi){:root{--wp-admin-border-width-focus:1.5px}}.wp-element-button{cursor:pointer}:root .has-very-light-gray-background-color{background-color:#eee}:root .has-very-dark-gray-background-color{background-color:#313131}:root .has-very-light-gray-color{color:#eee}:root .has-very-dark-gray-color{color:#313131}:root .has-vivid-green-cyan-to-vivid-cyan-blue-gradient-background{background:linear-gradient(135deg,#00d084,#0693e3)}:root .has-purple-crush-gradient-background{background:linear-gradient(135deg,#34e2e4,#4721fb 50%,#ab1dfe)}:root .has-hazy-dawn-gradient-background{background:linear-gradient(135deg,#faaca8,#dad0ec)}:root .has-subdued-olive-gradient-background{background:linear-gradient(135deg,#fafae1,#67a671)}:root .has-atomic-cream-gradient-background{background:linear-gradient(135deg,#fdd79a,#004a59)}:root .has-nightshade-gradient-background{background:linear-gradient(135deg,#330968,#31cdcf)}:root .has-midnight-gradient-background{background:linear-gradient(135deg,#020381,#2874fc)}:root{--wp--preset--font-size--normal:16px;--wp--preset--font-size--huge:42px}.has-regular-font-size{font-size:1em}.has-larger-font-size{font-size:2.625em}.has-normal-font-size{font-size:var(--wp--preset--font-size--normal)}.has-huge-font-size{font-size:var(--wp--preset--font-size--huge)}:root .has-text-align-center{text-align:center}:root .has-text-align-left{text-align:left}:root .has-text-align-right{text-align:right}.has-fit-text{white-space:nowrap!important}#end-resizable-editor-section{display:none}.aligncenter{clear:both}.items-justified-left{justify-content:flex-start}.items-justified-center{justify-content:center}.items-justified-right{justify-content:flex-end}.items-justified-space-between{justify-content:space-between}.screen-reader-text{word-wrap:normal!important;border:0;clip-path:inset(50%);height:1px;margin:-1px;overflow:hidden;padding:0;position:absolute;width:1px}.screen-reader-text:focus{background-color:#ddd;clip-path:none;color:#444;display:block;font-size:1em;height:auto;left:5px;line-height:normal;padding:15px 23px 14px;text-decoration:none;top:5px;width:auto;z-index:100000}html :where(.has-border-color){border-style:solid}html :where([style*=border-color]){border-style:solid}html :where([style*=border-top-color]){border-top-style:solid}html :where([style*=border-right-color]){border-right-style:solid}html :where([style*=border-bottom-color]){border-bottom-style:solid}html :where([style*=border-left-color]){border-left-style:solid}html :where([style*=border-width]){border-style:solid}html :where([style*=border-top-width]){border-top-style:solid}html :where([style*=border-right-width]){border-right-style:solid}html :where([style*=border-bottom-width]){border-bottom-style:solid}html :where([style*=border-left-width]){border-left-style:solid}html :where(img[class*=wp-image-]){height:auto;max-width:100%}:where(figure){margin:0 0 1em}html :where(.is-position-sticky){--wp-admin--admin-bar--position-offset:var(--wp-admin--admin-bar--height,0px)}@media screen and (max-width:600px){html :where(.is-position-sticky){--wp-admin--admin-bar--position-offset:0px}}
+
+/*# sourceURL=/wp-includes/css/dist/block-library/common.min.css */
+</style>
+<style id="classic-theme-styles-inline-css">
+/*! This file is auto-generated */
+.wp-block-button__link{color:#fff;background-color:#32373c;border-radius:9999px;box-shadow:none;text-decoration:none;padding:calc(.667em + 2px) calc(1.333em + 2px);font-size:1.125em}.wp-block-file__button{background:#32373c;color:#fff;text-decoration:none}
+/*# sourceURL=/wp-includes/css/classic-themes.min.css */
+</style>
+
+<style id="global-styles-inline-css">
+:root{--wp--preset--aspect-ratio--square: 1;--wp--preset--aspect-ratio--4-3: 4/3;--wp--preset--aspect-ratio--3-4: 3/4;--wp--preset--aspect-ratio--3-2: 3/2;--wp--preset--aspect-ratio--2-3: 2/3;--wp--preset--aspect-ratio--16-9: 16/9;--wp--preset--aspect-ratio--9-16: 9/16;--wp--preset--color--black: #000000;--wp--preset--color--cyan-bluish-gray: #abb8c3;--wp--preset--color--white: #ffffff;--wp--preset--color--pale-pink: #f78da7;--wp--preset--color--vivid-red: #cf2e2e;--wp--preset--color--luminous-vivid-orange: #ff6900;--wp--preset--color--luminous-vivid-amber: #fcb900;--wp--preset--color--light-green-cyan: #7bdcb5;--wp--preset--color--vivid-green-cyan: #00d084;--wp--preset--color--pale-cyan-blue: #8ed1fc;--wp--preset--color--vivid-cyan-blue: #0693e3;--wp--preset--color--vivid-purple: #9b51e0;--wp--preset--color--primary: #69af07;--wp--preset--color--secondary: #9f8447;--wp--preset--color--tertiary: #483b33;--wp--preset--gradient--vivid-cyan-blue-to-vivid-purple: linear-gradient(135deg,rgb(6,147,227) 0%,rgb(155,81,224) 100%);--wp--preset--gradient--light-green-cyan-to-vivid-green-cyan: linear-gradient(135deg,rgb(122,220,180) 0%,rgb(0,208,130) 100%);--wp--preset--gradient--luminous-vivid-amber-to-luminous-vivid-orange: linear-gradient(135deg,rgb(252,185,0) 0%,rgb(255,105,0) 100%);--wp--preset--gradient--luminous-vivid-orange-to-vivid-red: linear-gradient(135deg,rgb(255,105,0) 0%,rgb(207,46,46) 100%);--wp--preset--gradient--very-light-gray-to-cyan-bluish-gray: linear-gradient(135deg,rgb(238,238,238) 0%,rgb(169,184,195) 100%);--wp--preset--gradient--cool-to-warm-spectrum: linear-gradient(135deg,rgb(74,234,220) 0%,rgb(151,120,209) 20%,rgb(207,42,186) 40%,rgb(238,44,130) 60%,rgb(251,105,98) 80%,rgb(254,248,76) 100%);--wp--preset--gradient--blush-light-purple: linear-gradient(135deg,rgb(255,206,236) 0%,rgb(152,150,240) 100%);--wp--preset--gradient--blush-bordeaux: linear-gradient(135deg,rgb(254,205,165) 0%,rgb(254,45,45) 50%,rgb(107,0,62) 100%);--wp--preset--gradient--luminous-dusk: linear-gradient(135deg,rgb(255,203,112) 0%,rgb(199,81,192) 50%,rgb(65,88,208) 100%);--wp--preset--gradient--pale-ocean: linear-gradient(135deg,rgb(255,245,203) 0%,rgb(182,227,212) 50%,rgb(51,167,181) 100%);--wp--preset--gradient--electric-grass: linear-gradient(135deg,rgb(202,248,128) 0%,rgb(113,206,126) 100%);--wp--preset--gradient--midnight: linear-gradient(135deg,rgb(2,3,129) 0%,rgb(40,116,252) 100%);--wp--preset--font-size--small: 13px;--wp--preset--font-size--medium: 20px;--wp--preset--font-size--large: 36px;--wp--preset--font-size--x-large: 42px;--wp--preset--spacing--20: 0.44rem;--wp--preset--spacing--30: 0.67rem;--wp--preset--spacing--40: 1rem;--wp--preset--spacing--50: 1.5rem;--wp--preset--spacing--60: 2.25rem;--wp--preset--spacing--70: 3.38rem;--wp--preset--spacing--80: 5.06rem;--wp--preset--shadow--natural: 6px 6px 9px rgba(0, 0, 0, 0.2);--wp--preset--shadow--deep: 12px 12px 50px rgba(0, 0, 0, 0.4);--wp--preset--shadow--sharp: 6px 6px 0px rgba(0, 0, 0, 0.2);--wp--preset--shadow--outlined: 6px 6px 0px -3px rgb(255, 255, 255), 6px 6px rgb(0, 0, 0);--wp--preset--shadow--crisp: 6px 6px 0px rgb(0, 0, 0);}:where(body) { margin: 0; }:where(.is-layout-flex){gap: 0.5em;}:where(.is-layout-grid){gap: 0.5em;}body .is-layout-flex{display: flex;}.is-layout-flex{flex-wrap: wrap;align-items: center;}.is-layout-flex > :is(*, div){margin: 0;}body .is-layout-grid{display: grid;}.is-layout-grid > :is(*, div){margin: 0;}body{padding-top: 0px;padding-right: 0px;padding-bottom: 0px;padding-left: 0px;}:root :where(.wp-element-button, .wp-block-button__link){background-color: #32373c;border-width: 0;color: #fff;font-family: inherit;font-size: inherit;font-style: inherit;font-weight: inherit;letter-spacing: inherit;line-height: inherit;padding-top: calc(0.667em + 2px);padding-right: calc(1.333em + 2px);padding-bottom: calc(0.667em + 2px);padding-left: calc(1.333em + 2px);text-decoration: none;text-transform: inherit;}.has-black-color{color: var(--wp--preset--color--black) !important;}.has-cyan-bluish-gray-color{color: var(--wp--preset--color--cyan-bluish-gray) !important;}.has-white-color{color: var(--wp--preset--color--white) !important;}.has-pale-pink-color{color: var(--wp--preset--color--pale-pink) !important;}.has-vivid-red-color{color: var(--wp--preset--color--vivid-red) !important;}.has-luminous-vivid-orange-color{color: var(--wp--preset--color--luminous-vivid-orange) !important;}.has-luminous-vivid-amber-color{color: var(--wp--preset--color--luminous-vivid-amber) !important;}.has-light-green-cyan-color{color: var(--wp--preset--color--light-green-cyan) !important;}.has-vivid-green-cyan-color{color: var(--wp--preset--color--vivid-green-cyan) !important;}.has-pale-cyan-blue-color{color: var(--wp--preset--color--pale-cyan-blue) !important;}.has-vivid-cyan-blue-color{color: var(--wp--preset--color--vivid-cyan-blue) !important;}.has-vivid-purple-color{color: var(--wp--preset--color--vivid-purple) !important;}.has-primary-color{color: var(--wp--preset--color--primary) !important;}.has-secondary-color{color: var(--wp--preset--color--secondary) !important;}.has-tertiary-color{color: var(--wp--preset--color--tertiary) !important;}.has-black-background-color{background-color: var(--wp--preset--color--black) !important;}.has-cyan-bluish-gray-background-color{background-color: var(--wp--preset--color--cyan-bluish-gray) !important;}.has-white-background-color{background-color: var(--wp--preset--color--white) !important;}.has-pale-pink-background-color{background-color: var(--wp--preset--color--pale-pink) !important;}.has-vivid-red-background-color{background-color: var(--wp--preset--color--vivid-red) !important;}.has-luminous-vivid-orange-background-color{background-color: var(--wp--preset--color--luminous-vivid-orange) !important;}.has-luminous-vivid-amber-background-color{background-color: var(--wp--preset--color--luminous-vivid-amber) !important;}.has-light-green-cyan-background-color{background-color: var(--wp--preset--color--light-green-cyan) !important;}.has-vivid-green-cyan-background-color{background-color: var(--wp--preset--color--vivid-green-cyan) !important;}.has-pale-cyan-blue-background-color{background-color: var(--wp--preset--color--pale-cyan-blue) !important;}.has-vivid-cyan-blue-background-color{background-color: var(--wp--preset--color--vivid-cyan-blue) !important;}.has-vivid-purple-background-color{background-color: var(--wp--preset--color--vivid-purple) !important;}.has-primary-background-color{background-color: var(--wp--preset--color--primary) !important;}.has-secondary-background-color{background-color: var(--wp--preset--color--secondary) !important;}.has-tertiary-background-color{background-color: var(--wp--preset--color--tertiary) !important;}.has-black-border-color{border-color: var(--wp--preset--color--black) !important;}.has-cyan-bluish-gray-border-color{border-color: var(--wp--preset--color--cyan-bluish-gray) !important;}.has-white-border-color{border-color: var(--wp--preset--color--white) !important;}.has-pale-pink-border-color{border-color: var(--wp--preset--color--pale-pink) !important;}.has-vivid-red-border-color{border-color: var(--wp--preset--color--vivid-red) !important;}.has-luminous-vivid-orange-border-color{border-color: var(--wp--preset--color--luminous-vivid-orange) !important;}.has-luminous-vivid-amber-border-color{border-color: var(--wp--preset--color--luminous-vivid-amber) !important;}.has-light-green-cyan-border-color{border-color: var(--wp--preset--color--light-green-cyan) !important;}.has-vivid-green-cyan-border-color{border-color: var(--wp--preset--color--vivid-green-cyan) !important;}.has-pale-cyan-blue-border-color{border-color: var(--wp--preset--color--pale-cyan-blue) !important;}.has-vivid-cyan-blue-border-color{border-color: var(--wp--preset--color--vivid-cyan-blue) !important;}.has-vivid-purple-border-color{border-color: var(--wp--preset--color--vivid-purple) !important;}.has-primary-border-color{border-color: var(--wp--preset--color--primary) !important;}.has-secondary-border-color{border-color: var(--wp--preset--color--secondary) !important;}.has-tertiary-border-color{border-color: var(--wp--preset--color--tertiary) !important;}.has-vivid-cyan-blue-to-vivid-purple-gradient-background{background: var(--wp--preset--gradient--vivid-cyan-blue-to-vivid-purple) !important;}.has-light-green-cyan-to-vivid-green-cyan-gradient-background{background: var(--wp--preset--gradient--light-green-cyan-to-vivid-green-cyan) !important;}.has-luminous-vivid-amber-to-luminous-vivid-orange-gradient-background{background: var(--wp--preset--gradient--luminous-vivid-amber-to-luminous-vivid-orange) !important;}.has-luminous-vivid-orange-to-vivid-red-gradient-background{background: var(--wp--preset--gradient--luminous-vivid-orange-to-vivid-red) !important;}.has-very-light-gray-to-cyan-bluish-gray-gradient-background{background: var(--wp--preset--gradient--very-light-gray-to-cyan-bluish-gray) !important;}.has-cool-to-warm-spectrum-gradient-background{background: var(--wp--preset--gradient--cool-to-warm-spectrum) !important;}.has-blush-light-purple-gradient-background{background: var(--wp--preset--gradient--blush-light-purple) !important;}.has-blush-bordeaux-gradient-background{background: var(--wp--preset--gradient--blush-bordeaux) !important;}.has-luminous-dusk-gradient-background{background: var(--wp--preset--gradient--luminous-dusk) !important;}.has-pale-ocean-gradient-background{background: var(--wp--preset--gradient--pale-ocean) !important;}.has-electric-grass-gradient-background{background: var(--wp--preset--gradient--electric-grass) !important;}.has-midnight-gradient-background{background: var(--wp--preset--gradient--midnight) !important;}.has-small-font-size{font-size: var(--wp--preset--font-size--small) !important;}.has-medium-font-size{font-size: var(--wp--preset--font-size--medium) !important;}.has-large-font-size{font-size: var(--wp--preset--font-size--large) !important;}.has-x-large-font-size{font-size: var(--wp--preset--font-size--x-large) !important;}
+/*# sourceURL=global-styles-inline-css */
+</style>
+
+<link rel='stylesheet' id='contact-form-7-css' href='https://lawnstrees.com/wp-content/plugins/contact-form-7/includes/css/styles.css?ver=6.1.6' media='all' />
+<link rel='stylesheet' id='dt-jqueryui-css' href='https://lawnstrees.com/wp-content/plugins/designthemes-appointment-addon/css/jquery-ui.css?ver=7.0' media='all' />
+<link rel='stylesheet' id='dt-appointment-css' href='https://lawnstrees.com/wp-content/plugins/designthemes-appointment-addon/css/styles.css?ver=7.0' media='all' />
+<link rel='stylesheet' id='dt-animation-css-css' href='https://lawnstrees.com/wp-content/plugins/designthemes-core-features/shortcodes/css/animations.css?ver=7.0' media='all' />
+<link rel='stylesheet' id='dt-sc-css-css' href='https://lawnstrees.com/wp-content/plugins/designthemes-core-features/shortcodes/css/shortcodes.css?ver=7.0' media='all' />
+<link rel='stylesheet' id='resmap-css' href='https://lawnstrees.com/wp-content/plugins/responsive-maps-plugin/includes/css/resmap.min.css?ver=4.5' media='all' />
+<link rel='stylesheet' id='photoswipe-css' href='https://lawnstrees.com/wp-content/plugins/woocommerce/assets/css/photoswipe/photoswipe.min.css?ver=10.7.0' media='all' />
+<link rel='stylesheet' id='photoswipe-default-skin-css' href='https://lawnstrees.com/wp-content/plugins/woocommerce/assets/css/photoswipe/default-skin/default-skin.min.css?ver=10.7.0' media='all' />
+<style id="woocommerce-inline-inline-css">
+.woocommerce form .form-row .required { visibility: visible; }
+/*# sourceURL=woocommerce-inline-inline-css */
+</style>
+<link rel='stylesheet' id='bsf-Defaults-css' href='https://lawnstrees.com/wp-content/uploads/smile_fonts/Defaults/Defaults.css?ver=3.19.22' media='all' />
+<link rel='stylesheet' id='gardening-reset-css' href='https://lawnstrees.com/wp-content/themes/gardening/css/reset.css?ver=3.3' media='all' />
+<link rel='stylesheet' id='gardening-css' href='https://lawnstrees.com/wp-content/themes/gardening/style.css?ver=3.3' media='all' />
+<link rel='stylesheet' id='prettyphoto-css' href='https://lawnstrees.com/wp-content/plugins/js_composer/assets/lib/vendor/prettyphoto/css/prettyPhoto.min.css?ver=7.8' media='all' />
+<link rel='stylesheet' id='custom-font-awesome-css' href='https://lawnstrees.com/wp-content/themes/gardening/css/font-awesome.min.css?ver=4.3.0' media='all' />
+<link rel='stylesheet' id='pe-icon-7-stroke-css' href='https://lawnstrees.com/wp-content/themes/gardening/css/pe-icon-7-stroke.css?ver=7.0' media='all' />
+<link rel='stylesheet' id='stroke-gap-icons-style-css' href='https://lawnstrees.com/wp-content/themes/gardening/css/stroke-gap-icons-style.css?ver=7.0' media='all' />
+<link rel='stylesheet' id='icon-moon-css' href='https://lawnstrees.com/wp-content/themes/gardening/css/icon-moon.css?ver=7.0' media='all' />
+<link rel='stylesheet' id='material-design-iconic-css' href='https://lawnstrees.com/wp-content/themes/gardening/css/material-design-iconic-font.min.css?ver=7.0' media='all' />
+<link rel='stylesheet' id='linearicons-css' href='https://lawnstrees.com/wp-content/themes/gardening/css/linearicons.css?ver=7.0' media='all' />
+<link rel='stylesheet' id='gardening-woo-css' href='https://lawnstrees.com/wp-content/themes/gardening/css/woocommerce.css?ver=3.3' media='all' />
+<link rel='stylesheet' id='gardening-skin-css' href='https://lawnstrees.com/wp-content/themes/gardening/css/skins/green/style.css?ver=7.0' media='all' />
+<link rel='stylesheet' id='gardening-customevent-css' href='https://lawnstrees.com/wp-content/themes/gardening/tribe-events/custom.css?ver=3.3' media='all' />
+<link rel='stylesheet' id='gardening-responsive-css' href='https://lawnstrees.com/wp-content/themes/gardening/css/responsive.css?ver=3.3' media='all' />
+<link rel='stylesheet' id='gardening-google-fonts-css' href='https://fonts.googleapis.com/css?family=Maven+Pro%3A400%2C400italic%2C500%2C600%2C700%2C800%2C900%7CMaven+Pro%3A400%2C400italic%2C500%2C600%2C700%2C800%2C900%7CMaven+Pro%3A400%2C400italic%2C500%2C600%2C700%2C800%2C900%7CNoto+Serif%3A400%2C400italic%2C500%2C600%2C700%2C800%2C900%7CNoto+Serif%3A400%2C400italic%2C500%2C600%2C700%2C800%2C900%7CNoto+Serif%3A400%2C400italic%2C500%2C600%2C700%2C800%2C900%7CNoto+Serif%3A400%2C400italic%2C500%2C600%2C700%2C800%2C900%7CNoto+Serif%3A400%2C400italic%2C500%2C600%2C700%2C800%2C900%7CNoto+Serif%3A400%2C400italic%2C500%2C600%2C700%2C800%2C900&#038;subset&#038;ver=1.0.0' media='all' />
+<link rel='stylesheet' id='gardening-custom-css' href='https://lawnstrees.com/wp-content/themes/gardening/css/custom.css?ver=3.3' media='all' />
+<link rel='stylesheet' id='gardening-popup-css-css' href='https://lawnstrees.com/wp-content/themes/gardening/framework/js/magnific/magnific-popup.css?ver=3.3' media='all' />
+<link rel='stylesheet' id='gardening-gutenberg-css' href='https://lawnstrees.com/wp-content/themes/gardening/css/gutenberg.css?ver=3.3' media='all' />
+<style id="gardening-gutenberg-inline-css">
+.has-primary-background-color { background-color:#69af07; }.has-primary-color { color:#69af07; }.has-secondary-background-color { background-color:#9f8447; }.has-secondary-color { color:#9f8447; }.has-tertiary-background-color { background-color:#483b33; }.has-tertiary-color { color:#483b33; }
+/*# sourceURL=gardening-gutenberg-inline-css */
+</style>
+<style id="gardening-combined-inline-css">
+body, .layout-boxed .inner-wrapper { background-color:#ffffff;}#69af07.top-bar { color:#333; background-color:#fff}.top-bar a:hover, .dt-sc-dark-bg.top-bar a:hover { color:#333; }#main-menu ul.menu > li > a, #main-menu > ul.menu > li > .nolink-menu { color:#333; }.menu-active-highlight #main-menu > ul.menu > li.current_page_item > a, .menu-active-highlight #main-menu > ul.menu > li.current_page_ancestor > a, .menu-active-highlight #main-menu > ul.menu > li.current-menu-item > a, .menu-active-highlight #main-menu > ul.menu > li.current-menu-ancestor > a { color:#ffffff; }.footer-widgets.dt-sc-dark-bg { background-color: rgba(72,59,51, 1); }.footer-widgets.dt-sc-dark-bg, #footer .dt-sc-dark-bg, .footer-copyright.dt-sc-dark-bg{ color:rgba(255, 255, 255, 0.6); }.footer-widgets.dt-sc-dark-bg a, #footer .dt-sc-dark-bg a{ color:rgba(255, 255, 255, 0.6); }#footer .dt-sc-dark-bg h3, #footer .dt-sc-dark-bg h3 a { color:#ffffff; }.footer-copyright.dt-sc-dark-bg {background: rgba(72,59,51, 1);}h1, .dt-sc-counter.type1 .dt-sc-counter-number, .dt-sc-portfolio-sorting a, .dt-sc-testimonial .dt-sc-testimonial-author cite, .dt-sc-pr-tb-col.minimal .dt-sc-price p, .dt-sc-pr-tb-col.minimal .dt-sc-price h6 span, .dt-sc-testimonial.special-testimonial-carousel blockquote, .dt-sc-pr-tb-col .dt-sc-tb-title, .dt-sc-pr-tb-col .dt-sc-tb-content, .dt-sc-pr-tb-col .dt-sc-tb-content li, .dt-sc-bar-text, .dt-sc-counter.type3 .dt-sc-counter-number, .dt-sc-timeline .dt-sc-timeline-content h2 span, .dt-sc-model-sorting a, .dt-sc-icon-box.type9 .icon-content h4, .dt-sc-icon-box.type9 .icon-content h4 span, .dt-sc-menu-sorting a, .dt-sc-menu .image-overlay .price, .dt-sc-menu .menu-categories a, .dt-sc-pr-tb-col .dt-sc-price h6, ul.products li .onsale, .footer-widgets .widget.widget_text .menu-links li a, .dt-sc-testimonial .dt-sc-testimonial-quote blockquote, .dt-sc-contact-info, .dt-sc-section-title p, .dt-sc-schedule-progress .dt-sc-progress-step span { font-family:Noto Serif, serif; }h2 { font-family:Noto Serif, serif; }h3, .dt-sc-testimonial blockquote, .blog-entry.entry-date-left .entry-date, .dt-sc-ribbon-title, .dt-sc-testimonial.type1 .dt-sc-testimonial-author cite, .dt-sc-testimonial .dt-sc-testimonial-author cite { font-family:Noto Serif, serif; }h4, .blog-entry .entry-meta, .dt-sc-button, .dt-sc-counter.type3 h4 { font-family:Noto Serif, serif; }h5 { font-family:Noto Serif, serif; }h6, .dt-sc-contact-info.type5 h6, .dt-sc-contact-info.type2 h6 { font-family:Noto Serif, serif; }h1 { font-size:45px; font-weight:normal; letter-spacing:0.5px; }h2 { font-size:40px; font-weight:bold; letter-spacing:0.5px; }h3 { font-size:30px; font-weight:bold; letter-spacing:0.5px; }h4 { font-size:20px; font-weight:bold; letter-spacing:0.5px; }h5 { font-size:18px; font-weight:bold; letter-spacing:0.5px; }h6 { font-size:17px; font-weight:normal; letter-spacing:0.5px; }body { font-size:17px; line-height:28px; }body, .blog-entry.blog-medium-style .entry-meta, .dt-sc-event-image-caption .dt-sc-image-content h3, .dt-sc-events-list .dt-sc-event-title h5, .dt-sc-sponsors .dt-sc-one-third h3, .woocommerce ul.products li.product .onsale, #footer .mailchimp-form input[type="email"], .dt-sc-icon-box.type5 .icon-content h5, .main-header #searchform input[type="text"], .dt-sc-pr-tb-col.type2 .dt-sc-tb-content li, .megamenu-child-container > ul.sub-menu > li > a .menu-item-description, .menu-item-description { font-family:Maven Pro, sans-serif; }#main-menu ul.menu > li > a, .left-header #main-menu > ul.menu > li > a, #main-menu > ul.menu > li > .nolink-menu { font-size:16px; font-weight:bold; letter-spacing:0.5px; }#main-menu ul.menu > li > a, .dt-sc-pr-tb-col .dt-sc-tb-title h5, .dt-sc-popular-procedures .details .duration, .dt-sc-popular-procedures .details .price, .dt-sc-counter.type2 .dt-sc-counter-number { font-family:Maven Pro, sans-serif; }#main-menu ul li.menu-item-simple-parent ul li.menu-item-has-children::before {content: "";display: block;font-family: "Linearicons-Free";height: 0;position: absolute;right: 40px;top: 5px;width: 0;}#main-menu ul li.menu-item-simple-parent ul li.menu-item-has-children:hover::before {right: 30px;}#main-menu ul li.menu-item-simple-parent ul li.menu-item-has-children:hover:before { color: #69af07; }@media only screen and (max-width: 767px) {#main-menu ul li.menu-item-simple-parent ul li.menu-item-has-children::before { content: none; }}@media (min-width:768px) {.header-align-left #logo {width:40%;padding-top:0;padding-bottom:0;}.header-align-left .header-right {width:40%;padding-top:20px;}}@media only screen and (max-width: 767px){.header-align-center .main-header #logo a img, .header-align-left .main-header #logo a img {width: 100%;}.menu-icons-wrapper {position: absolute;right: 0px;top: -20px;}.header-align-left .header-right {font-size: 14px;padding-top:0;padding-bottom:0;}}.header-right .text-with-icon {font-weight:bold;}.widget ul li:before {content: "\f18c";font-family: FontAwesome;font-size: 14px;left: 0;position: absolute;top: 10px;}
+/*# sourceURL=gardening-combined-inline-css */
+</style>
+<script id="woocommerce-google-analytics-integration-gtag-js-after">
+/* Google Analytics for WooCommerce (gtag.js) */
+					window.dataLayer = window.dataLayer || [];
+					function gtag(){dataLayer.push(arguments);}
+					// Set up default consent state.
+					for ( const mode of [{"analytics_storage":"denied","ad_storage":"denied","ad_user_data":"denied","ad_personalization":"denied","region":["AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE","GR","HU","IS","IE","IT","LV","LI","LT","LU","MT","NL","NO","PL","PT","RO","SK","SI","ES","SE","GB","CH"]}] || [] ) {
+						gtag( "consent", "default", { "wait_for_update": 500, ...mode } );
+					}
+					gtag("js", new Date());
+					gtag("set", "developer_id.dOGY3NW", true);
+					gtag("config", "G-REDACTED02", {"track_404":true,"allow_google_signals":true,"logged_in":false,"linker":{"domains":[],"allow_incoming":false},"custom_map":{"dimension1":"logged_in"}});
+//# sourceURL=woocommerce-google-analytics-integration-gtag-js-after
+</script>
+<script id="jquery-core-js-extra">
+var dttheme_urls = {"theme_base_url":"https://lawnstrees.com/wp-content/themes/gardening","framework_base_url":"https://lawnstrees.com/wp-content/themes/gardening/framework/","ajaxurl":"https://lawnstrees.com/wp-admin/admin-ajax.php","url":"https://lawnstrees.com","stickynav":"enable","stickyele":".menu-wrapper","isRTL":"","loadingbar":"disable","nicescroll":"disable","advOptions":"Show Advanced Options"};
+//# sourceURL=jquery-core-js-extra
+</script>
+<script id="jquery-core-js" src="https://lawnstrees.com/wp-includes/js/jquery/jquery.min.js?ver=3.7.1"></script>
+<script id="jquery-migrate-js" src="https://lawnstrees.com/wp-includes/js/jquery/jquery-migrate.min.js?ver=3.4.1"></script>
+<script id="layerslider-utils-js-extra">
+var LS_Meta = {"v":"7.11.1","fixGSAP":"1"};
+//# sourceURL=layerslider-utils-js-extra
+</script>
+<script id="layerslider-utils-js" src="https://lawnstrees.com/wp-content/plugins/LayerSlider/assets/static/layerslider/js/layerslider.utils.js?ver=7.11.1"></script>
+<script id="layerslider-js" src="https://lawnstrees.com/wp-content/plugins/LayerSlider/assets/static/layerslider/js/layerslider.kreaturamedia.jquery.js?ver=7.11.1"></script>
+<script id="layerslider-transitions-js" src="https://lawnstrees.com/wp-content/plugins/LayerSlider/assets/static/layerslider/js/layerslider.transitions.js?ver=7.11.1"></script>
+<script async data-wp-strategy="async" id="monsterinsights-frontend-script-js" src="https://lawnstrees.com/wp-content/plugins/google-analytics-for-wordpress/assets/js/frontend-gtag.min.js?ver=10.2.2"></script>
+<script data-cfasync="false" data-wpfc-render="false" type="text/javascript" id='monsterinsights-frontend-script-js-extra'>/* <![CDATA[ */
+var monsterinsights_frontend = {"js_events_tracking":"true","download_extensions":"doc,pdf,ppt,zip,xls,docx,pptx,xlsx","inbound_paths":"[{\"path\":\"\\\/go\\\/\",\"label\":\"affiliate\"},{\"path\":\"\\\/recommend\\\/\",\"label\":\"affiliate\"}]","home_url":"https:\/\/lawnstrees.com","hash_tracking":"false","v4_id":"G-REDACTED01"};/* ]]> */
+</script>
+<script data-wp-strategy="defer" defer id="wc-zoom-js" src="https://lawnstrees.com/wp-content/plugins/woocommerce/assets/js/zoom/jquery.zoom.min.js?ver=1.7.21-wc.10.7.0"></script>
+<script data-wp-strategy="defer" defer id="wc-flexslider-js" src="https://lawnstrees.com/wp-content/plugins/woocommerce/assets/js/flexslider/jquery.flexslider.min.js?ver=2.7.2-wc.10.7.0"></script>
+<script data-wp-strategy="defer" defer id="wc-photoswipe-js" src="https://lawnstrees.com/wp-content/plugins/woocommerce/assets/js/photoswipe/photoswipe.min.js?ver=4.1.1-wc.10.7.0"></script>
+<script data-wp-strategy="defer" defer id="wc-photoswipe-ui-default-js" src="https://lawnstrees.com/wp-content/plugins/woocommerce/assets/js/photoswipe/photoswipe-ui-default.min.js?ver=4.1.1-wc.10.7.0"></script>
+<script id="wc-single-product-js-extra">
+var wc_single_product_params = {"i18n_required_rating_text":"Please select a rating","i18n_rating_options":["1 of 5 stars","2 of 5 stars","3 of 5 stars","4 of 5 stars","5 of 5 stars"],"i18n_product_gallery_trigger_text":"View full-screen image gallery","review_rating_required":"yes","flexslider":{"rtl":false,"animation":"slide","smoothHeight":true,"directionNav":false,"controlNav":"thumbnails","slideshow":false,"animationSpeed":500,"animationLoop":false,"allowOneSlide":false},"zoom_enabled":"1","zoom_options":[],"photoswipe_enabled":"1","photoswipe_options":{"shareEl":false,"closeOnScroll":false,"history":false,"hideAnimationDuration":0,"showAnimationDuration":0},"flexslider_enabled":"1"};
+//# sourceURL=wc-single-product-js-extra
+</script>
+<script data-wp-strategy="defer" defer id="wc-single-product-js" src="https://lawnstrees.com/wp-content/plugins/woocommerce/assets/js/frontend/single-product.min.js?ver=10.7.0"></script>
+<script data-wp-strategy="defer" id="wc-jquery-blockui-js" src="https://lawnstrees.com/wp-content/plugins/woocommerce/assets/js/jquery-blockui/jquery.blockUI.min.js?ver=2.7.0-wc.10.7.0"></script>
+<script data-wp-strategy="defer" id="wc-js-cookie-js" src="https://lawnstrees.com/wp-content/plugins/woocommerce/assets/js/js-cookie/js.cookie.min.js?ver=2.1.4-wc.10.7.0"></script>
+<script data-wp-strategy="defer" defer id="woocommerce-analytics-js" src="https://stats.wp.com/s-202626.js"></script>
+
+<!-- Google tag (gtag.js) snippet added by Site Kit -->
+<!-- Google Analytics snippet added by Site Kit -->
+<!-- Google Ads snippet added by Site Kit -->
+<script id="google_gtagjs-js" src="https://www.googletagmanager.com/gtag/js?id=GT-WV372GCB" async></script>
+<script id="google_gtagjs-js-after">
+window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}
+gtag("set","linker",{"domains":["lawnstrees.com"]});
+gtag("js", new Date());
+gtag("set", "developer_id.dZTNiMT", true);
+gtag("config", "GT-WV372GCB", {"googlesitekit_post_type":"product"});
+gtag("config", "AW-16873168602");
+ window._googlesitekit = window._googlesitekit || {}; window._googlesitekit.throttledEvents = []; window._googlesitekit.gtagEvent = (name, data) => { var key = JSON.stringify( { name, data } ); if ( !! window._googlesitekit.throttledEvents[ key ] ) { return; } window._googlesitekit.throttledEvents[ key ] = true; setTimeout( () => { delete window._googlesitekit.throttledEvents[ key ]; }, 5 ); gtag( "event", name, { ...data, event_source: "site-kit" } ); }; 
+//# sourceURL=google_gtagjs-js-after
+</script>
+<script id="modernizr-custom-js" src="https://lawnstrees.com/wp-content/themes/gardening/framework/js/modernizr.custom.js?ver=7.0"></script>
+<script></script><meta name="generator" content="Powered by LayerSlider 7.11.1 - Build Heros, Sliders, and Popups. Create Animations and Beautiful, Rich Web Content as Easy as Never Before on WordPress." />
+<!-- LayerSlider updates and docs at: https://layerslider.com -->
+<link rel="https://api.w.org/" href="https://lawnstrees.com/wp-json/" /><link rel="alternate" title="JSON" type="application/json" href="https://lawnstrees.com/wp-json/wp/v2/product/11618" /><link rel="EditURI" type="application/rsd+xml" title="RSD" href="https://lawnstrees.com/xmlrpc.php?rsd" />
+<meta name="generator" content="WordPress 7.0" />
+<meta name="generator" content="WooCommerce 10.7.0" />
+<meta name="generator" content="Site Kit by Google 1.181.0" /><meta name="ti-site-data" content="eyJyIjoiMTowITc6MCEzMDowIiwibyI6Imh0dHBzOlwvXC9sYXduc3RyZWVzLmNvbT90aS1vbmxpbmUtdXNlcnMteWVscD0xJmFtcDtwPSUyRnByb2R1Y3QlMkZzaG9hbC1jcmVlay12aXRleCUyRiZhbXA7X3dwbm9uY2U9NDYwOTJiYmQ5NCJ9" /><meta name="ti-site-data" content="eyJyIjoiMTowITc6MCEzMDowIiwibyI6Imh0dHBzOlwvXC9sYXduc3RyZWVzLmNvbT90aS1vbmxpbmUtdXNlcnMtZ29vZ2xlPTEmYW1wO3A9JTJGcHJvZHVjdCUyRnNob2FsLWNyZWVrLXZpdGV4JTJGJmFtcDtfd3Bub25jZT1hNTFmMDU1YTVkIn0=" /><meta name="tec-api-version" content="v1"><meta name="tec-api-origin" content="https://lawnstrees.com"><link rel="alternate" href="https://lawnstrees.com/wp-json/tribe/events/v1/" />	<style>img#wpstats{display:none}</style>
+				<script>
+			document.documentElement.className = document.documentElement.className.replace('no-js', 'js');
+		</script>
+				<style>
+			.no-js img.lazyload {
+				display: none;
+			}
+
+			figure.wp-block-image img.lazyloading {
+				min-width: 150px;
+			}
+
+			.lazyload,
+			.lazyloading {
+				--smush-placeholder-width: 100px;
+				--smush-placeholder-bg-max-width: 120px;
+				--smush-placeholder-aspect-ratio: 1/1;
+				width: var(--smush-image-width, var(--smush-placeholder-width)) !important;
+				aspect-ratio: var(--smush-image-aspect-ratio, var(--smush-placeholder-aspect-ratio)) !important;
+			}
+
+						.lazyload, .lazyloading {
+				opacity: 0;
+			}
+
+			.lazyloaded {
+				opacity: 1;
+				transition: opacity 400ms;
+				transition-delay: 0ms;
+			}
+
+					</style>
+			<noscript><style>.woocommerce-product-gallery{ opacity: 1 !important; }</style></noscript>
+	<style>.recentcomments a{display:inline !important;padding:0 !important;margin:0 !important;}</style><meta name="generator" content="Powered by WPBakery Page Builder - drag and drop page builder for WordPress."/>
+
+<!-- Google Tag Manager snippet added by Site Kit -->
+<script>
+			( function( w, d, s, l, i ) {
+				w[l] = w[l] || [];
+				w[l].push( {'gtm.start': new Date().getTime(), event: 'gtm.js'} );
+				var f = d.getElementsByTagName( s )[0],
+					j = d.createElement( s ), dl = l != 'dataLayer' ? '&l=' + l : '';
+				j.async = true;
+				j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+				f.parentNode.insertBefore( j, f );
+			} )( window, document, 'script', 'dataLayer', 'GTM-REDACTED' );
+			
+</script>
+
+<!-- End Google Tag Manager snippet added by Site Kit -->
+<meta name="generator" content="Powered by Slider Revolution 6.7.17 - responsive, Mobile-Friendly Slider Plugin for WordPress with comfortable drag and drop interface." />
+<link rel="icon" href="https://lawnstrees.com/wp-content/uploads/2025/07/LAWNS-favicon2-100x100.png" sizes="32x32" />
+<link rel="icon" href="https://lawnstrees.com/wp-content/uploads/2025/07/LAWNS-favicon2-300x300.png" sizes="192x192" />
+<link rel="apple-touch-icon" href="https://lawnstrees.com/wp-content/uploads/2025/07/LAWNS-favicon2-300x300.png" />
+<meta name="msapplication-TileImage" content="https://lawnstrees.com/wp-content/uploads/2025/07/LAWNS-favicon2-300x300.png" />
+<script>function setREVStartSize(e){
+			//window.requestAnimationFrame(function() {
+				window.RSIW = window.RSIW===undefined ? window.innerWidth : window.RSIW;
+				window.RSIH = window.RSIH===undefined ? window.innerHeight : window.RSIH;
+				try {
+					var pw = document.getElementById(e.c).parentNode.offsetWidth,
+						newh;
+					pw = pw===0 || isNaN(pw) || (e.l=="fullwidth" || e.layout=="fullwidth") ? window.RSIW : pw;
+					e.tabw = e.tabw===undefined ? 0 : parseInt(e.tabw);
+					e.thumbw = e.thumbw===undefined ? 0 : parseInt(e.thumbw);
+					e.tabh = e.tabh===undefined ? 0 : parseInt(e.tabh);
+					e.thumbh = e.thumbh===undefined ? 0 : parseInt(e.thumbh);
+					e.tabhide = e.tabhide===undefined ? 0 : parseInt(e.tabhide);
+					e.thumbhide = e.thumbhide===undefined ? 0 : parseInt(e.thumbhide);
+					e.mh = e.mh===undefined || e.mh=="" || e.mh==="auto" ? 0 : parseInt(e.mh,0);
+					if(e.layout==="fullscreen" || e.l==="fullscreen")
+						newh = Math.max(e.mh,window.RSIH);
+					else{
+						e.gw = Array.isArray(e.gw) ? e.gw : [e.gw];
+						for (var i in e.rl) if (e.gw[i]===undefined || e.gw[i]===0) e.gw[i] = e.gw[i-1];
+						e.gh = e.el===undefined || e.el==="" || (Array.isArray(e.el) && e.el.length==0)? e.gh : e.el;
+						e.gh = Array.isArray(e.gh) ? e.gh : [e.gh];
+						for (var i in e.rl) if (e.gh[i]===undefined || e.gh[i]===0) e.gh[i] = e.gh[i-1];
+											
+						var nl = new Array(e.rl.length),
+							ix = 0,
+							sl;
+						e.tabw = e.tabhide>=pw ? 0 : e.tabw;
+						e.thumbw = e.thumbhide>=pw ? 0 : e.thumbw;
+						e.tabh = e.tabhide>=pw ? 0 : e.tabh;
+						e.thumbh = e.thumbhide>=pw ? 0 : e.thumbh;
+						for (var i in e.rl) nl[i] = e.rl[i]<window.RSIW ? 0 : e.rl[i];
+						sl = nl[0];
+						for (var i in nl) if (sl>nl[i] && nl[i]>0) { sl = nl[i]; ix=i;}
+						var m = pw>(e.gw[ix]+e.tabw+e.thumbw) ? 1 : (pw-(e.tabw+e.thumbw)) / (e.gw[ix]);
+						newh =  (e.gh[ix] * m) + (e.tabh + e.thumbh);
+					}
+					var el = document.getElementById(e.c);
+					if (el!==null && el) el.style.height = newh+"px";
+					el = document.getElementById(e.c+"_wrapper");
+					if (el!==null && el) {
+						el.style.height = newh+"px";
+						el.style.display = "block";
+					}
+				} catch(e){
+					console.log("Failure at Presize of Slider:" + e)
+				}
+			//});
+		  };</script>
+<style id="wp-custom-css">
+.sticky-wrapper #menu-item-11915 > span {
+	float: none !important;
+}
+
+.wp-block-buttons .wp-block-button__link {
+	box-shadow: rgba(0, 0, 0, 0.9) 0px 8px 12px !important;
+}
+
+.wp-block-buttons .wp-block-button__link:hover {
+	color: #fff !important;
+	background: #69af07 !important;
+}
+
+#post-10726 > p:nth-child(22) > img {
+	border-radius: 10px !important;
+	box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px !important;
+}
+
+.page-id-7467 #post-7467 > div > div.vc_row.wpb_row.vc_row-fluid.vc_custom_1483334570779 > div:nth-child(1) > div > div > div:nth-child(1) > div > h1 > span {
+	
+	font-weight: 700 !important;
+}
+
+#post-7467 > div > div.vc_row.wpb_row.vc_row-fluid.vc_custom_1483334570779 > div:nth-child(2) > div > div > div > figure > div > img {
+	border-radius: 10px !important;
+	box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px !important;
+}
+
+.blog-entry .entry-thumb img {
+	border-radius: 10px !important;
+	box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px !important;
+}
+
+.dt-sc-button {
+	border-radius: 5px !important;
+	box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 10px !important;
+}
+
+#post-7467 > div > div.vc_row.wpb_row.vc_row-fluid.wpb_animate_when_almost_visible.wpb_fadeInUp.fadeInUp.vc_custom_1725045545435.vc_row-has-fill.wpb_start_animation.animated > div > div > div > div.vc_row.wpb_row.vc_inner.vc_row-fluid > div.dt-sc-dark-bg.wpb_column.vc_column_container.vc_col-sm-7.vc_col-has-fill > div {
+	border-radius: 5px !important;
+	box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px !important;
+}
+
+#post-7467 > div > div.vc_row.wpb_row.vc_row-fluid.wpb_animate_when_almost_visible.wpb_fadeInUp.fadeInUp.vc_custom_1725045545435.vc_row-has-fill.wpb_start_animation.animated > div > div > div > div.vc_row.wpb_row.vc_inner.vc_row-fluid > div.wpb_column.vc_column_container.vc_col-sm-5 > div > div > div > figure > div > img {
+	border-radius: 5px !important;
+	box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px !important;
+}
+
+.vc_btn3.vc_btn3-color-black.vc_btn3-style-3d {
+    background-color: #483b33 !important;
+}
+
+#slider-2-slide-3-layer-5,
+#slider-2-slide-3-layer-6 {
+	border-radius: 5px !important;
+	box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px !important;
+}
+
+#slider-2-slide-2-layer-5,
+#slider-2-slide-2-layer-6 {
+	border-radius: 5px !important;
+	box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px !important;
+}
+
+#slider-2-slide-4-layer-6 {
+	border-radius: 5px !important;
+	box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px !important;
+}
+
+#post-8583 > div > div > div.wpb_column.vc_column_container.vc_col-sm-8 > div > div > div > div > p:nth-child(10) > img,
+#post-8583 > div > div > div.wpb_column.vc_column_container.vc_col-sm-8 > div > div > div > div > p:nth-child(18) > img {
+	border-radius: 10px !important;
+	box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px !important;
+}
+
+#post-10726 > p:nth-child(18) > img {
+	border-radius: 10px !important;
+	box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px !important;
+}
+
+.header-align-left #logo {
+	width: 52% !important;
+}
+
+#logo a {
+	width: 52% !important;
+}
+
+#splw-location-weather-11601.splw-main-wrapper {
+	width: auto !important;
+}
+
+#splw-location-weather-11601.splw-main-wrapper:not(.table-view,.tabs-view) .splw-lite-wrapper {
+    box-shadow: 0px 5px 10px 5px rgba(0, 0, 0, 0.35) !important;
+}
+
+#footer > strong > div > div > div.alignright.wpb_column.vc_column_container.vc_col-sm-6 > div > div > a {
+	display: none !important;
+}
+
+#post-8583 > div > div > div.wpb_column.vc_column_container.vc_col-sm-8 > div > div > div > div > p:nth-child(14) > img,
+#post-8583 > div > div > div.wpb_column.vc_column_container.vc_col-sm-8 > div > div > div > div > p:nth-child(24) > img {
+	border-radius: 10px !important;
+  box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px !important;
+}
+
+.wp-block-jetpack-slideshow .wp-block-jetpack-slideshow_slide figure .wp-block-jetpack-slideshow_image {
+	border-radius: 10px !important;
+    box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px !important;
+}
+
+.dt-sc-section-title.type2 h2 span {
+    color: #69af07 !important;
+}
+
+.uvc-heading .uvc-main-heading div, .uvc-heading .uvc-main-heading h2, .uvc-heading .uvc-main-heading span {
+	color: #9f8447 !important;
+	font-family: Noto Serif, serif !important;
+	font-weight: bold !important;
+    letter-spacing: 0.5px !important;
+}
+
+.wp-block-embed__wrapper {
+    border-radius: 10px !important;
+    box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px !important;
+}
+
+#splw-location-weather-11601 .splw-weather-title {
+    color: #9f8447 !important;
+    font-family: Noto Serif, serif !important;
+    font-style: italic !important;
+}
+
+.alignfull .wp-block-group__inner-container .is-layout-constrained {
+	
+		z-index: 6 !important;
+    background-color: rgba(255, 255, 255, 0.65) !important;
+    color: rgb(255, 255, 255) !important;
+    min-height: 0px !important;
+    min-width: 0px !important;
+    max-height: none !important;
+    max-width: none !important;
+    backdrop-filter: none !important;
+    filter: none !important;
+    transform-origin: 50% 50% !important;
+    opacity: 1 !important;
+    transform: translate(0px, 0px) !important;
+    visibility: visible !important;
+    border-radius: 20px !important;
+    width: 800px !important;
+    height: 300px !important;
+    align-content: center !important;
+    align-items: center !important;
+    align-self: center !important;
+    justify-content: center !important;
+    justify-items: center !important;
+    justify-self: center !important;
+    box-shadow: rgba(0, 0, 0, 1) 0px 10px 12px !important;
+}
+
+.page-id-12910 iframe, /*Austin*/
+.page-id-13039 iframe, /*Cedar Park*/
+.page-id-13048 iframe, /*Leander*/
+.page-id-13062 iframe, /*Round Rock*/
+.page-id-13066 iframe, /*Liberty Hill*/
+.page-id-13074 iframe, /*Georgetown*/ 
+.page-id-13078 iframe, /*Hutto*/
+.page-id-13088 iframe, /*Pflugerville*/
+.page-id-13099 iframe, /*Lago Vista*/
+.page-id-13104 iframe, /*Jonestown*/
+.page-id-13110 iframe, /*Lakeway*/
+.page-id-13115 iframe, /*Bee Cave*/
+.page-id-13119 iframe, /*West Lake Hills*/
+.page-id-13123 iframe, /*Sun City*/
+.page-id-13127 iframe /*Santa Rita Ranch*/ {
+	
+		border-radius: 10px !important;
+    box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px !important;
+}
+
+.woo-type20 ul.products li.product .product-thumb, .woo-type20 ul.products li.product .product-thumb .image, .woo-type20 ul.products li.product .image img, .woo-type20 ul.products li.product-category img, .woo-type20 ul.products li.product .product-content,
+.woo-type20 ul.products li.product:hover .product-thumb .image {
+		-webkit-border-radius: 5% !important;
+    -moz-border-radius: 5% !important;
+    -ms-border-radius: 5% !important;
+    -o-border-radius: 5% !important;
+    border-radius: 5% !important;
+}
+
+.woo-type20 ul.products li.product .product-wrapper:after, .woo-type20 ul.products li.product .product-details h5 {
+	border-style: none !important;
+}
+
+.woo-type20 ul.products li.product .product-wrapper {
+		border-radius: 10px !important;
+		box-shadow: rgba(118, 202, 28, 1) 0px 5px 10px !important;
+}
+
+.woo-type20 ul.products li.product .product-wrapper {
+    padding: 10px 20px 0 !important;
+}
+
+.woo-type20 ul.products li.product .product-thumb a.add_to_cart_button:hover, .woo-type20 ul.products li.product .product-thumb a.button.product_type_simple:hover, .woo-type20 ul.products li.product .product-thumb a.button.product_type_variable:hover, .woo-type20 ul.products li.product .product-thumb a.added_to_cart.wc-forward:hover, .woo-type20 ul.products li.product .product-thumb a.add_to_wishlist:hover, .woo-type20 ul.products li.product .product-thumb .yith-wcwl-wishlistaddedbrowse a:hover, .woo-type20 ul.products li.product .product-thumb .yith-wcwl-wishlistexistsbrowse a:hover, .woo-type20 ul.products li.product:hover .product-wrapper {
+	background-color: transparent !important;	
+	transform: translateY(2px) !important; /* Move the button down by 2px */
+  box-shadow: 0px 2px 5px rgba(118, 202, 28, 0.75) !important; /* Reduce the shadow to simulate depth */
+}
+
+.woo-type20.woocommerce ul.products li.product:hover .product-details h5, .woo-type20 .woocommerce ul.products li.product:hover .product-details h5 {
+	border-color: #9f8447 !important;
+	color: #9f8447 !important;
+}
+
+.woo-type20.woocommerce ul.products li.product .product-thumb a.add_to_cart_button:hover:before, .woo-type20.woocommerce ul.products li.product .product-thumb a.button.product_type_simple:hover:before, .woo-type20.woocommerce ul.products li.product .product-thumb a.button.product_type_variable:hover:before, .woo-type20.woocommerce ul.products li.product .product-thumb a.added_to_cart.wc-forward:hover:before, .woo-type20.woocommerce ul.products li.product .product-thumb a.add_to_wishlist:hover:before, .woo-type20.woocommerce ul.products li.product .product-thumb .yith-wcwl-wishlistaddedbrowse a:hover:before, .woo-type20.woocommerce ul.products li.product .product-thumb .yith-wcwl-wishlistexistsbrowse a:hover:before, .woo-type20 .woocommerce ul.products li.product .product-thumb a.add_to_cart_button:hover:before, .woo-type20 .woocommerce ul.products li.product .product-thumb a.button.product_type_simple:hover:before, .woo-type20 .woocommerce ul.products li.product .product-thumb a.button.product_type_variable:hover:before, .woo-type20 .woocommerce ul.products li.product .product-thumb a.added_to_cart.wc-forward:hover:before, .woo-type20 .woocommerce ul.products li.product .product-thumb a.add_to_wishlist:hover:before, .woo-type20 .woocommerce ul.products li.product .product-thumb .yith-wcwl-wishlistaddedbrowse a:hover:before, .woo-type20 .woocommerce ul.products li.product .product-thumb .yith-wcwl-wishlistexistsbrowse a:hover:before, .woo-type20 ul.products li.product:hover .product-details h5 a, .woo-type20 ul.products li.product-category:hover .product-details h5, .woo-type20 ul.products li.product-category:hover .product-details h5 .count, .woo-type20 ul.products li.product:hover .product-details .product-price .amount, .woo-type20 ul.products li.product:hover .product-details span.price, .woo-type20 ul.products li.product:hover .product-details span.price del, .woo-type20 ul.products li.product:hover .product-details span.price del .amount, .woo-type20 ul.products li.product:hover .product-details span.price ins, .woo-type20 ul.products li.product:hover .product-details span.price ins .amount, .woo-type20 ul.products li.product:hover .product-details .product-rating-wrapper .star-rating:before, .woo-type20 ul.products li.product:hover .product-details .product-rating-wrapper .star-rating span:before, .woo-type20 ul.products li.product .onsale, .woo-type20 ul.products li.product .out-of-stock, .woo-type20 ul.products li.product:hover .onsale, .woo-type20 ul.products li.product:hover .out-of-stock {
+	color: #9f8447 !important;
+}
+	
+.woo-type20 ul.products li.product .product-thumb, .woo-type20 ul.products li.product .product-thumb .image, .woo-type20 ul.products li.product .image img, .woo-type20 ul.products li.product-category img, .woo-type20 ul.products li.product .product-content, .woo-type20 ul.products li.product:hover .product-thumb .image {
+    -webkit-border-radius: 5% !important;
+    -moz-border-radius: 5% !important;
+    -ms-border-radius: 5% !important;
+    -o-border-radius: 5% !important;
+    border-radius: 5% !important;
+    transform: none !important;
+    filter: none !important;
+    pointer-events: none !important;
+    aspect-ratio: 1 / 1 !important;
+}
+
+.woocommerce ul.products li.product .product-buttons-wrapper {
+		display: none !important;
+}
+
+.woocommerce ul.products li.product:hover .price {
+    text-align: center !important;
+    padding: 0 0 0 0 !important;
+    width: 100% !important;
+}
+
+.woo-type20 ul.products li.product .product-thumb .image, .woo-type20 ul.products li.product .product-thumb .image img, .woo-type20 ul.products li.product-category img, .woo-type20 div.product div.images img {
+    aspect-ratio: 1 !important;
+    width: 100% !important;
+    height: auto !important;
+    object-fit: cover !important;
+}
+
+	
+@media only screen and (max-width: 767px) {
+	
+	#logo a {
+    width: 100% !important;
+	}
+	.header-align-left #logo {
+    width: 100% !important;
+	}
+	.dt-sc-contact-info.type2 {
+        font-size: 25px !important;
+    }
+	#slider-2-slide-3-layer-7 {
+		color: #483b33 !important;
+	}
+	.vc_column_container>.vc_column-inner 	{
+		padding-left: 0px !important;
+    padding-right: 0px !important;
+	}
+	#post-7467 > div > div.vc_row.wpb_row.vc_row-fluid.wpb_animate_when_almost_visible.wpb_fadeInUp.fadeInUp.vc_custom_1725045545435.vc_row-has-fill.wpb_start_animation.animated > div > div > div > div.vc_row.wpb_row.vc_inner.vc_row-fluid > div.dt-sc-dark-bg.wpb_column.vc_column_container.vc_col-sm-7.vc_col-has-fill > div > div > div > div.dt-sc-section-title.type2.alignleft.with-separator > p 	{
+		/*justify-self: center !important;*/
+		padding-left: 125px !important;
+	}
+	
+#post-7467 > div > div.vc_row.wpb_row.vc_row-fluid.wpb_animate_when_almost_visible.wpb_fadeInUp.fadeInUp.vc_custom_1725045545435.vc_row-has-fill.wpb_start_animation.animated > div > div > div > div.vc_row.wpb_row.vc_inner.vc_row-fluid > div.dt-sc-dark-bg.wpb_column.vc_column_container.vc_col-sm-7.vc_col-has-fill > div > div > div > div.dt-sc-section-title.type2.alignleft.with-separator > h2 {
+		padding: 30px !important;
+}
+	
+#post-7467 > div > div.vc_row.wpb_row.vc_row-fluid.wpb_animate_when_almost_visible.wpb_fadeInUp.fadeInUp.vc_custom_1504175931725.vc_row-has-fill.wpb_start_animation.animated {
+		padding-left: 0px !important;
+    padding-right: 0px !important;
+}
+	
+#splw-location-weather-11601 > div.splw-weather-title {
+		font-size: 35px !important;
+	}
+	.dt-sc-contact-info.type2 {
+		padding-left: 125px !important;
+	}
+	.dt-sc-contact-info.type2 span {
+		padding-left: 40px !important;
+	}
+	#post-8583 > div > div > div.wpb_column.vc_column_container.vc_col-sm-4.vc_col-has-fill > div {
+		min-height: 25px !important;
+	}
+
+.admin-bar .is-sticky .main-header-wrapper, .header-align-left.admin-bar .is-sticky #menu-wrapper, .header-align-center.admin-bar .is-sticky #menu-wrapper {
+		top: 0px !important;
+	}
+	
+#main-menu .menu-item-megamenu-parent .megamenu-child-container ul.sub-menu > li > ul > li > a, #main-menu ul li.menu-item-simple-parent ul > li > a, #main-menu ul li.menu-item-simple-parent ul > li:last-child > a {
+		justify-self: center !important;
+	}
+	
+	#main-menu ul li.menu-item-simple-parent ul li a {
+		padding-left: 0px !important;
+	}
+	
+	#main-menu ul li.menu-item-simple-parent ul li a {
+		padding: 10px 0px 10px 0px !imporant;
+	}
+	
+.header-align-left .header-right .dt-sc-vertical-small-separator {
+		display: inline-block !important;
+	}
+}
+</style>
+<noscript><style> .wpb_animate_when_almost_visible { opacity: 1; }</style></noscript><link rel='stylesheet' id='wc-blocks-style-css' href='https://lawnstrees.com/wp-content/plugins/woocommerce/assets/client/blocks/wc-blocks.css?ver=wc-10.7.0' media='all' />
+<link rel='stylesheet' id='js_composer_front-css' href='https://lawnstrees.com/wp-content/plugins/js_composer/assets/css/js_composer.min.css?ver=7.8' media='all' />
+<link rel='stylesheet' id='rs-plugin-settings-css' href='//lawnstrees.com/wp-content/plugins/revslider/sr6/assets/css/rs6.css?ver=6.7.17' media='all' />
+<style id="rs-plugin-settings-inline-css">
+#rs-demo-id {}
+/*# sourceURL=rs-plugin-settings-inline-css */
+</style>
+
+</head>
+
+<body class="wp-singular product-template-default single single-product postid-11618 wp-embed-responsive wp-theme-gardening theme-gardening woocommerce woocommerce-page woocommerce-no-js tribe-no-js layout-wide fullwidth-header header-align-left fullwidth-menu-header transparent-header sticky-header standard-header header-with-topbar woo-type20 wpb-js-composer js-comp-ver-7.8 vc_responsive">
+		<!-- Google Tag Manager (noscript) snippet added by Site Kit -->
+		<noscript>
+			<iframe data-src="https://www.googletagmanager.com/ns.html?id=GTM-REDACTED" height="0" width="0" style="display:none;visibility:hidden" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMSIgaGVpZ2h0PSIxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" class="lazyload" data-load-mode="1"></iframe>
+		</noscript>
+		<!-- End Google Tag Manager (noscript) snippet added by Site Kit -->
+		
+<!-- **Wrapper** -->
+<div class="wrapper">
+	<div class="inner-wrapper">
+
+		<!-- **Header Wrapper** -->
+        		<div id="header-wrapper" class="">
+            <!-- **Header** -->
+            <header id="header">
+            	<!-- **Main Header Wrapper** -->
+            	<div id="main-header-wrapper" class="main-header-wrapper">
+
+            		<div class="container">
+
+            			<!-- **Main Header** -->
+            			<div class="main-header"><div id="logo">
+			<a href="https://lawnstrees.com/" title="LAWNS Tree Farm LLC.">
+				<img class="normal_logo lazyload" data-src="https://lawnstrees.com/wp-content/uploads/2025/10/New-4K-Logo.png" alt="LAWNS Tree Farm LLC." title="LAWNS Tree Farm LLC." src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMSIgaGVpZ2h0PSIxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" style="--smush-placeholder-width: 991px; --smush-placeholder-aspect-ratio: 991/751;" />
+				<img class="darkbg_logo lazyload" data-src="https://lawnstrees.com/wp-content/themes/gardening/images/light-logo.png" alt="LAWNS Tree Farm LLC." title="LAWNS Tree Farm LLC." src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMSIgaGVpZ2h0PSIxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" style="--smush-placeholder-width: 422px; --smush-placeholder-aspect-ratio: 422/76;" />
+			</a></div>								<div class="header-right"><div class="text-with-icon"><span class="icon icon-phone2"> </span><a href="tel:5125550000">  Call or Text 512-555-0000 </a></div>
+<div class="dt-sc-vertical-small-separator "></div> <a href="https://www.facebook.com/Leander-Area-Wholesale-Nursery-Supply-2249809878435464" target="_blank"><i class="fa fa-facebook"></i></a><a> 
+    </a><a href="https://g.page/lawns-leander?gm" target="_blank"><i class="fa fa-google"></i></a><a> 
+    </a><a href="https://www.yelp.com/biz/leander-area-wholesale-nursery-supply-leander" target="_blank"><i class="fa fa-yelp"></i></a><br><br>
+<a href="/my-account">My Account</a></div>
+            				<div id="menu-wrapper" class="menu-wrapper menu-active-with-double-border">
+                            	<div class="dt-menu-toggle" id="dt-menu-toggle">
+                                	Menu                                    <span class="dt-menu-toggle-icon"></span>
+                                </div><nav id="main-menu" class="menu-main-menu-container"><ul class="menu"><li id="menu-item-11913" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-depth-0 with-box-shadow  menu-item-simple-parent "><a href="/">Home</a></li>
+<li id="menu-item-11914" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-depth-0 with-box-shadow  menu-item-simple-parent "><a href="https://lawnstrees.com/about/">About</a></li>
+<li id="menu-item-11915" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-has-children menu-item-depth-0 with-box-shadow  menu-item-simple-parent "><span class="nolink-menu">Guides</span>
+
+
+<ul class="sub-menu animate fadeIn">
+	<li id="menu-item-11916" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-depth-1"><a href="https://lawnstrees.com/lawns-tree-watering-guide/">Watering Guide &#8211; How to Care for Your New Tree(s)</a></li>
+	<li id="menu-item-11917" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-depth-1"><a href="https://lawnstrees.com/tree-planting-guide/">Tree Planting Guide</a></li>
+</ul>
+<a class="dt-menu-expand" href="javascript:void(0)">+</a></li>
+<li id="menu-item-11918" class="menu-item menu-item-type-post_type menu-item-object-page current_page_parent menu-item-depth-0 with-box-shadow  menu-item-simple-parent "><a href="https://lawnstrees.com/shop/">Trees</a></li>
+<li id="menu-item-11919" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-depth-0 with-box-shadow  menu-item-simple-parent "><a href="/news/">News</a></li>
+<li id="menu-item-11920" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-depth-0 with-box-shadow  menu-item-simple-parent "><a href="https://lawnstrees.com/reviews/">Reviews</a></li>
+<li id="menu-item-12576" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-depth-0 with-box-shadow  menu-item-simple-parent "><a href="https://lawnstrees.com/gallery/">Gallery</a></li>
+<li id="menu-item-11921" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-depth-0 with-box-shadow  menu-item-simple-parent "><a href="https://lawnstrees.com/contact/">Contact</a></li>
+</ul></nav>            				</div>            			</div>
+            		</div>
+            	</div><!-- **Main Header** -->
+			</header><!-- **Header - End** -->
+		</div><!-- **Header Wrapper - End** -->
+
+		
+        <!-- **Main** -->
+        <div id="main"><section class="main-title-section-wrapper dt-breadcrumb-for-single-product default dt-sc-dark-bg " style="">	<div class="container">		<div class="main-title-section">			<h1>Shoal Creek Vitex (Vitex agnus-castus &#8216;Shoal Creek&#8217;)</h1>		</div><div class="breadcrumb"><a href="https://lawnstrees.com/">Home</a><span class="fa default"></span><a href="https://lawnstrees.com/product-category/all-trees/">All Trees</a><span class="fa default"></span><a href="https://lawnstrees.com/product-category/vitex/">Vitex</a><span class="fa default"></span><a href="https://lawnstrees.com/product/shoal-creek-vitex/">Shoal Creek Vitex (Vitex agnus-castus &#8216;Shoal Creek&#8217;)</a></div>	</div></section>            <!-- ** Container ** -->
+            <div class="container">
+	<section id="primary" class="page-with-sidebar with-right-sidebar">
+					
+			<div class="woocommerce-notices-wrapper"></div><div id="product-11618" class="pif-has-gallery product type-product post-11618 status-publish first instock product_cat-all-trees product_cat-vitex has-post-thumbnail taxable shipping-taxable product-type-variable">
+
+	<div class="product-thumb-wrapper"><div class="woocommerce-product-gallery woocommerce-product-gallery--with-images woocommerce-product-gallery--columns-4 images" data-columns="4" style="opacity: 0; transition: opacity .25s ease-in-out;">
+	<div class="woocommerce-product-gallery__wrapper">
+		<div data-thumb="https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek2-100x100.jpg" data-thumb-alt="Shoal Creek Vitex (Vitex agnus-castus &#039;Shoal Creek&#039;)" data-thumb-srcset="https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek2-100x100.jpg 100w, https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek2-150x150.jpg 150w, https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek2-500x500.jpg 500w"  data-thumb-sizes="(max-width: 100px) 100vw, 100px" class="woocommerce-product-gallery__image"><a href="https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek2.jpg"><img loading="lazy" width="500" height="375" src="https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek2-500x375.jpg" class="wp-post-image" alt="Shoal Creek Vitex (Vitex agnus-castus &#039;Shoal Creek&#039;)" data-caption="" data-src="https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek2.jpg" data-large_image="https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek2.jpg" data-large_image_width="879" data-large_image_height="660" decoding="async" fetchpriority="high" srcset="https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek2-500x375.jpg 500w, https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek2-300x225.jpg 300w, https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek2.jpg 879w" sizes="(max-width: 500px) 100vw, 500px" /></a></div><div data-thumb="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex3-100x100.jpg" data-thumb-alt="Shoal Creek Vitex (Vitex agnus-castus &#039;Shoal Creek&#039;) - Image 2" data-thumb-srcset="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex3-100x100.jpg 100w, https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex3-150x150.jpg 150w"  data-thumb-sizes="(max-width: 100px) 100vw, 100px" class="woocommerce-product-gallery__image"><a href="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex3.jpg"><img loading="lazy" width="500" height="332" src="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex3-500x332.jpg" class="" alt="Shoal Creek Vitex (Vitex agnus-castus &#039;Shoal Creek&#039;) - Image 2" data-caption="" data-src="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex3.jpg" data-large_image="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex3.jpg" data-large_image_width="700" data-large_image_height="465" decoding="async" srcset="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex3-500x332.jpg 500w, https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex3-300x199.jpg 300w, https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex3.jpg 700w" sizes="(max-width: 500px) 100vw, 500px" /></a></div><div data-thumb="https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek-100x100.jpg" data-thumb-alt="Shoal Creek Vitex (Vitex agnus-castus &#039;Shoal Creek&#039;) - Image 3" data-thumb-srcset="https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek-100x100.jpg 100w, https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek-150x150.jpg 150w, https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek-500x500.jpg 500w"  data-thumb-sizes="(max-width: 100px) 100vw, 100px" class="woocommerce-product-gallery__image"><a href="https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek.jpg"><img loading="lazy" width="500" height="375" src="https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek-500x375.jpg" class="" alt="Shoal Creek Vitex (Vitex agnus-castus &#039;Shoal Creek&#039;) - Image 3" data-caption="" data-src="https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek.jpg" data-large_image="https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek.jpg" data-large_image_width="879" data-large_image_height="660" decoding="async" srcset="https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek-500x375.jpg 500w, https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek-300x225.jpg 300w, https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek.jpg 879w" sizes="(max-width: 500px) 100vw, 500px" /></a></div><div data-thumb="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex-100x100.jpg" data-thumb-alt="Shoal Creek Vitex (Vitex agnus-castus &#039;Shoal Creek&#039;) - Image 4" data-thumb-srcset="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex-100x100.jpg 100w, https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex-300x300.jpg 300w, https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex-1024x1024.jpg 1024w, https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex-150x150.jpg 150w, https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex-500x500.jpg 500w, https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex.jpg 1200w"  data-thumb-sizes="(max-width: 100px) 100vw, 100px" class="woocommerce-product-gallery__image"><a href="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex.jpg"><img loading="lazy" width="500" height="500" src="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex-500x500.jpg" class="" alt="Shoal Creek Vitex (Vitex agnus-castus &#039;Shoal Creek&#039;) - Image 4" data-caption="" data-src="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex.jpg" data-large_image="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex.jpg" data-large_image_width="1200" data-large_image_height="1200" decoding="async" srcset="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex-500x500.jpg 500w, https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex-300x300.jpg 300w, https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex-1024x1024.jpg 1024w, https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex-150x150.jpg 150w, https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex-100x100.jpg 100w, https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex.jpg 1200w" sizes="(max-width: 500px) 100vw, 500px" /></a></div><div data-thumb="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex2-100x100.jpg" data-thumb-alt="Shoal Creek Vitex (Vitex agnus-castus &#039;Shoal Creek&#039;) - Image 5" data-thumb-srcset="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex2-100x100.jpg 100w, https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex2-150x150.jpg 150w"  data-thumb-sizes="(max-width: 100px) 100vw, 100px" class="woocommerce-product-gallery__image"><a href="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex2.jpg"><img loading="lazy" width="500" height="375" src="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex2.jpg" class="" alt="Shoal Creek Vitex (Vitex agnus-castus &#039;Shoal Creek&#039;) - Image 5" data-caption="" data-src="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex2.jpg" data-large_image="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex2.jpg" data-large_image_width="500" data-large_image_height="375" decoding="async" srcset="https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex2.jpg 500w, https://lawnstrees.com/wp-content/uploads/2024/05/shoal-creek-vitex2-300x225.jpg 300w" sizes="(max-width: 500px) 100vw, 500px" /></a></div><div class="product-status-labels"></div>	</div>
+</div>
+
+	<div class="summary entry-summary">
+		<h1 class="product_title entry-title">Shoal Creek Vitex (Vitex agnus-castus &#8216;Shoal Creek&#8217;)</h1><p class="price"></p>
+<div class="woocommerce-product-details__short-description">
+	<p>Shoal Creek Vitex (Vitex agnus-castus &#8216;Shoal Creek&#8217;) <span data-huuid="9266682779935713135"> is a deciduous shrub or small tree prized for its fragrant blue-violet flowers and attractive foliage. </span><span data-huuid="9266682779935712132">It&#8217;s a popular selection for gardens due to its vibrant blooms, which attract butterflies, bees, and hummingbirds. </span><span data-huuid="9266682779935715225">It&#8217;s also relatively low-maintenance, drought-tolerant, and can be used in various landscape settings.<span class="pjBG2e" data-cid="3d75fb40-843f-4f5e-94f2-a402adb78d32"><span class="UV3uM"> </span></span></span></p>
+<ul data-hveid="CDgQAQ" data-ved="2ahUKEwjl4ZO7m5KPAxVz4ckDHUboNWEQm_YKegQIOBAB">
+<li><span data-huuid="16048065330760024886"><strong>Growth Habit:</strong> </span><span data-huuid="16048065330760026109">Can be grown as a large shrub or trained into a small, multi-trunked tree<span class="pjBG2e" data-cid="ef8bc5cf-633c-42da-9f68-a5966ad1f51b"><span class="UV3uM"> </span></span></span>
+<div class="NPrrbc" data-cid="ef8bc5cf-633c-42da-9f68-a5966ad1f51b" data-uuids="16048065330760024886,16048065330760026109">
+<div class="BMebGe btku5b fCrZyc LwdV0e FR7ZSc qVhvac OJeuxf" tabindex="0" role="button" aria-label="View related links" data-hveid="CCAQAQ" data-ved="2ahUKEwjl4ZO7m5KPAxVz4ckDHUboNWEQ3fYKegQIIBAB"></div>
+</div>
+</li>
+<li><span data-huuid="16048065330760024459"><strong>Mature Size:</strong> </span><span data-huuid="16048065330760025682">Typically reaches a height of 8 to 15 feet and a width of 12 to 15 feet</span>
+<div class="NPrrbc" data-cid="43f86995-02fc-485e-bba5-9331312c2345" data-uuids="16048065330760024459,16048065330760025682">
+<div class="BMebGe btku5b fCrZyc LwdV0e FR7ZSc qVhvac OJeuxf" tabindex="0" role="button" aria-label="View related links" data-hveid="CCUQAQ" data-ved="2ahUKEwjl4ZO7m5KPAxVz4ckDHUboNWEQ3fYKegQIJRAB"></div>
+</div>
+</li>
+<li><span data-huuid="16048065330760028128"><strong>Foliage:</strong> </span><span data-huuid="16048065330760025255">Compound, palmate leaves with 5 to 7 leaflets, grayish-green in color, and fragrant</span>
+<div class="NPrrbc" data-cid="4aedb733-0067-4660-9c74-f282c87ad0c6" data-uuids="16048065330760028128,16048065330760025255">
+<div class="BMebGe btku5b fCrZyc LwdV0e FR7ZSc qVhvac OJeuxf" tabindex="0" role="button" aria-label="View related links" data-hveid="CDEQAQ" data-ved="2ahUKEwjl4ZO7m5KPAxVz4ckDHUboNWEQ3fYKegQIMRAB"></div>
+</div>
+</li>
+<li><span data-huuid="16048065330760027701"><strong>Flowers:</strong> </span><span data-huuid="16048065330760024828">Produces showy, fragrant, blue-violet flower spikes (racemes) in mid-summer</span>
+<div class="NPrrbc" data-cid="06f6b6ef-eb4d-4347-9f3c-1b6e1a2a2e18" data-uuids="16048065330760027701,16048065330760024828">
+<div class="BMebGe btku5b fCrZyc LwdV0e FR7ZSc qVhvac OJeuxf" tabindex="0" role="button" aria-label="View related links" data-hveid="CDAQAQ" data-ved="2ahUKEwjl4ZO7m5KPAxVz4ckDHUboNWEQ3fYKegQIMBAB"></div>
+</div>
+</li>
+<li><span data-huuid="16048065330760027274"><strong>Hardiness:</strong> </span><span data-huuid="16048065330760024401">Generally hardy in USDA zones 6-9, but may experience dieback in colder zones</span>
+<div class="NPrrbc" data-cid="e95fe583-1eaf-468a-9f91-ff21ac082be7" data-uuids="16048065330760027274,16048065330760024401">
+<div class="BMebGe btku5b fCrZyc LwdV0e FR7ZSc qVhvac OJeuxf" tabindex="0" role="button" aria-label="View related links" data-hveid="CC8QAQ" data-ved="2ahUKEwjl4ZO7m5KPAxVz4ckDHUboNWEQ3fYKegQILxAB"></div>
+</div>
+<div class="NPrrbc" data-cid="5ffe93a5-8377-4d42-a7da-0e702e50bb60" data-uuids="16048065330760026847,16048065330760028070">
+<div class="BMebGe btku5b fCrZyc LwdV0e FR7ZSc qVhvac OJeuxf" tabindex="0" role="button" aria-label="View related links" data-hveid="CC0QAQ" data-ved="2ahUKEwjl4ZO7m5KPAxVz4ckDHUboNWEQ3fYKegQILRAB"></div>
+</div>
+</li>
+<li><span data-huuid="16048065330760026420"><strong>Sunlight:</strong> </span><span data-huuid="16048065330760027643">Thrives in full sun</span></li>
+</ul>
+</div>
+
+<form class="variations_form cart" action="https://lawnstrees.com/product/shoal-creek-vitex/" method="post" enctype='multipart/form-data' data-product_id="11618" data-product_variations="[{&quot;attributes&quot;:{&quot;attribute_pa_tree-size&quot;:&quot;5-gallon&quot;},&quot;availability_html&quot;:&quot;&quot;,&quot;backorders_allowed&quot;:false,&quot;dimensions&quot;:{&quot;length&quot;:&quot;&quot;,&quot;width&quot;:&quot;&quot;,&quot;height&quot;:&quot;&quot;},&quot;dimensions_html&quot;:&quot;N\/A&quot;,&quot;display_price&quot;:0,&quot;display_regular_price&quot;:0,&quot;image&quot;:{&quot;title&quot;:&quot;vitex-shoal-creek2&quot;,&quot;caption&quot;:&quot;&quot;,&quot;url&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2.jpg&quot;,&quot;alt&quot;:&quot;vitex-shoal-creek2&quot;,&quot;src&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-500x375.jpg&quot;,&quot;srcset&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-500x375.jpg 500w, https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-300x225.jpg 300w, https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2.jpg 879w&quot;,&quot;sizes&quot;:&quot;(max-width: 500px) 100vw, 500px&quot;,&quot;full_src&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2.jpg&quot;,&quot;full_src_w&quot;:879,&quot;full_src_h&quot;:660,&quot;gallery_thumbnail_src&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-100x100.jpg&quot;,&quot;gallery_thumbnail_src_w&quot;:100,&quot;gallery_thumbnail_src_h&quot;:100,&quot;thumb_src&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-500x500.jpg&quot;,&quot;thumb_src_w&quot;:500,&quot;thumb_src_h&quot;:500,&quot;src_w&quot;:500,&quot;src_h&quot;:375},&quot;image_id&quot;:11622,&quot;is_downloadable&quot;:false,&quot;is_in_stock&quot;:true,&quot;is_purchasable&quot;:false,&quot;is_sold_individually&quot;:&quot;no&quot;,&quot;is_virtual&quot;:false,&quot;max_qty&quot;:&quot;&quot;,&quot;min_qty&quot;:1,&quot;price_html&quot;:&quot;&quot;,&quot;sku&quot;:&quot;&quot;,&quot;variation_description&quot;:&quot;&quot;,&quot;variation_id&quot;:12271,&quot;variation_is_active&quot;:true,&quot;variation_is_visible&quot;:true,&quot;weight&quot;:&quot;&quot;,&quot;weight_html&quot;:&quot;N\/A&quot;},{&quot;attributes&quot;:{&quot;attribute_pa_tree-size&quot;:&quot;15-gallon&quot;},&quot;availability_html&quot;:&quot;&quot;,&quot;backorders_allowed&quot;:false,&quot;dimensions&quot;:{&quot;length&quot;:&quot;&quot;,&quot;width&quot;:&quot;&quot;,&quot;height&quot;:&quot;&quot;},&quot;dimensions_html&quot;:&quot;N\/A&quot;,&quot;display_price&quot;:0,&quot;display_regular_price&quot;:0,&quot;image&quot;:{&quot;title&quot;:&quot;vitex-shoal-creek2&quot;,&quot;caption&quot;:&quot;&quot;,&quot;url&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2.jpg&quot;,&quot;alt&quot;:&quot;vitex-shoal-creek2&quot;,&quot;src&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-500x375.jpg&quot;,&quot;srcset&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-500x375.jpg 500w, https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-300x225.jpg 300w, https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2.jpg 879w&quot;,&quot;sizes&quot;:&quot;(max-width: 500px) 100vw, 500px&quot;,&quot;full_src&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2.jpg&quot;,&quot;full_src_w&quot;:879,&quot;full_src_h&quot;:660,&quot;gallery_thumbnail_src&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-100x100.jpg&quot;,&quot;gallery_thumbnail_src_w&quot;:100,&quot;gallery_thumbnail_src_h&quot;:100,&quot;thumb_src&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-500x500.jpg&quot;,&quot;thumb_src_w&quot;:500,&quot;thumb_src_h&quot;:500,&quot;src_w&quot;:500,&quot;src_h&quot;:375},&quot;image_id&quot;:11622,&quot;is_downloadable&quot;:false,&quot;is_in_stock&quot;:true,&quot;is_purchasable&quot;:false,&quot;is_sold_individually&quot;:&quot;no&quot;,&quot;is_virtual&quot;:false,&quot;max_qty&quot;:&quot;&quot;,&quot;min_qty&quot;:1,&quot;price_html&quot;:&quot;&quot;,&quot;sku&quot;:&quot;&quot;,&quot;variation_description&quot;:&quot;&quot;,&quot;variation_id&quot;:11641,&quot;variation_is_active&quot;:true,&quot;variation_is_visible&quot;:true,&quot;weight&quot;:&quot;&quot;,&quot;weight_html&quot;:&quot;N\/A&quot;},{&quot;attributes&quot;:{&quot;attribute_pa_tree-size&quot;:&quot;30-gallon&quot;},&quot;availability_html&quot;:&quot;&quot;,&quot;backorders_allowed&quot;:false,&quot;dimensions&quot;:{&quot;length&quot;:&quot;&quot;,&quot;width&quot;:&quot;&quot;,&quot;height&quot;:&quot;&quot;},&quot;dimensions_html&quot;:&quot;N\/A&quot;,&quot;display_price&quot;:0,&quot;display_regular_price&quot;:0,&quot;image&quot;:{&quot;title&quot;:&quot;vitex-shoal-creek2&quot;,&quot;caption&quot;:&quot;&quot;,&quot;url&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2.jpg&quot;,&quot;alt&quot;:&quot;vitex-shoal-creek2&quot;,&quot;src&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-500x375.jpg&quot;,&quot;srcset&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-500x375.jpg 500w, https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-300x225.jpg 300w, https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2.jpg 879w&quot;,&quot;sizes&quot;:&quot;(max-width: 500px) 100vw, 500px&quot;,&quot;full_src&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2.jpg&quot;,&quot;full_src_w&quot;:879,&quot;full_src_h&quot;:660,&quot;gallery_thumbnail_src&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-100x100.jpg&quot;,&quot;gallery_thumbnail_src_w&quot;:100,&quot;gallery_thumbnail_src_h&quot;:100,&quot;thumb_src&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-500x500.jpg&quot;,&quot;thumb_src_w&quot;:500,&quot;thumb_src_h&quot;:500,&quot;src_w&quot;:500,&quot;src_h&quot;:375},&quot;image_id&quot;:11622,&quot;is_downloadable&quot;:false,&quot;is_in_stock&quot;:true,&quot;is_purchasable&quot;:false,&quot;is_sold_individually&quot;:&quot;no&quot;,&quot;is_virtual&quot;:false,&quot;max_qty&quot;:&quot;&quot;,&quot;min_qty&quot;:1,&quot;price_html&quot;:&quot;&quot;,&quot;sku&quot;:&quot;&quot;,&quot;variation_description&quot;:&quot;&quot;,&quot;variation_id&quot;:11619,&quot;variation_is_active&quot;:true,&quot;variation_is_visible&quot;:true,&quot;weight&quot;:&quot;&quot;,&quot;weight_html&quot;:&quot;N\/A&quot;},{&quot;attributes&quot;:{&quot;attribute_pa_tree-size&quot;:&quot;45-gallon&quot;},&quot;availability_html&quot;:&quot;&quot;,&quot;backorders_allowed&quot;:false,&quot;dimensions&quot;:{&quot;length&quot;:&quot;&quot;,&quot;width&quot;:&quot;&quot;,&quot;height&quot;:&quot;&quot;},&quot;dimensions_html&quot;:&quot;N\/A&quot;,&quot;display_price&quot;:0,&quot;display_regular_price&quot;:0,&quot;image&quot;:{&quot;title&quot;:&quot;vitex-shoal-creek2&quot;,&quot;caption&quot;:&quot;&quot;,&quot;url&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2.jpg&quot;,&quot;alt&quot;:&quot;vitex-shoal-creek2&quot;,&quot;src&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-500x375.jpg&quot;,&quot;srcset&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-500x375.jpg 500w, https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-300x225.jpg 300w, https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2.jpg 879w&quot;,&quot;sizes&quot;:&quot;(max-width: 500px) 100vw, 500px&quot;,&quot;full_src&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2.jpg&quot;,&quot;full_src_w&quot;:879,&quot;full_src_h&quot;:660,&quot;gallery_thumbnail_src&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-100x100.jpg&quot;,&quot;gallery_thumbnail_src_w&quot;:100,&quot;gallery_thumbnail_src_h&quot;:100,&quot;thumb_src&quot;:&quot;https:\/\/lawnstrees.com\/wp-content\/uploads\/2024\/05\/vitex-shoal-creek2-500x500.jpg&quot;,&quot;thumb_src_w&quot;:500,&quot;thumb_src_h&quot;:500,&quot;src_w&quot;:500,&quot;src_h&quot;:375},&quot;image_id&quot;:11622,&quot;is_downloadable&quot;:false,&quot;is_in_stock&quot;:true,&quot;is_purchasable&quot;:false,&quot;is_sold_individually&quot;:&quot;no&quot;,&quot;is_virtual&quot;:false,&quot;max_qty&quot;:&quot;&quot;,&quot;min_qty&quot;:1,&quot;price_html&quot;:&quot;&quot;,&quot;sku&quot;:&quot;&quot;,&quot;variation_description&quot;:&quot;&quot;,&quot;variation_id&quot;:12082,&quot;variation_is_active&quot;:true,&quot;variation_is_visible&quot;:true,&quot;weight&quot;:&quot;&quot;,&quot;weight_html&quot;:&quot;N\/A&quot;}]">
+	
+			<table class="variations" cellspacing="0" role="presentation">
+			<tbody>
+									<tr>
+						<th class="label"><label for="pa_tree-size">Tree Size</label></th>
+						<td class="value">
+							<select id="pa_tree-size" class="" name="attribute_pa_tree-size" data-attribute_name="attribute_pa_tree-size" data-show_option_none="yes"><option value="">Choose an option</option><option value="5-gallon" >5 Gallon</option><option value="15-gallon" >15 Gallon</option><option value="30-gallon" >30 Gallon</option><option value="45-gallon" >45 Gallon</option></select><a class="reset_variations" href="#" aria-label="Clear options">Clear</a>						</td>
+					</tr>
+							</tbody>
+		</table>
+		<div class="reset_variations_alert screen-reader-text" role="alert" aria-live="polite" aria-relevant="all"></div>
+		
+		<div class="single_variation_wrap">
+			<div class="woocommerce-variation single_variation" role="alert" aria-relevant="additions"></div>		</div>
+	
+	</form>
+
+<div class="product_meta">
+
+	
+	
+		<span class="sku_wrapper">SKU: <span class="sku">N/A</span></span>
+
+	
+	<span class="posted_in">Categories: <a href="https://lawnstrees.com/product-category/all-trees/" rel="tag">All Trees</a>, <a href="https://lawnstrees.com/product-category/vitex/" rel="tag">Vitex</a></span>
+	
+	
+</div>
+	</div>
+
+	
+	<div class="woocommerce-tabs wc-tabs-wrapper">
+		<ul class="tabs wc-tabs" role="tablist">
+							<li role="presentation" class="additional_information_tab" id="tab-title-additional_information">
+					<a href="#tab-additional_information" role="tab" aria-controls="tab-additional_information">
+						Additional information					</a>
+				</li>
+					</ul>
+					<div class="woocommerce-Tabs-panel woocommerce-Tabs-panel--additional_information panel entry-content wc-tab" id="tab-additional_information" role="tabpanel" aria-labelledby="tab-title-additional_information">
+				
+	<h2>Additional information</h2>
+
+<table class="woocommerce-product-attributes shop_attributes" aria-label="Product Details">
+			<tr class="woocommerce-product-attributes-item woocommerce-product-attributes-item--attribute_pa_tree-size">
+			<th class="woocommerce-product-attributes-item__label" scope="row">Tree Size</th>
+			<td class="woocommerce-product-attributes-item__value"><p>5 Gallon, 15 Gallon, 30 Gallon, 45 Gallon</p>
+</td>
+		</tr>
+	</table>
+			</div>
+		
+			</div>
+
+</div><div class='related-products-container'>
+	<section class="related products">
+
+					<h2 class="border-title"><span>Related products</h2>
+				<ul class="products columns-3">
+
+			
+					<li class="pif-has-gallery product type-product post-10624 status-publish first instock product_cat-all-trees product_cat-elm has-post-thumbnail taxable shipping-taxable product-type-variable has-default-attributes">
+	<div class=' dt-sc-one-third column  in-stock-product '><div class='product-wrapper'><a href="https://lawnstrees.com/product/cedar-elm/" class="woocommerce-LoopProduct-link woocommerce-loop-product__link"><h2 class="woocommerce-loop-product__title">Cedar Elm (Ulmus crassifolia)</h2></a><div class='product-thumb'><a class="image" href="https://lawnstrees.com/product/cedar-elm/" title="Cedar Elm (Ulmus crassifolia)"><img width="900" height="675" data-src="https://lawnstrees.com/wp-content/uploads/2019/04/cedar-elm3.jpg" class="attachment-shop_catalog size-shop_catalog wp-post-image lazyload" alt="" decoding="async" data-srcset="https://lawnstrees.com/wp-content/uploads/2019/04/cedar-elm3.jpg 900w, https://lawnstrees.com/wp-content/uploads/2019/04/cedar-elm3-300x225.jpg 300w, https://lawnstrees.com/wp-content/uploads/2019/04/cedar-elm3-500x375.jpg 500w" data-sizes="(max-width: 900px) 100vw, 900px" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMSIgaGVpZ2h0PSIxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" style="--smush-placeholder-width: 900px; --smush-placeholder-aspect-ratio: 900/675;" /><img width="1500" height="1500" data-src="https://lawnstrees.com/wp-content/uploads/2019/04/cedar-elm1.jpg" class="secondary-image attachment-shop-catalog lazyload" alt="" decoding="async" data-srcset="https://lawnstrees.com/wp-content/uploads/2019/04/cedar-elm1.jpg 1500w, https://lawnstrees.com/wp-content/uploads/2019/04/cedar-elm1-300x300.jpg 300w, https://lawnstrees.com/wp-content/uploads/2019/04/cedar-elm1-1024x1024.jpg 1024w, https://lawnstrees.com/wp-content/uploads/2019/04/cedar-elm1-150x150.jpg 150w, https://lawnstrees.com/wp-content/uploads/2019/04/cedar-elm1-500x500.jpg 500w, https://lawnstrees.com/wp-content/uploads/2019/04/cedar-elm1-100x100.jpg 100w" data-sizes="(max-width: 1500px) 100vw, 1500px" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMSIgaGVpZ2h0PSIxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" style="--smush-placeholder-width: 1500px; --smush-placeholder-aspect-ratio: 1500/1500;" /></a><div class="product-buttons-wrapper"><div class="wc_inline_buttons"><div class="wc_cart_btn_wrapper wc_btn_inline"><a href="https://lawnstrees.com/product/cedar-elm/" aria-describedby="woocommerce_loop_add_to_cart_link_describedby_10624" data-quantity="1" class="dt-sc-button too-small button product_type_variable" data-product_id="10624" data-product_sku="10619" aria-label="Select options for &ldquo;Cedar Elm (Ulmus crassifolia)&rdquo;" rel="nofollow">Read more</a>	<span id="woocommerce_loop_add_to_cart_link_describedby_10624" class="dt-sc-button too-small screen-reader-text">
+			</span>
+</div></div></div><a class="product-content" href="https://lawnstrees.com/product/cedar-elm/" title="Cedar Elm (Ulmus crassifolia)"> </a></div><div class='product-details'><h5><a href="https://lawnstrees.com/product/cedar-elm/">Cedar Elm (Ulmus crassifolia)</a></h5><span class="product-price">
+</span><div class="product-rating-wrapper"><div></div></div></div></li>
+
+			
+					<li class="pif-has-gallery product type-product post-10637 status-publish instock product_cat-all-trees product_cat-elm has-post-thumbnail taxable shipping-taxable product-type-variable">
+	<div class=' dt-sc-one-third column  in-stock-product '><div class='product-wrapper'><a href="https://lawnstrees.com/product/lacebark-elm/" class="woocommerce-LoopProduct-link woocommerce-loop-product__link"><h2 class="woocommerce-loop-product__title">Lacebark Elm (Ulmus parvifolia)</h2></a><div class='product-thumb'><a class="image" href="https://lawnstrees.com/product/lacebark-elm/" title="Lacebark Elm (Ulmus parvifolia)"><img width="768" height="1024" data-src="https://lawnstrees.com/wp-content/uploads/2019/04/lacebark-elm1.jpg" class="attachment-shop_catalog size-shop_catalog wp-post-image lazyload" alt="" decoding="async" data-srcset="https://lawnstrees.com/wp-content/uploads/2019/04/lacebark-elm1.jpg 768w, https://lawnstrees.com/wp-content/uploads/2019/04/lacebark-elm1-225x300.jpg 225w, https://lawnstrees.com/wp-content/uploads/2019/04/lacebark-elm1-500x667.jpg 500w" data-sizes="(max-width: 768px) 100vw, 768px" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMSIgaGVpZ2h0PSIxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" style="--smush-placeholder-width: 768px; --smush-placeholder-aspect-ratio: 768/1024;" /><img width="1200" height="1600" data-src="https://lawnstrees.com/wp-content/uploads/2019/04/Lacebarkelm.jpg" class="secondary-image attachment-shop-catalog lazyload" alt="" decoding="async" data-srcset="https://lawnstrees.com/wp-content/uploads/2019/04/Lacebarkelm.jpg 1200w, https://lawnstrees.com/wp-content/uploads/2019/04/Lacebarkelm-225x300.jpg 225w, https://lawnstrees.com/wp-content/uploads/2019/04/Lacebarkelm-768x1024.jpg 768w, https://lawnstrees.com/wp-content/uploads/2019/04/Lacebarkelm-1152x1536.jpg 1152w, https://lawnstrees.com/wp-content/uploads/2019/04/Lacebarkelm-500x667.jpg 500w" data-sizes="(max-width: 1200px) 100vw, 1200px" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMSIgaGVpZ2h0PSIxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" style="--smush-placeholder-width: 1200px; --smush-placeholder-aspect-ratio: 1200/1600;" /></a><div class="product-buttons-wrapper"><div class="wc_inline_buttons"><div class="wc_cart_btn_wrapper wc_btn_inline"><a href="https://lawnstrees.com/product/lacebark-elm/" aria-describedby="woocommerce_loop_add_to_cart_link_describedby_10637" data-quantity="1" class="dt-sc-button too-small button product_type_variable" data-product_id="10637" data-product_sku="" aria-label="Select options for &ldquo;Lacebark Elm (Ulmus parvifolia)&rdquo;" rel="nofollow">Read more</a>	<span id="woocommerce_loop_add_to_cart_link_describedby_10637" class="dt-sc-button too-small screen-reader-text">
+			</span>
+</div></div></div><a class="product-content" href="https://lawnstrees.com/product/lacebark-elm/" title="Lacebark Elm (Ulmus parvifolia)"> </a></div><div class='product-details'><h5><a href="https://lawnstrees.com/product/lacebark-elm/">Lacebark Elm (Ulmus parvifolia)</a></h5><span class="product-price">
+</span><div class="product-rating-wrapper"><div></div></div></div></li>
+
+			
+					<li class="pif-has-gallery product type-product post-11104 status-publish last instock product_cat-all-trees product_cat-willow has-post-thumbnail taxable shipping-taxable product-type-variable">
+	<div class=' dt-sc-one-third column  in-stock-product '><div class='product-wrapper'><a href="https://lawnstrees.com/product/sweet-bubba-desert-willow/" class="woocommerce-LoopProduct-link woocommerce-loop-product__link"><h2 class="woocommerce-loop-product__title">Sweet Bubba Desert Willow (Chilopsis linearis &#8216;Sweet Bubba&#8217;)</h2></a><div class='product-thumb'><a class="image" href="https://lawnstrees.com/product/sweet-bubba-desert-willow/" title="Sweet Bubba Desert Willow (Chilopsis linearis &#8216;Sweet Bubba&#8217;)"><img width="638" height="850" data-src="https://lawnstrees.com/wp-content/uploads/2023/01/sweet-bubba3.jpg" class="attachment-shop_catalog size-shop_catalog wp-post-image lazyload" alt="" decoding="async" data-srcset="https://lawnstrees.com/wp-content/uploads/2023/01/sweet-bubba3.jpg 638w, https://lawnstrees.com/wp-content/uploads/2023/01/sweet-bubba3-225x300.jpg 225w, https://lawnstrees.com/wp-content/uploads/2023/01/sweet-bubba3-500x666.jpg 500w" data-sizes="(max-width: 638px) 100vw, 638px" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMSIgaGVpZ2h0PSIxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" style="--smush-placeholder-width: 638px; --smush-placeholder-aspect-ratio: 638/850;" /><img width="560" height="400" data-src="https://lawnstrees.com/wp-content/uploads/2023/01/sweet-bubba.jpg" class="secondary-image attachment-shop-catalog lazyload" alt="" decoding="async" data-srcset="https://lawnstrees.com/wp-content/uploads/2023/01/sweet-bubba.jpg 560w, https://lawnstrees.com/wp-content/uploads/2023/01/sweet-bubba-300x214.jpg 300w, https://lawnstrees.com/wp-content/uploads/2023/01/sweet-bubba-500x357.jpg 500w" data-sizes="(max-width: 560px) 100vw, 560px" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMSIgaGVpZ2h0PSIxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==" style="--smush-placeholder-width: 560px; --smush-placeholder-aspect-ratio: 560/400;" /></a><div class="product-buttons-wrapper"><div class="wc_inline_buttons"><div class="wc_cart_btn_wrapper wc_btn_inline"><a href="https://lawnstrees.com/product/sweet-bubba-desert-willow/" aria-describedby="woocommerce_loop_add_to_cart_link_describedby_11104" data-quantity="1" class="dt-sc-button too-small button product_type_variable" data-product_id="11104" data-product_sku="" aria-label="Select options for &ldquo;Sweet Bubba Desert Willow (Chilopsis linearis &#039;Sweet Bubba&#039;)&rdquo;" rel="nofollow">Read more</a>	<span id="woocommerce_loop_add_to_cart_link_describedby_11104" class="dt-sc-button too-small screen-reader-text">
+			</span>
+</div></div></div><a class="product-content" href="https://lawnstrees.com/product/sweet-bubba-desert-willow/" title="Sweet Bubba Desert Willow (Chilopsis linearis &#8216;Sweet Bubba&#8217;)"> </a></div><div class='product-details'><h5><a href="https://lawnstrees.com/product/sweet-bubba-desert-willow/">Sweet Bubba Desert Willow (Chilopsis linearis 'Sweet Bubba')</a></h5><span class="product-price">
+</span><div class="product-rating-wrapper"><div></div></div></div></li>
+
+			
+		</ul>
+
+	</section>
+	</div></div>
+
+
+		
+	</section><section class="secondary-sidebar secondary-has-right-sidebar" id="secondary-right"><div class='type16'></div></section>
+	
+        </div><!-- **Container - End** -->
+
+        </div><!-- **Main - End** -->            <!-- **Footer** -->
+            <footer id="footer">
+                    <div class="footer-widgets dt-sc-dark-bg">
+                        <div class="container"><div class='column dt-sc-one-half first'><aside id="nav_menu-4" class="widget widget_nav_menu"><h3 class="widgettitle">Menu</h3><div class="menu-main-menu-container"><ul id="menu-main-menu-1" class="menu"><li id="menu-item-11913" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-11913"><a href="/">Home</a></li>
+<li id="menu-item-11914" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-11914"><a href="https://lawnstrees.com/about/">About</a></li>
+<li id="menu-item-11915" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-has-children menu-item-11915"><a href="#">Guides</a>
+<ul class="sub-menu">
+	<li id="menu-item-11916" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-11916"><a href="https://lawnstrees.com/lawns-tree-watering-guide/">Watering Guide &#8211; How to Care for Your New Tree(s)</a></li>
+	<li id="menu-item-11917" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-11917"><a href="https://lawnstrees.com/tree-planting-guide/">Tree Planting Guide</a></li>
+</ul>
+</li>
+<li id="menu-item-11918" class="menu-item menu-item-type-post_type menu-item-object-page current_page_parent menu-item-11918"><a href="https://lawnstrees.com/shop/">Trees</a></li>
+<li id="menu-item-11919" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-11919"><a href="/news/">News</a></li>
+<li id="menu-item-11920" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-11920"><a href="https://lawnstrees.com/reviews/">Reviews</a></li>
+<li id="menu-item-12576" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-12576"><a href="https://lawnstrees.com/gallery/">Gallery</a></li>
+<li id="menu-item-11921" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-11921"><a href="https://lawnstrees.com/contact/">Contact</a></li>
+</ul></div></aside></div><div class='column dt-sc-one-fourth '><aside id="custom_html-6" class="widget_text widget widget_custom_html"><h3 class="widgettitle">Address &#038; Hours</h3><div class="textwidget custom-html-widget"><p>400 Honeycomb Mesa<br/>
+Leander, Texas 78641</p><br>
+<p style="font-weight:bold;"><strong>Hours:</strong></p>
+<p>
+
+Daily: <strong> 8am - 5pm</strong>
+<br><br>
+<p>Call or Text: <strong>512-555-0000</strong</p></div></aside></div><div class='column dt-sc-one-fourth '><aside id="text-3" class="widget widget_text"><h3 class="widgettitle">Get Updated</h3>			<div class="textwidget"><p>Enter your email below to receive news and product updates.</p>
+<div class='dt-sc-newsletter-section type2 '><form class="dt-sc-subscribe-frm" name="frmsubscribe" action="#" method="post"><input type='email' name='dt_mc_emailid' id='dt_mc_emailid' required='required' placeholder='Enter Email'><input type='hidden' name='dt_mc_apikey' id='dt_mc_apikey' value='[REDACTED-MAILCHIMP-APIKEY]' /><input type='hidden' name='dt_mc_listid' id='dt_mc_listid' value='' /><input type='submit' name='mc_submit' value='Subscribe'></form><div class="dt_ajax_subscribe_msg"></div></div>
+</div>
+		</aside><aside id="text-2" class="widget widget_text">			<div class="textwidget"><p style="text-align:center;"><a href="https://www.facebook.com/Leander-Area-Wholesale-Nursery-Supply-2249809878435464" target="_blank"><i class="fa fa-facebook" ></i></a>&nbsp;<a>  </a><a href="https://g.page/lawns-leander?gm" target="_blank"><i class="fa fa-google"></i></a>&nbsp;<a>  </a><a href="https://www.yelp.com/biz/leander-area-wholesale-nursery-supply-leander" target="_blank"><i class="fa fa-yelp"></i></a></p>
+</div>
+		</aside></div>                        </div>
+                    </div>
+                    <div class="footer-copyright dt-sc-dark-bg">
+                        <div class="container"><div class="wpb_column vc_column_container vc_col-sm-6"><div class="vc_column-inner "><div class="wpb_wrapper">
+
+© 2019 Leander Area Wholesale Nursery Supply. </a> All Rights Reserved.
+
+</div></div></div>
+<div class="alignright wpb_column vc_column_container vc_col-sm-6"><div class="vc_column-inner "><div class="wpb_wrapper">
+
+<a href="https://aodesign.com" target="_blank">Austin Web Design by AO Design</a>
+
+</div></div></div>                        </div>
+                    </div>            </footer><!-- **Footer - End** -->
+	</div><!-- **Inner Wrapper - End** -->
+</div><!-- **Wrapper - End** -->
+
+		<script>
+			window.RS_MODULES = window.RS_MODULES || {};
+			window.RS_MODULES.modules = window.RS_MODULES.modules || {};
+			window.RS_MODULES.waiting = window.RS_MODULES.waiting || [];
+			window.RS_MODULES.defered = true;
+			window.RS_MODULES.moduleWaiting = window.RS_MODULES.moduleWaiting || {};
+			window.RS_MODULES.type = 'compiled';
+		</script>
+		<script type="speculationrules">
+{"prefetch":[{"source":"document","where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":["/wp-*.php","/wp-admin/*","/wp-content/uploads/*","/wp-content/*","/wp-content/plugins/*","/wp-content/themes/gardening/*","/*\\?(.+)"]}},{"not":{"selector_matches":"a[rel~=\"nofollow\"]"}},{"not":{"selector_matches":".no-prefetch, .no-prefetch a"}}]},"eagerness":"conservative"}]}
+</script>
+		<script>
+		( function ( body ) {
+			'use strict';
+			body.className = body.className.replace( /\btribe-no-js\b/, 'tribe-js' );
+		} )( document.body );
+		</script>
+		<script id="mcjs">!function(c,h,i,m,p){m=c.createElement(h),p=c.getElementsByTagName(h)[0],m.async=1,m.src=i,p.parentNode.insertBefore(m,p)}(document,"script","https://chimpstatic.com/mcjs-connected/js/users/[REDACTED-MC-USER]/[REDACTED-MC-SCRIPT].js");</script>        <script type="text/javascript">
+        window.mcPixel = window.mcPixel || {};
+        window.mcPixel._handled = {};
+        window.mcPixel.cartId = 't_2cdef4adf60c26c7911ef041d5f46e';
+                window.mcPixel.data = {"products":[{"id":"10624","productId":"10624","title":"Cedar Elm (Ulmus crassifolia)","price":0,"currency":"USD","sku":"10619","imageUrl":"https://lawnstrees.com/wp-content/uploads/2019/04/cedar-elm3.jpg","productUrl":"https://lawnstrees.com/product/cedar-elm/","vendor":"","categories":["All Trees","Elm"]},{"id":"10637","productId":"10637","title":"Lacebark Elm (Ulmus parvifolia)","price":0,"currency":"USD","sku":"","imageUrl":"https://lawnstrees.com/wp-content/uploads/2019/04/lacebark-elm1.jpg","productUrl":"https://lawnstrees.com/product/lacebark-elm/","vendor":"","categories":["All Trees","Elm"]},{"id":"11104","productId":"11104","title":"Sweet Bubba Desert Willow (Chilopsis linearis 'Sweet Bubba')","price":0,"currency":"USD","sku":"","imageUrl":"https://lawnstrees.com/wp-content/uploads/2023/01/sweet-bubba3.jpg","productUrl":"https://lawnstrees.com/product/sweet-bubba-desert-willow/","vendor":"","categories":["All Trees","Willow"]}],"product":{"id":"11618","productId":"11618","title":"Shoal Creek Vitex (Vitex agnus-castus 'Shoal Creek')","price":0,"currency":"USD","sku":"","imageUrl":"https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek2.jpg","productUrl":"https://lawnstrees.com/product/shoal-creek-vitex/","vendor":"","categories":["All Trees","Vitex"]},"events":["PRODUCT_VIEWED"]};
+                </script>
+        <script type="application/ld+json">{"@context":"https://schema.org/","@type":"Product","@id":"https://lawnstrees.com/product/shoal-creek-vitex/#product","name":"Shoal Creek Vitex (Vitex agnus-castus 'Shoal Creek')","url":"https://lawnstrees.com/product/shoal-creek-vitex/","description":"Shoal Creek Vitex (Vitex agnus-castus 'Shoal Creek') \u00a0is a deciduous shrub or small tree prized for its fragrant blue-violet flowers and attractive foliage.\u00a0It's a popular selection for gardens due to its vibrant blooms, which attract butterflies, bees, and hummingbirds.\u00a0It's also relatively low-maintenance, drought-tolerant, and can be used in various landscape settings.\u00a0\r\n\r\n \tGrowth Habit:\u00a0Can be grown as a large shrub or trained into a small, multi-trunked tree\u00a0\r\n\r\n\r\n\r\n \tMature Size:\u00a0Typically reaches a height of 8 to 15 feet and a width of 12 to 15 feet\r\n\r\n\r\n\r\n \tFoliage:\u00a0Compound, palmate leaves with 5 to 7 leaflets, grayish-green in color, and fragrant\r\n\r\n\r\n\r\n \tFlowers:\u00a0Produces showy, fragrant, blue-violet flower spikes (racemes) in mid-summer\r\n\r\n\r\n\r\n \tHardiness:\u00a0Generally hardy in USDA zones 6-9, but may experience dieback in colder zones\r\n\r\n\r\n\r\n\r\n\r\n\r\n \tSunlight:\u00a0Thrives in full sun","image":"https://lawnstrees.com/wp-content/uploads/2024/05/vitex-shoal-creek2.jpg","sku":11618,"offers":[{"@type":"Offer","priceSpecification":[{"@type":"UnitPriceSpecification","price":"0.00","priceCurrency":"USD","valueAddedTaxIncluded":false,"validThrough":"2027-12-31"}],"priceValidUntil":"2027-12-31","availability":"https://schema.org/InStock","url":"https://lawnstrees.com/product/shoal-creek-vitex/","seller":{"@type":"Organization","name":"LAWNS Tree Farm LLC.","url":"https://lawnstrees.com"}}]}</script><script> /* <![CDATA[ */var tribe_l10n_datatables = {"aria":{"sort_ascending":": activate to sort column ascending","sort_descending":": activate to sort column descending"},"length_menu":"Show _MENU_ entries","empty_table":"No data available in table","info":"Showing _START_ to _END_ of _TOTAL_ entries","info_empty":"Showing 0 to 0 of 0 entries","info_filtered":"(filtered from _MAX_ total entries)","zero_records":"No matching records found","search":"Search:","all_selected_text":"All items on this page were selected. ","select_all_link":"Select all pages","clear_selection":"Clear Selection.","pagination":{"all":"All","next":"Next","previous":"Previous"},"select":{"rows":{"0":"","_":": Selected %d rows","1":": Selected 1 row"}},"datepicker":{"dayNames":["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],"dayNamesShort":["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],"dayNamesMin":["S","M","T","W","T","F","S"],"monthNames":["January","February","March","April","May","June","July","August","September","October","November","December"],"monthNamesShort":["January","February","March","April","May","June","July","August","September","October","November","December"],"monthNamesMin":["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],"nextText":"Next","prevText":"Prev","currentText":"Today","closeText":"Done","today":"Today","clear":"Clear"}};/* ]]> */ </script><script type="text/html" id="wpb-modifications"> window.wpbCustomElement = 1; </script>
+<div id="photoswipe-fullscreen-dialog" class="pswp" tabindex="-1" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Full screen image">
+	<div class="pswp__bg"></div>
+	<div class="pswp__scroll-wrap">
+		<div class="pswp__container">
+			<div class="pswp__item"></div>
+			<div class="pswp__item"></div>
+			<div class="pswp__item"></div>
+		</div>
+		<div class="pswp__ui pswp__ui--hidden">
+			<div class="pswp__top-bar">
+				<div class="pswp__counter"></div>
+				<button class="pswp__button pswp__button--zoom" aria-label="Zoom in/out"></button>
+				<button class="pswp__button pswp__button--fs" aria-label="Toggle fullscreen"></button>
+				<button class="pswp__button pswp__button--share" aria-label="Share"></button>
+				<button class="pswp__button pswp__button--close" aria-label="Close (Esc)"></button>
+				<div class="pswp__preloader">
+					<div class="pswp__preloader__icn">
+						<div class="pswp__preloader__cut">
+							<div class="pswp__preloader__donut"></div>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+				<div class="pswp__share-tooltip"></div>
+			</div>
+			<button class="pswp__button pswp__button--arrow--left" aria-label="Previous (arrow left)"></button>
+			<button class="pswp__button pswp__button--arrow--right" aria-label="Next (arrow right)"></button>
+			<div class="pswp__caption">
+				<div class="pswp__caption__center"></div>
+			</div>
+		</div>
+	</div>
+</div>
+	<script type='text/javascript'>
+		(function () {
+			var c = document.body.className;
+			c = c.replace(/woocommerce-no-js/, 'woocommerce-js');
+			document.body.className = c;
+		})();
+	</script>
+	<script type="text/template" id="tmpl-variation-template">
+	<div class="woocommerce-variation-description">{{{ data.variation.variation_description }}}</div>
+	<div class="woocommerce-variation-price">{{{ data.variation.price_html }}}</div>
+	<div class="woocommerce-variation-availability">{{{ data.variation.availability_html }}}</div>
+</script>
+<script type="text/template" id="tmpl-unavailable-variation-template">
+	<p role="alert">Sorry, this product is unavailable. Please choose a different combination.</p>
+</script>
+<script data-wp-strategy="async" id="google-tag-manager-js" src="https://www.googletagmanager.com/gtag/js?id=G-REDACTED02"></script>
+<script id="wp-hooks-js" src="https://lawnstrees.com/wp-includes/js/dist/hooks.min.js?ver=7496969728ca0f95732d"></script>
+<script id="wp-i18n-js" src="https://lawnstrees.com/wp-includes/js/dist/i18n.min.js?ver=781d11515ad3d91786ec"></script>
+<script id="wp-i18n-js-after">
+wp.i18n.setLocaleData( { 'text direction\u0004ltr': [ 'ltr' ] } );
+//# sourceURL=wp-i18n-js-after
+</script>
+<script id="woocommerce-google-analytics-integration-js" src="https://lawnstrees.com/wp-content/plugins/woocommerce-google-analytics-integration/assets/js/build/main.js?ver=87d94055e6aa0fdfa738"></script>
+<script id="tec-user-agent-js" src="https://lawnstrees.com/wp-content/plugins/the-events-calendar/common/build/js/user-agent.js?ver=da75d0bdea6dde3898df"></script>
+<script id="swv-js" src="https://lawnstrees.com/wp-content/plugins/contact-form-7/includes/swv/js/index.js?ver=6.1.6"></script>
+<script id="contact-form-7-js-before">
+var wpcf7 = {
+    "api": {
+        "root": "https:\/\/lawnstrees.com\/wp-json\/",
+        "namespace": "contact-form-7\/v1"
+    },
+    "cached": 1
+};
+//# sourceURL=contact-form-7-js-before
+</script>
+<script id="contact-form-7-js" src="https://lawnstrees.com/wp-content/plugins/contact-form-7/includes/js/index.js?ver=6.1.6"></script>
+<script id="dt-appointment-jqueryui-script-js" src="https://lawnstrees.com/wp-content/plugins/designthemes-appointment-addon/js/dt.jqueryui.js?ver=7.0"></script>
+<script id="dt-appointment-public-script-js-extra">
+var dtAppointmentCustom = {"plugin_url":"https://lawnstrees.com/wp-content/plugins/designthemes-appointment-addon/","chooseService":"Please choose Service!","erName":"Please enter name!","erEmail":"Please enter valid email!","erPhone":"Please enter Phone number!","erNotes":"Please enter Notes!","paymentAfterarrival":"Next","paymentPaypal":"Make Payment","day":"Day","time":"Time","store":"Store","service":"Service","staff":"Staff","name":"Name","address1":"Address 1","address2":"Address 2","city":"City","state":"State","zip":"Zip","phone":"Phone","email":"Email","amount":"Amount To Pay"};
+//# sourceURL=dt-appointment-public-script-js-extra
+</script>
+<script id="dt-appointment-public-script-js" src="https://lawnstrees.com/wp-content/plugins/designthemes-appointment-addon/js/dt.public.js?ver=7.0"></script>
+<script id="dt-sc-tabs-js" src="https://lawnstrees.com/wp-content/plugins/designthemes-core-features/shortcodes/js/jquery.tabs.min.js?ver=7.0"></script>
+<script id="dt-sc-tiptip-js" src="https://lawnstrees.com/wp-content/plugins/designthemes-core-features/shortcodes/js/jquery.tipTip.minified.js?ver=7.0"></script>
+<script id="dt-sc-inview-js" src="https://lawnstrees.com/wp-content/plugins/designthemes-core-features/shortcodes/js/jquery.inview.js?ver=7.0"></script>
+<script id="dt-sc-animatenum-js" src="https://lawnstrees.com/wp-content/plugins/designthemes-core-features/shortcodes/js/jquery.animateNumber.min.js?ver=7.0"></script>
+<script id="dt-sc-donutchart-js" src="https://lawnstrees.com/wp-content/plugins/designthemes-core-features/shortcodes/js/jquery.donutchart.js?ver=7.0"></script>
+<script id="dt-sc-toggleclick-js" src="https://lawnstrees.com/wp-content/plugins/designthemes-core-features/shortcodes/js/jquery.toggle.click.js?ver=7.0"></script>
+<script id="dt-sc-script-js" src="https://lawnstrees.com/wp-content/plugins/designthemes-core-features/shortcodes/js/shortcodes.js?ver=7.0"></script>
+<script defer async id="tp-tools-js" src="//lawnstrees.com/wp-content/plugins/revslider/sr6/assets/js/rbtools.min.js?ver=6.7.17"></script>
+<script defer async id="revmin-js" src="//lawnstrees.com/wp-content/plugins/revslider/sr6/assets/js/rs6.min.js?ver=6.7.17"></script>
+<script id="woocommerce-js-extra">
+var woocommerce_params = {"ajax_url":"/wp-admin/admin-ajax.php","wc_ajax_url":"/?wc-ajax=%%endpoint%%","i18n_password_show":"Show password","i18n_password_hide":"Hide password"};
+//# sourceURL=woocommerce-js-extra
+</script>
+<script data-wp-strategy="defer" id="woocommerce-js" src="https://lawnstrees.com/wp-content/plugins/woocommerce/assets/js/frontend/woocommerce.min.js?ver=10.7.0"></script>
+<script id="mailchimp-woocommerce-js-extra">
+var mailchimp_public_data = {"site_url":"https://lawnstrees.com","ajax_url":"https://lawnstrees.com/wp-admin/admin-ajax.php","disable_carts":"","subscribers_only":"","language":"en","allowed_to_set_cookies":"1","sms_allowed_countries":["AU","AT","CA","FR","DE","IE","IT","ES","CH","NL","US","GB","AL","BE","HR","DK","EE","FO","FI","GI","GR","GG","IS","IM","JE","LV","LT","LU","MT","MD","NO","PL","PT","SM","SK","SI","SE"]};
+//# sourceURL=mailchimp-woocommerce-js-extra
+</script>
+<script id="mailchimp-woocommerce-js" src="https://lawnstrees.com/wp-content/plugins/mailchimp-for-woocommerce/public/js/mailchimp-woocommerce-public.min.js?ver=6.1"></script>
+<script id="mailchimp-woocommerce-pixel-tracking-js-extra">
+var mcPixelConfig = {"restBase":"https://lawnstrees.com/wp-json/mailchimp-for-woocommerce/v1/"};
+//# sourceURL=mailchimp-woocommerce-pixel-tracking-js-extra
+</script>
+<script id="mailchimp-woocommerce-pixel-tracking-js" src="https://lawnstrees.com/wp-content/plugins/mailchimp-for-woocommerce/public/js/mailchimp-woocommerce-pixel-tracking.js?ver=1.0.0"></script>
+<script id="wp-polyfill-js" src="https://lawnstrees.com/wp-includes/js/dist/vendor/wp-polyfill.min.js?ver=3.15.0"></script>
+<script id="mailchimp-woocommerce-pixel-tracking-blocks-js" src="https://lawnstrees.com/wp-content/plugins/mailchimp-for-woocommerce/blocks/build/pixel-tracking.js?ver=740c58b265909004380b"></script>
+<script id="ui-totop-js" src="https://lawnstrees.com/wp-content/themes/gardening/framework/js/jquery.ui.totop.min.js?ver=7.0"></script>
+<script id="isotope-js" src="https://lawnstrees.com/wp-content/plugins/js_composer/assets/lib/vendor/node_modules/isotope-layout/dist/isotope.pkgd.min.js?ver=7.8"></script>
+<script id="caroufredSel-js" src="https://lawnstrees.com/wp-content/themes/gardening/framework/js/carouFredSel.js?ver=7.0"></script>
+<script id="smartresize-js" src="https://lawnstrees.com/wp-content/themes/gardening/framework/js/smartresize.js?ver=7.0"></script>
+<script id="prettyphoto-js" src="https://lawnstrees.com/wp-content/plugins/js_composer/assets/lib/vendor/prettyphoto/js/jquery.prettyPhoto.min.js?ver=7.8"></script>
+<script id="touchswipe-js" src="https://lawnstrees.com/wp-content/themes/gardening/framework/js/touchSwipe.js?ver=7.0"></script>
+<script id="parallax-js" src="https://lawnstrees.com/wp-content/themes/gardening/framework/js/parallax.js?ver=7.0"></script>
+<script id="countdown-js" src="https://lawnstrees.com/wp-content/themes/gardening/framework/js/countdown.js?ver=7.0"></script>
+<script id="nicescroll-js" src="https://lawnstrees.com/wp-content/themes/gardening/framework/js/nicescroll.js?ver=7.0"></script>
+<script id="bxslider-js" src="https://lawnstrees.com/wp-content/themes/gardening/framework/js/bxslider.js?ver=7.0"></script>
+<script id="fitvids-js" src="https://lawnstrees.com/wp-content/themes/gardening/framework/js/fitvids.js?ver=7.0"></script>
+<script id="sticky-js" src="https://lawnstrees.com/wp-content/themes/gardening/framework/js/sticky.js?ver=7.0"></script>
+<script id="simplesidebar-js" src="https://lawnstrees.com/wp-content/themes/gardening/framework/js/simpleSidebar.js?ver=7.0"></script>
+<script id="classie-js" src="https://lawnstrees.com/wp-content/themes/gardening/framework/js/classie.js?ver=7.0"></script>
+<script id="placeholder-js" src="https://lawnstrees.com/wp-content/themes/gardening/framework/js/placeholder.js?ver=7.0"></script>
+<script id="visualnav-js" src="https://lawnstrees.com/wp-content/themes/gardening/framework/js/jquery.visualNav.min.js?ver=7.0"></script>
+<script id="gardening-jqcustom-js" src="https://lawnstrees.com/wp-content/themes/gardening/framework/js/custom.js?ver=7.0"></script>
+<script id="jq-popup-js-js" src="https://lawnstrees.com/wp-content/themes/gardening/framework/js/magnific/jquery.magnific-popup.min.js?ver=7.0"></script>
+<script data-wp-strategy="defer" defer id="woocommerce-analytics-client-js" src="https://lawnstrees.com/wp-content/plugins/jetpack/jetpack_vendor/automattic/woocommerce-analytics/build/woocommerce-analytics-client.js?minify=false&#038;ver=e434986d5efc1358e217"></script>
+<script id="googlesitekit-consent-mode-js" src="https://lawnstrees.com/wp-content/plugins/google-site-kit/dist/assets/js/googlesitekit-consent-mode-86cb52dcb9f2b27ed244.js"></script>
+<script id="sourcebuster-js-js" src="https://lawnstrees.com/wp-content/plugins/woocommerce/assets/js/sourcebuster/sourcebuster.min.js?ver=10.7.0"></script>
+<script id="wc-order-attribution-js-extra">
+var wc_order_attribution = {"params":{"lifetime":1.0000000000000000818030539140313095458623138256371021270751953125e-5,"session":30,"base64":false,"ajaxurl":"https://lawnstrees.com/wp-admin/admin-ajax.php","prefix":"wc_order_attribution_","allowTracking":true},"fields":{"source_type":"current.typ","referrer":"current_add.rf","utm_campaign":"current.cmp","utm_source":"current.src","utm_medium":"current.mdm","utm_content":"current.cnt","utm_id":"current.id","utm_term":"current.trm","utm_source_platform":"current.plt","utm_creative_format":"current.fmt","utm_marketing_tactic":"current.tct","session_entry":"current_add.ep","session_start_time":"current_add.fd","session_pages":"session.pgs","session_count":"udata.vst","user_agent":"udata.uag"}};
+//# sourceURL=wc-order-attribution-js-extra
+</script>
+<script id="wc-order-attribution-js" src="https://lawnstrees.com/wp-content/plugins/woocommerce/assets/js/frontend/order-attribution.min.js?ver=10.7.0"></script>
+<script id="wp-consent-api-js-extra">
+var consent_api = {"consent_type":"","waitfor_consent_hook":"","cookie_expiration":"30","cookie_prefix":"wp_consent","services":[]};
+//# sourceURL=wp-consent-api-js-extra
+</script>
+<script id="wp-consent-api-js" src="https://lawnstrees.com/wp-content/plugins/wp-consent-api/assets/js/wp-consent-api.min.js?ver=2.0.1"></script>
+<script id="wp-consent-api-integration-js-before">
+window.wc_order_attribution.params.consentCategory = "marketing";
+//# sourceURL=wp-consent-api-integration-js-before
+</script>
+<script id="wp-consent-api-integration-js" src="https://lawnstrees.com/wp-content/plugins/woocommerce/assets/js/frontend/wp-consent-api-integration.min.js?ver=10.7.0"></script>
+<script id="googlesitekit-events-provider-contact-form-7-js" src="https://lawnstrees.com/wp-content/plugins/google-site-kit/dist/assets/js/googlesitekit-events-provider-contact-form-7-0310812e6aa65ef3c958.js" defer></script>
+<script id="googlesitekit-events-provider-optin-monster-js" src="https://lawnstrees.com/wp-content/plugins/google-site-kit/dist/assets/js/googlesitekit-events-provider-optin-monster-f6960b1ed80e457ea97e.js" defer></script>
+<script id="googlesitekit-events-provider-woocommerce-js-before">
+window._googlesitekit.wcdata = window._googlesitekit.wcdata || {};
+window._googlesitekit.wcdata.products = [{"id":10624,"name":"Cedar Elm (Ulmus crassifolia)","categories":[{"name":"All Trees"},{"name":"Elm"}],"price":0},{"id":10637,"name":"Lacebark Elm (Ulmus parvifolia)","categories":[{"name":"All Trees"},{"name":"Elm"}],"price":0},{"id":11104,"name":"Sweet Bubba Desert Willow (Chilopsis linearis 'Sweet Bubba')","categories":[{"name":"All Trees"},{"name":"Willow"}],"price":0}];
+window._googlesitekit.wcdata.add_to_cart = null;
+window._googlesitekit.wcdata.currency = "USD";
+window._googlesitekit.wcdata.eventsToTrack = [];
+//# sourceURL=googlesitekit-events-provider-woocommerce-js-before
+</script>
+<script id="googlesitekit-events-provider-woocommerce-js" src="https://lawnstrees.com/wp-content/plugins/google-site-kit/dist/assets/js/googlesitekit-events-provider-woocommerce-454120fdf8df4537b59f.js" defer></script>
+<script id="googlesitekit-events-provider-wpforms-js" src="https://lawnstrees.com/wp-content/plugins/google-site-kit/dist/assets/js/googlesitekit-events-provider-wpforms-063cb453c64ecfd3dafe.js" defer></script>
+<script id="smush-lazy-load-js-before">
+var smushLazyLoadOptions = {"autoResizingEnabled":false,"autoResizeOptions":{"precision":5,"skipAutoWidth":true}};
+//# sourceURL=smush-lazy-load-js-before
+</script>
+<script id="smush-lazy-load-js" src="https://lawnstrees.com/wp-content/plugins/wp-smushit/app/assets/js/smush-lazy-load.min.js?ver=4.0.3"></script>
+<script id="jetpack-stats-js-before">
+_stq = window._stq || [];
+_stq.push([ "view", {"v":"ext","blog":"160984682","post":"11618","tz":"0","srv":"lawnstrees.com","j":"1:15.8"} ]);
+_stq.push([ "clickTrackerInit", "160984682", "11618" ]);
+//# sourceURL=jetpack-stats-js-before
+</script>
+<script data-wp-strategy="defer" defer id="jetpack-stats-js" src="https://stats.wp.com/e-202626.js"></script>
+<script src='https://lawnstrees.com/wp-content/plugins/the-events-calendar/common/build/js/underscore-before.js'></script>
+<script id="underscore-js" src="https://lawnstrees.com/wp-includes/js/underscore.min.js?ver=1.13.8"></script>
+<script src='https://lawnstrees.com/wp-content/plugins/the-events-calendar/common/build/js/underscore-after.js'></script>
+<script id="wp-util-js-extra">
+var _wpUtilSettings = {"ajax":{"url":"/wp-admin/admin-ajax.php"}};
+//# sourceURL=wp-util-js-extra
+</script>
+<script id="wp-util-js" src="https://lawnstrees.com/wp-includes/js/wp-util.min.js?ver=7.0"></script>
+<script id="wc-add-to-cart-variation-js-extra">
+var wc_add_to_cart_variation_params = {"wc_ajax_url":"/?wc-ajax=%%endpoint%%","i18n_no_matching_variations_text":"Sorry, no products matched your selection. Please choose a different combination.","i18n_make_a_selection_text":"Please select some product options before adding this product to your cart.","i18n_unavailable_text":"Sorry, this product is unavailable. Please choose a different combination.","i18n_reset_alert_text":"Your selection has been reset. Please select some product options before adding this product to your cart."};
+//# sourceURL=wc-add-to-cart-variation-js-extra
+</script>
+<script data-wp-strategy="defer" defer id="wc-add-to-cart-variation-js" src="https://lawnstrees.com/wp-content/plugins/woocommerce/assets/js/frontend/add-to-cart-variation.min.js?ver=10.7.0"></script>
+<script id="wpb_composer_front_js-js" src="https://lawnstrees.com/wp-content/plugins/js_composer/assets/js/dist/js_composer_front.min.js?ver=7.8"></script>
+<script id="woocommerce-google-analytics-integration-data-js-after">
+window.ga4w = { data: {"cart":{"items":[],"coupons":[],"totals":{"currency_code":"USD","total_price":0,"currency_minor_unit":2}},"product":{"id":11618,"name":"Shoal Creek Vitex (Vitex agnus-castus 'Shoal Creek')","categories":[{"name":"All Trees"},{"name":"Vitex"}],"prices":{"price":0,"currency_minor_unit":2},"extensions":{"woocommerce_google_analytics_integration":{"identifier":"11618"}}},"products":[{"id":10624,"name":"Cedar Elm (Ulmus crassifolia)","categories":[{"name":"All Trees"},{"name":"Elm"}],"prices":{"price":0,"currency_minor_unit":2},"extensions":{"woocommerce_google_analytics_integration":{"identifier":"10624"}}},{"id":10637,"name":"Lacebark Elm (Ulmus parvifolia)","categories":[{"name":"All Trees"},{"name":"Elm"}],"prices":{"price":0,"currency_minor_unit":2},"extensions":{"woocommerce_google_analytics_integration":{"identifier":"10637"}}},{"id":11104,"name":"Sweet Bubba Desert Willow (Chilopsis linearis 'Sweet Bubba')","categories":[{"name":"All Trees"},{"name":"Willow"}],"prices":{"price":0,"currency_minor_unit":2},"extensions":{"woocommerce_google_analytics_integration":{"identifier":"11104"}}}],"events":["view_item_list","view_item"]}, settings: {"tracker_function_name":"gtag","events":["purchase","add_to_cart","remove_from_cart","view_item_list","select_content","view_item","begin_checkout"],"identifier":"product_id","currency":{"decimalSeparator":".","thousandSeparator":",","precision":2}} }; document.dispatchEvent(new Event("ga4w:ready"));
+//# sourceURL=woocommerce-google-analytics-integration-data-js-after
+</script>
+<script id="wp-emoji-settings" type="application/json">
+{"baseUrl":"https://s.w.org/images/core/emoji/17.0.2/72x72/","ext":".png","svgUrl":"https://s.w.org/images/core/emoji/17.0.2/svg/","svgExt":".svg","source":{"concatemoji":"https://lawnstrees.com/wp-includes/js/wp-emoji-release.min.js?ver=7.0"}}
+</script>
+<script type="module">
+/*! This file is auto-generated */
+const a=JSON.parse(document.getElementById("wp-emoji-settings").textContent),o=(window._wpemojiSettings=a,"wpEmojiSettingsSupports"),s=["flag","emoji"];function i(e){try{var t={supportTests:e,timestamp:(new Date).valueOf()};sessionStorage.setItem(o,JSON.stringify(t))}catch(e){}}function c(e,t,n){e.clearRect(0,0,e.canvas.width,e.canvas.height),e.fillText(t,0,0);t=new Uint32Array(e.getImageData(0,0,e.canvas.width,e.canvas.height).data);e.clearRect(0,0,e.canvas.width,e.canvas.height),e.fillText(n,0,0);const a=new Uint32Array(e.getImageData(0,0,e.canvas.width,e.canvas.height).data);return t.every((e,t)=>e===a[t])}function p(e,t){e.clearRect(0,0,e.canvas.width,e.canvas.height),e.fillText(t,0,0);var n=e.getImageData(16,16,1,1);for(let e=0;e<n.data.length;e++)if(0!==n.data[e])return!1;return!0}function u(e,t,n,a){switch(t){case"flag":return n(e,"\ud83c\udff3\ufe0f\u200d\u26a7\ufe0f","\ud83c\udff3\ufe0f\u200b\u26a7\ufe0f")?!1:!n(e,"\ud83c\udde8\ud83c\uddf6","\ud83c\udde8\u200b\ud83c\uddf6")&&!n(e,"\ud83c\udff4\udb40\udc67\udb40\udc62\udb40\udc65\udb40\udc6e\udb40\udc67\udb40\udc7f","\ud83c\udff4\u200b\udb40\udc67\u200b\udb40\udc62\u200b\udb40\udc65\u200b\udb40\udc6e\u200b\udb40\udc67\u200b\udb40\udc7f");case"emoji":return!a(e,"\ud83e\u1fac8")}return!1}function f(e,t,n,a){let r;const o=(r="undefined"!=typeof WorkerGlobalScope&&self instanceof WorkerGlobalScope?new OffscreenCanvas(300,150):document.createElement("canvas")).getContext("2d",{willReadFrequently:!0}),s=(o.textBaseline="top",o.font="600 32px Arial",{});return e.forEach(e=>{s[e]=t(o,e,n,a)}),s}function r(e){var t=document.createElement("script");t.src=e,t.defer=!0,document.head.appendChild(t)}a.supports={everything:!0,everythingExceptFlag:!0},new Promise(t=>{let n=function(){try{var e=JSON.parse(sessionStorage.getItem(o));if("object"==typeof e&&"number"==typeof e.timestamp&&(new Date).valueOf()<e.timestamp+604800&&"object"==typeof e.supportTests)return e.supportTests}catch(e){}return null}();if(!n){if("undefined"!=typeof Worker&&"undefined"!=typeof OffscreenCanvas&&"undefined"!=typeof URL&&URL.createObjectURL&&"undefined"!=typeof Blob)try{var e="postMessage("+f.toString()+"("+[JSON.stringify(s),u.toString(),c.toString(),p.toString()].join(",")+"));",a=new Blob([e],{type:"text/javascript"});const r=new Worker(URL.createObjectURL(a),{name:"wpTestEmojiSupports"});return void(r.onmessage=e=>{i(n=e.data),r.terminate(),t(n)})}catch(e){}i(n=f(s,u,c,p))}t(n)}).then(e=>{for(const n in e)a.supports[n]=e[n],a.supports.everything=a.supports.everything&&a.supports[n],"flag"!==n&&(a.supports.everythingExceptFlag=a.supports.everythingExceptFlag&&a.supports[n]);var t;a.supports.everythingExceptFlag=a.supports.everythingExceptFlag&&!a.supports.flag,a.supports.everything||((t=a.source||{}).concatemoji?r(t.concatemoji):t.wpemoji&&t.twemoji&&(r(t.twemoji),r(t.wpemoji)))});
+//# sourceURL=https://lawnstrees.com/wp-includes/js/wp-emoji-loader.min.js
+</script>
+<script></script>		<script type="text/javascript">
+			(function() {
+				window.wcAnalytics = window.wcAnalytics || {};
+				const wcAnalytics = window.wcAnalytics;
+
+				// Set the assets URL for webpack to find the split assets.
+				wcAnalytics.assets_url = 'https://lawnstrees.com/wp-content/plugins/jetpack/jetpack_vendor/automattic/woocommerce-analytics/src/../build/';
+
+				// Set the REST API tracking endpoint URL.
+								wcAnalytics.trackEndpoint = "https://lawnstrees.com/wp-json/woocommerce-analytics/v1/track";
+
+				// Set common properties for all events.
+				wcAnalytics.commonProps = {"session_id":null,"landing_page":null,"is_engaged":null,"ui":0,"blog_id":160984682,"store_id":"ae4f7f69-8972-4a9e-a027-8acd4e474783","url":"https://lawnstrees.com","woo_version":"10.7.0","wp_version":"7.0","store_admin":0,"device":"mobile","store_currency":"USD","timezone":"+00:00","is_guest":1,"_via_ua":"Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.7778.96 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)","_via_ip":"66.249.75.233","_lg":"","_dr":"","_dl":"https://lawnstrees.com/product/shoal-creek-vitex/","_via_ref":""};
+
+				// Set the event queue.
+				wcAnalytics.eventQueue = [{"eventName":"product_view","props":{"pi":11618,"pn":"Shoal Creek Vitex (Vitex agnus-castus 'Shoal Creek')","pc":"All Trees/Vitex","pp":"0.00","pt":"variable"}}];
+
+				// Features.
+				wcAnalytics.features = {
+					ch: false,
+					sessionTracking: false,
+					proxy: false,
+				};
+
+				wcAnalytics.breadcrumbs = ["Trees","All Trees","Shoal Creek Vitex (Vitex agnus-castus \u0026#8216;Shoal Creek\u0026#8217;)"];
+
+				// Page context flags.
+				wcAnalytics.pages = {
+					isAccountPage: false,
+					isCart: false,
+				};
+			})();
+		</script>
+		</body>
+</html>
+<!-- *´¨)
+     ¸.•´¸.•*´¨) ¸.•*¨)
+     (¸.•´ (¸.•` ¤ Comet Cache is Fully Functional ¤ ´¨) -->
+
+<!-- Cache File Version Salt:       n/a -->
+
+<!-- Cache File URL:                https://lawnstrees.com/product/shoal-creek-vitex/ -->
+<!-- Cache File Path:               /cache/comet-cache/cache/https/lawnstrees-com/product/shoal-creek-vitex.html -->
+
+<!-- Cache File Generated Via:      HTTP request -->
+<!-- Cache File Generated On:       Jun 24th, 2026 @ 2:11 am UTC -->
+<!-- Cache File Generated In:       0.52324 seconds -->
+
+<!-- Cache File Expires On:         Jul 1st, 2026 @ 2:11 am UTC -->
+<!-- Cache File Auto-Rebuild On:    Jul 1st, 2026 @ 2:11 am UTC -->
+
+<!-- Loaded via Cache On:    Jun 30th, 2026 @ 8:15 pm UTC -->
+<!-- Loaded via Cache In:    0.00193 seconds -->
