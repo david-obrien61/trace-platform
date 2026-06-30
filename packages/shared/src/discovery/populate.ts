@@ -32,6 +32,15 @@
  *     identities and no per-specimen data exists on a bare-domain QR — writing them
  *     would be fabrication.
  *
+ * DATA QUALITY (dup-size, ledger #73 stress battery CASE 5): two rows sharing one
+ *   variant_group AND the same size make a variety SILENTLY uncountable-by-scan at count
+ *   time (detectSizeCollision's all-distinct check fails → UNKNOWN, indistinguishable from
+ *   a never-seen item). We do NOT dedupe or auto-pick (refuse-to-guess stays correct) — we
+ *   DETECT the (variant_group, size) collision at WRITE time and SURFACE it: a
+ *   [TRACE:POPULATE] data-quality warning + PopulateResult.dataQuality.dupSizeGroups +
+ *   raw_extract.counts.dupSizeGroups, so the owner sees it in the populate report before it
+ *   ever reaches a count. Both rows are still written (surface, don't silently drop).
+ *
  * Instrumentation: emits [TRACE:POPULATE] (extract counts, clear, populate, persist).
  *   ON by default per the standing owner instruction.
  */
@@ -117,6 +126,40 @@ export function catalogItemToInventoryRow(
   return row;
 }
 
+// ── Data-quality: dup-size detection (ledger #73 CASE 5) ─────────────────────────
+
+/** A (variant_group, size) collision: ≥2 rows that share one variant_group AND the same
+ *  size. At count time these make the variety uncountable-by-scan (silent UNKNOWN). */
+export interface DupSizeGroup {
+  variantGroup: string;
+  size:         string;
+  count:        number;
+  varieties:    string[];   // the names of the colliding rows (usually one variety, ≥2 rows)
+}
+
+/** Find (variant_group, size) duplicates among built inventory rows. Pure + testable.
+ *  Only rows with a non-blank variant_group AND a non-blank size participate (a parent
+ *  row — size/variant_group absent — can never collide). Size match is case-insensitive
+ *  (mirrors extractSizeVariants' own dedupe key) so "15 Gallon" / "15 gallon" still flag.
+ *  Does NOT mutate or drop anything — detection only. */
+export function findDuplicateSizeGroups(
+  rows: ReturnType<typeof catalogItemToInventoryRow>[],
+): DupSizeGroup[] {
+  const groups = new Map<string, { variantGroup: string; size: string; varieties: string[] }>();
+  for (const r of rows) {
+    const vg   = r.variant_group;
+    const size = (r.size ?? '').trim();
+    if (vg == null || String(vg).trim() === '' || size === '') continue;
+    const key = `${vg}||${size.toLowerCase()}`;   // '||' separator → no cross-pair key collision
+    const g = groups.get(key) ?? { variantGroup: vg, size, varieties: [] };
+    g.varieties.push(r.name);
+    groups.set(key, g);
+  }
+  return [...groups.values()]
+    .filter(g => g.varieties.length > 1)
+    .map(g => ({ variantGroup: g.variantGroup, size: g.size, count: g.varieties.length, varieties: g.varieties }));
+}
+
 // ── Populate (orchestration) ────────────────────────────────────────────────────
 
 export interface PopulateOpts {
@@ -135,6 +178,8 @@ export interface PopulateResult {
   cleared:       { sandbox: Record<string, number>; discovery: number };
   inserted:      number;
   flaggedInserted: number;
+  /** Data-quality findings surfaced (not acted on) — see findDuplicateSizeGroups. */
+  dataQuality:   { dupSizeGroups: DupSizeGroup[] };
   status:        string;
   error:         string | null;
 }
@@ -163,6 +208,7 @@ export async function populateCatalog(
     return {
       businessId, sourceUrl, extract,
       cleared: { sandbox: {}, discovery: 0 }, inserted: 0, flaggedInserted: 0,
+      dataQuality: { dupSizeGroups: [] },
       status: 'extracted-empty',
       error: pages.length === 0 ? 'could not read any catalog pages from the site' : 'no varieties found on the site',
     };
@@ -212,6 +258,18 @@ export async function populateCatalog(
     }
   }
 
+  // Data-quality (ledger #73 CASE 5): detect (variant_group, size) collisions BEFORE the
+  // insert and SURFACE them. We do NOT dedupe or drop — both rows are still written; the
+  // owner sees the finding in the populate report and resolves the dup, so a variety never
+  // becomes silently uncountable-by-scan at count time.
+  const dupSizeGroups = findDuplicateSizeGroups(rows);
+  if (dupSizeGroups.length) {
+    console.log(JSON.stringify({
+      tag: '[TRACE:POPULATE]', phase: 'data-quality:dup-size', businessId,
+      groups: dupSizeGroups.length, detail: dupSizeGroups,
+    }));
+  }
+
   let { error: insErr } = await supabase.from('business_inventory').insert(rows);
 
   // Deploy-window safety: if size/variant_group are not applied yet, the per-size insert
@@ -229,7 +287,9 @@ export async function populateCatalog(
     return {
       businessId, sourceUrl, extract,
       cleared: { sandbox: sandboxCleared, discovery: discoveryCleared },
-      inserted: 0, flaggedInserted: 0, status: 'insert-failed', error: insErr.message,
+      inserted: 0, flaggedInserted: 0,
+      dataQuality: { dupSizeGroups: degradedNoSizes ? [] : dupSizeGroups },
+      status: 'insert-failed', error: insErr.message,
     };
   }
   const writtenRows     = degradedNoSizes ? extract.items.length : rows.length;
@@ -254,6 +314,7 @@ export async function populateCatalog(
         inserted:       writtenRows,
         sizeRows:       degradedNoSizes ? 0 : totalSizeRows,
         varietiesWithSizes: degradedNoSizes ? 0 : itemsWithVariants,
+        dupSizeGroups:  degradedNoSizes ? 0 : dupSizeGroups.length,
       },
     },
   };
@@ -269,6 +330,7 @@ export async function populateCatalog(
     tag: '[TRACE:POPULATE]', phase: 'populate:done',
     inserted: writtenRows, sizeRows: degradedNoSizes ? 0 : totalSizeRows,
     flaggedInserted, high: extract.highConfidence,
+    dupSizeGroups: degradedNoSizes ? 0 : dupSizeGroups.length,
     degradedNoSizes, profilePersisted: !profErr,
   }));
 
@@ -276,6 +338,7 @@ export async function populateCatalog(
     businessId, sourceUrl, extract,
     cleared: { sandbox: sandboxCleared, discovery: discoveryCleared },
     inserted: writtenRows, flaggedInserted,
+    dataQuality: { dupSizeGroups: degradedNoSizes ? [] : dupSizeGroups },
     status: degradedNoSizes
       ? (profErr ? 'populated-no-sizes-no-profile' : 'populated-no-sizes')
       : (profErr ? 'populated-no-profile' : 'populated'),

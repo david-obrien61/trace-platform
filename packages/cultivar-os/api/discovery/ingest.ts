@@ -157,6 +157,8 @@ export default async function handler(req: any, res: any) {
       const result = await populateCatalog(businessId, url, db, { apiKey: aiKey });
       return res.json({
         ok: !result.error, inserted: result.inserted, flaggedInserted: result.flaggedInserted,
+        dupSizeGroups: result.dataQuality.dupSizeGroups.length,
+        dataQuality: result.dataQuality,
         status: result.status, error: result.error,
       });
     } catch (err: any) {
