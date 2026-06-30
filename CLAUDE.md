@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-13 (THUNDER VERIFY-GATE: schema verification gate added to end-of-session-protocol.md + CLAUDE.md §9; 4-table catalog-backed verification run against business_assets/business_inventory/business_pmi_schedule/business_service_log)
+# Last updated: 2026-06-30 (THUNDER COUNT-SIDE SIZE-PICKER [ledger #72] — built the L5 NEED_CLARIFICATION seam in InventoryCount.tsx: a same-name multi-size scan now surfaces a size-picker → count routes to that exact per-size business_inventory row, instead of regressing to AMBIGUOUS→UNKNOWN. APP CODE ONLY, no schema/migration/PAT [20260628 already applied]; #61 single-match path untouched; reversible service-key seed scripts/seed-size-variants.mjs round-trip 9/9; npm run verify zero NET-NEW. Per-size catalog population now UNBLOCKED, gated on this picker's phone owner-prove.)
 # Current AI: Claude Code
 
 ---
@@ -322,6 +322,24 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-06-30 — THUNDER COUNT-SIDE SIZE-PICKER (L5 NEED_CLARIFICATION seam): same-name multi-size scan → size-picker → per-size row, resolves the size-variant LANDMINE at the count side (BUILDER-COMPLETE, phone owner-proof owed; ledger #72)
+
+**Type:** APP CODE ONLY — 1 file `packages/cultivar-os/src/pages/InventoryCount.tsx` + 1 reversible test seed `scripts/seed-size-variants.mjs`. **NO schema / NO migration / NO PAT** — the size-variant migration `20260628` is already APPLIED + verified (`size`/`variant_group` live on `business_inventory`, nullable, EMPTY) → **schema-verification gate N/A this pass** (confirmed back at STEP 0). `[TRACE:*]` STAYS ON; `[TRACE:COUNT]`+`[TRACE:RESOLVE]` extended. `npm run verify` exit 0 zero NET-NEW (tsc 10 / eslint 266 / knip 10·14·15); `build:cultivar` clean. Commit `__PENDING__`.
+
+**WHAT (the gating next-build from #70's LANDMINE, now built):** the count-side size-picker fills the **L5 NEED_CLARIFICATION** seam the L4 `:263` comment already reserved. Before: a same-name multi-size scan (the size-variant catalog model — ONE `business_inventory` row per variety×size, siblings sharing `variant_group`, differing by `size`) token-matched >1 row at L4 → collapsed to AMBIGUOUS→UNKNOWN, which would have **regressed the OWNER-PROVEN grower-resolve (#61, Vitex→DISC-1105→count-45)** the moment per-size rows were populated. Now: such a scan surfaces a **SIZE-PICKER** → David picks the size → the existing `openReview`→qty→save path SETS that exact per-size row's `qty`.
+
+**THREE-LENS RECON (binding gate, reported before building):** HAVE — `handleScan` ladder L1 tag_id → L2 sku → L4 token-set equality (`:242-269`) → UNKNOWN; the `matches.length > 1` branch (`:263-268`) was the reserved seam (comment named it). NEED — detect a same-name size collision in that branch, present the sizes, route the chosen row through `openReview`. WANT — a first-class `'picker'` phase reusing the file's modal/sheet-per-outcome pattern + a pure helper + seam filled in-place. OPTIONS A (inline in the unknown sheet, cheapest — rejected: conflates "no match" with "too many matches") → **B (dedicated phase, recommended + built)**. Recon confirmed the settled design; no schema change needed.
+
+**BUILT (Option B):**
+- **`detectSizeCollision(matches)`** (pure, module-level) — fires ONLY when: >1 match, all share ONE non-null `variant_group`, AND each carries a DISTINCT non-empty `size`. Any mixed/empty group or dup/missing size → false → UNKNOWN as today (surface-don't-presume).
+- **L4 SELECT gained only `size, variant_group`** (`InvRow` typed). On collision → build sorted `SizeCandidate[]` (numeric size sort, on-hand shown) → new **`'picker'` phase**. `pickSize(c)` → `openReview(c.resolved)` → existing qty→save sets THAT per-size row.
+- **`'picker'` bottom-sheet** mirrors the review/unknown sheets; added to the `counting` predicate; styles `pickBtn`/`pickSize`/`pickQty`.
+- **#61 NO-REGRESSION:** single match → `openReview` direct (untouched); L1/L2 untouched. AC-1 (generic `business_` cols, no vertical nouns) / AC-2 / AC-3 held.
+
+**BUILDER-COMPLETE — service-key round-trip proof (`scripts/seed-size-variants.mjs --verify`, real demo nursery `f7ec5d67…` = "Test Dave's Tree Nest", the 111-row #61 discovery catalog): 9/9 PASS** — (A) variety slug token-matches the 3 seeded siblings + `detectSizeCollision`→TRUE + picker offers 7/15/30 gal; (B) pick "15 gal" → qty lands on THAT row (99), siblings untouched (7→7, 30→30); (C) single-size control slug → exactly 1 match → no picker + `detectSizeCollision`→FALSE; (D) `--clear` removes all 4 fixtures, real 111-row catalog invariant. The seed is idempotent + `--clear`-able + writes ONLY to that one business_id (tenant isolation), ADDED rows only.
+
+**OWNER-PROVEN owed (David, live on phone):** Start count → scan the seeded multi-size fixture ("Fixture Picker Shrub") → the size-picker appears (7 / 15 / 30 gal) → pick one → the count routes to THAT per-size row and `business_inventory.qty` updates on the correct row; scan a real single-size variety (Vitex) → NO picker, resolves direct (#61 unregressed); an unresolvable scan still → UNKNOWN; `[TRACE:COUNT]` trail visible end-to-end. Then `--clear` removes the fixture. **Per-size catalog population (`populate.ts`) remains GATED on this picker's OWNER-PROVEN** — land it AFTER, not before. Seed the fixture with `node scripts/seed-size-variants.mjs` (defaults to `f7ec5d67…`); remove with `--clear`.
 
 ### 2026-06-29 — THUNDER END-OF-SESSION RECONCILIATION: session fix → OWNER-PROVEN, assets review banked onto main, size-variant LANDMINE recorded (DOCS + GIT housekeeping only; ledger #70)
 

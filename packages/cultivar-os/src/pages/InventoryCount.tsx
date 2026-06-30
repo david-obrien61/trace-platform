@@ -16,9 +16,12 @@
 //           L3 stored product-slug exact (DEFERRED, no column yet) →
 //           L4 NAME token-set EQUALITY (scan slug tokens == catalog name tokens, order-
 //           insensitive — fixes the discovery-catalog false-UNKNOWN, e.g. vitex-shoal-creek
-//           ↔ "Shoal Creek Vitex"; >1 candidate ⇒ UNKNOWN, never auto-pick) → UNKNOWN.
-//           Guarded subset/superset (L5 → NEED_CLARIFICATION) + stemming (L6) are a
-//           deferred fast-follow with the seam left at L4. [TRACE:RESOLVE] shows the layer hit.
+//           ↔ "Shoal Creek Vitex") → L5 SIZE-PICKER (NEED_CLARIFICATION): when L4 returns
+//           >1 row that are the SAME variety in different sizes (one non-null variant_group,
+//           each a distinct size), surface a size choice instead of collapsing to UNKNOWN —
+//           the count then routes to the chosen per-size row. A genuinely ambiguous >1
+//           (mixed/empty variant_group) still falls to UNKNOWN. Stemming (L6) deferred.
+//           [TRACE:RESOLVE] shows the layer hit; [TRACE:COUNT] shows the size collision + pick.
 // OUTPUTS:  SETS business_inventory.qty for the resolved lot; records each count in
 //           inventory_counts under a session, identity-stamped (who + when via the
 //           envelope userId + session.counted_by). Surfaces a same-lot-twice-in-session
@@ -38,7 +41,7 @@ import { QrScanner } from '../components/inventory/QrScanner';
 const TRACE_COUNT = true; // [TRACE:COUNT] STD-003 — on until OWNER-PROVEN
 const TRACE_RESOLVE = true; // [TRACE:RESOLVE] STD-003 — which resolver layer hit; on until OWNER-PROVEN
 
-type Phase = 'idle' | 'scanning' | 'reviewing' | 'unknown' | 'conflict' | 'done';
+type Phase = 'idle' | 'scanning' | 'reviewing' | 'unknown' | 'picker' | 'conflict' | 'done';
 
 interface Resolved {
   inventoryId: string | null;   // the business_inventory lot to set qty on (null = no linked lot)
@@ -47,6 +50,15 @@ interface Resolved {
   currentQty:  number | null;   // current on-hand (prefilled into the qty input)
   rawScan:     string;          // the raw decoded string, for the count record
 }
+
+// A single business_inventory candidate row (the L4 token-set match shape).
+interface InvRow {
+  id: string; name: string; sku: string | null; qty: number | null;
+  size: string | null; variant_group: string | null;
+}
+
+// A sibling size offered by the L5 picker — the chosen one resolves to its row.
+interface SizeCandidate { size: string; resolved: Resolved; }
 
 interface CountedItem { label: string; qty: number; unknown: boolean; }
 
@@ -83,6 +95,21 @@ function lotKey(r: Resolved): string | null {
   return null;
 }
 
+// L5 NEED_CLARIFICATION discriminator: are these >1 token-equal matches the SAME
+// variety in different SIZES (→ size-picker), or a genuinely ambiguous collision
+// (→ UNKNOWN)? Size collision ⟺ every match carries the SAME non-null variant_group
+// AND each carries a DISTINCT non-empty size. Any mixed/missing variant_group, any
+// missing/duplicate size → NOT a size collision (surface-don't-presume → UNKNOWN).
+function detectSizeCollision(matches: InvRow[]): boolean {
+  if (matches.length < 2) return false;
+  const group = matches[0].variant_group;
+  if (group == null || group.trim() === '') return false;       // group must be set…
+  if (!matches.every(m => m.variant_group === group)) return false; // …and shared by all
+  const sizes = matches.map(m => (m.size ?? '').trim());
+  if (sizes.some(s => s === '')) return false;                  // every row needs a size
+  return new Set(sizes).size === matches.length;                // all distinct
+}
+
 export function InventoryCount() {
   const navigate = useNavigate();
   const { businessId } = useBusinessContext();
@@ -95,6 +122,8 @@ export function InventoryCount() {
   const [unknownRaw, setUnknownRaw] = useState('');
   const [unknownTag, setUnknownTag] = useState('');
   const [unknownLabel, setUnknownLabel] = useState('');
+  const [pickerCandidates, setPickerCandidates] = useState<SizeCandidate[]>([]); // L5 size siblings
+  const [pickerName, setPickerName] = useState('');                              // variety name for the picker header
   const [counted, setCounted]     = useState<CountedItem[]>([]);
   const [sessionCounts, setSessionCounts] = useState<Record<string, number>>({}); // lotKey → last counted qty this session
   const [conflict, setConflict]   = useState<Conflict | null>(null);
@@ -243,13 +272,13 @@ export function InventoryCount() {
     if (scannedKey.size > 0) {
       const { data: rows } = await supabase
         .from('business_inventory')
-        .select('id, name, sku, qty')
+        .select('id, name, sku, qty, size, variant_group')
         .eq('business_id', businessId);
-      const matches = (rows ?? []).filter(row =>
-        tokenSetsEqual(nameTokenSet((row as any).name), scannedKey));
+      const matches = ((rows ?? []) as InvRow[]).filter(row =>
+        tokenSetsEqual(nameTokenSet(row.name), scannedKey));
 
       if (matches.length === 1) {
-        const m = matches[0] as any;
+        const m = matches[0];
         if (TRACE_RESOLVE) console.log('[TRACE:RESOLVE] L4 name token-set equality —', tag, '→', m.name);
         openReview({
           inventoryId: m.id,
@@ -261,10 +290,33 @@ export function InventoryCount() {
         return;
       }
       if (matches.length > 1) {
-        // EQUALITY guardrail (surface-don't-presume): more than one row reduces to the
-        // same token set — do NOT auto-pick. Fall to UNKNOWN. This is the seam where
-        // the deferred L5 NEED_CLARIFICATION candidate-picker will present the choice.
-        if (TRACE_RESOLVE) console.warn('[TRACE:RESOLVE] L4 AMBIGUOUS —', matches.length, 'equal-token candidates for', tag, '→ UNKNOWN (do not presume)');
+        // (L5 NEED_CLARIFICATION) >1 token-equal rows. If they are the SAME variety in
+        // different SIZES, surface a size-picker (route the count to the chosen per-size
+        // row) instead of collapsing to UNKNOWN — the #61-regression the size feature gates on.
+        if (detectSizeCollision(matches)) {
+          const candidates: SizeCandidate[] = matches
+            .map(m => ({
+              size: (m.size as string).trim(),
+              resolved: {
+                inventoryId: m.id,
+                plantTagId:  null,
+                label:       `${m.name}, ${(m.size as string).trim()}` + (m.sku ? ` (SKU ${m.sku})` : ''),
+                currentQty:  m.qty ?? null,
+                rawScan:     raw,
+              },
+            }))
+            .sort((a, b) => a.size.localeCompare(b.size, undefined, { numeric: true }));
+          if (TRACE_RESOLVE) console.log('[TRACE:RESOLVE] L5 NEED_CLARIFICATION (size) —', tag, '→ picker:', candidates.map(c => c.size).join(' / '));
+          if (TRACE_COUNT) console.log('[TRACE:COUNT] size collision —', 'matchCount:', matches.length, 'name:', matches[0].name, 'variant_group:', matches[0].variant_group, 'sizes:', candidates.map(c => c.size).join(' / '));
+          setPickerName(matches[0].name);
+          setPickerCandidates(candidates);
+          setError(null);
+          setPhase('picker');
+          return;
+        }
+        // EQUALITY guardrail (surface-don't-presume): a genuinely ambiguous collision
+        // (mixed/empty variant_group, or no per-size split) — do NOT auto-pick. → UNKNOWN.
+        if (TRACE_RESOLVE) console.warn('[TRACE:RESOLVE] L4 AMBIGUOUS —', matches.length, 'equal-token candidates for', tag, '→ UNKNOWN (not a size collision)');
       }
     }
 
@@ -283,6 +335,14 @@ export function InventoryCount() {
     setError(null);
     setPhase('reviewing');
     if (TRACE_COUNT) console.log('[TRACE:COUNT] resolved —', r.label, 'lot:', r.inventoryId, 'currentQty:', r.currentQty);
+  }
+
+  // ── L5 SIZE-PICKER: the counter chose which size ──────────
+  function pickSize(c: SizeCandidate) {
+    if (TRACE_COUNT) console.log('[TRACE:COUNT] size chosen —', c.size, '→ row:', c.resolved.inventoryId);
+    setPickerCandidates([]);
+    setPickerName('');
+    openReview(c.resolved);   // → reviewing → qty → save sets THIS per-size row's qty
   }
 
   // ── SAVE → NEXT (known item) ──────────────────────────────
@@ -438,7 +498,7 @@ export function InventoryCount() {
 
   function exit() { navigate('/inventory'); }
 
-  const counting = phase === 'scanning' || phase === 'reviewing' || phase === 'unknown' || phase === 'conflict';
+  const counting = phase === 'scanning' || phase === 'reviewing' || phase === 'unknown' || phase === 'picker' || phase === 'conflict';
 
   // ── RENDER ────────────────────────────────────────────────
   return (
@@ -523,6 +583,25 @@ export function InventoryCount() {
             <button style={busy ? S.btnDisabled : S.btnPrimary} disabled={busy} onClick={() => void saveAndNext()}>
               {busy ? 'Saving…' : 'Save → Next'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* SIZE-PICKER sheet — one variety, multiple sizes (L5 NEED_CLARIFICATION) */}
+      {phase === 'picker' && pickerCandidates.length > 0 && (
+        <div style={S.modal} onClick={e => { if (e.target === e.currentTarget) { setPhase('scanning'); setPickerCandidates([]); setPickerName(''); } }}>
+          <div style={S.sheet}>
+            <div style={S.sheetHeader}>
+              <h2 style={S.sheetTitle}>{pickerName} — which size?</h2>
+              <button style={S.iconBtn} onClick={() => { setPhase('scanning'); setPickerCandidates([]); setPickerName(''); }} aria-label="Cancel"><X size={20} color="#6b7280" /></button>
+            </div>
+            <p style={S.subtle}>This variety is stocked in more than one size. Pick the one you're counting.</p>
+            {pickerCandidates.map((c, i) => (
+              <button key={i} style={S.pickBtn} onClick={() => pickSize(c)}>
+                <span style={S.pickSize}>{c.size}</span>
+                {c.resolved.currentQty != null && <span style={S.pickQty}>on-hand {c.resolved.currentQty}</span>}
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -655,6 +734,9 @@ const S = {
   input:      { width: '100%', border: '1.5px solid #d1d5db', borderRadius: 8, padding: '0.7rem 0.85rem', fontSize: '1rem', color: '#111827', boxSizing: 'border-box', marginBottom: 14 } as React.CSSProperties,
   qtyInput:   { width: '100%', border: '1.5px solid #27500A', borderRadius: 8, padding: '0.8rem 0.85rem', fontSize: '1.5rem', fontWeight: 700, color: '#111827', boxSizing: 'border-box', marginBottom: 16, textAlign: 'center' } as React.CSSProperties,
   error:      { color: '#b91c1c', background: '#fee2e2', borderRadius: 8, padding: '0.55rem 0.85rem', fontSize: '0.86rem', marginBottom: 12 } as React.CSSProperties,
+  pickBtn:    { display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minHeight: 52, background: '#fff', color: '#1a2e0a', border: '1.5px solid #27500A', borderRadius: 10, padding: '0 1rem', fontSize: '1rem', fontWeight: 700, cursor: 'pointer', marginBottom: 10 } as React.CSSProperties,
+  pickSize:   { fontSize: '1.05rem', fontWeight: 700, color: '#1a2e0a' } as React.CSSProperties,
+  pickQty:    { fontSize: '0.8rem', fontWeight: 600, color: '#6b7280' } as React.CSSProperties,
   conflictRow:{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, margin: '0.25rem 0 1rem' } as React.CSSProperties,
   conflictCol:{ textAlign: 'center' } as React.CSSProperties,
   conflictNum:{ fontSize: '2rem', fontWeight: 800, color: '#1a2e0a', lineHeight: 1 } as React.CSSProperties,
