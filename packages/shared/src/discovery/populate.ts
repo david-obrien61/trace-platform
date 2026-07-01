@@ -52,6 +52,9 @@ import {
 } from './catalog';
 import { canonicalNameKey } from '../utils/canonicalName';
 import type { WebsiteContent } from './adapters/website';
+// Data-quality dup-size detection lives in a zero-dep leaf so client surfaces can reuse it
+// without pulling populate.ts's transitive @anthropic-ai/sdk import (ledger #74 CASE-5).
+import { findDuplicateSizeGroups, type DupSizeGroup } from './dupSize';
 
 const DISC_SKU_PREFIX = 'DISC-';
 const DISC_NOTE_TAG   = '[DISCOVERY]';
@@ -127,38 +130,10 @@ export function catalogItemToInventoryRow(
 }
 
 // ── Data-quality: dup-size detection (ledger #73 CASE 5) ─────────────────────────
-
-/** A (variant_group, size) collision: ≥2 rows that share one variant_group AND the same
- *  size. At count time these make the variety uncountable-by-scan (silent UNKNOWN). */
-export interface DupSizeGroup {
-  variantGroup: string;
-  size:         string;
-  count:        number;
-  varieties:    string[];   // the names of the colliding rows (usually one variety, ≥2 rows)
-}
-
-/** Find (variant_group, size) duplicates among built inventory rows. Pure + testable.
- *  Only rows with a non-blank variant_group AND a non-blank size participate (a parent
- *  row — size/variant_group absent — can never collide). Size match is case-insensitive
- *  (mirrors extractSizeVariants' own dedupe key) so "15 Gallon" / "15 gallon" still flag.
- *  Does NOT mutate or drop anything — detection only. */
-export function findDuplicateSizeGroups(
-  rows: ReturnType<typeof catalogItemToInventoryRow>[],
-): DupSizeGroup[] {
-  const groups = new Map<string, { variantGroup: string; size: string; varieties: string[] }>();
-  for (const r of rows) {
-    const vg   = r.variant_group;
-    const size = (r.size ?? '').trim();
-    if (vg == null || String(vg).trim() === '' || size === '') continue;
-    const key = `${vg}||${size.toLowerCase()}`;   // '||' separator → no cross-pair key collision
-    const g = groups.get(key) ?? { variantGroup: vg, size, varieties: [] };
-    g.varieties.push(r.name);
-    groups.set(key, g);
-  }
-  return [...groups.values()]
-    .filter(g => g.varieties.length > 1)
-    .map(g => ({ variantGroup: g.variantGroup, size: g.size, count: g.varieties.length, varieties: g.varieties }));
-}
+// Moved to the zero-dep leaf ./dupSize (ledger #74 CASE-5) so the inventory datasheet can reuse
+// it client-side without the AI-SDK bundle cost. Re-exported here for existing callers + tests.
+export { findDuplicateSizeGroups } from './dupSize';
+export type { DupSizeGroup } from './dupSize';
 
 // ── Populate (orchestration) ────────────────────────────────────────────────────
 
