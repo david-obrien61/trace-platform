@@ -42,6 +42,159 @@ function buildMapsUrl(addresses: string[]): string {
 // [TRACE:DELIVERY] STD-003 — ON until David owner-proves the scheduled-deliveries route
 const TRACE_DELIVERY = true;
 
+// Client-side Google Maps key. VITE_-prefixed so Vite injects it into the browser
+// bundle (the unprefixed name is invisible to the client). Referrer-restricted key,
+// safe to expose. Absent/blank → the embedded map is skipped entirely and the
+// "Open in Google Maps" URL-handoff card below remains the working fallback.
+const MAPS_KEY = import.meta.env?.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
+
+// Singleton client-side loader for the Maps JS API — one <script>, no new Vercel
+// function (api/ stays 12/12). Geocoder + Map + Marker all live in the core library.
+let mapsLoaderPromise: Promise<any> | null = null;
+function loadGoogleMaps(apiKey: string): Promise<any> {
+  if (typeof window === 'undefined') return Promise.reject(new Error('no window'));
+  const w = window as any;
+  if (w.google?.maps) return Promise.resolve(w.google.maps);
+  if (mapsLoaderPromise) return mapsLoaderPromise;
+  mapsLoaderPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.id = 'gmaps-js';
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&loading=async`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      if (w.google?.maps) resolve(w.google.maps);
+      else { mapsLoaderPromise = null; reject(new Error('maps loaded but google.maps missing')); }
+    };
+    script.onerror = () => { mapsLoaderPromise = null; reject(new Error('maps script load failed')); };
+    document.head.appendChild(script);
+  });
+  return mapsLoaderPromise;
+}
+
+interface RouteStop { label: string; address: string; }
+
+/**
+ * RouteMap — embedded Google Maps JS map with NUMBERED pins in route order.
+ * PURPOSE: render the built delivery route (business origin anchor + ordered
+ *          customer stops) as an interactive map — numbered markers + a connecting
+ *          polyline — so the owner/driver sees the day's route visually. ADDITIVE to,
+ *          never a replacement for, the "Open in Google Maps" URL handoff below it.
+ * DEPENDENCIES: Google Maps JavaScript API + Geocoding (client-side script loader;
+ *          key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY, referrer-restricted).
+ *          ZERO Vercel functions.
+ * OUTPUTS: geocodes each address → numbered markers (⌂ = origin) → fits bounds. On
+ *          ANY failure (no key, load error, every geocode misses) it degrades quietly
+ *          to a muted note; the parent's URL-handoff card is always the fallback.
+ * NOTE (standard-by-value): uses the classic `google.maps.Marker` for numbered labels
+ *          — the newer AdvancedMarkerElement needs a mapId + marker library + more
+ *          setup that buys nothing for v1 numbered pins. Divergence recorded here.
+ * [TRACE:MAP] on the geocode + render path (STD-003, ON until owner-proven).
+ */
+function RouteMap({ apiKey, origin, stops }: { apiKey: string; origin: string; stops: RouteStop[] }) {
+  const mapRef = React.useRef<HTMLDivElement | null>(null);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [note, setNote] = useState<string>('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatus('loading');
+    setNote('');
+
+    async function run() {
+      let maps: any;
+      try {
+        maps = await loadGoogleMaps(apiKey);
+      } catch (e) {
+        if (TRACE_DELIVERY) console.warn('[TRACE:MAP] maps script failed to load', e);
+        if (!cancelled) { setStatus('error'); setNote('Map unavailable — use the link below.'); }
+        return;
+      }
+      if (cancelled || !mapRef.current) return;
+
+      const geocoder = new maps.Geocoder();
+      const geocode = (address: string) => new Promise<any | null>((resolve) => {
+        geocoder.geocode({ address }, (results: any, gcStatus: string) => {
+          if (gcStatus === 'OK' && results && results[0]) resolve(results[0].geometry.location);
+          else { if (TRACE_DELIVERY) console.warn('[TRACE:MAP] geocode miss', { address, gcStatus }); resolve(null); }
+        });
+      });
+
+      // Ordered points: origin anchor first (⌂), then customer stops 1..N in route order.
+      const points: { marker: string; title: string; address: string; isOrigin: boolean }[] = [];
+      if (origin) points.push({ marker: '⌂', title: 'Start / return (business)', address: origin, isOrigin: true });
+      stops.forEach((s, i) => points.push({ marker: String(i + 1), title: `${i + 1}. ${s.label}`, address: s.address, isOrigin: false }));
+
+      if (TRACE_DELIVERY) console.log('[TRACE:MAP] geocoding', points.length, 'points', { hasOrigin: !!origin, stops: stops.length });
+
+      const located = await Promise.all(points.map(async p => ({ ...p, loc: await geocode(p.address) })));
+      if (cancelled || !mapRef.current) return;
+
+      const good = located.filter(p => p.loc);
+      if (good.length === 0) {
+        if (TRACE_DELIVERY) console.warn('[TRACE:MAP] no points geocoded — hiding map', { attempted: points.length });
+        if (!cancelled) { setStatus('error'); setNote('Couldn’t locate these addresses on the map — use the link below.'); }
+        return;
+      }
+
+      const map = new maps.Map(mapRef.current, {
+        mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
+      });
+      const bounds = new maps.LatLngBounds();
+
+      good.forEach(p => {
+        new maps.Marker({
+          position: p.loc,
+          map,
+          label: { text: p.marker, color: '#fff', fontWeight: '700', fontSize: '0.8125rem' },
+          title: p.title,
+        });
+        bounds.extend(p.loc);
+      });
+
+      // Connect the located points in order with a light polyline (the visual route line).
+      new maps.Polyline({
+        path: good.map(p => p.loc),
+        map, geodesic: false, strokeColor: GREEN, strokeOpacity: 0.7, strokeWeight: 3,
+      });
+
+      map.fitBounds(bounds, 48);
+      if (good.length === 1) map.setZoom(14);
+
+      if (!cancelled) {
+        setStatus('ready');
+        if (TRACE_DELIVERY) console.log('[TRACE:MAP] rendered', { located: good.length, missed: located.length - good.length });
+      }
+    }
+
+    void run();
+    return () => { cancelled = true; };
+    // `stops` is a stable state reference from the parent (routeStops) — it changes
+    // identity only when a route is (re)built, which is exactly when we want to re-run.
+  }, [apiKey, origin, stops]);
+
+  // The map div is ALWAYS present + visible so Maps initializes into a sized element;
+  // loading/error are overlays. A failure never throws — the card below still works.
+  return (
+    <div style={{ position: 'relative', marginBottom: 16 }}>
+      <div ref={mapRef} style={{ width: '100%', height: 260, borderRadius: 12, background: '#eef2e6' }} />
+      {status === 'loading' && (
+        <div style={{
+          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: GRAY, fontSize: '0.8125rem', borderRadius: 12, background: '#eef2e6',
+        }}>Loading map…</div>
+      )}
+      {status === 'error' && (
+        <div style={{
+          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          textAlign: 'center', padding: 16, color: '#9a5b00', fontSize: '0.8125rem',
+          borderRadius: 12, background: '#fff7ed', border: '1px solid #fed7aa',
+        }}>{note || 'Map unavailable — use the link below.'}</div>
+      )}
+    </div>
+  );
+}
+
 export function DeliveryRoute() {
   const [searchParams] = useSearchParams();
   // When ?date=YYYY-MM-DD is present we route SCHEDULED deliveries (the `deliveries`
@@ -62,6 +215,11 @@ export function DeliveryRoute() {
   // Route result state
   const [routeUrl, setRouteUrl] = useState<string | null>(null);
   const [copied, setCopied]     = useState(false);
+
+  // Structured route model for the embedded map — ordered stops + origin anchor,
+  // set alongside routeUrl in buildRoute() so the map + the URL share one source.
+  const [routeStops, setRouteStops]   = useState<RouteStop[]>([]);
+  const [routeOrigin, setRouteOrigin] = useState<string>('');
 
   // Business address — injected as the route origin/destination (round-trip anchor).
   const [originAddress, setOriginAddress] = useState<string>('');
@@ -189,6 +347,17 @@ export function DeliveryRoute() {
       console.warn('[TRACE:ROUTE] no business address — route built without anchor', { stops: stops.length });
     }
     setRouteUrl(buildMapsUrl(ordered));
+
+    // Same ordered set, structured for the embedded map (label = customer name).
+    const stopModels: RouteStop[] = selectedOrders
+      .map(o => ({
+        label: o.customers ? `${o.customers.first_name} ${o.customers.last_name}` : 'Customer',
+        address: getAddress(o),
+      }))
+      .filter(s => s.address.length > 0);
+    setRouteStops(stopModels);
+    setRouteOrigin(origin);
+    if (TRACE_DELIVERY) console.log('[TRACE:MAP] route model set', { origin: !!origin, stops: stopModels.length, keyPresent: !!MAPS_KEY });
   }
 
   function copyLink() {
@@ -351,6 +520,13 @@ export function DeliveryRoute() {
               </button>
             ) : (
               <div style={{ background: '#fff', borderRadius: 16, padding: '20px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+                {/* Embedded map — numbered pins in route order. Skipped entirely when
+                    no key/no stops; on failure it self-degrades. The URL card below
+                    is the always-present fallback (never lost). */}
+                {MAPS_KEY && routeStops.length > 0 && (
+                  <RouteMap apiKey={MAPS_KEY} origin={routeOrigin} stops={routeStops} />
+                )}
+
                 {/* Route summary */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                   <Navigation size={18} color={GREEN} />
