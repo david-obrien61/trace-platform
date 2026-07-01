@@ -48,50 +48,59 @@ const TRACE_DELIVERY = true;
 // "Open in Google Maps" URL-handoff card below remains the working fallback.
 const MAPS_KEY = import.meta.env?.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 
-// Singleton client-side loader for the Maps JS API — one <script>, no new Vercel
-// function (api/ stays 12/12). The modern Maps JS loader is MODULAR: loading the core
-// bootstrap does NOT attach Geocoder/Map/Marker to google.maps. What the bootstrap DOES
-// give us is `google.maps.importLibrary(name)` — each caller awaits the specific library
-// it needs (geocoding, maps, marker) before constructing anything from it. So this loader
-// resolves once `importLibrary` is available; RouteMap awaits the libraries it uses.
-let mapsLoaderPromise: Promise<any> | null = null;
+// Client-side loader for the Maps JS API — no new Vercel function (api/ stays 12/12).
+// Uses Google's OFFICIAL "Dynamic Library Import" bootstrap loader. This is the ONLY
+// load method that GUARANTEES `google.maps.importLibrary` exists — the legacy
+// `maps/api/js?...&loading=async` script tag does NOT reliably attach it (that was the
+// "importLibrary missing" bug). The bootstrap installs importLibrary synchronously; each
+// caller then awaits the specific library it needs (geocoding, maps, marker).
+let mapsBootstrapped = false;
+function installMapsBootstrap(apiKey: string): void {
+  if (mapsBootstrapped) return;
+  mapsBootstrapped = true;
+  // Google's documented inline bootstrap, TS-typed and de-async'd (the original's
+  // `new Promise(async …)` is an anti-pattern that trips no-async-promise-executor —
+  // the awaited createElement was a no-op, so removing async is behaviour-identical).
+  ((g: any) => {
+    let h: any, a: any, k: any;
+    const p = 'The Google Maps JavaScript API', c = 'google', l = 'importLibrary',
+      q = '__ib__', m = document;
+    let b: any = window;
+    b = b[c] || (b[c] = {});
+    const d = b.maps || (b.maps = {});
+    const r = new Set<string>();
+    const e = new URLSearchParams();
+    const u = () => h || (h = new Promise((f: any, n: any) => {
+      a = m.createElement('script');
+      e.set('libraries', [...r] + '');
+      for (k in g) e.set(k.replace(/[A-Z]/g, (t: string) => '_' + t[0].toLowerCase()), g[k]);
+      e.set('callback', c + '.maps.' + q);
+      a.src = `https://maps.${c}apis.com/maps/api/js?` + e;
+      d[q] = f;
+      a.onerror = () => (h = n(Error(p + ' could not load.')));
+      a.nonce = (m.querySelector('script[nonce]') as any)?.nonce || '';
+      m.head.append(a);
+    }));
+    // If importLibrary already exists (real API loaded), leave it; else install the stub
+    // that lazily boots the script on first use. Google overwrites d[l] with the real
+    // implementation once the script loads, so the .then re-dispatch hits the real one.
+    if (d[l]) {
+      console.warn(p + ' only loads once. Ignoring:', g);
+    } else {
+      d[l] = (f: any, ...n: any[]) => r.add(f) && u().then(() => d[l](f, ...n));
+    }
+  })({ key: apiKey, v: 'weekly' });
+}
+
 function loadGoogleMaps(apiKey: string): Promise<any> {
   if (typeof window === 'undefined') return Promise.reject(new Error('no window'));
   const w = window as any;
-  if (mapsLoaderPromise) return mapsLoaderPromise;
-
-  mapsLoaderPromise = new Promise((resolve, reject) => {
-    const ready = () => {
-      // Resolve on importLibrary (the modular entry point) — NOT on google.maps alone,
-      // which exists before any library is attached.
-      if (w.google?.maps?.importLibrary) { resolve(w.google.maps); return true; }
-      return false;
-    };
-    if (ready()) return;
-
-    const fail = (msg: string) => { mapsLoaderPromise = null; reject(new Error(msg)); };
-    const onLoad = () => { if (!ready()) fail('maps loaded but importLibrary missing'); };
-
-    // Reuse an existing tag (StrictMode double-mount / prior route) rather than duplicate it.
-    const existing = document.getElementById('gmaps-js') as HTMLScriptElement | null;
-    if (existing) {
-      existing.addEventListener('load', onLoad);
-      existing.addEventListener('error', () => fail('maps script load failed'));
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.id = 'gmaps-js';
-    // `loading=async` makes `google.maps.importLibrary` available; libraries are pulled
-    // on demand via importLibrary, so no `&libraries=` list is needed here.
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&loading=async`;
-    script.async = true;
-    script.defer = true;
-    script.onload = onLoad;
-    script.onerror = () => fail('maps script load failed');
-    document.head.appendChild(script);
-  });
-  return mapsLoaderPromise;
+  installMapsBootstrap(apiKey);
+  if (!w.google?.maps?.importLibrary) {
+    return Promise.reject(new Error('maps bootstrap did not install importLibrary'));
+  }
+  if (TRACE_DELIVERY) console.log('[TRACE:MAP] bootstrap loader ready — importLibrary present');
+  return Promise.resolve(w.google.maps);
 }
 
 interface RouteStop { label: string; address: string; }
