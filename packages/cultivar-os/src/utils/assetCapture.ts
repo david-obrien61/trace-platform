@@ -37,6 +37,8 @@ export interface CaptureCtx {
 // Raw parsed shape returned by the OCR asset prompt.
 interface AssetOcr {
   name?:            string | null;
+  make?:            string | null; // brand, SEPARATE from model (Mahindra / Stihl / Craftsman)
+  model?:           string | null; // model designation (4025 / BG 56 C / CMXECXM331)
   category?:        string | null;
   estimated_value?: number | null;
   confidence?:      string | null; // HIGH|MEDIUM|LOW (Vision's self-report — informational)
@@ -56,12 +58,6 @@ export interface CaptureOutcome {
 // Owner renames it on the desktop datasheet. Never a fabricated brand/model.
 const UNIDENTIFIED = 'Unidentified asset (from photo)';
 
-// A "the estimated_value columns aren't applied yet" reject — deploy-window safe.
-function isMissingValueColumn(err?: string): boolean {
-  if (!err) return false;
-  return /estimated_value/.test(err) && /(does not exist|schema cache|column)/i.test(err);
-}
-
 async function runAssetOcr(
   base64: string, mimeType: string, businessId: string, userId: string | null, categoryHint?: string,
 ): Promise<AssetOcr | null> {
@@ -77,7 +73,8 @@ async function runAssetOcr(
     }
     const json = await res.json();
     if (TRACE_ASSET) console.log('[TRACE:ASSET] vision — parsed', {
-      name: json?.parsed?.name, category: json?.parsed?.category,
+      name: json?.parsed?.name, make: json?.parsed?.make, model: json?.parsed?.model,
+      category: json?.parsed?.category,
       estimated_value: json?.parsed?.estimated_value, confidence: json?.parsed?.confidence,
       provider: json?.provider,
     });
@@ -89,44 +86,36 @@ async function runAssetOcr(
   }
 }
 
-// Map a Vision result onto a real cost_objects ASSET row. estimated_value lands at
-// ESTIMATED (owner promotes → CONFIRMED); acquisition_cost stays UNKNOWN (we captured
-// worth, not what-was-paid). Value is NEVER coerced to 0 — null stays null (UNKNOWN).
-function buildAssetRow(id: string, businessId: string, ocr: AssetOcr | null, withValueCols: boolean) {
+// Map a Vision result onto a real cost_objects ASSET row. make/model land in their own
+// columns (SEPARATE — brand vs model designation). estimated_value lands at ESTIMATED
+// (owner promotes → CONFIRMED); acquisition_cost stays UNKNOWN (we captured worth, not
+// what-was-paid). Value is NEVER coerced to 0 — null stays null (UNKNOWN).
+function buildAssetRow(id: string, businessId: string, ocr: AssetOcr | null) {
   const value = typeof ocr?.estimated_value === 'number' && isFinite(ocr.estimated_value) && ocr.estimated_value > 0
     ? ocr.estimated_value : null;
-  const row: Record<string, unknown> = {
+  return {
     id,
     business_id:       businessId,
     node_type:         'ASSET',
     name:              (ocr?.name && ocr.name.trim()) ? ocr.name.trim() : UNIDENTIFIED,
+    make:              (ocr?.make && ocr.make.trim()) ? ocr.make.trim() : null,   // brand, do-not-guess
+    model:             (ocr?.model && ocr.model.trim()) ? ocr.model.trim() : null, // model designation
     cost_category:     (ocr?.category && ocr.category.trim()) ? ocr.category.trim() : null,
     acquisition_cost:  null,                 // not captured here — what-it's-worth, not what-paid
     cost_confidence:   'UNKNOWN',
     cost_source:       'AI_VISION',          // provenance (cost_source is NO-CHECK, grows freely)
     substantiation:    'OWNER_ASSERTED',
     status:            'ACTIVE',
-  };
-  if (withValueCols) {
-    row.estimated_value            = value;
-    row.estimated_value_confidence = value === null ? 'UNKNOWN' : 'ESTIMATED';
-  }
-  return row;
+    estimated_value:            value,
+    estimated_value_confidence: value === null ? 'UNKNOWN' : 'ESTIMATED',
+  } satisfies Record<string, unknown>;
 }
 
-// Insert with the estimated_value columns; on the pre-migration deploy window
-// (columns absent) forget the poison op and retry WITHOUT them so capture never
-// hard-fails before the migration lands (mirrors the deliveries service_type path).
+// Insert the ASSET row. The estimated_value columns are live (migration 20260701 applied +
+// proven, commit 64bf3fd) — no deploy-window fallback needed.
 async function insertAssetRow(ctx: CaptureCtx, id: string, ocr: AssetOcr | null): Promise<string | undefined> {
-  const first = await ctx.engine.insert({ table: COST_OBJECTS, clientId: id, row: buildAssetRow(id, ctx.businessId, ocr, true) });
-  if (first.status !== 'failed') return undefined;
-  if (isMissingValueColumn(first.error)) {
-    if (TRACE_ASSET) console.warn('[TRACE:ASSET] estimated_value columns absent — inserting without (apply 20260701 migration)');
-    ctx.engine.forget(id);
-    const retry = await ctx.engine.insert({ table: COST_OBJECTS, clientId: id, row: buildAssetRow(id, ctx.businessId, ocr, false) });
-    return retry.status === 'failed' ? retry.error : undefined;
-  }
-  return first.error;
+  const res = await ctx.engine.insert({ table: COST_OBJECTS, clientId: id, row: buildAssetRow(id, ctx.businessId, ocr) });
+  return res.status === 'failed' ? res.error : undefined;
 }
 
 /**

@@ -121,7 +121,9 @@ function assetPrompt(categoryHint?: string): string {
 
 Return a JSON object with these exact fields (use null for any field you cannot determine from the photo):
 {
-  "name": "string — a short specific name for the asset, including make/model if legible (e.g. 'Mahindra 1626 tractor', 'DeWalt cordless drill'), or a plain description if the brand is unreadable",
+  "name": "string — a short specific name for the asset (e.g. 'tractor', 'cordless drill', 'leaf blower'), a plain description if the type is unclear",
+  "make": "string or null — the BRAND / manufacturer if legible on a plate or badge (e.g. 'Mahindra', 'Stihl', 'Craftsman'). Null if not legible — do NOT guess.",
+  "model": "string or null — the MODEL number/name if legible, SEPARATE from make (e.g. '4025', 'BG 56 C', 'CMXECXM331'). Null if not legible — do NOT guess.",
   "category": "string — best fit from: ${vocab}",
   "estimated_value": number or null — your best estimate of the asset's current used market value in US dollars (numeric only, no currency symbol). Null ONLY if you truly cannot tell what the asset is,
   "confidence": "string — HIGH, MEDIUM, or LOW: how confident you are in the value estimate given photo clarity and how identifiable the asset is"
@@ -129,8 +131,9 @@ Return a JSON object with these exact fields (use null for any field you cannot 
 
 Rules:
 - Identify the asset from what is VISIBLE. Read any legible brand/model plates.
+- make and model are SEPARATE fields: make = the brand (Mahindra, Stihl, Craftsman); model = the model designation (4025, BG 56 C, CMXECXM331). Put the brand in make, the model code in model — never both in one field.
 - estimated_value is an ESTIMATE of resale/used worth — this is expected and wanted; do NOT return null just because no price is printed. Return null ONLY when the object is unidentifiable.
-- Do not invent a brand or model that is not legible — describe it plainly instead.
+- Do not invent a brand or model that is not legible — return null for that field and describe the asset plainly in name instead.
 - Numeric value only — no currency symbols, no commas, no ranges (give a single best estimate).
 - Return ONLY the JSON object. No explanation, no markdown fences, no commentary.`;
 }
