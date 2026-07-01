@@ -30,7 +30,9 @@ At the end of each session, Lightning produces (or David requests) an updated bo
 
 6. **Update the 🧵 ARC MAP and 📚 CAPTURE INDEX.** Ask three questions, fast: **(a)** did any arc's piece-status change this session (a piece went 🔴→🟡→🟢, or a spine became coherent / dead-ended)? Flip the emoji + the one-line ARC STATUS, and keep the file:line evidence current. **(b)** Did anything get CAPTURED to a doc (a new decision, doctrine, concept, or recon)? Add ONE pointer row to the CAPTURE INDEX — *a capture without an index row is not done.* **(c)** Did anything new get DISCUSSED that isn't placed in an arc yet (an off-course/extra idea, or a conversation-only capture owed a home)? Drop it in the relevant arc's **OFF-COURSE / EXTRA** lane (or the index's ⚠️ conversation-only list) so it isn't re-derived next session. Rule: every arc-piece status and every index row traces to a file:line or doc section — **never populate from memory** (that is the stale-board trap this whole protocol exists to kill); mark ⚪ unverified instead of guessing. This is what makes the two structures self-maintaining instead of one-time.
 
-That's it. Six steps, a few minutes. The structure (§0–§7 headings + the 🧵 ARC MAP / 📚 CAPTURE INDEX sections) NEVER changes — you're only editing values. That's what makes it stop "changing every session": the shape is permanent, the contents are live.
+7. **Reconcile `docs/built-inventory.md` (only if a capability was built/changed/removed this session) — the same self-maintaining move as step 6, applied to "what exists."** For each capability touched: (a) it has a BODY entry reflecting CURRENT state (findable by capability, not just a changelog line on line 4), (b) the entry matches the code with **audit winning on conflict** (describe what IS), (c) a capability built with NO body entry = DRIFT → create it before close, and (d) bump `Last updated:` on line 4 to today. Same "trace to file:line / code, never from memory" rule as step 6 — built-inventory is the ARC MAP's twin for capability existence, and it drifts the same way if not walked. **This is the GATE below, folded into the walk so it is executed every close, not left as a section to remember.** Full statement of force + relationship to the Thunder Step-17 checklist and CLAUDE.md §9: see **GATE — BUILT-INVENTORY RECONCILIATION** below.
+
+That's it. Seven steps, a few minutes. The structure (§0–§7 headings + the 🧵 ARC MAP / 📚 CAPTURE INDEX sections + the reconciliation gate) NEVER changes — you're only editing values. That's what makes it stop "changing every session": the shape is permanent, the contents are live.
 
 ---
 
@@ -50,6 +52,20 @@ Thunder has its own session-end handoff (CLAUDE.md Part 9 / drift protocol). Kee
 - Decisions Lightning captured this session that affect code → ensure they land in CLAUDE.md / the specs so Thunder sees them.
 - Deep docs Lightning produced (specs/findings) → Thunder commits them to the repo; bootstrap §7 points at the committed path.
 - The bootstrap is Lightning's front door; CLAUDE.md is Thunder's. They reference the same reference library.
+
+---
+
+## GATE — BUILT-INVENTORY RECONCILIATION (mandatory every close, not optional)
+
+Every session that **builds, changes, or removes a capability** MUST reconcile `docs/built-inventory.md` before the close is complete. This is a GATE, not a courtesy: `built-inventory.md` is the source-of-truth answer to "what exists." Drift here corrupts every future session's orientation — a stale or missing entry is how the next session rebuilds something that already ships. **A close-out is NOT complete until built-inventory reconciles. Same enforcement weight as STEP 0 (the session-open staleness check) and the two-bar rule (BUILDER-COMPLETE vs OWNER-PROVEN).**
+
+For **each capability touched this session**, confirm all three:
+
+1. **Entry reflects CURRENT state.** `built-inventory.md` has a body entry describing the capability's actual state (built / wired / proven), with `Last updated:` on line 4 bumped to today. The top-of-file changelog line is NOT sufficient on its own — the capability needs a body entry a future session can find by capability, not by date.
+2. **Entry matches the CODE, and audit wins on conflict.** Where the entry and the actual code disagree, the code is truth — fix the entry to describe what IS, not what was planned or claimed. `built-inventory.md` describes reality, not intent.
+3. **No silent drift.** If a capability was built this session but has NO body entry → that is DRIFT → create the entry before close. A capability that ships without a findable entry is an INCOMPLETE task.
+
+**Relationship to the other end-of-session doc:** the authoritative Thunder close-out checklist (`docs/end-of-session-protocol.md`, Step 17) already requires the built-inventory write-back; this gate is its standing statement of *force* — reconciliation is mandatory, audit-derived, and drift-detecting, not a best-effort. The two agree; if they ever diverge, the code (audit) wins, then both docs get corrected. CLAUDE.md §9 carries the binding STANDING INSTRUCTION and cross-refs this gate.
 
 ---
 
