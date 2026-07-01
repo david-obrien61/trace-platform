@@ -6,10 +6,21 @@
  *              by delivery_date, soonest day forward. The hub that closes the loop:
  *              snap invoice → schedule → delivery shows under its DAY here → tap
  *              "Route this day" → it plots on the existing DeliveryRoute map.
+ *              Each card carries an inline date-edit (v1, 2026-07-01): move a delivery
+ *              to a working day (e.g. off a Sunday) → RLS UPDATE of delivery_date →
+ *              re-groups under the new day. Data KEPT, never deleted. Consolidating two
+ *              deliveries onto one day feeds the multi-stop "Route this day" map.
  * DEPENDENCIES supabase client; the `deliveries` table (+ customers join for names).
  *              Reached from the dashboard delivery_routing tile (→ /delivery-schedule).
  *              Routes a day via /deliveries?date=YYYY-MM-DD (DeliveryRoute reused).
- * OUTPUTS      Read-only list; navigation to the route map per day.
+ *              Date-edit is a client-side RLS UPDATE (deliveries_owner_all /
+ *              deliveries_member_all, FOR ALL, business_id-scoped) — no endpoint.
+ * OUTPUTS      Day-grouped list; per-card date-edit; navigation to the route map per day.
+ *
+ * GAP (future ticket — do NOT build here): a business "working days" setting would let
+ * the invoice router flag/validate a scheduled non-working day (it scheduled a Sunday
+ * delivery with no warning) and suggest the nearest working day — connects to the
+ * MASTER_BRIEF suggestion-engine. v1 relies on the shown day-of-week; David moves manually.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -64,6 +75,7 @@ export function DeliverySchedule() {
   const [rows, setRows]       = useState<DeliveryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!businessId) return;
@@ -88,6 +100,25 @@ export function DeliverySchedule() {
     setRows(list);
     setLoading(false);
     if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] day view loaded —', list.length, 'scheduled deliveries');
+  }
+
+  // Move a delivery to a different day (e.g. off a Sunday). A pure delivery_date UPDATE —
+  // data KEPT, never deleted. RLS (deliveries_*_all, FOR ALL, business_id-scoped) permits
+  // this under the owner/member's own session; no endpoint or service key. Empty → null
+  // (undated). Re-load() re-buckets the row under its new day automatically.
+  async function editDate(d: DeliveryRow, newVal: string) {
+    const next = newVal || null;
+    if (next === d.delivery_date) return; // no change → no write
+    setSavingId(d.id);
+    const { error: err } = await supabase
+      .from('deliveries')
+      .update({ delivery_date: next })
+      .eq('id', d.id)
+      .eq('business_id', businessId!);
+    if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] date edit', { id: d.id, from: d.delivery_date, to: next, error: err?.message ?? null });
+    if (err) { setError(err.message); setSavingId(null); return; }
+    await load();
+    setSavingId(null);
   }
 
   // Group by delivery_date, soonest day forward (undated grouped last).
@@ -206,6 +237,26 @@ export function DeliverySchedule() {
                           <span style={{ fontSize: '0.75rem', color: GRAY }}>{d.customers.phone}</span>
                         </div>
                       )}
+
+                      {/* Inline date-edit — move this delivery to a working day (data kept). */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
+                        <Calendar size={13} color={GREEN} />
+                        <input
+                          type="date"
+                          value={d.delivery_date ?? ''}
+                          disabled={savingId === d.id}
+                          onChange={e => { void editDate(d, e.target.value); }}
+                          aria-label="Delivery date"
+                          style={{
+                            border: '1px solid #d1d5db', borderRadius: 6, padding: '5px 9px',
+                            fontSize: '0.8125rem', color: DARK, outline: 'none',
+                            background: savingId === d.id ? '#f3f4f6' : '#fff',
+                          }}
+                        />
+                        {savingId === d.id && (
+                          <span style={{ fontSize: '0.75rem', color: GRAY }}>Moving…</span>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
