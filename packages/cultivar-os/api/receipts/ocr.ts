@@ -106,8 +106,38 @@ Rules:
 - For amounts: numeric values only — no currency symbols, no commas.
 - Return ONLY the JSON object. No explanation, no markdown fences, no commentary.`;
 
-type OcrShape = 'receipt' | 'invoice';
-function promptForShape(shape: OcrShape): string {
+// ASSET shape — identify a physical asset from a PHOTO (not a document) and
+// estimate its worth. Unlike receipt/invoice, VALUE here is deliberately an
+// ESTIMATE (there is no printed number on a tractor) — that is exactly why the
+// caller lands it at cost_confidence=ESTIMATED and lets the owner confirm.
+// `categoryHint` is the ONLY vertical-specific input: the caller passes its own
+// vocabulary (nursery vs auto categories) so the function itself stays
+// vertical-agnostic (AC-1 — no vertical noun baked into the shared seam).
+function assetPrompt(categoryHint?: string): string {
+  const vocab = (categoryHint && categoryHint.trim())
+    ? categoryHint.trim()
+    : 'equipment, vehicle-fuel, supplies, materials, repairs, other';
+  return `You are an asset appraiser looking at a PHOTO of a single physical business asset (a tool, machine, vehicle, piece of equipment, or similar).
+
+Return a JSON object with these exact fields (use null for any field you cannot determine from the photo):
+{
+  "name": "string — a short specific name for the asset, including make/model if legible (e.g. 'Mahindra 1626 tractor', 'DeWalt cordless drill'), or a plain description if the brand is unreadable",
+  "category": "string — best fit from: ${vocab}",
+  "estimated_value": number or null — your best estimate of the asset's current used market value in US dollars (numeric only, no currency symbol). Null ONLY if you truly cannot tell what the asset is,
+  "confidence": "string — HIGH, MEDIUM, or LOW: how confident you are in the value estimate given photo clarity and how identifiable the asset is"
+}
+
+Rules:
+- Identify the asset from what is VISIBLE. Read any legible brand/model plates.
+- estimated_value is an ESTIMATE of resale/used worth — this is expected and wanted; do NOT return null just because no price is printed. Return null ONLY when the object is unidentifiable.
+- Do not invent a brand or model that is not legible — describe it plainly instead.
+- Numeric value only — no currency symbols, no commas, no ranges (give a single best estimate).
+- Return ONLY the JSON object. No explanation, no markdown fences, no commentary.`;
+}
+
+type OcrShape = 'receipt' | 'invoice' | 'asset';
+function promptForShape(shape: OcrShape, categoryHint?: string): string {
+  if (shape === 'asset') return assetPrompt(categoryHint);
   return shape === 'invoice' ? INVOICE_PROMPT : PROMPT;
 }
 
@@ -275,11 +305,15 @@ export default async function handler(req: any, res: any) {
     return res.status(503).json({ ok: false, error: 'OCR unavailable — contact support' });
   }
 
-  const { businessId, userId, imageBase64, mimeType, fileSizeBytes } = req.body ?? {};
+  const { businessId, userId, imageBase64, mimeType, fileSizeBytes, categoryHint } = req.body ?? {};
   // shape selects the extraction prompt — 'receipt' (default, backward-compatible for all
-  // existing callers) or 'invoice' (Wave 2 superset). Same provider chain either way.
-  const shape: OcrShape = req.body?.shape === 'invoice' ? 'invoice' : 'receipt';
-  const activePrompt = promptForShape(shape);
+  // existing callers), 'invoice' (Wave 2 superset), or 'asset' (photo → {name, category,
+  // estimated_value, confidence}). Same provider chain either way. categoryHint is the
+  // caller's own category vocabulary, injected only for the asset shape (AC-1 vertical-agnostic).
+  const shape: OcrShape =
+    req.body?.shape === 'invoice' ? 'invoice' :
+    req.body?.shape === 'asset'   ? 'asset'   : 'receipt';
+  const activePrompt = promptForShape(shape, typeof categoryHint === 'string' ? categoryHint : undefined);
 
   if (!businessId || !userId || !imageBase64 || !mimeType) {
     return res.status(400).json({ error: 'businessId, userId, imageBase64, and mimeType are required' });

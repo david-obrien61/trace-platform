@@ -28,6 +28,7 @@ import { AddBusiness }       from './pages/AddBusiness';
 import { DiscoveryInspect }  from './pages/DiscoveryInspect';
 import { ReceiptKeeper }     from './pages/ReceiptKeeper';
 import { BusinessAssets }    from './pages/BusinessAssets';
+import { AssetCapture }      from './pages/AssetCapture';
 import { BusinessInventory } from './pages/BusinessInventory';
 import { InventoryCount }    from './pages/InventoryCount';
 import { CostToProduce }     from './pages/CostToProduce';
@@ -107,6 +108,7 @@ export function AppRouter() {
               A low-role member is redirected to /dashboard, so the cost SELECT never fires. */}
           <Route element={<PermissionRoute permission={VIEW_COSTS} />}>
             <Route path="/assets"            element={<BusinessAssets />} />
+            <Route path="/assets/capture"    element={<AssetCapture />} />
             <Route path="/inventory"         element={<BusinessInventory />} />
             <Route path="/inventory/count"   element={<InventoryCount />} />
             <Route path="/operating-costs"   element={<OperatingCosts />} />
