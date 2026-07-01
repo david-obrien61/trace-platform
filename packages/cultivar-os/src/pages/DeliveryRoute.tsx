@@ -49,24 +49,46 @@ const TRACE_DELIVERY = true;
 const MAPS_KEY = import.meta.env?.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 
 // Singleton client-side loader for the Maps JS API — one <script>, no new Vercel
-// function (api/ stays 12/12). Geocoder + Map + Marker all live in the core library.
+// function (api/ stays 12/12). The modern Maps JS loader is MODULAR: loading the core
+// bootstrap does NOT attach Geocoder/Map/Marker to google.maps. What the bootstrap DOES
+// give us is `google.maps.importLibrary(name)` — each caller awaits the specific library
+// it needs (geocoding, maps, marker) before constructing anything from it. So this loader
+// resolves once `importLibrary` is available; RouteMap awaits the libraries it uses.
 let mapsLoaderPromise: Promise<any> | null = null;
 function loadGoogleMaps(apiKey: string): Promise<any> {
   if (typeof window === 'undefined') return Promise.reject(new Error('no window'));
   const w = window as any;
-  if (w.google?.maps) return Promise.resolve(w.google.maps);
   if (mapsLoaderPromise) return mapsLoaderPromise;
+
   mapsLoaderPromise = new Promise((resolve, reject) => {
+    const ready = () => {
+      // Resolve on importLibrary (the modular entry point) — NOT on google.maps alone,
+      // which exists before any library is attached.
+      if (w.google?.maps?.importLibrary) { resolve(w.google.maps); return true; }
+      return false;
+    };
+    if (ready()) return;
+
+    const fail = (msg: string) => { mapsLoaderPromise = null; reject(new Error(msg)); };
+    const onLoad = () => { if (!ready()) fail('maps loaded but importLibrary missing'); };
+
+    // Reuse an existing tag (StrictMode double-mount / prior route) rather than duplicate it.
+    const existing = document.getElementById('gmaps-js') as HTMLScriptElement | null;
+    if (existing) {
+      existing.addEventListener('load', onLoad);
+      existing.addEventListener('error', () => fail('maps script load failed'));
+      return;
+    }
+
     const script = document.createElement('script');
     script.id = 'gmaps-js';
+    // `loading=async` makes `google.maps.importLibrary` available; libraries are pulled
+    // on demand via importLibrary, so no `&libraries=` list is needed here.
     script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&loading=async`;
     script.async = true;
     script.defer = true;
-    script.onload = () => {
-      if (w.google?.maps) resolve(w.google.maps);
-      else { mapsLoaderPromise = null; reject(new Error('maps loaded but google.maps missing')); }
-    };
-    script.onerror = () => { mapsLoaderPromise = null; reject(new Error('maps script load failed')); };
+    script.onload = onLoad;
+    script.onerror = () => fail('maps script load failed');
     document.head.appendChild(script);
   });
   return mapsLoaderPromise;
@@ -86,10 +108,11 @@ interface RouteStop { label: string; address: string; }
  * OUTPUTS: geocodes each address → numbered markers (⌂ = origin) → fits bounds. On
  *          ANY failure (no key, load error, every geocode misses) it degrades quietly
  *          to a muted note; the parent's URL-handoff card is always the fallback.
- * NOTE (standard-by-value): uses the classic `google.maps.Marker` for numbered labels
- *          — the newer AdvancedMarkerElement needs a mapId + marker library + more
- *          setup that buys nothing for v1 numbered pins. Divergence recorded here.
- * [TRACE:MAP] on the geocode + render path (STD-003, ON until owner-proven).
+ * NOTE (standard-by-value): loads Geocoder/Map/Marker via the modular `importLibrary`
+ *          (the current Maps JS pattern — core does NOT bundle them). Uses the classic
+ *          `Marker` (from the 'marker' library) for numbered labels — AdvancedMarkerElement
+ *          needs a mapId + more setup that buys nothing for v1 numbered pins. Divergence recorded.
+ * [TRACE:MAP] on the lib-ready → Geocoder-construct → geocode → render path (STD-003, ON until owner-proven).
  */
 function RouteMap({ apiKey, origin, stops }: { apiKey: string; origin: string; stops: RouteStop[] }) {
   const mapRef = React.useRef<HTMLDivElement | null>(null);
@@ -102,68 +125,82 @@ function RouteMap({ apiKey, origin, stops }: { apiKey: string; origin: string; s
     setNote('');
 
     async function run() {
-      let maps: any;
+      // ONE try/catch around the whole init: script load, library import, geocode, and
+      // render. ANY throw (incl. the old `Geocoder is not a constructor`) degrades to the
+      // error overlay + the URL-handoff card below — never a stuck "Loading map…" spinner.
       try {
-        maps = await loadGoogleMaps(apiKey);
+        const maps = await loadGoogleMaps(apiKey);
+        if (cancelled || !mapRef.current) return;
+
+        // Modular loader: AWAIT each library before touching its constructors. Importing
+        // these also populates the shared google.maps namespace (LatLngBounds, Polyline).
+        const [{ Geocoder }, { Map }, { Marker }] = await Promise.all([
+          maps.importLibrary('geocoding'),
+          maps.importLibrary('maps'),
+          maps.importLibrary('marker'),
+        ]);
+        if (TRACE_DELIVERY) console.log('[TRACE:MAP] geocoding lib ready');
+        if (cancelled || !mapRef.current) return;
+
+        const geocoder = new Geocoder();
+        if (TRACE_DELIVERY) console.log('[TRACE:MAP] Geocoder constructed OK');
+        const geocode = (address: string) => new Promise<any | null>((resolve) => {
+          geocoder.geocode({ address }, (results: any, gcStatus: string) => {
+            if (gcStatus === 'OK' && results && results[0]) resolve(results[0].geometry.location);
+            else { if (TRACE_DELIVERY) console.warn('[TRACE:MAP] geocode miss', { address, gcStatus }); resolve(null); }
+          });
+        });
+
+        // Ordered points: origin anchor first (⌂), then customer stops 1..N in route order.
+        const points: { marker: string; title: string; address: string; isOrigin: boolean }[] = [];
+        if (origin) points.push({ marker: '⌂', title: 'Start / return (business)', address: origin, isOrigin: true });
+        stops.forEach((s, i) => points.push({ marker: String(i + 1), title: `${i + 1}. ${s.label}`, address: s.address, isOrigin: false }));
+
+        if (TRACE_DELIVERY) console.log('[TRACE:MAP] geocoding', points.length, 'points', { hasOrigin: !!origin, stops: stops.length });
+
+        const located = await Promise.all(points.map(async p => ({ ...p, loc: await geocode(p.address) })));
+        if (cancelled || !mapRef.current) return;
+
+        const good = located.filter(p => p.loc);
+        if (good.length === 0) {
+          if (TRACE_DELIVERY) console.warn('[TRACE:MAP] no points geocoded — hiding map', { attempted: points.length });
+          if (!cancelled) { setStatus('error'); setNote('Couldn’t locate these addresses on the map — use the link below.'); }
+          return;
+        }
+
+        const map = new Map(mapRef.current, {
+          mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
+        });
+        const bounds = new maps.LatLngBounds();
+
+        good.forEach(p => {
+          new Marker({
+            position: p.loc,
+            map,
+            label: { text: p.marker, color: '#fff', fontWeight: '700', fontSize: '0.8125rem' },
+            title: p.title,
+          });
+          bounds.extend(p.loc);
+        });
+
+        // Connect the located points in order with a light polyline (the visual route line).
+        new maps.Polyline({
+          path: good.map(p => p.loc),
+          map, geodesic: false, strokeColor: GREEN, strokeOpacity: 0.7, strokeWeight: 3,
+        });
+
+        map.fitBounds(bounds, 48);
+        if (good.length === 1) map.setZoom(14);
+
+        if (!cancelled) {
+          setStatus('ready');
+          if (TRACE_DELIVERY) console.log('[TRACE:MAP] rendered', { located: good.length, missed: located.length - good.length });
+        }
       } catch (e) {
-        if (TRACE_DELIVERY) console.warn('[TRACE:MAP] maps script failed to load', e);
+        // Covers script-load failure AND the modular-loader trap (Geocoder/Map/Marker
+        // not yet in the namespace). Fall through to the working URL card — no dead spinner.
+        if (TRACE_DELIVERY) console.warn('[TRACE:MAP] map init failed — falling back to link', e);
         if (!cancelled) { setStatus('error'); setNote('Map unavailable — use the link below.'); }
-        return;
-      }
-      if (cancelled || !mapRef.current) return;
-
-      const geocoder = new maps.Geocoder();
-      const geocode = (address: string) => new Promise<any | null>((resolve) => {
-        geocoder.geocode({ address }, (results: any, gcStatus: string) => {
-          if (gcStatus === 'OK' && results && results[0]) resolve(results[0].geometry.location);
-          else { if (TRACE_DELIVERY) console.warn('[TRACE:MAP] geocode miss', { address, gcStatus }); resolve(null); }
-        });
-      });
-
-      // Ordered points: origin anchor first (⌂), then customer stops 1..N in route order.
-      const points: { marker: string; title: string; address: string; isOrigin: boolean }[] = [];
-      if (origin) points.push({ marker: '⌂', title: 'Start / return (business)', address: origin, isOrigin: true });
-      stops.forEach((s, i) => points.push({ marker: String(i + 1), title: `${i + 1}. ${s.label}`, address: s.address, isOrigin: false }));
-
-      if (TRACE_DELIVERY) console.log('[TRACE:MAP] geocoding', points.length, 'points', { hasOrigin: !!origin, stops: stops.length });
-
-      const located = await Promise.all(points.map(async p => ({ ...p, loc: await geocode(p.address) })));
-      if (cancelled || !mapRef.current) return;
-
-      const good = located.filter(p => p.loc);
-      if (good.length === 0) {
-        if (TRACE_DELIVERY) console.warn('[TRACE:MAP] no points geocoded — hiding map', { attempted: points.length });
-        if (!cancelled) { setStatus('error'); setNote('Couldn’t locate these addresses on the map — use the link below.'); }
-        return;
-      }
-
-      const map = new maps.Map(mapRef.current, {
-        mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
-      });
-      const bounds = new maps.LatLngBounds();
-
-      good.forEach(p => {
-        new maps.Marker({
-          position: p.loc,
-          map,
-          label: { text: p.marker, color: '#fff', fontWeight: '700', fontSize: '0.8125rem' },
-          title: p.title,
-        });
-        bounds.extend(p.loc);
-      });
-
-      // Connect the located points in order with a light polyline (the visual route line).
-      new maps.Polyline({
-        path: good.map(p => p.loc),
-        map, geodesic: false, strokeColor: GREEN, strokeOpacity: 0.7, strokeWeight: 3,
-      });
-
-      map.fitBounds(bounds, 48);
-      if (good.length === 1) map.setZoom(14);
-
-      if (!cancelled) {
-        setStatus('ready');
-        if (TRACE_DELIVERY) console.log('[TRACE:MAP] rendered', { located: good.length, missed: located.length - good.length });
       }
     }
 
