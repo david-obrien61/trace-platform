@@ -323,6 +323,22 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
 
+### 2026-07-01 — THUNDER CUSTOMERS ROSTER: `/customers` list via the shared `DataSheet<T>` engine (3rd consumer) + inline edit + owner-gated delivery-card link (BUILDER-COMPLETE, owner-proof owed; ledger #81)
+
+**Type:** RECON-FIRST (read-only 3-front recon → David chose Option A over an inline edit-modal, which this SUBSUMES) → APP CODE ONLY. 1 new page + 3 wiring edits. **NO migration, NO schema gate, NO new dep, NO Vercel function, owner-only RLS (no policy change).** `npm run verify` exit 0 zero NET-NEW (tsc 10 / eslint 262 / knip 10·14·15); matrix green incl. #n/#a/#e; `build:cultivar` clean 2244 modules (+2). **Uncommitted — David commits** (harness rule). `[TRACE:customers]` ON (standing hold).
+
+**RECON (reported, David decided):** the `DataSheet<T>` engine (`packages/cultivar-os/src/components/datasheet/DataSheet.tsx`) is genuinely generic (presentation-only, zero table coupling) — assets proved config-only. `customers` is a clean live-only table (tech-debt #39 pre-exists; a datasheet needs NO migration → no added debt). Three wrinkles that shaped scope: (1) RLS is OWNER-ONLY (`customers_business_owner`, FOR ALL) → gate `owner-only`, NOT a `manage_customers` chip (doesn't exist; would open nav onto an empty staff RLS wall — Gate-3 lesson); (2) person spine is RLS-blocked for the owner (`people_self_all`, auth_user_id-keyed) → v1 = customers table only, person spine deferred; (3) nav belongs in its own node, NOT under Operating Costs (that's `view_costs`-gated).
+
+**BUILT (Option A, mirrors `BusinessAssets` minus the `node_type` guard):**
+- **`pages/Customers.tsx` (NEW, `/customers`)** — `DataSheet<CustomerRow>` roster + inline-edit. Owner-scoped SELECT on `customers` (`business_id`, created_at desc); per-field immediate RLS UPDATE (`.eq('id').eq('business_id')`, reload after each) on first_name (never blank — identity) / last_name (NOT NULL → '' on clear) / phone / email / address_line1 / city / state / zip. Display-only: tier, source, QuickBooks ("Synced"), added; person_id hidden. Add-Customer bottom sheet → direct `insert` `source='manual'`. Source quick-filter + global search + hide-columns inherited from the engine.
+- **`registry/tileRegistry.ts`** — new `customers` tile (`vertical:general`, `placement:dashboard`, `required_permission:'owner-only'`, `route:'/customers'`, group `crm`, icon `Users`) + standalone `nav_customers` NAV_IA node under `sec_dashboard` (inherits owner-only from the tile).
+- **`router.tsx`** — `/customers` added to the existing owner-only `PermissionRoute` group (beside `/costs`). Both layers agree with the owner-only RLS.
+- **`pages/DeliverySchedule.tsx`** — each card gains an owner-gated (`isOwner`) "Edit customer →" link → `/customers` (subsumes the inline-modal idea; owner-gated so staff never hit the RLS wall).
+
+**AC held:** AC-1 (generic `customers` columns, no vertical noun) / AC-2 / AC-3 (owner-only, tenant-scoped). One engine, three configs (inventory · assets · customers) = AC-4 settle-once. Semantic-dup (§6 r8): reused the DataSheet engine + cells wholesale, no new grid code.
+
+**OWNER-PROVEN owed (David, live under RLS):** `/customers` shows the roster (all customers created via OCR-invoice + QR checkout + any added by hand) → inline-edit a name/phone → persists → reflects on that customer's deliveries via the `deliveries→customers` join → sort/search/hide-columns work → "Edit customer →" from a delivery card lands on the roster → a Staff session cannot reach `/customers` (redirected) and sees no Customers tile/nav. `[TRACE:customers]` stays ON until owner-proven.
+
 ### 2026-07-01 — THUNDER ASSET-CAPTURE TOOL v1: two-door capture → Vision value → real `cost_objects` ASSET row (general-layer primitive; BUILDER-COMPLETE, migration GATED + owner-proof owed; ledger #76)
 
 **Type:** RECON-FIRST (5 findings, STOPPED for David's go) → app code + **ONE GATED migration** (David applies as postgres — schema-verification gate OWED). **David's two calls (AskUserQuestion):** (1) value field model = **TWO fields** (add `estimated_value`, migration); (2) Andrew's `origin/assets` branch = **REBUILD fresh**, retire the branch. `npm run verify` exit 0 zero NET-NEW (tsc 10 / eslint 266 / knip 10·14·15); `build:cultivar` clean 2242 modules (+4 files). **Uncommitted — David commits** (harness rule). `[TRACE:ASSET]` ON (standing hold).
@@ -1372,7 +1388,7 @@ packages/shared/src/
 - ~~nursery_modules RLS policy authenticated_select_nursery_modules~~ — retired 2026-06-04, replaced by business_modules membership-scoped policy
 - main branch — multi-tenant-extraction was merged 2026-06-03. All work now goes directly to main or feature branches as appropriate.
 
-**STANDING INSTRUCTION (owner, do NOT cross without David):** TRACE instrumentation `[TRACE:*]` is ON by OWNER instruction — do NOT comment out or delete any emit until David explicitly lifts it. This OVERRIDES the STD-003 post-OWNER-PROVEN comment-out default. Applies to `[TRACE:COST]`, `[TRACE:SEAM]`, `[TRACE:opcosts]`, `[TRACE:PROJECTLENS]`, `[TRACE:ROLECFG]`, `[TRACE:HEADER]`, `[TRACE:NAV]`, and any new area.
+**STANDING INSTRUCTION (owner, do NOT cross without David):** TRACE instrumentation `[TRACE:*]` is ON by OWNER instruction — do NOT comment out or delete any emit until David explicitly lifts it. This OVERRIDES the STD-003 post-OWNER-PROVEN comment-out default. Applies to `[TRACE:COST]`, `[TRACE:SEAM]`, `[TRACE:opcosts]`, `[TRACE:PROJECTLENS]`, `[TRACE:ROLECFG]`, `[TRACE:HEADER]`, `[TRACE:NAV]`, `[TRACE:customers]`, and any new area.
 
 ---
 
