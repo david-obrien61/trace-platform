@@ -4,9 +4,11 @@
 //               David expect (every customer created via OCR-invoice capture, QR checkout, or
 //               added directly here) AND the inline-edit surface, in one. Runs through the SAME
 //               shared <DataSheet> engine /inventory + /assets use (the 3rd consumer — one
-//               engine, three configs; AC-4 settle-once). This SUBSUMES the earlier
-//               edit-modal-from-a-delivery-card idea: editing a customer happens inline on this
-//               roster; the delivery card just links in.
+//               engine, three configs; AC-4 settle-once). Reached via its owner-only nav node.
+//               The Add-Customer sheet and inline edits now share their form body
+//               (<CustomerFields>) and their coercion/write rules (customerEdit.ts) with the
+//               in-context CustomerEditModal a delivery card opens — one form, one rule set,
+//               no drift.
 // SCOPE (v1):   customers table ONLY. The person spine (customers.person_id → people) is DEFERRED
 //               — it stays populated-on-create by the OCR/service-key path and needs nothing from
 //               this list; people RLS (people_self_all, auth_user_id-keyed) blocks an owner from
@@ -32,12 +34,12 @@ import {
   DataSheet, TextCell, sheetStyles as SS,
   type DataSheetColumn,
 } from '../components/datasheet/DataSheet';
-
-// customers.first_name / last_name are NOT NULL (last_name defaults to ''); these must never
-// be written null. Everything else is nullable → blank clears to null.
-type NotNullField = 'first_name' | 'last_name';
-type TextField = NotNullField | 'phone' | 'email' | 'address_line1' | 'city' | 'state' | 'zip';
-const NOT_NULL: NotNullField[] = ['first_name', 'last_name'];
+import {
+  CustomerFields, EMPTY_CUSTOMER_FORM, type CustomerFormState,
+} from '../components/customers/CustomerFields';
+import {
+  coerceCustomerField, persistCustomerField, type CustomerTextField,
+} from '../components/customers/customerEdit';
 
 const SOURCE_LABEL: Record<string, string> = {
   'qr-scan':     'QR checkout',
@@ -61,15 +63,6 @@ interface CustomerRow {
   created_at: string;
 }
 
-interface FormState {
-  first_name: string; last_name: string; phone: string; email: string;
-  address_line1: string; city: string; state: string; zip: string;
-}
-const EMPTY_FORM: FormState = {
-  first_name: '', last_name: '', phone: '', email: '',
-  address_line1: '', city: '', state: 'TX', zip: '',
-};
-
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
@@ -84,7 +77,7 @@ export function Customers() {
   const [listError, setListError] = useState<string | null>(null);
 
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [form, setForm] = useState<CustomerFormState>(EMPTY_CUSTOMER_FORM);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -109,26 +102,22 @@ export function Customers() {
     void loadCustomers();
   }, [businessId, loadCustomers]);
 
-  // ── Inline edit: one immediate write per field, RLS-scoped (owner-only). ──
-  async function writeCustomer(c: CustomerRow, patch: Record<string, unknown>, field: string, to: unknown) {
-    const from = (c as unknown as Record<string, unknown>)[field];
-    console.log('[TRACE:customers] edit', { customerId: c.id, field, from, to });
-    const { error } = await supabase
-      .from('customers')
-      .update(patch)
-      .eq('id', c.id)
-      .eq('business_id', businessId);
-    if (error) { console.error('[TRACE:customers] edit error', field, error.message); setListError(error.message); return; }
-    await loadCustomers();
-  }
-
-  function onText(c: CustomerRow, field: TextField, raw: string | null) {
-    const trimmed = (raw ?? '').trim();
-    const notNull = (NOT_NULL as string[]).includes(field);
-    if (field === 'first_name' && trimmed === '') return; // first_name is the identity — never blank
-    const value = trimmed === '' ? (notNull ? '' : null) : trimmed;
-    if (value === (c as unknown as Record<string, unknown>)[field]) return;
-    void writeCustomer(c, { [field]: value }, field, value);
+  // ── Inline edit: one immediate write per field, RLS-scoped (owner-only). Shares the exact
+  //    coercion + write rules with CustomerEditModal via customerEdit.ts (no drift). Kept
+  //    sync (void return) so the TextCell onCommit callbacks stay void-returning. ──
+  function onText(c: CustomerRow, field: CustomerTextField, raw: string | null) {
+    if (!businessId) return;
+    const bid = businessId;
+    const r = coerceCustomerField(c as unknown as Record<string, unknown>, field, raw);
+    if (r.skip) return;
+    void (async () => {
+      const res = await persistCustomerField({
+        id: c.id, businessId: bid, field,
+        from: (c as unknown as Record<string, unknown>)[field], value: r.value,
+      });
+      if (res.error) { setListError(res.error); return; }
+      await loadCustomers();
+    })();
   }
 
   // ── Column config ──
@@ -160,7 +149,7 @@ export function Customers() {
   ];
 
   // ── Add-Customer form (create path — direct insert, source='manual') ──
-  function set(field: keyof FormState, value: string) {
+  function set(field: keyof CustomerFormState, value: string) {
     setForm(f => ({ ...f, [field]: value }));
   }
   async function handleSubmit(e: React.FormEvent) {
@@ -184,7 +173,7 @@ export function Customers() {
     const { error } = await supabase.from('customers').insert(payload);
     if (error) { console.error('[TRACE:customers] insert error', error.message); setSaveError(error.message); setSaving(false); return; }
     console.log('[TRACE:customers] insert ok');
-    setSaveSuccess(true); setSaving(false); setForm(EMPTY_FORM);
+    setSaveSuccess(true); setSaving(false); setForm(EMPTY_CUSTOMER_FORM);
     setTimeout(() => { setShowForm(false); setSaveSuccess(false); void loadCustomers(); }, 900);
   }
 
@@ -225,44 +214,7 @@ export function Customers() {
             {saveError && <div style={SS.error}>{saveError}</div>}
             {saveSuccess && <div style={SS.success}>Customer saved.</div>}
             <form onSubmit={e => { void handleSubmit(e); }}>
-              <div style={{ ...SS.row2, ...SS.field }}>
-                <div>
-                  <label style={SS.label}>First name *</label>
-                  <input style={SS.input} value={form.first_name} onChange={e => set('first_name', e.target.value)} placeholder="e.g. Marcus" required />
-                </div>
-                <div>
-                  <label style={SS.label}>Last name</label>
-                  <input style={SS.input} value={form.last_name} onChange={e => set('last_name', e.target.value)} placeholder="e.g. Webb" />
-                </div>
-              </div>
-              <div style={{ ...SS.row2, ...SS.field }}>
-                <div>
-                  <label style={SS.label}>Phone</label>
-                  <input style={SS.input} value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="Optional" />
-                </div>
-                <div>
-                  <label style={SS.label}>Email</label>
-                  <input style={SS.input} type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="Optional" />
-                </div>
-              </div>
-              <div style={SS.field}>
-                <label style={SS.label}>Address</label>
-                <input style={SS.input} value={form.address_line1} onChange={e => set('address_line1', e.target.value)} placeholder="Street address" />
-              </div>
-              <div style={{ ...SS.row3, ...SS.field }}>
-                <div>
-                  <label style={SS.label}>City</label>
-                  <input style={SS.input} value={form.city} onChange={e => set('city', e.target.value)} placeholder="City" />
-                </div>
-                <div>
-                  <label style={SS.label}>State</label>
-                  <input style={SS.input} value={form.state} onChange={e => set('state', e.target.value)} placeholder="TX" />
-                </div>
-                <div>
-                  <label style={SS.label}>ZIP</label>
-                  <input style={SS.input} value={form.zip} onChange={e => set('zip', e.target.value)} placeholder="ZIP" />
-                </div>
-              </div>
+              <CustomerFields values={form} onChange={set} requireFirstName />
               <button type="submit" style={saving ? SS.submitBtnDisabled : SS.submitBtn} disabled={saving}>
                 {saving ? 'Saving…' : 'Save Customer'}
               </button>

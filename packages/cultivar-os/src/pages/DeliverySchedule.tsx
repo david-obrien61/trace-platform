@@ -15,7 +15,9 @@
  *              Routes a day via /deliveries?date=YYYY-MM-DD (DeliveryRoute reused).
  *              Date-edit is a client-side RLS UPDATE (deliveries_owner_all /
  *              deliveries_member_all, FOR ALL, business_id-scoped) — no endpoint.
- * OUTPUTS      Day-grouped list; per-card date-edit; navigation to the route map per day.
+ * OUTPUTS      Day-grouped list; per-card date-edit; per-card in-context "Edit customer"
+ *              (owner-only CustomerEditModal, opens over this page — no re-nav to the roster);
+ *              navigation to the route map per day.
  *
  * GAP (future ticket — do NOT build here): a business "working days" setting would let
  * the invoice router flag/validate a scheduled non-working day (it scheduled a Sunday
@@ -27,6 +29,7 @@ import { useNavigate } from 'react-router-dom';
 import { Truck, MapPin, Navigation, Phone, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
+import { CustomerEditModal, type EditableCustomer } from '../components/customers/CustomerEditModal';
 
 const TRACE_DELIVERY = true; // [TRACE:DELIVERY] STD-003 — ON until David owner-proves
 
@@ -37,6 +40,7 @@ const DARK  = '#111827';
 
 interface DeliveryRow {
   id: string;
+  customer_id: string | null;
   delivery_date: string | null;
   address_line1: string | null;
   city: string | null;
@@ -45,7 +49,12 @@ interface DeliveryRow {
   status: string | null;
   service_type: string | null;
   notes: string | null;
-  customers: { first_name: string; last_name: string; phone: string | null } | null;
+  // Widened (3a) to the 8 editable fields so "Edit customer" opens the full customer
+  // object with zero extra round-trip.
+  customers: {
+    first_name: string; last_name: string; phone: string | null; email: string | null;
+    address_line1: string | null; city: string | null; state: string | null; zip: string | null;
+  } | null;
 }
 
 const SERVICE_TYPE_LABEL: Record<string, string> = {
@@ -76,6 +85,7 @@ export function DeliverySchedule() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<EditableCustomer | null>(null);
 
   useEffect(() => {
     if (!businessId) return;
@@ -87,8 +97,8 @@ export function DeliverySchedule() {
     const { data, error: err } = await supabase
       .from('deliveries')
       .select(`
-        id, delivery_date, address_line1, city, state, zip, status, service_type, notes,
-        customers ( first_name, last_name, phone )
+        id, customer_id, delivery_date, address_line1, city, state, zip, status, service_type, notes,
+        customers ( first_name, last_name, phone, email, address_line1, city, state, zip )
       `)
       .eq('business_id', businessId!)
       .neq('status', 'cancelled')
@@ -119,6 +129,32 @@ export function DeliverySchedule() {
     if (err) { setError(err.message); setSavingId(null); return; }
     await load();
     setSavingId(null);
+  }
+
+  // Open the in-context customer editor (owner-only, mounted below). Builds the EditableCustomer
+  // straight from the widened join (3a) — no extra round-trip, no re-nav off this route page.
+  function openEditor(d: DeliveryRow) {
+    if (!d.customer_id || !d.customers) return;
+    const c = d.customers;
+    setEditing({
+      id: d.customer_id,
+      first_name: c.first_name, last_name: c.last_name,
+      phone: c.phone, email: c.email,
+      address_line1: c.address_line1, city: c.city, state: c.state, zip: c.zip,
+    });
+  }
+
+  // Reflect a persisted customer edit onto every card sharing that customer — no reload, no re-nav.
+  function onCustomerEdited(u: EditableCustomer) {
+    setEditing(u);
+    setRows(prev => prev.map(r =>
+      r.customer_id === u.id && r.customers
+        ? { ...r, customers: {
+            first_name: u.first_name, last_name: u.last_name, phone: u.phone, email: u.email,
+            address_line1: u.address_line1, city: u.city, state: u.state, zip: u.zip,
+          } }
+        : r,
+    ));
   }
 
   // Group by delivery_date, soonest day forward (undated grouped last).
@@ -258,11 +294,12 @@ export function DeliverySchedule() {
                         )}
                       </div>
 
-                      {/* Edit customer → the owner-only roster (owner-gated so staff never hit the
-                          owner-only /customers RLS wall). Subsumes the inline edit-modal idea. */}
-                      {isOwner && d.customers && (
+                      {/* Edit customer → in-context modal over THIS page (owner-gated so staff
+                          never hit the owner-only customers RLS wall). Opens the full customer
+                          object from the widened join; close → stay on the same route, no re-nav. */}
+                      {isOwner && d.customer_id && d.customers && (
                         <button
-                          onClick={() => navigate('/customers')}
+                          onClick={() => openEditor(d)}
                           style={{
                             marginTop: 8, background: 'none', border: 'none', padding: 0,
                             color: GREEN, fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer',
@@ -293,6 +330,16 @@ export function DeliverySchedule() {
           </button>
         )}
       </div>
+
+      {/* In-context customer editor (owner-only). Opens over this route page; per-field-on-blur
+          persist shared with the /customers roster; edits reflect on the cards, no re-nav. */}
+      {editing && (
+        <CustomerEditModal
+          customer={editing}
+          onEdited={onCustomerEdited}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </div>
   );
 }
