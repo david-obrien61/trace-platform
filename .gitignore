@@ -17,3 +17,6 @@ scratch/
 .claude/settings.json
 # Personal-financial / personal-sensitive decisions — never commit (family reads the repo)
 decisions/PERSONAL-FINANCIAL.local.md
+
+# Generated QR test artifacts — do not clutter root (fixture-picker-shrub-QR.png etc.)
+*-QR.png
