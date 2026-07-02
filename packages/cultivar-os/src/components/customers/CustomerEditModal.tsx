@@ -8,8 +8,10 @@
 //               rules, zero drift.
 // WRITE MODEL:  per-field-on-blur (mirrors the roster inline edit; no Save button). Each field
 //               commits via persistCustomerField (owner-only RLS UPDATE, .eq id .eq business).
-// DEPENDENCIES: useBusinessContext (businessId → RLS scope), sheetStyles (SS) modal/sheet
-//               container, CustomerFields, coerceCustomerField/persistCustomerField.
+// DEPENDENCIES: useBusinessContext (businessId → RLS scope), sheetStyles (SS) for the
+//               header/error/hint tokens + a LOCAL centered-dialog overlay (NOT the SS
+//               bottom-sheet — see the overlay/dialog note below), CustomerFields,
+//               coerceCustomerField/persistCustomerField.
 // GATE:         OWNER-ONLY — mounted only when isOwner && the delivery has a customer (see
 //               DeliverySchedule). customers RLS is owner-only (FOR ALL) → staff never open it.
 // FORWARD FIT:  Enhancement 2's map-pin "Edit customer" popup opens THIS SAME component, so a
@@ -41,6 +43,22 @@ interface Props {
   /** Notified after each successful field write so the parent can reflect it (e.g. the card). */
   onEdited?: (updated: EditableCustomer) => void;
 }
+
+// CENTERED dialog (not the shared SS.modal/SS.sheet BOTTOM-SHEET — that pins to the viewport
+// bottom and ran the ZIP row + footer past the fold on desktop). Overlay flex-centers vertically
+// AND horizontally with a 16px margin so the whole form (through the footer) is in view at once;
+// the dialog caps at 85vh with internal scroll so nothing ever clips. Works desktop + mobile.
+// (The roster/inventory/assets Add sheets keep the deliberate bottom-sheet — SS untouched.)
+const overlay: React.CSSProperties = {
+  position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  zIndex: 100, padding: 16,
+};
+const dialog: React.CSSProperties = {
+  background: '#fff', borderRadius: 16, padding: '1.5rem',
+  width: '100%', maxWidth: 640, maxHeight: '85vh', overflowY: 'auto',
+  boxShadow: '0 10px 40px rgba(0,0,0,0.25)',
+};
 
 export function CustomerEditModal({ customer, onClose, onEdited }: Props) {
   const { businessId } = useBusinessContext();
@@ -74,8 +92,8 @@ export function CustomerEditModal({ customer, onClose, onEdited }: Props) {
   }
 
   return (
-    <div style={SS.modal} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={SS.sheet}>
+    <div style={overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={dialog}>
         <div style={SS.sheetHeader}>
           <h2 style={{ ...SS.sectionTitle, margin: 0 }}>Edit customer</h2>
           <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }} onClick={onClose}>
