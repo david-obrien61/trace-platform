@@ -20,3 +20,10 @@ decisions/PERSONAL-FINANCIAL.local.md
 
 # Generated QR test artifacts — do not clutter root (fixture-picker-shrub-QR.png etc.)
 *-QR.png
+
+# TypeScript incremental-build artifacts — never commit
+*.tsbuildinfo
+
+# Cost diagnostic scratch output — capture-cost-before.ts writes here so it can never
+# clobber the committed proof anchors (BEFORE-NUMBER / AFTER-FLIP snapshots)
+docs/cost-to-produce/.scratch/

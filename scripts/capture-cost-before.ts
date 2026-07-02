@@ -126,7 +126,11 @@ async function main() {
   }
 
   const outDir = join(repoRoot, 'docs/cost-to-produce');
-  mkdirSync(outDir, { recursive: true });
+  // Diagnostic OUTPUT goes to a gitignored scratch dir so re-running this script can NEVER
+  // clobber the committed proof anchors (BEFORE-NUMBER / AFTER-FLIP). Anchor READS still come
+  // from outDir (the committed, locked files); only WRITES are redirected here.
+  const scratchDir = join(outDir, '.scratch');
+  mkdirSync(scratchDir, { recursive: true });
 
   // D-12 STEP 3 labor-stage modes (do NOT touch the unified-model BEFORE/AFTER-FLIP snapshots):
   //   LABOR_STAGE=3a → record the guard-DORMANT baseline (no labor row seeded yet).
@@ -134,8 +138,8 @@ async function main() {
   //                    known must be byte-identical (the guard prevented the R2 double-count).
   const stage = process.env.LABOR_STAGE;
   if (stage === '3a' || stage === '3b') {
-    const baseFile  = join(outDir, 'LABOR-3a-snapshot.json');
-    const stageFile = join(outDir, `LABOR-${stage}-snapshot.json`);
+    const baseFile  = join(scratchDir, 'LABOR-3a-snapshot.json');
+    const stageFile = join(scratchDir, `LABOR-${stage}-snapshot.json`);
     writeFileSync(stageFile, JSON.stringify(snapshot, null, 2) + '\n');
     if (stage === '3a') {
       console.log(`\n✓ STEP 3a baseline recorded (labor guard DORMANT — no labor cost_object) → ${stageFile}`);
@@ -154,8 +158,9 @@ async function main() {
   }
 
   // Legacy unified-model behavior (LABOR_STAGE unset): AFTER-FLIP vs locked BEFORE-NUMBER.
-  const afterFile = join(outDir, 'AFTER-FLIP-snapshot.json');
+  const afterFile = join(scratchDir, 'AFTER-FLIP-snapshot.json');
   writeFileSync(afterFile, JSON.stringify(snapshot, null, 2) + '\n');
+  // Read the LOCKED, committed anchor from outDir — never from scratch.
   const anchor: any[] = JSON.parse(readFileSync(join(outDir, 'BEFORE-NUMBER-snapshot.json'), 'utf8'));
   let failed = 0;
   for (const row of snapshot) {
