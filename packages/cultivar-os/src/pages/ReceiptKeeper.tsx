@@ -111,6 +111,7 @@ interface OcrResult {
 // Invoice fields surfaced for human validation before any write (D-9: validate-before-write)
 interface InvoiceFields {
   customerName: string;
+  customerKind: 'person' | 'organization'; // OCR-inferred; drives the create-path split (person → first/last, org → whole name)
   customerPhone: string;
   customerEmail: string;
   billLine1: string; billCity: string; billState: string; billZip: string;
@@ -119,7 +120,7 @@ interface InvoiceFields {
   deliveryDate: string;
 }
 const EMPTY_INVOICE: InvoiceFields = {
-  customerName: '', customerPhone: '', customerEmail: '',
+  customerName: '', customerKind: 'person', customerPhone: '', customerEmail: '',
   billLine1: '', billCity: '', billState: '', billZip: '',
   shipLine1: '', shipCity: '', shipState: '', shipZip: '',
   dueDate: '', deliveryDate: '',
@@ -266,6 +267,8 @@ export function ReceiptKeeper() {
       const p = data.parsed ?? {};
       const inv: InvoiceFields = {
         customerName:  p.customer_name  ?? '',
+        // OCR classifies person vs organization; default 'person' for any other/absent value.
+        customerKind:  p.customer_kind === 'organization' ? 'organization' : 'person',
         customerPhone: p.customer_phone ?? '',
         customerEmail: p.customer_email ?? '',
         billLine1: p.bill_to?.line1 ?? '', billCity: p.bill_to?.city ?? '', billState: p.bill_to?.state ?? '', billZip: p.bill_to?.zip ?? '',
@@ -299,6 +302,8 @@ export function ReceiptKeeper() {
       setCustomerWarn(null);
       setDeliveryResult(null);
       setDeliveryWarn(null);
+      if (TRACE_ROUTER) console.log('[TRACE:ROUTER] customer_kind classified:', inv.customerKind,
+        '— name:', inv.customerName || '(none)', '(raw customer_kind:', JSON.stringify(p.customer_kind) + ')');
       if (TRACE_ROUTER) console.log('[TRACE:ROUTER] inferred docType:', inferred,
         '— customer:', inv.customerName || '(none)',
         'hasAddress:', !!(inv.billLine1 || inv.shipLine1),
@@ -466,15 +471,21 @@ export function ReceiptKeeper() {
     // loses the captured document. A delivery needs a customer, so scheduling implies adding.
     const needCustomer = addCustomer || scheduleDelivery;
     if (needCustomer && invoice.customerName.trim() && businessId) {
-      const nameParts = invoice.customerName.trim().split(/\s+/);
-      const first_name = nameParts[0];
-      const last_name  = nameParts.slice(1).join(' '); // '' when single-word name (customers.last_name is NOT NULL)
+      // person  → keep the CURRENT split (first token / rest) — it works for people.
+      // organization → whole name in first_name, last_name='' (an org has no first/last),
+      //   and the endpoint SKIPS the people link (an HOA is not a person) via customer_type.
+      const wholeName = invoice.customerName.trim();
+      const isOrg = invoice.customerKind === 'organization';
+      const nameParts = wholeName.split(/\s+/);
+      const first_name = isOrg ? wholeName : nameParts[0];
+      const last_name  = isOrg ? '' : nameParts.slice(1).join(' '); // '' when single-word name (customers.last_name is NOT NULL)
       const custBody: any = {
         businessId,
         source: 'ocr-invoice',
         customer: {
           first_name,
           last_name,
+          customer_type: isOrg ? 'organization' : 'person',
           email:         invoice.customerEmail.trim() || null,
           phone:         invoice.customerPhone.trim() || null,
           address_line1: invoice.billLine1.trim() || invoice.shipLine1.trim() || null,
@@ -498,7 +509,7 @@ export function ReceiptKeeper() {
           notes: `Delivery for ${invoice.customerName.trim()}`,
         };
       }
-      if (TRACE_ROUTER) console.log('[TRACE:ROUTER] creating customer from invoice —', first_name, last_name ?? '', 'email:', custBody.customer.email ?? '(none)', 'withDelivery:', scheduleDelivery);
+      if (TRACE_ROUTER) console.log('[TRACE:ROUTER] creating customer from invoice —', isOrg ? 'ORG branch (whole name, no people link):' : 'PERSON branch (split + people link):', first_name, last_name ?? '', 'email:', custBody.customer.email ?? '(none)', 'withDelivery:', scheduleDelivery);
       if (scheduleDelivery && TRACE_DELIVERY) console.log('[TRACE:DELIVERY] scheduling in same call — date:', custBody.delivery.deliveryDate ?? '(none)', 'serviceType:', serviceType,
         'addr:', [custBody.delivery.address.line1, custBody.delivery.address.city, custBody.delivery.address.state, custBody.delivery.address.zip].filter(Boolean).join(', ') || '(none)');
       try {

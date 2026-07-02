@@ -1,0 +1,40 @@
+-- ============================================================================
+-- customers.customer_type — person vs organization classifier
+-- THUNDER · 2026-07-02 · Option A (customer name-split + org handling)
+--
+-- WHY: the OCR-invoice create path split every customer name on whitespace. That
+-- is correct for a person ("Robert Nguyen" → Robert / Nguyen) but nonsense for an
+-- organization ("Cedar Park HOA" → Cedar / "Park HOA"), and every org was ALSO
+-- wrongly inserted into the `people` spine (an HOA is not a person). This column
+-- lets the create path branch: person → split + people link (unchanged);
+-- organization → whole name in first_name, last_name='', NO people row.
+--
+-- SHAPE: additive, text, DEFAULT 'person', NO CHECK constraint (matches the
+-- customers.price_tier precedent in 20260625_person_spine.sql — the value-set
+-- grows without a migration, AC-4). Deploy-window safe: does NOT touch the
+-- existing NOT-NULL first_name/last_name columns; a pre-column deploy that omits
+-- customer_type simply defaults every row to 'person', its prior behavior.
+-- Values in use: person | organization.
+--
+-- David applies as postgres.
+-- ============================================================================
+ALTER TABLE customers
+  ADD COLUMN IF NOT EXISTS customer_type text NOT NULL DEFAULT 'person';
+
+-- ============================================================================
+-- VERIFICATION (run after apply)
+-- ============================================================================
+-- (A) column exists, correct type/default/nullability:
+--   SELECT column_name, data_type, column_default, is_nullable
+--     FROM information_schema.columns
+--    WHERE table_name = 'customers' AND column_name = 'customer_type';
+--   -- expect: text | 'person'::text | NO
+--
+-- (B) NO check constraint was added (value-set stays open, AC-4):
+--   SELECT conname FROM pg_constraint
+--    WHERE conrelid = 'customers'::regclass AND contype = 'c'
+--      AND pg_get_constraintdef(oid) ILIKE '%customer_type%';
+--   -- expect: 0 rows
+--
+-- (C) every existing row defaulted to 'person' (backfill flips the 3 orgs after):
+--   SELECT customer_type, count(*) FROM customers GROUP BY customer_type;

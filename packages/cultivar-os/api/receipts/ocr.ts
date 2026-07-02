@@ -85,6 +85,7 @@ Return a JSON object with these exact fields (use null for any field you cannot 
   "due_date": "string or null — payment due date in YYYY-MM-DD if printed",
   "delivery_date": "string or null — delivery / ship / service date in YYYY-MM-DD if printed",
   "customer_name": "string or null — the bill-to / sold-to customer name (person or company)",
+  "customer_kind": "string — classify customer_name as 'person' or 'organization'. A named individual (Robert Nguyen, Diane Foster) is 'person'. A company, HOA, LLC, residence-by-name, contractor, nursery, or any business/entity (Cedar Park HOA, Hillside Landscapes, The Bradt Residence) is 'organization'. Default 'person' when customer_name is null or ambiguous.",
   "customer_phone": "string or null — the customer's phone if printed",
   "customer_email": "string or null — the customer's email if printed",
   "bill_to": {"line1": "string or null", "city": "string or null", "state": "string or null", "zip": "string or null"} or null,
@@ -101,6 +102,7 @@ Return a JSON object with these exact fields (use null for any field you cannot 
 Rules:
 - Extract ONLY values that appear on the invoice. Do not infer or estimate missing values.
 - Distinguish the VENDOR (seller, usually top/letterhead) from the CUSTOMER (bill-to / sold-to / ship-to).
+- Always return customer_kind ('person' or 'organization') classifying customer_name — this is a classification, not a copied value, so it is exempt from the "only what is printed" rule.
 - bill_to is the customer's billing address; ship_to is the delivery address — keep them separate even if identical.
 - For line_items: include sku, quantity, unit_price only if printed; otherwise set to null.
 - For amounts: numeric values only — no currency symbols, no commas.
