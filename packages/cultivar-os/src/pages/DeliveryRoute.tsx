@@ -39,6 +39,13 @@ function buildMapsUrl(addresses: string[]): string {
   return `https://www.google.com/maps/dir/${stops}/`;
 }
 
+// "1h 5m" / "45m" from a minutes value (Directions legs sum).
+function formatDriveTime(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
 // [TRACE:DELIVERY] STD-003 — ON until David owner-proves the scheduled-deliveries route
 const TRACE_DELIVERY = true;
 
@@ -105,28 +112,44 @@ function loadGoogleMaps(apiKey: string): Promise<any> {
 
 interface RouteStop { label: string; address: string; }
 
+// Result reported by RouteMap back to the parent after a route renders: drive
+// distance/time (null when Directions was skipped/failed) + the stops in optimized
+// driving order (null on the straight-polyline fallback → parent keeps built order).
+interface RouteResult { miles: number | null; minutes: number | null; orderedStops: RouteStop[] | null; }
+
 /**
- * RouteMap — embedded Google Maps JS map with NUMBERED pins in route order.
- * PURPOSE: render the built delivery route (business origin anchor + ordered
- *          customer stops) as an interactive map — numbered markers + a connecting
- *          polyline — so the owner/driver sees the day's route visually. ADDITIVE to,
- *          never a replacement for, the "Open in Google Maps" URL handoff below it.
- * DEPENDENCIES: Google Maps JavaScript API + Geocoding (client-side script loader;
- *          key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY, referrer-restricted).
+ * RouteMap — embedded Google Maps JS map with a ROAD-FOLLOWING route + NUMBERED pins.
+ * PURPOSE: render the built delivery route (business origin anchor ⌂ + ordered customer
+ *          stops) as an interactive map — a real driving route drawn on roads via the
+ *          Directions API, with numbered markers in OPTIMIZED (shortest-path) order — so
+ *          the owner/driver sees the day's route visually. ADDITIVE to, never a
+ *          replacement for, the "Open in Google Maps" URL handoff below it.
+ * DEPENDENCIES: Google Maps JavaScript API + Geocoding + Directions (client-side script
+ *          loader; key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY, referrer-restricted).
  *          ZERO Vercel functions.
- * OUTPUTS: geocodes each address → numbered markers (⌂ = origin) → fits bounds. On
- *          ANY failure (no key, load error, every geocode misses) it degrades quietly
- *          to a muted note; the parent's URL-handoff card is always the fallback.
- * NOTE (standard-by-value): loads Geocoder/Map/Marker via the modular `importLibrary`
- *          (the current Maps JS pattern — core does NOT bundle them). Uses the classic
- *          `Marker` (from the 'marker' library) for numbered labels — AdvancedMarkerElement
- *          needs a mapId + more setup that buys nothing for v1 numbered pins. Divergence recorded.
- * [TRACE:MAP] on the lib-ready → Geocoder-construct → geocode → render path (STD-003, ON until owner-proven).
+ * OUTPUTS: geocodes each address → asks DirectionsService for a round-trip driving route
+ *          (origin=⌂, waypoints=stops, dest=⌂, optimizeWaypoints:true) → DirectionsRenderer
+ *          draws the road polyline (suppressMarkers:true) while our own numbered markers are
+ *          renumbered to the optimized order → sums legs for miles + drive time → reports
+ *          {miles, minutes, orderedStops} to the parent. On ANY failure (no key, load error,
+ *          every geocode misses, Directions error, >25 waypoints) it degrades quietly — a
+ *          straight polyline fallback or a muted note; the parent's URL card is always the floor.
+ * NOTE (standard-by-value): loads Geocoder/Map/Marker/Directions via the modular
+ *          `importLibrary` (current Maps JS pattern — core does NOT bundle them). Directions API
+ *          (classic) chosen over Routes API: it is the only one with a drop-in JS renderer for our
+ *          existing client map + referrer-restricted key + zero-function constraint. Keeps the
+ *          classic `Marker` for numbered labels — AdvancedMarkerElement needs a mapId + more setup
+ *          that buys nothing for numbered pins; deferred. Divergences recorded.
+ * [TRACE:MAP] on the lib-ready → geocode → directions-requested → directions-ok → render path (STD-003, ON until owner-proven).
  */
-function RouteMap({ apiKey, origin, stops }: { apiKey: string; origin: string; stops: RouteStop[] }) {
+function RouteMap({ apiKey, origin, stops, onResult }: { apiKey: string; origin: string; stops: RouteStop[]; onResult?: (r: RouteResult) => void }) {
   const mapRef = React.useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [note, setNote] = useState<string>('');
+  // Keep the latest onResult in a ref so it is NOT an effect dependency — passing an
+  // inline callback from the parent would otherwise re-run the whole map init every render.
+  const onResultRef = React.useRef(onResult);
+  onResultRef.current = onResult;
 
   useEffect(() => {
     let cancelled = false;
@@ -143,12 +166,13 @@ function RouteMap({ apiKey, origin, stops }: { apiKey: string; origin: string; s
 
         // Modular loader: AWAIT each library before touching its constructors. Importing
         // these also populates the shared google.maps namespace (LatLngBounds, Polyline).
-        const [{ Geocoder }, { Map }, { Marker }] = await Promise.all([
+        const [{ Geocoder }, { Map }, { Marker }, { DirectionsService, DirectionsRenderer }] = await Promise.all([
           maps.importLibrary('geocoding'),
           maps.importLibrary('maps'),
           maps.importLibrary('marker'),
+          maps.importLibrary('routes'),
         ]);
-        if (TRACE_DELIVERY) console.log('[TRACE:MAP] geocoding lib ready');
+        if (TRACE_DELIVERY) console.log('[TRACE:MAP] geocoding + routes libs ready');
         if (cancelled || !mapRef.current) return;
 
         const geocoder = new Geocoder();
@@ -160,10 +184,12 @@ function RouteMap({ apiKey, origin, stops }: { apiKey: string; origin: string; s
           });
         });
 
-        // Ordered points: origin anchor first (⌂), then customer stops 1..N in route order.
-        const points: { marker: string; title: string; address: string; isOrigin: boolean }[] = [];
-        if (origin) points.push({ marker: '⌂', title: 'Start / return (business)', address: origin, isOrigin: true });
-        stops.forEach((s, i) => points.push({ marker: String(i + 1), title: `${i + 1}. ${s.label}`, address: s.address, isOrigin: false }));
+        // Ordered points: origin anchor first (⌂), then customer stops 1..N in entered order
+        // (renumbered later to the optimized driving order). `stop` carries the RouteStop so we
+        // can report the optimized sequence back to the parent for the on-card list.
+        const points: { marker: string; title: string; address: string; isOrigin: boolean; stop: RouteStop | null }[] = [];
+        if (origin) points.push({ marker: '⌂', title: 'Start / return (business)', address: origin, isOrigin: true, stop: null });
+        stops.forEach((s, i) => points.push({ marker: String(i + 1), title: `${i + 1}. ${s.label}`, address: s.address, isOrigin: false, stop: s }));
 
         if (TRACE_DELIVERY) console.log('[TRACE:MAP] geocoding', points.length, 'points', { hasOrigin: !!origin, stops: stops.length });
 
@@ -177,33 +203,93 @@ function RouteMap({ apiKey, origin, stops }: { apiKey: string; origin: string; s
           return;
         }
 
+        const originPt = located.find(p => p.isOrigin && p.loc) ?? null;
+        const stopPts  = located.filter(p => !p.isOrigin && p.loc);
+
         const map = new Map(mapRef.current, {
           mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
         });
         const bounds = new maps.LatLngBounds();
+        const label = (t: string) => ({ text: t, color: '#fff', fontWeight: '700', fontSize: '0.8125rem' });
 
-        good.forEach(p => {
-          new Marker({
-            position: p.loc,
-            map,
-            label: { text: p.marker, color: '#fff', fontWeight: '700', fontSize: '0.8125rem' },
-            title: p.title,
-          });
+        // Attempt a real driving route via Directions. Round-trip when we have a farm anchor
+        // (origin=dest=⌂, waypoints=stops); otherwise first→last stop with the middle as
+        // waypoints. optimizeWaypoints reorders for shortest path and returns waypoint_order.
+        let orderedStops = stopPts;                                  // default = entered order
+        let usedDirections = false;
+        let summary: { miles: number; minutes: number } | null = null;
+        // JS Directions supports up to 25 waypoints; over that (or too few points) we skip it.
+        const wpCount = originPt ? stopPts.length : Math.max(0, stopPts.length - 2);
+        const canRoute = wpCount <= 25 && (originPt ? stopPts.length >= 1 : stopPts.length >= 2);
+
+        if (canRoute) {
+          try {
+            if (TRACE_DELIVERY) console.log('[TRACE:MAP] directions requested', { stops: stopPts.length, hasOrigin: !!originPt, waypoints: wpCount });
+            const wp = originPt ? stopPts : stopPts.slice(1, -1);
+            const reqOrigin = originPt ? originPt.loc : stopPts[0].loc;
+            const reqDest   = originPt ? originPt.loc : stopPts[stopPts.length - 1].loc;
+            const result = await new DirectionsService().route({
+              origin: reqOrigin,
+              destination: reqDest,
+              waypoints: wp.map(p => ({ location: p.loc, stopover: true })),
+              optimizeWaypoints: true,
+              travelMode: maps.TravelMode.DRIVING,
+            });
+            if (cancelled || !mapRef.current) return;
+
+            const r = result.routes[0];
+            const order: number[] = (r.waypoint_order && r.waypoint_order.length) ? r.waypoint_order : wp.map((_: any, i: number) => i);
+            orderedStops = originPt
+              ? order.map((i: number) => wp[i])
+              : [stopPts[0], ...order.map((i: number) => wp[i]), stopPts[stopPts.length - 1]];
+
+            let meters = 0, seconds = 0;
+            r.legs.forEach((l: any) => { meters += l.distance?.value ?? 0; seconds += l.duration?.value ?? 0; });
+            summary = { miles: meters / 1609.344, minutes: seconds / 60 };
+
+            // Draw the road polyline only — our numbered markers are drawn below.
+            new DirectionsRenderer({
+              map, directions: result, suppressMarkers: true, preserveViewport: true,
+              polylineOptions: { strokeColor: GREEN, strokeOpacity: 0.85, strokeWeight: 4 },
+            });
+            usedDirections = true;
+            if (TRACE_DELIVERY) console.log('[TRACE:MAP] directions ok', { miles: +summary.miles.toFixed(1), minutes: Math.round(summary.minutes), optimizedOrder: order });
+          } catch (dirErr) {
+            // Directions failed → keep entered order, fall through to the straight polyline.
+            if (TRACE_DELIVERY) console.warn('[TRACE:MAP] directions failed — straight-line fallback', dirErr);
+            orderedStops = stopPts;
+            usedDirections = false;
+          }
+        } else if (TRACE_DELIVERY) {
+          console.warn('[TRACE:MAP] directions skipped — straight-line fallback', { waypoints: wpCount, stops: stopPts.length, reason: wpCount > 25 ? 'over-25-waypoints' : 'too-few-points' });
+        }
+
+        // Numbered markers, in the (optimized when routed) driving order: ⌂ then 1..N.
+        if (originPt) { new Marker({ position: originPt.loc, map, label: label('⌂'), title: 'Start / return (business)' }); bounds.extend(originPt.loc); }
+        orderedStops.forEach((p, i) => {
+          new Marker({ position: p.loc, map, label: label(String(i + 1)), title: `${i + 1}. ${p.stop?.label ?? ''}` });
           bounds.extend(p.loc);
         });
 
-        // Connect the located points in order with a light polyline (the visual route line).
-        new maps.Polyline({
-          path: good.map(p => p.loc),
-          map, geodesic: false, strokeColor: GREEN, strokeOpacity: 0.7, strokeWeight: 3,
-        });
+        // Straight-line fallback ONLY when Directions did not draw the road route.
+        if (!usedDirections) {
+          const path: any[] = [];
+          if (originPt) path.push(originPt.loc);
+          orderedStops.forEach(p => path.push(p.loc));
+          new maps.Polyline({ path, map, geodesic: false, strokeColor: GREEN, strokeOpacity: 0.7, strokeWeight: 3 });
+        }
 
         map.fitBounds(bounds, 48);
         if (good.length === 1) map.setZoom(14);
 
         if (!cancelled) {
           setStatus('ready');
-          if (TRACE_DELIVERY) console.log('[TRACE:MAP] rendered', { located: good.length, missed: located.length - good.length });
+          onResultRef.current?.({
+            miles: summary ? summary.miles : null,
+            minutes: summary ? summary.minutes : null,
+            orderedStops: usedDirections ? orderedStops.map(p => p.stop).filter((s): s is RouteStop => s !== null) : null,
+          });
+          if (TRACE_DELIVERY) console.log('[TRACE:MAP] rendered', { located: good.length, missed: located.length - good.length, directions: usedDirections });
         }
       } catch (e) {
         // Covers script-load failure AND the modular-loader trap (Geocoder/Map/Marker
@@ -269,6 +355,10 @@ export function DeliveryRoute() {
 
   // Business address — injected as the route origin/destination (round-trip anchor).
   const [originAddress, setOriginAddress] = useState<string>('');
+
+  // Drive summary (miles + minutes) + optimized stop order, reported by RouteMap after it
+  // renders the Directions route. Null until a route with a road path resolves.
+  const [routeSummary, setRouteSummary] = useState<RouteResult | null>(null);
 
   useEffect(() => {
     if (!businessId) return;
@@ -401,6 +491,7 @@ export function DeliveryRoute() {
         address: getAddress(o),
       }))
       .filter(s => s.address.length > 0);
+    setRouteSummary(null);           // cleared until RouteMap reports the new Directions result
     setRouteStops(stopModels);
     setRouteOrigin(origin);
     if (TRACE_DELIVERY) console.log('[TRACE:MAP] route model set', { origin: !!origin, stops: stopModels.length, keyPresent: !!MAPS_KEY });
@@ -422,6 +513,11 @@ export function DeliveryRoute() {
 
   const selectedOrders = orders.filter(o => selected.has(o.id));
   const canBuild = selectedOrders.some(o => getAddress(o).length > 0);
+
+  // Stops shown on the route-ready card: optimized driving order when Directions resolved,
+  // else the built order. Keeps pins + list + route in agreement.
+  const displayStops = routeSummary?.orderedStops ?? routeStops;
+  const routeStopCount = displayStops.length;
 
   const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
@@ -570,19 +666,24 @@ export function DeliveryRoute() {
                     no key/no stops; on failure it self-degrades. The URL card below
                     is the always-present fallback (never lost). */}
                 {MAPS_KEY && routeStops.length > 0 && (
-                  <RouteMap apiKey={MAPS_KEY} origin={routeOrigin} stops={routeStops} />
+                  <RouteMap apiKey={MAPS_KEY} origin={routeOrigin} stops={routeStops} onResult={setRouteSummary} />
                 )}
 
                 {/* Route summary */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: routeSummary?.miles != null ? 4 : 14 }}>
                   <Navigation size={18} color={GREEN} />
                   <span style={{ fontWeight: 700, fontSize: '0.9375rem', color: GREEN }}>
-                    Route ready — {selectedOrders.length} stop{selectedOrders.length !== 1 ? 's' : ''}
+                    Route ready — {routeStopCount} stop{routeStopCount !== 1 ? 's' : ''}
                   </span>
                 </div>
+                {routeSummary?.miles != null && routeSummary?.minutes != null && (
+                  <p style={{ margin: '0 0 14px 26px', fontSize: '0.8125rem', color: GRAY, fontWeight: 600 }}>
+                    {routeSummary.miles.toFixed(1)} miles · {formatDriveTime(routeSummary.minutes)} drive · optimized order
+                  </p>
+                )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-                  {selectedOrders.map((o, i) => (
-                    <div key={o.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  {displayStops.map((s, i) => (
+                    <div key={`${i}-${s.address}`} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                       <span style={{
                         width: 22, height: 22, borderRadius: '50%', background: GREEN,
                         color: '#fff', fontSize: '0.6875rem', fontWeight: 700, flexShrink: 0,
@@ -590,9 +691,9 @@ export function DeliveryRoute() {
                       }}>{i + 1}</span>
                       <div>
                         <p style={{ margin: 0, fontWeight: 600, fontSize: '0.875rem', color: DARK }}>
-                          {o.customers ? `${o.customers.first_name} ${o.customers.last_name}` : 'Customer'}
+                          {s.label}
                         </p>
-                        <p style={{ margin: 0, fontSize: '0.75rem', color: GRAY }}>{getAddress(o)}</p>
+                        <p style={{ margin: 0, fontSize: '0.75rem', color: GRAY }}>{s.address}</p>
                       </div>
                     </div>
                   ))}
