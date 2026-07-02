@@ -33,6 +33,7 @@ import { BusinessInventory } from './pages/BusinessInventory';
 import { InventoryCount }    from './pages/InventoryCount';
 import { CostToProduce }     from './pages/CostToProduce';
 import { OperatingCosts }    from './pages/OperatingCosts';
+import { Customers }         from './pages/Customers';
 import PMI                   from './pages/PMI';
 import { RoleConfig }        from './pages/RoleConfig';
 import { Profile }            from './pages/Profile';
@@ -121,6 +122,8 @@ export function AppRouter() {
               nav AND the route agree. can('owner-only') → owner true, everyone else redirected. */}
           <Route element={<PermissionRoute permission="owner-only" />}>
             <Route path="/costs"             element={<CostToProduce />} />
+            {/* Customer ROSTER — owner-only, matches customers_business_owner RLS (owner-only). */}
+            <Route path="/customers"         element={<Customers />} />
           </Route>
         </Route>
       </Route>

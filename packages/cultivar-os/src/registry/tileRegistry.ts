@@ -134,6 +134,10 @@ export const TILE_REGISTRY: TileEntry[] = [
     icon: Wrench,      color: '#94a3b8', bg: DASH_BG, route: '/pmi' },
   { key: 'social_media',     vertical: 'general', label: 'Social',                    group: 'growth',    kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'manage_campaigns',   status: 'live',    depends_on: null,
     icon: Share2,      color: '#f472b6', bg: DASH_BG, route: '/social/setup',      module_key: 'social_media' },
+  // Customers ROSTER (3rd DataSheet consumer). OWNER-ONLY — matches customers_business_owner RLS
+  // (owner-only, FOR ALL) so the nav never opens onto an empty RLS wall for staff (Gate-3 lesson).
+  { key: 'customers',        vertical: 'general', label: 'Customers',                 group: 'crm',       kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'owner-only',         status: 'live',    depends_on: null,
+    icon: Users,       color: '#818cf8', bg: DASH_BG, route: '/customers' },
 
   // ── Dashboard — readouts (live). A readout LEAKS data by rendering → gate on what it exposes.
   { key: 'leakage_alert',          vertical: 'general', label: 'Leakage alert',     group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'view_orders',    status: 'live', depends_on: null,
@@ -343,6 +347,9 @@ export const NAV_IA: NavNode[] = [
   { key: 'nav_receipts',        section: 'dashboard', parent: 'nav_operating_costs', tileKey: 'receipt_keeper' },
   { key: 'nav_pmi',             section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'pmi' },
   { key: 'nav_social',          section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'social_media' },
+  // Customers roster — standalone OWNER-ONLY nav node (inherits owner-only from the tile). Under the
+  // Dashboard section (operational surface the owner works with), NOT Operating Costs (view_costs).
+  { key: 'nav_customers',       section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'customers' },
   { key: 'nav_campaigns',       section: 'dashboard', parent: 'nav_social',          tileKey: 'campaigns', label: 'Campaigns', route: '/campaigns' },
   // Campaign detail — COLLAPSED breadcrumb (Dashboard / Campaigns / Campaign): drops "Social" so the
   // leaf stays 3-deep (ratified). parent stays nav_campaigns for section grouping; breadcrumb override

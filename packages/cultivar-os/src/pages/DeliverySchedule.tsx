@@ -70,7 +70,7 @@ function formatDay(dateStr: string | null): string {
 
 export function DeliverySchedule() {
   const navigate = useNavigate();
-  const { businessId } = useBusinessContext();
+  const { businessId, isOwner } = useBusinessContext();
 
   const [rows, setRows]       = useState<DeliveryRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -257,6 +257,20 @@ export function DeliverySchedule() {
                           <span style={{ fontSize: '0.75rem', color: GRAY }}>Moving…</span>
                         )}
                       </div>
+
+                      {/* Edit customer → the owner-only roster (owner-gated so staff never hit the
+                          owner-only /customers RLS wall). Subsumes the inline edit-modal idea. */}
+                      {isOwner && d.customers && (
+                        <button
+                          onClick={() => navigate('/customers')}
+                          style={{
+                            marginTop: 8, background: 'none', border: 'none', padding: 0,
+                            color: GREEN, fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer',
+                          }}
+                        >
+                          Edit customer →
+                        </button>
+                      )}
                     </div>
                   );
                 })}
