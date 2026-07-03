@@ -942,6 +942,45 @@ intent, not yet observed).
 
 ---
 
+### D-27 · Residence Product ("Kitchen Loop") is a residence-SCOPED VIEW of the one shared engine — BuiltWithCAI level, entry-point pointer not a separate app — `[CAPTURED]`
+**Class:** ARCHITECTURE-DECISION / product placement (cross-ref PLATFORM_STRATEGY.md).
+**Decision:** The Residence Product (household operations; the residence treated as the smallest business) is the **residence-scoped view of the ONE shared engine** — same DB, same spine, same app, skinned at runtime for `business_type = residence`. It is **NOT a vertical, NOT platform-infra, NOT a separate app or instance** — it is "one source, many views," the view being a house. It sits at the **BuiltWithCAI level** (the general core), **sibling to CoolRunnings** (loosely coupled, standalone-capable — may optionally ride a CoolRunnings box but must never require one). Front door = **`home.builtwithcai.app`**, an **entry-point POINTER** into the one app (not a separate app), under the TLD principle: `.com` explains/markets, `.app` domains are entry points. **Wiring is DEFERRED** — `home.` is gated on `builtwithcai.app` (the core `.app` home) standing up first; build capability now, pointer last. Customer-zero = David running his own house.
+**Reasoning:** Reuses the locked one-source-many-views architecture instead of spawning a parallel app; inherits shared auth/RLS + PIN gesture + Receipt Keeper for free ([[HOUSEHOLD-SHARING-DECISION]] treats multi-tenancy as inherited P0). Schema stays [[AC-1]]-clean: shared-core residence tables carry NO vertical noun (`receipts`); residence-specific tables carry the (not-yet-locked) residence prefix.
+**Companion principles:** one-source-many-views (PLATFORM_STRATEGY.md), [[AC-1]] (no vertical noun in shared schema), [[OP-5]] (good-enough + AI-as-equalizer — the house is the smallest business).
+**Canonical home:** `docs/residence-product/RESIDENCE-PRODUCT-MASTER-BRIEF.md` §2 (full placement) · PLATFORM_STRATEGY.md (architecture cross-ref) · THIS entry.
+**Date captured:** 2026-07-03 · **Status:** CAPTURED (design + prototype complete; UNBUILT; wiring deferred on core `.app`).
+
+---
+
+### D-28 · API NEUTRALITY — use any API that makes the answer more honest/effortless; refuse any whose price of admission is bias — `[CAPTURED]`
+**Class:** ARCHITECTURE-DECISION / connector-selection doctrine (ethical lineage [[OP-1]]).
+**Decision:** Connector selection is governed by **neutrality**, classed **Green / Red / Amber**:
+- **Green** — neutral utilities that make the answer more honest or effortless (Open Food Facts, USDA FoodData Central, Spoonacular/TheMealDB ontology, maps/distance). Use freely; swappable via `platform_config`.
+- **Red** — single-retailer data whose price of admission is **buying loyalty** (a retailer's own price API that biases the answer toward them). **REFUSED.**
+- **Amber** — retailer featuring/placement, allowed **LATER, from strength**, never as the spine.
+The customer's own **`receipts` are the CONFIRMED, neutral price spine** — free, unbreakable, reflecting the real price paid incl. the deal. Deal-finders and external feeds are **optional enrichment, never load-bearing**: a scraper's "current" price is a guess; the receipt is truth.
+**Reasoning:** Bias bought into the data layer corrupts every downstream recommendation ("cheaper where?" must never be sponsored). Anchoring on receipts keeps the moat customer-owned and provider-agnostic. Sibling to [[OP-1]] "any ethical means within the covenant," applied to data sourcing.
+**Companion principles:** [[OP-1]] (covenant / ethical means), `MB_D-009` (OCR-commodity; connectors swappable via platform_config), [[D-20]] (connectors fold into existing endpoints, no bias-locked feeds welded in).
+**Canonical home:** `docs/residence-product/RESIDENCE-PRODUCT-MASTER-BRIEF.md` §6 / §6a (connector table + deal-finder classing) · THIS entry.
+**Date captured:** 2026-07-03 · **Status:** CAPTURED doctrine (platform-wide; first applied in the residence connectors).
+
+---
+
+### D-29 · OFFLINE / LOCAL-FIRST CAPTURE is platform-wide, on an HONEST GRADIENT — capture always works, parsing populates on sync — `[CAPTURED]`
+**Class:** ARCHITECTURE-DECISION / platform capability (graceful-degradation lineage [[OP-6]]).
+**Decision:** The app **works when the connection doesn't**, on an **honest gradient** (never a fake "done"):
+- **CAPTURE works offline unconditionally** — snap receipt → save local → confirm **"Captured ✓"** → queue.
+- **OWN DATA (list/inventory) works offline** — reads/writes durably queued.
+- **OCR/parsing populates ON SYNC** — "Captured ✓ — will read items when back online," never a false "processed."
+- **Live external data degrades gracefully** — absent, not faked.
+Implementation applies the **local-first LOGIC proven in DataBridge** — **pull the pattern, make it shared; NOT a module extraction.** ✅ RECONCILED 2026-07-03: the shared foundation **already exists** — `packages/shared/src/sync/` (`SyncEngine` write-through-when-online / enqueue-when-offline + reconnect-drain; `OfflineQueue`; `NamespacedStore`; FIFO idempotent replay), built 2026-06-26 for Cultivar's walk-and-count loop (ledger #54), deliberately built NEW in shared rather than moving DataBridge (44 Ignition imports). DataBridge stays donor-reference. **Verticals build TOWARD this shared SyncEngine; the residence product inherits it, does not re-derive it.**
+**Reasoning:** [[OP-6]] graceful degradation + [[D-9]] honesty ladder applied to connectivity — a queued/UNKNOWN state is surfaced honestly, never masked as complete. Real engineering investment, already begun, not a per-vertical rebuild.
+**Companion principles:** [[OP-6]] (fidelity tiers / works-when-owner-does-nothing), [[D-9]] (honesty ladder — "Captured ✓, will read on sync" is the honest not-yet-CONFIRMED state), Surface Honesty (WORKS/LABELED/HIDDEN — nothing silently vanishes).
+**Canonical home:** `packages/shared/src/sync/` (the built foundation) · `docs/residence-product/RESIDENCE-PRODUCT-MASTER-BRIEF.md` §5 P6 · THIS entry.
+**Date captured:** 2026-07-03 · **Status:** CAPTURED doctrine; shared foundation PARTIALLY BUILT (walk-and-count consumer live; platform-wide adoption ongoing).
+
+---
+
 ## PERSONAL-FINANCIAL
 
 > Not in this file by design — see **`decisions/PERSONAL-FINANCIAL.local.md`** (gitignored).

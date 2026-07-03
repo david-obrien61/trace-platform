@@ -1245,6 +1245,10 @@ Platform-shared primitive (Cultivar quote, Conduit sign-off, KINNA pledge). Desi
 
 ---
 
+> **Pointer — Residence Product ("Kitchen Loop") + platform decisions (filed 2026-07-03):** the `MB_D-0XX` log above is FROZEN at MB_D-015; new decisions live in `docs/DECISIONS.md`. This session logged **D-27** (Residence Product placement — residence-scoped view of the one shared engine, BuiltWithCAI level, `home.builtwithcai.app` entry-point pointer, sibling to CoolRunnings; wiring deferred on core `.app`), **D-28** (API neutrality — Green/Red/Amber; receipts = neutral price spine, deal-finders optional enrichment), **D-29** (offline / local-first capture on an honest gradient — shared foundation already exists at `packages/shared/src/sync/`). Full package: `docs/residence-product/RESIDENCE-PRODUCT-MASTER-BRIEF.md`.
+
+---
+
 ### Open Threads for Next Session
 
 *(Not decisions — active uncertainties that must be resolved before the affected features advance.)*
