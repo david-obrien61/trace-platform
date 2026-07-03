@@ -119,6 +119,16 @@ PIECES: cost_meter, usage_ledger, ocr_quality_signal
 NEEDS: David to decide metering unit + cap-vs-overage + whether retakes (2 calls for 1 receipt, often OUR miss) are billed. Cost feeds cost-to-produce (built); the per-customer usage meter has NO board id yet (— = capability candidate, platform-scope: every vertical hits the gateway).
 David runs a batch of real receipts through and learns three things from the [TRACE:CAPTURE] trail: (1) what 100 reads cost (Gemini Flash ~$0.0001/read → extrapolate a customer's monthly AI bill); (2) whether a customer is over allotment (the "1000 calls, then a penny more" tier — needs per-customer counts to monitor, guard abuse, bill); (3) whether the OCR is good enough — straight-through submit = OCR nailed it, image RETAKEN = a PHOTO problem not OCR, fields EDITED on a good image = OCR misread. The three signals log APART, because an edit isn't always a failure (the user sometimes adds what OCR couldn't know).
 
+### Capture an invoice from where I manage deliveries (the second door)
+STATUS: needs-input
+SCOPE: vertical:cultivar, platform
+BUILD: in-build
+ARC: ocr-doc-routing
+MAPS-TO: 3.5
+PIECES: capture_invoice_launcher, ocr_second_door
+NEEDS: David to owner-prove the launcher live (from a route/schedule page → capture → add-customer + schedule-delivery → land back on the route with the new stop); flip 🟡→🟢 across the boards per [[OP-11]] on prove.
+The owner is standing on the delivery-schedule / route screen and a vendor invoice lands in hand — a persistent owner-gated **"Capture invoice"** button in the header opens the SAME invoice OCR→infer→route pipeline (ReceiptKeeper, `shape:'invoice'`) as the Receipts tile, then returns them to the route with the new stop bucketed. ONE pipeline, two doors — the entry point moved, nothing was rebuilt (mirrors the asset-capture two-door pattern). _Grounded: ledger #85 (`CaptureInvoiceLauncher.tsx`, BUILDER-COMPLETE, owner-proof owed; `[TRACE:ROUTER] entered-from:route`); board 3.5 · ARC-2 / ARC-5._
+
 ---
 
 ## ARC: cost-to-produce
@@ -132,6 +142,16 @@ ARC: cost-to-produce
 MAPS-TO: —
 NEEDS: David/owner to narrate the owner's lived cost-to-produce need. Build-blind in reverse — heavily BUILT, no story.
 _Coverage placeholder, not a fabricated scenario._ The cost-to-produce spine (recurring/operating costs → labor → margin → compute, plus the by-project drill-in) is among the most-built parts of the platform, yet there is **no day-in-the-life story** behind it. The narrative the build should answer is owed.
+
+### Platform economics — the pricing / margin / leakage engine, re-leveled (EPIC)
+STATUS: needs-input
+SCOPE: platform
+BUILD: active
+ARC: cost-to-produce
+MAPS-TO: —
+PIECES: model_b_pricing, overhead_carveout, display_surfaces, leakage_actor_capture
+NEEDS: POST-DEMO. David to (1) re-level TRACE Enterprises to BuiltWithCAI/general and (2) re-enter the infra cost floor wiped with the old DB — Model B needs per-tenant cost-to-serve to compute. Then the leakage/actor-capture layer (override CAPTURE, not just APPLY) is the forward build. See "David actions" below.
+The whole owner-economics engine as ONE tracked epic — distinct from the (still-owed) day-in-the-life cost-to-produce NARRATIVE above: **Model B** pricing ([[D-16]], cost-to-serve ÷ N ÷ (1−margin) + payback line) + **overhead carve-out** ([[D-14]] / [[D-18]]) + **four display surfaces / three audiences** ([[D-17]] — owner /costs · what-if estimator · customer price view · decision record) + **margin-leakage capture** (the override must be CAPTURED, not just applied, before a leakage report can aggregate it). The engine was PROVEN pre-wipe against business `45830ba7` (snapshots BEFORE-NUMBER / AFTER-FLIP / LABOR-3a/3b); recovery requires re-leveling + infra-cost re-entry. _Grounded: DECISIONS D-14/D-16/D-17/D-18; `docs/cost-to-produce/MARGIN-LEAKAGE-PRECONDITIONS.md` (override APPLIED-vs-CAPTURED); the pre-wipe snapshots. Cross-ref the "Cost-to-produce has no story yet" gap above — that is the BACKWARD narrative; this is the FORWARD engine._
 
 ---
 
@@ -147,6 +167,26 @@ MAPS-TO: —
 PIECES: timing_capture, timing_surface
 NEEDS: David to expand into the surfacing story. The genuinely-NEW unbuilt north-star piece — no capability exists yet.
 _Coverage placeholder, not a fabricated scenario._ The system captures a thread the moment it's noticed and re-surfaces it at the moment it's **actionable** (the Regina principle — closing the gap that cost the 40-minute drive home). This is the one net-new unbuilt piece in `NORTH-STAR.md` §5. The customer-zero rhythm logger (ledger #63) is the instrument gathering David's day-rhythm to design it.
+
+### Resurface the offers — configure and seed what surfaces at sale (the Regina anchor)
+STATUS: needs-input
+SCOPE: vertical:cultivar, platform
+BUILD: active
+ARC: suggestion
+MAPS-TO: 3.2, 2.2
+PIECES: offer_config_editor, offer_seed, jit_trigger
+NEEDS: David to configure-through-the-editor as the owner-prove, and to seed the demo tenant (`f7ec5d67…`) — netting (self-trigger) + an active self-transport offering. Recon: **0 active `service_offerings` today**, so the at-sale surfacing engine (board 3.2, netting LIVE) has nothing to surface until offers are seeded/configured.
+The netting companion-offer already fires at checkout (board 3.2, `AddOns.tsx:39`, `trigger_transport_mode`) — but only when an offer EXISTS and is ACTIVE. This is the owner's side of that: a Settings-level editor to define which offers surface, on which trigger, with what urgency copy (the Regina rule — the reminder that closes the 40-minute-drive-home gap), and the seed that lights the demo tenant up so the anchor demo actually shows an offer. _Grounded: tech-debt #47; `service_offerings` live; [[D-16]]/[[D-17]] pricing surfaces; MASTER_BRIEF Regina anchor (:327)._
+
+### Just-in-time completeness — surface the add-on before the window closes
+STATUS: needs-input
+SCOPE: vertical:cultivar, platform
+BUILD: active
+ARC: suggestion
+MAPS-TO: 3.2
+PIECES: jit_completeness, timing_window_enforce
+NEEDS: David to decide the model — **copy-only** (urgency prompt; owner/customer still free to skip) vs **enforced** (the timing window actually gates the flow). Today the Regina rule is urgency COPY; whether completeness is ever hard-enforced is open.
+Some add-ons can only be applied at a specific moment — netting at planting time, fertilizer at delivery. The completeness engine notices the window is open and surfaces the offer while it still matters, then lets it go once the moment passes, so the owner never discovers a missed upsell after the truck has left. This is the timing discipline on top of the offer-config surface above. _Grounded: MASTER_BRIEF Regina rule (urgency copy) + three suggestion types (:403); board 3.2; App Philosophy "The Regina Rule."_
 
 ---
 
@@ -164,6 +204,26 @@ PIECES: working_days_config, geo_slot_clustering, service_type_capacity
 NEEDS: David to settle the slot algorithm (working-days flag × geo-cluster × service-type capacity) + how far ahead slots open. Absorbs the banked working-days-config + service-type-aware-scheduling items.
 A customer scheduling a delivery shouldn't see every calendar day — only the slots LAWNS can serve. Open slots = the business's working days (LAWNS delivers Tue/Thu) filtered by geo-clustering: "nothing Tuesday, but we'll be in your ZIP Thursday." A planting job consumes more of a day's capacity than a drop-off, so a day fills by WORK, not stop-count. This is the just-in-time delivery intelligence that turns the raw routing engine into an offer the customer picks from. → 3.4 (scheduling, net-new) + 3.5 (routing, live).
 
+### See the opportunity along the route — service overlay on the map
+STATUS: needs-input
+SCOPE: vertical:cultivar
+BUILD: active
+ARC: delivery
+MAPS-TO: 3.5, 3.2
+PIECES: service_overlay, proximity_opportunity
+NEEDS: David to scope what the overlay surfaces — past customers near today's stops (warranty / upsell / inspection) vs due-services vs both — and whether it's a passive readout or a suggested add-stop.
+While routing the day, TRACE overlays SERVICE context on the map: past customers near the route, warranties coming due, inspections owed — turning the route from pure logistics into the capacity/opportunity readout (MASTER_BRIEF "routing IS the capacity readout"). The map becomes the demo that SHOWS the owner she's driving past opportunity, not just logistics. _Grounded: MASTER_BRIEF routing-as-capacity (:375) + map-is-the-demo (:382); proximity-opportunities memory; board 3.5 route live / 3.2 suggestion._
+
+### Clickable route pins — tap a stop for its detail (polish, not demo-critical)
+STATUS: needs-input
+SCOPE: vertical:cultivar
+BUILD: active
+ARC: delivery
+MAPS-TO: 3.5
+PIECES: pin_infowindow, pin_edit_customer
+NEEDS: RECLASSIFIED OUT of demo-critical → POLISH (per 2026-07-03). Enhancement 2 (clickable pins → stop-info InfoWindow, with an "Edit customer" popup opening the existing `CustomerEditModal`) is RECON'd, NOT built — a nice-to-have after the demo, not a blocker.
+On the delivery map, tapping a numbered pin opens a small InfoWindow with that stop's detail (customer, address, service) and an "Edit customer" action that opens the SAME modal the delivery card uses. Deferred as polish — the route, pins, and driving line are already owner-proven (the archived "Route the day's deliveries" story). _Grounded: ARC-5 Enhancement 2 (recon'd, not built); ledger #82 CustomerEditModal (forward-fit target); board 3.5._
+
 ---
 
 ## ARC: discovery
@@ -177,6 +237,16 @@ ARC: discovery
 MAPS-TO: —
 NEEDS: Owner to narrate the discovery need (the "TRACE already knows my business" moment). BUILT but un-storied.
 _Coverage placeholder, not a fabricated scenario._ The discovery engine (website read → identity/analysis passes → synthesis → seed → catalog-populate) is built, but has **no day-in-the-life story** behind it.
+
+### Populate LAWNS's real catalog — the 116-row Woo export becomes priced stock
+STATUS: needs-input
+SCOPE: vertical:cultivar
+BUILD: active
+ARC: discovery
+MAPS-TO: 1.3, 5.1
+PIECES: catalog_import, priced_offerings_activate
+NEEDS: David to activate the 116-row LAWNS WooCommerce catalog (already in hand as a CSV export) as priced offerings on the live demo tenant, so the demo dashboard shows LAWNS's ACTUAL trees, not sample data.
+The catalog-populate engine is BUILT (board 1.3 — 114 real varieties read live 06-21, D-9 honesty-flagged). This is the demo-facing activation: land LAWNS's own 116 rows as real, priced inventory so a walk-and-count / QR-checkout demo runs on real stock. _Grounded: board 1.3 (`discovery/catalog.ts`, migration-gated); the Woo CSV in hand; board 5.1 inventory live._
 
 ---
 
@@ -336,6 +406,49 @@ MAPS-TO: —
 PIECES: rhythm_logger
 NEEDS: Small fix — the watcher should retry/re-subscribe on reconnect. Honest-debt, not blocking.
 _Coverage placeholder, not a fabricated scenario._ In airplane mode the CoreLocation watcher throws `kCLErrorDomain 0`; after connectivity returns the error persists in the UI until the logger is restarted (the watcher does not retry/re-subscribe on reconnect). The rhythm logger (ledger #63) is the north-star TIMING-LAYER instrument. → CLOSE-OUT-LEDGER GENUINELY OPEN.
+
+### The market tile — show a prospect the price, not the plumbing
+STATUS: needs-input
+SCOPE: platform, vertical:cultivar
+BUILD: active
+MAPS-TO: —
+PIECES: market_tile, tier_price_sheet, module_pricing_display
+NEEDS: DEMO-CRITICAL. David to ratify the recovered price sheet as demo-facing — STARTER $149 / PROFESSIONAL $299 / PREMIER $499 + the per-module add-on numbers (MASTER_BRIEF:210-292) — as the PROSPECT view. This is [[D-17]] **surface #3** (customer/prospect price view): tiers + value ONLY, **NEVER** cost-to-serve, labor, margin, or payback. SEPARATE from — but downstream of — the platform-economics epic (which owns the owner-side engine).
+A prospect (Lauren, an Ignition buyer) opens the market/pricing tile and sees THEIR price and what it buys — clean tiers and module pricing — with none of the owner economics behind it. This is the price SHEET, not the pricing ENGINE: it presents settled numbers, it does not compute them. _Grounded: MASTER_BRIEF:210-292 (tiers + module economy); [[D-17]] surface #3 (`docs/DECISION-pricing-display-surfaces.md`); board 5.6-adjacent (no dedicated cap yet, —)._
+
+### Pay on the business's own rail — no card capture on the web (Rail A)
+STATUS: needs-input
+SCOPE: vertical:cultivar, platform
+BUILD: active
+MAPS-TO: 5.6, 2.1
+PIECES: rail_a_business_pay, no_web_card_capture
+NEEDS: SETTLED in principle (customer pays the BUSINESS on the business's existing rail; TRACE does NOT capture a card on the web). Open: which existing rail each business uses + how the online cart hands off to it. Rides the on-web / on-lot gated-cart stories.
+When a customer checks out online, the money moves on LAWNS's OWN payment rail — TRACE never captures a card in the web flow. The online cart (the on-web story) originates the order and routes to fulfillment + the business's existing payment method, keeping TRACE out of the card-handling path. This is the B2C rail (customer → business), the sibling of Rail B below (business → TRACE). _Grounded: HANDOFF 2026-07-03 (rails settled); board 2.1 checkout live / 5.6 online-shop stub; ⚡ on-web story._
+
+### Platform billing — the business pays TRACE (Rail B)
+STATUS: needs-input
+SCOPE: platform
+BUILD: active
+MAPS-TO: —
+PIECES: rail_b_platform_billing, stripe_subscription, module_metering
+NEEDS: GATED on David's Stripe account under the TRACE EIN (see "David actions" below). Then: subscription + add-on module billing (the tier + per-module numbers from the market tile), founding-rate lock, trial clock. Baseline = Ignition's `AdminSubscription.jsx`.
+The B2B SaaS rail: the business pays TRACE for the platform — base tier + billable add-on modules, metered and adjusted (Stripe). Blocked until the TRACE Stripe account clears verification. Sibling of Rail A above (customer → business). _Grounded: MASTER_BRIEF subscription tiers + module economy (:210-292); `project-billing-ignition-baseline` memory; gated on the Stripe David-action._
+
+### QuickBooks read-back + customer de-dup against the books
+STATUS: needs-input
+SCOPE: vertical:cultivar, platform
+MAPS-TO: 4.1
+PIECES: qbo_readback, qbo_customer_dedup
+NEEDS: David to scope — today QB integration is create-ONLY (push invoice/customer; no read-back, no de-dup against existing QBO customers). Read-back + matching an incoming customer to an existing QBO record (so TRACE doesn't create a duplicate in the customer's books) is net-new.
+TRACE currently WRITES to QuickBooks (invoice + customer create, board 4.1 live) but never READS back. The gap: when an invoice comes in, match its customer to an existing QBO customer instead of minting a duplicate in the owner's system of record. TRACE-internal org-dedup exists (board 3.7); de-dup AGAINST QBO does not. _Grounded: board 4.1 (`api/qbo/*`, create-only); board 3.7 (internal dedup, different target)._
+
+### Kitchen Loop / Residence Product — the house as the smallest business (EPIC)
+STATUS: needs-input
+SCOPE: platform
+MAPS-TO: —
+PIECES: residence_view, kitchen_loop, household_sharing, receipt_price_spine
+NEEDS: David to sequence the phased build (P0 schema first, per the BUILD-PLAN). DESIGN + prototype COMPLETE and filed; UNBUILT as code; front-door wiring (`home.builtwithcai.app`) DEFERRED on the core `.app` standing up first.
+The Residence Product ("Kitchen Loop") is a residence-scoped VIEW of the ONE shared engine — BuiltWithCAI level, sibling to CoolRunnings, `business_type = residence` skinned at runtime ([[D-27]]). It inherits shared auth/RLS + PIN gesture + Receipt Keeper for free; receipts are the neutral confirmed price spine ([[D-28]] API neutrality); capture works offline on the honest gradient ([[D-29]]). Registered here as ONE epic — the full design package is already filed, so do NOT explode into sub-stories yet. _Grounded: `docs/residence-product/` (RESIDENCE-PRODUCT-MASTER-BRIEF.md + RESIDENCE-PRODUCT-BUILD-PLAN.md + 7 specs + prototypes); DECISIONS D-27 / D-28 / D-29. Customer-zero = David's own house._
 
 ---
 

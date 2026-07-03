@@ -186,7 +186,7 @@ export const TILE_REGISTRY: TileEntry[] = [
   // ── Planned (greyed) — forward declarations. Permissions marked PROVISIONAL where the
   //    seed did not pin one (adjustable); the seed-pinned ones are locked like all others.
   { key: 'services',         vertical: 'general', label: 'Services',                  group: 'planned',  kind: 'context', placement: 'TBD',       nav_eligible: false, required_permission: 'view_dashboard',   status: 'planned', depends_on: null,
-    icon: Wrench,      color: '#94a3b8', bg: DASH_BG, note: 'placement TBD; permission PROVISIONAL' },
+    icon: Wrench,      color: '#94a3b8', bg: DASH_BG, note: 'EDITOR ALREADY LIVE — the service_offerings CRUD (transport / add-ons incl. netting companion / other services) renders in Settings.tsx:470, reachable only via /settings/all, NOT /admin. status:planned/placement:TBD refer to a first-class Services TILE/destination (not yet placed — next build), NOT to the editor. permission PROVISIONAL. See tech-debt #47.' },
   { key: 'opportunities',    vertical: 'general', label: 'Opportunities',             group: 'planned',  kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'view_orders',     status: 'planned', depends_on: 'services',
     icon: TrendingUp,  color: '#22d3ee', bg: DASH_BG, note: 'Regina surfacing; permission PROVISIONAL' },
   { key: 'followup_engine',  vertical: 'general', label: 'Follow-Up',                 group: 'planned',  kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'manage_customers', status: 'planned', depends_on: null,
