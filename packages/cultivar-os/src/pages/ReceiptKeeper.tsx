@@ -1127,7 +1127,11 @@ export function ReceiptKeeper() {
             </div>
             {customerResult && (
               <div style={{ fontSize: '0.875rem', color: '#27500A', marginBottom: 8 }}>
-                👤 Customer {customerResult.created ? 'added' : 'updated'}
+                👤 {customerResult.created
+                  ? 'Customer added'
+                  : scheduleDelivery
+                    ? `Adding a delivery for existing ${invoice.customerName.trim() || 'customer'}`
+                    : `Existing ${invoice.customerName.trim() || 'customer'} updated`}
               </div>
             )}
             {customerWarn && (

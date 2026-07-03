@@ -56,6 +56,21 @@ function isMissingCustomerTypeColumn(error: any): boolean {
   return /42703|PGRST204/.test(s) && /customer_type/i.test(s);
 }
 
+// ORG DEDUP KEY normalization. Orgs skip the person spine (an HOA is not a person), so
+// name + BILLING address is their identity. Normalize both sides so OCR variance doesn't
+// split one contractor into duplicates: lowercase, strip punctuation (H.O.A. → hoa), collapse
+// whitespace, trim. BILLING only — ship-to varies per job site (Dave's Tree Svs → XXX/YYY/ZZZ)
+// and matching on it would re-create the very duplication this fixes.
+// DEFERRED (not v1): synonym normalization (CR↔County Road, Svs↔Services) + a fuzzy
+// "looks like a match?" confirm for near-misses this basic normalization can't catch.
+function normalizeMatchKey(s: string | null | undefined): string {
+  return (s ?? '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ') // strip punctuation (H.O.A. → h o a; keeps word/digit boundaries)
+    .replace(/\s+/g, ' ')      // collapse whitespace
+    .trim();
+}
+
 export async function findOrCreateCustomer(
   db: any,
   businessId: string,
@@ -102,15 +117,46 @@ export async function findOrCreateCustomer(
   };
   if (personId) fields.person_id = personId;
 
-  // 2. Dedup WITHIN the business. Prefer person_id (the fix — covers the phone-only repeat,
-  //    since the person was already deduped by phone). Fall back to email only when the
-  //    person layer was unavailable. A null/blank email must NOT collapse email-less customers.
+  // 2. Dedup WITHIN the business.
+  //    - PERSON: prefer person_id (covers the phone-only repeat, since the person was already
+  //      deduped by email→phone in the spine). Fall back to email only when the spine was
+  //      unavailable. A null/blank email must NOT collapse email-less customers.
+  //    - ORGANIZATION: orgs skip the person spine, so name + BILLING address IS their identity.
+  //      An org with no email had NO dedup key before this branch → the same contractor invoiced
+  //      per job site created a new row each time (Dave's Tree Svs → 3 duplicates). Match on
+  //      normalized name + billing FIRST, then email as a secondary key. Never on ship-to.
   let existingId: string | null = null;
   if (personId) {
     const { data } = await db
       .from('customers').select('id')
       .eq('business_id', businessId).eq('person_id', personId).limit(1);
     if (data && data.length > 0) existingId = data[0].id;
+  } else if (isOrg) {
+    const nameKey = normalizeMatchKey(customer.first_name);       // org name lives in first_name
+    const billKey = normalizeMatchKey(customer.address_line1);    // BILLING address
+    if (nameKey && billKey) {
+      // Business-scoped org rows only. A column-absent error (pre-20260702 deploy window) simply
+      // yields no data → no match → email/create fallthrough, never a throw (rule 6).
+      const { data } = await db
+        .from('customers').select('id, first_name, address_line1')
+        .eq('business_id', businessId).eq('customer_type', 'organization');
+      const match = (data ?? []).find((r: any) =>
+        normalizeMatchKey(r.first_name) === nameKey &&
+        normalizeMatchKey(r.address_line1) === billKey);
+      if (match) {
+        existingId = match.id;
+        console.log('[TRACE:PERSON] resolve: matched organization by name+billing', {
+          customerId: existingId, businessId, source, nameKey, billKey,
+        });
+      }
+    }
+    // Secondary org key: an org that DID carry an email still dedups on it (prior behavior kept).
+    if (!existingId && customer.email) {
+      const { data } = await db
+        .from('customers').select('id')
+        .eq('business_id', businessId).eq('email', customer.email).limit(1);
+      if (data && data.length > 0) existingId = data[0].id;
+    }
   } else if (customer.email) {
     const { data } = await db
       .from('customers').select('id')
