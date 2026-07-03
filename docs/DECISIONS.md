@@ -281,6 +281,23 @@ in data, not schema). Named alongside VERIFY-BEFORE-BUILD in `TRACE-SESSION-BOOT
 
 ---
 
+### OP-11 · Reconcile on both bars — OWNER-PROVEN triggers the flip — `[POINTER]`
+**Class:** OPERATING-PRINCIPLE (close-out doctrine — governs how the canonical status surfaces stay honest).
+**Decision:** The BUILDER-COMPLETE reconciliation gate keeps the docs from drifting behind what is BUILT; this is its sibling on
+the second bar. **An OWNER-PROVEN report (single or batch) triggers an immediate 🟡→🟢 flip across ALL canonical surfaces** — ⚡
+ACTIVE STATUS · 📋 24-board · `built-inventory.md` · 🧵 ARC-MAP · any mapped `user_story` — as the FIRST action that session, with
+`Last updated:` bumped and the flipped caps named in the write-back. **A stale 🟡 on an owner-proven capability is DRIFT
+(tech-debt #39 class), same force as the BUILDER-COMPLETE reconciliation gate.** The two gates are the two bars of the two-bar
+rule made self-maintaining: BUILDER-COMPLETE reconciles *what exists*, OWNER-PROVEN reconciles *what's proven.*
+**Reasoning:** owner-proof-owed 🟡s re-accumulated because nothing forced the flip when David reported a proof; binding it as a
+gate on the OWNER-PROVEN bar closes that leak the same way the ledger gate closed the BUILDER-COMPLETE leak.
+**Canonical home (full text lives there, NOT duplicated here):** `CLAUDE.md` §9 STANDING INSTRUCTION (owner-proven reconcile gate)
+· `docs/operating-doctrine/end-of-session-protocol.md` → GATE — BUILT-INVENTORY RECONCILIATION (SIBLING GATE — OWNER-PROVEN
+RECONCILIATION). Companion: the BUILDER-COMPLETE reconciliation gate (its first-bar sibling).
+**Date captured:** 2026-07-03 · **Status:** Active doctrine (ratified by David 2026-07-03).
+
+---
+
 ## ARCHITECTURE-DECISION
 
 ### D-1 · Schema approach C (rename-in-place) for cost-object node model — `[CAPTURED]`

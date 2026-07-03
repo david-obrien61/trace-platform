@@ -67,6 +67,8 @@ For **each capability touched this session**, confirm all three:
 
 **Relationship to the other end-of-session doc:** the authoritative Thunder close-out checklist (`docs/end-of-session-protocol.md`, Step 17) already requires the built-inventory write-back; this gate is its standing statement of *force* — reconciliation is mandatory, audit-derived, and drift-detecting, not a best-effort. The two agree; if they ever diverge, the code (audit) wins, then both docs get corrected. CLAUDE.md §9 carries the binding STANDING INSTRUCTION and cross-refs this gate.
 
+**SIBLING GATE — OWNER-PROVEN RECONCILIATION (fires on the OWNER-PROVEN bar, same force):** the gate above fires when a capability is BUILT/changed (BUILDER-COMPLETE). This sibling fires when David reports an **OWNER-PROVEN** (single or batch). **The FIRST action that session is to flip the status marks for those capabilities from 🟡→🟢 across ALL canonical surfaces** — ⚡ ACTIVE STATUS · 📋 24-board · `built-inventory.md` · 🧵 ARC-MAP · any mapped `user_story` — bump `Last updated:` to today, and state in the write-back which caps flipped. A stale 🟡 on an owner-proven capability is DRIFT (tech-debt #39 class); leaving it un-flipped is an INCOMPLETE close, **same enforcement weight as the BUILDER-COMPLETE reconciliation gate above.** The two gates are the two bars of the two-bar rule made self-maintaining: BUILDER-COMPLETE reconciles "what exists," OWNER-PROVEN reconciles "what's proven." (Proposed operating-principle id: **OP-11** — confirm the DECISIONS.md OP sequence before assigning. Binding home: CLAUDE.md §9.)
+
 ---
 
 ## The why, one more time (so this discipline survives)
