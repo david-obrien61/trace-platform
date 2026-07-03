@@ -189,6 +189,7 @@
 | OP-8 | DECISIONS.md:205 | HAVE / NEED / WANT three-lens recon standard | working-method |
 | OP-9 | DECISIONS.md:228 | The Regina Principle — move "noticing what to do" off the owner onto the tool | suggestion |
 | OP-10 | DECISIONS.md (OP-10) | Structure-Last — the structure tax is paid by the MACHINE, not the human (+ small-grower expression, ~88% no-structure) | platform-wide |
+| OP-12 | DECISIONS.md (OP-12) | Reference-first promotion — code/schema reaches LIVE only by promoting a reference-proven artifact (schema byte-identical, no hand-edits); the 4th completion bar (DEPLOY TO LIVE). DORMANT until 1st paying customer | working-method |
 | D-1 | DECISIONS.md:256 | Cost-object schema = rename-in-place to ONE FK-able node table | cost-to-produce |
 | D-2 | DECISIONS.md:267 | PMI/service-log child column stays `asset_id` | asset/pmi |
 | D-3 | DECISIONS.md:277 | `parent_id` ON DELETE SET NULL — orphan-to-root, never cascade-destroy | cost-to-produce |

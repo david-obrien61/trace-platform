@@ -482,3 +482,22 @@ ARC: delivery
 MAPS-TO: 3.7, 3.5
 PIECES: customer_roster, customer_edit_modal, delivery_date_edit
 The owner opens /customers and sees every customer on one roster — the 3rd DataSheet consumer after inventory and assets — sort, search, hide-columns, inline-edit name/phone/email/address, owner-only. From a delivery card the owner taps "Edit customer" and a modal opens OVER the current route/map (per-field-on-blur, no Save button) instead of yanking them to the roster. The same card carries an inline date field to MOVE a delivery to another working day (the invoice router had scheduled one on a Sunday) — it re-groups under the new day. One form body, one rule set, shared between roster and modal. _Grounded: 52997c0 (roster), 3e7806a (modal), b2621a6 (date-edit), OWNER-PROVEN 2026-07-03. Board 3.7/3.5._
+
+### Ring up the sale — QR to cart to a real QuickBooks invoice
+STATUS: written
+SCOPE: vertical:cultivar
+BUILD: archived
+MAPS-TO: 2.1, 4.1
+PIECES: qr_checkout, cart_review, customer_capture, qbo_invoice
+The counter flow that started the demo: scan a plant's QR → add-ons (netting) → quantity → cart review with 8.25% TX tax → capture the customer → and a REAL QuickBooks invoice is created automatically (production Intuit approval), with a confirmation screen and the leakage flag if netting was declined. TRACE creates the invoice and feeds it forward into the customer's books — the base commerce loop, distinct from the BANKED "originate ahead of QBO" inversion (which would make TRACE the upstream system of record). _Grounded: 817b316 (US-003→US-010 full checkout + QB invoice), `qbo/invoice/cultivar.ts` QBO push; re-proven on the recovered tenant 2026-07-03; board 2.1 cart live / 4.1 QuickBooks live._
+
+---
+
+## DAVID ACTIONS — owner wall-clock (NOT builds)
+
+_Owner-side actions that GATE stories above. These are not builds Thunder can do — they are David's to execute (account setup, verification lags, domain wiring, data re-entry). Listed here so the blocking dependencies are tracked in one place beside the stories they unblock. (Not `###` stories — they do not render as cards; the story renderer only parses `###` headings.)_
+
+- **Stripe account under the TRACE EIN** — verification lag. **GATES Rail B** (platform billing). Until it clears, the business-pays-TRACE rail cannot be built or tested.
+- **Re-level TRACE Enterprises to BuiltWithCAI / general** — the pre-wipe snapshots show TRACE computed as a FLAT tenant; the [[D-14]] overhead carve-out is DECIDED but NOT built, and TRACE needs to sit at the BuiltWithCAI/general level. Also **wire the BuiltWithCAI domains** (`.com` explains / `.app` entry; `home.builtwithcai.app` pointer deferred on the core `.app`, per [[D-27]]). Feeds the platform-economics epic + the residence front-door.
+- **Re-enter the infra cost floor** — the per-tenant infra costs were WIPED with the old DB; **Model B ([[D-16]]) needs per-tenant cost-to-serve** to compute a price. Until re-entered, the pricing engine has no cost floor to divide.
+- **Stand up the REFERENCE / build environment** (a cheap disposable duplicate — no paying-customer data, break-freely). **TRIGGER: before LAWNS's data becomes real** (go-live prep), NOT sooner. Open shape (recon when triggered, not now): two-project (cleanest isolation, ~doubles some infra) vs Supabase branching vs seed/reset of a reference tenant — cost kept low since no paying customer. The hard part is not the copy; it's the promotion discipline ([[OP-12]] / the DEPLOY TO LIVE completion bar) that keeps reference and live schemas from drifting.

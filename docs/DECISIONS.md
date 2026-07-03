@@ -296,6 +296,14 @@ gate on the OWNER-PROVEN bar closes that leak the same way the ledger gate close
 RECONCILIATION). Companion: the BUILDER-COMPLETE reconciliation gate (its first-bar sibling).
 **Date captured:** 2026-07-03 · **Status:** Active doctrine (ratified by David 2026-07-03).
 
+### OP-12 · Reference-first promotion — the live boundary is crossed only by promoting a reference-proven artifact — `[CAPTURED]`
+**Class:** OPERATING-PRINCIPLE (release discipline — governs how code/schema reaches production once real customer data exists).
+**Decision:** Once a paying customer exists, **no code or schema reaches production except by promotion of an artifact already OWNER-PROVEN on the REFERENCE environment** (the disposable break-freely duplicate; see the fourth completion bar). Two promotions, different risk: **CODE** promotes as a git / environment-target operation (reversible via revert + redeploy). **SCHEMA is the dangerous one** — the migration applied to LIVE must be **BYTE-IDENTICAL** to the one proven on reference, applied in order, with **NO hand-edits at the boundary.** The failure mode this guards against is DRIFT: proving migration N on reference, then hand-applying a subtly-different N to live under deadline pressure. Given David applies SQL by hand as `postgres`, the rule is explicit — **the reference-proven migration file is the artifact promoted verbatim; live is never hand-authored.** **DORMANT until the first paying customer; ratified now so the discipline predates the pressure.**
+**Reasoning:** run-and-gun velocity is worth keeping right up to the live boundary — but the moment real customer data is at stake, an unproven or drifted change is expensive to undo. Binding promotion to a reference-proven artifact keeps the fast loop AND makes the live crossing deliberate and reversible. Byte-identical schema promotion closes the specific hole hand-applied SQL opens under pressure.
+**Companion principles:** the fourth completion bar — **DEPLOY TO LIVE** (`CLAUDE.md` §9, its sibling in the completion/promotion discipline), [[OP-11]] (reconcile-on-both-bars — the status-honesty gate on the OWNER-PROVEN bar that precedes promotion), [[OP-4]] (the completion-bars model this extends). NOT a duplicate of OP-11.
+**Canonical home:** `CLAUDE.md` §9 (the fourth completion bar — DEPLOY TO LIVE) · THIS entry (the promotion rule). **David action to stand up the reference environment:** `user_stories.md` → DAVID ACTIONS.
+**Date captured:** 2026-07-03 · **Status:** CAPTURED doctrine — **DORMANT until the first paying customer** (no paying customer today).
+
 ---
 
 ## ARCHITECTURE-DECISION
