@@ -30,6 +30,7 @@ import { Truck, MapPin, Navigation, Phone, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { CustomerEditModal, type EditableCustomer } from '../components/customers/CustomerEditModal';
+import { CaptureInvoiceLauncher } from '../components/CaptureInvoiceLauncher';
 
 const TRACE_DELIVERY = true; // [TRACE:DELIVERY] STD-003 — ON until David owner-proves
 
@@ -181,6 +182,8 @@ export function DeliverySchedule() {
             {loading ? 'Loading…' : `${rows.length} scheduled deliver${rows.length !== 1 ? 'ies' : 'y'}`}
           </p>
         </div>
+        {/* Second door into the invoice OCR→infer→route flow (owner action, matches "Edit customer" gating). */}
+        {isOwner && <CaptureInvoiceLauncher />}
       </div>
 
       <div style={{ padding: '16px 16px 0' }}>
@@ -195,7 +198,7 @@ export function DeliverySchedule() {
               Snap an invoice and check “Schedule delivery” to add one here.
             </p>
             <button
-              onClick={() => navigate('/receipts')}
+              onClick={() => navigate('/receipts', { state: { from: 'route' } })}
               style={{ marginTop: 16, padding: '11px 18px', background: GREEN, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer' }}
             >
               Snap an invoice →

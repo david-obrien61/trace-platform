@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import {
@@ -135,6 +135,10 @@ interface EditableFields {
 
 export function ReceiptKeeper() {
   const navigate = useNavigate();
+  const location = useLocation();
+  // Which door opened this flow — 'route' when launched from the delivery/route surface,
+  // 'direct' otherwise (the Receipts tile / nav). Observability only; behaviour is identical.
+  const enteredFrom = (location.state as { from?: string } | null)?.from ?? 'direct';
   const { businessId } = useBusinessContext();
   const isMobile = useIsMobile();
   const fileInputRef   = useRef<HTMLInputElement>(null); // gallery / file picker (no camera)
@@ -165,6 +169,10 @@ export function ReceiptKeeper() {
   useEffect(() => {
     if (TRACE_OCR) console.log('[TRACE:OCR] device-detect — isMobile:', isMobile, 'layout:', isMobile ? 'camera-first' : 'file-upload', 'shape:', OCR_SHAPE);
   }, [isMobile]);
+
+  useEffect(() => {
+    if (TRACE_ROUTER) console.log('[TRACE:ROUTER] invoice capture opened — entered-from:', enteredFrom, 'shape:', OCR_SHAPE);
+  }, [enteredFrom]);
 
   // Line items state — user-editable grid from OCR output
   const [lineItems, setLineItems]               = useState<LineItem[]>([]);

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
+import { CaptureInvoiceLauncher } from '../components/CaptureInvoiceLauncher';
 
 interface DeliveryOrder {
   id: string;
@@ -332,7 +333,7 @@ export function DeliveryRoute() {
   // When ?date=YYYY-MM-DD is present we route SCHEDULED deliveries (the `deliveries`
   // table) for that day. Absent → the original cart-order route path, unchanged.
   const dateParam = searchParams.get('date');
-  const { businessId } = useBusinessContext();
+  const { businessId, isOwner } = useBusinessContext();
 
   const [orders, setOrders]     = useState<DeliveryOrder[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -536,6 +537,8 @@ export function DeliveryRoute() {
               : `${orders.length} pending deliver${orders.length !== 1 ? 'ies' : 'y'}`}
           </p>
         </div>
+        {/* Second door into the invoice OCR→infer→route flow (owner action, matches the delivery-card gating). */}
+        {isOwner && <CaptureInvoiceLauncher />}
       </div>
 
       <div style={{ padding: '16px 16px 0' }}>
