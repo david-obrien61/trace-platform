@@ -23,8 +23,17 @@ export {
   getMembersByBusiness,
   updateMemberRole,
   removeMember,
+  setMemberActive,
   checkPermission,
 } from './members';
+
+// PIN-reset spine (D-31) — owner arms (nulls pin_hash), member sets own PIN via own session
+export {
+  armPinReset,
+  loadOwnMemberships,
+  setOwnPin,
+} from './pinReset';
+export type { OwnMembership } from './pinReset';
 
 // Device spine (D-31) — owner-side reads/writes of member_devices (enroll + is_active lockout)
 export {
@@ -57,6 +66,9 @@ export type { AcceptInvitationInput } from './acceptInvitation';
 
 // Shared React component for the invite acceptance page
 export { AcceptInvite } from './AcceptInvite';
+
+// Shared React component for the PIN-reset screen (D-31 spine — mounted at /reset-pin)
+export { ResetPin } from '../components/auth/ResetPin';
 
 // Shared multi-step owner signup with PIN gesture layer
 export { OwnerSignup } from './OwnerSignup';

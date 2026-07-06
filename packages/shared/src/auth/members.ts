@@ -46,6 +46,23 @@ export async function removeMember(
   if (error) throw new Error(`removeMember: ${error.message}`);
 }
 
+// Soft deactivate / reactivate — flips business_members.active. active=false blocks the member
+// at the RLS layer (is_active_member) without deleting history; active=true restores access.
+// Owner-scoped by bm_owner_all. Touches only `active`, never role/permissions, so the authority
+// trigger never fires. The reversible counterpart to removeMember's hard delete.
+export async function setMemberActive(
+  supabase: SupabaseClient,
+  memberId: string,
+  active: boolean
+): Promise<void> {
+  const { error } = await supabase
+    .from('business_members')
+    .update({ active })
+    .eq('id', memberId);
+
+  if (error) throw new Error(`setMemberActive: ${error.message}`);
+}
+
 // Pure function — no DB call.
 // Pass the member's permissions array and the permission name to check.
 // Verticals define what each permission string means.

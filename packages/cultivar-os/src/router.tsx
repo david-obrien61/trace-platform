@@ -39,7 +39,8 @@ import { TeamConsole }       from './pages/TeamConsole';
 import { Profile }            from './pages/Profile';
 import { AdminIndex }         from './pages/AdminIndex';
 import { SettingsIndex }      from './pages/SettingsIndex';
-import { AcceptInvite }      from '@trace/shared/auth';
+import { AcceptInvite, ResetPin } from '@trace/shared/auth';
+import { supabase }          from './lib/supabase';
 import { auth }              from './lib/auth';
 
 function AcceptInvitePage() {
@@ -50,6 +51,18 @@ function AcceptInvitePage() {
       onRedirectTo="/dashboard"
       supabaseSignIn={auth.signIn}
       navigate={navigate}
+    />
+  );
+}
+
+function ResetPinPage() {
+  const navigate = useNavigate();
+  return (
+    <ResetPin
+      supabase={supabase}
+      signIn={auth.signIn}
+      navigate={navigate}
+      redirectTo="/login"
     />
   );
 }
@@ -68,6 +81,7 @@ export function AppRouter() {
       <Route path="/login"   element={<Login />} />
       <Route path="/signup"  element={<SignUp />} />
       <Route path="/join"    element={<AcceptInvitePage />} />
+      <Route path="/reset-pin" element={<ResetPinPage />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms"   element={<Terms />} />
       <Route path="/help"    element={<Help />} />

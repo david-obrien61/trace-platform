@@ -17,12 +17,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  getMembersByBusiness, updateMemberRole, removeMember,
+  getMembersByBusiness, updateMemberRole, removeMember, setMemberActive,
   createInvitation, getPendingInvitations, revokeInvitation,
   getRoleDefinitions, resolveRoles, upsertTenantRole, deleteTenantRole,
-  listDevicesByBusiness, setDeviceActive, deleteDevice,
+  listDevicesByBusiness, setDeviceActive, deleteDevice, armPinReset,
 } from '../../auth';
 import type { Member, Invitation, Device, ResolvedRole, RoleDefinitionRow } from '../../auth';
+import { generateQR } from '../../qr/generate';
 
 // ── theming (vertical passes its own tokens — AC-4: only color/vocabulary vary) ────────
 export interface MemberConsoleTheme {
@@ -152,9 +153,9 @@ export function MemberConsole(props: MemberConsoleProps) {
         {tab === 'users' && (
           <UsersTab
             T={T} supabase={supabase} businessId={businessId}
-            members={members} pending={pending} resolved={resolved}
+            members={members} pending={pending} resolved={resolved} devices={devices}
             inviteRoleOptions={inviteRoleOptions} defaultPermissionsFor={defaultPermissionsFor}
-            inviteBaseUrl={inviteBaseUrl} invitePath={invitePath}
+            inviteBaseUrl={inviteBaseUrl} invitePath={invitePath} showDevices={showDevices}
             busy={busy} setBusy={setBusy} reload={reload} setLoadError={setLoadError}
           />
         )}
@@ -183,13 +184,14 @@ type InvitePhase = 'list' | 'form' | 'link';
 
 function UsersTab(p: {
   T: MemberConsoleTheme; supabase: SupabaseClient; businessId: string;
-  members: Member[]; pending: Invitation[]; resolved: ResolvedRole[];
+  members: Member[]; pending: Invitation[]; resolved: ResolvedRole[]; devices: Device[];
   inviteRoleOptions: InviteRoleOption[]; defaultPermissionsFor: (r: string) => string[];
-  inviteBaseUrl: string; invitePath: string;
+  inviteBaseUrl: string; invitePath: string; showDevices: boolean;
   busy: boolean; setBusy: (b: boolean) => void; reload: () => Promise<void>; setLoadError: (s: string) => void;
 }) {
-  const { T, supabase, businessId, members, pending, resolved, inviteRoleOptions, defaultPermissionsFor, inviteBaseUrl, invitePath, busy, setBusy, reload, setLoadError } = p;
+  const { T, supabase, businessId, members, pending, resolved, devices, inviteRoleOptions, defaultPermissionsFor, inviteBaseUrl, invitePath, showDevices, busy, setBusy, reload, setLoadError } = p;
   const [phase, setPhase] = useState<InvitePhase>('list');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState(inviteRoleOptions[0]?.role_key ?? 'STAFF');
@@ -307,10 +309,30 @@ function UsersTab(p: {
                 {copied ? 'Copied!' : 'Copy'}
               </button>
             </div>
+            {/* Same token, second format — scan to open the join page. */}
+            <QrImage content={link} T={T} caption="Or scan this QR to join" />
             <button onClick={resetForm} style={{ alignSelf: 'flex-start', background: 'none', color: T.primary, fontWeight: 700, padding: '8px 0', border: 'none', fontSize: 13, cursor: 'pointer' }}>← Back to team</button>
           </div>
         )}
       </div>
+    );
+  }
+
+  // Per-user DETAIL VIEW — the primary "manage one person" flow: selecting a member's name opens
+  // one view with every action scoped to that person (role, their devices, invite, reset PIN,
+  // deactivate/remove). All reuse the proven backends; the tab is now list ⇄ detail.
+  const selected = selectedId ? members.find((m) => m.id === selectedId) ?? null : null;
+  const selectedPendingInvite = selected ? pending.find((inv) => inv.id === selected.invite_id) ?? null : null;
+  if (selected) {
+    return (
+      <MemberDetail
+        T={T} supabase={supabase}
+        member={selected} devices={devices} pendingInvite={selectedPendingInvite}
+        resolved={resolved} roleOptions={roleOptions} assignRole={assignRole}
+        inviteBaseUrl={inviteBaseUrl} invitePath={invitePath} showDevices={showDevices}
+        busy={busy} setBusy={setBusy} reload={reload} setLoadError={setLoadError}
+        onRemove={handleRemove} onBack={() => setSelectedId(null)}
+      />
     );
   }
 
@@ -324,29 +346,20 @@ function UsersTab(p: {
 
         {members.length === 0 && <p style={{ fontSize: 14, color: T.sub, textAlign: 'center', padding: '12px 0' }}>No team members yet.</p>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* Scannable summary (name · status · role); the whole row opens the person's detail view. */}
           {members.map((m) => (
-            <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', background: T.chipOffBg, borderRadius: 10, border: `1px solid ${T.border}`, flexWrap: 'wrap' }}>
+            <button key={m.id} onClick={() => setSelectedId(m.id)}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', background: T.chipOffBg, borderRadius: 10, border: `1px solid ${T.border}`, cursor: 'pointer', textAlign: 'left', width: '100%' }}>
               <div style={{ flex: 1, minWidth: 140 }}>
                 <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: T.ink }}>{m.name}</p>
                 {m.email && <p style={{ margin: '2px 0 0', fontSize: 12, color: T.sub, overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.email}</p>}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={badge(m.active ? '#dcfce7' : '#f3f4f6', m.active ? '#166534' : T.sub)}>{m.active ? 'Active' : 'Invited'}</span>
-                {/* PRESELECTED from business_members.role (the ONE source); catalog-backed + resilient. */}
-                <select value={(m.role ?? '').toUpperCase()} disabled={busy}
-                  onChange={(e) => { void assignRole(m, e.target.value); }}
-                  style={{ padding: '7px 10px', borderRadius: 8, border: `1px solid ${T.border}`, fontSize: 13, background: '#fff', color: T.ink }}>
-                  {resolved.length === 0 && <option value={(m.role ?? '').toUpperCase()}>{(m.role ?? '—').toUpperCase()}</option>}
-                  {roleOptions(m.role).map((rk) => <option key={rk} value={rk}>{rk}</option>)}
-                </select>
-                {m.role !== 'OWNER' && (
-                  <button onClick={() => { void handleRemove(m.id); }} disabled={working === m.id} title="Remove member"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.sub, fontSize: 18, lineHeight: 1, padding: '2px 4px' }}>
-                    {working === m.id ? '…' : '×'}
-                  </button>
-                )}
+                <span style={badge(T.chipOnBg, T.primary)}>{(m.role ?? '—').toUpperCase()}</span>
+                <span style={{ color: T.sub, fontSize: 18, lineHeight: 1 }}>›</span>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -367,6 +380,204 @@ function UsersTab(p: {
                 </button>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── QR of any content (reuses the shared generateQR helper; qrcode is already a vertical dep) ──
+function QrImage({ content, T, caption }: { content: string; T: MemberConsoleTheme; caption?: string }) {
+  const [dataUrl, setDataUrl] = useState('');
+  useEffect(() => {
+    let live = true;
+    generateQR(content, { width: 180, margin: 1 }).then((u) => { if (live) setDataUrl(u); }).catch(() => {});
+    return () => { live = false; };
+  }, [content]);
+  if (!dataUrl) return null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+      <img src={dataUrl} alt="QR code" width={180} height={180} style={{ borderRadius: 10, border: `1px solid ${T.border}` }} />
+      {caption && <span style={{ fontSize: 12, color: T.sub }}>{caption}</span>}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════
+// MEMBER DETAIL — one person, every action in one place (role · devices · invite · reset PIN ·
+// deactivate · remove). Re-composition: reuses updateMemberRole/setDeviceActive/deleteDevice/
+// createInvitation/generateQR/armPinReset/setMemberActive/removeMember — no new backend.
+// ══════════════════════════════════════════════════════════════════════════════════════
+function MemberDetail(p: {
+  T: MemberConsoleTheme; supabase: SupabaseClient;
+  member: Member; devices: Device[]; pendingInvite: Invitation | null;
+  resolved: ResolvedRole[]; roleOptions: (role: string | null) => string[];
+  assignRole: (m: Member, roleKey: string) => Promise<void>;
+  inviteBaseUrl: string; invitePath: string; showDevices: boolean;
+  busy: boolean; setBusy: (b: boolean) => void; reload: () => Promise<void>; setLoadError: (s: string) => void;
+  onRemove: (id: string) => Promise<void>; onBack: () => void;
+}) {
+  const { T, supabase, member, devices, pendingInvite, resolved, roleOptions, assignRole,
+    inviteBaseUrl, invitePath, showDevices, busy, setBusy, reload, setLoadError, onRemove, onBack } = p;
+  const [working, setWorking] = useState<string | null>(null);
+  const [resetLink, setResetLink] = useState('');
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const myDevices = useMemo(() => devices.filter((d) => d.member_id === member.id), [devices, member.id]);
+  const isOwnerRow = (member.role ?? '').toUpperCase() === 'OWNER';
+  const inviteLink = pendingInvite ? `${inviteBaseUrl}${invitePath}?token=${pendingInvite.token}` : '';
+
+  const card: React.CSSProperties = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 18 };
+  const sectionLabel: React.CSSProperties = { margin: '0 0 10px', fontSize: 11, fontWeight: 800, color: T.sub, textTransform: 'uppercase', letterSpacing: '0.08em' };
+  const smallBtn = (color: string): React.CSSProperties => ({ background: 'none', border: `1px solid ${T.border}`, color, fontSize: 11, fontWeight: 700, padding: '6px 10px', borderRadius: 8, cursor: 'pointer' });
+
+  function copy(text: string, key: string) {
+    navigator.clipboard.writeText(text).catch(() => {});
+    setCopied(key); setTimeout(() => setCopied(null), 2000);
+  }
+
+  async function toggleDevice(d: Device) {
+    setWorking(d.id); setBusy(true);
+    try { await setDeviceActive(supabase, d.id, !d.is_active); console.log('[TRACE:MEMBERCONSOLE] detail deviceToggle', { memberId: member.id, deviceId: d.id, to: !d.is_active }); await reload(); }
+    catch (err) { setLoadError(err instanceof Error ? err.message : 'Device update failed'); }
+    finally { setWorking(null); setBusy(false); }
+  }
+  async function removeDevice(d: Device) {
+    if (!window.confirm(`Remove ${d.device_label ?? 'this device'}? A fresh sign-in re-enrolls it.`)) return;
+    setWorking(d.id); setBusy(true);
+    try { await deleteDevice(supabase, d.id); await reload(); }
+    catch (err) { setLoadError(err instanceof Error ? err.message : 'Device delete failed'); }
+    finally { setWorking(null); setBusy(false); }
+  }
+  async function resetPin() {
+    if (!window.confirm(`Reset ${member.name}'s PIN? Their current PIN stops working until they set a new one.`)) return;
+    setBusy(true);
+    try {
+      await armPinReset(supabase, member.id);
+      const link = `${inviteBaseUrl}/reset-pin?m=${member.id}`;
+      setResetLink(link);
+      console.log('[TRACE:PINRESET] armed by owner', { memberId: member.id });
+      await reload();
+    } catch (err) { setLoadError(err instanceof Error ? err.message : 'Reset failed'); }
+    finally { setBusy(false); }
+  }
+  async function toggleActive() {
+    const next = !member.active;
+    if (!window.confirm(next ? `Reactivate ${member.name}?` : `Deactivate ${member.name}? They lose access until reactivated.`)) return;
+    setBusy(true);
+    try { await setMemberActive(supabase, member.id, next); console.log('[TRACE:MEMBERCONSOLE] setActive', { memberId: member.id, to: next }); await reload(); onBack(); }
+    catch (err) { setLoadError(err instanceof Error ? err.message : 'Update failed'); }
+    finally { setBusy(false); }
+  }
+  async function remove() {
+    if (!window.confirm(`Permanently remove ${member.name}? This cannot be undone.`)) return;
+    setBusy(true);
+    try { await onRemove(member.id); onBack(); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <button onClick={onBack} style={{ alignSelf: 'flex-start', background: 'none', color: T.primary, fontWeight: 700, padding: '4px 0', border: 'none', fontSize: 13, cursor: 'pointer' }}>← All team members</button>
+
+      {/* Header: identity + role (inline) */}
+      <div style={card}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <p style={{ margin: 0, fontWeight: 800, fontSize: 18, color: T.ink }}>{member.name}</p>
+            {member.email && <p style={{ margin: '2px 0 0', fontSize: 13, color: T.sub }}>{member.email}</p>}
+            {member.phone && <p style={{ margin: '2px 0 0', fontSize: 13, color: T.sub }}>{member.phone}</p>}
+          </div>
+          <span style={badge(member.active ? '#dcfce7' : '#f3f4f6', member.active ? '#166534' : T.sub)}>{member.active ? 'Active' : 'Invited'}</span>
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <p style={sectionLabel}>Role</p>
+          <select value={(member.role ?? '').toUpperCase()} disabled={busy || isOwnerRow}
+            onChange={(e) => { void assignRole(member, e.target.value); }}
+            style={{ padding: '8px 12px', borderRadius: 9, border: `1px solid ${T.border}`, fontSize: 14, background: '#fff', color: T.ink, minWidth: 160 }}>
+            {resolved.length === 0 && <option value={(member.role ?? '').toUpperCase()}>{(member.role ?? '—').toUpperCase()}</option>}
+            {roleOptions(member.role).map((rk) => <option key={rk} value={rk}>{rk}</option>)}
+          </select>
+          {isOwnerRow && <p style={{ margin: '6px 0 0', fontSize: 12, color: T.sub }}>The owner role can’t be reassigned here.</p>}
+        </div>
+      </div>
+
+      {/* Devices — this person's enrolled devices */}
+      {showDevices && (
+        <div style={card}>
+          <p style={sectionLabel}>Devices ({myDevices.length})</p>
+          {myDevices.length === 0 && <p style={{ fontSize: 13, color: T.sub }}>No devices enrolled yet — they appear after this person signs in.</p>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {myDevices.map((d) => (
+              <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', background: T.chipOffBg, borderRadius: 10, border: `1px solid ${T.border}`, flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: T.ink }}>{d.device_label ?? 'Unknown device'}</p>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: T.sub }}>last seen {d.last_seen ? new Date(d.last_seen).toLocaleString() : 'never'}</p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={badge(d.is_active ? '#dcfce7' : '#fee2e2', d.is_active ? '#166534' : T.danger)}>{d.is_active ? 'Active' : 'Locked'}</span>
+                  <button onClick={() => { void toggleDevice(d); }} disabled={working === d.id} style={smallBtn(d.is_active ? T.danger : T.primary)}>
+                    {working === d.id ? '…' : d.is_active ? 'Lock out' : 'Re-enable'}
+                  </button>
+                  <button onClick={() => { void removeDevice(d); }} disabled={working === d.id} title="Remove device" style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.sub, fontSize: 18, lineHeight: 1, padding: '2px 4px' }}>×</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Invite — only meaningful while the member is still pending (link + QR, same token) */}
+      {pendingInvite && (
+        <div style={card}>
+          <p style={sectionLabel}>Invite — link &amp; QR</p>
+          <p style={{ margin: '0 0 10px', fontSize: 13, color: T.sub }}>{member.name} hasn’t joined yet. Share the link or QR — both carry the same one-time token.</p>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <input readOnly value={inviteLink} style={{ flex: 1, boxSizing: 'border-box', padding: '10px 12px', border: `1.5px solid ${T.border}`, borderRadius: 9, fontFamily: 'monospace', fontSize: 12, color: T.ink, background: '#fff' }} onFocus={(e) => e.currentTarget.select()} />
+            <button onClick={() => copy(inviteLink, 'invite')} style={{ background: T.primary, color: '#fff', fontWeight: 800, padding: '0 16px', borderRadius: 9, border: 'none', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>{copied === 'invite' ? 'Copied!' : 'Copy link'}</button>
+          </div>
+          <QrImage content={inviteLink} T={T} caption="Scan to join" />
+        </div>
+      )}
+
+      {/* Reset PIN — owner arms the reset; member sets a new PIN via the reset screen */}
+      {!isOwnerRow && (
+        <div style={card}>
+          <p style={sectionLabel}>Reset PIN</p>
+          <p style={{ margin: '0 0 10px', fontSize: 13, color: T.sub }}>Revoke this person’s current PIN and let them set a new one from the reset screen.</p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => { void resetPin(); }} disabled={busy} style={{ background: T.primary, color: '#fff', fontWeight: 800, padding: '9px 16px', borderRadius: 9, border: 'none', fontSize: 13, cursor: 'pointer', opacity: busy ? 0.5 : 1 }}>Reset PIN</button>
+            <button disabled title="SMS not configured — connect later" style={{ background: T.chipOffBg, color: T.sub, fontWeight: 700, padding: '9px 16px', borderRadius: 9, border: `1px dashed ${T.border}`, fontSize: 13, cursor: 'not-allowed' }}>
+              Send reset code by SMS — not configured
+            </button>
+          </div>
+          {member.phone
+            ? <p style={{ margin: '8px 0 0', fontSize: 12, color: T.sub }}>SMS would go to {member.phone} once texting is connected.</p>
+            : <p style={{ margin: '8px 0 0', fontSize: 12, color: T.sub }}>Add a phone number to enable SMS delivery later.</p>}
+          {resetLink && (
+            <div style={{ marginTop: 12 }}>
+              <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 700, color: T.primary }}>PIN revoked. Share this reset link:</p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input readOnly value={resetLink} style={{ flex: 1, boxSizing: 'border-box', padding: '10px 12px', border: `1.5px solid ${T.border}`, borderRadius: 9, fontFamily: 'monospace', fontSize: 12, color: T.ink, background: '#fff' }} onFocus={(e) => e.currentTarget.select()} />
+                <button onClick={() => copy(resetLink, 'reset')} style={{ background: T.primary, color: '#fff', fontWeight: 800, padding: '0 16px', borderRadius: 9, border: 'none', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>{copied === 'reset' ? 'Copied!' : 'Copy'}</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Danger zone — deactivate (reversible) + remove (permanent). Never for the owner row. */}
+      {!isOwnerRow && (
+        <div style={{ ...card, borderColor: '#f3d0d0' }}>
+          <p style={sectionLabel}>Danger zone</p>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button onClick={() => { void toggleActive(); }} disabled={busy} style={{ background: 'none', border: `1px solid ${T.border}`, color: member.active ? T.sub : T.primary, fontWeight: 700, padding: '9px 16px', borderRadius: 9, fontSize: 13, cursor: 'pointer' }}>
+              {member.active ? 'Deactivate' : 'Reactivate'}
+            </button>
+            <button onClick={() => { void remove(); }} disabled={busy} style={{ background: '#fef2f2', border: `1px solid ${T.danger}`, color: T.danger, fontWeight: 800, padding: '9px 16px', borderRadius: 9, fontSize: 13, cursor: 'pointer' }}>
+              Remove member
+            </button>
           </div>
         </div>
       )}
