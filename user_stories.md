@@ -119,16 +119,6 @@ PIECES: cost_meter, usage_ledger, ocr_quality_signal
 NEEDS: David to decide metering unit + cap-vs-overage + whether retakes (2 calls for 1 receipt, often OUR miss) are billed. Cost feeds cost-to-produce (built); the per-customer usage meter has NO board id yet (— = capability candidate, platform-scope: every vertical hits the gateway).
 David runs a batch of real receipts through and learns three things from the [TRACE:CAPTURE] trail: (1) what 100 reads cost (Gemini Flash ~$0.0001/read → extrapolate a customer's monthly AI bill); (2) whether a customer is over allotment (the "1000 calls, then a penny more" tier — needs per-customer counts to monitor, guard abuse, bill); (3) whether the OCR is good enough — straight-through submit = OCR nailed it, image RETAKEN = a PHOTO problem not OCR, fields EDITED on a good image = OCR misread. The three signals log APART, because an edit isn't always a failure (the user sometimes adds what OCR couldn't know).
 
-### Capture an invoice from where I manage deliveries (the second door)
-STATUS: needs-input
-SCOPE: vertical:cultivar, platform
-BUILD: in-build
-ARC: ocr-doc-routing
-MAPS-TO: 3.5
-PIECES: capture_invoice_launcher, ocr_second_door
-NEEDS: David to owner-prove the launcher live (from a route/schedule page → capture → add-customer + schedule-delivery → land back on the route with the new stop); flip 🟡→🟢 across the boards per [[OP-11]] on prove.
-The owner is standing on the delivery-schedule / route screen and a vendor invoice lands in hand — a persistent owner-gated **"Capture invoice"** button in the header opens the SAME invoice OCR→infer→route pipeline (ReceiptKeeper, `shape:'invoice'`) as the Receipts tile, then returns them to the route with the new stop bucketed. ONE pipeline, two doors — the entry point moved, nothing was rebuilt (mirrors the asset-capture two-door pattern). _Grounded: ledger #85 (`CaptureInvoiceLauncher.tsx`, BUILDER-COMPLETE, owner-proof owed; `[TRACE:ROUTER] entered-from:route`); board 3.5 · ARC-2 / ARC-5._
-
 ---
 
 ## ARC: cost-to-produce
@@ -455,6 +445,15 @@ The Residence Product ("Kitchen Loop") is a residence-scoped VIEW of the ONE sha
 ## ARCHIVED
 
 _Delivered or retired stories move here for history. They render muted and only appear in the All / Archived views._
+
+### Capture an invoice from where I manage deliveries (the second door)
+STATUS: written
+SCOPE: vertical:cultivar, platform
+BUILD: archived
+ARC: ocr-doc-routing
+MAPS-TO: 3.5
+PIECES: capture_invoice_launcher, ocr_second_door
+The owner is standing on the delivery-schedule / route screen and a vendor invoice lands in hand — a persistent owner-gated **"Capture invoice"** button in the header opens the SAME invoice OCR→infer→route pipeline (ReceiptKeeper, `shape:'invoice'`) as the Receipts tile, then returns them to the route with the new stop bucketed. ONE pipeline, two doors — the entry point moved, nothing was rebuilt (mirrors the asset-capture two-door pattern). _Grounded: ledger #85, commit 134bacd (`CaptureInvoiceLauncher.tsx`); renders on BOTH delivery/route + delivery/schedule (mobile + desktop), both doors open the existing flow, `[TRACE:ROUTER] entered-from:route`; OWNER-PROVEN 2026-07-06. Board 3.5 · ARC-2 / ARC-5._
 
 ### Route the day's deliveries
 STATUS: written
