@@ -68,6 +68,10 @@ export type { AcceptInvitationInput } from './acceptInvitation';
 // Shared React component for the invite acceptance page
 export { AcceptInvite } from './AcceptInvite';
 
+// AGNOSTIC route-entry permission gate (D-31 / security class fix) — every react-router +
+// BusinessProvider vertical inherits "a gated route refuses unauthorized entry from ANY door".
+export { PermissionRoute } from './PermissionRoute';
+
 // Shared React component for the PIN-reset screen (D-31 spine — mounted at /reset-pin)
 export { ResetPin } from '../components/auth/ResetPin';
 

@@ -1,8 +1,7 @@
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { PrivateRoute }    from './components/layout/PrivateRoute';
 import { AppLayout }       from './components/layout/AppLayout';
-import { PermissionRoute } from './components/layout/PermissionRoute';
-import { VIEW_COSTS }      from '@trace/shared/auth';
+import { VIEW_COSTS, PermissionRoute } from '@trace/shared/auth';
 import { PERMISSIONS }     from './auth/roles';
 import { PlantProfile }    from './pages/PlantProfile';
 import { AddOns }          from './pages/AddOns';
@@ -90,40 +89,63 @@ export function AppRouter() {
           around every authenticated route (one mount, not per-page). */}
       <Route element={<PrivateRoute />}>
         <Route element={<AppLayout />}>
+          {/* ── OPEN to every authenticated session (view_dashboard, held by all roles) ──
+              Landing + self-service surfaces. /dashboard is the redirect target; /profile and the
+              /settings index are per-person, not gated capabilities. Left ungated deliberately. */}
           <Route path="/dashboard"    element={<Dashboard />} />
-          <Route path="/orders"       element={<Orders />} />
-          <Route path="/deliveries"   element={<DeliveryRoute />} />
-          <Route path="/delivery-schedule" element={<DeliverySchedule />} />
-          <Route path="/social/setup" element={<SocialSetup />} />
           {/* Settings lands on a SHORT index (user-level), NOT the business-settings wall (D-21). */}
           <Route path="/settings"          element={<SettingsIndex />} />
-          {/* Section-isolated Settings destinations (RULE 2a) — /settings/business, /settings/accounting
-              land on JUST that section, full screen, no long scroll. /settings/all renders the FULL
-              business-settings page (Services/Team/cost config) as a deliberate destination reached
-              from the Settings index, not the default landing. Same component, section-filtered. */}
-          <Route path="/settings/:section" element={<Settings />} />
           <Route path="/onboarding"        element={<OnboardingWizard />} />
-          <Route path="/campaigns"         element={<Campaigns />} />
-          <Route path="/campaigns/:id"     element={<CampaignDetail />} />
-          <Route path="/add-business"      element={<AddBusiness />} />
           <Route path="/profile"           element={<Profile />} />
-          <Route path="/receipts"          element={<ReceiptKeeper />} />
 
-          {/* AGNOSTIC member/device console (D-31): invite + roles (visibility axis) + devices —
-              owner-only. manage_settings is held by OWNER alone in Cultivar today, so PermissionRoute
-              effectively owner-gates it; it writes only tenant role rows (RLS owner-only) + member/
-              device rows (RLS owner-scoped). /roles REDIRECTS here (the old page is superseded). */}
+          {/* ════════════════════════════════════════════════════════════════════════════════
+              ROUTE-ENTRY PERMISSION ENFORCEMENT (security class fix, 2026-07-06).
+              Gating must live on the ROUTE, not only on nav-link visibility — otherwise any second
+              door (dashboard tile, deep link, typed URL) bypasses it (the Campaign Scheduler bug).
+              Every gated capability's route is wrapped in <PermissionRoute permission=…> keyed on
+              its registry/nav required_permission, so an unauthorized session is refused (redirect
+              to /dashboard + [TRACE:PERMGATE]) regardless of HOW it arrived. Groups mirror the
+              tileRegistry required_permission values exactly — nav AND route agree.
+              ════════════════════════════════════════════════════════════════════════════════ */}
+
+          {/* Orders — qr_checkout (STAFF holds it; guarded for completeness so the class has no gap). */}
+          <Route element={<PermissionRoute permission={PERMISSIONS.QR_CHECKOUT} />}>
+            <Route path="/orders"       element={<Orders />} />
+          </Route>
+
+          {/* Delivery — manage_deliveries (STAFF lacks it → refused at entry, was URL-reachable). */}
+          <Route element={<PermissionRoute permission={PERMISSIONS.MANAGE_DELIVERIES} />}>
+            <Route path="/deliveries"        element={<DeliveryRoute />} />
+            <Route path="/delivery-schedule" element={<DeliverySchedule />} />
+          </Route>
+
+          {/* Social + Campaigns — manage_campaigns. Campaign Scheduler is the reported bug: STAFF
+              reached /campaigns via the dashboard card despite lacking this permission. Now every
+              door (tile, deep link, typed URL) is refused at route entry. */}
+          <Route element={<PermissionRoute permission={PERMISSIONS.MANAGE_CAMPAIGNS} />}>
+            <Route path="/social/setup" element={<SocialSetup />} />
+            <Route path="/campaigns"         element={<Campaigns />} />
+            <Route path="/campaigns/:id"     element={<CampaignDetail />} />
+          </Route>
+
+          {/* Business administration — manage_settings (held by OWNER alone in Cultivar today).
+              Section-isolated Settings destinations (RULE 2a) — /settings/business, /settings/
+              accounting land on JUST that section; /settings/all renders the FULL business-settings
+              page (Services/Team/cost config). AGNOSTIC member/device console (D-31): invite + roles
+              (visibility axis) + devices. /roles REDIRECTS here (the old page is superseded). Admin
+              landing index — each card additionally respects its own permission. */}
           <Route element={<PermissionRoute permission={PERMISSIONS.MANAGE_SETTINGS} />}>
+            <Route path="/settings/:section" element={<Settings />} />
             <Route path="/team"            element={<TeamConsole />} />
             <Route path="/roles"           element={<Navigate to="/team" replace />} />
-            {/* Admin landing index — business administration. Gated to manage_settings (owner
-                short-circuits); each card on the page additionally respects its own permission. */}
             <Route path="/admin"           element={<AdminIndex />} />
           </Route>
 
           {/* COST-ANALYSIS surfaces — require view_costs (decision 2026-06-21, Phase 3/4).
-              A low-role member is redirected to /dashboard, so the cost SELECT never fires. */}
+              A low-role member is redirected to /dashboard, so the cost SELECT never fires.
+              /receipts joins this group (registry receipt_keeper tile → view_costs). */}
           <Route element={<PermissionRoute permission={VIEW_COSTS} />}>
+            <Route path="/receipts"          element={<ReceiptKeeper />} />
             <Route path="/assets"            element={<BusinessAssets />} />
             <Route path="/assets/capture"    element={<AssetCapture />} />
             <Route path="/inventory"         element={<BusinessInventory />} />
@@ -132,14 +154,14 @@ export function AppRouter() {
             <Route path="/pmi"               element={<PMI />} />
           </Route>
 
-          {/* COST-TO-PRODUCE — OWNER-ONLY (Nav C2 access change, ratified 2026-06-24). Moved out
-              of the view_costs group: even a Manager who holds view_costs must NOT reach /costs by
-              URL. Matches the registry tile (placement=admin, required_permission=owner-only) so the
-              nav AND the route agree. can('owner-only') → owner true, everyone else redirected. */}
+          {/* OWNER-ONLY — the cost moat (D-009) + owner-scoped RLS surfaces. Even a Manager who
+              holds view_costs must NOT reach /costs by URL. Matches the registry tiles
+              (required_permission=owner-only) so nav AND route agree. Add Business is an account
+              action; Customers matches customers_business_owner RLS (owner-only). */}
           <Route element={<PermissionRoute permission="owner-only" />}>
             <Route path="/costs"             element={<CostToProduce />} />
-            {/* Customer ROSTER — owner-only, matches customers_business_owner RLS (owner-only). */}
             <Route path="/customers"         element={<Customers />} />
+            <Route path="/add-business"      element={<AddBusiness />} />
           </Route>
         </Route>
       </Route>

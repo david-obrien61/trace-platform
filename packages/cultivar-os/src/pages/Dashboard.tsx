@@ -111,7 +111,6 @@ export function Dashboard() {
   }
 
   const [socialDrafts, setSocialDrafts]           = useState<SocialDraft[]>([]);
-  const [campaignDraftCount, setCampaignDraftCount] = useState(0);
   const [draftEdits, setDraftEdits]               = useState<Record<string, string>>({});
   const [copiedId, setCopiedId]                   = useState<string | null>(null);
   const [generatingPosts, setGeneratingPosts]     = useState(false);
@@ -206,15 +205,6 @@ export function Dashboard() {
   }
 
   // ── Social drafts ─────────────────────────────────────────────────────────
-
-  async function loadCampaignDrafts() {
-    const { count } = await supabase
-      .from('campaign_posts')
-      .select('id', { count: 'exact', head: true })
-      .eq('business_id', businessId!)
-      .eq('status', 'draft');
-    setCampaignDraftCount(count ?? 0);
-  }
 
   async function loadSocialDrafts() {
     if (SOCIALDRAFT_DEBUG) console.log('[TRACE:socialdraft] loadSocialDrafts — businessId:', businessId);
@@ -331,7 +321,6 @@ export function Dashboard() {
     loadMetrics();
     checkQbStatus();
     loadSocialDrafts();
-    loadCampaignDrafts();
     // The connect poll's interval is owned + cleaned up by useQboConnect itself.
   }, [businessId]);
 
@@ -806,29 +795,11 @@ export function Dashboard() {
           </section>
         )}
 
-        {/* ── Campaign Scheduler ── */}
-        <section style={{ marginTop: '0.75rem' }}>
-          <div
-            onClick={() => navigate('/campaigns')}
-            style={{
-              background: '#fff', border: campaignDraftCount > 0 ? '1.5px solid #27500A' : '1px solid #e5e7eb',
-              borderRadius: 12, padding: '14px 16px', cursor: 'pointer',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            }}
-          >
-            <div>
-              <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#111827' }}>
-                📅 Campaign Scheduler
-              </p>
-              <p style={{ margin: '2px 0 0', fontSize: '0.8125rem', color: '#6b7280' }}>
-                {campaignDraftCount > 0
-                  ? `${campaignDraftCount} post${campaignDraftCount !== 1 ? 's' : ''} ready to review`
-                  : 'Plan seasonal and holiday content'}
-              </p>
-            </div>
-            <span style={{ fontSize: '0.875rem', color: '#27500A', fontWeight: 700 }}>→</span>
-          </div>
-        </section>
+        {/* Campaign Scheduler card REMOVED (security class fix, 2026-07-06). It rendered
+            unconditionally + navigated to /campaigns for every session, bypassing the
+            manage_campaigns gate (STAFF reached it here). Campaigns is a `manage_campaigns`
+            capability behind its registry tile (status:planned → locked in the grid) + the
+            now-route-guarded /campaigns; it does not belong loose on the dashboard. */}
 
         {/* ── Refresh ── */}
         <button
