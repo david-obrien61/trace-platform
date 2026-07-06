@@ -989,6 +989,23 @@ Implementation applies the **local-first LOGIC proven in DataBridge** — **pull
 
 ---
 
+### D-30 · Shared-device authentication — three flavors, face-swap preferred, face-recognition do-not-build — `[CAPTURED]`
+**Class:** ARCHITECTURE-DECISION / auth design note (DESIGN, not a build — banks the 2026-07-06 thinking so it survives to when "Build B" comes up).
+**Context:** Identity is **one-person / multi-device** (`member_devices`, shipped). Two device modes:
+- **PERSONAL device ("Picture A")** — Lauren/Terry each unlock their OWN device. Email → real Supabase session, with **PIN/biometric as an UNLOCK gesture on top** (per the Auth Architecture Locked Rule — the gesture never replaces `auth.uid()`). **A is the foundation, built first.**
+- **SHARED TERMINAL ("Picture B")** — many staff swap on ONE tablet (greasy-hands counter device). Additive on top of A.
+**The three flavors of shared-terminal (B):**
+1. **PIN-swap** — each staff taps their own 4-digit PIN on the shared tablet. NEEDS the orphaned `authenticateMember` (PIN-only, **no `auth.uid()`**) to establish a REAL Supabase session from a PIN — an **auth-architecture design pass**, not a code tweak. Real but **deferred**.
+2. **FACE-SWAP (RECOMMENDED)** — the shared tablet holds **MULTIPLE WebAuthn passkeys** (one per staff account). Staff glances (device biometric confirms a real enrolled person is present), taps their name → their passkey authenticates them **as themselves**. Privacy-clean: **NO stored biometric data** (keys stay in the Secure Enclave), reuses the Build-2 biometric work, much smaller than a recognition system. The greasy-hands shared-device experience done safely.
+3. **FACE-RECOGNITION (DO-NOT-BUILD)** — camera captures + **stores a face model** per staff, live-matches to identify who's present. Technically possible but converts the liability-free WebAuthn model into a **regulated BIOMETRIC DATABASE** (BIPA-style privacy law, consent, breach exposure) and discards WebAuthn's core safety property (TRACE never holds biometric data). **Do NOT build.** If a customer demands auto-identify, revisit **deliberately with legal review**.
+**Decision:** Build **A now**. When **B** is needed, prefer **FACE-SWAP (flavor 2)**. PIN-swap (1) is a separate auth-architecture design pass. Face-recognition (3) is a do-not-build on liability grounds. **B is additive on top of A — choosing A now does not close B.**
+**Grounds:** Ignition device recon 2026-07-06 (`member_devices` shipped, `authenticateMember` orphaned / PIN-only, `is_active` unenforced); WebAuthn's device-bound / identity-blind property; the PIN/face-unlock identity story.
+**Companion principles:** Auth Architecture Locked Rule (CLAUDE.md — PIN/face are unlock gestures on a real session, never a replacement), [[OP-1]] (covenant — no biometric database held over the customer), [[OP-8]] (three-lens recon — three flavors spanning NEED→WANT, not one pre-collapsed pick), Surface Honesty.
+**Canonical home:** THIS entry · the device-identity story in `user_stories.md`.
+**Date captured:** 2026-07-06 · **Status:** CAPTURED design note (UNBUILT — Build A proceeds separately; Build B deferred, face-swap preferred when it comes up).
+
+---
+
 ## PERSONAL-FINANCIAL
 
 > Not in this file by design — see **`decisions/PERSONAL-FINANCIAL.local.md`** (gitignored).
