@@ -263,6 +263,16 @@ NEEDS: David to confirm the biometric MECHANISM — WebAuthn passkey against the
 A LAWNS worker is out on the lot — gloves, dirty hands, a smudged screen; thumbing a PIN is the wrong tool. The app auto-locks after idle; the worker unlocks with their FACE, PIN as the fallback when a face check fails. From their OWN Settings › Your Profile (user-self, D-22 — not Admin, which is the owner resetting a staff PIN) each person can CHANGE THEIR PIN (re-auth first) and ENROLL / REMOVE face-unlock on that device. _Screenshot 2026-07-03: Your Profile shows Name/Phone/Login-Email; PIN + face-unlock are the missing controls._
 See [[D-30]] — shared-device auth design note (personal-device "A" is this story; shared-terminal "B" = PIN-swap / face-swap-preferred / face-recognition do-not-build).
 
+### Migrate shop_ (Ignition) tables into the platform DB — WITH RLS as they land (a SECURITY EVENT, not a lift-and-shift)
+STATUS: needs-input
+SCOPE: platform, vertical:ignition
+BUILD: active
+ARC: identity-roles-sec
+MAPS-TO: —
+PIECES: shop_tables_rls, business_id_scoping, ignition_onto_shared_auth
+NEEDS: David to set timing (undecided). A recon is owed to scope it table-by-table. Likely trigger: **before Ignition adopts the spine OR before any paying customer touches the platform DB, whichever comes first.**
+Under [[D-31]] (platform DB + spine-first), Ignition retires onto the shared spine and drops its own `DataBridge.authenticate` login; its `shop_` (Ignition-specific, the 20%) tables move into the platform DB. **This is a SECURITY EVENT, not a lift-and-shift:** the `shop_` tables currently **LACK RLS**, so migrating them into a multi-tenant DB that enforces tenant isolation on everything else means **adding `business_id` scoping + owner/member RLS to EVERY `shop_` table AS IT LANDS** ([[AC-2]]/[[AC-3]]) — or an unsecured hole is imported into the shared DB. A serious, careful build — **OP-12 territory**: once a reference environment exists, it goes through reference first, with the reference-proven migration promoted byte-identical to live. Grounds: [[D-31]], AC-2/AC-3, the Auth Architecture Locked Rule.
+
 ---
 
 ## ARC: asset-inventory-pmi

@@ -1006,6 +1006,23 @@ Implementation applies the **local-first LOGIC proven in DataBridge** — **pull
 
 ---
 
+### D-31 · Platform DB + spine-first architecture — one platform database (80/20), Ignition retires onto the shared spine — `[CAPTURED]`
+**Class:** ARCHITECTURE-DECISION / PLATFORM-PRINCIPLE (cross-cutting — governs every table, auth path, and build-placement call, not a single-feature decision).
+**Decision (David, 2026-07-06):** the main database is the **PLATFORM DB** — **not Cultivar's** — hosting **ALL apps' tables under the 80/20 rule**: ~**80%** shared/agnostic tables carry **NO vertical noun** ([[AC-1]]); ~**20%** vertical-specific tables carry a prefix (`growers_` / `shop_` / `kinna_` / `conduit_` …). The DB is to be **RENAMED at the project level** to reflect that it is the platform's, not one vertical's. Three consequences:
+
+1. **IGNITION IS A REFERENCE SYSTEM, temporary-separate.** It runs on its OWN auth (`DataBridge.authenticate`) + its OWN `shop_` tables **ONLY UNTIL** those tables migrate into the platform DB. Then Ignition **retires onto the shared spine** and **drops its own login.** All verticals authenticate through **ONE agnostic, robust auth path** — not a per-vertical login. "Temporary-separate" carries an explicit end-state so it never hardens into "permanently forked."
+
+2. **THE SPINE-FIRST TEST (the operative rule for every build):** ask — *"would every vertical need this, AND is it free of vertical-specific meaning?"* If **yes → build it in the SHARED SPINE, agnostic** (flag-gated for opt-in if a vertical isn't ready), **NOT in a vertical folder.** **Bias toward spine. Never build instance #2 of an agnostic capability per-vertical.** (This is exactly why the shared-device-auth work [[D-30]] lands in the shared `BusinessProvider`, flag-gated — not behind a Cultivar-only gate.)
+
+3. **The 80/20 split is [[AC-1]] restated at the DB level** (variation lives in DATA, not schema): the shared 80% is noun-free; the vertical 20% is where a prefix is legitimate.
+
+**Reasoning:** the platform's whole thesis is one-source-many-views on ONE composable engine ([[D-27]], PLATFORM_STRATEGY one-source-many-views). A DB named/owned by one vertical — plus a vertical running its own separate auth and tables indefinitely — quietly re-forks the platform back into per-vertical silos, the exact drift AC-1 exists to prevent. Naming the DB as the platform's, and making spine-first the DEFAULT build question, keeps the gravity toward the shared core. Re-test on drift: **is a new capability being built in a vertical folder that every vertical would need? If so it has drifted from spine-first — move it to shared, flag-gated.**
+**Companion principles:** [[AC-1]] (no vertical noun in shared schema — the 80/20 split is its DB-level form), [[AC-2]]/[[AC-3]] (RLS + tenant isolation — the security floor every migrated table must meet; see the shop_ RLS migration flagged build in `user_stories.md`), [[D-29]] (offline/local-first pattern pulled INTO shared — the same spine-first move: build toward the shared SyncEngine, never a per-vertical rebuild), [[D-30]] (the device-auth build in flight — lands shared + flag-gated BECAUSE of spine-first), one-source-many-views (PLATFORM_STRATEGY.md).
+**Canonical home:** THIS entry · PLATFORM_STRATEGY.md (architecture cross-ref) · the **spine-capability register** (`docs/spine-register.md` — the living inventory of which agnostic capabilities are correctly spine vs at risk of per-vertical rebuild) · the shop_ RLS migration flagged build (`user_stories.md`, identity-roles-sec arc).
+**Date captured:** 2026-07-06 · **Status:** CAPTURED doctrine / platform principle. DB rename + Ignition-onto-spine + shop_ RLS migration are UNBUILT (flagged, timing TBD); the **spine-first test is ACTIVE NOW on every build.**
+
+---
+
 ## PERSONAL-FINANCIAL
 
 > Not in this file by design — see **`decisions/PERSONAL-FINANCIAL.local.md`** (gitignored).
