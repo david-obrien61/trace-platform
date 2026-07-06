@@ -8,7 +8,7 @@ import './styles/globals.css';
 export function App() {
   return (
     <BrowserRouter>
-      <BusinessProvider businessType="nursery" addBusinessHref="/add-business">
+      <BusinessProvider businessType="nursery" addBusinessHref="/add-business" deviceEnrollment>
         <AppRouter />
       </BusinessProvider>
       {/* Field-debug panel — renders only when ?debug=1 (sticky) so demos stay clean. */}

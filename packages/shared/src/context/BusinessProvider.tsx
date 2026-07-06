@@ -34,6 +34,84 @@ function isTransientReadError(err: { code?: string | null } | null | undefined):
 const activeBusinessKey = (businessType: string) =>
   `trace_active_business_${businessType}`;
 
+// ─── Device spine: enrollment + is_active gate (agnostic, opt-in) ─────────────
+// Runs on the REAL email-session (auth.uid() non-null — Auth Locked Rule) once a
+// business_members row is resolved, so the member_devices RLS INSERT (md_self /
+// md_owner_all) passes. A disabled device is REFUSED and NEVER silently revived.
+// Any read/write failure returns 'error' so the caller fails OPEN — a failed device
+// write must never lock out a legitimate user; only an explicit is_active=false does.
+// NOTE: the correct home for this is the shared autoEnrollDevice in supabase/auth.ts,
+// but that file is OFF-LIMITS (PIN-auth refactor, permission-locked) and its
+// autoEnrollDevice is dead code (reachable only via the never-instantiated shop_members
+// PIN strategy) still carrying the shop_id column drift. This live copy uses the
+// correct business_id column; consolidate the two when auth.ts is unlocked.
+type DeviceAuthStatus = 'enrolled' | 'active' | 'disabled' | 'error';
+
+async function enrollAndGateDevice(memberId: string, businessId: string): Promise<DeviceAuthStatus> {
+  let fingerprint = '';
+  try {
+    fingerprint = localStorage.getItem('device_fingerprint') ?? '';
+    if (!fingerprint) {
+      fingerprint = crypto.randomUUID();
+      localStorage.setItem('device_fingerprint', fingerprint);
+    }
+  } catch { /* non-fatal */ }
+  if (!fingerprint) return 'error';
+
+  const { data: existing, error: readErr } = await supabase
+    .from('member_devices')
+    .select('id, is_active')
+    .eq('member_id', memberId)
+    .eq('device_fingerprint', fingerprint)
+    .maybeSingle();
+
+  if (readErr) {
+    console.log('[TRACE:DEVICE] device read failed — failing OPEN', {
+      memberId, businessId, code: readErr.code, message: readErr.message,
+    });
+    return 'error';
+  }
+
+  const now = new Date().toISOString();
+
+  if (!existing) {
+    const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+    const label = ua.includes('iPhone') ? 'iPhone'
+      : ua.includes('iPad')    ? 'iPad'
+      : ua.includes('Android') ? 'Android Device'
+      : ua.includes('Mac')     ? 'Mac'
+      : 'Browser';
+    const { error: insErr } = await supabase.from('member_devices').insert({
+      member_id:          memberId,
+      business_id:        businessId,   // FK → businesses (correct column; the drift was `shop_id`)
+      device_fingerprint: fingerprint,
+      device_label:       label,
+      is_active:          true,
+      last_seen:          now,
+    });
+    if (insErr) {
+      console.log('[TRACE:DEVICE] device enroll INSERT failed — failing OPEN', {
+        memberId, businessId, code: insErr.code, message: insErr.message,
+      });
+      return 'error';
+    }
+    console.log('[TRACE:DEVICE] device-enrolled', { memberId, businessId, deviceLabel: label });
+    return 'enrolled';
+  }
+
+  const row = existing as { id: string; is_active: boolean };
+
+  // Enforce the gate: a DISABLED device is refused and NOT revived (no last_seen bump).
+  if (row.is_active === false) {
+    console.log('[TRACE:DEVICE] device-REFUSED-disabled', { memberId, businessId, deviceId: row.id });
+    return 'disabled';
+  }
+
+  await supabase.from('member_devices').update({ last_seen: now }).eq('id', row.id);
+  console.log('[TRACE:DEVICE] device-authenticated', { memberId, businessId, deviceId: row.id });
+  return 'active';
+}
+
 export interface Business {
   id: string;
   owner_id: string;
@@ -58,6 +136,9 @@ interface ResolvedBusiness {
   permissions: string[] | null; // null = owner (full access implied)
   role: string | null;          // member's raw business_members.role; null for owners
   memberName: string | null;    // business_members.name for members; null for owners (no member row)
+  memberId: string | null;      // business_members.id — device spine key. Present for members AND
+                                // owners (OwnerSignup gives owners an active member row); null only
+                                // for legacy owners predating the member-row model → device no-op.
 }
 
 export interface BusinessContextValue {
@@ -200,16 +281,57 @@ function BusinessPicker({
   );
 }
 
+// ─── Device-locked screen ─────────────────────────────────────────────────────
+// Shown when the active member's device row is is_active=false. The session has
+// already been signed out by the gate; this is the terminal deny state.
+
+function DeviceLockedScreen() {
+  return (
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: '#EAF3DE',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+    }}>
+      <div style={{
+        background: '#fff',
+        borderRadius: 12,
+        padding: '2rem',
+        maxWidth: 400,
+        width: '90%',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
+        textAlign: 'center',
+      }}>
+        <div style={{ fontSize: '2rem', marginBottom: 12 }}>🔒</div>
+        <h2 style={{ margin: '0 0 0.5rem', color: '#A32D2D', fontSize: '1.25rem', fontWeight: 600 }}>
+          This device is disabled
+        </h2>
+        <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem', lineHeight: 1.5 }}>
+          Access from this device has been turned off by an administrator.
+          Contact the business owner to re-enable it.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function BusinessProvider({
   children,
   businessType,
   addBusinessHref,
+  deviceEnrollment = false,
 }: {
   children: React.ReactNode;
   businessType: string;
   addBusinessHref?: string;  // when provided, "Add a business" link appears in BusinessPicker
+  // Opt-in device spine (agnostic — a boolean the vertical supplies, NO vertical noun here).
+  // OFF (absent/false) → the device gate effect + lockout render are a pure no-op, so verticals
+  // that don't opt in (Ignition) are byte-for-byte unchanged. Cultivar passes true.
+  deviceEnrollment?: boolean;
 }) {
   // All businesses this user can access in this vertical
   const [resolvedBusinesses, setResolvedBusinesses] = useState<ResolvedBusiness[]>([]);
@@ -341,7 +463,7 @@ export function BusinessProvider({
         }
 
         for (const biz of (ownedBizzes ?? [])) {
-          resolved.push({ business: biz as Business, isOwner: true, permissions: null, role: null, memberName: null });
+          resolved.push({ business: biz as Business, isOwner: true, permissions: null, role: null, memberName: null, memberId: null });
         }
 
         // 2. Member path — fetch ALL business_members rows for this user, active=true
@@ -349,7 +471,7 @@ export function BusinessProvider({
         //    (was .single(); now returns the full array)
         const { data: memberships, error: memberError } = await supabase
           .from('business_members')
-          .select('business_id, role, permissions, name, businesses(*)')
+          .select('id, business_id, role, permissions, name, businesses(*)')
           .eq('user_id', userId)
           .eq('active', true);
 
@@ -386,7 +508,25 @@ export function BusinessProvider({
             permissions: (m.permissions as string[]) ?? [],
             role: (m.role as string) ?? null,
             memberName: ((m as { name?: string | null }).name ?? null) || null,
+            memberId: ((m as { id?: string }).id ?? null),
           });
+        }
+
+        // Device-spine member_id: OwnerSignup gives owners an active business_members row too,
+        // so the memberships query above returns an id for owners as well — but their row is
+        // deduped out of the member loop (already resolved via the owner path). Patch owner
+        // entries' memberId from the raw memberships list here. (null for legacy owners with no
+        // member row → the device gate no-ops for them.)
+        const memberIdByBusiness = new Map<string, string>();
+        for (const m of (memberships ?? [])) {
+          const bId = (m as { business_id?: string }).business_id;
+          const mId = (m as { id?: string }).id;
+          if (bId && mId) memberIdByBusiness.set(bId, mId);
+        }
+        for (const r of resolved) {
+          if (r.isOwner && r.memberId === null) {
+            r.memberId = memberIdByBusiness.get(r.business.id) ?? null;
+          }
         }
 
         return { resolved, ownerError, memberError };
@@ -573,6 +713,39 @@ export function BusinessProvider({
     });
   }, [activeResolved, isOwnerActive, activePermissions]);
 
+  // ─── Device spine gate (Fix 2 enrollment + Fix 3 is_active lockout) ──────────
+  // FLAG-GATED: the entire effect early-returns when deviceEnrollment is false, so
+  // for a vertical that does not opt in (Ignition) there is NO enrollment call, NO
+  // member_devices read, NO signOut — a pure no-op. Enrollment/lockout run on the
+  // real email session (auth.uid() non-null) once an active member is resolved.
+  const activeMemberId = activeResolved?.memberId ?? null;
+  const activeBusinessResolvedId = activeResolved?.business.id ?? null;
+  const [deviceLocked, setDeviceLocked] = useState(false);
+  const deviceGatedRef = useRef<string | null>(null); // member_id last gated (idempotency)
+
+  useEffect(() => {
+    if (!deviceEnrollment) return;                      // opt-in OFF → inert
+    if (loading) return;                                // wait for a settled resolution
+    if (!activeMemberId || !activeBusinessResolvedId) return; // no member row (legacy owner) → no-op
+    if (deviceGatedRef.current === activeMemberId) return;    // already gated this member
+    deviceGatedRef.current = activeMemberId;
+
+    let cancelled = false;
+    enrollAndGateDevice(activeMemberId, activeBusinessResolvedId)
+      .then(status => {
+        if (cancelled) return;
+        if (status === 'disabled') {
+          // Disabled device: deny access even though the password session was minted —
+          // PIN/device are unlock gestures ON TOP of the session, and this device is revoked.
+          setDeviceLocked(true);
+          void supabase.auth.signOut();
+        }
+      })
+      .catch(() => { /* fail OPEN — never lock out on an unexpected error */ });
+
+    return () => { cancelled = true; };
+  }, [deviceEnrollment, loading, activeMemberId, activeBusinessResolvedId]);
+
   // Picker is needed when: not loading, no error, 2+ businesses, no valid selection
   const needsPicker =
     !loading &&
@@ -597,9 +770,11 @@ export function BusinessProvider({
       role: activeRole,
       can,
     }}>
-      {needsPicker
-        ? <BusinessPicker businesses={allBusinesses} onSelect={setActiveBusinessId} addBusinessHref={addBusinessHref} />
-        : children}
+      {deviceEnrollment && deviceLocked
+        ? <DeviceLockedScreen />
+        : needsPicker
+          ? <BusinessPicker businesses={allBusinesses} onSelect={setActiveBusinessId} addBusinessHref={addBusinessHref} />
+          : children}
     </BusinessContext.Provider>
   );
 }
