@@ -381,7 +381,10 @@ export const NAV_IA: NavNode[] = [
   { key: 'nav_add_business',     section: 'admin',     parent: 'sec_admin',           tileKey: 'add_business' },
   { key: 'nav_business_profile', section: 'admin',     parent: 'sec_admin',           label: 'Business Profile', route: '/settings/business',    matchRoute: '/settings/business',    required_permission: 'manage_settings' },
   { key: 'nav_accounting',       section: 'admin',     parent: 'sec_admin',           label: 'Accounting',       route: '/settings/accounting', matchRoute: '/settings/accounting', required_permission: 'manage_settings' },
-  { key: 'nav_roles',            section: 'admin',     parent: 'sec_admin',           label: 'Roles & Permissions', route: '/roles', required_permission: 'manage_settings' },
+  // Team & Roles — the agnostic member/device console (D-31): invite, roles (visibility axis),
+  // devices. Supersedes the old /roles page (which now redirects here). manage_settings-gated
+  // (owner-default, delegable) so Staff never sees it.
+  { key: 'nav_team',             section: 'admin',     parent: 'sec_admin',           label: 'Team & Roles', route: '/team', required_permission: 'manage_settings' },
   { key: 'nav_cost_to_produce',  section: 'admin',     parent: 'sec_admin',           tileKey: 'cost_to_produce' },
 ];
 

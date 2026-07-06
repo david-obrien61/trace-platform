@@ -28,7 +28,7 @@ const CARD_META: Record<string, { icon: LucideIcon; description: string }> = {
   nav_add_business:     { icon: PlusCircle, description: 'Create another business under your account.' },
   nav_business_profile: { icon: Building2,  description: 'Name, contact info, address, tax rate.' },
   nav_accounting:       { icon: Landmark,   description: 'Connect QuickBooks for automatic invoicing.' },
-  nav_roles:            { icon: Shield,     description: 'Define which tiles each role can see and use.' },
+  nav_team:             { icon: Shield,     description: 'Invite people, set roles, and manage their devices.' },
   nav_cost_to_produce:  { icon: Calculator, description: 'Your cost-to-produce model and pricing.' },
 };
 

@@ -35,7 +35,7 @@ import { CostToProduce }     from './pages/CostToProduce';
 import { OperatingCosts }    from './pages/OperatingCosts';
 import { Customers }         from './pages/Customers';
 import PMI                   from './pages/PMI';
-import { RoleConfig }        from './pages/RoleConfig';
+import { TeamConsole }       from './pages/TeamConsole';
 import { Profile }            from './pages/Profile';
 import { AdminIndex }         from './pages/AdminIndex';
 import { SettingsIndex }      from './pages/SettingsIndex';
@@ -95,11 +95,13 @@ export function AppRouter() {
           <Route path="/profile"           element={<Profile />} />
           <Route path="/receipts"          element={<ReceiptKeeper />} />
 
-          {/* ROLE-CONFIG console (visibility axis) — owner-only. manage_settings is held by
-              OWNER alone in Cultivar today, so PermissionRoute effectively owner-gates it; the
-              page also writes only tenant role rows (RLS owner-only). */}
+          {/* AGNOSTIC member/device console (D-31): invite + roles (visibility axis) + devices —
+              owner-only. manage_settings is held by OWNER alone in Cultivar today, so PermissionRoute
+              effectively owner-gates it; it writes only tenant role rows (RLS owner-only) + member/
+              device rows (RLS owner-scoped). /roles REDIRECTS here (the old page is superseded). */}
           <Route element={<PermissionRoute permission={PERMISSIONS.MANAGE_SETTINGS} />}>
-            <Route path="/roles"           element={<RoleConfig />} />
+            <Route path="/team"            element={<TeamConsole />} />
+            <Route path="/roles"           element={<Navigate to="/team" replace />} />
             {/* Admin landing index — business administration. Gated to manage_settings (owner
                 short-circuits); each card on the page additionally respects its own permission. */}
             <Route path="/admin"           element={<AdminIndex />} />

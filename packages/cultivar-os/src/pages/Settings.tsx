@@ -257,13 +257,13 @@ function TeamSection({ businessId }: { businessId: string }) {
         {phase === 'list' && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
-              onClick={() => navigate('/roles')}
+              onClick={() => navigate('/team')}
               style={{
                 background: 'none', color: GREEN, border: `1px solid ${GREEN}`, borderRadius: 8,
                 padding: '8px 14px', fontWeight: 700, fontSize: '0.8125rem', cursor: 'pointer',
               }}
             >
-              Manage roles →
+              Team &amp; roles console →
             </button>
             <button
               onClick={() => setPhase('form')}

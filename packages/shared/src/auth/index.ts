@@ -26,6 +26,13 @@ export {
   checkPermission,
 } from './members';
 
+// Device spine (D-31) — owner-side reads/writes of member_devices (enroll + is_active lockout)
+export {
+  listDevicesByBusiness,
+  setDeviceActive,
+  deleteDevice,
+} from './devices';
+
 // Three-tier role-definition store (role-config console — visibility axis, MB_D-010)
 export {
   getRoleDefinitions,

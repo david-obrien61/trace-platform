@@ -488,7 +488,9 @@ function capA(key, v) {
 function capE(key, v) {
   if (!isMultiTenant(v)) return SKIP('role-config/marketplace are Cultivar surfaces over the Cultivar registry (out of scope for Ignition).');
   const reg = read('packages/cultivar-os/src/registry/tileRegistry.ts');
-  const console_ = read('packages/cultivar-os/src/pages/RoleConfig.tsx');
+  // The role-config surface is now the agnostic MemberConsole, mounted by the Cultivar TeamConsole
+  // wrapper — the wrapper is where the registry-fed chip catalog is built (registryPermissions()).
+  const console_ = read('packages/cultivar-os/src/pages/TeamConsole.tsx');
   const problems = [];
   if (!/required_permission:\s*string/.test(reg)) problems.push('TileEntry has no required_permission field');
   if (!/export function registryPermissions\b/.test(reg)) problems.push('no registryPermissions() enumerator (role-builder source)');
@@ -504,8 +506,8 @@ function capE(key, v) {
   }
   // NOW EXERCISED: the role-config console must actually FEED its chips from registryPermissions()
   // (B2 one-source guarantee) — not a hardcoded permission list. This is what makes (e) real.
-  if (!console_) problems.push('RoleConfig console (RoleConfig.tsx) not found — (e) cannot be exercised');
-  else if (!/registryPermissions\(\)/.test(console_)) problems.push('RoleConfig console does not read registryPermissions() (chip list must be registry-fed, not hardcoded)');
+  if (!console_) problems.push('Team console wrapper (TeamConsole.tsx) not found — (e) cannot be exercised');
+  else if (!/registryPermissions\(\)/.test(console_)) problems.push('Team console does not read registryPermissions() (chip list must be registry-fed, not hardcoded)');
   if (problems.length === 0) {
     return PASS(`every registry entry declares required_permission; registryPermissions()/allTiles() expose the full set AND the role-config console feeds its chips from registryPermissions() → a newly registered tile's permission is role-builder-selectable with no separate edit.`);
   }
@@ -550,7 +552,8 @@ function capF(key, v) {
   if (!isMultiTenant(v)) return SKIP('role_definitions store is a Cultivar multi-tenant surface (out of scope for Ignition).');
   const sql = concatSql(v.migrationsDir);
   const mod = read('packages/shared/src/auth/roleDefinitions.ts');
-  const ui  = read('packages/cultivar-os/src/pages/RoleConfig.tsx');
+  // The role editor is now the agnostic MemberConsole (Roles tab), mounted by TeamConsole.
+  const ui  = read('packages/shared/src/components/team/MemberConsole.tsx');
   const problems = [];
   if (!/CREATE TABLE IF NOT EXISTS role_definitions/.test(sql)) problems.push('role_definitions table not created');
   if (!/ALTER TABLE role_definitions ENABLE ROW LEVEL SECURITY/.test(sql)) problems.push('role_definitions RLS not enabled');
@@ -580,7 +583,7 @@ function capF(key, v) {
 function capG(key, v) {
   if (!isMultiTenant(v)) return SKIP('role override / factory-reset is a Cultivar surface (out of scope for Ignition).');
   const mod = read('packages/shared/src/auth/roleDefinitions.ts');
-  const ui  = read('packages/cultivar-os/src/pages/RoleConfig.tsx');
+  const ui  = read('packages/shared/src/components/team/MemberConsole.tsx');
   const problems = [];
   if (!/export async function deleteTenantRole/.test(mod) || !/\.delete\(\)/.test(mod)) problems.push('deleteTenantRole (override delete) missing');
   if (!/\.eq\('business_id', businessId\)/.test(mod)) problems.push('deleteTenantRole not business_id-scoped (could touch the floor)');
@@ -620,7 +623,7 @@ function capN(key, v) {
     'sec_dashboard', 'sec_settings', 'sec_admin',
     'nav_orders', 'nav_delivery', 'nav_delivery_route', 'nav_operating_costs',
     'nav_assets', 'nav_inventory', 'nav_receipts', 'nav_pmi', 'nav_social',
-    'nav_campaigns', 'nav_campaign_detail', 'nav_help', 'nav_roles', 'nav_add_business', 'nav_cost_to_produce',
+    'nav_campaigns', 'nav_campaign_detail', 'nav_help', 'nav_team', 'nav_add_business', 'nav_cost_to_produce',
   ];
   const missing = REQUIRED_NAV_KEYS.filter((k) => !navBlock.includes(`'${k}'`));
   if (missing.length) problems.push(`navigable surfaces with no IA node: ${missing.join(', ')}`);
@@ -628,6 +631,57 @@ function capN(key, v) {
     return PASS('navigation IA lives in the single tileRegistry (NAV_IA); breadcrumb + nav-rail both read it; AppLayout mounts both once; every navigable surface declares a breadcrumb path — a new surface cannot ship without nav.');
   }
   return FAIL(`navigation IA single-source not established: ${problems.join('; ')}`);
+}
+
+// ── (r) NAV-INTEGRITY: every reachable ROUTE has a discoverable NAV entry (and vice-versa) ──
+// The router declares route PATHS (<Route path=…>); the registry declares the NAV IA (route: …).
+// A private route with NO nav route is URL-only / orphaned — a surface a reorg can strand
+// (exactly the class that produced the scattered member-management this build consolidates).
+// FAIL on any private router path that is neither nav-reachable nor a documented exception.
+// Documented exceptions (legitimately nav-less): public/auth/checkout/plant/demo/discovery,
+// redirects (/roles → /team, / → /dashboard), the /settings/:section param alias (its concrete
+// sections ARE nav'd), first-run (/onboarding), and sub-flows reached from a parent surface
+// (/assets/capture from /assets, /inventory/count from /inventory).
+function capR(key, v) {
+  if (!isMultiTenant(v)) return SKIP('routes + nav IA are Cultivar multi-surface concerns; Ignition renders nav from CoreApp (out of scope).');
+  const router = read('packages/cultivar-os/src/router.tsx');
+  const reg    = read('packages/cultivar-os/src/registry/tileRegistry.ts');
+
+  const routerPaths = [...router.matchAll(/<Route\s+path="([^"]+)"/g)].map((m) => m[1]);
+  const navRoutes   = [...new Set([...reg.matchAll(/route:\s*'(\/[^']*)'/g)].map((m) => m[1]))];
+
+  // segment-wise pattern match (':' = wildcard), either direction
+  const seg = (a, b) => {
+    const pa = a.split('/'), pb = b.split('/');
+    if (pa.length !== pb.length) return false;
+    return pa.every((s, i) => s.startsWith(':') || pb[i].startsWith(':') || s === pb[i]);
+  };
+  const navReachable = (p) => navRoutes.some((r) => seg(p, r));
+
+  const EXCEPTIONS = new Set([
+    '/', '/login', '/signup', '/join', '/privacy', '/terms',
+    '/checkout/customer', '/checkout/review', '/checkout/confirm',
+    '/plant/:tagId', '/plant/:tagId/addons',
+    '/demo/quickbooks-invoice', '/discovery/inspect',
+    '/roles',                 // redirect → /team
+    '/settings/:section',     // param alias; concrete sections (/settings/business|accounting|all) ARE nav'd
+    '/onboarding',            // first-run flow
+    '/assets/capture',        // sub-flow reached from /assets
+    '/inventory/count',       // sub-flow reached from /inventory
+  ]);
+
+  const orphans  = routerPaths.filter((p) => !EXCEPTIONS.has(p) && !navReachable(p));
+  // reverse: a nav route pointing at no router route (dead nav link) — param-aware
+  const routerReachable = (r) => routerPaths.some((p) => seg(r, p));
+  const deadNav  = navRoutes.filter((r) => !routerReachable(r));
+
+  const problems = [];
+  if (orphans.length) problems.push(`routes reachable but with NO nav entry (URL-only/orphaned): ${orphans.join(', ')}`);
+  if (deadNav.length) problems.push(`nav entries pointing at no route (dead link): ${deadNav.join(', ')}`);
+  if (problems.length === 0) {
+    return PASS(`route↔nav integrity: all ${routerPaths.length} router paths are nav-reachable or a documented exception (${EXCEPTIONS.size} exceptions: public/auth/checkout/redirect/param/sub-flow); no dead nav links.`);
+  }
+  return FAIL(`route↔nav integrity broken: ${problems.join(' | ')}`);
 }
 
 // ── capability registry ──────────────────────────────────────────────────────────
@@ -641,6 +695,7 @@ const CAPS = [
   ['7', 'WRITE-WALL: cost writes permission-gated (endpoint + RLS WITH CHECK)', cap7],
   ['s', 'SELF-GRANT CLOSED: member cannot widen own role/permissions (bm_self_update WITH CHECK + authority trigger)', capS],
   ['n', 'Navigation IA in the registry — every surface has a breadcrumb path (Nav C2)', capN],
+  ['r', 'Nav-integrity — every reachable route has a discoverable nav entry (no URL-only orphans)', capR],
   ['a', 'Tile visibility driven by the registry, not hardcoded (D-012)', capA],
   ['e', "New tile's required_permission selectable in role-builder w/o separate edit (D-010/D-012)", capE],
   ['f', 'Tenant override/custom not cross-tenant; floor not tenant-writable; clone-not-mutate (D-010, AC-3)', capF],
