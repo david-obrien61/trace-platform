@@ -27,3 +27,8 @@ decisions/PERSONAL-FINANCIAL.local.md
 # Cost diagnostic scratch output — capture-cost-before.ts writes here so it can never
 # clobber the committed proof anchors (BEFORE-NUMBER / AFTER-FLIP snapshots)
 docs/cost-to-produce/.scratch/
+
+# Grower-scan named-nursery CSVs — David's competitive analysis of third-party
+# nurseries (some are prospects). Desktop-only, NEVER versioned. The recon .md
+# notes in this dir ARE tracked (institutional memory about TRACE's own system).
+data/grower-scan/*.csv
