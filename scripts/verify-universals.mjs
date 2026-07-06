@@ -659,7 +659,7 @@ function capR(key, v) {
   const navReachable = (p) => navRoutes.some((r) => seg(p, r));
 
   const EXCEPTIONS = new Set([
-    '/', '/login', '/signup', '/join', '/reset-pin', '/privacy', '/terms',
+    '/', '/login', '/signup', '/join', '/device-handoff', '/reset-pin', '/privacy', '/terms',
     '/checkout/customer', '/checkout/review', '/checkout/confirm',
     '/plant/:tagId', '/plant/:tagId/addons',
     '/demo/quickbooks-invoice', '/discovery/inspect',

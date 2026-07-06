@@ -66,8 +66,20 @@ export type { CreateInvitationInput, CreateInvitationResult } from './invitation
 export { previewInvitation, acceptInvitation } from './acceptInvitation';
 export type { AcceptInvitationInput } from './acceptInvitation';
 
+// Self-device-handoff (D-31) — client issue (own session) + server exchange (service key).
+// Authenticates an EXISTING member onto a new device via QR — no account creation, no typing.
+export { issueDeviceHandoff, exchangeDeviceHandoff } from './deviceHandoff';
+export type {
+  IssueDeviceHandoffResult,
+  ExchangeDeviceHandoffInput,
+  ExchangeDeviceHandoffResult,
+} from './deviceHandoff';
+
 // Shared React component for the invite acceptance page
 export { AcceptInvite } from './AcceptInvite';
+
+// Shared React component for the new-device handoff landing page (mounted at /device-handoff)
+export { DeviceHandoff } from './DeviceHandoffScreen';
 
 // AGNOSTIC route-entry permission gate (D-31 / security class fix) — every react-router +
 // BusinessProvider vertical inherits "a gated route refuses unauthorized entry from ANY door".

@@ -21,7 +21,8 @@
 import { useEffect, useState } from 'react';
 import { Card } from '@trace/shared/components/Card';
 import { useBusinessContext } from '@trace/shared/context';
-import { changeOwnPin } from '@trace/shared/auth';
+import { changeOwnPin, issueDeviceHandoff } from '@trace/shared/auth';
+import { generateQR } from '@trace/shared/qr/generate';
 import { normalizePhone } from '@trace/shared/utils/normalizePhone';
 import { supabase } from '../lib/supabase';
 
@@ -248,6 +249,101 @@ function ChangePinSection({
   );
 }
 
+// Add-a-device control — self-device-handoff via QR (D-31). Generates a short-lived, single-use
+// QR from THIS authenticated session; scanning it on a new phone/tablet logs that device in AS the
+// same member (no URL/email/password typing) and enrolls it in member_devices. The QR is a bearer
+// credential → guardrails are enforced by the handoff table + exchange endpoint (short TTL, single-
+// use, issued-only-from-this-session via RLS, device-bound on scan).
+function AddDeviceSection({
+  businessId, memberId,
+}: {
+  businessId: string;
+  memberId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [qr, setQr] = useState<string | null>(null);
+  const [url, setUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function generate() {
+    setBusy(true); setError(null); setQr(null);
+    try {
+      const { token } = await issueDeviceHandoff(supabase, businessId, memberId);
+      const link = `${window.location.origin}/device-handoff?token=${encodeURIComponent(token)}`;
+      const dataUrl = await generateQR(link, { width: 220, margin: 1 });
+      setUrl(link);
+      setQr(dataUrl);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not create a device link.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ padding: '14px 0', borderTop: '1px solid var(--gray-100, #eef1ea)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
+        <span style={{
+          fontSize: '0.6875rem', fontWeight: 700, color: 'var(--gray-400, #6b7280)',
+          textTransform: 'uppercase', letterSpacing: '0.06em',
+        }}>
+          Add a device
+        </span>
+        {!open && (
+          <button
+            onClick={() => { setOpen(true); void generate(); }}
+            style={{ background: 'none', border: 'none', color: GREEN, fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer', padding: 0 }}
+          >
+            Add a device
+          </button>
+        )}
+      </div>
+
+      {open ? (
+        <div style={{ marginTop: 10 }}>
+          <p style={{ fontSize: '0.8125rem', color: 'var(--gray-400, #6b7280)', margin: '0 0 10px', lineHeight: 1.5 }}>
+            Scan this with your new phone or tablet to sign it in as you — no typing.
+            The code expires in ~15 minutes and works once.
+          </p>
+          {busy && <p style={{ fontSize: '0.875rem', color: GREEN }}>Generating…</p>}
+          {error && <p style={{ color: '#A32D2D', fontSize: '0.8125rem', margin: '0 0 8px' }}>{error}</p>}
+          {qr && (
+            <div style={{ textAlign: 'center' }}>
+              <img src={qr} alt="Add-a-device QR code" style={{ width: 220, height: 220, borderRadius: 8 }} />
+              {url && (
+                <p style={{ fontSize: '0.6875rem', color: 'var(--gray-400, #9ca3af)', wordBreak: 'break-all', margin: '8px 0 0' }}>
+                  {url}
+                </p>
+              )}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'center' }}>
+            {qr && !busy && (
+              <button
+                onClick={() => { void generate(); }}
+                style={{ background: 'none', color: GREEN, border: `1px solid ${GREEN}`, borderRadius: 8, padding: '8px 16px', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer' }}
+              >
+                New code
+              </button>
+            )}
+            <button
+              onClick={() => { setOpen(false); setQr(null); setUrl(null); setError(null); }}
+              style={{ background: 'none', color: 'var(--gray-400, #6b7280)', border: 'none', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer', padding: '8px 4px' }}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p style={{ fontSize: '0.875rem', color: 'var(--gray-400, #6b7280)', margin: '6px 0 0' }}>
+          Sign in on a new phone or tablet by scanning a QR code — no password to type.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function Profile() {
   const { isOwner, userName, userEmail, businessId, reload, loading } = useBusinessContext();
 
@@ -431,6 +527,12 @@ export function Profile() {
             {/* PIN self-change — both owner-operator and member have a member row w/ pin_hash.
                 Hidden for legacy accounts without a resolved member row (memberId null). */}
             {!busy && memberId && <ChangePinSection hasPin={hasPin} onChange={saveOwnPin} />}
+
+            {/* Add-a-device (self-device-handoff via QR). Needs a resolved membership row (the
+                handoff logs in AS that member) + businessId — hidden for legacy owners w/o one. */}
+            {!busy && memberId && businessId && (
+              <AddDeviceSection businessId={businessId} memberId={memberId} />
+            )}
           </div>
         </Card>
       </div>
