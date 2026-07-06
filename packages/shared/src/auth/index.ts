@@ -33,6 +33,7 @@ export {
   armPinReset,
   loadOwnMemberships,
   setOwnPin,
+  changeOwnPin,
 } from './pinReset';
 export type { OwnMembership } from './pinReset';
 

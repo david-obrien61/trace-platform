@@ -4,6 +4,7 @@ import { Settings as SharedSettings } from '@trace/shared/pages/Settings';
 import { CostToProduceSettings } from '@trace/shared/components/CostToProduceSettings';
 import { useBusinessContext } from '@trace/shared/context';
 import { useQboConnect } from '@trace/shared/quickbooks/useQboConnect';
+import { generateQR } from '@trace/shared/qr/generate';
 import { supabase } from '../lib/supabase';
 import {
   getMembersByBusiness,
@@ -28,6 +29,24 @@ const inputStyle: React.CSSProperties = {
   border: '1.5px solid #d1d5db', borderRadius: 9, fontSize: '0.9375rem',
   outline: 'none', fontFamily: 'inherit', color: DARK, background: '#fff',
 };
+
+// ── Invite QR — the SAME invite token as a scannable code (one token, two formats). Reuses the
+//    shared generateQR helper (qrcode is a vertical dep). No new invite backend. ─────────────────
+function InviteQr({ link }: { link: string }) {
+  const [dataUrl, setDataUrl] = useState('');
+  useEffect(() => {
+    let live = true;
+    generateQR(link, { width: 180, margin: 1 }).then((u) => { if (live) setDataUrl(u); }).catch(() => {});
+    return () => { live = false; };
+  }, [link]);
+  if (!dataUrl) return null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+      <img src={dataUrl} alt="Invite QR code" width={180} height={180} style={{ borderRadius: 10, border: '1px solid #e5e7eb' }} />
+      <span style={{ fontSize: '0.75rem', color: GRAY }}>Or scan this QR to join</span>
+    </div>
+  );
+}
 
 // ── Nursery-specific install price section ─────────────────────────────────────
 
@@ -523,8 +542,11 @@ function TeamSection({ businessId }: { businessId: string }) {
             {copied ? '✓ Copied to clipboard' : 'Copy Link'}
           </button>
 
+          {/* Same token, second format — scan to open the join page (Lauren's QR join). */}
+          <InviteQr link={inviteLink} />
+
           <p style={{ fontSize: '0.75rem', color: GRAY, textAlign: 'center', margin: 0 }}>
-            No email integration yet — paste this link directly into a text or email.
+            No email integration yet — paste this link, or have them scan the QR.
           </p>
 
           <button

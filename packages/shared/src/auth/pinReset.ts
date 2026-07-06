@@ -10,8 +10,10 @@
 //               (../supabase/auth). RLS: bm_owner_all (owner arms any member in their business),
 //               bm_self_select/bm_self_update (member reads+writes their own row). The authority
 //               trigger guards role/permissions only — pin_hash writes pass.
-// OUTPUTS:      armPinReset, loadOwnMemberships, setOwnPin. Agnostic — no vertical nouns; both
-//               verticals' consoles/reset-screen call these with their own supabase client.
+// OUTPUTS:      armPinReset, loadOwnMemberships, setOwnPin, changeOwnPin. Agnostic — no vertical
+//               nouns; both verticals' consoles/reset-screen/profile call these with their client.
+//               changeOwnPin = member self-service PIN change from Your Profile (re-auth with current
+//               PIN → set new), reusing hashPin + setOwnPin over the same pin_hash column.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { hashPin } from '../supabase/auth';
@@ -91,4 +93,35 @@ export async function setOwnPin(
     .eq('id', memberId)
     .eq('user_id', userId);
   if (error) throw new Error(`setOwnPin: ${error.message}`);
+}
+
+/**
+ * MEMBER action — change the caller's OWN PIN from Your Profile. The member's live Supabase session
+ * is the real auth boundary (same as the reset screen); the current-PIN re-auth is a confirmation
+ * gesture that stops a change on an unattended, already-unlocked session. Verifies the supplied
+ * current PIN against the stored pin_hash (salted hashPin — the same value authenticateMember checks),
+ * then writes the new PIN via setOwnPin. If no PIN is set yet (pin_hash null), this is a first SET and
+ * the current-PIN check is skipped. Reuses hashPin + setOwnPin; NO new table/column/Vercel function.
+ */
+export async function changeOwnPin(
+  supabase: SupabaseClient,
+  memberId: string,
+  businessId: string,
+  userId: string,
+  currentPin: string,
+  newPin: string,
+): Promise<void> {
+  const { data, error } = await supabase
+    .from('business_members')
+    .select('pin_hash')
+    .eq('id', memberId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw new Error(`changeOwnPin: ${error.message}`);
+  const stored = (data as { pin_hash: string | null } | null)?.pin_hash ?? null;
+  if (stored !== null) {
+    const currentHash = await hashPin(businessId, currentPin);
+    if (currentHash !== stored) throw new Error('Current PIN is incorrect.');
+  }
+  await setOwnPin(supabase, memberId, businessId, userId, newPin);
 }
