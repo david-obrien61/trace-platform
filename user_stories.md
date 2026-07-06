@@ -177,6 +177,7 @@ MAPS-TO: 3.2
 PIECES: jit_completeness, timing_window_enforce
 NEEDS: David to decide the model — **copy-only** (urgency prompt; owner/customer still free to skip) vs **enforced** (the timing window actually gates the flow). Today the Regina rule is urgency COPY; whether completeness is ever hard-enforced is open.
 Some add-ons can only be applied at a specific moment — netting at planting time, fertilizer at delivery. The completeness engine notices the window is open and surfaces the offer while it still matters, then lets it go once the moment passes, so the owner never discovers a missed upsell after the truck has left. This is the timing discipline on top of the offer-config surface above. _Grounded: MASTER_BRIEF Regina rule (urgency copy) + three suggestion types (:403); board 3.2; App Philosophy "The Regina Rule."_
+**TILE HOME:** `opportunities` / `follow-up` (`followup_engine`) — both dashboard tiles PLANNED/unbuilt in `tileRegistry.ts`. The JIT-completeness engine is these tiles' intended function: surface-while-the-window-is-open (fertilizer at delivery, netting at planting) = `opportunities`; catch the missed add-on AFTER the window closed (the upsell discovered after the truck left) = `follow-up`.
 
 ---
 
@@ -203,6 +204,7 @@ MAPS-TO: 3.5, 3.2
 PIECES: service_overlay, proximity_opportunity
 NEEDS: David to scope what the overlay surfaces — past customers near today's stops (warranty / upsell / inspection) vs due-services vs both — and whether it's a passive readout or a suggested add-stop.
 While routing the day, TRACE overlays SERVICE context on the map: past customers near the route, warranties coming due, inspections owed — turning the route from pure logistics into the capacity/opportunity readout (MASTER_BRIEF "routing IS the capacity readout"). The map becomes the demo that SHOWS the owner she's driving past opportunity, not just logistics. _Grounded: MASTER_BRIEF routing-as-capacity (:375) + map-is-the-demo (:382); proximity-opportunities memory; board 3.5 route live / 3.2 suggestion._
+**TILE HOME:** `opportunities` (dashboard tile, PLANNED/unbuilt in `tileRegistry.ts` — no route/component yet) — this story is its intended function ("I'll be in your area, want your trees looked at?"; the registry note ties `opportunities` into the Delivery context). The outreach leg (reaching out to that nearby customer) lands on `follow-up` (`followup_engine`).
 
 ### Clickable route pins — tap a stop for its detail (polish, not demo-critical)
 STATUS: needs-input
