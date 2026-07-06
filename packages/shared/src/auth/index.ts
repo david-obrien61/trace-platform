@@ -24,6 +24,7 @@ export {
   updateMemberRole,
   removeMember,
   setMemberActive,
+  setMemberPhone,
   checkPermission,
 } from './members';
 

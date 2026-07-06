@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  getMembersByBusiness, updateMemberRole, removeMember, setMemberActive,
+  getMembersByBusiness, updateMemberRole, removeMember, setMemberActive, setMemberPhone,
   createInvitation, getPendingInvitations, revokeInvitation,
   getRoleDefinitions, resolveRoles, upsertTenantRole, deleteTenantRole,
   listDevicesByBusiness, setDeviceActive, deleteDevice, armPinReset,
@@ -423,6 +423,10 @@ function MemberDetail(p: {
   const [working, setWorking] = useState<string | null>(null);
   const [resetLink, setResetLink] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [phoneDraft, setPhoneDraft] = useState(member.phone ?? '');
+
+  useEffect(() => { setPhoneDraft(member.phone ?? ''); setEditingPhone(false); }, [member.id, member.phone]);
 
   const myDevices = useMemo(() => devices.filter((d) => d.member_id === member.id), [devices, member.id]);
   const isOwnerRow = (member.role ?? '').toUpperCase() === 'OWNER';
@@ -449,6 +453,18 @@ function MemberDetail(p: {
     try { await deleteDevice(supabase, d.id); await reload(); }
     catch (err) { setLoadError(err instanceof Error ? err.message : 'Device delete failed'); }
     finally { setWorking(null); setBusy(false); }
+  }
+  async function savePhone() {
+    setBusy(true);
+    try {
+      // Owner sets/edits this member's PHONE (SMS-reset target + contact). phone ONLY — never
+      // role/permissions/email (email is the login credential, immutable from the app).
+      await setMemberPhone(supabase, member.id, phoneDraft);
+      console.log('[TRACE:PROFILE] owner-set-phone', { memberId: member.id, by: 'owner', field: 'phone' });
+      setEditingPhone(false);
+      await reload();
+    } catch (err) { setLoadError(err instanceof Error ? err.message : 'Phone update failed'); }
+    finally { setBusy(false); }
   }
   async function resetPin() {
     if (!window.confirm(`Reset ${member.name}'s PIN? Their current PIN stops working until they set a new one.`)) return;
@@ -486,10 +502,37 @@ function MemberDetail(p: {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
           <div>
             <p style={{ margin: 0, fontWeight: 800, fontSize: 18, color: T.ink }}>{member.name}</p>
+            {/* Email is the LOGIN CREDENTIAL — display only, never editable here or anywhere. */}
             {member.email && <p style={{ margin: '2px 0 0', fontSize: 13, color: T.sub }}>{member.email}</p>}
-            {member.phone && <p style={{ margin: '2px 0 0', fontSize: 13, color: T.sub }}>{member.phone}</p>}
           </div>
           <span style={badge(member.active ? '#dcfce7' : '#f3f4f6', member.active ? '#166534' : T.sub)}>{member.active ? 'Active' : 'Invited'}</span>
+        </div>
+
+        {/* Phone — owner-manageable (SMS-reset target + contact). Not the login credential. */}
+        <div style={{ marginTop: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <p style={{ ...sectionLabel, margin: 0 }}>Phone</p>
+            {!editingPhone && (
+              <button onClick={() => { setPhoneDraft(member.phone ?? ''); setEditingPhone(true); }}
+                style={{ background: 'none', border: 'none', color: T.primary, fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
+                {member.phone ? 'Edit' : 'Add'}
+              </button>
+            )}
+          </div>
+          {editingPhone ? (
+            <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+              <input type="tel" value={phoneDraft} autoFocus placeholder="(512) 555-0100"
+                onChange={(e) => setPhoneDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { void savePhone(); } if (e.key === 'Escape') { setEditingPhone(false); setPhoneDraft(member.phone ?? ''); } }}
+                style={{ flex: 1, minWidth: 160, boxSizing: 'border-box', padding: '9px 12px', border: `1.5px solid ${T.border}`, borderRadius: 9, fontSize: 15, color: T.ink, background: '#fff' }} />
+              <button onClick={() => { void savePhone(); }} disabled={busy}
+                style={{ background: T.primary, color: '#fff', fontWeight: 800, padding: '9px 16px', borderRadius: 9, border: 'none', fontSize: 13, cursor: 'pointer', opacity: busy ? 0.5 : 1 }}>Save</button>
+              <button onClick={() => { setEditingPhone(false); setPhoneDraft(member.phone ?? ''); }} disabled={busy}
+                style={{ background: 'none', color: T.sub, fontWeight: 700, padding: '9px 10px', borderRadius: 9, border: `1px solid ${T.border}`, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+            </div>
+          ) : (
+            <p style={{ margin: '4px 0 0', fontSize: 14, color: member.phone ? T.ink : T.sub }}>{member.phone || 'No phone on file'}</p>
+          )}
         </div>
         <div style={{ marginTop: 14 }}>
           <p style={sectionLabel}>Role</p>

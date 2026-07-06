@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Member, Role } from './types';
+import { normalizePhone } from '../utils/normalizePhone';
 
 // All functions here run client-side with the owner's authenticated session.
 // RLS policy bm_owner_all grants the owner full access to all member rows
@@ -61,6 +62,24 @@ export async function setMemberActive(
     .eq('id', memberId);
 
   if (error) throw new Error(`setMemberActive: ${error.message}`);
+}
+
+// Owner sets/edits a member's PHONE (the SMS-reset target + contact number). Owner-scoped by
+// bm_owner_all — the owner may write any member row on a business they own. Touches ONLY `phone`,
+// never role/permissions, so the authority-immutability trigger never fires. Value is run through
+// the ONE shared storage normalization (same as Profile/Settings). NOTE: email is deliberately
+// NOT writable here — email is the login credential (auth.users.email) and is immutable from the app.
+export async function setMemberPhone(
+  supabase: SupabaseClient,
+  memberId: string,
+  phone: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('business_members')
+    .update({ phone: normalizePhone(phone) })   // phone ONLY — never role/permissions/email
+    .eq('id', memberId);
+
+  if (error) throw new Error(`setMemberPhone: ${error.message}`);
 }
 
 // Pure function — no DB call.

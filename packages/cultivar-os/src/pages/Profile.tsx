@@ -8,11 +8,13 @@
  * DEPENDENCIES: useBusinessContext (isOwner / userName / userEmail / businessId / reload) — the one
  *               canonical identity source · supabase (shared client, re-exported by lib/supabase).
  *               OWNER write → auth.updateUser({ data:{ full_name } }) (owners have no member row).
- *               MEMBER write → business_members row (name/phone/email) scoped to user_id+business_id
- *               via the bm_self_update RLS policy.
- * OUTPUTS:      Click-to-edit identity rows. On save: optimistic local state + context reload() so
- *               the header switches from email to name immediately. AUTHORITY BOUNDARY: this file
- *               writes name/phone/email ONLY and never role or permissions.
+ *               MEMBER write → business_members row (name/phone ONLY) scoped to user_id+business_id
+ *               via the bm_self_update RLS policy. EMAIL is the LOGIN CREDENTIAL (auth.users.email) —
+ *               shown READ-ONLY, never self-editable (account-lockout/takeover vector).
+ * OUTPUTS:      Click-to-edit identity rows (name/phone). Email renders read-only. On save:
+ *               optimistic local state + context reload() so the header switches from email to name
+ *               immediately. AUTHORITY BOUNDARY: this file writes name/phone ONLY — never email,
+ *               role, or permissions.
  */
 import { useEffect, useState } from 'react';
 import { Card } from '@trace/shared/components/Card';
@@ -179,33 +181,35 @@ export function Profile() {
     reload(); // refetch identity → header switches from email to name immediately
   }
 
-  // MEMBER: name/phone/email → own business_members row, scoped to user_id+business_id (bm_self_update
-  // RLS). AUTHORITY BOUNDARY: this update lists ONLY name/phone/email — never role or permissions.
-  async function saveMemberField(field: 'name' | 'phone' | 'email', next: string) {
+  // MEMBER: name/phone → own business_members row, scoped to user_id+business_id (bm_self_update
+  // RLS). EMAIL IS INTENTIONALLY NOT WRITABLE — it is the login credential (auth.users.email) and
+  // must never be self-editable (account-lockout / takeover vector). This function can only ever
+  // touch name/phone; email has no code path here (belt-and-suspenders: the affordance is gone AND
+  // the writer can't write it). AUTHORITY BOUNDARY: never role or permissions.
+  async function saveMemberField(field: 'name' | 'phone', next: string) {
     if (!userId || !businessId) throw new Error('Not signed in.');
     // PERSON NAME source of truth = auth.user_metadata.full_name (same write the owner
     // path uses). A member editing their OWN name writes full_name first; the
     // business_members.name row is kept in sync only as a display-fallback so Team
-    // lists don't show a stale copy. phone/email stay on the membership row.
+    // lists don't show a stale copy. phone stays on the membership row.
     if (field === 'name') {
       const { error: authErr } = await supabase.auth.updateUser({ data: { full_name: next } });
       if (authErr) throw authErr;
     }
-    // PHONE goes through the ONE shared storage normalization (R1/R3/profile); name/email keep
-    // their existing trim-to-null behavior.
+    // PHONE goes through the ONE shared storage normalization (R1/R3/profile); name keeps
+    // its existing trim behavior.
     const normalizedPhone = field === 'phone' ? normalizePhone(next) : null;
     const patch: Record<string, string | null> = {
-      [field]: field === 'name' ? next : field === 'phone' ? normalizedPhone : (next || null),
+      [field]: field === 'name' ? next : normalizedPhone,
     };
     const { error } = await supabase
       .from('business_members')
-      .update(patch)            // name/phone/email ONLY — role/permissions intentionally absent
+      .update(patch)            // name/phone ONLY — email/role/permissions intentionally absent
       .eq('user_id', userId)
       .eq('business_id', businessId);
     if (error) throw error;
     if (field === 'name') setMemberName(next);
     if (field === 'phone') setMemberPhone(normalizedPhone ?? '');
-    if (field === 'email') setMemberEmail(next);
     console.log('[TRACE:PROFILE] save', { path: 'member', field, ok: true });
     reload();
   }
@@ -283,12 +287,11 @@ export function Profile() {
                   type="tel"
                   onSave={(v) => saveMemberField('phone', v)}
                 />
+                {/* Email is the LOGIN CREDENTIAL — read-only, never self-editable. */}
                 <EditableRow
-                  label="Email"
-                  value={memberEmail}
-                  placeholder="Your contact email"
-                  type="email"
-                  onSave={(v) => saveMemberField('email', v)}
+                  label="Login email"
+                  value={memberEmail || (userEmail ?? '')}
+                  readOnly
                 />
               </>
             )}
