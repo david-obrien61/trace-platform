@@ -252,7 +252,7 @@ SCOPE: platform
 ARC: identity-roles-sec
 MAPS-TO: —
 NEEDS: Narrate the owner/manager/staff lived need behind the wall (who sees costs, who can't, why). BUILT but un-storied.
-_Coverage placeholder, not a fabricated scenario._ The identity/roles/security spine (auth principal → membership resolution → role/permission chokepoint → RLS wall → audit) is built, but has **no day-in-the-life story** behind it.
+_Coverage placeholder, not a fabricated scenario._ The identity/roles/security spine (auth principal → membership resolution → role/permission chokepoint → RLS wall → audit) is built, but has **no day-in-the-life story** behind it. _Update 2026-07-06 (OP-11): the owner-facing SURFACE is now OWNER-PROVEN — the agnostic member/device console at `/team` (Users/Roles/Devices; ledger #86), the per-user detail view + owner PIN-reset (#87), and email-read-only-login-cred + owner-manages-member-phone (#88). The narrative (who sees costs, who can't, why) is still owed — STATUS stays `gap` until a real story is written._
 
 ### Manage how I unlock — change my PIN, unlock with my face
 STATUS: needs-input
@@ -264,6 +264,7 @@ PIECES: pin_self_change, biometric_unlock, auto_lock_reauth
 NEEDS: David to confirm the biometric MECHANISM — WebAuthn passkey against the device platform authenticator (Face-ID-gated, key in the Secure Enclave, TRACE stores only a public key; NO camera face-match, NO templates). Recommended: face PRIMARY, PIN FALLBACK, riding the existing auto-lock timeout. WebAuthn works in the Safari tab now (no PWA-wrap dependency). No discrete auth/session board id (— ; nearest 1.5 + the RBAC auto-lock setting — dedicated device-auth capability may be warranted).
 A LAWNS worker is out on the lot — gloves, dirty hands, a smudged screen; thumbing a PIN is the wrong tool. The app auto-locks after idle; the worker unlocks with their FACE, PIN as the fallback when a face check fails. From their OWN Settings › Your Profile (user-self, D-22 — not Admin, which is the owner resetting a staff PIN) each person can CHANGE THEIR PIN (re-auth first) and ENROLL / REMOVE face-unlock on that device. _Screenshot 2026-07-03: Your Profile shows Name/Phone/Login-Email; PIN + face-unlock are the missing controls._
 See [[D-30]] — shared-device auth design note (personal-device "A" is this story; shared-terminal "B" = PIN-swap / face-swap-preferred / face-recognition do-not-build).
+_Update 2026-07-06 (OP-11): the OWNER-side reset leg referenced above (the owner resetting a staff PIN from the member-detail view) is now BUILT + OWNER-PROVEN — agnostic PIN-reset spine, reset-screen path (ledger #87, `5ab0c50`; SMS-coded-link path stubbed pending Twilio). This story's remaining scope — SELF-change PIN + biometric face-unlock from Your Profile — stays `needs-input` (David to confirm the WebAuthn mechanism)._
 
 ### Migrate shop_ (Ignition) tables into the platform DB — WITH RLS as they land (a SECURITY EVENT, not a lift-and-shift)
 STATUS: needs-input
