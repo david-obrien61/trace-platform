@@ -37,9 +37,10 @@ export {
 } from './pinReset';
 export type { OwnMembership } from './pinReset';
 
-// Device spine (D-31) — owner-side reads/writes of member_devices (enroll + is_active lockout)
+// Device spine (D-31) — owner-side reads/writes + member self-service reads of member_devices
 export {
   listDevicesByBusiness,
+  listOwnDevices,
   setDeviceActive,
   deleteDevice,
 } from './devices';

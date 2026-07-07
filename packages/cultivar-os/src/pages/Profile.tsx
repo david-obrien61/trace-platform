@@ -18,10 +18,11 @@
  *               AUTHORITY BOUNDARY: this file writes name/phone/pin_hash ONLY — never email, role,
  *               or permissions.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card } from '@trace/shared/components/Card';
 import { useBusinessContext } from '@trace/shared/context';
-import { changeOwnPin, issueDeviceHandoff } from '@trace/shared/auth';
+import { changeOwnPin, issueDeviceHandoff, listOwnDevices, deleteDevice } from '@trace/shared/auth';
+import type { Device } from '@trace/shared/auth';
 import { generateQR } from '@trace/shared/qr/generate';
 import { normalizePhone } from '@trace/shared/utils/normalizePhone';
 import { supabase } from '../lib/supabase';
@@ -344,6 +345,126 @@ function AddDeviceSection({
   );
 }
 
+// Your-devices control — self-service device management (D-31). Lists the signed-in member's OWN
+// enrolled devices (RLS md_self scopes reads/removes to their own active-membership rows — they can
+// never see or touch another member's devices) and lets them REMOVE any device EXCEPT the one they
+// are currently signed in on (self-lockout guard). Remove is a HARD DELETE (matches the owner /team
+// "×" semantic — a fresh sign-in re-enrolls). The owner retains lock/remove-any on /team.
+function YourDevicesSection({ memberId }: { memberId: string }) {
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [working, setWorking] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // The device this session is on — matched against each row's device_fingerprint. Same canonical
+  // localStorage key the handoff enrollment + device spine write. A null-fingerprint row never
+  // matches (currentFp is a string), so it's never mistaken for the current device.
+  const currentFp = (() => {
+    try { return localStorage.getItem('device_fingerprint'); } catch { return null; }
+  })();
+
+  const load = useCallback(async () => {
+    setLoading(true); setError(null);
+    try {
+      setDevices(await listOwnDevices(supabase, memberId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load your devices.');
+    } finally {
+      setLoading(false);
+    }
+  }, [memberId]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function remove(d: Device) {
+    // Defensive: never remove the row for the device we're signed in on, even if asked.
+    if (currentFp && d.device_fingerprint === currentFp) return;
+    if (!window.confirm(`Remove ${d.device_label ?? 'this device'}? A fresh sign-in re-enrolls it.`)) return;
+    setWorking(d.id); setError(null);
+    try {
+      await deleteDevice(supabase, d.id);
+      console.log('[TRACE:DEVICE] self-remove', { by: 'self', deviceId: d.id });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not remove that device.');
+    } finally {
+      setWorking(null);
+    }
+  }
+
+  function seen(d: Device): string {
+    if (!d.last_seen) return 'Enrolled';
+    try { return `Last seen ${new Date(d.last_seen).toLocaleDateString()}`; } catch { return 'Enrolled'; }
+  }
+
+  return (
+    <div style={{ padding: '14px 0', borderTop: '1px solid var(--gray-100, #eef1ea)' }}>
+      <span style={{
+        fontSize: '0.6875rem', fontWeight: 700, color: 'var(--gray-400, #6b7280)',
+        textTransform: 'uppercase', letterSpacing: '0.06em',
+      }}>
+        Your devices
+      </span>
+
+      {error && <p style={{ color: '#A32D2D', fontSize: '0.8125rem', margin: '8px 0 0' }}>{error}</p>}
+
+      {loading ? (
+        <div className="skeleton" style={{ height: 16, width: 160, borderRadius: 4, margin: '12px 0' }} />
+      ) : devices.length === 0 ? (
+        <p style={{ fontSize: '0.875rem', color: 'var(--gray-400, #6b7280)', margin: '8px 0 0' }}>
+          No devices enrolled yet. Use “Add a device” above to sign in on a phone or tablet.
+        </p>
+      ) : (
+        <div style={{ marginTop: 8 }}>
+          {devices.map((d) => {
+            const isCurrent = Boolean(currentFp && d.device_fingerprint === currentFp);
+            return (
+              <div key={d.id} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+                padding: '10px 0', borderBottom: '1px solid var(--gray-100, #eef1ea)',
+              }}>
+                <div style={{ overflow: 'hidden' }}>
+                  <p style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--gray-800, #1f2937)', margin: 0 }}>
+                    {d.device_label ?? 'Device'}
+                    {!d.is_active && (
+                      <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#A32D2D', marginLeft: 8 }}>
+                        LOCKED
+                      </span>
+                    )}
+                  </p>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--gray-400, #9ca3af)', margin: '2px 0 0' }}>
+                    {isCurrent ? "This device — you're signed in on it" : seen(d)}
+                  </p>
+                </div>
+                {isCurrent ? (
+                  <span
+                    title="You can't remove the device you're signed in on"
+                    style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--gray-300, #cbd5c0)', cursor: 'not-allowed', whiteSpace: 'nowrap' }}
+                  >
+                    Remove
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => { void remove(d); }}
+                    disabled={working === d.id}
+                    style={{
+                      background: 'none', border: 'none', color: '#A32D2D',
+                      fontSize: '0.8125rem', fontWeight: 600, cursor: working === d.id ? 'default' : 'pointer',
+                      padding: 0, opacity: working === d.id ? 0.6 : 1, whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {working === d.id ? 'Removing…' : 'Remove'}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Profile() {
   const { isOwner, userName, userEmail, businessId, reload, loading } = useBusinessContext();
 
@@ -533,6 +654,10 @@ export function Profile() {
             {!busy && memberId && businessId && (
               <AddDeviceSection businessId={businessId} memberId={memberId} />
             )}
+
+            {/* Your devices — self-service list + remove of the member's OWN enrolled devices
+                (RLS md_self scopes to self; the current device is guarded against removal). */}
+            {!busy && memberId && <YourDevicesSection memberId={memberId} />}
           </div>
         </Card>
       </div>
