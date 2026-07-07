@@ -130,9 +130,11 @@ interface SettingsProps {
   accountingConnecting?: boolean;
   accountingError?: string;
   // When set, render ONLY that section as a direct-access full-screen destination (RULE 2a,
-  // ledger #50) — Business Profile or Accounting reached straight from the menu, no long scroll.
+  // ledger #50) — Business Profile, Accounting, or Services reached straight from the menu, no long
+  // scroll. Services is the offerings editor as its OWN nav destination (was orphaned at
+  // /settings/all — nav rewire 2026-07-07, tech-debt #47).
   // Undefined (default) → render the full page (UNCHANGED for every existing caller, incl. Ignition).
-  section?: 'business' | 'accounting';
+  section?: 'business' | 'accounting' | 'services';
   // When true, the Accounting card is NOT rendered on the full page — the host already exposes the
   // SAME connect action elsewhere (its own /settings/accounting destination + the Dashboard prompt),
   // so a third copy on the full page is redundant (Item 4). Default false → unchanged for any host
@@ -229,6 +231,9 @@ export function Settings({
   }
 
   async function toggleOffering(id: string, current: boolean) {
+    // [TRACE:SERVICE] write scoped to the ACTIVE business_id (rows loaded .eq('business_id', businessId)
+    // + RLS owner-fence). ON by default (STD-003) until owner-proven.
+    console.log('[TRACE:SERVICE] save', { businessId, serviceId: id, action: current ? 'deactivate' : 'activate' });
     await supabase.from('service_offerings').update({ is_active: !current }).eq('id', id);
     setOfferings(prev => prev.map(o => o.id === id ? { ...o, is_active: !current } : o));
   }
@@ -250,6 +255,7 @@ export function Settings({
     setSavingOffering(true);
     const price = parseFloat(editForm.price);
     if (isNaN(price)) { setSavingOffering(false); return; }
+    console.log('[TRACE:SERVICE] save', { businessId, serviceId: editingId, action: 'edit' });
     await supabase.from('service_offerings').update({
       name:             editForm.name.trim(),
       description:      editForm.description.trim()      || null,
@@ -268,6 +274,7 @@ export function Settings({
   }
 
   async function deleteOffering(id: string) {
+    console.log('[TRACE:SERVICE] save', { businessId, serviceId: id, action: 'delete' });
     await supabase.from('service_offerings').delete().eq('id', id);
     setOfferings(prev => prev.filter(o => o.id !== id));
   }
@@ -292,6 +299,8 @@ export function Settings({
     }).select('*').single();
 
     if (!error && data) {
+      // [TRACE:SERVICE] insert scoped to the ACTIVE business_id (from useBusinessContext). ON by default (STD-003).
+      console.log('[TRACE:SERVICE] save', { businessId, serviceId: (data as ServiceOffering).id, action: 'add' });
       setOfferings(prev => [...prev, data as ServiceOffering]);
       setNewName(''); setNewDesc(''); setNewPrice('');
       setNewCategory('addon'); setNewTiming('at_checkout'); setNewPriceType('per_unit');
@@ -369,7 +378,7 @@ export function Settings({
             {business?.name}
           </p>
           <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>
-            {section === 'business' ? 'Business Profile' : section === 'accounting' ? 'Accounting' : 'Settings'}
+            {section === 'business' ? 'Business Profile' : section === 'accounting' ? 'Accounting' : section === 'services' ? 'Services' : 'Settings'}
           </h1>
         </div>
       </div>
@@ -466,8 +475,9 @@ export function Settings({
         </SectionCard>
         )}
 
-        {/* ── Services ── (full page only; not a named direct destination this pass) */}
-        {full && (
+        {/* ── Services ── (full page OR the isolated /settings/services destination — the offerings
+            editor is now a discoverable nav destination, no longer orphaned at /settings/all). */}
+        {(full || section === 'services') && (
         <SectionCard title="Services">
           <p style={{ fontSize: '0.8125rem', color: GRAY, marginBottom: 14, lineHeight: 1.5 }}>
             Everything you offer at checkout — transport options, add-ons, and future recurring services. Toggle off to hide from customers without deleting.
@@ -590,8 +600,9 @@ export function Settings({
         </SectionCard>
         )}
 
-        {/* ── Find Customers (AI match results) ── */}
-        {full && matchOfferingId && (
+        {/* ── Find Customers (AI match results) ── (full page OR the Services destination — the
+            "Find customers" action lives inside the Services card, so its panel must render there too) */}
+        {(full || section === 'services') && matchOfferingId && (
           <SectionCard title={`Expand — ${matchOfferingName}`}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <p style={{ fontSize: '0.8125rem', color: GRAY, margin: 0, lineHeight: 1.5 }}>

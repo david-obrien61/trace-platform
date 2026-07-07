@@ -569,10 +569,13 @@ export function Settings() {
   const { businessId, isOwner, userPermissions, reload } = useBusinessContext();
 
   // RULE 2a (ledger #50): a section param renders JUST that section as a direct menu destination.
-  // Only Business Profile + Accounting are isolated this pass; an unknown param falls back to the
-  // full page rather than a blank screen.
-  const section: 'business' | 'accounting' | undefined =
-    sectionParam === 'business' || sectionParam === 'accounting' ? sectionParam : undefined;
+  // Business Profile + Accounting + Services are isolated destinations; an unknown param falls back
+  // to the full page rather than a blank screen. Services was orphaned at /settings/all — it is now
+  // a discoverable Admin nav destination at /settings/services (nav rewire 2026-07-07).
+  const section: 'business' | 'accounting' | 'services' | undefined =
+    sectionParam === 'business' || sectionParam === 'accounting' || sectionParam === 'services'
+      ? sectionParam
+      : undefined;
 
   // [TRACE:NAV] which Settings section-destination resolved (ON by default, STD-003).
   console.log('[TRACE:NAV] settings section', { param: sectionParam ?? null, resolved: section ?? 'full' });

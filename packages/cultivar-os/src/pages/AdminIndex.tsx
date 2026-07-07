@@ -15,7 +15,7 @@
  * INSTRUMENTATION (STD-003): [TRACE:NAV] admin-index — ON by default (standing owner instruction).
  */
 import { useNavigate } from 'react-router-dom';
-import { Building2, FileText, Landmark, Shield, Calculator, PlusCircle } from 'lucide-react';
+import { Building2, FileText, Landmark, Shield, Calculator, PlusCircle, Wrench } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useBusinessContext } from '@trace/shared/context';
 import { navChildrenOf, navRoute, navPermission, navLabel } from '../registry/tileRegistry';
@@ -28,6 +28,7 @@ const CARD_META: Record<string, { icon: LucideIcon; description: string }> = {
   nav_add_business:     { icon: PlusCircle, description: 'Create another business under your account.' },
   nav_business_profile: { icon: Building2,  description: 'Name, contact info, address, tax rate.' },
   nav_accounting:       { icon: Landmark,   description: 'Connect QuickBooks for automatic invoicing.' },
+  nav_services:         { icon: Wrench,     description: 'Transport, add-ons, and other services offered at checkout.' },
   nav_team:             { icon: Shield,     description: 'Invite people, set roles, and manage their devices.' },
   nav_cost_to_produce:  { icon: Calculator, description: 'Your cost-to-produce model and pricing.' },
 };

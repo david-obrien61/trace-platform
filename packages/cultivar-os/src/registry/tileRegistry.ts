@@ -186,7 +186,7 @@ export const TILE_REGISTRY: TileEntry[] = [
   // ── Planned (greyed) — forward declarations. Permissions marked PROVISIONAL where the
   //    seed did not pin one (adjustable); the seed-pinned ones are locked like all others.
   { key: 'services',         vertical: 'general', label: 'Services',                  group: 'planned',  kind: 'context', placement: 'TBD',       nav_eligible: false, required_permission: 'view_dashboard',   status: 'planned', depends_on: null,
-    icon: Wrench,      color: '#94a3b8', bg: DASH_BG, note: 'EDITOR ALREADY LIVE — the service_offerings CRUD (transport / add-ons incl. netting companion / other services) renders in Settings.tsx:470, reachable only via /settings/all, NOT /admin. status:planned/placement:TBD refer to a first-class Services TILE/destination (not yet placed — next build), NOT to the editor. permission PROVISIONAL. See tech-debt #47.' },
+    icon: Wrench,      color: '#94a3b8', bg: DASH_BG, note: 'EDITOR LIVE — the service_offerings CRUD (transport / add-ons incl. netting companion / other services) renders in shared Settings.tsx. NAV rewire 2026-07-07 (tech-debt #47): it now has a first-class section-isolated DESTINATION at /settings/services via the nav_services Admin IA node (peer of Business Profile / Accounting), no longer orphaned at /settings/all. This tile (status:planned/placement:TBD) refers to a future DASHBOARD tile, not the editor or its nav destination. permission PROVISIONAL.' },
   { key: 'opportunities',    vertical: 'general', label: 'Opportunities',             group: 'planned',  kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'view_orders',     status: 'planned', depends_on: 'services',
     icon: TrendingUp,  color: '#22d3ee', bg: DASH_BG, note: 'Regina surfacing; permission PROVISIONAL' },
   { key: 'followup_engine',  vertical: 'general', label: 'Follow-Up',                 group: 'planned',  kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'manage_customers', status: 'planned', depends_on: null,
@@ -381,6 +381,12 @@ export const NAV_IA: NavNode[] = [
   { key: 'nav_add_business',     section: 'admin',     parent: 'sec_admin',           tileKey: 'add_business' },
   { key: 'nav_business_profile', section: 'admin',     parent: 'sec_admin',           label: 'Business Profile', route: '/settings/business',    matchRoute: '/settings/business',    required_permission: 'manage_settings' },
   { key: 'nav_accounting',       section: 'admin',     parent: 'sec_admin',           label: 'Accounting',       route: '/settings/accounting', matchRoute: '/settings/accounting', required_permission: 'manage_settings' },
+  // Services — the service_offerings editor (transport / add-ons incl. netting companion / other
+  // services + "+ Add service" + On/Off) as a FIRST-CLASS section-isolated destination (RULE 2a).
+  // Was orphaned: reachable only via /settings/all → scroll (tech-debt #47). Now a discoverable
+  // Admin nav item at /settings/services, peer of Business Profile / Accounting. manage_settings-
+  // gated (owner-default, delegable). Served by the /settings/:section route (no router change).
+  { key: 'nav_services',         section: 'admin',     parent: 'sec_admin',           label: 'Services',         route: '/settings/services',   matchRoute: '/settings/services',   required_permission: 'manage_settings' },
   // Team & Roles — the agnostic member/device console (D-31): invite, roles (visibility axis),
   // devices. Supersedes the old /roles page (which now redirects here). manage_settings-gated
   // (owner-default, delegable) so Staff never sees it.
