@@ -4,7 +4,9 @@
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.
 
-**Last updated:** 2026-07-07 (created — DOCS-ONLY. Scanned `docs/decisions/*.md`,
+**Last updated:** 2026-07-07 (D-34 "lot is the SKU" promoted to a first-class entry;
+SELL-PRICE flipped OPEN→DECIDED as D-35 "sell_price stored on the stock line"; consolidated
+inventory→sale build spec linked. Created earlier same day — DOCS-ONLY scan of `docs/decisions/*.md`,
 `docs/DECISIONS.md`, `MASTER_BRIEF.md`, `DISCOVERY_MODULE_BRIEF.md`, `user_stories.md`,
 `docs/architecture/*`, `docs/cost-to-produce/*`, all `*BRIEF*`/`*DECISION*`/`*FRAMING*`.)
 
@@ -15,11 +17,14 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
-> ✅ **Drift watch (2026-07-07):** No drift — this session (add the DECISIONS panel to
-> status.html + the close-out sync/drift rule) built strictly within the settled decisions;
-> it changed no decision. The close-out rule (CLAUDE.md §9) updates THIS line every session:
-> "✅ No drift — abided by …" or "⚠️ DRIFT — went outside #Z: [what/why]". status.html renders
-> this line as a banner on the 📇 Decisions panel (green = clean, red = drift).
+> ✅ **Drift watch (2026-07-07):** No drift — this session (record D-34 lot-is-the-SKU + D-35
+> sell_price-on-stock-line, then write the consolidated inventory→sale build spec) stayed
+> strictly within the settled decisions: D-34 promotes an already-settled 2026-06-13 decision
+> to a first-class entry (no new call), D-35 resolves a genuinely-OPEN question David decided
+> this pass, and the spec only sequences work FROM those decisions (no code, no schema written).
+> The close-out rule (CLAUDE.md §9) updates THIS line every session: "✅ No drift — abided by …"
+> or "⚠️ DRIFT — went outside #Z: [what/why]". status.html renders this line as a banner on the
+> 📇 Decisions panel (green = clean, red = drift).
 
 ---
 
@@ -41,7 +46,7 @@ decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenan
 | Decision / Topic | What it decides (one line) | Doc + path | Date | Status |
 |---|---|---|---|---|
 | **Inventory size model = B-clean** | One `business_inventory` row per **variety × size**; `size text` (grower's own value, no CHECK) + `variant_group text` (parent product slug). Migration `20260628_inventory_size_variants.sql` (applied). | [docs/decisions/2026-06-27-discovery-size-variants.md](decisions/2026-06-27-discovery-size-variants.md) (pick recorded at line 64); build state in [2026-07-07-size-variant-build-state-recon.md](decisions/2026-07-07-size-variant-build-state-recon.md) | 2026-06-27 | **DECIDED** |
-| **Lot-level history, "the lot is the SKU"** | LAWNS tracks **lots (qty-of-SKU)** via `business_inventory`, **not individual organisms**; history attaches to the variety/lot. `cultivar_plants` demoted to vertical-IDENTITY-only. | **⚠️ Recorded only as the header rationale of the migration** [supabase/migrations/20260613_cultivar_plants_untangle.sql](../supabase/migrations/20260613_cultivar_plants_untangle.sql) (lines 4–11) + design in [docs/architecture/INVENTORY-RESTRUCTURE-FEASIBILITY.md](architecture/INVENTORY-RESTRUCTURE-FEASIBILITY.md). **NOT a first-class D-## entry** — see PART 2 flag below. | 2026-06-13 | **DECIDED** (needs promotion to a D-## entry) |
+| **D-34** Lot-level history, "the lot is the SKU" | LAWNS tracks **lots (qty-of-SKU)** via `business_inventory`, **not individual organisms**; history attaches to the variety/lot. `cultivar_plants` demoted to vertical-IDENTITY-only. | [docs/DECISIONS.md](DECISIONS.md) D-34 (promoted from the migration header) + [supabase/migrations/20260613_cultivar_plants_untangle.sql](../supabase/migrations/20260613_cultivar_plants_untangle.sql) (lines 4–11) + design in [docs/architecture/INVENTORY-RESTRUCTURE-FEASIBILITY.md](architecture/INVENTORY-RESTRUCTURE-FEASIBILITY.md) | 2026-06-13 (recorded as D-34 2026-07-07) | **DECIDED** |
 | **Three-layer inventory model (item → size class → stock line) + lifecycle-stages-as-events** | Catalog item → size class → countable stock line; lifecycle stages modeled as events on the lot. | ⚠️ **No single dedicated doc found.** Realized across the B-clean size decision (variety×size rows) + the June-13 lot=SKU untangle; lifecycle/stages-as-events design captured in [docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md](cost-to-produce/COST-TO-PRODUCE-DESIGN.md) §5.3/§5.9 (project→product lifecycle, season-end event on each lot). The "June 5" framing appears to be **chat-origin, not a repo doc** — see PART 2 flag. | June 5 (framing) / 2026-06-13–27 (realized) | **DECIDED (scattered)** |
 | **QR resolves to VARIETY (bare-domain QR), size is a pick-step** | A pot's QR encodes `${baseUrl}/plant/${tag_id}` → public `/plant/:tagId` page → resolves the variety; size is chosen at count/checkout time (the count-side size-picker). | [docs/decisions/2026-06-26-grower-resolve-design.md](decisions/2026-06-26-grower-resolve-design.md) + [walk-and-count-inventory-verify-first.md](decisions/walk-and-count-inventory-verify-first.md); front-door path in [2026-07-07-qr-order-front-door-recon.md](decisions/2026-07-07-qr-order-front-door-recon.md) | 2026-06-21 / 26 | **DECIDED** |
 | **Count-side size-picker (L5 NEED_CLARIFICATION seam)** | Same-name multi-size scan → size-picker → routes to the exact per-size lot (owner-proven on iPhone). | [docs/decisions/2026-06-27-discovery-size-variants.md](decisions/2026-06-27-discovery-size-variants.md) + CLOSE-OUT-LEDGER #72 | 2026-06-30 | **DECIDED (OWNER-PROVEN)** |
@@ -74,7 +79,7 @@ decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenan
 | **D-19** Three cost layers; the hidden third = OPPORTUNITY COST | The cost of pulled labor. | [docs/DECISIONS.md](DECISIONS.md) D-19 | 2026-06 | **DECIDED** |
 | **Unified cost model (Option 2) / small-business accounting model** | Cost-NATURE (CapEx/COGS/OpEx) × PROJECT × SHAPE tagging. | [docs/DECISION-unified-cost-model-option2.md](DECISION-unified-cost-model-option2.md) + [docs/DECISION-small-business-cost-accounting-model.md](DECISION-small-business-cost-accounting-model.md) | 2026-06-17 | **DECIDED** |
 | **Nested projects + BI what-if blocker** | Future arc — build when real. | [docs/DECISION-nested-projects-and-BI-whatif-blocker.md](DECISION-nested-projects-and-BI-whatif-blocker.md) | 2026-06 | **DEFERRED** |
-| **Sell price on the stock line** | See PART 3 — **OPEN**, no doc decides storage yet. | — | — | **OPEN** |
+| **D-35** Sell price stored on the stock line | `business_inventory.sell_price` (stored, editable, authoritative) DISTINCT from `unit_cost`; MarginEngine suggests but the stored price governs; cart reads `sell_price`, refuses $0; `price_tier` applies at checkout. Industry-standard variant pricing (Shopify/Square/WooCommerce). | [docs/DECISIONS.md](DECISIONS.md) D-35 + build items in [docs/decisions/2026-07-07-inventory-sale-pipeline-buildspec.md](decisions/2026-07-07-inventory-sale-pipeline-buildspec.md) item 1 | 2026-07-07 | **DECIDED** (build owed) |
 
 ---
 
@@ -141,12 +146,10 @@ Plus the top-of-hierarchy framing doc: [NORTH-STAR.md](../NORTH-STAR.md).
   [docs/decisions/2026-07-07-qr-lifecycle-and-stock-line-purchase-recon.md](decisions/2026-07-07-qr-lifecycle-and-stock-line-purchase-recon.md)
   (line 14: *"June 13: 'LAWNS tracks lot-level history, not individual organisms; the lot
   is the SKU.'"*).
-- **🚩 FLAG:** it is **NOT** a `D-##` entry in DECISIONS.md and **NOT** a
-  `docs/decisions/*.md` file — so a decision lookup won't find it where it should. It is a
-  genuinely-settled decision hiding in a migration comment. **Recommend promoting it to a
-  proper `D-##` entry** (e.g. "D-34 · Lot is the SKU — lot-level history, `cultivar_plants`
-  is identity-only") so it's discoverable. (Not authored this pass — DOCS-INDEX only; needs
-  David's nod on the D-number.)
+- **✅ RESOLVED 2026-07-07:** promoted to **[D-34 · The LOT is the SKU](DECISIONS.md)** in
+  DECISIONS.md (a `[POINTER]` entry back to the migration header + feasibility doc). A
+  decision lookup now finds it where it should. The migration header remains the canonical
+  rationale home; D-34 is the discoverable ledger pointer.
 
 ### 2. STORIES_AND_FRAMINGS.md → **NEVER CREATED**
 
@@ -169,11 +172,13 @@ These are NOT yet decided/recorded. Lightning should surface them rather than as
 
 | Open item | Current state | Decided anywhere? |
 |---|---|---|
-| **SELL PRICE on the stock line** | `business_inventory` has `unit_cost` ONLY (what you paid), NULL on all 111 rows; **no `sell_price`/`retail_price`/`price` column and no UI to enter one**. Only `service_offerings.price` holds a real sell price — services/add-ons only, not plants. Cart reads `unit_cost ?? 0` → customer sees $0.00, order writes total $0 with no block. | **OPEN** — no doc decides sell-price STORAGE. Recon'd (not decided) in [docs/decisions/2026-07-07-sell-price-answers-plain.md](decisions/2026-07-07-sell-price-answers-plain.md) + [2026-07-07-count-size-persist-and-pricing-model-recon.md](decisions/2026-07-07-count-size-persist-and-pricing-model-recon.md). Choice owed: populate `unit_cost` + margin-markup at checkout, OR add a real `sell_price` column + UI + cart read. |
-| **Lifecycle / transplant EVENT attachment** | Events currently key on `plant_id` (a `cultivar_plants` row); design says lot-level. Whether events attach to the **variety-cohort** vs a **per-size row** is not settled. | **OPEN** — recon'd in [2026-07-07-qr-lifecycle-and-stock-line-purchase-recon.md](decisions/2026-07-07-qr-lifecycle-and-stock-line-purchase-recon.md) (option b: re-anchor events to the `business_inventory` stock line + cost-basis columns), but the cohort-vs-per-size grain is **not decided** and the re-anchor is **not built** (DRIFTED). |
-| **Purchase-off-stock-line vs `cultivar_plants` (the drift)** | Purchase resolution is still anchored to per-specimen `cultivar_plants`, the model June-13 abandoned. The untangle moved *stock* to `business_inventory` but left *identity + price + purchase* on `cultivar_plants`. | **OPEN / DRIFTED** — the recon [2026-07-07-qr-lifecycle-and-stock-line-purchase-recon.md](decisions/2026-07-07-qr-lifecycle-and-stock-line-purchase-recon.md) diagnoses the drift and proposes re-anchoring purchase to the stock line, but **no decision doc rules on it and no build has landed.** |
+| ~~**SELL PRICE on the stock line**~~ | ✅ **DECIDED 2026-07-07 as [D-35](DECISIONS.md)** — stored `business_inventory.sell_price` (editable, authoritative, DISTINCT from `unit_cost`); MarginEngine suggests, stored price governs; cart reads `sell_price` and refuses $0; `price_tier` applies at checkout. | **DECIDED** — build owed (spec item 1: migration + datasheet entry UI + cart repoint + tier consumption). |
+| **Lifecycle / transplant EVENT grain (cohort vs per-size)** | Events key on `plant_id`; design says lot-level. The re-anchor target (variety-cohort vs per-size row) is spec'd but the grain is the one sub-question David still picks at build time. | **PARTIALLY DECIDED** — the DRIFT is settled by [[D-34]] (re-anchor to the stock line, add cost-basis columns); spec'd as [buildspec item 5](decisions/2026-07-07-inventory-sale-pipeline-buildspec.md) and marked **POST-DEMO**. The cohort-vs-per-size grain is the residual call, made when item 5 is built. |
+| **Purchase-off-stock-line vs `cultivar_plants` (the drift)** | Purchase resolution still anchored to per-specimen `cultivar_plants`. | **DECIDED (build owed)** — no longer an open *decision*: [[D-34]] settles the target; the fix is spec'd as [buildspec item 2](decisions/2026-07-07-inventory-sale-pipeline-buildspec.md) (`usePlant` fallback ladder + shared resolver + `order_items` schema), **DEMO-CRITICAL**. It's DRIFTED code, not an undecided question. |
 
-**Reconciliation note:** items 2 and 3 above are downstream of the same root the June-13
-decision already settled ("the lot is the SKU") — the DECISION exists; the CODE drifted.
-So they are less "undecided" than "decided-but-un-built" (DRIFTED). The genuinely-undecided
-one is **SELL PRICE storage** — there is no decision on record at all.
+**Reconciliation note (updated 2026-07-07):** all three former open items are now closed as
+*decisions*. SELL PRICE became **D-35**. The two lifecycle/purchase items were always
+downstream of the June-13 "lot is the SKU" decision (now first-class **D-34**) — the DECISION
+existed; the CODE drifted — and are now sequenced in the consolidated build spec
+([2026-07-07-inventory-sale-pipeline-buildspec.md](decisions/2026-07-07-inventory-sale-pipeline-buildspec.md)).
+What remains is BUILD, not DECIDE. Nothing genuinely-undecided is left in this section.

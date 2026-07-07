@@ -1042,6 +1042,25 @@ Implementation applies the **local-first LOGIC proven in DataBridge** — **pull
 
 ---
 
+### D-34 · The LOT is the SKU — lot-level history, `cultivar_plants` is identity-only — `[POINTER]`
+**Decision (2026-06-13, promoted to a first-class entry 2026-07-07):** LAWNS (and the grower vertical generally) tracks **LOTS — a quantity-of-SKU — via `business_inventory`, NOT individual organisms.** A "lot" is one variety×size stock line; history, cost, stock status, and lifecycle all attach to the **variety/lot**, never to a per-pot row. `cultivar_plants` is DEMOTED to a vertical-IDENTITY-only join table (its surviving value is `tag_id`, species, container, zone — the per-organism attributes a QR needs when true per-specimen tagging is wanted); its stock facts (`status`, `arrived_at`, `base_price`, `install_price`) were MOVED to `business_inventory` and its `nursery_id` dropped (AC-1). The per-unique-pot-identity idea was explicitly **abandoned as infeasible** — a grower with 500 identical 5-gal Vitex will not tag 500 pots; they track the lot. This is the anchor decision under the size model ([[Inventory size model = B-clean]]), the QR-resolves-to-variety decision, and the sell-price/lifecycle work — everything hangs on "the lot is the SKU."
+**Why a pointer:** the full rationale lives in the migration header that enacted it; this entry makes a genuinely-settled decision (which had been hiding in a migration comment) discoverable from the ledger.
+**Canonical home:** [`supabase/migrations/20260613_cultivar_plants_untangle.sql`](../supabase/migrations/20260613_cultivar_plants_untangle.sql) (lines 4–11, the "Settled model" header block) + design in [`docs/architecture/INVENTORY-RESTRUCTURE-FEASIBILITY.md`](architecture/INVENTORY-RESTRUCTURE-FEASIBILITY.md).
+**Companion:** [[D-24]] (rigid spine / flexible edge — the lot line is the spine), the B-clean size model (variety×size rows), [[D-35]] (sell price stored on the lot line — the SKU carries its price). **Known drift:** purchase-resolution + lifecycle-events still anchor to `cultivar_plants` (the untangle stopped at stock) — see the consolidated build spec [`docs/decisions/2026-07-07-inventory-sale-pipeline-buildspec.md`](decisions/2026-07-07-inventory-sale-pipeline-buildspec.md).
+**Date:** DECIDED 2026-06-13 · recorded as D-34 2026-07-07.
+
+---
+
+### D-35 · Sell price is STORED on the stock line (`business_inventory.sell_price`), engine suggests but doesn't govern — `[POINTER]`
+**Decision (2026-07-07):** the variety×size stock line (`business_inventory`) gets a stored **`sell_price`** column — the retail price the customer pays — **DISTINCT from `unit_cost`** (what the grower paid, sourced from receipts). The MarginEngine (`unit_cost + margin + overhead`) **SUGGESTS** a price, but the **STORED `sell_price` is authoritative and editable** — the cart reads `sell_price`, **never** `unit_cost`. A $0/null `sell_price` is **refused/flagged at checkout, never silently charged $0** (Surface Honesty). Customer `price_tier` (retail / contractor / wholesale — column already exists on `customers`) applies a tier adjustment at checkout time.
+**Rationale — adopt the industry standard (by-value, §6 rule 10):** every mainstream commerce platform stores price as a field on the variant and lets margin tools suggest, not govern — **Shopify `variant.price`, Square `item_variation.price_money`, WooCommerce `_regular_price`.** Price must be stable, auditable, and independent of cost fluctuations: a grower's cost can wobble receipt-to-receipt, but the shelf price shouldn't lurch with it, and a purely-computed price can't be hand-overridden or reasoned about after the fact. Stored-and-editable is the standard because it's the honest one.
+**Why a pointer:** this entry records the decision; the build items (migration, datasheet entry UI, cart repoint, tier consumption) live in the consolidated spec.
+**Canonical home:** [`docs/decisions/2026-07-07-inventory-sale-pipeline-buildspec.md`](decisions/2026-07-07-inventory-sale-pipeline-buildspec.md) item 1. Recon that surfaced the gap (not the decision): [`2026-07-07-sell-price-answers-plain.md`](decisions/2026-07-07-sell-price-answers-plain.md) + [`2026-07-07-count-size-persist-and-pricing-model-recon.md`](decisions/2026-07-07-count-size-persist-and-pricing-model-recon.md) §GAP-2.
+**Companion:** [[D-34]] (the SKU is the lot — so its price lives on the lot line), [[D-16]] (pricing model — cost-to-serve; the MarginEngine that suggests), [[D-9]] (Surface Honesty — refuse a $0 sale, don't fake it). Supersedes the OPEN "sell price storage" question.
+**Date captured:** 2026-07-07 · **Status:** DECIDED (build owed — see spec; NOT built this pass).
+
+---
+
 ## PERSONAL-FINANCIAL
 
 > Not in this file by design — see **`decisions/PERSONAL-FINANCIAL.local.md`** (gitignored).
