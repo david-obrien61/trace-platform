@@ -43,6 +43,7 @@ interface InventoryRow {
   sku: string | null;
   qty: number;
   unit_cost: number | null;
+  sell_price: number | null;
   location: string | null;
   status: string;
   serial_number: string | null;
@@ -107,7 +108,7 @@ export function BusinessInventory() {
     setListError(null);
     const { data, error } = await supabase
       .from('business_inventory')
-      .select('id,name,sku,qty,unit_cost,location,status,serial_number,cost_confidence,size,variant_group,received_at,receipt_id,notes,description,created_at,updated_at')
+      .select('id,name,sku,qty,unit_cost,sell_price,location,status,serial_number,cost_confidence,size,variant_group,received_at,receipt_id,notes,description,created_at,updated_at')
       .eq('business_id', businessId)
       .order('created_at', { ascending: false });
     if (error) { console.error('[TRACE:invsheet] load error', error.message); setListError(error.message); setListLoading(false); return; }
@@ -152,6 +153,15 @@ export function BusinessInventory() {
     console.log('[TRACE:invsheet] edit', { rowId: row.id, field: 'unit_cost', from: row.unit_cost, to: value, cost_confidence: value == null ? 'UNKNOWN' : 'CONFIRMED' });
     void doPatch(row, patch);
   }
+  // Sell price (D-35): the retail price the customer pays, STORED on the stock line and
+  // AUTHORITATIVE at checkout — DISTINCT from unit_cost (what the grower paid). No
+  // confidence coupling (that governs cost, not price). Blank clears to null = unpriced,
+  // which the cart REFUSES rather than selling at $0 (Surface Honesty, D-9).
+  function onSellPrice(row: InventoryRow, value: number | null) {
+    if (value === (row.sell_price ?? null)) return;
+    console.log('[TRACE:PRICE] datasheet write sell_price', { rowId: row.id, name: row.name, from: row.sell_price, to: value });
+    void doPatch(row, { sell_price: value });
+  }
   // Confidence override: UNKNOWN clears the cost; any other grade keeps it.
   function onConfidence(row: InventoryRow, conf: CostConfidence) {
     if (conf === row.cost_confidence) return;
@@ -186,6 +196,8 @@ export function BusinessInventory() {
       render: r => <TextCell key={`vg-${r.id}-${r.updated_at}`} value={r.variant_group} width={110} placeholder="—" onCommit={v => onText(r, 'variant_group', v)} /> },
     { key: 'unit_cost', header: 'Unit cost', sortable: true, sortVal: r => r.unit_cost ?? -1,
       render: r => <AmountCell key={`cost-${r.id}-${r.updated_at}`} value={r.unit_cost} onCommit={v => onUnitCost(r, v)} /> },
+    { key: 'sell_price', header: 'Sell price', sortable: true, sortVal: r => r.sell_price ?? -1,
+      render: r => <AmountCell key={`sell-${r.id}-${r.updated_at}`} value={r.sell_price} onCommit={v => onSellPrice(r, v)} /> },
     { key: 'cost_confidence', header: 'Conf.', sortable: true, sortVal: r => r.cost_confidence ?? '',
       render: r => <SelectCell value={r.cost_confidence ?? 'UNKNOWN'} options={CONFIDENCE_OPTS.map(o => ({ value: o, label: o }))} onChange={v => onConfidence(r, v as CostConfidence)} styleFor={confidenceStyleFor} title={confidenceLabel(r.cost_confidence)} /> },
     { key: 'status', header: 'Status', sortable: true, sortVal: r => r.status,

@@ -63,7 +63,7 @@ export function usePlant(tagId: string | undefined): UsePlantResult {
       // Returns null for business_inventory when inventory_id is null (no lot linked yet).
       const { data: plantData, error: plantErr } = await supabase
         .from('cultivar_plants')
-        .select('*, business_inventory ( id, qty, unit_cost, status, received_at )')
+        .select('*, business_inventory ( id, qty, unit_cost, sell_price, status, received_at )')
         .ilike('tag_id', tagId!)
         .single();
 

@@ -41,7 +41,8 @@ export function PlantProfile() {
 
   const inv          = plant.business_inventory;
   const inventoryStatus = inv?.status ?? null;
-  const unitCost     = inv?.unit_cost ?? 0;
+  // D-35: the price shown to the customer is the stored sell_price, NEVER unit_cost (cost).
+  const sellPrice    = inv?.sell_price ?? 0;
   const isUnavailable = !inv || inventoryStatus !== 'available';
 
   function handleAddToCart() {
@@ -79,7 +80,7 @@ export function PlantProfile() {
             </div>
 
             <button className="btn btn-primary" onClick={handleAddToCart}>
-              Add to cart — ${(unitCost * qty).toLocaleString('en-US')}
+              Add to cart — ${(sellPrice * qty).toLocaleString('en-US')}
             </button>
 
             <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--gray-400)', marginTop: 10 }}>

@@ -67,7 +67,10 @@ export function AddOns() {
   const nettingFallback =
     !nettingSelection && isSelfTransport && !nettingDeclined ? nettingPrice * quantity : 0;
 
-  const plantSubtotal = (plant.business_inventory?.unit_cost ?? 0) * quantity;
+  // D-35: the cart reads sell_price (the retail price), NEVER unit_cost (what the grower paid).
+  const sellPrice     = plant.business_inventory?.sell_price ?? 0;
+  console.log('[TRACE:PRICE] cart read (AddOns) column=sell_price', { plantId: plant.id, sellPrice, quantity });
+  const plantSubtotal = sellPrice * quantity;
   const grandTotal    = plantSubtotal + transportAmount + addonAmount + nettingFallback;
 
   return (

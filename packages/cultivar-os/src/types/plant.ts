@@ -2,7 +2,8 @@
 export interface PlantInventory {
   id: string;
   qty: number;
-  unit_cost: number | null;
+  unit_cost: number | null;   // what the grower PAID (cost) — never the sale price
+  sell_price: number | null;  // D-35: the retail price the customer pays — cart reads THIS
   status: string;
   received_at: string | null;
 }

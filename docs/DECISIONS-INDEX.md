@@ -17,7 +17,17 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
-> ✅ **Drift watch (2026-07-07):** No drift — this session (record D-34 lot-is-the-SKU + D-35
+> ✅ **Drift watch (2026-07-07 · SELL_PRICE build):** No drift — abided by **D-34** (price lives on
+> the stock line, not per-specimen), **D-35** (built exactly: stored `sell_price` DISTINCT from
+> `unit_cost`, cart reads sell_price never unit_cost, MarginEngine only suggests), **AC-1** (sell_price
+> on the agnostic `business_inventory`, no `cultivar_` noun), **AC-3** (every read/write business_id-scoped),
+> **Surface Honesty / D-9** ($0/null sale REFUSED server+client, never silently charged $0). Item 1 of the
+> inventory→sale spec is BUILDER-COMPLETE (M1 migration GATED — David applies). **STEP 5 tier math HELD, not
+> drift:** the `price_tier`→adjustment mechanism is undefined and taxonomies don't match (customers
+> retail/contractor/wholesale ≠ Cost-to-Produce walk-in/friends-family/contractor), so per **AC-4** (settle-once,
+> don't guess) the read is wired + TRACE-logged but NO adjustment applied — surfaced to David for a decision.
+> *(Prior 2026-07-07 line — D-34/D-35 recording + spec — preserved below.)*
+> ✅ **Drift watch (2026-07-07 · decisions + spec):** No drift — this session (record D-34 lot-is-the-SKU + D-35
 > sell_price-on-stock-line, then write the consolidated inventory→sale build spec) stayed
 > strictly within the settled decisions: D-34 promotes an already-settled 2026-06-13 decision
 > to a first-class entry (no new call), D-35 resolves a genuinely-OPEN question David decided
@@ -79,7 +89,7 @@ decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenan
 | **D-19** Three cost layers; the hidden third = OPPORTUNITY COST | The cost of pulled labor. | [docs/DECISIONS.md](DECISIONS.md) D-19 | 2026-06 | **DECIDED** |
 | **Unified cost model (Option 2) / small-business accounting model** | Cost-NATURE (CapEx/COGS/OpEx) × PROJECT × SHAPE tagging. | [docs/DECISION-unified-cost-model-option2.md](DECISION-unified-cost-model-option2.md) + [docs/DECISION-small-business-cost-accounting-model.md](DECISION-small-business-cost-accounting-model.md) | 2026-06-17 | **DECIDED** |
 | **Nested projects + BI what-if blocker** | Future arc — build when real. | [docs/DECISION-nested-projects-and-BI-whatif-blocker.md](DECISION-nested-projects-and-BI-whatif-blocker.md) | 2026-06 | **DEFERRED** |
-| **D-35** Sell price stored on the stock line | `business_inventory.sell_price` (stored, editable, authoritative) DISTINCT from `unit_cost`; MarginEngine suggests but the stored price governs; cart reads `sell_price`, refuses $0; `price_tier` applies at checkout. Industry-standard variant pricing (Shopify/Square/WooCommerce). | [docs/DECISIONS.md](DECISIONS.md) D-35 + build items in [docs/decisions/2026-07-07-inventory-sale-pipeline-buildspec.md](decisions/2026-07-07-inventory-sale-pipeline-buildspec.md) item 1 | 2026-07-07 | **DECIDED** (build owed) |
+| **D-35** Sell price stored on the stock line | `business_inventory.sell_price` (stored, editable, authoritative) DISTINCT from `unit_cost`; MarginEngine suggests but the stored price governs; cart reads `sell_price`, refuses $0; `price_tier` applies at checkout. Industry-standard variant pricing (Shopify/Square/WooCommerce). | [docs/DECISIONS.md](DECISIONS.md) D-35 + build items in [docs/decisions/2026-07-07-inventory-sale-pipeline-buildspec.md](decisions/2026-07-07-inventory-sale-pipeline-buildspec.md) item 1 | 2026-07-07 | **DECIDED** · item 1 BUILDER-COMPLETE (M1 migration GATED; datasheet column + cart repoint + $0-refusal built; **tier math OPEN — AC-4 hold**) |
 
 ---
 

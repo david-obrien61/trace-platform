@@ -79,24 +79,57 @@ export default async function handler(req: any, res: any) {
       return sum + p;
     }, 0);
 
-    // AUTHORITATIVE unit cost — server-fetched, NEVER the client-POSTed value. The charge
+    // AUTHORITATIVE sell price — server-fetched, NEVER the client-POSTed value. The charge
     // must not be client-controllable (price-tamper hole, decision 2026-06-21 Part B). The
     // customer-facing DISPLAY is unchanged; only the CHARGED amount is server-authoritative.
-    // (unit_cost is the nursery's per-plant price on this surface — out of scope of the
-    // view_costs wall, which governs owner cost-analysis surfaces; see grower-import sell_price gap.)
+    // D-35: the cart charges business_inventory.sell_price (the retail price), NEVER unit_cost
+    // (what the grower paid — cost, from receipts). Cost and price never conflate here.
     const { data: invRow } = await db
       .from('cultivar_plants')
-      .select('business_inventory ( unit_cost )')
+      .select('business_inventory ( sell_price )')
       .eq('id', plant.id)
       .eq('business_id', businessId)
       .single();
-    const serverUnitCost   = Number((invRow as any)?.business_inventory?.unit_cost ?? 0);
-    const clientClaimedCost = Number(plant.business_inventory?.unit_cost ?? 0);
-    if (clientClaimedCost !== serverUnitCost) {
-      console.log('[TRACE:CHECKOUT] unit_cost mismatch — charging SERVER value (tamper defeated)', {
-        plantId: plant.id, clientClaimedCost, serverUnitCost,
+    const serverSellPriceRaw = (invRow as any)?.business_inventory?.sell_price;
+    const serverSellPrice    = Number(serverSellPriceRaw ?? 0);
+    const clientClaimedPrice = Number(plant.business_inventory?.sell_price ?? 0);
+    if (clientClaimedPrice !== serverSellPrice) {
+      console.log('[TRACE:PRICE] sell_price mismatch — charging SERVER value (tamper defeated)', {
+        plantId: plant.id, clientClaimedPrice, serverSellPrice,
       });
     }
+    console.log('[TRACE:PRICE] server-authoritative sell_price read column=sell_price', {
+      plantId: plant.id, serverSellPrice, quantity,
+    });
+
+    // ── $0/NULL REFUSAL (Surface Honesty, D-9) ─────────────────────────────
+    // A lot with no sell_price set is UNPRICED — refuse the sale rather than silently
+    // writing a $0 order. The cart surfaces this error instead of completing.
+    if (serverSellPriceRaw == null || serverSellPrice <= 0) {
+      const plantName = plant.common_name ?? plant.species ?? 'this item';
+      console.log('[TRACE:PRICE] REFUSED — no sell_price set, sale blocked (no $0 order written)', {
+        plantId: plant.id, plantName, serverSellPriceRaw,
+      });
+      return res.status(400).json({
+        error: `No sale price set for ${plantName} — set a price in Inventory before selling.`,
+        code: 'NO_SELL_PRICE',
+      });
+    }
+
+    // ── PRICE TIER at checkout (D-35) — READ WIRED, ADJUSTMENT HELD (AC-4) ──
+    // The resolved customer's price_tier is read + logged here. The tier→adjustment
+    // MATH is NOT yet defined anywhere (customers.price_tier = retail/contractor/wholesale
+    // does not map to any config of adjustment values; the Cost-to-Produce tiers use
+    // different names). Per the buildspec STEP 5 STOP rule, we do NOT invent tier math —
+    // no adjustment is applied until David settles it (settle-once, AC-4). Post == pre today.
+    const { data: custRow } = await db
+      .from('customers').select('price_tier').eq('id', customerId).maybeSingle();
+    const priceTier            = (custRow as any)?.price_tier ?? null;
+    const tierAdjustedUnitPrice = serverSellPrice; // HOLD: no adjustment — mechanism undefined (AC-4)
+    console.log('[TRACE:PRICE] price_tier adjustment', {
+      customerId, priceTier, prePrice: serverSellPrice, postPrice: tierAdjustedUnitPrice,
+      adjustmentApplied: false, note: 'tier math undefined — AC-4 hold, no adjustment applied',
+    });
     // AUTHORITATIVE tax rate — the business's own setting (businesses.tax_rate, editable in
     // Settings), server-fetched so the invoiced tax matches the displayed tax (CartReview reads
     // the same column). Falls back to the constant only for a row predating the column.
@@ -104,7 +137,7 @@ export default async function handler(req: any, res: any) {
       .from('businesses').select('tax_rate').eq('id', businessId).maybeSingle();
     const taxRate = Number((bizTaxRow as any)?.tax_rate ?? TAX_RATE_FALLBACK);
 
-    const plantSubtotal = serverUnitCost * quantity;
+    const plantSubtotal = tierAdjustedUnitPrice * quantity;
     const addonsAmount  = transportAmount + nettingTotal + otherTotal;
     const subtotal      = plantSubtotal + addonsAmount;
     const taxAmount     = Math.round(subtotal * taxRate * 100) / 100;
@@ -152,7 +185,7 @@ export default async function handler(req: any, res: any) {
       order_id:   orderId,
       plant_id:   plant.id,
       quantity,
-      unit_price: serverUnitCost,   // server-authoritative (not the client-POSTed value)
+      unit_price: tierAdjustedUnitPrice,   // server-authoritative sell_price (D-35), not the client-POSTed value
       subtotal:   plantSubtotal,
     });
     if (itemErr) throw new Error(`Order item: ${itemErr.message}`);

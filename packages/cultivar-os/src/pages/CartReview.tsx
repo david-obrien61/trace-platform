@@ -54,7 +54,12 @@ export function CartReview() {
   // the hardcoded TAX_RATE constant is only a fallback for a row that predates the column.
   // The server (orders/submit) recomputes from the same column — display and invoice agree.
   const taxRate       = business?.tax_rate ?? TAX_RATE;
-  const plantSubtotal = (plant.business_inventory?.unit_cost ?? 0) * quantity;
+  // D-35: read sell_price (retail), NEVER unit_cost (cost). A missing/0 sell_price is
+  // REFUSED below rather than silently charged $0 (Surface Honesty, D-9).
+  const sellPrice     = plant.business_inventory?.sell_price ?? 0;
+  const noSalePrice   = sellPrice <= 0;
+  console.log('[TRACE:PRICE] cart read (CartReview) column=sell_price', { plantId: plant.id, sellPrice, quantity, noSalePrice });
+  const plantSubtotal = sellPrice * quantity;
   const addonsAmount  = transportAmount + nettingTotal + otherTotal;
   const subtotal      = plantSubtotal + addonsAmount;
   const taxAmount     = Math.round(subtotal * taxRate * 100) / 100;
@@ -221,6 +226,15 @@ export function CartReview() {
         )}
       </div>
 
+      {/* No-sale-price refusal (Surface Honesty, D-9) — block, don't silently sell at $0 */}
+      {noSalePrice && (
+        <div style={{ margin: '0 16px', padding: '10px 14px', background: '#fff3f3', border: '1.5px solid #A32D2D', borderRadius: 8 }}>
+          <p style={{ fontSize: '0.875rem', color: '#7f1d1d', fontWeight: 600 }}>
+            No sale price set for {plant.common_name ?? plant.species} — set a price in Inventory before selling.
+          </p>
+        </div>
+      )}
+
       {/* Error */}
       {submitError && (
         <div style={{ margin: '0 16px', padding: '10px 14px', background: '#fff3f3', border: '1.5px solid #A32D2D', borderRadius: 8 }}>
@@ -233,14 +247,14 @@ export function CartReview() {
         <button
           className="btn btn-primary"
           style={{ minHeight: 56 }}
-          disabled={submitting}
+          disabled={submitting || noSalePrice}
           onClick={() => handleSubmit(true)}
         >
           {submitting && payOnline ? 'Sending…' : `Send invoice + pay online — $${total.toFixed(2)}`}
         </button>
         <button
           className="btn btn-secondary"
-          disabled={submitting}
+          disabled={submitting || noSalePrice}
           onClick={() => handleSubmit(false)}
         >
           {submitting && !payOnline ? 'Creating order…' : "I'll pay at the office"}
