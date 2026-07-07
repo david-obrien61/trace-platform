@@ -1032,6 +1032,16 @@ Implementation applies the **local-first LOGIC proven in DataBridge** — **pull
 
 ---
 
+### D-33 · Discovery FIX — Option A: gap-vs-decision (scoped, NOT built, post-demo) — `[POINTER]`
+**Decision (2026-07-07):** the scoped fix that makes [[D-32]] real in code is **Option A — gap-vs-decision**. A read-only recon ([`data/grower-scan/discovery-engine-vs-design-recon.md`](../data/grower-scan/discovery-engine-vs-design-recon.md)) found the found-vs-suggested LABELING is already largely honest (`types.ts` distinguishes; UI labels honest; `seed.ts` D-9 logic) — **not the main defect**. The REAL defect: the engine ASSERTS "you could add X" (`engine.ts:117,130`; `DiscoveryGlimpse.tsx:457-476` renders gaps as "Opportunities") instead of ASKING "deliberate, or opportunity?" — violating D-32 in code and misfiring on TRACE's own LAWNS example (suggesting standalone Seasonal Fertilization when LAWNS bundles fertilizer into install on purpose).
+**Fix shape (medium-small, rides an existing mechanic):** reframe the gaps/suggestions prompt as QUESTIONS; relabel the UI away from assertion; add a record-as-business-decision / stop-re-surfacing loop by **REUSING the existing identity-conflict-resolution confirm/correct mechanic** (`compare.ts` + `DiscoveryGlimpse.tsx:180,386-434`) — extend it from identity fields to gaps, plus rule 3 "offer to improve the chosen model" (e.g. formalize contractor referrals). Needs a persistence home for recorded decisions (interacts with the gated `business_discovery_profiles`). **POST-DEMO — not Aug-4-critical.**
+**Also flagged by the recon (separate, smaller):** (a) `nursery.ts commonPainPoints` are ROADMAP-derived, not empirically grounded (committed 2026-05-29, before the grower-scan research existed 2026-06-21) — known, fix out of scope now; (b) the grower-scan research measures CATALOG-SCRAPABILITY (8/28 scrapable; most growers are brochures; some social/PDF only) and grounds the catalog-POPULATE path, a separate future improvement, NOT the pain-points config; (c) the discovery three-paths / pain-first / library design is NET-NEW (not built) — roadmap item, not a fix.
+**Canonical home:** the recon file above · fix-shape options + evidence index therein.
+**Companion:** [[D-32]] (the principle this implements), [[D-9]] (surface-don't-presume), tech-debt #51.
+**Date captured:** 2026-07-07 · **Status:** SCOPED / NOT BUILT (post-demo). Discovery code UNCHANGED this pass.
+
+---
+
 ## PERSONAL-FINANCIAL
 
 > Not in this file by design — see **`decisions/PERSONAL-FINANCIAL.local.md`** (gitignored).
