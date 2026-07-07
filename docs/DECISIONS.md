@@ -1023,6 +1023,15 @@ Implementation applies the **local-first LOGIC proven in DataBridge** — **pull
 
 ---
 
+### D-32 · Discovery — not every absence is an opportunity (gap vs deliberate business decision) — `[POINTER]`
+**Decision (David, 2026-07-07):** the discovery engine must NOT presume every absent service is a gap to fill — some absences are deliberate business decisions (a nursery that refers planting out to contractors; LAWNS bundling fertilizer into installation on purpose). It surfaces an absence as a **question not an assertion**, **respects owner corrections** and stops re-surfacing (cousin of the Path 3 "won't touch" marker), and where a deliberate model exists offers to **improve the chosen model rather than replace it** — sophisticated discovery, not naive "you're missing X, add it." This is the BuiltWithCAI thesis (connect + fill genuine gaps + respect what works) applied to discovery.
+**Why a pointer:** full principle + the four design rules live in the discovery design home; this entry makes it discoverable from the ledger.
+**Canonical home:** [`DISCOVERY_MODULE_BRIEF.md`](../DISCOVERY_MODULE_BRIEF.md) § Core Design Principles ("Not every absence is an opportunity").
+**Companion:** [[D-9]] (surface-don't-presume honesty contract — applied here to absences), [[D-6]] (surface the decision-changing few, not the complete many), [[OP-7]] (AI infers → proposes → owner confirms), Path 3 "won't touch" (THOUGHTS.md — deliberate non-features recorded with reasoning).
+**Date captured:** 2026-07-07 · **Status:** CAPTURED design principle (discovery code UNCHANGED — design capture only).
+
+---
+
 ## PERSONAL-FINANCIAL
 
 > Not in this file by design — see **`decisions/PERSONAL-FINANCIAL.local.md`** (gitignored).
