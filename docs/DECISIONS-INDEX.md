@@ -15,6 +15,12 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-07):** No drift — this session (add the DECISIONS panel to
+> status.html + the close-out sync/drift rule) built strictly within the settled decisions;
+> it changed no decision. The close-out rule (CLAUDE.md §9) updates THIS line every session:
+> "✅ No drift — abided by …" or "⚠️ DRIFT — went outside #Z: [what/why]". status.html renders
+> this line as a banner on the 📇 Decisions panel (green = clean, red = drift).
+
 ---
 
 ## 1. THE CANONICAL LEDGERS (start here)

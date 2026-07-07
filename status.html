@@ -6,11 +6,20 @@
 <title>TRACE — Status Board</title>
 <!--
   PURE RENDERER. Holds ZERO status data of its own.
-  The ONLY source of truth is TRACE-SESSION-BOOTSTRAP.md (its ⚡ ACTIVE STATUS,
+  The status board's ONLY source of truth is TRACE-SESSION-BOOTSTRAP.md (its ⚡ ACTIVE STATUS,
   📋 24-CAPABILITY BOARD, 🧵 ARC MAP, and §A DONE/ARCHIVED sections). This file PARSES that
   markdown at open-time and renders it — it never duplicates or hardcodes statuses.
   Delete the .md and this shows "no data", never a stale board.
   Open: double-click → "Open TRACE-SESSION-BOOTSTRAP.md" (or drag-drop it).
+
+  📇 DECISIONS TAB: the "Decisions" tab is ALSO a pure renderer — it parses
+  docs/DECISIONS-INDEX.md (the decisions index) at open-time into color-coded cards
+  (DECIDED=green · DRIFTED=amber · OPEN=red · SUPERSEDED/ref=grey). It holds no decision
+  data of its own. To keep it current: the SINGLE source is docs/DECISIONS-INDEX.md — edit
+  THAT, never this file. CLOSE-OUT RULE (CLAUDE.md §9): every session updates
+  DECISIONS-INDEX.md (status cells + the drift-watch blockquote at its top) so this panel
+  re-renders current, and any decision the session went OUTSIDE is flipped to DRIFTED/OPEN
+  there → it surfaces here automatically (row color + the drift banner).
 -->
 <style>
   :root{
@@ -95,6 +104,13 @@
   .drop.over{border-color:var(--accent);background:#eef4e6}
   .hint{font-size:.76rem;color:var(--muted);margin-top:10px}
   .srcline{font-size:.72rem;color:var(--muted)}
+  /* decisions panel */
+  .driftbanner{border-radius:10px;padding:10px 14px;margin:2px 0 16px;font-size:.82rem;
+    font-weight:600;line-height:1.45}
+  .driftbanner.df-warn{background:#fee2e2;color:#991b1b;border-left:5px solid var(--red)}
+  .driftbanner.df-ok{background:#dcfce7;color:#166534;border-left:5px solid var(--green)}
+  .decfoot{font-size:.72rem;color:var(--muted);margin:18px 0 0}
+  .opencount{color:#fecaca;font-weight:800}
   .hide{display:none}
 </style>
 </head>
@@ -107,6 +123,7 @@
   <button class="btn" id="openBtn">Open .md</button>
   <button class="btn ghost" id="reloadBtn">↻</button>
   <input type="file" id="file" accept=".md,.markdown,text/markdown,text/plain" class="hide" />
+  <input type="file" id="fileDec" accept=".md,.markdown,text/markdown,text/plain" class="hide" />
 </header>
 
 <div class="wrap">
@@ -126,6 +143,7 @@
   <div id="board" class="hide">
     <div class="tabs">
       <button class="tab active" data-view="active">⚡ Active</button>
+      <button class="tab" data-view="decisions" id="tabDec">📇 Decisions</button>
       <button class="tab" data-view="board">📋 24-Capability Board</button>
       <button class="tab" data-view="arcs">🧵 Arcs</button>
       <button class="tab" data-view="archived">🗄 Archived</button>
@@ -138,6 +156,7 @@
       <span class="srcline" id="srcline"></span>
     </div>
     <div id="viewActive"></div>
+    <div id="viewDecisions" class="hide"></div>
     <div id="viewBoard" class="hide"></div>
     <div id="viewArcs" class="hide"></div>
     <div id="viewArchived" class="hide"></div>
@@ -444,6 +463,164 @@ function render(mdText, srcLabel){
   document.getElementById("viewBoard").innerHTML = bHTML;
 }
 
+/* ───────────────────────── parse 📇 DECISIONS-INDEX.md ───────────────────────── */
+/* Separate pure-renderer path: reads docs/DECISIONS-INDEX.md, groups by "## " section,
+   parses every markdown table into color-coded cards. Zero hardcoded decision data. */
+let decisionsText = "";
+
+function splitRow(r){
+  return r.replace(/^\s*\|/,"").replace(/\|\s*$/,"").split("|").map(c=>c.trim());
+}
+function isSepRow(r){ return /^[\s|:\-]+$/.test(r) && r.indexOf("-")>-1; }
+function findCol(header, res){
+  for(let i=0;i<header.length;i++){ if(res.some(re=>re.test(header[i]))) return i; }
+  return -1;
+}
+function decColor(s){
+  const u=(s||"").toUpperCase();
+  if(/\bOPEN\b/.test(u)) return "red";
+  if(/DRIFT/.test(u)) return "amber";
+  if(/SUPERSEDED/.test(u)) return "grey";
+  if(/DECIDED|LOCKED|OWNER-PROVEN/.test(u)) return "green";
+  if(/DEFERRED/.test(u)) return "green";
+  return "grey";
+}
+function decLabel(s){
+  const u=(s||"").toUpperCase();
+  if(/\bOPEN\b/.test(u)) return "OPEN";
+  if(/DRIFT/.test(u)) return "DRIFTED";
+  if(/SUPERSEDED/.test(u)) return "SUPERSEDED";
+  if(/OWNER-PROVEN/.test(u)) return "DECIDED ✓";
+  if(/DEFERRED/.test(u)) return "DEFERRED";
+  if(/DECIDED/.test(u)) return "DECIDED";
+  if(/LOCKED/.test(u)) return "LOCKED";
+  return "";
+}
+// doc cell "[text](path)" → path; plain text → cleaned text; "—"/"" → ""
+function docPointer(cell){
+  if(!cell || cell==="—") return "";
+  const m = cell.match(/\]\(([^)]+)\)/);
+  if(m) return m[1];
+  return cell.replace(/\*\*/g,"").replace(/`/g,"").trim();
+}
+function parseDecTable(block, out){
+  if(block.length<2) return;
+  const header = splitRow(block[0]).map(c=>c.toLowerCase());
+  const dataStart = isSepRow(block[1]) ? 2 : 1;
+  let topic = findCol(header,[/decision|topic|open item|^\s*op\s*$|ledger/]);
+  const decides = findCol(header,[/decides|holds|principle|current state|^state$/]);
+  const status  = findCol(header,[/status|decided anywhere/]);
+  const doc     = findCol(header,[/doc|path/]);
+  if(topic<0) topic=0;
+  for(let r=dataStart;r<block.length;r++){
+    const cells = splitRow(block[r]);
+    if(cells.length<2) continue;
+    const t = cells[topic]||"";
+    if(!t || t==="—") continue;
+    const statusRaw = status>-1 ? (cells[status]||"") : "";
+    out.push({
+      topic:t,
+      decides: decides>-1 ? (cells[decides]||"") : "",
+      status: statusRaw,
+      doc: doc>-1 ? (cells[doc]||"") : "",
+      color: decColor(statusRaw || t)
+    });
+  }
+}
+function parseDecisions(mdText){
+  const lines = mdText.split(/\r?\n/);
+  const sections=[]; let cur=null; let i=0;
+  while(i<lines.length){
+    const h = lines[i].match(/^##\s+(.+)$/);
+    if(h){ cur={name:h[1].replace(/\*\*/g,"").trim(), rows:[]}; sections.push(cur); i++; continue; }
+    if(/^\s*\|/.test(lines[i]) && cur){
+      const block=[];
+      while(i<lines.length && /^\s*\|/.test(lines[i])){ block.push(lines[i]); i++; }
+      parseDecTable(block, cur.rows);
+      continue;
+    }
+    i++;
+  }
+  return sections.filter(s=>s.rows.length);
+}
+// drift-watch: a blockquote near the top (before the first "## ") flagged by the close-out
+function parseDrift(mdText){
+  const lines = mdText.split(/\r?\n/);
+  for(const raw of lines){
+    if(/^##\s/.test(raw)) break;
+    const line = raw.trim();
+    if(!/^>/.test(line)) continue;
+    if(/drift/i.test(line)){
+      const warn = /⚠️|drift(ed)?\b(?!.*no drift)/i.test(line) && !/no drift|✅|abided|no-drift/i.test(line);
+      return { text: line.replace(/^>\s*/,""), warn };
+    }
+  }
+  return null;
+}
+function decCardHTML(row){
+  const label = decLabel(row.status);
+  const chip = {green:"s-green",amber:"s-amber",red:"s-red",grey:"s-grey"}[row.color];
+  const ptr = docPointer(row.doc);
+  return `<div class="card c-${row.color}">
+    <div class="top">
+      <span class="dot d-${row.color}"></span>
+      <span class="name">${md(row.topic)}</span>
+      ${label?`<span class="state ${chip}">${esc(label)}</span>`:""}
+    </div>
+    ${row.decides?`<div class="meta">${md(row.decides)}</div>`:""}
+    ${ptr?`<div class="ptr">→ ${esc(ptr)}</div>`:""}
+  </div>`;
+}
+function renderDecisions(){
+  const el = document.getElementById("viewDecisions");
+  const tab = document.getElementById("tabDec");
+  if(!decisionsText){
+    el.innerHTML = `<div class="empty" style="padding:34px 20px">
+      <p class="hint">DECISIONS-INDEX.md wasn't auto-loaded (normal when you double-click
+      open — the browser blocks local reads).</p>
+      <button class="btn" id="openDecBtn"
+        style="color:var(--accent);border:1.5px solid var(--line)">Open DECISIONS-INDEX.md</button>
+      <p class="hint">It lives at <code>docs/DECISIONS-INDEX.md</code>. It's the single source —
+      this panel just renders it.</p></div>`;
+    const b=document.getElementById("openDecBtn");
+    if(b) b.onclick=()=>document.getElementById("fileDec").click();
+    tab.innerHTML = "📇 Decisions";
+    return;
+  }
+  const drift = parseDrift(decisionsText);
+  const secs  = parseDecisions(decisionsText);
+  let openCount = 0;
+  secs.forEach(s=>s.rows.forEach(r=>{ if(r.color==="red") openCount++; }));
+  let html = "";
+  if(drift){
+    html += `<div class="driftbanner ${drift.warn?"df-warn":"df-ok"}">${md(drift.text)}</div>`;
+  }
+  if(!secs.length){
+    html += `<p class="hint">No decision tables found in DECISIONS-INDEX.md.</p>`;
+  }
+  for(const s of secs){
+    html += `<div class="band">${esc(s.name)}</div>`;
+    html += `<div class="grid">${s.rows.map(decCardHTML).join("")}</div>`;
+  }
+  html += `<p class="decfoot">Rendered live from <code>docs/DECISIONS-INDEX.md</code> — the single
+    source. OPEN (red) items need David. Kept current by the close-out rule (CLAUDE.md §9).</p>`;
+  el.innerHTML = html;
+  tab.innerHTML = openCount
+    ? `📇 Decisions <span class="opencount">(${openCount} open)</span>`
+    : "📇 Decisions";
+}
+function loadDecisions(text){ decisionsText = text; renderDecisions(); }
+function tryFetchDecisions(){
+  fetch("./docs/DECISIONS-INDEX.md",{cache:"no-store"})
+    .then(r=>{ if(!r.ok) throw new Error(r.status); return r.text(); })
+    .then(t=>loadDecisions(t))
+    .catch(()=>renderDecisions());   // renders the pick-file affordance
+}
+document.getElementById("fileDec").onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader(); r.onload=()=>loadDecisions(String(r.result)); r.readAsText(f);
+};
+
 /* ───────────────────────── views / empty ───────────────────────── */
 function showEmpty(msg){
   document.getElementById("board").classList.add("hide");
@@ -454,7 +631,7 @@ function showEmpty(msg){
 }
 function setView(v){
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
-  const map={active:"viewActive",board:"viewBoard",arcs:"viewArcs",archived:"viewArchived"};
+  const map={active:"viewActive",decisions:"viewDecisions",board:"viewBoard",arcs:"viewArcs",archived:"viewArchived"};
   for(const name in map){ document.getElementById(map[name]).classList.toggle("hide", v!==name); }
 }
 
@@ -470,7 +647,7 @@ function readFile(file){
 
 document.getElementById("openBtn").onclick=()=>document.getElementById("file").click();
 document.getElementById("file").onchange=e=>{ if(e.target.files[0]) readFile(e.target.files[0]); };
-document.getElementById("reloadBtn").onclick=()=>{ tryAutoFetch(true); };
+document.getElementById("reloadBtn").onclick=()=>{ tryAutoFetch(true); tryFetchDecisions(); };
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>setView(t.dataset.view));
 
 // drag-drop
@@ -491,6 +668,7 @@ function tryAutoFetch(manual){
     });
 }
 tryAutoFetch(false);
+tryFetchDecisions();
 </script>
 </body>
 </html>
