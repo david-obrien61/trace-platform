@@ -4,11 +4,12 @@
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.
 
-**Last updated:** 2026-07-07 (D-34 "lot is the SKU" promoted to a first-class entry;
-SELL-PRICE flipped OPEN→DECIDED as D-35 "sell_price stored on the stock line"; consolidated
-inventory→sale build spec linked. Created earlier same day — DOCS-ONLY scan of `docs/decisions/*.md`,
-`docs/DECISIONS.md`, `MASTER_BRIEF.md`, `DISCOVERY_MODULE_BRIEF.md`, `user_stories.md`,
-`docs/architecture/*`, `docs/cost-to-produce/*`, all `*BRIEF*`/`*DECISION*`/`*FRAMING*`.)
+**Last updated:** 2026-07-07 (PURCHASE-OFF-STOCK-LINE built — the D-34 drift row flipped from
+"DECIDED (build owed)" to **BUILDER-COMPLETE (M2 GATED)**; earlier same day: D-34 "lot is the SKU"
+promoted to a first-class entry; SELL-PRICE flipped OPEN→DECIDED as D-35. Created earlier same day —
+DOCS-ONLY scan of `docs/decisions/*.md`, `docs/DECISIONS.md`, `MASTER_BRIEF.md`,
+`DISCOVERY_MODULE_BRIEF.md`, `user_stories.md`, `docs/architecture/*`, `docs/cost-to-produce/*`,
+all `*BRIEF*`/`*DECISION*`/`*FRAMING*`.)
 
 **How this file stays honest:** it is a POINTER index — it names the home + one-line
 what-it-decides + status. It never re-states a decision's substance (that's the home doc's
@@ -17,6 +18,14 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-07 · PURCHASE-OFF-STOCK-LINE build):** No drift — abided by **D-34** (purchase
+> anchors to the `business_inventory` stock line, `cultivar_plants` identity-only — this closes the DRIFTED
+> code, does not re-decide), **AC-1** (the extracted `resolveStockLine` is agnostic — names only
+> `business_inventory`, no `cultivar_` noun; the vertical `cultivar_plants` L1 lane stays in the callers),
+> **AC-3** (every resolve/read/write business_id-scoped), **§6 rule 8** (ONE shared resolver + one
+> `detectSizeCollision`, consumed by both InventoryCount and usePlant — not a second copy). M2 GATED (order_items
+> stock-line anchor). **#72 count size-picker byte-identical (no regression); a quick re-owner-prove recommended,
+> expected to hold.** Item 2 of the inventory→sale spec is BUILDER-COMPLETE. *(Prior 2026-07-07 lines preserved below.)*
 > ✅ **Drift watch (2026-07-07 · SELL_PRICE build):** No drift — abided by **D-34** (price lives on
 > the stock line, not per-specimen), **D-35** (built exactly: stored `sell_price` DISTINCT from
 > `unit_cost`, cart reads sell_price never unit_cost, MarginEngine only suggests), **AC-1** (sell_price
@@ -184,7 +193,7 @@ These are NOT yet decided/recorded. Lightning should surface them rather than as
 |---|---|---|
 | ~~**SELL PRICE on the stock line**~~ | ✅ **DECIDED 2026-07-07 as [D-35](DECISIONS.md)** — stored `business_inventory.sell_price` (editable, authoritative, DISTINCT from `unit_cost`); MarginEngine suggests, stored price governs; cart reads `sell_price` and refuses $0; `price_tier` applies at checkout. | **DECIDED** — build owed (spec item 1: migration + datasheet entry UI + cart repoint + tier consumption). |
 | **Lifecycle / transplant EVENT grain (cohort vs per-size)** | Events key on `plant_id`; design says lot-level. The re-anchor target (variety-cohort vs per-size row) is spec'd but the grain is the one sub-question David still picks at build time. | **PARTIALLY DECIDED** — the DRIFT is settled by [[D-34]] (re-anchor to the stock line, add cost-basis columns); spec'd as [buildspec item 5](decisions/2026-07-07-inventory-sale-pipeline-buildspec.md) and marked **POST-DEMO**. The cohort-vs-per-size grain is the residual call, made when item 5 is built. |
-| **Purchase-off-stock-line vs `cultivar_plants` (the drift)** | Purchase resolution still anchored to per-specimen `cultivar_plants`. | **DECIDED (build owed)** — no longer an open *decision*: [[D-34]] settles the target; the fix is spec'd as [buildspec item 2](decisions/2026-07-07-inventory-sale-pipeline-buildspec.md) (`usePlant` fallback ladder + shared resolver + `order_items` schema), **DEMO-CRITICAL**. It's DRIFTED code, not an undecided question. |
+| **Purchase-off-stock-line vs `cultivar_plants` (the drift)** | Purchase resolution still anchored to per-specimen `cultivar_plants`. | **BUILDER-COMPLETE (M2 GATED) 2026-07-07** — [[D-34]] settles the target; [buildspec item 2](decisions/2026-07-07-inventory-sale-pipeline-buildspec.md) BUILT: shared `packages/shared/src/inventory/stockLineResolver.ts` (agnostic ladder, consumed by both InventoryCount + usePlant) + `usePlant` fallback + `plant.stock_line_id` discriminator + `submit.ts` one-anchor write + **M2** `20260707_order_items_stock_line_anchor.sql` (`business_inventory_id` + `plant_id` nullable, GATED — David applies). `npm run verify` zero net-new; owner-proof owed. |
 
 **Reconciliation note (updated 2026-07-07):** all three former open items are now closed as
 *decisions*. SELL PRICE became **D-35**. The two lifecycle/purchase items were always

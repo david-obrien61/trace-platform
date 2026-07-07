@@ -10,10 +10,12 @@
 //           (tag→identity→lot), inventory_count_sessions + inventory_counts (durable record,
 //           gated migration 20260626 — degrades gracefully if not yet applied),
 //           @trace/shared/sync SyncEngine (offline durability + reconnect drain),
-//           @trace/shared/utils/canonicalName (the token-set canonical key — L4 resolve).
+//           @trace/shared/inventory resolveStockLine (the SHARED business_inventory ladder —
+//           SKU→name-token-equality→size-picker; ONE core, also used by usePlant's purchase
+//           fallback so the two surfaces cannot drift, CLAUDE.md §6 rule 8).
 // RESOLVE:  layered, most-specific → least (grower-resolve design 2026-06-26):
-//           L1 cultivar_plants.tag_id exact → L2 business_inventory.sku exact →
-//           L3 stored product-slug exact (DEFERRED, no column yet) →
+//           L1 cultivar_plants.tag_id exact (VERTICAL, stays here) → then the SHARED resolver:
+//           L2 business_inventory.sku exact → L3 stored product-slug (DEFERRED, no column) →
 //           L4 NAME token-set EQUALITY (scan slug tokens == catalog name tokens, order-
 //           insensitive — fixes the discovery-catalog false-UNKNOWN, e.g. vitex-shoal-creek
 //           ↔ "Shoal Creek Vitex") → L5 SIZE-PICKER (NEED_CLARIFICATION): when L4 returns
@@ -35,7 +37,7 @@ import { ArrowLeft, CheckCircle2, X, ScanLine, CloudOff, RefreshCw } from 'lucid
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { SyncEngine } from '@trace/shared/sync';
-import { nameTokenSet, tokenSetsEqual } from '@trace/shared/utils/canonicalName';
+import { resolveStockLine } from '@trace/shared/inventory';
 import { QrScanner } from '../components/inventory/QrScanner';
 
 const TRACE_COUNT = true; // [TRACE:COUNT] STD-003 — on until OWNER-PROVEN
@@ -49,12 +51,6 @@ interface Resolved {
   label:       string;          // "Shoal Creek Vitex, 30 gal"
   currentQty:  number | null;   // current on-hand (prefilled into the qty input)
   rawScan:     string;          // the raw decoded string, for the count record
-}
-
-// A single business_inventory candidate row (the L4 token-set match shape).
-interface InvRow {
-  id: string; name: string; sku: string | null; qty: number | null;
-  size: string | null; variant_group: string | null;
 }
 
 // A sibling size offered by the L5 picker — the chosen one resolves to its row.
@@ -93,21 +89,6 @@ function lotKey(r: Resolved): string | null {
   if (r.inventoryId) return `inv:${r.inventoryId}`;
   if (r.plantTagId)  return `tag:${r.plantTagId}`;
   return null;
-}
-
-// L5 NEED_CLARIFICATION discriminator: are these >1 token-equal matches the SAME
-// variety in different SIZES (→ size-picker), or a genuinely ambiguous collision
-// (→ UNKNOWN)? Size collision ⟺ every match carries the SAME non-null variant_group
-// AND each carries a DISTINCT non-empty size. Any mixed/missing variant_group, any
-// missing/duplicate size → NOT a size collision (surface-don't-presume → UNKNOWN).
-function detectSizeCollision(matches: InvRow[]): boolean {
-  if (matches.length < 2) return false;
-  const group = matches[0].variant_group;
-  if (group == null || group.trim() === '') return false;       // group must be set…
-  if (!matches.every(m => m.variant_group === group)) return false; // …and shared by all
-  const sizes = matches.map(m => (m.size ?? '').trim());
-  if (sizes.some(s => s === '')) return false;                  // every row needs a size
-  return new Set(sizes).size === matches.length;                // all distinct
 }
 
 export function InventoryCount() {
@@ -236,91 +217,58 @@ export function InventoryCount() {
       return;
     }
 
-    // (L2) Fall back to an inventory SKU (some QRs encode a real SKU, not a plant tag).
-    const { data: lot } = await supabase
-      .from('business_inventory')
-      .select('id, name, sku, qty')
-      .eq('business_id', businessId)
-      .ilike('sku', tag)
-      .maybeSingle();
+    // (L2→L5) SHARED business_inventory ladder — SKU exact → name token-set equality →
+    //         size-picker. ONE resolver, shared with usePlant's purchase fallback so the
+    //         two surfaces cannot drift (CLAUDE.md §6 rule 8). Identity-only column set
+    //         (default) — this keeps the count query byte-identical (no sell_price), so the
+    //         proven #72 flow does not depend on the sell_price migration being applied.
+    const resolution = await resolveStockLine(supabase, businessId, tag);
 
-    if (lot) {
-      if (TRACE_RESOLVE) console.log('[TRACE:RESOLVE] L2 sku exact —', tag, '→', (lot as any).name);
+    if (resolution.kind === 'resolved') {
+      const m = resolution.row;
+      if (TRACE_RESOLVE) {
+        const layer = resolution.via === 'sku' ? 'L2 sku exact' : 'L4 name token-set equality';
+        console.log('[TRACE:RESOLVE]', layer, '(business_inventory) —', tag, '→', m.name);
+      }
       openReview({
-        inventoryId: (lot as any).id,
+        inventoryId: m.id,
         plantTagId:  null,
-        label:       (lot as any).name + ((lot as any).sku ? ` (SKU ${(lot as any).sku})` : ''),
-        currentQty:  (lot as any).qty ?? null,
+        label:       m.name + (m.sku ? ` (SKU ${m.sku})` : ''),
+        currentQty:  m.qty ?? null,
         rawScan:     raw,
       });
       return;
     }
 
-    // (L3) stored product-slug exact — DEFERRED: no source_slug column exists today
-    //      (grower-resolve design §6 — a new column behind a gated migration). Skipped
-    //      cleanly; when that column lands, an exact norm(scan)==stored-slug check slots here.
-
-    // (L4) NAME TOKEN-SET EQUALITY — the canonical-key resolve. Fixes the discovery-
-    //      populated catalog case: a QR product-slug ("vitex-shoal-creek") and the
-    //      catalog row that holds it ("Shoal Creek Vitex", synthetic DISC- sku, no
-    //      cultivar_plants row) share only the WORDS of the name. Compare the scanned
-    //      slug's token set against each candidate's name token set; match on EQUALITY
-    //      (order-insensitive). EQUALITY ONLY this build — guarded subset/superset (L5,
-    //      → NEED_CLARIFICATION) and stemming (L6) are the deferred fast-follow and
-    //      slot in right here, after equality and before UNKNOWN.
-    const scannedKey = nameTokenSet(tag);
-    if (scannedKey.size > 0) {
-      const { data: rows } = await supabase
-        .from('business_inventory')
-        .select('id, name, sku, qty, size, variant_group')
-        .eq('business_id', businessId);
-      const matches = ((rows ?? []) as InvRow[]).filter(row =>
-        tokenSetsEqual(nameTokenSet(row.name), scannedKey));
-
-      if (matches.length === 1) {
-        const m = matches[0];
-        if (TRACE_RESOLVE) console.log('[TRACE:RESOLVE] L4 name token-set equality —', tag, '→', m.name);
-        openReview({
+    if (resolution.kind === 'collision') {
+      // (L5 NEED_CLARIFICATION) >1 token-equal rows, SAME variety in different SIZES →
+      // surface a size-picker (route the count to the chosen per-size row) instead of
+      // collapsing to UNKNOWN — the #61-regression the size feature gates on.
+      const candidates: SizeCandidate[] = resolution.candidates.map(m => ({
+        size: (m.size as string).trim(),
+        resolved: {
           inventoryId: m.id,
           plantTagId:  null,
-          label:       m.name + (m.sku ? ` (SKU ${m.sku})` : ''),
+          label:       `${m.name}, ${(m.size as string).trim()}` + (m.sku ? ` (SKU ${m.sku})` : ''),
           currentQty:  m.qty ?? null,
           rawScan:     raw,
-        });
-        return;
-      }
-      if (matches.length > 1) {
-        // (L5 NEED_CLARIFICATION) >1 token-equal rows. If they are the SAME variety in
-        // different SIZES, surface a size-picker (route the count to the chosen per-size
-        // row) instead of collapsing to UNKNOWN — the #61-regression the size feature gates on.
-        if (detectSizeCollision(matches)) {
-          const candidates: SizeCandidate[] = matches
-            .map(m => ({
-              size: (m.size as string).trim(),
-              resolved: {
-                inventoryId: m.id,
-                plantTagId:  null,
-                label:       `${m.name}, ${(m.size as string).trim()}` + (m.sku ? ` (SKU ${m.sku})` : ''),
-                currentQty:  m.qty ?? null,
-                rawScan:     raw,
-              },
-            }))
-            .sort((a, b) => a.size.localeCompare(b.size, undefined, { numeric: true }));
-          if (TRACE_RESOLVE) console.log('[TRACE:RESOLVE] L5 NEED_CLARIFICATION (size) —', tag, '→ picker:', candidates.map(c => c.size).join(' / '));
-          if (TRACE_COUNT) console.log('[TRACE:COUNT] size collision —', 'matchCount:', matches.length, 'name:', matches[0].name, 'variant_group:', matches[0].variant_group, 'sizes:', candidates.map(c => c.size).join(' / '));
-          setPickerName(matches[0].name);
-          setPickerCandidates(candidates);
-          setError(null);
-          setPhase('picker');
-          return;
-        }
-        // EQUALITY guardrail (surface-don't-presume): a genuinely ambiguous collision
-        // (mixed/empty variant_group, or no per-size split) — do NOT auto-pick. → UNKNOWN.
-        if (TRACE_RESOLVE) console.warn('[TRACE:RESOLVE] L4 AMBIGUOUS —', matches.length, 'equal-token candidates for', tag, '→ UNKNOWN (not a size collision)');
-      }
+        },
+      }));
+      if (TRACE_RESOLVE) console.log('[TRACE:RESOLVE] L5 NEED_CLARIFICATION (size) —', tag, '→ picker:', candidates.map(c => c.size).join(' / '));
+      if (TRACE_COUNT) console.log('[TRACE:COUNT] size collision —', 'matchCount:', resolution.candidates.length, 'name:', resolution.variety, 'variant_group:', resolution.variantGroup, 'sizes:', candidates.map(c => c.size).join(' / '));
+      setPickerName(resolution.variety);
+      setPickerCandidates(candidates);
+      setError(null);
+      setPhase('picker');
+      return;
     }
 
-    // (L5/UNKNOWN) Unknown — don't dead-end the loop.
+    // resolution.kind === 'miss': surface the ambiguous case distinctly (surface-don't-presume).
+    if (resolution.reason === 'ambiguous' && TRACE_RESOLVE) {
+      console.warn('[TRACE:RESOLVE] L4 AMBIGUOUS —', resolution.ambiguousCount, 'equal-token candidates for', tag, '→ UNKNOWN (not a size collision)');
+    }
+
+    // (UNKNOWN) Unknown — don't dead-end the loop.
     if (TRACE_RESOLVE) console.log('[TRACE:RESOLVE] UNKNOWN — no layer matched:', tag);
     if (TRACE_COUNT) console.log('[TRACE:COUNT] resolve UNKNOWN — tag:', tag);
     setUnknownRaw(raw);

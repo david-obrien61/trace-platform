@@ -9,7 +9,7 @@ import { QtySelector } from '../components/checkout/QtySelector';
 export function PlantProfile() {
   const { tagId } = useParams<{ tagId: string }>();
   const navigate   = useNavigate();
-  const { plant, events, availableCount, loading, error } = usePlant(tagId);
+  const { plant, events, availableCount, loading, error, sizeChoices, chooseSize } = usePlant(tagId);
   const setItem    = useCart((s) => s.setItem);
   const [qty, setQty] = useState(1);
 
@@ -20,6 +20,38 @@ export function PlantProfile() {
           <div className="skeleton" style={{ height: 200, marginBottom: 16 }} />
           <div className="skeleton" style={{ height: 24, width: '70%', marginBottom: 8 }} />
           <div className="skeleton" style={{ height: 16, width: '50%' }} />
+        </div>
+      </div>
+    );
+  }
+
+  // D-34: the scanned variety resolved to a multi-size stock line — customer picks a size
+  // (L5 NEED_CLARIFICATION) before the profile renders. Choosing one synthesizes that lot.
+  if (sizeChoices && sizeChoices.length > 0) {
+    return (
+      <div className="page">
+        <div className="section" style={{ padding: '32px 16px' }}>
+          <h1 style={{ fontSize: '1.375rem', fontWeight: 700, color: '#1f2937', marginBottom: 6 }}>
+            Which size?
+          </h1>
+          <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: 20 }}>
+            This variety is stocked in more than one size. Pick the one you're looking at.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {sizeChoices.map((c) => (
+              <button
+                key={c.inventoryId}
+                className="btn btn-secondary"
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 52 }}
+                onClick={() => chooseSize(c.inventoryId)}
+              >
+                <span style={{ fontWeight: 700 }}>{c.size}</span>
+                {c.qty != null && (
+                  <span style={{ fontSize: '0.8125rem', color: 'var(--gray-600)' }}>{c.qty} available</span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     );

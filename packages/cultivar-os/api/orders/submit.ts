@@ -84,14 +84,36 @@ export default async function handler(req: any, res: any) {
     // customer-facing DISPLAY is unchanged; only the CHARGED amount is server-authoritative.
     // D-35: the cart charges business_inventory.sell_price (the retail price), NEVER unit_cost
     // (what the grower paid — cost, from receipts). Cost and price never conflate here.
-    const { data: invRow } = await db
-      .from('cultivar_plants')
-      .select('business_inventory ( sell_price )')
-      .eq('id', plant.id)
-      .eq('business_id', businessId)
-      .single();
-    const serverSellPriceRaw = (invRow as any)?.business_inventory?.sell_price;
-    const serverSellPrice    = Number(serverSellPriceRaw ?? 0);
+    //
+    // D-34: the price + size come off the business_inventory STOCK LINE. Two anchor lanes:
+    //   • stock line (plant.stock_line_id set) — a lot with no cultivar_plants specimen
+    //     (the discovery-seeded catalog): read business_inventory directly by that id.
+    //   • specimen (no stock_line_id) — a real cultivar_plants row: join to its lot (the
+    //     existing tamper-defense path). Exactly one lane, never both.
+    const stockLineId: string | null = plant.stock_line_id ?? null;
+    let serverSellPriceRaw: number | null | undefined;
+    let stockLineSize: string | null = null;
+    if (stockLineId) {
+      const { data: invRow } = await db
+        .from('business_inventory')
+        .select('sell_price, size, status')
+        .eq('id', stockLineId)
+        .eq('business_id', businessId)
+        .single();
+      serverSellPriceRaw = (invRow as any)?.sell_price;
+      stockLineSize      = (invRow as any)?.size ?? null;
+      console.log('[TRACE:RESOLVE] order anchor — business_inventory (stock line)', { stockLineId });
+    } else {
+      const { data: invRow } = await db
+        .from('cultivar_plants')
+        .select('business_inventory ( sell_price )')
+        .eq('id', plant.id)
+        .eq('business_id', businessId)
+        .single();
+      serverSellPriceRaw = (invRow as any)?.business_inventory?.sell_price;
+      console.log('[TRACE:RESOLVE] order anchor — cultivar_plants (specimen)', { plantId: plant.id });
+    }
+    const serverSellPrice = Number(serverSellPriceRaw ?? 0);
     const clientClaimedPrice = Number(plant.business_inventory?.sell_price ?? 0);
     if (clientClaimedPrice !== serverSellPrice) {
       console.log('[TRACE:PRICE] sell_price mismatch — charging SERVER value (tamper defeated)', {
@@ -144,7 +166,10 @@ export default async function handler(req: any, res: any) {
     const total         = subtotal + taxAmount;
 
     // ── 3. Leakage flag (missed add-on opportunities) ──────────────────────
-    const isLargeContainer = LARGE_CONTAINERS.includes(plant.current_container);
+    // D-34: for a stock-line order, the container is the lot's business_inventory.size
+    // (server-fetched above), not the client plant.current_container.
+    const container        = stockLineId ? (stockLineSize ?? plant.current_container) : plant.current_container;
+    const isLargeContainer = LARGE_CONTAINERS.includes(container);
     const leakageFlag      = isLargeContainer && (nettingTotal + otherTotal) === 0;
 
     // ── 4. Transport metadata ──────────────────────────────────────────────
@@ -181,13 +206,25 @@ export default async function handler(req: any, res: any) {
     const orderId = order!.id;
 
     // ── 7. Order item ──────────────────────────────────────────────────────
-    const { error: itemErr } = await db.from('order_items').insert({
+    // D-34: one line = ONE anchor, never both. A stock-line order references the lot
+    // (business_inventory_id, plant_id null); a specimen order references the plant_id.
+    const itemRow: Record<string, unknown> = {
       order_id:   orderId,
-      plant_id:   plant.id,
       quantity,
       unit_price: tierAdjustedUnitPrice,   // server-authoritative sell_price (D-35), not the client-POSTed value
       subtotal:   plantSubtotal,
+    };
+    if (stockLineId) {
+      itemRow.business_inventory_id = stockLineId;
+      itemRow.plant_id             = null;
+    } else {
+      itemRow.plant_id             = plant.id;
+    }
+    console.log('[TRACE:RESOLVE] order_items anchor', {
+      anchor: stockLineId ? 'business_inventory_id' : 'plant_id',
+      value:  stockLineId ?? plant.id,
     });
+    const { error: itemErr } = await db.from('order_items').insert(itemRow);
     if (itemErr) throw new Error(`Order item: ${itemErr.message}`);
 
     // ── 8. Order service selections (new model) ────────────────────────────
