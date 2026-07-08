@@ -23,6 +23,14 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-08 · #100 follow-up — order-detail "PLANTS (0)" fix):**
+> No drift — abided by **D-34** (the dedicated `order_items` fetch names every line by the LOT/specimen
+> dual anchor, reusing the same `orderItemName.ts` resolver Part A added — NOT forked), **AC-3** (the
+> line-item query is `order_id`-scoped only after the orders query verified `.eq('business_id')`), and
+> **§6 rule 8 / rule 11** (one resolver reused; ZERO new `api/` file, ZERO migration). No decision
+> settled/deferred/superseded — this is a query FIX (a PostgREST nested-embed drop decoupled into a
+> top-level query) within existing decisions. Completes the #100 roster drill-in (story MAPS-TO 2.1).
+>
 > ✅ **Drift watch (2026-07-08 · ORDER ROSTER CRUD + "Unknown plant" fix — as-built §7 gaps):**
 > No drift — abided by **D-34** (the roster/drill-in name items by the LOT/specimen dual anchor — the same
 > `business_inventory_id`-vs-`plant_id` anchor `submit.ts` writes), **D-35** (edit re-reads server-authoritative

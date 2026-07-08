@@ -15,7 +15,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Trash2, Save, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
-import { orderItemName, orderItemTag, type OrderItemAnchorFields } from '../lib/orderItemName';
+import { orderItemName, orderItemTag, orderItemAnchor, type OrderItemAnchorFields } from '../lib/orderItemName';
 import { ORDER_STATUSES, ORDER_STATUS_META } from '../lib/orderStatus';
 
 interface DetailItem extends OrderItemAnchorFields {
@@ -53,19 +53,24 @@ interface OrderDetailRow {
 const money = (n: number | null | undefined) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(n ?? 0));
 
+// order_items is fetched in its OWN top-level query (ITEM_COLS below), NOT embedded here.
+// WHY: a nested order_items embed under this .maybeSingle() orders query returned 0 lines while
+// the sibling order_service_selections embed populated in the SAME successful query (a PostgREST
+// nested-embed drop — the "PLANTS (0) but subtotal includes plant cost" bug). A dedicated
+// top-level query returns every line regardless of D-34 anchor (stock-line or specimen).
 const SELECT_COLS = `
   id, created_at, status, transport_method, transport_note, netting_declined,
   subtotal, tax_amount, total_amount, addons_amount, leakage_flag, notes,
   customers ( first_name, last_name, email, phone, address_line1, city, state, zip ),
-  order_items (
-    id, quantity, unit_price, subtotal, plant_id, business_inventory_id,
-    cultivar_plants ( tag_id, common_name, species ),
-    business_inventory ( name, size, sku )
-  ),
   order_service_selections (
     id, quantity, unit_price_at_time, subtotal,
     service_offerings ( name, category, price_type, price_unit )
   )`;
+
+const ITEM_COLS = `
+  id, quantity, unit_price, subtotal, plant_id, business_inventory_id,
+  cultivar_plants ( tag_id, common_name, species ),
+  business_inventory ( name, size, sku )`;
 
 export function OrderDetail() {
   const { id }           = useParams<{ id: string }>();
@@ -99,13 +104,36 @@ export function OrderDetail() {
     if (err) { setError(err.message); setLoading(false); return; }
     if (!data) { setError('Order not found'); setLoading(false); return; }
     const o = data as OrderDetailRow;
+
+    // Line items — DEDICATED top-level query (see SELECT_COLS note). ALL rows regardless of anchor
+    // (no inner-join, no plant_id filter). Scoped by order_id AFTER the order was verified to
+    // belong to businessId above (AC-3 — an order from another business already returned null).
+    const { data: itemsData, error: itemsErr } = await supabase
+      .from('order_items').select(ITEM_COLS).eq('order_id', id);
+    if (itemsErr) { setError(itemsErr.message); setLoading(false); return; }
+    o.order_items = (itemsData ?? []) as DetailItem[];
+
     setOrder(o);
     setQtyEdits(Object.fromEntries(o.order_items.map(it => [it.id, it.quantity])));
     setRemoved(new Set());
     setDateEdit(o.delivery_date ?? '');
     setStatusEdit(o.status);
     setLoading(false);
-    console.log('[TRACE:ROSTER] order detail loaded', { orderId: o.id, lines: o.order_items.length, services: o.order_service_selections.length, canManage });
+
+    // Reconciliation (STEP 3): plant lines + services must equal the stored subtotal.
+    const plantLinesTotal = o.order_items.reduce((s, it) => s + Number(it.subtotal ?? (it.unit_price * it.quantity)), 0);
+    const servicesTotal   = o.order_service_selections.reduce((s, x) => s + Number(x.subtotal ?? 0), 0);
+    console.log('[TRACE:ROSTER] order detail loaded', {
+      orderId: o.id,
+      lines: o.order_items.length,
+      anchors: o.order_items.map(orderItemAnchor),
+      plantLinesTotal: Math.round(plantLinesTotal * 100) / 100,
+      servicesTotal:   Math.round(servicesTotal * 100) / 100,
+      storedSubtotal:  Number(o.subtotal),
+      reconciles: Math.abs((plantLinesTotal + servicesTotal) - Number(o.subtotal)) < 0.01,
+      services: o.order_service_selections.length,
+      canManage,
+    });
   }, [businessId, id, canManage]);
 
   useEffect(() => { void load(); }, [load]);
