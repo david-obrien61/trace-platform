@@ -1,0 +1,34 @@
+-- ── DELIVERY_DATE on orders (owner/manager manual entry) ───────────────────────
+-- Story: user_stories.md #231 "In-store purchase workflow" (MAPS-TO 2.1) + flow spec
+--   docs/user-stories/cultivar-flows-and-contractor-program-2026-06-03.md §2 line 55:
+--   "Requires `delivery_date` column on `orders` (not yet written)". This is that column.
+--
+-- The order carries a DELIVERY DATE — the day the load goes out — entered by an owner/manager
+-- at checkout when a delivery branch is selected. This is the MANUAL precursor to the
+-- customer-facing self-scheduling calendar (flow spec §2 P0/P1); the customer-facing slot
+-- picker is a later story. Nullable: a self-haul / pickup order has no delivery date.
+--
+-- ⚠️ DAVID APPLIES AS postgres (project bgobkjcopcxusjsetfob). The schema-verification gate
+--    (CLAUDE.md §9) runs AFTER apply — verify queries (A)-(B) embedded below. Until applied,
+--    api/orders/submit.ts inserts the order WITHOUT delivery_date (missing-column fallback,
+--    [TRACE:DELIVERY]) so checkout never breaks — the date lands once this column exists.
+--
+-- ⚠️ `orders` is a LIVE-ONLY table (tech-debt #39 — no CREATE TABLE migration in the repo).
+--    This ALTER is additive/lossless: ONE NULLABLE `date` column, NO default, NO CHECK. It
+--    inherits orders' existing RLS unchanged — no policy change. Existing rows stay NULL.
+
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_date date;
+
+-- ── VERIFY (run after apply, as postgres) ──────────────────────────────────────
+-- (A) column exists, type date, nullable, no default:
+--   SELECT column_name, data_type, is_nullable, column_default
+--   FROM information_schema.columns
+--   WHERE table_name = 'orders' AND column_name = 'delivery_date';
+--   -- expect: delivery_date | date | YES | (null)
+--
+-- (B) round-trip a value on an existing order (rollback so nothing persists):
+--   BEGIN;
+--     UPDATE orders SET delivery_date = '2026-07-15' WHERE id = (SELECT id FROM orders LIMIT 1)
+--       RETURNING id, delivery_date;
+--   ROLLBACK;
+--   -- expect: one row, delivery_date = 2026-07-15

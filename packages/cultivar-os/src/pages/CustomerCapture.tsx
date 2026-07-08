@@ -1,7 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
+import { useBusinessContext } from '@trace/shared/context';
 import type { CustomerInput } from '../types/customer';
+
+const TRACE_DELIVERY = true; // [TRACE:DELIVERY] STD-003 — on until OWNER-PROVEN
+
+// Today's date as an ISO 'YYYY-MM-DD' (local), the min for the delivery-date picker.
+function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 function formatPhone(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 10);
@@ -61,7 +70,11 @@ function Field({
 
 export function CustomerCapture() {
   const navigate = useNavigate();
-  const { setCustomer, customer: saved, items } = useCart();
+  const {
+    setCustomer, customer: saved, items, selectedTransport,
+    deliveryDate: savedDeliveryDate, setDeliveryDate,
+  } = useCart();
+  const { isOwner, role } = useBusinessContext();
   const firstItem = items[0] ?? null;
 
   const [firstName, setFirstName] = useState(saved?.first_name ?? '');
@@ -73,18 +86,41 @@ export function CustomerCapture() {
   const [state,     setState]     = useState(saved?.state ?? 'TX');
   const [zip,       setZip]       = useState(saved?.zip ?? '');
   const [optIn,     setOptIn]     = useState(saved?.marketing_opt_in ?? true);
+  const [delivDate, setDelivDate] = useState(savedDeliveryDate ?? '');
   const [touched,   setTouched]   = useState(false);
+
+  // FIX 3 — a delivery order needs a ship-to. Read the requirement FROM the chosen transport
+  // service (requires_address, owner-set) or its shape (a staff/delivery branch), never hardcoded.
+  const deliveryRequired = !!selectedTransport
+    && (selectedTransport.requires_address || selectedTransport.transport_mode === 'staff');
+  // FIX 4 — the delivery date is entered by owner/manager (the manual precursor to customer
+  // self-scheduling). Shown only when a delivery branch is selected.
+  const canSetDeliveryDate = isOwner || role === 'MANAGER';
+  const showDeliveryDate   = deliveryRequired && canSetDeliveryDate;
+
+  const phoneValid   = phone.replace(/\D/g, '').length === 10;
 
   const emailError   = touched && !email.trim() ? 'Email is required'
                      : touched && !isValidEmail(email) ? 'Enter a valid email address'
                      : '';
   const firstError   = touched && !firstName.trim() ? 'First name is required' : '';
   const lastError    = touched && !lastName.trim() ? 'Last name is required' : '';
-  const hasErrors    = !firstName.trim() || !lastName.trim() || !isValidEmail(email);
+  const addressError = touched && deliveryRequired && !address.trim() ? 'A delivery address is required' : '';
+  const phoneError   = touched && deliveryRequired && !phoneValid ? 'A phone number is required for delivery' : '';
+  const hasErrors    = !firstName.trim() || !lastName.trim() || !isValidEmail(email)
+                     || (deliveryRequired && (!address.trim() || !phoneValid));
 
   function handleSubmit() {
     setTouched(true);
-    if (hasErrors) return;
+    if (hasErrors) {
+      if (TRACE_DELIVERY && deliveryRequired) {
+        console.log('[TRACE:DELIVERY] delivery order — required fields enforced (submit blocked)', {
+          transport: selectedTransport?.name, requiresAddress: selectedTransport?.requires_address,
+          hasAddress: !!address.trim(), phoneValid,
+        });
+      }
+      return;
+    }
 
     const c: CustomerInput = {
       first_name:      firstName.trim(),
@@ -99,6 +135,7 @@ export function CustomerCapture() {
     };
 
     setCustomer(c);
+    setDeliveryDate(showDeliveryDate ? (delivDate || null) : null);
     navigate('/checkout/review');
   }
 
@@ -174,9 +211,9 @@ export function CustomerCapture() {
           />
         </Field>
 
-        <Field label="Phone (optional)">
+        <Field label={deliveryRequired ? 'Phone' : 'Phone (optional)'} required={deliveryRequired} error={phoneError}>
           <input
-            style={inputStyle}
+            style={{ ...inputStyle, borderColor: phoneError ? '#A32D2D' : '#e5e7eb' }}
             type="tel"
             inputMode="numeric"
             value={phone}
@@ -186,9 +223,9 @@ export function CustomerCapture() {
           />
         </Field>
 
-        <Field label="Address (optional)">
+        <Field label={deliveryRequired ? 'Delivery address' : 'Address (optional)'} required={deliveryRequired} error={addressError}>
           <input
-            style={inputStyle}
+            style={{ ...inputStyle, borderColor: addressError ? '#A32D2D' : '#e5e7eb' }}
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             placeholder="123 Oak Creek Dr"
@@ -226,6 +263,23 @@ export function CustomerCapture() {
             />
           </Field>
         </div>
+
+        {/* FIX 4 — delivery date (owner/manager, delivery order only). Manual precursor to the
+            customer-facing scheduling calendar (flow spec §2). Optional at entry. */}
+        {showDeliveryDate && (
+          <Field label="Delivery date">
+            <input
+              style={inputStyle}
+              type="date"
+              min={todayISO()}
+              value={delivDate}
+              onChange={(e) => setDelivDate(e.target.value)}
+            />
+            <p style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: 4 }}>
+              When is this going out? You set the date now; customer self-scheduling comes later.
+            </p>
+          </Field>
+        )}
 
         <p style={{ fontSize: '0.8125rem', color: '#9ca3af', lineHeight: 1.5, marginBottom: 20 }}>
           We'll email your invoice here. No payment is taken now — pay in person at the office, or online from the invoice we send.

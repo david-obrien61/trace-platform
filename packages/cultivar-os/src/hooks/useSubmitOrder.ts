@@ -16,6 +16,7 @@ export interface SubmitPayload {
   nettingDeclined:   boolean;
   // Owner-confirmed netted quantities (offering id → qty). Absent ⇒ server applies the rule.
   serviceQuantities: Record<string, number>;
+  deliveryDate?:     string | null;   // owner/manager-entered delivery date (ISO 'YYYY-MM-DD')
   businessId:        string;
 }
 
@@ -42,7 +43,7 @@ export function useSubmitOrder() {
     try {
       const {
         customer, lines, services, selectedTransport, plantingOffering, plantingSelected,
-        nettingDeclined, serviceQuantities, businessId,
+        nettingDeclined, serviceQuantities, deliveryDate, businessId,
       } = payload;
 
       const res = await fetch('/api/orders/submit', {
@@ -50,7 +51,7 @@ export function useSubmitOrder() {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
           customer, lines, services, selectedTransport, plantingOffering, plantingSelected,
-          nettingDeclined, serviceQuantities, businessId,
+          nettingDeclined, serviceQuantities, deliveryDate, businessId,
         }),
       });
 

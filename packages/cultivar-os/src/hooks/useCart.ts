@@ -22,6 +22,9 @@ interface CartStore {
   services:          ServiceSelection[];
   nettingDeclined:   boolean;
   customer:          CustomerInput | null;
+  // Owner/manager-entered delivery date (ISO 'YYYY-MM-DD') for a delivery order — the manual
+  // precursor to the customer-facing scheduling calendar. Written to orders.delivery_date.
+  deliveryDate:      string | null;
 
   setItem:            (plant: Plant, qty: number) => void;   // REPLACE cart with a single line (profile entry)
   addLine:            (plant: Plant, qty: number) => void;   // APPEND / merge-by-anchor (scan loop)
@@ -35,6 +38,7 @@ interface CartStore {
   toggleService:      (offeringId: string) => void;
   setNettingDeclined: (val: boolean) => void;
   setCustomer:        (c: CustomerInput) => void;
+  setDeliveryDate:    (val: string | null) => void;
   clear:              () => void;
 }
 
@@ -47,6 +51,7 @@ export const useCart = create<CartStore>((set) => ({
   services:          [],
   nettingDeclined:   false,
   customer:          null,
+  deliveryDate:      null,
 
   // Single-item entry (PlantProfile "Add to cart"): replace the cart with just this line.
   // Preserves the proven N=1 flow exactly.
@@ -152,6 +157,11 @@ export const useCart = create<CartStore>((set) => ({
 
   setCustomer: (c) => set({ customer: c }),
 
+  setDeliveryDate: (val) => {
+    if (TRACE_CART) console.log('[TRACE:DELIVERY] delivery date set', { deliveryDate: val });
+    set({ deliveryDate: val });
+  },
+
   clear: () => set({
     items:             [],
     transportChoice:   null,
@@ -161,5 +171,6 @@ export const useCart = create<CartStore>((set) => ({
     services:          [],
     nettingDeclined:   false,
     customer:          null,
+    deliveryDate:      null,
   }),
 }));

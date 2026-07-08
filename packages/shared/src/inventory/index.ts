@@ -1,5 +1,6 @@
 export {
   resolveStockLine,
+  searchStockLines,
   detectSizeCollision,
   STOCK_LINE_COLUMNS,
   STOCK_LINE_IDENTITY_COLUMNS,

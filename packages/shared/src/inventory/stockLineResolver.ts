@@ -140,3 +140,47 @@ export async function resolveStockLine(
 
   return { kind: 'miss', reason: 'no_match' };
 }
+
+/**
+ * SEARCH the tenant's stock lines by a PARTIAL identifier — a substring of the SKU or name,
+ * or a token subset of the name. Unlike resolveStockLine (which requires an exact SKU match
+ * or a full name token-set EQUALITY, correct for a scanned QR that carries the whole slug),
+ * this powers the manual "Look up" field where a human types "vitex" / "shoal" / "SCV" and
+ * expects the matching lot(s) back, not a dead-end "not recognized".
+ *
+ * Match rule (any one hits): the trimmed term is a case-insensitive substring of `sku` or
+ * `name`, OR every token of the term appears in the row's name token set (partial multi-word,
+ * e.g. "shoal creek" ⊆ "Shoal Creek Vitex"). business_id-scoped (AC-3), vertical-agnostic
+ * (AC-1). Returns up to `limit` rows sorted by name (numeric-aware). An empty term → [].
+ */
+export async function searchStockLines(
+  supabase: SupabaseClient,
+  businessId: string,
+  term: string,
+  opts?: { columns?: string; limit?: number },
+): Promise<StockLineRow[]> {
+  const columns = opts?.columns ?? STOCK_LINE_IDENTITY_COLUMNS;
+  const limit   = opts?.limit ?? 25;
+  const t = term.trim().toLowerCase();
+  if (!t) return [];
+
+  const { data: rows } = await supabase
+    .from('business_inventory')
+    .select(columns)
+    .eq('business_id', businessId);
+
+  const termTokens = nameTokenSet(t);
+  const matches = ((rows ?? []) as unknown as StockLineRow[]).filter((row) => {
+    const name = (row.name ?? '').toLowerCase();
+    const sku  = (row.sku ?? '').toLowerCase();
+    if (name.includes(t) || (sku && sku.includes(t))) return true;      // substring on name/sku
+    if (termTokens.size === 0) return false;
+    const nameTokens = nameTokenSet(row.name);                          // token subset (multi-word)
+    for (const tok of termTokens) if (!nameTokens.has(tok)) return false;
+    return true;
+  });
+
+  return matches
+    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', undefined, { numeric: true }))
+    .slice(0, limit);
+}

@@ -18,11 +18,16 @@ const TRACE_COUNT = true; // [TRACE:COUNT] STD-003 — on until OWNER-PROVEN
 interface QrScannerProps {
   /** When false the decode loop pauses (camera stays warm) — e.g. while a review sheet is open. */
   active: boolean;
-  /** Fired with the raw decoded string (a URL or bare code) on each successful read. */
+  /** Fired with the raw decoded string (a URL or bare code) on each successful CAMERA read.
+   *  A camera scan carries the whole tag/slug → it resolves EXACTLY (resolveStockLine). */
   onScan: (raw: string) => void;
+  /** Optional: when provided, the manual "Look up" field routes here instead of onScan, so a
+   *  human can SEARCH by a partial id / name token (searchStockLines) rather than needing an
+   *  exact tag. Callers that want the count-style exact match (e.g. InventoryCount) omit this. */
+  onLookup?: (term: string) => void;
 }
 
-export function QrScanner({ active, onScan }: QrScannerProps) {
+export function QrScanner({ active, onScan, onLookup }: QrScannerProps) {
   const videoRef  = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef    = useRef<number | null>(null);
@@ -101,9 +106,11 @@ export function QrScanner({ active, onScan }: QrScannerProps) {
     e.preventDefault();
     const v = manual.trim();
     if (!v) return;
-    if (TRACE_COUNT) console.log('[TRACE:COUNT] manual entry —', v);
+    if (TRACE_COUNT) console.log('[TRACE:COUNT] manual entry —', v, onLookup ? '(search)' : '(exact)');
     setManual('');
-    onScan(v);
+    // Search when a lookup handler is wired (ScanOrder); exact resolve otherwise (count).
+    if (onLookup) onLookup(v);
+    else onScan(v);
   }
 
   return (
@@ -124,11 +131,11 @@ export function QrScanner({ active, onScan }: QrScannerProps) {
           style={S.manualInput}
           value={manual}
           onChange={e => setManual(e.target.value)}
-          placeholder="Or type the tag (e.g. SCV-0031)"
-          autoCapitalize="characters"
+          placeholder={onLookup ? 'Search by name or tag (e.g. vitex)' : 'Or type the tag (e.g. SCV-0031)'}
+          autoCapitalize={onLookup ? 'none' : 'characters'}
           autoCorrect="off"
         />
-        <button type="submit" style={S.manualBtn}>Look up</button>
+        <button type="submit" style={S.manualBtn}>{onLookup ? 'Search' : 'Look up'}</button>
       </form>
     </div>
   );

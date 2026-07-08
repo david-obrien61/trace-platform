@@ -42,6 +42,7 @@ export default async function handler(req: any, res: any) {
     plantingSelected,  // boolean — whether planting is attached
     nettingDeclined,
     serviceQuantities, // Record<offeringId, number> — owner-confirmed netted quantities
+    deliveryDate,      // string 'YYYY-MM-DD' | null — owner/manager-entered delivery date
   } = req.body;
   const businessId: string = req.body.businessId || lines?.[0]?.plant?.business_id;
 
@@ -209,24 +210,48 @@ export default async function handler(req: any, res: any) {
     const invoiceNumber = `CLV-${dp}-${seq}`;
 
     // ── 7. Create order ────────────────────────────────────────────────────
-    const { data: order, error: orderErr } = await db
+    const orderBase: Record<string, unknown> = {
+      business_id:      businessId,
+      customer_id:      customerId,
+      transport_method: transportMethod,   // backward compat for delivery routing
+      transport_note:   transportNote,
+      netting_declined: nettingDeclined,
+      subtotal,
+      tax_amount:       taxAmount,
+      total_amount:     total,
+      addons_amount:    addonsAmount,
+      leakage_flag:     leakageFlag,
+      notes:            invoiceNumber,
+      status:           'pending',
+    };
+    // Owner/manager-entered delivery date. GATED migration 20260708_orders_delivery_date.sql
+    // adds orders.delivery_date; until it applies, an insert carrying the column 42703's — so we
+    // insert WITH the date and, on a missing-column error, retry WITHOUT it (deploy-window-safe;
+    // the order still lands, the date is dropped and re-enabled once the column exists).
+    const deliveryDateVal: string | null =
+      typeof deliveryDate === 'string' && deliveryDate.trim() ? deliveryDate.trim() : null;
+
+    let order: any;
+    let orderErr: any;
+    ({ data: order, error: orderErr } = await db
       .from('orders')
-      .insert({
-        business_id:      businessId,
-        customer_id:      customerId,
-        transport_method: transportMethod,   // backward compat for delivery routing
-        transport_note:   transportNote,
-        netting_declined: nettingDeclined,
-        subtotal,
-        tax_amount:       taxAmount,
-        total_amount:     total,
-        addons_amount:    addonsAmount,
-        leakage_flag:     leakageFlag,
-        notes:            invoiceNumber,
-        status:           'pending',
-      })
+      .insert(deliveryDateVal ? { ...orderBase, delivery_date: deliveryDateVal } : orderBase)
       .select('id')
-      .single();
+      .single());
+
+    // Missing-column fallback (42703 = undefined_column; PGRST204 = schema-cache miss).
+    if (orderErr && deliveryDateVal && (orderErr.code === '42703' || orderErr.code === 'PGRST204')) {
+      console.log('[TRACE:DELIVERY] orders.delivery_date column absent — retrying without it (migration pending)', {
+        code: orderErr.code, deliveryDate: deliveryDateVal,
+      });
+      ({ data: order, error: orderErr } = await db
+        .from('orders')
+        .insert(orderBase)
+        .select('id')
+        .single());
+    } else if (!orderErr && deliveryDateVal) {
+      console.log('[TRACE:DELIVERY] order created with delivery_date', { deliveryDate: deliveryDateVal });
+    }
 
     if (orderErr) throw new Error(`Order: ${orderErr.message}`);
     const orderId = order!.id;

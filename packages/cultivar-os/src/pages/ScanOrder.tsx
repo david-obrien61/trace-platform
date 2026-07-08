@@ -17,7 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Minus, Plus, ScanLine, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
-import { resolveStockLine, STOCK_LINE_COLUMNS } from '@trace/shared/inventory';
+import { resolveStockLine, searchStockLines, STOCK_LINE_COLUMNS } from '@trace/shared/inventory';
 import type { StockLineRow } from '@trace/shared/inventory';
 import { QrScanner } from '../components/inventory/QrScanner';
 import { useCart } from '../hooks/useCart';
@@ -30,7 +30,9 @@ const TRACE_CART = true; // [TRACE:CART] STD-003 — on until OWNER-PROVEN
 
 type Phase = 'scanning' | 'reviewing' | 'picker' | 'unknown';
 
-interface SizeChoice { inventoryId: string; size: string; qty: number | null; row: StockLineRow }
+// A pick-list choice — used by BOTH the size-collision picker (a scanned multi-size variety)
+// and the manual-search picker (a partial-term lookup that matched >1 lot). One shape, one UI.
+interface PickChoice { inventoryId: string; title: string; sub: string; row: StockLineRow }
 
 export function ScanOrder() {
   const navigate = useNavigate();
@@ -40,8 +42,9 @@ export function ScanOrder() {
   const [phase, setPhase]           = useState<Phase>('scanning');
   const [resolved, setResolved]     = useState<Plant | null>(null);
   const [qty, setQty]               = useState(1);
-  const [candidates, setCandidates] = useState<SizeChoice[]>([]);
-  const [pickerName, setPickerName] = useState('');
+  const [candidates, setCandidates] = useState<PickChoice[]>([]);
+  const [pickerTitle, setPickerTitle] = useState('');
+  const [pickerHint, setPickerHint]   = useState('');
   const [unknownTag, setUnknownTag] = useState('');
 
   const plantCount = totalPlantCount(items);
@@ -59,16 +62,14 @@ export function ScanOrder() {
     }
 
     if (resolution.kind === 'collision') {
-      const choices: SizeChoice[] = resolution.candidates.map(row => ({
+      const choices: PickChoice[] = resolution.candidates.map(row => ({
         inventoryId: row.id,
-        size:        (row.size ?? '').trim(),
-        qty:         row.qty ?? null,
+        title:       (row.size ?? '').trim() || 'Unspecified size',
+        sub:         row.qty != null ? `${row.qty} available` : '',
         row,
       }));
-      if (TRACE_CART) console.log('[TRACE:CART] scan size collision — picker:', choices.map(c => c.size).join(' / '));
-      setPickerName(resolution.variety);
-      setCandidates(choices);
-      setPhase('picker');
+      if (TRACE_CART) console.log('[TRACE:CART] scan size collision — picker:', choices.map(c => c.title).join(' / '));
+      openPicker(`${resolution.variety} — which size?`, "This variety is stocked in more than one size. Pick the one you're looking at.", choices);
       return;
     }
 
@@ -78,16 +79,63 @@ export function ScanOrder() {
     setPhase('unknown');
   }
 
+  // Manual "Search" field: a PARTIAL id / name token → matching lot(s). 0 → unknown; 1 →
+  // resolve; >1 → the same pick list the size collision uses. No exact-tag requirement.
+  async function handleLookup(term: string) {
+    if (!businessId) return;
+    const results = await searchStockLines(supabase, businessId, term, { columns: STOCK_LINE_COLUMNS });
+    if (TRACE_CART) console.log('[TRACE:RESOLVE] manual search', { term, matchCount: results.length });
+
+    if (results.length === 0) {
+      setUnknownTag(term);
+      setPhase('unknown');
+      return;
+    }
+    if (results.length === 1) {
+      const row = results[0];
+      const plant = synthesizePlant(row, businessId, row.sku ?? row.name);
+      if (TRACE_CART) console.log('[TRACE:RESOLVE] manual search — single match resolved', plant.common_name);
+      openReview(plant);
+      return;
+    }
+    const choices: PickChoice[] = results.map(row => ({
+      inventoryId: row.id,
+      title: `${row.name}${(row.size ?? '').trim() ? ` · ${(row.size ?? '').trim()}` : ''}`,
+      sub: [
+        row.sku ?? '',
+        row.qty != null ? `${row.qty} available` : '',
+        (row.sell_price != null && Number(row.sell_price) > 0) ? `$${Number(row.sell_price).toFixed(2)}` : '',
+      ].filter(Boolean).join(' · '),
+      row,
+    }));
+    openPicker(`"${term}" — pick an item`, `${results.length} matches. Pick the one you're looking at.`, choices);
+  }
+
+  function openPicker(title: string, hint: string, choices: PickChoice[]) {
+    setPickerTitle(title);
+    setPickerHint(hint);
+    setCandidates(choices);
+    setPhase('picker');
+  }
+
+  function closePicker() {
+    setCandidates([]);
+    setPickerTitle('');
+    setPickerHint('');
+    setPhase('scanning');
+  }
+
   function openReview(plant: Plant) {
     setResolved(plant);
     setQty(1);
     setPhase('reviewing');
   }
 
-  function pickSize(c: SizeChoice) {
+  function pick(c: PickChoice) {
     const plant = synthesizePlant(c.row, businessId, c.row.sku ?? c.row.name);
     setCandidates([]);
-    setPickerName('');
+    setPickerTitle('');
+    setPickerHint('');
     openReview(plant);
   }
 
@@ -127,7 +175,7 @@ export function ScanOrder() {
 
       {/* Camera */}
       <div style={S.card}>
-        <QrScanner active={phase === 'scanning'} onScan={raw => void handleScan(raw)} />
+        <QrScanner active={phase === 'scanning'} onScan={raw => void handleScan(raw)} onLookup={term => void handleLookup(term)} />
       </div>
 
       {/* Cart so far */}
@@ -180,19 +228,19 @@ export function ScanOrder() {
         </div>
       )}
 
-      {/* SIZE-PICKER sheet */}
+      {/* PICKER sheet — size collision OR manual-search multi-match */}
       {phase === 'picker' && candidates.length > 0 && (
-        <div style={S.modal} onClick={e => { if (e.target === e.currentTarget) { setCandidates([]); setPickerName(''); setPhase('scanning'); } }}>
+        <div style={S.modal} onClick={e => { if (e.target === e.currentTarget) closePicker(); }}>
           <div style={S.sheet}>
             <div style={S.sheetHeader}>
-              <h2 style={S.sheetTitle}>{pickerName} — which size?</h2>
-              <button style={S.iconBtn} onClick={() => { setCandidates([]); setPickerName(''); setPhase('scanning'); }} aria-label="Cancel"><X size={20} color="#6b7280" /></button>
+              <h2 style={S.sheetTitle}>{pickerTitle}</h2>
+              <button style={S.iconBtn} onClick={closePicker} aria-label="Cancel"><X size={20} color="#6b7280" /></button>
             </div>
-            <p style={S.subtle}>This variety is stocked in more than one size. Pick the one you're looking at.</p>
+            {pickerHint && <p style={S.subtle}>{pickerHint}</p>}
             {candidates.map((c) => (
-              <button key={c.inventoryId} style={S.pickBtn} onClick={() => pickSize(c)}>
-                <span style={S.pickSize}>{c.size}</span>
-                {c.qty != null && <span style={S.pickQty}>{c.qty} available</span>}
+              <button key={c.inventoryId} style={S.pickBtn} onClick={() => pick(c)}>
+                <span style={S.pickSize}>{c.title}</span>
+                {c.sub && <span style={S.pickQty}>{c.sub}</span>}
               </button>
             ))}
           </div>
@@ -232,8 +280,8 @@ const S = {
   cartAmt:    { fontWeight: 600, fontSize: '0.9rem', color: '#374151' } as React.CSSProperties,
   iconBtn:    { background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' } as React.CSSProperties,
   reviewBtn:  { width: '100%', minHeight: 48, background: '#27500A', color: '#fff', border: 'none', borderRadius: 10, fontSize: '1rem', fontWeight: 700, cursor: 'pointer', marginTop: 8 } as React.CSSProperties,
-  modal:      { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 100 } as React.CSSProperties,
-  sheet:      { background: '#fff', borderRadius: '16px 16px 0 0', padding: '1.5rem', width: '100%', maxWidth: 560 } as React.CSSProperties,
+  modal:      { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16, boxSizing: 'border-box' } as React.CSSProperties,
+  sheet:      { background: '#fff', borderRadius: 16, padding: '1.5rem', width: '100%', maxWidth: 560, maxHeight: '85vh', overflowY: 'auto', boxSizing: 'border-box' } as React.CSSProperties,
   sheetHeader:{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' } as React.CSSProperties,
   sheetTitle: { fontSize: '1.15rem', fontWeight: 700, color: '#1a2e0a', margin: 0 } as React.CSSProperties,
   price:      { color: '#27500A', fontSize: '1.1rem', fontWeight: 700, margin: '0 0 1rem' } as React.CSSProperties,
@@ -247,7 +295,7 @@ const S = {
   code:       { background: '#f3f4f6', borderRadius: 4, padding: '1px 6px', fontSize: '0.82rem', color: '#374151' } as React.CSSProperties,
   btnPrimary: { width: '100%', minHeight: 48, background: '#27500A', color: '#fff', border: 'none', borderRadius: 10, fontSize: '1rem', fontWeight: 700, cursor: 'pointer' } as React.CSSProperties,
   btnGhost:   { width: '100%', minHeight: 44, background: 'none', color: '#6b7280', border: '1.5px solid #d1d5db', borderRadius: 10, fontSize: '0.92rem', fontWeight: 600, cursor: 'pointer', marginTop: 10 } as React.CSSProperties,
-  pickBtn:    { display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minHeight: 52, background: '#fff', color: '#1a2e0a', border: '1.5px solid #27500A', borderRadius: 10, padding: '0 1rem', fontSize: '1rem', fontWeight: 700, cursor: 'pointer', marginBottom: 10 } as React.CSSProperties,
-  pickSize:   { fontSize: '1.05rem', fontWeight: 700, color: '#1a2e0a' } as React.CSSProperties,
+  pickBtn:    { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3, width: '100%', minHeight: 52, background: '#fff', border: '1.5px solid #27500A', borderRadius: 10, padding: '0.7rem 1rem', cursor: 'pointer', marginBottom: 10, textAlign: 'left' } as React.CSSProperties,
+  pickSize:   { fontSize: '1.02rem', fontWeight: 700, color: '#1a2e0a' } as React.CSSProperties,
   pickQty:    { fontSize: '0.8rem', fontWeight: 600, color: '#6b7280' } as React.CSSProperties,
 };

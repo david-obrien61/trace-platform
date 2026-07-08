@@ -17,7 +17,7 @@ export function CartReview() {
   const navigate = useNavigate();
   const {
     items, services, selectedTransport, plantingOffering, plantingSelected,
-    nettingDeclined, customer,
+    nettingDeclined, customer, deliveryDate,
     setLineQty, removeLine, toggleService, setNettingDeclined, setPlantingSelected,
   } = useCart();
   const { submit, submitting, error: submitError } = useSubmitOrder();
@@ -124,6 +124,7 @@ export function CartReview() {
         plantingSelected: plantingOn,
         nettingDeclined,
         serviceQuantities,
+        deliveryDate,
         businessId: items[0].plant.business_id,
       });
       navigate('/checkout/confirm', {
@@ -345,6 +346,16 @@ export function CartReview() {
         <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: 2 }}>{customer.email}</p>
         {customer.phone && (
           <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: 2 }}>{customer.phone}</p>
+        )}
+        {customer.address_line1 && (
+          <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: 2 }}>
+            {customer.address_line1}{customer.city ? `, ${customer.city}` : ''}{customer.state ? ` ${customer.state}` : ''}{customer.zip ? ` ${customer.zip}` : ''}
+          </p>
+        )}
+        {deliveryDate && (
+          <p style={{ fontSize: '0.875rem', color: '#27500A', fontWeight: 600, marginTop: 6 }}>
+            Delivery: {new Date(`${deliveryDate}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+          </p>
         )}
       </div>
 

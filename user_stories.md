@@ -391,14 +391,36 @@ PIECES: registration_price_gate, cart, jit_offers, delivery_or_pickup
 NEEDS: David to set the minimum details that unlock price + the origination fork (does this cart create the order upstream of QBO — the banked inversion).
 A customer browses the LAWNS website, clicks a tree they want — but can't cart it or see the price. The move: a light registration (name, address, ZIP) is the KEY that unlocks price and moves them into a cart. There they accept the price, pick add-ons (netting, fertilizer), and choose delivered / delivered-and-planted / pickup — every option a just-in-time cost surfaced BEFORE checkout, not after. On submit it routes to fulfillment. Shares the AC-4 gated-price KEY (here = REGISTRATION). → 2.1 (cart) + 5.6 (online shop, stub).
 
+### Contractor / tier pricing — set a tier, the discount actually comes off
+STATUS: needs-sub-stories
+SCOPE: vertical:cultivar, platform
+BUILD: active
+MAPS-TO: 3.7, 2.1
+PIECES: tier_discount_apply, tier_assign_ui, tier_discount_map, contractor_program
+NEEDS: (mechanism) DECIDED 2026-07-08 — tier→discount is PERCENT-OFF-BASELINE, owner-set per tier, default 0% (retail=0, contractor=10 owner-editable, wholesale owner-set); build flips the submit.ts AC-4 hold. Still owed → (config) an owner surface to set the per-tier % AND to ASSIGN a tier to a customer — today customers.price_tier is DISPLAY-ONLY (Customers.tsx:141-142), no assignment UI exists at all; (program) the full "Become a Contractor" register→verify→approve→notify→paid flow (§3/§4, all net-new, not demo-critical).
+Umbrella for the contractor-discount thread — the piece that makes "contractor pricing" real. "Contractor" is NOT a new entity: it's a customer `price_tier` (retail | contractor | wholesale), and the column already exists (customers, 20260625_person_spine.sql:106 — NOT NULL default 'retail', no CHECK / AC-4). Three separable layers, only the plumbing half-built and the pipe capped:
+- **MECHANISM (the AC-4 hold, now decided):** at checkout the tier's percent comes off the stored `sell_price`. Today submit.ts READS the tier and logs it but applies NOTHING (submit.ts:72-77, and :137 `unitPrice = serverSellPrice; // tier HOLD`). DECIDED: percent-off-baseline. The proven arithmetic already lives in the shared MarginEngine — `tierDiscount` + `price × (1 − discount/100)` (MarginEngine.ts:100-135) — BUT it derives price from COST via slabs, whereas cultivar charges a STORED sell_price, so the reuse is the tiny percent-off step against sell_price (extract `applyTierDiscount`), not the whole engine. This is the smallest, most buildable piece. → 2.1 (checkout) + 3.7 (tiers).
+- **CONFIG:** where the % lives + who's which tier. Rides the existing gated `business_pricing_config.config` jsonb (readPricingConfig/writePricingConfig, financialDataAccess.ts:171/199) as a `pricingTiers` key — NO migration. Sub-story: "Set what each contractor tier saves" (below). The tier-assignment surface is a GAP (price_tier display-only — R5).
+- **PROGRAM:** register→verify→approve→notify→paid. All net-new (grep-empty). Sub-story: "Come on board as a contractor" (5.7, 3.7, 1.5). Flow detail: flow spec §3 (8-step onboarding) + §4 (monetization A/B/C — ship A free).
+_Grounded: as-built recon docs/decisions/2026-07-08-as-built-contractor-pricing.md (R1-R5); submit.ts AC-4 hold; MarginEngine tierDiscount; business_pricing_config + financialDataAccess; flow spec §3/§4._
+
 ### Set what each contractor tier saves
 STATUS: needs-input
 SCOPE: vertical:cultivar
 BUILD: active
 MAPS-TO: 3.7
 PIECES: tier_discount_map, tier_assignment
-NEEDS: David to fix the tier→discount model (fixed % per tier? per-category? owner-editable) + where it's managed.
-The owner defines what each contractor tier is worth — tier 1 / 2 / 3 each map to a discount % on all products — and assigns a contractor to a tier. "Contractor" is a customer price_tier, not a new entity (the column already exists), so this is the owner-side management surface on top of it, not a schema change. Set once, it flows to every price that contractor sees and every order they place. → 3.7 (rides customers.price_tier, AC-4).
+NEEDS: tier→discount MODEL now DECIDED (2026-07-08) — PERCENT-OFF-BASELINE, owner-set per tier, default 0%. STORAGE resolved by recon — rides business_pricing_config.config jsonb as a `pricingTiers` key, NO migration (financialDataAccess.ts:171/199). Still owed from David: WHERE the set-% control lives (likely CostToProduceSettings / Settings) and the tier-ASSIGNMENT surface (customers.price_tier is display-only today — Customers.tsx:141-142).
+The owner defines what each contractor tier is worth — each tier maps to a % off all products — and assigns a contractor to a tier. "Contractor" is a customer price_tier, not a new entity (the column already exists), so this is the owner-side management surface on top of it, not a schema change. Set once, it flows to every price that contractor sees and every order they place. The CONFIG sub-story of the contractor/tier-pricing umbrella above. → 3.7 (rides customers.price_tier, AC-4).
+
+### Template-driven service setup — a non-technical owner can't mis-shape a service
+STATUS: needs-input
+SCOPE: vertical:cultivar, platform
+BUILD: active
+MAPS-TO: 2.1
+PIECES: service_templates, guided_editor, shape_validation
+NEEDS: David to decide the template set (delivery / planting / inspection / netting / subscription…) + how prescriptive the guided editor is (pick-a-template-then-tweak vs free-form-with-guardrails) + where it lives relative to the current Settings service editor (#98).
+Surfaced 2026-07-08 during the checkout-fixes owner-prove: the Settings service editor (#98) is CAPABLE — it exposes every category + un-conflated price_type/price_unit + category-scoped rule fields — but it is NOT foolproof. A non-technical owner (Terry/Lauren) can still shape a service wrongly: a fused "We deliver and plant" per-plant row instead of a delivery (flat/order) + planting (per_unit/plant) pair (the exact drift the transport workflow FLAGS and best-efforts around — see #97 / lib/transport.ts roles.flags), or a delivery service with requires_address unset so the checkout never demands a ship-to. The move: TEMPLATES — "Add a delivery service" / "Add a planting service" pre-shape the correct price_type/price_unit/transport_mode/requires_address, so the owner fills in a price and a name, not a rule matrix. The editor stays for power users; the templates are the guardrail that makes the demo-data reshape (#97/#98) something an owner does right the first time. → 2.1 (the purchase workflow depends on correctly-shaped transport services).
 
 ### Come on board as a contractor — invited, verified, unlock my price
 STATUS: needs-input
@@ -476,6 +498,14 @@ MAPS-TO: —
 PIECES: residence_view, kitchen_loop, household_sharing, receipt_price_spine
 NEEDS: David to sequence the phased build (P0 schema first, per the BUILD-PLAN). DESIGN + prototype COMPLETE and filed; UNBUILT as code; front-door wiring (`home.builtwithcai.app`) DEFERRED on the core `.app` standing up first.
 The Residence Product ("Kitchen Loop") is a residence-scoped VIEW of the ONE shared engine — BuiltWithCAI level, sibling to CoolRunnings, `business_type = residence` skinned at runtime ([[D-27]]). It inherits shared auth/RLS + PIN gesture + Receipt Keeper for free; receipts are the neutral confirmed price spine ([[D-28]] API neutrality); capture works offline on the honest gradient ([[D-29]]). Registered here as ONE epic — the full design package is already filed, so do NOT explode into sub-stories yet. _Grounded: `docs/residence-product/` (RESIDENCE-PRODUCT-MASTER-BRIEF.md + RESIDENCE-PRODUCT-BUILD-PLAN.md + 7 specs + prototypes); DECISIONS D-27 / D-28 / D-29. Customer-zero = David's own house._
+
+### Owner-configurable form fields + missing-data flag
+STATUS: needs-input
+SCOPE: platform
+MAPS-TO: —
+PIECES: field_config_primitive, missing_data_flag, configurable_required
+NEEDS: David to confirm with LAWNS whether their invoices can carry email (improves OCR capture at source) before the "should email be required" half is settled. Build wants a recon: does any field-config mechanism already exist (the #98 service editor + the platform validation rule are adjacent)? Build as a GENERIC field-config primitive, not per-form.
+Customers ingested from invoice scans carry phone but often no email (the invoices didn't include it) — so nulls are honest to the source, not sloppiness. Forcing email-required would break ingestion or fabricate data. But fully-optional leaves incomplete, invisible customer records (can't email an HOA you only have a phone for). Two paired mechanisms: (1) MISSING-DATA FLAG — nulls allowed, but the absence is SURFACED (a "missing contact method" indicator + a roster filter/count, same spirit as cost_confidence marking ESTIMATED vs CONFIRMED) so the owner sees the gap and fills it over time, never blocked. (2) OWNER-CONFIGURABLE REQUIRED — the owner can toggle certain fields (email/phone/address) required-on/off for their business, set once, applies to their form — solving the requirement in config not per-customer code (AC-4). CONSTRAINT: only DESIGNATED fields are configurable — structural fields (first_name-never-blank, business_id, anchors) are never toggleable, to prevent turning off a field the system depends on. Demo value: showcases OCR→DB capture ("we pulled these off your invoices; email wasn't on them, so it's flagged; flip this to require it going forward"). Build as a shared field-config primitive so every form inherits it (not a per-form toggle — same lesson as the service editor + validation rule). _Grounded: observed 2026-07-08 on /customers (invoice-scan customers missing email); adjacent to #98 service editor + the platform required-field validation rule._
 
 ---
 

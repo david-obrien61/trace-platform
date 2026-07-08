@@ -23,6 +23,17 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-08 · CHECKOUT FIX-PASS — search lookup + centered modal + conditional required address/phone + owner delivery-date):**
+> No drift — abided by **AC-1** (the new shared `searchStockLines` names only `business_inventory`, no vertical noun —
+> same agnostic resolver family as `resolveStockLine`), **AC-3** (search + all reads are `business_id`-scoped), **D-9
+> Surface Honesty** (a delivery order can no longer be placed with a blank ship-to — the requirement is READ from the
+> owner-set `service_offerings.requires_address` / staff shape, not hardcoded), **§6 rule 11 / 12-fn ceiling** (ZERO new
+> `api/` file — the delivery-date write rides the existing `submit.ts`), and the **gated-migration discipline**
+> (`orders.delivery_date` doesn't exist → GATED `20260708_orders_delivery_date.sql`, David applies as postgres; NOT
+> hand-migrated; `submit.ts` deploy-window-safe fallback). No decision was settled/deferred/superseded — these are FIXES
+> within existing decisions (D-34 anchor · D-35 sell_price · D-9 · AC-1/AC-3) and satisfy story MAPS-TO 2.1. NEW gap
+> sub-story logged on the board (template-driven service setup, needs-input) — a surfaced NEED, not a decision.
+>
 > ✅ **Drift watch (2026-07-08 · SETTINGS SERVICE EDITOR — categories + un-conflate price_type/price_unit, create+edit):**
 > No drift — abided by **AC-1** (the category / price_type / price_unit / transport_mode option lists are the GENERIC
 > schema enums, sourced from the migration column CHECKs into ONE shared `serviceOfferingEnums.ts`; no vertical noun — a
