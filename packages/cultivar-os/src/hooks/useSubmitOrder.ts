@@ -11,6 +11,8 @@ export interface SubmitPayload {
   lines:             { plant: Plant; quantity: number }[];   // multi-item: one entry per cart line
   services:          ServiceSelection[];
   selectedTransport: ServiceOffering | null;
+  plantingOffering:  ServiceOffering | null;   // per-plant planting service (branch: Delivery + planting)
+  plantingSelected:  boolean;
   nettingDeclined:   boolean;
   // Owner-confirmed netted quantities (offering id → qty). Absent ⇒ server applies the rule.
   serviceQuantities: Record<string, number>;
@@ -39,7 +41,7 @@ export function useSubmitOrder() {
 
     try {
       const {
-        customer, lines, services, selectedTransport,
+        customer, lines, services, selectedTransport, plantingOffering, plantingSelected,
         nettingDeclined, serviceQuantities, businessId,
       } = payload;
 
@@ -47,7 +49,7 @@ export function useSubmitOrder() {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          customer, lines, services, selectedTransport,
+          customer, lines, services, selectedTransport, plantingOffering, plantingSelected,
           nettingDeclined, serviceQuantities, businessId,
         }),
       });
@@ -100,7 +102,8 @@ export function useSubmitOrder() {
         .filter(s => s.selected)
         .reduce((sum, s) => sum + lineSubtotal(s.offering, qtyFor(s.offering)), 0);
       const transportAmount = selectedTransport ? lineSubtotal(selectedTransport, qtyFor(selectedTransport)) : 0;
-      const addonsAmount = servicesAmount + transportAmount;
+      const plantingAmount  = plantingSelected && plantingOffering ? lineSubtotal(plantingOffering, qtyFor(plantingOffering)) : 0;
+      const addonsAmount = servicesAmount + transportAmount + plantingAmount;
       // D-35: sale price, not cost. Sum across every line.
       const plantsTotal = lines.reduce((sum, l) => sum + (l.plant.business_inventory?.sell_price ?? 0) * l.quantity, 0);
       const firstPlant  = lines[0]?.plant;

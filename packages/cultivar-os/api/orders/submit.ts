@@ -12,11 +12,13 @@ function adminDb() {
   return createClient(url, key);
 }
 
-// Derive the legacy transport_method value from a service offering.
-// Kept for backward compat with delivery routing query and historical data.
-function deriveTransportMethod(t: any): string {
+// Derive the legacy transport_method value (backward compat: delivery routing query + history).
+// Three-branch model: self → 'self'; a staff branch with planting attached (or a fused
+// per-plant staff row) → 'install'; a plain staff delivery → 'delivery'.
+function deriveTransportMethod(t: any, plantingSelected: boolean): string {
   if (t.transport_mode === 'self') return 'self';
-  if (t.transport_mode === 'staff' && t.price_type === 'per_unit') return 'install';
+  if (plantingSelected) return 'install';
+  if (t.transport_mode === 'staff' && t.price_type === 'per_unit') return 'install'; // fused row
   return 'delivery';
 }
 
@@ -35,7 +37,9 @@ export default async function handler(req: any, res: any) {
     customer,
     lines,             // OrderLineInput[] — multi-item cart (each { plant, quantity })
     services,          // ServiceSelection[] — from the service_offerings model
-    selectedTransport, // ServiceOffering | null
+    selectedTransport, // ServiceOffering | null — primary transport (delivery or self)
+    plantingOffering,  // ServiceOffering | null — per-plant planting (Delivery + planting branch)
+    plantingSelected,  // boolean — whether planting is attached
     nettingDeclined,
     serviceQuantities, // Record<offeringId, number> — owner-confirmed netted quantities
   } = req.body;
@@ -156,6 +160,12 @@ export default async function handler(req: any, res: any) {
 
     const transportAmount = selectedTransport ? lineSubtotal(selectedTransport, qtyFor(selectedTransport)) : 0;
 
+    // Planting — the SEPARATE per-plant service the "Delivery + planting" branch attaches
+    // (delivery flat ×1 + planting per_unit ×N). Distinct from transport so both are charged.
+    const plantingActive = !!(plantingSelected && plantingOffering);
+    const plantingQty    = plantingActive ? qtyFor(plantingOffering) : 0;
+    const plantingAmount = plantingActive ? lineSubtotal(plantingOffering, plantingQty) : 0;
+
     const nettingSelection = (services ?? []).find(
       (s: any) => s.offering?.trigger_transport_mode === 'self' && s.offering?.category === 'addon',
     );
@@ -171,10 +181,10 @@ export default async function handler(req: any, res: any) {
 
     console.log('[TRACE:CART] netting applied (server)', {
       plantCount, transportQty: selectedTransport ? qtyFor(selectedTransport) : 0,
-      nettingQty, transportAmount, nettingTotal, otherTotal,
+      transportAmount, plantingActive, plantingQty, plantingAmount, nettingQty, nettingTotal, otherTotal,
     });
 
-    const addonsAmount = transportAmount + nettingTotal + otherTotal;
+    const addonsAmount = transportAmount + plantingAmount + nettingTotal + otherTotal;
     const subtotal     = plantSubtotal + addonsAmount;
     const taxAmount    = Math.round(subtotal * taxRate * 100) / 100;
     const total        = subtotal + taxAmount;
@@ -183,8 +193,15 @@ export default async function handler(req: any, res: any) {
     const leakageFlag = anyLargeContainer && (nettingTotal + otherTotal) === 0;
 
     // ── 6. Transport metadata + invoice number ─────────────────────────────
-    const transportMethod = deriveTransportMethod(selectedTransport ?? { transport_mode: 'self', price_type: 'flat' });
+    const transportMethod = deriveTransportMethod(selectedTransport ?? { transport_mode: 'self', price_type: 'flat' }, plantingActive);
     const transportNote   = buildTransportNote(transportMode, nettingDeclined, nettingActive);
+    // [TRACE:PRICE] the decline capture — a self-transport netting decline is registered on the
+    // order (netting_declined) AND in the immutable order_compliance_records log below.
+    if (transportMode === 'self') {
+      console.log('[TRACE:PRICE] netting decision (self-transport)', {
+        nettingActive, nettingDeclined, note: transportNote,
+      });
+    }
 
     const now  = new Date();
     const dp   = now.toISOString().slice(0, 10).replace(/-/g, '');
@@ -249,6 +266,18 @@ export default async function handler(req: any, res: any) {
         quantity:              qtyFor(selectedTransport),
         unit_price_at_time:    selectedTransport.price,
         subtotal:              transportAmount,
+      });
+    }
+
+    // Planting is its OWN selection row (per-plant, netted ×N) — one order, two service lines
+    // (delivery ×1 + planting ×N) for the "Delivery + planting" branch.
+    if (plantingActive && plantingOffering?.id) {
+      selectionRows.push({
+        order_id:              orderId,
+        service_offering_id:   plantingOffering.id,
+        quantity:              plantingQty,
+        unit_price_at_time:    plantingOffering.price,
+        subtotal:              plantingAmount,
       });
     }
 

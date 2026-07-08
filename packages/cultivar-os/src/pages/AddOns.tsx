@@ -1,79 +1,108 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
 import { useServices } from '../hooks/useServices';
-import { totalPlantCount } from '../lib/netting';
+import { totalPlantCount, nettedQuantity } from '../lib/netting';
+import {
+  resolveTransportRoles, availableChoices, choiceToSelection, CHOICE_META,
+} from '../lib/transport';
 import { TransportToggle } from '../components/checkout/TransportToggle';
 import { CompliancePrompt } from '../components/checkout/CompliancePrompt';
 import { AddonCard } from '../components/checkout/AddonCard';
+
+const TRACE_CART = true; // [TRACE:CART] STD-003 — on until OWNER-PROVEN
 
 export function AddOns() {
   const { tagId } = useParams<{ tagId: string }>();
   const navigate  = useNavigate();
 
   const {
-    items, selectedTransport, services,
-    setTransport, setServices, toggleService, setNettingDeclined, nettingDeclined,
+    items, transportChoice, selectedTransport, plantingOffering, plantingSelected, services,
+    setTransportChoice, setServices, toggleService, setNettingDeclined, nettingDeclined,
   } = useCart();
 
   const businessId = items[0]?.plant.business_id ?? '';
   const { transportOfferings, addonOfferings, loading, error } = useServices(businessId);
 
-  // Load service offerings into cart once fetched
+  // Load addon service offerings into cart once fetched.
   useEffect(() => {
     if (transportOfferings.length > 0 || addonOfferings.length > 0) {
       setServices(transportOfferings, addonOfferings);
     }
   }, [transportOfferings, addonOfferings]);
 
+  // Classify the raw transport rows into ROLES (self / delivery / planting) by shape,
+  // then the three-branch radio (SPEC-transport-netting-decline-workflow).
+  const roles   = useMemo(() => resolveTransportRoles(transportOfferings), [transportOfferings]);
+  const choices = useMemo(() => availableChoices(roles), [roles]);
+
+  // D-9 (Surface Honesty): any data-shape problem is FLAGGED, never silently mischarged.
+  useEffect(() => {
+    if (TRACE_CART && !loading && roles.flags.length > 0) {
+      console.log('[TRACE:CART] transport role flags (data reshape owed via Settings)', { flags: roles.flags });
+    }
+  }, [loading, roles.flags]);
+
+  // Set the initial branch once the offerings are known: prefer the pre_selected transport
+  // row's branch (the seed pre-selects "Pick up myself" → the self/netting branch — the
+  // Regina default), else the first available branch.
+  useEffect(() => {
+    if (transportChoice || choices.length === 0) return;
+    const preSelectedMode = transportOfferings.find(o => o.pre_selected)?.transport_mode;
+    const initial =
+      (preSelectedMode === 'self' && choices.includes('self')) ? 'self'
+      : (preSelectedMode === 'staff' && choices.includes('delivery_planting')) ? 'delivery_planting'
+      : choices[0];
+    setTransportChoice(initial, choiceToSelection(initial, roles));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transportChoice, choices, roles, transportOfferings]);
+
   if (items.length === 0) {
     navigate(tagId ? `/plant/${tagId}` : '/checkout/scan', { replace: true });
     return null;
   }
 
-  // Multi-item: services attach across the WHOLE cart's plant count (netting engine).
-  // A per-plant add-on scales to this count; a per-order service collapses to ×1.
-  const plantCount    = totalPlantCount(items);
+  const plantCount      = totalPlantCount(items);
   const isSelfTransport = selectedTransport?.transport_mode === 'self';
 
-  // Find netting in the services list
+  // Netting (self-transport only, the compliance/Regina add-on).
   const nettingSelection = services.find(
     s => s.offering.trigger_transport_mode === 'self' && s.offering.category === 'addon',
   );
   const nettingPrice  = nettingSelection?.offering.price ?? 10;
-  const nettingActive = isSelfTransport && (nettingSelection?.selected ?? true);
+  const nettingActive = isSelfTransport && (nettingSelection?.selected ?? true) && !nettingDeclined;
 
-  // Other always-shown addons (no transport trigger)
+  // Other always-shown addons (no transport trigger).
   const alwaysAddons = services.filter(
     s => s.offering.category === 'addon' && !s.offering.trigger_transport_mode,
   );
 
-  // Running subtotal for the summary bar — per-plant services × plantCount, per-order flat.
+  // ── Amounts (attach-rule netting: per_unit ×plantCount, flat ×1) ──────────
   const transportAmount = selectedTransport
-    ? selectedTransport.price_type === 'per_unit'
-      ? selectedTransport.price * plantCount
-      : selectedTransport.price
+    ? Number(selectedTransport.price) * nettedQuantity(selectedTransport, plantCount)
+    : 0;
+  // Planting is a SEPARATE per-plant service attached only by the "Delivery + planting" branch.
+  const plantingAmount = plantingSelected && plantingOffering
+    ? Number(plantingOffering.price) * nettedQuantity(plantingOffering, plantCount)
     : 0;
 
   const addonAmount = services
     .filter(s => s.selected && s.offering.category === 'addon')
-    .reduce((sum, s) => {
-      const p = s.offering.price_type === 'per_unit'
-        ? s.offering.price * plantCount
-        : s.offering.price;
-      return sum + p;
-    }, 0);
+    .reduce((sum, s) => sum + Number(s.offering.price) * nettedQuantity(s.offering, plantCount), 0);
 
-  // Netting amount is already included in addonAmount via services state,
-  // but if cart hasn't loaded the netting service yet fall back to manual calc
+  // Netting fallback when the cart hasn't loaded the netting service row yet.
   const nettingFallback =
     !nettingSelection && isSelfTransport && !nettingDeclined ? nettingPrice * plantCount : 0;
 
   // D-35: the cart reads sell_price (the retail price), NEVER unit_cost (what the grower paid).
-  // Sum across every cart line.
   const plantSubtotal = items.reduce((sum, l) => sum + (l.plant.business_inventory?.sell_price ?? 0) * l.quantity, 0);
-  console.log('[TRACE:CART] addons summary — column=sell_price', { lineCount: items.length, plantCount, plantSubtotal });
-  const grandTotal    = plantSubtotal + transportAmount + addonAmount + nettingFallback;
+  const servicesAmount = transportAmount + plantingAmount + addonAmount + nettingFallback;
+  const grandTotal     = plantSubtotal + servicesAmount;
+
+  if (TRACE_CART) console.log('[TRACE:CART] addons summary — column=sell_price', {
+    lineCount: items.length, plantCount, plantSubtotal,
+    branch: transportChoice, transportAmount, plantingAmount, plantingSelected,
+  });
 
   const headerLabel = items.length === 1
     ? `${items[0].plant.common_name ?? items[0].plant.species} · ${plantCount} plant${plantCount !== 1 ? 's' : ''}`
@@ -118,51 +147,64 @@ export function AddOns() {
         </div>
       )}
 
-      {/* Transport */}
+      {/* Transport — the three-branch radio */}
       <div className="section">
         {loading ? (
           <div className="skeleton" style={{ height: 140, borderRadius: 10 }} />
         ) : error ? (
           <p style={{ fontSize: '0.875rem', color: '#9ca3af' }}>Services unavailable — {error}</p>
+        ) : choices.length === 0 ? (
+          <p style={{ fontSize: '0.875rem', color: '#A32D2D' }}>
+            No transport options are set up — add a delivery, planting, or self-transport service in Settings.
+          </p>
         ) : (
-          <TransportToggle
-            offerings={transportOfferings}
-            selected={selectedTransport}
-            onChange={setTransport}
-          />
+          <>
+            <TransportToggle
+              choices={choices}
+              roles={roles}
+              selected={transportChoice}
+              onChange={c => setTransportChoice(c, choiceToSelection(c, roles))}
+            />
+            {/* Honest note when the two correctly-ruled rows aren't both present (D-9). */}
+            {roles.flags.length > 0 && (
+              <p style={{ fontSize: '0.75rem', color: '#92400e', marginTop: 8, lineHeight: 1.5 }}>
+                Heads up: {roles.flags[0]}
+              </p>
+            )}
+          </>
         )}
       </div>
 
-      {/* Compliance prompt — any self-transport addon with a compliance notice */}
+      {/* Netting / compliance prompt — self-transport only (the Regina mechanic) */}
       {isSelfTransport && !loading && nettingSelection && (
-        nettingSelection.offering.compliance_title ? (
-          <div className="section">
-            <CompliancePrompt
-              title={nettingSelection.offering.compliance_title}
-              body={nettingSelection.offering.compliance_body ?? ''}
-              serviceNote={nettingSelection.offering.service_note ?? 'Applied by staff'}
-              pricePerUnit={nettingPrice}
-              unitLabel={nettingSelection.offering.price_unit === 'plant' ? 'plant' : 'unit'}
-              quantity={plantCount}
-              selected={nettingActive}
-              onToggle={() => setNettingDeclined(nettingActive)}
-            />
-          </div>
-        ) : (
-          /* Fallback if compliance text not yet seeded */
-          <div className="section">
-            <CompliancePrompt
-              title="Protective netting required"
-              body="Protective travel netting secures branches and prevents wind damage during transport."
-              serviceNote="Applied by staff before you leave"
-              pricePerUnit={nettingPrice}
-              unitLabel="plant"
-              quantity={plantCount}
-              selected={nettingActive}
-              onToggle={() => setNettingDeclined(nettingActive)}
-            />
-          </div>
-        )
+        <div className="section" style={{ paddingTop: 0 }}>
+          <CompliancePrompt
+            title={nettingSelection.offering.compliance_title ?? 'Protective netting required'}
+            body={nettingSelection.offering.compliance_body ??
+              'Protective travel netting secures branches and prevents wind damage during transport.'}
+            serviceNote={nettingSelection.offering.service_note ?? 'Applied by staff before you leave'}
+            pricePerUnit={nettingPrice}
+            unitLabel={nettingSelection.offering.price_unit === 'plant' ? 'plant' : 'unit'}
+            quantity={plantCount}
+            selected={nettingActive}
+            onToggle={() => setNettingDeclined(nettingActive)}
+          />
+        </div>
+      )}
+      {/* Netting fallback (compliance row not yet seeded) — still offer + capture the decline */}
+      {isSelfTransport && !loading && !nettingSelection && (
+        <div className="section" style={{ paddingTop: 0 }}>
+          <CompliancePrompt
+            title="Protective netting required"
+            body="Protective travel netting secures branches and prevents wind damage during transport."
+            serviceNote="Applied by staff before you leave"
+            pricePerUnit={nettingPrice}
+            unitLabel="plant"
+            quantity={plantCount}
+            selected={isSelfTransport && !nettingDeclined}
+            onToggle={() => setNettingDeclined(!nettingDeclined)}
+          />
+        </div>
       )}
 
       {/* Always-on add-ons */}
@@ -205,10 +247,22 @@ export function AddOns() {
             <span>Plants ({plantCount})</span>
             <span>${plantSubtotal.toFixed(2)}</span>
           </div>
-          {(addonAmount + nettingFallback + transportAmount) > 0 && (
+          {selectedTransport && transportAmount > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#6b7280' }}>
-              <span>Services</span>
-              <span>+${(addonAmount + nettingFallback + transportAmount).toFixed(2)}</span>
+              <span>{CHOICE_META[transportChoice ?? 'delivery_only'].label.split(' — ')[0]}{selectedTransport.price_type === 'per_unit' ? ` (×${plantCount})` : ''}</span>
+              <span>+${transportAmount.toFixed(2)}</span>
+            </div>
+          )}
+          {plantingAmount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#6b7280' }}>
+              <span>Planting (×{plantCount})</span>
+              <span>+${plantingAmount.toFixed(2)}</span>
+            </div>
+          )}
+          {(addonAmount + nettingFallback) > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#6b7280' }}>
+              <span>Add-ons</span>
+              <span>+${(addonAmount + nettingFallback).toFixed(2)}</span>
             </div>
           )}
           <div style={{

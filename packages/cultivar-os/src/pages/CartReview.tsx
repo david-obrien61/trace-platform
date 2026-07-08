@@ -16,8 +16,9 @@ const TRACE_CART = true; // [TRACE:CART] STD-003 — on until OWNER-PROVEN
 export function CartReview() {
   const navigate = useNavigate();
   const {
-    items, services, selectedTransport, nettingDeclined, customer,
-    setLineQty, removeLine, toggleService, setNettingDeclined,
+    items, services, selectedTransport, plantingOffering, plantingSelected,
+    nettingDeclined, customer,
+    setLineQty, removeLine, toggleService, setNettingDeclined, setPlantingSelected,
   } = useCart();
   const { submit, submitting, error: submitError } = useSubmitOrder();
   const { business } = useBusinessContext();
@@ -82,11 +83,13 @@ export function CartReview() {
   const plantSubtotal = items.reduce((sum, l) => sum + (l.plant.business_inventory?.sell_price ?? 0) * l.quantity, 0);
 
   const transportAmount = selectedTransport ? lineSubtotal(selectedTransport, effQty(selectedTransport)) : 0;
+  const plantingOn      = plantingSelected && !!plantingOffering;
+  const plantingTotal   = plantingOn && plantingOffering ? lineSubtotal(plantingOffering, effQty(plantingOffering)) : 0;
   const nettingTotal    = nettingActive && nettingSel ? lineSubtotal(nettingSel.offering, effQty(nettingSel.offering)) : 0;
   const otherTotal      = otherAddons.filter(s => s.selected)
     .reduce((sum, s) => sum + lineSubtotal(s.offering, effQty(s.offering)), 0);
 
-  const addonsAmount = transportAmount + nettingTotal + otherTotal;
+  const addonsAmount = transportAmount + plantingTotal + nettingTotal + otherTotal;
   const subtotal     = plantSubtotal + addonsAmount;
   const taxAmount    = Math.round(subtotal * taxRate * 100) / 100;
   const total        = subtotal + taxAmount;
@@ -102,6 +105,7 @@ export function CartReview() {
     // Build the owner-confirmed service quantities (only INCLUDED services), keyed by id.
     const serviceQuantities: Record<string, number> = {};
     if (selectedTransport) serviceQuantities[selectedTransport.id] = effQty(selectedTransport);
+    if (plantingOn && plantingOffering) serviceQuantities[plantingOffering.id] = effQty(plantingOffering);
     if (nettingActive && nettingSel) serviceQuantities[nettingSel.offering.id] = effQty(nettingSel.offering);
     for (const s of otherAddons) if (s.selected) serviceQuantities[s.offering.id] = effQty(s.offering);
 
@@ -116,6 +120,8 @@ export function CartReview() {
         lines: items.map(l => ({ plant: l.plant, quantity: l.quantity })),
         services,
         selectedTransport,
+        plantingOffering: plantingOn ? plantingOffering : null,
+        plantingSelected: plantingOn,
         nettingDeclined,
         serviceQuantities,
         businessId: items[0].plant.business_id,
@@ -223,6 +229,29 @@ export function CartReview() {
             onQty={selectedTransport.price_type === 'per_unit' ? (q => setQty(selectedTransport, q)) : undefined}
             included
           />
+        )}
+
+        {/* Planting — the separate per-plant service attached by the "Delivery + planting" branch */}
+        {plantingOffering && (
+          plantingOn ? (
+            <ServiceRow
+              name={plantingOffering.name}
+              rule={`per plant · ×${effQty(plantingOffering)}`}
+              amount={plantingTotal}
+              editable
+              qty={effQty(plantingOffering)}
+              onQty={q => setQty(plantingOffering, q)}
+              included
+              onToggle={() => setPlantingSelected(false)}
+            />
+          ) : (
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+              <button onClick={() => setPlantingSelected(true)} style={linkBtn}>+ Add {plantingOffering.name}</button>
+              <span style={{ fontSize: '0.875rem', color: '#9ca3af' }}>
+                ${Number(plantingOffering.price).toFixed(2)}/plant
+              </span>
+            </div>
+          )
         )}
 
         {/* Netting (self-transport only) — include/decline toggle */}

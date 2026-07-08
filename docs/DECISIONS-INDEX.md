@@ -4,7 +4,9 @@
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.
 
-**Last updated:** 2026-07-07 (PURCHASE-OFF-STOCK-LINE built — the D-34 drift row flipped from
+**Last updated:** 2026-07-08 (RESTORE transport/netting/decline workflow — added §4b CHECKOUT / ORDER-FLOW
+WORKFLOWS with the canonical spec `docs/specs/SPEC-transport-netting-decline-workflow-2026-07-08.md`; drift-watch
+updated. Earlier: PURCHASE-OFF-STOCK-LINE built — the D-34 drift row flipped from
 "DECIDED (build owed)" to **BUILDER-COMPLETE (M2 GATED)**; earlier same day: D-34 "lot is the SKU"
 promoted to a first-class entry; SELL-PRICE flipped OPEN→DECIDED as D-35. Created earlier same day —
 DOCS-ONLY scan of `docs/decisions/*.md`, `docs/DECISIONS.md`, `MASTER_BRIEF.md`,
@@ -18,6 +20,18 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-08 · RESTORE transport/netting/decline workflow + canonical spec):** No drift — this
+> RESTORES the May-18 proven workflow (recovered from git `0897e00`/`5aeff86`/`8764b39`/`0041769`) onto the current
+> service_offerings model and gives it a canonical spec home (docs/specs/SPEC-transport-netting-decline-workflow) so it
+> is never re-derived — a NEW retrievable decision (added §4b), not a re-litigation. Abided by **AC-1** (transport/netting
+> generic; Ch.725 copy lives in the row's `compliance_title`/`compliance_body`, not code), **AC-3** (business_id-scoped
+> reads + business-scoped decline rows), **D-9 Surface Honesty** (delivery+planting read as TWO correctly-ruled services;
+> when the two rows aren't both present the workflow FLAGS + best-efforts, never silently mischarges — data reshape is the
+> separate Settings-editor task, not hand-migrated here), **§6 rule 8** (the per-branch attach math reuses the ONE shared
+> `netting.ts` engine for both display and charge), **§6 rule 11 / 12-fn ceiling** (ZERO new `api/` file — rides
+> `submit.ts`; ZERO migration). The decline-capture (orders.netting_declined + immutable order_compliance_records) is
+> preserved from the proven build.
+>
 > ✅ **Drift watch (2026-07-08 · TWO owner-prove-surfaced bug fixes — profile cost-leak + QBO-absent crash):** No drift —
 > abided by the **cost wall / D-9 Surface Honesty** (the customer-facing profile now shows `sell_price`, NEVER `unit_cost`;
 > `unit_cost` stays only on view_costs owner surfaces; null/0 → honest "Not set", never $0, never cost) and **D-9 fail-loud-not-
@@ -144,6 +158,14 @@ decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenan
 | **Discovery module** | The discovery capability brief. | [DISCOVERY_MODULE_BRIEF.md](../DISCOVERY_MODULE_BRIEF.md) | — | **REFERENCE** |
 | **Canonical layer definitions** | shared/vertical/platform code layers + placement authority. | [docs/architecture/LAYER-DEFINITIONS.md](architecture/LAYER-DEFINITIONS.md) | 2026-06-14 | **DECIDED** |
 | **AC-1…AC-5** Architecture Constants | Non-negotiable structural rules (see §1). | [PLATFORM_STRATEGY.md](../PLATFORM_STRATEGY.md) / [CLAUDE.md](../CLAUDE.md) §1.5 | — | **DECIDED (locked)** |
+
+---
+
+## 4b. CHECKOUT / ORDER-FLOW WORKFLOWS
+
+| Decision / Topic | What it decides (one line) | Doc + path | Date | Status |
+|---|---|---|---|---|
+| **Transport / netting / decline workflow** | Transport is a single-select 3-branch radio — (1) Delivery + planting = delivery (flat ×1) + planting (per_unit ×N); (2) Delivery only = delivery (flat ×1); (3) No thank you (self) = no charge + netting/tarp offer with red-border Ch.725 compliance prompt; a decline is CAPTURED (orders.netting_declined + order_compliance_records). Originally built + owner-proven May-18; regressed by the multi-item rewrite; restored 2026-07-08. Reads delivery + planting as TWO correctly-ruled `service_offerings` rows (FLAGs if not present; data reshape is the separate Settings-editor task). ZERO migration, ZERO new `api/` file. | [docs/specs/SPEC-transport-netting-decline-workflow-2026-07-08.md](specs/SPEC-transport-netting-decline-workflow-2026-07-08.md) | 2026-05-18 (built) / 2026-07-08 (restored) | **DECIDED** · restored BUILDER-COMPLETE (owner-proof owed) |
 
 ---
 

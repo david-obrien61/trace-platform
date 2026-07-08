@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Plant, ServiceOffering } from '../types/plant';
 import type { CartItem, ServiceSelection } from '../types/order';
 import type { CustomerInput } from '../types/customer';
+import type { TransportChoice, TransportSelection } from '../lib/transport';
 import { anchorKey } from '../lib/stockLinePlant';
 
 const TRACE_CART = true; // [TRACE:CART] STD-003 — on until OWNER-PROVEN
@@ -11,7 +12,13 @@ interface CartStore {
   // stock_line_id OR specimen plant.id — carrying sell_price + qty). The single-item
   // profile path is the trivial N=1 case (setItem replaces the cart with one line).
   items:             CartItem[];
+  // Transport is the three-branch radio (SPEC-transport-netting-decline-workflow). The chosen
+  // branch attaches a PRIMARY transport (selectedTransport — drives transport_method + the
+  // netting trigger) and, for "Delivery + planting", a SEPARATE per-plant planting service.
+  transportChoice:   TransportChoice | null;
   selectedTransport: ServiceOffering | null;
+  plantingOffering:  ServiceOffering | null;   // the per-plant planting service (branch 1 only)
+  plantingSelected:  boolean;                   // whether planting is attached this order
   services:          ServiceSelection[];
   nettingDeclined:   boolean;
   customer:          CustomerInput | null;
@@ -20,7 +27,10 @@ interface CartStore {
   addLine:            (plant: Plant, qty: number) => void;   // APPEND / merge-by-anchor (scan loop)
   setLineQty:         (key: string, qty: number) => void;    // key = anchorKey(plant)
   removeLine:         (key: string) => void;
-  setTransport:       (offering: ServiceOffering) => void;
+  // Branch-driven transport select: the caller resolves the branch → selection (via
+  // ../lib/transport) and hands both here, so the store never re-resolves roles.
+  setTransportChoice: (choice: TransportChoice, selection: TransportSelection) => void;
+  setPlantingSelected:(val: boolean) => void;                // CartReview add/remove planting within branch 1
   setServices:        (transportOfferings: ServiceOffering[], addonOfferings: ServiceOffering[]) => void;
   toggleService:      (offeringId: string) => void;
   setNettingDeclined: (val: boolean) => void;
@@ -30,7 +40,10 @@ interface CartStore {
 
 export const useCart = create<CartStore>((set) => ({
   items:             [],
+  transportChoice:   null,
   selectedTransport: null,
+  plantingOffering:  null,
+  plantingSelected:  false,
   services:          [],
   nettingDeclined:   false,
   customer:          null,
@@ -71,11 +84,12 @@ export const useCart = create<CartStore>((set) => ({
       return { items: s.items.filter(l => anchorKey(l.plant) !== key) };
     }),
 
-  // Selecting a transport offering: if switching away from self-transport,
-  // auto-decline any addons gated on self transport (netting).
-  setTransport: (offering) =>
+  // Selecting a transport BRANCH (the three-branch radio). The caller resolved the branch
+  // to its concrete selection (primary transport + optional planting). Switching away from
+  // self-transport auto-declines any addons gated on self transport (netting).
+  setTransportChoice: (choice, selection) =>
     set((s) => {
-      const isNowSelf = offering.transport_mode === 'self';
+      const isNowSelf = selection.transport?.transport_mode === 'self';
       const services = isNowSelf
         ? s.services
         : s.services.map(sel =>
@@ -83,28 +97,39 @@ export const useCart = create<CartStore>((set) => ({
               ? { ...sel, selected: false }
               : sel
           );
+      if (TRACE_CART) console.log('[TRACE:CART] transport branch', {
+        choice,
+        transport: selection.transport?.name ?? null,
+        planting:  selection.planting?.name ?? null,
+      });
       return {
-        selectedTransport: offering,
+        transportChoice:   choice,
+        selectedTransport: selection.transport,
+        plantingOffering:  selection.planting,
+        plantingSelected:  selection.planting != null,
         services,
-        nettingDeclined: isNowSelf ? s.nettingDeclined : false,
+        nettingDeclined:   isNowSelf ? s.nettingDeclined : false,
       };
     }),
 
-  // Called once when services load from DB.
-  // Initializes: first pre_selected transport as selectedTransport,
-  // all addons at their pre_selected state.
-  setServices: (transportOfferings, addonOfferings) =>
+  // CartReview add/remove of planting within the "Delivery + planting" branch (keeps the
+  // offering so it can be re-added). Never invents planting on a branch that has none.
+  setPlantingSelected: (val) =>
     set((s) => {
-      const defaultTransport =
-        transportOfferings.find(o => o.pre_selected) ?? transportOfferings[0] ?? null;
+      if (!s.plantingOffering) return {};
+      if (TRACE_CART) console.log('[TRACE:CART] planting toggle', { selected: val, name: s.plantingOffering.name });
+      return { plantingSelected: val };
+    }),
+
+  // Called once when services load from DB. Initializes all addons at their pre_selected
+  // state. The initial transport BRANCH is set by the AddOns page (it resolves roles).
+  setServices: (_transportOfferings, addonOfferings) =>
+    set(() => {
       const services: ServiceSelection[] = addonOfferings.map(o => ({
         offering: o,
         selected: o.pre_selected,
       }));
-      return {
-        selectedTransport: s.selectedTransport ?? defaultTransport,
-        services,
-      };
+      return { services };
     }),
 
   toggleService: (offeringId) =>
@@ -129,7 +154,10 @@ export const useCart = create<CartStore>((set) => ({
 
   clear: () => set({
     items:             [],
+    transportChoice:   null,
     selectedTransport: null,
+    plantingOffering:  null,
+    plantingSelected:  false,
     services:          [],
     nettingDeclined:   false,
     customer:          null,
