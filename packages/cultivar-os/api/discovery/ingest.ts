@@ -27,30 +27,11 @@ const VERTICAL_SCHEMAS: Record<string, VerticalSchema> = {
   nursery: nurserySchema,
 };
 
-// WRITE-WALL gate (MB_D-015 — write-authority ≥ read-authority). Resolve the caller from the
-// request AUTH CONTEXT (the Bearer token), NEVER the request body, and confirm they hold `perm`
-// for the TARGET business via the canonical has_permission RPC. That RPC is SECURITY DEFINER and
-// reads business_members for auth.uid(), so running it under the caller's anon-key+token returns
-// true only for an active member of that business holding the permission — a forged businessId the
-// caller doesn't belong to returns false. The service key is the write MECHANISM (below); this is
-// the GATE. `_rpc` is an injectable test seam that replaces ONLY the network call, never the token
-// guard (so the no-token refusal is always exercised). Returns true only on an explicit grant.
-export async function callerHoldsPermission(
-  authHeader: string | undefined,
-  businessId: string,
-  perm: string,
-  _rpc?: (token: string, businessId: string, perm: string) => Promise<boolean>,
-): Promise<boolean> {
-  const token = String(authHeader || '').replace(/^Bearer\s+/i, '').trim();
-  if (!token) return false; // no caller token → refuse (the auth guard, runs before any RPC)
-  if (_rpc) return _rpc(token, businessId, perm);
-  const url = process.env.SUPABASE_URL;
-  const anon = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-  if (!url || !anon) return false;
-  const caller = createClient(url, anon, { global: { headers: { Authorization: `Bearer ${token}` } } });
-  const { data, error } = await caller.rpc('has_permission', { p_business_id: businessId, p_perm: perm });
-  return !error && data === true;
-}
+// WRITE-WALL gate (MB_D-015 — write-authority ≥ read-authority). The implementation lives in
+// the shared server-side gate module (one home, reused by the order CRUD handler too — CLAUDE.md
+// §6 rule 8); re-exported here so its importers (scripts/verify-write-wall.ts) and the cost-apply
+// call site below are unchanged.
+export { callerHoldsPermission } from '../../../shared/src/auth/callerPermission';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {

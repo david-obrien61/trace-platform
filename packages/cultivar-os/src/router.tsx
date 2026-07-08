@@ -18,6 +18,7 @@ import { Terms }           from './pages/Terms';
 import { Help }            from './pages/Help';
 import { SocialSetup }     from './pages/SocialSetup';
 import { Orders }            from './pages/Orders';
+import { OrderDetail }       from './pages/OrderDetail';
 import { OnboardingWizard } from './pages/OnboardingWizard';
 import { DeliveryRoute }    from './pages/DeliveryRoute';
 import { DeliverySchedule } from './pages/DeliverySchedule';
@@ -128,6 +129,7 @@ export function AppRouter() {
               /checkout/scan is the multi-item scan-loop front door (needs businessId + inventory RLS). */}
           <Route element={<PermissionRoute permission={PERMISSIONS.QR_CHECKOUT} />}>
             <Route path="/orders"       element={<Orders />} />
+            <Route path="/orders/:id"   element={<OrderDetail />} />
             <Route path="/checkout/scan" element={<ScanOrder />} />
           </Route>
 

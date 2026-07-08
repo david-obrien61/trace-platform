@@ -663,6 +663,7 @@ function capR(key, v) {
     '/', '/login', '/signup', '/join', '/device-handoff', '/reset-pin', '/privacy', '/terms',
     '/checkout/customer', '/checkout/review', '/checkout/confirm', '/checkout/addons',
     '/checkout/scan',         // sub-flow: multi-item scan-loop order entry, reached from /orders "New order"
+    '/orders/:id',            // drill-in: order detail, reached by clicking a roster card on /orders
     '/plant/:tagId', '/plant/:tagId/addons',
     '/demo/quickbooks-invoice', '/discovery/inspect',
     '/roles',                 // redirect → /team

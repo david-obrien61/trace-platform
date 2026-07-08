@@ -29,6 +29,7 @@ export const PERMISSIONS = {
   VIEW_DASHBOARD:    'view_dashboard',
   QR_CHECKOUT:       'qr_checkout',
   VIEW_ORDERS:       'view_orders',
+  MANAGE_ORDERS:     'manage_orders',      // edit / delete / status-change an order (roster CRUD); owner + manager
   MANAGE_DELIVERIES: 'manage_deliveries',
   MANAGE_CUSTOMERS:  'manage_customers',
   MANAGE_CAMPAIGNS:  'manage_campaigns',
@@ -48,6 +49,7 @@ export const DEFAULT_PERMISSIONS: Record<CultivarRole, string[]> = {
     PERMISSIONS.VIEW_DASHBOARD,
     PERMISSIONS.QR_CHECKOUT,
     PERMISSIONS.VIEW_ORDERS,
+    PERMISSIONS.MANAGE_ORDERS,
     PERMISSIONS.MANAGE_DELIVERIES,
     PERMISSIONS.MANAGE_CUSTOMERS,
     PERMISSIONS.MANAGE_CAMPAIGNS,
@@ -65,6 +67,7 @@ export const DEFAULT_PERMISSIONS: Record<CultivarRole, string[]> = {
     PERMISSIONS.VIEW_DASHBOARD,
     PERMISSIONS.QR_CHECKOUT,
     PERMISSIONS.VIEW_ORDERS,
+    PERMISSIONS.MANAGE_ORDERS,
     PERMISSIONS.MANAGE_DELIVERIES,
     PERMISSIONS.MANAGE_CUSTOMERS,
     PERMISSIONS.MANAGE_CAMPAIGNS,

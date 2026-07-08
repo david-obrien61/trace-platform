@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Truck, Package, Wrench, ScanLine } from 'lucide-react';
+import { AlertTriangle, Truck, Package, Wrench, ScanLine, ChevronRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
+import { orderItemName, orderItemTag, orderItemAnchor, type OrderItemAnchorFields } from '../lib/orderItemName';
+import { ORDER_STATUS_META } from '../lib/orderStatus';
 
 interface OrderRow {
   id: string;
@@ -13,7 +15,7 @@ interface OrderRow {
   notes: string | null;
   status: string;
   customers: { first_name: string; last_name: string; email: string } | null;
-  order_items: { quantity: number; cultivar_plants: { tag_id: string; common_name: string | null; species: string } | null }[];
+  order_items: (OrderItemAnchorFields & { quantity: number })[];
 }
 
 const TRANSPORT_ICON: Record<string, React.ReactNode> = {
@@ -37,7 +39,7 @@ export function Orders() {
 
   useEffect(() => {
     if (!businessId) return;
-    load();
+    void load();
   }, [businessId]);
 
   async function load() {
@@ -48,14 +50,25 @@ export function Orders() {
         id, created_at, total_amount, transport_method,
         leakage_flag, notes, status,
         customers ( first_name, last_name, email ),
-        order_items ( quantity, cultivar_plants ( tag_id, common_name, species ) )
+        order_items (
+          quantity, plant_id, business_inventory_id,
+          cultivar_plants ( tag_id, common_name, species ),
+          business_inventory ( name, size, sku )
+        )
       `)
       .eq('business_id', businessId)
       .order('created_at', { ascending: false })
       .limit(50);
 
     if (err) { setError(err.message); setLoading(false); return; }
-    setOrders((data ?? []) as OrderRow[]);
+    const rows = (data ?? []) as OrderRow[];
+    // [TRACE:ROSTER] which anchor named each order's first line (specimen vs stock line) — the
+    // fix for the "Unknown plant" gap on stock-line/scan orders (as-built recon §7).
+    console.log('[TRACE:ROSTER] roster loaded', {
+      count: rows.length,
+      anchors: rows.map(o => o.order_items?.[0] ? orderItemAnchor(o.order_items[0]) : 'no-line'),
+    });
+    setOrders(rows);
     setLoading(false);
   }
 
@@ -113,21 +126,23 @@ export function Orders() {
       {/* ── Order list ── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {orders.map(order => {
-          const item    = order.order_items?.[0];
-          const plant   = item?.cultivar_plants;
-          const qty     = item?.quantity ?? 1;
-          const tagId   = plant?.tag_id ?? '—';
-          const plantName = plant?.common_name ?? plant?.species ?? 'Unknown plant';
+          const item      = order.order_items?.[0];
+          const qty       = item?.quantity ?? 1;
+          const tagId     = item ? orderItemTag(item) : '—';
+          const plantName = item ? orderItemName(item) : 'Unknown plant';
+          const st        = ORDER_STATUS_META[order.status] ?? { label: order.status, color: '#6b7280', bg: '#f3f4f6' };
 
           return (
             <div
               key={order.id}
+              onClick={() => navigate(`/orders/${order.id}`)}
               style={{
                 background: '#fff',
                 borderRadius: 12,
                 padding: '14px 16px',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.07)',
                 borderLeft: order.leakage_flag ? '4px solid #A32D2D' : '4px solid #27500A',
+                cursor: 'pointer',
               }}
             >
               {/* Row 1: customer + amount */}
@@ -173,6 +188,13 @@ export function Orders() {
                   {TRANSPORT_LABEL[order.transport_method] ?? order.transport_method}
                 </span>
 
+                <span style={{
+                  fontSize: '0.6875rem', fontWeight: 700, color: st.color, background: st.bg,
+                  borderRadius: 6, padding: '2px 7px',
+                }}>
+                  {st.label}
+                </span>
+
                 {order.leakage_flag && (
                   <span style={{
                     fontSize: '0.6875rem', fontWeight: 700, color: '#A32D2D',
@@ -182,8 +204,8 @@ export function Orders() {
                   </span>
                 )}
 
-                <span style={{ fontSize: '0.6875rem', color: '#9ca3af', marginLeft: 'auto' }}>
-                  {fmt(order.created_at)}
+                <span style={{ fontSize: '0.6875rem', color: '#9ca3af', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2 }}>
+                  {fmt(order.created_at)} <ChevronRight size={13} color="#c4c9d0" />
                 </span>
               </div>
             </div>

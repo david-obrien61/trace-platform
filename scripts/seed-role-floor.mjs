@@ -43,7 +43,7 @@ const FLOOR = [
     role_key: 'OWNER', label: 'Owner',
     description: 'Full access — settings, team, QB, all reports',
     permissions: [
-      'view_dashboard', 'qr_checkout', 'view_orders', 'manage_deliveries',
+      'view_dashboard', 'qr_checkout', 'view_orders', 'manage_orders', 'manage_deliveries',
       'manage_customers', 'manage_campaigns', 'view_reports', 'manage_settings',
       'view_wages', 'view_pricing_config', 'view_costs', 'view_margin', 'override_maintenance',
     ],
@@ -52,7 +52,7 @@ const FLOOR = [
     role_key: 'MANAGER', label: 'Manager',
     description: 'Day-to-day ops — checkout, deliveries, campaigns, orders',
     permissions: [
-      'view_dashboard', 'qr_checkout', 'view_orders', 'manage_deliveries',
+      'view_dashboard', 'qr_checkout', 'view_orders', 'manage_orders', 'manage_deliveries',
       'manage_customers', 'manage_campaigns', 'view_reports', 'view_costs',
       'view_margin', 'override_maintenance',
     ],

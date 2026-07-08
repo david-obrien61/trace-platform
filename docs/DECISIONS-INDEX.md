@@ -23,6 +23,18 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-08 · ORDER ROSTER CRUD + "Unknown plant" fix — as-built §7 gaps):**
+> No drift — abided by **D-34** (the roster/drill-in name items by the LOT/specimen dual anchor — the same
+> `business_inventory_id`-vs-`plant_id` anchor `submit.ts` writes), **D-35** (edit re-reads server-authoritative
+> `sell_price`, refuses $0 per line — never `unit_cost`, never a fabricated total), **AC-3** (every CRUD query
+> `business_id`-scoped + verifies order ownership), **MB_D-015 write-authority ≥ read-authority** (edit/delete/status
+> are token-gated server-side — owner by `owner_id` OR `manage_orders` via `has_permission` — the same write-wall
+> pattern as cost-apply; staff can't edit even though the roster is `qr_checkout`-visible), and **§6 rule 11 / 12-fn
+> ceiling** (ZERO new `api/` file — CRUD rides `submit.ts` via an `action` param). No prior decision settled/deferred/
+> superseded. **TWO NEW open decisions logged (PART 3):** R-QBSTALE (an edited order surfaces QB-invoice staleness —
+> auto re-sync vs the banner is David's call) + R-STATUS (ratify the minimal `pending→confirmed→fulfilled→cancelled`
+> enum + whether cancel should auto-release inventory). Satisfies story MAPS-TO 2.1 roster sub-stories.
+>
 > ✅ **Drift watch (2026-07-08 · CHECKOUT FIX-PASS — search lookup + centered modal + conditional required address/phone + owner delivery-date):**
 > No drift — abided by **AC-1** (the new shared `searchStockLines` names only `business_inventory`, no vertical noun —
 > same agnostic resolver family as `resolveStockLine`), **AC-3** (search + all reads are `business_id`-scoped), **D-9
@@ -262,10 +274,12 @@ These are NOT yet decided/recorded. Lightning should surface them rather than as
 | ~~**SELL PRICE on the stock line**~~ | ✅ **DECIDED 2026-07-07 as [D-35](DECISIONS.md)** — stored `business_inventory.sell_price` (editable, authoritative, DISTINCT from `unit_cost`); MarginEngine suggests, stored price governs; cart reads `sell_price` and refuses $0; `price_tier` applies at checkout. | **DECIDED** — build owed (spec item 1: migration + datasheet entry UI + cart repoint + tier consumption). |
 | **Lifecycle / transplant EVENT grain (cohort vs per-size)** | Events key on `plant_id`; design says lot-level. The re-anchor target (variety-cohort vs per-size row) is spec'd but the grain is the one sub-question David still picks at build time. | **PARTIALLY DECIDED** — the DRIFT is settled by [[D-34]] (re-anchor to the stock line, add cost-basis columns); spec'd as [buildspec item 5](decisions/2026-07-07-inventory-sale-pipeline-buildspec.md) and marked **POST-DEMO**. The cohort-vs-per-size grain is the residual call, made when item 5 is built. |
 | **Purchase-off-stock-line vs `cultivar_plants` (the drift)** | Purchase resolution still anchored to per-specimen `cultivar_plants`. | **BUILDER-COMPLETE (M2 GATED) 2026-07-07** — [[D-34]] settles the target; [buildspec item 2](decisions/2026-07-07-inventory-sale-pipeline-buildspec.md) BUILT: shared `packages/shared/src/inventory/stockLineResolver.ts` (agnostic ladder, consumed by both InventoryCount + usePlant) + `usePlant` fallback + `plant.stock_line_id` discriminator + `submit.ts` one-anchor write + **M2** `20260707_order_items_stock_line_anchor.sql` (`business_inventory_id` + `plant_id` nullable, GATED — David applies). `npm run verify` zero net-new; owner-proof owed. |
+| **R-QBSTALE — edited order → QuickBooks invoice** | Order roster CRUD (2026-07-08, ledger #100) lets owner/manager edit a SUBMITTED order → totals recompute. The order's existing QB invoice is now out of date. Current behavior: the edit SURFACES staleness (`qbStale:true` + a UI banner "re-sync in QuickBooks") but does NOT auto re-sync. | **OPEN — needs David.** Options: (a) leave the surfaced banner (owner re-syncs manually — current), (b) auto re-issue/void+recreate the QB invoice on edit (rides `qbo/invoice/cultivar`, no new fn). Same family as the pay-at-office-also-fires-QBO flag (R3, ledger #99). |
+| **R-STATUS — order status lifecycle enum** | `orders.status` is a live-only text column with NO CHECK; before #100 nothing moved it off `pending`. #100 added a minimal `pending→confirmed→fulfilled→cancelled` lifecycle (`lib/orderStatus.ts`, ONE source; server-validated) so owner/manager can transition an order; 'cancelled' currently auto-releases reserved inventory. | **OPEN — needs David.** Ratify (a) the status set (is 4 states right? any missing — e.g. `paid`, `out_for_delivery`?), (b) whether cancel should auto-release (currently yes) and whether un-cancel should auto-re-reserve (currently NO — edit to restock). A DB CHECK constraint can follow ratification. |
 
 **Reconciliation note (updated 2026-07-07):** all three former open items are now closed as
 *decisions*. SELL PRICE became **D-35**. The two lifecycle/purchase items were always
 downstream of the June-13 "lot is the SKU" decision (now first-class **D-34**) — the DECISION
 existed; the CODE drifted — and are now sequenced in the consolidated build spec
 ([2026-07-07-inventory-sale-pipeline-buildspec.md](decisions/2026-07-07-inventory-sale-pipeline-buildspec.md)).
-What remains is BUILD, not DECIDE. Nothing genuinely-undecided is left in this section.
+What remains is BUILD, not DECIDE. **UPDATE 2026-07-08 (ledger #100):** two genuinely-open decisions were added below the reconciled rows — **R-QBSTALE** (edited-order QB re-sync) and **R-STATUS** (order status enum ratification) — both surfaced by the order-roster-CRUD build; neither is settled.
