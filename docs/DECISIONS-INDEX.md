@@ -18,6 +18,20 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-08 · MULTI-ITEM SCAN-LOOP CART + NETTING build):** No drift — abided by **D-34**
+> (each cart line reuses the proven per-line `stock_line_id`/`plant_id` anchor branch — extended to loop N,
+> not forked), **Item-1 sell_price** (D-35: cart reads `sell_price`, server-authoritative per line, $0 refused
+> naming the item — no cost leak), **D-9 surface-not-silent** (the netted itemization is PROPOSED and
+> owner-adjustable in CartReview before submit — Regina Principle; nothing silently applied), **AC-3**
+> (every resolve/read/write business_id-scoped), **§6 rule 8** (extracted `synthesizePlant`+`anchorKey`,
+> `extractTag`, and the attach-rule `nettedQuantity`/`lineSubtotal` into ONE shared definition each —
+> client display + server charge import the same rule so they can't drift; QrScanner + `resolveStockLine`
+> reused from walk-and-count, not rebuilt), **§6 rule 11 / 12-fn ceiling** (ZERO new `api/` files — the
+> order write rides the existing `submit.ts`, generalized to loop lines). No new schema — the per-order vs
+> per-plant attach-rule already lived on `service_offerings.price_type`/`price_unit` (recon R1–R5). The
+> quantity-bearing-with-spec class (fertilizer "5 × 30gal each") is DEFERRED, seam left untouched, no spec
+> column added.
+>
 > ✅ **Drift watch (2026-07-07 · PURCHASE-OFF-STOCK-LINE build):** No drift — abided by **D-34** (purchase
 > anchors to the `business_inventory` stock line, `cultivar_plants` identity-only — this closes the DRIFTED
 > code, does not re-decide), **AC-1** (the extracted `resolveStockLine` is agnostic — names only

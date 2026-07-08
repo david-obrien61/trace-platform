@@ -39,6 +39,7 @@ import { useBusinessContext } from '@trace/shared/context';
 import { SyncEngine } from '@trace/shared/sync';
 import { resolveStockLine } from '@trace/shared/inventory';
 import { QrScanner } from '../components/inventory/QrScanner';
+import { extractTag } from '../lib/scanTag';
 
 const TRACE_COUNT = true; // [TRACE:COUNT] STD-003 — on until OWNER-PROVEN
 const TRACE_RESOLVE = true; // [TRACE:RESOLVE] STD-003 — which resolver layer hit; on until OWNER-PROVEN
@@ -60,20 +61,6 @@ interface CountedItem { label: string; qty: number; unknown: boolean; }
 
 // A same-lot-twice-in-session recount — surfaced, never silently overwritten.
 interface Conflict { key: string; label: string; prevQty: number; newQty: number; }
-
-// Scanned QR holds a URL like https://…/plant/SCV-0031 — strip the URL, keep the tag.
-function extractTag(raw: string): string {
-  const trimmed = raw.trim();
-  const m = trimmed.match(/\/plant\/([^/?#]+)/i);
-  if (m) return decodeURIComponent(m[1]);
-  // Not a /plant/ URL — if it's any other URL, take the last path segment; else use as-is.
-  try {
-    const u = new URL(trimmed);
-    const segs = u.pathname.split('/').filter(Boolean);
-    if (segs.length) return decodeURIComponent(segs[segs.length - 1]);
-  } catch { /* not a URL — a bare code */ }
-  return trimmed;
-}
 
 function isMissingTable(err: { code?: string; message?: string } | null): boolean {
   if (!err) return false;

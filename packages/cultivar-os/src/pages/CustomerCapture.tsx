@@ -61,7 +61,8 @@ function Field({
 
 export function CustomerCapture() {
   const navigate = useNavigate();
-  const { setCustomer, customer: saved, item } = useCart();
+  const { setCustomer, customer: saved, items } = useCart();
+  const firstItem = items[0] ?? null;
 
   const [firstName, setFirstName] = useState(saved?.first_name ?? '');
   const [lastName,  setLastName]  = useState(saved?.last_name ?? '');
@@ -105,9 +106,9 @@ export function CustomerCapture() {
     <div className="page">
       {/* Header */}
       <div style={{ padding: '16px 16px 0' }}>
-        {item && (
+        {firstItem && (
           <button
-            onClick={() => navigate(`/plant/${item.plant.tag_id}/addons`)}
+            onClick={() => navigate(items.length === 1 ? `/plant/${firstItem.plant.tag_id}/addons` : '/checkout/addons')}
             style={{
               background: 'none',
               border: 'none',

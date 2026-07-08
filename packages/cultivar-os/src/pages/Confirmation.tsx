@@ -1,6 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
-import { TRANSPORT_OPTIONS } from '../lib/constants';
 
 interface ConfirmState {
   orderId:          string;
@@ -10,6 +9,8 @@ interface ConfirmState {
   taxAmount:        number;
   email:            string;
   payOnline:        boolean;
+  transportMode?:   'self' | 'staff';
+  nettingActive?:   boolean;
   qbInvoiceId?:     string;
   qbInvoiceNumber?: string;
   qbInvoiceUrl?:    string;
@@ -48,26 +49,21 @@ function StatusBadge({
 export function Confirmation() {
   const navigate  = useNavigate();
   const location  = useLocation();
-  const { item, transport, nettingDeclined, addons, clear } = useCart();
+  const { items, clear } = useCart();
 
   const state = location.state as ConfirmState | null;
 
-  if (!state || !item) {
+  if (!state) {
     navigate('/', { replace: true });
     return null;
   }
 
   const { invoiceNumber, total, subtotal, taxAmount, email, payOnline,
+          transportMode, nettingActive,
           qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus } = state;
-  const { plant, quantity } = item;
 
-  const isSelf         = transport === TRANSPORT_OPTIONS.SELF;
-  const nettingActive  = isSelf && !nettingDeclined;
-  const nettingDbAddon = addons.find((a) => a.addon.trigger_rule === 'transport=self');
-  const nettingPrice   = nettingDbAddon?.addon.price_per_plant ?? 10;
-  const nettingTotal   = nettingActive ? nettingPrice * quantity : 0;
-  const alwaysAddons   = addons.filter((a) => a.selected && a.addon.trigger_rule === 'always');
-
+  const isSelf      = (transportMode ?? 'self') === 'self';
+  const nettingOn   = !!nettingActive;
   const qbConnected = qbStatus === 'success' && !!qbInvoiceId;
   const displayQbNumber = qbInvoiceNumber || qbInvoiceId || '—';
 
@@ -111,13 +107,13 @@ export function Confirmation() {
       <div className="section" style={{ paddingTop: 0 }}>
         {!isSelf && (
           <StatusBadge icon="✓" color="green" title="LAWNS handling delivery/install"
-            detail={transport === TRANSPORT_OPTIONS.INSTALL ? 'We will deliver and install your plant.' : 'We will deliver your plant to your property.'} />
+            detail="We will deliver your order to your property." />
         )}
-        {isSelf && nettingActive && (
+        {isSelf && nettingOn && (
           <StatusBadge icon="✓" color="green" title="Trees protected — netting applied"
-            detail="Staff will wrap your plant before loading. You're good to go." />
+            detail="Staff will wrap your plants before loading. You're good to go." />
         )}
-        {isSelf && !nettingActive && (
+        {isSelf && !nettingOn && (
           <StatusBadge icon="⚠" color="amber" title="No netting — drive carefully"
             detail="Secure your load per Texas Transportation Code Ch. 725 before leaving the lot." />
         )}
@@ -129,22 +125,11 @@ export function Confirmation() {
           Order detail
         </p>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem', color: '#374151', marginBottom: 8 }}>
-          <span>{plant.common_name ?? plant.species} · {plant.current_container} × {quantity}</span>
-          <span>${((plant.business_inventory?.unit_cost ?? 0) * quantity).toFixed(2)}</span>
-        </div>
-
-        {nettingActive && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem', color: '#374151', marginBottom: 8 }}>
-            <span>Travel netting × {quantity}</span>
-            <span>${nettingTotal.toFixed(2)}</span>
-          </div>
-        )}
-
-        {alwaysAddons.map((ca) => (
-          <div key={ca.addon.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem', color: '#374151', marginBottom: 8 }}>
-            <span>{ca.addon.name} × {quantity}</span>
-            <span>${(ca.addon.price_per_plant * quantity).toFixed(2)}</span>
+        {/* Plant lines (D-35: sale price). Cart still holds the lines until "done". */}
+        {items.map((l) => (
+          <div key={l.plant.stock_line_id ?? l.plant.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem', color: '#374151', marginBottom: 8 }}>
+            <span>{l.plant.common_name ?? l.plant.species}{l.plant.current_container ? ` · ${l.plant.current_container}` : ''} × {l.quantity}</span>
+            <span>${((l.plant.business_inventory?.sell_price ?? 0) * l.quantity).toFixed(2)}</span>
           </div>
         ))}
 
@@ -191,7 +176,7 @@ export function Confirmation() {
         </a>
 
         <button className="btn btn-secondary" onClick={handleDone}>
-          Scan another plant
+          Start another order
         </button>
       </div>
     </div>

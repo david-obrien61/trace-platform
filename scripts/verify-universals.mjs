@@ -661,7 +661,8 @@ function capR(key, v) {
 
   const EXCEPTIONS = new Set([
     '/', '/login', '/signup', '/join', '/device-handoff', '/reset-pin', '/privacy', '/terms',
-    '/checkout/customer', '/checkout/review', '/checkout/confirm',
+    '/checkout/customer', '/checkout/review', '/checkout/confirm', '/checkout/addons',
+    '/checkout/scan',         // sub-flow: multi-item scan-loop order entry, reached from /orders "New order"
     '/plant/:tagId', '/plant/:tagId/addons',
     '/demo/quickbooks-invoice', '/discovery/inspect',
     '/roles',                 // redirect → /team

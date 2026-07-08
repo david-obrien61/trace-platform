@@ -4,6 +4,7 @@ import { useBusinessContext } from '@trace/shared/context';
 import { resolveStockLine, STOCK_LINE_COLUMNS } from '@trace/shared/inventory';
 import type { StockLineRow } from '@trace/shared/inventory';
 import type { Plant, PlantEvent } from '../types/plant';
+import { synthesizePlant } from '../lib/stockLinePlant';
 
 const TRACE_RESOLVE = true; // [TRACE:RESOLVE] STD-003 — which lane resolved; on until OWNER-PROVEN
 
@@ -61,36 +62,8 @@ function writeCache(tagId: string, data: Omit<PlantCache, 'cachedAt'>): void {
   }
 }
 
-// D-34: build a plant-shaped object from a business_inventory STOCK LINE, so the existing
-// cart/profile code (which expects a Plant) works unchanged for a lot that has no per-
-// specimen cultivar_plants row. stock_line_id is the discriminator the order write reads.
-function synthesizePlant(row: StockLineRow, businessId: string, tagId: string): Plant {
-  return {
-    id:                row.id,             // stable UI key; the ORDER anchors on stock_line_id, not this
-    business_id:       businessId,
-    inventory_id:      row.id,             // the stock line IS the lot
-    tag_id:            tagId,
-    species:           row.name,
-    common_name:       row.name,
-    plant_type:        'tree',             // synthetic default — a stock line carries no plant_type
-    current_container: row.size ?? '',
-    location_zone:     null,
-    warranty_months:   0,
-    photo_url:         null,
-    notes:             row.description ?? null,
-    created_at:        '',
-    updated_at:        '',
-    business_inventory: {
-      id:          row.id,
-      qty:         row.qty ?? 0,
-      unit_cost:   row.unit_cost ?? null,
-      sell_price:  row.sell_price ?? null,
-      status:      row.status ?? 'available',
-      received_at: row.received_at ?? null,
-    },
-    stock_line_id:     row.id,             // DISCRIMINATOR — this plant is a stock line, not a specimen
-  };
-}
+// synthesizePlant (D-34) is shared with the multi-item scan-loop — one definition in
+// ../lib/stockLinePlant (CLAUDE.md §6 rule 8, no drifted copy).
 
 export function usePlant(tagId: string | undefined): UsePlantResult {
   const cached = tagId ? readCache(tagId) : null;

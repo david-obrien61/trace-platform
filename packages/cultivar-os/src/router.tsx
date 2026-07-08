@@ -5,6 +5,7 @@ import { VIEW_COSTS, PermissionRoute } from '@trace/shared/auth';
 import { PERMISSIONS }     from './auth/roles';
 import { PlantProfile }    from './pages/PlantProfile';
 import { AddOns }          from './pages/AddOns';
+import { ScanOrder }       from './pages/ScanOrder';
 import { CustomerCapture } from './pages/CustomerCapture';
 import { CartReview }      from './pages/CartReview';
 import { Confirmation }    from './pages/Confirmation';
@@ -84,6 +85,8 @@ export function AppRouter() {
       {/* PUBLIC — no auth needed */}
       <Route path="/plant/:tagId"        element={<PlantProfile />} />
       <Route path="/plant/:tagId/addons" element={<AddOns />} />
+      {/* Multi-item scan-loop tail entry (no plant tag — cart already built by scanning). */}
+      <Route path="/checkout/addons"     element={<AddOns />} />
       <Route path="/checkout/customer"   element={<CustomerCapture />} />
       <Route path="/checkout/review"     element={<CartReview />} />
       <Route path="/checkout/confirm"    element={<Confirmation />} />
@@ -121,9 +124,11 @@ export function AppRouter() {
               tileRegistry required_permission values exactly — nav AND route agree.
               ════════════════════════════════════════════════════════════════════════════════ */}
 
-          {/* Orders — qr_checkout (STAFF holds it; guarded for completeness so the class has no gap). */}
+          {/* Orders — qr_checkout (STAFF holds it; guarded for completeness so the class has no gap).
+              /checkout/scan is the multi-item scan-loop front door (needs businessId + inventory RLS). */}
           <Route element={<PermissionRoute permission={PERMISSIONS.QR_CHECKOUT} />}>
             <Route path="/orders"       element={<Orders />} />
+            <Route path="/checkout/scan" element={<ScanOrder />} />
           </Route>
 
           {/* Delivery — manage_deliveries (STAFF lacks it → refused at entry, was URL-reachable). */}

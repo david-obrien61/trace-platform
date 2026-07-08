@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Truck, Package, Wrench } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { AlertTriangle, Truck, Package, Wrench, ScanLine } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 
@@ -28,6 +29,7 @@ const TRANSPORT_LABEL: Record<string, string> = {
 };
 
 export function Orders() {
+  const navigate              = useNavigate();
   const { businessId }        = useBusinessContext();
   const [orders, setOrders]   = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,7 +72,7 @@ export function Orders() {
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <div>
+        <div style={{ flex: 1 }}>
           <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#27500A' }}>
             Orders
           </h1>
@@ -78,6 +80,16 @@ export function Orders() {
             {orders.length} recent checkout{orders.length !== 1 ? 's' : ''}
           </p>
         </div>
+        <button
+          onClick={() => navigate('/checkout/scan')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, minHeight: 44, padding: '0 16px',
+            background: '#27500A', color: '#fff', border: 'none', borderRadius: 10,
+            fontSize: '0.875rem', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+          }}
+        >
+          <ScanLine size={16} /> New order
+        </button>
       </div>
 
       {loading && (
@@ -150,6 +162,7 @@ export function Orders() {
                   borderRadius: 6, padding: '3px 8px', fontWeight: 600,
                 }}>
                   {qty}× {plantName} · {tagId}
+                  {order.order_items && order.order_items.length > 1 && ` +${order.order_items.length - 1} more`}
                 </span>
 
                 <span style={{

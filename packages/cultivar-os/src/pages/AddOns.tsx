@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
 import { useServices } from '../hooks/useServices';
+import { totalPlantCount } from '../lib/netting';
 import { TransportToggle } from '../components/checkout/TransportToggle';
 import { CompliancePrompt } from '../components/checkout/CompliancePrompt';
 import { AddonCard } from '../components/checkout/AddonCard';
@@ -11,13 +12,12 @@ export function AddOns() {
   const navigate  = useNavigate();
 
   const {
-    item, selectedTransport, services,
+    items, selectedTransport, services,
     setTransport, setServices, toggleService, setNettingDeclined, nettingDeclined,
   } = useCart();
 
-  const { transportOfferings, addonOfferings, loading, error } = useServices(
-    item?.plant.business_id ?? '',
-  );
+  const businessId = items[0]?.plant.business_id ?? '';
+  const { transportOfferings, addonOfferings, loading, error } = useServices(businessId);
 
   // Load service offerings into cart once fetched
   useEffect(() => {
@@ -26,12 +26,14 @@ export function AddOns() {
     }
   }, [transportOfferings, addonOfferings]);
 
-  if (!item) {
-    navigate(`/plant/${tagId}`, { replace: true });
+  if (items.length === 0) {
+    navigate(tagId ? `/plant/${tagId}` : '/checkout/scan', { replace: true });
     return null;
   }
 
-  const { plant, quantity } = item;
+  // Multi-item: services attach across the WHOLE cart's plant count (netting engine).
+  // A per-plant add-on scales to this count; a per-order service collapses to ×1.
+  const plantCount    = totalPlantCount(items);
   const isSelfTransport = selectedTransport?.transport_mode === 'self';
 
   // Find netting in the services list
@@ -46,10 +48,10 @@ export function AddOns() {
     s => s.offering.category === 'addon' && !s.offering.trigger_transport_mode,
   );
 
-  // Running subtotal for the summary bar
+  // Running subtotal for the summary bar — per-plant services × plantCount, per-order flat.
   const transportAmount = selectedTransport
     ? selectedTransport.price_type === 'per_unit'
-      ? selectedTransport.price * quantity
+      ? selectedTransport.price * plantCount
       : selectedTransport.price
     : 0;
 
@@ -57,7 +59,7 @@ export function AddOns() {
     .filter(s => s.selected && s.offering.category === 'addon')
     .reduce((sum, s) => {
       const p = s.offering.price_type === 'per_unit'
-        ? s.offering.price * quantity
+        ? s.offering.price * plantCount
         : s.offering.price;
       return sum + p;
     }, 0);
@@ -65,20 +67,24 @@ export function AddOns() {
   // Netting amount is already included in addonAmount via services state,
   // but if cart hasn't loaded the netting service yet fall back to manual calc
   const nettingFallback =
-    !nettingSelection && isSelfTransport && !nettingDeclined ? nettingPrice * quantity : 0;
+    !nettingSelection && isSelfTransport && !nettingDeclined ? nettingPrice * plantCount : 0;
 
   // D-35: the cart reads sell_price (the retail price), NEVER unit_cost (what the grower paid).
-  const sellPrice     = plant.business_inventory?.sell_price ?? 0;
-  console.log('[TRACE:PRICE] cart read (AddOns) column=sell_price', { plantId: plant.id, sellPrice, quantity });
-  const plantSubtotal = sellPrice * quantity;
+  // Sum across every cart line.
+  const plantSubtotal = items.reduce((sum, l) => sum + (l.plant.business_inventory?.sell_price ?? 0) * l.quantity, 0);
+  console.log('[TRACE:CART] addons summary — column=sell_price', { lineCount: items.length, plantCount, plantSubtotal });
   const grandTotal    = plantSubtotal + transportAmount + addonAmount + nettingFallback;
+
+  const headerLabel = items.length === 1
+    ? `${items[0].plant.common_name ?? items[0].plant.species} · ${plantCount} plant${plantCount !== 1 ? 's' : ''}`
+    : `${items.length} items · ${plantCount} plant${plantCount !== 1 ? 's' : ''}`;
 
   return (
     <div className="page">
       {/* Header */}
       <div style={{ padding: '16px 16px 0' }}>
         <button
-          onClick={() => navigate(`/plant/${tagId}`)}
+          onClick={() => navigate(tagId ? `/plant/${tagId}` : '/checkout/scan')}
           style={{
             background: 'none', border: 'none', color: '#27500A',
             fontSize: '0.9375rem', fontWeight: 600, cursor: 'pointer',
@@ -94,9 +100,23 @@ export function AddOns() {
           Services & add-ons
         </h1>
         <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: 4 }}>
-          {plant.common_name ?? plant.species} · {quantity} plant{quantity !== 1 ? 's' : ''}
+          {headerLabel}
         </p>
       </div>
+
+      {/* Cart lines (multi-item) */}
+      {items.length > 1 && (
+        <div className="section" style={{ paddingTop: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {items.map((l) => (
+              <div key={l.plant.stock_line_id ?? l.plant.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#374151' }}>
+                <span>{l.plant.common_name ?? l.plant.species}{l.plant.current_container ? ` · ${l.plant.current_container}` : ''} × {l.quantity}</span>
+                <span>${((l.plant.business_inventory?.sell_price ?? 0) * l.quantity).toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Transport */}
       <div className="section">
@@ -123,7 +143,7 @@ export function AddOns() {
               serviceNote={nettingSelection.offering.service_note ?? 'Applied by staff'}
               pricePerUnit={nettingPrice}
               unitLabel={nettingSelection.offering.price_unit === 'plant' ? 'plant' : 'unit'}
-              quantity={quantity}
+              quantity={plantCount}
               selected={nettingActive}
               onToggle={() => setNettingDeclined(nettingActive)}
             />
@@ -137,7 +157,7 @@ export function AddOns() {
               serviceNote="Applied by staff before you leave"
               pricePerUnit={nettingPrice}
               unitLabel="plant"
-              quantity={quantity}
+              quantity={plantCount}
               selected={nettingActive}
               onToggle={() => setNettingDeclined(nettingActive)}
             />
@@ -170,7 +190,7 @@ export function AddOns() {
                   sort_order:      sel.offering.sort_order,
                 }}
                 selected={sel.selected}
-                quantity={quantity}
+                quantity={plantCount}
                 onToggle={() => toggleService(sel.offering.id)}
               />
             ))}
@@ -182,7 +202,7 @@ export function AddOns() {
       <div className="section" style={{ marginTop: 'auto' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#6b7280' }}>
-            <span>Plants ({quantity})</span>
+            <span>Plants ({plantCount})</span>
             <span>${plantSubtotal.toFixed(2)}</span>
           </div>
           {(addonAmount + nettingFallback + transportAmount) > 0 && (

@@ -4,14 +4,16 @@ import type { ServiceSelection } from '../types/order';
 import type { ServiceOffering } from '../types/plant';
 import type { CustomerInput } from '../types/customer';
 import type { Plant } from '../types/plant';
+import { nettedQuantity, lineSubtotal, totalPlantCount, isNettingOffering } from '../lib/netting';
 
 export interface SubmitPayload {
   customer:          CustomerInput;
-  plant:             Plant;
-  quantity:          number;
+  lines:             { plant: Plant; quantity: number }[];   // multi-item: one entry per cart line
   services:          ServiceSelection[];
   selectedTransport: ServiceOffering | null;
   nettingDeclined:   boolean;
+  // Owner-confirmed netted quantities (offering id → qty). Absent ⇒ server applies the rule.
+  serviceQuantities: Record<string, number>;
   businessId:        string;
 }
 
@@ -37,16 +39,16 @@ export function useSubmitOrder() {
 
     try {
       const {
-        customer, plant, quantity, services, selectedTransport,
-        nettingDeclined, businessId,
+        customer, lines, services, selectedTransport,
+        nettingDeclined, serviceQuantities, businessId,
       } = payload;
 
       const res = await fetch('/api/orders/submit', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          customer, plant, quantity, services, selectedTransport,
-          nettingDeclined, businessId,
+          customer, lines, services, selectedTransport,
+          nettingDeclined, serviceQuantities, businessId,
         }),
       });
 
@@ -83,25 +85,23 @@ export function useSubmitOrder() {
       }
 
       // ── Order confirmation email — non-blocking ──────────────────────────
-      const isSelf          = selectedTransport?.transport_mode === 'self';
-      const nettingSelection = services.find(
-        s => s.offering.trigger_transport_mode === 'self' && s.offering.category === 'addon',
-      );
-      const nettingActive  = isSelf && (nettingSelection?.selected ?? false);
+      const plantCount   = totalPlantCount(lines);
+      const isSelf       = selectedTransport?.transport_mode === 'self';
+      const nettingSel   = services.find(s => isNettingOffering(s.offering));
+      const nettingOn    = isSelf && (nettingSel?.selected ?? false) && !nettingDeclined;
+      // Service amount honors the owner-adjusted netted quantities.
+      const qtyFor = (o: ServiceOffering) => serviceQuantities[o.id] ?? nettedQuantity(o, plantCount);
       const servicesAmount = services
         .filter(s => s.selected)
-        .reduce((sum, s) => {
-          const p = s.offering.price_type === 'per_unit'
-            ? s.offering.price * quantity
-            : s.offering.price;
-          return sum + p;
-        }, 0);
-      const transportAmount = selectedTransport
-        ? selectedTransport.price_type === 'per_unit'
-          ? selectedTransport.price * quantity
-          : selectedTransport.price
-        : 0;
+        .reduce((sum, s) => sum + lineSubtotal(s.offering, qtyFor(s.offering)), 0);
+      const transportAmount = selectedTransport ? lineSubtotal(selectedTransport, qtyFor(selectedTransport)) : 0;
       const addonsAmount = servicesAmount + transportAmount;
+      // D-35: sale price, not cost. Sum across every line.
+      const plantsTotal = lines.reduce((sum, l) => sum + (l.plant.business_inventory?.sell_price ?? 0) * l.quantity, 0);
+      const firstPlant  = lines[0]?.plant;
+      const plantLabel  = lines.length === 1
+        ? (firstPlant?.common_name ?? firstPlant?.species ?? 'your order')
+        : `${firstPlant?.common_name ?? firstPlant?.species ?? 'your order'} +${lines.length - 1} more`;
 
       sendSilently({
         vertical:   'cultivar',
@@ -114,16 +114,16 @@ export function useSubmitOrder() {
         data: {
           customerName:  `${customer.first_name} ${customer.last_name}`,
           invoiceNumber,
-          plantName:     plant.common_name ?? plant.species,
-          container:     plant.current_container,
-          quantity,
-          plantTotal:    `$${((plant.business_inventory?.sell_price ?? 0) * quantity).toFixed(2)}`,  // D-35: sale price, not cost
+          plantName:     plantLabel,
+          container:     firstPlant?.current_container ?? '',
+          quantity:      plantCount,
+          plantTotal:    `$${plantsTotal.toFixed(2)}`,
           addonsTotal:   `$${addonsAmount.toFixed(2)}`,
           subtotal:      `$${subtotal.toFixed(2)}`,
           tax:           `$${taxAmount.toFixed(2)}`,
           total:         `$${total.toFixed(2)}`,
           transport:     selectedTransport?.transport_mode ?? 'self',
-          nettingActive,
+          nettingActive: nettingOn,
           payOnline:     false,
           payUrl:        '',
         },

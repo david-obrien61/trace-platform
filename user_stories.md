@@ -181,6 +181,18 @@ Some add-ons can only be applied at a specific moment — netting at planting ti
 
 ---
 
+### Build one order from many plants — scan, add or pass, then net the services
+STATUS: written
+SCOPE: vertical:cultivar, platform
+BUILD: in-build
+ARC: suggestion
+MAPS-TO: QR Checkout Flow (multi-item)
+PIECES: scan_order_loop, attach_rule_netting, interactive_review
+NEEDS: David's owner-prove on live (below). Fertilizer quantity-with-spec ("5 × 30gal each") is banked (own recon + a small additive migration).
+Lauren walks the lot with one order open. She scans a tree — Add. Scans the next — that one's not going today, Pass. Scans a third — Add. Five trees, one order, no URL typing. At review the app has already done the arithmetic the right way: the delivery fee is charged once (one truck for the whole load), the planting fee is charged per tree (five plantings, five fees), netting per tree — and it SHOWS her each with its rule so nothing is silently applied. She bumps one line's quantity, drops a service she doesn't want, and sends it. Each line lands on the order anchored to its own stock line or specimen; the total reflects the netting. _Grounded: recon R1–R5 (the per-order/per-plant attach rule already lives on `service_offerings.price_type`/`price_unit` — zero migration); D-34 per-line anchor; D-9/Regina surface-not-silent (the review PROPOSES, the owner adjusts); §6.8 reuse (QrScanner + resolveStockLine + synthesizePlant reused, the order write rides the existing submit.ts). Built 2026-07-08, BUILDER-COMPLETE, owner-proof owed._
+
+---
+
 ## ARC: delivery
 
 _Schedule → day-group → select stops → bookend (business→stops→business) → Google Maps handoff._
