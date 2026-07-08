@@ -2,6 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabase/client';
 import { useBusinessContext } from '../context/BusinessProvider';
 import { normalizePhone } from '../utils/normalizePhone';
+import {
+  CATEGORY_OPTIONS, TIMING_OPTIONS, PRICE_TYPE_OPTIONS, PRICE_UNIT_OPTIONS,
+  TRANSPORT_MODE_OPTIONS, TIMING_LABEL,
+} from '../business-logic/serviceOfferingEnums';
 
 const GREEN = '#27500A';
 const SAGE  = '#EAF3DE';
@@ -14,6 +18,20 @@ const inputStyle: React.CSSProperties = {
   border: '1.5px solid #d1d5db', borderRadius: 9, fontSize: '0.9375rem',
   outline: 'none', fontFamily: 'inherit', color: DARK, background: '#fff',
 };
+
+// Small captioned wrapper for a form control — a tiny uppercase label over its input, so the
+// un-conflated fields (Price type vs Per unit, Category, Transport mode) read clearly. flex:1 so
+// two sit side-by-side.
+function FieldLabel({ text, children }: { text: string; children: React.ReactNode }) {
+  return (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <p style={{ fontSize: '0.625rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 3px' }}>
+        {text}
+      </p>
+      {children}
+    </div>
+  );
+}
 
 // Collapsible card. Each card owns its OWN open state (RULE 2b, ledger #50): toggling one NEVER
 // closes another — no shared accordion, multiple open at once, owner may expand everything (free
@@ -101,19 +119,26 @@ interface ServiceOffering {
   sort_order: number;
 }
 
-const CATEGORY_LABEL: Record<string, string> = {
-  transport:    'Transport',
-  addon:        'Add-on',
-  maintenance:  'Maintenance',
-  inspection:   'Inspection',
-  subscription: 'Subscription',
-};
+// Edit-form shape — extends the old name/price/compliance set with the attach-rule fields
+// (category · price_type · price_unit · transport_mode · requires_address · trigger_transport_mode)
+// so an owner can FIX a mis-shaped service (e.g. move a fused row's category), not just rename it.
+interface EditForm {
+  name: string;
+  description: string;
+  price: string;
+  category: string;
+  price_type: string;
+  price_unit: string;
+  transport_mode: string;
+  requires_address: boolean;
+  trigger_transport_mode: string;
+  compliance_title: string;
+  compliance_body: string;
+  service_note: string;
+}
 
-const TIMING_LABEL: Record<string, string> = {
-  at_checkout:   'At checkout',
-  post_purchase: 'After sale',
-  recurring:     'Recurring',
-};
+// CATEGORY_LABEL / TIMING_LABEL now come from the shared serviceOfferingEnums module
+// (imported above) — the ONE generic source for every service-editor surface (AC-1).
 
 interface SettingsProps {
   // Optional: the persistent breadcrumb (AppLayout) is the canonical "up" affordance now, so the
@@ -201,7 +226,12 @@ export function Settings({
   const [offerings, setOfferings]         = useState<ServiceOffering[]>([]);
   const [offeringsLoading, setOfferingsLoading] = useState(true);
   const [editingId, setEditingId]         = useState<string | null>(null);
-  const [editForm, setEditForm]           = useState({ name: '', description: '', price: '', compliance_title: '', compliance_body: '', service_note: '' });
+  const [editForm, setEditForm]           = useState<EditForm>({
+    name: '', description: '', price: '',
+    category: 'addon', price_type: 'per_unit', price_unit: 'plant',
+    transport_mode: 'staff', requires_address: false, trigger_transport_mode: '',
+    compliance_title: '', compliance_body: '', service_note: '',
+  });
   const [savingOffering, setSavingOffering] = useState(false);
 
   // Add-new form
@@ -212,6 +242,10 @@ export function Settings({
   const [newCategory, setNewCategory]     = useState('addon');
   const [newTiming, setNewTiming]         = useState('at_checkout');
   const [newPriceType, setNewPriceType]   = useState('per_unit');
+  const [newPriceUnit, setNewPriceUnit]   = useState('plant');   // DISTINCT from price_type — no longer derived
+  const [newTransportMode, setNewTransportMode]       = useState('staff'); // only when category=transport
+  const [newRequiresAddress, setNewRequiresAddress]   = useState(false);   // only when category=transport
+  const [newTriggerMode, setNewTriggerMode]           = useState('');      // '' = always show; only when category=addon
   const [addingOffering, setAddingOffering] = useState(false);
 
   useEffect(() => {
@@ -244,6 +278,12 @@ export function Settings({
       name:              o.name,
       description:       o.description       ?? '',
       price:             String(o.price),
+      category:          o.category,
+      price_type:        o.price_type,
+      price_unit:        o.price_unit,
+      transport_mode:    o.transport_mode ?? 'staff',
+      requires_address:  o.requires_address,
+      trigger_transport_mode: o.trigger_transport_mode ?? '',
       compliance_title:  (o as any).compliance_title  ?? '',
       compliance_body:   (o as any).compliance_body   ?? '',
       service_note:      (o as any).service_note      ?? '',
@@ -255,18 +295,42 @@ export function Settings({
     setSavingOffering(true);
     const price = parseFloat(editForm.price);
     if (isNaN(price)) { setSavingOffering(false); return; }
-    console.log('[TRACE:SERVICE] save', { businessId, serviceId: editingId, action: 'edit' });
+    const isTransport = editForm.category === 'transport';
+    const isAddon     = editForm.category === 'addon';
+    // Category-scoped rules: transport carries transport_mode + requires_address; an addon can be
+    // gated by trigger_transport_mode. Clear the ones that don't apply so moving a service between
+    // categories can't leave a stale rule behind.
+    const transport_mode         = isTransport ? editForm.transport_mode : null;
+    const requires_address       = isTransport ? editForm.requires_address : false;
+    const trigger_transport_mode = isAddon && editForm.trigger_transport_mode ? editForm.trigger_transport_mode : null;
+    // [TRACE:SERVICE] log the un-conflated rule being written.
+    console.log('[TRACE:SERVICE] save', {
+      businessId, serviceId: editingId, action: 'edit',
+      category: editForm.category, price_type: editForm.price_type, price_unit: editForm.price_unit,
+      transport_mode, trigger_transport_mode, requires_address,
+    });
     await supabase.from('service_offerings').update({
       name:             editForm.name.trim(),
       description:      editForm.description.trim()      || null,
       price,
+      category:         editForm.category,
+      price_type:       editForm.price_type,
+      price_unit:       editForm.price_unit,
+      transport_mode,
+      requires_address,
+      trigger_transport_mode,
       compliance_title: editForm.compliance_title.trim() || null,
       compliance_body:  editForm.compliance_body.trim()  || null,
       service_note:     editForm.service_note.trim()     || null,
     }).eq('id', editingId);
     setOfferings(prev => prev.map(o =>
       o.id === editingId
-        ? { ...o, name: editForm.name.trim(), description: editForm.description.trim() || null, price }
+        ? {
+            ...o,
+            name: editForm.name.trim(), description: editForm.description.trim() || null, price,
+            category: editForm.category, price_type: editForm.price_type, price_unit: editForm.price_unit,
+            transport_mode, requires_address, trigger_transport_mode,
+          }
         : o
     ));
     setEditingId(null);
@@ -284,6 +348,16 @@ export function Settings({
     setAddingOffering(true);
     const price = parseFloat(newPrice);
     if (isNaN(price)) { setAddingOffering(false); return; }
+    const isTransport = newCategory === 'transport';
+    const isAddon     = newCategory === 'addon';
+    // [TRACE:SERVICE] log the un-conflated rule being written (category · price_type · price_unit).
+    console.log('[TRACE:SERVICE] save', {
+      businessId, action: 'add',
+      category: newCategory, price_type: newPriceType, price_unit: newPriceUnit,
+      transport_mode: isTransport ? newTransportMode : null,
+      trigger_transport_mode: isAddon && newTriggerMode ? newTriggerMode : null,
+      requires_address: isTransport ? newRequiresAddress : false,
+    });
     const { data, error } = await supabase.from('service_offerings').insert({
       business_id:  businessId,
       name:         newName.trim(),
@@ -291,19 +365,25 @@ export function Settings({
       category:     newCategory,
       timing:       newTiming,
       price_type:   newPriceType,
-      price_unit:   newPriceType === 'per_unit' ? 'plant' : 'order',
+      price_unit:   newPriceUnit,   // OWNER-SET, no longer derived from price_type
       price,
+      // transport_mode is only meaningful for a transport service (self triggers netting).
+      transport_mode:         isTransport ? newTransportMode : null,
+      // trigger_transport_mode gates an addon to a chosen transport mode ('' = always show).
+      trigger_transport_mode: isAddon && newTriggerMode ? newTriggerMode : null,
+      // a delivery/install service needs a destination address.
+      requires_address:       isTransport ? newRequiresAddress : false,
       is_active:    true,
       pre_selected: false,
       sort_order:   offerings.length + 10,
     }).select('*').single();
 
     if (!error && data) {
-      // [TRACE:SERVICE] insert scoped to the ACTIVE business_id (from useBusinessContext). ON by default (STD-003).
-      console.log('[TRACE:SERVICE] save', { businessId, serviceId: (data as ServiceOffering).id, action: 'add' });
       setOfferings(prev => [...prev, data as ServiceOffering]);
       setNewName(''); setNewDesc(''); setNewPrice('');
-      setNewCategory('addon'); setNewTiming('at_checkout'); setNewPriceType('per_unit');
+      setNewCategory('addon'); setNewTiming('at_checkout');
+      setNewPriceType('per_unit'); setNewPriceUnit('plant');
+      setNewTransportMode('staff'); setNewRequiresAddress(false); setNewTriggerMode('');
       setShowAddForm(false);
     }
     setAddingOffering(false);
@@ -553,25 +633,62 @@ export function Settings({
 
                   <input value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Description (optional)" style={{ ...inputStyle, marginBottom: 8 }} />
 
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                    <select value={newCategory} onChange={e => setNewCategory(e.target.value)} style={{ ...inputStyle, flex: 1, marginBottom: 0 }}>
-                      <option value="addon">Add-on</option>
-                      <option value="maintenance">Maintenance</option>
-                      <option value="inspection">Inspection</option>
-                      <option value="subscription">Subscription</option>
-                    </select>
-                    <select value={newTiming} onChange={e => setNewTiming(e.target.value)} style={{ ...inputStyle, flex: 1, marginBottom: 0 }}>
-                      <option value="at_checkout">At checkout</option>
-                      <option value="post_purchase">After sale</option>
-                      <option value="recurring">Recurring</option>
-                    </select>
-                    <select value={newPriceType} onChange={e => setNewPriceType(e.target.value)} style={{ ...inputStyle, flex: 1, marginBottom: 0 }}>
-                      <option value="per_unit">Per unit</option>
-                      <option value="flat">Flat fee</option>
-                    </select>
+                  {/* Category (full schema set, incl. Transport) + timing */}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <FieldLabel text="Category">
+                      <select value={newCategory} onChange={e => setNewCategory(e.target.value)} style={{ ...inputStyle, marginBottom: 0 }}>
+                        {CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    </FieldLabel>
+                    <FieldLabel text="Timing">
+                      <select value={newTiming} onChange={e => setNewTiming(e.target.value)} style={{ ...inputStyle, marginBottom: 0 }}>
+                        {TIMING_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    </FieldLabel>
                   </div>
 
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  {/* Price rule — price_type (how) and price_unit (what one unit is) are SEPARATE */}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <FieldLabel text="Price type">
+                      <select value={newPriceType} onChange={e => setNewPriceType(e.target.value)} style={{ ...inputStyle, marginBottom: 0 }}>
+                        {PRICE_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    </FieldLabel>
+                    <FieldLabel text="Per unit">
+                      <select value={newPriceUnit} onChange={e => setNewPriceUnit(e.target.value)} style={{ ...inputStyle, marginBottom: 0 }}>
+                        {PRICE_UNIT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    </FieldLabel>
+                  </div>
+
+                  {/* Transport-only rules: who transports + whether an address is needed */}
+                  {newCategory === 'transport' && (
+                    <div style={{ marginBottom: 8, padding: '10px 12px', background: '#fff', borderRadius: 9, border: '1px solid #e5e7eb' }}>
+                      <FieldLabel text="Transport mode">
+                        <select value={newTransportMode} onChange={e => setNewTransportMode(e.target.value)} style={{ ...inputStyle, marginBottom: 0 }}>
+                          {TRANSPORT_MODE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      </FieldLabel>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: '0.8125rem', color: DARK, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={newRequiresAddress} onChange={e => setNewRequiresAddress(e.target.checked)} />
+                        Requires a destination address (delivery / install)
+                      </label>
+                    </div>
+                  )}
+
+                  {/* Add-on-only rule: gate this add-on to a transport mode ('' = always show) */}
+                  {newCategory === 'addon' && (
+                    <div style={{ marginBottom: 8 }}>
+                      <FieldLabel text="Show only when transport is">
+                        <select value={newTriggerMode} onChange={e => setNewTriggerMode(e.target.value)} style={{ ...inputStyle, marginBottom: 0 }}>
+                          <option value="">Always show</option>
+                          {TRANSPORT_MODE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      </FieldLabel>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                     <button
                       onClick={addOffering}
                       disabled={addingOffering || !newName.trim() || !newPrice}
@@ -715,8 +832,8 @@ interface OfferingGroupProps {
   label: string;
   offerings: ServiceOffering[];
   editingId: string | null;
-  editForm: { name: string; description: string; price: string; compliance_title: string; compliance_body: string; service_note: string };
-  setEditForm: (f: { name: string; description: string; price: string; compliance_title: string; compliance_body: string; service_note: string }) => void;
+  editForm: EditForm;
+  setEditForm: (f: EditForm) => void;
   savingOffering: boolean;
   onToggle: (id: string, current: boolean) => void;
   onEdit: (o: ServiceOffering) => void;
@@ -762,6 +879,56 @@ function OfferingGroup({
                   style={{ ...inputStyle, marginBottom: 6, padding: '8px 10px' }}
                   placeholder="Description (optional)"
                 />
+
+                {/* Attach-rule (editable) — category can be CHANGED (move between groups), and
+                    price_type / price_unit are two separate controls, no longer conflated. */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                  <FieldLabel text="Category">
+                    <select value={editForm.category} onChange={e => setEditForm({ ...editForm, category: e.target.value })} style={{ ...inputStyle, marginBottom: 0, padding: '8px 10px' }}>
+                      {CATEGORY_OPTIONS.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
+                    </select>
+                  </FieldLabel>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                  <FieldLabel text="Price type">
+                    <select value={editForm.price_type} onChange={e => setEditForm({ ...editForm, price_type: e.target.value })} style={{ ...inputStyle, marginBottom: 0, padding: '8px 10px' }}>
+                      {PRICE_TYPE_OPTIONS.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
+                    </select>
+                  </FieldLabel>
+                  <FieldLabel text="Per unit">
+                    <select value={editForm.price_unit} onChange={e => setEditForm({ ...editForm, price_unit: e.target.value })} style={{ ...inputStyle, marginBottom: 0, padding: '8px 10px' }}>
+                      {PRICE_UNIT_OPTIONS.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
+                    </select>
+                  </FieldLabel>
+                </div>
+
+                {/* Transport-only rules */}
+                {editForm.category === 'transport' && (
+                  <div style={{ marginBottom: 6, padding: '8px 10px', background: '#fff', borderRadius: 8, border: '1px solid #e5e7eb' }}>
+                    <FieldLabel text="Transport mode">
+                      <select value={editForm.transport_mode} onChange={e => setEditForm({ ...editForm, transport_mode: e.target.value })} style={{ ...inputStyle, marginBottom: 0, padding: '8px 10px' }}>
+                        {TRANSPORT_MODE_OPTIONS.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
+                      </select>
+                    </FieldLabel>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: '0.8125rem', color: DARK, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={editForm.requires_address} onChange={e => setEditForm({ ...editForm, requires_address: e.target.checked })} />
+                      Requires a destination address (delivery / install)
+                    </label>
+                  </div>
+                )}
+
+                {/* Add-on-only rule: gate this add-on to a transport mode ('' = always show) */}
+                {editForm.category === 'addon' && (
+                  <div style={{ marginBottom: 6 }}>
+                    <FieldLabel text="Show only when transport is">
+                      <select value={editForm.trigger_transport_mode} onChange={e => setEditForm({ ...editForm, trigger_transport_mode: e.target.value })} style={{ ...inputStyle, marginBottom: 0, padding: '8px 10px' }}>
+                        <option value="">Always show</option>
+                        {TRANSPORT_MODE_OPTIONS.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
+                      </select>
+                    </FieldLabel>
+                  </div>
+                )}
+
                 <p style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '8px 0 4px' }}>
                   Compliance notice (optional)
                 </p>

@@ -99,6 +99,22 @@ export type {
 // (CostToProduceSettings recurring rows, BusinessAssets capital rows) so they can't drift.
 export { CATEGORY_OPTS, UNCATEGORIZED, categoryLabel } from './costCategories';
 
+// service_offerings schema enums (all-vertical, AC-1) — the ONE option-set for the
+// service editor's category / price_type / price_unit / transport_mode selects, sourced
+// from the migration column CHECKs so the picker can't offer or omit a rejected value.
+export {
+  CATEGORY_OPTIONS,
+  TIMING_OPTIONS,
+  PRICE_TYPE_OPTIONS,
+  PRICE_UNIT_OPTIONS,
+  TRANSPORT_MODE_OPTIONS,
+  CATEGORY_LABEL,
+  TIMING_LABEL,
+  PRICE_UNIT_LABEL,
+  TRANSPORT_MODE_LABEL,
+} from './serviceOfferingEnums';
+export type { EnumOption } from './serviceOfferingEnums';
+
 // Customer find-or-create — the ONE shared customer write (cart + OCR-invoice both call it).
 // Extracted from api/orders/submit.ts so a customer can be created without an order (Wave 2).
 export { findOrCreateCustomer } from './customerUpsert';

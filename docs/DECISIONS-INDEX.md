@@ -4,7 +4,10 @@
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.
 
-**Last updated:** 2026-07-08 (RESTORE transport/netting/decline workflow — added §4b CHECKOUT / ORDER-FLOW
+**Last updated:** 2026-07-08 (SETTINGS SERVICE EDITOR — expose all service_offerings categories (+ transport) +
+un-conflate `price_type`/`price_unit` on create AND edit, category now editable, category-scoped rule fields surfaced;
+NEW generic enum module `serviceOfferingEnums.ts`. Unblocks §4b's demo-data reshape (the "separate Settings-editor task").
+drift-watch updated. Earlier: RESTORE transport/netting/decline workflow — added §4b CHECKOUT / ORDER-FLOW
 WORKFLOWS with the canonical spec `docs/specs/SPEC-transport-netting-decline-workflow-2026-07-08.md`; drift-watch
 updated. Earlier: PURCHASE-OFF-STOCK-LINE built — the D-34 drift row flipped from
 "DECIDED (build owed)" to **BUILDER-COMPLETE (M2 GATED)**; earlier same day: D-34 "lot is the SKU"
@@ -20,6 +23,17 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-08 · SETTINGS SERVICE EDITOR — categories + un-conflate price_type/price_unit, create+edit):**
+> No drift — abided by **AC-1** (the category / price_type / price_unit / transport_mode option lists are the GENERIC
+> schema enums, sourced from the migration column CHECKs into ONE shared `serviceOfferingEnums.ts`; no vertical noun — a
+> vertical supplies service ROWS, never enum members), **AC-3** (owner-fenced `service_offerings` RLS unchanged; writes
+> scoped to the active business_id), **§8 configuration philosophy** (owner can now shape any service entirely in the UI:
+> the fields are available, visible, and propagate immediately — no migration), **D-9 Surface Honesty** (prices are
+> OWNER-SET and always editable; the editor invents no number, and moving a service between categories clears the rule
+> fields that no longer apply so no stale/mis-charging rule lingers), **§6 rule 11 / 12-fn ceiling** (ZERO new `api/`
+> file — rides the existing insert/update; ZERO migration — every column already exists). This is the "separate
+> Settings-editor task" §4b/ROW #97 named — it UNBLOCKS the restored transport/netting workflow's demo-data reshape.
+>
 > ✅ **Drift watch (2026-07-08 · RESTORE transport/netting/decline workflow + canonical spec):** No drift — this
 > RESTORES the May-18 proven workflow (recovered from git `0897e00`/`5aeff86`/`8764b39`/`0041769`) onto the current
 > service_offerings model and gives it a canonical spec home (docs/specs/SPEC-transport-netting-decline-workflow) so it

@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-06-30 (THUNDER COUNT-SIDE SIZE-PICKER [ledger #72] — built the L5 NEED_CLARIFICATION seam in InventoryCount.tsx: a same-name multi-size scan now surfaces a size-picker → count routes to that exact per-size business_inventory row, instead of regressing to AMBIGUOUS→UNKNOWN. APP CODE ONLY, no schema/migration/PAT [20260628 already applied]; #61 single-match path untouched; reversible service-key seed scripts/seed-size-variants.mjs round-trip 9/9; npm run verify zero NET-NEW. Per-size catalog population now UNBLOCKED, gated on this picker's phone owner-prove.)
+# Last updated: 2026-07-08 (THUNDER SETTINGS SERVICE EDITOR [ledger #98] — expose ALL service_offerings categories (+ transport) + un-conflate price_type/price_unit on BOTH create and edit, category now editable, category-scoped rule fields (transport_mode/requires_address/trigger) surfaced; NEW generic enum module packages/shared/src/business-logic/serviceOfferingEnums.ts (AC-1, sourced from migration CHECKs). APP CODE ONLY, ZERO migration / ZERO new api-fn (12/12); npm run verify exit 0 zero NET-NEW (eslint 251→250 re-baselined). UNBLOCKS #97's demo-data reshape (delivery+planting as two correctly-ruled services, entirely in the UI); satisfies the in-store purchase-workflow story MAPS-TO 2.1. UNCOMMITTED — David commits.)
 # Current AI: Claude Code
 
 ---
@@ -322,6 +322,22 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-07-08 — THUNDER SETTINGS SERVICE EDITOR: expose ALL categories (+ transport) + un-conflate `price_type`/`price_unit`, both CREATE and EDIT — UNBLOCKS #97's demo-data reshape (BUILDER-COMPLETE, owner-proof owed; APP CODE ONLY, ZERO migration, ZERO new api-fn)
+
+**Type:** App code — `packages/shared/src/pages/Settings.tsx` (service create + edit forms) + 1 NEW generic enum module `packages/shared/src/business-logic/serviceOfferingEnums.ts` (+ barrel export) + docs. **NO schema** (every `service_offerings` column already exists — verified from `20260529_businesses_f_service_offerings.sql` before building), **NO new `api/` file** (rides the existing insert/update; 12/12 HELD), AC-3 owner-fenced RLS unchanged. `[TRACE:SERVICE]` ON (already present; now logs the un-conflated rule). `npm run verify` **exit 0 zero NET-NEW** — and the baseline IMPROVED (eslint 251→**250**, removed the dead local `CATEGORY_LABEL` const; re-baselined + locked); tsc 6 / knip 10·14·15 == baseline; `build:cultivar` clean 2338 modules. **UNCOMMITTED — David commits** (harness rule). This is the **"separate Settings-editor task" ROW #97 / DECISIONS-INDEX §4b named** — it un-blocks the restored transport/netting workflow's demo-data reshape.
+
+**STORY-CITED (MAPS-TO 2.1):** satisfies the in-store purchase-workflow story (`user_stories.md`, ARC delivery) — specifically its "delivery + planting as two correctly-ruled services" requirement. Flow-spec §5/§6 (fulfillment: delivery-only vs delivery-with-planting) + §8 (config philosophy: opinionated defaults, always configurable, VISIBLE, propagate immediately) read before building. The owner could NOT create/fix those two services today because the editor was incomplete.
+
+**RECON-CONFIRMED GAPS CLOSED (built to the prior Settings-editor recon, not re-reconned):**
+- **STEP 1 — CATEGORY (both forms):** the category dropdown OMITTED `transport` → now the full schema set (transport / addon / maintenance / inspection / subscription) on BOTH the New Service and Edit forms, and **category is now EDITABLE** (Edit couldn't change category → a mis-categorized/fused service could never be fixed; now it can be moved between groups). Option list is sourced from the shared enum module, not an inline list (AC-1 — generic schema enums; a vertical supplies service ROWS, never enum members).
+- **STEP 2 — UN-CONFLATE `price_type` / `price_unit` (both forms):** the single "per unit / flat fee" control conflated the two DB fields and hardcoded `price_unit='plant'`. Split into TWO owner-set controls — `price_type` (flat | per_unit) and `price_unit` (order | plant | vehicle | visit); no longer derived. Delivery = flat/order, planting = per_unit/plant, inspection = flat/visit, etc.
+- **STEP 3 — CATEGORY-SCOPED RULE FIELDS surfaced (both forms):** category=transport → `transport_mode` (self | staff) + `requires_address`; category=addon → `trigger_transport_mode` gate ('' = always show). Fields render only for the category they apply to (not a wall of columns), and on save the ones that don't apply are CLEARED — so a service moved between categories can't carry a stale/mischarging rule.
+- **NEW `packages/shared/src/business-logic/serviceOfferingEnums.ts`** — the ONE generic option-set (CATEGORY/TIMING/PRICE_TYPE/PRICE_UNIT/TRANSPORT_MODE), sourced from the migration column CHECKs so the picker can never offer or omit a rejected value; exported from the business-logic barrel. Reported per the STEP-0 constraint (introduced ONE generic source).
+
+**STANDING RULE encoded (§8 + D-9 Surface Honesty):** prices are OWNER-SET and always editable; the editor invents no number; every field stays editable after seed.
+
+**OWNER-PROVEN owed (David, after merge → Vercel READY):** create a NEW transport service (transport / flat / per order) → it appears in the Transport group; edit the fused demo row's category + price rule → shape **delivery (transport/flat/order) + planting (addon/per_unit/plant)** as two correctly-ruled services entirely in the UI, NO migration → the restored transport workflow (#97, `4f895a9`) lights up fully (branch-1 two-line math + "Delivery only" appearing). `[TRACE:SERVICE]` stays ON until owner-proven.
 
 ### 2026-07-08 — THUNDER RESTORE the transport/netting/decline workflow to the May-18 proven spec + write its canonical spec doc (recovered from git; regressed by the multi-item rewrite) — BUILDER-COMPLETE, owner-proof owed; ZERO migration, ZERO new api-fn
 
