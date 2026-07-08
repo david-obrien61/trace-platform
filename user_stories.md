@@ -228,6 +228,16 @@ PIECES: pin_infowindow, pin_edit_customer
 NEEDS: RECLASSIFIED OUT of demo-critical → POLISH (per 2026-07-03). Enhancement 2 (clickable pins → stop-info InfoWindow, with an "Edit customer" popup opening the existing `CustomerEditModal`) is RECON'd, NOT built — a nice-to-have after the demo, not a blocker.
 On the delivery map, tapping a numbered pin opens a small InfoWindow with that stop's detail (customer, address, service) and an "Edit customer" action that opens the SAME modal the delivery card uses. Deferred as polish — the route, pins, and driving line are already owner-proven (the archived "Route the day's deliveries" story). _Grounded: ARC-5 Enhancement 2 (recon'd, not built); ledger #82 CustomerEditModal (forward-fit target); board 3.5._
 
+### In-store purchase workflow — plant → transport → checkout → confirm → order
+STATUS: needs-sub-stories
+SCOPE: vertical:cultivar
+BUILD: in-build
+ARC: delivery
+MAPS-TO: 2.1
+PIECES: transport_radio, netting_decline, compliance_record, customer_capture, review_itemize, confirmation, order_roster
+NEEDS: sub-stories owed for the open gaps (roster CRUD, conditional-address-on-delivery, confirmation itemization, fallback-decline audit-row) — the core transport/decline path is written+built; these are the surfaced-but-unstoried pieces.
+Lauren rings up a customer at the lot: take a plant order, offer transport and services correctly priced, capture a netting-decline for liability, produce a confirmed order — complete, correctly priced, legally covered. Originally built + owner-proven May-18 (transport toggle, netting prompt with TX Transportation Code Ch.725, decline tracking); regressed by the multi-item rewrite; restored 2026-07-08. Transport is a single-select radio: Delivery+planting (delivery flat ×1 per order + planting per_unit ×N per plant), Delivery only (delivery ×1, no planting), No thank you / self-haul (netting offer). Netting fires ONLY on self-haul: tarp offered (size/qty is a staff judgment at the lot, system surfaces — does not auto-calc); accept adds the tarp, decline shows the Ch.725 message AND writes an immutable liability record (who/what/when/sale) — the legal shield, the Regina-story origin mechanic, must persist not merely display. Deep flow detail lives in docs/user-stories/cultivar-flows-and-contractor-program-2026-06-03.md §5 (online) + §6 (in-person QR); canonical behavior in docs/specs/SPEC-transport-netting-decline-workflow-2026-07-08.md. _Grounded: restore commit (#97), lib/transport.ts, order_compliance_records; as-built recon docs/decisions/2026-07-08-as-built-purchase-workflow.md._
+
 ---
 
 ## ARC: discovery
