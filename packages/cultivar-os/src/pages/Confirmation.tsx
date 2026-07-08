@@ -64,7 +64,14 @@ export function Confirmation() {
 
   const isSelf      = (transportMode ?? 'self') === 'self';
   const nettingOn   = !!nettingActive;
+  // A QB invoice object is NOT required to confirm — the order already exists. When QB is
+  // absent (not connected / 503 / error → qbStatus 'pending', no invoice id) we render the
+  // honest "invoice will follow" state, never a crash and never a blank. (Bug 2 hard req.)
   const qbConnected = qbStatus === 'success' && !!qbInvoiceId;
+  if (!qbConnected) {
+    console.log('[TRACE:CHECKOUT] confirmation rendering WITHOUT a QB invoice — degraded state, no crash',
+      { orderId: state.orderId, qbStatus: qbStatus ?? 'pending', payOnline });
+  }
   const displayQbNumber = qbInvoiceNumber || qbInvoiceId || '—';
 
   function handleDone() {

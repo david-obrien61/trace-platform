@@ -21,7 +21,12 @@ export function PlantHero({ plant }: PlantHeroProps) {
   const inv = plant.business_inventory;
   const age = inv?.received_at ? formatAge(inv.received_at) : null;
   const inventoryStatus = inv?.status ?? null;
-  const unitCost = inv?.unit_cost ?? 0;
+  // D-35: the customer-facing price is the stored sell_price (retail), NEVER unit_cost
+  // (what the grower PAID — cost stays behind view_costs, never on this page). On null/0
+  // we show an honest "Price not set" — we do NOT fall back to cost and do NOT show $0
+  // (Surface Honesty / D-9, the same treatment as the cart's $0-refusal).
+  const sellPrice = inv?.sell_price ?? 0;
+  console.log('[TRACE:PRICE] profile price read (PlantHero) column=sell_price', { plantId: plant.id, sellPrice });
 
   return (
     <div>
@@ -74,16 +79,21 @@ export function PlantHero({ plant }: PlantHeroProps) {
           <Stat label="Warranty" value={`${plant.warranty_months} months`} />
         </div>
 
-        {/* Pricing — from business_inventory.unit_cost via inventory_id join */}
-        {unitCost > 0 && (
-          <div style={{
-            background: 'var(--sage-bg)',
-            borderRadius: 10,
-            padding: '14px 16px',
-          }}>
-            <PriceLine label="Plant price" amount={unitCost} large />
-          </div>
-        )}
+        {/* Pricing — the stored sell_price (retail), NEVER unit_cost (cost). Honest on null/0. */}
+        <div style={{
+          background: 'var(--sage-bg)',
+          borderRadius: 10,
+          padding: '14px 16px',
+        }}>
+          {sellPrice > 0 ? (
+            <PriceLine label="Price" amount={sellPrice} large />
+          ) : (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <span style={{ fontSize: '1rem', color: 'var(--gray-800)' }}>Price</span>
+              <span style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--gray-400)' }}>Not set</span>
+            </div>
+          )}
+        </div>
 
         {plant.notes && (
           <p style={{ marginTop: 12, fontSize: '0.875rem', color: 'var(--gray-600)' }}>

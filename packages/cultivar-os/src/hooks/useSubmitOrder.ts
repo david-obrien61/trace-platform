@@ -78,10 +78,15 @@ export function useSubmitOrder() {
           qbInvoiceUrl    = qbData.qb_invoice_url   ?? undefined;
           qbStatus        = qbData.success === true ? 'success' : 'pending';
         } else {
-          console.warn('[QB] invoice creation failed:', await qbRes.text());
+          // QB not connected / token expired / QB error (incl. 503). NON-BLOCKING: the order
+          // is already created — leave qbStatus 'pending' so confirmation renders "invoice to
+          // follow" WITHOUT a QB invoice object. Never throws to the UI. (Bug 2 hard req.)
+          console.log('[TRACE:CHECKOUT] QBO invoice unavailable — degraded gracefully, did NOT throw',
+            { status: qbRes.status, qbStatus: 'pending', orderId, detail: await qbRes.text().catch(() => '') });
         }
       } catch (qbErr) {
-        console.warn('[QB] invoice call threw:', qbErr);
+        console.log('[TRACE:CHECKOUT] QBO invoice call threw — caught, degraded gracefully, order stands',
+          { qbStatus: 'pending', orderId, error: qbErr instanceof Error ? qbErr.message : String(qbErr) });
       }
 
       // ── Order confirmation email — non-blocking ──────────────────────────

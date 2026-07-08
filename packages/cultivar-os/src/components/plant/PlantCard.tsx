@@ -31,9 +31,10 @@ export function PlantCard({ plant }: PlantCardProps) {
           </div>
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          {plant.business_inventory?.unit_cost != null && (
+          {/* D-35: customer-facing price = sell_price (retail), NEVER unit_cost (cost). */}
+          {(plant.business_inventory?.sell_price ?? 0) > 0 && (
             <div style={{ fontWeight: 700, color: 'var(--green-primary)' }}>
-              ${plant.business_inventory.unit_cost.toLocaleString()}
+              ${plant.business_inventory!.sell_price!.toLocaleString()}
             </div>
           )}
           {plant.business_inventory?.status && (

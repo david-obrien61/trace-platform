@@ -18,6 +18,13 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-08 · TWO owner-prove-surfaced bug fixes — profile cost-leak + QBO-absent crash):** No drift —
+> abided by the **cost wall / D-9 Surface Honesty** (the customer-facing profile now shows `sell_price`, NEVER `unit_cost`;
+> `unit_cost` stays only on view_costs owner surfaces; null/0 → honest "Not set", never $0, never cost) and **D-9 fail-loud-not-
+> silent** (a QBO failure degrades to an honest "invoice will follow" confirmation with `[TRACE:CHECKOUT]`, never a blank crash).
+> **AC-3** (business_id-scoped reads unchanged). ZERO new `api/` file (12/12 held), ZERO schema. Surfaced R3 as a design flag for
+> David (pay-at-office fires the QBO call on both pay paths) — flagged, not decided; crash-proof regardless.
+>
 > ✅ **Drift watch (2026-07-08 · MULTI-ITEM SCAN-LOOP CART + NETTING build):** No drift — abided by **D-34**
 > (each cart line reuses the proven per-line `stock_line_id`/`plant_id` anchor branch — extended to loop N,
 > not forked), **Item-1 sell_price** (D-35: cart reads `sell_price`, server-authoritative per line, $0 refused
