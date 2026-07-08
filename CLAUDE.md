@@ -84,6 +84,7 @@ instance of the same shared platform.
 6. packages/ignition-os is now an active build target — treat it like cultivar-os
 7. Never end a session without updating this Handoff section
 8. Commit after every completed task
+9. **Commit → push are ONE action (standing rule, David 2026-07-08).** Every `git commit` is IMMEDIATELY followed by `git push` to origin — never leave a commit sitting unpushed. The default is commit-and-push together; only skip the push if David explicitly says "hold" (or "commit only / don't push"). This makes "commit" mean "commit + push" everywhere in this doc (rule 8 above, §9 close-out, every build handoff). See [[feedback-always-push]].
 
 ---
 
