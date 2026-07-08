@@ -312,7 +312,9 @@
 ## 📋 24-CAPABILITY BOARD — the full platform map (L1–L5)
 
 > Grouped by layer (fixed grouping). Each cap: `[●] id name · reuse/Ignition tag · → feeder`. Reconciled to today's code from `docs/CAPABILITY-PACKAGE-GROUNDTRUTH.md` (2026-06-19 baseline 7 live/8 partial/9 net-new).
-> **Today: 9 live · 9 partial · 8 net-new** — moved since baseline: 3.5 partial→🟢 (delivery loop closed 06-20); 1.2 + 1.3 net-new→🟡 (built 06-19/06-21, owner-proof owed); **NEW 3.7 Customer management 🟢 (OWNER-PROVEN 2026-07-03)**.
+> **Today: 8 live · 10 partial · 8 net-new** — moved since baseline: 3.5 partial→🟢 (delivery loop closed 06-20); 1.2 + 1.3 net-new→🟡 (built 06-19/06-21, owner-proof owed); **NEW 3.7 Customer management 🟢 (OWNER-PROVEN 2026-07-03)**; **2.1 QR Checkout 🟢→🟡 (2026-07-08 — CAPPED by hardcoded debt: 8 open register items, led by the QB stub).**
+>
+> **⛔ HARDCODED-DEBT RULE (binding — CLAUDE.md §6 rule 12):** 🟢 = done AND no open hardcoded debt. A capability with ANY open item in [`docs/decisions/HARDCODED-REGISTER.md`](../docs/decisions/HARDCODED-REGISTER.md) is **CAPPED AT AMBER** and shows its debt count (`⛔ hardcoded-debt: N`) until every item is cleared (reads from data) or documented-with-reason. The `status.html` renderer enforces this — a row marked `⛔ hardcoded-debt: N` renders amber even if its dot is green.
 
 | ● | Cap | State / note | → feeder |
 |---|---|---|---|
@@ -322,7 +324,7 @@
 | 🟡 | **1.3** Clear→real catalog-populate (D-9) | built 06-21 (114 real LAWNS varieties), migration-gated | `discovery/catalog.ts` |
 | 🟡 | **1.4** AI-assisted questions→config | partial — scaffolding only; answer-capture/setup-write [M] | GROUNDTRUTH 1.4 |
 | 🟡 | **1.5** Handshake (one auth, two products) | one auth live; `business_discovery_profiles` applied; Person-spine 06-25 advances identity | GROUNDTRUTH 1.5 |
-| 🟢 | **2.1** Cart / QR checkout (no money) | live | built-inventory 2.1 |
+| 🟡 | **2.1** Cart / QR checkout (no money) | live capability, ⛔ hardcoded-debt: 8 — capped amber (QB stub `DemoQBInvoice` / hardcoded LAWNS footer / branch-label-on-receipt + 5 more; see HARDCODED-REGISTER.md) → clears to 🟢 when the 8 open items are fixed/reasoned | built-inventory 2.1 · HARDCODED-REGISTER.md |
 | 🟢 | **2.2** Compliance / netting (TX Ch.725) | live, persisted + immutable | `order_compliance_records` |
 | 🟡 | **2.3** Walk-and-count inventory | LOOP BUILT (scan→qty→save→next→complete, `InventoryCount`+`QrScanner`/jsQR) + OFFLINE-CAPABLE (ledger #57 — shared `sync/`: dead-zone Save queues + drains, identity-stamp, double-count surfacing) + **RESOLVE L4 token-set EQUALITY (ledger #61 — shared `canonicalName.ts`, fixes the LAWNS FALSE-UNKNOWN; EQUALITY-only, guarded-fuzzy L5/L6 = fast-follow)** + **SIZE VARIANTS captured catalog-side (ledger #62, `9f1063e` — `extractSizeVariants` deterministic, one `business_inventory` row per variety×size, `variant_group`=slug; migration `20260628` APPLIED) + COUNT-SIDE SIZE-PICKER 🟢 OWNER-PROVEN 2026-06-30 (ledger #72, `InventoryCount.tsx` — L5 NEED_CLARIFICATION seam: same-name multi-size scan → size-picker → routes to that per-size row; pure `detectSizeCollision`; #61 single-match untouched; David iPhone trail `trace-capture-1782840727687`, routing verified by UUID, fixtures `--clear`'d; seed round-trip 9/9; ⇒ per-size population (`populate.ts`) UNBLOCKED)**; OCR-intake sibling still NEXT | ledger #54 · #57 · #61 · #62 · #72 · `walk-and-count-inventory-verify-first.md` · `2026-06-27-discovery-size-variants.md` |
 | 🟢 | **3.1** Leakage / missed-upsell visibility | live | Dashboard leakage tile |

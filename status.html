@@ -12,6 +12,11 @@
   Delete the .md and this shows "no data", never a stale board.
   Open: double-click → "Open TRACE-SESSION-BOOTSTRAP.md" (or drag-drop it).
 
+  ⛔ HARDCODED-DEBT CAP (CLAUDE.md §6 rule 12): a 24-board row whose note carries
+  "⛔ hardcoded-debt: N" (N>0) is FORCED to render amber even if its dot is green —
+  a capability with open items in docs/decisions/HARDCODED-REGISTER.md cannot show green.
+  Enforced in parseBoard(); the register is the source of which capability owns which debt.
+
   📇 DECISIONS TAB: the "Decisions" tab is ALSO a pure renderer — it parses
   docs/DECISIONS-INDEX.md (the decisions index) at open-time into color-coded cards
   (DECIDED=green · DRIFTED=amber · OPEN=red · SUPERSEDED/ref=grey). It holds no decision
@@ -151,8 +156,9 @@
     <div class="legend">
       <span class="k"><span class="dot d-red"></span>not-started / fake / broken</span>
       <span class="k"><span class="dot d-amber"></span>in-flight (wired / not-proven)</span>
-      <span class="k"><span class="dot d-green"></span>live + proven</span>
+      <span class="k"><span class="dot d-green"></span>live + proven (AND no open hardcoded debt)</span>
       <span class="k"><span class="dot d-grey"></span>conversation-only / n-a</span>
+      <span class="k">⛔ <em>hardcoded-debt caps a tile at amber</em> (HARDCODED-REGISTER.md)</span>
       <span class="srcline" id="srcline"></span>
     </div>
     <div id="viewActive"></div>
@@ -263,10 +269,14 @@ function parseBoard(mdText){
     // leading "" from the first pipe → cells: ["", emoji, cap, note, feeder, ""]
     const c = cells.filter((_,i)=>i>0 && i<cells.length-1);
     if(c.length<2) continue;
-    const color = colorOf(c[0]);
+    let color = colorOf(c[0]);
     const capCell = c[1] || "";
     const note = c[2] || "";
     const feeder = c[3] || "";
+    // ⛔ HARDCODED-DEBT RULE (CLAUDE.md §6 rule 12): a capability with open HARDCODED-REGISTER.md
+    // items is CAPPED AT AMBER — green cannot render while "⛔ hardcoded-debt: N" (N>0) is present.
+    const hd = note.match(/⛔\s*hardcoded-debt:\s*(\d+)/i);
+    if(hd && parseInt(hd[1],10) > 0 && color === "green") color = "amber";
     // id = first **bold** token; name = remainder
     let id="", name=capCell;
     const b = capCell.match(/\*\*([^*]+)\*\*\s*(.*)$/);

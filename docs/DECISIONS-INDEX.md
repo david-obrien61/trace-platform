@@ -23,6 +23,18 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-08 · build-spec pre-flight gate + hardcoded register + amber-cap rule — DOCS/board only):**
+> No drift — this session added process TEETH, wrote no app code and no migration. Landed: (1) CLAUDE.md
+> **§1.6 the 10-item build-spec pre-flight gate** (binding, folds into STEP 0 — story · hardcoded-register ·
+> validation · CRUD-with-permissions · UI/modals · AC-1..4 · 12-fn ceiling · reuse-don't-fork · TRACE-stays-on ·
+> money-safety; "not reconciled = not ready to fire"); (2) **`docs/decisions/HARDCODED-REGISTER.md`** — a living
+> checklist of hardcoded literals tagged by owning capability (11 items, cross-ref'd to the receipt/QB/leakage
+> recon, NOT duplicated); (3) CLAUDE.md **§6 rule 12** + the status board (`TRACE-SESSION-BOOTSTRAP.md` legend +
+> `status.html` `parseBoard`) enforce **"🟢 = done AND no open hardcoded debt; a tile with register items is
+> capped at amber."** Applied now: **2.1 QR Checkout dropped 🟢→🟡** (8 open items, led by the QB stub). Gives the
+> anti-hardcoding rule the teeth the as-built §6 flag lacked (flagged-never-removed = why it exists). No decision
+> settled/deferred/superseded that conflicts; these are new standing rules + a register.
+>
 > ✅ **Drift watch (2026-07-08 · #100 follow-up — order-detail "PLANTS (0)" fix):**
 > No drift — abided by **D-34** (the dedicated `order_items` fetch names every line by the LOT/specimen
 > dual anchor, reusing the same `orderItemName.ts` resolver Part A added — NOT forked), **AC-3** (the
@@ -137,6 +149,8 @@ decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenan
 | **CLOSE-OUT-LEDGER.md** | Per-build completion state (BUILDER-COMPLETE vs OWNER-PROVEN, SHA, what live test closes it). Answers "is it closed?" not "was it decided?". | [docs/CLOSE-OUT-LEDGER.md](CLOSE-OUT-LEDGER.md) |
 | **built-inventory.md** | Flat catalog of what's BUILT (capability ledger). Answers "was X built?". | [docs/built-inventory.md](built-inventory.md) |
 | **TRACE-SESSION-BOOTSTRAP.md** | The status front-page (⚡ ACTIVE STATUS · 📋 24-board · 🧵 ARC-MAP · 📚 CAPTURE INDEX). Answers "what's the current state?". | [TRACE-SESSION-BOOTSTRAP.md](../TRACE-SESSION-BOOTSTRAP.md) |
+| **HARDCODED-REGISTER.md** | Living checklist of hardcoded tenant/vertical literals that should be data (AC-1), tagged by owning capability. A tile with any OPEN item is CAPPED AT AMBER (CLAUDE.md §6 rule 12 + §1.6 gate item 2). Answers "what fake/leaked literals block this tile from green?". | [docs/decisions/HARDCODED-REGISTER.md](decisions/HARDCODED-REGISTER.md) |
+| **Build-spec pre-flight gate (§1.6)** | The 10-item binding checklist every build spec reconciles (scoped to touched files) before firing: story · hardcoded-register · validation · CRUD-with-permissions · UI/modals · AC-1..4 · 12-fn ceiling · reuse-don't-fork · TRACE-stays-on · money-safety. "Not reconciled = not ready to fire." | [CLAUDE.md](../CLAUDE.md) §1.6 |
 
 ---
 
