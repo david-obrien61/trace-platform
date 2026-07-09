@@ -4,10 +4,12 @@
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.
 
-**Last updated:** 2026-07-08 (SETTINGS SERVICE EDITOR — expose all service_offerings categories (+ transport) +
-un-conflate `price_type`/`price_unit` on create AND edit, category now editable, category-scoped rule fields surfaced;
-NEW generic enum module `serviceOfferingEnums.ts`. Unblocks §4b's demo-data reshape (the "separate Settings-editor task").
-drift-watch updated. Earlier: RESTORE transport/netting/decline workflow — added §4b CHECKOUT / ORDER-FLOW
+**Last updated:** 2026-07-08 (RECEIPT/QB-PREVIEW/LEAKAGE + tile-2.1 hardcoded SWEEP — QB preview order-backed, receipt
+services by real name, real QB push dual-anchor, attributed price-override leakage [Ignition pattern + reason], all 8
+tile-2.1 register items CLEARED → 2.1 restored 🟢; drift-watch added. Earlier: SETTINGS SERVICE EDITOR — expose all
+service_offerings categories (+ transport) + un-conflate `price_type`/`price_unit` on create AND edit, category now editable,
+category-scoped rule fields surfaced; NEW generic enum module `serviceOfferingEnums.ts`. Unblocks §4b's demo-data reshape.
+Earlier: RESTORE transport/netting/decline workflow — added §4b CHECKOUT / ORDER-FLOW
 WORKFLOWS with the canonical spec `docs/specs/SPEC-transport-netting-decline-workflow-2026-07-08.md`; drift-watch
 updated. Earlier: PURCHASE-OFF-STOCK-LINE built — the D-34 drift row flipped from
 "DECIDED (build owed)" to **BUILDER-COMPLETE (M2 GATED)**; earlier same day: D-34 "lot is the SKU"
@@ -23,6 +25,16 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-08 · RECEIPT/QB-PREVIEW/LEAKAGE + tile-2.1 hardcoded SWEEP):** No drift — abided by
+> **AC-1** (every business literal now resolves from the `businesses` row / `service_offerings.name`, no hardcoded
+> tenant/vertical), **AC-3** (business-scoped reads), **D-9** (netting `?? 10` → real price; footer omitted not faked
+> under anon RLS), **D-34** (dual-anchor naming reused via `orderItemName.ts`, 3rd reuse — not forked), **MB_D-015**
+> (price override honored only on a token-verified owner/manager caller; public path server-authoritative + tamper-
+> defended), and **§6 rule 12** (the anti-hardcoding TEETH — all 8 flagged tile-2.1 literals were CLEARED IN THE SAME
+> PASS that touched them, restoring 2.1 🟡→🟢; not aged on a gap board). Mirrored Ignition's shipped leakage pattern
+> (extract-don't-invent) + added a reason field. ONE gated additive migration (`20260708_service_override_leakage.sql`);
+> ZERO new api-fn (12/12 held). No decision settled/deferred/superseded that conflicts.
+>
 > ✅ **Drift watch (2026-07-08 · build-spec pre-flight gate + hardcoded register + amber-cap rule — DOCS/board only):**
 > No drift — this session added process TEETH, wrote no app code and no migration. Landed: (1) CLAUDE.md
 > **§1.6 the 10-item build-spec pre-flight gate** (binding, folds into STEP 0 — story · hardcoded-register ·
