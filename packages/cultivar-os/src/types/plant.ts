@@ -26,9 +26,10 @@ export interface Plant {
   // Populated by PostgREST FK join in usePlant — null when inventory_id is null
   business_inventory?: PlantInventory | null;
   // D-34: when set, this "plant" was synthesized from a business_inventory STOCK LINE
-  // (no cultivar_plants specimen row) — its value is the business_inventory.id. The
-  // order write anchors order_items.business_inventory_id to it (plant_id null). Absent/
-  // null ⇒ plant.id is a real cultivar_plants specimen (order anchors to plant_id).
+  // (no cultivar_plants specimen row) — its value is the business_inventory.id. Absent/
+  // null ⇒ plant.id is a real cultivar_plants specimen. Either way the order write anchors
+  // order_items.business_inventory_id (the sole line anchor — order_items.plant_id was
+  // dropped 20260709, D-36): a stock line to its own id, a specimen to its lot (inventory_id).
   stock_line_id?: string | null;
 }
 
