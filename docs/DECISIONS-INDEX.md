@@ -27,6 +27,14 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-09 · FIX 5 — service-editor required-field validation + forms/modals audit):**
+> No drift — abided by the **12-function ceiling** (§6 r11 — ZERO new `api/` file), **AC-1** (validation is a generic
+> quality primitive, no vertical noun), **§6 rule 8** (reused the shared `RED`, no color dup; the validation helpers
+> are ONE shared shape other forms copy), **D-9 Surface Honesty** (blank ≠ free — a $0 service needs `0` typed, never
+> a silent coercion), and the **story-reconciliation gate** (created the platform-validation ## NEEDED story since none
+> existed). NO schema, NO migration, ONE file + audit doc. This satisfies §1.6 pre-flight items 3 (validation) + 5
+> (modal centering) as a reference impl + a retrofit backlog. No new numbered decision.
+>
 > ✅ **Drift watch (2026-07-09 · DROP `order_items.plant_id` — AC-1 de-noun of the shared order spine, D-36):**
 > No drift — abided by **AC-1** (removed the Cultivar vertical noun `plant_id` from the SHARED `order_items` table;
 > `business_inventory_id` is the sole line anchor), **D-34** (the LOT is the SKU — the anchor), **§6 rule 8** (reused the
