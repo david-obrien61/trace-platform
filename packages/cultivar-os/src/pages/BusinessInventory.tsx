@@ -353,7 +353,8 @@ export function BusinessInventory() {
         }
       />
 
-      {/* Add Inventory bottom sheet — create path (unchanged) */}
+      {/* Add Inventory sheet — CENTERED (shared sheetStyles.modal, convention A). Create path:
+          required sell_price (D-35) + editable unit_cost (derives cost_confidence). */}
       {showForm && (
         <div style={SS.modal} onClick={e => { if (e.target === e.currentTarget) setShowForm(false); }}>
           <div style={SS.sheet}>
