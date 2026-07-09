@@ -4,8 +4,11 @@
 //               sortable, filterable, column-hideable grid — fix qty / name / size /
 //               variant_group / location / unit_cost / status inline, on the correct row.
 //               The count flow (InventoryCount.tsx) is the phone CAPTURE tool; this is the
-//               desk RECONCILE tool (banked: capture=mobile, reconcile=desktop). Create still
-//               happens via the "Add Item" bottom sheet.
+//               desk RECONCILE tool (banked: capture=mobile, reconcile=desktop). Create happens
+//               via the CENTERED "Add Item" sheet — which now REQUIRES sell_price (D-35, so nothing
+//               is born unsellable), makes unit_cost freely editable (optional), and DERIVES
+//               cost_confidence from unit_cost presence (no manual picker). Required-field validation
+//               follows the FIX 5 pattern (block + red border + inline message, never a silent save).
 // ENGINE:       Renders through the SHARED <DataSheet> engine (components/datasheet/DataSheet)
 //               — the SAME engine /assets now uses (one engine, two configs). Search/sort/
 //               column-hide/flag-highlight/expand all come from the engine; this file only
@@ -20,7 +23,9 @@
 //               (overridable); clearing the cost → UNKNOWN (Surface Honesty coherence).
 // GATE:         Inherits the /inventory VIEW_COSTS route gate + business_inventory RLS (owner_all +
 //               member_all FOR ALL under view_costs). No schema / migration / RLS touched here.
-// INSTRUMENTATION (STD-003): `[TRACE:invsheet]` on grid load + every inline write. ON BY DEFAULT.
+// INSTRUMENTATION (STD-003): `[TRACE:invsheet]` on grid load + every inline write; `[TRACE:INVENTORY]`
+//               on the Add-Item insert (sell_price + cost_confidence written) + a blocked save. `[TRACE:PRICE]`
+//               on inline sell_price edits. ON BY DEFAULT.
 // ============================================================
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -36,6 +41,38 @@ import {
 type CostConfidence = 'CONFIRMED' | 'DERIVED' | 'ESTIMATED' | 'UNKNOWN';
 const CONFIDENCE_OPTS: CostConfidence[] = ['CONFIRMED', 'DERIVED', 'ESTIMATED', 'UNKNOWN'];
 const STATUS_OPTIONS = ['available', 'reserved', 'depleted', 'damaged', 'returned'];
+
+// ── Required-field validation — the FIX 5 pattern (Settings.tsx validateServiceForm/errBorder/
+// FieldError), copied here as the shape other forms adopt (per the FIX 5 handoff: "the shape other
+// forms copy"). A save with an empty required field BLOCKS, HIGHLIGHTS the field (red border), and
+// SAYS WHY — never a silent greyed button. RED reuses the shared compliance/netting red. ──
+const RED = '#A32D2D';
+function errBorder(hasErr: boolean): React.CSSProperties {
+  return hasErr ? { borderColor: RED, boxShadow: `0 0 0 1px ${RED}` } : {};
+}
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  return <p style={{ margin: '3px 0 0', fontSize: '0.75rem', fontWeight: 600, color: RED }}>{msg}</p>;
+}
+// sell_price is REQUIRED (D-35 — nothing born unsellable). unit_cost is OPTIONAL (cost_confidence is
+// DERIVED from its presence, not entered here). qty ≥ 0. name non-blank.
+function validateInventoryForm(f: FormState): Record<string, string> {
+  const errs: Record<string, string> = {};
+  if (!f.name.trim()) errs.name = 'Name is required.';
+  const qty = parseInt(f.qty, 10);
+  if (isNaN(qty) || qty < 0) errs.qty = 'Quantity must be 0 or greater.';
+  const sp = f.sell_price.trim();
+  if (sp === '') errs.sell_price = 'Sell price is required — enter what the customer pays.';
+  else if (isNaN(parseFloat(sp))) errs.sell_price = 'Sell price must be a number.';
+  else if (parseFloat(sp) <= 0) errs.sell_price = 'Sell price must be greater than $0 so the item can be sold.';
+  return errs;
+}
+
+// Placeholder for the future margin-aware signal (docs/concepts/margin-aware-pricing-intelligence.md):
+// an advisory background color attaches to the sell_price field once cost/overhead/target data exist.
+// Empty today — the field's background is NOT hardcoded into a wall, so the indicator can attach later
+// without restructuring. NO margin math is built now; this is a plain composable style slot.
+const marginSignalStyle: React.CSSProperties = {};
 
 interface InventoryRow {
   id: string;
@@ -59,12 +96,12 @@ interface InventoryRow {
 }
 
 interface FormState {
-  name: string; sku: string; qty: string; unit_cost: string; location: string;
-  status: string; serial_number: string; cost_confidence: CostConfidence; received_at: string; notes: string;
+  name: string; sku: string; qty: string; sell_price: string; unit_cost: string; location: string;
+  status: string; serial_number: string; received_at: string; notes: string;
 }
 const EMPTY_FORM: FormState = {
-  name: '', sku: '', qty: '0', unit_cost: '', location: '',
-  status: 'available', serial_number: '', cost_confidence: 'UNKNOWN', received_at: '', notes: '',
+  name: '', sku: '', qty: '0', sell_price: '', unit_cost: '', location: '',
+  status: 'available', serial_number: '', received_at: '', notes: '',
 };
 
 function dupKey(vg: string | null, size: string | null): string | null {
@@ -94,6 +131,7 @@ export function BusinessInventory() {
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [addErrors, setAddErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -218,37 +256,43 @@ export function BusinessInventory() {
       render: r => <span style={SS.muted}>{fmtDate(r.updated_at)}</span> },
   ];
 
-  // ── Add-Item form (create path — unchanged flow) ──
+  // ── Add-Item form (create path) ──
+  // sell_price is REQUIRED (D-35). unit_cost is OPTIONAL and DERIVES cost_confidence
+  // (typed cost → CONFIRMED, blank → UNKNOWN) — no manual confidence picker on this form.
   function set(field: keyof FormState, value: string) {
-    setForm(f => {
-      const next = { ...f, [field]: value };
-      if (field === 'unit_cost' && value.trim() !== '' && f.cost_confidence === 'UNKNOWN') next.cost_confidence = 'CONFIRMED';
-      if (field === 'cost_confidence' && value === 'UNKNOWN') next.unit_cost = '';
-      return next;
-    });
+    setForm(f => ({ ...f, [field]: value }));
+    // Clear this field's validation error as the owner corrects it (FIX 5 UX).
+    setAddErrors(e => (e[field] ? { ...e, [field]: '' } : e));
   }
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!businessId) return;
-    if (!form.name.trim()) { setSaveError('Name is required.'); return; }
+    const errs = validateInventoryForm(form);
+    if (Object.values(errs).some(Boolean)) {
+      setAddErrors(errs); setSaveError(null);
+      console.log('[TRACE:INVENTORY] add BLOCKED — missing/invalid required fields', { fields: Object.keys(errs) });
+      return;
+    }
     const qty = parseInt(form.qty, 10);
-    if (isNaN(qty) || qty < 0) { setSaveError('Quantity must be 0 or greater.'); return; }
-    setSaving(true); setSaveError(null); setSaveSuccess(false);
+    // unit_cost present & numeric → CONFIRMED (manual entry accepted as confirmed data); blank → UNKNOWN.
+    // Independent of sell_price (price the owner charges vs cost the owner paid).
+    const unitCostRaw = form.unit_cost.trim();
+    const unitCost = unitCostRaw !== '' && !isNaN(parseFloat(unitCostRaw)) ? parseFloat(unitCostRaw) : null;
+    const costConfidence: CostConfidence = unitCost != null ? 'CONFIRMED' : 'UNKNOWN';
+    setSaving(true); setSaveError(null); setSaveSuccess(false); setAddErrors({});
     const payload: Record<string, unknown> = {
-      business_id: businessId, name: form.name.trim(), qty, status: form.status, cost_confidence: form.cost_confidence,
+      business_id: businessId, name: form.name.trim(), qty, status: form.status,
+      sell_price: parseFloat(form.sell_price), cost_confidence: costConfidence,
     };
+    if (unitCost != null)          payload.unit_cost     = unitCost;
     if (form.sku.trim())           payload.sku           = form.sku.trim();
     if (form.location.trim())      payload.location      = form.location.trim();
     if (form.serial_number.trim()) payload.serial_number = form.serial_number.trim();
     if (form.notes.trim())         payload.notes         = form.notes.trim();
     if (form.received_at)          payload.received_at   = form.received_at;
-    if (form.cost_confidence !== 'UNKNOWN' && form.unit_cost.trim()) {
-      const parsed = parseFloat(form.unit_cost);
-      if (!isNaN(parsed)) payload.unit_cost = parsed;
-    }
-    console.log('[TRACE:invsheet] add → insert', { name: payload.name, qty, cost_confidence: payload.cost_confidence });
+    console.log('[TRACE:INVENTORY] add → insert', { name: payload.name, qty, sell_price: payload.sell_price, unit_cost: unitCost, cost_confidence: costConfidence });
     const { error } = await supabase.from('business_inventory').insert(payload);
-    if (error) { console.error('[TRACE:invsheet] add error', error.message); setSaveError(error.message); setSaving(false); return; }
+    if (error) { console.error('[TRACE:INVENTORY] add error', error.message); setSaveError(error.message); setSaving(false); return; }
     setSaveSuccess(true); setSaving(false); setForm(EMPTY_FORM);
     setTimeout(() => { setShowForm(false); setSaveSuccess(false); loadItems(); }, 900);
   }
@@ -302,7 +346,7 @@ export function BusinessInventory() {
             <button style={SS.primaryBtn} onClick={() => navigate('/inventory/count')}>
               <ScanLine size={16} /> Start count
             </button>
-            <button style={SS.addBtn} onClick={() => { setShowForm(true); setSaveError(null); setSaveSuccess(false); }}>
+            <button style={SS.addBtn} onClick={() => { setShowForm(true); setSaveError(null); setSaveSuccess(false); setAddErrors({}); setForm(EMPTY_FORM); }}>
               <Plus size={16} /> Add Item
             </button>
           </>
@@ -321,10 +365,11 @@ export function BusinessInventory() {
             </div>
             {saveError && <div style={SS.error}>{saveError}</div>}
             {saveSuccess && <div style={SS.success}>Item saved.</div>}
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} noValidate>
               <div style={SS.field}>
                 <label style={SS.label}>Name *</label>
-                <input style={SS.input} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Fertilizer 10-10-10, Netting 6×12" required />
+                <input style={{ ...SS.input, ...errBorder(!!addErrors.name) }} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Fertilizer 10-10-10, Netting 6×12" />
+                <FieldError msg={addErrors.name} />
               </div>
               <div style={{ ...SS.row3, ...SS.field }}>
                 <div>
@@ -333,7 +378,8 @@ export function BusinessInventory() {
                 </div>
                 <div>
                   <label style={SS.label}>Qty *</label>
-                  <input style={SS.input} type="number" min="0" value={form.qty} onChange={e => set('qty', e.target.value)} />
+                  <input style={{ ...SS.input, ...errBorder(!!addErrors.qty) }} type="number" min="0" value={form.qty} onChange={e => set('qty', e.target.value)} />
+                  <FieldError msg={addErrors.qty} />
                 </div>
                 <div>
                   <label style={SS.label}>Status</label>
@@ -342,19 +388,26 @@ export function BusinessInventory() {
                   </select>
                 </div>
               </div>
-              <div style={{ ...SS.row2, ...SS.field }}>
-                <div>
-                  <label style={SS.label}>Unit Cost</label>
-                  <input style={SS.input} type="number" step="0.01" min="0" value={form.unit_cost} onChange={e => set('unit_cost', e.target.value)}
-                    placeholder={form.cost_confidence === 'UNKNOWN' ? 'unknown' : '0.00'} disabled={form.cost_confidence === 'UNKNOWN'} />
+              {/* Sell Price — REQUIRED (D-35): what the customer pays, stored on the stock line and
+                  authoritative at checkout. Required so nothing is born unsellable (no downstream
+                  $0-refusal). INDEPENDENT of unit_cost / cost_confidence. The wrapper is structured
+                  so the future margin-aware signal (docs/concepts/margin-aware-pricing-intelligence.md
+                  — a background traffic-light + a drill-in icon) can attach WITHOUT restructuring; no
+                  margin math is built here (marginSignalStyle is an empty slot today). */}
+              <div style={SS.field}>
+                <label style={SS.label}>Sell Price *</label>
+                <div style={{ position: 'relative' }}>
+                  <input style={{ ...SS.input, ...marginSignalStyle, ...errBorder(!!addErrors.sell_price) }} type="number" step="0.01" min="0"
+                    value={form.sell_price} onChange={e => set('sell_price', e.target.value)} placeholder="What the customer pays, e.g. 124.00" />
+                  {/* future margin-signal icon slot */}
                 </div>
-                <div>
-                  <label style={SS.label}>Cost Confidence</label>
-                  <select style={SS.select} value={form.cost_confidence} onChange={e => set('cost_confidence', e.target.value as CostConfidence)}>
-                    {CONFIDENCE_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                  <p style={SS.hint}>A cost you type = Confirmed. Change it if it’s a guess. No cost = Unknown.</p>
-                </div>
+                <FieldError msg={addErrors.sell_price} />
+                <p style={SS.hint}>The retail price at checkout — distinct from unit cost (what you paid).</p>
+              </div>
+              <div style={SS.field}>
+                <label style={SS.label}>Unit Cost</label>
+                <input style={SS.input} type="number" step="0.01" min="0" value={form.unit_cost} onChange={e => set('unit_cost', e.target.value)} placeholder="Optional — what you paid" />
+                <p style={SS.hint}>Optional. A cost you type in is marked <b>Confirmed</b>; left blank it stays <b>Unknown</b>. Independent of sell price.</p>
               </div>
               <div style={{ ...SS.row2, ...SS.field }}>
                 <div>

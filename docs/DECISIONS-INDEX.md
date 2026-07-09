@@ -4,7 +4,9 @@
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.
 
-**Last updated:** 2026-07-09 (DROP `order_items.plant_id` — AC-1 de-noun of the shared order spine, D-36; the sole
+**Last updated:** 2026-07-09 (Add Inventory modal — required `sell_price` [D-35 CRUD hole, nothing born unsellable] +
+unit_cost editable [derives cost_confidence] + shared datasheet-add modals centered [convention A]; margin-aware signal
+structure-only. Earlier: DROP `order_items.plant_id` — AC-1 de-noun of the shared order spine, D-36; the sole
 line anchor is now `business_inventory_id`; closes story #231's "PLANTS (0)" bug class; gated DROP migration + 6 readers
 repointed. Earlier: RECEIPT/QB-PREVIEW/LEAKAGE + tile-2.1 hardcoded SWEEP — QB preview order-backed, receipt
 services by real name, real QB push dual-anchor, attributed price-override leakage [Ignition pattern + reason], all 8
@@ -27,6 +29,16 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-09 · Add Inventory modal — required `sell_price` [D-35 CRUD hole] + unit_cost editable + centered):**
+> No drift — abided by **D-35** (sell_price is stored on the stock line, DISTINCT from unit_cost, authoritative at
+> checkout; the create form now sets it so nothing is born unsellable), **D-9 Surface Honesty** (unit_cost blank →
+> honest UNKNOWN, never a fabricated $0; sell_price required > $0 rather than a downstream silent $0-refusal), the
+> **FIX 5 validation pattern** (§6 rule 8 — copied the shared `errBorder`/`FieldError`/RED shape, rule-of-three not yet
+> hit so a second copy is sanctioned, not a fork), the **12-function ceiling** (ZERO new `api/` file) and **AC-3**
+> (business-scoped write). NO schema/migration (sell_price/unit_cost/cost_confidence all exist per D-35). Centering
+> adopted **convention A** for the datasheet-add camp (shared `sheetStyles.modal` → centers Inventory/Customer/Asset).
+> The margin-aware signal is structure-only (empty `marginSignalStyle` slot) — NOT built (design: `docs/concepts/margin-aware-pricing-intelligence.md`). No new numbered decision.
+>
 > ✅ **Drift watch (2026-07-09 · FIX 5 — service-editor required-field validation + forms/modals audit):**
 > No drift — abided by the **12-function ceiling** (§6 r11 — ZERO new `api/` file), **AC-1** (validation is a generic
 > quality primitive, no vertical noun), **§6 rule 8** (reused the shared `RED`, no color dup; the validation helpers
