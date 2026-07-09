@@ -19,6 +19,38 @@ const inputStyle: React.CSSProperties = {
   outline: 'none', fontFamily: 'inherit', color: DARK, background: '#fff',
 };
 
+// ── Required-field validation (the REFERENCE implementation) ─────────────────
+// The cross-cutting platform rule (user_stories.md ## NEEDED): a save with an empty required field
+// BLOCKS, HIGHLIGHTS the offending field, and SAYS WHY — never fails silently. Other forms copy this
+// shape: validate on save-attempt → if the map is non-empty, set it as error state and return.
+// 0 is a VALID price (a free service) — only a blank/non-numeric price is rejected (D-9 honesty:
+// blank ≠ free; the owner must state 0). Error red reuses the shared RED (the compliance/netting red).
+
+function validateServiceForm(f: {
+  name: string; price: string; category: string; transportMode?: string;
+}): Record<string, string> {
+  const errs: Record<string, string> = {};
+  if (!f.name.trim()) errs.name = 'Name is required.';
+  const price = f.price.trim();
+  if (price === '') errs.price = 'Price is required — enter 0 for a free service.';
+  else if (isNaN(parseFloat(price))) errs.price = 'Price must be a number — enter 0 for a free service.';
+  if (!f.category) errs.category = 'Category is required.';
+  // Category-scoped: a transport service must say who transports (self / staff).
+  if (f.category === 'transport' && !f.transportMode) errs.transportMode = 'Transport mode is required for a transport service.';
+  return errs;
+}
+
+// Red error border merged onto an input whose field failed validation.
+function errBorder(hasErr: boolean): React.CSSProperties {
+  return hasErr ? { borderColor: RED, boxShadow: `0 0 0 1px ${RED}` } : {};
+}
+
+// Inline red message under a field. Renders nothing when the field is valid.
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  return <p style={{ margin: '3px 0 0', fontSize: '0.75rem', fontWeight: 600, color: RED }}>{msg}</p>;
+}
+
 // Small captioned wrapper for a form control — a tiny uppercase label over its input, so the
 // un-conflated fields (Price type vs Per unit, Category, Transport mode) read clearly. flex:1 so
 // two sit side-by-side.
@@ -233,6 +265,7 @@ export function Settings({
     compliance_title: '', compliance_body: '', service_note: '',
   });
   const [savingOffering, setSavingOffering] = useState(false);
+  const [editErrors, setEditErrors]         = useState<Record<string, string>>({});
 
   // Add-new form
   const [showAddForm, setShowAddForm]     = useState(false);
@@ -247,6 +280,7 @@ export function Settings({
   const [newRequiresAddress, setNewRequiresAddress]   = useState(false);   // only when category=transport
   const [newTriggerMode, setNewTriggerMode]           = useState('');      // '' = always show; only when category=addon
   const [addingOffering, setAddingOffering] = useState(false);
+  const [addErrors, setAddErrors]           = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!businessId) return;
@@ -274,6 +308,7 @@ export function Settings({
 
   function startEdit(o: ServiceOffering) {
     setEditingId(o.id);
+    setEditErrors({});
     setEditForm({
       name:              o.name,
       description:       o.description       ?? '',
@@ -292,9 +327,19 @@ export function Settings({
 
   async function saveEdit() {
     if (!editingId) return;
+    // Validate BEFORE touching the DB — block + highlight + message, never a silent reject (FIX 5).
+    const errs = validateServiceForm({
+      name: editForm.name, price: editForm.price,
+      category: editForm.category, transportMode: editForm.transport_mode,
+    });
+    if (Object.keys(errs).length > 0) {
+      setEditErrors(errs);
+      console.log('[TRACE:SERVICE] save blocked', { businessId, serviceId: editingId, action: 'edit', missing: Object.keys(errs) });
+      return;
+    }
+    setEditErrors({});
     setSavingOffering(true);
     const price = parseFloat(editForm.price);
-    if (isNaN(price)) { setSavingOffering(false); return; }
     const isTransport = editForm.category === 'transport';
     const isAddon     = editForm.category === 'addon';
     // Category-scoped rules: transport carries transport_mode + requires_address; an addon can be
@@ -344,10 +389,20 @@ export function Settings({
   }
 
   async function addOffering() {
-    if (!businessId || !newName.trim() || !newPrice) return;
+    if (!businessId) return;
+    // Validate BEFORE touching the DB — block + highlight + message, never a silent reject (FIX 5).
+    const errs = validateServiceForm({
+      name: newName, price: newPrice,
+      category: newCategory, transportMode: newTransportMode,
+    });
+    if (Object.keys(errs).length > 0) {
+      setAddErrors(errs);
+      console.log('[TRACE:SERVICE] save blocked', { businessId, action: 'add', missing: Object.keys(errs) });
+      return;
+    }
+    setAddErrors({});
     setAddingOffering(true);
     const price = parseFloat(newPrice);
-    if (isNaN(price)) { setAddingOffering(false); return; }
     const isTransport = newCategory === 'transport';
     const isAddon     = newCategory === 'addon';
     // [TRACE:SERVICE] log the un-conflated rule being written (category · price_type · price_unit).
@@ -575,6 +630,7 @@ export function Settings({
                   editingId={editingId}
                   editForm={editForm}
                   setEditForm={setEditForm}
+                  editErrors={editErrors}
                   savingOffering={savingOffering}
                   onToggle={toggleOffering}
                   onEdit={startEdit}
@@ -593,6 +649,7 @@ export function Settings({
                   editingId={editingId}
                   editForm={editForm}
                   setEditForm={setEditForm}
+                  editErrors={editErrors}
                   savingOffering={savingOffering}
                   onToggle={toggleOffering}
                   onEdit={startEdit}
@@ -611,6 +668,7 @@ export function Settings({
                   editingId={editingId}
                   editForm={editForm}
                   setEditForm={setEditForm}
+                  editErrors={editErrors}
                   savingOffering={savingOffering}
                   onToggle={toggleOffering}
                   onEdit={startEdit}
@@ -626,10 +684,13 @@ export function Settings({
                 <div style={{ marginTop: 8, padding: '14px', background: '#f9fafb', borderRadius: 10, border: '1px solid #e5e7eb' }}>
                   <p style={{ margin: '0 0 12px', fontWeight: 700, fontSize: '0.875rem', color: DARK }}>New service</p>
 
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                    <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Name (e.g. Monthly Fertilizer)" style={{ ...inputStyle, flex: 2, marginBottom: 0 }} />
-                    <input value={newPrice} onChange={e => setNewPrice(e.target.value)} placeholder="Price" type="number" step="0.01" style={{ ...inputStyle, flex: 1, marginBottom: 0 }} />
+                  <div style={{ display: 'flex', gap: 8, marginBottom: (addErrors.name || addErrors.price) ? 2 : 8 }}>
+                    <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Name (e.g. Monthly Fertilizer)" style={{ ...inputStyle, flex: 2, marginBottom: 0, ...errBorder(!!addErrors.name) }} />
+                    <input value={newPrice} onChange={e => setNewPrice(e.target.value)} placeholder="Price (0 = free)" type="number" step="0.01" style={{ ...inputStyle, flex: 1, marginBottom: 0, ...errBorder(!!addErrors.price) }} />
                   </div>
+                  <FieldError msg={addErrors.name} />
+                  <FieldError msg={addErrors.price} />
+                  {(addErrors.name || addErrors.price) && <div style={{ height: 8 }} />}
 
                   <input value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Description (optional)" style={{ ...inputStyle, marginBottom: 8 }} />
 
@@ -646,6 +707,7 @@ export function Settings({
                       </select>
                     </FieldLabel>
                   </div>
+                  <FieldError msg={addErrors.category} />
 
                   {/* Price rule — price_type (how) and price_unit (what one unit is) are SEPARATE */}
                   <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
@@ -665,9 +727,10 @@ export function Settings({
                   {newCategory === 'transport' && (
                     <div style={{ marginBottom: 8, padding: '10px 12px', background: '#fff', borderRadius: 9, border: '1px solid #e5e7eb' }}>
                       <FieldLabel text="Transport mode">
-                        <select value={newTransportMode} onChange={e => setNewTransportMode(e.target.value)} style={{ ...inputStyle, marginBottom: 0 }}>
+                        <select value={newTransportMode} onChange={e => setNewTransportMode(e.target.value)} style={{ ...inputStyle, marginBottom: 0, ...errBorder(!!addErrors.transportMode) }}>
                           {TRANSPORT_MODE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
+                        <FieldError msg={addErrors.transportMode} />
                       </FieldLabel>
                       <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: '0.8125rem', color: DARK, cursor: 'pointer' }}>
                         <input type="checkbox" checked={newRequiresAddress} onChange={e => setNewRequiresAddress(e.target.checked)} />
@@ -691,13 +754,13 @@ export function Settings({
                   <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                     <button
                       onClick={addOffering}
-                      disabled={addingOffering || !newName.trim() || !newPrice}
-                      style={{ flex: 1, padding: '11px', borderRadius: 9, border: 'none', cursor: 'pointer', background: GREEN, color: '#fff', fontWeight: 700, fontSize: '0.875rem', opacity: (addingOffering || !newName.trim() || !newPrice) ? 0.5 : 1 }}
+                      disabled={addingOffering}
+                      style={{ flex: 1, padding: '11px', borderRadius: 9, border: 'none', cursor: 'pointer', background: GREEN, color: '#fff', fontWeight: 700, fontSize: '0.875rem', opacity: addingOffering ? 0.5 : 1 }}
                     >
                       {addingOffering ? 'Adding…' : 'Add Service'}
                     </button>
                     <button
-                      onClick={() => { setShowAddForm(false); setNewName(''); setNewDesc(''); setNewPrice(''); }}
+                      onClick={() => { setShowAddForm(false); setAddErrors({}); setNewName(''); setNewDesc(''); setNewPrice(''); }}
                       style={{ padding: '11px 16px', borderRadius: 9, border: '1px solid #e5e7eb', cursor: 'pointer', background: '#fff', color: GRAY, fontWeight: 600, fontSize: '0.875rem' }}
                     >
                       Cancel
@@ -834,6 +897,7 @@ interface OfferingGroupProps {
   editingId: string | null;
   editForm: EditForm;
   setEditForm: (f: EditForm) => void;
+  editErrors: Record<string, string>;
   savingOffering: boolean;
   onToggle: (id: string, current: boolean) => void;
   onEdit: (o: ServiceOffering) => void;
@@ -844,7 +908,7 @@ interface OfferingGroupProps {
 }
 
 function OfferingGroup({
-  label, offerings, editingId, editForm, setEditForm, savingOffering,
+  label, offerings, editingId, editForm, setEditForm, editErrors, savingOffering,
   onToggle, onEdit, onSaveEdit, onCancelEdit, onDelete, onFindCustomers,
 }: OfferingGroupProps) {
   return (
@@ -859,20 +923,23 @@ function OfferingGroup({
             {editingId === o.id ? (
               /* Edit mode */
               <div>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: (editErrors.name || editErrors.price) ? 2 : 6 }}>
                   <input
                     value={editForm.name}
                     onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                    style={{ ...inputStyle, flex: 2, marginBottom: 0, padding: '8px 10px' }}
+                    style={{ ...inputStyle, flex: 2, marginBottom: 0, padding: '8px 10px', ...errBorder(!!editErrors.name) }}
                     placeholder="Name"
                   />
                   <input
                     value={editForm.price}
                     onChange={e => setEditForm({ ...editForm, price: e.target.value })}
-                    style={{ ...inputStyle, flex: 1, marginBottom: 0, padding: '8px 10px' }}
-                    type="number" step="0.01" placeholder="Price"
+                    style={{ ...inputStyle, flex: 1, marginBottom: 0, padding: '8px 10px', ...errBorder(!!editErrors.price) }}
+                    type="number" step="0.01" placeholder="Price (0 = free)"
                   />
                 </div>
+                <FieldError msg={editErrors.name} />
+                <FieldError msg={editErrors.price} />
+                {(editErrors.name || editErrors.price) && <div style={{ height: 6 }} />}
                 <input
                   value={editForm.description}
                   onChange={e => setEditForm({ ...editForm, description: e.target.value })}
@@ -884,9 +951,10 @@ function OfferingGroup({
                     price_type / price_unit are two separate controls, no longer conflated. */}
                 <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
                   <FieldLabel text="Category">
-                    <select value={editForm.category} onChange={e => setEditForm({ ...editForm, category: e.target.value })} style={{ ...inputStyle, marginBottom: 0, padding: '8px 10px' }}>
+                    <select value={editForm.category} onChange={e => setEditForm({ ...editForm, category: e.target.value })} style={{ ...inputStyle, marginBottom: 0, padding: '8px 10px', ...errBorder(!!editErrors.category) }}>
                       {CATEGORY_OPTIONS.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
                     </select>
+                    <FieldError msg={editErrors.category} />
                   </FieldLabel>
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
@@ -906,9 +974,10 @@ function OfferingGroup({
                 {editForm.category === 'transport' && (
                   <div style={{ marginBottom: 6, padding: '8px 10px', background: '#fff', borderRadius: 8, border: '1px solid #e5e7eb' }}>
                     <FieldLabel text="Transport mode">
-                      <select value={editForm.transport_mode} onChange={e => setEditForm({ ...editForm, transport_mode: e.target.value })} style={{ ...inputStyle, marginBottom: 0, padding: '8px 10px' }}>
+                      <select value={editForm.transport_mode} onChange={e => setEditForm({ ...editForm, transport_mode: e.target.value })} style={{ ...inputStyle, marginBottom: 0, padding: '8px 10px', ...errBorder(!!editErrors.transportMode) }}>
                         {TRANSPORT_MODE_OPTIONS.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
                       </select>
+                      <FieldError msg={editErrors.transportMode} />
                     </FieldLabel>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: '0.8125rem', color: DARK, cursor: 'pointer' }}>
                       <input type="checkbox" checked={editForm.requires_address} onChange={e => setEditForm({ ...editForm, requires_address: e.target.checked })} />

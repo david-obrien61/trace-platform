@@ -373,6 +373,15 @@ Built from **two real spoken walks**, this is the spec for counting a lot **by t
 
 _Owed items that don't belong to one of the 8 build-arcs. They render under "Unfiled" but surface in the WHAT'S OWED view and the status/scope filters._
 
+### No form ever fails silently — validate required fields, say why, everywhere
+STATUS: written
+SCOPE: platform
+BUILD: active
+MAPS-TO: —
+PIECES: required_field_validation, modal_centering, forms_audit_backlog
+NEEDS: David to decide the modal-centering convention (A: always center — retrofit the 6 bottom-sheets; or B: center-for-decisions, bottom-sheet-for-list-adds — document the split, ⚠️ rows become ✅-by-design). Then a retrofit pass closes the 3 open validation surfaces.
+The standing quality rule made concrete: when an owner saves a form with a required field empty, the app BLOCKS the save, HIGHLIGHTS the offending field, and SAYS WHY — never a silent reject and never a greyed-out button that won't explain itself (the exact defect: saving a service with a blank Price failed silently; a $0/free service needs 0 typed, blank ≠ free). The paired rule: modals are CENTERED, not off-center (David: "why isn't the centering standard applied always?" — the Add Inventory modal was a bottom-sheet). **Reference implementation shipped 2026-07-09:** the Settings service editor now blocks + red-borders + inline-messages on both create and edit (`validateServiceForm` in `packages/shared/src/pages/Settings.tsx` — other forms copy this shape). **Backlog:** `docs/decisions/2026-07-09-forms-and-modals-compliance-audit.md` — 16 surfaces rated on BOTH axes; 3 validation gaps (OnboardingWizard nursery step, CustomerEditModal, + 2 to confirm) and 6 bottom-sheet modals await the centering decision. Adjacent to the owner-configurable-required-fields story (§ missing-email) — both want a shared field-config primitive, not per-form code. _Grounded: FIX 5 build 2026-07-09; §1.6 pre-flight items 3 + 5._
+
 ### On the lot — scan a tree, see the price because I'm here
 STATUS: needs-input
 SCOPE: vertical:cultivar
