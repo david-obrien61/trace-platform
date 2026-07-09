@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { refreshQBToken } from '../../../../shared/src/quickbooks/refresh';
 import { readQBSecrets } from '../../../../shared/src/quickbooks/secrets';
+import { orderItemName, orderItemAnchor } from '../../../src/lib/orderItemName';
 
 const QBO_ENVIRONMENT = process.env.QBO_ENVIRONMENT || 'sandbox';
 const QBO_API_BASE =
@@ -131,10 +132,14 @@ export default async function handler(req: any, res: any) {
     const customer = order.customers;
     const invoiceNumber: string = order.notes || `CLV-${order_id.slice(0, 8)}`;
 
-    // Fetch line items
+    // Fetch line items — D-34 DUAL ANCHOR: a line is anchored EITHER to a cultivar_plants
+    // specimen (plant_id) OR a business_inventory stock line (business_inventory_id). A
+    // stock-line / scan order (the PRIMARY path) has plant_id null → the old cultivar_plants-only
+    // read printed "undefined — undefined" on the real invoice. Join BOTH + name via the shared
+    // resolver (orderItemName), same as the roster/detail/preview.
     const { data: orderItems } = await db
       .from('order_items')
-      .select('*, cultivar_plants(*)')
+      .select('*, cultivar_plants(*), business_inventory ( name, size, sku )')
       .eq('order_id', order_id);
 
     // Try new service_selections model first; fall back to legacy order_addons
@@ -162,9 +167,13 @@ export default async function handler(req: any, res: any) {
     const lines: unknown[] = [];
 
     for (const item of orderItems || []) {
-      const plant = item.cultivar_plants;
+      // Dual-anchor name (specimen common_name/species WINS; else the stock line's name).
+      const name      = orderItemName(item as any);
+      const container = item.cultivar_plants?.current_container ?? item.business_inventory?.size ?? null;
+      const anchor    = orderItemAnchor(item as any);
+      console.log('[TRACE:QBO] invoice line — dual anchor', { anchor, name, container });
       lines.push({
-        Description: `${plant.common_name || plant.species} — ${plant.current_container}`,
+        Description: container ? `${name} — ${container}` : name,
         Amount: Number(item.subtotal),
         DetailType: 'SalesItemLineDetail',
         SalesItemLineDetail: {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useBusinessContext } from '@trace/shared/context';
 import { usePlant } from '../hooks/usePlant';
 import { useCart } from '../hooks/useCart';
 import { PlantHero } from '../components/plant/PlantHero';
@@ -10,6 +11,7 @@ export function PlantProfile() {
   const { tagId } = useParams<{ tagId: string }>();
   const navigate   = useNavigate();
   const { plant, events, availableCount, loading, error, sizeChoices, chooseSize } = usePlant(tagId);
+  const { business } = useBusinessContext();
   const setItem    = useCart((s) => s.setItem);
   const [qty, setQty] = useState(1);
 
@@ -138,12 +140,16 @@ export function PlantProfile() {
         )}
       </div>
 
-      {/* Nursery footer */}
-      <div style={{ borderTop: '1px solid var(--gray-100)', padding: '14px 16px', textAlign: 'center' }}>
-        <p style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }}>
-          LAWNS Tree Farm, LLC · Leander, TX · (512) 450-3336
-        </p>
-      </div>
+      {/* Business footer — H2: identity from the businesses row (AC-1), never a hardcoded tenant.
+          Rendered only when the business is resolvable (a signed-in owner/staff session); an anon
+          customer scan has no businesses read under RLS → no footer, rather than a wrong tenant. */}
+      {business && (business.name || business.address || business.phone) && (
+        <div style={{ borderTop: '1px solid var(--gray-100)', padding: '14px 16px', textAlign: 'center' }}>
+          <p style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }}>
+            {[business.name, business.address, business.phone].filter(Boolean).join(' · ')}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

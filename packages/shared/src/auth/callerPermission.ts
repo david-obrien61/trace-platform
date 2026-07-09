@@ -79,3 +79,19 @@ export async function callerIsBusinessOwner(
     .from('businesses').select('owner_id').eq('id', businessId).maybeSingle();
   return !error && (data as { owner_id?: string } | null)?.owner_id === uid;
 }
+
+/**
+ * Resolve the CALLER's auth.uid() from the Bearer token (or null if no/invalid token). Used to
+ * ATTRIBUTE a privileged act (e.g. a price-override give) to the acting user, server-side — never
+ * a client-posted id. Only call after an authority gate (callerIsBusinessOwner / callerHoldsPermission)
+ * has already confirmed the caller may perform the act.
+ */
+export async function resolveCallerUid(authHeader: string | undefined): Promise<string | null> {
+  const token = bearer(authHeader);
+  if (!token) return null;
+  const e = env();
+  if (!e) return null;
+  const caller = createClient(e.url, e.anon, { global: { headers: { Authorization: `Bearer ${token}` } } });
+  const { data } = await caller.auth.getUser();
+  return data?.user?.id ?? null;
+}

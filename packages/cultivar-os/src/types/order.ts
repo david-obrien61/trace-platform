@@ -46,7 +46,7 @@ export function buildTransportNote(
   nettingSelected: boolean,
 ): string {
   if (transport !== 'self') {
-    return 'LAWNS staff transport';
+    return 'Staff transport';
   }
   if (nettingSelected && !nettingDeclined) {
     return 'Customer self-transport — netting purchased';

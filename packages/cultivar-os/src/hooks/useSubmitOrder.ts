@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { sendSilently } from '@trace/shared/notifications';
+import { supabase } from '../lib/supabase';
 import type { ServiceSelection } from '../types/order';
 import type { ServiceOffering } from '../types/plant';
 import type { CustomerInput } from '../types/customer';
@@ -16,6 +17,9 @@ export interface SubmitPayload {
   nettingDeclined:   boolean;
   // Owner-confirmed netted quantities (offering id → qty). Absent ⇒ server applies the rule.
   serviceQuantities: Record<string, number>;
+  // Owner/manager PRICE overrides (offering id → { amount, reason }). Honored ONLY on a
+  // token-verified owner/manager path server-side; ignored (tamper defense) otherwise.
+  serviceOverrides?: Record<string, { amount: number; reason: string }>;
   deliveryDate?:     string | null;   // owner/manager-entered delivery date (ISO 'YYYY-MM-DD')
   businessId:        string;
 }
@@ -43,15 +47,22 @@ export function useSubmitOrder() {
     try {
       const {
         customer, lines, services, selectedTransport, plantingOffering, plantingSelected,
-        nettingDeclined, serviceQuantities, deliveryDate, businessId,
+        nettingDeclined, serviceQuantities, serviceOverrides, deliveryDate, businessId,
       } = payload;
+
+      // Attach the caller's Bearer token when a session exists so the server can VERIFY an
+      // owner/manager for a price override (attributed leakage). An anon customer has no session
+      // → no token → the server ignores any overrides (tamper defense) and charges the baseline.
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
       const res = await fetch('/api/orders/submit', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body:    JSON.stringify({
           customer, lines, services, selectedTransport, plantingOffering, plantingSelected,
-          nettingDeclined, serviceQuantities, deliveryDate, businessId,
+          nettingDeclined, serviceQuantities, serviceOverrides, deliveryDate, businessId,
         }),
       });
 

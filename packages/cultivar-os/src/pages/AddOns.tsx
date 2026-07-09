@@ -69,7 +69,10 @@ export function AddOns() {
   const nettingSelection = services.find(
     s => s.offering.trigger_transport_mode === 'self' && s.offering.category === 'addon',
   );
-  const nettingPrice  = nettingSelection?.offering.price ?? 10;
+  // H7: no hardcoded tenant $ fallback (was `?? 10` = LAWNS's netting price). The netting
+  // offering row carries its own price (service_offerings.price, NOT NULL); a business with no
+  // netting offering has no nettingSelection at all, so this only reads a real configured price.
+  const nettingPrice  = nettingSelection?.offering.price ?? 0;
   const nettingActive = isSelfTransport && (nettingSelection?.selected ?? true) && !nettingDeclined;
 
   // Other always-shown addons (no transport trigger).

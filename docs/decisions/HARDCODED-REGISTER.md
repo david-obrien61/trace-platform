@@ -23,22 +23,22 @@ placeholder carrying a tenant literal.
 [2026-07-08-receipt-qb-leakage-recon.md](2026-07-08-receipt-qb-leakage-recon.md) — this register
 tracks the literals; that recon tracks the builds. Do not duplicate the fix detail here.
 
-**Last updated:** 2026-07-08 (seeded — 11 items; 2.1 QR Checkout capped amber).
+**Last updated:** 2026-07-08 (ALL 8 tile-2.1 items CLEARED — 2.1 QR Checkout restored to GREEN; receipt/QB/leakage + sweep build).
 
 ---
 
-## Owning capability: **2.1 — Cart / QR checkout** (currently CAPPED AMBER — 8 open)
+## Owning capability: **2.1 — Cart / QR checkout** (✅ ALL 8 CLEARED — restored to GREEN)
 
 | id | file:line | what it is | why it's debt | should be | sev | status |
 |---|---|---|---|---|---|---|
-| H1 | [`pages/DemoQBInvoice.tsx`](../../packages/cultivar-os/src/pages/DemoQBInvoice.tsx) (whole file) | the QB invoice PREVIEW renders **hardcoded line items for every order** — Shoal Creek Vitex $400 (`:84`), netting $10 (`:90`), compost $28 (`:96`); + hardcoded LAWNS name (`:28,:58`), address (`:59-60`), phone (`:61`), bill-to "Customer" (`:65`), and the **retired "Layna" contact** (`:134`). Reads only `total`+`invoiceNumber` from the query, ignores the real order. | any order shows the same FAKE lines → demo-killer; leaks LAWNS identity + a banned contact | fetch the real order (`orderId` is already passed) → render its `order_items` (dual-anchor named via `orderItemName.ts`) + `order_service_selections` + `customers` in the QB chrome | HIGH | **OPEN** (recon §R3) |
-| H2 | [`pages/PlantProfile.tsx:144`](../../packages/cultivar-os/src/pages/PlantProfile.tsx#L144) | customer-facing footer `"LAWNS Tree Farm, LLC · Leander, TX · (512) 450-3336"` hardcoded on the public plant profile | a different tenant's customer sees LAWNS's name/phone (also a phone that disagrees with other docs) | read `businesses` (name/city/state/phone) from context | HIGH | **OPEN** (as-built §1a) |
-| H3 | [`pages/Confirmation.tsx:116`](../../packages/cultivar-os/src/pages/Confirmation.tsx#L116) | hardcoded badge `title="LAWNS handling delivery/install"` on the receipt | tenant name baked in; also stands in for the real service | business name from context + the real service name(s) | HIGH | **OPEN** (recon §R4) |
-| H4 | [`pages/CustomerCapture.tsx:305`](../../packages/cultivar-os/src/pages/CustomerCapture.tsx#L305) | opt-in copy `"…special offers from LAWNS Tree Farm"` | tenant name in customer-facing consent copy | business name from context | HIGH | **OPEN** |
-| H5 | [`types/order.ts:49`](../../packages/cultivar-os/src/types/order.ts#L49) | `'LAWNS staff transport'` hardcoded transport-method label | tenant name in a data label | generic ("Staff transport") or business name | MED | **OPEN** |
-| H6 | [`lib/transport.ts:108-112`](../../packages/cultivar-os/src/lib/transport.ts#L108-L112) `CHOICE_META` | branch labels `"Delivery + planting"` etc. | fine for the RADIO, but must not stand in for the service name on a receipt/invoice | receipts read `service_offerings.name`; `CHOICE_META` stays radio-only | MED | **OPEN** (recon §R4) |
-| H7 | [`pages/AddOns.tsx:72`](../../packages/cultivar-os/src/pages/AddOns.tsx#L72) | `nettingPrice = offering.price ?? 10` — hardcoded $10 netting fallback | $10 is LAWNS's netting price; a different nursery's isn't | no numeric fallback — a null offering price is refused/flagged (D-9), not defaulted to a tenant number | LOW | **OPEN** |
-| H8 | [`pages/CustomerCapture.tsx:242,261`](../../packages/cultivar-os/src/pages/CustomerCapture.tsx#L242) | input placeholders `"Leander"` / `"78641"` (LAWNS city/zip as hints) | tenant location as default hint text | generic placeholders, or derive from the business's own city/zip | LOW | **OPEN** |
+| H1 | [`pages/DemoQBInvoice.tsx`](../../packages/cultivar-os/src/pages/DemoQBInvoice.tsx) | ~~QB PREVIEW rendered hardcoded lines for every order + LAWNS identity + "Layna"~~ | any order showed FAKE lines; leaked LAWNS identity + banned contact | fetch the real order → render `order_items` (dual-anchor `orderItemName.ts`) + `order_service_selections` + `customers` + real business identity | HIGH | **✅ CLEARED** — rebuilt as order-backed `QBInvoicePreview`; real lines + real businesses row; Layna/LAWNS gone (FIX 1) |
+| H2 | [`pages/PlantProfile.tsx:141-149`](../../packages/cultivar-os/src/pages/PlantProfile.tsx#L141) | ~~footer `"LAWNS Tree Farm, LLC · Leander, TX · (512) 450-3336"`~~ | a different tenant's customer saw LAWNS's name/phone | read the `businesses` row from context | HIGH | **✅ CLEARED** — footer = `{name · address · phone}` from `useBusinessContext().business`; omitted (not faked) when unresolvable under anon RLS |
+| H3 | [`pages/Confirmation.tsx:115`](../../packages/cultivar-os/src/pages/Confirmation.tsx#L115) | ~~badge `title="LAWNS handling delivery/install"`~~ | tenant name baked in; stood in for the real service | business name + real service name | HIGH | **✅ CLEARED** — badge = `{businessName} — {transportName}` from nav state; services itemized by real `service_offerings.name` (FIX 2) |
+| H4 | [`pages/CustomerCapture.tsx:304`](../../packages/cultivar-os/src/pages/CustomerCapture.tsx#L304) | ~~opt-in copy `"…special offers from LAWNS Tree Farm"`~~ | tenant name in consent copy | business name from context | HIGH | **✅ CLEARED** — `…special offers{business?.name ? ' from '+name : ''}` |
+| H5 | [`types/order.ts:49`](../../packages/cultivar-os/src/types/order.ts#L49) | ~~`'LAWNS staff transport'` transport-method label~~ | tenant name in a data label | generic label | MED | **✅ CLEARED** — `'Staff transport'` (generic; note: this fn is currently unused — submit.ts owns the live note) |
+| H6 | [`lib/transport.ts:108-112`](../../packages/cultivar-os/src/lib/transport.ts#L108-L112) `CHOICE_META` | branch labels `"Delivery + planting"` etc. | fine for the RADIO, must not stand in for the service name on a receipt/invoice | receipts read `service_offerings.name`; `CHOICE_META` stays radio-only | MED | **✅ CLEARED** — no code change needed; FIX 2 makes Confirmation + QB preview itemize by real `service_offerings.name`; `CHOICE_META` remains radio-only (verified: only `TransportToggle` consumes it) |
+| H7 | [`pages/AddOns.tsx:72`](../../packages/cultivar-os/src/pages/AddOns.tsx#L72) | ~~`nettingPrice = offering.price ?? 10`~~ | $10 is LAWNS's netting price | no tenant numeric fallback | LOW | **✅ CLEARED** — `?? 0` (offering row carries the real price, NOT NULL; also fixed in `submit.ts:260`) |
+| H8 | [`pages/CustomerCapture.tsx:242,261`](../../packages/cultivar-os/src/pages/CustomerCapture.tsx#L242) | ~~input placeholders `"Leander"` / `"78641"`~~ | tenant location as hint | generic placeholders | LOW | **✅ CLEARED** — `"City"` / `"ZIP"` |
 
 ---
 
@@ -67,7 +67,7 @@ tracks the literals; that recon tracks the builds. Do not duplicate the fix deta
 ---
 
 ## Summary
-- **Open items:** 8 (all under 2.1) + H9 (1.x, doesn't drop a green tile) = **9 open**; 2 documented-with-reason (H10, H11).
-- **Tiles CAPPED AT AMBER by this register:** **2.1 Cart / QR checkout** (was 🟢 → 🟡, 8 open).
+- **Open items:** 1 — only **H9** (1.x, doesn't drop a green tile); 2 documented-with-reason (H10, H11). All 8 tile-2.1 items are CLEARED (2026-07-08).
+- **Tiles CAPPED AT AMBER by this register:** **none.** 2.1 Cart / QR checkout is restored to 🟢 (all 8 items cleared).
 - **Tiles that stay green** (their items are DOC — generic defaults / demo-only, not tenant leaks): 2.2, 3.7.
-- Clearing all 8 open 2.1 items (led by H1 the QB stub, H2 the footer, H6 the receipt label) restores 2.1 to green.
+- H9 (front-door signup example placeholder) remains OPEN but its owning caps 1.1–1.5 are already 🟡 for other reasons, so it drops no green tile.

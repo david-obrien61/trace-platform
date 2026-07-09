@@ -21,13 +21,26 @@ export function CartReview() {
     setLineQty, removeLine, toggleService, setNettingDeclined, setPlantingSelected,
   } = useCart();
   const { submit, submitting, error: submitError } = useSubmitOrder();
-  const { business } = useBusinessContext();
+  const { business, isOwner, can } = useBusinessContext();
   const [payOnline, setPayOnline] = useState<boolean | null>(null);
 
   // Owner overrides for a service's netted quantity (review-only refinement; default = the
   // attach rule's netted value). Keyed by offering id. Surface-not-silent: the rule computes
   // the proposal, the owner can adjust it here before submit (Regina Principle / D-9).
   const [serviceQty, setServiceQty] = useState<Record<string, number>>({});
+
+  // Owner/manager PRICE overrides (attributed leakage). Keyed by offering id → { amount, reason }.
+  // A give-away (e.g. planting 6×$225=$1350 → flat $1000) is honored ONLY on a token-verified
+  // owner/manager path server-side (submit.ts); the public path stays server-authoritative +
+  // tamper-defended. `canOverride` gates the affordance; the server independently re-verifies.
+  const canOverride = isOwner || can('manage_orders');
+  const [serviceOverride, setServiceOverride] = useState<Record<string, { amount: number; reason: string }>>({});
+  const setOverride = (id: string, next: { amount: number; reason: string } | null) =>
+    setServiceOverride(m => {
+      const copy = { ...m };
+      if (next) copy[id] = next; else delete copy[id];
+      return copy;
+    });
 
   const plantCount = totalPlantCount(items);
   const isSelf     = selectedTransport?.transport_mode === 'self';
@@ -82,12 +95,22 @@ export function CartReview() {
 
   const plantSubtotal = items.reduce((sum, l) => sum + (l.plant.business_inventory?.sell_price ?? 0) * l.quantity, 0);
 
-  const transportAmount = selectedTransport ? lineSubtotal(selectedTransport, effQty(selectedTransport)) : 0;
-  const plantingOn      = plantingSelected && !!plantingOffering;
-  const plantingTotal   = plantingOn && plantingOffering ? lineSubtotal(plantingOffering, effQty(plantingOffering)) : 0;
-  const nettingTotal    = nettingActive && nettingSel ? lineSubtotal(nettingSel.offering, effQty(nettingSel.offering)) : 0;
+  // Rule-computed (baseline) amount for a service, and the EFFECTIVE amount = owner override
+  // (if set) else the baseline. leakage = baseline − override (surfaced in the row + server).
+  const computedAmt = (o: ServiceOffering) => lineSubtotal(o, effQty(o));
+  const effAmt = (o: ServiceOffering, computed: number) => serviceOverride[o.id]?.amount ?? computed;
+
+  const plantingOn = plantingSelected && !!plantingOffering;
+
+  const transportComputed = selectedTransport ? computedAmt(selectedTransport) : 0;
+  const plantingComputed  = plantingOn && plantingOffering ? computedAmt(plantingOffering) : 0;
+  const nettingComputed   = nettingActive && nettingSel ? computedAmt(nettingSel.offering) : 0;
+
+  const transportAmount = selectedTransport ? effAmt(selectedTransport, transportComputed) : 0;
+  const plantingTotal   = plantingOn && plantingOffering ? effAmt(plantingOffering, plantingComputed) : 0;
+  const nettingTotal    = nettingActive && nettingSel ? effAmt(nettingSel.offering, nettingComputed) : 0;
   const otherTotal      = otherAddons.filter(s => s.selected)
-    .reduce((sum, s) => sum + lineSubtotal(s.offering, effQty(s.offering)), 0);
+    .reduce((sum, s) => sum + effAmt(s.offering, computedAmt(s.offering)), 0);
 
   const addonsAmount = transportAmount + plantingTotal + nettingTotal + otherTotal;
   const subtotal     = plantSubtotal + addonsAmount;
@@ -109,8 +132,30 @@ export function CartReview() {
     if (nettingActive && nettingSel) serviceQuantities[nettingSel.offering.id] = effQty(nettingSel.offering);
     for (const s of otherAddons) if (s.selected) serviceQuantities[s.offering.id] = effQty(s.offering);
 
+    // Real service lines for the receipt (Confirmation) — itemized by the offering's REAL name
+    // (service_offerings.name), NEVER a CHOICE_META branch label (H3/H6). Amounts are the same
+    // effective values shown here (owner overrides included). One source, no drift.
+    const serviceLines: { name: string; amount: number }[] = [];
+    if (selectedTransport) serviceLines.push({ name: selectedTransport.name, amount: transportAmount });
+    if (plantingOn && plantingOffering) serviceLines.push({ name: plantingOffering.name, amount: plantingTotal });
+    if (nettingActive && nettingSel) serviceLines.push({ name: nettingSel.offering.name, amount: nettingTotal });
+    for (const s of otherAddons) if (s.selected) serviceLines.push({ name: s.offering.name, amount: effAmt(s.offering, computedAmt(s.offering)) });
+
+    // Owner/manager price overrides for the honored path — only for services actually in the order.
+    const activeIds = new Set<string>([
+      ...(selectedTransport ? [selectedTransport.id] : []),
+      ...(plantingOn && plantingOffering ? [plantingOffering.id] : []),
+      ...(nettingActive && nettingSel ? [nettingSel.offering.id] : []),
+      ...otherAddons.filter(s => s.selected).map(s => s.offering.id),
+    ]);
+    const serviceOverrides: Record<string, { amount: number; reason: string }> = {};
+    for (const [id, ov] of Object.entries(serviceOverride)) {
+      if (activeIds.has(id)) serviceOverrides[id] = ov;
+    }
+
     if (TRACE_CART) console.log('[TRACE:CART] submit — handoff to checkout tail', {
-      lineCount: items.length, plantCount, serviceQuantities,
+      lineCount: items.length, plantCount, serviceQuantities, serviceLines,
+      overrides: Object.keys(serviceOverrides).length,
       anchors: items.map(l => anchorKey(l.plant)),
     });
 
@@ -124,6 +169,7 @@ export function CartReview() {
         plantingSelected: plantingOn,
         nettingDeclined,
         serviceQuantities,
+        serviceOverrides,
         deliveryDate,
         businessId: items[0].plant.business_id,
       });
@@ -137,6 +183,9 @@ export function CartReview() {
           email:           customer!.email,
           payOnline:       online,
           transportMode:   selectedTransport?.transport_mode ?? 'self',
+          transportName:   selectedTransport?.name ?? null,
+          serviceLines,
+          businessName:    business?.name ?? null,
           nettingActive,
           qbInvoiceId:     result.qbInvoiceId,
           qbInvoiceNumber: result.qbInvoiceNumber,
@@ -229,6 +278,10 @@ export function CartReview() {
             qty={effQty(selectedTransport)}
             onQty={selectedTransport.price_type === 'per_unit' ? (q => setQty(selectedTransport, q)) : undefined}
             included
+            canOverride={canOverride}
+            baseline={transportComputed}
+            override={serviceOverride[selectedTransport.id]}
+            onOverride={next => setOverride(selectedTransport.id, next)}
           />
         )}
 
@@ -244,6 +297,10 @@ export function CartReview() {
               onQty={q => setQty(plantingOffering, q)}
               included
               onToggle={() => setPlantingSelected(false)}
+              canOverride={canOverride}
+              baseline={plantingComputed}
+              override={serviceOverride[plantingOffering.id]}
+              onOverride={next => setOverride(plantingOffering.id, next)}
             />
           ) : (
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -267,6 +324,10 @@ export function CartReview() {
               onQty={q => setQty(nettingSel.offering, q)}
               included
               onToggle={() => { setNettingDeclined(true); }}
+              canOverride={canOverride}
+              baseline={nettingComputed}
+              override={serviceOverride[nettingSel.offering.id]}
+              onOverride={next => setOverride(nettingSel.offering.id, next)}
             />
           ) : (
             <div style={{ marginBottom: 12 }}>
@@ -290,12 +351,16 @@ export function CartReview() {
               key={s.offering.id}
               name={s.offering.name}
               rule={s.offering.price_type === 'per_unit' ? `per plant · ×${effQty(s.offering)}` : 'per order · ×1'}
-              amount={lineSubtotal(s.offering, effQty(s.offering))}
+              amount={effAmt(s.offering, computedAmt(s.offering))}
               editable={s.offering.price_type === 'per_unit'}
               qty={effQty(s.offering)}
               onQty={s.offering.price_type === 'per_unit' ? (q => setQty(s.offering, q)) : undefined}
               included
               onToggle={() => toggleService(s.offering.id)}
+              canOverride={canOverride}
+              baseline={computedAmt(s.offering)}
+              override={serviceOverride[s.offering.id]}
+              onOverride={next => setOverride(s.offering.id, next)}
             />
           ) : (
             <div key={s.offering.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -417,28 +482,101 @@ function Stepper({ value, onChange, min = 0 }: { value: number; onChange: (v: nu
 
 function ServiceRow({
   name, rule, amount, editable, qty, onQty, included, onToggle,
+  canOverride, baseline, override, onOverride,
 }: {
   name: string; rule: string; amount: number; editable: boolean;
   qty: number; onQty?: (q: number) => void; included: boolean; onToggle?: () => void;
+  // Owner/manager price override (attributed leakage). canOverride gates the affordance;
+  // baseline = rule-computed amount; override = current {amount, reason}; onOverride persists it.
+  canOverride?: boolean; baseline?: number;
+  override?: { amount: number; reason: string };
+  onOverride?: (next: { amount: number; reason: string } | null) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draftAmt, setDraftAmt]     = useState<string>(String(override?.amount ?? amount ?? 0));
+  const [draftReason, setDraftReason] = useState<string>(override?.reason ?? '');
+  const isOverridden = !!override;
+  const base = baseline ?? amount;
+  const leak = isOverridden ? Math.max(0, base - override!.amount) : 0;
+
+  function openEditor() {
+    setDraftAmt(String(override?.amount ?? base ?? 0));
+    setDraftReason(override?.reason ?? '');
+    setEditing(true);
+  }
+  function saveEditor() {
+    const val = Math.max(0, parseFloat(draftAmt) || 0);
+    onOverride?.({ amount: val, reason: draftReason.trim() });
+    setEditing(false);
+  }
+  function clearEditor() {
+    onOverride?.(null);
+    setEditing(false);
+  }
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: '0.9375rem', color: '#1f2937', margin: 0 }}>
-          {included ? '✓ ' : ''}{name}
-        </p>
-        <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: '2px 0 0' }}>{rule}</p>
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: '0.9375rem', color: '#1f2937', margin: 0 }}>
+            {included ? '✓ ' : ''}{name}
+          </p>
+          <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: '2px 0 0' }}>{rule}</p>
+          {canOverride && onOverride && !editing && (
+            <button onClick={openEditor} style={{ ...linkBtn, fontSize: '0.75rem', marginTop: 2 }}>
+              {isOverridden ? 'Edit price' : 'Adjust price'}
+            </button>
+          )}
+          {isOverridden && leak > 0 && (
+            <p style={{ fontSize: '0.75rem', color: '#92400e', margin: '2px 0 0' }}>
+              −${leak.toFixed(2)} off ${base.toFixed(2)}{override!.reason ? ` · ${override!.reason}` : ''}
+            </p>
+          )}
+        </div>
+        {editable && onQty && !isOverridden && (
+          <Stepper value={qty} onChange={onQty} min={1} />
+        )}
+        <span style={{ width: 68, textAlign: 'right', fontWeight: 500, fontSize: '0.9375rem', color: isOverridden ? '#92400e' : '#374151' }}>
+          {amount > 0 ? `$${amount.toFixed(2)}` : '—'}
+        </span>
+        {onToggle && (
+          <button onClick={onToggle} aria-label="Remove service" style={iconBtn}>
+            <X size={16} color="#9ca3af" />
+          </button>
+        )}
       </div>
-      {editable && onQty && (
-        <Stepper value={qty} onChange={onQty} min={1} />
-      )}
-      <span style={{ width: 68, textAlign: 'right', fontWeight: 500, fontSize: '0.9375rem', color: '#374151' }}>
-        {amount > 0 ? `$${amount.toFixed(2)}` : '—'}
-      </span>
-      {onToggle && (
-        <button onClick={onToggle} aria-label="Remove service" style={iconBtn}>
-          <X size={16} color="#9ca3af" />
-        </button>
+
+      {/* Owner/manager price-override editor (leakage capture) */}
+      {editing && (
+        <div style={{ marginTop: 8, padding: '10px 12px', background: '#fffbeb', border: '1.5px solid #fcd34d', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: '0.8125rem', color: '#78350f', fontWeight: 600 }}>Set price</span>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#92400e', fontWeight: 700 }}>$</span>
+              <input
+                type="number" inputMode="decimal" step="0.01" min="0" value={draftAmt}
+                onChange={e => setDraftAmt(e.target.value)}
+                style={{ width: '100%', padding: '8px 8px 8px 20px', border: '1.5px solid #fcd34d', borderRadius: 6, fontSize: '0.9375rem', boxSizing: 'border-box' }}
+              />
+            </div>
+          </div>
+          <input
+            type="text" value={draftReason}
+            onChange={e => setDraftReason(e.target.value)}
+            placeholder="Reason (e.g. loyal contractor)"
+            style={{ padding: '8px 10px', border: '1.5px solid #fcd34d', borderRadius: 6, fontSize: '0.875rem', boxSizing: 'border-box' }}
+          />
+          <p style={{ fontSize: '0.75rem', color: '#92400e', margin: 0 }}>
+            Baseline ${base.toFixed(2)} · giving away ${Math.max(0, base - (parseFloat(draftAmt) || 0)).toFixed(2)}
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={saveEditor} className="btn btn-primary" style={{ minHeight: 40, flex: 1, fontSize: '0.875rem' }}>Apply</button>
+            {isOverridden && (
+              <button onClick={clearEditor} className="btn btn-secondary" style={{ minHeight: 40, fontSize: '0.875rem' }}>Reset to ${base.toFixed(2)}</button>
+            )}
+            <button onClick={() => setEditing(false)} className="btn btn-secondary" style={{ minHeight: 40, fontSize: '0.875rem' }}>Cancel</button>
+          </div>
+        </div>
       )}
     </div>
   );

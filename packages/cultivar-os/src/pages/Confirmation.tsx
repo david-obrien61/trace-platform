@@ -10,6 +10,9 @@ interface ConfirmState {
   email:            string;
   payOnline:        boolean;
   transportMode?:   'self' | 'staff';
+  transportName?:   string | null;                     // real service_offerings.name (H3/H6)
+  serviceLines?:    { name: string; amount: number }[]; // real service itemization (H3/H6)
+  businessName?:    string | null;                     // from context at review (AC-1)
   nettingActive?:   boolean;
   qbInvoiceId?:     string;
   qbInvoiceNumber?: string;
@@ -59,7 +62,7 @@ export function Confirmation() {
   }
 
   const { invoiceNumber, total, subtotal, taxAmount, email, payOnline,
-          transportMode, nettingActive,
+          transportMode, transportName, serviceLines, businessName, nettingActive,
           qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus } = state;
 
   const isSelf      = (transportMode ?? 'self') === 'self';
@@ -113,7 +116,10 @@ export function Confirmation() {
       {/* Transport status */}
       <div className="section" style={{ paddingTop: 0 }}>
         {!isSelf && (
-          <StatusBadge icon="✓" color="green" title="LAWNS handling delivery/install"
+          <StatusBadge icon="✓" color="green"
+            title={transportName
+              ? `${businessName ? `${businessName} — ` : ''}${transportName}`
+              : `${businessName ?? 'We'} handling your order`}
             detail="We will deliver your order to your property." />
         )}
         {isSelf && nettingOn && (
@@ -137,6 +143,14 @@ export function Confirmation() {
           <div key={l.plant.stock_line_id ?? l.plant.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem', color: '#374151', marginBottom: 8 }}>
             <span>{l.plant.common_name ?? l.plant.species}{l.plant.current_container ? ` · ${l.plant.current_container}` : ''} × {l.quantity}</span>
             <span>${((l.plant.business_inventory?.sell_price ?? 0) * l.quantity).toFixed(2)}</span>
+          </div>
+        ))}
+
+        {/* Service lines — itemized by REAL service_offerings.name (H3/H6), not a branch label. */}
+        {(serviceLines ?? []).filter(s => s.amount > 0).map((s, i) => (
+          <div key={`svc-${i}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem', color: '#374151', marginBottom: 8 }}>
+            <span>{s.name}</span>
+            <span>${s.amount.toFixed(2)}</span>
           </div>
         ))}
 

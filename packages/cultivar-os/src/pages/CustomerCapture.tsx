@@ -74,7 +74,7 @@ export function CustomerCapture() {
     setCustomer, customer: saved, items, selectedTransport,
     deliveryDate: savedDeliveryDate, setDeliveryDate,
   } = useCart();
-  const { isOwner, role } = useBusinessContext();
+  const { isOwner, role, business } = useBusinessContext();
   const firstItem = items[0] ?? null;
 
   const [firstName, setFirstName] = useState(saved?.first_name ?? '');
@@ -239,7 +239,7 @@ export function CustomerCapture() {
               style={inputStyle}
               value={city}
               onChange={(e) => setCity(e.target.value)}
-              placeholder="Leander"
+              placeholder="City"
               autoComplete="address-level2"
             />
           </Field>
@@ -258,7 +258,7 @@ export function CustomerCapture() {
               inputMode="numeric"
               value={zip}
               onChange={(e) => setZip(e.target.value.replace(/\D/g, '').slice(0, 5))}
-              placeholder="78641"
+              placeholder="ZIP"
               autoComplete="postal-code"
             />
           </Field>
@@ -302,7 +302,7 @@ export function CustomerCapture() {
             style={{ marginTop: 2, width: 18, height: 18, accentColor: '#27500A', flexShrink: 0 }}
           />
           <span style={{ fontSize: '0.875rem', color: '#4b5563', lineHeight: 1.5 }}>
-            Send me seasonal planting tips and special offers from LAWNS Tree Farm
+            Send me seasonal planting tips and special offers{business?.name ? ` from ${business.name}` : ''}
           </span>
         </label>
       </div>

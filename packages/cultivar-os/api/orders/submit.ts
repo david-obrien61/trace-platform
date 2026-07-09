@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { sendNotification } from '../../../shared/src/notifications/send';
 import { findOrCreateCustomer } from '../../../shared/src/business-logic/customerUpsert';
-import { callerHoldsPermission, callerIsBusinessOwner } from '../../../shared/src/auth/callerPermission';
+import { callerHoldsPermission, callerIsBusinessOwner, resolveCallerUid } from '../../../shared/src/auth/callerPermission';
 import { nettedQuantity, lineSubtotal } from '../../src/lib/netting';
 import { ORDER_STATUSES } from '../../src/lib/orderStatus';
 
@@ -128,6 +128,7 @@ async function handleCreate(req: any, res: any) {
     plantingSelected,  // boolean — whether planting is attached
     nettingDeclined,
     serviceQuantities, // Record<offeringId, number> — owner-confirmed netted quantities
+    serviceOverrides,  // Record<offeringId, {amount,reason}> — owner/manager PRICE overrides
     deliveryDate,      // string 'YYYY-MM-DD' | null — owner/manager-entered delivery date
   } = req.body;
   const businessId: string = req.body.businessId || lines?.[0]?.plant?.business_id;
@@ -245,30 +246,84 @@ async function handleCreate(req: any, res: any) {
       return nettedQuantity(o, plantCount);
     };
 
-    const transportAmount = selectedTransport ? lineSubtotal(selectedTransport, qtyFor(selectedTransport)) : 0;
+    // ── PRICE-OVERRIDE authority (attributed leakage) ───────────────────────
+    // An override is a privileged owner/manager act. It is HONORED only when the CALLER is
+    // token-verified owner/manager for THIS business (never a client-posted flag). The public
+    // (anon) checkout path has no token → overrides ignored, baseline charged (tamper defense).
+    const overridesIn: Record<string, { amount: number; reason: string }> =
+      (serviceOverrides && typeof serviceOverrides === 'object') ? serviceOverrides : {};
+    const hasOverrides = Object.keys(overridesIn).length > 0;
+    let overrideAllowed = false;
+    let overrideBy: string | null = null;
+    if (hasOverrides) {
+      overrideAllowed = await callerCanManageOrders(req.headers?.authorization, businessId);
+      if (overrideAllowed) {
+        overrideBy = await resolveCallerUid(req.headers?.authorization);
+      } else {
+        console.log('[TRACE:PRICE] price override IGNORED — caller not owner/manager (tamper defense)', {
+          businessId, count: Object.keys(overridesIn).length,
+        });
+      }
+    }
+    const honored = overrideAllowed ? overridesIn : {};
+
+    type SvcResult = { amount: number; isOverride: boolean; original: number | null; leakage: number | null; reason: string | null };
+    const applyOverride = (offeringId: string, computed: number): SvcResult => {
+      const ov = honored[offeringId];
+      if (ov && typeof ov.amount === 'number' && ov.amount >= 0) {
+        const amt  = round2(ov.amount);
+        const leak = round2(computed - amt);
+        console.log('[TRACE:LEAKAGE] price override honored', {
+          offeringId, baseline: round2(computed), override: amt, leakage: leak, overrideBy, reason: ov.reason ?? null,
+        });
+        return { amount: amt, isOverride: true, original: round2(computed), leakage: leak, reason: (ov.reason ?? '').trim() || null };
+      }
+      return { amount: computed, isOverride: false, original: null, leakage: null, reason: null };
+    };
+
+    const transportComputed = selectedTransport ? lineSubtotal(selectedTransport, qtyFor(selectedTransport)) : 0;
+    const transportRes      = selectedTransport ? applyOverride(selectedTransport.id, transportComputed) : null;
+    const transportAmount   = transportRes?.amount ?? 0;
 
     // Planting — the SEPARATE per-plant service the "Delivery + planting" branch attaches
     // (delivery flat ×1 + planting per_unit ×N). Distinct from transport so both are charged.
-    const plantingActive = !!(plantingSelected && plantingOffering);
-    const plantingQty    = plantingActive ? qtyFor(plantingOffering) : 0;
-    const plantingAmount = plantingActive ? lineSubtotal(plantingOffering, plantingQty) : 0;
+    const plantingActive   = !!(plantingSelected && plantingOffering);
+    const plantingQty      = plantingActive ? qtyFor(plantingOffering) : 0;
+    const plantingComputed = plantingActive ? lineSubtotal(plantingOffering, plantingQty) : 0;
+    const plantingRes      = plantingActive ? applyOverride(plantingOffering.id, plantingComputed) : null;
+    const plantingAmount   = plantingRes?.amount ?? 0;
 
     const nettingSelection = (services ?? []).find(
       (s: any) => s.offering?.trigger_transport_mode === 'self' && s.offering?.category === 'addon',
     );
     const nettingActive    = transportMode === 'self' && (nettingSelection?.selected ?? false) && !nettingDeclined;
-    const nettingUnitPrice = nettingSelection?.offering?.price ?? 10;
+    const nettingUnitPrice = nettingSelection?.offering?.price ?? 0; // H7: no tenant $10 fallback
     const nettingQty       = nettingActive && nettingSelection ? qtyFor(nettingSelection.offering) : 0;
-    const nettingTotal     = nettingActive && nettingSelection ? lineSubtotal(nettingSelection.offering, nettingQty) : 0;
+    const nettingComputed  = nettingActive && nettingSelection ? lineSubtotal(nettingSelection.offering, nettingQty) : 0;
+    const nettingRes       = nettingActive && nettingSelection ? applyOverride(nettingSelection.offering.id, nettingComputed) : null;
+    const nettingTotal     = nettingRes?.amount ?? 0;
 
     const otherAddons = (services ?? []).filter(
       (s: any) => s.selected && s.offering?.category === 'addon' && !s.offering?.trigger_transport_mode,
     );
-    const otherTotal = otherAddons.reduce((sum: number, s: any) => sum + lineSubtotal(s.offering, qtyFor(s.offering)), 0);
+    const otherResults = otherAddons.map((s: any) => ({
+      offering: s.offering,
+      res: applyOverride(s.offering.id, lineSubtotal(s.offering, qtyFor(s.offering))),
+    }));
+    const otherTotal = otherResults.reduce((sum: number, x: any) => sum + x.res.amount, 0);
+
+    // Override columns for a selection row (only when honored). override_by = the acting user's
+    // auth.uid (server-resolved). Gated migration 20260708 adds these columns — insert falls back
+    // without them if absent (deploy-window-safe, below).
+    const overrideCols = (res: SvcResult | null): Record<string, unknown> =>
+      res?.isOverride
+        ? { is_manual_override: true, original_price: res.original, price_leakage: res.leakage, override_by: overrideBy, override_reason: res.reason }
+        : {};
 
     console.log('[TRACE:CART] netting applied (server)', {
       plantCount, transportQty: selectedTransport ? qtyFor(selectedTransport) : 0,
       transportAmount, plantingActive, plantingQty, plantingAmount, nettingQty, nettingTotal, otherTotal,
+      overridesHonored: Object.keys(honored).length,
     });
 
     const addonsAmount = transportAmount + plantingAmount + nettingTotal + otherTotal;
@@ -367,7 +422,7 @@ async function handleCreate(req: any, res: any) {
     const { error: itemErr } = await db.from('order_items').insert(itemRows);
     if (itemErr) throw new Error(`Order item: ${itemErr.message}`);
 
-    // ── 9. Order service selections (attach-rule netted quantities) ─────────
+    // ── 9. Order service selections (attach-rule netted quantities + override leakage) ──
     const selectionRows: any[] = [];
 
     if (selectedTransport) {
@@ -377,6 +432,7 @@ async function handleCreate(req: any, res: any) {
         quantity:              qtyFor(selectedTransport),
         unit_price_at_time:    selectedTransport.price,
         subtotal:              transportAmount,
+        ...overrideCols(transportRes),
       });
     }
 
@@ -389,6 +445,7 @@ async function handleCreate(req: any, res: any) {
         quantity:              plantingQty,
         unit_price_at_time:    plantingOffering.price,
         subtotal:              plantingAmount,
+        ...overrideCols(plantingRes),
       });
     }
 
@@ -399,21 +456,37 @@ async function handleCreate(req: any, res: any) {
         quantity:              nettingQty,
         unit_price_at_time:    nettingUnitPrice,
         subtotal:              nettingTotal,
+        ...overrideCols(nettingRes),
       });
     }
 
-    for (const s of otherAddons) {
+    for (const x of otherResults) {
       selectionRows.push({
         order_id:              orderId,
-        service_offering_id:   s.offering.id,
-        quantity:              qtyFor(s.offering),
-        unit_price_at_time:    s.offering.price,
-        subtotal:              lineSubtotal(s.offering, qtyFor(s.offering)),
+        service_offering_id:   x.offering.id,
+        quantity:              qtyFor(x.offering),
+        unit_price_at_time:    x.offering.price,
+        subtotal:              x.res.amount,
+        ...overrideCols(x.res),
       });
     }
 
     if (selectionRows.length > 0) {
-      const { error: selErr } = await db.from('order_service_selections').insert(selectionRows);
+      // Override columns are gated (20260708). Insert WITH them; on a missing-column error,
+      // strip the override fields and retry (deploy-window-safe — the order still lands, the
+      // give-away is dropped and re-enabled once the columns exist).
+      const OVERRIDE_KEYS = ['is_manual_override', 'original_price', 'price_leakage', 'override_by', 'override_reason'];
+      let selErr: any;
+      ({ error: selErr } = await db.from('order_service_selections').insert(selectionRows));
+      if (selErr && (selErr.code === '42703' || selErr.code === 'PGRST204')) {
+        console.log('[TRACE:LEAKAGE] override columns absent — retrying selections without them (migration pending)', { code: selErr.code });
+        const stripped = selectionRows.map((r) => {
+          const c = { ...r };
+          for (const k of OVERRIDE_KEYS) delete c[k];
+          return c;
+        });
+        ({ error: selErr } = await db.from('order_service_selections').insert(stripped));
+      }
       if (selErr) throw new Error(`Service selections: ${selErr.message}`);
     }
 
