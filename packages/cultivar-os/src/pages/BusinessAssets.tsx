@@ -214,7 +214,7 @@ export function BusinessAssets() {
 
   // ── Column config ──
   const columns: DataSheetColumn<AssetRow>[] = [
-    { key: 'name', header: 'Name', sortable: true, sortVal: r => r.name.toLowerCase(),
+    { key: 'name', header: 'Name', sortable: true, sortVal: r => r.name.toLowerCase(), frozen: true,
       render: r => <TextCell key={`name-${r.id}-${r.updated_at}`} value={r.name} width={150} onCommit={v => onText(r, 'name', v)} /> },
     { key: 'make', header: 'Make', sortable: true, sortVal: r => (r.make ?? '').toLowerCase(),
       render: r => <TextCell key={`make-${r.id}-${r.updated_at}`} value={r.make} width={100} placeholder="—" onCommit={v => onText(r, 'make', v)} /> },

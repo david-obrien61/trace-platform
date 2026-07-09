@@ -4,7 +4,10 @@
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.
 
-**Last updated:** 2026-07-09 (Add Inventory modal — required `sell_price` [D-35 CRUD hole, nothing born unsellable] +
+**Last updated:** 2026-07-09 (DataSheet platform standards — TWO cross-cutting UI conventions in the shared `DataSheet<T>`
+engine: system-managed fields display LOCKED-WITH-EXPLANATION [single canonical registry `systemManagedFields.ts`] +
+horizontal scroll ALWAYS reachable [bounded box + sticky header + frozen identifier column]; recorded as CLAUDE.md §6 r13/r14,
+NOT numbered D-## decisions. Earlier: Add Inventory modal — required `sell_price` [D-35 CRUD hole, nothing born unsellable] +
 unit_cost editable [derives cost_confidence] + shared datasheet-add modals centered [convention A]; margin-aware signal
 structure-only. Earlier: DROP `order_items.plant_id` — AC-1 de-noun of the shared order spine, D-36; the sole
 line anchor is now `business_inventory_id`; closes story #231's "PLANTS (0)" bug class; gated DROP migration + 6 readers
@@ -29,6 +32,9 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-09 · DataSheet platform standards — system-managed-field lock-with-explanation + horizontal-scroll):**
+> No drift — abided by **§6 rule 8 / reuse-not-fork** (both standards land in the ONE shared `DataSheet<T>` control → inventory/assets/customers inherit; the system-managed set is a SINGLE canonical registry `systemManagedFields.ts`, the sole source for the lock rule — no per-consumer duplication), **D-9 Surface Honesty** (extended to editability: a system-write-only field is locked-WITH-explanation, never a silent-grey hidden edit; `cost_confidence`/`estimated_value_confidence` deliberately left editable because they carry a real override on the reconcile grids — honest about what IS editable), **AC-3** (no tenant-scope change), and the **12-function ceiling** (ZERO new `api/` file). NO schema/migration. Established **two new platform UI conventions** recorded as CLAUDE.md §6 rules 13 (system-managed display) + 14 (DataSheet horizontal-scroll) — process/standards additions, NOT numbered D-## decisions. `price_tier` flagged for a future edit-vs-lock decision (surfaced, not decided — no new numbered decision opened).
+>
 > ✅ **Drift watch (2026-07-09 · Add Inventory modal — required `sell_price` [D-35 CRUD hole] + unit_cost editable + centered):**
 > No drift — abided by **D-35** (sell_price is stored on the stock line, DISTINCT from unit_cost, authoritative at
 > checkout; the create form now sets it so nothing is born unsellable), **D-9 Surface Honesty** (unit_cost blank →

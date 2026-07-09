@@ -122,7 +122,7 @@ export function Customers() {
 
   // ── Column config ──
   const columns: DataSheetColumn<CustomerRow>[] = [
-    { key: 'first_name', header: 'First', sortable: true, sortVal: r => r.first_name.toLowerCase(),
+    { key: 'first_name', header: 'First', sortable: true, sortVal: r => r.first_name.toLowerCase(), frozen: true,
       render: r => <TextCell key={`fn-${r.id}-${r.created_at}`} value={r.first_name} width={120} onCommit={v => onText(r, 'first_name', v)} /> },
     { key: 'last_name', header: 'Last', sortable: true, sortVal: r => r.last_name.toLowerCase(),
       render: r => <TextCell key={`ln-${r.id}-${r.created_at}`} value={r.last_name} width={120} placeholder="—" onCommit={v => onText(r, 'last_name', v)} /> },

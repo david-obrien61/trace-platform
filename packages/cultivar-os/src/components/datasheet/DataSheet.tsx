@@ -18,10 +18,12 @@
 // INSTRUMENTATION (STD-003): the engine is silent; consumers emit `[TRACE:<area>]` on their
 //               loads/writes (invsheet for inventory, assets for the asset grid).
 // ============================================================
-import { useState, useMemo, Fragment } from 'react';
-import { ChevronRight, ChevronDown, SlidersHorizontal, Search } from 'lucide-react';
+import { useState, useMemo, useEffect, Fragment } from 'react';
+import { ChevronRight, ChevronDown, SlidersHorizontal, Search, Lock } from 'lucide-react';
+import { lockInfoFor, type SystemFieldInfo } from './systemManagedFields';
 
-// ── Column descriptor: drives <thead>/<tbody> render, sort, and the show/hide menu ──
+// ── Column descriptor: drives <thead>/<tbody> render, sort, the show/hide menu, the frozen-column
+//    pin, and the system-managed lock. ──
 export interface DataSheetColumn<T> {
   key: string;
   header: string;
@@ -29,6 +31,17 @@ export interface DataSheetColumn<T> {
   sortVal?: (r: T) => string | number;
   hideable?: boolean;        // default true (structural cols like a flag icon pass false)
   defaultVisible?: boolean;  // default true
+  /** Pin this column to the left so it stays put on horizontal scroll (the name/identifier column).
+   *  Only the LEADING contiguous run of frozen columns is pinned. */
+  frozen?: boolean;
+  /** Rendered width (px) of a frozen column — needed only for a frozen col that has ANOTHER frozen
+   *  col to its right (it sets that neighbour's left offset). The last frozen col needs none. */
+  frozenWidth?: number;
+  /** Force the system-managed lock on/off, overriding the registry. Default: registry decides by key
+   *  (see systemManagedFields.ts — the single source). `false` = force editable; `true` = force locked. */
+  systemManaged?: boolean;
+  /** Custom lock-popover text (overrides the registry reason). */
+  lockReason?: string;
   render: (r: T) => React.ReactNode;
 }
 
@@ -81,6 +94,26 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
   });
   const [colMenuOpen, setColMenuOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // Lock popover for a system-managed column — positioned fixed (escapes the scroll container's clip).
+  const [lockPop, setLockPop] = useState<{ info: SystemFieldInfo; top: number; left: number } | null>(null);
+
+  // [TRACE:datasheet] — one emit per mount/config: what the engine is rendering + how many columns
+  // are pinned / system-locked. ON BY DEFAULT (standing owner instruction).
+  useEffect(() => {
+    console.log('[TRACE:datasheet] render', {
+      title,
+      columns: columns.length,
+      frozen: columns.filter(c => c.frozen).length,
+      systemManaged: columns.filter(c => lockInfoFor(c)).length,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title]);
+
+  function openLock(e: React.MouseEvent, info: SystemFieldInfo) {
+    e.stopPropagation(); // never trigger the column sort
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setLockPop({ info, top: r.bottom + 6, left: Math.max(8, Math.min(r.left - 4, window.innerWidth - 288)) });
+  }
 
   function toggleSort(key: string) {
     if (sortKey === key) { setSortDir(d => (d === 'asc' ? 'desc' : 'asc')); return; }
@@ -114,6 +147,25 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
 
   const shownCols = columns.filter(c => visible[c.key]);
   const hideable = columns.filter(c => c.hideable !== false);
+
+  // ── Frozen columns: pin the LEADING contiguous run so the identifier stays put on horizontal
+  //    scroll. left offsets accumulate from each frozen col's width; the last one gets a right edge
+  //    shadow to delineate the pinned block. Computed over SHOWN columns so hiding a col is safe. ──
+  const frozenMap = new Map<string, { left: number; last: boolean }>();
+  {
+    let acc = 0;
+    const run: string[] = [];
+    for (const c of shownCols) {
+      if (!c.frozen) break;
+      frozenMap.set(c.key, { left: acc, last: false });
+      run.push(c.key);
+      acc += c.frozenWidth ?? 150;
+    }
+    if (run.length) {
+      const lastEntry = frozenMap.get(run[run.length - 1]);
+      if (lastEntry) lastEntry.last = true;
+    }
+  }
 
   return (
     <div style={S.page}>
@@ -180,21 +232,43 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
               <div style={S.dupBanner}>{flagBanner(flagCount)}</div>
             )}
 
-            {/* Table */}
-            <div style={{ overflowX: 'auto' }}>
+            {/* Table — bounded scroll box: sticky header (top) + frozen identifier column (left),
+                so the horizontal scrollbar sits at the bottom of the VIEWPORT-BOUNDED box (reachable
+                without scrolling past every row) and you never lose the header row or which row you're on. */}
+            <div style={S.scroll}>
               <table style={S.table}>
                 <thead>
                   <tr>
-                    {shownCols.map(col => (
-                      <th
-                        key={col.key}
-                        style={{ ...S.th, ...(col.sortable ? S.thSortable : {}) }}
-                        onClick={col.sortable ? () => toggleSort(col.key) : undefined}
-                      >
-                        {col.header}
-                        {col.sortable && sortKey === col.key && <span style={S.sortArrow}>{sortDir === 'asc' ? '▲' : '▼'}</span>}
-                      </th>
-                    ))}
+                    {shownCols.map(col => {
+                      const fz = frozenMap.get(col.key);
+                      const lock = lockInfoFor(col);
+                      const thStyle: React.CSSProperties = {
+                        ...S.th,
+                        ...(col.sortable ? S.thSortable : {}),
+                        ...(fz ? { left: fz.left, zIndex: 3, background: '#fff', ...(fz.last ? S.frozenEdgeTh : {}) } : {}),
+                      };
+                      return (
+                        <th
+                          key={col.key}
+                          style={thStyle}
+                          onClick={col.sortable ? () => toggleSort(col.key) : undefined}
+                        >
+                          {col.header}
+                          {lock && (
+                            <button
+                              type="button"
+                              style={S.lockBtn}
+                              onClick={e => openLock(e, lock)}
+                              title="System-managed field — tap to learn why it isn't editable"
+                              aria-label={`${col.header || col.key}: system-managed, not editable — details`}
+                            >
+                              <Lock size={11} />
+                            </button>
+                          )}
+                          {col.sortable && sortKey === col.key && <span style={S.sortArrow}>{sortDir === 'asc' ? '▲' : '▼'}</span>}
+                        </th>
+                      );
+                    })}
                     {renderExpand && <th style={S.th}></th>}
                   </tr>
                 </thead>
@@ -207,9 +281,13 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
                     return (
                       <Fragment key={id}>
                         <tr>
-                          {shownCols.map(col => (
-                            <td key={col.key} style={tdStyle}>{col.render(row)}</td>
-                          ))}
+                          {shownCols.map(col => {
+                            const fz = frozenMap.get(col.key);
+                            const cellStyle = fz
+                              ? { ...tdStyle, left: fz.left, position: 'sticky' as const, zIndex: 1, background: flagged ? '#fffbeb' : '#fff', ...(fz.last ? S.frozenEdgeTd : {}) }
+                              : tdStyle;
+                            return <td key={col.key} style={cellStyle}>{col.render(row)}</td>;
+                          })}
                           {renderExpand && (
                             <td style={tdStyle}>
                               <button style={S.expandBtn} onClick={() => toggleExpand(id)} title="Details">
@@ -234,6 +312,17 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
           </>
         )}
       </div>
+
+      {/* System-managed lock popover — fixed so the scroll container can't clip it. */}
+      {lockPop && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 200 }} onClick={() => setLockPop(null)} />
+          <div style={{ ...S.lockCard, top: lockPop.top, left: lockPop.left }}>
+            <div style={S.lockCardHead}><Lock size={13} /> System-managed — not editable</div>
+            <p style={S.lockCardBody}><b>{lockPop.info.label}.</b> {lockPop.info.reason}</p>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -332,9 +421,25 @@ const S = {
   colMenuItem: { display: 'flex', alignItems: 'center', gap: 8, padding: '0.35rem 0.5rem', fontSize: '0.85rem', color: '#374151', cursor: 'pointer', borderRadius: 6 } as React.CSSProperties,
   countPill: { fontSize: '0.8rem', color: '#6b7280', marginLeft: 'auto' } as React.CSSProperties,
   dupBanner: { display: 'flex', alignItems: 'center', gap: 8, background: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e', borderRadius: 8, padding: '0.5rem 0.75rem', fontSize: '0.83rem', marginBottom: 12 } as React.CSSProperties,
+  // Bounded scroll box: BOTH scrollbars live on this container (not the page), so the horizontal
+  // scrollbar is reachable within the viewport instead of below all N rows. The offset leaves room
+  // for the AppLayout header + breadcrumb + page title + toolbar chrome above, so the box bottom
+  // (and its horizontal scrollbar) stays on-screen (tune the offset if chrome height changes).
+  scroll: { overflow: 'auto', maxHeight: 'calc(100vh - 280px)', position: 'relative' as const } as React.CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: '0.85rem' } as React.CSSProperties,
-  th: { textAlign: 'left' as const, padding: '0.5rem 0.6rem', borderBottom: '2px solid #e5e7eb', color: '#374151', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' as const, whiteSpace: 'nowrap' as const, userSelect: 'none' as const } as React.CSSProperties,
+  // Sticky header row — stays visible on vertical scroll. box-shadow (not just borderBottom) keeps the
+  // underline drawn during scroll under border-collapse. Opaque bg so body rows don't show through.
+  th: { textAlign: 'left' as const, padding: '0.5rem 0.6rem', borderBottom: '2px solid #e5e7eb', boxShadow: 'inset 0 -2px 0 #e5e7eb', color: '#374151', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' as const, whiteSpace: 'nowrap' as const, userSelect: 'none' as const, position: 'sticky' as const, top: 0, zIndex: 2, background: '#fff' } as React.CSSProperties,
   thSortable: { cursor: 'pointer' } as React.CSSProperties,
+  // Right-edge shadow on the last frozen (pinned) column — delineates the pinned block from the
+  // scrolling columns. The th variant also re-declares the sticky-header underline (spread wins).
+  frozenEdgeTh: { boxShadow: 'inset 0 -2px 0 #e5e7eb, 6px 0 6px -4px rgba(0,0,0,0.14)' } as React.CSSProperties,
+  frozenEdgeTd: { boxShadow: '6px 0 6px -4px rgba(0,0,0,0.10)' } as React.CSSProperties,
+  // System-managed lock affordance + its popover.
+  lockBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 5, color: '#9ca3af', display: 'inline-flex', alignItems: 'center', verticalAlign: 'middle' } as React.CSSProperties,
+  lockCard: { position: 'fixed' as const, zIndex: 201, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.16)', padding: '0.75rem 0.85rem', maxWidth: 272 } as React.CSSProperties,
+  lockCardHead: { display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', fontWeight: 700, color: '#374151', marginBottom: 6, textTransform: 'none' as const } as React.CSSProperties,
+  lockCardBody: { margin: 0, fontSize: '0.8rem', lineHeight: 1.45, color: '#4b5563', textTransform: 'none' as const } as React.CSSProperties,
   td: { padding: '0.45rem 0.6rem', borderBottom: '1px solid #f3f4f6', color: '#111827', verticalAlign: 'middle' as const, whiteSpace: 'nowrap' as const } as React.CSSProperties,
   tdDup: { background: '#fffbeb' } as React.CSSProperties,
   sortArrow: { fontSize: '0.7rem', color: '#27500A', marginLeft: 3 } as React.CSSProperties,
