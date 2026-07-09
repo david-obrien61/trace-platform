@@ -51,8 +51,7 @@ export function Orders() {
         leakage_flag, notes, status,
         customers ( first_name, last_name, email ),
         order_items (
-          quantity, plant_id, business_inventory_id,
-          cultivar_plants ( tag_id, common_name, species ),
+          quantity, business_inventory_id,
           business_inventory ( name, size, sku )
         )
       `)

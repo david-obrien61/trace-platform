@@ -31,12 +31,13 @@ async function callerCanManageOrders(authHeader: string | undefined, businessId:
 }
 
 // Resolve a single order_item's server-authoritative sell_price + its inventory lot + container +
-// display name, by its D-34 anchor (stock line via business_inventory_id, else specimen via
-// plant_id). Server-authoritative price (tamper defense), business_id-scoped (AC-3).
+// display name, by its business_inventory_id anchor (the SOLE order-line anchor — D-34, the LOT is
+// the SKU; the AC-1 vertical noun order_items.plant_id was dropped 20260709). Server-authoritative
+// price (tamper defense), business_id-scoped (AC-3).
 async function resolveItemForServer(
   db: ReturnType<typeof adminDb>,
   businessId: string,
-  item: { plant_id: string | null; business_inventory_id: string | null },
+  item: { business_inventory_id: string | null },
 ): Promise<{ sellPrice: number | null; inventoryId: string | null; container: string | null; name: string }> {
   if (item.business_inventory_id) {
     const { data } = await db
@@ -51,25 +52,6 @@ async function resolveItemForServer(
       inventoryId: item.business_inventory_id,
       container:   r?.size ?? null,
       name:        r?.name ?? 'this item',
-    };
-  }
-  if (item.plant_id) {
-    const { data } = await db
-      .from('cultivar_plants')
-      .select('inventory_id, current_container, common_name, species, business_inventory ( sell_price )')
-      .eq('id', item.plant_id)
-      .eq('business_id', businessId)
-      .maybeSingle();
-    const r = data as {
-      inventory_id?: string | null; current_container?: string | null;
-      common_name?: string | null; species?: string | null;
-      business_inventory?: { sell_price?: number | null } | null;
-    } | null;
-    return {
-      sellPrice:   r?.business_inventory?.sell_price ?? null,
-      inventoryId: r?.inventory_id ?? null,
-      container:   r?.current_container ?? null,
-      name:        r?.common_name ?? r?.species ?? 'this item',
     };
   }
   return { sellPrice: null, inventoryId: null, container: null, name: 'this item' };
@@ -137,9 +119,9 @@ async function handleCreate(req: any, res: any) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
-  // Total plants across the cart — the denominator for a per-plant (per_unit) service.
-  const plantCount = lines.reduce((s: number, l: any) => s + Number(l.quantity || 0), 0);
-  if (plantCount <= 0) {
+  // Total items across the cart — the denominator for a per-unit (e.g. per-plant) service.
+  const itemCount = lines.reduce((s: number, l: any) => s + Number(l.quantity || 0), 0);
+  if (itemCount <= 0) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
@@ -169,7 +151,7 @@ async function handleCreate(req: any, res: any) {
     // D-35: charge business_inventory.sell_price (retail), NEVER unit_cost. Server-authoritative;
     // the client-POSTed price is never trusted for the charge (tamper defense, per line).
     const resolvedLines: Array<{ plant: any; quantity: number; stockLineId: string | null; unitPrice: number; subtotal: number }> = [];
-    let plantSubtotal = 0;
+    let linesSubtotal = 0;
     let anyLargeContainer = false;
 
     for (const line of lines) {
@@ -211,26 +193,26 @@ async function handleCreate(req: any, res: any) {
       // ── $0/NULL REFUSAL (Surface Honesty, D-9) — refuse the whole order if ANY line is
       // unpriced rather than silently writing a $0 line. Names the offending item.
       if (serverSellPriceRaw == null || serverSellPrice <= 0) {
-        const plantName = plant.common_name ?? plant.species ?? 'this item';
+        const itemName = plant.common_name ?? plant.species ?? 'this item';
         console.log('[TRACE:PRICE] REFUSED — no sell_price set, sale blocked (no $0 order written)', {
-          plantId: plant.id, plantName, serverSellPriceRaw,
+          plantId: plant.id, itemName, serverSellPriceRaw,
         });
         return res.status(400).json({
-          error: `No sale price set for ${plantName} — set a price in Inventory before selling.`,
+          error: `No sale price set for ${itemName} — set a price in Inventory before selling.`,
           code: 'NO_SELL_PRICE',
         });
       }
 
       const unitPrice = serverSellPrice; // tier HOLD: no adjustment (AC-4)
       const sub = unitPrice * quantity;
-      plantSubtotal += sub;
+      linesSubtotal += sub;
 
       // D-34: for a stock-line order the container is the lot's size (server-fetched).
       const container = stockLineId ? (stockLineSize ?? plant.current_container) : plant.current_container;
       if (LARGE_CONTAINERS.includes(container)) anyLargeContainer = true;
 
       console.log('[TRACE:PRICE] line — server-authoritative sell_price', {
-        plantId: plant.id, unitPrice, quantity, subtotal: sub, anchor: stockLineId ? 'business_inventory_id' : 'plant_id',
+        plantId: plant.id, unitPrice, quantity, subtotal: sub, lane: stockLineId ? 'stock_line' : 'specimen',
       });
 
       resolvedLines.push({ plant, quantity, stockLineId, unitPrice, subtotal: sub });
@@ -238,12 +220,12 @@ async function handleCreate(req: any, res: any) {
 
     // ── 4. Service amounts (attach-rule netting over the WHOLE cart) ─────────
     // qtyFor honors the owner-confirmed netted quantity (serviceQuantities), else applies
-    // the rule (per_unit ? plantCount : 1). Same rule the client showed — display & charge agree.
+    // the rule (per_unit ? itemCount : 1). Same rule the client showed — display & charge agree.
     const transportMode = selectedTransport?.transport_mode ?? 'self';
     const qtyFor = (o: any): number => {
       const override = serviceQuantities?.[o.id];
       if (typeof override === 'number' && override > 0) return override;
-      return nettedQuantity(o, plantCount);
+      return nettedQuantity(o, itemCount);
     };
 
     // ── PRICE-OVERRIDE authority (attributed leakage) ───────────────────────
@@ -321,13 +303,13 @@ async function handleCreate(req: any, res: any) {
         : {};
 
     console.log('[TRACE:CART] netting applied (server)', {
-      plantCount, transportQty: selectedTransport ? qtyFor(selectedTransport) : 0,
+      itemCount, transportQty: selectedTransport ? qtyFor(selectedTransport) : 0,
       transportAmount, plantingActive, plantingQty, plantingAmount, nettingQty, nettingTotal, otherTotal,
       overridesHonored: Object.keys(honored).length,
     });
 
     const addonsAmount = transportAmount + plantingAmount + nettingTotal + otherTotal;
-    const subtotal     = plantSubtotal + addonsAmount;
+    const subtotal     = linesSubtotal + addonsAmount;
     const taxAmount    = Math.round(subtotal * taxRate * 100) / 100;
     const total        = subtotal + taxAmount;
 
@@ -397,27 +379,24 @@ async function handleCreate(req: any, res: any) {
     if (orderErr) throw new Error(`Order: ${orderErr.message}`);
     const orderId = order!.id;
 
-    // ── 8. Order items — ONE row per cart line, each with its own D-34 anchor ──
-    // one line = ONE anchor, never both: stock line → business_inventory_id (plant_id null);
-    // specimen → plant_id.
+    // ── 8. Order items — ONE row per cart line, anchored to its business_inventory lot ──
+    // D-34: the LOT is the SKU → every line anchors to business_inventory_id (the sole anchor;
+    // the AC-1 vertical noun order_items.plant_id was dropped 20260709). A stock line anchors to
+    // its own id; a specimen anchors to its lot (cultivar_plants.inventory_id, carried on the
+    // cart plant object). Money/qty unchanged — only the line's NAME anchor.
     const itemRows = resolvedLines.map((rl) => {
       const row: Record<string, unknown> = {
         order_id:   orderId,
         quantity:   rl.quantity,
         unit_price: rl.unitPrice,   // server-authoritative sell_price (D-35)
         subtotal:   rl.subtotal,
+        business_inventory_id: rl.stockLineId ?? rl.plant.inventory_id ?? null,
       };
-      if (rl.stockLineId) {
-        row.business_inventory_id = rl.stockLineId;
-        row.plant_id             = null;
-      } else {
-        row.plant_id             = rl.plant.id;
-      }
       return row;
     });
     console.log('[TRACE:RESOLVE] order_items anchors', {
       count: itemRows.length,
-      anchors: resolvedLines.map(rl => rl.stockLineId ? `inv:${rl.stockLineId}` : `plant:${rl.plant.id}`),
+      anchors: resolvedLines.map(rl => `inv:${rl.stockLineId ?? rl.plant.inventory_id ?? 'none'}`),
     });
     const { error: itemErr } = await db.from('order_items').insert(itemRows);
     if (itemErr) throw new Error(`Order item: ${itemErr.message}`);
@@ -551,7 +530,7 @@ async function handleCreate(req: any, res: any) {
             plantName:     plantLabel,
             container:     firstPlant?.current_container,
             invoiceNumber,
-            quantity:      plantCount,
+            quantity:      itemCount,
           },
         }).catch((err: any) => console.error('[leakage-alert]', err.message));
       }
@@ -588,9 +567,9 @@ async function handleUpdate(req: any, res: any) {
 
     const { data: itemsRaw } = await db
       .from('order_items')
-      .select('id, quantity, plant_id, business_inventory_id')
+      .select('id, quantity, business_inventory_id')
       .eq('order_id', orderId);
-    const items = (itemsRaw ?? []) as Array<{ id: string; quantity: number; plant_id: string | null; business_inventory_id: string | null }>;
+    const items = (itemsRaw ?? []) as Array<{ id: string; quantity: number; business_inventory_id: string | null }>;
     if (items.length === 0) return res.status(400).json({ error: 'Order has no line items' });
 
     const removed = new Set<string>(Array.isArray(removedItemIds) ? removedItemIds : []);
@@ -610,16 +589,16 @@ async function handleUpdate(req: any, res: any) {
     }
 
     // Server-authoritative sell_price per kept line; refuse the whole edit if any is unpriced (D-9).
-    let plantSubtotal = 0;
+    let linesSubtotal = 0;
     let anyLargeContainer = false;
     for (const k of kept) {
       if (k.r.sellPrice == null || k.r.sellPrice <= 0) {
         return res.status(400).json({ error: `No sale price set for ${k.r.name} — set a price in Inventory before selling.`, code: 'NO_SELL_PRICE' });
       }
-      plantSubtotal += k.r.sellPrice * k.newQty;
+      linesSubtotal += k.r.sellPrice * k.newQty;
       if (k.r.container && LARGE_CONTAINERS.includes(k.r.container)) anyLargeContainer = true;
     }
-    const plantCount = kept.reduce((s, k) => s + k.newQty, 0);
+    const itemCount = kept.reduce((s, k) => s + k.newQty, 0);
 
     // Re-net service selections over the NEW plant count (transport flat ×1 / planting·netting per_unit ×N).
     const { data: selsRaw } = await db
@@ -643,14 +622,14 @@ async function handleUpdate(req: any, res: any) {
     for (const s of sels) {
       const o = offById.get(s.service_offering_id);
       if (!o) continue; // offering gone — leave the historical selection untouched
-      const q   = nettedQuantity(o as any, plantCount);
+      const q   = nettedQuantity(o as any, itemCount);
       const sub = lineSubtotal(o as any, q);
       addonsAmount += sub;
       if (o.category === 'addon') addonCategoryTotal += sub;
       selectionUpdates.push({ id: s.id, quantity: q, subtotal: sub });
     }
 
-    const subtotal    = round2(plantSubtotal + addonsAmount);
+    const subtotal    = round2(linesSubtotal + addonsAmount);
     const { data: bizTaxRow } = await db.from('businesses').select('tax_rate').eq('id', businessId).maybeSingle();
     const taxRate     = Number((bizTaxRow as any)?.tax_rate ?? TAX_RATE_FALLBACK);
     const taxAmount   = round2(subtotal * taxRate);
@@ -661,7 +640,7 @@ async function handleUpdate(req: any, res: any) {
     await setLotStatus(db, businessId, resolvedAll.map(x => x.r.inventoryId), 'available');
     await setLotStatus(db, businessId, kept.map(k => k.r.inventoryId), 'reserved');
     console.log('[TRACE:PRICE] order edit — re-reserved + recomputed', {
-      orderId, plantCount, plantSubtotal: round2(plantSubtotal), addonsAmount: round2(addonsAmount),
+      orderId, itemCount, linesSubtotal: round2(linesSubtotal), addonsAmount: round2(addonsAmount),
       subtotal, taxAmount, total, leakageFlag, removed: [...removed],
     });
 
@@ -725,8 +704,8 @@ async function handleDelete(req: any, res: any) {
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
     const { data: itemsRaw } = await db
-      .from('order_items').select('id, plant_id, business_inventory_id').eq('order_id', orderId);
-    const items = (itemsRaw ?? []) as Array<{ plant_id: string | null; business_inventory_id: string | null }>;
+      .from('order_items').select('id, business_inventory_id').eq('order_id', orderId);
+    const items = (itemsRaw ?? []) as Array<{ business_inventory_id: string | null }>;
     const lots = await Promise.all(items.map(it => resolveItemForServer(db, businessId, it)));
     await setLotStatus(db, businessId, lots.map(l => l.inventoryId), 'available');
 
@@ -768,8 +747,8 @@ async function handleStatus(req: any, res: any) {
     // Cancelling frees the reserved stock (R-STATUS: un-cancel does NOT auto-re-reserve — edit to restock).
     if (status === 'cancelled') {
       const { data: itemsRaw } = await db
-        .from('order_items').select('plant_id, business_inventory_id').eq('order_id', orderId);
-      const items = (itemsRaw ?? []) as Array<{ plant_id: string | null; business_inventory_id: string | null }>;
+        .from('order_items').select('business_inventory_id').eq('order_id', orderId);
+      const items = (itemsRaw ?? []) as Array<{ business_inventory_id: string | null }>;
       const lots = await Promise.all(items.map(it => resolveItemForServer(db, businessId, it)));
       await setLotStatus(db, businessId, lots.map(l => l.inventoryId), 'available');
     }

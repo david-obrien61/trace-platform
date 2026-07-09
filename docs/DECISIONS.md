@@ -1061,6 +1061,16 @@ Implementation applies the **local-first LOGIC proven in DataBridge** — **pull
 
 ---
 
+### D-36 · `order_items` is AC-1-clean — `business_inventory_id` is the SOLE line anchor (`plant_id` DROPPED)
+**Decision (2026-07-09):** the shared `order_items` spine no longer carries `plant_id` (a Cultivar-specific FK→`cultivar_plants` — an **AC-1** vertical-noun violation on a shared surface). Every order line anchors to its **`business_inventory` stock line** (`business_inventory_id`) — the sole anchor, consistent with [[D-34]] (the LOT is the SKU). A specimen line anchors to its lot (`cultivar_plants.inventory_id`); the lot's name IS the variety name, so line names resolve from `business_inventory.name` via the shared `orderItemName` resolver (no forked reader).
+**Why DROP (not demote):** mirrors the already-shipped `social_drafts.plant_id` DROP ([20260608_social_drafts_subject_ref.sql](../supabase/migrations/20260608_social_drafts_subject_ref.sql)) — the purest AC-1 result. `plant_id` was proven vestigial (every live line writes `business_inventory_id` with `plant_id` NULL). Permanently closes the recurring "PLANTS (0)" / "Unknown plant" / "undefined" order-display bug class (**story #231**).
+**Blast radius (small, bounded):** submit.ts stopped writing `plant_id` + dropped it from every SELECT/type; the 6 specimen readers (orderItemName · OrderDetail · DemoQBInvoice · qbo/invoice/cultivar · DeliveryRoute · Orders roster) repointed to `business_inventory_id` and dropped the `cultivar_plants` embed. Money/qty/reservation/leakage logic untouched — only the line's NAME anchor changed.
+**Canonical home / audit:** [`docs/decisions/2026-07-09-plant-references-ac1-audit.md`](decisions/2026-07-09-plant-references-ac1-audit.md) (bucket-A #1+#2, R4/R5) · migration [20260709_drop_order_items_plant_id.sql](../supabase/migrations/20260709_drop_order_items_plant_id.sql) (GATED — David applies as postgres AFTER the code deploys).
+**Companion:** [[D-34]] (the LOT is the SKU — the anchor), the AC-1 constant. **Still HELD (David):** bucket-A #3 (`price_unit` DEFAULT `'plant'`) + #5 (shared QR util).
+**Date captured:** 2026-07-09 · **Status:** DECIDED (BUILDER-COMPLETE; migration gated, owner-proof owed).
+
+---
+
 ## PERSONAL-FINANCIAL
 
 > Not in this file by design — see **`decisions/PERSONAL-FINANCIAL.local.md`** (gitignored).

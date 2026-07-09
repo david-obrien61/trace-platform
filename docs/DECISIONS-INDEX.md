@@ -4,7 +4,9 @@
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.
 
-**Last updated:** 2026-07-08 (RECEIPT/QB-PREVIEW/LEAKAGE + tile-2.1 hardcoded SWEEP — QB preview order-backed, receipt
+**Last updated:** 2026-07-09 (DROP `order_items.plant_id` — AC-1 de-noun of the shared order spine, D-36; the sole
+line anchor is now `business_inventory_id`; closes story #231's "PLANTS (0)" bug class; gated DROP migration + 6 readers
+repointed. Earlier: RECEIPT/QB-PREVIEW/LEAKAGE + tile-2.1 hardcoded SWEEP — QB preview order-backed, receipt
 services by real name, real QB push dual-anchor, attributed price-override leakage [Ignition pattern + reason], all 8
 tile-2.1 register items CLEARED → 2.1 restored 🟢; drift-watch added. Earlier: SETTINGS SERVICE EDITOR — expose all
 service_offerings categories (+ transport) + un-conflate `price_type`/`price_unit` on create AND edit, category now editable,
@@ -25,6 +27,15 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-09 · DROP `order_items.plant_id` — AC-1 de-noun of the shared order spine, D-36):**
+> No drift — abided by **AC-1** (removed the Cultivar vertical noun `plant_id` from the SHARED `order_items` table;
+> `business_inventory_id` is the sole line anchor), **D-34** (the LOT is the SKU — the anchor), **§6 rule 8** (reused the
+> ONE `orderItemName` resolver + repointed all 6 readers, no fork), and the **social_drafts.plant_id DROP precedent**
+> (same template). Money/qty/reservation/leakage untouched — name-resolution only. ONE gated additive migration
+> (`20260709_drop_order_items_plant_id.sql`, deploy-window-safe: code unread BEFORE drop); ZERO new api-fn (12/12 held).
+> Scope fenced to bucket-A #1+#2 only — bucket-A #3 (`price_unit`) + #5 (QR util) remain HELD per David. New decision
+> D-36 recorded. Closes story #231.
+>
 > ✅ **Drift watch (2026-07-08 · RECEIPT/QB-PREVIEW/LEAKAGE + tile-2.1 hardcoded SWEEP):** No drift — abided by
 > **AC-1** (every business literal now resolves from the `businesses` row / `service_offerings.name`, no hardcoded
 > tenant/vertical), **AC-3** (business-scoped reads), **D-9** (netting `?? 10` → real price; footer omitted not faked

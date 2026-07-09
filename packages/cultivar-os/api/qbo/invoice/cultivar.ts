@@ -132,14 +132,13 @@ export default async function handler(req: any, res: any) {
     const customer = order.customers;
     const invoiceNumber: string = order.notes || `CLV-${order_id.slice(0, 8)}`;
 
-    // Fetch line items — D-34 DUAL ANCHOR: a line is anchored EITHER to a cultivar_plants
-    // specimen (plant_id) OR a business_inventory stock line (business_inventory_id). A
-    // stock-line / scan order (the PRIMARY path) has plant_id null → the old cultivar_plants-only
-    // read printed "undefined — undefined" on the real invoice. Join BOTH + name via the shared
-    // resolver (orderItemName), same as the roster/detail/preview.
+    // Fetch line items — D-34: every line anchors to its business_inventory stock line
+    // (business_inventory_id), the sole anchor after the AC-1 vertical noun order_items.plant_id
+    // was dropped (20260709). The lot's name IS the variety name → name via the shared resolver
+    // (orderItemName), same as the roster/detail/preview.
     const { data: orderItems } = await db
       .from('order_items')
-      .select('*, cultivar_plants(*), business_inventory ( name, size, sku )')
+      .select('*, business_inventory ( name, size, sku )')
       .eq('order_id', order_id);
 
     // Try new service_selections model first; fall back to legacy order_addons
@@ -167,9 +166,9 @@ export default async function handler(req: any, res: any) {
     const lines: unknown[] = [];
 
     for (const item of orderItems || []) {
-      // Dual-anchor name (specimen common_name/species WINS; else the stock line's name).
+      // Name via the shared resolver (the stock line's name — the lot IS the variety).
       const name      = orderItemName(item as any);
-      const container = item.cultivar_plants?.current_container ?? item.business_inventory?.size ?? null;
+      const container = item.business_inventory?.size ?? null;
       const anchor    = orderItemAnchor(item as any);
       console.log('[TRACE:QBO] invoice line — dual anchor', { anchor, name, container });
       lines.push({

@@ -56,11 +56,11 @@ function QBInvoicePreview() {
 
       const o = order as any;
 
-      // Plant lines — D-34 dual anchor (specimen via cultivar_plants, else stock line via
-      // business_inventory), named by the SAME resolver as the roster/detail/real-push.
+      // Plant lines — anchored to the business_inventory lot (D-34; order_items.plant_id dropped
+      // 20260709), named by the SAME resolver as the roster/detail/real-push.
       const { data: itemsRaw } = await supabase
         .from('order_items')
-        .select('quantity, unit_price, subtotal, plant_id, business_inventory_id, cultivar_plants(*), business_inventory ( name, size, sku )')
+        .select('quantity, unit_price, subtotal, business_inventory_id, business_inventory ( name, size, sku )')
         .eq('order_id', orderId);
 
       // Service lines — real service_offerings.name (never a CHOICE_META branch label).
@@ -79,7 +79,7 @@ function QBInvoicePreview() {
       const lines: PreviewLine[] = [];
       for (const it of (itemsRaw ?? []) as any[]) {
         const name      = orderItemName(it);
-        const container = it.cultivar_plants?.current_container ?? it.business_inventory?.size ?? null;
+        const container = it.business_inventory?.size ?? null;
         const tag       = orderItemTag(it);
         const label     = container ? `${name} — ${container}` : (name === 'Unknown plant' && tag !== '—' ? tag : name);
         lines.push({

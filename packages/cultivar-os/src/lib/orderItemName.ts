@@ -1,17 +1,16 @@
 // ============================================================
-// orderItemName — name/tag an order line by its D-34 anchor (ONE definition, roster + detail).
-// PURPOSE: an order_items row is anchored EITHER to a cultivar_plants specimen (plant_id) OR a
-//   business_inventory stock line (business_inventory_id) — never both (submit.ts §8). The roster
-//   used to join ONLY cultivar_plants, so every stock-line / scan order rendered "Unknown plant".
-//   This resolves the display name with the SAME dual-anchor fallback usePlant uses: specimen
-//   WINS (vertical identity), else the stock line's name. Reused by Orders + OrderDetail so the
-//   two surfaces cannot drift (CLAUDE.md §6 rule 8).
+// orderItemName — name/tag an order line by its business_inventory lot (ONE definition, roster + detail).
+// PURPOSE: an order_items row anchors to its business_inventory stock line (business_inventory_id) —
+//   the sole line anchor after the AC-1 vertical noun order_items.plant_id was dropped (20260709,
+//   mirrors the social_drafts.plant_id DROP). D-34: the LOT is the SKU, so the lot's name IS the
+//   variety name. The resolver keeps a specimen-name fallback (cultivar_plants) for any surface that
+//   still supplies one, but the shared order spine no longer joins it. Reused by Orders + OrderDetail
+//   + the QB preview + the real QB push so the surfaces cannot drift (CLAUDE.md §6 rule 8).
 // DEPENDENCIES: none (pure).
 // OUTPUTS: orderItemName, orderItemTag, orderItemAnchor.
 // ============================================================
 
 export interface OrderItemAnchorFields {
-  plant_id?:              string | null;
   business_inventory_id?: string | null;
   cultivar_plants?:  { tag_id?: string | null; common_name?: string | null; species?: string | null } | null;
   business_inventory?: { name?: string | null; size?: string | null; sku?: string | null } | null;

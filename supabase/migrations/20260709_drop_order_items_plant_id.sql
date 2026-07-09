@@ -1,0 +1,60 @@
+-- ── order_items: DROP plant_id (AC-1 de-noun of the shared order spine) ─────────────
+-- 2026-07-09 · Story #231 (order display root cause) · AC-1 audit
+--   docs/decisions/2026-07-09-plant-references-ac1-audit.md (bucket-A #1, R4/R5)
+--
+-- WHAT: remove order_items.plant_id — a Cultivar-specific specimen pointer (FK→cultivar_plants)
+--   bolted onto the SHARED order_items spine table. AC-1 forbids vertical nouns on shared surfaces
+--   (vertical identity is a VALUE, never a column). business_inventory_id is the sole line anchor
+--   (D-34 — the LOT is the SKU); plant_id is proven vestigial (every live line writes
+--   business_inventory_id with plant_id NULL — see PRE-FLIGHT check below).
+--
+-- WHY NOW: the recurring "PLANTS (0)" / "Unknown plant" / "undefined" order-display bug (story
+--   #231) traced to this vertical noun on the shared spine. Dropping it permanently closes the
+--   bug class and shrinks the shared spine toward AC-1-clean.
+--
+-- PRECEDENT: mirrors the already-shipped social_drafts.plant_id DROP
+--   ([20260608_social_drafts_subject_ref.sql:41-46] — "plant_id: AC-1 violation (Cultivar-specific
+--   noun)"). Same reasoning, same template.
+--
+-- DEPLOY-WINDOW SAFETY: the shipping code no longer references order_items.plant_id BEFORE this
+--   drops (the 5 specimen-name readers were repointed to business_inventory_id-first; submit.ts
+--   stopped writing plant_id; every SELECT dropped the column + the cultivar_plants embed). So the
+--   column is unread whether this migration is applied before OR after the code deploys. SAFE
+--   ORDER: deploy the code first (Vercel READY), THEN apply this — an OLD bundle asking for
+--   plant_id after the drop would 42703; the new bundle never asks.
+--
+-- ⚠️ DAVID APPLIES AS postgres (project bgobkjcopcxusjsetfob), AFTER the code is deployed. The
+--    schema-verification gate (CLAUDE.md §9) runs after apply — verify queries embedded below.
+--
+-- Append-only + lossless: DROP COLUMN auto-drops the plant_id FK constraint + any index. No data
+--   moved (all live rows have plant_id NULL). order_items RLS unchanged — no policy touched.
+
+-- ── PRE-FLIGHT (David runs BEFORE the drop — confirm vestigial) ──────────────────────
+-- Expect 0. If > 0, STOP: those lines would lose their only anchor — backfill
+-- business_inventory_id (from cultivar_plants.inventory_id) on them first, then drop.
+--   SELECT count(*) AS lines_with_plant_id FROM order_items WHERE plant_id IS NOT NULL;
+--   → 0 expected.
+
+-- ── THE DROP ─────────────────────────────────────────────────────────────────────────
+ALTER TABLE order_items
+  DROP COLUMN IF EXISTS plant_id;
+
+-- ── VERIFY (David runs after apply — catalog-backed, not from memory) ────────────────
+-- (A) plant_id is gone from order_items:
+--   SELECT column_name FROM information_schema.columns
+--   WHERE table_name = 'order_items' AND column_name = 'plant_id';
+--   → 0 rows.
+--
+-- (B) business_inventory_id remains the anchor (untouched):
+--   SELECT column_name, is_nullable FROM information_schema.columns
+--   WHERE table_name = 'order_items' AND column_name = 'business_inventory_id';
+--   → 1 row; is_nullable 'YES'.
+--
+-- (C) no FK from order_items still targets cultivar_plants:
+--   SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint
+--   WHERE conrelid = 'order_items'::regclass AND contype = 'f'
+--     AND pg_get_constraintdef(oid) ILIKE '%cultivar_plants%';
+--   → 0 rows.
+--
+-- (D) orders still resolve line names (functional): open any order's detail — every line shows its
+--   business_inventory.name + qty + price (NOT "PLANTS (0)" / "Unknown" / "undefined").

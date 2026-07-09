@@ -68,8 +68,7 @@ const SELECT_COLS = `
   )`;
 
 const ITEM_COLS = `
-  id, quantity, unit_price, subtotal, plant_id, business_inventory_id,
-  cultivar_plants ( tag_id, common_name, species ),
+  id, quantity, unit_price, subtotal, business_inventory_id,
   business_inventory ( name, size, sku )`;
 
 export function OrderDetail() {

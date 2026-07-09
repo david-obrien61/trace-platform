@@ -21,7 +21,7 @@ interface DeliveryOrder {
     state: string | null;
     zip: string | null;
   } | null;
-  order_items: { cultivar_plants: { common_name: string | null; species: string } | null }[];
+  order_items: { business_inventory: { name: string | null } | null }[];
 }
 
 const GREEN = '#27500A';
@@ -424,7 +424,7 @@ export function DeliveryRoute() {
       .select(`
         id, created_at, notes,
         customers ( first_name, last_name, phone, address_line1, city, state, zip ),
-        order_items ( cultivar_plants ( common_name, species ) )
+        order_items ( business_inventory ( name ) )
       `)
       .eq('business_id', businessId!)
       .eq('transport_method', 'delivery')
@@ -566,8 +566,8 @@ export function DeliveryRoute() {
                 const isSelected = selected.has(order.id);
                 const addr = getAddress(order);
                 const hasAddr = addr.length > 0;
-                const p = order.order_items?.[0]?.cultivar_plants;
-              const plant = p?.common_name ?? p?.species ?? 'Plant';
+                const p = order.order_items?.[0]?.business_inventory;
+              const plant = p?.name ?? 'Plant';
                 const custName = order.customers
                   ? `${order.customers.first_name} ${order.customers.last_name}`
                   : 'Unknown customer';
