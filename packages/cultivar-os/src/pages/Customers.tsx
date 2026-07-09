@@ -31,7 +31,7 @@ import { Plus, X, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import {
-  DataSheet, TextCell, sheetStyles as SS,
+  DataSheet, TextCell, SelectCell, sheetStyles as SS,
   type DataSheetColumn,
 } from '../components/datasheet/DataSheet';
 import {
@@ -40,6 +40,7 @@ import {
 import {
   coerceCustomerField, persistCustomerField, type CustomerTextField,
 } from '../components/customers/customerEdit';
+import { readPricingConfig, normalizePricingTiers } from '@trace/shared/business-logic';
 
 const SOURCE_LABEL: Record<string, string> = {
   'qr-scan':     'QR checkout',
@@ -66,8 +67,8 @@ interface CustomerRow {
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
-const tierStyle: React.CSSProperties = { fontSize: '0.72rem', fontWeight: 700, color: '#3730a3', background: '#e0e7ff', borderRadius: 6, padding: '2px 7px' };
 const sourceStyle: React.CSSProperties = { fontSize: '0.72rem', fontWeight: 600, color: '#374151', background: '#f3f4f6', borderRadius: 6, padding: '2px 7px' };
+const tierSelectStyle = (): React.CSSProperties => ({ color: '#3730a3', fontWeight: 700 });
 
 export function Customers() {
   const { businessId } = useBusinessContext();
@@ -78,9 +79,14 @@ export function Customers() {
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<CustomerFormState>(EMPTY_CUSTOMER_FORM);
+  const [newTier, setNewTier] = useState('retail');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Configured tier names (from business_pricing_config.config.pricingTiers — set in Settings).
+  // Seeded to the known set so a business that hasn't configured tiers can still tag a contractor.
+  const [tierNames, setTierNames] = useState<string[]>(['retail', 'contractor', 'wholesale']);
 
   const loadCustomers = useCallback(async () => {
     setListLoading(true);
@@ -101,6 +107,39 @@ export function Customers() {
     if (!businessId) return;
     void loadCustomers();
   }, [businessId, loadCustomers]);
+
+  // Load the configured tier names (owner reads business_pricing_config via bpc_owner_all). Falls
+  // back to the known set if unconfigured. Used for the inline tier picker + the Add-Customer form.
+  useEffect(() => {
+    if (!businessId) return;
+    void (async () => {
+      const { data } = await readPricingConfig(supabase, businessId);
+      const t = normalizePricingTiers((data?.config as { pricingTiers?: unknown } | null)?.pricingTiers);
+      setTierNames(t.map(x => x.name));
+    })();
+  }, [businessId]);
+
+  // Inline tier edit — one immediate RLS-scoped write (owner-only). price_tier drives the checkout
+  // discount (submit.ts) — tagging a customer 'contractor' is how they get contractor pricing.
+  function onTier(c: CustomerRow, v: string) {
+    if (!businessId || v === (c.price_tier ?? 'retail')) return;
+    const bid = businessId;
+    console.log('[TRACE:customers] tier edit', { id: c.id, from: c.price_tier, to: v });
+    void (async () => {
+      const { error } = await supabase.from('customers').update({ price_tier: v }).eq('id', c.id).eq('business_id', bid);
+      if (error) { setListError(error.message); return; }
+      await loadCustomers();
+    })();
+  }
+
+  // Options for a row's tier select — configured tiers ∪ the row's current value (so a legacy tier
+  // not in the config still displays and can be changed).
+  const tierOptions = (current: string | null) => {
+    const names = [...tierNames];
+    const cur = current ?? 'retail';
+    if (!names.includes(cur)) names.push(cur);
+    return names.map(n => ({ value: n, label: n }));
+  };
 
   // ── Inline edit: one immediate write per field, RLS-scoped (owner-only). Shares the exact
   //    coercion + write rules with CustomerEditModal via customerEdit.ts (no drift). Kept
@@ -139,7 +178,7 @@ export function Customers() {
     { key: 'zip', header: 'ZIP', sortable: true, sortVal: r => (r.zip ?? '').toLowerCase(),
       render: r => <TextCell key={`zp-${r.id}-${r.created_at}`} value={r.zip} width={80} placeholder="—" onCommit={v => onText(r, 'zip', v)} /> },
     { key: 'price_tier', header: 'Tier', sortable: true, sortVal: r => (r.price_tier ?? '').toLowerCase(),
-      render: r => <span style={tierStyle}>{r.price_tier ?? 'retail'}</span> },
+      render: r => <SelectCell value={r.price_tier ?? 'retail'} options={tierOptions(r.price_tier)} onChange={v => onTier(r, v)} styleFor={tierSelectStyle} title="Customer price tier — drives the checkout discount" /> },
     { key: 'source', header: 'Source', sortable: true, sortVal: r => (r.source ?? '').toLowerCase(),
       render: r => <span style={sourceStyle}>{SOURCE_LABEL[r.source ?? ''] ?? r.source ?? '—'}</span> },
     { key: 'qb_customer_id', header: 'QuickBooks', sortable: true, sortVal: r => (r.qb_customer_id ? 1 : 0), defaultVisible: false,
@@ -160,6 +199,7 @@ export function Customers() {
     const payload: Record<string, unknown> = {
       business_id: businessId,
       source: 'manual',
+      price_tier: newTier, // explicit (was omitted → silently defaulted retail); owner can set a tier on create
       first_name: form.first_name.trim(),
       last_name:  form.last_name.trim(), // NOT NULL — empty string is fine, never null
     };
@@ -173,7 +213,7 @@ export function Customers() {
     const { error } = await supabase.from('customers').insert(payload);
     if (error) { console.error('[TRACE:customers] insert error', error.message); setSaveError(error.message); setSaving(false); return; }
     console.log('[TRACE:customers] insert ok');
-    setSaveSuccess(true); setSaving(false); setForm(EMPTY_CUSTOMER_FORM);
+    setSaveSuccess(true); setSaving(false); setForm(EMPTY_CUSTOMER_FORM); setNewTier('retail');
     setTimeout(() => { setShowForm(false); setSaveSuccess(false); void loadCustomers(); }, 900);
   }
 
@@ -215,6 +255,12 @@ export function Customers() {
             {saveSuccess && <div style={SS.success}>Customer saved.</div>}
             <form onSubmit={e => { void handleSubmit(e); }}>
               <CustomerFields values={form} onChange={set} requireFirstName />
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Price tier</label>
+                <select value={newTier} onChange={e => setNewTier(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', border: '1.5px solid #d1d5db', borderRadius: 9, fontSize: '0.9rem', background: '#fff', color: '#111827' }}>
+                  {tierOptions(newTier).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
               <button type="submit" style={saving ? SS.submitBtnDisabled : SS.submitBtn} disabled={saving}>
                 {saving ? 'Saving…' : 'Save Customer'}
               </button>

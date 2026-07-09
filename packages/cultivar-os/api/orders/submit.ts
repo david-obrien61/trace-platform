@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import { sendNotification } from '../../../shared/src/notifications/send';
 import { findOrCreateCustomer } from '../../../shared/src/business-logic/customerUpsert';
 import { callerHoldsPermission, callerIsBusinessOwner, resolveCallerUid } from '../../../shared/src/auth/callerPermission';
+import { readPricingConfig } from '../../../shared/src/business-logic/financialDataAccess';
+import { applyTierDiscount, tierDiscountPercent, normalizePricingTiers } from '../../../shared/src/business-logic/tierPricing';
 import { nettedQuantity, lineSubtotal } from '../../src/lib/netting';
 import { ORDER_STATUSES } from '../../src/lib/orderStatus';
 
@@ -136,13 +138,20 @@ async function handleCreate(req: any, res: any) {
       .from('businesses').select('tax_rate').eq('id', businessId).maybeSingle();
     const taxRate = Number((bizTaxRow as any)?.tax_rate ?? TAX_RATE_FALLBACK);
 
-    // PRICE TIER at checkout (D-35) — READ WIRED, ADJUSTMENT HELD (AC-4). The tier→adjustment
-    // MATH is undefined; per the buildspec STEP 5 STOP rule we apply NO adjustment (post == pre).
+    // PRICE TIER at checkout (D-35) — READ + APPLIED (AC-4 hold CLOSED 2026-07-09). The tier→discount
+    // math is PERCENT-OFF-BASELINE (owner-set per tier, default 0%): the tier's discountPercent is
+    // taken off the stored, server-authoritative sell_price. Both the tier (on the customer row) and
+    // the percents (in the business's pricing config) are read SERVER-SIDE — the client supplies
+    // neither (tamper defense). Config-less business / retail / unknown tier → 0% → price unchanged.
     const { data: custRow } = await db
       .from('customers').select('price_tier').eq('id', customerId).maybeSingle();
     const priceTier = (custRow as any)?.price_tier ?? null;
-    console.log('[TRACE:PRICE] price_tier adjustment (order-level)', {
-      customerId, priceTier, adjustmentApplied: false, note: 'tier math undefined — AC-4 hold',
+    const { data: pricingCfg } = await readPricingConfig(db, businessId);
+    const pricingTiers = normalizePricingTiers((pricingCfg?.config as any)?.pricingTiers);
+    const tierDiscountPct = tierDiscountPercent(priceTier, pricingTiers);
+    console.log('[TRACE:PRICE] price_tier discount (order-level)', {
+      customerId, priceTier, discountPercent: tierDiscountPct,
+      adjustmentApplied: tierDiscountPct > 0,
     });
 
     // ── 3. Resolve + validate each cart line (server-authoritative sell_price per anchor) ──
@@ -203,16 +212,19 @@ async function handleCreate(req: any, res: any) {
         });
       }
 
-      const unitPrice = serverSellPrice; // tier HOLD: no adjustment (AC-4)
-      const sub = unitPrice * quantity;
+      // AC-4 CLOSED: charge the tier-discounted sell_price. applyTierDiscount is a no-op for
+      // retail/default/unknown/0% (unitPrice === serverSellPrice), so a non-tiered order is unchanged.
+      const unitPrice = applyTierDiscount(serverSellPrice, priceTier, pricingTiers);
+      const sub = round2(unitPrice * quantity);
       linesSubtotal += sub;
 
       // D-34: for a stock-line order the container is the lot's size (server-fetched).
       const container = stockLineId ? (stockLineSize ?? plant.current_container) : plant.current_container;
       if (LARGE_CONTAINERS.includes(container)) anyLargeContainer = true;
 
-      console.log('[TRACE:PRICE] line — server-authoritative sell_price', {
-        plantId: plant.id, unitPrice, quantity, subtotal: sub, lane: stockLineId ? 'stock_line' : 'specimen',
+      console.log('[TRACE:PRICE] line — tier-discounted sell_price', {
+        plantId: plant.id, baseSellPrice: serverSellPrice, tier: priceTier, discountPercent: tierDiscountPct,
+        unitPrice, quantity, subtotal: sub, lane: stockLineId ? 'stock_line' : 'specimen',
       });
 
       resolvedLines.push({ plant, quantity, stockLineId, unitPrice, subtotal: sub });

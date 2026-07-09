@@ -14,6 +14,16 @@ export type {
   MarginAnalysis,
 } from './MarginEngine';
 
+// Customer price-tier → discount (percent-off-baseline) — the SOLE arithmetic for the cultivar
+// checkout tier discount (Item-1 AC-4 close, 2026-07-09). Reuses PricingTier from MarginEngine.
+export {
+  applyTierDiscount,
+  tierDiscountPercent,
+  normalizePricingTiers,
+  clampPercent,
+  DEFAULT_PRICING_TIERS,
+} from './tierPricing';
+
 // Cost-to-Produce — period-pool engine (THUNDER · 2026-06-14). MarginEngine-fed.
 export {
   accumulate,
