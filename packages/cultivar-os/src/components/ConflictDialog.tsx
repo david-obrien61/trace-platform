@@ -9,23 +9,29 @@ interface ConflictDialogProps {
   btnGhostStyle: React.CSSProperties;
 }
 
+// CENTERED per the platform modal standard (docs/standards/ui-control-standards.md → MODAL) — a
+// decision dialog (use-site-value vs keep-mine) floats centered on every viewport, not anchored bottom.
 const DIALOG_BACKDROP: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
   background: 'rgba(0,0,0,0.5)',
   zIndex: 100,
   display: 'flex',
-  alignItems: 'flex-end',
+  alignItems: 'center',
   justifyContent: 'center',
+  padding: 16,
+  boxSizing: 'border-box',
 };
 
 const DIALOG_CARD: React.CSSProperties = {
   background: '#fff',
-  borderRadius: '16px 16px 0 0',
-  padding: '24px 20px 36px',
+  borderRadius: 16,
+  padding: '24px 20px',
   width: '100%',
   maxWidth: 480,
-  boxShadow: '0 -4px 24px rgba(0,0,0,0.15)',
+  maxHeight: '85vh',
+  overflowY: 'auto',
+  boxShadow: '0 8px 24px rgba(0,0,0,0.16)',
 };
 
 export function ConflictDialog({ reconcileState, onClose, onSaveAnyway, btnPrimaryStyle, btnGhostStyle }: ConflictDialogProps) {

@@ -656,8 +656,9 @@ const S = {
   btnDisabled:{ width: '100%', minHeight: 48, background: '#9ca3af', color: '#fff', border: 'none', borderRadius: 10, fontSize: '1rem', fontWeight: 700, cursor: 'not-allowed' } as React.CSSProperties,
   btnGhost:   { width: '100%', minHeight: 44, background: 'none', color: '#6b7280', border: '1.5px solid #d1d5db', borderRadius: 10, fontSize: '0.92rem', fontWeight: 600, cursor: 'pointer', marginTop: 10 } as React.CSSProperties,
   completeBtn:{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 48, background: 'none', color: '#27500A', border: '2px solid #27500A', borderRadius: 10, fontSize: '0.98rem', fontWeight: 700, cursor: 'pointer' } as React.CSSProperties,
-  modal:      { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 100 } as React.CSSProperties,
-  sheet:      { background: '#fff', borderRadius: '16px 16px 0 0', padding: '1.5rem', width: '100%', maxWidth: 560 } as React.CSSProperties,
+  // CENTERED per the platform modal standard (docs/standards/ui-control-standards.md → MODAL). maxHeight+scroll so a tall sheet stays on-screen when centered.
+  modal:      { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, boxSizing: 'border-box', zIndex: 100 } as React.CSSProperties,
+  sheet:      { background: '#fff', borderRadius: 16, padding: '1.5rem', width: '100%', maxWidth: 560, maxHeight: '85vh', overflowY: 'auto' as const } as React.CSSProperties,
   sheetHeader:{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' } as React.CSSProperties,
   sheetTitle: { fontSize: '1.15rem', fontWeight: 700, color: '#1a2e0a', margin: 0 } as React.CSSProperties,
   iconBtn:    { background: 'none', border: 'none', cursor: 'pointer', padding: 4 } as React.CSSProperties,

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TRACE — UI Control Standards Compliance</title>
+<!--
+  RENDERED COMPLIANCE BOARD — control × standard, glanceable (✅ meets / 🟡 partial / 🔴 missing).
+  Sits beside status.html + stories.html at the repo root (the home for TRACE's rendered boards).
+
+  The prose BAR (what each standard means + why) is docs/standards/ui-control-standards.md — the
+  authoritative spec. THIS file is the visual check-state seeded from it.
+
+  SINGLE EDIT POINT: the MANIFEST array below. It is the ONLY data this board holds — there is no
+  external source it can drift from (unlike status.html, which mirrors an .md). Update a row's
+  `status`/`note` here when a control changes, and keep it in step with the spec doc. Because it is
+  self-contained, David just OPENS this file (double-click) and SEES the board — no drag-drop, no
+  build step, works on file://.
+-->
+<style>
+  :root{
+    --red:#dc2626; --amber:#d97706; --green:#16a34a; --grey:#9ca3af;
+    --bg:#f5f7f2; --card:#ffffff; --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; --accent:#27500A;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{position:sticky;top:0;z-index:5;background:var(--accent);color:#fff;
+    padding:14px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;box-shadow:0 1px 6px rgba(0,0,0,.15)}
+  header h1{margin:0;font-size:1.05rem;font-weight:800}
+  header .sub{font-size:.72rem;opacity:.85;font-weight:500}
+  .spacer{flex:1}
+  .tally{display:inline-flex;gap:12px;font-weight:800;font-size:.9rem}
+  .wrap{max-width:1000px;margin:0 auto;padding:18px 20px 60px}
+  .intro{font-size:.86rem;color:var(--muted);margin:4px 0 18px;line-height:1.5}
+  .intro a{color:var(--accent);font-weight:700}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:.78rem;color:var(--muted);margin-bottom:18px}
+  .legend .k{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;display:inline-block}
+  .d-red{background:var(--red)} .d-amber{background:var(--amber)} .d-green{background:var(--green)}
+  .group{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:6px 0 2px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,.04);overflow:hidden}
+  .group h2{margin:0;padding:13px 18px 11px;font-size:.98rem;font-weight:800;color:var(--accent);
+    border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px}
+  .group h2 .ctl{font-size:.7rem;font-weight:700;color:var(--muted);background:#eef4e6;
+    border-radius:999px;padding:2px 9px;text-transform:none}
+  .row{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start;
+    padding:11px 18px;border-bottom:1px solid #f3f4f6}
+  .row:last-child{border-bottom:none}
+  .row .code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.7rem;color:var(--muted);
+    background:#f1f3ee;border-radius:5px;padding:2px 6px;align-self:start;margin-top:2px}
+  .row .body .std{font-weight:700;font-size:.9rem}
+  .row .body .note{font-size:.79rem;color:var(--muted);margin-top:3px;line-height:1.45}
+  .row .body .note code{background:#f1f3ee;border-radius:4px;padding:.5px 4px;font-size:.92em;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .state{display:inline-flex;align-items:center;gap:6px;font-size:.72rem;font-weight:800;
+    padding:3px 10px;border-radius:999px;white-space:nowrap;align-self:start;margin-top:1px}
+  .s-green{background:#dcfce7;color:#166534}
+  .s-amber{background:#fef3c7;color:#92400e}
+  .s-red{background:#fee2e2;color:#991b1b}
+  .foot{font-size:.74rem;color:var(--muted);margin-top:22px;line-height:1.5}
+  .foot code{background:#f1f3ee;border-radius:4px;padding:.5px 4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎛️ TRACE — UI Control Standards</h1>
+  <span class="sub">rendered compliance board · control × standard</span>
+  <span class="spacer"></span>
+  <span class="tally" id="tally"></span>
+</header>
+<div class="wrap">
+  <p class="intro">
+    The <b>bar</b> every platform control is measured against — industry-standard UI patterns we
+    <b>implement</b>, not defects we discover. Prose spec:
+    <a href="docs/standards/ui-control-standards.md">docs/standards/ui-control-standards.md</a>.
+    ✅ = the shared control meets it (all consumers inherit) · 🟡 = partial · 🔴 = not yet built (a
+    KNOWN gap, on the board rather than silent).
+  </p>
+  <div class="legend">
+    <span class="k"><span class="dot d-green"></span> meets</span>
+    <span class="k"><span class="dot d-amber"></span> partial</span>
+    <span class="k"><span class="dot d-red"></span> missing</span>
+  </div>
+  <div id="board"></div>
+  <p class="foot">
+    Single edit point: the <code>MANIFEST</code> array in this file's source (no external source to
+    drift from). Keep it in step with the spec doc when a control changes. Self-contained — opens on
+    <code>file://</code>, no build step. Beside <code>status.html</code> + <code>stories.html</code>.
+  </p>
+</div>
+<script>
+// ── COMPLIANCE MANIFEST (the single edit point) ──────────────────────────────
+// group = a control category; control = the shared control that carries it.
+// status: 'green' (meets) | 'amber' (partial) | 'red' (missing).
+const MANIFEST = [
+  {
+    group: 'Data grid',
+    control: 'DataSheet.tsx (inventory · assets · customers inherit)',
+    items: [
+      { id:'G1', std:'Sticky header row', status:'green',
+        note:'Sticky <code>&lt;thead&gt;</code> + box-shadow underline that survives border-collapse on scroll.' },
+      { id:'G2', std:'Reachable horizontal scrollbar', status:'green',
+        note:'Bounded <code>overflow:auto</code> box (<code>maxHeight:calc(100vh-280px)</code>) — the h-scrollbar sits in the viewport, not below all rows. Fixes the reported 111-row defect.' },
+      { id:'G3', std:'Frozen identifier column', status:'green',
+        note:'Leading <code>frozen:true</code> run pinned <code>position:sticky;left</code> with cumulative offsets + right-edge shadow. Inventory pins flag+name, assets name, customers first_name.' },
+      { id:'G4', std:'Sortable columns', status:'green',
+        note:'<code>sortable</code>/<code>sortVal</code> per column + visible ▲/▼ indicator.' },
+      { id:'G5', std:'Column show/hide', status:'green',
+        note:'“Columns” menu toggles <code>hideable</code> columns.' },
+      { id:'G6', std:'Search / filter', status:'green',
+        note:'Global text search + optional status quick-filter.' },
+      { id:'G7', std:'Density for 100+ rows', status:'green',
+        note:'Compact rows in the bounded scroll box; handles 111 rows today. Row virtualization deferred (standard-by-value) — not worth it at current scale.' },
+      { id:'G8', std:'Per-cell inline edit + clear editable-vs-readonly affordance', status:'green',
+        note:'Inline <code>TextCell</code>/<code>NumberCell</code>/<code>AmountCell</code>/<code>SelectCell</code>; readonly system fields carry the §3 lock.' },
+    ],
+  },
+  {
+    group: 'Modal / dialog',
+    control: 'sheetStyles.modal (shared) + centered own-copy sheets',
+    items: [
+      { id:'M1', std:'Centered on every viewport', status:'green',
+        note:'Shared <code>sheetStyles.modal</code> centers the 3 add-sheets; the 4 former bottom-sheets (OperatingCosts, ProjectsManager, InventoryCount, ConflictDialog) centered this pass. Convention A “always center”.' },
+      { id:'M2', std:'Required-field validation, surfaced (never silent)', status:'green',
+        note:'FIX 5 pattern — <code>validateXForm</code> + red border + inline message; reference: Settings service editor + Add Inventory. The shape other forms copy.' },
+      { id:'M3', std:'Escape-to-close', status:'red',
+        note:'Not yet wired platform-wide. Next modal rung.' },
+      { id:'M4', std:'Backdrop-click behavior defined', status:'amber',
+        note:'Inconsistent — some sheets dismiss on backdrop, some are inert; not yet a single convention.' },
+      { id:'M5', std:'Focus management / focus-trap', status:'red',
+        note:'Focus is not moved into / trapped within the dialog yet (WAI-ARIA dialog). Next modal rung.' },
+    ],
+  },
+  {
+    group: 'Field display',
+    control: 'systemManagedFields.ts (single registry) + DataSheet',
+    items: [
+      { id:'F1', std:'Editable fields show an edit affordance', status:'green',
+        note:'Inline cell inputs — editable cells read as editable.' },
+      { id:'F2', std:'System-managed fields render LOCKED with explanation', status:'green',
+        note:'Clickable 🔒 in the column header → fixed popover: what sets it + why not editable. Never silently greyed/absent (Surface Honesty).' },
+      { id:'F3', std:'Locked set is a single canonical registry', status:'green',
+        note:'<code>SYSTEM_MANAGED_FIELDS</code> + <code>lockInfoFor()</code> is the sole source; keys match DB field names, so one flat registry covers all grids.' },
+    ],
+  },
+];
+// ─────────────────────────────────────────────────────────────────────────────
+const EMOJI = { green:'✅', amber:'🟡', red:'🔴' };
+const board = document.getElementById('board');
+let g=0,a=0,r=0;
+for (const grp of MANIFEST) {
+  const sec = document.createElement('div');
+  sec.className = 'group';
+  sec.innerHTML = `<h2>${grp.group}<span class="ctl">${grp.control}</span></h2>`;
+  for (const it of grp.items) {
+    if (it.status==='green') g++; else if (it.status==='amber') a++; else r++;
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML =
+      `<span class="code">${it.id}</span>`+
+      `<div class="body"><div class="std">${it.std}</div><div class="note">${it.note}</div></div>`+
+      `<span class="state s-${it.status}">${EMOJI[it.status]} ${it.status==='green'?'meets':it.status==='amber'?'partial':'missing'}</span>`;
+    sec.appendChild(row);
+  }
+  board.appendChild(sec);
+}
+document.getElementById('tally').innerHTML =
+  `<span style="color:#bbf7d0">✅ ${g}</span> <span style="color:#fde68a">🟡 ${a}</span> <span style="color:#fecaca">🔴 ${r}</span>`;
+</script>
+</body>
+</html>

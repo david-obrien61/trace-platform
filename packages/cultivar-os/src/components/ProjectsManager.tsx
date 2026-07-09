@@ -178,8 +178,9 @@ export function ProjectsManager({ businessId, projects, onChanged, onClose }: Pr
 }
 
 const S: Record<string, React.CSSProperties> = {
-  modal: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 },
-  sheet: { background: '#fff', borderRadius: '16px 16px 0 0', padding: '1.5rem', width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' },
+  // CENTERED per the platform modal standard (docs/standards/ui-control-standards.md → MODAL).
+  modal: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, boxSizing: 'border-box', zIndex: 200 },
+  sheet: { background: '#fff', borderRadius: 16, padding: '1.5rem', width: '100%', maxWidth: 560, maxHeight: '85vh', overflowY: 'auto' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   title: { fontSize: '1.1rem', fontWeight: 700, color: '#1a2e0a', margin: 0, display: 'flex', alignItems: 'center', gap: 8 },
   help: { fontSize: '0.8125rem', color: GRAY, lineHeight: 1.5, margin: '4px 0 14px' },

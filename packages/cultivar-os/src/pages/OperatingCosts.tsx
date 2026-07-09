@@ -108,8 +108,9 @@ const S = {
   th: { textAlign: 'left' as const, padding: '0.5rem 0.75rem', borderBottom: '2px solid #e5e7eb', color: '#374151', fontWeight: 600, fontSize: '0.8rem', textTransform: 'uppercase' as const, whiteSpace: 'nowrap' as const } as React.CSSProperties,
   td: { padding: '0.625rem 0.75rem', borderBottom: '1px solid #f3f4f6', color: '#111827', verticalAlign: 'top' as const } as React.CSSProperties,
   empty: { textAlign: 'center' as const, color: '#6b7280', padding: '2rem', fontSize: '0.9rem' } as React.CSSProperties,
-  modal: { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 100 } as React.CSSProperties,
-  sheet: { background: '#fff', borderRadius: '16px 16px 0 0', padding: '1.5rem', width: '100%', maxWidth: 640, maxHeight: '92vh', overflowY: 'auto' as const } as React.CSSProperties,
+  // CENTERED per the platform modal standard (docs/standards/ui-control-standards.md → MODAL). center + padding + boxSizing so the sheet floats centered on every viewport.
+  modal: { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, boxSizing: 'border-box' as const, zIndex: 100 } as React.CSSProperties,
+  sheet: { background: '#fff', borderRadius: 16, padding: '1.5rem', width: '100%', maxWidth: 640, maxHeight: '85vh', overflowY: 'auto' as const } as React.CSSProperties,
   sheetHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' } as React.CSSProperties,
   inlineSelect: { border: '1.5px solid #d1d5db', borderRadius: 7, padding: '4px 6px', fontSize: '0.8rem', color: '#111827', background: '#fff', cursor: 'pointer', maxWidth: 160 } as React.CSSProperties,
   inlineAmount: { width: 84, border: '1.5px solid #d1d5db', borderRadius: 7, padding: '4px 6px', fontSize: '0.8rem', color: '#111827', background: '#fff', textAlign: 'right' as const } as React.CSSProperties,
