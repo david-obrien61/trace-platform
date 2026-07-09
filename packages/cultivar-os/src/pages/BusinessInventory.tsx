@@ -222,7 +222,7 @@ export function BusinessInventory() {
   const columns: DataSheetColumn<InventoryRow>[] = [
     { key: 'flag', header: '', sortable: false, hideable: false, frozen: true, frozenWidth: 34,
       render: r => isDup(r) ? <span style={SS.dupTag} title="Duplicate (variant group, size) — uncountable by scan until you disambiguate the size or variant group."><AlertTriangle size={13} /></span> : null },
-    { key: 'name', header: 'Name', sortable: true, sortVal: r => r.name.toLowerCase(), frozen: true,
+    { key: 'name', header: 'Name', sortable: true, sortVal: r => r.name.toLowerCase(), frozen: true, frozenWidth: 180,
       render: r => <TextCell key={`name-${r.id}-${r.updated_at}`} value={r.name} width={150} onCommit={v => onText(r, 'name', v)} /> },
     { key: 'sku', header: 'SKU', sortable: true, sortVal: r => (r.sku ?? '').toLowerCase(),
       render: r => r.sku ? <span style={SS.skuText}>{r.sku}</span> : <span style={SS.muted}>—</span> },

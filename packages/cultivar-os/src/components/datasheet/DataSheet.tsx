@@ -34,8 +34,11 @@ export interface DataSheetColumn<T> {
   /** Pin this column to the left so it stays put on horizontal scroll (the name/identifier column).
    *  Only the LEADING contiguous run of frozen columns is pinned. */
   frozen?: boolean;
-  /** Rendered width (px) of a frozen column — needed only for a frozen col that has ANOTHER frozen
-   *  col to its right (it sets that neighbour's left offset). The last frozen col needs none. */
+  /** RESERVED TRACK WIDTH (px, border-box incl. cell padding) of a frozen column. This is the frozen
+   *  column's ACTUAL rendered width — it locks the cell width AND sets the next frozen col's left offset
+   *  AND defines where the scrolling region begins (its right edge), so scrolling columns lay out BESIDE
+   *  the frozen column and never render beneath it. Set it ≥ the cell content width (fixed-width input +
+   *  ~19px padding). Required on EVERY frozen column for a deterministic track; defaults to 160 if omitted. */
   frozenWidth?: number;
   /** Force the system-managed lock on/off, overriding the registry. Default: registry decides by key
    *  (see systemManagedFields.ts — the single source). `false` = force editable; `true` = force locked. */
@@ -148,18 +151,21 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
   const shownCols = columns.filter(c => visible[c.key]);
   const hideable = columns.filter(c => c.hideable !== false);
 
-  // ── Frozen columns: pin the LEADING contiguous run so the identifier stays put on horizontal
-  //    scroll. left offsets accumulate from each frozen col's width; the last one gets a right edge
-  //    shadow to delineate the pinned block. Computed over SHOWN columns so hiding a col is safe. ──
-  const frozenMap = new Map<string, { left: number; last: boolean }>();
+  // ── Frozen columns: pin the LEADING contiguous run so the identifier stays put on horizontal scroll.
+  //    Each frozen col RESERVES A TRACK — its frozenWidth is the actual (border-box) cell width, so the
+  //    left offsets accumulate exactly and the scrolling region begins at the last frozen col's right
+  //    edge (scrolling columns lay out BESIDE the pinned block, never beneath it). Last frozen col gets a
+  //    crisp freeze line + shadow. Computed over SHOWN columns so hiding a col is safe. ──
+  const frozenMap = new Map<string, { left: number; width: number; last: boolean }>();
   {
     let acc = 0;
     const run: string[] = [];
     for (const c of shownCols) {
       if (!c.frozen) break;
-      frozenMap.set(c.key, { left: acc, last: false });
+      const w = c.frozenWidth ?? 160;
+      frozenMap.set(c.key, { left: acc, width: w, last: false });
       run.push(c.key);
-      acc += c.frozenWidth ?? 150;
+      acc += w;
     }
     if (run.length) {
       const lastEntry = frozenMap.get(run[run.length - 1]);
@@ -245,7 +251,7 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
                       const thStyle: React.CSSProperties = {
                         ...S.th,
                         ...(col.sortable ? S.thSortable : {}),
-                        ...(fz ? { left: fz.left, zIndex: 3, background: '#fff', ...(fz.last ? S.frozenEdgeTh : {}) } : {}),
+                        ...(fz ? { left: fz.left, width: fz.width, minWidth: fz.width, boxSizing: 'border-box', zIndex: 3, background: '#fff', ...(fz.last ? S.frozenEdgeTh : {}) } : {}),
                       };
                       return (
                         <th
@@ -284,7 +290,7 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
                           {shownCols.map(col => {
                             const fz = frozenMap.get(col.key);
                             const cellStyle = fz
-                              ? { ...tdStyle, left: fz.left, position: 'sticky' as const, zIndex: 1, background: flagged ? '#fffbeb' : '#fff', ...(fz.last ? S.frozenEdgeTd : {}) }
+                              ? { ...tdStyle, left: fz.left, width: fz.width, minWidth: fz.width, boxSizing: 'border-box' as const, position: 'sticky' as const, zIndex: 1, background: flagged ? '#fffbeb' : '#fff', ...(fz.last ? S.frozenEdgeTd : {}) }
                               : tdStyle;
                             return <td key={col.key} style={cellStyle}>{col.render(row)}</td>;
                           })}
@@ -425,16 +431,21 @@ const S = {
   // scrollbar is reachable within the viewport instead of below all N rows. The offset leaves room
   // for the AppLayout header + breadcrumb + page title + toolbar chrome above, so the box bottom
   // (and its horizontal scrollbar) stays on-screen (tune the offset if chrome height changes).
-  scroll: { overflow: 'auto', maxHeight: 'calc(100vh - 280px)', position: 'relative' as const } as React.CSSProperties,
+  // Negative horizontal margin bleeds the grid FLUSH to the card edges (cancels the card's 1.25rem
+  // side padding) — zero left gutter, so the frozen identifier column gets that reclaimed room and
+  // more columns fit before horizontal scroll kicks in. Cell padding keeps content off the edge.
+  scroll: { overflow: 'auto', maxHeight: 'calc(100vh - 280px)', position: 'relative' as const, margin: '0 -1.25rem' } as React.CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: '0.85rem' } as React.CSSProperties,
   // Sticky header row — stays visible on vertical scroll. box-shadow (not just borderBottom) keeps the
   // underline drawn during scroll under border-collapse. Opaque bg so body rows don't show through.
   th: { textAlign: 'left' as const, padding: '0.5rem 0.6rem', borderBottom: '2px solid #e5e7eb', boxShadow: 'inset 0 -2px 0 #e5e7eb', color: '#374151', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' as const, whiteSpace: 'nowrap' as const, userSelect: 'none' as const, position: 'sticky' as const, top: 0, zIndex: 2, background: '#fff' } as React.CSSProperties,
   thSortable: { cursor: 'pointer' } as React.CSSProperties,
-  // Right-edge shadow on the last frozen (pinned) column — delineates the pinned block from the
-  // scrolling columns. The th variant also re-declares the sticky-header underline (spread wins).
-  frozenEdgeTh: { boxShadow: 'inset 0 -2px 0 #e5e7eb, 6px 0 6px -4px rgba(0,0,0,0.14)' } as React.CSSProperties,
-  frozenEdgeTd: { boxShadow: '6px 0 6px -4px rgba(0,0,0,0.10)' } as React.CSSProperties,
+  // Freeze boundary on the last frozen (pinned) column: a crisp 1px line (1px 0 0 0) marks the freeze
+  // edge — the standard "frozen pane" affordance — and the soft depth shadow delineates the pinned block
+  // from the scrolling columns behind it. The th variant also re-declares the sticky-header underline
+  // (spread wins). borderCollapse eats real borders on scroll, so the line is drawn via box-shadow.
+  frozenEdgeTh: { boxShadow: 'inset 0 -2px 0 #e5e7eb, 1px 0 0 0 #d1d5db, 8px 0 8px -5px rgba(0,0,0,0.14)' } as React.CSSProperties,
+  frozenEdgeTd: { boxShadow: '1px 0 0 0 #d1d5db, 8px 0 8px -5px rgba(0,0,0,0.10)' } as React.CSSProperties,
   // System-managed lock affordance + its popover.
   lockBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 5, color: '#9ca3af', display: 'inline-flex', alignItems: 'center', verticalAlign: 'middle' } as React.CSSProperties,
   lockCard: { position: 'fixed' as const, zIndex: 201, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.16)', padding: '0.75rem 0.85rem', maxWidth: 272 } as React.CSSProperties,
