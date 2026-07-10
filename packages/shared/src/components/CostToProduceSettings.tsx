@@ -55,9 +55,6 @@ import { EMPTY_COST_CONFIG } from '../business-logic/CostToProduce';
 import type { CostToProduceConfig, CostConfidence, CostLocation } from '../business-logic/CostToProduce';
 // D-11 Schedule C category set — SHARED canonical list (also used by /assets capital-row picker).
 import { CATEGORY_OPTS } from '../business-logic/costCategories';
-// Customer pricing tiers (Item-1 AC-4 close) — the tier→discount % lives in this same jsonb config
-// (business_pricing_config.config.pricingTiers), set here + read by checkout (submit.ts).
-import { normalizePricingTiers, DEFAULT_PRICING_TIERS, type PricingTier } from '../business-logic';
 // Phase 2 financial wall (decision 2026-06-21): wages + pricing config go through the gated
 // child tables via this seam (migration-window-resilient). The wall itself is RLS, not this read.
 import {
@@ -159,21 +156,6 @@ const cell: React.CSSProperties = {
 function deepClone<T>(v: T): T { return JSON.parse(JSON.stringify(v)); }
 const num = (v: number | null | undefined) => (v == null ? 0 : v);
 
-// Validate each tier's percent buffer (FIX 5 pattern — block+message on save, never silent). Blank /
-// non-numeric / out-of-range → an error keyed by tier name; else the parsed PricingTier[] to persist.
-function validateTierPcts(tiers: PricingTier[], text: Record<string, string>): { errors: Record<string, string>; clean: PricingTier[] } {
-  const errors: Record<string, string> = {};
-  const clean = tiers.map(t => {
-    const raw = (text[t.name] ?? String(t.discountPercent)).trim();
-    if (raw === '') { errors[t.name] = 'Enter a percent — 0 for no discount.'; return t; }
-    const n = Number(raw);
-    if (!Number.isFinite(n)) { errors[t.name] = 'Must be a number (0 for no discount).'; return t; }
-    if (n < 0 || n > 100) { errors[t.name] = 'Must be between 0 and 100.'; return t; }
-    return { ...t, discountPercent: n };
-  });
-  return { errors, clean };
-}
-const errBorder = (hasErr: boolean): React.CSSProperties => hasErr ? { borderColor: RED, boxShadow: `0 0 0 1px ${RED}` } : {};
 
 /** cost_rate = base_wage + burden. UI COMPUTES + stores it on every edit so it can't drift. */
 function computeCostRate(e: LaborEntry): number { return num(e.base_wage) + num(e.burden); }
@@ -223,11 +205,9 @@ export function CostToProduceSettings() {
   const [saving, setSaving]   = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
   const [loadError, setLoadError] = useState('');
-  // Customer pricing tiers (Block 5 — Item-1 AC-4 close). `tiers` holds the names + which is default;
-  // `tierPctText` is the editable percent buffer (like denomText — smooth typing, validated on save).
-  const [tiers, setTiers] = useState<PricingTier[]>(() => DEFAULT_PRICING_TIERS.map(t => ({ ...t })));
-  const [tierPctText, setTierPctText] = useState<Record<string, string>>({});
-  const [tierErrors, setTierErrors] = useState<Record<string, string>>({});
+  // Customer pricing tiers were RELOCATED out of here into the standalone Discounts screen
+  // (/discounts, THUNDER · 2026-07-10). This panel no longer reads or writes the discount config —
+  // it PRESERVES those jsonb keys on save (below) so it can't clobber what /discounts owns.
 
   // Single editable location for config-side knobs (overhead); persisted in locations[].
   const loc: CostLocation = config.locations[0] ?? deepClone(EMPTY_COST_CONFIG.locations[0]);
@@ -265,12 +245,6 @@ export function CostToProduceSettings() {
       setConfig(loadedCfg);
       setDenomText((loadedCfg.denominators ?? []).join(', ')); // seed the N-list text buffer
 
-      // Customer pricing tiers — read from the RAW config jsonb (parseConfig drops unknown keys),
-      // coerced to a clean set (missing/malformed → the seed: retail default 0% + contractor/wholesale 0%).
-      const loadedTiers = normalizePricingTiers((modRes.data?.config as { pricingTiers?: unknown } | null)?.pricingTiers);
-      setTiers(loadedTiers);
-      setTierPctText(Object.fromEntries(loadedTiers.map(t => [t.name, String(t.discountPercent)])));
-      setTierErrors({});
 
       const allCost = (objRes.data ?? []) as any[];
       const isLaborCat = (c: any) => c === 'labor' || c === 'contract-labor';
@@ -381,15 +355,6 @@ export function CostToProduceSettings() {
     if (!businessId) return;
     if (loadError) { setSaveMsg('Cannot save: costs did not load (' + loadError + '). Reload before editing.'); return; }
 
-    // Validate the tier percents BEFORE any write (FIX 5 — block+message, never a silent bad save).
-    const { errors: tErrs, clean: cleanTiers } = validateTierPcts(tiers, tierPctText);
-    if (Object.keys(tErrs).length) {
-      setTierErrors(tErrs);
-      setSaveMsg('Error: fix the highlighted pricing-tier percents.');
-      return;
-    }
-    setTierErrors({});
-
     setSaving(true);
     setSaveMsg('');
 
@@ -460,11 +425,20 @@ export function CostToProduceSettings() {
     const baseConfig = hasLaborObject
       ? { ...config, locations: config.locations.map(l => ({ ...l, labor: { ...l.labor, rate: null, hours: null } })) }
       : config;
-    // Customer pricing tiers ride the same jsonb config additively (no migration). Spread at the write
-    // site so the tier % persists — CostToProduceSettings is the sole writer of business_pricing_config.
-    const configToWrite = { ...baseConfig, pricingTiers: cleanTiers };
     let cfgErr: { message: string } | null = null;
     if (!err) {
+      // CLOBBER-SAFETY: the discount config (discountTypes / legacy pricingTiers) and the AI-advisory
+      // toggle (aiBiEnabled) live in this SAME jsonb but are owned by OTHER screens (/discounts, the
+      // customer surface). parseConfig drops those unknown keys, so we re-read the LATEST config and
+      // PRESERVE them, writing only our cost keys over the top. A stale cost-panel load can never wipe
+      // what /discounts saved (money-safety on shared config).
+      const { data: latestCfg } = await readPricingConfig(supabase, businessId);
+      const lc = (latestCfg?.config && typeof latestCfg.config === 'object' ? latestCfg.config : {}) as Record<string, unknown>;
+      const preserved: Record<string, unknown> = {};
+      for (const k of ['discountTypes', 'pricingTiers', 'aiBiEnabled'] as const) {
+        if (lc[k] !== undefined) preserved[k] = lc[k];
+      }
+      const configToWrite = { ...baseConfig, ...preserved };
       // Phase 2 wall: pricing config → the gated business_pricing_config table (legacy fallback
       // pre-migration). writePricingConfig also keeps the business_modules enablement flags set.
       const { error } = await writePricingConfig(supabase, businessId, configToWrite);
@@ -481,9 +455,6 @@ export function CostToProduceSettings() {
     const finalErr = err || cfgErr;
     if (finalErr) { setSaveMsg('Error: ' + finalErr.message); return; }
     setSaveMsg('Saved'); setRemovedLabor([]);
-    // Tiers persisted — reflect the cleaned values (reload() re-reads costs/labor, not pricing config).
-    setTiers(cleanTiers);
-    setTierPctText(Object.fromEntries(cleanTiers.map(t => [t.name, String(t.discountPercent)])));
     // Reload so new rows pick up DB ids (avoids duplicate insert on next save).
     await reload();
     setTimeout(() => setSaveMsg(''), 2000);
@@ -741,25 +712,7 @@ export function CostToProduceSettings() {
           placeholder="1, 5, 20, 100, 500, 1000" style={{ ...cell, width: '100%' }} />
       </Block>
 
-      {/* ════ BLOCK 5 — CUSTOMER PRICING TIERS ════ */}
-      <Block title="5 · Customer pricing tiers" hint="Set a percent-off-retail for each tier. It comes off the item's sale price at checkout for a customer tagged that tier (retail = 0 = full price). Tag a customer's tier on the Customers page.">
-        {tiers.map(t => (
-          <div key={t.name} style={{ marginBottom: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: '0.8125rem', color: DARK, fontWeight: 600, minWidth: 120, textTransform: 'capitalize' }}>
-                {t.name}{t.isDefault ? ' (default)' : ''}
-              </span>
-              <input
-                type="number" step="1" min="0" max="100"
-                value={tierPctText[t.name] ?? String(t.discountPercent)}
-                onChange={e => setTierPctText(m => ({ ...m, [t.name]: e.target.value }))}
-                style={{ ...cell, width: 90, ...errBorder(!!tierErrors[t.name]) }} />
-              <span style={{ fontSize: '0.8125rem', color: GRAY }}>% off retail</span>
-            </div>
-            {tierErrors[t.name] && <p style={{ margin: '3px 0 0', fontSize: '0.75rem', fontWeight: 600, color: RED }}>{tierErrors[t.name]}</p>}
-          </div>
-        ))}
-      </Block>
+      {/* Customer pricing tiers RELOCATED → the standalone Discounts screen (/discounts). */}
 
       <button onClick={save} disabled={saving}
         style={{ width: '100%', padding: '13px 20px', background: saving ? '#e5e7eb' : GREEN, color: saving ? GRAY : '#fff', fontWeight: 700, fontSize: '0.9375rem', borderRadius: 10, border: 'none', cursor: saving ? 'default' : 'pointer', marginTop: 4 }}>

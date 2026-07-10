@@ -182,6 +182,10 @@ export const TILE_REGISTRY: TileEntry[] = [
   // owner-only, so a Staff/Manager session sees it nowhere (nav AND route, see router.tsx /costs).
   { key: 'cost_to_produce',  vertical: 'general', label: 'Cost-to-Produce',           group: 'admin',    kind: 'context', placement: 'admin',    nav_eligible: false, required_permission: 'owner-only',       status: 'live',    depends_on: null,
     icon: Calculator,  color: '#2dd4bf', bg: DASH_BG, route: '/costs',             module_key: 'cost_to_produce' },
+  // Discounts — customer discount types × tiers (relocated out of Cost-to-Produce Block 5, 2026-07-10).
+  // manage_settings (pricing authority; owner in Cultivar today), matching the /discounts route gate.
+  { key: 'discounts',        vertical: 'general', label: 'Discounts',                 group: 'admin',    kind: 'action',  placement: 'admin',    nav_eligible: false, required_permission: 'manage_settings',  status: 'live',    depends_on: null,
+    icon: Percent,     color: '#fbbf24', bg: DASH_BG, route: '/discounts' },
 
   // ── Planned (greyed) — forward declarations. Permissions marked PROVISIONAL where the
   //    seed did not pin one (adjustable); the seed-pinned ones are locked like all others.
@@ -391,6 +395,7 @@ export const NAV_IA: NavNode[] = [
   // devices. Supersedes the old /roles page (which now redirects here). manage_settings-gated
   // (owner-default, delegable) so Staff never sees it.
   { key: 'nav_team',             section: 'admin',     parent: 'sec_admin',           label: 'Team & Roles', route: '/team', required_permission: 'manage_settings' },
+  { key: 'nav_discounts',        section: 'admin',     parent: 'sec_admin',           tileKey: 'discounts' },
   { key: 'nav_cost_to_produce',  section: 'admin',     parent: 'sec_admin',           tileKey: 'cost_to_produce' },
 ];
 

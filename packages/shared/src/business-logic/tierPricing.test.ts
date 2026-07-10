@@ -14,6 +14,8 @@
 import {
   applyTierDiscount, tierDiscountPercent, normalizePricingTiers, clampPercent,
   DEFAULT_PRICING_TIERS, type PricingTier,
+  normalizeDiscountTypes, resolveTier, applyTierPrice, RETAIL_TIER_NAME,
+  type DiscountType,
 } from './tierPricing';
 
 // ── tiny harness ─────────────────────────────────────────────────────────────────
@@ -77,6 +79,76 @@ test('6. normalize: garbage → seed; missing default → retail; malformed rows
   const withGarbage = normalizePricingTiers([{ name: 'a', discountPercent: 5 }, { nope: 1 }, null, { name: 42 }]);
   ok(withGarbage.length === 1 && withGarbage[0].name === 'a', 'rows without a string name are dropped');
   ok(normalizePricingTiers([{ name: 'a', discountPercent: 'x' }])[0].discountPercent === 0, 'non-numeric percent → 0');
+});
+
+/* ══ DISCOUNT TYPES × TIERS (the generalized model · 2026-07-10) ═══════════════════ */
+
+// Owner-configured: a "Contractor" type (percent tiers) + a "Wholesale" type with an at-cost tier.
+const TYPES: DiscountType[] = [
+  { name: 'Contractor', tiers: [
+    { name: 'contractor', basis: 'retail_minus_percent', discountPercent: 10 },
+    { name: 'fleet',      basis: 'retail_minus_percent', discountPercent: 20, accessTerms: '$25/yr membership' },
+  ] },
+  { name: 'Wholesale', tiers: [
+    { name: 'wholesale',  basis: 'at_cost', discountPercent: 0 },
+  ] },
+];
+
+// ── 7. resolveTier: name → tier across types; null/retail/unknown → the retail floor. ─
+test('7. resolveTier resolves across types and floors the unknown/null/retail cases', () => {
+  ok(resolveTier('contractor', TYPES).discountPercent === 10, 'contractor → 10% tier');
+  ok(resolveTier('fleet', TYPES).accessTerms === '$25/yr membership', 'fleet carries accessTerms');
+  ok(resolveTier('wholesale', TYPES).basis === 'at_cost', 'wholesale → at_cost basis');
+  ok(resolveTier(null, TYPES).name === RETAIL_TIER_NAME, 'null → retail floor');
+  ok(resolveTier('retail', TYPES).discountPercent === 0, 'retail → 0%');
+  ok(resolveTier('nonesuch', TYPES).name === RETAIL_TIER_NAME, 'unknown tier → retail floor (money-safe)');
+});
+
+// ── 8. applyTierPrice percent branch mirrors the flat mechanism. ────────────────────
+test('8. applyTierPrice percent basis discounts sell_price; retail passes through', () => {
+  const r = applyTierPrice(124, 24, resolveTier('contractor', TYPES));
+  ok(r.price === 111.6 && r.applied && !r.degraded && r.basis === 'retail_minus_percent', `contractor 10% off 124 → 111.6; got ${r.price}`);
+  const retail = applyTierPrice(124, 24, resolveTier('retail', TYPES));
+  ok(retail.price === 124 && !retail.applied, 'retail → unchanged, not applied');
+});
+
+// ── 9. at_cost basis charges the server unit_cost, never the sell_price. ────────────
+test('9. at_cost charges unit_cost (margin 0), independent of sell_price', () => {
+  const r = applyTierPrice(124, 24, resolveTier('wholesale', TYPES));
+  ok(r.price === 24 && r.applied && !r.degraded && r.basis === 'at_cost', `at_cost → 24 (the cost), not 124; got ${r.price}`);
+  ok(applyTierPrice(124, 30.005, resolveTier('wholesale', TYPES)).price === 30.01, 'at_cost rounds cost to cents');
+});
+
+// ── 10. GRACEFUL DEGRADATION — at_cost with no cost on file → retail fallback, never $0. ─
+test('10. at_cost + null/zero cost → retail sell_price + degraded flag (never fabricate $0)', () => {
+  const nullCost = applyTierPrice(124, null, resolveTier('wholesale', TYPES));
+  ok(nullCost.price === 124 && nullCost.degraded && !nullCost.applied, `null cost → 124 (retail), degraded; got ${nullCost.price}`);
+  ok(applyTierPrice(124, 0, resolveTier('wholesale', TYPES)).price === 124, 'zero cost → retail fallback, not $0');
+  ok(applyTierPrice(124, undefined, resolveTier('wholesale', TYPES)).degraded === true, 'undefined cost flags degraded');
+});
+
+// ── 11. normalizeDiscountTypes NON-DESTRUCTIVELY forward-migrates legacy flat pricingTiers. ─
+test('11. forward-migrate legacy pricingTiers → a Contractor type, carrying percents; nothing lost', () => {
+  const legacy = { pricingTiers: [
+    { name: 'retail', discountPercent: 0, isDefault: true },
+    { name: 'contractor', discountPercent: 15 },
+    { name: 'wholesale', discountPercent: 30 },
+  ] };
+  const types = normalizeDiscountTypes(legacy);
+  ok(types.length === 1 && types[0].name === 'Contractor', 'legacy → one Contractor type');
+  ok(resolveTier('contractor', types).discountPercent === 15, 'legacy contractor 15% carried forward (not lost)');
+  ok(resolveTier('wholesale', types).discountPercent === 30, 'legacy wholesale 30% carried forward');
+  ok(types[0].tiers.every(t => t.name !== 'retail'), 'retail floor is NOT wrapped as a discount tier');
+});
+
+// ── 12. normalizeDiscountTypes: new model wins; garbage → seed; at_cost tier zeroes its percent. ─
+test('12. normalize prefers discountTypes, seeds on garbage, coerces basis + percent', () => {
+  ok(normalizeDiscountTypes(undefined).length >= 1, 'no config → seed (non-empty)');
+  ok(normalizeDiscountTypes({}).length >= 1, 'empty config → seed');
+  const bad = normalizeDiscountTypes({ discountTypes: [{ name: 'T', tiers: [{ name: 'x', basis: 'at_cost', discountPercent: 99 }, { nope: 1 }, null] }] });
+  ok(bad[0].tiers.length === 1 && bad[0].tiers[0].discountPercent === 0, 'at_cost tier zeroes discountPercent; junk tiers dropped');
+  const dt = normalizeDiscountTypes({ discountTypes: [{ name: 'A', tiers: [{ name: 'a', basis: 'weird', discountPercent: 150 }] }] });
+  ok(dt[0].tiers[0].basis === 'retail_minus_percent' && dt[0].tiers[0].discountPercent === 100, 'unknown basis → percent; 150 clamped to 100');
 });
 
 // ── run ────────────────────────────────────────────────────────────────────────────

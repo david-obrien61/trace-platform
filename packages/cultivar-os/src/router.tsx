@@ -35,6 +35,7 @@ import { InventoryCount }    from './pages/InventoryCount';
 import { CostToProduce }     from './pages/CostToProduce';
 import { OperatingCosts }    from './pages/OperatingCosts';
 import { Customers }         from './pages/Customers';
+import { Discounts }         from './pages/Discounts';
 import PMI                   from './pages/PMI';
 import { TeamConsole }       from './pages/TeamConsole';
 import { Profile }            from './pages/Profile';
@@ -158,6 +159,10 @@ export function AppRouter() {
             <Route path="/settings/:section" element={<Settings />} />
             <Route path="/team"            element={<TeamConsole />} />
             <Route path="/roles"           element={<Navigate to="/team" replace />} />
+            {/* Discounts — customer discount types × tiers (pricing authority). WRITE gated here at
+                manage_settings (owner in Cultivar today); the READ of the set stays business-scoped
+                in the data layer (roster picker + checkout resolve it independently of this route). */}
+            <Route path="/discounts"       element={<Discounts />} />
             <Route path="/admin"           element={<AdminIndex />} />
           </Route>
 

@@ -40,7 +40,7 @@ import {
 import {
   coerceCustomerField, persistCustomerField, type CustomerTextField,
 } from '../components/customers/customerEdit';
-import { readPricingConfig, normalizePricingTiers } from '@trace/shared/business-logic';
+import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME, type DiscountType } from '@trace/shared/business-logic';
 
 const SOURCE_LABEL: Record<string, string> = {
   'qr-scan':     'QR checkout',
@@ -84,9 +84,11 @@ export function Customers() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Configured tier names (from business_pricing_config.config.pricingTiers — set in Settings).
-  // Seeded to the known set so a business that hasn't configured tiers can still tag a contractor.
-  const [tierNames, setTierNames] = useState<string[]>(['retail', 'contractor', 'wholesale']);
+  // Configured discount types × tiers (from business_pricing_config.config — set on the Discounts
+  // screen). READ is business-scoped (readPricingConfig), NOT owner-restricted — the tier picker
+  // resolves the full set independently of the /discounts admin route. aiEnabled gates the AI slot.
+  const [discountTypes, setDiscountTypes] = useState<DiscountType[]>([]);
+  const [aiEnabled, setAiEnabled] = useState(false);
 
   const loadCustomers = useCallback(async () => {
     setListLoading(true);
@@ -108,14 +110,15 @@ export function Customers() {
     void loadCustomers();
   }, [businessId, loadCustomers]);
 
-  // Load the configured tier names (owner reads business_pricing_config via bpc_owner_all). Falls
-  // back to the known set if unconfigured. Used for the inline tier picker + the Add-Customer form.
+  // Load the configured discount types (business-scoped read; forward-migrates legacy pricingTiers).
+  // Feeds the inline tier picker + the Add-Customer form. Also reads the AI-advisory toggle.
   useEffect(() => {
     if (!businessId) return;
     void (async () => {
       const { data } = await readPricingConfig(supabase, businessId);
-      const t = normalizePricingTiers((data?.config as { pricingTiers?: unknown } | null)?.pricingTiers);
-      setTierNames(t.map(x => x.name));
+      const cfg = (data?.config ?? {}) as Record<string, unknown>;
+      setDiscountTypes(normalizeDiscountTypes(cfg));
+      setAiEnabled(cfg.aiBiEnabled === true);
     })();
   }, [businessId]);
 
@@ -132,13 +135,15 @@ export function Customers() {
     })();
   }
 
-  // Options for a row's tier select — configured tiers ∪ the row's current value (so a legacy tier
-  // not in the config still displays and can be changed).
+  // Options for a row's tier select — the retail floor + every tier across every configured type
+  // (label "Type · Tier", value = the tier NAME stored in customers.price_tier) ∪ the row's current
+  // value (so a legacy/removed tier still displays and can be changed). Dynamic — no hardcoded set.
   const tierOptions = (current: string | null) => {
-    const names = [...tierNames];
-    const cur = current ?? 'retail';
-    if (!names.includes(cur)) names.push(cur);
-    return names.map(n => ({ value: n, label: n }));
+    const opts: { value: string; label: string }[] = [{ value: RETAIL_TIER_NAME, label: 'Retail (no discount)' }];
+    for (const ty of discountTypes) for (const ti of ty.tiers) opts.push({ value: ti.name, label: `${ty.name} · ${ti.name}` });
+    const cur = current ?? RETAIL_TIER_NAME;
+    if (!opts.some(o => o.value === cur)) opts.push({ value: cur, label: cur });
+    return opts;
   };
 
   // ── Inline edit: one immediate write per field, RLS-scoped (owner-only). Shares the exact
@@ -219,6 +224,13 @@ export function Customers() {
 
   return (
     <>
+      {/* AI_BI advisory slot (toggle-gated, owner setting on the Discounts screen; default OFF).
+          WIRED PLACEHOLDER — reads nothing yet (no spend aggregation) and changes nothing (never
+          auto-assigns a tier); it's a suggestion the owner acts on or ignores (D-38 advisory-only).
+          The real inference (orders summed per person → threshold suggestion) is the AIEngine port,
+          post-demo — this pass wires the surface + toggle + placeholder ONLY. */}
+      {aiEnabled && <AiAdvisorySlot />}
+
       <DataSheet<CustomerRow>
         title="Customers"
         rows={customers}
@@ -269,5 +281,23 @@ export function Customers() {
         </div>
       )}
     </>
+  );
+}
+
+// AI_BI advisory PLACEHOLDER — the wired, toggle-gated slot on the customer surface. Renders a
+// suggestion card only; the real spend→tier inference is the post-demo AIEngine port (see above).
+function AiAdvisorySlot() {
+  useEffect(() => { console.log('[TRACE:AI_BI] advisory slot rendered (placeholder — no inference yet)'); }, []);
+  return (
+    <div style={{ border: '1px solid #ddd6fe', background: '#f5f3ff', borderRadius: 12, padding: '12px 16px', marginBottom: 14, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+      <span style={{ fontSize: '1.1rem', lineHeight: 1.2 }}>💡</span>
+      <div>
+        <div style={{ fontWeight: 700, color: '#4c1d95', fontSize: '0.875rem' }}>Spend-based suggestion (advisory)</div>
+        <div style={{ fontSize: '0.8125rem', color: '#6d28d9', marginTop: 2, lineHeight: 1.5 }}>
+          When a customer's order history suggests a discount tier might fit, it'll surface here for you to act on or
+          ignore. Advisory only — it never assigns a tier or changes a price. (Suggestions arrive in a later update.)
+        </div>
+      </div>
+    </div>
   );
 }

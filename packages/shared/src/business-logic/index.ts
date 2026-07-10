@@ -22,7 +22,16 @@ export {
   normalizePricingTiers,
   clampPercent,
   DEFAULT_PRICING_TIERS,
+  // Discount TYPES × TIERS — the generalized model (owner-named types, N tiers, per-tier basis;
+  // THUNDER · 2026-07-10). normalizeDiscountTypes forward-migrates legacy pricingTiers non-destructively.
+  normalizeDiscountTypes,
+  resolveTier,
+  applyTierPrice,
+  RETAIL_TIER_NAME,
+  RETAIL_FLOOR,
+  DEFAULT_DISCOUNT_TYPES,
 } from './tierPricing';
+export type { DiscountBasis, DiscountTier, DiscountType, TierPriceResult } from './tierPricing';
 
 // Cost-to-Produce — period-pool engine (THUNDER · 2026-06-14). MarginEngine-fed.
 export {
@@ -143,5 +152,6 @@ export {
   writeLaborResource,
   readPricingConfig,
   writePricingConfig,
+  mergePricingConfig,
 } from './financialDataAccess';
 export type { LaborResourceRow } from './financialDataAccess';
