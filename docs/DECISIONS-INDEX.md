@@ -4,7 +4,11 @@
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.
 
-**Last updated:** 2026-07-10 (MONEY BOUNDARY promoted to D-37: Cultivar computes charges on originated orders + grants
+**Last updated:** 2026-07-10 (CONTRACTOR PRICING MODEL recorded as D-38: FLAT, owner-set tiers with MANUAL
+promote/demote — no auto-progression / decay / cumulative-spend engine; the register→$4.99→earn-tier loyalty ladder
+is ruled OUT (not deferred); a spend-based discount suggestion is ADVISORY-ONLY + owner-toggleable (surfaces, never
+auto-applies). Home: docs/decisions/2026-07-10-contractor-pricing-model.md.
+Earlier: MONEY BOUNDARY promoted to D-37: Cultivar computes charges on originated orders + grants
 role-based access, never processes/collects/reconciles payment; access fees are owner-set descriptive config on the
 business's own rail. Founding principle 'connect what they have, don't add a rail.' Home: docs/decisions/2026-07-10-money-boundary.md.
 Earlier: DataSheet platform standards — TWO cross-cutting UI conventions in the shared `DataSheet<T>`
@@ -35,6 +39,15 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-10 · CONTRACTOR PRICING MODEL recorded as a numbered decision — D-38):**
+> Decides: contractor pricing is FLAT, owner-set tiers with MANUAL promote/demote — no auto-progression, decay, or
+> cumulative-spend engine; the register→$4.99→earn-higher-tier loyalty ladder (recon R4 / story #8) is ruled OUT, not
+> deferred; a spend-based "a discount tier might fit" prompt is ADVISORY-ONLY + owner-toggleable (surfaces, never
+> auto-applies — SURFACE-THE-BETWEEN + owner-authority per D-9). Status **DECIDED**, numbered **[[D-38]]**. Relates
+> **[[D-35]]** (tier math) + **[[D-37]]** (money boundary). Home: `docs/decisions/2026-07-10-contractor-pricing-model.md`.
+> Constraints abided: **AC-1** (generic, no vertical noun), **AC-4** (owner-managed tier value-set grows without schema),
+> docs-only (no schema/migration/code/api). Pointer only — substance lives in the home doc.
+>
 > ✅ **Drift watch (2026-07-10 · MONEY BOUNDARY promoted to a numbered decision — D-37):**
 > Decides: Cultivar computes the charge on orders it ORIGINATES and grants role-based access (incl. discounted
 > contractor ordering) but never processes/collects/reconciles payment for either — access fees are owner-set
