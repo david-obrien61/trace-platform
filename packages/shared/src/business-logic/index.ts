@@ -30,8 +30,14 @@ export {
   RETAIL_TIER_NAME,
   RETAIL_FLOOR,
   DEFAULT_DISCOUNT_TYPES,
+  // Order pricing — the single computation both Review and submit run (D-39 · 2026-07-10):
+  // tier discounts GOODS lines only, services never, tax on the discounted subtotal.
+  computeOrderPricing,
 } from './tierPricing';
-export type { DiscountBasis, DiscountTier, DiscountType, TierPriceResult } from './tierPricing';
+export type {
+  DiscountBasis, DiscountTier, DiscountType, TierPriceResult,
+  PricingLineKind, PricingLineInput, PricedLine, OrderPricing,
+} from './tierPricing';
 
 // Cost-to-Produce — period-pool engine (THUNDER · 2026-06-14). MarginEngine-fed.
 export {

@@ -14,7 +14,8 @@
 import {
   applyTierDiscount, tierDiscountPercent, normalizePricingTiers, clampPercent,
   DEFAULT_PRICING_TIERS, type PricingTier,
-  normalizeDiscountTypes, resolveTier, applyTierPrice, RETAIL_TIER_NAME,
+  normalizeDiscountTypes, resolveTier, applyTierPrice, RETAIL_TIER_NAME, RETAIL_FLOOR,
+  computeOrderPricing, type PricingLineInput,
   type DiscountType,
 } from './tierPricing';
 
@@ -150,6 +151,76 @@ test('12. normalize prefers discountTypes, seeds on garbage, coerces basis + per
   const dt = normalizeDiscountTypes({ discountTypes: [{ name: 'A', tiers: [{ name: 'a', basis: 'weird', discountPercent: 150 }] }] });
   ok(dt[0].tiers[0].basis === 'retail_minus_percent' && dt[0].tiers[0].discountPercent === 100, 'unknown basis → percent; 150 clamped to 100');
 });
+
+// ══ computeOrderPricing — the single Review/submit computation (D-39 · 2026-07-10) ══════════════
+
+const CONTRACTOR = resolveTier('contractor', normalizeDiscountTypes({
+  discountTypes: [{ name: 'Contractor', tiers: [{ name: 'contractor', basis: 'retail_minus_percent', discountPercent: 10 }] }],
+}));
+
+// ── 13. THE canonical demo order: 8× goods @$128 (contractor 10%) + services at FULL price. ──────
+test('13. goods discounted 10%, services NOT, tax on the discounted subtotal', () => {
+  const lines: PricingLineInput[] = [
+    { kind: 'goods',   name: 'Shoal Creek Vitex', unitPrice: 128, qty: 8 },
+    { kind: 'service', name: 'Placement Service',  unitPrice: 225, qty: 9 },
+    { kind: 'service', name: 'Delivery',           unitPrice: 50,  qty: 1 },
+  ];
+  const p = computeOrderPricing(lines, CONTRACTOR, 0.0825);
+  const goods = p.lines[0];
+  ok(goods.netUnit === 115.2, `goods net unit 115.20, got ${goods.netUnit}`);           // $128 × 0.9
+  ok(goods.netTotal === 921.6, `goods net total 921.60, got ${goods.netTotal}`);        // ×8
+  ok(goods.discountAmt === 102.4, `goods discount $102.40, got ${goods.discountAmt}`);   // $1024 − $921.60
+  ok(goods.discountPct === 10, `goods discountPct 10, got ${goods.discountPct}`);
+  // services untouched — a WRONG impl would discount them too
+  ok(p.lines[1].netTotal === 2025 && p.lines[1].discountAmt === 0, 'Placement full $2025, no discount');
+  ok(p.lines[2].netTotal === 50 && p.lines[2].discountAmt === 0, 'Delivery full $50, no discount');
+  // discounted subtotal = 921.60 + 2025 + 50 = 2996.60; tax on THAT (not on the retail subtotal)
+  ok(p.discountedSubtotal === 2996.6, `discounted subtotal 2996.60, got ${p.discountedSubtotal}`);
+  const wrongTaxOnRetail = round2Local((1024 + 2075) * 0.0825);
+  ok(p.tax === round2Local(2996.6 * 0.0825) && p.tax !== wrongTaxOnRetail, `tax on discounted subtotal (${p.tax}), NOT on retail`);
+  ok(p.total === round2Local(2996.6 + p.tax), `total = discounted subtotal + tax, got ${p.total}`);
+  ok(p.goodsRetailSubtotal === 1024 && p.discountTotal === 102.4, 'show-the-work: retail $1024, discount $102.40');
+});
+
+// ── 14. Retail floor / null tier → no discount anywhere (Review must match a retail order). ──────
+test('14. retail floor leaves goods AND services at full price', () => {
+  const lines: PricingLineInput[] = [
+    { kind: 'goods',   name: 'Live Oak', unitPrice: 200, qty: 2 },
+    { kind: 'service', name: 'Delivery', unitPrice: 50,  qty: 1 },
+  ];
+  const p = computeOrderPricing(lines, RETAIL_FLOOR, 0.0825);
+  ok(p.discountTotal === 0, 'no discount at retail');
+  ok(p.lines[0].netTotal === 400 && p.lines[0].discountPct === 0, 'goods full at retail');
+  ok(p.discountedSubtotal === 450, 'subtotal 450 (unchanged)');
+});
+
+// ── 15. at_cost basis discounts GOODS to cost; degrades to retail when no cost on file (D-9). ─────
+test('15. at_cost goods → cost; missing cost → retail + degraded flag; services never at cost', () => {
+  const atCost = resolveTier('wholesale', normalizeDiscountTypes({
+    discountTypes: [{ name: 'Wholesale', tiers: [{ name: 'wholesale', basis: 'at_cost', discountPercent: 0 }] }],
+  }));
+  const p = computeOrderPricing([
+    { kind: 'goods',   name: 'Priced',   unitPrice: 100, qty: 1, unitCost: 40 },
+    { kind: 'goods',   name: 'NoCost',   unitPrice: 100, qty: 1, unitCost: null },
+    { kind: 'service', name: 'Delivery', unitPrice: 50,  qty: 1 },
+  ], atCost, 0);
+  ok(p.lines[0].netUnit === 40 && !p.lines[0].degraded, 'priced good → $40 (cost)');
+  ok(p.lines[1].netUnit === 100 && p.lines[1].degraded, 'no-cost good → retail $100, degraded (never $0)');
+  ok(p.lines[2].netTotal === 50, 'service still full $50 (at_cost is a goods basis only)');
+});
+
+// ── 16. Service owner-override (leakage) passes through as the charge; still discountAmt 0. ───────
+test('16. service overrideTotal replaces the charge, is not a tier discount', () => {
+  const p = computeOrderPricing([
+    { kind: 'goods',   name: 'Vitex',    unitPrice: 128, qty: 1 },
+    { kind: 'service', name: 'Planting', unitPrice: 225, qty: 6, overrideTotal: 1000 },
+  ], CONTRACTOR, 0);
+  ok(p.lines[1].netTotal === 1000 && p.lines[1].discountAmt === 0, 'override $1000 charged, discountAmt 0 (leakage ≠ discount)');
+  ok(p.lines[0].netUnit === 115.2, 'goods still tier-discounted alongside the override');
+  ok(p.discountedSubtotal === round2Local(115.2 + 1000), 'subtotal = discounted goods + overridden service');
+});
+
+function round2Local(n: number): number { return Math.round(n * 100) / 100; }
 
 // ── run ────────────────────────────────────────────────────────────────────────────
 console.log(`\n${passed} passed, ${failed} failed`);

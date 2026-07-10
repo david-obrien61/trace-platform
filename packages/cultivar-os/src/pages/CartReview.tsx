@@ -4,6 +4,7 @@ import { Minus, Plus, X } from 'lucide-react';
 import { useCart } from '../hooks/useCart';
 import { useSubmitOrder } from '../hooks/useSubmitOrder';
 import { useBusinessContext } from '@trace/shared/context';
+import { computeOrderPricing, RETAIL_FLOOR, type PricingLineInput } from '@trace/shared/business-logic';
 import { TAX_RATE } from '../lib/constants';
 import { anchorKey } from '../lib/stockLinePlant';
 import {
@@ -18,7 +19,7 @@ export function CartReview() {
   const {
     items, services, selectedTransport, plantingOffering, plantingSelected,
     nettingDeclined, customer, deliveryDate,
-    attachedCustomerId, invokedTier, orderTierLabel,
+    attachedCustomerId, invokedTier, orderTierLabel, orderTier,
     setLineQty, removeLine, toggleService, setNettingDeclined, setPlantingSelected,
   } = useCart();
   const { submit, submitting, error: submitError } = useSubmitOrder();
@@ -94,8 +95,6 @@ export function CartReview() {
   const unpricedLine = items.findIndex((_, i) => sellPriceOf(i) <= 0);
   const noSalePrice  = unpricedLine >= 0;
 
-  const plantSubtotal = items.reduce((sum, l) => sum + (l.plant.business_inventory?.sell_price ?? 0) * l.quantity, 0);
-
   // Rule-computed (baseline) amount for a service, and the EFFECTIVE amount = owner override
   // (if set) else the baseline. leakage = baseline − override (surfaced in the row + server).
   const computedAmt = (o: ServiceOffering) => lineSubtotal(o, effQty(o));
@@ -110,13 +109,44 @@ export function CartReview() {
   const transportAmount = selectedTransport ? effAmt(selectedTransport, transportComputed) : 0;
   const plantingTotal   = plantingOn && plantingOffering ? effAmt(plantingOffering, plantingComputed) : 0;
   const nettingTotal    = nettingActive && nettingSel ? effAmt(nettingSel.offering, nettingComputed) : 0;
-  const otherTotal      = otherAddons.filter(s => s.selected)
-    .reduce((sum, s) => sum + effAmt(s.offering, computedAmt(s.offering)), 0);
 
-  const addonsAmount = transportAmount + plantingTotal + nettingTotal + otherTotal;
-  const subtotal     = plantSubtotal + addonsAmount;
-  const taxAmount    = Math.round(subtotal * taxRate * 100) / 100;
-  const total        = subtotal + taxAmount;
+  // ── D-39: ONE pricing computation (the same shared fn submit.ts runs) ────────────────
+  // Tier discounts GOODS lines only; SERVICE lines pass through at full price (an owner override
+  // is leakage, fed as overrideTotal — never a tier discount); tax on the DISCOUNTED subtotal.
+  // orderTier is the tier RESOLVED at attach (ScanOrder); submit re-resolves server-side (tamper
+  // defense). Because both call computeOrderPricing over the same inputs, Review === submit === QBO.
+  const resolvedTier = orderTier ?? RETAIL_FLOOR;
+  const goodsInputs: PricingLineInput[] = items.map(l => ({
+    kind: 'goods',
+    name: l.plant.common_name ?? l.plant.species ?? 'item',
+    unitPrice: l.plant.business_inventory?.sell_price ?? 0,
+    qty: l.quantity,
+    unitCost: l.plant.business_inventory?.unit_cost ?? null,
+  }));
+  const svcInput = (o: ServiceOffering): PricingLineInput => ({
+    kind: 'service', name: o.name, unitPrice: Number(o.price), qty: effQty(o),
+    overrideTotal: serviceOverride[o.id]?.amount ?? null,
+  });
+  const serviceInputs: PricingLineInput[] = [
+    ...(selectedTransport ? [svcInput(selectedTransport)] : []),
+    ...(plantingOn && plantingOffering ? [svcInput(plantingOffering)] : []),
+    ...(nettingActive && nettingSel ? [svcInput(nettingSel.offering)] : []),
+    ...otherAddons.filter(s => s.selected).map(s => svcInput(s.offering)),
+  ];
+  const pricing = computeOrderPricing([...goodsInputs, ...serviceInputs], resolvedTier, taxRate);
+  const goodsPriced = pricing.lines.filter(p => p.kind === 'goods'); // same order as items
+  const subtotal  = pricing.discountedSubtotal;
+  const taxAmount = pricing.tax;
+  const total     = pricing.total;
+
+  // [TRACE:PRICE] — the full per-line breakdown on the Review render path (D-39). STD-003, on
+  // until OWNER-PROVEN. Proves Review computes what submit charges (goods discounted, services not).
+  if (TRACE_CART) console.log('[TRACE:PRICE] review pricing (computeOrderPricing)', {
+    tier: resolvedTier.name, basis: resolvedTier.basis, discountPercent: resolvedTier.discountPercent,
+    lines: pricing.lines.map(p => ({ kind: p.kind, name: p.name, retailUnit: p.retailUnit, qty: p.qty, retailTotal: p.retailTotal, discountPct: p.discountPct, discountAmt: p.discountAmt, netTotal: p.netTotal })),
+    goodsRetailSubtotal: pricing.goodsRetailSubtotal, discountTotal: pricing.discountTotal,
+    discountedSubtotal: subtotal, tax: taxAmount, total,
+  });
 
   function setQty(o: ServiceOffering, qty: number) {
     const next = Math.max(1, qty);
@@ -188,6 +218,10 @@ export function CartReview() {
           transportMode:   selectedTransport?.transport_mode ?? 'self',
           transportName:   selectedTransport?.name ?? null,
           serviceLines,
+          // D-39: the per-goods-line breakdown (retail → discount → net) so the receipt shows the
+          // SAME work Review showed. Review === submit === QBO (one computeOrderPricing).
+          goodsBreakdown:  goodsPriced,
+          tierLabel:       orderTierLabel,
           businessName:    business?.name ?? null,
           nettingActive,
           qbInvoiceId:     result.qbInvoiceId,
@@ -236,7 +270,12 @@ export function CartReview() {
 
         {items.map((l, i) => {
           const key = anchorKey(l.plant);
-          const price = sellPriceOf(i);
+          const gp = goodsPriced[i];
+          const price = gp?.retailUnit ?? sellPriceOf(i);
+          // Show the work (D-39): when the tier actually came off this goods line, spell out
+          // retail × qty → discount → net, so the owner SEES the discount rather than a bare total.
+          const showWork = !!gp && gp.discountAmt > 0;
+          const lineTotal = gp?.netTotal ?? price * l.quantity;
           return (
             <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -247,10 +286,17 @@ export function CartReview() {
                   {l.plant.current_container ? `${l.plant.current_container} · ` : ''}
                   {price > 0 ? `$${price.toFixed(2)} each` : 'No price set'}
                 </p>
+                {showWork && gp && (
+                  <p style={{ fontSize: '0.75rem', color: '#27500A', margin: '3px 0 0', lineHeight: 1.5 }}>
+                    Retail ${gp.retailUnit.toFixed(2)} × {gp.qty} = ${gp.retailTotal.toFixed(2)}
+                    {' · '}{resolvedTier.name} {gp.basis === 'at_cost' ? 'at cost' : `${gp.discountPct}% off`} −${gp.discountAmt.toFixed(2)}
+                    {' · '}<strong>Net ${gp.netTotal.toFixed(2)}</strong>
+                  </p>
+                )}
               </div>
               <Stepper value={l.quantity} onChange={q => setLineQty(key, q)} min={1} />
               <span style={{ width: 68, textAlign: 'right', fontWeight: 600, fontSize: '0.9375rem', color: '#374151' }}>
-                ${(price * l.quantity).toFixed(2)}
+                ${lineTotal.toFixed(2)}
               </span>
               {items.length > 1 && (
                 <button onClick={() => removeLine(key)} aria-label="Remove" style={iconBtn}>
@@ -281,6 +327,7 @@ export function CartReview() {
             qty={effQty(selectedTransport)}
             onQty={selectedTransport.price_type === 'per_unit' ? (q => setQty(selectedTransport, q)) : undefined}
             included
+            noDiscount
             canOverride={canOverride}
             baseline={transportComputed}
             override={serviceOverride[selectedTransport.id]}
@@ -299,6 +346,7 @@ export function CartReview() {
               qty={effQty(plantingOffering)}
               onQty={q => setQty(plantingOffering, q)}
               included
+              noDiscount
               onToggle={() => setPlantingSelected(false)}
               canOverride={canOverride}
               baseline={plantingComputed}
@@ -326,6 +374,7 @@ export function CartReview() {
               qty={effQty(nettingSel.offering)}
               onQty={q => setQty(nettingSel.offering, q)}
               included
+              noDiscount
               onToggle={() => { setNettingDeclined(true); }}
               canOverride={canOverride}
               baseline={nettingComputed}
@@ -359,6 +408,7 @@ export function CartReview() {
               qty={effQty(s.offering)}
               onQty={s.offering.price_type === 'per_unit' ? (q => setQty(s.offering, q)) : undefined}
               included
+              noDiscount
               onToggle={() => toggleService(s.offering.id)}
               canOverride={canOverride}
               baseline={computedAmt(s.offering)}
@@ -375,10 +425,22 @@ export function CartReview() {
           )
         ))}
 
-        {/* Totals */}
+        {/* Totals — show the work (D-39): retail → discount → discounted subtotal → tax → total. */}
         <div style={{ borderTop: '1px solid #f3f4f6', marginTop: 8, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {pricing.discountTotal > 0 && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#9ca3af' }}>
+                <span>Subtotal (retail)</span>
+                <span>${(subtotal + pricing.discountTotal).toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#27500A', fontWeight: 600 }}>
+                <span>{resolvedTier.name} discount (plants only)</span>
+                <span>−${pricing.discountTotal.toFixed(2)}</span>
+              </div>
+            </>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#6b7280' }}>
-            <span>Subtotal</span>
+            <span>{pricing.discountTotal > 0 ? 'Subtotal (after discount)' : 'Subtotal'}</span>
             <span>${subtotal.toFixed(2)}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#6b7280' }}>
@@ -497,10 +559,12 @@ function Stepper({ value, onChange, min = 0 }: { value: number; onChange: (v: nu
 
 function ServiceRow({
   name, rule, amount, editable, qty, onQty, included, onToggle,
-  canOverride, baseline, override, onOverride,
+  canOverride, baseline, override, onOverride, noDiscount,
 }: {
   name: string; rule: string; amount: number; editable: boolean;
   qty: number; onQty?: (q: number) => void; included: boolean; onToggle?: () => void;
+  // D-39: service/labor lines are never tier-discounted — surface that plainly ("no discount").
+  noDiscount?: boolean;
   // Owner/manager price override (attributed leakage). canOverride gates the affordance;
   // baseline = rule-computed amount; override = current {amount, reason}; onOverride persists it.
   canOverride?: boolean; baseline?: number;
@@ -536,7 +600,9 @@ function ServiceRow({
           <p style={{ fontSize: '0.9375rem', color: '#1f2937', margin: 0 }}>
             {included ? '✓ ' : ''}{name}
           </p>
-          <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: '2px 0 0' }}>{rule}</p>
+          <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: '2px 0 0' }}>
+            {rule}{noDiscount ? ' · no discount' : ''}
+          </p>
           {canOverride && onOverride && !editing && (
             <button onClick={openEditor} style={{ ...linkBtn, fontSize: '0.75rem', marginTop: 2 }}>
               {isOverridden ? 'Edit price' : 'Adjust price'}

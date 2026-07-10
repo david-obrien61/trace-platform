@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
+import type { PricedLine } from '@trace/shared/business-logic';
 
 interface ConfirmState {
   orderId:          string;
@@ -12,6 +13,8 @@ interface ConfirmState {
   transportMode?:   'self' | 'staff';
   transportName?:   string | null;                     // real service_offerings.name (H3/H6)
   serviceLines?:    { name: string; amount: number }[]; // real service itemization (H3/H6)
+  goodsBreakdown?:  PricedLine[];                       // D-39: per-goods-line retail→discount→net
+  tierLabel?:       string | null;                     // the order's tier badge (display)
   businessName?:    string | null;                     // from context at review (AC-1)
   nettingActive?:   boolean;
   qbInvoiceId?:     string;
@@ -62,8 +65,11 @@ export function Confirmation() {
   }
 
   const { invoiceNumber, total, subtotal, taxAmount, email, payOnline,
-          transportMode, transportName, serviceLines, businessName, nettingActive,
+          transportMode, transportName, serviceLines, goodsBreakdown, tierLabel,
+          businessName, nettingActive,
           qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus } = state;
+  const hasBreakdown = !!goodsBreakdown && goodsBreakdown.length > 0;
+  const orderDiscount = hasBreakdown ? goodsBreakdown!.reduce((s, g) => s + g.discountAmt, 0) : 0;
 
   const isSelf      = (transportMode ?? 'self') === 'self';
   const nettingOn   = !!nettingActive;
@@ -138,13 +144,31 @@ export function Confirmation() {
           Order detail
         </p>
 
-        {/* Plant lines (D-35: sale price). Cart still holds the lines until "done". */}
-        {items.map((l) => (
-          <div key={l.plant.stock_line_id ?? l.plant.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem', color: '#374151', marginBottom: 8 }}>
-            <span>{l.plant.common_name ?? l.plant.species}{l.plant.current_container ? ` · ${l.plant.current_container}` : ''} × {l.quantity}</span>
-            <span>${((l.plant.business_inventory?.sell_price ?? 0) * l.quantity).toFixed(2)}</span>
-          </div>
-        ))}
+        {/* Plant lines — D-39: render the per-line breakdown (retail → discount → net) that matches
+            what QuickBooks charges. The breakdown comes from the SAME computeOrderPricing the Review
+            ran. Falls back to the cart's raw lines (retail) only if no breakdown was passed. */}
+        {hasBreakdown ? (
+          goodsBreakdown!.map((gp, i) => (
+            <div key={`goods-${i}`} style={{ marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem', color: '#374151' }}>
+                <span>{gp.name} × {gp.qty}</span>
+                <span>${gp.netTotal.toFixed(2)}</span>
+              </div>
+              {gp.discountAmt > 0 && (
+                <p style={{ fontSize: '0.75rem', color: '#27500A', margin: '2px 0 0', lineHeight: 1.5 }}>
+                  Retail ${gp.retailTotal.toFixed(2)} · {gp.basis === 'at_cost' ? 'at cost' : `${gp.discountPct}% off`} −${gp.discountAmt.toFixed(2)} · Net ${gp.netTotal.toFixed(2)}
+                </p>
+              )}
+            </div>
+          ))
+        ) : (
+          items.map((l) => (
+            <div key={l.plant.stock_line_id ?? l.plant.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem', color: '#374151', marginBottom: 8 }}>
+              <span>{l.plant.common_name ?? l.plant.species}{l.plant.current_container ? ` · ${l.plant.current_container}` : ''} × {l.quantity}</span>
+              <span>${((l.plant.business_inventory?.sell_price ?? 0) * l.quantity).toFixed(2)}</span>
+            </div>
+          ))
+        )}
 
         {/* Service lines — itemized by REAL service_offerings.name (H3/H6), not a branch label. */}
         {(serviceLines ?? []).filter(s => s.amount > 0).map((s, i) => (
@@ -155,8 +179,18 @@ export function Confirmation() {
         ))}
 
         <div style={{ borderTop: '1px solid #f3f4f6', marginTop: 8, paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {orderDiscount > 0 && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#9ca3af' }}>
+                <span>Subtotal (retail)</span><span>${(subtotal + orderDiscount).toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#27500A', fontWeight: 600 }}>
+                <span>{tierLabel ? `${tierLabel.split(' · ')[0]} discount` : 'Discount'} (plants only)</span><span>−${orderDiscount.toFixed(2)}</span>
+              </div>
+            </>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#9ca3af' }}>
-            <span>Subtotal</span><span>${subtotal.toFixed(2)}</span>
+            <span>{orderDiscount > 0 ? 'Subtotal (after discount)' : 'Subtotal'}</span><span>${subtotal.toFixed(2)}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#9ca3af' }}>
             <span>Tax ({subtotal > 0 ? ((taxAmount / subtotal) * 100).toFixed(2).replace(/\.00$/, '') : '0'}%)</span><span>${taxAmount.toFixed(2)}</span>

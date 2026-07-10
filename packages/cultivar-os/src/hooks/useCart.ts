@@ -4,6 +4,7 @@ import type { CartItem, ServiceSelection } from '../types/order';
 import type { CustomerInput } from '../types/customer';
 import type { TransportChoice, TransportSelection } from '../lib/transport';
 import { anchorKey } from '../lib/stockLinePlant';
+import type { DiscountTier } from '@trace/shared/business-logic';
 
 const TRACE_CART = true; // [TRACE:CART] STD-003 — on until OWNER-PROVEN
 
@@ -37,6 +38,11 @@ interface CartStore {
   // moment" badge shown in ScanOrder + CartReview. Display-only; the authoritative price is
   // always recomputed server-side (money-safety).
   orderTierLabel:       string | null;
+  // The RESOLVED tier for the order (basis + discountPercent), resolved ONCE at attach time
+  // (ScanOrder, where the discount config is loaded). CartReview + Confirmation feed this to the
+  // shared computeOrderPricing so the DISPLAYED discount equals what submit charges (D-39). null
+  // ⇒ retail floor (no discount). Display-only: submit RE-RESOLVES server-side (tamper defense).
+  orderTier:            DiscountTier | null;
   // Owner/manager-entered delivery date (ISO 'YYYY-MM-DD') for a delivery order — the manual
   // precursor to the customer-facing scheduling calendar. Written to orders.delivery_date.
   deliveryDate:      string | null;
@@ -57,7 +63,7 @@ interface CartStore {
   // submit uses that existing row directly (no dedup). customerId null → a NEW customer that
   // submit creates via findOrCreateCustomer (way 4). invokedTier = an order-scoped tier invoke
   // (not saved to the customer); null when using the customer's stored tier.
-  attachCustomer:     (args: { customerId: string | null; name: string; customer: CustomerInput; invokedTier: string | null; tierLabel: string | null }) => void;
+  attachCustomer:     (args: { customerId: string | null; name: string; customer: CustomerInput; invokedTier: string | null; tierLabel: string | null; resolvedTier: DiscountTier | null }) => void;
   clearAttachedCustomer: () => void;
   setDeliveryDate:    (val: string | null) => void;
   clear:              () => void;
@@ -76,6 +82,7 @@ export const useCart = create<CartStore>((set) => ({
   attachedCustomerName: null,
   invokedTier:          null,
   orderTierLabel:       null,
+  orderTier:            null,
   deliveryDate:      null,
 
   // Single-item entry (PlantProfile "Add to cart"): replace the cart with just this line.
@@ -83,7 +90,7 @@ export const useCart = create<CartStore>((set) => ({
   // reset any attach state carried in this browser session (path B never attaches a customer).
   setItem: (plant, qty) => {
     if (TRACE_CART) console.log('[TRACE:CART] setItem (single-line replace)', { anchor: anchorKey(plant), qty });
-    set({ items: [{ plant, quantity: qty }], attachedCustomerId: null, attachedCustomerName: null, invokedTier: null, orderTierLabel: null });
+    set({ items: [{ plant, quantity: qty }], attachedCustomerId: null, attachedCustomerName: null, invokedTier: null, orderTierLabel: null, orderTier: null });
   },
 
   // Scan-loop entry: add a line, merging by ANCHOR so scanning the same lot twice bumps
@@ -183,9 +190,10 @@ export const useCart = create<CartStore>((set) => ({
 
   setCustomer: (c) => set({ customer: c }),
 
-  attachCustomer: ({ customerId, name, customer, invokedTier, tierLabel }) => {
+  attachCustomer: ({ customerId, name, customer, invokedTier, tierLabel, resolvedTier }) => {
     if (TRACE_CART) console.log('[TRACE:lookup] customer attached to order', {
       customerId, name, invokedTier: invokedTier ?? null, tierLabel: tierLabel ?? null,
+      resolvedTier: resolvedTier ? { name: resolvedTier.name, basis: resolvedTier.basis, discountPercent: resolvedTier.discountPercent } : null,
     });
     set({
       attachedCustomerId:   customerId,
@@ -193,12 +201,13 @@ export const useCart = create<CartStore>((set) => ({
       customer,                       // prefill the rest of the flow (CustomerCapture reads this)
       invokedTier:          invokedTier ?? null,
       orderTierLabel:       tierLabel ?? null,
+      orderTier:            resolvedTier ?? null,
     });
   },
 
   clearAttachedCustomer: () => {
     if (TRACE_CART) console.log('[TRACE:lookup] customer detached from order');
-    set({ attachedCustomerId: null, attachedCustomerName: null, customer: null, invokedTier: null, orderTierLabel: null });
+    set({ attachedCustomerId: null, attachedCustomerName: null, customer: null, invokedTier: null, orderTierLabel: null, orderTier: null });
   },
 
   setDeliveryDate: (val) => {
@@ -219,6 +228,7 @@ export const useCart = create<CartStore>((set) => ({
     attachedCustomerName: null,
     invokedTier:          null,
     orderTierLabel:       null,
+    orderTier:            null,
     deliveryDate:      null,
   }),
 }));
