@@ -114,6 +114,7 @@ export type { FinancialPermission } from './financialPermissions';
 // Action-permission vocabulary — behavior-gating perms (not tile perms) — single source
 export {
   OVERRIDE_MAINTENANCE,
+  VIEW_CUSTOMERS,
   ACTION_PERMISSIONS,
   ALL_ACTION_PERMISSIONS,
   ACTION_ROLE_DEFAULTS,

@@ -44,7 +44,7 @@ const FLOOR = [
     description: 'Full access — settings, team, QB, all reports',
     permissions: [
       'view_dashboard', 'qr_checkout', 'view_orders', 'manage_orders', 'manage_deliveries',
-      'manage_customers', 'manage_campaigns', 'view_reports', 'manage_settings',
+      'manage_customers', 'manage_campaigns', 'view_reports', 'manage_settings', 'view_customers',
       'view_wages', 'view_pricing_config', 'view_costs', 'view_margin', 'override_maintenance',
     ],
   },
@@ -53,7 +53,7 @@ const FLOOR = [
     description: 'Day-to-day ops — checkout, deliveries, campaigns, orders',
     permissions: [
       'view_dashboard', 'qr_checkout', 'view_orders', 'manage_orders', 'manage_deliveries',
-      'manage_customers', 'manage_campaigns', 'view_reports', 'view_costs',
+      'manage_customers', 'manage_campaigns', 'view_reports', 'view_customers', 'view_costs',
       'view_margin', 'override_maintenance',
     ],
   },

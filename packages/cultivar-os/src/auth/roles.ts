@@ -20,7 +20,7 @@ import {
   VIEW_WAGES,
   VIEW_MARGIN,
 } from '@trace/shared/auth/financialPermissions';
-import { OVERRIDE_MAINTENANCE } from '@trace/shared/auth/actionPermissions';
+import { OVERRIDE_MAINTENANCE, VIEW_CUSTOMERS } from '@trace/shared/auth/actionPermissions';
 
 export const ROLES = ['OWNER', 'MANAGER', 'STAFF'] as const;
 export type CultivarRole = typeof ROLES[number];
@@ -35,6 +35,7 @@ export const PERMISSIONS = {
   MANAGE_CAMPAIGNS:  'manage_campaigns',
   VIEW_REPORTS:      'view_reports',
   MANAGE_SETTINGS:   'manage_settings',   // settings page, QB connect, team management
+  VIEW_CUSTOMERS,                          // read customers (roster + order-entry lookup/attach); RLS-gated (20260710). owner + manager
   // ── financial-data wall (v1) — default-deny; backfilled onto existing members ──
   VIEW_COSTS,                              // operational unit_cost (shaping)
   VIEW_PRICING_CONFIG,                     // pricing recipe / moat (hard wall)
@@ -55,6 +56,7 @@ export const DEFAULT_PERMISSIONS: Record<CultivarRole, string[]> = {
     PERMISSIONS.MANAGE_CAMPAIGNS,
     PERMISSIONS.VIEW_REPORTS,
     PERMISSIONS.MANAGE_SETTINGS,
+    PERMISSIONS.VIEW_CUSTOMERS,
     // financial wall — owner sees all four
     PERMISSIONS.VIEW_WAGES,
     PERMISSIONS.VIEW_PRICING_CONFIG,
@@ -72,6 +74,7 @@ export const DEFAULT_PERMISSIONS: Record<CultivarRole, string[]> = {
     PERMISSIONS.MANAGE_CUSTOMERS,
     PERMISSIONS.MANAGE_CAMPAIGNS,
     PERMISSIONS.VIEW_REPORTS,
+    PERMISSIONS.VIEW_CUSTOMERS,
     // financial wall — ops see what's selling short, NOT the pricing recipe, NOT payroll
     PERMISSIONS.VIEW_COSTS,
     PERMISSIONS.VIEW_MARGIN,

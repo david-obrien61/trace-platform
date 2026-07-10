@@ -9,6 +9,13 @@ import { nettedQuantity, lineSubtotal, totalPlantCount, isNettingOffering } from
 
 export interface SubmitPayload {
   customer:          CustomerInput;
+  // Customer-first attach (ways 1 & 4). customerId set → the server uses THAT existing customer
+  // row directly (no typed-field dedup). Null/absent → the server find-or-creates as before.
+  customerId?:       string | null;
+  // Order-scoped tier invoke (way 4). A tier NAME applied to THIS order only. Honored server-side
+  // ONLY on a token-verified owner/manager path (tamper defense); null/absent → the customer's
+  // stored price_tier governs.
+  invokedTier?:      string | null;
   lines:             { plant: Plant; quantity: number }[];   // multi-item: one entry per cart line
   services:          ServiceSelection[];
   selectedTransport: ServiceOffering | null;
@@ -46,7 +53,7 @@ export function useSubmitOrder() {
 
     try {
       const {
-        customer, lines, services, selectedTransport, plantingOffering, plantingSelected,
+        customer, customerId, invokedTier, lines, services, selectedTransport, plantingOffering, plantingSelected,
         nettingDeclined, serviceQuantities, serviceOverrides, deliveryDate, businessId,
       } = payload;
 
@@ -61,7 +68,7 @@ export function useSubmitOrder() {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body:    JSON.stringify({
-          customer, lines, services, selectedTransport, plantingOffering, plantingSelected,
+          customer, customerId, invokedTier, lines, services, selectedTransport, plantingOffering, plantingSelected,
           nettingDeclined, serviceQuantities, serviceOverrides, deliveryDate, businessId,
         }),
       });
