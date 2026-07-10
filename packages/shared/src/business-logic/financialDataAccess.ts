@@ -222,3 +222,23 @@ export async function writePricingConfig(
   );
   return { error };
 }
+
+/**
+ * READ-MERGE-WRITE the pricing config: read the current config jsonb, shallow-merge `patch` over it,
+ * write it back via writePricingConfig. This is the clobber-safe path for the THREE partial writers
+ * of business_pricing_config.config that own DIFFERENT keys — Discounts (discountTypes + aiBiEnabled)
+ * and the Cost-to-Produce panel (cost keys). Each writer patches ONLY its keys; a stale in-memory
+ * blob from one screen can never wipe another screen's keys (money-safety on shared config).
+ * Returns the read error if the read fails (never writes a config it couldn't first read).
+ */
+export async function mergePricingConfig(
+  supabase: SupabaseClient,
+  businessId: string,
+  patch: Record<string, unknown>,
+): Promise<{ error: { message: string } | null }> {
+  const { data, error: readErr } = await readPricingConfig(supabase, businessId);
+  if (readErr) return { error: readErr };
+  const current = (data?.config && typeof data.config === 'object') ? (data.config as Record<string, unknown>) : {};
+  const next = { ...current, ...patch };
+  return writePricingConfig(supabase, businessId, next);
+}

@@ -3,7 +3,7 @@ import { sendNotification } from '../../../shared/src/notifications/send';
 import { findOrCreateCustomer } from '../../../shared/src/business-logic/customerUpsert';
 import { callerHoldsPermission, callerIsBusinessOwner, resolveCallerUid } from '../../../shared/src/auth/callerPermission';
 import { readPricingConfig } from '../../../shared/src/business-logic/financialDataAccess';
-import { applyTierDiscount, tierDiscountPercent, normalizePricingTiers } from '../../../shared/src/business-logic/tierPricing';
+import { normalizeDiscountTypes, resolveTier, applyTierPrice } from '../../../shared/src/business-logic/tierPricing';
 import { nettedQuantity, lineSubtotal } from '../../src/lib/netting';
 import { ORDER_STATUSES } from '../../src/lib/orderStatus';
 
@@ -138,20 +138,23 @@ async function handleCreate(req: any, res: any) {
       .from('businesses').select('tax_rate').eq('id', businessId).maybeSingle();
     const taxRate = Number((bizTaxRow as any)?.tax_rate ?? TAX_RATE_FALLBACK);
 
-    // PRICE TIER at checkout (D-35) — READ + APPLIED (AC-4 hold CLOSED 2026-07-09). The tier→discount
-    // math is PERCENT-OFF-BASELINE (owner-set per tier, default 0%): the tier's discountPercent is
-    // taken off the stored, server-authoritative sell_price. Both the tier (on the customer row) and
-    // the percents (in the business's pricing config) are read SERVER-SIDE — the client supplies
-    // neither (tamper defense). Config-less business / retail / unknown tier → 0% → price unchanged.
+    // PRICE TIER at checkout (D-35 + the generalized TYPES×TIERS model, 2026-07-10) — READ + APPLIED
+    // SERVER-SIDE (tamper defense — the client supplies neither the tier nor the config). The customer's
+    // price_tier NAME resolves against the owner-configured discount types to a tier + BASIS:
+    //   • retail_minus_percent → % off the stored server-authoritative sell_price.
+    //   • at_cost              → the server-read unit_cost (money-safety — cost NEVER from the client;
+    //                            with graceful degradation to retail if no cost is on file, below).
+    // Config-less business / retail / unknown tier → retail floor → price unchanged.
     const { data: custRow } = await db
       .from('customers').select('price_tier').eq('id', customerId).maybeSingle();
     const priceTier = (custRow as any)?.price_tier ?? null;
     const { data: pricingCfg } = await readPricingConfig(db, businessId);
-    const pricingTiers = normalizePricingTiers((pricingCfg?.config as any)?.pricingTiers);
-    const tierDiscountPct = tierDiscountPercent(priceTier, pricingTiers);
-    console.log('[TRACE:PRICE] price_tier discount (order-level)', {
-      customerId, priceTier, discountPercent: tierDiscountPct,
-      adjustmentApplied: tierDiscountPct > 0,
+    const discountTypes = normalizeDiscountTypes(pricingCfg?.config);
+    const resolvedTier = resolveTier(priceTier, discountTypes);
+    const degradedItems: string[] = []; // at_cost lines with no cost on file → charged at retail (D-9)
+    console.log('[TRACE:PRICE] price_tier resolved (order-level)', {
+      customerId, priceTier, resolvedName: resolvedTier.name, basis: resolvedTier.basis,
+      discountPercent: resolvedTier.discountPercent, accessTerms: resolvedTier.accessTerms ?? null,
     });
 
     // ── 3. Resolve + validate each cart line (server-authoritative sell_price per anchor) ──
@@ -168,26 +171,29 @@ async function handleCreate(req: any, res: any) {
       const quantity = Number(line.quantity);
       const stockLineId: string | null = plant.stock_line_id ?? null;
       let serverSellPriceRaw: number | null | undefined;
+      let serverUnitCost: number | null | undefined; // server-read cost (at_cost basis only; NEVER client)
       let stockLineSize: string | null = null;
 
       if (stockLineId) {
         const { data: invRow } = await db
           .from('business_inventory')
-          .select('sell_price, size, status')
+          .select('sell_price, unit_cost, size, status')
           .eq('id', stockLineId)
           .eq('business_id', businessId)
           .single();
         serverSellPriceRaw = (invRow as any)?.sell_price;
+        serverUnitCost     = (invRow as any)?.unit_cost;
         stockLineSize      = (invRow as any)?.size ?? null;
         console.log('[TRACE:RESOLVE] order anchor — business_inventory (stock line)', { stockLineId });
       } else {
         const { data: invRow } = await db
           .from('cultivar_plants')
-          .select('business_inventory ( sell_price )')
+          .select('business_inventory ( sell_price, unit_cost )')
           .eq('id', plant.id)
           .eq('business_id', businessId)
           .single();
         serverSellPriceRaw = (invRow as any)?.business_inventory?.sell_price;
+        serverUnitCost     = (invRow as any)?.business_inventory?.unit_cost;
         console.log('[TRACE:RESOLVE] order anchor — cultivar_plants (specimen)', { plantId: plant.id });
       }
 
@@ -212,9 +218,15 @@ async function handleCreate(req: any, res: any) {
         });
       }
 
-      // AC-4 CLOSED: charge the tier-discounted sell_price. applyTierDiscount is a no-op for
-      // retail/default/unknown/0% (unitPrice === serverSellPrice), so a non-tiered order is unchanged.
-      const unitPrice = applyTierDiscount(serverSellPrice, priceTier, pricingTiers);
+      // Apply the resolved tier's BASIS to the server-authoritative sell_price + server-read cost.
+      // No-op for the retail floor / 0% (unitPrice === serverSellPrice → non-tiered order unchanged).
+      // at_cost with no cost on file → NEUTRAL fallback to retail (never $0), flagged degraded (D-9).
+      const priced = applyTierPrice(serverSellPrice, serverUnitCost, resolvedTier);
+      const unitPrice = priced.price;
+      if (priced.degraded) {
+        const itemName = plant.common_name ?? plant.species ?? 'an item';
+        degradedItems.push(itemName);
+      }
       const sub = round2(unitPrice * quantity);
       linesSubtotal += sub;
 
@@ -222,12 +234,26 @@ async function handleCreate(req: any, res: any) {
       const container = stockLineId ? (stockLineSize ?? plant.current_container) : plant.current_container;
       if (LARGE_CONTAINERS.includes(container)) anyLargeContainer = true;
 
-      console.log('[TRACE:PRICE] line — tier-discounted sell_price', {
-        plantId: plant.id, baseSellPrice: serverSellPrice, tier: priceTier, discountPercent: tierDiscountPct,
-        unitPrice, quantity, subtotal: sub, lane: stockLineId ? 'stock_line' : 'specimen',
+      console.log('[TRACE:PRICE] line — tier-priced', {
+        plantId: plant.id, baseSellPrice: serverSellPrice, tier: resolvedTier.name, basis: resolvedTier.basis,
+        discountPercent: resolvedTier.discountPercent, unitCostSeen: serverUnitCost ?? null,
+        unitPrice, applied: priced.applied, degraded: priced.degraded,
+        quantity, subtotal: sub, lane: stockLineId ? 'stock_line' : 'specimen',
       });
 
       resolvedLines.push({ plant, quantity, stockLineId, unitPrice, subtotal: sub });
+    }
+
+    // Graceful-degradation surface (D-9) — an at-cost tier with NO cost on file was charged at
+    // RETAIL (never $0). Surface an honest order-level note (returned to the client + logged) so
+    // the owner sees why the at-cost price could not apply, rather than a silent mismatch.
+    const pricingNotes: string[] = degradedItems.length
+      ? [`At-cost pricing could not apply to ${degradedItems.length} line(s) with no cost on file — charged at retail instead: ${degradedItems.join(', ')}. Set a unit cost in Inventory to enable at-cost pricing.`]
+      : [];
+    if (pricingNotes.length) {
+      console.log('[TRACE:PRICE] at_cost degraded to retail (no cost on file)', {
+        tier: resolvedTier.name, degradedCount: degradedItems.length, items: degradedItems,
+      });
     }
 
     // ── 4. Service amounts (attach-rule netting over the WHOLE cart) ─────────
@@ -548,7 +574,7 @@ async function handleCreate(req: any, res: any) {
       }
     }
 
-    res.json({ orderId, invoiceNumber, total, subtotal, taxAmount });
+    res.json({ orderId, invoiceNumber, total, subtotal, taxAmount, pricingNotes });
 
   } catch (err: any) {
     console.error('[orders/submit]', err.message);

@@ -4,7 +4,10 @@
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.
 
-**Last updated:** 2026-07-10 (CONTRACTOR PRICING MODEL recorded as D-38: FLAT, owner-set tiers with MANUAL
+**Last updated:** 2026-07-10 (DISCOUNTS admin item BUILT — owner-named discount types × N tiers, per-tier basis
+(retail-% | at-cost), relocated out of Cost-to-Produce to /discounts, toggle-gated AI_BI placeholder; implements
+D-35/D-37/D-38 + margin-aware concept, NO new decision (see drift watch below). Earlier same day:
+CONTRACTOR PRICING MODEL recorded as D-38: FLAT, owner-set tiers with MANUAL
 promote/demote — no auto-progression / decay / cumulative-spend engine; the register→$4.99→earn-tier loyalty ladder
 is ruled OUT (not deferred); a spend-based discount suggestion is ADVISORY-ONLY + owner-toggleable (surfaces, never
 auto-applies). Home: docs/decisions/2026-07-10-contractor-pricing-model.md.
@@ -39,6 +42,17 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-10 · DISCOUNTS admin item — build, no new decision):** No drift — abided by **[[D-35]]**
+> (tier math = % off stored sell_price, never re-derived from cost), **[[D-37]]** (access terms are DESCRIPTIVE config,
+> never charged by the platform), **[[D-38]]** (FLAT, owner-managed, MANUAL — N tiers is structure not auto-progression;
+> the AI_BI slot is a toggle-gated ADVISORY placeholder that surfaces, never auto-applies), and the margin-aware concept
+> (cost-vs-price basis + graceful degradation). The build RELOCATES discount config out of Cost-to-Produce into a
+> standalone `/discounts` admin item, GENERALIZES it to owner-named types × N tiers with a per-tier basis
+> (`retail_minus_percent` \| `at_cost`), and wires the toggle-gated AI_BI placeholder. **New mechanism, not a new
+> decision:** the `at_cost` basis is the margin-aware concept's cost-basis (owner-set, no auto-logic) — implemented,
+> not re-litigated. ZERO migration/api-fn (rides `business_pricing_config.config` jsonb additively), no auth change.
+> Close-out ledger row #110.
+>
 > ✅ **Drift watch (2026-07-10 · CONTRACTOR PRICING MODEL recorded as a numbered decision — D-38):**
 > Decides: contractor pricing is FLAT, owner-set tiers with MANUAL promote/demote — no auto-progression, decay, or
 > cumulative-spend engine; the register→$4.99→earn-higher-tier loyalty ladder (recon R4 / story #8) is ruled OUT, not
