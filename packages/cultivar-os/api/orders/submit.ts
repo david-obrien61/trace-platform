@@ -3,7 +3,7 @@ import { sendNotification } from '../../../shared/src/notifications/send';
 import { findOrCreateCustomer } from '../../../shared/src/business-logic/customerUpsert';
 import { callerHoldsPermission, callerIsBusinessOwner, resolveCallerUid } from '../../../shared/src/auth/callerPermission';
 import { readPricingConfig } from '../../../shared/src/business-logic/financialDataAccess';
-import { normalizeDiscountTypes, resolveTier, applyTierPrice } from '../../../shared/src/business-logic/tierPricing';
+import { normalizeDiscountTypes, resolveTier, computeOrderPricing, type PricingLineInput } from '../../../shared/src/business-logic/tierPricing';
 import { nettedQuantity, lineSubtotal } from '../../src/lib/netting';
 import { ORDER_STATUSES } from '../../src/lib/orderStatus';
 
@@ -220,8 +220,12 @@ async function handleCreate(req: any, res: any) {
     // by that id) or a specimen (join cultivar_plants → its lot). Exactly one lane per line.
     // D-35: charge business_inventory.sell_price (retail), NEVER unit_cost. Server-authoritative;
     // the client-POSTed price is never trusted for the charge (tamper defense, per line).
+    // Collect each cart line's raw GOODS pricing input (server-authoritative sell_price + cost).
+    // The tier is APPLIED once, below, via the shared computeOrderPricing (D-39 — the same fn the
+    // Review runs → Review === submit === QBO). This loop validates, refuses unpriced lines, and
+    // defeats client price tampering; it no longer computes the net per line.
     const resolvedLines: Array<{ plant: any; quantity: number; stockLineId: string | null; unitPrice: number; subtotal: number }> = [];
-    let linesSubtotal = 0;
+    const goodsInputs: PricingLineInput[] = [];
     let anyLargeContainer = false;
 
     for (const line of lines) {
@@ -276,42 +280,18 @@ async function handleCreate(req: any, res: any) {
         });
       }
 
-      // Apply the resolved tier's BASIS to the server-authoritative sell_price + server-read cost.
-      // No-op for the retail floor / 0% (unitPrice === serverSellPrice → non-tiered order unchanged).
-      // at_cost with no cost on file → NEUTRAL fallback to retail (never $0), flagged degraded (D-9).
-      const priced = applyTierPrice(serverSellPrice, serverUnitCost, resolvedTier);
-      const unitPrice = priced.price;
-      if (priced.degraded) {
-        const itemName = plant.common_name ?? plant.species ?? 'an item';
-        degradedItems.push(itemName);
-      }
-      const sub = round2(unitPrice * quantity);
-      linesSubtotal += sub;
-
       // D-34: for a stock-line order the container is the lot's size (server-fetched).
       const container = stockLineId ? (stockLineSize ?? plant.current_container) : plant.current_container;
       if (LARGE_CONTAINERS.includes(container)) anyLargeContainer = true;
 
-      console.log('[TRACE:PRICE] line — tier-priced', {
-        plantId: plant.id, baseSellPrice: serverSellPrice, tier: resolvedTier.name, basis: resolvedTier.basis,
-        discountPercent: resolvedTier.discountPercent, unitCostSeen: serverUnitCost ?? null,
-        unitPrice, applied: priced.applied, degraded: priced.degraded,
-        quantity, subtotal: sub, lane: stockLineId ? 'stock_line' : 'specimen',
+      // GOODS line for the shared computation — the tier is applied there, once (D-39). The net
+      // unitPrice/subtotal are written back onto resolvedLines after computeOrderPricing, below.
+      goodsInputs.push({
+        kind: 'goods',
+        name: plant.common_name ?? plant.species ?? 'this item',
+        unitPrice: serverSellPrice, qty: quantity, unitCost: serverUnitCost,
       });
-
-      resolvedLines.push({ plant, quantity, stockLineId, unitPrice, subtotal: sub });
-    }
-
-    // Graceful-degradation surface (D-9) — an at-cost tier with NO cost on file was charged at
-    // RETAIL (never $0). Surface an honest order-level note (returned to the client + logged) so
-    // the owner sees why the at-cost price could not apply, rather than a silent mismatch.
-    const pricingNotes: string[] = degradedItems.length
-      ? [`At-cost pricing could not apply to ${degradedItems.length} line(s) with no cost on file — charged at retail instead: ${degradedItems.join(', ')}. Set a unit cost in Inventory to enable at-cost pricing.`]
-      : [];
-    if (pricingNotes.length) {
-      console.log('[TRACE:PRICE] at_cost degraded to retail (no cost on file)', {
-        tier: resolvedTier.name, degradedCount: degradedItems.length, items: degradedItems,
-      });
+      resolvedLines.push({ plant, quantity, stockLineId, unitPrice: 0, subtotal: 0 }); // net filled after compute
     }
 
     // ── 4. Service amounts (attach-rule netting over the WHOLE cart) ─────────
@@ -396,9 +376,39 @@ async function handleCreate(req: any, res: any) {
     });
 
     const addonsAmount = transportAmount + plantingAmount + nettingTotal + otherTotal;
-    const subtotal     = linesSubtotal + addonsAmount;
-    const taxAmount    = Math.round(subtotal * taxRate * 100) / 100;
-    const total        = subtotal + taxAmount;
+
+    // ── D-39: ONE pricing computation (the SAME shared fn the Review runs) ───────────────
+    // Goods lines get the tier; SERVICE/LABOR lines pass through (an owner override is fed as
+    // overrideTotal — attributed leakage, never a tier discount); tax on the DISCOUNTED subtotal.
+    // Because the Review and this authoritative path both call computeOrderPricing over the same
+    // inputs, Review === submit === QBO — closing the Review-vs-QBO price divergence.
+    const serviceInputs: PricingLineInput[] = [];
+    if (selectedTransport) serviceInputs.push({ kind: 'service', name: selectedTransport.name, unitPrice: Number(selectedTransport.price), qty: qtyFor(selectedTransport), overrideTotal: transportRes?.isOverride ? transportAmount : null });
+    if (plantingActive && plantingOffering) serviceInputs.push({ kind: 'service', name: plantingOffering.name, unitPrice: Number(plantingOffering.price), qty: plantingQty, overrideTotal: plantingRes?.isOverride ? plantingAmount : null });
+    if (nettingActive && nettingSelection?.offering) serviceInputs.push({ kind: 'service', name: nettingSelection.offering.name, unitPrice: Number(nettingUnitPrice), qty: nettingQty, overrideTotal: nettingRes?.isOverride ? nettingTotal : null });
+    for (const x of otherResults) serviceInputs.push({ kind: 'service', name: x.offering.name, unitPrice: Number(x.offering.price), qty: qtyFor(x.offering), overrideTotal: x.res.isOverride ? x.res.amount : null });
+
+    const pricing = computeOrderPricing([...goodsInputs, ...serviceInputs], resolvedTier, taxRate);
+    // Write each goods line's tier-priced net back onto resolvedLines (same order) → order_items.
+    const goodsPriced = pricing.lines.filter(p => p.kind === 'goods');
+    resolvedLines.forEach((rl, i) => { rl.unitPrice = goodsPriced[i].netUnit; rl.subtotal = goodsPriced[i].netTotal; });
+    for (const gp of goodsPriced) if (gp.degraded) degradedItems.push(gp.name);
+    const subtotal  = pricing.discountedSubtotal;
+    const taxAmount = pricing.tax;
+    const total     = pricing.total;
+
+    // Graceful-degradation surface (D-9) — an at_cost tier with NO cost on file was charged at
+    // RETAIL (never $0). Honest order-level note (returned to the client + logged), not a silent mismatch.
+    const pricingNotes: string[] = degradedItems.length
+      ? [`At-cost pricing could not apply to ${degradedItems.length} line(s) with no cost on file — charged at retail instead: ${degradedItems.join(', ')}. Set a unit cost in Inventory to enable at-cost pricing.`]
+      : [];
+
+    console.log('[TRACE:PRICE] order priced (computeOrderPricing)', {
+      tier: resolvedTier.name, basis: resolvedTier.basis, discountPercent: resolvedTier.discountPercent,
+      lines: pricing.lines.map(p => ({ kind: p.kind, name: p.name, retailUnit: p.retailUnit, qty: p.qty, retailTotal: p.retailTotal, discountPct: p.discountPct, discountAmt: p.discountAmt, netTotal: p.netTotal })),
+      goodsRetailSubtotal: pricing.goodsRetailSubtotal, discountTotal: pricing.discountTotal,
+      discountedSubtotal: subtotal, tax: taxAmount, total, degraded: degradedItems,
+    });
 
     // ── 5. Leakage flag (a large-container line went out with no add-on) ────
     const leakageFlag = anyLargeContainer && (nettingTotal + otherTotal) === 0;

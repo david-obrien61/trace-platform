@@ -162,6 +162,9 @@ export function ScanOrder() {
       customer:    customerToInput(r),
       invokedTier: null,
       tierLabel:   tierLabelFor(r.price_tier, discountTypes),
+      // Resolve the customer's STORED tier once here (config is loaded) → carried into the cart so
+      // CartReview shows the SAME discount submit charges (D-39). submit re-resolves authoritatively.
+      resolvedTier: resolveTier(r.price_tier, discountTypes),
     });
     closeCustomer();
   }
@@ -185,6 +188,8 @@ export function ScanOrder() {
       customer,
       invokedTier: chosen !== RETAIL_TIER_NAME ? chosen : null,
       tierLabel:   tierLabelFor(chosen, discountTypes),
+      // Resolve the invoked tier once → carried so CartReview shows what submit charges (D-39).
+      resolvedTier: resolveTier(chosen, discountTypes),
     });
     console.log('[TRACE:customers] new customer staged for order (created at submit)', {
       name: customer.first_name, invokedTier: chosen !== RETAIL_TIER_NAME ? chosen : null,

@@ -4,7 +4,11 @@
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.
 
-**Last updated:** 2026-07-10 (DISCOUNTS admin item BUILT — owner-named discount types × N tiers, per-tier basis
+**Last updated:** 2026-07-10 (DISCOUNT LINE SCOPE recorded as D-39 + BUILT: the customer tier discount applies to
+GOODS/inventory lines ONLY — service/labor lines are NEVER discounted; tax on the discounted subtotal; Review,
+submit/QBO, and Confirmation all render from ONE shared `computeOrderPricing` (closes the Review-vs-QBO price
+divergence) + show the work per line. Home: docs/decisions/2026-07-10-discount-line-scope.md. Ledger row #113.
+Earlier same day: DISCOUNTS admin item BUILT — owner-named discount types × N tiers, per-tier basis
 (retail-% | at-cost), relocated out of Cost-to-Produce to /discounts, toggle-gated AI_BI placeholder; implements
 D-35/D-37/D-38 + margin-aware concept, NO new decision (see drift watch below). Earlier same day:
 CONTRACTOR PRICING MODEL recorded as D-38: FLAT, owner-set tiers with MANUAL
@@ -42,6 +46,17 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-10 · DISCOUNT LINE SCOPE recorded as D-39 + built):** No drift — abided by **[[D-35]]**
+> (tier math = % off the stored sell_price), **[[D-37]]** / **[[D-38]]** (unchanged). Decides + builds: the customer tier
+> discount applies to **GOODS/inventory lines ONLY** — service/labor lines (placement, delivery, netting, add-ons) are
+> NEVER discounted (an owner override on a service is attributed leakage, not a discount); **tax computes on the
+> discounted subtotal**; and **Review, submit/QBO, and Confirmation all render IDENTICAL numbers from ONE shared
+> `computeOrderPricing`** (pure, reuses `applyTierPrice`), closing the Review-vs-QBO price divergence (Review showed
+> $124/each vs QBO's correct $115.20). The per-line breakdown (retail → discount → net) is SHOWN. Status **DECIDED**,
+> numbered **[[D-39]]**. Home: `docs/decisions/2026-07-10-discount-line-scope.md`. **AC-1** (generic goods/service line
+> kinds, no vertical noun), **AC-3**, **AC-4** (settle-once — one computation, every surface); ZERO migration, ZERO new
+> api-fn (12/12). Closes MUST-FIX #1/#2 from the 2026-07-10 handover. Close-out ledger row #113.
+>
 > ✅ **Drift watch (2026-07-10 · DISCOUNTS admin item — build, no new decision):** No drift — abided by **[[D-35]]**
 > (tier math = % off stored sell_price, never re-derived from cost), **[[D-37]]** (access terms are DESCRIPTIVE config,
 > never charged by the platform), **[[D-38]]** (FLAT, owner-managed, MANUAL — N tiers is structure not auto-progression;

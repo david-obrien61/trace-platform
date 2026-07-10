@@ -235,3 +235,102 @@ export function applyTierPrice(sellPrice: number, unitCost: number | null | unde
   if (pct <= 0) return { price: sellPrice, basis: resolved.basis, applied: false, degraded: false };
   return { price: pctOff(sellPrice, pct), basis: resolved.basis, applied: true, degraded: false };
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+ * ORDER PRICING — the SINGLE computation both the Review preview AND submit.ts run (D-39 · 2026-07-10)
+ *
+ * THE RULE (D-39): the customer's tier discount applies to GOODS/INVENTORY lines ONLY. SERVICE /
+ * LABOR lines (placement, delivery, netting, add-ons) are NEVER discounted — they pass through at
+ * full price (an owner price-override on a service is attributed LEAKAGE, not a tier discount).
+ * Tax computes on the DISCOUNTED subtotal. Because Review (display) and submit.ts (server-
+ * authoritative) both call THIS one pure function over the same inputs, the two surfaces cannot
+ * diverge — closing the Review-vs-QBO price disagreement.
+ *
+ * PURE: no db, no config resolution inside — submit.ts resolves the tier SERVER-SIDE (tamper
+ * defense) via resolveTier() and passes the resolved DiscountTier in; the Review carries the
+ * SAME resolved tier (resolved once at attach). GOODS pricing reuses applyTierPrice (the SOLE
+ * basis-branch arithmetic) so there is exactly one place the tier→price step lives. Rounding
+ * mirrors the prior submit path (round each line total to cents → sum → round tax) so the
+ * authoritative numbers are byte-identical to before. AC-1: 'goods' | 'service' are generic line
+ * KINDS — no vertical noun. AC-4: this IS the settle-once — one computation, every surface.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+export type PricingLineKind = 'goods' | 'service';
+
+export interface PricingLineInput {
+  kind: PricingLineKind;
+  name: string;
+  /** Retail unit price. goods → sell_price; service → the per-unit (or flat) offering price. */
+  unitPrice: number;
+  qty: number;
+  /** GOODS only — server-read unit_cost, used only when the resolved tier basis is 'at_cost'. */
+  unitCost?: number | null;
+  /** SERVICE only — an owner price-override (flat give-away) that REPLACES unitPrice×qty as the
+   *  charged amount. Attributed leakage, NOT a tier discount — the service is still never discounted. */
+  overrideTotal?: number | null;
+}
+
+export interface PricedLine {
+  kind: PricingLineKind;
+  name: string;
+  retailUnit: number;
+  qty: number;
+  retailTotal: number;   // retailUnit × qty (cents-rounded)
+  discountPct: number;   // 0 for services / retail / at-cost-neutral
+  discountAmt: number;   // retailTotal − netTotal (goods tier discount; 0 for services)
+  netUnit: number;       // the charged unit price after the tier
+  netTotal: number;      // the charged line total
+  basis: DiscountBasis;
+  degraded: boolean;     // at_cost with no cost on file → charged at retail (D-9)
+}
+
+export interface OrderPricing {
+  lines: PricedLine[];
+  goodsRetailSubtotal: number; // Σ goods retailTotal (pre-discount) — for "show the work"
+  discountTotal: number;       // Σ discountAmt (goods only)
+  discountedSubtotal: number;  // Σ netTotal (goods discounted + services full)
+  taxableSubtotal: number;     // = discountedSubtotal (D-39: tax on the discounted subtotal)
+  tax: number;
+  total: number;
+}
+
+/**
+ * Compute an order's full pricing from its lines + the resolved tier + the tax rate. Goods lines
+ * get the tier (applyTierPrice); service lines pass through (never discounted). Tax on the
+ * discounted subtotal. See the block comment above for the rule + why this is the single source.
+ */
+export function computeOrderPricing(
+  lines: PricingLineInput[],
+  resolvedTier: DiscountTier,
+  taxRate: number,
+): OrderPricing {
+  const priced: PricedLine[] = lines.map(l => {
+    const qty = Math.max(0, Number(l.qty) || 0);
+    const retailUnit = Number(l.unitPrice) || 0;
+    const retailTotal = round2(retailUnit * qty);
+
+    if (l.kind === 'goods') {
+      const r = applyTierPrice(retailUnit, l.unitCost, resolvedTier);
+      const netUnit = r.price;
+      const netTotal = round2(netUnit * qty);
+      const discountAmt = round2(retailTotal - netTotal);
+      const discountPct = retailUnit > 0 ? round2((1 - netUnit / retailUnit) * 100) : 0;
+      return { kind: 'goods', name: l.name, retailUnit, qty, retailTotal, discountPct, discountAmt, netUnit, netTotal, basis: r.basis, degraded: r.degraded };
+    }
+
+    // Service — NEVER tier-discounted. An overrideTotal (owner give-away) replaces the computed
+    // amount as the charge; it is leakage (surfaced elsewhere), so discountAmt stays 0 here.
+    const netTotal = (l.overrideTotal != null && l.overrideTotal >= 0) ? round2(l.overrideTotal) : retailTotal;
+    const netUnit = qty > 0 ? round2(netTotal / qty) : netTotal;
+    return { kind: 'service', name: l.name, retailUnit, qty, retailTotal, discountPct: 0, discountAmt: 0, netUnit, netTotal, basis: 'retail_minus_percent', degraded: false };
+  });
+
+  const goodsRetailSubtotal = round2(priced.filter(p => p.kind === 'goods').reduce((s, p) => s + p.retailTotal, 0));
+  const discountTotal       = round2(priced.reduce((s, p) => s + p.discountAmt, 0));
+  const discountedSubtotal  = round2(priced.reduce((s, p) => s + p.netTotal, 0));
+  const taxableSubtotal     = discountedSubtotal; // D-39
+  const tax                 = round2(taxableSubtotal * (Number(taxRate) || 0));
+  const total               = round2(discountedSubtotal + tax);
+
+  return { lines: priced, goodsRetailSubtotal, discountTotal, discountedSubtotal, taxableSubtotal, tax, total };
+}
