@@ -4,7 +4,10 @@
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.
 
-**Last updated:** 2026-07-09 (DataSheet platform standards — TWO cross-cutting UI conventions in the shared `DataSheet<T>`
+**Last updated:** 2026-07-10 (MONEY BOUNDARY promoted to D-37: Cultivar computes charges on originated orders + grants
+role-based access, never processes/collects/reconciles payment; access fees are owner-set descriptive config on the
+business's own rail. Founding principle 'connect what they have, don't add a rail.' Home: docs/decisions/2026-07-10-money-boundary.md.
+Earlier: DataSheet platform standards — TWO cross-cutting UI conventions in the shared `DataSheet<T>`
 engine: system-managed fields display LOCKED-WITH-EXPLANATION [single canonical registry `systemManagedFields.ts`] +
 horizontal scroll ALWAYS reachable [bounded box + sticky header + frozen identifier column]; recorded as CLAUDE.md §6 r13/r14,
 NOT numbered D-## decisions. Earlier: Add Inventory modal — required `sell_price` [D-35 CRUD hole, nothing born unsellable] +
@@ -32,6 +35,14 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-10 · MONEY BOUNDARY promoted to a numbered decision — D-37):**
+> Decides: Cultivar computes the charge on orders it ORIGINATES and grants role-based access (incl. discounted
+> contractor ordering) but never processes/collects/reconciles payment for either — access fees are owner-set
+> descriptive config on the business's own rail, not a platform transaction. Status **DECIDED**, numbered **[[D-37]]**.
+> Home: `docs/decisions/2026-07-10-money-boundary.md`. Constraints abided: **AC-1** (decision text is vertical-noun-free),
+> **AC-3** (business-scoped by construction), docs-only (no schema/migration/code/api — 12/12 untouched). Pointer only —
+> substance lives in the home doc.
+>
 > ✅ **Drift watch (2026-07-09 · Contractor/tier pricing Layers 1+2 — D-35 AC-4 hold CLOSED):**
 > No drift — this session CLOSES the open piece of **[[D-35]]** ("`price_tier` applies at checkout" — the AC-4 hold "tier math undefined") by DEFINING the math as **percent-off-baseline, owner-set per tier, default 0%** (recorded as a D-35 addendum, `docs/decisions/2026-07-09-tier-pricing-mechanism.md`), exactly the decided-going-in line from the recon. Abided by **AC-1** (tier names are generic jsonb DATA, no vertical noun), **AC-3** (business_id-scoped), **AC-4** (the hold it closes), **§6 rule 8/reuse-not-fork** (extracted the tier arithmetic to ONE shared `tierPricing.ts`, reusing MarginEngine's `PricingTier`; DELIBERATELY separate from cost-derived `calculateRetail`), **§6 rule 11 12-fn ceiling** (rides `submit.ts`, no new api/), **FIX 5** validation on the % inputs, **§6 rule 16** (money/tier-config UI = standard form/select). NO schema/migration (rides `business_pricing_config.config` jsonb). Layer 3 (contractor program) STORIED, out of scope — not built, not claimed.
 >
