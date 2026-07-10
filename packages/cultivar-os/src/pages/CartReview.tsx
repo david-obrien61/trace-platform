@@ -18,6 +18,7 @@ export function CartReview() {
   const {
     items, services, selectedTransport, plantingOffering, plantingSelected,
     nettingDeclined, customer, deliveryDate,
+    attachedCustomerId, invokedTier, orderTierLabel,
     setLineQty, removeLine, toggleService, setNettingDeclined, setPlantingSelected,
   } = useCart();
   const { submit, submitting, error: submitError } = useSubmitOrder();
@@ -162,6 +163,8 @@ export function CartReview() {
     try {
       const result = await submit({
         customer: customer!,
+        customerId: attachedCustomerId,
+        invokedTier,
         lines: items.map(l => ({ plant: l.plant, quantity: l.quantity })),
         services,
         selectedTransport,
@@ -421,6 +424,18 @@ export function CartReview() {
           <p style={{ fontSize: '0.875rem', color: '#27500A', fontWeight: 600, marginTop: 6 }}>
             Delivery: {new Date(`${deliveryDate}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
           </p>
+        )}
+        {/* Tier badge — the pricing agreement shown BEFORE submit. Display-only; the discounted
+            total is recomputed server-authoritatively at checkout (money-safety). */}
+        {orderTierLabel && orderTierLabel !== 'Retail — no discount' && (
+          <div style={{ marginTop: 8 }}>
+            <span style={{ display: 'inline-block', background: '#eef2ff', color: '#3730a3', fontWeight: 700, fontSize: '0.75rem', borderRadius: 6, padding: '3px 9px' }}>
+              {orderTierLabel}{invokedTier ? ' · this order' : ''}
+            </span>
+            <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: '4px 0 0' }}>
+              {invokedTier ? 'Order discount' : 'Customer tier'} applies at checkout — the invoice total reflects it.
+            </p>
+          </div>
         )}
       </div>
 

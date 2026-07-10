@@ -105,6 +105,8 @@ export default async function handler(req: any, res: any) {
 async function handleCreate(req: any, res: any) {
   const {
     customer,
+    customerId: attachedCustomerIdRaw, // customer-first attach (way 1/4) — an EXISTING customer row id
+    invokedTier: invokedTierRaw,       // order-scoped tier invoke (way 4) — a tier NAME, this order only
     lines,             // OrderLineInput[] — multi-item cart (each { plant, quantity })
     services,          // ServiceSelection[] — from the service_offerings model
     selectedTransport, // ServiceOffering | null — primary transport (delivery or self)
@@ -130,8 +132,45 @@ async function handleCreate(req: any, res: any) {
   const db = adminDb();
 
   try {
-    // ── 1. Find or create customer ─────────────────────────────────────────
-    const { customerId } = await findOrCreateCustomer(db, businessId, customer, 'qr-scan');
+    // ── 0. Caller authority (owner/manager) — resolved ONCE from the Bearer token (NEVER the
+    // body) for the TARGET business (AC-3). Needed for BOTH the order-scoped tier invoke (way 4)
+    // AND price overrides (attributed leakage). Only resolved when a privileged act is requested;
+    // the anon checkout path has no token → callerManages stays false → nothing privileged applies.
+    const authHeader = req.headers?.authorization;
+    const attachedCustomerId: string | null =
+      typeof attachedCustomerIdRaw === 'string' && attachedCustomerIdRaw.trim() ? attachedCustomerIdRaw.trim() : null;
+    const invokedTierName: string | null =
+      typeof invokedTierRaw === 'string' && invokedTierRaw.trim() ? invokedTierRaw.trim() : null;
+    const overridesIn: Record<string, { amount: number; reason: string }> =
+      (serviceOverrides && typeof serviceOverrides === 'object') ? serviceOverrides : {};
+    const hasOverrides = Object.keys(overridesIn).length > 0;
+    let callerManages = false;
+    let overrideBy: string | null = null;
+    if (invokedTierName || hasOverrides) {
+      callerManages = await callerCanManageOrders(authHeader, businessId);
+      if (callerManages) overrideBy = await resolveCallerUid(authHeader);
+    }
+
+    // ── 1. Resolve the customer ─────────────────────────────────────────────
+    // Customer-first attach (ways 1 & 4): when the order carries an explicit customerId, use THAT
+    // existing row directly — do NOT re-run typed-field dedup (which could mint a tier-less
+    // duplicate; the finding-D class). AC-3: the id MUST belong to this business — a cross-tenant
+    // id is never trusted; it falls back to find-or-create. No attached id → dedup as before
+    // (unchanged anon QR path + way-4 NEW customers, which submit creates here).
+    let customerId: string;
+    if (attachedCustomerId) {
+      const { data: attachedRow } = await db
+        .from('customers').select('id').eq('id', attachedCustomerId).eq('business_id', businessId).maybeSingle();
+      if ((attachedRow as any)?.id) {
+        customerId = (attachedRow as any).id;
+        console.log('[TRACE:lookup] order using ATTACHED customer (dedup skipped)', { customerId, businessId });
+      } else {
+        console.log('[TRACE:lookup] attached customer not in this business — find-or-create (AC-3)', { attachedCustomerId, businessId });
+        ({ customerId } = await findOrCreateCustomer(db, businessId, customer, 'qr-scan'));
+      }
+    } else {
+      ({ customerId } = await findOrCreateCustomer(db, businessId, customer, 'qr-scan'));
+    }
 
     // ── 2. Tax rate + price tier (business-level, read once) ────────────────
     const { data: bizTaxRow } = await db
@@ -140,20 +179,39 @@ async function handleCreate(req: any, res: any) {
 
     // PRICE TIER at checkout (D-35 + the generalized TYPES×TIERS model, 2026-07-10) — READ + APPLIED
     // SERVER-SIDE (tamper defense — the client supplies neither the tier nor the config). The customer's
-    // price_tier NAME resolves against the owner-configured discount types to a tier + BASIS:
+    // stored price_tier NAME resolves against the owner-configured discount types to a tier + BASIS:
     //   • retail_minus_percent → % off the stored server-authoritative sell_price.
     //   • at_cost              → the server-read unit_cost (money-safety — cost NEVER from the client;
     //                            with graceful degradation to retail if no cost is on file, below).
     // Config-less business / retail / unknown tier → retail floor → price unchanged.
     const { data: custRow } = await db
       .from('customers').select('price_tier').eq('id', customerId).maybeSingle();
-    const priceTier = (custRow as any)?.price_tier ?? null;
+    const storedTier = (custRow as any)?.price_tier ?? null;
+
+    // Order-scoped tier INVOKE (way 4): a tier NAME chosen for THIS order only. Honored ONLY on a
+    // token-verified owner/manager path (tamper defense — an anon/staff caller's invoke is ignored,
+    // the stored tier governs). NOT persisted to the customer (that's the /customers roster path).
+    let tierNameForOrder: string | null = storedTier;
+    if (invokedTierName) {
+      if (callerManages) {
+        tierNameForOrder = invokedTierName;
+        console.log('[TRACE:PRICE] order-scoped tier invoke HONORED (owner/manager, token-verified)', {
+          invokedTier: invokedTierName, storedTier, by: overrideBy, businessId,
+        });
+      } else {
+        console.log('[TRACE:PRICE] order-scoped tier invoke IGNORED — caller not owner/manager (tamper defense)', {
+          invokedTier: invokedTierName, businessId,
+        });
+      }
+    }
+
     const { data: pricingCfg } = await readPricingConfig(db, businessId);
     const discountTypes = normalizeDiscountTypes(pricingCfg?.config);
-    const resolvedTier = resolveTier(priceTier, discountTypes);
+    const resolvedTier = resolveTier(tierNameForOrder, discountTypes);
     const degradedItems: string[] = []; // at_cost lines with no cost on file → charged at retail (D-9)
     console.log('[TRACE:PRICE] price_tier resolved (order-level)', {
-      customerId, priceTier, resolvedName: resolvedTier.name, basis: resolvedTier.basis,
+      customerId, storedTier, invokedTier: invokedTierName, invokeHonored: !!invokedTierName && callerManages,
+      resolvedName: resolvedTier.name, basis: resolvedTier.basis,
       discountPercent: resolvedTier.discountPercent, accessTerms: resolvedTier.accessTerms ?? null,
     });
 
@@ -267,25 +325,16 @@ async function handleCreate(req: any, res: any) {
     };
 
     // ── PRICE-OVERRIDE authority (attributed leakage) ───────────────────────
-    // An override is a privileged owner/manager act. It is HONORED only when the CALLER is
-    // token-verified owner/manager for THIS business (never a client-posted flag). The public
-    // (anon) checkout path has no token → overrides ignored, baseline charged (tamper defense).
-    const overridesIn: Record<string, { amount: number; reason: string }> =
-      (serviceOverrides && typeof serviceOverrides === 'object') ? serviceOverrides : {};
-    const hasOverrides = Object.keys(overridesIn).length > 0;
-    let overrideAllowed = false;
-    let overrideBy: string | null = null;
-    if (hasOverrides) {
-      overrideAllowed = await callerCanManageOrders(req.headers?.authorization, businessId);
-      if (overrideAllowed) {
-        overrideBy = await resolveCallerUid(req.headers?.authorization);
-      } else {
-        console.log('[TRACE:PRICE] price override IGNORED — caller not owner/manager (tamper defense)', {
-          businessId, count: Object.keys(overridesIn).length,
-        });
-      }
+    // An override is a privileged owner/manager act. It is HONORED only when the CALLER is the
+    // token-verified owner/manager for THIS business (resolved once in §0 as callerManages;
+    // never a client-posted flag). The public (anon) checkout path has no token → overrides
+    // ignored, baseline charged (tamper defense). overrideBy (§0) attributes the leakage.
+    if (hasOverrides && !callerManages) {
+      console.log('[TRACE:PRICE] price override IGNORED — caller not owner/manager (tamper defense)', {
+        businessId, count: Object.keys(overridesIn).length,
+      });
     }
-    const honored = overrideAllowed ? overridesIn : {};
+    const honored = (hasOverrides && callerManages) ? overridesIn : {};
 
     type SvcResult = { amount: number; isOverride: boolean; original: number | null; leakage: number | null; reason: string | null };
     const applyOverride = (offeringId: string, computed: number): SvcResult => {

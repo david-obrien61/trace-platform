@@ -25,8 +25,19 @@
  */
 export const OVERRIDE_MAINTENANCE = 'override_maintenance';
 
+/**
+ * Read this business's CUSTOMERS (the roster + the order-entry lookup/attach typeahead).
+ * A DATA-READ behavior, not a dashboard tile — the /customers roster route stays owner-only,
+ * but a member holding this may READ customers to look one up and attach them during order
+ * entry (customer-first Path A). Enforced at the DATA layer by the customers_member RLS
+ * policy (is_active_member AND has_permission('view_customers'), 20260710). Default OWNER +
+ * MANAGER; STAFF granted only if the owner chooses to in the /roles console.
+ */
+export const VIEW_CUSTOMERS = 'view_customers';
+
 export const ACTION_PERMISSIONS = {
   OVERRIDE_MAINTENANCE,
+  VIEW_CUSTOMERS,
 } as const;
 
 export type ActionPermission =
@@ -35,6 +46,7 @@ export type ActionPermission =
 /** Every behavior-gating action permission, in a stable order. */
 export const ALL_ACTION_PERMISSIONS: string[] = [
   OVERRIDE_MAINTENANCE,
+  VIEW_CUSTOMERS,
 ];
 
 // ── role defaults (DEFAULT-DENY) ────────────────────────────────────────────
@@ -47,8 +59,8 @@ export const ALL_ACTION_PERMISSIONS: string[] = [
  * Keys match the free-form `business_members.role` strings; an unlisted role gets [].
  */
 export const ACTION_ROLE_DEFAULTS: Record<string, string[]> = {
-  OWNER: [OVERRIDE_MAINTENANCE],
-  MANAGER: [OVERRIDE_MAINTENANCE],
+  OWNER: [OVERRIDE_MAINTENANCE, VIEW_CUSTOMERS],
+  MANAGER: [OVERRIDE_MAINTENANCE, VIEW_CUSTOMERS],
   STAFF: [],
 };
 
