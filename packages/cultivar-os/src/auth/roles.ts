@@ -20,7 +20,7 @@ import {
   VIEW_WAGES,
   VIEW_MARGIN,
 } from '@trace/shared/auth/financialPermissions';
-import { OVERRIDE_MAINTENANCE, VIEW_CUSTOMERS } from '@trace/shared/auth/actionPermissions';
+import { OVERRIDE_MAINTENANCE, VIEW_CUSTOMERS, APPLY_TAX_EXEMPT, APPLY_DISCOUNT } from '@trace/shared/auth/actionPermissions';
 
 export const ROLES = ['OWNER', 'MANAGER', 'STAFF'] as const;
 export type CultivarRole = typeof ROLES[number];
@@ -43,6 +43,8 @@ export const PERMISSIONS = {
   VIEW_MARGIN,                             // margin verdict (shaping; requires VIEW_COSTS)
   // ── action permissions (gate a behavior, not a tile) ──
   OVERRIDE_MAINTENANCE,                    // defer/use an asset against its PMI schedule (mechanism not yet built)
+  APPLY_TAX_EXEMPT,                        // zero an order's tax via a documented exemption (D-40); owner + manager
+  APPLY_DISCOUNT,                          // apply a discount / owner price-override on an order (D-40 matched pair); owner + manager
 } as const;
 
 export const DEFAULT_PERMISSIONS: Record<CultivarRole, string[]> = {
@@ -62,8 +64,10 @@ export const DEFAULT_PERMISSIONS: Record<CultivarRole, string[]> = {
     PERMISSIONS.VIEW_PRICING_CONFIG,
     PERMISSIONS.VIEW_COSTS,
     PERMISSIONS.VIEW_MARGIN,
-    // action permissions — owner may override a maintenance schedule
+    // action permissions — owner may override a maintenance schedule, exempt/discount an order
     PERMISSIONS.OVERRIDE_MAINTENANCE,
+    PERMISSIONS.APPLY_TAX_EXEMPT,
+    PERMISSIONS.APPLY_DISCOUNT,
   ],
   MANAGER: [
     PERMISSIONS.VIEW_DASHBOARD,
@@ -78,8 +82,10 @@ export const DEFAULT_PERMISSIONS: Record<CultivarRole, string[]> = {
     // financial wall — ops see what's selling short, NOT the pricing recipe, NOT payroll
     PERMISSIONS.VIEW_COSTS,
     PERMISSIONS.VIEW_MARGIN,
-    // action permissions — manager runs the floor; may keep equipment moving
+    // action permissions — manager runs the floor; may keep equipment moving, exempt/discount
     PERMISSIONS.OVERRIDE_MAINTENANCE,
+    PERMISSIONS.APPLY_TAX_EXEMPT,
+    PERMISSIONS.APPLY_DISCOUNT,
   ],
   STAFF: [
     PERMISSIONS.VIEW_DASHBOARD,

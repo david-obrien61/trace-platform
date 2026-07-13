@@ -53,6 +53,8 @@ interface CustomerHit {
   phone: string | null; email: string | null;
   address_line1: string | null; city: string | null; state: string | null; zip: string | null;
   price_tier: string | null;
+  // D-40 (optional — gated cols 20260713): the persistent exemption, carried so Review reflects it.
+  tax_exempt?: boolean | null; tax_exempt_reason?: string | null; tax_exempt_cert_ref?: string | null;
 }
 
 // Human label of a tier for the "visible moment" badge — the pricing agreement the manager sees
@@ -85,6 +87,9 @@ function customerToInput(r: CustomerHit): CustomerInput {
     state:         r.state ?? undefined,
     zip:           r.zip ?? undefined,
     price_tier:    r.price_tier ?? null, // D-39: carry the stored tier so Review resolves the same discount submit charges
+    tax_exempt:          r.tax_exempt ?? null,          // D-40: carry the persistent exemption to the Review preview
+    tax_exempt_reason:   r.tax_exempt_reason ?? null,
+    tax_exempt_cert_ref: r.tax_exempt_cert_ref ?? null,
   };
 }
 
@@ -141,16 +146,24 @@ export function ScanOrder() {
     if (!safe) { setSearchHits([]); setSearched(false); return; }
     setSearching(true);
     const like = `%${safe}%`;
-    const { data, error } = await supabase
+    const runSearch = (cols: string) => supabase
       .from('customers')
-      .select('id,first_name,last_name,phone,email,address_line1,city,state,zip,price_tier')
+      .select(cols)
       .eq('business_id', businessId)
       .or(`first_name.ilike.${like},last_name.ilike.${like}`)
       .order('first_name')
       .limit(10);
+    // D-40 gated cols (20260713) — deploy-window-safe: try with the exemption cols; on a missing-column
+    // error retry WITHOUT them so customer search never breaks before the migration applies.
+    const BASE = 'id,first_name,last_name,phone,email,address_line1,city,state,zip,price_tier';
+    let { data, error } = await runSearch(`${BASE},tax_exempt,tax_exempt_reason,tax_exempt_cert_ref`);
+    if (error && (error.code === '42703' || error.code === 'PGRST204')) {
+      console.log('[TRACE:TAX] customer exemption cols absent — search retrying without them (migration pending)', { code: error.code });
+      ({ data, error } = await runSearch(BASE));
+    }
     if (error) console.log('[TRACE:lookup] search error', { error: error.message });
     console.log('[TRACE:lookup] customer search', { term: safe, count: data?.length ?? 0 });
-    setSearchHits((data ?? []) as CustomerHit[]);
+    setSearchHits((data ?? []) as unknown as CustomerHit[]);
     setSearched(true);
     setSearching(false);
   }

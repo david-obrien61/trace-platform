@@ -35,9 +35,30 @@ export const OVERRIDE_MAINTENANCE = 'override_maintenance';
  */
 export const VIEW_CUSTOMERS = 'view_customers';
 
+/**
+ * Zero the tax on an order via a tax EXEMPTION (D-40) — a gated, LOGGED authority. Honored ONLY on a
+ * token-verified owner/manager path server-side (submit.ts); an anon/public checkout can NEVER
+ * self-exempt (tamper defense). Zeroing tax requires a recorded reason (+ optional cert) — the
+ * auditable control (no silent tax removal, ever). Sibling of APPLY_DISCOUNT, deliberately SEPARATE:
+ * a legal exemption (with a cert) and a commercial concession are delegated + audited differently —
+ * an owner may grant one but not the other. Default OWNER + MANAGER; STAFF only if the owner grants it.
+ */
+export const APPLY_TAX_EXEMPT = 'apply_tax_exempt';
+
+/**
+ * Apply a discount / owner price-override on an order (D-40 matched pair; formalizes the previously
+ * threaded apply_discount authority). Today discount/override application rides MANAGE_ORDERS + the
+ * server owner/manager token gate; this DECLARES the granular authority so it is assignable in the
+ * role console, and is built BESIDE APPLY_TAX_EXEMPT so the two land as a matched pair rather than
+ * divergent one-offs. Default OWNER + MANAGER.
+ */
+export const APPLY_DISCOUNT = 'apply_discount';
+
 export const ACTION_PERMISSIONS = {
   OVERRIDE_MAINTENANCE,
   VIEW_CUSTOMERS,
+  APPLY_TAX_EXEMPT,
+  APPLY_DISCOUNT,
 } as const;
 
 export type ActionPermission =
@@ -47,20 +68,22 @@ export type ActionPermission =
 export const ALL_ACTION_PERMISSIONS: string[] = [
   OVERRIDE_MAINTENANCE,
   VIEW_CUSTOMERS,
+  APPLY_TAX_EXEMPT,
+  APPLY_DISCOUNT,
 ];
 
 // ── role defaults (DEFAULT-DENY) ────────────────────────────────────────────
 
 /**
  * Role string → its default action grants.
- *   OWNER   → override_maintenance.
- *   MANAGER → override_maintenance (runs the floor; may keep equipment moving).
+ *   OWNER   → all (override_maintenance, view_customers, apply_tax_exempt, apply_discount).
+ *   MANAGER → same (runs the floor: keeps equipment moving, looks up customers, may exempt/discount).
  *   STAFF   → none.
  * Keys match the free-form `business_members.role` strings; an unlisted role gets [].
  */
 export const ACTION_ROLE_DEFAULTS: Record<string, string[]> = {
-  OWNER: [OVERRIDE_MAINTENANCE, VIEW_CUSTOMERS],
-  MANAGER: [OVERRIDE_MAINTENANCE, VIEW_CUSTOMERS],
+  OWNER: [OVERRIDE_MAINTENANCE, VIEW_CUSTOMERS, APPLY_TAX_EXEMPT, APPLY_DISCOUNT],
+  MANAGER: [OVERRIDE_MAINTENANCE, VIEW_CUSTOMERS, APPLY_TAX_EXEMPT, APPLY_DISCOUNT],
   STAFF: [],
 };
 

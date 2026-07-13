@@ -6,6 +6,9 @@ import {
   CATEGORY_OPTIONS, TIMING_OPTIONS, PRICE_TYPE_OPTIONS, PRICE_UNIT_OPTIONS,
   TRANSPORT_MODE_OPTIONS, TIMING_LABEL,
 } from '../business-logic/serviceOfferingEnums';
+// D-40: the tax RATE is per-tenant config data (config.taxRate), not the businesses column, and
+// not a hardcoded default. resolveTaxRate reads it; mergePricingConfig writes it clobber-safe.
+import { readPricingConfig, mergePricingConfig, resolveTaxRate, TX_COMPTROLLER_RATE_LOCATOR_URL } from '../business-logic';
 
 const GREEN = '#27500A';
 const SAGE  = '#EAF3DE';
@@ -221,32 +224,54 @@ export function Settings({
 
   useEffect(() => {
     if (!business) return;
-    setForm({
+    setForm(f => ({
+      ...f,
       name:     business.name,
       phone:    business.phone    ?? '',
       address:  business.address  ?? '',
       email:    business.email    ?? '',
       website:  business.website  ?? '',
-      tax_rate: String(business.tax_rate),
-    });
+      // tax_rate is loaded from config.taxRate (below), NOT the businesses column (D-40). Left as-is
+      // here so the config value isn't clobbered by the businesses-driven refresh.
+    }));
   }, [business]);
+
+  // D-40: load the tax rate from config.taxRate (the new home). ABSENT → blank field → "not identified"
+  // (the honest state — every existing tenant re-confirms their rate; never a silent 8.25% default).
+  useEffect(() => {
+    if (!businessId) return;
+    void (async () => {
+      const { data } = await readPricingConfig(supabase, businessId);
+      const rate = resolveTaxRate((data?.config ?? {}) as Record<string, unknown>);
+      setForm(f => ({ ...f, tax_rate: rate == null ? '' : String(rate) }));
+    })();
+  }, [businessId]);
 
   async function saveProfile() {
     if (!businessId) return;
     setSaving(true);
     setSaveMsg('');
+    // Business identity → businesses row (tax_rate is NO LONGER written here — D-40).
     const { error } = await supabase.from('businesses').update({
       name:     form.name.trim(),
       phone:    normalizePhone(form.phone),   // ONE shared storage normalization (R1/R3/profile)
       address:  form.address.trim()  || null,
       email:    form.email.trim()    || null,
       website:  form.website.trim()  || null,
-      tax_rate: parseFloat(form.tax_rate) || 0.0825,
     }).eq('id', businessId);
 
+    // D-40: the tax RATE → config.taxRate (clobber-safe merge). BLANK = unset = "not identified"
+    // (redline) — NEVER coerced to 0.0825. A non-numeric entry also stores unset (never a fabricated
+    // rate). This is the fix for the silent-default: an owner who never set a rate sees the redline.
+    const raw = form.tax_rate.trim();
+    const parsed = parseFloat(raw);
+    const rateNum: number | null = raw !== '' && Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+    const { error: cfgErr } = await mergePricingConfig(supabase, businessId, { taxRate: rateNum });
+    console.log('[TRACE:TAX] business tax rate saved', { businessId, taxRate: rateNum, source: 'config.taxRate' });
+
     setSaving(false);
-    if (error) {
-      setSaveMsg('Error: ' + error.message);
+    if (error || cfgErr) {
+      setSaveMsg('Error: ' + (error?.message ?? cfgErr?.message));
     } else {
       setSaveMsg('Saved');
       reload();
@@ -528,7 +553,17 @@ export function Settings({
           <Field label="Address"          value={form.address}  onChange={v => setForm(f => ({ ...f, address: v }))}  placeholder="400 Honeycomb Mesa, Leander TX" />
           <Field label="Email"            value={form.email}    onChange={v => setForm(f => ({ ...f, email: v }))}    placeholder="info@yourbusiness.com" type="email" />
           <Field label="Website"          value={form.website}  onChange={v => setForm(f => ({ ...f, website: v }))}  placeholder="https://yourbusiness.com" />
-          <Field label="Tax rate (e.g. 0.0825 = 8.25%)" value={form.tax_rate} onChange={v => setForm(f => ({ ...f, tax_rate: v }))} placeholder="0.0825" />
+          <Field label="Sales tax rate (decimal — e.g. 0.0825 = 8.25%)" value={form.tax_rate} onChange={v => setForm(f => ({ ...f, tax_rate: v }))} placeholder="e.g. 0.0825" />
+          {/* D-40: the platform never guesses a rate — the owner enters THEIR correct rate for their
+              business address. Texas is origin-based, so it's the rate at the seller's location. Blank
+              = "not identified" → invoices show a redline until it's set (never a fabricated default). */}
+          <p style={{ fontSize: '0.75rem', color: GRAY, margin: '-4px 0 4px' }}>
+            Enter the rate for your business address (Texas is origin-based — the rate is charged at your
+            location, not the customer's). Not sure?{' '}
+            <a href={TX_COMPTROLLER_RATE_LOCATOR_URL} target="_blank" rel="noopener noreferrer" style={{ color: GREEN, fontWeight: 600 }}>
+              Look it up on the Texas Comptroller rate locator
+            </a>. Leave blank if you don't charge sales tax — invoices will show "Tax: not identified" until you set it.
+          </p>
           <button
             onClick={saveProfile} disabled={saving}
             style={{

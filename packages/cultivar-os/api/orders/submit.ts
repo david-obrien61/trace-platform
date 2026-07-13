@@ -3,17 +3,22 @@ import { sendNotification } from '../../../shared/src/notifications/send';
 import { findOrCreateCustomer } from '../../../shared/src/business-logic/customerUpsert';
 import { callerHoldsPermission, callerIsBusinessOwner, resolveCallerUid } from '../../../shared/src/auth/callerPermission';
 import { readPricingConfig } from '../../../shared/src/business-logic/financialDataAccess';
-import { normalizeDiscountTypes, resolveTier, computeOrderPricing, type PricingLineInput } from '../../../shared/src/business-logic/tierPricing';
+import { normalizeDiscountTypes, resolveTier, computeOrderPricing, resolveTaxRate, RETAIL_FLOOR, type PricingLineInput, type OrderTaxExemption } from '../../../shared/src/business-logic/tierPricing';
 import { nettedQuantity, lineSubtotal } from '../../src/lib/netting';
 import { ORDER_STATUSES } from '../../src/lib/orderStatus';
 
-const TAX_RATE_FALLBACK = 0.0825; // only for a business row predating the tax_rate column
 const LARGE_CONTAINERS = ['15 gal', '30 gal', '45 gal', '60 gal', '100 gal'];
 
 // The permission that gates order EDIT / DELETE / STATUS. Mirrors cultivar roles.ts
 // PERMISSIONS.MANAGE_ORDERS (owner + manager, NOT staff) — a string VALUE (AC-1), kept local so
 // the api bundle doesn't pull the frontend role tree.
 const MANAGE_ORDERS = 'manage_orders';
+// D-40: the gated + LOGGED authority to zero an order's tax via a per-order exemption OVERRIDE.
+// Owner OR a member holding apply_tax_exempt. The anon/public path has no token → never self-exempt.
+const APPLY_TAX_EXEMPT = 'apply_tax_exempt';
+
+// Order-exemption cols on `orders` are gated (20260713). Stripped-and-retried on 42703/PGRST204.
+const ORDER_EXEMPT_KEYS = ['tax_exempt_applied', 'tax_exempt_reason', 'tax_exempt_cert_ref', 'tax_exempt_by'];
 
 function adminDb() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL!;
@@ -30,6 +35,27 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 async function callerCanManageOrders(authHeader: string | undefined, businessId: string): Promise<boolean> {
   if (await callerIsBusinessOwner(authHeader, businessId)) return true;
   return callerHoldsPermission(authHeader, businessId, MANAGE_ORDERS);
+}
+
+// D-40 tax-exemption authority gate — owner OR a member holding apply_tax_exempt. Same shape as the
+// manage-orders gate: resolved from the caller's Bearer token (NEVER the body). A per-order exemption
+// OVERRIDE is honored ONLY when this returns true; the anon/public path (no token) can never self-exempt.
+async function callerCanApplyTaxExempt(authHeader: string | undefined, businessId: string): Promise<boolean> {
+  if (await callerIsBusinessOwner(authHeader, businessId)) return true;
+  return callerHoldsPermission(authHeader, businessId, APPLY_TAX_EXEMPT);
+}
+
+// Normalize a client-posted per-order exemption override into an OrderTaxExemption (or null when
+// absent/malformed). `exempt:true` requires a non-blank reason downstream to be honored.
+function parseOrderExemption(raw: unknown): OrderTaxExemption | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.exempt !== 'boolean') return null;
+  return {
+    exempt: r.exempt,
+    reason: typeof r.reason === 'string' ? r.reason : null,
+    certRef: typeof r.certRef === 'string' ? r.certRef : null,
+  };
 }
 
 // Resolve a single order_item's server-authoritative sell_price + its inventory lot + container +
@@ -116,6 +142,7 @@ async function handleCreate(req: any, res: any) {
     serviceQuantities, // Record<offeringId, number> — owner-confirmed netted quantities
     serviceOverrides,  // Record<offeringId, {amount,reason}> — owner/manager PRICE overrides
     deliveryDate,      // string 'YYYY-MM-DD' | null — owner/manager-entered delivery date
+    orderExemption: orderExemptionRaw, // D-40: per-order tax-exemption OVERRIDE (owner/manager only)
   } = req.body;
   const businessId: string = req.body.businessId || lines?.[0]?.plant?.business_id;
 
@@ -172,10 +199,13 @@ async function handleCreate(req: any, res: any) {
       ({ customerId } = await findOrCreateCustomer(db, businessId, customer, 'qr-scan'));
     }
 
-    // ── 2. Tax rate + price tier (business-level, read once) ────────────────
-    const { data: bizTaxRow } = await db
-      .from('businesses').select('tax_rate').eq('id', businessId).maybeSingle();
-    const taxRate = Number((bizTaxRow as any)?.tax_rate ?? TAX_RATE_FALLBACK);
+    // ── 2. Tax rate + price tier + tax exemption (business/customer-level, read once) ──────
+    // D-40: the TAX RATE is per-tenant SUPPLIED DATA — business_pricing_config.config.taxRate via
+    // the resolveTaxRate seam (NOT businesses.tax_rate; NOT a hardcoded 8.25%). Absent → null =
+    // "not identified" (the redline; never a fabricated default). Read server-side (service key,
+    // RLS-bypassed) so the rate resolves regardless of the caller's view_pricing_config grant.
+    const { data: pricingCfg } = await readPricingConfig(db, businessId);
+    const taxRate = resolveTaxRate(pricingCfg?.config);
 
     // PRICE TIER at checkout (D-35 + the generalized TYPES×TIERS model, 2026-07-10) — READ + APPLIED
     // SERVER-SIDE (tamper defense — the client supplies neither the tier nor the config). The customer's
@@ -184,9 +214,39 @@ async function handleCreate(req: any, res: any) {
     //   • at_cost              → the server-read unit_cost (money-safety — cost NEVER from the client;
     //                            with graceful degradation to retail if no cost is on file, below).
     // Config-less business / retail / unknown tier → retail floor → price unchanged.
+    // D-40: also read the customer's PERSISTENT tax exemption (the party attribute). select('*') is
+    // deploy-window-safe (a missing gated column never errors a select, unlike a named column).
     const { data: custRow } = await db
-      .from('customers').select('price_tier').eq('id', customerId).maybeSingle();
+      .from('customers').select('*').eq('id', customerId).maybeSingle();
     const storedTier = (custRow as any)?.price_tier ?? null;
+
+    // ── D-40: effective tax exemption for THIS order ──────────────────────────
+    // Default = the customer's PERSISTENT exemption. A per-order OVERRIDE (client-posted) is honored
+    // ONLY on a token-verified owner/manager+apply_tax_exempt path (tamper defense — an anon/staff
+    // caller's override is IGNORED, the persistent attribute governs). exemptBy = the acting uid ONLY
+    // when it came from a per-order override (null when it rode the persistent customer attribute).
+    const persistentExemption: OrderTaxExemption = {
+      exempt:  (custRow as any)?.tax_exempt === true,
+      reason:  (custRow as any)?.tax_exempt_reason ?? null,
+      certRef: (custRow as any)?.tax_exempt_cert_ref ?? null,
+    };
+    const orderExemptionOverride = parseOrderExemption(orderExemptionRaw);
+    let effectiveExemption: OrderTaxExemption = persistentExemption;
+    let exemptBy: string | null = null;
+    if (orderExemptionOverride) {
+      const canExempt = await callerCanApplyTaxExempt(authHeader, businessId);
+      if (canExempt) {
+        effectiveExemption = orderExemptionOverride;
+        exemptBy = await resolveCallerUid(authHeader);
+        console.log('[TRACE:TAX] per-order exemption override HONORED (owner/manager + apply_tax_exempt)', {
+          exempt: orderExemptionOverride.exempt, reason: orderExemptionOverride.reason, by: exemptBy, businessId,
+        });
+      } else {
+        console.log('[TRACE:TAX] per-order exemption override IGNORED — caller lacks apply_tax_exempt (tamper defense)', {
+          attempted: orderExemptionOverride.exempt, businessId,
+        });
+      }
+    }
 
     // Order-scoped tier INVOKE (way 4): a tier NAME chosen for THIS order only. Honored ONLY on a
     // token-verified owner/manager path (tamper defense — an anon/staff caller's invoke is ignored,
@@ -205,7 +265,7 @@ async function handleCreate(req: any, res: any) {
       }
     }
 
-    const { data: pricingCfg } = await readPricingConfig(db, businessId);
+    // pricingCfg was already read in §2 (for the tax rate) — reuse it (no second read).
     const discountTypes = normalizeDiscountTypes(pricingCfg?.config);
     const resolvedTier = resolveTier(tierNameForOrder, discountTypes);
     const degradedItems: string[] = []; // at_cost lines with no cost on file → charged at retail (D-9)
@@ -394,7 +454,10 @@ async function handleCreate(req: any, res: any) {
     if (nettingActive && nettingSelection?.offering) serviceInputs.push({ kind: 'service', name: nettingSelection.offering.name, unitPrice: Number(nettingUnitPrice), qty: nettingQty, overrideTotal: nettingRes?.isOverride ? nettingTotal : null });
     for (const x of otherResults) serviceInputs.push({ kind: 'service', name: x.offering.name, unitPrice: Number(x.offering.price), qty: qtyFor(x.offering), overrideTotal: x.res.isOverride ? x.res.amount : null });
 
-    const pricing = computeOrderPricing([...goodsInputs, ...serviceInputs], resolvedTier, taxRate);
+    // D-40: the tax rate + effective exemption flow into the SAME shared computation. taxStatus is
+    // one of not_identified (rate unset → redline) / taxed / exempt (documented). The surfaces render
+    // taxStatus; the server never fabricates a rate and never zeros tax without a reason.
+    const pricing = computeOrderPricing([...goodsInputs, ...serviceInputs], resolvedTier, taxRate, effectiveExemption);
     // Write each goods line's tier-priced net back onto resolvedLines (same order) → order_items.
     const goodsPriced = pricing.lines.filter(p => p.kind === 'goods');
     resolvedLines.forEach((rl, i) => { rl.unitPrice = goodsPriced[i].netUnit; rl.subtotal = goodsPriced[i].netTotal; });
@@ -402,6 +465,12 @@ async function handleCreate(req: any, res: any) {
     const subtotal  = pricing.discountedSubtotal;
     const taxAmount = pricing.tax;
     const total     = pricing.total;
+    console.log('[TRACE:TAX] order tax resolved', {
+      rateSource: 'config.taxRate', taxRate, taxStatus: pricing.taxStatus,
+      taxableSubtotal: pricing.taxableSubtotal, tax: taxAmount,
+      exemptApplied: effectiveExemption.exempt, exemptReason: pricing.taxExemptReason,
+      exemptBy, businessId,
+    });
 
     // Graceful-degradation surface (D-9) — an at_cost tier with NO cost on file was charged at
     // RETAIL (never $0). Honest order-level note (returned to the client + logged), not a silent mismatch.
@@ -450,33 +519,43 @@ async function handleCreate(req: any, res: any) {
       notes:            invoiceNumber,
       status:           'pending',
     };
-    // Owner/manager-entered delivery date. GATED migration 20260708_orders_delivery_date.sql
-    // adds orders.delivery_date; until it applies, an insert carrying the column 42703's — so we
-    // insert WITH the date and, on a missing-column error, retry WITHOUT it (deploy-window-safe;
-    // the order still lands, the date is dropped and re-enabled once the column exists).
+    // GATED columns on `orders` — delivery_date (20260708) + the D-40 tax-exemption cols (20260713).
+    // Both are deploy-window-safe: insert WITH them and, on a missing-column error, strip the gated
+    // keys and retry (the order still lands; the gated fields re-enable once the migration applies).
     const deliveryDateVal: string | null =
       typeof deliveryDate === 'string' && deliveryDate.trim() ? deliveryDate.trim() : null;
+    const GATED_ORDER_KEYS = ['delivery_date', ...ORDER_EXEMPT_KEYS];
+    const gatedCols: Record<string, unknown> = {
+      // D-40: persist the EFFECTIVE per-order tax state so every downstream surface renders the same
+      // truth. applied = tax was actually exempted (an exempt flag with no reason falls to 'taxed').
+      tax_exempt_applied:  pricing.taxStatus === 'exempt',
+      tax_exempt_reason:   pricing.taxStatus === 'exempt' ? pricing.taxExemptReason : null,
+      tax_exempt_cert_ref: pricing.taxStatus === 'exempt' ? pricing.taxExemptCertRef : null,
+      tax_exempt_by:       exemptBy,   // set only when it came from a per-order OVERRIDE (else null)
+    };
+    if (deliveryDateVal) gatedCols.delivery_date = deliveryDateVal;
 
     let order: any;
     let orderErr: any;
     ({ data: order, error: orderErr } = await db
       .from('orders')
-      .insert(deliveryDateVal ? { ...orderBase, delivery_date: deliveryDateVal } : orderBase)
+      .insert({ ...orderBase, ...gatedCols })
       .select('id')
       .single());
 
     // Missing-column fallback (42703 = undefined_column; PGRST204 = schema-cache miss).
-    if (orderErr && deliveryDateVal && (orderErr.code === '42703' || orderErr.code === 'PGRST204')) {
-      console.log('[TRACE:DELIVERY] orders.delivery_date column absent — retrying without it (migration pending)', {
-        code: orderErr.code, deliveryDate: deliveryDateVal,
+    if (orderErr && (orderErr.code === '42703' || orderErr.code === 'PGRST204')) {
+      console.log('[TRACE:TAX] gated order columns absent — retrying insert without them (migration pending)', {
+        code: orderErr.code, strippedKeys: GATED_ORDER_KEYS, taxStatus: pricing.taxStatus, deliveryDate: deliveryDateVal,
       });
       ({ data: order, error: orderErr } = await db
         .from('orders')
         .insert(orderBase)
         .select('id')
         .single());
-    } else if (!orderErr && deliveryDateVal) {
-      console.log('[TRACE:DELIVERY] order created with delivery_date', { deliveryDate: deliveryDateVal });
+    } else if (!orderErr) {
+      if (deliveryDateVal) console.log('[TRACE:DELIVERY] order created with delivery_date', { deliveryDate: deliveryDateVal });
+      if (pricing.taxStatus === 'exempt') console.log('[TRACE:TAX] order created tax-exempt', { reason: pricing.taxExemptReason, cert: pricing.taxExemptCertRef, by: exemptBy });
     }
 
     if (orderErr) throw new Error(`Order: ${orderErr.message}`);
@@ -664,7 +743,13 @@ async function handleCreate(req: any, res: any) {
       goodsAfterDiscount: round2(pricing.goodsRetailSubtotal - pricing.discountTotal),
       discountedSubtotal: subtotal, tax: taxAmount, total,
     });
-    res.json({ orderId, invoiceNumber, total, subtotal, taxAmount, pricingNotes, breakdown });
+    res.json({
+      orderId, invoiceNumber, total, subtotal, taxAmount, pricingNotes, breakdown,
+      // D-40: the authoritative tax state → Confirmation + email render it (redline / taxed / exempt),
+      // no surface re-derives. taxRate carried so a taxed surface shows the exact %.
+      taxStatus: pricing.taxStatus, taxRate,
+      taxExemptReason: pricing.taxExemptReason ?? null, taxExemptCertRef: pricing.taxExemptCertRef ?? null,
+    });
 
   } catch (err: any) {
     console.error('[orders/submit]', err.message);
@@ -688,9 +773,10 @@ async function handleUpdate(req: any, res: any) {
 
   const db = adminDb();
   try {
-    // Order must belong to this business (AC-3).
+    // Order must belong to this business (AC-3). select('*') is deploy-window-safe (a missing gated
+    // column never errors a select) and carries the persisted D-40 exemption so an edit preserves it.
     const { data: order } = await db
-      .from('orders').select('id, business_id').eq('id', orderId).eq('business_id', businessId).maybeSingle();
+      .from('orders').select('*').eq('id', orderId).eq('business_id', businessId).maybeSingle();
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
     const { data: itemsRaw } = await db
@@ -757,12 +843,29 @@ async function handleUpdate(req: any, res: any) {
       selectionUpdates.push({ id: s.id, quantity: q, subtotal: sub });
     }
 
-    const subtotal    = round2(linesSubtotal + addonsAmount);
-    const { data: bizTaxRow } = await db.from('businesses').select('tax_rate').eq('id', businessId).maybeSingle();
-    const taxRate     = Number((bizTaxRow as any)?.tax_rate ?? TAX_RATE_FALLBACK);
-    const taxAmount   = round2(subtotal * taxRate);
-    const total       = round2(subtotal + taxAmount);
+    // D-40: FOLD the roster-edit tax through the SAME computeOrderPricing the create path runs — no
+    // off-seam `subtotal × rate` (closes the #107/#114 drift). handleUpdate stays baseline-only for
+    // goods (RETAIL_FLOOR — no tier), so goods pass at full price = linesSubtotal; services carry their
+    // already-netted subtotal (unitPrice=sub, qty=1 → netTotal=sub). The order's PERSISTED exemption is
+    // re-applied so an exempt order stays exempt and a rate-unset order stays "not identified" across edits.
+    const editGoods: PricingLineInput[] = kept.map(k => ({ kind: 'goods', name: k.r.name, unitPrice: k.r.sellPrice as number, qty: k.newQty }));
+    const editServices: PricingLineInput[] = selectionUpdates.map(su => ({ kind: 'service', name: `svc:${su.id}`, unitPrice: su.subtotal, qty: 1 }));
+    const editExemption: OrderTaxExemption = {
+      exempt:  (order as any).tax_exempt_applied === true,
+      reason:  (order as any).tax_exempt_reason ?? null,
+      certRef: (order as any).tax_exempt_cert_ref ?? null,
+    };
+    const { data: editCfg } = await readPricingConfig(db, businessId);
+    const taxRate     = resolveTaxRate(editCfg?.config);
+    const editPricing = computeOrderPricing([...editGoods, ...editServices], RETAIL_FLOOR, taxRate, editExemption);
+    const subtotal    = editPricing.discountedSubtotal;
+    const taxAmount   = editPricing.tax;
+    const total       = editPricing.total;
     const leakageFlag = anyLargeContainer && addonCategoryTotal === 0;
+    console.log('[TRACE:TAX] order edit tax resolved (folded through computeOrderPricing)', {
+      orderId, rateSource: 'config.taxRate', taxRate, taxStatus: editPricing.taxStatus,
+      taxableSubtotal: editPricing.taxableSubtotal, tax: taxAmount, exemptApplied: editExemption.exempt,
+    });
 
     // ── Re-reserve: release ALL old lots, reserve the KEPT lots (removed lines' lots go free) ──
     await setLotStatus(db, businessId, resolvedAll.map(x => x.r.inventoryId), 'available');
@@ -806,7 +909,7 @@ async function handleUpdate(req: any, res: any) {
     // QB invoice staleness — totals changed, so any existing QB invoice is now out of date.
     // We surface it (never silently leave a mismatch); auto re-sync to QB is a separate decision (R-QBSTALE).
     console.log('[TRACE:PRICE] order edit — QB invoice may be stale (totals changed)', { orderId, total });
-    res.json({ ok: true, orderId, subtotal, taxAmount, total, addonsAmount: round2(addonsAmount), leakageFlag, qbStale: true });
+    res.json({ ok: true, orderId, subtotal, taxAmount, total, addonsAmount: round2(addonsAmount), leakageFlag, qbStale: true, taxStatus: editPricing.taxStatus });
   } catch (err: any) {
     console.error('[orders/submit:update]', err.message);
     res.status(500).json({ error: err.message });

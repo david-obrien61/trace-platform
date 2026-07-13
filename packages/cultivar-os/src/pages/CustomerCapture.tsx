@@ -133,19 +133,30 @@ export function CustomerCapture() {
     // no tier → retail; submit remains the final, tamper-defended authority for the charge.
     let priceTier: string | null =
       (saved?.email && saved.email.toLowerCase() === emailLower) ? (saved.price_tier ?? null) : null;
+    // D-40: also resolve the customer's PERSISTENT tax exemption so the Review preview reflects it
+    // (the party attribute submit re-reads server-side). Carried from the same business-scoped lookup.
+    let taxExempt: boolean | null = saved?.tax_exempt ?? null;
+    let taxExemptReason: string | null = saved?.tax_exempt_reason ?? null;
+    let taxExemptCertRef: string | null = saved?.tax_exempt_cert_ref ?? null;
     try {
       if (businessId && emailLower) {
+        // select('*') is deploy-window-safe (a missing gated column never errors a select).
         const { data } = await supabase
           .from('customers')
-          .select('price_tier')
+          .select('*')
           .eq('business_id', businessId)
           .eq('email', emailLower)
           .limit(1)
           .maybeSingle();
-        if (data?.price_tier != null) priceTier = data.price_tier as string;
+        if (data) {
+          if ((data as any).price_tier != null) priceTier = (data as any).price_tier as string;
+          taxExempt        = (data as any).tax_exempt ?? taxExempt;
+          taxExemptReason  = (data as any).tax_exempt_reason ?? taxExemptReason;
+          taxExemptCertRef = (data as any).tax_exempt_cert_ref ?? taxExemptCertRef;
+        }
       }
     } catch {
-      console.log('[TRACE:PRICE] CustomerCapture tier lookup skipped (no customer read / anon path)', { email: emailLower });
+      console.log('[TRACE:PRICE] CustomerCapture tier/exemption lookup skipped (no customer read / anon path)', { email: emailLower });
     }
 
     const c: CustomerInput = {
@@ -159,6 +170,9 @@ export function CustomerCapture() {
       zip:             zip.trim() || undefined,
       marketing_opt_in: optIn,
       price_tier:      priceTier,
+      tax_exempt:          taxExempt,
+      tax_exempt_reason:   taxExemptReason,
+      tax_exempt_cert_ref: taxExemptCertRef,
     };
 
     console.log('[TRACE:PRICE] customer finalized — stored tier resolved for Review preview', { email: emailLower, priceTier });

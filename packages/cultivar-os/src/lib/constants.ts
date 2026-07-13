@@ -1,4 +1,6 @@
-export const TAX_RATE = 0.0825;
+// D-40: the tax rate is per-tenant SUPPLIED DATA (business_pricing_config.config.taxRate via the
+// resolveTaxRate seam) — never a hardcoded default. An unset rate renders "Tax: not identified"
+// (redline), never a fabricated 8.25%. The old `TAX_RATE = 0.0825` constant is retired.
 
 export const DEMO_BUSINESS_ID = 'a1b2c3d4-0000-0000-0000-000000000001';
 

@@ -33,11 +33,20 @@ export {
   // Order pricing — the single computation both Review and submit run (D-39 · 2026-07-10):
   // tier discounts GOODS lines only, services never, tax on the discounted subtotal.
   computeOrderPricing,
+  // Tax on the money boundary (D-40 · 2026-07-13): the resolveTaxRate seam (per-tenant origin rate;
+  // absent → null = "not identified"; Level-2 tax-API slots in here).
+  resolveTaxRate,
 } from './tierPricing';
 export type {
   DiscountBasis, DiscountTier, DiscountType, TierPriceResult,
   PricingLineKind, PricingLineInput, PricedLine, OrderPricing,
+  TaxStatus, OrderTaxExemption,
 } from './tierPricing';
+// Tax-exemption vocabulary + the single three-state tax-line presenter (D-40).
+export {
+  TAX_EXEMPTION_REASONS, taxExemptionLabel, describeTaxLine, TX_COMPTROLLER_RATE_LOCATOR_URL,
+} from './taxExemption';
+export type { TaxExemptionReason, TaxLineView } from './taxExemption';
 
 // Cost-to-Produce — period-pool engine (THUNDER · 2026-06-14). MarginEngine-fed.
 export {

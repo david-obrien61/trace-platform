@@ -23,7 +23,22 @@ placeholder carrying a tenant literal.
 [2026-07-08-receipt-qb-leakage-recon.md](2026-07-08-receipt-qb-leakage-recon.md) — this register
 tracks the literals; that recon tracks the builds. Do not duplicate the fix detail here.
 
-**Last updated:** 2026-07-13 (H12–H17 CLEARED — the shared cultivar NOTIFICATION TEMPLATES (`cultivar.ts`) were fully LAWNS-hardcoded on a customer-facing surface; genericized to a `NotifyBusiness` active-business token, omit-not-fake. Register gap closed: notification templates were missed by the #97 checkout sweep and are now IN SCOPE. Prior: 2026-07-08 — ALL 8 tile-2.1 items CLEARED; 2.1 QR Checkout restored to GREEN.).
+**Last updated:** 2026-07-13 (D-40 tax build — the 3 sales-tax-rate literals T1–T3 CLEARED; rate is now per-tenant config data. Prior same day: H12–H17 CLEARED — the shared cultivar NOTIFICATION TEMPLATES (`cultivar.ts`) were fully LAWNS-hardcoded on a customer-facing surface; genericized to a `NotifyBusiness` active-business token, omit-not-fake. Register gap closed: notification templates were missed by the #97 checkout sweep and are now IN SCOPE. Prior: 2026-07-08 — ALL 8 tile-2.1 items CLEARED; 2.1 QR Checkout restored to GREEN.).
+
+---
+
+## Owning capability: **2.1 / tax (D-40)** — sales-tax rate literals (✅ ALL 3 CLEARED)
+
+The last remaining customer-facing hardcode class (flagged in the 2026-07-13 brand sweep as "borderline locale value").
+D-40 makes the rate per-tenant SUPPLIED DATA (`config.taxRate`); an unset rate renders a redline, never a fabricated %.
+
+| id | file:line | what it was | why it was debt | now | sev | status |
+|---|---|---|---|---|---|---|
+| T1 | [`notifications/templates/cultivar.ts:57`](../../packages/shared/src/notifications/templates/cultivar.ts#L57) | ~~customer-facing email `<span>Tax (8.25%)</span>`~~ | every non-TX tenant's customer saw a wrong tax % on their invoice email (the highest-severity surface) | renders `describeTaxLine` three states (redline / taxed(%) / exempt) from the authoritative `taxStatus` — no literal | HIGH | **✅ CLEARED** (D-40) |
+| T2 | [`lib/constants.ts:1`](../../packages/cultivar-os/src/lib/constants.ts#L1) | ~~`export const TAX_RATE = 0.0825`~~ (imported by CartReview) | a tenant tax rate baked into shared cultivar code (AC-1) | constant RETIRED; CartReview reads `config.taxRate` via `resolveTaxRate` | MED | **✅ CLEARED** (D-40) |
+| T3 | [`api/orders/submit.ts:10`](../../packages/cultivar-os/api/orders/submit.ts#L10) | ~~`const TAX_RATE_FALLBACK = 0.0825`~~ (create + handleUpdate) | server coerced an unset rate to TX's 8.25% — the silent-default that hid "not identified" | constant RETIRED; both paths read `resolveTaxRate(config.taxRate)`; null → "not identified" | MED | **✅ CLEARED** (D-40) |
+
+Also cleared, not previously registered: shared `Settings.tsx` `parseFloat(form.tax_rate) || 0.0825` (blank→0.0825 coercion) — now writes `config.taxRate`, blank = unset = redline (never a fabricated default). QBO `business.tax_rate ?? 0.0825` → derives the % from amount/subtotal (no literal).
 
 ---
 

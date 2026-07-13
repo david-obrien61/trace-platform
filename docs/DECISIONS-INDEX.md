@@ -4,7 +4,19 @@
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.
 
-**Last updated:** 2026-07-13 (D-39 REVIEW-SURFACE FIX + show-the-work display — implements D-39, NO new decision. The
+**Last updated:** 2026-07-13 (**D-40 TAX AS A SPINE CAPABILITY — APPROVED + BUILT (Level 1), owner-proof owed.** Tax is a
+computed line on the shared money boundary (extends D-37): the RATE is per-tenant SUPPLIED DATA at
+`business_pricing_config.config.taxRate` (via the new `resolveTaxRate` seam) — never platform-encoded jurisdiction
+knowledge, never a hardcoded 8.25%; an unset rate renders a REDLINED "Tax: not identified" (never a fabricated number).
+Level 1 = one origin-based rate (TX is origin-based for in-state sellers — legally correct). TAXABILITY rides the D-39
+line-kind seam (per-line `taxable`, default all-taxable = prior behavior). EXEMPTION is a business-scoped PARTY attribute
+on `customers` (mirrors price_tier/D-38, AC-3) invoked per-transaction + a per-order override on `orders`; zeroing tax
+REQUIRES a recorded reason (+ optional cert) under the gated/logged `apply_tax_exempt` (matched-pair sibling of the new
+`apply_discount`). Rounding stated ONCE (`round2(taxableSubtotal × rate)`) → Review === submit === QBO === email.
+Repointed every rate reader off `businesses.tax_rate`/literals (incl. folding the off-seam handleUpdate tax back through
+computeOrderPricing — closes the #107/#114 drift); killed `TAX_RATE_FALLBACK`/`TAX_RATE`; the hardcoded email "Tax
+(8.25%)" DIES. TWO gated additive migrations (`customers`/`orders` exemption cols); ZERO new api-fn (12/12). Home:
+docs/decisions/2026-07-13-tax-as-spine-capability-D40.md. Ledger row #117. PRIOR: D-39 REVIEW-SURFACE FIX + show-the-work display — implements D-39, NO new decision. The
 Review page was computing with a 0% tier because the `orderTier` client snapshot was null on the CustomerCapture
 checkout path → discount not applied → $1,646.48 vs QBO's correct $1,495.37. FIX (E1): Review now resolves the tier the
 SAME way submit does — `invokedTier ?? customer.price_tier` against the fetched config (authoritative), with the
@@ -62,6 +74,16 @@ decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenan
 > Abided **AC-1** (no tenant literal remains in the shared module — this IS the correction), **AC-3** (identity from the
 > active business_id-scoped context only), **[[D-9]]** (omit-not-fake, never a placeholder/wrong name). No decision, no
 > schema/migration/api change (12/12). Register H12-H17 CLEARED — notification templates now in register scope. Ledger #116.
+>
+> ✅ **Drift watch (2026-07-13 · D-40 TAX AS A SPINE CAPABILITY — new decision, built Level 1):** No drift. NEW decision
+> **[[D-40]]** logged (extends [[D-37]] money boundary; does not contradict it — tax is a CHARGE computation, still never
+> payment processing). Abided **AC-1** (rate is per-tenant data, reason codes are string values, the hardcoded 8.25%/0.0825
+> literals die), **AC-3** (exemption business-scoped on `customers`; rate per-active-business; anon path can never
+> self-exempt), **AC-4** (ONE `computeOrderPricing`, ONE line-kind seam read by BOTH discount and tax, ONE tax state
+> emitted, every surface renders it), **[[D-9]]** (rate-unset is a LOUD redline, exempt requires a reason — never a silent
+> $0/removal), **[[D-38]]** (exemption mirrors the party-attribute-invoked-per-transaction pattern), **[[D-39]]**
+> (taxability reuses the goods/service seam), **§6 r11** (ZERO new api-fn — 12/12 held), **§6 r16** (industry-standard-first:
+> tax as a computed line, origin-based single rate stated on the record). Two GATED additive migrations only. Ledger #117.
 >
 > ✅ **Drift watch (2026-07-13 · service price-override write-constraint 500 fix — no decision touched):** No drift.
 > Pure bug fix: submit 500'd on a manual service price override (order_service_selections.is_manual_override NOT-NULL

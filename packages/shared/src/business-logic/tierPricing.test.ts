@@ -17,7 +17,9 @@ import {
   normalizeDiscountTypes, resolveTier, applyTierPrice, RETAIL_TIER_NAME, RETAIL_FLOOR,
   computeOrderPricing, type PricingLineInput,
   type DiscountType,
+  resolveTaxRate, type OrderTaxExemption,
 } from './tierPricing';
+import { describeTaxLine, taxExemptionLabel } from './taxExemption';
 
 // ── tiny harness ─────────────────────────────────────────────────────────────────
 let passed = 0;
@@ -218,6 +220,81 @@ test('16. service overrideTotal replaces the charge, is not a tier discount', ()
   ok(p.lines[1].netTotal === 1000 && p.lines[1].discountAmt === 0, 'override $1000 charged, discountAmt 0 (leakage ≠ discount)');
   ok(p.lines[0].netUnit === 115.2, 'goods still tier-discounted alongside the override');
   ok(p.discountedSubtotal === round2Local(115.2 + 1000), 'subtotal = discounted goods + overridden service');
+});
+
+// ══ TAX — the three honest states + taxability filter + rounding + the rate seam (D-40) ══════════
+
+const TAXED_ORDER: PricingLineInput[] = [
+  { kind: 'goods',   name: 'Live Oak', unitPrice: 128, qty: 4 },  // $512
+  { kind: 'service', name: 'Delivery', unitPrice: 125, qty: 1 },  // $125
+];
+
+// ── 17. taxStatus 'taxed': tax on the taxable discounted subtotal, ONE rounding method. ──────────
+test("17. rate set → 'taxed', tax = round2(taxableSubtotal × rate)", () => {
+  const CON10 = resolveTier('contractor', normalizeDiscountTypes({
+    discountTypes: [{ name: 'Contractor', tiers: [{ name: 'contractor', basis: 'retail_minus_percent', discountPercent: 10 }] }],
+  }));
+  const p = computeOrderPricing(TAXED_ORDER, CON10, 0.0825);
+  // goods $512 −10% = $460.80; + delivery $125 (never discounted) → discounted subtotal $585.80
+  ok(p.discountedSubtotal === 585.8, `discounted subtotal 585.80, got ${p.discountedSubtotal}`);
+  ok(p.taxableSubtotal === 585.8, 'all lines taxable by default → taxableSubtotal == discountedSubtotal');
+  ok(p.taxStatus === 'taxed', `taxStatus 'taxed', got ${p.taxStatus}`);
+  ok(p.tax === round2Local(585.8 * 0.0825), `tax = round2(585.80 × 0.0825) = ${round2Local(585.8 * 0.0825)}, got ${p.tax}`);
+  ok(p.total === round2Local(585.8 + p.tax), 'total = discounted subtotal + tax');
+  ok(p.taxExemptReason == null && p.taxExemptCertRef == null, 'no exemption fields when taxed');
+});
+
+// ── 18. taxStatus 'not_identified': rate null → tax 0, NOT a fabricated rate (the redline). ───────
+test("18. rate null → 'not_identified', tax 0, total == subtotal (redline, never a default)", () => {
+  const p = computeOrderPricing(TAXED_ORDER, RETAIL_FLOOR, null);
+  ok(p.taxStatus === 'not_identified', `taxStatus 'not_identified', got ${p.taxStatus}`);
+  ok(p.tax === 0, 'tax is 0 (not a fabricated 8.25%)');
+  ok(p.total === p.discountedSubtotal, 'total excludes tax when the rate is not identified');
+  // a garbage rate is ALSO not identified (never silently taxed at a wrong number)
+  ok(resolveTaxRate({ taxRate: 'abc' }) === null && resolveTaxRate({ taxRate: '' }) === null && resolveTaxRate({}) === null, 'resolveTaxRate: garbage/empty/absent → null');
+  ok(resolveTaxRate({ taxRate: 0.0725 }) === 0.0725 && resolveTaxRate({ taxRate: 0 }) === 0, 'resolveTaxRate: a real rate (incl. 0) passes through');
+});
+
+// ── 19. taxStatus 'exempt': a VALID exemption zeros tax; NO reason → NOT exempt (audit control). ──
+test("19. exempt zeros tax ONLY with a recorded reason; reasonless exempt is refused", () => {
+  const RATE = 0.0825;
+  const exempt: OrderTaxExemption = { exempt: true, reason: 'agricultural', certRef: 'AG-TX-88213' };
+  const p = computeOrderPricing(TAXED_ORDER, RETAIL_FLOOR, RATE, exempt);
+  ok(p.taxStatus === 'exempt' && p.tax === 0, 'valid exemption → exempt, tax 0');
+  ok(p.total === p.discountedSubtotal, 'exempt total excludes tax');
+  ok(p.taxExemptReason === 'agricultural' && p.taxExemptCertRef === 'AG-TX-88213', 'exemption reason + cert carried');
+  // no reason → the pure fn REFUSES to remove tax (no silent removal) → falls back to taxed
+  const noReason = computeOrderPricing(TAXED_ORDER, RETAIL_FLOOR, RATE, { exempt: true, reason: '  ' });
+  ok(noReason.taxStatus === 'taxed' && noReason.tax > 0, 'exempt WITHOUT a reason is NOT honored — tax still charged');
+  // exempt beats an unset rate too (exempt is a definite $0, not the redline)
+  const exemptNoRate = computeOrderPricing(TAXED_ORDER, RETAIL_FLOOR, null, exempt);
+  ok(exemptNoRate.taxStatus === 'exempt', 'a valid exemption wins even when the rate is unset');
+});
+
+// ── 20. taxability filter: a non-taxable line is excluded from the taxable subtotal. ─────────────
+test('20. taxable:false line drops out of the taxable subtotal (D-40 seam), goods default taxable', () => {
+  const p = computeOrderPricing([
+    { kind: 'goods',   name: 'Oak',      unitPrice: 100, qty: 1 },                    // taxable (default)
+    { kind: 'service', name: 'Labor',    unitPrice: 200, qty: 1, taxable: false },    // opted out (jurisdiction)
+  ], RETAIL_FLOOR, 0.10);
+  ok(p.discountedSubtotal === 300, 'subtotal includes both lines ($300)');
+  ok(p.taxableSubtotal === 100, 'only the taxable goods line is in the taxable subtotal ($100)');
+  ok(p.tax === 10, 'tax = $100 × 10% = $10 (labor excluded), NOT $30');
+  // default (undefined) keeps a line taxable — money-safety: no silent shift from today's behavior
+  const allTaxable = computeOrderPricing([{ kind: 'service', name: 'S', unitPrice: 100, qty: 1 }], RETAIL_FLOOR, 0.10);
+  ok(allTaxable.taxableSubtotal === 100 && allTaxable.tax === 10, 'a service with no taxable flag is taxable by default');
+});
+
+// ── 21. describeTaxLine: the SINGLE three-state presenter every surface renders from. ────────────
+test('21. describeTaxLine wording — redline / taxed % / exempt reason+cert', () => {
+  const ni = describeTaxLine({ taxStatus: 'not_identified', tax: 0 });
+  ok(ni.redline && ni.amount === null && /not identified/i.test(ni.label), 'not_identified → redline, no amount, "not identified"');
+  const tx = describeTaxLine({ taxStatus: 'taxed', tax: 48.33, taxRate: 0.0825 });
+  ok(!tx.redline && tx.label === 'Tax (8.25%)' && tx.amount === '$48.33', 'taxed → "Tax (8.25%)" + amount');
+  const ex = describeTaxLine({ taxStatus: 'exempt', tax: 0, reason: 'agricultural', certRef: 'AG-TX-88213' });
+  ok(ex.label === 'Tax exempt — Agricultural exemption · cert AG-TX-88213' && ex.amount === '$0.00', 'exempt → reason label + cert + $0.00');
+  ok(taxExemptionLabel('resale') === 'Resale / reseller certificate', 'known code → label');
+  ok(taxExemptionLabel('special ag co-op') === 'special ag co-op', "'other' free text → text as-is");
 });
 
 function round2Local(n: number): number { return Math.round(n * 100) / 100; }

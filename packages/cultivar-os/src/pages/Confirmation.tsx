@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
 import type { OrderBreakdown } from '../hooks/useSubmitOrder';
+import { describeTaxLine, type TaxStatus } from '@trace/shared/business-logic';
 
 interface ConfirmState {
   orderId:          string;
@@ -8,6 +9,11 @@ interface ConfirmState {
   total:            number;
   subtotal:         number;
   taxAmount:        number;
+  // D-40: the authoritative tax state → the receipt renders redline / taxed(%) / exempt(reason).
+  taxStatus?:       TaxStatus;
+  taxRate?:         number | null;
+  taxExemptReason?: string | null;
+  taxExemptCertRef?: string | null;
   email:            string;
   payOnline:        boolean;
   transportMode?:   'self' | 'staff';
@@ -66,8 +72,11 @@ export function Confirmation() {
 
   const { invoiceNumber, total, subtotal, taxAmount, email, payOnline,
           transportMode, transportName, serviceLines, breakdown, tierLabel,
-          businessName, nettingActive,
+          businessName, nettingActive, taxStatus, taxRate, taxExemptReason, taxExemptCertRef,
           qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus } = state;
+  // D-40: ONE presenter, rendered from the authoritative state. taxableSubtotal ≈ subtotal here
+  // (Confirmation shows the discounted subtotal); a null rate → redline, exempt → reason+$0.
+  const taxLine = describeTaxLine({ taxStatus: taxStatus ?? 'taxed', tax: taxAmount, taxableSubtotal: subtotal, taxRate, reason: taxExemptReason, certRef: taxExemptCertRef });
   // D-39 (E2): render the SERVER-AUTHORITATIVE breakdown (goods retail lines → discount line → net),
   // not the client preview → the receipt equals QBO and the discount is a visible line.
   const goodsLines    = (breakdown?.lines ?? []).filter(l => l.kind === 'goods');
@@ -200,11 +209,12 @@ export function Confirmation() {
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#9ca3af' }}>
             <span>{orderDiscount > 0 ? 'Subtotal (after discount)' : 'Subtotal'}</span><span>${subtotal.toFixed(2)}</span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#9ca3af' }}>
-            <span>Tax ({subtotal > 0 ? ((taxAmount / subtotal) * 100).toFixed(2).replace(/\.00$/, '') : '0'}%)</span><span>${taxAmount.toFixed(2)}</span>
+          {/* D-40 three-state tax line: redline (rate unset) / taxed(%) / exempt(reason) — never a fabricated rate */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: taxLine.redline ? '#92400e' : '#9ca3af', fontWeight: taxLine.redline ? 600 : 400 }}>
+            <span>{taxLine.redline ? '⚠ ' : ''}{taxLine.label}</span><span>{taxLine.amount ?? ''}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '1.0625rem', color: '#1f2937', paddingTop: 6, borderTop: '1px solid #e5e7eb' }}>
-            <span>Total</span><span>${total.toFixed(2)}</span>
+            <span>Total{taxLine.state === 'not_identified' ? ' (tax not included)' : ''}</span><span>${total.toFixed(2)}</span>
           </div>
         </div>
       </div>

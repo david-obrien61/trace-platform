@@ -40,7 +40,7 @@ import {
 import {
   coerceCustomerField, persistCustomerField, type CustomerTextField,
 } from '../components/customers/customerEdit';
-import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME, type DiscountType } from '@trace/shared/business-logic';
+import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME, TAX_EXEMPTION_REASONS, taxExemptionLabel, type DiscountType } from '@trace/shared/business-logic';
 
 const SOURCE_LABEL: Record<string, string> = {
   'qr-scan':     'QR checkout',
@@ -59,6 +59,10 @@ interface CustomerRow {
   state: string | null;
   zip: string | null;
   price_tier: string | null;
+  // D-40: the persistent tax exemption (gated cols 20260713; optional so a pre-migration read is safe).
+  tax_exempt?: boolean | null;
+  tax_exempt_reason?: string | null;
+  tax_exempt_cert_ref?: string | null;
   source: string | null;
   qb_customer_id: string | null;
   created_at: string;
@@ -94,14 +98,18 @@ export function Customers() {
     setListLoading(true);
     setListError(null);
     console.log('[TRACE:customers] loadCustomers → customers', { businessId });
-    const { data, error } = await supabase
-      .from('customers')
-      .select('id,first_name,last_name,phone,email,address_line1,city,state,zip,price_tier,source,qb_customer_id,created_at')
-      .eq('business_id', businessId)
-      .order('created_at', { ascending: false });
+    const BASE = 'id,first_name,last_name,phone,email,address_line1,city,state,zip,price_tier,source,qb_customer_id,created_at';
+    const run = (cols: string) => supabase.from('customers').select(cols).eq('business_id', businessId).order('created_at', { ascending: false });
+    // D-40 gated exemption cols (20260713) — deploy-window-safe: try with them, retry without on a
+    // missing-column error so the roster never breaks before the migration applies.
+    let { data, error } = await run(`${BASE},tax_exempt,tax_exempt_reason,tax_exempt_cert_ref`);
+    if (error && ((error as any).code === '42703' || (error as any).code === 'PGRST204')) {
+      console.log('[TRACE:TAX] customers exemption cols absent — roster retrying without them (migration pending)', { code: (error as any).code });
+      ({ data, error } = await run(BASE));
+    }
     if (error) { console.error('[TRACE:customers] loadCustomers error', error.message); setListError(error.message); setListLoading(false); return; }
     console.log('[TRACE:customers] loadCustomers ok', { count: data?.length ?? 0 });
-    setCustomers((data ?? []) as CustomerRow[]);
+    setCustomers((data ?? []) as unknown as CustomerRow[]);
     setListLoading(false);
   }, [businessId]);
 
@@ -146,6 +154,23 @@ export function Customers() {
     return opts;
   };
 
+  // ── D-40: persistent tax-exemption editor (owner-only, RLS-scoped). Zeroing tax REQUIRES a
+  //    reason (the auditable control) — the editor blocks a reasonless exempt. Removing an exemption
+  //    (charging tax) needs no reason (the safe default). Immediate write, reload after. ──
+  const [exemptEditing, setExemptEditing] = useState<CustomerRow | null>(null);
+  async function saveExemption(row: CustomerRow, next: { exempt: boolean; reason: string | null; certRef: string | null }) {
+    if (!businessId) return;
+    console.log('[TRACE:TAX] customer exemption edit', { id: row.id, exempt: next.exempt, reason: next.reason });
+    const { error } = await supabase.from('customers').update({
+      tax_exempt: next.exempt,
+      tax_exempt_reason: next.exempt ? next.reason : null,
+      tax_exempt_cert_ref: next.exempt ? (next.certRef || null) : null,
+    }).eq('id', row.id).eq('business_id', businessId);
+    if (error) { setListError(error.message); return; }
+    setExemptEditing(null);
+    await loadCustomers();
+  }
+
   // ── Inline edit: one immediate write per field, RLS-scoped (owner-only). Shares the exact
   //    coercion + write rules with CustomerEditModal via customerEdit.ts (no drift). Kept
   //    sync (void return) so the TextCell onCommit callbacks stay void-returning. ──
@@ -184,6 +209,14 @@ export function Customers() {
       render: r => <TextCell key={`zp-${r.id}-${r.created_at}`} value={r.zip} width={80} placeholder="—" onCommit={v => onText(r, 'zip', v)} /> },
     { key: 'price_tier', header: 'Tier', sortable: true, sortVal: r => (r.price_tier ?? '').toLowerCase(),
       render: r => <SelectCell value={r.price_tier ?? 'retail'} options={tierOptions(r.price_tier)} onChange={v => onTier(r, v)} styleFor={tierSelectStyle} title="Customer price tier — drives the checkout discount" /> },
+    { key: 'tax_exempt', header: 'Tax', sortable: true, sortVal: r => (r.tax_exempt ? 1 : 0),
+      render: r => (
+        <button onClick={() => setExemptEditing(r)} title="Tax exemption — click to edit" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+          {r.tax_exempt
+            ? <span style={{ ...sourceStyle, color: '#166534', background: '#dcfce7' }}>Exempt · {taxExemptionLabel(r.tax_exempt_reason)}</span>
+            : <span style={{ ...SS.muted, textDecoration: 'underline dotted' }}>Taxable</span>}
+        </button>
+      ) },
     { key: 'source', header: 'Source', sortable: true, sortVal: r => (r.source ?? '').toLowerCase(),
       render: r => <span style={sourceStyle}>{SOURCE_LABEL[r.source ?? ''] ?? r.source ?? '—'}</span> },
     { key: 'qb_customer_id', header: 'QuickBooks', sortable: true, sortVal: r => (r.qb_customer_id ? 1 : 0), defaultVisible: false,
@@ -280,7 +313,75 @@ export function Customers() {
           </div>
         </div>
       )}
+
+      {/* D-40: per-customer tax-exemption editor (owner-only). Reason REQUIRED to mark exempt. */}
+      {exemptEditing && (
+        <ExemptionEditor
+          customer={exemptEditing}
+          onClose={() => setExemptEditing(null)}
+          onSave={(next) => void saveExemption(exemptEditing, next)}
+        />
+      )}
     </>
+  );
+}
+
+// D-40 — the customer tax-exemption editor sheet. Marking exempt REQUIRES a reason (the auditable
+// control); removing an exemption (charging tax) needs none. Reuses the datasheet sheet styles.
+function ExemptionEditor({ customer, onClose, onSave }: {
+  customer: CustomerRow;
+  onClose: () => void;
+  onSave: (next: { exempt: boolean; reason: string | null; certRef: string | null }) => void;
+}) {
+  // Seed from the row: if the stored reason matches a known code use it, else it's 'other' free text.
+  const storedReason = customer.tax_exempt_reason ?? '';
+  const knownCode = TAX_EXEMPTION_REASONS.find(x => x.code === storedReason && x.code !== 'other');
+  const [reasonCode, setReasonCode] = useState<string>(customer.tax_exempt ? (knownCode?.code ?? (storedReason ? 'other' : 'resale')) : 'resale');
+  const [otherText, setOtherText]   = useState<string>(knownCode ? '' : storedReason);
+  const [cert, setCert]             = useState<string>(customer.tax_exempt_cert_ref ?? '');
+  const [err, setErr]               = useState<string | null>(null);
+
+  function save() {
+    const reason = reasonCode === 'other' ? otherText.trim() : reasonCode;
+    if (!reason) { setErr('A reason is required to make a customer tax-exempt.'); return; }
+    onSave({ exempt: true, reason, certRef: cert.trim() || null });
+  }
+
+  return (
+    <div style={SS.modal} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={SS.sheet}>
+        <div style={SS.sheetHeader}>
+          <h2 style={{ ...SS.sectionTitle, margin: 0 }}>Tax exemption — {customer.first_name} {customer.last_name}</h2>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }} onClick={onClose}>
+            <X size={20} color="#6b7280" />
+          </button>
+        </div>
+        <p style={{ fontSize: '0.8125rem', color: '#6b7280', margin: '0 0 12px' }}>
+          A tax-exempt customer is not charged sales tax on any order. Every exemption requires a documented reason.
+        </p>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Reason</label>
+          <select value={reasonCode} onChange={e => setReasonCode(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', border: '1.5px solid #d1d5db', borderRadius: 9, fontSize: '0.9rem', background: '#fff', color: '#111827' }}>
+            {TAX_EXEMPTION_REASONS.map(r => <option key={r.code} value={r.code}>{r.label}</option>)}
+          </select>
+        </div>
+        {reasonCode === 'other' && (
+          <div style={{ marginBottom: 12 }}>
+            <input type="text" value={otherText} onChange={e => setOtherText(e.target.value)} placeholder="Reason (required)" style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', border: '1.5px solid #d1d5db', borderRadius: 9, fontSize: '0.9rem' }} />
+          </div>
+        )}
+        <div style={{ marginBottom: 12 }}>
+          <input type="text" value={cert} onChange={e => setCert(e.target.value)} placeholder="Certificate # (optional)" style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', border: '1.5px solid #d1d5db', borderRadius: 9, fontSize: '0.9rem' }} />
+        </div>
+        {err && <div style={SS.error}>{err}</div>}
+        <button onClick={save} style={SS.submitBtn}>Save exemption</button>
+        {customer.tax_exempt && (
+          <button onClick={() => onSave({ exempt: false, reason: null, certRef: null })} style={{ ...SS.submitBtn, background: 'none', color: '#92400e', border: '1.5px solid #fcd34d', marginTop: 8 }}>
+            Remove exemption (charge tax)
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 

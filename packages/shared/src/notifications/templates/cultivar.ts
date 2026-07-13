@@ -1,5 +1,7 @@
 import type { TemplateDef, NotifyBusiness } from '../types';
 import { baseEmailHtml, type BaseEmailOptions } from './base';
+import { describeTaxLine } from '../../business-logic/taxExemption';
+import type { TaxStatus } from '../../business-logic/tierPricing';
 
 // Per-tenant email chrome (header logo + footer identity) built from the ACTIVE business — NO
 // hardcoded brand (AC-1). OMIT-NOT-FAKE (D-9): a missing name/address/phone/email renders NOTHING;
@@ -33,6 +35,13 @@ interface OrderConfirmData extends Record<string, unknown> {
   subtotal:       string;
   tax:            string;
   total:          string;
+  // D-40: the authoritative tax state → the email renders redline / taxed(%) / exempt(reason), never
+  // a hardcoded "Tax (8.25%)". taxAmountNum feeds the shared describeTaxLine presenter.
+  taxStatus?:       TaxStatus;
+  taxAmountNum?:    number;
+  taxRate?:         number | null;
+  taxExemptReason?: string | null;
+  taxExemptCertRef?: string | null;
   transport:      'self' | 'delivery' | 'install';
   nettingActive:  boolean;
   payOnline:      boolean;
@@ -54,8 +63,15 @@ const orderConfirmation: TemplateDef<OrderConfirmData> = {
     <h2>Order ${d.invoiceNumber}</h2>
     <div class="line-item"><span>${d.plantName} · ${d.container} × ${d.quantity}</span><span>${d.plantTotal}</span></div>
     ${d.addonsTotal !== '$0.00' ? `<div class="line-item"><span>Add-ons</span><span>${d.addonsTotal}</span></div>` : ''}
-    <div class="line-item"><span>Tax (8.25%)</span><span>${d.tax}</span></div>
-    <div class="line-item"><span>Total</span><span>${d.total}</span></div>
+    ${(() => {
+      // D-40: ONE presenter, three honest states. not_identified → a redlined line (never a fabricated
+      // rate); taxed → "Tax (X%)"; exempt → "Tax exempt — reason". Same wording as Review/Confirmation.
+      const t = describeTaxLine({ taxStatus: d.taxStatus ?? 'taxed', tax: d.taxAmountNum ?? 0, taxRate: d.taxRate, reason: d.taxExemptReason, certRef: d.taxExemptCertRef });
+      return t.redline
+        ? `<div class="line-item" style="color:#92400e;"><span>⚠ ${t.label}</span><span></span></div>`
+        : `<div class="line-item"><span>${t.label}</span><span>${t.amount ?? d.tax}</span></div>`;
+    })()}
+    <div class="line-item"><span>Total${(d.taxStatus ?? 'taxed') === 'not_identified' ? ' (tax not included)' : ''}</span><span>${d.total}</span></div>
 
     ${d.transport === 'self' && d.nettingActive ? `
     <div class="alert">

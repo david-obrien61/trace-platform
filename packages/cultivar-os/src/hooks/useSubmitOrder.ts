@@ -40,6 +40,10 @@ export interface SubmitPayload {
   // token-verified owner/manager path server-side; ignored (tamper defense) otherwise.
   serviceOverrides?: Record<string, { amount: number; reason: string }>;
   deliveryDate?:     string | null;   // owner/manager-entered delivery date (ISO 'YYYY-MM-DD')
+  // D-40: per-order tax-exemption OVERRIDE (owner/manager only). Honored server-side ONLY on a
+  // token-verified apply_tax_exempt path; ignored (tamper defense) otherwise. Null/absent → the
+  // customer's PERSISTENT exemption governs.
+  orderExemption?:   { exempt: boolean; reason?: string | null; certRef?: string | null } | null;
   businessId:        string;
   // AC-1: the ACTIVE business identity (name/address/phone/email), threaded into the customer-facing
   // confirmation notification so the email renders the true tenant — never a hardcoded brand. Resolved
@@ -58,6 +62,11 @@ export interface OrderResult {
   qbInvoiceUrl?:   string;
   qbStatus:        'success' | 'pending';
   breakdown?:      OrderBreakdown;   // D-39: server-authoritative per-line breakdown for the receipt
+  // D-40: the authoritative tax state — the receipt/email render it (redline / taxed / exempt).
+  taxStatus?:      'not_identified' | 'taxed' | 'exempt';
+  taxRate?:        number | null;    // the origin rate (for the taxed %); null when not identified
+  taxExemptReason?: string | null;
+  taxExemptCertRef?: string | null;
 }
 
 export function useSubmitOrder() {
@@ -71,7 +80,7 @@ export function useSubmitOrder() {
     try {
       const {
         customer, customerId, invokedTier, lines, services, selectedTransport, plantingOffering, plantingSelected,
-        nettingDeclined, serviceQuantities, serviceOverrides, deliveryDate, businessId, business,
+        nettingDeclined, serviceQuantities, serviceOverrides, deliveryDate, orderExemption, businessId, business,
       } = payload;
 
       // Attach the caller's Bearer token when a session exists so the server can VERIFY an
@@ -86,7 +95,7 @@ export function useSubmitOrder() {
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body:    JSON.stringify({
           customer, customerId, invokedTier, lines, services, selectedTransport, plantingOffering, plantingSelected,
-          nettingDeclined, serviceQuantities, serviceOverrides, deliveryDate, businessId,
+          nettingDeclined, serviceQuantities, serviceOverrides, deliveryDate, orderExemption, businessId,
         }),
       });
 
@@ -95,7 +104,8 @@ export function useSubmitOrder() {
         throw new Error(body.error || `Order submission failed (${res.status})`);
       }
 
-      const { orderId, invoiceNumber, total, subtotal, taxAmount, breakdown } = await res.json();
+      const { orderId, invoiceNumber, total, subtotal, taxAmount, breakdown,
+              taxStatus, taxRate, taxExemptReason, taxExemptCertRef } = await res.json();
 
       // ── QB invoice — non-blocking ────────────────────────────────────────
       let qbInvoiceId: string | undefined;
@@ -167,6 +177,13 @@ export function useSubmitOrder() {
           subtotal:      `$${subtotal.toFixed(2)}`,
           tax:           `$${taxAmount.toFixed(2)}`,
           total:         `$${total.toFixed(2)}`,
+          // D-40: the authoritative tax state → the email renders redline / taxed(%) / exempt(reason),
+          // NOT a hardcoded "Tax (8.25%)". taxAmountNum feeds the shared describeTaxLine presenter.
+          taxStatus:        taxStatus ?? 'taxed',
+          taxAmountNum:     taxAmount,
+          taxRate:          taxRate ?? null,
+          taxExemptReason:  taxExemptReason ?? null,
+          taxExemptCertRef: taxExemptCertRef ?? null,
           transport:     selectedTransport?.transport_mode ?? 'self',
           nettingActive: nettingOn,
           payOnline:     false,
@@ -176,7 +193,8 @@ export function useSubmitOrder() {
         tenantId: businessId,
       });
 
-      return { orderId, invoiceNumber, total, subtotal, taxAmount, qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus, breakdown };
+      return { orderId, invoiceNumber, total, subtotal, taxAmount, qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus, breakdown,
+               taxStatus, taxRate, taxExemptReason, taxExemptCertRef };
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Submission failed';

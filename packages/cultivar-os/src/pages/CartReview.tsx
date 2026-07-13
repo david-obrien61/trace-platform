@@ -6,10 +6,10 @@ import { useSubmitOrder } from '../hooks/useSubmitOrder';
 import { useBusinessContext } from '@trace/shared/context';
 import {
   computeOrderPricing, RETAIL_FLOOR, resolveTier, readPricingConfig, normalizeDiscountTypes,
-  type PricingLineInput, type DiscountType,
+  resolveTaxRate, describeTaxLine, TAX_EXEMPTION_REASONS, taxExemptionLabel,
+  type PricingLineInput, type DiscountType, type OrderTaxExemption,
 } from '@trace/shared/business-logic';
 import { supabase } from '../lib/supabase';
-import { TAX_RATE } from '../lib/constants';
 import { anchorKey } from '../lib/stockLinePlant';
 import {
   totalPlantCount, nettedQuantity, lineSubtotal, isNettingOffering,
@@ -34,15 +34,28 @@ export function CartReview() {
   // discount config and resolve the SAME inputs submit uses (invokedTier ?? the customer's stored
   // price_tier), NOT the fragile orderTier snapshot. null = still loading (fast-path below).
   const [discountTypes, setDiscountTypes] = useState<DiscountType[] | null>(null);
+  // D-40: the tax RATE comes from the SAME config read (config.taxRate via resolveTaxRate) — NOT the
+  // businesses.tax_rate column, NOT a hardcoded 8.25%. null = "not identified" (redline). taxLoaded
+  // gates the redline so it doesn't flash before the config resolves.
+  const [taxRate, setTaxRate] = useState<number | null>(null);
+  const [taxLoaded, setTaxLoaded] = useState(false);
   useEffect(() => {
     const bid = businessId ?? items[0]?.plant.business_id;
     if (!bid) return;
     void (async () => {
       const { data } = await readPricingConfig(supabase, bid);
-      setDiscountTypes(normalizeDiscountTypes((data?.config ?? {}) as Record<string, unknown>));
+      const cfg = (data?.config ?? {}) as Record<string, unknown>;
+      setDiscountTypes(normalizeDiscountTypes(cfg));
+      setTaxRate(resolveTaxRate(cfg));
+      setTaxLoaded(true);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId]);
+
+  // D-40: per-order tax-exemption OVERRIDE (owner/manager + apply_tax_exempt). Null → the customer's
+  // PERSISTENT exemption governs. { exempt:false } un-exempts a standing-exempt customer for this order.
+  const canApplyTaxExempt = isOwner || can('apply_tax_exempt');
+  const [orderExempt, setOrderExempt] = useState<OrderTaxExemption | null>(null);
 
   // Owner overrides for a service's netted quantity (review-only refinement; default = the
   // attach rule's netted value). Keyed by offering id. Surface-not-silent: the rule computes
@@ -104,8 +117,13 @@ export function CartReview() {
     return null;
   }
 
-  // Tax rate from the business's own setting (server recomputes from the same column).
-  const taxRate = business?.tax_rate ?? TAX_RATE;
+  // D-40: effective exemption for the PREVIEW = the per-order override (owner-set) else the customer's
+  // PERSISTENT exemption. submit re-reads the persistent one server-side (authoritative) and honors
+  // the override only on a token-verified apply_tax_exempt path — the preview just mirrors it.
+  const persistentExempt: OrderTaxExemption | null = customer?.tax_exempt
+    ? { exempt: true, reason: customer.tax_exempt_reason ?? null, certRef: customer.tax_exempt_cert_ref ?? null }
+    : null;
+  const effectiveExemption = orderExempt ?? persistentExempt ?? undefined;
 
   // D-35: read sell_price (retail), NEVER unit_cost. A line with missing/0 sell_price is
   // REFUSED below rather than silently charged $0 (Surface Honesty, D-9).
@@ -157,11 +175,16 @@ export function CartReview() {
     ...(nettingActive && nettingSel ? [svcInput(nettingSel.offering)] : []),
     ...otherAddons.filter(s => s.selected).map(s => svcInput(s.offering)),
   ];
-  const pricing = computeOrderPricing([...goodsInputs, ...serviceInputs], resolvedTier, taxRate);
+  const pricing = computeOrderPricing([...goodsInputs, ...serviceInputs], resolvedTier, taxRate, effectiveExemption);
   const goodsPriced = pricing.lines.filter(p => p.kind === 'goods'); // same order as items
   const subtotal  = pricing.discountedSubtotal;
   const taxAmount = pricing.tax;
   const total     = pricing.total;
+  // D-40: the three-state tax line, rendered from the authoritative computeOrderPricing output.
+  // Suppress the redline until the config actually loaded (taxLoaded) so it doesn't flash on mount.
+  const taxView = taxLoaded
+    ? describeTaxLine({ taxStatus: pricing.taxStatus, tax: taxAmount, taxableSubtotal: pricing.taxableSubtotal, taxRate, reason: pricing.taxExemptReason, certRef: pricing.taxExemptCertRef })
+    : { state: 'taxed' as const, label: 'Tax', amount: '…', redline: false };
 
   // [TRACE:PRICE] — the grouped breakdown on the Review render path (D-39). STD-003, on until
   // OWNER-PROVEN. `resolvedFrom` proves the tier came from the AUTHORITATIVE resolution (config
@@ -231,6 +254,9 @@ export function CartReview() {
         serviceQuantities,
         serviceOverrides,
         deliveryDate,
+        // D-40: the per-order exemption OVERRIDE (owner-set). Null → server uses the customer's
+        // persistent exemption. Honored server-side ONLY on a token-verified apply_tax_exempt path.
+        orderExemption: orderExempt,
         businessId: items[0].plant.business_id,
         // AC-1: pass the ACTIVE business identity (business_id-scoped context) so the confirmation
         // email renders the true tenant, never a hardcoded brand. Omit-not-fake: undefined when
@@ -244,6 +270,11 @@ export function CartReview() {
           total:           result.total,
           subtotal:        result.subtotal,
           taxAmount:       result.taxAmount,
+          // D-40: the authoritative tax state → Confirmation renders redline / taxed(%) / exempt(reason).
+          taxStatus:        result.taxStatus,
+          taxRate:          result.taxRate,
+          taxExemptReason:  result.taxExemptReason,
+          taxExemptCertRef: result.taxExemptCertRef,
           email:           customer!.email,
           payOnline:       online,
           transportMode:   selectedTransport?.transport_mode ?? 'self',
@@ -471,15 +502,21 @@ export function CartReview() {
             <span>{pricing.discountTotal > 0 ? 'Subtotal (after discount)' : 'Subtotal'}</span>
             <span>${subtotal.toFixed(2)}</span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#6b7280' }}>
-            <span>Tax ({(taxRate * 100).toFixed(2).replace(/\.00$/, '')}%)</span>
-            <span>${taxAmount.toFixed(2)}</span>
+          {/* D-40 three-state tax line: redline (rate unset) / taxed(%) / exempt(reason) */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: taxView.redline ? '#92400e' : '#6b7280', fontWeight: taxView.redline ? 600 : 400 }}>
+            <span>{taxView.redline ? '⚠ ' : ''}{taxView.label}</span>
+            <span>{taxView.amount ?? ''}</span>
           </div>
+          {taxView.state === 'not_identified' && (
+            <p style={{ fontSize: '0.75rem', color: '#92400e', margin: '0 0 2px' }}>
+              No tax was applied — set your business's sales tax rate in Settings so the invoice is correct.
+            </p>
+          )}
           <div style={{
             display: 'flex', justifyContent: 'space-between', fontSize: '1.0625rem',
             fontWeight: 700, color: '#1f2937', paddingTop: 6, borderTop: '1px solid #e5e7eb',
           }}>
-            <span>Total</span>
+            <span>Total{taxView.state === 'not_identified' ? ' (tax not included)' : ''}</span>
             <span>${total.toFixed(2)}</span>
           </div>
         </div>
@@ -527,6 +564,17 @@ export function CartReview() {
             </p>
           </div>
         )}
+
+        {/* D-40: per-order tax-exemption control (owner/manager + apply_tax_exempt). Zeroing tax
+            REQUIRES a reason (the auditable control). Server re-verifies authority + reason. */}
+        {canApplyTaxExempt && (
+          <TaxExemptControl
+            effective={effectiveExemption}
+            isOverride={orderExempt !== null}
+            onApply={e => setOrderExempt(e)}
+            onReset={() => setOrderExempt(null)}
+          />
+        )}
       </div>
 
       {/* No-sale-price refusal (Surface Honesty, D-9) — block, don't silently sell at $0 */}
@@ -563,6 +611,65 @@ export function CartReview() {
           {submitting && !payOnline ? 'Creating order…' : "I'll pay at the office"}
         </button>
       </div>
+    </div>
+  );
+}
+
+// D-40 — per-order tax-exemption control. Shows the effective exemption state and lets an
+// owner/manager exempt THIS order (reason REQUIRED) or remove/reset it. `effective` reflects the
+// customer's persistent exemption OR a per-order override; `isOverride` is true when the current
+// state came from a per-order override (so "Reset to customer default" is offered).
+function TaxExemptControl({ effective, isOverride, onApply, onReset }: {
+  effective: OrderTaxExemption | undefined;
+  isOverride: boolean;
+  onApply: (e: OrderTaxExemption) => void;
+  onReset: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [reasonCode, setReasonCode] = useState('resale');
+  const [otherText, setOtherText]   = useState('');
+  const [cert, setCert]             = useState('');
+  const [err, setErr]               = useState<string | null>(null);
+  const isExempt = !!effective?.exempt;
+
+  function apply() {
+    const reason = reasonCode === 'other' ? otherText.trim() : reasonCode;
+    if (!reason) { setErr('A reason is required to make an order tax-exempt.'); return; }
+    onApply({ exempt: true, reason, certRef: cert.trim() || null });
+    setEditing(false); setErr(null);
+  }
+
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f3f4f6' }}>
+      {isExempt ? (
+        <div>
+          <span style={{ display: 'inline-block', background: '#f0fdf4', color: '#166534', fontWeight: 700, fontSize: '0.75rem', borderRadius: 6, padding: '3px 9px' }}>
+            Tax exempt — {taxExemptionLabel(effective?.reason)}{effective?.certRef ? ` · cert ${effective.certRef}` : ''}
+          </span>
+          <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
+            <button onClick={() => onApply({ exempt: false })} style={{ ...linkBtn, fontSize: '0.75rem', color: '#92400e' }}>Charge tax on this order</button>
+            {isOverride && <button onClick={onReset} style={{ ...linkBtn, fontSize: '0.75rem' }}>Reset to customer default</button>}
+          </div>
+        </div>
+      ) : !editing ? (
+        <button onClick={() => setEditing(true)} style={{ ...linkBtn, fontSize: '0.8125rem' }}>Make this order tax-exempt</button>
+      ) : (
+        <div style={{ padding: '10px 12px', background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <span style={{ fontSize: '0.8125rem', color: '#166534', fontWeight: 600 }}>Tax exemption (reason required)</span>
+          <select value={reasonCode} onChange={e => setReasonCode(e.target.value)} style={{ padding: '8px 10px', border: '1.5px solid #86efac', borderRadius: 6, fontSize: '0.875rem' }}>
+            {TAX_EXEMPTION_REASONS.map(r => <option key={r.code} value={r.code}>{r.label}</option>)}
+          </select>
+          {reasonCode === 'other' && (
+            <input type="text" value={otherText} onChange={e => setOtherText(e.target.value)} placeholder="Reason (required)" style={{ padding: '8px 10px', border: '1.5px solid #86efac', borderRadius: 6, fontSize: '0.875rem', boxSizing: 'border-box' }} />
+          )}
+          <input type="text" value={cert} onChange={e => setCert(e.target.value)} placeholder="Certificate # (optional)" style={{ padding: '8px 10px', border: '1.5px solid #86efac', borderRadius: 6, fontSize: '0.875rem', boxSizing: 'border-box' }} />
+          {err && <p style={{ fontSize: '0.75rem', color: '#A32D2D', margin: 0 }}>{err}</p>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={apply} className="btn btn-primary" style={{ minHeight: 40, flex: 1, fontSize: '0.875rem' }}>Apply exemption</button>
+            <button onClick={() => { setEditing(false); setErr(null); }} className="btn btn-secondary" style={{ minHeight: 40, fontSize: '0.875rem' }}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

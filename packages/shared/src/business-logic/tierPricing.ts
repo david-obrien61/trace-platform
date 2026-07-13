@@ -268,6 +268,11 @@ export interface PricingLineInput {
   /** SERVICE only — an owner price-override (flat give-away) that REPLACES unitPrice×qty as the
    *  charged amount. Attributed leakage, NOT a tier discount — the service is still never discounted. */
   overrideTotal?: number | null;
+  /** TAXABILITY (D-40) — rides the D-39 goods/service line-kind seam. undefined ⇒ TRUE for BOTH
+   *  goods and service (today's behavior — money-safety: no tenant's totals shift silently on ship;
+   *  an owner opts a line out per jurisdiction later, e.g. labor exempt). This per-line flag is the
+   *  LEVEL-2 HOOK where future jurisdiction-specific taxability rules attach. */
+  taxable?: boolean;
 }
 
 export interface PricedLine {
@@ -282,6 +287,26 @@ export interface PricedLine {
   netTotal: number;      // the charged line total
   basis: DiscountBasis;
   degraded: boolean;     // at_cost with no cost on file → charged at retail (D-9)
+  taxable: boolean;      // D-40: whether this line is in the taxable subtotal (default true)
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+ * TAX — a computed line on the shared money boundary (D-40 · 2026-07-13). Tax is NOT a vertical
+ * feature: the rate is per-tenant SUPPLIED DATA (never platform-encoded jurisdiction knowledge),
+ * taxability rides the D-39 line-kind seam, and an unset rate renders "not identified" (a REDLINE,
+ * never a fabricated number). Extends D-37 (money boundary — still never payment processing).
+ * ══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+export type TaxStatus = 'not_identified' | 'taxed' | 'exempt';
+
+/** A tax exemption invoked on an order (D-40) — the persistent business-scoped PARTY attribute
+ *  (customers.tax_exempt, mirroring price_tier/D-38) OR a per-order owner override. `exempt` zeros
+ *  tax ONLY with a recorded reason: the pure computation REFUSES to remove tax without one
+ *  (no silent tax removal, ever — the auditable control). certRef is an optional certificate ref. */
+export interface OrderTaxExemption {
+  exempt: boolean;
+  reason?: string | null;   // a TAX_EXEMPTION_REASONS code (or free text for 'other') — REQUIRED to zero tax
+  certRef?: string | null;  // optional certificate reference
 }
 
 export interface OrderPricing {
@@ -289,25 +314,59 @@ export interface OrderPricing {
   goodsRetailSubtotal: number; // Σ goods retailTotal (pre-discount) — for "show the work"
   discountTotal: number;       // Σ discountAmt (goods only)
   discountedSubtotal: number;  // Σ netTotal (goods discounted + services full)
-  taxableSubtotal: number;     // = discountedSubtotal (D-39: tax on the discounted subtotal)
+  taxableSubtotal: number;     // Σ netTotal WHERE line.taxable (D-40; = discountedSubtotal when all taxable)
   tax: number;
   total: number;
+  taxStatus: TaxStatus;                 // D-40: which of the three honest states this order's tax is in
+  taxExemptReason?: string | null;      // present only when taxStatus === 'exempt'
+  taxExemptCertRef?: string | null;     // present only when taxStatus === 'exempt'
 }
 
 /**
- * Compute an order's full pricing from its lines + the resolved tier + the tax rate. Goods lines
- * get the tier (applyTierPrice); service lines pass through (never discounted). Tax on the
- * discounted subtotal. See the block comment above for the rule + why this is the single source.
+ * resolveTaxRate — the SINGLE seam that produces an order's tax rate (D-40). LEVEL 1: returns the
+ * per-tenant ORIGIN rate stored in business_pricing_config.config.taxRate. (Texas is ORIGIN-based
+ * for in-state sellers — a TX seller charges the rate at the SELLER's place of business, so ONE
+ * rate per tenant sourced at origin is the LEGALLY CORRECT model, not a simplification.) ABSENCE of
+ * the key → null = "not identified" (the REDLINE; never a fabricated default). The platform NEVER
+ * computes a rate — the owner enters theirs (linked to the Texas Comptroller rate locator).
+ *
+ * LEVEL-2 HOOK (deferred — do NOT build now): a future address/jurisdiction/tax-API resolver slots
+ * in HERE, keyed by the order's ship-to / jurisdiction — this is the ONE place it attaches, so
+ * Level 2 is a swap, not a rewrite. `_order` is reserved for that (unused at Level 1). The per-line
+ * `taxable` flag (PricingLineInput) is the sibling hook where future jurisdiction-specific
+ * taxability rules attach.
+ */
+export function resolveTaxRate(config: unknown, _order?: unknown): number | null {
+  const c = (config && typeof config === 'object') ? config as Record<string, unknown> : {};
+  const raw = c.taxRate;
+  if (raw == null || raw === '') return null;              // absent = not identified (redline)
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : null;          // a garbage value is also "not identified"
+}
+
+/**
+ * Compute an order's full pricing from its lines + the resolved tier + the tax rate + an optional
+ * exemption. Goods lines get the tier (applyTierPrice); service lines pass through (never
+ * discounted). TAXABILITY (D-40): taxableSubtotal = Σ netTotal WHERE line.taxable (default true for
+ * every line = today's behavior). ROUNDING (stated, ONE method so Review/submit/QBO/email cannot
+ * disagree by a penny): tax = round2(taxableSubtotal × rate). TAX STATE (D-40):
+ *   • a VALID exemption (exempt AND a recorded reason) → 'exempt', tax 0 (no silent removal);
+ *   • else rate == null → 'not_identified', tax 0 (redline rendered by the surfaces);
+ *   • else → 'taxed', tax on the taxable discounted subtotal.
+ * See the block comments above for the rules + why this is the single source.
  */
 export function computeOrderPricing(
   lines: PricingLineInput[],
   resolvedTier: DiscountTier,
-  taxRate: number,
+  taxRate: number | null,
+  exemption?: OrderTaxExemption | null,
 ): OrderPricing {
   const priced: PricedLine[] = lines.map(l => {
     const qty = Math.max(0, Number(l.qty) || 0);
     const retailUnit = Number(l.unitPrice) || 0;
     const retailTotal = round2(retailUnit * qty);
+
+    const taxable = l.taxable !== false; // D-40: default true (money-safety — today's behavior)
 
     if (l.kind === 'goods') {
       const r = applyTierPrice(retailUnit, l.unitCost, resolvedTier);
@@ -315,22 +374,36 @@ export function computeOrderPricing(
       const netTotal = round2(netUnit * qty);
       const discountAmt = round2(retailTotal - netTotal);
       const discountPct = retailUnit > 0 ? round2((1 - netUnit / retailUnit) * 100) : 0;
-      return { kind: 'goods', name: l.name, retailUnit, qty, retailTotal, discountPct, discountAmt, netUnit, netTotal, basis: r.basis, degraded: r.degraded };
+      return { kind: 'goods', name: l.name, retailUnit, qty, retailTotal, discountPct, discountAmt, netUnit, netTotal, basis: r.basis, degraded: r.degraded, taxable };
     }
 
     // Service — NEVER tier-discounted. An overrideTotal (owner give-away) replaces the computed
     // amount as the charge; it is leakage (surfaced elsewhere), so discountAmt stays 0 here.
     const netTotal = (l.overrideTotal != null && l.overrideTotal >= 0) ? round2(l.overrideTotal) : retailTotal;
     const netUnit = qty > 0 ? round2(netTotal / qty) : netTotal;
-    return { kind: 'service', name: l.name, retailUnit, qty, retailTotal, discountPct: 0, discountAmt: 0, netUnit, netTotal, basis: 'retail_minus_percent', degraded: false };
+    return { kind: 'service', name: l.name, retailUnit, qty, retailTotal, discountPct: 0, discountAmt: 0, netUnit, netTotal, basis: 'retail_minus_percent', degraded: false, taxable };
   });
 
   const goodsRetailSubtotal = round2(priced.filter(p => p.kind === 'goods').reduce((s, p) => s + p.retailTotal, 0));
   const discountTotal       = round2(priced.reduce((s, p) => s + p.discountAmt, 0));
   const discountedSubtotal  = round2(priced.reduce((s, p) => s + p.netTotal, 0));
-  const taxableSubtotal     = discountedSubtotal; // D-39
-  const tax                 = round2(taxableSubtotal * (Number(taxRate) || 0));
-  const total               = round2(discountedSubtotal + tax);
+  // D-40: tax on the taxable lines only (default = every line taxable → == discountedSubtotal).
+  const taxableSubtotal     = round2(priced.filter(p => p.taxable).reduce((s, p) => s + p.netTotal, 0));
 
-  return { lines: priced, goodsRetailSubtotal, discountTotal, discountedSubtotal, taxableSubtotal, tax, total };
+  // D-40 tax state: a VALID exemption zeros tax ONLY with a recorded reason (never silent removal);
+  // else an unset rate is "not identified" (redline); else tax on the taxable subtotal (ONE rounding).
+  const validExempt = !!(exemption?.exempt && (exemption.reason ?? '').trim());
+  let taxStatus: TaxStatus;
+  let tax: number;
+  if (validExempt)            { taxStatus = 'exempt';         tax = 0; }
+  else if (taxRate == null)   { taxStatus = 'not_identified'; tax = 0; }
+  else                        { taxStatus = 'taxed';          tax = round2(taxableSubtotal * (Number(taxRate) || 0)); }
+  const total = round2(discountedSubtotal + tax);
+
+  return {
+    lines: priced, goodsRetailSubtotal, discountTotal, discountedSubtotal, taxableSubtotal, tax, total,
+    taxStatus,
+    taxExemptReason:  validExempt ? (exemption!.reason ?? null) : null,
+    taxExemptCertRef: validExempt ? (exemption!.certRef ?? null) : null,
+  };
 }

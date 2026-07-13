@@ -31,4 +31,10 @@ export interface CustomerInput {
   // Set from an attached customer (ScanOrder) or an email lookup (CustomerCapture). Undefined/null →
   // no stored tier → retail. Never authoritative for the CHARGE — submit re-resolves server-side.
   price_tier?: string | null;
+  // The customer's PERSISTENT tax exemption (D-40 — the party attribute, mirrors price_tier). Carried
+  // so the Review preview reflects a standing-exempt customer, matching what submit applies. Never
+  // authoritative for the CHARGE — submit re-reads the customer's exemption server-side.
+  tax_exempt?: boolean | null;
+  tax_exempt_reason?: string | null;
+  tax_exempt_cert_ref?: string | null;
 }

@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { refreshQBToken } from '../../../../shared/src/quickbooks/refresh';
 import { readQBSecrets } from '../../../../shared/src/quickbooks/secrets';
+import { taxExemptionLabel } from '../../../../shared/src/business-logic/taxExemption';
 import { orderItemName, orderItemAnchor } from '../../../src/lib/orderItemName';
 
 const QBO_ENVIRONMENT = process.env.QBO_ENVIRONMENT || 'sandbox';
@@ -101,7 +102,7 @@ export default async function handler(req: any, res: any) {
     // Fetch business accounting tokens
     const { data: business, error: bizErr } = await db
       .from('businesses')
-      .select('accounting_token_expires_at, accounting_company_id, tax_rate, name')
+      .select('accounting_token_expires_at, accounting_company_id, name')
       .eq('id', business_id)
       .single();
 
@@ -279,10 +280,23 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // Tax line
+    // Tax line (D-40) — render the order's PERSISTED tax state; NO hardcoded 8.25%:
+    //   • exempt order      → a $0 "Tax exempt — <reason>[· cert]" line (documents the exemption);
+    //   • taxed order       → the tax with the % DERIVED from amount/subtotal (never a fabricated rate);
+    //   • not-identified    → no tax was charged → no tax line (the redline lives pre-invoice, in the app).
     const taxAmount = Number(order.tax_amount);
-    if (taxAmount > 0) {
-      const taxPct = Math.round((business.tax_rate ?? 0.0825) * 10000) / 100;
+    if (order.tax_exempt_applied === true) {
+      const cert = String(order.tax_exempt_cert_ref ?? '').trim();
+      lines.push({
+        Description: `Tax exempt — ${taxExemptionLabel(order.tax_exempt_reason)}${cert ? ` · cert ${cert}` : ''}`,
+        Amount: 0,
+        DetailType: 'SalesItemLineDetail',
+        SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
+      });
+      console.log('[TRACE:TAX] QBO invoice — tax-exempt line', { order_id, reason: order.tax_exempt_reason, cert });
+    } else if (taxAmount > 0) {
+      const sub = Number(order.subtotal) || 0;
+      const taxPct = sub > 0 ? Math.round((taxAmount / sub) * 10000) / 100 : 0;
       lines.push({
         Description: `Sales Tax (${taxPct}%)`,
         Amount: taxAmount,
