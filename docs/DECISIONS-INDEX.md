@@ -54,6 +54,12 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-13 · service price-override write-constraint 500 fix — no decision touched):** No drift.
+> Pure bug fix: submit 500'd on a manual service price override (order_service_selections.is_manual_override NOT-NULL
+> violation) because overrideCols omitted the flag on non-override rows and PostgREST batch-insert NULLed them. Fixed by
+> setting is_manual_override:false on non-override rows (truthful per-row). No decision, no schema/migration/api change
+> (12/12). Pre-existing latent bug (1c13d46), NOT a D-39 regression — D-39 owner-prove status (#114) unaffected. Ledger #115.
+>
 > ✅ **Drift watch (2026-07-13 · D-39 Review-surface fix + show-the-work — implements D-39, no new decision):** No drift.
 > The D-39 owner-prove FAILED on the Review surface (Review $1,646.48, discount not applied) even though QBO/submit were
 > correct ($1,495.37). ROOT CAUSE: Review's tier came from the fragile `orderTier` client snapshot, which was null when
