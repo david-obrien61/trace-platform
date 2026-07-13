@@ -1,7 +1,7 @@
 # STANDARDS.md — TRACE Engineering Standards
-# Version: 1.8
+# Version: 2.0
 # Created: 2026-06-04
-# Last updated: 2026-06-11
+# Last updated: 2026-07-13
 # Owner: David O'Brien / TRACE Enterprises
 
 > Every standard on this list traces to a real failure that bit us.
@@ -26,7 +26,7 @@ Standards exist in three states. The point is not to hold every industry standar
 it is to hold the ones that apply to *our* stack, activate them at the right moment,
 and never carry noise.
 
-- **ACTIVE** (on the field — enforced now): STD-001 through STD-010 below. Each has
+- **ACTIVE** (on the field — enforced now): STD-001 through STD-016 below. Each has
   a confirming scar and is enforced every relevant session. Two origins:
     - *TRACE scars* — failures from this codebase (the QB lying flag, the
       hand-applied constraint, the hardcoded channels).
@@ -515,6 +515,158 @@ new sensitive column, RLS policy, or shared predicate.
 
 ---
 
+### STD-012 — SERVER-AUTHORITATIVE PRICING, ONE COMPUTATION
+
+**Rule:** Any price, discount, or tax a customer is charged is computed by ONE
+server-authoritative function. The client never holds a pricing computation that can
+diverge from the server; an interactive surface may recompute ONLY by calling the same
+function with the same inputs. Every display surface (review, confirmation, invoice,
+QBO, email) renders from that one output — no surface re-derives.
+
+**Scar (2026-07-10):** The Review page ran its own pricing (`Σ raw sell_price × qty`,
+tier never applied) and showed $124/each + a $3539.78 total, while submit/QBO applied
+the tier correctly at $115.20/each + $3418.54 — ~$121 hidden inside a Review that looked
+fine. The bug recurred a second time (`orderTier` null on the CustomerCapture path →
+Review silently priced at retail). Fixed by `computeOrderPricing` as the single shared
+function (D-39), with the client resolving the tier from the same authoritative inputs
+submit uses (E1).
+
+**In practice:**
+- One pricing function in `packages/shared`; submit is the tamper-defended authority.
+- A client surface that must show live totals calls THAT function with THE SAME inputs —
+  never a parallel/preview calc.
+- Read-only surfaces render the server's returned numbers; they do not recompute.
+- Any client-held pricing snapshot (tier, rate) is a divergence risk: resolve from
+  authoritative inputs, treat the snapshot as a fast-path only.
+
+**Relationship:** Extends STD-011 (one canonical representation) from a stored fact to a
+computed output — pricing is a fact-in-motion, and two computations of it drift exactly as
+two representations of a fact do (see AC-4).
+
+**Scope:** Every build touching order pricing, discounts, or tax on more than one surface.
+
+---
+
+### STD-013 — MONEY-AFFECTING OVERRIDES ARE REASON-CODED, GATED, AND LOGGED
+
+**Rule:** No money-affecting override (price override, discount application, tax
+exemption, waiver) may zero or alter a charge without: (1) a recorded REASON, (2) a
+grantable named permission gating who may do it, and (3) an actor + timestamp on the
+record. A $0 with no reason is indistinguishable from a mistake or fraud — never allow it.
+
+**Territory / scar (2026-07-13):** Tax exemption forced this into the open — zeroing tax
+must record WHY (resale / ag / nonprofit / gov / other-with-free-text), under a grantable
+`apply_tax_exempt`, logged with the actor. The same shape governs the discount override
+and the placement-price override already in the product (the leakage-override gate,
+ledger #108 / #115). The anon/public path can NEVER self-apply an override — the server
+ignores it and logs the refusal (tamper defense).
+
+**In practice:**
+- Override authority = a named action permission in `actionPermissions.ts` (declare-and-
+  union), server-enforced, defaulted per role.
+- Zeroing/reducing a charge REQUIRES a reason field (free-text mandatory for "other").
+- Actor via `resolveCallerUid` written to the record; the public/anon path is refused
+  and logged.
+- Build sibling authorities as a matched pair — a legal exemption and a commercial
+  discount are delegated and audited differently; do not collapse them into one grant.
+
+**Scope:** Every build that lets a user reduce, zero, or override a computed charge.
+
+---
+
+### STD-014 — SOURCED CONFIG, HONEST-UNSET (NEVER A FABRICATED DEFAULT)
+
+**Rule:** A per-tenant operational value the platform cannot legitimately KNOW (tax rate,
+locale, jurisdiction settings) is SUPPLIED DATA, never a hardcoded default. "Unset" must
+be a real, distinguishable state that surfaces honestly (redlined "not identified"), never
+silently coerced to one tenant's value. A `NOT NULL DEFAULT <one-tenant's-value>` on such
+a field is the anti-pattern.
+
+**Scar (2026-07-13):** `businesses.tax_rate` was `NOT NULL DEFAULT 0.0825` (TX = LAWNS's
+rate). Every tenant who never set it was silently given Texas's rate — and "chose 8.25%"
+was indistinguishable from "never set it." Compounded by a hardcoded "Tax (8.25%)" literal
+in the shared customer-facing email → every non-TX tenant's customer saw a wrong tax. Prior
+ancestor: the `VITE_TAX_RATE` decorative env var (STD-011). Fixed by moving the rate to
+`config.taxRate` jsonb where ABSENCE = "not identified" for free, forcing every tenant
+(incl. LAWNS) to honestly re-confirm; the owner enters their own rate (linked to the
+official jurisdiction locator — the platform never computes it).
+
+**In practice:**
+- Home the value where absence is expressible (jsonb key absent = unset), not a
+  NOT-NULL-defaulted column.
+- Capture it from the owner; where correctness depends on jurisdiction, link the owner to
+  the authoritative external source — never guess it for them.
+- Unset renders a LOUD redline ("not identified — set it in Settings"), never $0-as-fact,
+  never blank, never a fabricated number (this is D-9 omit-not-fake made explicit).
+
+**Relationship:** Descends from STD-011's `VITE_TAX_RATE` ancestor but carries a distinct
+lesson: STD-011 forbids DUPLICATING a value across representations; STD-014 forbids
+FABRICATING a default for a value the platform cannot know, and requires that "unset" be
+honest.
+
+**Scope:** Every per-tenant value the platform cannot compute from first principles —
+tax rate, locale, jurisdiction, regulatory settings.
+
+---
+
+### STD-015 — NO TENANT IDENTITY IN SHARED OR CUSTOMER-FACING CODE
+
+**Rule:** No specific tenant's brand, name, address, phone, email, or contact may be a
+literal in shared code or on a customer-facing surface. Tenant identity is threaded as a
+per-tenant, `business_id`-scoped data token; when a field is unresolvable, OMIT it (fall
+to platform default) — never substitute another tenant's value.
+
+**Scar (2026-07-13):** The shared notification templates were fully LAWNS-hardcoded —
+subject, body, SMS, footer chrome — so every non-LAWNS tenant's customer received an email
+branded "LAWNS Tree Farm." A prior checkout-UI sweep (register H1–H9) had cleared the
+visible surfaces but never scoped the notification templates. A full sweep then confirmed
+zero customer-facing tenant hardcodes remain and no cross-tenant DB read exists; the
+residue is bounded owner-UI placeholders. Fixed (ledger #116) by threading a
+`NotifyBusiness` token from the active business context, omit-not-fake on missing fields.
+
+**In practice:**
+- Tenant identity = a token resolved from the active `business_id`-scoped context, never a
+  literal in `packages/shared`.
+- Unresolvable field → omit (or platform default) — NEVER another tenant's value.
+- New hardcodes of this class are registered in `HARDCODED-REGISTER.md`; notification
+  templates are now in scope for that register.
+- Applies to EVERY customer-facing surface: email, SMS, invoice, QBO, receipt, opt-in copy.
+
+**Relationship:** Extends AC-1 (STD-006 — vertical-agnostic identifiers) and AC-3 (tenant
+isolation absolute) to the customer-facing RENDER layer: STD-006 forbids vertical NOUNS in
+shared schema/code; STD-015 forbids a specific TENANT's identity as a literal on any
+surface a customer sees.
+
+**Scope:** Every shared module and every customer-facing render path.
+
+---
+
+### STD-016 — ORDER EDITS RECOMPUTE THROUGH THE CANONICAL PRICING PATH
+
+**Rule:** Editing an existing order (qty, lines, services, delivery) recomputes the WHOLE
+money boundary through the same canonical pricing function a new order uses — tier, basis,
+taxability, tax, exemption — never a partial or off-seam recompute.
+
+**Scar (ongoing — ledger #107 / #114):** `submit.ts handleUpdate` (roster order edit)
+recomputed baseline `sell_price` only — not tier/basis-aware — and computed tax off-seam
+(`subtotal × taxRate` directly, bypassing `computeOrderPricing`). An edited tiered order
+could silently drop its discount or mis-tax. The gap has been carried across multiple
+builds; D-40 folds the off-seam tax back through the one computation.
+
+**In practice:**
+- The order-edit path calls the SAME `computeOrderPricing` as create — no separate math.
+- Re-resolve tier, taxability, and exemption on edit; preserve no stale line math.
+
+**Relationship:** This is STD-012 applied specifically to the edit path — the place it
+keeps regressing. It is kept as its own standard (rather than a clause of STD-012) so the
+ongoing, recurring `handleUpdate` regression carries its own roster line and its own
+ACTIVATE trigger (an order-edit build), which is what a repeatedly-recurring scar needs to
+be matched at STEP 0. (David may fold this into STD-012 as a clause if he prefers.)
+
+**Scope:** Every build touching order editing / update after creation.
+
+---
+
 ## ENFORCEMENT
 
 | Standard | Applies to | Gate type |
@@ -530,8 +682,14 @@ new sensitive column, RLS policy, or shared predicate.
 | STD-009 | Every AI generation path + every config field for channel/cadence/count | Config-read required; no hardcoded channel names or counts in generator |
 | STD-010 | Every file-accepting code path, every OCR/vision ingest, every storage write from user-supplied content | Content-type validation + size limit + per-tenant storage path + no raw-file trust |
 | STD-011 | Every fact read in more than one place (access/state booleans, tenant predicates, enum/status sets, driftable config values); every new sensitive column/policy/shared predicate | One canonical representation referenced everywhere; new column/policy re-deriving a fact instead of referencing its canonical form = INCOMPLETE |
-| BENCH-A, BENCH-C, BENCH-D | Every session (STEP 0 roster match against ACTIVATE WHEN triggers) | Catastrophic-class match → stop and ask David; hygiene-class match → apply and report |
+| STD-012 | Every build touching order pricing/discounts/tax on more than one surface | One server-authoritative pricing fn; interactive surfaces call it with the same inputs, read-only surfaces render its output — no surface re-derives |
+| STD-013 | Every build that lets a user reduce/zero/override a computed charge | Recorded reason + grantable named permission (server-enforced) + actor/timestamp logged; anon/public path refused and logged |
+| STD-014 | Every per-tenant value the platform cannot compute from first principles (tax rate, locale, jurisdiction) | Value sourced from data; absence expressible and honestly redlined; no `NOT NULL DEFAULT <one-tenant's-value>` |
+| STD-015 | Every shared module + every customer-facing render path (email/SMS/invoice/QBO/receipt/opt-in) | No tenant identity literal; identity threaded as a `business_id`-scoped token; unresolvable → omit, never another tenant's value |
+| STD-016 | Every build touching order editing/update after creation | Edit recomputes the whole money boundary through the same canonical pricing fn as create (tier/basis/tax/exemption) |
+| BENCH-A, BENCH-C, BENCH-D, BENCH-F | Every session (STEP 0 roster match against ACTIVATE WHEN triggers) | Catastrophic-class match → stop and ask David; hygiene-class match → apply and report |
 | BENCH-E | Any session that adds an external AI provider call that is user-facing | Apply try-chain pattern; provider 3 slot in comments; operator log on fallback; clean user error on all-fail |
+| BENCH-G | Any session adding/altering a compliance action whose history is auditable (tax exemption apply/remove, waiver, money-authority grant) | Hygiene: write the immutable event row alongside current-state columns; escalates to catastrophic (BENCH-F) if it touches an issued invoice |
 
 **Part 9 addition:** A `STANDARDS compliance` line is now required alongside the
 existing Step 13 AC check at session end. See CLAUDE.md Part 9, Step 14.
@@ -692,6 +850,64 @@ analysis features, AI generation paths that could surface provider errors to use
 
 ---
 
+### BENCH-F — INVOICE LIFECYCLE: SEQUENTIAL, IMMUTABLE, VOID-NOT-DELETE
+
+**ACTIVATE WHEN:** a build adds invoice editing after send, invoice deletion, invoice
+numbering, or a "correct/cancel an issued invoice" flow.
+**CLASS:** 🔴 CATASTROPHIC — stop and get David's go before proceeding.
+
+**Rule (when active):** Invoices carry gap-free per-tenant sequential numbers; a SENT
+invoice is immutable — corrections happen by VOID + credit-note + reissue, never by
+editing or deleting the original. Invoice state is an explicit lifecycle
+(draft → sent → paid → void), not an ad-hoc flag.
+
+**Territory (enterprise scar — not yet a TRACE scar):** Invoicing is a compliance surface.
+Editing or deleting a sent invoice, or non-sequential numbering, is an audit failure in
+every jurisdiction — a scar the whole industry has already bled for; we inherit the lesson
+without re-bleeding. TRACE computes and sends invoices (QBO push, confirmation) but does
+not yet enforce numbering immutability or a void/credit path — an order edit today
+recomputes in place (STD-016; ledger #107 / #114) rather than void-and-reissue.
+
+**In practice (when activated):**
+- Per-tenant sequential numbering, gaps disallowed; a voided number stays consumed.
+- Sent invoice is read-only; corrections = void + credit note + new invoice.
+- Explicit state machine; transitions logged.
+- Reconcile with the QBO boundary (D-37): TRACE originates the charge; the void/credit
+  must round-trip to QBO honestly.
+
+**Scope:** Any invoice generation, editing, numbering, or cancellation build.
+
+---
+
+### BENCH-G — IMMUTABLE AUDIT RECORD FOR COMPLIANCE-AFFECTING ACTIONS
+
+**ACTIVATE WHEN:** exemption/waiver volume becomes material, OR a build adds a compliance
+action whose HISTORY (not just current state) could be audited — removal of a standing
+exemption, retroactive waiver, changing an issued charge.
+**CLASS:** 🟡 HYGIENE — apply and report. (Escalates to catastrophic if it touches an
+already-issued invoice — then BENCH-F governs.)
+
+**Rule (when active):** A compliance-affecting event (tax exemption applied or REMOVED, a
+legal waiver, a permission grant on money authority) is recorded as an IMMUTABLE event row
+capturing who / when / why / evidence — not merely the current-state columns on the mutable
+parent record. Current-state columns show what IS; an audit needs what HAPPENED.
+
+**Territory:** The risk case is a REMOVED exemption — mutable columns on the order show the
+current state, not the event that a standing-exempt customer was un-exempted for one order.
+The `order_compliance_records` immutable-row pattern (the netting accept/decline precedent)
+is the proven shape. D-40 ships exemption on order columns for Level 1 (sufficient to render
++ attribute); the immutable record is the named hardening.
+
+**In practice (when activated):**
+- Append-only row per compliance event: `{ entity, action, reason, cert/evidence, actor,
+  timestamp }`, mirroring `order_compliance_records`.
+- The mutable parent still carries current state for rendering; the row carries history.
+
+**Scope:** Tax exemption, legal waivers, money-authority grants, any charge alteration
+whose history is auditable.
+
+---
+
 ## THUNDER INTELLIGENCE — match, flag, and propose
 
 Standards are not a static list Thunder obeys — they are a roster Thunder matches
@@ -744,6 +960,13 @@ a standard's application."
 | 1.7 | 2026-06-11 | BENCH-E added — EXTERNAL AI PROVIDER RESILIENCE (provider chain / graceful degradation). TRACE scar: `gemini-1.5-flash` deprecated mid-session → Google 404 → our own `res.status(502)` on every receipt OCR request until the model was updated. No fallback existed → feature was 100% dark on model deprecation. Fixed 2026-06-11: `ocr.ts` now uses `gemini-2.0-flash` (primary) + Claude Haiku 4.5 vision (fallback) + clean 503 all-fail. Rule: try-chain with isolated catches, one-failure-never-kills-chain, all-fail clean user error, operator-greppable fallback log, provider 3+ slot in comments. Hygiene-class: apply and report, no stop-and-ask. |
 | 1.8 | 2026-06-11 | BENCH-E Rule 7 added — MODEL NAMES ARE VALUES, NOT SOURCE CONSTANTS. Second scar added: `gemini-2.0-flash` deprecated 3 days after the first fix, again requiring a source-code edit + deploy cycle. Fix: model names externalized to `platform_config` table (Layer 1) → `OCR_PRIMARY_MODEL` env var (Layer 2) → hardcoded default (Layer 3, last resort). Model is now `gemini-2.5-flash` (validated in bake-off). A future deprecation = one DB row edit, no code change. |
 | 1.9 | 2026-06-22 | STD-011 added — ONE CANONICAL REPRESENTATION PER FACT. Origin: the membership-active RLS consistency sweep (`data/grower-scan/member-rls-consistency-audit.md`) found "active member" spelled 3 ways across policies, with one (`md_self`) omitting the active filter entirely → a revoked member kept self-device access (live leak). Same disease as the `VITE_TAX_RATE` decorative env var, split model ids, and `unit_cost` dual-meaning. Rule: a single-meaning fact has exactly ONE canonical representation (one column/enum/predicate/helper) referenced everywhere, never re-derived. Promotes AC-4 to a data-integrity invariant with a security consequence; a consistency sweep is a recognized correctness-hardening tool. Open item recorded: owner-only operational tables have no member policy → Staff RLS-blocked despite perms (a product decision, next hardening item). |
+| 2.0 | 2026-07-13 | STD-012 added — SERVER-AUTHORITATIVE PRICING, ONE COMPUTATION. Scar (2026-07-10): the Review page ran its own pricing (`Σ raw sell_price`, tier never applied) → $124/ea, $3539.78 while submit/QBO applied the tier at $115.20/ea, $3418.54 — ~$121 hidden in a Review that looked fine; recurred (`orderTier` null on CustomerCapture → retail). Fixed by `computeOrderPricing` as the single shared fn (D-39) + client resolving the tier from the same authoritative inputs (E1). Extends STD-011 to a computed output. |
+| 2.0 | 2026-07-13 | STD-013 added — MONEY-AFFECTING OVERRIDES ARE REASON-CODED, GATED, AND LOGGED. Territory/scar (2026-07-13): tax exemption forced it open — zeroing/reducing a charge requires a recorded reason + grantable named permission (server-enforced) + actor/timestamp; a $0 with no reason is indistinguishable from a mistake or fraud; the anon/public path can never self-apply (server ignores + logs). Same shape governs the discount + placement-price overrides. |
+| 2.0 | 2026-07-13 | STD-014 added — SOURCED CONFIG, HONEST-UNSET (NEVER A FABRICATED DEFAULT). Scar (2026-07-13): `businesses.tax_rate` was `NOT NULL DEFAULT 0.0825` (TX/LAWNS) → every unset tenant silently given Texas's rate; "chose 8.25%" indistinguishable from "never set it"; compounded by a hardcoded "Tax (8.25%)" email literal. Ancestor: the `VITE_TAX_RATE` decorative env var (STD-011). Fixed by `config.taxRate` jsonb (absence = "not identified"); owner enters own rate, platform never computes it. |
+| 2.0 | 2026-07-13 | STD-015 added — NO TENANT IDENTITY IN SHARED OR CUSTOMER-FACING CODE. Scar (2026-07-13): the shared notification templates were fully LAWNS-hardcoded (subject/body/SMS/footer) → every non-LAWNS tenant's customer emailed "LAWNS Tree Farm"; the checkout-UI sweep (H1–H9) missed the templates. Fixed (ledger #116) by a `NotifyBusiness` token from the active business context, omit-not-fake. Extends AC-1/STD-006 + AC-3 to the customer-facing render layer. |
+| 2.0 | 2026-07-13 | STD-016 added — ORDER EDITS RECOMPUTE THROUGH THE CANONICAL PRICING PATH. Scar (ongoing, ledger #107 / #114): `submit.ts handleUpdate` recomputed baseline `sell_price` only (not tier/basis-aware) and computed tax off-seam (`subtotal × taxRate`, bypassing `computeOrderPricing`) → an edited tiered order could silently drop its discount or mis-tax; D-40 folds the off-seam tax back through the one computation. STD-012 applied to the edit path (kept as its own roster line for the recurring regression). |
+| 2.0 | 2026-07-13 | BENCH-F added — INVOICE LIFECYCLE: SEQUENTIAL, IMMUTABLE, VOID-NOT-DELETE (🔴 catastrophic). Territory (enterprise scar): editing/deleting a sent invoice or non-sequential numbering is an audit failure in every jurisdiction; TRACE sends invoices (QBO/confirmation) but doesn't yet enforce numbering immutability or a void/credit path (order edits recompute in place today — STD-016). ACTIVATE WHEN a build adds invoice editing-after-send, deletion, numbering, or an issue-cancel flow. |
+| 2.0 | 2026-07-13 | BENCH-G added — IMMUTABLE AUDIT RECORD FOR COMPLIANCE-AFFECTING ACTIONS (🟡 hygiene; escalates to catastrophic on an issued invoice → BENCH-F). Territory: the risk case is a REMOVED exemption — mutable columns show current state, not the event; `order_compliance_records` (netting precedent) is the proven immutable-row shape. D-40 ships exemption on order columns for Level 1; the immutable record is the named hardening. ACTIVATE WHEN exemption/waiver volume is material or a build adds an auditable-history compliance action. |
 
 ---
 
