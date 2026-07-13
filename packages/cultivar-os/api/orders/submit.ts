@@ -361,13 +361,19 @@ async function handleCreate(req: any, res: any) {
     }));
     const otherTotal = otherResults.reduce((sum: number, x: any) => sum + x.res.amount, 0);
 
-    // Override columns for a selection row (only when honored). override_by = the acting user's
-    // auth.uid (server-resolved). Gated migration 20260708 adds these columns — insert falls back
-    // without them if absent (deploy-window-safe, below).
+    // Override columns for a selection row. `is_manual_override` is set on EVERY row — true on the
+    // overridden line, FALSE on the others — never omitted. WHY: order_service_selections is inserted
+    // as a BATCH; PostgREST unions the column set across the batch, so if ANY row carries
+    // is_manual_override the rows that omit it are inserted with an explicit NULL (the column's
+    // `DEFAULT false` only applies when the column is absent from the WHOLE batch). Omitting it on
+    // non-override rows therefore violated the NOT NULL constraint the moment an order had one
+    // override (a pure non-override order omitted it on every row → default applied → no error; that's
+    // why it stayed latent). Setting it false here keeps the per-row override signal truthful AND
+    // gives every batch row the column. override_by = the acting user's auth.uid (server-resolved).
     const overrideCols = (res: SvcResult | null): Record<string, unknown> =>
       res?.isOverride
         ? { is_manual_override: true, original_price: res.original, price_leakage: res.leakage, override_by: overrideBy, override_reason: res.reason }
-        : {};
+        : { is_manual_override: false };
 
     console.log('[TRACE:CART] netting applied (server)', {
       itemCount, transportQty: selectedTransport ? qtyFor(selectedTransport) : 0,
@@ -552,6 +558,12 @@ async function handleCreate(req: any, res: any) {
       // strip the override fields and retry (deploy-window-safe — the order still lands, the
       // give-away is dropped and re-enabled once the columns exist).
       const OVERRIDE_KEYS = ['is_manual_override', 'original_price', 'price_leakage', 'override_by', 'override_reason'];
+      // [TRACE:LEAKAGE] per-row override flag on the write — every row carries is_manual_override
+      // (true on the overridden line, false elsewhere) so the batch can't NULL-violate. STD-003 ON.
+      console.log('[TRACE:LEAKAGE] service-selection write — per-row is_manual_override', {
+        rows: selectionRows.map((r: any) => ({ service_offering_id: r.service_offering_id, is_manual_override: r.is_manual_override === true, subtotal: r.subtotal })),
+        overrides: selectionRows.filter((r: any) => r.is_manual_override === true).length,
+      });
       let selErr: any;
       ({ error: selErr } = await db.from('order_service_selections').insert(selectionRows));
       if (selErr && (selErr.code === '42703' || selErr.code === 'PGRST204')) {
