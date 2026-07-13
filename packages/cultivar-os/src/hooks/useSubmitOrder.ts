@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { sendSilently } from '@trace/shared/notifications';
+import type { NotifyBusiness } from '@trace/shared/notifications';
 import { supabase } from '../lib/supabase';
 import type { ServiceSelection } from '../types/order';
 import type { ServiceOffering } from '../types/plant';
@@ -40,6 +41,10 @@ export interface SubmitPayload {
   serviceOverrides?: Record<string, { amount: number; reason: string }>;
   deliveryDate?:     string | null;   // owner/manager-entered delivery date (ISO 'YYYY-MM-DD')
   businessId:        string;
+  // AC-1: the ACTIVE business identity (name/address/phone/email), threaded into the customer-facing
+  // confirmation notification so the email renders the true tenant — never a hardcoded brand. Resolved
+  // from the business_id-scoped context at the call site (CartReview). Omitted → the template omits it.
+  business?:         NotifyBusiness;
 }
 
 export interface OrderResult {
@@ -66,7 +71,7 @@ export function useSubmitOrder() {
     try {
       const {
         customer, customerId, invokedTier, lines, services, selectedTransport, plantingOffering, plantingSelected,
-        nettingDeclined, serviceQuantities, serviceOverrides, deliveryDate, businessId,
+        nettingDeclined, serviceQuantities, serviceOverrides, deliveryDate, businessId, business,
       } = payload;
 
       // Attach the caller's Bearer token when a session exists so the server can VERIFY an
@@ -151,6 +156,7 @@ export function useSubmitOrder() {
           emailOptIn: customer.marketing_opt_in ?? true,
         },
         data: {
+          business,   // AC-1: active tenant identity → the email renders the true business, not a literal
           customerName:  `${customer.first_name} ${customer.last_name}`,
           invoiceNumber,
           plantName:     plantLabel,

@@ -232,6 +232,10 @@ export function CartReview() {
         serviceOverrides,
         deliveryDate,
         businessId: items[0].plant.business_id,
+        // AC-1: pass the ACTIVE business identity (business_id-scoped context) so the confirmation
+        // email renders the true tenant, never a hardcoded brand. Omit-not-fake: undefined when
+        // context is unresolved → the template renders nothing rather than a wrong/placeholder name.
+        business: business ? { name: business.name, address: business.address, phone: business.phone, email: business.email } : undefined,
       });
       navigate('/checkout/confirm', {
         state: {

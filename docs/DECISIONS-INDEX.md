@@ -54,6 +54,15 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-13 · cultivar notification templates de-hardcoded — pure AC-1 correction, no new decision):** No drift.
+> The shared cultivar notification templates (cultivar.ts) were fully LAWNS-hardcoded on a customer-facing surface (a
+> confirmation email for "Test Dave's Tree Nest" read "Your LAWNS Tree Farm order is confirmed"). Fixed by genericizing
+> the whole file to a NotifyBusiness active-business token (name/address/phone/email) via a chrome() helper; the caller
+> (useSubmitOrder/CartReview) threads the business_id-scoped useBusinessContext().business; omit-not-fake rendering.
+> Abided **AC-1** (no tenant literal remains in the shared module — this IS the correction), **AC-3** (identity from the
+> active business_id-scoped context only), **[[D-9]]** (omit-not-fake, never a placeholder/wrong name). No decision, no
+> schema/migration/api change (12/12). Register H12-H17 CLEARED — notification templates now in register scope. Ledger #116.
+>
 > ✅ **Drift watch (2026-07-13 · service price-override write-constraint 500 fix — no decision touched):** No drift.
 > Pure bug fix: submit 500'd on a manual service price override (order_service_selections.is_manual_override NOT-NULL
 > violation) because overrideCols omitted the flag on non-override rows and PostgREST batch-insert NULLed them. Fixed by
