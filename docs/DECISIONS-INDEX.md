@@ -4,7 +4,15 @@
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.
 
-**Last updated:** 2026-07-10 (DISCOUNT LINE SCOPE recorded as D-39 + BUILT: the customer tier discount applies to
+**Last updated:** 2026-07-13 (D-39 REVIEW-SURFACE FIX + show-the-work display — implements D-39, NO new decision. The
+Review page was computing with a 0% tier because the `orderTier` client snapshot was null on the CustomerCapture
+checkout path → discount not applied → $1,646.48 vs QBO's correct $1,495.37. FIX (E1): Review now resolves the tier the
+SAME way submit does — `invokedTier ?? customer.price_tier` against the fetched config (authoritative), with the
+customer's `price_tier` carried on the client (attach OR a business-scoped email lookup in CustomerCapture, mirroring
+submit's dedup); `orderTier` is a fast-path only. FIX (E2): submit RETURNS its authoritative per-line breakdown (no new
+endpoint) and Confirmation renders THAT. Grouped display on both surfaces: retail lines → ONE discount line on the goods
+subtotal → goods-after → services (not discounted) → discounted subtotal → tax → total. Industry-standard basis (§6 r16).
+Ledger row #114. ZERO migration/api-fn (12/12). PRIOR: DISCOUNT LINE SCOPE recorded as D-39 + BUILT: the customer tier discount applies to
 GOODS/inventory lines ONLY — service/labor lines are NEVER discounted; tax on the discounted subtotal; Review,
 submit/QBO, and Confirmation all render from ONE shared `computeOrderPricing` (closes the Review-vs-QBO price
 divergence) + show the work per line. Home: docs/decisions/2026-07-10-discount-line-scope.md. Ledger row #113.
@@ -46,6 +54,20 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-13 · D-39 Review-surface fix + show-the-work — implements D-39, no new decision):** No drift.
+> The D-39 owner-prove FAILED on the Review surface (Review $1,646.48, discount not applied) even though QBO/submit were
+> correct ($1,495.37). ROOT CAUSE: Review's tier came from the fragile `orderTier` client snapshot, which was null when
+> the customer was entered at CustomerCapture → `RETAIL_FLOOR` → 0%. FIX (E1): Review resolves the tier the SAME way
+> submit does — `invokedTier ?? customer.price_tier` against the fetched pricing config (authoritative), the customer's
+> `price_tier` carried on the client (ScanOrder attach OR a business-scoped email lookup in CustomerCapture); `orderTier`
+> is a fast-path only. FIX (E2): submit returns its authoritative per-line breakdown (rides the existing response — no new
+> endpoint); Confirmation renders THAT (receipt === QBO by construction). GROUPED display on both surfaces (retail lines →
+> ONE labeled discount line on the goods subtotal → goods-after → services "not discounted" → discounted subtotal → tax →
+> total). Industry-standard basis recorded (**§6 r16**: server = single pricing authority; standard invoice/receipt
+> presentation). Abided **[[D-39]]** (goods-only, tax on discounted subtotal, one shared computeOrderPricing), **AC-1**
+> (generic goods/service), **AC-3**, **AC-4** (one authoritative resolution, both surfaces). ZERO migration, ZERO new
+> api-fn (12/12). Home: `docs/specs/discount-show-the-work-presentation.md`. Ledger row #114.
+>
 > ✅ **Drift watch (2026-07-10 · DISCOUNT LINE SCOPE recorded as D-39 + built):** No drift — abided by **[[D-35]]**
 > (tier math = % off the stored sell_price), **[[D-37]]** / **[[D-38]]** (unchanged). Decides + builds: the customer tier
 > discount applies to **GOODS/inventory lines ONLY** — service/labor lines (placement, delivery, netting, add-ons) are

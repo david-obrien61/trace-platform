@@ -5,7 +5,18 @@ import type { ServiceSelection } from '../types/order';
 import type { ServiceOffering } from '../types/plant';
 import type { CustomerInput } from '../types/customer';
 import type { Plant } from '../types/plant';
+import type { PricedLine } from '@trace/shared/business-logic';
 import { nettedQuantity, lineSubtotal, totalPlantCount, isNettingOffering } from '../lib/netting';
+
+// D-39: the server-authoritative per-line breakdown returned by submit — the Confirmation receipt
+// renders THIS (not the client Review preview), so Confirmation === QBO and the discount is visible.
+export interface OrderBreakdown {
+  lines:               PricedLine[];
+  goodsRetailSubtotal: number;
+  discountTotal:       number;
+  discountedSubtotal:  number;
+  discountLabel:       string | null;
+}
 
 export interface SubmitPayload {
   customer:          CustomerInput;
@@ -41,6 +52,7 @@ export interface OrderResult {
   qbInvoiceNumber?: string;
   qbInvoiceUrl?:   string;
   qbStatus:        'success' | 'pending';
+  breakdown?:      OrderBreakdown;   // D-39: server-authoritative per-line breakdown for the receipt
 }
 
 export function useSubmitOrder() {
@@ -78,7 +90,7 @@ export function useSubmitOrder() {
         throw new Error(body.error || `Order submission failed (${res.status})`);
       }
 
-      const { orderId, invoiceNumber, total, subtotal, taxAmount } = await res.json();
+      const { orderId, invoiceNumber, total, subtotal, taxAmount, breakdown } = await res.json();
 
       // ── QB invoice — non-blocking ────────────────────────────────────────
       let qbInvoiceId: string | undefined;
@@ -158,7 +170,7 @@ export function useSubmitOrder() {
         tenantId: businessId,
       });
 
-      return { orderId, invoiceNumber, total, subtotal, taxAmount, qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus };
+      return { orderId, invoiceNumber, total, subtotal, taxAmount, qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus, breakdown };
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Submission failed';
