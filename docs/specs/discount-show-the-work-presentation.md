@@ -1,6 +1,6 @@
 # SPEC — Discount "show the work" presentation (Review + Confirmation)
 
-**Date:** 2026-07-10 · **Status:** ✅ BUILT (2026-07-13, build `__BUILD__` → merge `__MERGE__`) — implements D-39 on
+**Date:** 2026-07-10 · **Status:** ✅ BUILT (2026-07-13, build `8f53698` → merge `cf7a97b`) — implements D-39 on
 the Review surface + the grouped display on both. Owner-proof owed (David's live 8×-Vitex prove-out).
 **Scope:** the checkout Review page + the Confirmation receipt. **Decision:** D-39 (goods-only discount, one shared
 computation). **Follows:** the owner-prove of ledger #113 on main (merge `f2f0e4b`) — the money bar FAILED on the
