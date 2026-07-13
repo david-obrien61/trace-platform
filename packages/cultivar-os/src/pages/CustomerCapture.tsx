@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
 import { useBusinessContext } from '@trace/shared/context';
+import { supabase } from '../lib/supabase';
 import type { CustomerInput } from '../types/customer';
 
 const TRACE_DELIVERY = true; // [TRACE:DELIVERY] STD-003 — on until OWNER-PROVEN
@@ -74,7 +75,7 @@ export function CustomerCapture() {
     setCustomer, customer: saved, items, selectedTransport,
     deliveryDate: savedDeliveryDate, setDeliveryDate,
   } = useCart();
-  const { isOwner, role, business } = useBusinessContext();
+  const { isOwner, role, business, businessId } = useBusinessContext();
   const firstItem = items[0] ?? null;
 
   const [firstName, setFirstName] = useState(saved?.first_name ?? '');
@@ -110,7 +111,7 @@ export function CustomerCapture() {
   const hasErrors    = !firstName.trim() || !lastName.trim() || !isValidEmail(email)
                      || (deliveryRequired && (!address.trim() || !phoneValid));
 
-  function handleSubmit() {
+  async function handleSubmit() {
     setTouched(true);
     if (hasErrors) {
       if (TRACE_DELIVERY && deliveryRequired) {
@@ -122,18 +123,45 @@ export function CustomerCapture() {
       return;
     }
 
+    const emailLower = email.trim().toLowerCase();
+
+    // D-39: resolve the customer's STORED pricing tier the way submit does (authoritative
+    // identity→tier), so the Review preview shows the SAME discount that will be charged — closing
+    // the "customer entered here → Review shows no discount" gap. Prefer the tier already carried by
+    // an attached customer (ScanOrder) when the email is unchanged; otherwise look it up by email
+    // (business-scoped, mirrors submit's dedup). On the anon QR path (no customer read) this yields
+    // no tier → retail; submit remains the final, tamper-defended authority for the charge.
+    let priceTier: string | null =
+      (saved?.email && saved.email.toLowerCase() === emailLower) ? (saved.price_tier ?? null) : null;
+    try {
+      if (businessId && emailLower) {
+        const { data } = await supabase
+          .from('customers')
+          .select('price_tier')
+          .eq('business_id', businessId)
+          .eq('email', emailLower)
+          .limit(1)
+          .maybeSingle();
+        if (data?.price_tier != null) priceTier = data.price_tier as string;
+      }
+    } catch {
+      console.log('[TRACE:PRICE] CustomerCapture tier lookup skipped (no customer read / anon path)', { email: emailLower });
+    }
+
     const c: CustomerInput = {
       first_name:      firstName.trim(),
       last_name:       lastName.trim(),
-      email:           email.trim().toLowerCase(),
+      email:           emailLower,
       phone:           phone.replace(/\D/g, '').length === 10 ? phone : undefined,
       address_line1:   address.trim() || undefined,
       city:            city.trim() || undefined,
       state:           state.trim() || 'TX',
       zip:             zip.trim() || undefined,
       marketing_opt_in: optIn,
+      price_tier:      priceTier,
     };
 
+    console.log('[TRACE:PRICE] customer finalized — stored tier resolved for Review preview', { email: emailLower, priceTier });
     setCustomer(c);
     setDeliveryDate(showDeliveryDate ? (delivDate || null) : null);
     navigate('/checkout/review');
@@ -312,7 +340,7 @@ export function CustomerCapture() {
         <button
           className="btn btn-primary"
           style={{ minHeight: 56 }}
-          onClick={handleSubmit}
+          onClick={() => { void handleSubmit(); }}
         >
           Review my order
         </button>

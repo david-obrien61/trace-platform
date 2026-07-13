@@ -26,4 +26,9 @@ export interface CustomerInput {
   state?: string;
   zip?: string;
   marketing_opt_in?: boolean;
+  // The customer's stored pricing tier NAME (D-39). Carried so the Review preview can resolve the
+  // discount the SAME way submit does (authoritative resolution, not the fragile orderTier snapshot).
+  // Set from an attached customer (ScanOrder) or an email lookup (CustomerCapture). Undefined/null →
+  // no stored tier → retail. Never authoritative for the CHARGE — submit re-resolves server-side.
+  price_tier?: string | null;
 }

@@ -84,6 +84,7 @@ function customerToInput(r: CustomerHit): CustomerInput {
     city:          r.city ?? undefined,
     state:         r.state ?? undefined,
     zip:           r.zip ?? undefined,
+    price_tier:    r.price_tier ?? null, // D-39: carry the stored tier so Review resolves the same discount submit charges
   };
 }
 

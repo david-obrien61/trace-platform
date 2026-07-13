@@ -633,7 +633,26 @@ async function handleCreate(req: any, res: any) {
       }
     }
 
-    res.json({ orderId, invoiceNumber, total, subtotal, taxAmount, pricingNotes });
+    // D-39: return the AUTHORITATIVE per-line breakdown so the Confirmation receipt renders the
+    // server's numbers (not the client Review preview) — Confirmation === QBO by construction, and
+    // the discount is a visible line. No new endpoint (rides this existing response).
+    const discountLabel = pricing.discountTotal > 0
+      ? (resolvedTier.basis === 'at_cost' ? `${resolvedTier.name} — at cost` : `${resolvedTier.name} — ${resolvedTier.discountPercent}% off`)
+      : null;
+    const breakdown = {
+      lines: pricing.lines,
+      goodsRetailSubtotal: pricing.goodsRetailSubtotal,
+      discountTotal: pricing.discountTotal,
+      discountedSubtotal: pricing.discountedSubtotal,
+      discountLabel,
+    };
+    console.log('[TRACE:PRICE] order priced — grouped breakdown (authoritative)', {
+      tier: resolvedTier.name, basis: resolvedTier.basis, discountPercent: resolvedTier.discountPercent,
+      goodsRetailSubtotal: pricing.goodsRetailSubtotal, discountTotal: pricing.discountTotal,
+      goodsAfterDiscount: round2(pricing.goodsRetailSubtotal - pricing.discountTotal),
+      discountedSubtotal: subtotal, tax: taxAmount, total,
+    });
+    res.json({ orderId, invoiceNumber, total, subtotal, taxAmount, pricingNotes, breakdown });
 
   } catch (err: any) {
     console.error('[orders/submit]', err.message);

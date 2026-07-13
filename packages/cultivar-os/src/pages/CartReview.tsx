@@ -4,7 +4,11 @@ import { Minus, Plus, X } from 'lucide-react';
 import { useCart } from '../hooks/useCart';
 import { useSubmitOrder } from '../hooks/useSubmitOrder';
 import { useBusinessContext } from '@trace/shared/context';
-import { computeOrderPricing, RETAIL_FLOOR, type PricingLineInput } from '@trace/shared/business-logic';
+import {
+  computeOrderPricing, RETAIL_FLOOR, resolveTier, readPricingConfig, normalizeDiscountTypes,
+  type PricingLineInput, type DiscountType,
+} from '@trace/shared/business-logic';
+import { supabase } from '../lib/supabase';
 import { TAX_RATE } from '../lib/constants';
 import { anchorKey } from '../lib/stockLinePlant';
 import {
@@ -23,8 +27,22 @@ export function CartReview() {
     setLineQty, removeLine, toggleService, setNettingDeclined, setPlantingSelected,
   } = useCart();
   const { submit, submitting, error: submitError } = useSubmitOrder();
-  const { business, isOwner, can } = useBusinessContext();
+  const { business, businessId, isOwner, can } = useBusinessContext();
   const [payOnline, setPayOnline] = useState<boolean | null>(null);
+
+  // D-39 (E1) — the AUTHORITATIVE tier resolution for the Review preview. Load the business's
+  // discount config and resolve the SAME inputs submit uses (invokedTier ?? the customer's stored
+  // price_tier), NOT the fragile orderTier snapshot. null = still loading (fast-path below).
+  const [discountTypes, setDiscountTypes] = useState<DiscountType[] | null>(null);
+  useEffect(() => {
+    const bid = businessId ?? items[0]?.plant.business_id;
+    if (!bid) return;
+    void (async () => {
+      const { data } = await readPricingConfig(supabase, bid);
+      setDiscountTypes(normalizeDiscountTypes((data?.config ?? {}) as Record<string, unknown>));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessId]);
 
   // Owner overrides for a service's netted quantity (review-only refinement; default = the
   // attach rule's netted value). Keyed by offering id. Surface-not-silent: the rule computes
@@ -113,9 +131,15 @@ export function CartReview() {
   // ── D-39: ONE pricing computation (the same shared fn submit.ts runs) ────────────────
   // Tier discounts GOODS lines only; SERVICE lines pass through at full price (an owner override
   // is leakage, fed as overrideTotal — never a tier discount); tax on the DISCOUNTED subtotal.
-  // orderTier is the tier RESOLVED at attach (ScanOrder); submit re-resolves server-side (tamper
-  // defense). Because both call computeOrderPricing over the same inputs, Review === submit === QBO.
-  const resolvedTier = orderTier ?? RETAIL_FLOOR;
+  // E1 — resolve the tier the SAME way submit does (authoritative): invokedTier ?? the customer's
+  // stored price_tier, resolved against the fetched config. orderTier is ONLY a fast-path while the
+  // config loads (avoids a retail flash), NEVER the sole source — that's what left Review at 0% when
+  // the customer was entered at CustomerCapture. Once config is loaded the authoritative resolution
+  // governs, so Review === submit === QBO regardless of how the customer was attached.
+  const effectiveTierName = invokedTier ?? customer?.price_tier ?? null;
+  const resolvedTier = discountTypes !== null
+    ? resolveTier(effectiveTierName, discountTypes)
+    : (orderTier ?? RETAIL_FLOOR);
   const goodsInputs: PricingLineInput[] = items.map(l => ({
     kind: 'goods',
     name: l.plant.common_name ?? l.plant.species ?? 'item',
@@ -139,13 +163,16 @@ export function CartReview() {
   const taxAmount = pricing.tax;
   const total     = pricing.total;
 
-  // [TRACE:PRICE] — the full per-line breakdown on the Review render path (D-39). STD-003, on
-  // until OWNER-PROVEN. Proves Review computes what submit charges (goods discounted, services not).
-  if (TRACE_CART) console.log('[TRACE:PRICE] review pricing (computeOrderPricing)', {
+  // [TRACE:PRICE] — the grouped breakdown on the Review render path (D-39). STD-003, on until
+  // OWNER-PROVEN. `resolvedFrom` proves the tier came from the AUTHORITATIVE resolution (config
+  // loaded), not the orderTier fast-path — so a 0% here means a genuine retail customer, not a miss.
+  if (TRACE_CART) console.log('[TRACE:PRICE] review pricing — grouped (computeOrderPricing)', {
     tier: resolvedTier.name, basis: resolvedTier.basis, discountPercent: resolvedTier.discountPercent,
-    lines: pricing.lines.map(p => ({ kind: p.kind, name: p.name, retailUnit: p.retailUnit, qty: p.qty, retailTotal: p.retailTotal, discountPct: p.discountPct, discountAmt: p.discountAmt, netTotal: p.netTotal })),
+    resolvedFrom: discountTypes !== null ? `authoritative(${invokedTier ? 'invokedTier' : (customer?.price_tier ? 'customer.price_tier' : 'retail')})` : 'fast-path(orderTier)',
     goodsRetailSubtotal: pricing.goodsRetailSubtotal, discountTotal: pricing.discountTotal,
+    goodsAfterDiscount: Math.round((pricing.goodsRetailSubtotal - pricing.discountTotal) * 100) / 100,
     discountedSubtotal: subtotal, tax: taxAmount, total,
+    lines: pricing.lines.map(p => ({ kind: p.kind, name: p.name, retailTotal: p.retailTotal, discountAmt: p.discountAmt, netTotal: p.netTotal })),
   });
 
   function setQty(o: ServiceOffering, qty: number) {
@@ -218,9 +245,9 @@ export function CartReview() {
           transportMode:   selectedTransport?.transport_mode ?? 'self',
           transportName:   selectedTransport?.name ?? null,
           serviceLines,
-          // D-39: the per-goods-line breakdown (retail → discount → net) so the receipt shows the
-          // SAME work Review showed. Review === submit === QBO (one computeOrderPricing).
-          goodsBreakdown:  goodsPriced,
+          // D-39 (E2): the receipt renders the SERVER-AUTHORITATIVE breakdown returned by submit
+          // (not the Review client preview) → Confirmation === QBO by construction, discount visible.
+          breakdown:       result.breakdown ?? null,
           tierLabel:       orderTierLabel,
           businessName:    business?.name ?? null,
           nettingActive,
@@ -268,14 +295,14 @@ export function CartReview() {
           Plants
         </p>
 
+        {/* Grouped-only presentation (D-39): each goods line shows its FULL retail amount; the
+            discount is ONE labeled line on the goods subtotal below — never folded into a per-line
+            net (standard invoice/receipt convention, auditable). */}
         {items.map((l, i) => {
           const key = anchorKey(l.plant);
           const gp = goodsPriced[i];
           const price = gp?.retailUnit ?? sellPriceOf(i);
-          // Show the work (D-39): when the tier actually came off this goods line, spell out
-          // retail × qty → discount → net, so the owner SEES the discount rather than a bare total.
-          const showWork = !!gp && gp.discountAmt > 0;
-          const lineTotal = gp?.netTotal ?? price * l.quantity;
+          const retailTotal = gp?.retailTotal ?? price * l.quantity;
           return (
             <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -284,19 +311,12 @@ export function CartReview() {
                 </p>
                 <p style={{ fontSize: '0.75rem', color: price <= 0 ? '#A32D2D' : '#6b7280', margin: '2px 0 0' }}>
                   {l.plant.current_container ? `${l.plant.current_container} · ` : ''}
-                  {price > 0 ? `$${price.toFixed(2)} each` : 'No price set'}
+                  {price > 0 ? `${l.quantity} × $${price.toFixed(2)}` : 'No price set'}
                 </p>
-                {showWork && gp && (
-                  <p style={{ fontSize: '0.75rem', color: '#27500A', margin: '3px 0 0', lineHeight: 1.5 }}>
-                    Retail ${gp.retailUnit.toFixed(2)} × {gp.qty} = ${gp.retailTotal.toFixed(2)}
-                    {' · '}{resolvedTier.name} {gp.basis === 'at_cost' ? 'at cost' : `${gp.discountPct}% off`} −${gp.discountAmt.toFixed(2)}
-                    {' · '}<strong>Net ${gp.netTotal.toFixed(2)}</strong>
-                  </p>
-                )}
               </div>
               <Stepper value={l.quantity} onChange={q => setLineQty(key, q)} min={1} />
-              <span style={{ width: 68, textAlign: 'right', fontWeight: 600, fontSize: '0.9375rem', color: '#374151' }}>
-                ${lineTotal.toFixed(2)}
+              <span style={{ width: 74, textAlign: 'right', fontWeight: 600, fontSize: '0.9375rem', color: '#374151' }}>
+                ${retailTotal.toFixed(2)}
               </span>
               {items.length > 1 && (
                 <button onClick={() => removeLine(key)} aria-label="Remove" style={iconBtn}>
@@ -306,6 +326,25 @@ export function CartReview() {
             </div>
           );
         })}
+
+        {/* Goods subtotal → discount line → goods after (only when a discount actually applies;
+            a retail-tier customer sees none of this scaffolding — the floor case stays clean). */}
+        {pricing.discountTotal > 0 && (
+          <div style={{ borderTop: '1px solid #f3f4f6', marginTop: 4, paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#6b7280' }}>
+              <span>Goods subtotal (retail)</span>
+              <span>${pricing.goodsRetailSubtotal.toFixed(2)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#27500A', fontWeight: 600 }}>
+              <span>{resolvedTier.name} {resolvedTier.basis === 'at_cost' ? '— at cost' : `— ${resolvedTier.discountPercent}% off`}</span>
+              <span>−${pricing.discountTotal.toFixed(2)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#374151', fontWeight: 600 }}>
+              <span>Goods after discount</span>
+              <span>${(pricing.goodsRetailSubtotal - pricing.discountTotal).toFixed(2)}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Services — netted proposal, editable */}
@@ -314,7 +353,7 @@ export function CartReview() {
           fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af',
           textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12,
         }}>
-          Services
+          Services <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500, color: '#b0b7c0' }}>· not discounted</span>
         </p>
 
         {/* Transport */}
@@ -327,7 +366,6 @@ export function CartReview() {
             qty={effQty(selectedTransport)}
             onQty={selectedTransport.price_type === 'per_unit' ? (q => setQty(selectedTransport, q)) : undefined}
             included
-            noDiscount
             canOverride={canOverride}
             baseline={transportComputed}
             override={serviceOverride[selectedTransport.id]}
@@ -346,7 +384,6 @@ export function CartReview() {
               qty={effQty(plantingOffering)}
               onQty={q => setQty(plantingOffering, q)}
               included
-              noDiscount
               onToggle={() => setPlantingSelected(false)}
               canOverride={canOverride}
               baseline={plantingComputed}
@@ -374,7 +411,6 @@ export function CartReview() {
               qty={effQty(nettingSel.offering)}
               onQty={q => setQty(nettingSel.offering, q)}
               included
-              noDiscount
               onToggle={() => { setNettingDeclined(true); }}
               canOverride={canOverride}
               baseline={nettingComputed}
@@ -408,7 +444,6 @@ export function CartReview() {
               qty={effQty(s.offering)}
               onQty={s.offering.price_type === 'per_unit' ? (q => setQty(s.offering, q)) : undefined}
               included
-              noDiscount
               onToggle={() => toggleService(s.offering.id)}
               canOverride={canOverride}
               baseline={computedAmt(s.offering)}
@@ -425,20 +460,9 @@ export function CartReview() {
           )
         ))}
 
-        {/* Totals — show the work (D-39): retail → discount → discounted subtotal → tax → total. */}
+        {/* Totals (D-39): the goods discount was already itemized in the PLANTS group above; here
+            it's discounted subtotal → tax on the discounted subtotal → total. */}
         <div style={{ borderTop: '1px solid #f3f4f6', marginTop: 8, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {pricing.discountTotal > 0 && (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#9ca3af' }}>
-                <span>Subtotal (retail)</span>
-                <span>${(subtotal + pricing.discountTotal).toFixed(2)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#27500A', fontWeight: 600 }}>
-                <span>{resolvedTier.name} discount (plants only)</span>
-                <span>−${pricing.discountTotal.toFixed(2)}</span>
-              </div>
-            </>
-          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#6b7280' }}>
             <span>{pricing.discountTotal > 0 ? 'Subtotal (after discount)' : 'Subtotal'}</span>
             <span>${subtotal.toFixed(2)}</span>

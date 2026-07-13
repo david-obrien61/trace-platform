@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
-import type { PricedLine } from '@trace/shared/business-logic';
+import type { OrderBreakdown } from '../hooks/useSubmitOrder';
 
 interface ConfirmState {
   orderId:          string;
@@ -13,7 +13,7 @@ interface ConfirmState {
   transportMode?:   'self' | 'staff';
   transportName?:   string | null;                     // real service_offerings.name (H3/H6)
   serviceLines?:    { name: string; amount: number }[]; // real service itemization (H3/H6)
-  goodsBreakdown?:  PricedLine[];                       // D-39: per-goods-line retail→discount→net
+  breakdown?:       OrderBreakdown | null;              // D-39 (E2): SERVER-AUTHORITATIVE per-line breakdown
   tierLabel?:       string | null;                     // the order's tier badge (display)
   businessName?:    string | null;                     // from context at review (AC-1)
   nettingActive?:   boolean;
@@ -65,11 +65,17 @@ export function Confirmation() {
   }
 
   const { invoiceNumber, total, subtotal, taxAmount, email, payOnline,
-          transportMode, transportName, serviceLines, goodsBreakdown, tierLabel,
+          transportMode, transportName, serviceLines, breakdown, tierLabel,
           businessName, nettingActive,
           qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus } = state;
-  const hasBreakdown = !!goodsBreakdown && goodsBreakdown.length > 0;
-  const orderDiscount = hasBreakdown ? goodsBreakdown!.reduce((s, g) => s + g.discountAmt, 0) : 0;
+  // D-39 (E2): render the SERVER-AUTHORITATIVE breakdown (goods retail lines → discount line → net),
+  // not the client preview → the receipt equals QBO and the discount is a visible line.
+  const goodsLines    = (breakdown?.lines ?? []).filter(l => l.kind === 'goods');
+  const svcFromBreak  = (breakdown?.lines ?? []).filter(l => l.kind === 'service' && l.netTotal > 0);
+  const hasBreakdown  = goodsLines.length > 0;
+  const orderDiscount = breakdown?.discountTotal ?? 0;
+  const goodsRetail   = breakdown?.goodsRetailSubtotal ?? 0;
+  const discountLabel = breakdown?.discountLabel ?? (tierLabel ? tierLabel.split(' · ')[0] : 'Discount');
 
   const isSelf      = (transportMode ?? 'self') === 'self';
   const nettingOn   = !!nettingActive;
@@ -138,27 +144,19 @@ export function Confirmation() {
         )}
       </div>
 
-      {/* Order detail */}
+      {/* Order detail — grouped-only (D-39): goods at FULL retail → ONE discount line → goods after,
+          then services (not discounted), then discounted subtotal → tax → total. Rendered from the
+          SERVER-AUTHORITATIVE breakdown so the receipt equals QuickBooks by construction. */}
       <div className="section" style={{ paddingTop: 0 }}>
         <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
-          Order detail
+          Plants
         </p>
 
-        {/* Plant lines — D-39: render the per-line breakdown (retail → discount → net) that matches
-            what QuickBooks charges. The breakdown comes from the SAME computeOrderPricing the Review
-            ran. Falls back to the cart's raw lines (retail) only if no breakdown was passed. */}
         {hasBreakdown ? (
-          goodsBreakdown!.map((gp, i) => (
-            <div key={`goods-${i}`} style={{ marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem', color: '#374151' }}>
-                <span>{gp.name} × {gp.qty}</span>
-                <span>${gp.netTotal.toFixed(2)}</span>
-              </div>
-              {gp.discountAmt > 0 && (
-                <p style={{ fontSize: '0.75rem', color: '#27500A', margin: '2px 0 0', lineHeight: 1.5 }}>
-                  Retail ${gp.retailTotal.toFixed(2)} · {gp.basis === 'at_cost' ? 'at cost' : `${gp.discountPct}% off`} −${gp.discountAmt.toFixed(2)} · Net ${gp.netTotal.toFixed(2)}
-                </p>
-              )}
+          goodsLines.map((gp, i) => (
+            <div key={`goods-${i}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem', color: '#374151', marginBottom: 8 }}>
+              <span>{gp.name} × {gp.qty}</span>
+              <span>${gp.retailTotal.toFixed(2)}</span>
             </div>
           ))
         ) : (
@@ -170,8 +168,28 @@ export function Confirmation() {
           ))
         )}
 
-        {/* Service lines — itemized by REAL service_offerings.name (H3/H6), not a branch label. */}
-        {(serviceLines ?? []).filter(s => s.amount > 0).map((s, i) => (
+        {/* Goods subtotal → discount line → goods after (only when a discount applies). */}
+        {orderDiscount > 0 && (
+          <div style={{ borderTop: '1px solid #f3f4f6', marginTop: 4, paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#6b7280' }}>
+              <span>Goods subtotal (retail)</span><span>${goodsRetail.toFixed(2)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#27500A', fontWeight: 600 }}>
+              <span>{discountLabel}</span><span>−${orderDiscount.toFixed(2)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#374151', fontWeight: 600 }}>
+              <span>Goods after discount</span><span>${(goodsRetail - orderDiscount).toFixed(2)}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Services — not discounted. Prefer the authoritative breakdown; fall back to serviceLines. */}
+        {(hasBreakdown ? svcFromBreak.map(s => ({ name: s.name, amount: s.netTotal })) : (serviceLines ?? []).filter(s => s.amount > 0)).length > 0 && (
+          <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '16px 0 10px' }}>
+            Services <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500, color: '#b0b7c0' }}>· not discounted</span>
+          </p>
+        )}
+        {(hasBreakdown ? svcFromBreak.map(s => ({ name: s.name, amount: s.netTotal })) : (serviceLines ?? []).filter(s => s.amount > 0)).map((s, i) => (
           <div key={`svc-${i}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem', color: '#374151', marginBottom: 8 }}>
             <span>{s.name}</span>
             <span>${s.amount.toFixed(2)}</span>
@@ -179,16 +197,6 @@ export function Confirmation() {
         ))}
 
         <div style={{ borderTop: '1px solid #f3f4f6', marginTop: 8, paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
-          {orderDiscount > 0 && (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#9ca3af' }}>
-                <span>Subtotal (retail)</span><span>${(subtotal + orderDiscount).toFixed(2)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#27500A', fontWeight: 600 }}>
-                <span>{tierLabel ? `${tierLabel.split(' · ')[0]} discount` : 'Discount'} (plants only)</span><span>−${orderDiscount.toFixed(2)}</span>
-              </div>
-            </>
-          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#9ca3af' }}>
             <span>{orderDiscount > 0 ? 'Subtotal (after discount)' : 'Subtotal'}</span><span>${subtotal.toFixed(2)}</span>
           </div>
