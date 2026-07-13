@@ -31,16 +31,14 @@ import { Plus, X, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import {
-  DataSheet, TextCell, SelectCell, sheetStyles as SS,
+  DataSheet, SelectCell, sheetStyles as SS,
   type DataSheetColumn,
 } from '../components/datasheet/DataSheet';
 import {
   CustomerFields, EMPTY_CUSTOMER_FORM, type CustomerFormState,
 } from '../components/customers/CustomerFields';
-import {
-  coerceCustomerField, persistCustomerField, type CustomerTextField,
-} from '../components/customers/customerEdit';
-import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME, TAX_EXEMPTION_REASONS, taxExemptionLabel, type DiscountType } from '@trace/shared/business-logic';
+import { CustomerPartyEditor, type PartyCustomer } from '../components/customers/CustomerPartyEditor';
+import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME, taxExemptionLabel, type DiscountType } from '@trace/shared/business-logic';
 
 const SOURCE_LABEL: Record<string, string> = {
   'qr-scan':     'QR checkout',
@@ -59,10 +57,25 @@ interface CustomerRow {
   state: string | null;
   zip: string | null;
   price_tier: string | null;
+  customer_type: string | null;
   // D-40: the persistent tax exemption (gated cols 20260713; optional so a pre-migration read is safe).
   tax_exempt?: boolean | null;
   tax_exempt_reason?: string | null;
   tax_exempt_cert_ref?: string | null;
+  // Party-record cols (2026-07-13, gated) — optional so a pre-migration read is safe (deploy-window).
+  organization_name?: string | null;
+  display_name?: string | null;
+  billing_line1?: string | null;
+  billing_line2?: string | null;
+  billing_city?: string | null;
+  billing_state?: string | null;
+  billing_zip?: string | null;
+  tax_id?: string | null;
+  tax_exempt_expires?: string | null;
+  payment_terms?: string | null;
+  credit_limit?: number | null;
+  status?: string | null;
+  notes?: string | null;
   source: string | null;
   qb_customer_id: string | null;
   created_at: string;
@@ -98,14 +111,16 @@ export function Customers() {
     setListLoading(true);
     setListError(null);
     console.log('[TRACE:customers] loadCustomers → customers', { businessId });
-    const BASE = 'id,first_name,last_name,phone,email,address_line1,city,state,zip,price_tier,source,qb_customer_id,created_at';
+    // CORE = guaranteed-live set (everything pre-2026-07-13). FULL adds the D-40 exemption trio +
+    // the party-record cols (both gated 20260713). Deploy-window-safe: try FULL, retry CORE on a
+    // missing-column error so the roster never breaks before the migrations apply.
+    const CORE = 'id,first_name,last_name,phone,email,address_line1,city,state,zip,price_tier,customer_type,source,qb_customer_id,created_at';
+    const FULL = `${CORE},tax_exempt,tax_exempt_reason,tax_exempt_cert_ref,organization_name,display_name,billing_line1,billing_line2,billing_city,billing_state,billing_zip,tax_id,tax_exempt_expires,payment_terms,credit_limit,status,notes`;
     const run = (cols: string) => supabase.from('customers').select(cols).eq('business_id', businessId).order('created_at', { ascending: false });
-    // D-40 gated exemption cols (20260713) — deploy-window-safe: try with them, retry without on a
-    // missing-column error so the roster never breaks before the migration applies.
-    let { data, error } = await run(`${BASE},tax_exempt,tax_exempt_reason,tax_exempt_cert_ref`);
+    let { data, error } = await run(FULL);
     if (error && ((error as any).code === '42703' || (error as any).code === 'PGRST204')) {
-      console.log('[TRACE:TAX] customers exemption cols absent — roster retrying without them (migration pending)', { code: (error as any).code });
-      ({ data, error } = await run(BASE));
+      console.log('[TRACE:customers] party/exemption cols absent — roster retrying with CORE (migration pending)', { code: (error as any).code });
+      ({ data, error } = await run(CORE));
     }
     if (error) { console.error('[TRACE:customers] loadCustomers error', error.message); setListError(error.message); setListLoading(false); return; }
     console.log('[TRACE:customers] loadCustomers ok', { count: data?.length ?? 0 });
@@ -154,75 +169,60 @@ export function Customers() {
     return opts;
   };
 
-  // ── D-40: persistent tax-exemption editor (owner-only, RLS-scoped). Zeroing tax REQUIRES a
-  //    reason (the auditable control) — the editor blocks a reasonless exempt. Removing an exemption
-  //    (charging tax) needs no reason (the safe default). Immediate write, reload after. ──
-  const [exemptEditing, setExemptEditing] = useState<CustomerRow | null>(null);
-  async function saveExemption(row: CustomerRow, next: { exempt: boolean; reason: string | null; certRef: string | null }) {
-    if (!businessId) return;
-    console.log('[TRACE:TAX] customer exemption edit', { id: row.id, exempt: next.exempt, reason: next.reason });
-    const { error } = await supabase.from('customers').update({
-      tax_exempt: next.exempt,
-      tax_exempt_reason: next.exempt ? next.reason : null,
-      tax_exempt_cert_ref: next.exempt ? (next.certRef || null) : null,
-    }).eq('id', row.id).eq('business_id', businessId);
-    if (error) { setListError(error.message); return; }
-    setExemptEditing(null);
-    await loadCustomers();
-  }
-
-  // ── Inline edit: one immediate write per field, RLS-scoped (owner-only). Shares the exact
-  //    coercion + write rules with CustomerEditModal via customerEdit.ts (no drift). Kept
-  //    sync (void return) so the TextCell onCommit callbacks stay void-returning. ──
-  function onText(c: CustomerRow, field: CustomerTextField, raw: string | null) {
-    if (!businessId) return;
+  // ── Status inline (quick soft-deactivate; full editor also carries it). Immediate RLS write. ──
+  function onStatus(c: CustomerRow, v: string) {
+    if (!businessId || v === (c.status ?? 'active')) return;
     const bid = businessId;
-    const r = coerceCustomerField(c as unknown as Record<string, unknown>, field, raw);
-    if (r.skip) return;
+    console.log('[TRACE:customers] status edit', { id: c.id, from: c.status, to: v });
     void (async () => {
-      const res = await persistCustomerField({
-        id: c.id, businessId: bid, field,
-        from: (c as unknown as Record<string, unknown>)[field], value: r.value,
-      });
-      if (res.error) { setListError(res.error); return; }
+      const { error } = await supabase.from('customers').update({ status: v }).eq('id', c.id).eq('business_id', bid);
+      if (error) { setListError(error.message); return; }
       await loadCustomers();
     })();
   }
 
-  // ── Column config ──
+  // The full grouped party editor — opened per-row from the roster. Everything beyond the at-a-glance
+  // columns (name/type/tier/tax/status) is edited HERE, not inline (the DataSheet is hand-declared,
+  // and the party record is ~18 fields — too many for grid columns).
+  const [partyEditing, setPartyEditing] = useState<CustomerRow | null>(null);
+
+  const displayName = (r: CustomerRow) =>
+    r.customer_type === 'organization'
+      ? (r.organization_name?.trim() || r.first_name)
+      : `${r.first_name} ${r.last_name}`.trim() || r.first_name;
+
+  // ── Column config — the LEAN at-a-glance roster (name/type/tier/tax/status/added + Edit).
+  //    The full field set lives in CustomerPartyEditor (opened via the name or the Edit button). ──
   const columns: DataSheetColumn<CustomerRow>[] = [
-    { key: 'first_name', header: 'First', sortable: true, sortVal: r => r.first_name.toLowerCase(), frozen: true, frozenWidth: 150,
-      render: r => <TextCell key={`fn-${r.id}-${r.created_at}`} value={r.first_name} width={120} onCommit={v => onText(r, 'first_name', v)} /> },
-    { key: 'last_name', header: 'Last', sortable: true, sortVal: r => r.last_name.toLowerCase(),
-      render: r => <TextCell key={`ln-${r.id}-${r.created_at}`} value={r.last_name} width={120} placeholder="—" onCommit={v => onText(r, 'last_name', v)} /> },
-    { key: 'phone', header: 'Phone', sortable: true, sortVal: r => (r.phone ?? '').toLowerCase(),
-      render: r => <TextCell key={`ph-${r.id}-${r.created_at}`} value={r.phone} width={130} placeholder="—" onCommit={v => onText(r, 'phone', v)} /> },
-    { key: 'email', header: 'Email', sortable: true, sortVal: r => (r.email ?? '').toLowerCase(),
-      render: r => <TextCell key={`em-${r.id}-${r.created_at}`} value={r.email} width={180} placeholder="—" onCommit={v => onText(r, 'email', v)} /> },
-    { key: 'address_line1', header: 'Address', sortable: true, sortVal: r => (r.address_line1 ?? '').toLowerCase(),
-      render: r => <TextCell key={`ad-${r.id}-${r.created_at}`} value={r.address_line1} width={170} placeholder="—" onCommit={v => onText(r, 'address_line1', v)} /> },
-    { key: 'city', header: 'City', sortable: true, sortVal: r => (r.city ?? '').toLowerCase(),
-      render: r => <TextCell key={`ci-${r.id}-${r.created_at}`} value={r.city} width={110} placeholder="—" onCommit={v => onText(r, 'city', v)} /> },
-    { key: 'state', header: 'State', sortable: true, sortVal: r => (r.state ?? '').toLowerCase(),
-      render: r => <TextCell key={`st-${r.id}-${r.created_at}`} value={r.state} width={60} placeholder="—" onCommit={v => onText(r, 'state', v)} /> },
-    { key: 'zip', header: 'ZIP', sortable: true, sortVal: r => (r.zip ?? '').toLowerCase(),
-      render: r => <TextCell key={`zp-${r.id}-${r.created_at}`} value={r.zip} width={80} placeholder="—" onCommit={v => onText(r, 'zip', v)} /> },
+    { key: 'first_name', header: 'Name', sortable: true, sortVal: r => displayName(r).toLowerCase(), frozen: true, frozenWidth: 200,
+      render: r => (
+        <button onClick={() => setPartyEditing(r)} title="Open customer record"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', fontWeight: 600, color: '#1f2937' }}>
+          {displayName(r) || '—'}
+        </button>
+      ) },
+    { key: 'customer_type', header: 'Type', sortable: true, sortVal: r => (r.customer_type ?? 'person'),
+      render: r => <span style={sourceStyle}>{r.customer_type === 'organization' ? 'Organization' : 'Person'}</span> },
     { key: 'price_tier', header: 'Tier', sortable: true, sortVal: r => (r.price_tier ?? '').toLowerCase(),
       render: r => <SelectCell value={r.price_tier ?? 'retail'} options={tierOptions(r.price_tier)} onChange={v => onTier(r, v)} styleFor={tierSelectStyle} title="Customer price tier — drives the checkout discount" /> },
     { key: 'tax_exempt', header: 'Tax', sortable: true, sortVal: r => (r.tax_exempt ? 1 : 0),
       render: r => (
-        <button onClick={() => setExemptEditing(r)} title="Tax exemption — click to edit" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+        <button onClick={() => setPartyEditing(r)} title="Tax exemption — click to edit" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
           {r.tax_exempt
             ? <span style={{ ...sourceStyle, color: '#166534', background: '#dcfce7' }}>Exempt · {taxExemptionLabel(r.tax_exempt_reason)}</span>
             : <span style={{ ...SS.muted, textDecoration: 'underline dotted' }}>Taxable</span>}
         </button>
       ) },
-    { key: 'source', header: 'Source', sortable: true, sortVal: r => (r.source ?? '').toLowerCase(),
+    { key: 'status', header: 'Status', sortable: true, sortVal: r => (r.status ?? 'active'),
+      render: r => <SelectCell value={r.status ?? 'active'} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} onChange={v => onStatus(r, v)} title="Account status — inactive soft-deactivates" /> },
+    { key: 'source', header: 'Source', sortable: true, sortVal: r => (r.source ?? '').toLowerCase(), defaultVisible: false,
       render: r => <span style={sourceStyle}>{SOURCE_LABEL[r.source ?? ''] ?? r.source ?? '—'}</span> },
-    { key: 'qb_customer_id', header: 'QuickBooks', sortable: true, sortVal: r => (r.qb_customer_id ? 1 : 0), defaultVisible: false,
-      render: r => r.qb_customer_id ? <span style={{ ...sourceStyle, color: '#166534', background: '#dcfce7' }}>Synced</span> : <span style={SS.muted}>—</span> },
     { key: 'created_at', header: 'Added', sortable: true, sortVal: r => r.created_at,
       render: r => <span style={SS.muted}>{fmtDate(r.created_at)}</span> },
+    { key: 'edit', header: '', hideable: false, sortable: false, systemManaged: false,
+      render: r => (
+        <button onClick={() => setPartyEditing(r)} style={{ ...sourceStyle, cursor: 'pointer', border: '1px solid #d1d5db', background: '#fff' }}>Edit</button>
+      ) },
   ];
 
   // ── Add-Customer form (create path — direct insert, source='manual') ──
@@ -314,74 +314,17 @@ export function Customers() {
         </div>
       )}
 
-      {/* D-40: per-customer tax-exemption editor (owner-only). Reason REQUIRED to mark exempt. */}
-      {exemptEditing && (
-        <ExemptionEditor
-          customer={exemptEditing}
-          onClose={() => setExemptEditing(null)}
-          onSave={(next) => void saveExemption(exemptEditing, next)}
+      {/* The full grouped party-record editor (owner-only). All fields beyond the lean roster cols
+          are edited here, including the D-40 tax set (id / exempt / reason / cert / expiry). */}
+      {partyEditing && (
+        <CustomerPartyEditor
+          customer={partyEditing as unknown as PartyCustomer}
+          tierOptions={tierOptions(partyEditing.price_tier)}
+          onClose={() => setPartyEditing(null)}
+          onSaved={() => { void loadCustomers(); }}
         />
       )}
     </>
-  );
-}
-
-// D-40 — the customer tax-exemption editor sheet. Marking exempt REQUIRES a reason (the auditable
-// control); removing an exemption (charging tax) needs none. Reuses the datasheet sheet styles.
-function ExemptionEditor({ customer, onClose, onSave }: {
-  customer: CustomerRow;
-  onClose: () => void;
-  onSave: (next: { exempt: boolean; reason: string | null; certRef: string | null }) => void;
-}) {
-  // Seed from the row: if the stored reason matches a known code use it, else it's 'other' free text.
-  const storedReason = customer.tax_exempt_reason ?? '';
-  const knownCode = TAX_EXEMPTION_REASONS.find(x => x.code === storedReason && x.code !== 'other');
-  const [reasonCode, setReasonCode] = useState<string>(customer.tax_exempt ? (knownCode?.code ?? (storedReason ? 'other' : 'resale')) : 'resale');
-  const [otherText, setOtherText]   = useState<string>(knownCode ? '' : storedReason);
-  const [cert, setCert]             = useState<string>(customer.tax_exempt_cert_ref ?? '');
-  const [err, setErr]               = useState<string | null>(null);
-
-  function save() {
-    const reason = reasonCode === 'other' ? otherText.trim() : reasonCode;
-    if (!reason) { setErr('A reason is required to make a customer tax-exempt.'); return; }
-    onSave({ exempt: true, reason, certRef: cert.trim() || null });
-  }
-
-  return (
-    <div style={SS.modal} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={SS.sheet}>
-        <div style={SS.sheetHeader}>
-          <h2 style={{ ...SS.sectionTitle, margin: 0 }}>Tax exemption — {customer.first_name} {customer.last_name}</h2>
-          <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }} onClick={onClose}>
-            <X size={20} color="#6b7280" />
-          </button>
-        </div>
-        <p style={{ fontSize: '0.8125rem', color: '#6b7280', margin: '0 0 12px' }}>
-          A tax-exempt customer is not charged sales tax on any order. Every exemption requires a documented reason.
-        </p>
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Reason</label>
-          <select value={reasonCode} onChange={e => setReasonCode(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', border: '1.5px solid #d1d5db', borderRadius: 9, fontSize: '0.9rem', background: '#fff', color: '#111827' }}>
-            {TAX_EXEMPTION_REASONS.map(r => <option key={r.code} value={r.code}>{r.label}</option>)}
-          </select>
-        </div>
-        {reasonCode === 'other' && (
-          <div style={{ marginBottom: 12 }}>
-            <input type="text" value={otherText} onChange={e => setOtherText(e.target.value)} placeholder="Reason (required)" style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', border: '1.5px solid #d1d5db', borderRadius: 9, fontSize: '0.9rem' }} />
-          </div>
-        )}
-        <div style={{ marginBottom: 12 }}>
-          <input type="text" value={cert} onChange={e => setCert(e.target.value)} placeholder="Certificate # (optional)" style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', border: '1.5px solid #d1d5db', borderRadius: 9, fontSize: '0.9rem' }} />
-        </div>
-        {err && <div style={SS.error}>{err}</div>}
-        <button onClick={save} style={SS.submitBtn}>Save exemption</button>
-        {customer.tax_exempt && (
-          <button onClick={() => onSave({ exempt: false, reason: null, certRef: null })} style={{ ...SS.submitBtn, background: 'none', color: '#92400e', border: '1.5px solid #fcd34d', marginTop: 8 }}>
-            Remove exemption (charge tax)
-          </button>
-        )}
-      </div>
-    </div>
   );
 }
 

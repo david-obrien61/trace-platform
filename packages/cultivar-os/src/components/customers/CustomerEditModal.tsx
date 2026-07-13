@@ -77,11 +77,13 @@ export function CustomerEditModal({ customer, onClose, onEdited }: Props) {
     const r = coerceCustomerField(draft as unknown as Record<string, unknown>, f, raw);
     if (r.skip) {
       // e.g. first_name blanked, or unchanged → snap the input back to the persisted value.
-      setForm(prev => ({ ...prev, [field]: (draft[f] ?? '') as string }));
+      // EditableCustomer is the 8-field core subset; CustomerTextField now spans the wider party
+      // set, so index through a record cast (this modal only ever passes its 8 core fields).
+      setForm(prev => ({ ...prev, [field]: ((draft as unknown as Record<string, unknown>)[f] ?? '') as string }));
       return;
     }
     setSavingField(field);
-    const res = await persistCustomerField({ id: draft.id, businessId, field: f, from: draft[f], value: r.value });
+    const res = await persistCustomerField({ id: draft.id, businessId, field: f, from: (draft as unknown as Record<string, unknown>)[f], value: r.value });
     setSavingField(null);
     if (res.error) { setError(res.error); return; }
     const updated = { ...draft, [f]: r.value };

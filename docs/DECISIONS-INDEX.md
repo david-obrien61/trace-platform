@@ -4,7 +4,14 @@
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.
 
-**Last updated:** 2026-07-13 (**D-40 TAX AS A SPINE CAPABILITY — APPROVED + BUILT (Level 1), owner-proof owed.** Tax is a
+**Last updated:** 2026-07-13 (**D-41 (proposed) CUSTOMER / PARTY RECORD → standard entity-completeness — BUILDER-COMPLETE, migration
+gated, owner-proof owed.** `customers` brought to the complete standard party record in ONE additive migration (15 cols:
+org/display name · billing address as L1 columns [shipping is order-time on the delivery row; `customer_addresses` ship-to
+book = deferred L2] · tax_id/expiry/cert-doc-slot · payment_terms/credit_limit · status/updated_at/notes) + a grouped
+`CustomerPartyEditor`; roster stays lean; AC-1 (string values, no CHECK) · RLS inherits (AC-3) · STD-011/014 · BENCH-C
+(tax_id/credit_limit PII value-masked in [TRACE:customers]). Closes the D-40 tax owner-prove blocker — exemption is now
+UI-editable. Home: docs/decisions/2026-07-13-customer-party-record.md. Migration `20260713_customers_party_record.sql`
+(gated). Ledger row #118. PRIOR: **D-40 TAX AS A SPINE CAPABILITY — APPROVED + BUILT (Level 1), owner-proof owed.** Tax is a
 computed line on the shared money boundary (extends D-37): the RATE is per-tenant SUPPLIED DATA at
 `business_pricing_config.config.taxRate` (via the new `resolveTaxRate` seam) — never platform-encoded jurisdiction
 knowledge, never a hardcoded 8.25%; an unset rate renders a REDLINED "Tax: not identified" (never a fabricated number).
@@ -66,6 +73,17 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-13 · customer/party record → standard entity-completeness — NEW decision D-41 (proposed)):** No drift.
+> Brought `customers` to the complete standard party record in ONE additive migration (15 cols: org/display name, billing
+> address, tax_id/expiry/cert-doc-slot, payment_terms/credit_limit, status/updated_at/notes) + a grouped `CustomerPartyEditor`.
+> NEW decision **[[D-41]]** logged (home: `docs/decisions/2026-07-13-customer-party-record.md`) — implements the STD-015
+> party-model line. Abided **AC-1** (payment_terms/status are string VALUES, NO CHECK — mirrors customer_type/price_tier),
+> **AC-3** (new cols inherit the customers RLS — NO new policy, D-40 precedent), **STD-011** (updated_at reuses the canonical
+> `set_updated_at_generic()`; ONE PII-masking source), **STD-014** (status/updated_at defaults are universal, not fabricated
+> per-tenant values), **BENCH-C** (PII — David's go; tax_id/credit_limit VALUE-MASKED in [TRACE:customers]), **§6 r11** (ZERO
+> new api-fn — 12/12). ADDRESS = L1 (billing columns; shipping is order-time on the delivery row; customer_addresses = deferred
+> L2). Closes the D-40 owner-prove blocker (tax fields now UI-editable). ONE gated additive migration. Ledger #118.
+>
 > ✅ **Drift watch (2026-07-13 · cultivar notification templates de-hardcoded — pure AC-1 correction, no new decision):** No drift.
 > The shared cultivar notification templates (cultivar.ts) were fully LAWNS-hardcoded on a customer-facing surface (a
 > confirmation email for "Test Dave's Tree Nest" read "Your LAWNS Tree Farm order is confirmed"). Fixed by genericizing
@@ -363,6 +381,7 @@ decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenan
 | **Unified cost model (Option 2) / small-business accounting model** | Cost-NATURE (CapEx/COGS/OpEx) × PROJECT × SHAPE tagging. | [docs/DECISION-unified-cost-model-option2.md](DECISION-unified-cost-model-option2.md) + [docs/DECISION-small-business-cost-accounting-model.md](DECISION-small-business-cost-accounting-model.md) | 2026-06-17 | **DECIDED** |
 | **Nested projects + BI what-if blocker** | Future arc — build when real. | [docs/DECISION-nested-projects-and-BI-whatif-blocker.md](DECISION-nested-projects-and-BI-whatif-blocker.md) | 2026-06 | **DEFERRED** |
 | **D-35** Sell price stored on the stock line | `business_inventory.sell_price` (stored, editable, authoritative) DISTINCT from `unit_cost`; MarginEngine suggests but the stored price governs; cart reads `sell_price`, refuses $0; `price_tier` applies at checkout. Industry-standard variant pricing (Shopify/Square/WooCommerce). | [docs/DECISIONS.md](DECISIONS.md) D-35 + [docs/decisions/2026-07-09-tier-pricing-mechanism.md](decisions/2026-07-09-tier-pricing-mechanism.md) (tier math addendum) + build items in [docs/decisions/2026-07-07-inventory-sale-pipeline-buildspec.md](decisions/2026-07-07-inventory-sale-pipeline-buildspec.md) item 1 | 2026-07-07 (tier math 2026-07-09) | **DECIDED** · item 1 BUILDER-COMPLETE (M1 migration GATED; datasheet column + cart repoint + $0-refusal built; **tier math CLOSED 2026-07-09 — percent-off-baseline, owner-set; `applyTierDiscount` + config Block 5 + editable customer tier; owner-proof owed**) |
+| **D-41 (proposed)** Customer/party record → standard entity-completeness | Bring `customers` to the complete standard party record in ONE additive migration (identity org/display name · **billing** address as L1 columns — **shipping is order-time on the delivery row, NOT a customer attribute; `customer_addresses` saved ship-to book = deferred L2**) · tax_id/expiry/cert-doc-slot · payment_terms/credit_limit · status/updated_at/notes) + a grouped `CustomerPartyEditor`; roster stays lean; closes the D-40 tax owner-prove blocker (tax fields UI-editable). AC-1 (string values, no CHECK) · RLS inherits (AC-3) · STD-011/014 · BENCH-C (PII masked). Implements the STD-015 party-model line. | [docs/decisions/2026-07-13-customer-party-record.md](decisions/2026-07-13-customer-party-record.md) + migration `20260713_customers_party_record.sql` (APPLIED + A-F verified) | 2026-07-13 | **DECIDED · BUILDER-COMPLETE (migration APPLIED 2026-07-13; UI owner-proof owed) — confirm DECISIONS.md head then assign D-41** |
 
 ---
 
