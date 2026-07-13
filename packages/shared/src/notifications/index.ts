@@ -33,6 +33,7 @@ export type {
   TraceVertical,
   NotificationType,
   NotificationChannel,
+  NotifyBusiness,
   NotificationRecipient,
   NotificationPayload,
   NotificationResult,

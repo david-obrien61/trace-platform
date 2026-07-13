@@ -14,6 +14,18 @@ export type NotificationType =
 
 export type NotificationChannel = 'email' | 'sms' | 'both';
 
+// ── Sending business identity ───────────────────────────────────────────────────
+// The ACTIVE business whose name/contact a customer-facing notification renders. Threaded as a
+// per-render DATA token (never a hardcoded literal — AC-1) so a shared template renders the true
+// tenant, resolved from the business_id-scoped context (BusinessProvider). OMIT-NOT-FAKE (D-9):
+// any field left unset is rendered as NOTHING, never a placeholder or a different business's value.
+export interface NotifyBusiness {
+  name:     string;
+  address?: string | null;
+  phone?:   string | null;
+  email?:   string | null;
+}
+
 // ── Recipient ─────────────────────────────────────────────────────────────────
 
 export interface NotificationRecipient {

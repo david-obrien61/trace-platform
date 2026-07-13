@@ -1,19 +1,28 @@
-import type { TemplateDef } from '../types';
-import { baseEmailHtml } from './base';
+import type { TemplateDef, NotifyBusiness } from '../types';
+import { baseEmailHtml, type BaseEmailOptions } from './base';
 
-const BASE = {
-  headerColor:   '#27500A',
-  logoText:      'LAWNS Tree Farm',
-  footerName:    'LAWNS Tree Farm, LLC — 400 Honeycomb Mesa, Leander TX 78641',
-  footerAddress: '(512) 450-3336 · info@lawnstrees.com',
-  appUrl:        'https://cultivar-os.app',
-  unsubscribeUrl: 'https://cultivar-os.app/unsubscribe',
-};
+// Per-tenant email chrome (header logo + footer identity) built from the ACTIVE business — NO
+// hardcoded brand (AC-1). OMIT-NOT-FAKE (D-9): a missing name/address/phone/email renders NOTHING;
+// when the business name is unresolvable the platform default (base.ts DEFAULT) shows — never a
+// wrong tenant's name. headerColor falls to the base default (cultivar green). appUrl/unsubscribe
+// are the cultivar-VERTICAL platform URLs (generic across all cultivar tenants), not a tenant brand.
+function chrome(b?: NotifyBusiness): BaseEmailOptions {
+  const footerName    = [b?.name, b?.address].filter(Boolean).join(' — ');
+  const footerAddress = [b?.phone, b?.email].filter(Boolean).join(' · ');
+  return {
+    ...(b?.name ? { logoText: b.name } : {}),
+    ...(footerName ? { footerName } : {}),
+    ...(footerAddress ? { footerAddress } : {}),
+    appUrl:         'https://cultivar-os.app',
+    unsubscribeUrl: 'https://cultivar-os.app/unsubscribe',
+  };
+}
 
 // ── order_confirmation ────────────────────────────────────────────────────────
 // Triggered on every checkout. Always transactional.
 
 interface OrderConfirmData extends Record<string, unknown> {
+  business?:      NotifyBusiness;   // the ACTIVE business (AC-1: token, never a literal)
   customerName:   string;
   invoiceNumber:  string;
   plantName:      string;
@@ -36,11 +45,11 @@ const orderConfirmation: TemplateDef<OrderConfirmData> = {
   channel:  'both',
   type:     'transactional',
 
-  subject: (d) => `Your LAWNS Tree Farm order is confirmed — ${d.invoiceNumber}`,
+  subject: (d) => `Your ${d.business?.name ? `${d.business.name} ` : ''}order is confirmed — ${d.invoiceNumber}`,
 
   html: (d) => baseEmailHtml(`
     <h1>Your order is confirmed.</h1>
-    <p>Hi ${d.customerName}, thank you for your purchase from LAWNS Tree Farm.</p>
+    <p>Hi ${d.customerName}, thank you for your purchase${d.business?.name ? ` from ${d.business.name}` : ''}.</p>
 
     <h2>Order ${d.invoiceNumber}</h2>
     <div class="line-item"><span>${d.plantName} · ${d.container} × ${d.quantity}</span><span>${d.plantTotal}</span></div>
@@ -59,16 +68,16 @@ const orderConfirmation: TemplateDef<OrderConfirmData> = {
       Texas Transportation Code Ch. 725 applies to open-bed transport.
     </div>` : ''}
 
-    ${d.transport === 'delivery' ? `<p><strong>Delivery:</strong> LAWNS will contact you to schedule your delivery.</p>` : ''}
-    ${d.transport === 'install' ? `<p><strong>Installation:</strong> LAWNS will contact you to schedule delivery and installation.</p>` : ''}
+    ${d.transport === 'delivery' ? `<p><strong>Delivery:</strong> ${d.business?.name ?? 'We'} will contact you to schedule your delivery.</p>` : ''}
+    ${d.transport === 'install' ? `<p><strong>Installation:</strong> ${d.business?.name ?? 'We'} will contact you to schedule delivery and installation.</p>` : ''}
 
     ${d.payOnline ? `<a class="btn" href="${d.payUrl}">Pay your invoice — ${d.total}</a>` : `<p>You can pay when you visit the office. Your invoice is saved.</p>`}
 
-    <p style="font-size:13px;color:#9ca3af;">Questions? Call us at (512) 450-3336.</p>
-  `, BASE),
+    ${d.business?.phone ? `<p style="font-size:13px;color:#9ca3af;">Questions? Call us at ${d.business.phone}.</p>` : ''}
+  `, chrome(d.business)),
 
   text: (d) =>
-    `Hi ${d.customerName}, your LAWNS Tree Farm order is confirmed.\n\n` +
+    `Hi ${d.customerName}, your${d.business?.name ? ` ${d.business.name}` : ''} order is confirmed.\n\n` +
     `Order: ${d.invoiceNumber}\n` +
     `${d.plantName} · ${d.container} × ${d.quantity}: ${d.plantTotal}\n` +
     `Total: ${d.total}\n` +
@@ -76,14 +85,15 @@ const orderConfirmation: TemplateDef<OrderConfirmData> = {
       ? `\nREMINDER: Secure your load before driving. Texas TCC Ch. 725.\n`
       : '') +
     (d.payOnline ? `\nPay online: ${d.payUrl}` : '\nPay at the office — your invoice is saved.') +
-    `\n\nQuestions? Call (512) 450-3336.`,
+    (d.business?.phone ? `\n\nQuestions? Call ${d.business.phone}.` : ''),
 };
 
 // ── netting_waiver_reminder ───────────────────────────────────────────────────
 // Nurture: sent 30 min after checkout when netting was declined. Transactional.
 
 interface NettingWaiverData extends Record<string, unknown> {
-  customerName: string;
+  business?:     NotifyBusiness;
+  customerName:  string;
   invoiceNumber: string;
 }
 
@@ -94,20 +104,21 @@ const nettingWaiverReminder: TemplateDef<NettingWaiverData> = {
   type:     'transactional',
 
   text: (d) =>
-    `Hi ${d.customerName} — just a reminder from LAWNS Tree Farm: ` +
+    `Hi ${d.customerName} — just a reminder${d.business?.name ? ` from ${d.business.name}` : ''}: ` +
     `you declined netting on order ${d.invoiceNumber}. ` +
     `Please secure your tree before driving per TX law. ` +
-    `Drive safe! (512) 450-3336`,
+    `Drive safe!${d.business?.phone ? ` ${d.business.phone}` : ''}`,
 };
 
 // ── delivery_scheduled ────────────────────────────────────────────────────────
 
 interface DeliveryScheduledData extends Record<string, unknown> {
-  customerName:  string;
-  plantName:     string;
-  deliveryDate:  string;
+  business?:      NotifyBusiness;
+  customerName:   string;
+  plantName:      string;
+  deliveryDate:   string;
   deliveryWindow: string;   // "10am – 12pm"
-  staffName:     string;
+  staffName:      string;
 }
 
 const deliveryScheduled: TemplateDef<DeliveryScheduledData> = {
@@ -123,19 +134,19 @@ const deliveryScheduled: TemplateDef<DeliveryScheduledData> = {
     <p>Hi ${d.customerName},</p>
     <p>Your <strong>${d.plantName}</strong> will be delivered by <strong>${d.staffName}</strong> on:</p>
     <p style="font-size:20px;font-weight:700;color:#27500A;">${d.deliveryDate} · ${d.deliveryWindow}</p>
-    <p>Please have the planting area cleared and accessible. If you need to reschedule, call us at (512) 450-3336.</p>
-  `, BASE),
+    <p>Please have the planting area cleared and accessible.${d.business?.phone ? ` If you need to reschedule, call us at ${d.business.phone}.` : ''}</p>
+  `, chrome(d.business)),
 
   text: (d) =>
-    `Hi ${d.customerName} — your ${d.plantName} delivery from LAWNS is scheduled for ` +
-    `${d.deliveryDate} between ${d.deliveryWindow}. ` +
-    `Questions: (512) 450-3336.`,
+    `Hi ${d.customerName} — your ${d.plantName} delivery${d.business?.name ? ` from ${d.business.name}` : ''} is scheduled for ` +
+    `${d.deliveryDate} between ${d.deliveryWindow}.${d.business?.phone ? ` Questions: ${d.business.phone}.` : ''}`,
 };
 
 // ── care_tips_30d ─────────────────────────────────────────────────────────────
 // Nurture: 30-day post-purchase care guide. Requires emailOptIn.
 
 interface CareTips30dData extends Record<string, unknown> {
+  business?:    NotifyBusiness;
   customerName: string;
   plantName:    string;
   container:    string;
@@ -152,7 +163,7 @@ const careTips30d: TemplateDef<CareTips30dData> = {
   html: (d) => baseEmailHtml(`
     <h1>30 days in — here's what to watch for.</h1>
     <p>Hi ${d.customerName},</p>
-    <p>It's been about a month since your <strong>${d.plantName}</strong> from LAWNS went in the ground. Here are a few things to check:</p>
+    <p>It's been about a month since your <strong>${d.plantName}</strong>${d.business?.name ? ` from ${d.business.name}` : ''} went in the ground. Here are a few things to check:</p>
     <h2>Watering</h2>
     <p>For a ${d.container} tree, water deeply 2–3 times per week for the first 3 months.
     The root ball should stay consistently moist but never waterlogged.</p>
@@ -160,19 +171,20 @@ const careTips30d: TemplateDef<CareTips30dData> = {
     <p>Keep a 3-inch mulch ring (4 ft wide) around the base.
     Pull mulch away from the trunk — it should not touch the bark.</p>
     <h2>Signs of stress</h2>
-    <p>Yellowing leaves or wilting despite watering? Call us — it's usually fixable early. (512) 450-3336</p>
-    <p>Thanks for growing with LAWNS.</p>
-  `, BASE),
+    <p>Yellowing leaves or wilting despite watering? Call us — it's usually fixable early.${d.business?.phone ? ` ${d.business.phone}` : ''}</p>
+    <p>Thanks for growing${d.business?.name ? ` with ${d.business.name}` : ''}.</p>
+  `, chrome(d.business)),
 
   text: (d) =>
-    `Hi ${d.customerName} — 30-day check-in from LAWNS Tree Farm on your ${d.plantName}. ` +
-    `Water deeply 2-3x/week. Keep mulch 3" deep. Questions? Call (512) 450-3336.`,
+    `Hi ${d.customerName} — 30-day check-in${d.business?.name ? ` from ${d.business.name}` : ''} on your ${d.plantName}. ` +
+    `Water deeply 2-3x/week. Keep mulch 3" deep.${d.business?.phone ? ` Questions? Call ${d.business.phone}.` : ''}`,
 };
 
 // ── seasonal_offer ────────────────────────────────────────────────────────────
 // Promotional. Requires smsOptIn / emailOptIn.
 
 interface SeasonalOfferData extends Record<string, unknown> {
+  business?:      NotifyBusiness;
   customerName:   string;
   offerHeadline:  string;
   offerBody:      string;
@@ -195,10 +207,10 @@ const seasonalOffer: TemplateDef<SeasonalOfferData> = {
     <p>${d.offerBody}</p>
     <a class="btn" href="${d.ctaUrl}">${d.ctaText}</a>
     <p style="font-size:13px;color:#9ca3af;">Offer expires ${d.expiresDate}.</p>
-  `, BASE),
+  `, chrome(d.business)),
 
   text: (d) =>
-    `LAWNS Tree Farm: ${d.offerHeadline}. ${d.offerBody} ` +
+    `${d.business?.name ? `${d.business.name}: ` : ''}${d.offerHeadline}. ${d.offerBody} ` +
     `Shop now: ${d.ctaUrl} · Expires ${d.expiresDate}. ` +
     `Reply STOP to unsubscribe.`,
 };
@@ -206,6 +218,7 @@ const seasonalOffer: TemplateDef<SeasonalOfferData> = {
 // ── owner_leakage_alert ───────────────────────────────────────────────────────
 // Internal alert to the business owner when a large-container order closes
 // with zero add-ons. Status type — no opt-in required (operator notification).
+// No customer-facing brand: the owner already knows their own business (no name literal to leak).
 
 interface OwnerLeakageData extends Record<string, unknown> {
   customerName:  string;
@@ -229,7 +242,7 @@ const ownerLeakageAlert: TemplateDef<OwnerLeakageData> = {
 // ── silent_partner_analysis ───────────────────────────────────────────────────
 // Admin-triggered (David sends via DiscoveryInspect "Send this analysis" button).
 // synthesis.ts pre-renders subject/body/html — template passes them through.
-// Uses default TRACE branding (not LAWNS) — this email is from TRACE, not a business.
+// Uses default TRACE branding (not a tenant) — this email is from TRACE, not a business.
 
 interface SilentPartnerAnalysisData extends Record<string, unknown> {
   subject:      string;

@@ -23,7 +23,7 @@ placeholder carrying a tenant literal.
 [2026-07-08-receipt-qb-leakage-recon.md](2026-07-08-receipt-qb-leakage-recon.md) — this register
 tracks the literals; that recon tracks the builds. Do not duplicate the fix detail here.
 
-**Last updated:** 2026-07-08 (ALL 8 tile-2.1 items CLEARED — 2.1 QR Checkout restored to GREEN; receipt/QB/leakage + sweep build).
+**Last updated:** 2026-07-13 (H12–H17 CLEARED — the shared cultivar NOTIFICATION TEMPLATES (`cultivar.ts`) were fully LAWNS-hardcoded on a customer-facing surface; genericized to a `NotifyBusiness` active-business token, omit-not-fake. Register gap closed: notification templates were missed by the #97 checkout sweep and are now IN SCOPE. Prior: 2026-07-08 — ALL 8 tile-2.1 items CLEARED; 2.1 QR Checkout restored to GREEN.).
 
 ---
 
@@ -59,6 +59,30 @@ tracks the literals; that recon tracks the builds. Do not duplicate the fix deta
 
 ---
 
+## Owning capability: **notification templates (shared — `packages/shared/src/notifications/templates/cultivar.ts`)** (✅ ALL CLEARED — whole-file AC-1 fix)
+
+> **Register gap closed:** the #97 checkout sweep (H1–H8) covered the checkout UI SURFACES but never scoped the
+> customer-facing EMAIL/SMS templates. The whole `cultivar.ts` file was LAWNS-hardcoded — every non-LAWNS tenant's
+> customer received an email branded "LAWNS Tree Farm." Recon verdict (2026-07-13): classification (a) hardcode = AC-1
+> (a tenant literal in a SHARED module), not an AC-3 cross-tenant read. Notification templates are now IN SCOPE for this
+> register. FIX: threaded the ACTIVE business as a `NotifyBusiness` data token (name/address/phone/email), resolved from
+> the business_id-scoped context (`useBusinessContext().business`) at the call site (`useSubmitOrder`/`CartReview`), with
+> OMIT-NOT-FAKE rendering (a missing field renders nothing, never a placeholder/other tenant). Same pattern that cleared
+> H2/H3/H4.
+
+| id | file:line | what it is | why it's debt | should be | sev | status |
+|---|---|---|---|---|---|---|
+| H12 | [`templates/cultivar.ts:4-11`](../../packages/shared/src/notifications/templates/cultivar.ts) | ~~`BASE` chrome consts `logoText:'LAWNS Tree Farm'`, `footerName:'LAWNS Tree Farm, LLC — 400 Honeycomb Mesa, Leander TX 78641'`, `footerAddress:'(512) 450-3336 · info@lawnstrees.com'`~~ | every cultivar email's header logo + footer showed LAWNS's name/address/phone/email for ALL tenants | per-tenant chrome from the active business | HIGH | **✅ CLEARED** — `BASE` const removed → `chrome(d.business)` builds logo/footer from the active business; omit-not-fake (missing → base.ts platform default, never a wrong tenant) |
+| H13 | [`templates/cultivar.ts` order_confirmation](../../packages/shared/src/notifications/templates/cultivar.ts) | ~~subject `"Your LAWNS Tree Farm order is confirmed"` + body `"purchase from LAWNS Tree Farm"` / `"LAWNS will contact you"` + text + phone `(512) 450-3336`~~ | THE reported defect — customer confirmation email branded with another tenant's name | active business name/phone tokens | HIGH | **✅ CLEARED** — `Your ${d.business?.name ? name+' ' : ''}order is confirmed`; body/text use `d.business?.name`; phone line renders only when `d.business?.phone` |
+| H14 | [`templates/cultivar.ts` netting_waiver_reminder](../../packages/shared/src/notifications/templates/cultivar.ts) | ~~SMS `"reminder from LAWNS Tree Farm"` + `(512) 450-3336`~~ | tenant brand + phone in a customer SMS | active business tokens | HIGH | **✅ CLEARED** — `just a reminder${name ? ' from '+name : ''}`; phone only when set |
+| H15 | [`templates/cultivar.ts` delivery_scheduled](../../packages/shared/src/notifications/templates/cultivar.ts) | ~~`"delivery from LAWNS"` + `(512) 450-3336` ×2~~ | tenant brand + phone in delivery email/SMS | active business tokens | HIGH | **✅ CLEARED** — `delivery${name ? ' from '+name : ''}`; reschedule/phone clauses only when phone set; `chrome(d.business)` |
+| H16 | [`templates/cultivar.ts` care_tips_30d](../../packages/shared/src/notifications/templates/cultivar.ts) | ~~`"from LAWNS went in the ground"`, `"growing with LAWNS"`, `"check-in from LAWNS Tree Farm"` + `(512) 450-3336` ×2~~ | tenant brand + phone in a nurture email/SMS | active business tokens | HIGH | **✅ CLEARED** — all LAWNS → `d.business?.name`; phone only when set; `chrome(d.business)` |
+| H17 | [`templates/cultivar.ts` seasonal_offer](../../packages/shared/src/notifications/templates/cultivar.ts) | ~~SMS lead `"LAWNS Tree Farm: {headline}"`~~ | tenant brand in a promo SMS | active business token | MED | **✅ CLEARED** — `${name ? name+': ' : ''}${d.offerHeadline}`; `chrome(d.business)` |
+
+_Note: `owner_leakage_alert` (internal owner SMS — owner knows their own business, no name literal) and `silent_partner_analysis` (deliberately TRACE-branded, sent by the platform not a tenant) carry no tenant literal → not debt._
+
+---
+
 ## NOT debt (excluded — correct, platform-owned)
 
 - `Terms.tsx:139` / `Privacy.tsx:107` / `Help.tsx:761,839` — `(512) 456-3632` + `david@trace-enterprises.com`: these are **TRACE Enterprises'** own legal/help contact (per CLAUDE.md Key Data), correct on the platform's own legal pages — NOT a tenant leak.
@@ -67,7 +91,8 @@ tracks the literals; that recon tracks the builds. Do not duplicate the fix deta
 ---
 
 ## Summary
-- **Open items:** 1 — only **H9** (1.x, doesn't drop a green tile); 2 documented-with-reason (H10, H11). All 8 tile-2.1 items are CLEARED (2026-07-08).
-- **Tiles CAPPED AT AMBER by this register:** **none.** 2.1 Cart / QR checkout is restored to 🟢 (all 8 items cleared).
+- **Open items:** 1 — only **H9** (1.x, doesn't drop a green tile); 2 documented-with-reason (H10, H11). All 8 tile-2.1 items CLEARED (2026-07-08); the 6 notification-template items H12–H17 CLEARED (2026-07-13).
+- **Tiles CAPPED AT AMBER by this register:** **none.** 2.1 Cart / QR checkout is 🟢 (all items cleared); the shared notification templates are fully genericized.
 - **Tiles that stay green** (their items are DOC — generic defaults / demo-only, not tenant leaks): 2.2, 3.7.
 - H9 (front-door signup example placeholder) remains OPEN but its owning caps 1.1–1.5 are already 🟡 for other reasons, so it drops no green tile.
+- **Register scope note (2026-07-13):** customer-facing NOTIFICATION TEMPLATES (`packages/shared/src/notifications/templates/*`) are now tracked here — the #97 sweep only covered UI surfaces. Any future tenant literal in an email/SMS template is register debt.
