@@ -664,6 +664,7 @@ function capR(key, v) {
     '/checkout/customer', '/checkout/review', '/checkout/confirm', '/checkout/addons',
     '/checkout/scan',         // sub-flow: multi-item scan-loop order entry, reached from /orders "New order"
     '/orders/:id',            // drill-in: order detail, reached by clicking a roster card on /orders
+    '/customers/:id',         // drill-in: customer detail + order history, reached by clicking a name on /customers
     '/plant/:tagId', '/plant/:tagId/addons',
     '/demo/quickbooks-invoice', '/discovery/inspect',
     '/roles',                 // redirect → /team

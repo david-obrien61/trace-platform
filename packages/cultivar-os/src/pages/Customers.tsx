@@ -26,6 +26,7 @@
 //               ON BY DEFAULT — standing owner instruction (do NOT comment out).
 // ============================================================
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
@@ -85,6 +86,7 @@ const tierSelectStyle = (): React.CSSProperties => ({ color: '#3730a3', fontWeig
 
 export function Customers() {
   const { businessId } = useBusinessContext();
+  const navigate = useNavigate();
 
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [listLoading, setListLoading] = useState(true);
@@ -174,7 +176,8 @@ export function Customers() {
     })();
   }
 
-  // Open the ONE editor in EDIT mode for a roster row (name / tax badge / Edit button all use this).
+  // Open the ONE editor in EDIT mode for a roster row (tax badge + Edit button use this — a roster
+  // quick-edit). The NAME click instead navigates to /customers/:id (the detail page + order history).
   const openEdit = (r: CustomerRow) => setEditor({ mode: 'edit', row: r as unknown as PartyCustomer });
 
   const displayName = (r: CustomerRow) =>
@@ -187,7 +190,7 @@ export function Customers() {
   const columns: DataSheetColumn<CustomerRow>[] = [
     { key: 'first_name', header: 'Name', sortable: true, sortVal: r => displayName(r).toLowerCase(), frozen: true, frozenWidth: 200,
       render: r => (
-        <button onClick={() => openEdit(r)} title="Open customer record"
+        <button onClick={() => navigate(`/customers/${r.id}`)} title="Open customer record + order history"
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', fontWeight: 600, color: '#1f2937' }}>
           {displayName(r) || '—'}
         </button>

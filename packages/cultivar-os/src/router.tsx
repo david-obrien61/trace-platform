@@ -35,6 +35,7 @@ import { InventoryCount }    from './pages/InventoryCount';
 import { CostToProduce }     from './pages/CostToProduce';
 import { OperatingCosts }    from './pages/OperatingCosts';
 import { Customers }         from './pages/Customers';
+import { CustomerDetail }    from './pages/CustomerDetail';
 import { Discounts }         from './pages/Discounts';
 import PMI                   from './pages/PMI';
 import { TeamConsole }       from './pages/TeamConsole';
@@ -186,6 +187,7 @@ export function AppRouter() {
           <Route element={<PermissionRoute permission="owner-only" />}>
             <Route path="/costs"             element={<CostToProduce />} />
             <Route path="/customers"         element={<Customers />} />
+            <Route path="/customers/:id"     element={<CustomerDetail />} />
             <Route path="/add-business"      element={<AddBusiness />} />
           </Route>
         </Route>
