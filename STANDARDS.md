@@ -1,7 +1,7 @@
 # STANDARDS.md — TRACE Engineering Standards
-# Version: 2.0
+# Version: 2.2
 # Created: 2026-06-04
-# Last updated: 2026-07-13 (STD-012 persistence-clause amendment — D-43)
+# Last updated: 2026-07-14 (STD-017 added — a fix is complete only when true on every surface)
 # Owner: David O'Brien / TRACE Enterprises
 
 > Every standard on this list traces to a real failure that bit us.
@@ -26,7 +26,7 @@ Standards exist in three states. The point is not to hold every industry standar
 it is to hold the ones that apply to *our* stack, activate them at the right moment,
 and never carry noise.
 
-- **ACTIVE** (on the field — enforced now): STD-001 through STD-016 below. Each has
+- **ACTIVE** (on the field — enforced now): STD-001 through STD-017 below. Each has
   a confirming scar and is enforced every relevant session. Two origins:
     - *TRACE scars* — failures from this codebase (the QB lying flag, the
       hand-applied constraint, the hardcoded channels).
@@ -700,6 +700,54 @@ be matched at STEP 0. (David may fold this into STD-012 as a clause if he prefer
 
 ---
 
+### STD-017 — A FIX IS COMPLETE ONLY WHEN TRUE ON EVERY SURFACE THE CAPABILITY TOUCHES
+
+**Rule:** A capability renders, persists, or reads on multiple surfaces. A fix is NOT
+complete when it is true on the surface that motivated it — it is complete only when true
+on EVERY surface that capability touches. Before building a fix, ENUMERATE the capability's
+surfaces (all display surfaces for a value; the capture surface AND every reader for a
+field; create AND edit paths for an order). The build makes the fix true on all of them, or
+explicitly scopes which and flags the rest. OWNER-PROVE tests EVERY surface, not the
+motivating one.
+
+**Corollary (capture-persist-read continuity):** entered data is not "captured" until it
+reaches the table its reader queries; a column that is written-but-never-read or
+read-but-never-written is an orphan and a defect.
+
+**Scar (2026-07-14, six instances in one validation sweep):** the tier discount showed on
+Review/Confirmation but NOT on the real QBO push (customer's actual invoice showed net with
+no discount line); order EDIT dropped the D-43 breakdown that CREATE persisted; count
+captured size/qty into `inventory_counts` but the order picker read `business_inventory`
+(counted data invisible); `variant_group` was READ by the picker but no UI WROTE it; tax
+exemption set in the editor didn't render consistently across all display surfaces; `billing_*`
+and `tax_id` were captured in the customer editor but read by nothing. One discipline gap —
+no surface-consistency check — expressed six times. Each fix had been verified on ONE surface
+and assumed complete.
+
+**In practice:**
+- Before a fix: list the capability's surfaces (grep the value/field/table across the
+  codebase). The prompt fixes all, or scopes explicitly.
+- STEP 0 roster-match asks: "this fix touches capability X; X renders/persists/reads on
+  surfaces A,B,C,D — is the change true on all of them?"
+- Owner-prove enumerates surfaces: "discount shows on Review AND Confirmation AND
+  order-detail AND real QBO AND email" — not "discount shows [where I looked]."
+- Orphan check: any column written-but-not-read or read-but-not-written is flagged (not
+  necessarily fixed, but recorded, never silently shipped).
+- Extends STD-012 (one computation) with surface-completeness: computing once is not enough
+  if only some surfaces render it.
+
+**Relationship:** STD-012 says compute pricing ONCE; STD-017 says a fix (pricing or
+otherwise) is true on EVERY surface the capability touches. STD-012's persistence clause is
+the pricing-shaped instance of this general rule — persist once so all surfaces render the
+same fact; STD-017 generalizes it to any capability with more than one surface (a captured
+field and its readers, a value's display surfaces, an order's create vs edit paths).
+
+**Scope:** Every fix or build touching a capability that has more than one surface (any
+pricing/tax value; any customer/order field; any create-vs-edit path; any capture-then-read
+flow).
+
+---
+
 ## ENFORCEMENT
 
 | Standard | Applies to | Gate type |
@@ -720,6 +768,7 @@ be matched at STEP 0. (David may fold this into STD-012 as a clause if he prefer
 | STD-014 | Every per-tenant value the platform cannot compute from first principles (tax rate, locale, jurisdiction) | Value sourced from data; absence expressible and honestly redlined; no `NOT NULL DEFAULT <one-tenant's-value>` |
 | STD-015 | Every shared module + every customer-facing render path (email/SMS/invoice/QBO/receipt/opt-in) | No tenant identity literal; identity threaded as a `business_id`-scoped token; unresolvable → omit, never another tenant's value |
 | STD-016 | Every build touching order editing/update after creation | Edit recomputes the whole money boundary through the same canonical pricing fn as create (tier/basis/tax/exemption) |
+| STD-017 | Every fix/build touching a capability with more than one surface (pricing/tax value, customer/order field, create-vs-edit path, capture-then-read flow) | Enumerate the capability's surfaces before building; fix true on ALL (or explicitly scoped + rest flagged); owner-prove enumerates EVERY surface; orphan columns (written-not-read / read-not-written) flagged |
 | BENCH-A, BENCH-C, BENCH-D, BENCH-F | Every session (STEP 0 roster match against ACTIVATE WHEN triggers) | Catastrophic-class match → stop and ask David; hygiene-class match → apply and report |
 | BENCH-E | Any session that adds an external AI provider call that is user-facing | Apply try-chain pattern; provider 3 slot in comments; operator log on fallback; clean user error on all-fail |
 | BENCH-G | Any session adding/altering a compliance action whose history is auditable (tax exemption apply/remove, waiver, money-authority grant) | Hygiene: write the immutable event row alongside current-state columns; escalates to catastrophic (BENCH-F) if it touches an issued invoice |
@@ -1001,6 +1050,7 @@ a standard's application."
 | 2.0 | 2026-07-13 | STD-016 added — ORDER EDITS RECOMPUTE THROUGH THE CANONICAL PRICING PATH. Scar (ongoing, ledger #107 / #114): `submit.ts handleUpdate` recomputed baseline `sell_price` only (not tier/basis-aware) and computed tax off-seam (`subtotal × taxRate`, bypassing `computeOrderPricing`) → an edited tiered order could silently drop its discount or mis-tax; D-40 folds the off-seam tax back through the one computation. STD-012 applied to the edit path (kept as its own roster line for the recurring regression). |
 | 2.0 | 2026-07-13 | BENCH-F added — INVOICE LIFECYCLE: SEQUENTIAL, IMMUTABLE, VOID-NOT-DELETE (🔴 catastrophic). Territory (enterprise scar): editing/deleting a sent invoice or non-sequential numbering is an audit failure in every jurisdiction; TRACE sends invoices (QBO/confirmation) but doesn't yet enforce numbering immutability or a void/credit path (order edits recompute in place today — STD-016). ACTIVATE WHEN a build adds invoice editing-after-send, deletion, numbering, or an issue-cancel flow. |
 | 2.0 | 2026-07-13 | BENCH-G added — IMMUTABLE AUDIT RECORD FOR COMPLIANCE-AFFECTING ACTIONS (🟡 hygiene; escalates to catastrophic on an issued invoice → BENCH-F). Territory: the risk case is a REMOVED exemption — mutable columns show current state, not the event; `order_compliance_records` (netting precedent) is the proven immutable-row shape. D-40 ships exemption on order columns for Level 1; the immutable record is the named hardening. ACTIVATE WHEN exemption/waiver volume is material or a build adds an auditable-history compliance action. |
+| 2.2 | 2026-07-14 | STD-017 added — A FIX IS COMPLETE ONLY WHEN TRUE ON EVERY SURFACE THE CAPABILITY TOUCHES. Scar (2026-07-14, six instances in ONE all-surfaces validation sweep): discount showed on Review/Confirmation but not on the real QBO push; order EDIT dropped the D-43 breakdown CREATE persisted; count captured size/qty into `inventory_counts` but the order picker read `business_inventory`; `variant_group` was read by the picker but written by no UI; tax exemption didn't render consistently across display surfaces; `billing_*`/`tax_id` were captured but read by nothing. One discipline gap — no surface-consistency check — expressed six times; each fix had been verified on ONE surface and assumed complete. Rule: enumerate a capability's surfaces before a fix; make it true on all (or scope + flag the rest); owner-prove every surface. Corollary (capture-persist-read continuity): a column written-but-never-read or read-but-never-written is an orphan and a defect. Extends STD-012's one-computation logic to surface-completeness. |
 
 ---
 

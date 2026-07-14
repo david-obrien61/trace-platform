@@ -322,14 +322,15 @@ PIECES: inventory_count, inventory_count_offline
 NEEDS: David to expand into full day-in-the-life prose.
 _Placeholder (David to expand into full day-in-the-life prose)._ The manager walks the lot with a phone, scanning each plant's QR tag, entering the on-hand count, saving, and moving straight to the next — until the lot is counted and a session summary closes it out. The loop must never dead-end: an unreadable tag falls back to manual entry, an unrecognized scan is handled gracefully (quick entry or skip-and-flag) rather than stalling. Counting in a field with no signal must still work (offline). _Grounded in ledger #54 — the scan→resolve→qty→save→next→complete loop is BUILDER-COMPLETE; the offline piece is still ahead._
 
-### Count-side size-picker (the gating next-build)
-STATUS: needs-sub-stories
+### Count promotes size + qty into inventory (the count IS the catalog)
+STATUS: written
+BUILD: in-build
 SCOPE: vertical:cultivar
 ARC: asset-inventory-pmi
 MAPS-TO: 2.3
-PIECES: size_picker, need_clarification_seam
-NEEDS: The "Count the lot" story's missing sub-story — and a LIVE LANDMINE. Build this BEFORE any per-size rows are populated.
-_Coverage placeholder, not a fabricated scenario._ The size-variant migration (`20260628`) is APPLIED (cols `size` / `variant_group` live, EMPTY), but **per-size rows must NOT be populated into `business_inventory` until this picker exists** — else a multi-size scan (e.g. Shoal Creek Vitex 5/15/30/45 gal) returns >1 same-name match → `InventoryCount.tsx:263` treats `matches.length>1` as AMBIGUOUS → regresses to UNKNOWN → **breaks the OWNER-PROVEN grower-resolve** (Vitex→DISC-1105→count-45, ledger #61). The picker IS the L5 NEED_CLARIFICATION seam — the **gating next-build**. → CLOSE-OUT-LEDGER LANDMINE + ARC-MAP arc-8.
+PIECES: size_picker, need_clarification_seam, count_promote, resolve_before_create
+NEEDS: OWNER-PROVE (D-45). The count-side size-picker (L5 NEED_CLARIFICATION seam) is OWNER-PROVEN (ledger #72) — the old "gating landmine" is CLEARED.
+Lauren walks the lot with a per-variety QR on each variety (the SAME QR across all its sizes). She scans Shoal Creek Vitex, the app resolves the VARIETY, she taps "30 gal" (or types it — a free label) and enters 45. Save. Scan the same tag, tap "45 gal", enter 12 — a SECOND stock row is born under the same variety. When she opens the inventory grid or rings up an order, BOTH sizes are there at their prices, because the count didn't just log a number — it PROMOTED size + qty into a `variant_group`-keyed `business_inventory` row (create-or-update), the one store the grid and the order picker actually read. A variety she's never seen, typed by hand with no QR, resolves to the right existing variety even if she spells it a little differently (token-set equality) instead of orphaning into duplicates. Nothing born unsellable-silently: a new size starts needs-price (the cart refuses $0), never a fabricated price. _Grounded: D-45 (`docs/decisions/2026-07-14-count-promote-D45.md`), ledger #124 — closes the count-size-persist bug (buildspec item 4, never shipped) + the `variant_group` orphan-read; reuses the #61 token-set resolver + the #72 size-picker (now folded into the review size-control). Built 2026-07-14, BUILDER-COMPLETE, owner-proof owed. HOOK named not built: per-size unit-multiplier (a "flat" = N plants)._
 
 ### Assets + camera capture (Andrew's branch) — and the local-storage distinction
 STATUS: needs-input
