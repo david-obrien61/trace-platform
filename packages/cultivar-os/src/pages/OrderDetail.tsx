@@ -21,8 +21,13 @@ import { ORDER_STATUSES, ORDER_STATUS_META } from '../lib/orderStatus';
 interface DetailItem extends OrderItemAnchorFields {
   id: string;
   quantity: number;
-  unit_price: number;
-  subtotal: number;
+  unit_price: number;   // NET — what was charged (after tier)
+  subtotal: number;     // NET line total
+  // D-43: the stored show-the-work breakdown (gated 20260713_order_items_line_breakdown). Optional so
+  // a pre-migration read is safe; NULL on historical rows → render net only (no fabricated discount).
+  retail_unit?: number | null;
+  discount_pct?: number | null;
+  discount_amt?: number | null;
 }
 interface DetailSelection {
   id: string;
@@ -52,6 +57,7 @@ interface OrderDetailRow {
 
 const money = (n: number | null | undefined) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(n ?? 0));
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 // order_items is fetched in its OWN top-level query (ITEM_COLS below), NOT embedded here.
 // WHY: a nested order_items embed under this .maybeSingle() orders query returned 0 lines while
@@ -67,9 +73,13 @@ const SELECT_COLS = `
     service_offerings ( name, category, price_type, price_unit )
   )`;
 
-const ITEM_COLS = `
+// NET cols + the anchor + name join. The D-43 breakdown trio (retail_unit/discount_pct/discount_amt)
+// is appended in ITEM_COLS_FULL; the read falls back to ITEM_COLS_CORE on a missing-column error so
+// the detail never breaks before 20260713_order_items_line_breakdown applies (deploy-window safe).
+const ITEM_COLS_CORE = `
   id, quantity, unit_price, subtotal, business_inventory_id,
   business_inventory ( name, size, sku )`;
+const ITEM_COLS_FULL = `${ITEM_COLS_CORE}, retail_unit, discount_pct, discount_amt`;
 
 export function OrderDetail() {
   const { id }           = useParams<{ id: string }>();
@@ -107,8 +117,14 @@ export function OrderDetail() {
     // Line items — DEDICATED top-level query (see SELECT_COLS note). ALL rows regardless of anchor
     // (no inner-join, no plant_id filter). Scoped by order_id AFTER the order was verified to
     // belong to businessId above (AC-3 — an order from another business already returned null).
-    const { data: itemsData, error: itemsErr } = await supabase
-      .from('order_items').select(ITEM_COLS).eq('order_id', id);
+    let itemsData: any = null; let itemsErr: any = null;
+    ({ data: itemsData, error: itemsErr } = await supabase
+      .from('order_items').select(ITEM_COLS_FULL).eq('order_id', id));
+    if (itemsErr && (itemsErr.code === '42703' || itemsErr.code === 'PGRST204')) {
+      // D-43 breakdown cols not applied yet — read the core set; render net only (no discount line).
+      ({ data: itemsData, error: itemsErr } = await supabase
+        .from('order_items').select(ITEM_COLS_CORE).eq('order_id', id));
+    }
     if (itemsErr) { setError(itemsErr.message); setLoading(false); return; }
     o.order_items = (itemsData ?? []) as DetailItem[];
 
@@ -131,6 +147,7 @@ export function OrderDetail() {
       storedSubtotal:  Number(o.subtotal),
       reconciles: Math.abs((plantLinesTotal + servicesTotal) - Number(o.subtotal)) < 0.01,
       services: o.order_service_selections.length,
+      hasStoredBreakdown: o.order_items.length > 0 && o.order_items.every(it => it.retail_unit != null),
       canManage,
     });
   }, [businessId, id, canManage]);
@@ -209,6 +226,20 @@ export function OrderDetail() {
   const st = ORDER_STATUS_META[order.status] ?? { label: order.status, color: '#6b7280', bg: '#f3f4f6' };
   const cust = order.customers;
 
+  // D-43: render the STORED per-line breakdown (frozen-at-charge) — NO computeOrderPricing here, no
+  // recompute. hasBreakdown = every goods line stored a retail_unit (a historical/pre-migration order
+  // has NULLs → render net only, no fabricated discount line, D-9 omit-not-fake). When a discount is
+  // present, goods show at RETAIL + a grouped discount block, mirroring Review/Confirmation (§6 r16).
+  const goodsLines = order.order_items;
+  const hasBreakdown = goodsLines.length > 0 && goodsLines.every(it => it.retail_unit != null);
+  const goodsRetailSubtotal = hasBreakdown
+    ? round2(goodsLines.reduce((s, it) => s + Number(it.retail_unit) * it.quantity, 0)) : 0;
+  const discountTotal = hasBreakdown
+    ? round2(goodsLines.reduce((s, it) => s + Number(it.discount_amt ?? 0), 0)) : 0;
+  const showDiscount = hasBreakdown && discountTotal > 0;
+  const discPct = goodsLines.find(it => Number(it.discount_amt ?? 0) > 0)?.discount_pct ?? 0;
+  const discountLabel = discPct > 0 ? `Discount — ${discPct}% off` : 'Discount';
+
   return (
     <Shell>
       {/* Header */}
@@ -244,18 +275,21 @@ export function OrderDetail() {
         ) : <p style={sub}>Unknown customer</p>}
       </Card>
 
-      {/* Line items */}
+      {/* Line items — goods shown at RETAIL when a discount applies (the grouped discount block
+          below shows the tier came off), else at net. All from STORED breakdown, no recompute. */}
       <Card title={`Plants (${order.order_items.length})`}>
         {order.order_items.map(it => {
           const gone = removed.has(it.id);
           const q = qtyEdits[it.id] ?? it.quantity;
+          // showDiscount → display the RETAIL rate/amount (the discount is shown in the group block).
+          const displayRate = showDiscount ? Number(it.retail_unit) : it.unit_price;
           return (
             <div key={it.id} style={{ ...lineRow, opacity: gone ? 0.4 : 1 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ margin: 0, fontWeight: 600, fontSize: '0.85rem', color: '#111827', textDecoration: gone ? 'line-through' : 'none' }}>
                   {orderItemName(it)}
                 </p>
-                <p style={{ margin: 0, fontSize: '0.7rem', color: '#9ca3af' }}>{orderItemTag(it)} · {money(it.unit_price)} ea</p>
+                <p style={{ margin: 0, fontSize: '0.7rem', color: '#9ca3af' }}>{orderItemTag(it)} · {money(displayRate)} ea{showDiscount ? ' (retail)' : ''}</p>
               </div>
               {canManage && !gone ? (
                 <input type="number" min={1} value={q}
@@ -265,7 +299,7 @@ export function OrderDetail() {
                 <span style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 600 }}>×{it.quantity}</span>
               )}
               <span style={{ width: 74, textAlign: 'right', fontSize: '0.82rem', fontWeight: 600, color: '#27500A' }}>
-                {money((canManage ? q : it.quantity) * it.unit_price)}
+                {money((canManage ? q : it.quantity) * displayRate)}
               </span>
               {canManage && (
                 <button
@@ -279,6 +313,22 @@ export function OrderDetail() {
             </div>
           );
         })}
+
+        {/* Grouped discount block (only when the stored breakdown carries a discount) — goods retail
+            subtotal → discount line → goods after discount. Mirrors the Confirmation receipt exactly. */}
+        {showDiscount && (
+          <div style={{ borderTop: '1px solid #f3f4f6', marginTop: 6, paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#6b7280' }}>
+              <span>Goods subtotal (retail)</span><span>{money(goodsRetailSubtotal)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#27500A', fontWeight: 600 }}>
+              <span>{discountLabel}</span><span>−{money(discountTotal)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#374151', fontWeight: 600 }}>
+              <span>Goods after discount</span><span>{money(round2(goodsRetailSubtotal - discountTotal))}</span>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Services */}

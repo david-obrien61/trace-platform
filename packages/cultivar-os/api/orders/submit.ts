@@ -306,7 +306,10 @@ async function handleCreate(req: any, res: any) {
     // The tier is APPLIED once, below, via the shared computeOrderPricing (D-39 — the same fn the
     // Review runs → Review === submit === QBO). This loop validates, refuses unpriced lines, and
     // defeats client price tampering; it no longer computes the net per line.
-    const resolvedLines: Array<{ plant: any; quantity: number; stockLineId: string | null; unitPrice: number; subtotal: number }> = [];
+    // D-43: each resolved line carries its NET (unitPrice/subtotal — what's charged) AND its stored
+    // show-the-work breakdown (retailUnit/discountPct/discountAmt) — all written to order_items so
+    // every downstream surface renders the stored fact, no recompute. Filled after computeOrderPricing.
+    const resolvedLines: Array<{ plant: any; quantity: number; stockLineId: string | null; unitPrice: number; subtotal: number; retailUnit: number; discountPct: number; discountAmt: number }> = [];
     const goodsInputs: PricingLineInput[] = [];
     let anyLargeContainer = false;
 
@@ -393,7 +396,7 @@ async function handleCreate(req: any, res: any) {
         name: plant.common_name ?? plant.species ?? 'this item',
         unitPrice: serverSellPrice, qty: quantity, unitCost: serverUnitCost,
       });
-      resolvedLines.push({ plant, quantity, stockLineId, unitPrice: 0, subtotal: 0 }); // net filled after compute
+      resolvedLines.push({ plant, quantity, stockLineId, unitPrice: 0, subtotal: 0, retailUnit: 0, discountPct: 0, discountAmt: 0 }); // net + breakdown filled after compute
     }
 
     // ── 4. Service amounts (attach-rule netting over the WHOLE cart) ─────────
@@ -500,9 +503,20 @@ async function handleCreate(req: any, res: any) {
     // one of not_identified (rate unset → redline) / taxed / exempt (documented). The surfaces render
     // taxStatus; the server never fabricates a rate and never zeros tax without a reason.
     const pricing = computeOrderPricing([...goodsInputs, ...serviceInputs], resolvedTier, taxRate, effectiveExemption);
-    // Write each goods line's tier-priced net back onto resolvedLines (same order) → order_items.
+    // Write each goods line's tier-priced NET + its stored show-the-work BREAKDOWN back onto
+    // resolvedLines (same order) → order_items (D-43). retailUnit/discountPct/discountAmt are the
+    // frozen-at-charge provenance every downstream surface renders (no recompute). INVARIANT:
+    // retail_total − discount_amt === net_total (discountAmt = round2(retailTotal − netTotal) by
+    // construction in computeOrderPricing, so it holds exactly).
     const goodsPriced = pricing.lines.filter(p => p.kind === 'goods');
-    resolvedLines.forEach((rl, i) => { rl.unitPrice = goodsPriced[i].netUnit; rl.subtotal = goodsPriced[i].netTotal; });
+    resolvedLines.forEach((rl, i) => {
+      const gp = goodsPriced[i];
+      rl.unitPrice   = gp.netUnit;
+      rl.subtotal    = gp.netTotal;
+      rl.retailUnit  = gp.retailUnit;
+      rl.discountPct = gp.discountPct;
+      rl.discountAmt = gp.discountAmt;
+    });
     for (const gp of goodsPriced) if (gp.degraded) degradedItems.push(gp.name);
     const subtotal  = pricing.discountedSubtotal;
     const taxAmount = pricing.tax;
@@ -608,21 +622,45 @@ async function handleCreate(req: any, res: any) {
     // the AC-1 vertical noun order_items.plant_id was dropped 20260709). A stock line anchors to
     // its own id; a specimen anchors to its lot (cultivar_plants.inventory_id, carried on the
     // cart plant object). Money/qty unchanged — only the line's NAME anchor.
-    const itemRows = resolvedLines.map((rl) => {
-      const row: Record<string, unknown> = {
-        order_id:   orderId,
-        quantity:   rl.quantity,
-        unit_price: rl.unitPrice,   // server-authoritative sell_price (D-35)
-        subtotal:   rl.subtotal,
-        business_inventory_id: rl.stockLineId ?? rl.plant.inventory_id ?? null,
-      };
-      return row;
-    });
+    // D-43: each row carries the NET (unit_price/subtotal — what's charged) AND the persisted
+    // show-the-work breakdown (retail_unit/discount_pct/discount_amt) so order-detail + QBO render
+    // the stored discount line, no recompute. The breakdown cols are gated (20260713_order_items_
+    // line_breakdown); insert WITH them and, on a missing-column error, strip + retry (deploy-window
+    // safe — the order still lands; the breakdown re-enables once the migration applies).
+    const BREAKDOWN_KEYS = ['retail_unit', 'discount_pct', 'discount_amt'];
+    const itemRows = resolvedLines.map((rl) => ({
+      order_id:   orderId,
+      quantity:   rl.quantity,
+      unit_price: rl.unitPrice,   // NET — server-authoritative sell_price after tier (D-35/D-39)
+      subtotal:   rl.subtotal,    // NET line total
+      business_inventory_id: rl.stockLineId ?? rl.plant.inventory_id ?? null,
+      retail_unit:  rl.retailUnit,   // pre-discount unit price (frozen-at-charge provenance)
+      discount_pct: rl.discountPct,  // tier % applied to this line (0 = none)
+      discount_amt: rl.discountAmt,  // retail_total − net_total (0 = none)
+    }));
     console.log('[TRACE:RESOLVE] order_items anchors', {
       count: itemRows.length,
       anchors: resolvedLines.map(rl => `inv:${rl.stockLineId ?? rl.plant.inventory_id ?? 'none'}`),
     });
-    const { error: itemErr } = await db.from('order_items').insert(itemRows);
+    // [TRACE:PRICE] the PERSISTED per-line breakdown + the reconcile invariant (STD-012 persistence).
+    console.log('[TRACE:PRICE] order_items breakdown persisted', {
+      lines: resolvedLines.map(rl => ({
+        retailUnit: rl.retailUnit, qty: rl.quantity, discountPct: rl.discountPct,
+        discountAmt: rl.discountAmt, net: rl.subtotal,
+        reconciles: Math.abs((round2(rl.retailUnit * rl.quantity) - rl.discountAmt) - rl.subtotal) < 0.01,
+      })),
+    });
+    let itemErr: any;
+    ({ error: itemErr } = await db.from('order_items').insert(itemRows));
+    if (itemErr && (itemErr.code === '42703' || itemErr.code === 'PGRST204')) {
+      console.log('[TRACE:PRICE] order_items breakdown columns absent — retrying insert without them (migration pending)', { code: itemErr.code });
+      const stripped = itemRows.map((r) => {
+        const c: Record<string, unknown> = { ...r };
+        for (const k of BREAKDOWN_KEYS) delete c[k];
+        return c;
+      });
+      ({ error: itemErr } = await db.from('order_items').insert(stripped));
+    }
     if (itemErr) throw new Error(`Order item: ${itemErr.message}`);
 
     // ── 9. Order service selections (attach-rule netted quantities + override leakage) ──
@@ -934,11 +972,35 @@ async function handleUpdate(req: any, res: any) {
     });
 
     // ── Writes: line qtys, removals, service re-net, order totals + delivery date ──
+    // D-43 (STD-016): the edit RE-PERSISTS each kept line's breakdown too — WITHOUT this, an edited
+    // tiered order would keep its stale create-time retail_unit/discount_amt while unit_price/subtotal
+    // move to the re-charged net, VIOLATING the invariant (retail − discount ≠ net). handleUpdate
+    // charges baseline (RETAIL_FLOOR — no tier; the carried #107/#114 gap), so the refreshed breakdown
+    // is retail_unit = sell_price, discount_pct 0, discount_amt 0 → order-detail shows net only, HONEST
+    // to what the edit re-charged. The breakdown cols are gated; on a missing-column error, strip once
+    // and update the rest without them (deploy-window safe).
+    let breakdownColsMissing = false;
     for (const k of kept) {
+      const net = round2(k.r.sellPrice! * k.newQty);
+      const full: Record<string, unknown> = {
+        quantity: k.newQty, unit_price: k.r.sellPrice, subtotal: net,
+        retail_unit: k.r.sellPrice, discount_pct: 0, discount_amt: 0,
+      };
+      if (!breakdownColsMissing) {
+        const { error: upErr } = await db.from('order_items').update(full).eq('id', k.item.id);
+        if (upErr && (upErr.code === '42703' || upErr.code === 'PGRST204')) {
+          console.log('[TRACE:PRICE] order_items breakdown columns absent on edit — updating without them (migration pending)', { code: upErr.code });
+          breakdownColsMissing = true;
+        } else { continue; }
+      }
+      // stripped path (columns absent): update only the net + qty
       await db.from('order_items')
-        .update({ quantity: k.newQty, unit_price: k.r.sellPrice, subtotal: round2(k.r.sellPrice! * k.newQty) })
+        .update({ quantity: k.newQty, unit_price: k.r.sellPrice, subtotal: net })
         .eq('id', k.item.id);
     }
+    console.log('[TRACE:PRICE] order edit — breakdown refreshed (baseline; STD-016)', {
+      orderId, keptLines: kept.length, breakdownColsMissing,
+    });
     const removeIds = resolvedAll.filter(x => !x.keep || x.newQty <= 0).map(x => x.item.id);
     if (removeIds.length > 0) {
       await db.from('order_items').delete().in('id', removeIds);

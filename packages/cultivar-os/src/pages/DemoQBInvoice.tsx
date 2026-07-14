@@ -57,11 +57,19 @@ function QBInvoicePreview() {
       const o = order as any;
 
       // Plant lines — anchored to the business_inventory lot (D-34; order_items.plant_id dropped
-      // 20260709), named by the SAME resolver as the roster/detail/real-push.
-      const { data: itemsRaw } = await supabase
+      // 20260709), named by the SAME resolver as the roster/detail/real-push. D-43: also read the
+      // STORED per-line breakdown (retail_unit/discount_pct/discount_amt) so the invoice SHOWS the
+      // discount as its own line (goods at retail → discount line), never a silently-net rate. The
+      // breakdown cols are gated (20260713); fall back to the net-only select on a missing-column error.
+      const ITEM_CORE = 'quantity, unit_price, subtotal, business_inventory_id, business_inventory ( name, size, sku )';
+      let itemsRaw: any = null; let itemsErr: any = null;
+      ({ data: itemsRaw, error: itemsErr } = await supabase
         .from('order_items')
-        .select('quantity, unit_price, subtotal, business_inventory_id, business_inventory ( name, size, sku )')
-        .eq('order_id', orderId);
+        .select(`${ITEM_CORE}, retail_unit, discount_pct, discount_amt`)
+        .eq('order_id', orderId));
+      if (itemsErr && (itemsErr.code === '42703' || itemsErr.code === 'PGRST204')) {
+        ({ data: itemsRaw } = await supabase.from('order_items').select(ITEM_CORE).eq('order_id', orderId));
+      }
 
       // Service lines — real service_offerings.name (never a CHOICE_META branch label).
       const { data: selsRaw } = await supabase
@@ -76,17 +84,33 @@ function QBInvoicePreview() {
         .eq('id', o.business_id)
         .maybeSingle();
 
+      // D-43: when every goods line stored a retail_unit AND a discount was applied, show goods at
+      // RETAIL and add ONE explicit discount line (mirrors QBO's list-price + discount convention +
+      // the Review/Confirmation receipt). Historical/pre-migration rows (null retail_unit) → render
+      // net only, no discount line (omit-not-fake, D-9). All from STORED columns — no recompute.
+      const goodsItems  = (itemsRaw ?? []) as any[];
+      const hasBreakdown = goodsItems.length > 0 && goodsItems.every(it => it.retail_unit != null);
+      const discountTotal = hasBreakdown
+        ? Math.round(goodsItems.reduce((s, it) => s + Number(it.discount_amt ?? 0), 0) * 100) / 100 : 0;
+      const showDiscount = hasBreakdown && discountTotal > 0;
+      const discPct = goodsItems.find(it => Number(it.discount_amt ?? 0) > 0)?.discount_pct ?? 0;
+
       const lines: PreviewLine[] = [];
-      for (const it of (itemsRaw ?? []) as any[]) {
+      for (const it of goodsItems) {
         const name      = orderItemName(it);
         const container = it.business_inventory?.size ?? null;
         const tag       = orderItemTag(it);
         const label     = container ? `${name} — ${container}` : (name === 'Unknown plant' && tag !== '—' ? tag : name);
+        const rate   = showDiscount ? Number(it.retail_unit) : Number(it.unit_price ?? 0);
+        const amount = showDiscount
+          ? Math.round(Number(it.retail_unit) * Number(it.quantity ?? 1) * 100) / 100
+          : Number(it.subtotal ?? 0);
+        lines.push({ description: label, qty: Number(it.quantity ?? 1), rate, amount });
+      }
+      if (showDiscount) {
         lines.push({
-          description: label,
-          qty:  Number(it.quantity ?? 1),
-          rate: Number(it.unit_price ?? 0),
-          amount: Number(it.subtotal ?? 0),
+          description: `Discount${discPct > 0 ? ` (${discPct}% off)` : ''}`,
+          qty: 1, rate: -discountTotal, amount: -discountTotal,
         });
       }
       for (const s of (selsRaw ?? []) as any[]) {
@@ -203,14 +227,18 @@ function QBInvoicePreview() {
               </tr>
             </thead>
             <tbody>
-              {data.lines.map((l, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #f9fafb' }}>
-                  <td style={{ padding: '14px 0', fontSize: '0.9375rem', color: '#374151' }}>{l.description}</td>
-                  <td style={{ textAlign: 'right', padding: '14px 0', color: '#374151' }}>{l.qty}</td>
-                  <td style={{ textAlign: 'right', padding: '14px 0', color: '#374151' }}>${l.rate.toFixed(2)}</td>
-                  <td style={{ textAlign: 'right', padding: '14px 0', fontWeight: 500, color: '#374151' }}>${l.amount.toFixed(2)}</td>
-                </tr>
-              ))}
+              {data.lines.map((l, i) => {
+                const isDiscount = l.amount < 0;
+                const fmt = (n: number) => (n < 0 ? `−$${Math.abs(n).toFixed(2)}` : `$${n.toFixed(2)}`);
+                return (
+                  <tr key={i} style={{ borderBottom: '1px solid #f9fafb' }}>
+                    <td style={{ padding: '14px 0', fontSize: '0.9375rem', color: isDiscount ? '#166534' : '#374151', fontWeight: isDiscount ? 600 : 400 }}>{l.description}</td>
+                    <td style={{ textAlign: 'right', padding: '14px 0', color: '#374151' }}>{isDiscount ? '' : l.qty}</td>
+                    <td style={{ textAlign: 'right', padding: '14px 0', color: isDiscount ? '#166534' : '#374151' }}>{isDiscount ? '' : fmt(l.rate)}</td>
+                    <td style={{ textAlign: 'right', padding: '14px 0', fontWeight: isDiscount ? 600 : 500, color: isDiscount ? '#166534' : '#374151' }}>{fmt(l.amount)}</td>
+                  </tr>
+                );
+              })}
               <tr>
                 <td style={{ padding: '14px 0', fontSize: '0.9375rem', color: '#374151' }}>Sales Tax</td>
                 <td style={{ textAlign: 'right', padding: '14px 0', color: '#374151' }}>1</td>

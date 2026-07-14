@@ -4,7 +4,16 @@
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.
 
-**Last updated:** 2026-07-13 (**D-42 (proposed) INVENTORY DECREMENT-ON-PAID (the Amazon model) — BUILDER-COMPLETE, migration
+**Last updated:** 2026-07-13 (**D-43 (proposed) ORDER PERSISTS ITS OWN LINE BREAKDOWN (frozen-at-charge show-the-work) — BUILDER-COMPLETE, migration APPLIED +
+catalog-verified (A–E green, invariant holds), owner-proof owed.** The durable fix for the recurring "tier discount CHARGED but no discount LINE on order-detail/QBO" gap:
+`submit.ts` computed the per-line breakdown (`computeOrderPricing`) then DISCARDED it (persisting only net `unit_price`/`subtotal`),
+so order-detail + both QBO surfaces had nothing to render. FIX (STD-012 persistence clause + STD-016): the order PERSISTS its breakdown
+on `order_items` (`retail_unit`/`discount_pct`/`discount_amt`, ONE additive gated migration `20260713_order_items_line_breakdown.sql`)
+at submit on CREATE and EDIT; order-detail + DemoQBInvoice preview + the real QB push RENDER the stored fact (goods at retail + explicit
+discount line), no downstream recompute. INVARIANT retail−discount===net; historical rows render net only (D-9). Confirmation/Review
+unchanged (response breakdown IS the persisted output / pre-submit). STD-012 amended (persistence clause + scar + changelog v2.1). ZERO
+new api-fn (12/12); verify exit 0 zero net-new. Home: `docs/decisions/2026-07-13-order-line-breakdown-persisted-D43.md`. Ledger row #121.
+PRIOR: **D-42 (proposed) INVENTORY DECREMENT-ON-PAID (the Amazon model) — BUILDER-COMPLETE, migration
 gated, owner-proof owed.** `qty` is decremented PER-UNIT + ATOMICALLY (via the new `adjust_inventory_qty` RPC — concurrency-safe,
 guarded, cannot go negative) at ORDER-PAID/CONFIRMED (submit.ts §11), NOT at delivery; status DERIVES from qty (qty>0 → available,
 qty<=0 → depleted — STD-011), replacing the coarse whole-lot flip to 'reserved' (which wrongly reserved a whole 45-lot on one sale
@@ -82,6 +91,18 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-13 · ORDER PERSISTS ITS OWN LINE BREAKDOWN — NEW decision D-43 (proposed); strengthens STD-012):** No drift.
+> The durable fix for the recurring "tier discount CHARGED but no discount LINE on order-detail/QBO" gap: `submit.ts` computed the
+> per-line breakdown (`computeOrderPricing`) then DISCARDED it, persisting only net `unit_price`/`subtotal` → downstream surfaces had
+> nothing to render. Fixed by PERSISTING the breakdown on `order_items` (`retail_unit`/`discount_pct`/`discount_amt`, ONE additive
+> gated migration `20260713_order_items_line_breakdown.sql`) at submit — on CREATE and EDIT (**STD-016**) — and having order-detail +
+> both QBO surfaces RENDER the stored fact, no downstream recompute. NEW decision **[[D-43]]** logged (home:
+> `docs/decisions/2026-07-13-order-line-breakdown-persisted-D43.md`) + **STD-012 PERSISTENCE CLAUSE** amended into STANDARDS.md
+> (the anti-recurrence step). Abided **STD-012** (taken to its conclusion — compute ONCE at submit, persist, render stored; recompute-
+> per-surface is the anti-pattern), **STD-016** (edit persists the refreshed breakdown), **AC-3** (business-scoped reads), **D-9**
+> (historical/null rows render net only, never a fabricated partial discount), **§6 r11/r16** (ZERO new api-fn 12/12; QBO discount-line
+> representation named against the industry standard, with the untestable-surface divergence documented). No prior decision contradicted.
+>
 > ✅ **Drift watch (2026-07-13 · INVENTORY DECREMENT-ON-PAID — NEW decision D-42 (proposed)):** No drift.
 > Built the missing per-unit inventory decrement at order-paid (submit.ts §11) — atomic via the new `adjust_inventory_qty` RPC,
 > status derives from qty (replacing the whole-lot 'reserved' flip), whole lifecycle (create/edit/delete/cancel) coherent through
@@ -376,6 +397,7 @@ decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenan
 |---|---|---|---|---|
 | **Inventory size model = B-clean** | One `business_inventory` row per **variety × size**; `size text` (grower's own value, no CHECK) + `variant_group text` (parent product slug). Migration `20260628_inventory_size_variants.sql` (applied). | [docs/decisions/2026-06-27-discovery-size-variants.md](decisions/2026-06-27-discovery-size-variants.md) (pick recorded at line 64); build state in [2026-07-07-size-variant-build-state-recon.md](decisions/2026-07-07-size-variant-build-state-recon.md) | 2026-06-27 | **DECIDED** |
 | **D-34** Lot-level history, "the lot is the SKU" | LAWNS tracks **lots (qty-of-SKU)** via `business_inventory`, **not individual organisms**; history attaches to the variety/lot. `cultivar_plants` demoted to vertical-IDENTITY-only. | [docs/DECISIONS.md](DECISIONS.md) D-34 (promoted from the migration header) + [supabase/migrations/20260613_cultivar_plants_untangle.sql](../supabase/migrations/20260613_cultivar_plants_untangle.sql) (lines 4–11) + design in [docs/architecture/INVENTORY-RESTRUCTURE-FEASIBILITY.md](architecture/INVENTORY-RESTRUCTURE-FEASIBILITY.md) | 2026-06-13 (recorded as D-34 2026-07-07) | **DECIDED** |
+| **D-43** Order persists its own line breakdown (frozen-at-charge show-the-work) | An order PERSISTS its per-line breakdown at submit (`retail_unit`/`discount_pct`/`discount_amt` on `order_items`) — computed ONCE by `computeOrderPricing`, on CREATE and EDIT (STD-016) — and EVERY surface RENDERS the stored fact (order-detail + both QBO surfaces show the discount line, no downstream recompute). Fixes the recurring "discount CHARGED but no discount LINE on order-detail/QBO" gap (submit computed then discarded the breakdown). INVARIANT retail−discount===net; historical rows render net only (D-9). Strengthens STD-012 (persistence clause). | [docs/decisions/2026-07-13-order-line-breakdown-persisted-D43.md](decisions/2026-07-13-order-line-breakdown-persisted-D43.md) + migration `20260713_order_items_line_breakdown.sql` (APPLIED + A–E verified) + STD-012 amendment | 2026-07-13 | **PROPOSED** (builder-complete; migration APPLIED + catalog-verified A–E; owner-proof owed) |
 | **D-42** Inventory decrement-on-paid (the Amazon model) | `qty` decremented per-unit + atomically at ORDER-PAID/CONFIRMED (submit.ts §11), NOT at delivery; status DERIVES from qty (available/depleted), replacing the whole-lot 'reserved' flip; one signed-delta RPC (`adjust_inventory_qty`) serves create/edit/delete/cancel; oversell surfaced never negative. Adds `reorder_point` stub (next build = reorder threshold). UNBLOCKS reconciliation. | [docs/decisions/2026-07-13-inventory-decrement-on-paid-D42.md](decisions/2026-07-13-inventory-decrement-on-paid-D42.md) + migration `20260713_inventory_decrement_and_reorder.sql` (gated) | 2026-07-13 | **PROPOSED** (builder-complete; migration gated; owner-proof owed) |
 | **Three-layer inventory model (item → size class → stock line) + lifecycle-stages-as-events** | Catalog item → size class → countable stock line; lifecycle stages modeled as events on the lot. | ⚠️ **No single dedicated doc found.** Realized across the B-clean size decision (variety×size rows) + the June-13 lot=SKU untangle; lifecycle/stages-as-events design captured in [docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md](cost-to-produce/COST-TO-PRODUCE-DESIGN.md) §5.3/§5.9 (project→product lifecycle, season-end event on each lot). The "June 5" framing appears to be **chat-origin, not a repo doc** — see PART 2 flag. | June 5 (framing) / 2026-06-13–27 (realized) | **DECIDED (scattered)** |
 | **QR resolves to VARIETY (bare-domain QR), size is a pick-step** | A pot's QR encodes `${baseUrl}/plant/${tag_id}` → public `/plant/:tagId` page → resolves the variety; size is chosen at count/checkout time (the count-side size-picker). | [docs/decisions/2026-06-26-grower-resolve-design.md](decisions/2026-06-26-grower-resolve-design.md) + [walk-and-count-inventory-verify-first.md](decisions/walk-and-count-inventory-verify-first.md); front-door path in [2026-07-07-qr-order-front-door-recon.md](decisions/2026-07-07-qr-order-front-door-recon.md) | 2026-06-21 / 26 | **DECIDED** |

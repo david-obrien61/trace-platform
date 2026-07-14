@@ -1,7 +1,7 @@
 # STANDARDS.md — TRACE Engineering Standards
 # Version: 2.0
 # Created: 2026-06-04
-# Last updated: 2026-07-13
+# Last updated: 2026-07-13 (STD-012 persistence-clause amendment — D-43)
 # Owner: David O'Brien / TRACE Enterprises
 
 > Every standard on this list traces to a real failure that bit us.
@@ -523,6 +523,20 @@ diverge from the server; an interactive surface may recompute ONLY by calling th
 function with the same inputs. Every display surface (review, confirmation, invoice,
 QBO, email) renders from that one output — no surface re-derives.
 
+**PERSISTENCE CLAUSE (2026-07-13, D-43):** For any charge breakdown a customer or owner
+must SEE after the transaction (discount, tax, per-line detail), the computation is
+PERSISTED on the order at submit; post-transaction surfaces RENDER the stored breakdown,
+they do not recompute. Recompute-per-surface is the anti-pattern — it fragments into N
+copies that drift, and any surface that computes NOTHING (order-detail, QBO) simply shows
+nothing. An invoice stores its own lines; you don't recompute an invoice every time you
+view it. Frozen-at-charge: a later tier/price change cannot make a displayed discount
+disagree with the total, because surfaces read history, not a live recompute. Pre-submit
+surfaces (Review) legitimately compute live — nothing is stored yet — but they call the
+SAME function, so their preview equals what will be persisted. A stored breakdown must
+reconcile to what was charged (retail_total − discount_amt === net_total per line);
+historical rows that never stored a breakdown render net only — never a fabricated
+partial discount line (D-9 omit-not-fake).
+
 **Scar (2026-07-10):** The Review page ran its own pricing (`Σ raw sell_price × qty`,
 tier never applied) and showed $124/each + a $3539.78 total, while submit/QBO applied
 the tier correctly at $115.20/each + $3418.54 — ~$121 hidden inside a Review that looked
@@ -531,6 +545,19 @@ Review silently priced at retail). Fixed by `computeOrderPricing` as the single 
 function (D-39), with the client resolving the tier from the same authoritative inputs
 submit uses (E1).
 
+**Scar (2026-07-13 — the persistence gap, D-43):** The tier discount was CHARGED
+correctly ($115.20) but the show-the-work discount LINE rendered only on Review and
+Confirmation, NOT on order-detail (`/orders/:id`) or the QBO invoice — because submit
+COMPUTED the full per-line breakdown (`computeOrderPricing`) then DISCARDED it, persisting
+only the net `unit_price`/`subtotal` ([submit.ts:615-616]). Every downstream surface had
+nothing to read, so it could not show the discount; "recompute per surface" would have
+fragmented the one computation into copies. This resurfaced repeatedly. Fixed (D-43) by
+PERSISTING the breakdown on `order_items` (`retail_unit`/`discount_pct`/`discount_amt`) at
+submit — on create AND edit (STD-016) — and having order-detail + both QBO surfaces RENDER
+the stored fact (no recompute). This scar is why the PERSISTENCE CLAUSE above exists: the
+STEP 0 roster-match now catches "are you persisting the breakdown or recomputing it
+downstream?" on every future pricing-display build.
+
 **In practice:**
 - One pricing function in `packages/shared`; submit is the tamper-defended authority.
 - A client surface that must show live totals calls THAT function with THE SAME inputs —
@@ -538,6 +565,12 @@ submit uses (E1).
 - Read-only surfaces render the server's returned numbers; they do not recompute.
 - Any client-held pricing snapshot (tier, rate) is a divergence risk: resolve from
   authoritative inputs, treat the snapshot as a fast-path only.
+- PERSIST the breakdown at submit (per-line retail/discount/net) so post-transaction
+  surfaces (order-detail, invoice, QBO, email) RENDER the stored fact instead of
+  recomputing or showing nothing. Persist on the edit path too, or the stored breakdown
+  goes stale vs the re-charged net (STD-016). Enforce the reconcile invariant on write
+  (retail_total − discount_amt === net_total). Render net-only for historical rows that
+  never stored a breakdown — never a fabricated partial discount line.
 
 **Relationship:** Extends STD-011 (one canonical representation) from a stored fact to a
 computed output — pricing is a fact-in-motion, and two computations of it drift exactly as
@@ -961,6 +994,7 @@ a standard's application."
 | 1.8 | 2026-06-11 | BENCH-E Rule 7 added — MODEL NAMES ARE VALUES, NOT SOURCE CONSTANTS. Second scar added: `gemini-2.0-flash` deprecated 3 days after the first fix, again requiring a source-code edit + deploy cycle. Fix: model names externalized to `platform_config` table (Layer 1) → `OCR_PRIMARY_MODEL` env var (Layer 2) → hardcoded default (Layer 3, last resort). Model is now `gemini-2.5-flash` (validated in bake-off). A future deprecation = one DB row edit, no code change. |
 | 1.9 | 2026-06-22 | STD-011 added — ONE CANONICAL REPRESENTATION PER FACT. Origin: the membership-active RLS consistency sweep (`data/grower-scan/member-rls-consistency-audit.md`) found "active member" spelled 3 ways across policies, with one (`md_self`) omitting the active filter entirely → a revoked member kept self-device access (live leak). Same disease as the `VITE_TAX_RATE` decorative env var, split model ids, and `unit_cost` dual-meaning. Rule: a single-meaning fact has exactly ONE canonical representation (one column/enum/predicate/helper) referenced everywhere, never re-derived. Promotes AC-4 to a data-integrity invariant with a security consequence; a consistency sweep is a recognized correctness-hardening tool. Open item recorded: owner-only operational tables have no member policy → Staff RLS-blocked despite perms (a product decision, next hardening item). |
 | 2.0 | 2026-07-13 | STD-012 added — SERVER-AUTHORITATIVE PRICING, ONE COMPUTATION. Scar (2026-07-10): the Review page ran its own pricing (`Σ raw sell_price`, tier never applied) → $124/ea, $3539.78 while submit/QBO applied the tier at $115.20/ea, $3418.54 — ~$121 hidden in a Review that looked fine; recurred (`orderTier` null on CustomerCapture → retail). Fixed by `computeOrderPricing` as the single shared fn (D-39) + client resolving the tier from the same authoritative inputs (E1). Extends STD-011 to a computed output. |
+| 2.1 | 2026-07-13 | STD-012 PERSISTENCE CLAUSE added (D-43). Scar: the tier discount was CHARGED correctly but the show-the-work discount LINE rendered only on Review/Confirmation, NOT on order-detail or QBO — submit computed the full breakdown then DISCARDED it, persisting only net `unit_price`/`subtotal`; downstream surfaces had nothing to read. Resurfaced repeatedly. Fixed by PERSISTING the breakdown on `order_items` (`retail_unit`/`discount_pct`/`discount_amt`) at submit (create AND edit — STD-016) and having order-detail + both QBO surfaces RENDER the stored fact (no recompute). The clause: for any post-transaction charge breakdown, compute ONCE at submit, persist, render stored — recompute-per-surface is the anti-pattern. Reconcile invariant: retail_total − discount_amt === net_total; historical (null) rows render net only (D-9). |
 | 2.0 | 2026-07-13 | STD-013 added — MONEY-AFFECTING OVERRIDES ARE REASON-CODED, GATED, AND LOGGED. Territory/scar (2026-07-13): tax exemption forced it open — zeroing/reducing a charge requires a recorded reason + grantable named permission (server-enforced) + actor/timestamp; a $0 with no reason is indistinguishable from a mistake or fraud; the anon/public path can never self-apply (server ignores + logs). Same shape governs the discount + placement-price overrides. |
 | 2.0 | 2026-07-13 | STD-014 added — SOURCED CONFIG, HONEST-UNSET (NEVER A FABRICATED DEFAULT). Scar (2026-07-13): `businesses.tax_rate` was `NOT NULL DEFAULT 0.0825` (TX/LAWNS) → every unset tenant silently given Texas's rate; "chose 8.25%" indistinguishable from "never set it"; compounded by a hardcoded "Tax (8.25%)" email literal. Ancestor: the `VITE_TAX_RATE` decorative env var (STD-011). Fixed by `config.taxRate` jsonb (absence = "not identified"); owner enters own rate, platform never computes it. |
 | 2.0 | 2026-07-13 | STD-015 added — NO TENANT IDENTITY IN SHARED OR CUSTOMER-FACING CODE. Scar (2026-07-13): the shared notification templates were fully LAWNS-hardcoded (subject/body/SMS/footer) → every non-LAWNS tenant's customer emailed "LAWNS Tree Farm"; the checkout-UI sweep (H1–H9) missed the templates. Fixed (ledger #116) by a `NotifyBusiness` token from the active business context, omit-not-fake. Extends AC-1/STD-006 + AC-3 to the customer-facing render layer. |

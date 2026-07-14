@@ -166,22 +166,57 @@ export default async function handler(req: any, res: any) {
     // Build QB line items
     const lines: unknown[] = [];
 
-    for (const item of orderItems || []) {
+    // D-43: read the STORED per-line breakdown (retail_unit/discount_pct/discount_amt — via select('*'))
+    // so the pushed invoice SHOWS the discount as its OWN line (goods at retail → an explicit discount
+    // line), never a silently-net rate. GATED on a discount actually applying: a non-discounted (retail)
+    // order pushes goods at net EXACTLY as before → zero regression; only a discounted order carries the
+    // retail-goods + negative-discount representation. Historical rows (null retail_unit) → net lines, no
+    // discount line (omit-not-fake, D-9). The invoice total is unchanged (retail − discount === net).
+    const goodsRows = (orderItems || []) as any[];
+    const qbHasBreakdown = goodsRows.length > 0 && goodsRows.every((it: any) => it.retail_unit != null);
+    const qbDiscountTotal = qbHasBreakdown
+      ? Math.round(goodsRows.reduce((s: number, it: any) => s + Number(it.discount_amt ?? 0), 0) * 100) / 100 : 0;
+    const qbShowDiscount = qbHasBreakdown && qbDiscountTotal > 0;
+    const qbDiscPct = goodsRows.find((it: any) => Number(it.discount_amt ?? 0) > 0)?.discount_pct ?? 0;
+
+    for (const item of goodsRows) {
       // Name via the shared resolver (the stock line's name — the lot IS the variety).
       const name      = orderItemName(item as any);
       const container = item.business_inventory?.size ?? null;
       const anchor    = orderItemAnchor(item as any);
       console.log('[TRACE:QBO] invoice line — dual anchor', { anchor, name, container });
+      // Goods at RETAIL when a discount applies (the discount line below shows the tier came off), else net.
+      const lineAmount = qbShowDiscount
+        ? Math.round(Number(item.retail_unit) * Number(item.quantity) * 100) / 100
+        : Number(item.subtotal);
+      const lineUnit = qbShowDiscount ? Number(item.retail_unit) : Number(item.unit_price);
       lines.push({
         Description: container ? `${name} — ${container}` : name,
-        Amount: Number(item.subtotal),
+        Amount: lineAmount,
         DetailType: 'SalesItemLineDetail',
         SalesItemLineDetail: {
-          UnitPrice: Number(item.unit_price),
+          UnitPrice: lineUnit,
           Qty: item.quantity,
           ItemRef: { value: '1', name: 'Services' },
         },
       });
+    }
+
+    // ONE explicit discount line (negative SalesItemLine — consistent with this invoice's own
+    // all-SalesItemLine convention, incl. its manual tax line) so the 10% shows on the invoice, not
+    // baked into a net rate. Reads the STORED discount total; never recomputes.
+    if (qbShowDiscount) {
+      lines.push({
+        Description: `Discount${qbDiscPct > 0 ? ` (${qbDiscPct}% off)` : ''}`,
+        Amount: -qbDiscountTotal,
+        DetailType: 'SalesItemLineDetail',
+        SalesItemLineDetail: {
+          UnitPrice: -qbDiscountTotal,
+          Qty: 1,
+          ItemRef: { value: '1', name: 'Services' },
+        },
+      });
+      console.log('[TRACE:QBO] invoice discount line from stored breakdown', { discountTotal: qbDiscountTotal, pct: qbDiscPct });
     }
 
     if (useNewModel) {
