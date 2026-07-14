@@ -85,15 +85,37 @@ async function resolveItemForServer(
   return { sellPrice: null, inventoryId: null, container: null, name: 'this item' };
 }
 
-// Flip a set of inventory lots' status. Reservation is a coarse per-lot status flip (mirrors
-// submit.ts §11) — release = 'available', reserve = 'reserved'. Null ids skipped.
-async function setLotStatus(db: ReturnType<typeof adminDb>, businessId: string, lotIds: (string | null)[], status: 'available' | 'reserved'): Promise<void> {
-  const ids = [...new Set(lotIds.filter((x): x is string => !!x))];
-  for (const id of ids) {
-    await db.from('business_inventory')
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq('id', id).eq('business_id', businessId);
+// D-42: the ONE server-authoritative inventory-adjust path (STD-011 / STD-012). Atomic per-unit
+// qty change via the adjust_inventory_qty RPC (a single guarded UPDATE — concurrency-safe, cannot
+// drive qty negative). delta < 0 decrements (a sale/commit at order-paid); delta > 0 restores
+// (edit-down / delete / cancel). Status DERIVES from qty inside the RPC (qty>0 → available,
+// qty<=0 → depleted; a manual damaged/returned status is preserved). Replaces the old coarse
+// whole-lot status flip to 'reserved'. Deploy-window-safe: if the RPC is not yet applied the call
+// no-ops loudly (decrement deferred) so checkout never breaks before the gated migration lands.
+async function adjustLotQty(
+  db: ReturnType<typeof adminDb>, businessId: string, lotId: string | null, delta: number, ctx: string,
+): Promise<{ applied: boolean; newQty: number | null; reason: string }> {
+  if (!lotId) return { applied: false, newQty: null, reason: 'no_lot' };
+  if (delta === 0) return { applied: true, newQty: null, reason: 'noop' };
+  const { data, error } = await db.rpc('adjust_inventory_qty', {
+    p_lot_id: lotId, p_business_id: businessId, p_delta: delta,
+  });
+  if (error) {
+    // Missing-function (RPC not yet applied) → defer gracefully; anything else → surface, non-fatal.
+    if (error.code === 'PGRST202' || error.code === '42883') {
+      console.log('[TRACE:INVENTORY] adjust_inventory_qty RPC absent — decrement deferred (migration pending)', { ctx, lotId, delta, code: error.code });
+      return { applied: false, newQty: null, reason: 'rpc_absent' };
+    }
+    console.log('[TRACE:INVENTORY] adjust FAILED', { ctx, lotId, delta, code: error.code, error: error.message });
+    return { applied: false, newQty: null, reason: 'rpc_error' };
   }
+  const row: any = Array.isArray(data) ? data[0] : data;
+  const out = { applied: row?.applied === true, newQty: row?.new_qty ?? null, reason: row?.reason ?? 'unknown' };
+  console.log('[TRACE:INVENTORY] lot qty adjusted', { ctx, lotId, delta, newQty: out.newQty, status: row?.new_status, reason: out.reason });
+  if (!out.applied && out.reason === 'oversell_refused') {
+    console.log('[TRACE:INVENTORY] OVERSELL REFUSED — qty not driven negative (surfaced, not silent)', { ctx, lotId, delta, currentQty: out.newQty });
+  }
+  return out;
 }
 
 // Derive the legacy transport_method value (backward compat: delivery routing query + history).
@@ -295,27 +317,30 @@ async function handleCreate(req: any, res: any) {
       let serverSellPriceRaw: number | null | undefined;
       let serverUnitCost: number | null | undefined; // server-read cost (at_cost basis only; NEVER client)
       let stockLineSize: string | null = null;
+      let availableQty: number | null = null; // server-read on-hand for the pre-flight oversell guard (D-42)
 
       if (stockLineId) {
         const { data: invRow } = await db
           .from('business_inventory')
-          .select('sell_price, unit_cost, size, status')
+          .select('sell_price, unit_cost, size, status, qty')
           .eq('id', stockLineId)
           .eq('business_id', businessId)
           .single();
         serverSellPriceRaw = (invRow as any)?.sell_price;
         serverUnitCost     = (invRow as any)?.unit_cost;
         stockLineSize      = (invRow as any)?.size ?? null;
+        availableQty       = (invRow as any)?.qty ?? null;
         console.log('[TRACE:RESOLVE] order anchor — business_inventory (stock line)', { stockLineId });
       } else {
         const { data: invRow } = await db
           .from('cultivar_plants')
-          .select('business_inventory ( sell_price, unit_cost )')
+          .select('business_inventory ( sell_price, unit_cost, qty )')
           .eq('id', plant.id)
           .eq('business_id', businessId)
           .single();
         serverSellPriceRaw = (invRow as any)?.business_inventory?.sell_price;
         serverUnitCost     = (invRow as any)?.business_inventory?.unit_cost;
+        availableQty       = (invRow as any)?.business_inventory?.qty ?? null;
         console.log('[TRACE:RESOLVE] order anchor — cultivar_plants (specimen)', { plantId: plant.id });
       }
 
@@ -337,6 +362,23 @@ async function handleCreate(req: any, res: any) {
         return res.status(400).json({
           error: `No sale price set for ${itemName} — set a price in Inventory before selling.`,
           code: 'NO_SELL_PRICE',
+        });
+      }
+
+      // ── OVERSELL PRE-FLIGHT (D-42, Surface Honesty) — refuse the WHOLE order BEFORE any write
+      // if a line's quantity exceeds the lot's on-hand qty, rather than driving stock negative or
+      // silently short-selling. qty is the truth (STD-011) regardless of the lot's current status
+      // (an old-model 'reserved' lot still carries its real qty). The §11 atomic RPC is the
+      // authoritative guard against a concurrent-depletion race; this is the clean common-case
+      // refusal that avoids a half-committed order.
+      if (availableQty != null && quantity > availableQty) {
+        const itemName = plant.common_name ?? plant.species ?? 'this item';
+        console.log('[TRACE:INVENTORY] REFUSED — insufficient stock (order blocked, no negative qty written)', {
+          plantId: plant.id, itemName, requested: quantity, availableQty,
+        });
+        return res.status(400).json({
+          error: `Only ${availableQty} of ${itemName} in stock — reduce the quantity or restock before selling.`,
+          code: 'INSUFFICIENT_STOCK',
         });
       }
 
@@ -679,15 +721,17 @@ async function handleCreate(req: any, res: any) {
       await db.from('order_compliance_records').insert(complianceRows);
     }
 
-    // ── 11. Reserve each line's inventory lot ──────────────────────────────
-    // Stock state lives on business_inventory. Skip a line whose inventory_id is null.
+    // ── 11. DECREMENT each line's inventory lot (D-42 — decrement-on-paid) ──────────
+    // This is the ORDER-PAID/CONFIRMED commitment point (order written + invoice generated).
+    // Per-unit, ATOMIC (qty = qty - n via the RPC — concurrency-safe, cannot go negative), NOT a
+    // whole-lot status flip. Status DERIVES from the new qty inside the RPC. The lot targeted is the
+    // SAME id the line ANCHORS on (rl.stockLineId ?? rl.plant.inventory_id — D-34) so it can't
+    // silently no-op on a stock-line line. Delivery is a LATER event that does NOT touch qty (the
+    // stock is committed here, at payment). A rare concurrent-depletion oversell is surfaced by the
+    // RPC (the pre-flight already refused the common case) — logged, never a negative qty.
     for (const rl of resolvedLines) {
-      if (rl.plant.inventory_id) {
-        await db
-          .from('business_inventory')
-          .update({ status: 'reserved', updated_at: new Date().toISOString() })
-          .eq('id', rl.plant.inventory_id);
-      }
+      const lotId = rl.stockLineId ?? rl.plant.inventory_id ?? null;
+      await adjustLotQty(db, businessId, lotId, -rl.quantity, 'order-paid decrement');
     }
 
     // ── 12. Leakage alert to business owner (fire-and-forget) ──────────────
@@ -867,9 +911,23 @@ async function handleUpdate(req: any, res: any) {
       taxableSubtotal: editPricing.taxableSubtotal, tax: taxAmount, exemptApplied: editExemption.exempt,
     });
 
-    // ── Re-reserve: release ALL old lots, reserve the KEPT lots (removed lines' lots go free) ──
-    await setLotStatus(db, businessId, resolvedAll.map(x => x.r.inventoryId), 'available');
-    await setLotStatus(db, businessId, kept.map(k => k.r.inventoryId), 'reserved');
+    // ── Re-adjust inventory qty for the edit (D-42) ────────────────────────────────
+    // Under decrement-on-paid the lot was already decremented by the OLD committed qty at create.
+    // An edit re-commits to the NEW qty, so each lot changes by (oldQty − newQty): reducing a line
+    // or removing it (newQty=0) RESTORES stock (delta>0); increasing it decrements further (delta<0,
+    // guarded against negative by the RPC). Deltas are summed per lot (a lot shared by 2 lines is
+    // adjusted once) and applied atomically. Replaces the old release-all/reserve-kept status flips.
+    const editDeltas = new Map<string, number>();
+    for (const x of resolvedAll) {
+      const lotId = x.item.business_inventory_id;
+      if (!lotId) continue;
+      const effectiveNewQty = x.keep ? x.newQty : 0;
+      const delta = Number(x.item.quantity) - effectiveNewQty; // >0 restore, <0 decrement further
+      editDeltas.set(lotId, (editDeltas.get(lotId) ?? 0) + delta);
+    }
+    for (const [lotId, delta] of editDeltas) {
+      await adjustLotQty(db, businessId, lotId, delta, 'order edit');
+    }
     console.log('[TRACE:PRICE] order edit — re-reserved + recomputed', {
       orderId, itemCount, linesSubtotal: round2(linesSubtotal), addonsAmount: round2(addonsAmount),
       subtotal, taxAmount, total, leakageFlag, removed: [...removed],
@@ -931,14 +989,23 @@ async function handleDelete(req: any, res: any) {
   const db = adminDb();
   try {
     const { data: order } = await db
-      .from('orders').select('id').eq('id', orderId).eq('business_id', businessId).maybeSingle();
+      .from('orders').select('id, status').eq('id', orderId).eq('business_id', businessId).maybeSingle();
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
     const { data: itemsRaw } = await db
-      .from('order_items').select('id, business_inventory_id').eq('order_id', orderId);
-    const items = (itemsRaw ?? []) as Array<{ business_inventory_id: string | null }>;
-    const lots = await Promise.all(items.map(it => resolveItemForServer(db, businessId, it)));
-    await setLotStatus(db, businessId, lots.map(l => l.inventoryId), 'available');
+      .from('order_items').select('id, quantity, business_inventory_id').eq('order_id', orderId);
+    const items = (itemsRaw ?? []) as Array<{ quantity: number; business_inventory_id: string | null }>;
+
+    // RESTORE the order's committed stock (D-42) — deleting an order returns its units to the lot.
+    // Guarded: a 'cancelled' order ALREADY restored its stock (handleStatus), so don't double-restore.
+    let restored = 0;
+    if ((order as any).status !== 'cancelled') {
+      for (const it of items) {
+        if (!it.business_inventory_id) continue;
+        await adjustLotQty(db, businessId, it.business_inventory_id, Number(it.quantity), 'order delete restore');
+        restored++;
+      }
+    }
 
     await db.from('order_compliance_records').delete().eq('order_id', orderId);
     await db.from('order_service_selections').delete().eq('order_id', orderId);
@@ -946,7 +1013,7 @@ async function handleDelete(req: any, res: any) {
     const { error: delErr } = await db.from('orders').delete().eq('id', orderId).eq('business_id', businessId);
     if (delErr) throw new Error(`Order delete: ${delErr.message}`);
 
-    console.log('[TRACE:ROSTER] order deleted + reservations released', { orderId, releasedLots: lots.filter(l => l.inventoryId).length });
+    console.log('[TRACE:ROSTER] order deleted + stock restored', { orderId, restoredLines: restored, wasCancelled: (order as any).status === 'cancelled' });
     res.json({ ok: true, orderId });
   } catch (err: any) {
     console.error('[orders/submit:delete]', err.message);
@@ -972,16 +1039,20 @@ async function handleStatus(req: any, res: any) {
   const db = adminDb();
   try {
     const { data: order } = await db
-      .from('orders').select('id').eq('id', orderId).eq('business_id', businessId).maybeSingle();
+      .from('orders').select('id, status').eq('id', orderId).eq('business_id', businessId).maybeSingle();
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
-    // Cancelling frees the reserved stock (R-STATUS: un-cancel does NOT auto-re-reserve — edit to restock).
-    if (status === 'cancelled') {
+    // Cancelling RESTORES the order's committed stock (D-42 — un-decrement). Only on the transition
+    // INTO cancelled from a non-cancelled state (guard against double-restore if already cancelled).
+    // R-STATUS preserved: un-cancel does NOT auto-re-decrement — edit the order to re-commit stock.
+    if (status === 'cancelled' && (order as any).status !== 'cancelled') {
       const { data: itemsRaw } = await db
-        .from('order_items').select('business_inventory_id').eq('order_id', orderId);
-      const items = (itemsRaw ?? []) as Array<{ business_inventory_id: string | null }>;
-      const lots = await Promise.all(items.map(it => resolveItemForServer(db, businessId, it)));
-      await setLotStatus(db, businessId, lots.map(l => l.inventoryId), 'available');
+        .from('order_items').select('quantity, business_inventory_id').eq('order_id', orderId);
+      const items = (itemsRaw ?? []) as Array<{ quantity: number; business_inventory_id: string | null }>;
+      for (const it of items) {
+        if (!it.business_inventory_id) continue;
+        await adjustLotQty(db, businessId, it.business_inventory_id, Number(it.quantity), 'order cancel restore');
+      }
     }
 
     const { error: stErr } = await db.from('orders').update({ status }).eq('id', orderId).eq('business_id', businessId);

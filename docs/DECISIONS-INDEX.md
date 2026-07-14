@@ -4,7 +4,16 @@
 settled. Before re-litigating a design question, look it up here → find its home → **ask
 David to paste the right doc** rather than re-reasoning from scratch.
 
-**Last updated:** 2026-07-13 (**D-41 (proposed) CUSTOMER / PARTY RECORD → standard entity-completeness — BUILDER-COMPLETE, migration
+**Last updated:** 2026-07-13 (**D-42 (proposed) INVENTORY DECREMENT-ON-PAID (the Amazon model) — BUILDER-COMPLETE, migration
+gated, owner-proof owed.** `qty` is decremented PER-UNIT + ATOMICALLY (via the new `adjust_inventory_qty` RPC — concurrency-safe,
+guarded, cannot go negative) at ORDER-PAID/CONFIRMED (submit.ts §11), NOT at delivery; status DERIVES from qty (qty>0 → available,
+qty<=0 → depleted — STD-011), replacing the coarse whole-lot flip to 'reserved' (which wrongly reserved a whole 45-lot on one sale
++ hid it from the dashboard count). Whole lifecycle coherent via ONE signed-delta RPC: create −n · edit ±(old−new) · delete/cancel
+restore +n (guarded vs double-restore). Oversell surfaced (pre-flight INSUFFICIENT_STOCK + RPC guard), never a negative qty. UNBLOCKS
+reconciliation (counted vs expected = last count − sold). `reorder_point` stub column added for the NEXT build (reorder threshold).
+STD-011/STD-012/AC-3; ZERO new api-fn (the RPC is Postgres, not a Vercel fn — 12/12 held); verify exit 0 zero net-new. Home:
+docs/decisions/2026-07-13-inventory-decrement-on-paid-D42.md. Migration `20260713_inventory_decrement_and_reorder.sql` (gated).
+Ledger row #120. PRIOR: **D-41 (proposed) CUSTOMER / PARTY RECORD → standard entity-completeness — BUILDER-COMPLETE, migration
 gated, owner-proof owed.** `customers` brought to the complete standard party record in ONE additive migration (15 cols:
 org/display name · billing address as L1 columns [shipping is order-time on the delivery row; `customer_addresses` ship-to
 book = deferred L2] · tax_id/expiry/cert-doc-slot · payment_terms/credit_limit · status/updated_at/notes) + a grouped
@@ -73,6 +82,25 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-13 · INVENTORY DECREMENT-ON-PAID — NEW decision D-42 (proposed)):** No drift.
+> Built the missing per-unit inventory decrement at order-paid (submit.ts §11) — atomic via the new `adjust_inventory_qty` RPC,
+> status derives from qty (replacing the whole-lot 'reserved' flip), whole lifecycle (create/edit/delete/cancel) coherent through
+> ONE signed-delta RPC, oversell surfaced never negative. NEW decision **[[D-42]]** logged (home:
+> `docs/decisions/2026-07-13-inventory-decrement-on-paid-D42.md`). Abided **STD-011** (qty = ONE canonical on-hand fact; status
+> derives), **STD-012** (server-authoritative, atomic — no JS read-modify-write), **AC-3** (RPC business_id-scoped, service_role-only
+> EXECUTE), **§6 r11** (the RPC is a Postgres function, NOT a Vercel api-fn — 12/12 held). ONE additive gated migration (reorder_point
+> stub + RPC). UNBLOCKS reconciliation (counted vs expected = last count − sold). No prior decision contradicted.
+>
+> ✅ **Drift watch (2026-07-13 · STD-011 UI unification — Add + Edit customer render ONE component — implements D-41 + STD-011, no new decision):** No drift.
+> The "Add Customer" form was the OLD flat 8-field form while "Edit customer" was the NEW grouped `CustomerPartyEditor` (15
+> fields) — two canonical representations of one entity. Unified: `CustomerPartyEditor` gained `mode:'create'|'edit'` (create =
+> empty + buffered + ONE insert via new shared `insertCustomer`; edit unchanged); the old flat Add form is RETIRED. Abided
+> **STD-011** (ONE customer form after this — no second full form), **STD-013/D-40** (exempt requires a reason in BOTH modes),
+> **BENCH-C** (tax_id/credit_limit masked in create too), **§6 r11** (NO new api-fn — create rides a client RLS insert; 12/12).
+> No new decision (implements [[D-41]] + STD-011). NO migration (D-41 cols exist). No-regression bridge: the editor mirrors
+> Billing → the legacy consumed `address_*` on save (both modes) until D-41 follow-up (b) repoints readers to `billing_*`.
+> Ledger #119.
+>
 > ✅ **Drift watch (2026-07-13 · customer/party record → standard entity-completeness — NEW decision D-41 (proposed)):** No drift.
 > Brought `customers` to the complete standard party record in ONE additive migration (15 cols: org/display name, billing
 > address, tax_id/expiry/cert-doc-slot, payment_terms/credit_limit, status/updated_at/notes) + a grouped `CustomerPartyEditor`.
@@ -348,6 +376,7 @@ decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenan
 |---|---|---|---|---|
 | **Inventory size model = B-clean** | One `business_inventory` row per **variety × size**; `size text` (grower's own value, no CHECK) + `variant_group text` (parent product slug). Migration `20260628_inventory_size_variants.sql` (applied). | [docs/decisions/2026-06-27-discovery-size-variants.md](decisions/2026-06-27-discovery-size-variants.md) (pick recorded at line 64); build state in [2026-07-07-size-variant-build-state-recon.md](decisions/2026-07-07-size-variant-build-state-recon.md) | 2026-06-27 | **DECIDED** |
 | **D-34** Lot-level history, "the lot is the SKU" | LAWNS tracks **lots (qty-of-SKU)** via `business_inventory`, **not individual organisms**; history attaches to the variety/lot. `cultivar_plants` demoted to vertical-IDENTITY-only. | [docs/DECISIONS.md](DECISIONS.md) D-34 (promoted from the migration header) + [supabase/migrations/20260613_cultivar_plants_untangle.sql](../supabase/migrations/20260613_cultivar_plants_untangle.sql) (lines 4–11) + design in [docs/architecture/INVENTORY-RESTRUCTURE-FEASIBILITY.md](architecture/INVENTORY-RESTRUCTURE-FEASIBILITY.md) | 2026-06-13 (recorded as D-34 2026-07-07) | **DECIDED** |
+| **D-42** Inventory decrement-on-paid (the Amazon model) | `qty` decremented per-unit + atomically at ORDER-PAID/CONFIRMED (submit.ts §11), NOT at delivery; status DERIVES from qty (available/depleted), replacing the whole-lot 'reserved' flip; one signed-delta RPC (`adjust_inventory_qty`) serves create/edit/delete/cancel; oversell surfaced never negative. Adds `reorder_point` stub (next build = reorder threshold). UNBLOCKS reconciliation. | [docs/decisions/2026-07-13-inventory-decrement-on-paid-D42.md](decisions/2026-07-13-inventory-decrement-on-paid-D42.md) + migration `20260713_inventory_decrement_and_reorder.sql` (gated) | 2026-07-13 | **PROPOSED** (builder-complete; migration gated; owner-proof owed) |
 | **Three-layer inventory model (item → size class → stock line) + lifecycle-stages-as-events** | Catalog item → size class → countable stock line; lifecycle stages modeled as events on the lot. | ⚠️ **No single dedicated doc found.** Realized across the B-clean size decision (variety×size rows) + the June-13 lot=SKU untangle; lifecycle/stages-as-events design captured in [docs/cost-to-produce/COST-TO-PRODUCE-DESIGN.md](cost-to-produce/COST-TO-PRODUCE-DESIGN.md) §5.3/§5.9 (project→product lifecycle, season-end event on each lot). The "June 5" framing appears to be **chat-origin, not a repo doc** — see PART 2 flag. | June 5 (framing) / 2026-06-13–27 (realized) | **DECIDED (scattered)** |
 | **QR resolves to VARIETY (bare-domain QR), size is a pick-step** | A pot's QR encodes `${baseUrl}/plant/${tag_id}` → public `/plant/:tagId` page → resolves the variety; size is chosen at count/checkout time (the count-side size-picker). | [docs/decisions/2026-06-26-grower-resolve-design.md](decisions/2026-06-26-grower-resolve-design.md) + [walk-and-count-inventory-verify-first.md](decisions/walk-and-count-inventory-verify-first.md); front-door path in [2026-07-07-qr-order-front-door-recon.md](decisions/2026-07-07-qr-order-front-door-recon.md) | 2026-06-21 / 26 | **DECIDED** |
 | **Count-side size-picker (L5 NEED_CLARIFICATION seam)** | Same-name multi-size scan → size-picker → routes to the exact per-size lot (owner-proven on iPhone). | [docs/decisions/2026-06-27-discovery-size-variants.md](decisions/2026-06-27-discovery-size-variants.md) + CLOSE-OUT-LEDGER #72 | 2026-06-30 | **DECIDED (OWNER-PROVEN)** |
