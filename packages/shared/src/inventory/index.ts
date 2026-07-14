@@ -6,3 +6,4 @@ export {
   STOCK_LINE_IDENTITY_COLUMNS,
 } from './stockLineResolver';
 export type { StockLineRow, StockLineResolution } from './stockLineResolver';
+export { variantGroupSlug } from './variantGroup';

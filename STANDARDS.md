@@ -1,7 +1,7 @@
 # STANDARDS.md — TRACE Engineering Standards
-# Version: 2.2
+# Version: 2.3
 # Created: 2026-06-04
-# Last updated: 2026-07-14 (STD-017 added — a fix is complete only when true on every surface)
+# Last updated: 2026-07-14 (STD-018 added — a capability ships its full entry surface: CRUD is C+R+U+D, enumerated at build time, not discovered at use)
 # Owner: David O'Brien / TRACE Enterprises
 
 > Every standard on this list traces to a real failure that bit us.
@@ -26,7 +26,7 @@ Standards exist in three states. The point is not to hold every industry standar
 it is to hold the ones that apply to *our* stack, activate them at the right moment,
 and never carry noise.
 
-- **ACTIVE** (on the field — enforced now): STD-001 through STD-017 below. Each has
+- **ACTIVE** (on the field — enforced now): STD-001 through STD-018 below. Each has
   a confirming scar and is enforced every relevant session. Two origins:
     - *TRACE scars* — failures from this codebase (the QB lying flag, the
       hand-applied constraint, the hardcoded channels).
@@ -748,6 +748,46 @@ flow).
 
 ---
 
+### STD-018 — A CAPABILITY SHIPS ITS FULL ENTRY SURFACE (CRUD is C+R+U+D, enumerated at build time)
+
+**Rule:** A capability that lets an owner MANAGE data must ship its FULL entry surface — the manual
+CRUD (Create, Read, Update, Delete) **plus** any automated / sensory entry paths its workflow needs
+(scan, OCR, import). **Update and Delete are not optional and are enumerated at BUILD time, not
+discovered at USE.** When a build introduces or touches an owner-managed entity, it states the entity's
+full entry surface and either implements each operation or explicitly scopes-and-flags what is deferred
+(and why). "Create works" is not "the capability is built."
+
+**Scar (2026-07-14):** Inventory. **Create** was built three separate ways (the Add-Item form, the
+D-45 scan-count promote, the discovery CSV import), while **Update** was partial (no clean per-size
+qty/price edit surface, no "add another size" affordance) and **Delete was entirely missing**. The gap
+surfaced only when David needed to add a second size to an existing variety and found no path — and even
+manual entry of a second row would have left the sizes ungrouped, so the checkout size-picker never
+fired. The same shape recurs across the platform: Create+Read got built at first need; Update+Delete
+were skipped and rediscovered later at the point of use, each as its own "why can't I edit/delete this?"
+moment. One discipline gap — the entry surface was never enumerated — expressed as a class of missing
+operations.
+
+**In practice:**
+- At build time, LIST the entity's entry surface: Create · Read · Update · Delete · (+ scan / OCR /
+  import if the workflow uses them). The build implements each or records an explicit, reasoned deferral.
+- **Update means the FULL owner-editable field set**, reachable through ONE editor surface (STD-011),
+  not a subset that forces the owner to a workaround for the rest.
+- **Delete means a real, safe delete policy** — decide soft (deactivate/archive, preserve referenced
+  history) vs hard (remove when unreferenced) by checking the entity's FKs; confirm-first; log the actor.
+- A capability whose Update or Delete is missing is INCOMPLETE — same force as the surface-completeness
+  (STD-017) and capture-persist-read gates. It does not render green while an entry operation is absent
+  without a recorded reason.
+
+**Relationship:** STD-017 says a fix is true on every SURFACE a capability touches; STD-018 says a
+capability ships every OPERATION its entry surface requires. STD-011 supplies the "one editor, not
+parallel forms" shape that makes a complete Update+Create tractable. Together: one entity, one editor,
+every operation, every surface.
+
+**Scope:** Every build that introduces or touches an owner-managed entity (a table the owner creates,
+edits, and removes rows in — inventory, customers, assets, service offerings, and the like).
+
+---
+
 ## ENFORCEMENT
 
 | Standard | Applies to | Gate type |
@@ -769,6 +809,7 @@ flow).
 | STD-015 | Every shared module + every customer-facing render path (email/SMS/invoice/QBO/receipt/opt-in) | No tenant identity literal; identity threaded as a `business_id`-scoped token; unresolvable → omit, never another tenant's value |
 | STD-016 | Every build touching order editing/update after creation | Edit recomputes the whole money boundary through the same canonical pricing fn as create (tier/basis/tax/exemption) |
 | STD-017 | Every fix/build touching a capability with more than one surface (pricing/tax value, customer/order field, create-vs-edit path, capture-then-read flow) | Enumerate the capability's surfaces before building; fix true on ALL (or explicitly scoped + rest flagged); owner-prove enumerates EVERY surface; orphan columns (written-not-read / read-not-written) flagged |
+| STD-018 | Every build introducing/touching an owner-managed entity (a table the owner creates/edits/removes rows in — inventory, customers, assets, service offerings) | Enumerate the full entry surface at build time (C+R+U+D + scan/OCR/import as the workflow needs); implement each or explicitly scope-and-flag the deferral; Update = full field set via ONE editor (STD-011); Delete = safe soft/hard policy by FK check, confirm-first, actor logged |
 | BENCH-A, BENCH-C, BENCH-D, BENCH-F | Every session (STEP 0 roster match against ACTIVATE WHEN triggers) | Catastrophic-class match → stop and ask David; hygiene-class match → apply and report |
 | BENCH-E | Any session that adds an external AI provider call that is user-facing | Apply try-chain pattern; provider 3 slot in comments; operator log on fallback; clean user error on all-fail |
 | BENCH-G | Any session adding/altering a compliance action whose history is auditable (tax exemption apply/remove, waiver, money-authority grant) | Hygiene: write the immutable event row alongside current-state columns; escalates to catastrophic (BENCH-F) if it touches an issued invoice |

@@ -49,7 +49,7 @@ import { ArrowLeft, CheckCircle2, X, ScanLine, CloudOff, RefreshCw } from 'lucid
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { SyncEngine } from '@trace/shared/sync';
-import { resolveStockLine, type StockLineResolution } from '@trace/shared/inventory';
+import { resolveStockLine, variantGroupSlug, type StockLineResolution } from '@trace/shared/inventory';
 import { QrScanner } from '../components/inventory/QrScanner';
 import { extractTag } from '../lib/scanTag';
 
@@ -89,10 +89,10 @@ function sameSize(a: string | null, b: string | null): boolean {
   return (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
 }
 // variant_group key for a NEW variety when there is no QR slug and no existing sibling to
-// adopt — a product-slug from the name (same shape populate's sourceSlug uses).
-function slugify(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'variety';
-}
+// adopt — a product-slug from the name. SHARED with the manual "+ Add size" path
+// (variantGroupSlug, @trace/shared/inventory) so a scan-promoted row and a hand-added size of
+// the same variety land in the SAME group and the size-picker fires (STD-011 — one convention).
+const slugify = variantGroupSlug;
 function labelFor(varietyName: string, size: string | null): string {
   return size ? `${varietyName}, ${size}` : varietyName;
 }
