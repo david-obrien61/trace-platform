@@ -1,16 +1,22 @@
 // ============================================================
 // CustomerPartyEditor — the full GROUPED party-record editor (Cultivar OS)
-// PURPOSE:      Edit the COMPLETE customer/party record in one grouped form, opened from the
-//               /customers roster. The DataSheet is hand-declared and the party record is ~18
-//               fields — far too many for inline grid columns — so the full set lives HERE, in
-//               labeled sections (Identity · Contact · Billing address · Tax · Commercial terms ·
-//               Status). The roster surfaces only the at-a-glance columns; everything else is edited
-//               here. This is where the tax set (id / exempt / reason / cert / expiry) became
-//               UI-editable — closing the D-40 owner-prove blocker (exemption was SQL-only before).
-// WRITE MODEL:  auto-save — text fields commit on blur (shared coerce + persist rules, no drift),
-//               selects/number/date commit on change, and the tax exemption is a VALIDATED trio
-//               ("Save exemption" — cannot mark exempt without a reason, mirrors D-40's server
-//               refusal of silent removal). Each write is an owner-only RLS UPDATE (.eq id .eq biz).
+// PURPOSE:      The ONE customer/party form (STD-011) — BOTH the "Add Customer" (create) and
+//               "Edit customer" surfaces on the /customers roster render THIS component, so a field
+//               added to the party record can never drift between two forms. The old flat Add form
+//               is retired. The DataSheet is hand-declared and the party record is ~18 fields — far
+//               too many for inline grid columns — so the full set lives HERE, in labeled sections
+//               (Identity · Contact · Billing address · Tax · Commercial terms · Status). The roster
+//               surfaces only the at-a-glance columns. This is where the tax set (id / exempt /
+//               reason / cert / expiry) is UI-editable — closing the D-40 owner-prove blocker.
+// MODES:        The ONLY differences between create and edit are (a) title, (b) empty-vs-populated
+//               initial values, (c) insert-vs-update on save. Everything else is identical.
+//               EDIT: auto-save — text fields commit on blur, selects/number/date on change, and the
+//               tax exemption is a VALIDATED trio ("Save exemption" — cannot mark exempt without a
+//               reason, mirrors D-40's server refusal). Each write is an owner-only RLS UPDATE.
+//               CREATE: all fields buffer locally; ONE "Save Customer" INSERT (owner-only RLS, no
+//               endpoint) after validation (first_name required; exempt requires a reason).
+//               Billing address is mirrored to the legacy consumed address_* on save (both modes) —
+//               a bridge until D-41 follow-up (b) repoints checkout/delivery readers to billing_*.
 // ADDRESS (L1): BILLING only. Shipping is NOT a customer attribute — it is order-time, snapshotted
 //               onto the delivery row. No shipping block here (deliberate).
 // DEPENDENCIES: useBusinessContext (businessId → RLS scope), sheetStyles (SS), the shared
@@ -27,7 +33,7 @@ import { X } from 'lucide-react';
 import { useBusinessContext } from '@trace/shared/context';
 import { sheetStyles as SS } from '../datasheet/DataSheet';
 import {
-  coerceCustomerField, persistCustomerField, persistCustomerPatch, type CustomerTextField,
+  coerceCustomerField, persistCustomerField, persistCustomerPatch, insertCustomer, type CustomerTextField,
 } from './customerEdit';
 import { TAX_EXEMPTION_REASONS } from '@trace/shared/business-logic';
 
@@ -59,12 +65,30 @@ export interface PartyCustomer {
   notes?: string | null;
 }
 
+/** A blank party seed for CREATE mode (the retired flat Add form's replacement start-state). */
+export const BLANK_PARTY_CUSTOMER: PartyCustomer = {
+  id: '', first_name: '', last_name: '', email: null, phone: null,
+  customer_type: 'person', price_tier: 'retail', status: 'active',
+};
+
+// Billing → legacy consumed-address mirror (line2 has no legacy equivalent). D-41 shipped billing_*
+// as the address home, but checkout/delivery/order-detail still READ the unprefixed address_* today
+// (follow-up (b) will repoint them). To avoid regressing a manually-added customer's checkout address,
+// the shared editor writes billing AND the legacy field together — in BOTH create and edit — keeping
+// the consumed field in sync until (b) folds address_* into billing_* and drops this mirror.
+const BILLING_MIRROR: Record<string, string> = {
+  billing_line1: 'address_line1', billing_city: 'city', billing_state: 'state', billing_zip: 'zip',
+};
+
 interface Props {
   customer: PartyCustomer;
+  /** 'edit' (default) = per-field auto-save on an existing row. 'create' = buffer all fields, one
+   *  INSERT on "Save Customer" (the unified Add path — same component, only title/empty/insert differ). */
+  mode?: 'create' | 'edit';
   /** Retail floor + configured tiers, resolved by the roster (readPricingConfig). */
   tierOptions: { value: string; label: string }[];
   onClose: () => void;
-  /** Fired after any successful write so the roster reloads. */
+  /** Fired after any successful write (edit) or the insert (create) so the roster reloads. */
   onSaved: () => void;
 }
 
@@ -87,11 +111,13 @@ const PAYMENT_TERMS_SUGGESTIONS = ['due_on_receipt', 'net_15', 'net_30', 'net_60
 
 const DATALIST_ID = 'party-payment-terms';
 
-export function CustomerPartyEditor({ customer, tierOptions, onClose, onSaved }: Props) {
+export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onClose, onSaved }: Props) {
   const { businessId } = useBusinessContext();
+  const creating = mode === 'create';
   const [draft, setDraft] = useState<PartyCustomer>(customer);
   const [error, setError] = useState<string | null>(null);
   const [savingField, setSavingField] = useState<string | null>(null);
+  const [savingNew, setSavingNew] = useState(false);
 
   // Tax-exemption sub-state (validated trio). Seed from the row; when exempt is ON but no reason
   // yet, the "Save exemption" is blocked (mirrors D-40 — never zero tax without a recorded reason).
@@ -107,28 +133,34 @@ export function CustomerPartyEditor({ customer, tierOptions, onClose, onSaved }:
 
   const set = (patch: Partial<PartyCustomer>) => setDraft(d => ({ ...d, ...patch }));
 
-  // ── Nullable-text field on blur (shared coerce + persist; identity rules honored) ──
+  // ── Nullable-text field on blur. CREATE = buffer into draft only (one INSERT on Save Customer).
+  //    EDIT = persist (billing fields mirror to the legacy consumed address_* — see BILLING_MIRROR). ──
   async function commitText(field: CustomerTextField, raw: string) {
     if (!businessId) return;
     const r = coerceCustomerField(draft as unknown as Record<string, unknown>, field, raw);
     if (r.skip) return;
+    if (creating) { set({ [field]: r.value } as Partial<PartyCustomer>); return; }
+    const mirror = BILLING_MIRROR[field];
     setSavingField(field);
-    const res = await persistCustomerField({ id: draft.id, businessId, field, from: (draft as any)[field], value: r.value });
+    const res = mirror
+      ? await persistCustomerPatch({ id: draft.id, businessId, patch: { [field]: r.value, [mirror]: r.value } })
+      : await persistCustomerField({ id: draft.id, businessId, field, from: (draft as any)[field], value: r.value });
     setSavingField(null);
     if (res.error) { setError(res.error); return; }
     set({ [field]: r.value } as Partial<PartyCustomer>);
     setError(null); onSaved();
   }
 
-  // ── Typed/select field on change (one patch write) ──
+  // ── Typed/select field on change. CREATE = buffer; EDIT = one patch write. ──
   async function commitPatch(patch: Record<string, unknown>, local: Partial<PartyCustomer>) {
+    if (creating) { set(local); return; }
     if (!businessId) return;
     const res = await persistCustomerPatch({ id: draft.id, businessId, patch });
     if (res.error) { setError(res.error); return; }
     set(local); setError(null); onSaved();
   }
 
-  // ── credit_limit numeric on blur (blank → null; NaN rejected) ──
+  // ── credit_limit numeric on blur (blank → null; NaN rejected). CREATE buffers; EDIT persists. ──
   async function commitCredit(raw: string) {
     const t = raw.trim();
     let val: number | null;
@@ -138,8 +170,15 @@ export function CustomerPartyEditor({ customer, tierOptions, onClose, onSaved }:
     await commitPatch({ credit_limit: val }, { credit_limit: val });
   }
 
-  // ── Tax exemption — VALIDATED. Turning OFF is immediate (safe default, no reason). Turning ON
-  //    requires a reason before the exempt state persists (D-40: never zero tax without a reason). ──
+  // ── Tax exemption toggle. CREATE = buffer the flag only (validated at Save Customer). EDIT: ON
+  //    reveals the validated trio; OFF is an immediate safe-default clear. ──
+  function toggleExempt(checked: boolean) {
+    if (creating) { setExempt(checked); if (!checked) setTaxErr(null); return; }
+    if (checked) setExempt(true); else void clearExemption();
+  }
+
+  // ── EDIT-mode exemption save — VALIDATED. Turning ON requires a reason before it persists
+  //    (D-40: never zero tax without a recorded reason). ──
   async function saveExemption() {
     if (!businessId) return;
     const reason = reasonCode === 'other' ? otherText.trim() : reasonCode;
@@ -159,6 +198,54 @@ export function CustomerPartyEditor({ customer, tierOptions, onClose, onSaved }:
     );
   }
 
+  // ── CREATE — validate (first_name required; exempt requires a reason) then ONE insert. Same rules
+  //    as edit; billing mirrored to the legacy consumed address_*; tax_id/credit_limit masked (BENCH-C). ──
+  async function saveCreate() {
+    if (!businessId) return;
+    const first = draft.first_name.trim();
+    if (!first) { setError('First name is required.'); return; }
+    let taxReason: string | null = null;
+    if (exempt) {
+      taxReason = reasonCode === 'other' ? otherText.trim() : reasonCode;
+      if (!taxReason) { setTaxErr('A reason is required to make a customer tax-exempt.'); return; }
+    }
+    setTaxErr(null); setError(null);
+
+    const values: Record<string, unknown> = {
+      source: 'manual',
+      first_name: first,
+      last_name: (draft.last_name ?? '').trim(), // NOT NULL — '' when blank, never null
+      customer_type: draft.customer_type ?? 'person',
+      price_tier: draft.price_tier ?? 'retail',
+      status: draft.status ?? 'active',
+    };
+    const addText = (k: keyof PartyCustomer) => {
+      const v = ((draft[k] as string) ?? '').trim();
+      if (v) values[k] = v;
+    };
+    (['organization_name', 'display_name', 'email', 'phone',
+      'billing_line1', 'billing_line2', 'billing_city', 'billing_state', 'billing_zip',
+      'tax_id', 'payment_terms', 'notes'] as (keyof PartyCustomer)[]).forEach(addText);
+    // legacy consumed-address mirror (billing_line2 has no legacy equivalent)
+    for (const [billing, legacy] of Object.entries(BILLING_MIRROR)) {
+      if (values[billing] != null) values[legacy] = values[billing];
+    }
+    if (draft.credit_limit != null) values.credit_limit = draft.credit_limit;
+    if (exempt) {
+      values.tax_exempt = true;
+      values.tax_exempt_reason = taxReason;
+      values.tax_exempt_cert_ref = certRef.trim() || null;
+      values.tax_exempt_expires = expires || null;
+    }
+
+    setSavingNew(true);
+    const res = await insertCustomer({ businessId, values });
+    setSavingNew(false);
+    if (res.error) { setError(res.error); return; }
+    onSaved();
+    onClose();
+  }
+
   const input = (field: keyof PartyCustomer, extra?: React.CSSProperties): React.InputHTMLAttributes<HTMLInputElement> => ({
     style: { ...SS.input, ...extra },
     value: (draft[field] as string) ?? '',
@@ -170,7 +257,7 @@ export function CustomerPartyEditor({ customer, tierOptions, onClose, onSaved }:
     <div style={overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={dialog}>
         <div style={SS.sheetHeader}>
-          <h2 style={{ ...SS.sectionTitle, margin: 0 }}>Edit customer</h2>
+          <h2 style={{ ...SS.sectionTitle, margin: 0 }}>{creating ? 'Add Customer' : 'Edit customer'}</h2>
           <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }} onClick={onClose}>
             <X size={20} color="#6b7280" />
           </button>
@@ -254,7 +341,7 @@ export function CustomerPartyEditor({ customer, tierOptions, onClose, onSaved }:
         </div>
         <div style={{ ...SS.field, display: 'flex', alignItems: 'center', gap: 8 }}>
           <input type="checkbox" checked={exempt}
-            onChange={e => { if (e.target.checked) { setExempt(true); } else { void clearExemption(); } }}
+            onChange={e => toggleExempt(e.target.checked)}
             style={{ width: 18, height: 18 }} />
           <label style={{ ...SS.label, margin: 0 }}>Tax-exempt customer</label>
         </div>
@@ -291,7 +378,8 @@ export function CustomerPartyEditor({ customer, tierOptions, onClose, onSaved }:
               Attach certificate document (coming soon)
             </button>
             {taxErr && <div style={SS.error}>{taxErr}</div>}
-            <button type="button" onClick={() => { void saveExemption(); }} style={{ ...SS.submitBtn, marginTop: 8 }}>Save exemption</button>
+            {/* EDIT persists the exemption atomically here; CREATE buffers it and saves with the row. */}
+            {!creating && <button type="button" onClick={() => { void saveExemption(); }} style={{ ...SS.submitBtn, marginTop: 8 }}>Save exemption</button>}
           </div>
         )}
 
@@ -330,10 +418,18 @@ export function CustomerPartyEditor({ customer, tierOptions, onClose, onSaved }:
         <div style={SS.field}>
           <label style={SS.label}>Notes (internal)</label>
           <textarea style={{ ...SS.input, minHeight: 64, resize: 'vertical' }}
-            defaultValue={draft.notes ?? ''} onBlur={e => { void commitText('notes', e.target.value); }} placeholder="Internal memo — not shown to the customer" />
+            value={draft.notes ?? ''} onChange={e => set({ notes: e.target.value })}
+            onBlur={e => { void commitText('notes', e.target.value); }} placeholder="Internal memo — not shown to the customer" />
         </div>
 
-        <p style={SS.hint}>Changes save automatically as you edit. Close when you're done.</p>
+        {creating ? (
+          <button type="button" onClick={() => { void saveCreate(); }} disabled={savingNew}
+            style={savingNew ? SS.submitBtnDisabled : { ...SS.submitBtn, marginTop: 6 }}>
+            {savingNew ? 'Saving…' : 'Save Customer'}
+          </button>
+        ) : (
+          <p style={SS.hint}>Changes save automatically as you edit. Close when you're done.</p>
+        )}
       </div>
     </div>
   );

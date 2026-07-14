@@ -5,10 +5,10 @@
 //               added directly here) AND the inline-edit surface, in one. Runs through the SAME
 //               shared <DataSheet> engine /inventory + /assets use (the 3rd consumer — one
 //               engine, three configs; AC-4 settle-once). Reached via its owner-only nav node.
-//               The Add-Customer sheet and inline edits now share their form body
-//               (<CustomerFields>) and their coercion/write rules (customerEdit.ts) with the
-//               in-context CustomerEditModal a delivery card opens — one form, one rule set,
-//               no drift.
+//               STD-011 (one canonical form): BOTH "Add Customer" (create) and "Edit customer" open
+//               the SAME grouped <CustomerPartyEditor> — the old flat Add form is retired, so a field
+//               added to the party record can never drift between two forms. The roster shows only
+//               the at-a-glance columns (name/type/tier/tax/status); everything else is in the editor.
 // SCOPE (v1):   customers table ONLY. The person spine (customers.person_id → people) is DEFERRED
 //               — it stays populated-on-create by the OCR/service-key path and needs nothing from
 //               this list; people RLS (people_self_all, auth_user_id-keyed) blocks an owner from
@@ -16,10 +16,9 @@
 //               possible here. person_id is not shown.
 // DEPENDENCIES: supabase (customers rows, business_id-scoped), useBusinessContext (businessId →
 //               RLS scope), DataSheet cell components. NO migration, NO new dep, NO endpoint.
-// OUTPUTS:      Per-row immediate UPDATE on customers (.eq('id').eq('business_id')) — first_name,
-//               last_name, phone, email, address_line1, city, state, zip. Create via the
-//               Add-Customer sheet (direct insert, source='manual'). Reflects on that customer's
-//               deliveries via the deliveries→customers join.
+// OUTPUTS:      Inline roster writes: tier + status (per-row RLS UPDATE). Full field editing +
+//               create (insert, source='manual') both go through CustomerPartyEditor. Reflects on
+//               that customer's deliveries via the deliveries→customers join.
 // GATE:         OWNER-ONLY — the /customers route sits in an owner-only PermissionRoute group
 //               (like /costs), matching the customers_business_owner RLS (owner-only, FOR ALL).
 //               Staff hold no access at either layer → nav never opens onto an empty RLS wall.
@@ -27,17 +26,14 @@
 //               ON BY DEFAULT — standing owner instruction (do NOT comment out).
 // ============================================================
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, X, Users } from 'lucide-react';
+import { Plus, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import {
   DataSheet, SelectCell, sheetStyles as SS,
   type DataSheetColumn,
 } from '../components/datasheet/DataSheet';
-import {
-  CustomerFields, EMPTY_CUSTOMER_FORM, type CustomerFormState,
-} from '../components/customers/CustomerFields';
-import { CustomerPartyEditor, type PartyCustomer } from '../components/customers/CustomerPartyEditor';
+import { CustomerPartyEditor, BLANK_PARTY_CUSTOMER, type PartyCustomer } from '../components/customers/CustomerPartyEditor';
 import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME, taxExemptionLabel, type DiscountType } from '@trace/shared/business-logic';
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -94,12 +90,9 @@ export function Customers() {
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
 
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<CustomerFormState>(EMPTY_CUSTOMER_FORM);
-  const [newTier, setNewTier] = useState('retail');
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  // The ONE customer form (STD-011): Add (create) AND Edit both open CustomerPartyEditor. null =
+  // closed; { mode:'create' } opens it empty; { mode:'edit', row } opens it populated.
+  const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; row: PartyCustomer } | null>(null);
 
   // Configured discount types × tiers (from business_pricing_config.config — set on the Discounts
   // screen). READ is business-scoped (readPricingConfig), NOT owner-restricted — the tier picker
@@ -181,10 +174,8 @@ export function Customers() {
     })();
   }
 
-  // The full grouped party editor — opened per-row from the roster. Everything beyond the at-a-glance
-  // columns (name/type/tier/tax/status) is edited HERE, not inline (the DataSheet is hand-declared,
-  // and the party record is ~18 fields — too many for grid columns).
-  const [partyEditing, setPartyEditing] = useState<CustomerRow | null>(null);
+  // Open the ONE editor in EDIT mode for a roster row (name / tax badge / Edit button all use this).
+  const openEdit = (r: CustomerRow) => setEditor({ mode: 'edit', row: r as unknown as PartyCustomer });
 
   const displayName = (r: CustomerRow) =>
     r.customer_type === 'organization'
@@ -196,7 +187,7 @@ export function Customers() {
   const columns: DataSheetColumn<CustomerRow>[] = [
     { key: 'first_name', header: 'Name', sortable: true, sortVal: r => displayName(r).toLowerCase(), frozen: true, frozenWidth: 200,
       render: r => (
-        <button onClick={() => setPartyEditing(r)} title="Open customer record"
+        <button onClick={() => openEdit(r)} title="Open customer record"
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', fontWeight: 600, color: '#1f2937' }}>
           {displayName(r) || '—'}
         </button>
@@ -207,7 +198,7 @@ export function Customers() {
       render: r => <SelectCell value={r.price_tier ?? 'retail'} options={tierOptions(r.price_tier)} onChange={v => onTier(r, v)} styleFor={tierSelectStyle} title="Customer price tier — drives the checkout discount" /> },
     { key: 'tax_exempt', header: 'Tax', sortable: true, sortVal: r => (r.tax_exempt ? 1 : 0),
       render: r => (
-        <button onClick={() => setPartyEditing(r)} title="Tax exemption — click to edit" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+        <button onClick={() => openEdit(r)} title="Tax exemption — click to edit" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
           {r.tax_exempt
             ? <span style={{ ...sourceStyle, color: '#166534', background: '#dcfce7' }}>Exempt · {taxExemptionLabel(r.tax_exempt_reason)}</span>
             : <span style={{ ...SS.muted, textDecoration: 'underline dotted' }}>Taxable</span>}
@@ -221,39 +212,9 @@ export function Customers() {
       render: r => <span style={SS.muted}>{fmtDate(r.created_at)}</span> },
     { key: 'edit', header: '', hideable: false, sortable: false, systemManaged: false,
       render: r => (
-        <button onClick={() => setPartyEditing(r)} style={{ ...sourceStyle, cursor: 'pointer', border: '1px solid #d1d5db', background: '#fff' }}>Edit</button>
+        <button onClick={() => openEdit(r)} style={{ ...sourceStyle, cursor: 'pointer', border: '1px solid #d1d5db', background: '#fff' }}>Edit</button>
       ) },
   ];
-
-  // ── Add-Customer form (create path — direct insert, source='manual') ──
-  function set(field: keyof CustomerFormState, value: string) {
-    setForm(f => ({ ...f, [field]: value }));
-  }
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!businessId) return;
-    if (!form.first_name.trim()) { setSaveError('First name is required.'); return; }
-    setSaving(true); setSaveError(null); setSaveSuccess(false);
-    const payload: Record<string, unknown> = {
-      business_id: businessId,
-      source: 'manual',
-      price_tier: newTier, // explicit (was omitted → silently defaulted retail); owner can set a tier on create
-      first_name: form.first_name.trim(),
-      last_name:  form.last_name.trim(), // NOT NULL — empty string is fine, never null
-    };
-    if (form.phone.trim())         payload.phone         = form.phone.trim();
-    if (form.email.trim())         payload.email         = form.email.trim();
-    if (form.address_line1.trim()) payload.address_line1 = form.address_line1.trim();
-    if (form.city.trim())          payload.city          = form.city.trim();
-    if (form.state.trim())         payload.state         = form.state.trim();
-    if (form.zip.trim())           payload.zip           = form.zip.trim();
-    console.log('[TRACE:customers] insert → customers', { source: 'manual', name: `${payload.first_name} ${payload.last_name}` });
-    const { error } = await supabase.from('customers').insert(payload);
-    if (error) { console.error('[TRACE:customers] insert error', error.message); setSaveError(error.message); setSaving(false); return; }
-    console.log('[TRACE:customers] insert ok');
-    setSaveSuccess(true); setSaving(false); setForm(EMPTY_CUSTOMER_FORM); setNewTier('retail');
-    setTimeout(() => { setShowForm(false); setSaveSuccess(false); void loadCustomers(); }, 900);
-  }
 
   return (
     <>
@@ -280,47 +241,20 @@ export function Customers() {
         emptyIcon={<Users size={32} color="#d1d5db" style={{ marginBottom: 8 }} />}
         emptyText="No customers yet. They appear here from checkout + invoice scans, or add one."
         actions={
-          <button style={SS.addBtn} onClick={() => { setShowForm(true); setSaveError(null); setSaveSuccess(false); }}>
+          <button style={SS.addBtn} onClick={() => setEditor({ mode: 'create', row: BLANK_PARTY_CUSTOMER })}>
             <Plus size={16} /> Add Customer
           </button>
         }
       />
 
-      {/* Add Customer bottom sheet */}
-      {showForm && (
-        <div style={SS.modal} onClick={e => { if (e.target === e.currentTarget) setShowForm(false); }}>
-          <div style={SS.sheet}>
-            <div style={SS.sheetHeader}>
-              <h2 style={{ ...SS.sectionTitle, margin: 0 }}>Add Customer</h2>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }} onClick={() => setShowForm(false)}>
-                <X size={20} color="#6b7280" />
-              </button>
-            </div>
-            {saveError && <div style={SS.error}>{saveError}</div>}
-            {saveSuccess && <div style={SS.success}>Customer saved.</div>}
-            <form onSubmit={e => { void handleSubmit(e); }}>
-              <CustomerFields values={form} onChange={set} requireFirstName />
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Price tier</label>
-                <select value={newTier} onChange={e => setNewTier(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', border: '1.5px solid #d1d5db', borderRadius: 9, fontSize: '0.9rem', background: '#fff', color: '#111827' }}>
-                  {tierOptions(newTier).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </div>
-              <button type="submit" style={saving ? SS.submitBtnDisabled : SS.submitBtn} disabled={saving}>
-                {saving ? 'Saving…' : 'Save Customer'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* The full grouped party-record editor (owner-only). All fields beyond the lean roster cols
-          are edited here, including the D-40 tax set (id / exempt / reason / cert / expiry). */}
-      {partyEditing && (
+      {/* The ONE customer form (STD-011) — Add (create) AND Edit both render this grouped editor.
+          All fields beyond the lean roster cols live here, incl. the D-40 tax set. */}
+      {editor && (
         <CustomerPartyEditor
-          customer={partyEditing as unknown as PartyCustomer}
-          tierOptions={tierOptions(partyEditing.price_tier)}
-          onClose={() => setPartyEditing(null)}
+          mode={editor.mode}
+          customer={editor.row}
+          tierOptions={tierOptions(editor.row.price_tier ?? null)}
+          onClose={() => setEditor(null)}
           onSaved={() => { void loadCustomers(); }}
         />
       )}

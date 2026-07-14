@@ -17,11 +17,6 @@ export interface CustomerFormState {
   address_line1: string; city: string; state: string; zip: string;
 }
 
-export const EMPTY_CUSTOMER_FORM: CustomerFormState = {
-  first_name: '', last_name: '', phone: '', email: '',
-  address_line1: '', city: '', state: 'TX', zip: '',
-};
-
 /** Build a form-state from an existing customer row (nulls → '' for controlled inputs). */
 export function customerToForm(c: {
   first_name?: string | null; last_name?: string | null; phone?: string | null; email?: string | null;

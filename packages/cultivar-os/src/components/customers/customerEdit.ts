@@ -112,3 +112,28 @@ export async function persistCustomerPatch(params: {
   if (error) { console.error('[TRACE:customers] patch error', Object.keys(patch).join(','), error.message); return { error: error.message }; }
   return { error: null };
 }
+
+/**
+ * INSERT a new customer (the CREATE path — used by CustomerPartyEditor in create mode, replacing
+ * the retired flat Add form). ONE insert path, owner-only RLS (business_id-scoped, no endpoint —
+ * NO new api-fn). Logs `[TRACE:customers] insert` with tax_id / credit_limit VALUE-MASKED (BENCH-C,
+ * the same SENSITIVE_CUSTOMER_FIELDS source as the edit helpers — STD-011). The caller passes the
+ * already-built values (first_name required upstream); business_id is stamped here.
+ */
+export async function insertCustomer(params: {
+  businessId: string;
+  values: Record<string, unknown>;
+}): Promise<{ error: string | null; id: string | null }> {
+  const { businessId, values } = params;
+  const masked = Object.fromEntries(
+    Object.entries(values).map(([k, v]) => [k, SENSITIVE_CUSTOMER_FIELDS.has(k) ? '(set)' : v]),
+  );
+  console.log('[TRACE:customers] insert', { businessId, fields: masked });
+  const { data, error } = await supabase
+    .from('customers')
+    .insert({ business_id: businessId, ...values })
+    .select('id')
+    .single();
+  if (error) { console.error('[TRACE:customers] insert error', error.message); return { error: error.message, id: null }; }
+  return { error: null, id: (data as { id: string }).id };
+}
