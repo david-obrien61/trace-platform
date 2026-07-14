@@ -17,14 +17,15 @@
   Linked by MAPS-TO capability id + arc.
 
   TWO DIMENSIONS on every story (parsed from the .md, never invented here):
-    STATUS (owed lifecycle): written | needs-input | needs-sub-stories | gap
-    SCOPE  (altitude):       north-star | platform | vertical:<name>
-  Default view = "What's owed" (everything not yet written). Filter by status + scope.
+    STATUS (lifecycle): written | demo-operational | needs-input | needs-sub-stories | gap | scoped-out
+                        (terminal = written/demo-operational/scoped-out ; owed = the other three)
+    SCOPE  (altitude):  north-star | platform | vertical:<name>
+  Default view = "What's owed" (everything not terminal). Filter by status + scope.
 -->
 <style>
   :root{
     --written:#16a34a; --needsinput:#d97706; --needssub:#7c3aed; --gap:#dc2626;
-    --archived:#9ca3af;
+    --demoop:#0891b2; --scopedout:#64748b; --archived:#9ca3af;
     --bg:#f5f7f2; --card:#ffffff; --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb;
     --accent:#27500A;
   }
@@ -60,6 +61,7 @@
   .dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;display:inline-block}
   .d-written{background:var(--written)} .d-needsinput{background:var(--needsinput)}
   .d-needssub{background:var(--needssub)} .d-gap{background:var(--gap)}
+  .d-demoop{background:var(--demoop)} .d-scopedout{background:var(--scopedout)}
   .d-archived{background:var(--archived)}
   /* arc band */
   .band{margin:22px 0 10px;font-size:.78rem;font-weight:800;letter-spacing:.06em;
@@ -75,6 +77,9 @@
   .card.c-needsinput{border-left-color:var(--needsinput)}
   .card.c-needssub{border-left-color:var(--needssub)}
   .card.c-gap{border-left-color:var(--gap)}
+  .card.c-demoop{border-left-color:var(--demoop)}
+  .card.c-scopedout{border-left-color:var(--scopedout)}
+  .card.c-scopedout{background:#f8fafc}
   .card.c-archived{border-left-color:var(--archived);filter:grayscale(.4);opacity:.8}
   .card .top{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:6px}
   .card .name{font-weight:800;font-size:1rem;flex:1;min-width:200px}
@@ -84,6 +89,8 @@
   .p-needsinput{background:#fef3c7;color:#92400e}
   .p-needssub{background:#ede9fe;color:#5b21b6}
   .p-gap{background:#fee2e2;color:#991b1b}
+  .p-demoop{background:#cffafe;color:#155e75}
+  .p-scopedout{background:#e2e8f0;color:#334155}
   .p-archived{background:#f3f4f6;color:#4b5563}
   .buildbadge{display:inline-block;font-size:.64rem;font-weight:800;letter-spacing:.04em;
     text-transform:uppercase;padding:2px 8px;border-radius:6px;white-space:nowrap;
@@ -163,9 +170,11 @@
         <select id="statusFilter">
           <option value="all">all</option>
           <option value="written">written</option>
+          <option value="demo-operational">demo-operational</option>
           <option value="needs-input">needs-input</option>
           <option value="needs-sub-stories">needs-sub-stories</option>
           <option value="gap">gap</option>
+          <option value="scoped-out">scoped-out</option>
         </select>
       </span>
       <span class="fgroup">Scope <select id="scopeFilter"><option value="all">all</option></select></span>
@@ -173,9 +182,11 @@
     </div>
     <div class="legend">
       <span class="k"><span class="dot d-written"></span>written (complete)</span>
+      <span class="k"><span class="dot d-demoop"></span>demo-operational (built, works if poked)</span>
       <span class="k"><span class="dot d-needsinput"></span>needs-input (blocked on David)</span>
       <span class="k"><span class="dot d-needssub"></span>needs-sub-stories</span>
       <span class="k"><span class="dot d-gap"></span>gap (capability exists, no story)</span>
+      <span class="k"><span class="dot d-scopedout"></span>scoped-out (deliberately not built — reason shown)</span>
       <span class="k"><span class="dot d-archived"></span>archived</span>
       <span class="srcline" id="srcline"></span>
     </div>
@@ -211,9 +222,12 @@ const SCOPE_LABEL = {
 function scopeClass(sc){ return sc==="north-star"?"s-north":(sc==="platform"?"s-platform":"s-vertical"); }
 function scopeLabel(sc){ return SCOPE_LABEL[sc] || sc; }
 
-/* ───────────── owed-status + build-progress vocab ───────────── */
-const OWED   = ["written","needs-input","needs-sub-stories","gap"];
-const BUILDV = ["active","in-build","archived"];
+/* ───────────── status + build-progress vocab ─────────────
+   TERMINAL = not owed (built or a deliberate non-goal).  OWED = still needs work.  */
+const TERMINAL   = ["written","demo-operational","scoped-out"];
+const OWED       = ["needs-input","needs-sub-stories","gap"];
+const RECOGNIZED = [...TERMINAL, ...OWED];
+const BUILDV     = ["active","in-build","archived"];
 
 /* ───────────── tiny markdown (inline + block) ───────────── */
 function esc(s){return (s||"").replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
@@ -292,8 +306,8 @@ function parseStories(mdText){
     // build progress: explicit BUILD wins; else an old build-word left in STATUS; else active
     s.build = BUILDV.includes(s.buildTag) ? s.buildTag
             : (BUILDV.includes(s.statusRaw) ? s.statusRaw : "active");
-    // owed status: recognized owed value wins; an old build-word → assume complete (written); unknown → written
-    s.status = OWED.includes(s.statusRaw) ? s.statusRaw : "written";
+    // status: a recognized value wins; an old build-word → assume complete (written); unknown → written
+    s.status = RECOGNIZED.includes(s.statusRaw) ? s.statusRaw : "written";
     s.archived = s.inArchivedSection || s.build==="archived" || s.statusRaw==="archived";
     s.noCapability = s.mapsTo.length===0;   // story exists, MAPS-TO no capability (distinct from status:gap)
   }
@@ -309,9 +323,11 @@ function splitList(s){
 /* ───────────── render ───────────── */
 function statusClass(st){
   if(st==="written") return "written";
+  if(st==="demo-operational") return "demoop";
   if(st==="needs-input") return "needsinput";
   if(st==="needs-sub-stories") return "needssub";
   if(st==="gap") return "gap";
+  if(st==="scoped-out") return "scopedout";
   if(st==="archived") return "archived";
   return "written";
 }
@@ -322,7 +338,9 @@ function storyCard(s){
     ? `<span class="buildbadge">${esc(s.build)}</span>` : "";
   const scopes = s.scopes.map(sp=>`<span class="scope ${scopeClass(sp)}">${esc(scopeLabel(sp))}</span>`).join("");
   const maps = s.noCapability
-    ? `<span class="maps nocap">→ no capability yet</span>`
+    ? (s.status==="scoped-out"
+        ? `<span class="maps nocap">→ not building</span>`
+        : `<span class="maps nocap">→ no capability yet</span>`)
     : s.mapsTo.map(id=>`<span class="maps">→ ${esc(id)}</span>`).join("");
   const pieces = s.pieces.length
     ? `<span class="lbl">pieces</span><span class="pieces">${s.pieces.map(p=>`<span class="pc">${esc(p)}</span>`).join("")}</span>`
@@ -344,7 +362,7 @@ function storyCard(s){
 function visible(s){
   if(currentView==="archived"){ if(!s.archived) return false; }
   else { if(s.archived) return false; }                 // owed + all hide archived
-  if(currentView==="owed" && s.status==="written") return false;   // owed = not written
+  if(currentView==="owed" && TERMINAL.includes(s.status)) return false; // owed = not terminal (written/demo-op/scoped-out)
   if(statusFilter!=="all" && s.status!==statusFilter) return false;
   if(scopeFilter!=="all" && !s.scopes.includes(scopeFilter)) return false;
   return true;
@@ -362,7 +380,7 @@ function render(mdText, srcLabel){
   document.getElementById("srcInfo").textContent = "rendering: " + srcLabel;
 
   // tally (from parsed data, never hardcoded) — owed-status counts among non-archived
-  const t={written:0,"needs-input":0,"needs-sub-stories":0,gap:0,archived:0};
+  const t={written:0,"demo-operational":0,"needs-input":0,"needs-sub-stories":0,gap:0,"scoped-out":0,archived:0};
   stories.forEach(s=>{
     if(s.archived){ t.archived++; return; }
     if(t[s.status]!==undefined) t[s.status]++;
@@ -371,7 +389,9 @@ function render(mdText, srcLabel){
   document.getElementById("tally").innerHTML =
     `<span style="color:#fde68a">${owedTotal} owed</span>`+
     `<span style="color:#a7f3d0">${t.written} written</span>`+
-    `<span style="color:#fecaca">${t.gap} gap</span>`;
+    `<span style="color:#cffafe">${t["demo-operational"]} demo-op</span>`+
+    `<span style="color:#fecaca">${t.gap} gap</span>`+
+    `<span style="color:#e2e8f0">${t["scoped-out"]} scoped-out</span>`;
 
   // scope filter options — only altitudes actually present, in canonical order
   buildScopeFilter(stories);

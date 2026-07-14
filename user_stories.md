@@ -23,7 +23,7 @@
 >
 > ```
 > ### <story title>
-> STATUS: written | needs-input | needs-sub-stories | gap
+> STATUS: written | demo-operational | needs-input | needs-sub-stories | gap | scoped-out
 > SCOPE: <one or more of: north-star | platform | vertical:cultivar | vertical:coolrunnings | vertical:kinna | vertical:ignition — comma-separated, primary first>
 > BUILD: active | in-build | archived          (OPTIONAL — build progress; default active)
 > ARC: <one of the 8 arc ids below — or omit for a cross-cutting item>
@@ -33,13 +33,20 @@
 > <narrative + details in markdown prose / bullets, until the next ### or ##>
 > ```
 >
-> - **STATUS** — the OWED axis (where the story is in its own lifecycle):
->   - `written` — complete, captured, no open questions.
+> - **STATUS** — the lifecycle axis. Three states are TERMINAL (not owed — `written`, `demo-operational`,
+>   `scoped-out`); three are OWED (`needs-input`, `needs-sub-stories`, `gap`):
+>   - `written` — complete, captured, no open questions (TERMINAL, built + storied).
+>   - `demo-operational` — a standard capability that must **WORK IF POKED** at the demo (owner asks
+>     "can it do X?" → yes, and it functions), even if it isn't in the *scripted* flow. TERMINAL / built,
+>     not owed. **Distinct from demo-critical** (which is *in* the scripted flow).
 >   - `needs-input` — drafted / stubbed but BLOCKED on a decision, detail, or direction from David
 >     (the "Lightning needs David" queue).
 >   - `needs-sub-stories` — the top-level story exists but the sub-stories under it are missing / incomplete.
 >   - `gap` — a capability that EXISTS (in code, on the status board, or in the plan) but has **NO story yet**
 >     (a coverage gap). A `gap` entry is a one-line "this needs a story," **not** a fabricated scenario.
+>   - `scoped-out` — a standard capability **DELIBERATELY not built**, carrying its **one-line reason**.
+>     TERMINAL, not owed. The **anti-recurrence** entry: it stops a scoped-out decision from re-appearing
+>     later as a "gap." (The reason lives in the prose as **`Reason:`** so the card SHOWS why.)
 > - **SCOPE** — the ALTITUDE the story lives at (this is a nested-scope project; discussions flip between altitudes):
 >   - `north-star` — the vision above the platform (spotlight brain, timing layer, trust tiers).
 >   - `platform` — the whole composable-AI platform (one source / many views, the shared spine, cross-vertical).
@@ -524,6 +531,224 @@ MAPS-TO: 5.1, 3.7
 PIECES: ambient_signal, drill_in_modal, operational_reasons, margin_target_setting, overhead_allocation
 NEEDS: three open dependencies to flag (none block the floor case): (1) PER-UNIT OVERHEAD ALLOCATION — the [[D-14]] carve-out / [[D-16]] Model B (cost-to-serve ÷ N) / cost_objects model, still OPEN platform-wide; gates the FULL traffic-light (true green/yellow/red vs landed cost). Partial signal (margin-vs-unit_cost, pre-overhead) works without it. (2) MARGIN-TARGET SETTING — the owner sets a desired margin %; where the green/yellow threshold lives (likely rides business_pricing_config.config jsonb, no migration — David sets the surface + granularity). (3) CONFIRM Layer-3 data coverage — plant_events is per-cultivar_plants specimen, but the dominant anchor is now the stock-line business_inventory lot ([[D-34]]/[[D-36]]) which may have no specimen events, so "plants dying on this line" may be sparse; age (created_at/received_at) is solid.
 Point-of-entry pricing intelligence with graceful degradation — a 3-layer interaction tying pricing health to OPERATIONAL health, right where the owner types a `sell_price`. **The price field IS the dashboard**, advisory-only (never blocks the save — Surface Honesty + owner-authority). **Layer 1 — ambient signal:** the field's BACKGROUND COLOR is the traffic light — 🟢 above margin target / 🟡 below target (thin) / 🔴 below cost+overhead (losing money) / ⚪ neutral when there's no cost basis to judge. Glanceable, always on, no interaction. **Layer 2 — drill-in:** a clickable icon → a modal with the math, state-dependent — GREEN shows % margin + profit-per-item ("42% margin · $53 each"), YELLOW adds a suggested price to reach green ("18% — suggest $145"), RED shows negative margin + recovery price + the Layer-3 reasons. **Layer 3 — the operational WHY (the differentiator):** red/yellow isn't just margin math — it connects price to operational health, surfacing reasons from operational data: too long in stock (aging → carrying cost, from inventory created_at/received_at), plants dying/declining (reuse plant_events decline tracking), great losses/shrinkage on the line (plant_events 'lost'), extensible. "This plant is bad business + here's why," not just "you priced it wrong." **Graceful degradation (mirrors cost_confidence + fidelity tiers):** no cost+overhead → NEUTRAL, accept the owner's price on trust, form fully works; unit_cost known → partial signal (vs cost, pre-overhead); + overhead → full traffic-light; + operational data → Layer 3 reasons light up. Intelligence appears as data arrives, NEVER blocks the floor case. **Reuse:** the shared MarginEngine for margin/suggested-price math (NOT its slab model — cultivar stores an explicit sell_price, so extract the small margin helpers, don't force the whole engine); existing plant_events + inventory timestamps for Layer 3. Full design: `docs/concepts/margin-aware-pricing-intelligence.md`. _Grounded: business_inventory.unit_cost/sell_price/created_at ([[D-35]]); plant_events (packages/cultivar-os/src/types/plant.ts); MarginEngine.ts; cost_confidence seam; open overhead model [[D-14]]/[[D-16]]._
+
+---
+
+## PLATFORM STANDARD CAPABILITIES
+
+_The three-category capability roster the platform-standard **gap analysis** (2026-07-14, David) surfaced: the
+boards had captured what David INTENDED to build but not (a) the industry-standard capabilities still MISSING nor
+(b) the ones deliberately scoped OUT — so gaps ambushed one demo-surface at a time. This section closes that by
+putting ALL THREE on the boards from the ONE source: what's **BUILT** (`written`), what's **BUILDING / a GAP**
+(`gap`), what must be **DEMO-OPERATIONAL if poked** (`demo-operational`), and what is deliberately **SCOPED-OUT**
+with the reason (`scoped-out`). These are terse capability lines (not day-in-the-life narratives — those live in
+the arc sections above), and where a capability already has a fuller arc story, the roster line `MAPS-TO` the same
+id rather than re-telling it (STD-011 — one canonical narrative, this is the capability-index VIEW). Rendered on
+`stories.html` (Cross-cutting) + the live `cultivar_demo_kanban.html` (grouped into Built / Building / Demo-op /
+Scoped-out columns)._
+
+### Server-authoritative pricing & discount (BUILT)
+STATUS: written
+SCOPE: platform, vertical:cultivar
+MAPS-TO: 2.1
+PIECES: computeOrderPricing, discount_showwork
+ONE shared server-authoritative pricing function; every surface renders its output, and the per-line breakdown is PERSISTED at submit and RENDERED downstream (never recomputed per surface). _Built: [[D-39]] (one computation) + [[D-43]] (persist the show-the-work breakdown); STD-012._
+
+### Tax rate + exemption (BUILT)
+STATUS: written
+SCOPE: platform, vertical:cultivar
+MAPS-TO: 2.1
+PIECES: per_tenant_tax_rate, tax_exemption, override_gate
+Per-tenant tax rate (honest-unset, redlined when not set — no fabricated default), taxability on the goods/service line-kind seam, party exemption on `customers`, per-order override — each reason-coded, permission-gated, actor-logged. _Built: [[D-40]]; STD-013 (money-affecting overrides) + STD-014 (sourced config, honest-unset)._
+
+### Customer party record (BUILT)
+STATUS: written
+SCOPE: platform, vertical:cultivar
+MAPS-TO: —
+PIECES: customer_party_record, party_editor
+`customers` brought to the complete standard party/customer record (identity · billing · tax · terms · lifecycle) in ONE migration + a grouped `CustomerPartyEditor` (create + edit, one form) — fields stop being added reactively. _Built: [[D-41]]; STD-011 (Add + Edit render the SAME editor)._
+
+### Inventory decrement-on-paid (BUILT)
+STATUS: written
+SCOPE: platform, vertical:cultivar
+MAPS-TO: 5.1
+PIECES: atomic_decrement_rpc, oversell_refuse, lifecycle_restore
+Per-unit stock depletion at order-paid via one atomic guarded RPC (concurrency-safe, can't go negative), status derives from qty, oversell refused (`INSUFFICIENT_STOCK`), whole lifecycle coherent (edit/cancel/delete restore). The Amazon model — committed at payment, not delivery. _Built: [[D-42]]._
+
+### Customer detail + order history (BUILT)
+STATUS: written
+SCOPE: platform, vertical:cultivar
+MAPS-TO: —
+PIECES: customer_detail_page, order_ledger
+`/customers/:id` detail page with the customer's order history — customer history IS order history (no separate touch-log). _Built: [[D-44]] (ledger #122)._
+
+### Money boundary — TRACE charges, never processes payment (BUILT)
+STATUS: written
+SCOPE: platform
+MAPS-TO: —
+PIECES: charge_computation, no_payment_processing
+The platform COMPUTES a charge (price/discount/tax) and hands off; it never captures a card or processes a payment on the web. Tax is a charge computation, not payment processing. _Built: [[D-37]]; cf. Rail A / Rail B stories (payment moves on the business's own rail)._
+
+### Multi-tenant RLS isolation (BUILT)
+STATUS: written
+SCOPE: platform
+MAPS-TO: 1.4
+PIECES: business_id_scoping, is_active_member, tenant_isolation
+Every business-scoped table is `business_id`-scoped with owner/active-member RLS via the ONE canonical `is_active_member` predicate; cross-tenant resolution returns no-access, never a wrong-tenant record. _Built: AC-2 / AC-3; STD-004 (isolation is the acceptance bar) + STD-011 (one canonical membership predicate)._
+
+### Roles / permissions (BUILT)
+STATUS: written
+SCOPE: platform
+MAPS-TO: —
+PIECES: role_chokepoint, permission_gate, member_console
+One `can()` role/permission chokepoint gating visibility + write authority (owner/manager/staff), the agnostic member/device console at `/team`, and a three-tier role store (floor → override → custom). _Built: RBAC spine (ledger #86–#88); OP-11._
+
+### Order create / edit with server recompute (BUILT)
+STATUS: written
+SCOPE: platform, vertical:cultivar
+MAPS-TO: 2.1
+PIECES: order_crud, server_recompute, inventory_rereserve
+Full order CRUD — create + `/orders/:id` drill-in edit (qty / lines / services / delivery / status / delete), each SERVER-recomputed (re-read sell_price, re-net services, re-tax) with inventory re-reserved/released; staff read-only, enforced server-side. _Built: STD-016 (edit recomputes through the canonical path); the edit-drops-tier facet is the GAP below._
+
+### Manager permissions effective after account creation (GAP)
+STATUS: gap
+SCOPE: platform
+MAPS-TO: —
+PIECES: manager_perms_apply, role_reapply
+NEEDS: existing MANAGER member rows need a role re-save (or `seed-role-floor` re-run + re-apply) to hold newly-declared perms like `manage_orders`; owners unaffected (gated by `owner_id`), so the owner path proves today but a manager doesn't inherit a new perm until re-applied. Open item #3 (carried from ledger #100).
+_Coverage placeholder, not a fabricated scenario._ A perm declared after a manager's role was created does not take effect for that manager until their role is re-applied. Honest-debt: fails closed/safe (a manager without the perm is refused, never wrongly granted), but the capability isn't complete until re-application is automatic.
+
+### Placement / service-line increment edit persists (GAP)
+STATUS: gap
+SCOPE: vertical:cultivar
+MAPS-TO: 2.1
+PIECES: service_line_edit, qty_increment_persist
+NEEDS: LOOK before fixing — recon the order-edit service-line path (submit.ts `handleUpdate` + `order_service_selections`). Open item #4.
+_Coverage placeholder, not a fabricated scenario._ Editing a service line's increment/quantity on an existing order does not reliably persist through the recompute. A facet of the order-edit path — the money recompute is built (above), this specific service-line increment edit is the open gap.
+
+### Order edit re-applies the tier (edit-drops-tier) (GAP)
+STATUS: gap
+SCOPE: platform, vertical:cultivar
+MAPS-TO: 2.1, 3.7
+PIECES: handleupdate_tier, edit_pricing_reapply
+NEEDS: fold the roster order-edit path through `computeOrderPricing` tier/basis-aware (today `handleUpdate` recomputes baseline `sell_price` only, not tier-aware). Carried across builds (#107 / #114); STD-016 names it as its own recurring line.
+_Coverage placeholder, not a fabricated scenario._ An edited tiered order can silently drop its discount because `submit.ts handleUpdate` recomputes baseline price only, not tier-aware. The canonical fix is to route the edit through the same `computeOrderPricing` a create uses (STD-016).
+
+### Inventory reconciliation — counted vs expected (GAP)
+STATUS: gap
+SCOPE: vertical:cultivar
+MAPS-TO: 4.2
+PIECES: inventory_reconcile
+NEEDS: capability-roster line — the fuller day-in-the-life is the **"Reconcile counted vs expected"** story (ARC asset-inventory-pmi, 4.2). UNBLOCKED by [[D-42]] (real per-unit depletion now exists = expected-on-hand is computable) but the reconcile surface (sold / dead / missing) is not built.
+_Counted-on-hand vs what the books expected, surfacing shrinkage — deferred, not built. Roster entry for the Built/Building view; the narrative lives in the 4.2 story above._
+
+### Reorder threshold / low-stock alert (GAP)
+STATUS: gap
+SCOPE: platform, vertical:cultivar
+MAPS-TO: 5.1
+PIECES: reorder_point, low_stock_alert
+NEEDS: the `reorder_point` stub column exists (additive, [[D-42]]) but carries no threshold logic yet. David to set whether the alert is a dashboard readout, a notification, or both.
+_Coverage placeholder, not a fabricated scenario._ A low-stock threshold on the `reorder_point` stub that flags when a lot needs reordering. The schema slot was homed with the decrement build; the logic is the next build.
+
+### Data export / portability — owner gets their data (GAP)
+STATUS: gap
+SCOPE: platform
+MAPS-TO: —
+PIECES: data_export_csv, portability
+NEEDS: David to scope — on-thesis for the loose-coupling / no-lock-in pitch (the owner can always take their data). Concept only today; no export path built.
+_Coverage placeholder, not a fabricated scenario._ The owner can export their own data (customers, inventory, orders) as CSV — portability that backs the "we don't lock you in" promise. Not built; a standard capability the roster now tracks so it isn't ambushed later.
+
+### CSV catalog / customer import (GAP)
+STATUS: gap
+SCOPE: platform, vertical:cultivar
+MAPS-TO: 1.3
+PIECES: csv_import
+NEEDS: distinguish from receipt-OCR (which is IMAGE-only). A catalog import exists (the Woo/discovery catalog path); a general CSV import for customers/inventory is the gap. A CSV mistakenly fed to the image-OCR path is not import — it's the wrong door.
+_Coverage placeholder, not a fabricated scenario._ A first-class CSV import path for customers/inventory, distinct from the image-only receipt-OCR pipeline. The catalog-populate engine imports a Woo export; a general owner-facing CSV import is not built.
+
+### Tax exemption reachable + working via the customer editor (DEMO-OPERATIONAL)
+STATUS: demo-operational
+SCOPE: platform, vertical:cultivar
+MAPS-TO: 2.1
+PIECES: exemption_ui, customer_editor
+Must WORK IF POKED: marking a customer tax-exempt (reason required) through the `CustomerPartyEditor` UI actually zeroes their order tax and shows "Tax exempt — [reason] · cert" on every surface. _Built path: [[D-40]] + [[D-41]] UI; not necessarily in the scripted demo flow but functions if the owner tries it._
+
+### Order status lifecycle visible + settable (DEMO-OPERATIONAL)
+STATUS: demo-operational
+SCOPE: platform, vertical:cultivar
+MAPS-TO: 2.1
+PIECES: order_status, status_transitions
+Must WORK IF POKED: an order's status (Pending → Confirmed → Fulfilled → Cancelled) is visible on the roster/detail and settable by owner/manager, with cancel releasing reserved stock. _Built path: order CRUD (ledger #100) + [[D-42]] restore-on-cancel._
+
+### Discount shows as a line on order-detail + QBO (DEMO-OPERATIONAL)
+STATUS: demo-operational
+SCOPE: platform, vertical:cultivar
+MAPS-TO: 2.1
+PIECES: discount_line, order_detail_render, qbo_render
+Must WORK IF POKED: the persisted per-line discount breakdown renders as a visible discount line on `/orders/:id` AND the QBO invoice (not just Review/Confirmation) — the receipt reconciles to what was charged. _Built path: [[D-43]] persistence; STD-012 persistence clause._
+
+### Document / file HOSTING (SCOPED-OUT)
+STATUS: scoped-out
+SCOPE: platform
+MAPS-TO: —
+PIECES: —
+**Reason:** TRACE stores **references / links**, not files — hosting (certs, EIN, contracts) is the customer's (Google Drive, etc.). `tax_exempt_cert_doc_url` is a LINK field, not an upload. Deliberate non-goal, not a gap.
+
+### Inbound customer communication / support inbox (SCOPED-OUT)
+STATUS: scoped-out
+SCOPE: platform
+MAPS-TO: —
+PIECES: —
+**Reason:** The platform is **send-only** (transactional out only) — the owner's email is Gmail/Outlook, which owns the inbound side. No support-inbox / two-way messaging is built or planned.
+
+### CRM interaction / touch-log per customer (SCOPED-OUT)
+STATUS: scoped-out
+SCOPE: platform
+MAPS-TO: —
+PIECES: —
+**Reason:** Customer history **IS order history** ([[D-44]] `/customers/:id`) — there is no separate per-customer interaction/touch-log. Deliberate: the order ledger is the record.
+
+### Customer segments / lists (SCOPED-OUT)
+STATUS: scoped-out
+SCOPE: platform
+MAPS-TO: —
+PIECES: —
+**Reason:** Deferred WITH the planned SMS/social work — not a standalone capability. Segments/lists arrive (if at all) as part of that thread, not as an independent build.
+
+### Invoice numbering / void / credit-note / refund (SCOPED-OUT)
+STATUS: scoped-out
+SCOPE: platform
+MAPS-TO: —
+PIECES: —
+**Reason:** LAWNS uses **QBO**, and QBO owns the invoice lifecycle (numbering, void, credit-note, refund) — the [[D-37]] money boundary. TRACE ORIGINATES cart/QR orders and hands off; it does not run the invoice lifecycle.
+
+### Connector-management CONSOLE — full UI (SCOPED-OUT)
+STATUS: scoped-out
+SCOPE: platform
+MAPS-TO: —
+PIECES: —
+**Reason:** The connector / gap-filler tile + integration-registry model is DECIDED (2026-05-23); `business_modules` is the partial impl and QBO-connect works — that's enough for the demo. A full connector-management console is **post-demo**, not a gap.
+
+### Multi-currency (SCOPED-OUT)
+STATUS: scoped-out
+SCOPE: platform
+MAPS-TO: —
+PIECES: —
+**Reason:** Single-currency by design; multi-currency is deferred. Not needed for the LAWNS demo or the near-term verticals.
+
+### Level-2 address-based tax API / saved ship-to address book (SCOPED-OUT)
+STATUS: scoped-out
+SCOPE: platform, vertical:cultivar
+MAPS-TO: —
+PIECES: —
+**Reason:** TX is **origin-based** for in-state sellers — one rate at the seller's location is legally correct ([[D-40]]). Destination-jurisdiction resolution + a saved `customer_addresses` ship-to book are **Level-2, post-demo**, hooked at the `resolveTaxRate` seam. The platform never computes a jurisdiction rate; the owner enters theirs.
+
+### Immutable compliance-audit row for exemptions (SCOPED-OUT)
+STATUS: scoped-out
+SCOPE: platform
+MAPS-TO: —
+PIECES: —
+**Reason:** The order columns are sufficient for Level-1 exemption ([[D-40]]); an immutable per-exemption compliance-audit row (BENCH-G) is a **volume-justified hardening**, deliberately deferred until scale warrants it — not a Level-1 gap.
 
 ---
 

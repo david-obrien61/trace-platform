@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TRACE — Cultivar Demo Kanban</title>
+<!--
+  PURE RENDERER. Holds ZERO story/card data of its own.
+  The ONLY source of truth is user_stories.md. This file PARSES that markdown at
+  open-time and GROUPS it into status columns — it never hardcodes cards.
+  (The previous cultivar_demo_kanban.html was a DEAD hand-authored snapshot, 2026-07-03;
+   this replaces it with a live renderer so it can never drift again.)
+
+  Third view of the ONE source, beside the two other pure renderers:
+    status.html  ← TRACE-SESSION-BOOTSTRAP.md   (what's BUILT — capability board)
+    stories.html ← user_stories.md               (day-in-the-life need, arc-grouped list)
+    THIS FILE    ← user_stories.md               (the same stories, KANBAN by status column)
+
+  Columns (by STATUS tag, parsed — never invented here):
+    ✅ Built (written) · 🎯 Demo-operational · 🔨 Building / Gap (needs-input|needs-sub-stories|gap) · 🚫 Scoped-out
+  Default = the PLATFORM STANDARD CAPABILITIES roster (the three-category picture);
+  toggle "All stories" for the full board. Scoped-out cards SHOW their Reason.
+
+  Open: double-click → "Open .md" (or drag-drop user_stories.md).
+-->
+<style>
+  :root{
+    --written:#16a34a; --demoop:#0891b2; --needsinput:#d97706; --needssub:#7c3aed;
+    --gap:#dc2626; --scopedout:#64748b; --archived:#9ca3af;
+    --bg:#f5f7f2; --card:#ffffff; --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#27500A;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{position:sticky;top:0;z-index:5;background:var(--accent);color:#fff;
+    padding:14px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    box-shadow:0 1px 6px rgba(0,0,0,.15)}
+  header h1{margin:0;font-size:1.05rem;font-weight:800;letter-spacing:.01em}
+  header .sub{font-size:.72rem;opacity:.85;font-weight:500}
+  .spacer{flex:1}
+  .btn{background:#fff;color:var(--accent);border:none;border-radius:8px;
+    padding:8px 14px;font-weight:700;font-size:.82rem;cursor:pointer}
+  .btn.ghost{background:rgba(255,255,255,.15);color:#fff}
+  .wrap{max-width:1500px;margin:0 auto;padding:16px 18px 60px}
+  /* toolbar */
+  .tabs{display:flex;gap:8px;margin:4px 0 12px;flex-wrap:wrap;align-items:center}
+  .tab{background:var(--card);border:1.5px solid var(--line);border-radius:999px;
+    padding:7px 16px;font-weight:700;font-size:.82rem;cursor:pointer;color:var(--muted)}
+  .tab.active{border-color:var(--accent);color:var(--accent);background:#eef4e6}
+  .fgroup{display:inline-flex;align-items:center;gap:6px;font-size:.76rem;color:var(--muted);font-weight:700;margin-left:6px}
+  .fgroup select{font:inherit;font-size:.8rem;font-weight:600;color:var(--ink);
+    background:var(--card);border:1.5px solid var(--line);border-radius:8px;padding:5px 9px;cursor:pointer}
+  .srcline{font-size:.72rem;color:var(--muted);margin:2px 0 12px}
+  /* board = columns */
+  .cols{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;align-items:start}
+  @media(max-width:1100px){.cols{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:640px){.cols{grid-template-columns:1fr}}
+  .col{background:#eef1ea;border:1px solid var(--line);border-radius:12px;padding:10px;min-height:80px}
+  .colhead{display:flex;align-items:center;gap:8px;margin:2px 4px 10px;font-weight:800;font-size:.9rem}
+  .colhead .cnt{font-size:.72rem;font-weight:800;color:#fff;border-radius:999px;padding:1px 9px}
+  .colhead .hint{font-size:.68rem;font-weight:500;color:var(--muted);flex-basis:100%;margin-top:-4px}
+  .col.built .colhead{color:var(--written)} .col.built .cnt{background:var(--written)}
+  .col.demoop .colhead{color:var(--demoop)} .col.demoop .cnt{background:var(--demoop)}
+  .col.building .colhead{color:var(--needsinput)} .col.building .cnt{background:var(--needsinput)}
+  .col.scopedout .colhead{color:var(--scopedout)} .col.scopedout .cnt{background:var(--scopedout)}
+  /* cards */
+  .card{background:var(--card);border:1px solid var(--line);border-left-width:5px;
+    border-radius:10px;padding:11px 12px;box-shadow:0 1px 2px rgba(0,0,0,.05);margin-bottom:10px}
+  .card.c-written{border-left-color:var(--written)}
+  .card.c-demoop{border-left-color:var(--demoop)}
+  .card.c-needsinput{border-left-color:var(--needsinput)}
+  .card.c-needssub{border-left-color:var(--needssub)}
+  .card.c-gap{border-left-color:var(--gap)}
+  .card.c-scopedout{border-left-color:var(--scopedout);background:#f8fafc}
+  .card .name{font-weight:800;font-size:.92rem;line-height:1.3;margin-bottom:6px}
+  .card .name .star{color:#d97706}
+  .row{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-bottom:6px}
+  .pill{display:inline-block;font-size:.62rem;font-weight:800;letter-spacing:.03em;
+    text-transform:uppercase;padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .p-written{background:#dcfce7;color:#166534}
+  .p-demoop{background:#cffafe;color:#155e75}
+  .p-needsinput{background:#fef3c7;color:#92400e}
+  .p-needssub{background:#ede9fe;color:#5b21b6}
+  .p-gap{background:#fee2e2;color:#991b1b}
+  .p-scopedout{background:#e2e8f0;color:#334155}
+  .scope{display:inline-flex;align-items:center;gap:4px;font-size:.64rem;font-weight:800;
+    border-radius:6px;padding:2px 7px}
+  .scope.s-north{background:#1e1b4b;color:#fde68a}
+  .scope.s-platform{background:#0f3d2e;color:#a7f3d0}
+  .scope.s-vertical{background:#eef4e6;color:var(--accent);border:1px solid #d6e6c4}
+  .maps{display:inline-flex;align-items:center;gap:4px;font-size:.66rem;font-weight:800;
+    color:#fff;background:var(--accent);border-radius:6px;padding:2px 7px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .maps.nocap{background:#94a3b8}
+  .reason{font-size:.8rem;line-height:1.45;background:#f1f5f9;border:1px solid #cbd5e1;
+    border-left:3px solid var(--scopedout);border-radius:7px;padding:6px 10px;margin:4px 0 2px;color:#334155}
+  .reason b{color:#1e293b}
+  .needs{font-size:.76rem;line-height:1.4;background:#fffbeb;border:1px solid #fde68a;
+    border-radius:7px;padding:6px 9px;margin:4px 0 2px;color:#78350f}
+  .needs b{color:#92400e}
+  .nar{font-size:.8rem;line-height:1.45;color:var(--ink);margin-top:4px}
+  .nar p{margin:.35em 0} .nar ul{margin:.35em 0;padding-left:18px} .nar li{margin:.15em 0}
+  .nar em{color:var(--muted)}
+  code{background:#f1f3ee;border-radius:4px;padding:.5px 4px;font-size:.85em;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .colempty{font-size:.74rem;color:var(--muted);text-align:center;padding:14px 6px}
+  /* empty / dropzone */
+  .empty{text-align:center;padding:60px 20px;color:var(--muted)}
+  .empty h2{color:var(--ink);margin:0 0 8px}
+  .drop{margin:22px auto 0;max-width:480px;border:2px dashed var(--line);
+    border-radius:14px;padding:34px 20px;background:var(--card);transition:.15s}
+  .drop.over{border-color:var(--accent);background:#eef4e6}
+  .hint{font-size:.76rem;color:var(--muted);margin-top:10px}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>🗂 TRACE — Cultivar Demo Kanban</h1>
+  <span class="sub" id="srcInfo">pure renderer · reads user_stories.md</span>
+  <span class="spacer"></span>
+  <button class="btn" id="openBtn">Open .md</button>
+  <button class="btn ghost" id="reloadBtn">↻</button>
+  <input type="file" id="file" accept=".md,.markdown,text/markdown,text/plain" class="hide" />
+</header>
+
+<div class="wrap">
+  <!-- EMPTY STATE -->
+  <div id="emptyState" class="empty">
+    <h2>No data — open the story source</h2>
+    <p>This board holds no cards of its own. It renders only what it reads from
+       <code>user_stories.md</code>, grouped by STATUS into columns.</p>
+    <div class="drop" id="drop">
+      <strong>Drop user_stories.md here</strong>
+      <div class="hint">or click “Open .md” above and pick it from your desktop.</div>
+    </div>
+    <p class="hint" id="autoNote"></p>
+  </div>
+
+  <!-- BOARD -->
+  <div id="board" class="hide">
+    <div class="tabs">
+      <button class="tab active" data-view="roster">📋 Capability roster</button>
+      <button class="tab" data-view="all">📚 All stories</button>
+      <span class="fgroup">Scope <select id="scopeFilter"><option value="all">all</option></select></span>
+    </div>
+    <div class="srcline" id="srcline"></div>
+    <div class="cols" id="cols"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ───────────── status vocab (mirrors stories.html — same source, same parse) ───────────── */
+const TERMINAL   = ["written","demo-operational","scoped-out"];
+const OWED        = ["needs-input","needs-sub-stories","gap"];
+const RECOGNIZED = [...TERMINAL, ...OWED];
+const BUILDV     = ["active","in-build","archived"];
+
+/* columns = status buckets */
+const COLUMNS = [
+  {key:"built",     cls:"built",     label:"✅ Built",            statuses:["written"],
+     hint:"shipped + working"},
+  {key:"demoop",    cls:"demoop",    label:"🎯 Demo-operational", statuses:["demo-operational"],
+     hint:"works if poked (not necessarily scripted)"},
+  {key:"building",  cls:"building",  label:"🔨 Building / Gap",   statuses:["needs-input","needs-sub-stories","gap"],
+     hint:"owed — in flight or no story yet"},
+  {key:"scopedout", cls:"scopedout", label:"🚫 Scoped-out",       statuses:["scoped-out"],
+     hint:"deliberately not built — reason shown"},
+];
+
+/* scope altitude labels */
+const SCOPE_ORDER = ["north-star","platform","vertical:cultivar","vertical:coolrunnings","vertical:kinna","vertical:ignition"];
+const SCOPE_LABEL = {
+  "north-star":"★ North-star","platform":"▣ Platform",
+  "vertical:cultivar":"Cultivar","vertical:coolrunnings":"CoolRunnings",
+  "vertical:kinna":"KINNA","vertical:ignition":"Ignition"
+};
+function scopeClass(sc){ return sc==="north-star"?"s-north":(sc==="platform"?"s-platform":"s-vertical"); }
+function scopeLabel(sc){ return SCOPE_LABEL[sc] || sc; }
+
+/* ───────────── tiny markdown ───────────── */
+function esc(s){return (s||"").replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function inlineMd(s){
+  let t = esc(s);
+  t = t.replace(/\[([^\]]+)\]\([^)]*\)/g,"$1");
+  t = t.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>");
+  t = t.replace(/`([^`]+)`/g,"<code>$1</code>");
+  t = t.replace(/(^|[\s(])_([^_]+)_(?=[\s.,;:)]|$)/g,"$1<em>$2</em>");
+  return t;
+}
+function blockMd(raw){
+  const lines = (raw||"").split(/\n/);
+  let html="", list=[], para=[];
+  const flushP=()=>{ if(para.length){ html+=`<p>${inlineMd(para.join(" ").trim())}</p>`; para=[]; } };
+  const flushL=()=>{ if(list.length){ html+=`<ul>${list.map(li=>`<li>${inlineMd(li)}</li>`).join("")}</ul>`; list=[]; } };
+  for(const ln of lines){
+    const t = ln.trim();
+    if(!t){ flushP(); flushL(); continue; }
+    const m = t.match(/^[-*]\s+(.+)$/);
+    if(m){ flushP(); list.push(m[1]); }
+    else { flushL(); para.push(t); }
+  }
+  flushP(); flushL();
+  return html;
+}
+
+/* ───────────── parse user_stories.md ───────────── */
+function parseStories(mdText){
+  const lines = mdText.split(/\r?\n/);
+  const stories=[];
+  let curArc=null, curSection="", inArchivedSection=false, cur=null;
+  const push=()=>{ if(cur){ cur.narrative = cur.narLines.join("\n").trim(); delete cur.narLines; stories.push(cur); cur=null; } };
+
+  for(const raw of lines){
+    const line = raw.replace(/\s+$/,"");
+    const t = line.trim();
+    if(/^##\s/.test(t) && !/^###/.test(t)){
+      push();
+      const arcm = t.match(/^##\s*ARC:\s*([a-z0-9-]+)/i);
+      curSection = t.replace(/^##\s*/,"").trim();
+      if(arcm){ curArc = arcm[1].toLowerCase(); inArchivedSection=false; }
+      else if(/^##\s*ARCHIVED/i.test(t)){ curArc=null; inArchivedSection=true; }
+      else { curArc=null; inArchivedSection=false; }
+      continue;
+    }
+    if(/^###\s+/.test(t)){
+      push();
+      cur = { title:t.replace(/^###\s+/,"").trim(),
+              statusRaw:"", scopes:[], buildTag:"", mapsTo:[], pieces:[], needs:"", narLines:[],
+              section:curSection, inArchivedSection };
+      continue;
+    }
+    if(!cur) continue;
+    let m;
+    if((m=t.match(/^STATUS:\s*(.+)$/i)))   { cur.statusRaw = m[1].trim().toLowerCase(); continue; }
+    if((m=t.match(/^SCOPE:\s*(.+)$/i)))    { cur.scopes = splitList(m[1]).map(x=>x.toLowerCase()); continue; }
+    if((m=t.match(/^BUILD:\s*(.+)$/i)))    { cur.buildTag = m[1].trim().toLowerCase(); continue; }
+    if((m=t.match(/^ARC:\s*(.+)$/i)))      { continue; }
+    if((m=t.match(/^MAPS-TO:\s*(.+)$/i)))  { cur.mapsTo = splitIds(m[1]); continue; }
+    if((m=t.match(/^PIECES:\s*(.+)$/i)))   { continue; }
+    if((m=t.match(/^NEEDS:\s*(.+)$/i)))    { cur.needs = m[1].trim(); continue; }
+    if(/^<!--/.test(t)) continue;
+    cur.narLines.push(line);
+  }
+  push();
+
+  for(const s of stories){
+    s.build = BUILDV.includes(s.buildTag) ? s.buildTag
+            : (BUILDV.includes(s.statusRaw) ? s.statusRaw : "active");
+    s.status = RECOGNIZED.includes(s.statusRaw) ? s.statusRaw : "written";
+    s.archived = s.inArchivedSection || s.build==="archived" || s.statusRaw==="archived";
+    s.noCapability = s.mapsTo.length===0;
+    s.isRoster = /PLATFORM STANDARD CAPABILITIES/i.test(s.section||"");
+    // pull a leading **Reason:** line for scoped-out cards
+    s.reason = "";
+    if(s.status==="scoped-out"){
+      const rm = (s.narrative||"").match(/\*\*Reason:\*\*\s*([\s\S]+)/i);
+      if(rm) s.reason = rm[1].trim();
+    }
+    // demo-critical heuristic badge (prose flag, not a status)
+    s.demoCritical = /DEMO-CRITICAL/.test((s.needs||"")+" "+(s.narrative||""));
+  }
+  return stories;
+}
+function splitIds(s){ return s.split(",").map(x=>x.trim()).filter(x=>x && x!=="—" && x!=="-"); }
+function splitList(s){ return s.split(",").map(x=>x.replace(/`/g,"").trim()).filter(Boolean); }
+
+/* ───────────── render ───────────── */
+function statusClass(st){
+  if(st==="written") return "written";
+  if(st==="demo-operational") return "demoop";
+  if(st==="needs-input") return "needsinput";
+  if(st==="needs-sub-stories") return "needssub";
+  if(st==="gap") return "gap";
+  if(st==="scoped-out") return "scopedout";
+  return "written";
+}
+function card(s){
+  const sc = statusClass(s.status);
+  const star = s.demoCritical ? `<span class="star" title="demo-critical (prose flag)">★ </span>` : "";
+  const pill = `<span class="pill p-${sc}">${esc(s.status)}</span>`;
+  const scopes = s.scopes.map(sp=>`<span class="scope ${scopeClass(sp)}">${esc(scopeLabel(sp))}</span>`).join("");
+  const maps = s.noCapability
+    ? (s.status==="scoped-out" ? `<span class="maps nocap">not building</span>` : `<span class="maps nocap">no cap</span>`)
+    : s.mapsTo.map(id=>`<span class="maps">→ ${esc(id)}</span>`).join("");
+  // scoped-out → reason callout; owed → needs callout; else short narrative
+  let body="";
+  if(s.status==="scoped-out" && s.reason){
+    body = `<div class="reason"><b>Reason:</b> ${inlineMd(s.reason)}</div>`;
+  } else if(OWED.includes(s.status) && s.needs){
+    body = `<div class="needs"><b>Owed:</b> ${inlineMd(s.needs)}</div>`;
+  } else if(s.narrative){
+    body = `<div class="nar">${blockMd(s.narrative)}</div>`;
+  }
+  return `<div class="card c-${sc}">
+    <div class="name">${star}${inlineMd(s.title)}</div>
+    <div class="row">${pill}${scopes}${maps}</div>
+    ${body}
+  </div>`;
+}
+
+function visible(s){
+  if(s.archived) return false;
+  if(currentView==="roster" && !s.isRoster) return false;
+  if(scopeFilter!=="all" && !s.scopes.includes(scopeFilter)) return false;
+  return true;
+}
+
+function render(mdText, srcLabel){
+  const stories = parseStories(mdText);
+  if(!stories.length){ showEmpty("No stories found — is this user_stories.md?"); return; }
+  document.getElementById("emptyState").classList.add("hide");
+  document.getElementById("board").classList.remove("hide");
+  document.getElementById("srcInfo").textContent = "rendering: " + srcLabel;
+  window.__stories = stories;
+  buildScopeFilter(stories);
+  renderCols(stories);
+}
+
+function buildScopeFilter(stories){
+  const present = new Set();
+  stories.forEach(s=>{ if(!s.archived) s.scopes.forEach(sp=>present.add(sp)); });
+  const sel = document.getElementById("scopeFilter");
+  const keep = sel.value;
+  let opts = `<option value="all">all</option>`;
+  SCOPE_ORDER.filter(sp=>present.has(sp)).forEach(sp=>{ opts += `<option value="${esc(sp)}">${esc(scopeLabel(sp))}</option>`; });
+  [...present].filter(sp=>!SCOPE_ORDER.includes(sp)).sort().forEach(sp=>{ opts += `<option value="${esc(sp)}">${esc(sp)}</option>`; });
+  sel.innerHTML = opts;
+  sel.value = [...sel.options].some(o=>o.value===keep) ? keep : "all";
+  scopeFilter = sel.value;
+}
+
+function renderCols(stories){
+  const shown = stories.filter(visible);
+  const cols = COLUMNS.map(col=>{
+    const inCol = shown.filter(s=>col.statuses.includes(s.status));
+    const cards = inCol.length ? inCol.map(card).join("") : `<div class="colempty">— none —</div>`;
+    return `<div class="col ${col.cls}">
+      <div class="colhead">${esc(col.label)}<span class="cnt">${inCol.length}</span>
+        <span class="hint">${esc(col.hint)}</span></div>
+      ${cards}
+    </div>`;
+  }).join("");
+  document.getElementById("cols").innerHTML = cols;
+  const total = shown.length;
+  const label = currentView==="roster" ? "PLATFORM STANDARD CAPABILITIES roster" : "all stories";
+  document.getElementById("srcline").textContent =
+    `source: user_stories.md · ${label} · ${total} cards` +
+    (scopeFilter!=="all" ? ` · scope: ${scopeLabel(scopeFilter)}` : "");
+}
+
+/* ───────────── views / filters / empty ───────────── */
+let currentView = "roster";
+let scopeFilter = "all";
+function showEmpty(msg){
+  document.getElementById("board").classList.add("hide");
+  const e=document.getElementById("emptyState");
+  e.classList.remove("hide");
+  if(msg) e.querySelector("h2").textContent = msg;
+}
+function setView(v){
+  currentView = v;
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
+  if(window.__stories) renderCols(window.__stories);
+}
+
+/* ───────────── file loading ───────────── */
+function loadText(text, label){ render(text, label); }
+function readFile(file){
+  const r=new FileReader();
+  r.onload=()=>loadText(String(r.result), file.name);
+  r.onerror=()=>showEmpty("Couldn't read that file.");
+  r.readAsText(file);
+}
+document.getElementById("openBtn").onclick=()=>document.getElementById("file").click();
+document.getElementById("file").onchange=e=>{ if(e.target.files[0]) readFile(e.target.files[0]); };
+document.getElementById("reloadBtn").onclick=()=>{ tryAutoFetch(true); };
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>setView(t.dataset.view));
+document.getElementById("scopeFilter").onchange=e=>{ scopeFilter=e.target.value; if(window.__stories) renderCols(window.__stories); };
+
+// drag-drop
+const drop=document.getElementById("drop");
+["dragenter","dragover"].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();if(ev==="dragleave"&&e.relatedTarget)return;drop.classList.remove("over");}));
+document.addEventListener("drop",e=>{const f=e.dataTransfer.files[0]; if(f) readFile(f);});
+
+/* auto-fetch (served → loads; file:// → picker) */
+function tryAutoFetch(manual){
+  fetch("./user_stories.md",{cache:"no-store"})
+    .then(r=>{ if(!r.ok) throw new Error(r.status); return r.text(); })
+    .then(t=>loadText(t,"./user_stories.md (auto)"))
+    .catch(()=>{
+      document.getElementById("autoNote").textContent =
+        "Auto-load blocked by the browser for local files — pick or drop the .md (normal for double-click open).";
+      if(manual) showEmpty("No data — open the story source");
+    });
+}
+tryAutoFetch(false);
+</script>
+</body>
+</html>

@@ -91,6 +91,12 @@ job). If code and a home doc conflict, **the code wins and the doc gets correcte
 decided/recorded — needs David) · **SUPERSEDED** (replaced; kept for provenance) ·
 **DRIFTED** (decided, but the code diverged — a build owed).
 
+> ✅ **Drift watch (2026-07-14 · DEMO KANBAN + STORY-BOARD GAP CATEGORIES — board/tracking infra, NO new decision):** No drift.
+> Extended the story STATUS vocabulary (`demo-operational` + `scoped-out`) in `user_stories.md` + the `stories.html` renderer, added a
+> `## PLATFORM STANDARD CAPABILITIES` roster (28 lines across built / building-gap / demo-op / scoped-out-with-reason), and (re)built
+> `cultivar_demo_kanban.html` as a PURE RENDERER over `user_stories.md`. Docs + renderers ONLY — no app code/schema/migration and no
+> decision to log; abided by **STD-011** (the boards RENDER the one source, they don't hand-author cards). Ledger #123.
+>
 > ✅ **Drift watch (2026-07-14 · CUSTOMER DETAIL PAGE — NEW decision D-44 (proposed); honors STD-011):** No drift.
 > Built the per-customer detail page `/customers/:id` (summary header → 4 live-computed stat cards → order-history list linking to
 > `/orders/:id` → a stubbed insights strip). Editing routes through the EXISTING `CustomerPartyEditor` — the page does NOT re-implement
