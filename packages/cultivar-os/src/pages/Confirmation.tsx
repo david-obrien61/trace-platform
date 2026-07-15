@@ -1,7 +1,8 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
 import type { OrderBreakdown } from '../hooks/useSubmitOrder';
-import { describeTaxLine, type TaxStatus } from '@trace/shared/business-logic';
+import type { TaxStatus } from '@trace/shared/business-logic';
+import { OrderTotals } from '../components/checkout/OrderTotals';
 
 interface ConfirmState {
   orderId:          string;
@@ -74,17 +75,19 @@ export function Confirmation() {
           transportMode, transportName, serviceLines, breakdown, tierLabel,
           businessName, nettingActive, taxStatus, taxRate, taxExemptReason, taxExemptCertRef,
           qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus } = state;
-  // D-40: ONE presenter, rendered from the authoritative state. taxableSubtotal ≈ subtotal here
-  // (Confirmation shows the discounted subtotal); a null rate → redline, exempt → reason+$0.
-  const taxLine = describeTaxLine({ taxStatus: taxStatus ?? 'taxed', tax: taxAmount, taxableSubtotal: subtotal, taxRate, reason: taxExemptReason, certRef: taxExemptCertRef });
   // D-39 (E2): render the SERVER-AUTHORITATIVE breakdown (goods retail lines → discount line → net),
   // not the client preview → the receipt equals QBO and the discount is a visible line.
   const goodsLines    = (breakdown?.lines ?? []).filter(l => l.kind === 'goods');
-  const svcFromBreak  = (breakdown?.lines ?? []).filter(l => l.kind === 'service' && l.netTotal > 0);
   const hasBreakdown  = goodsLines.length > 0;
   const orderDiscount = breakdown?.discountTotal ?? 0;
   const goodsRetail   = breakdown?.goodsRetailSubtotal ?? 0;
   const discountLabel = breakdown?.discountLabel ?? (tierLabel ? tierLabel.split(' · ')[0] : 'Discount');
+  // FIX 3/4 (STD-017): render EVERY selected service incl. $0 ones — Confirm was dropping the
+  // zero-amount Deer bundle that Review/QBO/order-detail all show. OrderTotals renders $0.00
+  // explicitly (never an em-dash). Prefer the authoritative breakdown, fall back to serviceLines.
+  const svcAll: { name: string; amount: number }[] = hasBreakdown
+    ? (breakdown?.lines ?? []).filter(l => l.kind === 'service').map(s => ({ name: s.name, amount: s.netTotal }))
+    : (serviceLines ?? []).map(s => ({ name: s.name, amount: s.amount }));
 
   const isSelf      = (transportMode ?? 'self') === 'self';
   const nettingOn   = !!nettingActive;
@@ -177,45 +180,24 @@ export function Confirmation() {
           ))
         )}
 
-        {/* Goods subtotal → discount line → goods after (only when a discount applies). */}
-        {orderDiscount > 0 && (
-          <div style={{ borderTop: '1px solid #f3f4f6', marginTop: 4, paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#6b7280' }}>
-              <span>Goods subtotal (retail)</span><span>${goodsRetail.toFixed(2)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#27500A', fontWeight: 600 }}>
-              <span>{discountLabel}</span><span>−${orderDiscount.toFixed(2)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#374151', fontWeight: 600 }}>
-              <span>Goods after discount</span><span>${(goodsRetail - orderDiscount).toFixed(2)}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Services — not discounted. Prefer the authoritative breakdown; fall back to serviceLines. */}
-        {(hasBreakdown ? svcFromBreak.map(s => ({ name: s.name, amount: s.netTotal })) : (serviceLines ?? []).filter(s => s.amount > 0)).length > 0 && (
-          <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '16px 0 10px' }}>
-            Services <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500, color: '#b0b7c0' }}>· not discounted</span>
-          </p>
-        )}
-        {(hasBreakdown ? svcFromBreak.map(s => ({ name: s.name, amount: s.netTotal })) : (serviceLines ?? []).filter(s => s.amount > 0)).map((s, i) => (
-          <div key={`svc-${i}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem', color: '#374151', marginBottom: 8 }}>
-            <span>{s.name}</span>
-            <span>${s.amount.toFixed(2)}</span>
-          </div>
-        ))}
-
-        <div style={{ borderTop: '1px solid #f3f4f6', marginTop: 8, paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#9ca3af' }}>
-            <span>{orderDiscount > 0 ? 'Subtotal (after discount)' : 'Subtotal'}</span><span>${subtotal.toFixed(2)}</span>
-          </div>
-          {/* D-40 three-state tax line: redline (rate unset) / taxed(%) / exempt(reason) — never a fabricated rate */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: taxLine.redline ? '#92400e' : '#9ca3af', fontWeight: taxLine.redline ? 600 : 400 }}>
-            <span>{taxLine.redline ? '⚠ ' : ''}{taxLine.label}</span><span>{taxLine.amount ?? ''}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '1.0625rem', color: '#1f2937', paddingTop: 6, borderTop: '1px solid #e5e7eb' }}>
-            <span>Total{taxLine.state === 'not_identified' ? ' (tax not included)' : ''}</span><span>${total.toFixed(2)}</span>
-          </div>
+        {/* Canonical totals — ONE shared renderer (STD-011/STD-012): goods subtotal → discount →
+            goods after → services (all, incl. $0) → subtotal → three-state tax → total. Rendered
+            from the SERVER-AUTHORITATIVE breakdown so the receipt equals QBO/order-detail. */}
+        <div style={{ marginTop: 8 }}>
+          <OrderTotals
+            goodsRetailSubtotal={goodsRetail}
+            discountTotal={orderDiscount}
+            discountLabel={discountLabel}
+            services={svcAll}
+            subtotal={subtotal}
+            total={total}
+            taxStatus={taxStatus ?? 'taxed'}
+            tax={taxAmount}
+            taxableSubtotal={subtotal}
+            taxRate={taxRate}
+            taxReason={taxExemptReason}
+            taxCertRef={taxExemptCertRef}
+          />
         </div>
       </div>
 

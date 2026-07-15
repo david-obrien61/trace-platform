@@ -753,7 +753,9 @@ function ServiceRow({
           <Stepper value={qty} onChange={onQty} min={1} />
         )}
         <span style={{ width: 68, textAlign: 'right', fontWeight: 500, fontSize: '0.9375rem', color: isOverridden ? '#92400e' : '#374151' }}>
-          {amount > 0 ? `$${amount.toFixed(2)}` : '—'}
+          {/* FIX 4: an explicit $0.00 (a zero the customer can read), never an em-dash — "—" reads as
+              "unknown/not applicable", a different meaning. One zero convention across every surface. */}
+          ${amount.toFixed(2)}
         </span>
         {onToggle && (
           <button onClick={onToggle} aria-label="Remove service" style={iconBtn}>

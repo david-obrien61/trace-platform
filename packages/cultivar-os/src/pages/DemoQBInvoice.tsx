@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { orderItemName, orderItemTag } from '../lib/orderItemName';
+import { describeTaxLine, type TaxStatus } from '@trace/shared/business-logic';
 
 interface PreviewLine { description: string; qty: number; rate: number; amount: number; }
 interface PreviewData {
@@ -21,6 +22,11 @@ interface PreviewData {
   total:         number;
   subtotal:      number;
   tax:           number;
+  // D-40 (FIX 2): the persisted tax state → the preview renders the three-state tax line via the
+  // SHARED presenter (never a silent "Sales Tax $0.00" with no reason on an exempt invoice).
+  taxStatus:     TaxStatus;
+  taxReason:     string | null;
+  taxCertRef:    string | null;
   bizName:       string | null;
   bizAddress:    string | null;
   bizPhone:      string | null;
@@ -48,7 +54,7 @@ function QBInvoicePreview() {
       // Order + customer (owner RLS — the preview is an owner-facing surface).
       const { data: order } = await supabase
         .from('orders')
-        .select('id, business_id, subtotal, tax_amount, total_amount, notes, customers(*)')
+        .select('id, business_id, subtotal, tax_amount, total_amount, notes, tax_exempt_applied, tax_exempt_reason, tax_exempt_cert_ref, customers(*)')
         .eq('id', orderId)
         .maybeSingle();
 
@@ -129,11 +135,20 @@ function QBInvoicePreview() {
       const total    = Number(o.total_amount ?? subtotal + tax);
       const cust     = o.customers;
 
+      // FIX 2 (D-40): derive the three-state tax status from the persisted facts (deriving an enum
+      // from stored fields is not recomputing a charge — the money is unchanged).
+      const taxStatus: TaxStatus = o.tax_exempt_applied
+        ? 'exempt'
+        : (tax > 0 ? 'taxed' : 'not_identified');
+
       if (!cancelled) {
         setData({
           invoiceNumber: o.notes || queryInvoice,
           date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
           total, subtotal, tax,
+          taxStatus,
+          taxReason:  o.tax_exempt_reason ?? null,
+          taxCertRef: o.tax_exempt_cert_ref ?? null,
           bizName:    biz?.name ?? null,
           bizAddress: biz?.address ?? null,
           bizPhone:   biz?.phone ?? null,
@@ -181,6 +196,11 @@ function QBInvoicePreview() {
       </div>,
     );
   }
+
+  // D-40 (FIX 2): the ONE three-state tax presenter, from the persisted state. not_identified →
+  // no tax line on the invoice (the redline lives pre-invoice, in the app); exempt → a $0 line that
+  // STATES the reason (audit-trail, never a silent $0.00); taxed → the derived %.
+  const taxView = describeTaxLine({ taxStatus: data.taxStatus, tax: data.tax, taxableSubtotal: data.subtotal, taxRate: null, reason: data.taxReason, certRef: data.taxCertRef });
 
   return wrap(
     <>
@@ -239,12 +259,16 @@ function QBInvoicePreview() {
                   </tr>
                 );
               })}
-              <tr>
-                <td style={{ padding: '14px 0', fontSize: '0.9375rem', color: '#374151' }}>Sales Tax</td>
-                <td style={{ textAlign: 'right', padding: '14px 0', color: '#374151' }}>1</td>
-                <td style={{ textAlign: 'right', padding: '14px 0', color: '#374151' }}>${data.tax.toFixed(2)}</td>
-                <td style={{ textAlign: 'right', padding: '14px 0', fontWeight: 500, color: '#374151' }}>${data.tax.toFixed(2)}</td>
-              </tr>
+              {/* D-40 three-state tax line (FIX 2). not_identified → omit (no tax was charged);
+                  exempt → a $0 line stating the reason; taxed → the tax with derived %. */}
+              {taxView.state !== 'not_identified' && (
+                <tr>
+                  <td style={{ padding: '14px 0', fontSize: '0.9375rem', color: '#374151' }}>{taxView.label}</td>
+                  <td style={{ textAlign: 'right', padding: '14px 0', color: '#374151' }}></td>
+                  <td style={{ textAlign: 'right', padding: '14px 0', color: '#374151' }}></td>
+                  <td style={{ textAlign: 'right', padding: '14px 0', fontWeight: 500, color: '#374151' }}>{taxView.amount}</td>
+                </tr>
+              )}
             </tbody>
           </table>
 
@@ -252,9 +276,15 @@ function QBInvoicePreview() {
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#6b7280' }}>
               <span>Subtotal</span><span>${data.subtotal.toFixed(2)}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#6b7280' }}>
-              <span>Tax</span><span>${data.tax.toFixed(2)}</span>
-            </div>
+            {taxView.state === 'not_identified' ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#92400e', fontWeight: 600 }}>
+                <span>⚠ Tax: not identified</span><span></span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#6b7280' }}>
+                <span>{taxView.state === 'exempt' ? 'Tax exempt' : 'Tax'}</span><span>{taxView.amount}</span>
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '1.125rem', color: '#111827', paddingTop: 8, borderTop: '1.5px solid #e5e7eb' }}>
               <span>Total</span><span>${data.total.toFixed(2)}</span>
             </div>

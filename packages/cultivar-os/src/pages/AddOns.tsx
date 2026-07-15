@@ -18,8 +18,16 @@ export function AddOns() {
 
   const {
     items, transportChoice, selectedTransport, plantingOffering, plantingSelected, services,
+    orderTier, orderTierLabel,
     setTransportChoice, setServices, toggleService, setNettingDeclined, nettingDeclined,
   } = useCart();
+
+  // FIX 6: when a discounting tier is already attached to this order, note that the discount lands
+  // at checkout (parallel to the tax note) — a contractor shouldn't see the retail subtotal here and
+  // then a lower Review total with no warning. Copy only: the tier still APPLIES at checkout (Review),
+  // this does NOT move the computation earlier. Retail customers (no discount) see nothing new.
+  const tierDiscountApplies = !!orderTier && (orderTier.basis === 'at_cost' || orderTier.discountPercent > 0);
+  const tierName = (orderTierLabel ? orderTierLabel.split(' — ')[0].split(' · ')[0] : (orderTier?.name ?? '')).trim();
 
   const businessId = items[0]?.plant.business_id ?? '';
   const { transportOfferings, addonOfferings, loading, error } = useServices(businessId);
@@ -276,6 +284,11 @@ export function AddOns() {
             <span>${grandTotal.toFixed(2)}</span>
           </div>
           <p style={{ fontSize: '0.75rem', color: '#9ca3af' }}>Tax calculated at checkout</p>
+          {tierDiscountApplies && (
+            <p style={{ fontSize: '0.75rem', color: '#27500A', fontWeight: 600 }}>
+              Your {tierName ? `${tierName} ` : ''}discount applies at checkout
+            </p>
+          )}
         </div>
 
         <button

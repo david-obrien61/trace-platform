@@ -15,8 +15,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Trash2, Save, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
-import { orderItemName, orderItemTag, orderItemAnchor, type OrderItemAnchorFields } from '../lib/orderItemName';
+import { orderItemName, orderItemAnchor, type OrderItemAnchorFields } from '../lib/orderItemName';
 import { ORDER_STATUSES, ORDER_STATUS_META } from '../lib/orderStatus';
+import { OrderTotals } from '../components/checkout/OrderTotals';
+import type { TaxStatus } from '@trace/shared/business-logic';
 
 interface DetailItem extends OrderItemAnchorFields {
   id: string;
@@ -47,6 +49,10 @@ interface OrderDetailRow {
   tax_amount: number;
   total_amount: number;
   addons_amount: number | null;
+  // D-40: the PERSISTED tax state → the totals block renders the three-state tax line (FIX 2).
+  tax_exempt_applied?: boolean | null;
+  tax_exempt_reason?: string | null;
+  tax_exempt_cert_ref?: string | null;
   leakage_flag: boolean;
   notes: string | null;
   delivery_date?: string | null;
@@ -66,7 +72,9 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 // top-level query returns every line regardless of D-34 anchor (stock-line or specimen).
 const SELECT_COLS = `
   id, created_at, status, transport_method, transport_note, netting_declined,
-  subtotal, tax_amount, total_amount, addons_amount, leakage_flag, notes,
+  subtotal, tax_amount, total_amount, addons_amount,
+  tax_exempt_applied, tax_exempt_reason, tax_exempt_cert_ref,
+  leakage_flag, notes,
   customers ( first_name, last_name, email, phone, address_line1, city, state, zip ),
   order_service_selections (
     id, quantity, unit_price_at_time, subtotal,
@@ -240,6 +248,23 @@ export function OrderDetail() {
   const discPct = goodsLines.find(it => Number(it.discount_amt ?? 0) > 0)?.discount_pct ?? 0;
   const discountLabel = discPct > 0 ? `Discount — ${discPct}% off` : 'Discount';
 
+  // FIX 1/3 (STD-017): the canonical totals block lists EVERY service (incl. $0, FIX 4) with a
+  // detail sublabel, sourced from order_service_selections — replacing the misleading "Add-ons"
+  // aggregate that double-read against a subtotal already containing it.
+  const svcLines = order.order_service_selections.map(s => ({
+    name: s.service_offerings?.name ?? 'Service',
+    amount: Number(s.subtotal ?? 0),
+    sublabel: [
+      s.service_offerings?.category,
+      s.service_offerings?.price_type === 'per_unit' ? `per plant · ×${s.quantity}` : `per order · ×${s.quantity}`,
+    ].filter(Boolean).join(' · '),
+  }));
+  // FIX 2 (D-40): derive the three-state tax status from the PERSISTED facts (deriving an enum from
+  // stored fields is not recomputing a charge). exempt → reason line; $0 & not exempt → not-identified.
+  const taxStatus: TaxStatus = order.tax_exempt_applied
+    ? 'exempt'
+    : (Number(order.tax_amount) > 0 ? 'taxed' : 'not_identified');
+
   return (
     <Shell>
       {/* Header */}
@@ -289,7 +314,9 @@ export function OrderDetail() {
                 <p style={{ margin: 0, fontWeight: 600, fontSize: '0.85rem', color: '#111827', textDecoration: gone ? 'line-through' : 'none' }}>
                   {orderItemName(it)}
                 </p>
-                <p style={{ margin: 0, fontSize: '0.7rem', color: '#9ca3af' }}>{orderItemTag(it)} · {money(displayRate)} ea{showDiscount ? ' (retail)' : ''}</p>
+                {/* FIX 5: SIZE as the sub-label (matching Review + QBO) — the internal DISC- SKU is a
+                    discovery-scrape id, not owner/customer-facing, and reads confusingly beside a size. */}
+                <p style={{ margin: 0, fontSize: '0.7rem', color: '#9ca3af' }}>{it.business_inventory?.size ?? '—'} · {money(displayRate)} ea{showDiscount ? ' (retail)' : ''}</p>
               </div>
               {canManage && !gone ? (
                 <input type="number" min={1} value={q}
@@ -314,45 +341,16 @@ export function OrderDetail() {
           );
         })}
 
-        {/* Grouped discount block (only when the stored breakdown carries a discount) — goods retail
-            subtotal → discount line → goods after discount. Mirrors the Confirmation receipt exactly. */}
-        {showDiscount && (
-          <div style={{ borderTop: '1px solid #f3f4f6', marginTop: 6, paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#6b7280' }}>
-              <span>Goods subtotal (retail)</span><span>{money(goodsRetailSubtotal)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#27500A', fontWeight: 600 }}>
-              <span>{discountLabel}</span><span>−{money(discountTotal)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#374151', fontWeight: 600 }}>
-              <span>Goods after discount</span><span>{money(round2(goodsRetailSubtotal - discountTotal))}</span>
-            </div>
-          </div>
-        )}
+        {/* The goods retail-subtotal / discount / goods-after rows moved into the canonical totals
+            block below (OrderTotals) so there is ONE money summary, not two that can disagree. */}
       </Card>
 
-      {/* Services */}
-      <Card title={`Services (${order.order_service_selections.length})`}>
-        {order.order_service_selections.length === 0 && <p style={sub}>No services on this order.</p>}
-        {order.order_service_selections.map(s => (
-          <div key={s.id} style={lineRow}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ margin: 0, fontWeight: 600, fontSize: '0.85rem', color: '#111827' }}>
-                {s.service_offerings?.name ?? 'Service'}
-              </p>
-              <p style={{ margin: 0, fontSize: '0.7rem', color: '#9ca3af' }}>
-                {s.service_offerings?.category ?? ''} · {s.service_offerings?.price_type === 'per_unit' ? `per plant · ×${s.quantity}` : `per order · ×${s.quantity}`}
-              </p>
-            </div>
-            <span style={{ width: 74, textAlign: 'right', fontSize: '0.82rem', fontWeight: 600, color: '#27500A' }}>{money(s.subtotal)}</span>
-          </div>
-        ))}
-        {order.transport_note && <p style={{ ...sub, marginTop: 8 }}>{order.transport_note}</p>}
-      </Card>
-
-      {/* Delivery + totals */}
+      {/* Delivery + canonical totals — ONE shared renderer (STD-011/STD-012 persistence clause):
+          goods subtotal → discount → goods after → services (each, incl. $0) → subtotal → three-state
+          tax → total, all from the STORED breakdown. Replaces the old Subtotal/Add-ons/Tax/Total rows
+          where "Add-ons" double-read against a subtotal that already contained it (FIX 1). */}
       <Card title="Delivery & totals">
-        <div style={lineRow}>
+        <div style={{ ...lineRow, borderTop: 'none', paddingTop: 0 }}>
           <span style={{ flex: 1, fontSize: '0.82rem', color: '#374151' }}>Delivery date</span>
           {canManage ? (
             <input type="date" value={dateEdit} min={new Date().toISOString().slice(0, 10)}
@@ -361,10 +359,23 @@ export function OrderDetail() {
             <span style={{ fontSize: '0.82rem', color: '#374151' }}>{order.delivery_date ?? '—'}</span>
           )}
         </div>
-        <TotalRow label="Subtotal" value={money(order.subtotal)} />
-        <TotalRow label="Add-ons" value={money(order.addons_amount)} />
-        <TotalRow label="Tax" value={money(order.tax_amount)} />
-        <TotalRow label="Total" value={money(order.total_amount)} bold />
+        <div style={{ borderTop: '1px solid #f3f4f6', marginTop: 4, paddingTop: 10 }}>
+          <OrderTotals
+            goodsRetailSubtotal={goodsRetailSubtotal}
+            discountTotal={discountTotal}
+            discountLabel={discountLabel}
+            services={svcLines}
+            subtotal={Number(order.subtotal)}
+            total={Number(order.total_amount)}
+            taxStatus={taxStatus}
+            tax={Number(order.tax_amount)}
+            taxableSubtotal={Number(order.subtotal)}
+            taxRate={null}
+            taxReason={order.tax_exempt_reason}
+            taxCertRef={order.tax_exempt_cert_ref}
+          />
+        </div>
+        {order.transport_note && <p style={{ ...sub, marginTop: 8 }}>{order.transport_note}</p>}
       </Card>
 
       {/* Owner/manager actions */}
@@ -422,14 +433,6 @@ function Banner({ tone, children }: { tone: 'ok' | 'err' | 'warn'; children: Rea
   const c = tone === 'ok' ? { bg: '#DCFCE7', fg: '#166534' } : tone === 'err' ? { bg: '#FEE2E2', fg: '#991B1B' } : { bg: '#FEF3C7', fg: '#92600A' };
   return <div style={{ background: c.bg, color: c.fg, borderRadius: 10, padding: '10px 12px', fontSize: '0.8rem', marginBottom: 12 }}>{children}</div>;
 }
-function TotalRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: bold ? '0.95rem' : '0.82rem', fontWeight: bold ? 700 : 500, color: bold ? '#27500A' : '#374151' }}>
-      <span>{label}</span><span>{value}</span>
-    </div>
-  );
-}
-
 const backBtn: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 10, border: '1px solid #d1d5db', background: '#fff', color: '#27500A', cursor: 'pointer' };
 const lineRow: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: '1px solid #f3f4f6' };
 const row: React.CSSProperties = { margin: 0, fontSize: '0.9rem', color: '#111827' };
