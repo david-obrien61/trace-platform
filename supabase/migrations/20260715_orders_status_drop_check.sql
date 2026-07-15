@@ -1,0 +1,81 @@
+-- Migration: DROP orders_status_check — a pre-D-37 payment-lifecycle fossil that 500'd status changes
+-- Target project: bgobkjcopcxusjsetfob (cultivar-os)
+-- Date: 2026-07-15
+-- Branch: main
+-- Apply: in the Supabase SQL editor AS the default `postgres` role. GATED — David applies + runs the
+--        verification block below. NOTE: `orders` is a LIVE-ONLY table (tech-debt #39 — no CREATE TABLE
+--        migration in version control); this DROP CONSTRAINT is the delta only.
+--
+-- NEVER EDIT APPLIED MIGRATIONS. Append new migrations for changes.
+--
+-- ── THE SCAR (why this exists) ─────────────────────────────────────────────────
+-- The live DB carried  CHECK (status = ANY (ARRAY['pending','invoiced','paid','cancelled']))  on
+-- orders.status. That is a PAYMENT lifecycle (pending → invoiced → paid). The code moved long ago to a
+-- FULFILLMENT lifecycle — ORDER_STATUSES = ['pending','confirmed','fulfilled','cancelled'] (Pending = no
+-- delivery date, Confirmed = date set, Fulfilled = delivered, Cancelled). The DB constraint never
+-- followed. Result: handleStatus's  UPDATE orders SET status='confirmed'|'fulfilled'  violated the CHECK
+-- → Postgres error → 500 on TWO of the four status buttons. It went undetected because every existing
+-- order was stuck at 'pending' (16 'pending', 1 'cancelled', ZERO 'invoiced', ZERO 'paid') — the two
+-- transitions that would trip it had never been exercised until the D-42 cancel test.
+--   Vercel function log (ground truth):
+--     [orders/submit:status] Order status: new row for relation "orders"
+--       violates check constraint "orders_status_check"
+--
+-- ── WHY DROP (not re-write the CHECK to the new vocabulary) ────────────────────
+-- * AC-1 — variation lives in DATA, not schema. status is a string VALUE; the platform's precedent is
+--   NO CHECK on value-sets that grow with the business: customer_type / price_tier / payment_terms
+--   (D-41), business_inventory.status (D-46), inventory_count_sessions.status. A DB CHECK enumerating a
+--   business vocabulary is exactly the anti-pattern those decisions established. Re-writing the CHECK to
+--   the current four values would just re-arm the same drift for the next vocabulary change.
+-- * STD-011 — ONE canonical representation. The status vocabulary is canonical in ORDER_STATUSES (code,
+--   packages/cultivar-os/src/lib/orderStatus.ts). handleStatus already validates against it server-side
+--   and returns a clean 400 BAD_STATUS on a bad value (verified by live probe). The DB CHECK was a
+--   SECOND, drifted representation of the same fact — the thing STD-011 forbids. Dropping it leaves the
+--   code guard as the single source of truth.
+-- * D-37 — TRACE does not track payment state; QBO owns invoiced/paid. The dropped constraint literally
+--   encoded the abandoned payment model. Removing it aligns the schema with the money boundary.
+--
+-- ── ZERO DATA MIGRATION ────────────────────────────────────────────────────────
+-- 'pending' and 'cancelled' are valid in BOTH the old and new vocabularies, and every live row is one of
+-- those two. All 17 rows stay valid after the drop — no UPDATE, no backfill, no row rewritten.
+--
+-- ── RLS-INTACT ─────────────────────────────────────────────────────────────────
+-- DROP CONSTRAINT only. ALTERS NO policy/function/trigger and NO other constraint. orders RLS unchanged.
+--
+-- ── SIBLING LATENT DRIFT (flagged, NOT fixed this pass) ────────────────────────
+-- orders_transport_method_check  CHECK (transport_method = ANY (ARRAY['self','delivery','install']))  is
+-- the SAME class — a DB CHECK duplicating a code vocabulary (deriveTransportMethod). It is NOT currently
+-- breaking (the code's three values match the constraint exactly), so it is left in place and recorded as
+-- a known item rather than dropped speculatively. This migration deliberately does NOT touch it (see
+-- verification (B) — it must remain untouched).
+--
+-- Idempotent: DROP CONSTRAINT IF EXISTS.
+
+ALTER TABLE orders
+  DROP CONSTRAINT IF EXISTS orders_status_check;
+
+-- ============================================================================
+-- VERIFICATION (run after apply)
+-- ============================================================================
+-- (A) orders_status_check is GONE:
+--   SELECT conname
+--     FROM pg_constraint
+--    WHERE conrelid = 'orders'::regclass
+--      AND contype  = 'c'
+--      AND conname  = 'orders_status_check';
+--   -- expect: 0 rows
+--
+-- (B) orders_transport_method_check is UNTOUCHED (the sibling drift stays put this pass):
+--   SELECT conname, pg_get_constraintdef(oid) AS def
+--     FROM pg_constraint
+--    WHERE conrelid = 'orders'::regclass
+--      AND contype  = 'c'
+--      AND conname  = 'orders_transport_method_check';
+--   -- expect: 1 row, def = CHECK ((transport_method = ANY (ARRAY['self'::text,'delivery'::text,'install'::text])))
+--
+-- (C) all 17 existing rows still read correctly (no row invalidated by the change):
+--   SELECT status, count(*)
+--     FROM orders
+--    GROUP BY status
+--    ORDER BY status;
+--   -- expect: pending 16, cancelled 1 (both valid in the new vocabulary; total 17)
