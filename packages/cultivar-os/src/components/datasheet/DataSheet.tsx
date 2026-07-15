@@ -72,6 +72,12 @@ interface DataSheetProps<T> {
   flagBanner?: (count: number) => React.ReactNode;
   /** Optional per-row detail drawer. When present, a trailing expand toggle column appears. */
   renderExpand?: (r: T) => React.ReactNode;
+  /** Optional per-row action buttons (Edit / Add / Delete). When present, the engine renders them in
+   *  a LEFT-PINNED column immediately after the frozen identifier run, so the actions stay reachable
+   *  regardless of horizontal scroll (STD-011 — one engine behavior, every consumer inherits it). */
+  rowActions?: (r: T) => React.ReactNode;
+  rowActionsHeader?: string;   // default '' (blank header)
+  rowActionsWidth?: number;    // reserved-track width of the pinned actions column, px (default 128)
   /** Header buttons (Add, Capture, Start count…). */
   actions?: React.ReactNode;
   emptyIcon?: React.ReactNode;
@@ -83,7 +89,8 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
   const {
     title, rows, loading, error, getRowId, columns, searchText, searchPlaceholder,
     statusFilter, defaultSortKey, defaultSortDir = 'asc', rowFlag, flagBanner,
-    renderExpand, actions, emptyIcon, emptyText = 'Nothing here yet.', itemNoun = 'items',
+    renderExpand, rowActions, rowActionsHeader = '', rowActionsWidth = 128,
+    actions, emptyIcon, emptyText = 'Nothing here yet.', itemNoun = 'items',
   } = props;
 
   const [search, setSearch] = useState('');
@@ -108,6 +115,7 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
       columns: columns.length,
       frozen: columns.filter(c => c.frozen).length,
       systemManaged: columns.filter(c => lockInfoFor(c)).length,
+      pinnedActions: !!rowActions,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title]);
@@ -153,25 +161,66 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
 
   // ── Frozen columns: pin the LEADING contiguous run so the identifier stays put on horizontal scroll.
   //    Each frozen col RESERVES A TRACK — its frozenWidth is the actual (border-box) cell width, so the
-  //    left offsets accumulate exactly and the scrolling region begins at the last frozen col's right
-  //    edge (scrolling columns lay out BESIDE the pinned block, never beneath it). Last frozen col gets a
-  //    crisp freeze line + shadow. Computed over SHOWN columns so hiding a col is safe. ──
+  //    left offsets accumulate exactly and the scrolling region begins at the pinned block's right edge
+  //    (scrolling columns lay out BESIDE the pinned block, never beneath it). The RIGHTMOST pinned
+  //    element gets a crisp freeze line + shadow. Computed over SHOWN columns so hiding a col is safe.
+  //    When rowActions is set, a LEFT-PINNED actions column is reserved right after the frozen run — so
+  //    per-row actions stay reachable regardless of horizontal scroll (STD-011 engine behavior). ──
+  let firstScroll = 0;
+  while (firstScroll < shownCols.length && shownCols[firstScroll].frozen) firstScroll++;
+  const frozenCols = shownCols.slice(0, firstScroll);
+  const scrollCols = shownCols.slice(firstScroll);
+
   const frozenMap = new Map<string, { left: number; width: number; last: boolean }>();
-  {
-    let acc = 0;
-    const run: string[] = [];
-    for (const c of shownCols) {
-      if (!c.frozen) break;
-      const w = c.frozenWidth ?? 160;
-      frozenMap.set(c.key, { left: acc, width: w, last: false });
-      run.push(c.key);
-      acc += w;
-    }
-    if (run.length) {
-      const lastEntry = frozenMap.get(run[run.length - 1]);
-      if (lastEntry) lastEntry.last = true;
-    }
+  let frozenAcc = 0;
+  for (const c of frozenCols) {
+    const w = c.frozenWidth ?? 160;
+    frozenMap.set(c.key, { left: frozenAcc, width: w, last: false });
+    frozenAcc += w;
   }
+  // Pinned actions column: its own reserved track immediately after the frozen run.
+  const actionsPin = rowActions ? { left: frozenAcc, width: rowActionsWidth } : null;
+  // Freeze edge belongs to the RIGHTMOST pinned element: the actions column when present, else the
+  // last frozen column (preserves prior behavior for consumers without row actions).
+  if (!actionsPin && frozenCols.length) {
+    const e = frozenMap.get(frozenCols[frozenCols.length - 1].key);
+    if (e) e.last = true;
+  }
+
+  // ── Shared header/body cell renderers (used by the frozen + scrolling segments alike). ──
+  const headerCell = (col: DataSheetColumn<T>) => {
+    const fz = frozenMap.get(col.key);
+    const lock = lockInfoFor(col);
+    const thStyle: React.CSSProperties = {
+      ...S.th,
+      ...(col.sortable ? S.thSortable : {}),
+      ...(fz ? { left: fz.left, width: fz.width, minWidth: fz.width, boxSizing: 'border-box', zIndex: 3, background: '#fff', ...(fz.last ? S.frozenEdgeTh : {}) } : {}),
+    };
+    return (
+      <th key={col.key} style={thStyle} onClick={col.sortable ? () => toggleSort(col.key) : undefined}>
+        {col.header}
+        {lock && (
+          <button
+            type="button"
+            style={S.lockBtn}
+            onClick={e => openLock(e, lock)}
+            title="System-managed field — tap to learn why it isn't editable"
+            aria-label={`${col.header || col.key}: system-managed, not editable — details`}
+          >
+            <Lock size={11} />
+          </button>
+        )}
+        {col.sortable && sortKey === col.key && <span style={S.sortArrow}>{sortDir === 'asc' ? '▲' : '▼'}</span>}
+      </th>
+    );
+  };
+  const bodyCell = (col: DataSheetColumn<T>, row: T, tdStyle: React.CSSProperties, flagged: boolean) => {
+    const fz = frozenMap.get(col.key);
+    const cellStyle = fz
+      ? { ...tdStyle, left: fz.left, width: fz.width, minWidth: fz.width, boxSizing: 'border-box' as const, position: 'sticky' as const, zIndex: 1, background: flagged ? '#fffbeb' : '#fff', ...(fz.last ? S.frozenEdgeTd : {}) }
+      : tdStyle;
+    return <td key={col.key} style={cellStyle}>{col.render(row)}</td>;
+  };
 
   return (
     <div style={S.page}>
@@ -245,36 +294,13 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
               <table style={S.table}>
                 <thead>
                   <tr>
-                    {shownCols.map(col => {
-                      const fz = frozenMap.get(col.key);
-                      const lock = lockInfoFor(col);
-                      const thStyle: React.CSSProperties = {
-                        ...S.th,
-                        ...(col.sortable ? S.thSortable : {}),
-                        ...(fz ? { left: fz.left, width: fz.width, minWidth: fz.width, boxSizing: 'border-box', zIndex: 3, background: '#fff', ...(fz.last ? S.frozenEdgeTh : {}) } : {}),
-                      };
-                      return (
-                        <th
-                          key={col.key}
-                          style={thStyle}
-                          onClick={col.sortable ? () => toggleSort(col.key) : undefined}
-                        >
-                          {col.header}
-                          {lock && (
-                            <button
-                              type="button"
-                              style={S.lockBtn}
-                              onClick={e => openLock(e, lock)}
-                              title="System-managed field — tap to learn why it isn't editable"
-                              aria-label={`${col.header || col.key}: system-managed, not editable — details`}
-                            >
-                              <Lock size={11} />
-                            </button>
-                          )}
-                          {col.sortable && sortKey === col.key && <span style={S.sortArrow}>{sortDir === 'asc' ? '▲' : '▼'}</span>}
-                        </th>
-                      );
-                    })}
+                    {frozenCols.map(headerCell)}
+                    {actionsPin && (
+                      <th key="__actions__" style={{ ...S.th, left: actionsPin.left, width: actionsPin.width, minWidth: actionsPin.width, boxSizing: 'border-box', zIndex: 3, background: '#fff', ...S.frozenEdgeTh }}>
+                        {rowActionsHeader}
+                      </th>
+                    )}
+                    {scrollCols.map(headerCell)}
                     {renderExpand && <th style={S.th}></th>}
                   </tr>
                 </thead>
@@ -287,13 +313,13 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
                     return (
                       <Fragment key={id}>
                         <tr>
-                          {shownCols.map(col => {
-                            const fz = frozenMap.get(col.key);
-                            const cellStyle = fz
-                              ? { ...tdStyle, left: fz.left, width: fz.width, minWidth: fz.width, boxSizing: 'border-box' as const, position: 'sticky' as const, zIndex: 1, background: flagged ? '#fffbeb' : '#fff', ...(fz.last ? S.frozenEdgeTd : {}) }
-                              : tdStyle;
-                            return <td key={col.key} style={cellStyle}>{col.render(row)}</td>;
-                          })}
+                          {frozenCols.map(col => bodyCell(col, row, tdStyle, flagged))}
+                          {actionsPin && (
+                            <td key="__actions__" style={{ ...tdStyle, left: actionsPin.left, width: actionsPin.width, minWidth: actionsPin.width, boxSizing: 'border-box' as const, position: 'sticky' as const, zIndex: 1, background: flagged ? '#fffbeb' : '#fff', ...S.frozenEdgeTd }}>
+                              {rowActions!(row)}
+                            </td>
+                          )}
+                          {scrollCols.map(col => bodyCell(col, row, tdStyle, flagged))}
                           {renderExpand && (
                             <td style={tdStyle}>
                               <button style={S.expandBtn} onClick={() => toggleExpand(id)} title="Details">
@@ -304,7 +330,7 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
                         </tr>
                         {renderExpand && isOpen && (
                           <tr style={S.expandRow}>
-                            <td colSpan={shownCols.length + 1} style={{ padding: 0 }}>
+                            <td colSpan={shownCols.length + (actionsPin ? 1 : 0) + 1} style={{ padding: 0 }}>
                               {renderExpand(row)}
                             </td>
                           </tr>

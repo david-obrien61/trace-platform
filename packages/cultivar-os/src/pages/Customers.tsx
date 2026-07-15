@@ -213,11 +213,13 @@ export function Customers() {
       render: r => <span style={sourceStyle}>{SOURCE_LABEL[r.source ?? ''] ?? r.source ?? '—'}</span> },
     { key: 'created_at', header: 'Added', sortable: true, sortVal: r => r.created_at,
       render: r => <span style={SS.muted}>{fmtDate(r.created_at)}</span> },
-    { key: 'edit', header: '', hideable: false, sortable: false, systemManaged: false,
-      render: r => (
-        <button onClick={() => openEdit(r)} style={{ ...sourceStyle, cursor: 'pointer', border: '1px solid #d1d5db', background: '#fff' }}>Edit</button>
-      ) },
   ];
+
+  // Row action — LEFT-PINNED by the shared engine (adjacent to the frozen Name column) so Edit is
+  // always reachable without scrolling right (STD-011 engine behavior, same as inventory).
+  const rowActions = (r: CustomerRow) => (
+    <button onClick={() => openEdit(r)} style={{ ...sourceStyle, cursor: 'pointer', border: '1px solid #d1d5db', background: '#fff' }}>Edit</button>
+  );
 
   return (
     <>
@@ -235,6 +237,8 @@ export function Customers() {
         error={listError}
         getRowId={r => r.id}
         columns={columns}
+        rowActions={rowActions}
+        rowActionsWidth={78}
         searchText={r => [r.first_name, r.last_name, r.phone, r.email, r.address_line1, r.city, r.state, r.zip].filter(Boolean).join(' ')}
         searchPlaceholder="Search name, phone, email, city…"
         statusFilter={{ label: 'sources', options: ['qr-scan', 'ocr-invoice', 'manual'], get: r => r.source ?? '' }}

@@ -1,6 +1,6 @@
 # CLAUDE.md — TRACE Platform
 # Multi-AI Handoff Workflow — Claude Code reads this every session
-# Last updated: 2026-07-14 (CLAUDE.md restructure — §3 HANDOFF trimmed to the current 2026-07-13 date-block; entries dated 2026-07-10 and older relocated to docs/handoff-archive.md, nothing deleted). Latest handoff state lives in §3 below; full history in the archive.
+# Last updated: 2026-07-15 (THUNDER D-46 owner-prove follow-on — 3 defects fixed in one pass: SKU edit-persist bug, add-size SKU lineage, engine-level left-pinned row actions; implements D-46 + STD-011, NO new decision; ledger #127). Latest handoff state lives in §3 below; full history in the archive.
 # Current AI: Claude Code
 
 ---
@@ -347,6 +347,21 @@ Audit completed 2026-05-29. Full findings live in session context. Canonical pri
 
 > Rewritten at the end of every session.
 > The next Claude Code session reads this first.
+
+### 2026-07-15 — THUNDER D-46 OWNER-PROVE FOLLOW-ON: three defects fixed live-testing D-46 in ONE pass (implements D-46 + STD-011, NO new decision) — (1) SKU EDIT-PERSIST BUG, (2) add-size SKU LINEAGE (base + size suffix), (3) engine-level LEFT-PINNED row actions; BUILDER-COMPLETE, owner-proof owed; ZERO migration, ZERO new api-fn (12/12)
+
+**Type:** App code — 2 shared (`packages/shared/src/inventory/variantGroup.ts` NEW `skuSizeSuffix` + `deriveSiblingSku` · barrel export) + 3 cultivar (`components/inventory/InventoryEditor.tsx` persist-bug fix + add-size SKU derivation + uniqueness guard · `components/datasheet/DataSheet.tsx` NEW `rowActions` left-pinned column · `pages/BusinessInventory.tsx` + `pages/Customers.tsx` moved onto `rowActions`). **NO migration** (sku column exists), **ZERO new `api/` file** (12/12 — all client RLS writes). `[TRACE:INVENTORY]` + `[TRACE:datasheet]` ON. `npm run verify` **exit 0 zero NET-NEW** (tsc 5 / eslint 249→**248 ↓ baseline re-locked** / knip 10·14·15 == baseline); `build:cultivar` clean; SKU-suffix logic unit-checked (11 cases green). Ledger row #127.
+
+**CONTEXT:** David owner-proved D-46 (`1530f31`) live — add-size + variant_group inheritance + group-aware rename all WORK (two 'Sierra' Mexican Red Oak rows share `variant_group` `sierra-mexican-red-oak`). Live testing surfaced three follow-on defects.
+
+**FIXED:**
+- **(1) SKU edit did NOT persist (capture-persist break).** The `InventoryEditor` text fields (`sku`/`size`/`variant_group`/`location` + notes) were CONTROLLED in EDIT mode (`value` + `onChange` writing every keystroke into `draft`), so by blur time `draft.sku` already equalled the typed value and `saveText`'s `value === draft[field]` guard SHORT-CIRCUITED → nothing written. **FIX:** edit-mode inputs are now UNCONTROLLED (`defaultValue` + `onBlur`, no `onChange`) — mirroring the name/price/qty fields that never had the bug; create-mode stays controlled for the buffered insert. Also fixed the same latent bug on size/variant_group/location/notes edits. `[TRACE:INVENTORY] patch` now shows the sku write. SKU is editable + persists in BOTH create and edit.
+- **(2) Add-size SKU LINEAGE (base + size suffix).** NEW shared helpers next to `variantGroupSlug` (STD-011 — one convention, manual + future scan/import): `skuSizeSuffix` (`"45 gal"→45G`, `"7 gal"→07G` matching FIXTURE-PS-07G, `4"→4IN`, `quart→QT`, `flat→FLAT`) and `deriveSiblingSku` (DISC-1001 + "45 gal" → **DISC-1001-45G**, WooCommerce parent+variation convention). "+ Add size" PRE-FILLS the sibling SKU from the size until the owner hand-edits (`skuTouched`); the **parent's SKU is left UNCHANGED** (may be referenced in QBO); **blank when the parent has no SKU** (D-9, never fabricate a base). An `existingSkus` guard BLOCKS a colliding SKU on create/edit — never a silent duplicate (a SKU identifies one sellable unit).
+- **(3) Engine-level LEFT-PINNED row actions.** NEW `rowActions` prop on the SHARED `<DataSheet>` renders Edit/Add-size/Delete in a LEFT-PINNED column reserved right after the frozen identifier run (its own track + freeze-edge). Fixed in the ENGINE (STD-011), so inventory AND customers moved onto it; assets (no actions) unaffected. Actions stay reachable regardless of horizontal scroll.
+
+**CONSTRAINTS HELD:** STD-011 (ONE shared SKU-suffix helper; engine-level pinning, not per-consumer) · STD-017 (SKU fix verified typed→persisted→read on the grid) · D-9 (no fabricated SKU when the parent has none) · AC-3 (business_id-scoped) · §6 r11 (12/12 api-fn). No pricing/tax/money logic touched.
+
+**OWNER-PROVEN owed (David, live under RLS):** (1) edit a row's SKU → saves + shows on the grid (bug gone). (2) "+ Add size" on 'Sierra' Mexican Red Oak (DISC-1001) → sibling SKU pre-fills **DISC-1001-45G** (editable), parent DISC-1001 UNCHANGED, name + variant_group still inherit. (3) add-size on a NO-SKU parent → sibling SKU blank, not invented. (4) row actions (Edit / + Add size / Delete) visible at the LEFT next to the name without scrolling right — on inventory AND customers/assets. (5) both 'Sierra' sizes still pickable at checkout (D-46 grouping intact). `[TRACE:INVENTORY]` stays ON until owner-proven. **UNCOMMITTED — app-code-only, ready to commit (no migration gate).**
 
 ### 2026-07-14 — THUNDER COMPLETE INVENTORY CRUD (D-46 proposed): the manual-entry half — ONE `InventoryEditor` (create|edit, retires the flat Add form), from-the-row "+ Add size" that auto-groups the parent (size-picker fires by construction), group-aware rename, reference-aware soft/hard delete; NEW STD-018 (full entry surface); BUILDER-COMPLETE, owner-proof owed; ZERO migration, ZERO new api-fn (12/12)
 

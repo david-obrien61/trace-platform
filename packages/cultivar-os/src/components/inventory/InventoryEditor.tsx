@@ -23,7 +23,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useBusinessContext } from '@trace/shared/context';
-import { variantGroupSlug } from '@trace/shared/inventory';
+import { variantGroupSlug, deriveSiblingSku } from '@trace/shared/inventory';
 import { sheetStyles as SS } from '../datasheet/DataSheet';
 import { insertInventory, persistInventoryPatch, renameVariety } from './inventoryEdit';
 
@@ -58,8 +58,13 @@ interface Props {
   mode: 'create' | 'edit';
   statusOptions: string[];
   /** When set, this CREATE is a "+ Add size" seeded from a parent row: name + variant_group are
-   *  inherited (name read-only), and the parent is auto-grouped on save if it had no group. */
-  addSizeParent?: { id: string; name: string; variant_group: string | null };
+   *  inherited (name read-only), and the parent is auto-grouped on save if it had no group. The
+   *  sibling's SKU pre-fills as parent-SKU + size-suffix (deriveSiblingSku) — editable, and blank
+   *  when the parent has no SKU (D-9, never fabricate a base). */
+  addSizeParent?: { id: string; name: string; variant_group: string | null; sku: string | null };
+  /** Every OTHER row's SKU (lowercased) — a SKU identifies ONE sellable unit, so two rows may never
+   *  share one; a create/edit that would collide is blocked (never a silent duplicate). */
+  existingSkus?: Set<string>;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -79,12 +84,14 @@ function addSizeGroup(parent: { name: string; variant_group: string | null }): s
   return parent.variant_group?.trim() || variantGroupSlug(parent.name);
 }
 
-export function InventoryEditor({ item, mode, statusOptions, addSizeParent, onClose, onSaved }: Props) {
+export function InventoryEditor({ item, mode, statusOptions, addSizeParent, existingSkus, onClose, onSaved }: Props) {
   const { businessId } = useBusinessContext();
   const creating = mode === 'create';
   const isAddSize = creating && !!addSizeParent;
+  const knownSkus = existingSkus ?? new Set<string>();
 
-  // Seed: an add-size create inherits the parent name + resolved group.
+  // Seed: an add-size create inherits the parent name + resolved group. The SKU is left blank at
+  // seed (no size yet); it auto-derives to parent-SKU + suffix as the owner types the size below.
   const seed: EditorInventoryItem = isAddSize
     ? { ...item, name: addSizeParent!.name, variant_group: addSizeGroup(addSizeParent!) }
     : item;
@@ -94,6 +101,11 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, onCl
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [savingField, setSavingField] = useState<string | null>(null);
+  // Once the owner edits the SKU by hand, stop auto-deriving it from the size (add-size mode).
+  const [skuTouched, setSkuTouched] = useState(false);
+
+  // A SKU collision check (case-insensitive) — the typed SKU may not match any OTHER row's SKU.
+  const skuCollides = (sku: string) => knownSkus.has(sku.trim().toLowerCase());
 
   const set = (patch: Partial<EditorInventoryItem>) => {
     setDraft(d => ({ ...d, ...patch }));
@@ -115,6 +127,11 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, onCl
   async function saveText(field: 'sku' | 'size' | 'variant_group' | 'location' | 'notes', raw: string) {
     const value = raw.trim() === '' ? null : raw.trim();
     if (value === (draft[field] ?? null)) return;
+    // SKU uniqueness — refuse a value that collides with another row (never a silent duplicate).
+    if (field === 'sku' && value && skuCollides(value)) {
+      setErrors(e => ({ ...e, sku: `SKU "${value}" is already used by another item — SKUs must be unique.` }));
+      return;
+    }
     setSavingField(field);
     const res = await persistInventoryPatch({ id: draft.id, businessId: businessId!, patch: { [field]: value } });
     setSavingField(null);
@@ -180,6 +197,10 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, onCl
     if (draft.qty == null || draft.qty < 0) errs.qty = 'Quantity must be 0 or greater.';
     if (draft.sell_price == null) errs.sell_price = 'Sell price is required — enter what the customer pays.';
     else if (draft.sell_price <= 0) errs.sell_price = 'Sell price must be greater than $0 so the item can be sold.';
+    // SKU uniqueness — a derived-or-typed SKU may never collide with an existing row (D-9: flag, never
+    // silently duplicate; two rows sharing a SKU are indistinguishable in QBO/stock lookups).
+    const skuVal = draft.sku?.trim();
+    if (skuVal && skuCollides(skuVal)) errs.sku = `SKU "${skuVal}" is already used by another item — change it so it's unique.`;
     if (Object.keys(errs).length) { setErrors(errs); setError(null); return; }
     setErrors({});
 
@@ -214,14 +235,43 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, onCl
 
   const title = isAddSize ? `Add size — ${addSizeParent!.name}` : creating ? 'Add Inventory Item' : 'Edit Inventory Item';
 
-  // Field wiring: CREATE buffers into draft (saved together); EDIT auto-saves per field.
-  const textInput = (field: 'sku' | 'size' | 'variant_group' | 'location', extra?: React.CSSProperties): React.InputHTMLAttributes<HTMLInputElement> => ({
-    style: { ...SS.input, ...extra },
-    value: (draft[field] as string) ?? '',
-    disabled: savingField === field,
-    onChange: e => set({ [field]: e.target.value } as Partial<EditorInventoryItem>),
-    ...(creating ? {} : { onBlur: (e: React.FocusEvent<HTMLInputElement>) => { void saveText(field, e.target.value); } }),
-  });
+  // Field wiring. THE PERSIST-BUG FIX (ISSUE 1): in EDIT mode the input is UNCONTROLLED
+  // (defaultValue + onBlur, no onChange) — mirroring the name/price/qty fields — so `draft` still
+  // holds the SAVED value when saveText's equality guard runs. Previously it was controlled in BOTH
+  // modes (value + onChange updated draft on every keystroke), so by blur time draft already held the
+  // typed value → the `value === draft[field]` guard short-circuited → the typed SKU/size/etc. never
+  // persisted. CREATE mode stays controlled (value + onChange) so the buffered insert sees every key.
+  const textInput = (
+    field: 'sku' | 'size' | 'variant_group' | 'location',
+    onCreateChange?: (v: string) => void,
+    extra?: React.CSSProperties,
+  ): React.InputHTMLAttributes<HTMLInputElement> =>
+    creating
+      ? {
+          style: { ...SS.input, ...extra },
+          value: (draft[field] as string) ?? '',
+          onChange: e => (onCreateChange ? onCreateChange(e.target.value) : set({ [field]: e.target.value } as Partial<EditorInventoryItem>)),
+        }
+      : {
+          style: { ...SS.input, ...extra },
+          defaultValue: (draft[field] as string) ?? '',
+          disabled: savingField === field,
+          onBlur: (e: React.FocusEvent<HTMLInputElement>) => { void saveText(field, e.target.value); },
+        };
+
+  // "+ Add size" size change: auto-derive the sibling SKU (parent SKU + size suffix — SHARED helper,
+  // STD-011) until the owner edits the SKU by hand. ONE setDraft so size + derived SKU move together.
+  const onSizeCreateChange = (size: string) => {
+    if (isAddSize && !skuTouched) {
+      const derived = deriveSiblingSku(addSizeParent!.sku, size);
+      setDraft(d => ({ ...d, size, sku: derived ?? '' }));
+      setErrors(e => (e.sku ? { ...e, sku: '' } : e));
+    } else {
+      set({ size });
+    }
+  };
+  // Hand-editing the SKU marks it touched (stops auto-derive) and buffers the value.
+  const onSkuCreateChange = (v: string) => { setSkuTouched(true); set({ sku: v }); };
 
   return (
     <div style={SS.modal} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -257,7 +307,12 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, onCl
         </div>
         <div style={SS.field}>
           <label style={SS.label}>SKU</label>
-          <input {...textInput('sku')} placeholder="Optional" />
+          <input {...textInput('sku', onSkuCreateChange, errBorder(!!errors.sku))}
+            placeholder={isAddSize ? 'Auto-fills from the size — editable' : 'Optional'} />
+          {errors.sku && <p style={{ margin: '3px 0 0', fontSize: '0.75rem', fontWeight: 600, color: RED }}>{errors.sku}</p>}
+          {isAddSize && addSizeParent!.sku && (
+            <p style={SS.hint}>Suggested from the parent SKU <b>{addSizeParent!.sku}</b> + the size — edit if yours differs. The parent's SKU is left unchanged.</p>
+          )}
         </div>
 
         {/* ── SIZE & GROUPING ── */}
@@ -265,7 +320,7 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, onCl
         <div style={{ ...SS.row2, ...SS.field }}>
           <div>
             <label style={SS.label}>Size</label>
-            <input {...textInput('size')} placeholder="e.g. 30 gal, 45 gal" />
+            <input {...textInput('size', onSizeCreateChange)} placeholder="e.g. 30 gal, 45 gal" />
           </div>
           <div>
             <label style={SS.label}>Variant group</label>
@@ -350,10 +405,13 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, onCl
         </div>
         <div style={SS.field}>
           <label style={SS.label}>Notes (internal)</label>
+          {/* Same persist-bug fix as textInput: EDIT is uncontrolled (defaultValue + onBlur) so the
+              equality guard sees the saved value; CREATE is controlled so the insert buffers keystrokes. */}
           <textarea style={{ ...SS.input, minHeight: 64, resize: 'vertical' }}
-            value={draft.notes ?? ''} disabled={savingField === 'notes'}
-            onChange={e => set({ notes: e.target.value })}
-            {...(creating ? {} : { onBlur: (e: React.FocusEvent<HTMLTextAreaElement>) => { void saveText('notes', e.target.value); } })}
+            disabled={savingField === 'notes'}
+            {...(creating
+              ? { value: draft.notes ?? '', onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => set({ notes: e.target.value }) }
+              : { defaultValue: draft.notes ?? '', onBlur: (e: React.FocusEvent<HTMLTextAreaElement>) => { void saveText('notes', e.target.value); } })}
             placeholder="Supplier, purchase context, storage notes…" />
         </div>
 

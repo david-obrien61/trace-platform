@@ -100,7 +100,7 @@ function toEditorItem(r: InventoryRow): EditorInventoryItem {
 }
 
 type EditorState =
-  | { mode: 'create'; item: EditorInventoryItem; addSizeParent?: { id: string; name: string; variant_group: string | null } }
+  | { mode: 'create'; item: EditorInventoryItem; addSizeParent?: { id: string; name: string; variant_group: string | null; sku: string | null } }
   | { mode: 'edit'; item: EditorInventoryItem };
 
 export function BusinessInventory() {
@@ -229,6 +229,36 @@ export function BusinessInventory() {
   }, [items]);
   const isDup = (r: InventoryRow) => { const k = dupKey(r.variant_group, r.size); return k != null && dupKeys.has(k); };
 
+  // Every OTHER row's SKU (lowercased) for the editor's uniqueness guard — excludes the row being
+  // edited so re-saving its own SKU never false-collides (a SKU identifies ONE sellable unit).
+  const existingSkus = useMemo(() => {
+    const editingId = editor?.mode === 'edit' ? editor.item.id : null;
+    const s = new Set<string>();
+    for (const r of items) {
+      if (r.id === editingId) continue;
+      if (r.sku && r.sku.trim()) s.add(r.sku.trim().toLowerCase());
+    }
+    return s;
+  }, [items, editor]);
+
+  // ── Row actions (Edit · + Add size · Delete). Rendered by the SHARED DataSheet engine in a
+  //    LEFT-PINNED column pinned adjacent to the frozen Name column (STD-011 engine behavior), so
+  //    they stay reachable regardless of horizontal scroll — no more scrolling past every column. ──
+  const rowActions = (r: InventoryRow) => (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      <button style={rowActionBtn} title="Edit item" onClick={() => setEditor({ mode: 'edit', item: toEditorItem(r) })}>
+        <Pencil size={14} />
+      </button>
+      <button style={rowActionBtn} title="Add another size of this variety"
+        onClick={() => setEditor({ mode: 'create', item: { ...BLANK_INVENTORY_ITEM }, addSizeParent: { id: r.id, name: r.name, variant_group: r.variant_group, sku: r.sku } })}>
+        <CopyPlus size={14} />
+      </button>
+      <button style={{ ...rowActionBtn, color: '#b91c1c', borderColor: '#fca5a5' }} title="Delete item" onClick={() => setDeleteTarget(r)}>
+        <Trash2 size={14} />
+      </button>
+    </div>
+  );
+
   // ── Column config ──
   const columns: DataSheetColumn<InventoryRow>[] = [
     { key: 'flag', header: '', sortable: false, hideable: false, frozen: true, frozenWidth: 34,
@@ -267,22 +297,6 @@ export function BusinessInventory() {
       render: r => <span style={SS.muted}>{fmtDate(r.created_at)}</span> },
     { key: 'updated_at', header: 'Last touched', sortable: true, sortVal: r => r.updated_at ?? '',
       render: r => <span style={SS.muted}>{fmtDate(r.updated_at)}</span> },
-    // ── Row actions: Edit (full editor) · + Add size (seeded create) · Delete (confirm) ──
-    { key: 'actions', header: '', sortable: false, hideable: false,
-      render: r => (
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <button style={rowActionBtn} title="Edit item" onClick={() => setEditor({ mode: 'edit', item: toEditorItem(r) })}>
-            <Pencil size={14} />
-          </button>
-          <button style={rowActionBtn} title="Add another size of this variety"
-            onClick={() => setEditor({ mode: 'create', item: { ...BLANK_INVENTORY_ITEM }, addSizeParent: { id: r.id, name: r.name, variant_group: r.variant_group } })}>
-            <CopyPlus size={14} />
-          </button>
-          <button style={{ ...rowActionBtn, color: '#b91c1c', borderColor: '#fca5a5' }} title="Delete item" onClick={() => setDeleteTarget(r)}>
-            <Trash2 size={14} />
-          </button>
-        </div>
-      ) },
   ];
 
   return (
@@ -295,6 +309,9 @@ export function BusinessInventory() {
         error={listError}
         getRowId={r => r.id}
         columns={columns}
+        rowActions={rowActions}
+        rowActionsHeader="Actions"
+        rowActionsWidth={122}
         searchText={r => [r.name, r.sku, r.size, r.variant_group, r.location, r.serial_number, r.notes].filter(Boolean).join(' ')}
         searchPlaceholder="Search name, SKU, size, location…"
         statusFilter={{ label: 'statuses', options: STATUS_OPTIONS, get: r => r.status }}
@@ -350,6 +367,7 @@ export function BusinessInventory() {
           mode={editor.mode}
           statusOptions={STATUS_OPTIONS}
           addSizeParent={editor.mode === 'create' ? editor.addSizeParent : undefined}
+          existingSkus={existingSkus}
           onClose={() => setEditor(null)}
           onSaved={() => { void loadItems(); }}
         />

@@ -106,3 +106,48 @@ AC-3 (business_id-scoped) · D-9 (never fabricate a price/size; unset renders bl
   silently assumed).
 - The editor covers the gate's named field set; `serial_number` / `received_at` / `description` remain
   inline-only on the grid (deliberate — not in the editor's scope).
+
+---
+
+## FOLLOW-ON — 2026-07-15 (owner-prove defects, ledger #127; implements D-46 + STD-011, NO new decision)
+
+David owner-proved D-46 live (`1530f31`). The add-size + variant_group inheritance + group-aware
+rename all WORK (verified: two 'Sierra' Mexican Red Oak rows share `variant_group` `sierra-mexican-red-oak`).
+Live testing surfaced three follow-on defects, fixed in one pass:
+
+### Defect 1 — SKU edit did not persist (capture-persist break, STD-017 corollary)
+`InventoryEditor`'s generic `textInput` fields (`sku`/`size`/`variant_group`/`location`) and the notes
+textarea were CONTROLLED in **both** modes — `value` + an `onChange` that wrote every keystroke into
+`draft`. In EDIT mode the field also had `onBlur → saveText`, and `saveText` guards with
+`if (value === (draft[field] ?? null)) return;`. Because `onChange` had already written the typed value
+into `draft`, by blur time `draft.sku` equalled the typed value → the guard short-circuited → **nothing
+was ever written to `business_inventory.sku`**. The name/price/qty fields never had the bug because they
+are uncontrolled in edit mode (`defaultValue`, no `onChange`).
+**Fix:** make edit-mode inputs UNCONTROLLED (`defaultValue` + `onBlur`, no `onChange`) — create-mode
+stays controlled so the buffered insert sees every keystroke. `[TRACE:INVENTORY] patch` now shows the
+`sku` write. This latently affected size/variant_group/location/notes edits too — all fixed by the same
+change.
+
+### Defect 2 — "+ Add size" lost SKU lineage → now pre-fills base + size suffix
+Add-size inherited name + variant_group but left the sibling's SKU blank. NEW shared helpers homed next
+to `variantGroupSlug` (STD-011 — one convention for the manual add-size path and any future scan/import):
+- `skuSizeSuffix(size)` — compact suffix (`"45 gal"→45G`, `"7 gal"→07G` matching FIXTURE-PS-07G, `"4\""→4IN`,
+  `"quart"→QT`, `"flat"→FLAT`).
+- `deriveSiblingSku(parentSku, size)` — `parentSku + '-' + suffix` (DISC-1001 + "45 gal" → **DISC-1001-45G**),
+  matching the WooCommerce parent-SKU + per-variation-SKU convention LAWNS runs. Returns **null** when the
+  parent has no SKU (D-9 — never fabricate a base) or the size is blank; idempotent.
+The add-size SKU field auto-derives from the size until the owner hand-edits it (`skuTouched`), is fully
+editable, and **the parent's existing SKU is left UNCHANGED** (it may already be referenced in QBO). A
+`existingSkus` uniqueness guard blocks a create/edit whose SKU collides with another row — never a silent
+duplicate (a SKU identifies one sellable unit).
+
+### Defect 3 — row actions were far-right; now engine-level LEFT-PINNED
+The shared `<DataSheet>` gained a `rowActions` prop that renders Edit / + Add size / Delete in a
+LEFT-PINNED column reserved immediately after the frozen identifier run (its own reserved track, shares
+the freeze-edge affordance) — so actions stay reachable regardless of horizontal scroll. Fixed in the
+ENGINE (STD-011), so inventory AND customers moved onto it; assets (no row actions) is unaffected.
+
+**Verification:** `npm run verify` exit 0 zero net-new (eslint 249→**248**, baseline re-locked);
+`build:cultivar` clean; `skuSizeSuffix`/`deriveSiblingSku` unit-checked (11 cases green, incl. the
+DISC-1001-45G owner-prove case). NO migration, ZERO new api-fn (12/12). `[TRACE:INVENTORY]` +
+`[TRACE:datasheet]` ON.
