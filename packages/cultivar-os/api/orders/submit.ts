@@ -424,15 +424,28 @@ async function handleCreate(req: any, res: any) {
     type SvcResult = { amount: number; isOverride: boolean; original: number | null; leakage: number | null; reason: string | null };
     const applyOverride = (offeringId: string, computed: number): SvcResult => {
       const ov = honored[offeringId];
+      const baseline: SvcResult = { amount: computed, isOverride: false, original: null, leakage: null, reason: null };
       if (ov && typeof ov.amount === 'number' && ov.amount >= 0) {
+        // STD-013 — a money-affecting override REQUIRES a recorded reason. The UI blocks Apply
+        // without one; THIS is the server-side enforcement (the UI gate is defense-in-depth, not
+        // the control). Same shape as the D-40 reasonless-exemption refusal above: refuse, log,
+        // charge the BASELINE. Refusal charges MORE, never gives money away unrecorded — the
+        // money-safe direction. A concession with no reason is unreconcilable later (D-48).
+        const reason = (ov.reason ?? '').trim();
+        if (!reason) {
+          console.log('[TRACE:PRICE] price override REFUSED — no reason recorded (STD-013); baseline charged', {
+            offeringId, baseline: round2(computed), attempted: round2(ov.amount), overrideBy, businessId,
+          });
+          return baseline;
+        }
         const amt  = round2(ov.amount);
         const leak = round2(computed - amt);
         console.log('[TRACE:LEAKAGE] price override honored', {
-          offeringId, baseline: round2(computed), override: amt, leakage: leak, overrideBy, reason: ov.reason ?? null,
+          offeringId, baseline: round2(computed), override: amt, leakage: leak, overrideBy, reason,
         });
-        return { amount: amt, isOverride: true, original: round2(computed), leakage: leak, reason: (ov.reason ?? '').trim() || null };
+        return { amount: amt, isOverride: true, original: round2(computed), leakage: leak, reason };
       }
-      return { amount: computed, isOverride: false, original: null, leakage: null, reason: null };
+      return baseline;
     };
 
     const transportComputed = selectedTransport ? lineSubtotal(selectedTransport, qtyFor(selectedTransport)) : 0;
@@ -493,11 +506,14 @@ async function handleCreate(req: any, res: any) {
     // overrideTotal — attributed leakage, never a tier discount); tax on the DISCOUNTED subtotal.
     // Because the Review and this authoritative path both call computeOrderPricing over the same
     // inputs, Review === submit === QBO — closing the Review-vs-QBO price divergence.
+    // D-48: an override rides overrideTotal + its REQUIRED overrideReason — the shared computation
+    // expresses it as the line's discount (baseline preserved) and independently re-enforces the
+    // reason rule, so the two gates agree by construction rather than by convention.
     const serviceInputs: PricingLineInput[] = [];
-    if (selectedTransport) serviceInputs.push({ kind: 'service', name: selectedTransport.name, unitPrice: Number(selectedTransport.price), qty: qtyFor(selectedTransport), overrideTotal: transportRes?.isOverride ? transportAmount : null });
-    if (plantingActive && plantingOffering) serviceInputs.push({ kind: 'service', name: plantingOffering.name, unitPrice: Number(plantingOffering.price), qty: plantingQty, overrideTotal: plantingRes?.isOverride ? plantingAmount : null });
-    if (nettingActive && nettingSelection?.offering) serviceInputs.push({ kind: 'service', name: nettingSelection.offering.name, unitPrice: Number(nettingUnitPrice), qty: nettingQty, overrideTotal: nettingRes?.isOverride ? nettingTotal : null });
-    for (const x of otherResults) serviceInputs.push({ kind: 'service', name: x.offering.name, unitPrice: Number(x.offering.price), qty: qtyFor(x.offering), overrideTotal: x.res.isOverride ? x.res.amount : null });
+    if (selectedTransport) serviceInputs.push({ kind: 'service', name: selectedTransport.name, unitPrice: Number(selectedTransport.price), qty: qtyFor(selectedTransport), overrideTotal: transportRes?.isOverride ? transportAmount : null, overrideReason: transportRes?.reason ?? null });
+    if (plantingActive && plantingOffering) serviceInputs.push({ kind: 'service', name: plantingOffering.name, unitPrice: Number(plantingOffering.price), qty: plantingQty, overrideTotal: plantingRes?.isOverride ? plantingAmount : null, overrideReason: plantingRes?.reason ?? null });
+    if (nettingActive && nettingSelection?.offering) serviceInputs.push({ kind: 'service', name: nettingSelection.offering.name, unitPrice: Number(nettingUnitPrice), qty: nettingQty, overrideTotal: nettingRes?.isOverride ? nettingTotal : null, overrideReason: nettingRes?.reason ?? null });
+    for (const x of otherResults) serviceInputs.push({ kind: 'service', name: x.offering.name, unitPrice: Number(x.offering.price), qty: qtyFor(x.offering), overrideTotal: x.res.isOverride ? x.res.amount : null, overrideReason: x.res.reason ?? null });
 
     // D-40: the tax rate + effective exemption flow into the SAME shared computation. taxStatus is
     // one of not_identified (rate unset → redline) / taxed / exempt (documented). The surfaces render
@@ -534,10 +550,14 @@ async function handleCreate(req: any, res: any) {
       ? [`At-cost pricing could not apply to ${degradedItems.length} line(s) with no cost on file — charged at retail instead: ${degradedItems.join(', ')}. Set a unit cost in Inventory to enable at-cost pricing.`]
       : [];
 
+    // [TRACE:PRICE] D-48: every line now carries its own invariant proof (retailTotal − discountAmt
+    // === netTotal) and an overridden service names its reason. THIS is the line that showed the
+    // scar: Placement retailTotal 1575 / discountAmt 0 / netTotal 1000 — a line contradicting itself.
     console.log('[TRACE:PRICE] order priced (computeOrderPricing)', {
       tier: resolvedTier.name, basis: resolvedTier.basis, discountPercent: resolvedTier.discountPercent,
-      lines: pricing.lines.map(p => ({ kind: p.kind, name: p.name, retailUnit: p.retailUnit, qty: p.qty, retailTotal: p.retailTotal, discountPct: p.discountPct, discountAmt: p.discountAmt, netTotal: p.netTotal })),
+      lines: pricing.lines.map(p => ({ kind: p.kind, name: p.name, retailUnit: p.retailUnit, qty: p.qty, retailTotal: p.retailTotal, discountPct: p.discountPct, discountAmt: p.discountAmt, netTotal: p.netTotal, adjustmentReason: p.adjustmentReason ?? null, invariantOk: Math.abs(round2(p.retailTotal - p.discountAmt) - p.netTotal) <= 0.005 })),
       goodsRetailSubtotal: pricing.goodsRetailSubtotal, discountTotal: pricing.discountTotal,
+      serviceAdjustmentTotal: pricing.serviceAdjustmentTotal,
       discountedSubtotal: subtotal, tax: taxAmount, total, degraded: degradedItems,
     });
 
@@ -816,6 +836,9 @@ async function handleCreate(req: any, res: any) {
       lines: pricing.lines,
       goodsRetailSubtotal: pricing.goodsRetailSubtotal,
       discountTotal: pricing.discountTotal,
+      // D-48: the owner's service concessions ride their own roll-up so the receipt can show them
+      // WITHOUT contaminating the "<tier> — N% off" line, which is a different fact.
+      serviceAdjustmentTotal: pricing.serviceAdjustmentTotal,
       discountedSubtotal: pricing.discountedSubtotal,
       discountLabel,
     };

@@ -16,9 +16,16 @@ import { describeTaxLine, type TaxStatus } from '@trace/shared/business-logic';
 
 interface TotalsService {
   name: string;
+  /** the CHARGED amount (net of any owner price override) */
   amount: number;
   /** optional detail line (e.g. "transport · per plant · ×3") — order-detail passes it, Confirmation omits it */
   sublabel?: string | null;
+  /** D-48 — the RETAIL baseline when an owner price override applies (else null/equal to amount).
+   *  Preserved rather than overwritten, which is what makes the concession visible on every surface. */
+  retailAmount?: number | null;
+  /** D-48 — the owner's REQUIRED recorded reason for the override (STD-013). Historical overrides
+   *  predate the rule and may have none → the line still shows the adjustment, just no reason (D-9). */
+  adjustmentReason?: string | null;
 }
 
 interface OrderTotalsProps {
@@ -68,18 +75,33 @@ export function OrderTotals(props: OrderTotalsProps) {
       {/* Services — not discounted. ALL lines incl. $0 (FIX 3), zero shown as $0.00 (FIX 4). */}
       {services.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: hasDiscount ? 8 : 0, borderTop: hasDiscount ? '1px solid #f3f4f6' : 'none' }}>
+          {/* "no tier discount" — precise. The old "not discounted" now sits beside lines that CAN
+              show an owner price adjustment (D-48), which would read as a contradiction. The claim
+              being made is about the TIER, which never touches a service; say exactly that. */}
           <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 2px' }}>
-            Services <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500, color: '#b0b7c0' }}>· not discounted</span>
+            Services <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500, color: '#b0b7c0' }}>· no tier discount</span>
           </p>
-          {services.map((s, i) => (
-            <div key={`svc-${i}`} style={rowStyle('#374151')}>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                {s.name}
-                {s.sublabel ? <span style={{ display: 'block', fontSize: '0.72rem', color: '#9ca3af' }}>{s.sublabel}</span> : null}
-              </span>
-              <span>{money(s.amount)}</span>
-            </div>
-          ))}
+          {services.map((s, i) => {
+            // D-48 show-the-work: an owner override keeps its retail baseline, so every surface can
+            // show WHAT the price was, WHAT changed, and WHY — instead of a bare adjusted number.
+            const adj = s.retailAmount != null ? Math.round((s.retailAmount - s.amount) * 100) / 100 : 0;
+            const adjusted = s.retailAmount != null && Math.abs(adj) >= 0.005;
+            return (
+              <div key={`svc-${i}`} style={rowStyle('#374151')}>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  {s.name}
+                  {s.sublabel ? <span style={{ display: 'block', fontSize: '0.72rem', color: '#9ca3af' }}>{s.sublabel}</span> : null}
+                  {adjusted && (
+                    <span style={{ display: 'block', fontSize: '0.72rem', color: '#92400e' }}>
+                      Baseline {money(s.retailAmount as number)} · {adj > 0 ? `price adjusted −${money(adj)}` : `price adjusted +${money(-adj)}`}
+                      {s.adjustmentReason ? ` · ${s.adjustmentReason}` : ''}
+                    </span>
+                  )}
+                </span>
+                <span style={{ color: adjusted ? '#92400e' : undefined, fontWeight: adjusted ? 600 : undefined }}>{money(s.amount)}</span>
+              </div>
+            );
+          })}
         </div>
       )}
 

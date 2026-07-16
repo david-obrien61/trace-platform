@@ -36,6 +36,11 @@ interface DetailSelection {
   quantity: number;
   unit_price_at_time: number;
   subtotal: number;
+  // D-48: the PERSISTED owner price override (20260708 columns) — order-detail RENDERS the stored
+  // fact (STD-012 persistence clause), it never recomputes a concession.
+  is_manual_override?: boolean | null;
+  original_price?: number | null;
+  override_reason?: string | null;
   service_offerings: { name: string | null; category: string | null; price_type: string | null; price_unit: string | null } | null;
 }
 interface OrderDetailRow {
@@ -78,6 +83,7 @@ const SELECT_COLS = `
   customers ( first_name, last_name, email, phone, address_line1, city, state, zip ),
   order_service_selections (
     id, quantity, unit_price_at_time, subtotal,
+    is_manual_override, original_price, override_reason,
     service_offerings ( name, category, price_type, price_unit )
   )`;
 
@@ -258,6 +264,14 @@ export function OrderDetail() {
       s.service_offerings?.category,
       s.service_offerings?.price_type === 'per_unit' ? `per plant · ×${s.quantity}` : `per order · ×${s.quantity}`,
     ].filter(Boolean).join(' · '),
+    // D-48: render the STORED override — the retail baseline the owner adjusted FROM, and why.
+    // original_price is the baseline captured at charge; fall back to unit_price × qty (they agree
+    // by construction). Historical overrides may carry no reason → show the adjustment, omit the
+    // reason rather than invent one (D-9).
+    retailAmount: s.is_manual_override
+      ? Number(s.original_price ?? round2(Number(s.unit_price_at_time ?? 0) * Number(s.quantity ?? 0)))
+      : null,
+    adjustmentReason: s.override_reason ?? null,
   }));
   // FIX 2 (D-40): derive the three-state tax status from the PERSISTED facts (deriving an enum from
   // stored fields is not recomputing a charge). exempt → reason line; $0 & not exempt → not-identified.

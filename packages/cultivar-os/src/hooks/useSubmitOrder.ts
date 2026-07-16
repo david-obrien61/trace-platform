@@ -11,10 +11,23 @@ import { nettedQuantity, lineSubtotal, totalPlantCount, isNettingOffering } from
 
 // D-39: the server-authoritative per-line breakdown returned by submit — the Confirmation receipt
 // renders THIS (not the client Review preview), so Confirmation === QBO and the discount is visible.
+/**
+ * The THREE honest states of a QuickBooks invoice push (D-48 · D-9 Surface Honesty). There is no
+ * 'pending': the push is synchronous, so "will sync shortly" was never true — it was the absence of
+ * a failed state. Each maps to distinct owner copy and a distinct owner action:
+ *   • 'success'       — the invoice exists in QBO.
+ *   • 'not_connected' — QBO isn't connected / the token expired (503) → connect, then re-push.
+ *   • 'failed'        — QBO rejected it or the call failed → the owner sees the reason and fixes it.
+ */
+export type QbSyncStatus = 'success' | 'not_connected' | 'failed';
+
 export interface OrderBreakdown {
   lines:               PricedLine[];
   goodsRetailSubtotal: number;
+  /** the customer's TIER discount on goods — NOT the owner's service concessions (D-48) */
   discountTotal:       number;
+  /** D-48: Σ the owner's service price concessions, kept separate from the tier's discount */
+  serviceAdjustmentTotal?: number;
   discountedSubtotal:  number;
   discountLabel:       string | null;
 }
@@ -60,7 +73,9 @@ export interface OrderResult {
   qbInvoiceId?:    string;
   qbInvoiceNumber?: string;
   qbInvoiceUrl?:   string;
-  qbStatus:        'success' | 'pending';
+  qbStatus:        QbSyncStatus;
+  /** D-48: the REAL reason a push failed (owner-facing). Present only when qbStatus === 'failed'. */
+  qbError?:        string;
   breakdown?:      OrderBreakdown;   // D-39: server-authoritative per-line breakdown for the receipt
   // D-40: the authoritative tax state — the receipt/email render it (redline / taxed / exempt).
   taxStatus?:      'not_identified' | 'taxed' | 'exempt';
@@ -111,7 +126,13 @@ export function useSubmitOrder() {
       let qbInvoiceId: string | undefined;
       let qbInvoiceNumber: string | undefined;
       let qbInvoiceUrl: string | undefined;
-      let qbStatus: 'success' | 'pending' = 'pending';
+      // D-48 (D-9 Surface Honesty): THREE honest states, not two. The old code collapsed every
+      // non-success into 'pending', so a hard 400 rendered "Invoice will sync to QuickBooks shortly
+      // — Connect QuickBooks from the owner dashboard". That was wrong twice: QBO WAS connected
+      // (it had created a customer seconds earlier), and nothing was going to sync — ever. A
+      // validation failure is not a connection problem and it is not a pending sync.
+      let qbStatus: QbSyncStatus = 'failed';
+      let qbError: string | undefined;
 
       try {
         const qbRes = await fetch('/api/qbo/invoice/cultivar', {
@@ -124,17 +145,25 @@ export function useSubmitOrder() {
           qbInvoiceId     = qbData.qb_invoice_id   ?? undefined;
           qbInvoiceNumber = qbData.qb_invoice_number ?? undefined;
           qbInvoiceUrl    = qbData.qb_invoice_url   ?? undefined;
-          qbStatus        = qbData.success === true ? 'success' : 'pending';
+          qbStatus        = qbData.success === true && qbInvoiceId ? 'success' : 'failed';
+          if (qbStatus === 'failed') qbError = 'QuickBooks returned no invoice for this order.';
         } else {
-          // QB not connected / token expired / QB error (incl. 503). NON-BLOCKING: the order
-          // is already created — leave qbStatus 'pending' so confirmation renders "invoice to
-          // follow" WITHOUT a QB invoice object. Never throws to the UI. (Bug 2 hard req.)
-          console.log('[TRACE:CHECKOUT] QBO invoice unavailable — degraded gracefully, did NOT throw',
-            { status: qbRes.status, qbStatus: 'pending', orderId, detail: await qbRes.text().catch(() => '') });
+          // 503 = genuinely not connected / token expired → the connect prompt IS the right answer.
+          // Anything else (400 validation, 409 identity conflict, 500) is a REAL failure the owner
+          // must see and act on. NON-BLOCKING either way: the order already exists and stands.
+          const body = await qbRes.json().catch(() => ({} as any));
+          qbStatus = qbRes.status === 503 ? 'not_connected' : 'failed';
+          qbError  = body?.error || `QuickBooks rejected the invoice (HTTP ${qbRes.status}).`;
+          console.log('[TRACE:CHECKOUT] QBO invoice NOT created — degraded gracefully, did NOT throw',
+            { status: qbRes.status, qbStatus, orderId, code: body?.code ?? null, detail: qbError });
         }
       } catch (qbErr) {
+        // A network/parse throw is a failure, NOT "not connected" — do not point the owner at the
+        // connect button for a problem that isn't the connection.
+        qbStatus = 'failed';
+        qbError  = qbErr instanceof Error ? qbErr.message : String(qbErr);
         console.log('[TRACE:CHECKOUT] QBO invoice call threw — caught, degraded gracefully, order stands',
-          { qbStatus: 'pending', orderId, error: qbErr instanceof Error ? qbErr.message : String(qbErr) });
+          { qbStatus, orderId, error: qbError });
       }
 
       // ── Order confirmation email — non-blocking ──────────────────────────
@@ -193,7 +222,7 @@ export function useSubmitOrder() {
         tenantId: businessId,
       });
 
-      return { orderId, invoiceNumber, total, subtotal, taxAmount, qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus, breakdown,
+      return { orderId, invoiceNumber, total, subtotal, taxAmount, qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus, qbError, breakdown,
                taxStatus, taxRate, taxExemptReason, taxExemptCertRef };
 
     } catch (err) {

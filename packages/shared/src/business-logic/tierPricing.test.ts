@@ -211,15 +211,27 @@ test('15. at_cost goods → cost; missing cost → retail + degraded flag; servi
   ok(p.lines[2].netTotal === 50, 'service still full $50 (at_cost is a goods basis only)');
 });
 
-// ── 16. Service owner-override (leakage) passes through as the charge; still discountAmt 0. ───────
-test('16. service overrideTotal replaces the charge, is not a tier discount', () => {
+// ── 16. Service owner-override rides discountAmt (D-48); the TIER still never touches a service. ──
+// REWRITTEN 2026-07-16 (D-48). This test previously asserted `discountAmt === 0` on an overridden
+// service — it encoded THE DEFECT AS INTENDED BEHAVIOR ("override $1000 charged, discountAmt 0
+// (leakage ≠ discount)"). That assertion is precisely what produced the self-contradictory line QBO
+// rejected with 6070, and it is why the bug survived a green suite: the suite was asked whether the
+// override replaced the charge (it did), never whether the LINE still added up (it didn't). A test
+// can only catch what it asserts — this one blessed the scar. It now asserts the invariant.
+test('16. service overrideTotal is expressed as the line discount; tier still skips services', () => {
   const p = computeOrderPricing([
     { kind: 'goods',   name: 'Vitex',    unitPrice: 128, qty: 1 },
-    { kind: 'service', name: 'Planting', unitPrice: 225, qty: 6, overrideTotal: 1000 },
+    { kind: 'service', name: 'Planting', unitPrice: 225, qty: 6, overrideTotal: 1000, overrideReason: 'loyal contractor' },
   ], CONTRACTOR, 0);
-  ok(p.lines[1].netTotal === 1000 && p.lines[1].discountAmt === 0, 'override $1000 charged, discountAmt 0 (leakage ≠ discount)');
+  ok(p.lines[1].netTotal === 1000, 'the owner`s $1000 is charged');
+  ok(p.lines[1].retailTotal === 1350, 'the $1350 baseline is PRESERVED (225 × 6) — what QBO multiplies');
+  ok(p.lines[1].discountAmt === 350, `the concession rides discountAmt: 1350 − 1000 = 350; got ${p.lines[1].discountAmt}`);
+  ok(round2Local(p.lines[1].retailTotal - p.lines[1].discountAmt) === p.lines[1].netTotal, 'INVARIANT holds on the overridden line');
   ok(p.lines[0].netUnit === 115.2, 'goods still tier-discounted alongside the override');
-  ok(p.discountedSubtotal === round2Local(115.2 + 1000), 'subtotal = discounted goods + overridden service');
+  // The TIER never reaches a service: the service concession is the OWNER`s, tracked separately.
+  ok(p.discountTotal === round2Local(128 - 115.2), 'discountTotal = the TIER discount on goods ONLY (not 350 + 12.80)');
+  ok(p.serviceAdjustmentTotal === 350, 'the service concession has its own roll-up');
+  ok(p.discountedSubtotal === round2Local(115.2 + 1000), 'subtotal = discounted goods + overridden service (unchanged)');
 });
 
 // ══ TAX — the three honest states + taxability filter + rounding + the rate seam (D-40) ══════════
@@ -295,6 +307,127 @@ test('21. describeTaxLine wording — redline / taxed % / exempt reason+cert', (
   ok(ex.label === 'Tax exempt — Agricultural exemption · cert AG-TX-88213' && ex.amount === '$0.00', 'exempt → reason label + cert + $0.00');
   ok(taxExemptionLabel('resale') === 'Resale / reseller certificate', 'known code → label');
   ok(taxExemptionLabel('special ag co-op') === 'special ag co-op', "'other' free text → text as-is");
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+ * OVERRIDE-AS-DISCOUNT (D-48 · 2026-07-16) — the fix for the QBO 6070 scar.
+ *
+ * THE SCAR (live, order CLV-20260716-1156): an owner price override on Placement Service wrote
+ * netTotal 1000 while leaving discountAmt 0 against a retailTotal of 1575 — so the LINE CONTRADICTED
+ * ITSELF (1575 − 0 ≠ 1000) inside TRACE's own model. Every TRACE surface rendered a self-consistent
+ * total; QBO was the FIRST thing anywhere in the chain that multiplied rate × qty, and it REJECTED
+ * the invoice: 6070 "Amount is not equal to UnitPrice * Qty. Supplied value:1,000".
+ *
+ * The D-43 invariant (retail_total − discount_amt === net_total) was SPECCED but never ENFORCED at
+ * compute time — its migration verify (E) passed only because no override existed yet. These tests
+ * are the enforcement: they fail against the old netTotal-only override.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** The live scar order. RETAIL customer (no tier) — so goods carry no discount and the ONLY
+ *  concession is the owner's $575 giveaway on Placement. Rebuilt line-for-line from [TRACE:PRICE]. */
+const SCAR_ORDER: PricingLineInput[] = [
+  { kind: 'goods',   name: 'Shoal Creek Vitex 30',      unitPrice: 124, qty: 4 },   // $496
+  { kind: 'goods',   name: "'Sierra' Mexican Red Oak 15", unitPrice: 133, qty: 3 }, // $399
+  { kind: 'service', name: 'Delivery',                   unitPrice: 125, qty: 1 },  // $125 flat
+  { kind: 'service', name: 'Placement Service',          unitPrice: 225, qty: 7,    // $1575 baseline
+    overrideTotal: 1000, overrideReason: 'loyal contractor' },                       // → $1000 charged
+];
+
+/** THE INVARIANT, asserted line-by-line: retailTotal − discountAmt === netTotal (cent tolerance —
+ *  round2 of a float difference can leave sub-cent dust, e.g. 0.3 − round2(0.3−0.1) ≠ 0.1 exactly). */
+function invariantHolds(p: ReturnType<typeof computeOrderPricing>): boolean {
+  return p.lines.every(l => Math.abs(round2Local(l.retailTotal - l.discountAmt) - l.netTotal) <= 0.005);
+}
+
+// ── 22. THE SCAR: an override is expressed as the line's DISCOUNT; the invariant holds. ──────────
+test('22. service override → retail baseline PRESERVED + discountAmt carries the concession', () => {
+  const p = computeOrderPricing(SCAR_ORDER, RETAIL_FLOOR, 0.076);
+  const placement = p.lines.find(l => l.name === 'Placement Service')!;
+  // The exact line the old code got wrong: it wrote netTotal 1000 with discountAmt 0.
+  ok(placement.retailUnit === 225, `retailUnit stays 225 (the baseline is preserved); got ${placement.retailUnit}`);
+  ok(placement.qty === 7, `qty stays 7; got ${placement.qty}`);
+  ok(placement.retailTotal === 1575, `retailTotal stays 1575 (225 × 7 — what QBO multiplies); got ${placement.retailTotal}`);
+  ok(placement.discountAmt === 575, `discountAmt carries the $575 concession (was 0 — THE BUG); got ${placement.discountAmt}`);
+  ok(placement.discountPct === 36.51, `discountPct = round2(575/1575 × 100) = 36.51; got ${placement.discountPct}`);
+  ok(placement.netTotal === 1000, `netTotal is the owner's price 1000; got ${placement.netTotal}`);
+  ok(placement.adjustmentReason === 'loyal contractor', `the reason rides the line; got ${placement.adjustmentReason}`);
+  ok(invariantHolds(p), 'INVARIANT: retailTotal − discountAmt === netTotal on EVERY line');
+  // The money David proved live is UNCHANGED by expressing the override as a discount.
+  ok(p.discountedSubtotal === 2020, `subtotal $2020.00 (unchanged); got ${p.discountedSubtotal}`);
+  ok(p.tax === 153.52, `tax 7.6% → $153.52 (unchanged); got ${p.tax}`);
+  ok(p.total === 2173.52, `total $2173.52 (unchanged — this fix moves no money); got ${p.total}`);
+});
+
+// ── 23. STD-013: an override with NO reason is REFUSED — baseline charged, never a silent giveaway. ─
+test('23. reasonless override is REFUSED (STD-013) — baseline charged, invariant holds', () => {
+  const noReason = SCAR_ORDER.map(l =>
+    l.name === 'Placement Service' ? { ...l, overrideReason: '   ' } : l);        // whitespace ≠ a reason
+  const p = computeOrderPricing(noReason, RETAIL_FLOOR, 0.076);
+  const placement = p.lines.find(l => l.name === 'Placement Service')!;
+  ok(placement.netTotal === 1575, `no reason → the $1575 BASELINE is charged, not the $1000 give; got ${placement.netTotal}`);
+  ok(placement.discountAmt === 0, `no reason → no discount; got ${placement.discountAmt}`);
+  ok(placement.adjustmentReason == null, 'no reason → no adjustment reason on the line');
+  ok(invariantHolds(p), 'INVARIANT holds on the refused path too');
+  // Refusal charges MORE, never less — the money-safe direction (mirrors D-40's reasonless exemption).
+  const undef = computeOrderPricing(
+    SCAR_ORDER.map(l => l.name === 'Placement Service' ? { ...l, overrideReason: undefined } : l), RETAIL_FLOOR, 0.076);
+  ok(undef.lines.find(l => l.name === 'Placement Service')!.netTotal === 1575, 'undefined reason → also refused');
+});
+
+// ── 24. discountTotal stays GOODS-only; a service concession has its OWN roll-up. ────────────────
+test('24. discountTotal is the TIER discount on goods; service overrides never contaminate it', () => {
+  const p = computeOrderPricing(SCAR_ORDER, RETAIL_FLOOR, 0.076);
+  // Retail customer → zero tier discount. If the $575 service give leaked into discountTotal, the
+  // Review/Confirmation "<tier> — N% off" line (rendered against goodsRetailSubtotal) would lie.
+  ok(p.discountTotal === 0, `retail customer → goods discountTotal 0 (NOT 575); got ${p.discountTotal}`);
+  ok(p.serviceAdjustmentTotal === 575, `the service concession has its own roll-up: 575; got ${p.serviceAdjustmentTotal}`);
+  ok(p.goodsRetailSubtotal === 895, `goods retail 496 + 399 = 895; got ${p.goodsRetailSubtotal}`);
+  // And with a tier: the two facts stay separate and each stays true.
+  const CON10 = resolveTier('contractor', normalizeDiscountTypes({
+    discountTypes: [{ name: 'Contractor', tiers: [{ name: 'contractor', basis: 'retail_minus_percent', discountPercent: 10 }] }],
+  }));
+  const t = computeOrderPricing(SCAR_ORDER, CON10, 0.076);
+  ok(t.discountTotal === 89.5, `tier 10% off $895 goods = $89.50 ONLY; got ${t.discountTotal}`);
+  ok(t.serviceAdjustmentTotal === 575, `service give still 575, separate; got ${t.serviceAdjustmentTotal}`);
+  ok(invariantHolds(t), 'INVARIANT holds with BOTH a tier discount and a service override present');
+});
+
+// ── 25. An UPWARD override is a NEGATIVE discount (a surcharge) — allowed, honest, consistent. ────
+test('25. override ABOVE baseline → negative discountAmt (surcharge), invariant still holds', () => {
+  const up = SCAR_ORDER.map(l =>
+    l.name === 'Placement Service' ? { ...l, overrideTotal: 2000, overrideReason: 'rocky site — extra labor' } : l);
+  const p = computeOrderPricing(up, RETAIL_FLOOR, 0.076);
+  const placement = p.lines.find(l => l.name === 'Placement Service')!;
+  ok(placement.retailTotal === 1575, 'baseline preserved');
+  ok(placement.discountAmt === -425, `a surcharge is a negative discount: 1575 − 2000 = −425; got ${placement.discountAmt}`);
+  ok(placement.netTotal === 2000, `the owner's higher price is charged; got ${placement.netTotal}`);
+  ok(invariantHolds(p), 'INVARIANT: 1575 − (−425) === 2000');
+  ok(p.serviceAdjustmentTotal === -425, `the roll-up is negative too; got ${p.serviceAdjustmentTotal}`);
+  ok(p.discountTotal === 0, 'a surcharge NEVER reaches the goods tier-discount roll-up');
+});
+
+// ── 26. The invariant holds across the whole matrix — the guard D-43 specced but never enforced. ──
+test('26. INVARIANT holds on every line across the override matrix', () => {
+  const CON10 = resolveTier('contractor', normalizeDiscountTypes({
+    discountTypes: [{ name: 'Contractor', tiers: [{ name: 'contractor', basis: 'retail_minus_percent', discountPercent: 10 }] }],
+  }));
+  const cases: Array<[string, PricingLineInput[]]> = [
+    ['no override',        SCAR_ORDER.map(l => ({ ...l, overrideTotal: null, overrideReason: null }))],
+    ['override to $0',     SCAR_ORDER.map(l => l.kind === 'service' ? { ...l, overrideTotal: 0, overrideReason: 'comp' } : l)],
+    ['odd cents',          [{ kind: 'service', name: 'S', unitPrice: 0.1, qty: 3, overrideTotal: 0.2, overrideReason: 'r' }]],
+    ['qty 0',              [{ kind: 'service', name: 'S', unitPrice: 225, qty: 0, overrideTotal: 50, overrideReason: 'r' }]],
+    ['negative override',  [{ kind: 'service', name: 'S', unitPrice: 225, qty: 2, overrideTotal: -5, overrideReason: 'r' }]],
+  ];
+  for (const [label, lines] of cases) {
+    for (const tier of [RETAIL_FLOOR, CON10]) {
+      const p = computeOrderPricing(lines, tier, 0.0825);
+      ok(invariantHolds(p), `INVARIANT violated: ${label} @ tier ${tier.name}`);
+      ok(round2Local(p.lines.reduce((s, l) => s + l.netTotal, 0)) === p.discountedSubtotal, `lines sum to subtotal: ${label}`);
+    }
+  }
+  // A negative override can never charge a negative amount — it is refused, baseline stands.
+  const neg = computeOrderPricing([{ kind: 'service', name: 'S', unitPrice: 225, qty: 2, overrideTotal: -5, overrideReason: 'r' }], RETAIL_FLOOR, 0);
+  ok(neg.lines[0].netTotal === 450, `a negative override is refused → baseline 450 charged; got ${neg.lines[0].netTotal}`);
 });
 
 function round2Local(n: number): number { return Math.round(n * 100) / 100; }

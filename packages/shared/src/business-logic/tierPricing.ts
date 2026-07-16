@@ -265,9 +265,16 @@ export interface PricingLineInput {
   qty: number;
   /** GOODS only — server-read unit_cost, used only when the resolved tier basis is 'at_cost'. */
   unitCost?: number | null;
-  /** SERVICE only — an owner price-override (flat give-away) that REPLACES unitPrice×qty as the
-   *  charged amount. Attributed leakage, NOT a tier discount — the service is still never discounted. */
+  /** SERVICE only — an owner price-override. Expressed as the line's DISCOUNT (D-48): the retail
+   *  baseline (unitPrice × qty) is PRESERVED and the concession lands in discountAmt. It is
+   *  attributed leakage (owner-set), NOT a tier discount — the tier still never touches a service.
+   *  REQUIRES overrideReason (STD-013) — a reasonless override is refused and the baseline charged. */
   overrideTotal?: number | null;
+  /** SERVICE only — the owner's recorded reason for overrideTotal. REQUIRED for the override to
+   *  apply (STD-013, mirroring D-40's rule that an exemption cannot zero tax without a reason).
+   *  Empty/whitespace/absent ⇒ the override is REFUSED and the baseline is charged (money-safe:
+   *  refusal charges MORE, never less). A concession with no recorded reason is unreconcilable. */
+  overrideReason?: string | null;
   /** TAXABILITY (D-40) — rides the D-39 goods/service line-kind seam. undefined ⇒ TRUE for BOTH
    *  goods and service (today's behavior — money-safety: no tenant's totals shift silently on ship;
    *  an owner opts a line out per jurisdiction later, e.g. labor exempt). This per-line flag is the
@@ -280,14 +287,18 @@ export interface PricedLine {
   name: string;
   retailUnit: number;
   qty: number;
-  retailTotal: number;   // retailUnit × qty (cents-rounded)
-  discountPct: number;   // 0 for services / retail / at-cost-neutral
-  discountAmt: number;   // retailTotal − netTotal (goods tier discount; 0 for services)
+  retailTotal: number;   // retailUnit × qty (cents-rounded) — the baseline, ALWAYS preserved
+  discountPct: number;   // goods → the tier %; service → the override's % of baseline (D-48)
+  discountAmt: number;   // retailTotal − netTotal. goods: the tier discount. service: the owner
+                         // override's concession (D-48; NEGATIVE when the override is a surcharge)
   netUnit: number;       // the charged unit price after the tier
   netTotal: number;      // the charged line total
   basis: DiscountBasis;
   degraded: boolean;     // at_cost with no cost on file → charged at retail (D-9)
   taxable: boolean;      // D-40: whether this line is in the taxable subtotal (default true)
+  /** SERVICE only (D-48) — the owner's recorded reason, present ONLY when an override applied.
+   *  Rides the line so every surface (Review/Confirmation/order-detail/QBO) can say WHY. */
+  adjustmentReason?: string | null;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -312,7 +323,10 @@ export interface OrderTaxExemption {
 export interface OrderPricing {
   lines: PricedLine[];
   goodsRetailSubtotal: number; // Σ goods retailTotal (pre-discount) — for "show the work"
-  discountTotal: number;       // Σ discountAmt (goods only)
+  discountTotal: number;       // Σ discountAmt (GOODS only) — the customer's TIER discount
+  /** Σ service discountAmt (D-48) — the owner's price concessions. SEPARATE from discountTotal: a
+   *  tier discount and an owner override are two different facts (STD-011). Negative = a surcharge. */
+  serviceAdjustmentTotal: number;
   discountedSubtotal: number;  // Σ netTotal (goods discounted + services full)
   taxableSubtotal: number;     // Σ netTotal WHERE line.taxable (D-40; = discountedSubtotal when all taxable)
   tax: number;
@@ -377,15 +391,60 @@ export function computeOrderPricing(
       return { kind: 'goods', name: l.name, retailUnit, qty, retailTotal, discountPct, discountAmt, netUnit, netTotal, basis: r.basis, degraded: r.degraded, taxable };
     }
 
-    // Service — NEVER tier-discounted. An overrideTotal (owner give-away) replaces the computed
-    // amount as the charge; it is leakage (surfaced elsewhere), so discountAmt stays 0 here.
-    const netTotal = (l.overrideTotal != null && l.overrideTotal >= 0) ? round2(l.overrideTotal) : retailTotal;
+    // ── Service — NEVER tier-discounted. An owner OVERRIDE is expressed as this line's DISCOUNT
+    // (D-48): the retail baseline is PRESERVED (retailUnit/qty/retailTotal untouched — which is what
+    // makes the giveaway visible AND what lets QuickBooks multiply rate × qty and agree) and the
+    // concession lands in discountAmt. The OLD code wrote netTotal alone and left discountAmt 0, so
+    // the line contradicted itself (1575 − 0 ≠ 1000) and QBO rejected the invoice with 6070.
+    //
+    // STD-013 (mirrors D-40's exemption rule directly above): the override applies ONLY with a
+    // recorded reason. Reasonless ⇒ REFUSED, baseline charged — the money-safe direction (refusal
+    // charges MORE, never gives money away unrecorded). A negative override can never charge a
+    // negative amount; it is refused too.
+    const reason = (l.overrideReason ?? '').trim();
+    const overrideApplies = l.overrideTotal != null && l.overrideTotal >= 0 && reason !== '';
+    const netTotal = overrideApplies ? round2(l.overrideTotal as number) : retailTotal;
     const netUnit = qty > 0 ? round2(netTotal / qty) : netTotal;
-    return { kind: 'service', name: l.name, retailUnit, qty, retailTotal, discountPct: 0, discountAmt: 0, netUnit, netTotal, basis: 'retail_minus_percent', degraded: false, taxable };
+    // discountAmt is NEGATIVE when the owner overrode UPWARD (a surcharge — a legitimate act, e.g. a
+    // rocky site costing extra labor). Allowed deliberately: refusing would REGRESS an ability the
+    // owner has today, and a negative discount stays internally consistent (retail − (−425) = 2000)
+    // and pushes to QBO as a positive "price adjusted" line. discountPct is measured against the
+    // baseline: round2(discountAmt / retailTotal × 100) — honest-negative for a surcharge. No
+    // surface renders it as "% off" unless discountAmt > 0.
+    const discountAmt = round2(retailTotal - netTotal);
+    const discountPct = retailTotal > 0 ? round2((discountAmt / retailTotal) * 100) : 0;
+    return { kind: 'service', name: l.name, retailUnit, qty, retailTotal, discountPct, discountAmt, netUnit, netTotal, basis: 'retail_minus_percent', degraded: false, taxable, adjustmentReason: overrideApplies ? reason : null };
   });
 
+  // ── THE D-43 INVARIANT, ENFORCED AT COMPUTE TIME (D-48) ────────────────────────────────────────
+  // retailTotal − discountAmt === netTotal on EVERY line. D-43 SPECCED this and verified it in a
+  // migration; nothing enforced it where lines are BORN, so the override sailed through to QBO — and
+  // QBO's 6070 was the first check anywhere in the chain that multiplied rate × qty. An invariant
+  // that is only verified in a migration is not enforced. This THROWS: a self-contradictory money
+  // line is a programming error, and refusing the order beats billing an incoherent one. It cannot
+  // fire by construction above — it is the guard against the NEXT branch that forgets. Tolerance is
+  // half a cent: round2 of a float difference can leave sub-cent dust (0.3 − round2(0.3 − 0.1) ≠ 0.1).
+  for (const p of priced) {
+    if (Math.abs(round2(p.retailTotal - p.discountAmt) - p.netTotal) > 0.005) {
+      const detail = { kind: p.kind, name: p.name, retailUnit: p.retailUnit, qty: p.qty, retailTotal: p.retailTotal, discountAmt: p.discountAmt, netTotal: p.netTotal };
+      console.error('[TRACE:PRICE] INVARIANT VIOLATED — retailTotal − discountAmt !== netTotal (D-43/D-48)', detail);
+      throw new Error(
+        `Pricing invariant violated on line "${p.name}": retailTotal ${p.retailTotal} − discountAmt ${p.discountAmt} !== netTotal ${p.netTotal}. ` +
+        'A line that contradicts itself cannot be charged or invoiced (D-43 invariant, D-48).',
+      );
+    }
+  }
+
   const goodsRetailSubtotal = round2(priced.filter(p => p.kind === 'goods').reduce((s, p) => s + p.retailTotal, 0));
-  const discountTotal       = round2(priced.reduce((s, p) => s + p.discountAmt, 0));
+  // discountTotal is GOODS-ONLY — as its contract always said. It summed EVERY line and merely got
+  // away with it while services were hardcoded to discountAmt 0. Now that a service override IS a
+  // discount (D-48), summing all lines would silently merge two DIFFERENT facts: the customer's TIER
+  // discount on goods (labelled "<tier> — N% off" and rendered against goodsRetailSubtotal) and the
+  // owner's per-service concession. They have different authorities, labels, and audit trails
+  // (STD-013 reason) — STD-011 forbids collapsing two facts into one representation.
+  const discountTotal          = round2(priced.filter(p => p.kind === 'goods').reduce((s, p) => s + p.discountAmt, 0));
+  /** The owner's service price-concessions (D-48) — its OWN roll-up, never merged into the tier's. */
+  const serviceAdjustmentTotal = round2(priced.filter(p => p.kind === 'service').reduce((s, p) => s + p.discountAmt, 0));
   const discountedSubtotal  = round2(priced.reduce((s, p) => s + p.netTotal, 0));
   // D-40: tax on the taxable lines only (default = every line taxable → == discountedSubtotal).
   const taxableSubtotal     = round2(priced.filter(p => p.taxable).reduce((s, p) => s + p.netTotal, 0));
@@ -401,7 +460,7 @@ export function computeOrderPricing(
   const total = round2(discountedSubtotal + tax);
 
   return {
-    lines: priced, goodsRetailSubtotal, discountTotal, discountedSubtotal, taxableSubtotal, tax, total,
+    lines: priced, goodsRetailSubtotal, discountTotal, serviceAdjustmentTotal, discountedSubtotal, taxableSubtotal, tax, total,
     taxStatus,
     taxExemptReason:  validExempt ? (exemption!.reason ?? null) : null,
     taxExemptCertRef: validExempt ? (exemption!.certRef ?? null) : null,

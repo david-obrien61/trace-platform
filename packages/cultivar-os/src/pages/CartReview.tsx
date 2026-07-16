@@ -165,9 +165,15 @@ export function CartReview() {
     qty: l.quantity,
     unitCost: l.plant.business_inventory?.unit_cost ?? null,
   }));
+  // D-48: the preview MUST feed the override's reason alongside its amount. computeOrderPricing
+  // refuses a reasonless override (STD-013) — so omitting the reason here would make Review show the
+  // BASELINE while submit (which passes it) charges the overridden price: precisely the
+  // Review-vs-submit divergence STD-012 exists to prevent. The editor requires a reason, so one is
+  // always present; passing it keeps preview === charge by construction rather than by luck.
   const svcInput = (o: ServiceOffering): PricingLineInput => ({
     kind: 'service', name: o.name, unitPrice: Number(o.price), qty: effQty(o),
     overrideTotal: serviceOverride[o.id]?.amount ?? null,
+    overrideReason: serviceOverride[o.id]?.reason ?? null,
   });
   const serviceInputs: PricingLineInput[] = [
     ...(selectedTransport ? [svcInput(selectedTransport)] : []),
@@ -289,7 +295,12 @@ export function CartReview() {
           qbInvoiceId:     result.qbInvoiceId,
           qbInvoiceNumber: result.qbInvoiceNumber,
           qbInvoiceUrl:    result.qbInvoiceUrl,
+          // D-48: the three honest QBO states + the REAL failure reason, and who is looking. The
+          // owner sees the actual error and what to do; a customer on the public QR path sees a
+          // true neutral state — never TRACE's accounting internals, never an owner instruction.
           qbStatus:        result.qbStatus,
+          qbError:         result.qbError ?? null,
+          ownerView:       canOverride,
         },
       });
     } catch {
@@ -709,6 +720,9 @@ function ServiceRow({
   const [editing, setEditing] = useState(false);
   const [draftAmt, setDraftAmt]     = useState<string>(String(override?.amount ?? amount ?? 0));
   const [draftReason, setDraftReason] = useState<string>(override?.reason ?? '');
+  // STD-013: a money-affecting override REQUIRES a recorded reason. Surfaced, never silent (§6 r15
+  // / M2 — a blocked save must say why). The server independently refuses a reasonless override.
+  const [reasonErr, setReasonErr] = useState(false);
   const isOverridden = !!override;
   const base = baseline ?? amount;
   const leak = isOverridden ? Math.max(0, base - override!.amount) : 0;
@@ -716,11 +730,19 @@ function ServiceRow({
   function openEditor() {
     setDraftAmt(String(override?.amount ?? base ?? 0));
     setDraftReason(override?.reason ?? '');
+    setReasonErr(false);
     setEditing(true);
   }
   function saveEditor() {
+    // THE GATE (D-48/STD-013): David applied a $575 giveaway with this field BLANK and it went
+    // through — a concession with no recorded reason is unreconcilable later. Mirrors D-40's rule
+    // that an exemption cannot be saved without a reason. The server refuses it too (defense in
+    // depth): this is the affordance, not the control.
+    const reason = draftReason.trim();
+    if (!reason) { setReasonErr(true); return; }
     const val = Math.max(0, parseFloat(draftAmt) || 0);
-    onOverride?.({ amount: val, reason: draftReason.trim() });
+    onOverride?.({ amount: val, reason });
+    setReasonErr(false);
     setEditing(false);
   }
   function clearEditor() {
@@ -743,9 +765,15 @@ function ServiceRow({
               {isOverridden ? 'Edit price' : 'Adjust price'}
             </button>
           )}
-          {isOverridden && leak > 0 && (
+          {/* Show the work in BOTH directions (D-48): a give-away reads "−$575.00 off $1575.00", an
+              upward override reads "+$425.00 over $1575.00". The old copy rendered only leak > 0, so
+              a surcharge showed nothing at all. The reason always rides it — it is now required. */}
+          {isOverridden && Math.abs(base - override!.amount) >= 0.005 && (
             <p style={{ fontSize: '0.75rem', color: '#92400e', margin: '2px 0 0' }}>
-              −${leak.toFixed(2)} off ${base.toFixed(2)}{override!.reason ? ` · ${override!.reason}` : ''}
+              {leak > 0
+                ? `−$${leak.toFixed(2)} off $${base.toFixed(2)}`
+                : `+$${(override!.amount - base).toFixed(2)} over $${base.toFixed(2)}`}
+              {override!.reason ? ` · ${override!.reason}` : ''}
             </p>
           )}
         </div>
@@ -778,14 +806,30 @@ function ServiceRow({
               />
             </div>
           </div>
-          <input
-            type="text" value={draftReason}
-            onChange={e => setDraftReason(e.target.value)}
-            placeholder="Reason (e.g. loyal contractor)"
-            style={{ padding: '8px 10px', border: '1.5px solid #fcd34d', borderRadius: 6, fontSize: '0.875rem', boxSizing: 'border-box' }}
-          />
+          {/* Reason is REQUIRED (STD-013) — labelled as such, not a hint hiding in a placeholder. */}
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: '#78350f', fontWeight: 600, marginBottom: 4 }}>
+              Reason <span style={{ color: '#A32D2D' }}>*</span>
+            </label>
+            <input
+              type="text" value={draftReason}
+              onChange={e => { setDraftReason(e.target.value); if (reasonErr) setReasonErr(false); }}
+              placeholder="e.g. loyal contractor"
+              aria-invalid={reasonErr}
+              style={{ width: '100%', padding: '8px 10px', border: `1.5px solid ${reasonErr ? '#A32D2D' : '#fcd34d'}`, borderRadius: 6, fontSize: '0.875rem', boxSizing: 'border-box' }}
+            />
+            {reasonErr && (
+              <p style={{ fontSize: '0.75rem', color: '#A32D2D', margin: '4px 0 0', fontWeight: 600 }}>
+                A reason is required to change this price — it goes on the invoice and the record.
+              </p>
+            )}
+          </div>
           <p style={{ fontSize: '0.75rem', color: '#92400e', margin: 0 }}>
-            Baseline ${base.toFixed(2)} · giving away ${Math.max(0, base - (parseFloat(draftAmt) || 0)).toFixed(2)}
+            {/* D-48: an override IS a discount — the baseline is preserved and this concession rides
+                the line's discount to the invoice. Name the direction honestly: an override ABOVE
+                the baseline is a surcharge, not a give-away. */}
+            Baseline ${base.toFixed(2)} · {(parseFloat(draftAmt) || 0) > base ? 'charging extra' : 'giving away'} $
+            {Math.abs(base - (parseFloat(draftAmt) || 0)).toFixed(2)}
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={saveEditor} className="btn btn-primary" style={{ minHeight: 40, flex: 1, fontSize: '0.875rem' }}>Apply</button>

@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
-import type { OrderBreakdown } from '../hooks/useSubmitOrder';
+import type { OrderBreakdown, QbSyncStatus } from '../hooks/useSubmitOrder';
 import type { TaxStatus } from '@trace/shared/business-logic';
 import { OrderTotals } from '../components/checkout/OrderTotals';
 
@@ -27,7 +27,13 @@ interface ConfirmState {
   qbInvoiceId?:     string;
   qbInvoiceNumber?: string;
   qbInvoiceUrl?:    string;
-  qbStatus?:        'success' | 'pending';
+  // D-48: the three honest QBO states + the real failure reason (owner-facing only).
+  qbStatus?:        QbSyncStatus;
+  qbError?:         string | null;
+  /** D-48: is an OWNER/MANAGER looking at this screen (vs. a customer on the public QR path)?
+   *  Scopes the QBO detail: the owner needs the actual error and the action; the customer does
+   *  not need TRACE's accounting internals — and must never be handed an owner instruction. */
+  ownerView?:       boolean;
 }
 
 function StatusBadge({
@@ -74,7 +80,7 @@ export function Confirmation() {
   const { invoiceNumber, total, subtotal, taxAmount, email, payOnline,
           transportMode, transportName, serviceLines, breakdown, tierLabel,
           businessName, nettingActive, taxStatus, taxRate, taxExemptReason, taxExemptCertRef,
-          qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus } = state;
+          qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus, qbError, ownerView } = state;
   // D-39 (E2): render the SERVER-AUTHORITATIVE breakdown (goods retail lines → discount line → net),
   // not the client preview → the receipt equals QBO and the discount is a visible line.
   const goodsLines    = (breakdown?.lines ?? []).filter(l => l.kind === 'goods');
@@ -85,19 +91,31 @@ export function Confirmation() {
   // FIX 3/4 (STD-017): render EVERY selected service incl. $0 ones — Confirm was dropping the
   // zero-amount Deer bundle that Review/QBO/order-detail all show. OrderTotals renders $0.00
   // explicitly (never an em-dash). Prefer the authoritative breakdown, fall back to serviceLines.
-  const svcAll: { name: string; amount: number }[] = hasBreakdown
-    ? (breakdown?.lines ?? []).filter(l => l.kind === 'service').map(s => ({ name: s.name, amount: s.netTotal }))
+  // D-48: an owner price override rides the line's discount, so the receipt shows the retail
+  // baseline + the adjustment + its reason — from the SERVER's breakdown, not a client recompute.
+  const svcAll = hasBreakdown
+    ? (breakdown?.lines ?? []).filter(l => l.kind === 'service').map(s => ({
+        name: s.name,
+        amount: s.netTotal,
+        retailAmount: s.discountAmt !== 0 ? s.retailTotal : null,
+        adjustmentReason: s.adjustmentReason ?? null,
+      }))
     : (serviceLines ?? []).map(s => ({ name: s.name, amount: s.amount }));
 
   const isSelf      = (transportMode ?? 'self') === 'self';
   const nettingOn   = !!nettingActive;
-  // A QB invoice object is NOT required to confirm — the order already exists. When QB is
-  // absent (not connected / 503 / error → qbStatus 'pending', no invoice id) we render the
-  // honest "invoice will follow" state, never a crash and never a blank. (Bug 2 hard req.)
-  const qbConnected = qbStatus === 'success' && !!qbInvoiceId;
+  // A QB invoice object is NOT required to confirm — the order already exists. When QB is absent we
+  // render an honest state, never a crash and never a blank. (Bug 2 hard req.)
+  //
+  // D-48 (D-9 Surface Honesty): THREE states, reported for what they ARE. A hard 400 used to render
+  // "⏱ Invoice will sync to QuickBooks shortly — Connect QuickBooks from the owner dashboard" —
+  // wrong twice: QBO was connected (it had created a customer seconds before), and nothing would
+  // ever sync. Never render a hard failure as a pending sync or a connection prompt.
+  const qbState: QbSyncStatus = qbStatus === 'success' && qbInvoiceId ? 'success' : (qbStatus ?? 'failed');
+  const qbConnected = qbState === 'success';
   if (!qbConnected) {
-    console.log('[TRACE:CHECKOUT] confirmation rendering WITHOUT a QB invoice — degraded state, no crash',
-      { orderId: state.orderId, qbStatus: qbStatus ?? 'pending', payOnline });
+    console.log('[TRACE:CHECKOUT] confirmation rendering WITHOUT a QB invoice — honest degraded state, no crash',
+      { orderId: state.orderId, qbState, qbError: qbError ?? null, ownerView: !!ownerView, payOnline });
   }
   const displayQbNumber = qbInvoiceNumber || qbInvoiceId || '—';
 
@@ -118,23 +136,51 @@ export function Confirmation() {
         <p style={{ fontSize: '0.8125rem', color: '#a8c890', marginTop: 4 }}>{invoiceNumber}</p>
       </div>
 
-      {/* QB invoice status */}
+      {/* QB invoice status — D-48: the three honest states, scoped to who is looking. */}
       <div className="section">
-        {qbConnected ? (
+        {qbState === 'success' && (
           <StatusBadge
             icon="✓"
             color="blue"
             title={`Invoice created in QuickBooks — #${displayQbNumber}`}
             detail="Open QuickBooks and go to Invoices — it's already there."
           />
+        )}
+
+        {/* NOT CONNECTED (503) — the connect prompt is the RIGHT answer here, and only here. */}
+        {qbState === 'not_connected' && (ownerView ? (
+          <StatusBadge
+            icon="⚠"
+            color="amber"
+            title="Invoice NOT created — QuickBooks isn't connected"
+            detail="The order is saved. Connect QuickBooks from the owner dashboard, then push this invoice again from the order page."
+          />
         ) : (
           <StatusBadge
-            icon="⏱"
-            color="amber"
-            title="Invoice will sync to QuickBooks shortly"
-            detail="Connect QuickBooks from the owner dashboard to enable automatic sync."
+            icon="✓"
+            color="green"
+            title="Order confirmed — invoice to follow"
+            detail={`Your order is saved. ${businessName ?? 'The nursery'} will send your invoice.`}
           />
-        )}
+        ))}
+
+        {/* FAILED — a real error. Say so. Give the owner the reason and the next action; give the
+            customer a true, neutral state with no accounting internals and no owner instruction. */}
+        {qbState === 'failed' && (ownerView ? (
+          <StatusBadge
+            icon="⚠"
+            color="amber"
+            title="QuickBooks invoice FAILED — it was not created"
+            detail={`${qbError || 'QuickBooks rejected the invoice.'} The order itself is saved and correct — fix the issue above, then push the invoice again from the order page.`}
+          />
+        ) : (
+          <StatusBadge
+            icon="✓"
+            color="green"
+            title="Order confirmed — invoice to follow"
+            detail={`Your order is saved. ${businessName ?? 'The nursery'} will send your invoice.`}
+          />
+        ))}
       </div>
 
       {/* Transport status */}

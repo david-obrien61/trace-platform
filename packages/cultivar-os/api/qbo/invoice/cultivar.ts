@@ -299,6 +299,25 @@ async function verifyStoredQbLink(
   });
 }
 
+/**
+ * THE ONE reduction-line construction on this invoice (STD-011) — a negative-Amount SalesItemLine,
+ * consistent with this invoice's own all-SalesItemLine convention (incl. its manual tax line).
+ * Both callers use it: the goods TIER discount (D-43) and a service PRICE OVERRIDE (D-48). One
+ * operation, one place — a second hand-rolled discount path is exactly how the two would drift.
+ *
+ * `amount` is the reduction as a POSITIVE number (575 → a −575 line). A NEGATIVE amount is a
+ * surcharge (an owner override ABOVE baseline) and correctly pushes a POSITIVE line — the same
+ * arithmetic, no branch, no second concept.
+ */
+function discountLine(description: string, amount: number): Record<string, unknown> {
+  return {
+    Description: description,
+    Amount: -amount,
+    DetailType: 'SalesItemLineDetail',
+    SalesItemLineDetail: { UnitPrice: -amount, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
+  };
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
@@ -418,16 +437,7 @@ export default async function handler(req: any, res: any) {
     // all-SalesItemLine convention, incl. its manual tax line) so the 10% shows on the invoice, not
     // baked into a net rate. Reads the STORED discount total; never recomputes.
     if (qbShowDiscount) {
-      lines.push({
-        Description: `Discount${qbDiscPct > 0 ? ` (${qbDiscPct}% off)` : ''}`,
-        Amount: -qbDiscountTotal,
-        DetailType: 'SalesItemLineDetail',
-        SalesItemLineDetail: {
-          UnitPrice: -qbDiscountTotal,
-          Qty: 1,
-          ItemRef: { value: '1', name: 'Services' },
-        },
-      });
+      lines.push(discountLine(`Discount${qbDiscPct > 0 ? ` (${qbDiscPct}% off)` : ''}`, qbDiscountTotal));
       console.log('[TRACE:QBO] invoice discount line from stored breakdown', { discountTotal: qbDiscountTotal, pct: qbDiscPct });
     }
 
@@ -440,12 +450,50 @@ export default async function handler(req: any, res: any) {
         const isNetting  = offering.trigger_transport_mode === 'self' && offering.category === 'addon';
         const isTransport = offering.category === 'transport';
 
+        // ── D-48: an owner price-override pushes as RETAIL + an explicit adjustment line ─────────
+        // THE SCAR: this branch used to push Amount = subtotal (the overridden $1000) alongside
+        // UnitPrice 225 × Qty 7, and QuickBooks REJECTED the whole invoice — 6070 "Amount is not
+        // equal to UnitPrice * Qty. Supplied value:1,000". QBO was the first thing in the chain that
+        // multiplied rate × qty; TRACE never checked that a line was internally consistent.
+        // Now the override IS the line's discount, so the service line multiplies correctly
+        // (225 × 7 = 1575) and the $575 rides the SAME negative-Amount mechanism as the tier
+        // discount above. GATED on an override actually applying: a normal order pushes byte-
+        // identical to before (unit_price_at_time × quantity === subtotal holds for every
+        // non-overridden row — flat services store qty 1) → zero regression, same discipline as D-43.
+        const svcQty    = Number(sel.quantity) || 0;
+        const svcUnit   = Number(sel.unit_price_at_time) || 0;
+        const svcNet    = Number(sel.subtotal) || 0;
+        const svcRetail = Math.round(svcUnit * svcQty * 100) / 100;
+        const svcAdj    = Math.round((svcRetail - svcNet) * 100) / 100;   // >0 giveaway · <0 surcharge
+        const svcOverridden = sel.is_manual_override === true && Math.abs(svcAdj) >= 0.005;
+        // Historical override rows predate the required-reason rule → omit rather than invent (D-9).
+        const svcReason = (sel.override_reason ?? '').trim();
+
         if (isNetting && order.netting_declined) {
           lines.push({
             Description: 'Protective travel netting — DECLINED by customer (TX TCC Ch.725 waiver signed)',
             Amount: 0,
             DetailType: 'SalesItemLineDetail',
             SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
+          });
+        } else if (svcOverridden) {
+          // The service at its RETAIL baseline — internally consistent, so QBO accepts it.
+          lines.push({
+            Description: `${offering.name} × ${svcQty}`,
+            Amount: svcRetail,
+            DetailType: 'SalesItemLineDetail',
+            SalesItemLineDetail: { UnitPrice: svcUnit, Qty: svcQty, ItemRef: { value: '1', name: 'Services' } },
+          });
+          // …and the concession as its own line, naming WHAT and WHY. Neutral "price adjusted"
+          // wording reads correctly in BOTH directions (a surcharge pushes a positive Amount).
+          lines.push(discountLine(
+            `${offering.name} — price adjusted${svcReason ? ` (reason: ${svcReason})` : ''}`,
+            svcAdj,
+          ));
+          console.log('[TRACE:QBO] service price-override line (D-48) — retail + adjustment, not a bare net', {
+            offering: offering.name, unitPrice: svcUnit, qty: svcQty, retail: svcRetail,
+            adjustment: svcAdj, charged: svcNet, reason: svcReason || null,
+            reconciles: Math.abs((svcRetail - svcAdj) - svcNet) <= 0.005,
           });
         } else if (isTransport && Number(sel.subtotal) === 0) {
           if (offering.transport_mode !== 'self') {
@@ -554,6 +602,28 @@ export default async function handler(req: any, res: any) {
           ItemRef: { value: '1', name: 'Services' },
         },
       });
+    }
+
+    // ── RECONCILE the assembled invoice against what TRACE actually charged (D-48) ───────────────
+    // Every line is now internally consistent (Amount === UnitPrice × Qty), which is what QBO
+    // validates. This checks the OTHER half: that the lines SUM to the order's total — so a
+    // discount line can never double-count against an already-netted line (the failure mode of
+    // representing one concession twice). SURFACED, never silent: a mismatch means the invoice and
+    // the order disagree about money, and the owner must see that rather than have QBO carry a
+    // number TRACE never charged. This is a check TRACE never had — QBO's 6070 was doing this job.
+    const qbLineSum   = Math.round(lines.reduce((s: number, l: any) => s + Number(l.Amount ?? 0), 0) * 100) / 100;
+    const qbOrderTotal = Math.round(Number(order.total_amount) * 100) / 100;
+    const qbReconciles = Math.abs(qbLineSum - qbOrderTotal) <= 0.005;
+    console.log('[TRACE:QBO] invoice reconcile — lines sum vs the order total', {
+      order_id, lineSum: qbLineSum, orderTotal: qbOrderTotal, reconciles: qbReconciles,
+      lines: lines.map((l: any) => ({ desc: l.Description, amount: l.Amount })),
+    });
+    if (!qbReconciles) {
+      throw new Error(
+        `Invoice does not reconcile: the QuickBooks lines sum to $${qbLineSum.toFixed(2)} but this order charged `
+        + `$${qbOrderTotal.toFixed(2)}. TRACE will not push an invoice for an amount it did not charge. `
+        + `(Order ${invoiceNumber}.)`,
+      );
     }
 
     const today = new Date().toISOString().slice(0, 10);
