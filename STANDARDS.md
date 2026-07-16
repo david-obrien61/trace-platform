@@ -1,7 +1,7 @@
 # STANDARDS.md — TRACE Engineering Standards
-# Version: 2.3
+# Version: 2.4
 # Created: 2026-06-04
-# Last updated: 2026-07-14 (STD-018 added — a capability ships its full entry surface: CRUD is C+R+U+D, enumerated at build time, not discovered at use)
+# Last updated: 2026-07-16 (STD-019 added + ACTIVATED — external identity binds on the field the external system guarantees unique; ambiguity never auto-links; a stored link is a CACHE, not a FACT. Scar: an email-only QBO match with no name verification and a never-re-checked stored link cross-billed NINE real invoices to the wrong person over two months — silent because every TRACE surface showed the correct customer. D-47.)
 # Owner: David O'Brien / TRACE Enterprises
 
 > Every standard on this list traces to a real failure that bit us.
@@ -26,7 +26,7 @@ Standards exist in three states. The point is not to hold every industry standar
 it is to hold the ones that apply to *our* stack, activate them at the right moment,
 and never carry noise.
 
-- **ACTIVE** (on the field — enforced now): STD-001 through STD-018 below. Each has
+- **ACTIVE** (on the field — enforced now): STD-001 through STD-019 below. Each has
   a confirming scar and is enforced every relevant session. Two origins:
     - *TRACE scars* — failures from this codebase (the QB lying flag, the
       hand-applied constraint, the hardcoded channels).
@@ -788,6 +788,79 @@ edits, and removes rows in — inventory, customers, assets, service offerings, 
 
 ---
 
+### STD-019 — EXTERNAL IDENTITY BINDS ON THE GUARANTEED-UNIQUE FIELD; AMBIGUITY NEVER AUTO-LINKS; A STORED LINK IS A CACHE, NOT A FACT
+
+**Rule:** When a TRACE record is bound to a record in an external system (a QBO customer, a Stripe
+customer, a supplier's catalog item), three clauses hold:
+
+1. **Bind on the field the external system GUARANTEES unique.** Identify what that system enforces
+   unique versus what it merely permits to collide, and key identity on the former. A field the
+   external system explicitly allows to collide is not an identity key — it is a hint.
+2. **Two independent fields must CONCUR before binding.** One matching field is a hint, not an
+   identity. Ambiguity resolves to **CREATE** or **SURFACE** — never a guessed link. This is
+   asymmetric on purpose: the costs are asymmetric (a duplicate record is annoying and fixable in
+   seconds; a mis-bind is money, trust, and legal). When the two directions cost differently, the
+   rule leans toward the cheap failure.
+3. **A stored external link is a CACHE, not a FACT — verify before use.** Re-check the cached
+   foreign id against the live external record before acting on it. A binding that is written once
+   and trusted forever converts a single bad match into an unbounded run of them.
+
+**Scar (2026-07-15, PROVEN LIVE — nine invoices, two months):** `findOrCreateQBCustomer` resolved a
+TRACE customer → a QBO customer with `select * from Customer where PrimaryEmailAddr = '<email>'`
+→ `Customer[0]`. **`DisplayName` was not in the predicate; no name was ever compared.** TRACE
+"TERRENCE OBRIEN" / david_obrien2016@outlook.com bound to QBO customer **81 = "Andrew O'Brien"**
+because they share an email. **NINE real invoices** in TRACE Enterprises' production QuickBooks
+were billed to Andrew for sales that never happened.
+
+Three failures compounded, one per clause:
+- **Clause 1 —** QBO enforces `DisplayName` UNIQUE and does **NOT** enforce unique email. TRACE
+  matched on the one field QBO permits to collide (families share an email — literally the case
+  here; an office shares one across staff) and ignored the one it guarantees.
+- **Clause 2 —** a single field decided the bind, and `Customer[0]` — an arbitrary first hit —
+  broke the tie when several records shared the email.
+- **Clause 3 —** once `qb_customer_id` was stored, every later push **skipped find-or-create
+  entirely** and billed the stored id with no re-verification. The mis-link was made once, on
+  invoice #1, and never questioned again for nine invoices. **This is the clause that earned the
+  standard:** clauses 1 and 2 cost one wrong invoice; clause 3 is what made it nine.
+
+**Why it was silent — the property that makes this class dangerous:** every TRACE surface showed the
+correct customer throughout. Review, Confirmation, order-detail, the roster — all correct. The
+mis-billing existed **only in the external system**. It surfaced after two months, when David opened
+QuickBooks and read the name. **No amount of testing TRACE's own surfaces would ever have caught
+it.** A binding defect lives at the boundary — the one place our own surfaces never look back at —
+so STD-017's "true on every surface" does not reach it. The external record IS a surface.
+
+**In practice:**
+- Before building any external binding, **state which field that system guarantees unique** and bind
+  on it. If the answer isn't known, find it in the provider's docs — do not assume email/name/phone.
+- Query the external system on **both** fields and resolve the union; resolving on one reintroduces
+  single-field blindness.
+- Normalize both sides before comparing, and make **absence a non-match** — two blank names both
+  reduce to the empty set, and naive equality calls that agreement (D-9 applied to identity: absence
+  is not agreement).
+- Ambiguity → CREATE or SURFACE. **Surface it as an owner-actionable refusal** (not a generic 500):
+  a real ambiguity is a decision only the owner can make, and refusing is recoverable where
+  mis-binding is not.
+- **Re-verify the stored link before every use.** Drift or unreadable → refuse and flag loudly.
+- **Guard the collision:** two TRACE records must never carry one external id. (Race-proof form: a
+  partial unique index on `(business_id, <external_id>)`.)
+- Never route around a collision by manufacturing a junk record (the retired
+  email-as-DisplayName fallback) — that hides the collision from the owner, which is the disease.
+
+**Relationship:** STD-007 governs derived connection STATE (is the token alive) — this governs
+identity BINDING (is it the right party). STD-011 governs one canonical representation of an
+INTERNAL fact — this governs which field of an EXTERNAL system carries identity, and what to do when
+it is ambiguous. STD-017 says a fix must be true on every surface a capability touches; this extends
+that reach **past our own boundary**: the external record is a surface, and it is the one our
+testing never sees. D-9 (omit-not-fake) is the parent principle — applied to identity, it reads:
+never guess a person.
+
+**Scope:** Every build that binds a TRACE record to a record in an external system — QBO
+customers/items/accounts, a payment processor's customer (BENCH-A territory), a supplier catalog,
+any future connector. Fires on the first bind, not at volume.
+
+---
+
 ## ENFORCEMENT
 
 | Standard | Applies to | Gate type |
@@ -810,6 +883,7 @@ edits, and removes rows in — inventory, customers, assets, service offerings, 
 | STD-016 | Every build touching order editing/update after creation | Edit recomputes the whole money boundary through the same canonical pricing fn as create (tier/basis/tax/exemption) |
 | STD-017 | Every fix/build touching a capability with more than one surface (pricing/tax value, customer/order field, create-vs-edit path, capture-then-read flow) | Enumerate the capability's surfaces before building; fix true on ALL (or explicitly scoped + rest flagged); owner-prove enumerates EVERY surface; orphan columns (written-not-read / read-not-written) flagged |
 | STD-018 | Every build introducing/touching an owner-managed entity (a table the owner creates/edits/removes rows in — inventory, customers, assets, service offerings) | Enumerate the full entry surface at build time (C+R+U+D + scan/OCR/import as the workflow needs); implement each or explicitly scope-and-flag the deferral; Update = full field set via ONE editor (STD-011); Delete = safe soft/hard policy by FK check, confirm-first, actor logged |
+| STD-019 | Every build that binds a TRACE record to an external system's record (QBO customer/item/account, payment-processor customer, supplier catalog, any connector) | Bind on the field the external system GUARANTEES unique (never one it permits to collide); two independent fields must concur before binding; ambiguity → CREATE or SURFACE, never a guessed link; a stored external id is a CACHE — re-verify against the live record before acting on it; collision-guard the id; absence is never agreement |
 | BENCH-A, BENCH-C, BENCH-D, BENCH-F | Every session (STEP 0 roster match against ACTIVATE WHEN triggers) | Catastrophic-class match → stop and ask David; hygiene-class match → apply and report |
 | BENCH-E | Any session that adds an external AI provider call that is user-facing | Apply try-chain pattern; provider 3 slot in comments; operator log on fallback; clean user error on all-fail |
 | BENCH-G | Any session adding/altering a compliance action whose history is auditable (tax exemption apply/remove, waiver, money-authority grant) | Hygiene: write the immutable event row alongside current-state columns; escalates to catastrophic (BENCH-F) if it touches an issued invoice |
@@ -1091,6 +1165,8 @@ a standard's application."
 | 2.0 | 2026-07-13 | STD-016 added — ORDER EDITS RECOMPUTE THROUGH THE CANONICAL PRICING PATH. Scar (ongoing, ledger #107 / #114): `submit.ts handleUpdate` recomputed baseline `sell_price` only (not tier/basis-aware) and computed tax off-seam (`subtotal × taxRate`, bypassing `computeOrderPricing`) → an edited tiered order could silently drop its discount or mis-tax; D-40 folds the off-seam tax back through the one computation. STD-012 applied to the edit path (kept as its own roster line for the recurring regression). |
 | 2.0 | 2026-07-13 | BENCH-F added — INVOICE LIFECYCLE: SEQUENTIAL, IMMUTABLE, VOID-NOT-DELETE (🔴 catastrophic). Territory (enterprise scar): editing/deleting a sent invoice or non-sequential numbering is an audit failure in every jurisdiction; TRACE sends invoices (QBO/confirmation) but doesn't yet enforce numbering immutability or a void/credit path (order edits recompute in place today — STD-016). ACTIVATE WHEN a build adds invoice editing-after-send, deletion, numbering, or an issue-cancel flow. |
 | 2.0 | 2026-07-13 | BENCH-G added — IMMUTABLE AUDIT RECORD FOR COMPLIANCE-AFFECTING ACTIONS (🟡 hygiene; escalates to catastrophic on an issued invoice → BENCH-F). Territory: the risk case is a REMOVED exemption — mutable columns show current state, not the event; `order_compliance_records` (netting precedent) is the proven immutable-row shape. D-40 ships exemption on order columns for Level 1; the immutable record is the named hardening. ACTIVATE WHEN exemption/waiver volume is material or a build adds an auditable-history compliance action. |
+| 2.4 | 2026-07-16 | **STD-019 added + ACTIVATED (David's explicit go)** — EXTERNAL IDENTITY BINDS ON THE GUARANTEED-UNIQUE FIELD; AMBIGUITY NEVER AUTO-LINKS; A STORED LINK IS A CACHE, NOT A FACT. Scar (2026-07-15, proven live): `findOrCreateQBCustomer` matched on EMAIL ALONE (`where PrimaryEmailAddr = '<email>'` → `Customer[0]`, `DisplayName` never compared) → TRACE "TERRENCE OBRIEN" bound to QBO 81 "Andrew O'Brien" because they share an email → **NINE real invoices cross-billed to the wrong person over two months**. Three failures, one per clause: (1) QBO enforces `DisplayName` UNIQUE and does NOT enforce unique email — we matched on the one field it permits to collide (families/offices share one); (2) a single field decided the bind and an arbitrary `Customer[0]` broke ties; (3) **the stored `qb_customer_id` was never re-checked** — every later push skipped find-or-create and billed it, turning one bad match into nine. **Clause 3 is what earned the standard.** Silent because every TRACE surface showed the correct customer — the defect lived only in the external system, the one place our own surfaces never look back at, so STD-017's "every surface" does not reach it (the external record IS a surface). Fixed by D-47's three-way rule (query email AND DisplayName; concur→LINK, email-YES/name-NO→CREATE, name-YES/email-no→SURFACE, neither→CREATE; stored links verified-before-use; collision guard; 6240 surfaces; the junk email-as-DisplayName fallback retired). Generalizes to ANY external identity binding — Stripe (BENCH-A territory), supplier catalogs, any connector — not just QBO. |
+| 2.3 | 2026-07-14 | STD-018 added — A CAPABILITY SHIPS ITS FULL ENTRY SURFACE (CRUD is C+R+U+D, enumerated at build time, not discovered at use). Scar (2026-07-14): inventory Create was built THREE ways (Add-Item form, D-45 scan-promote, discovery CSV) while Update was partial (no per-size edit surface, no add-size affordance) and Delete was entirely missing — surfaced only when David needed to add a second size to an existing variety and found no path. Rule: enumerate the entity's entry surface at build time; Update = the full field set via ONE editor (STD-011); Delete = a real soft/hard policy by FK check, confirm-first, actor logged. |
 | 2.2 | 2026-07-14 | STD-017 added — A FIX IS COMPLETE ONLY WHEN TRUE ON EVERY SURFACE THE CAPABILITY TOUCHES. Scar (2026-07-14, six instances in ONE all-surfaces validation sweep): discount showed on Review/Confirmation but not on the real QBO push; order EDIT dropped the D-43 breakdown CREATE persisted; count captured size/qty into `inventory_counts` but the order picker read `business_inventory`; `variant_group` was read by the picker but written by no UI; tax exemption didn't render consistently across display surfaces; `billing_*`/`tax_id` were captured but read by nothing. One discipline gap — no surface-consistency check — expressed six times; each fix had been verified on ONE surface and assumed complete. Rule: enumerate a capability's surfaces before a fix; make it true on all (or scope + flag the rest); owner-prove every surface. Corollary (capture-persist-read continuity): a column written-but-never-read or read-but-never-written is an orphan and a defect. Extends STD-012's one-computation logic to surface-completeness. |
 
 ---

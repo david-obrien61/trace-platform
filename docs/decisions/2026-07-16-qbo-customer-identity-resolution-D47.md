@@ -4,7 +4,7 @@
 **Status:** PROPOSED (confirm the DECISIONS.md head, then assign — D-46 is the current head)
 **Bar:** BUILDER-COMPLETE · owner-proof owed
 **Implements:** D-9 (applied to identity) · STD-011 · STD-013 · D-37 (money boundary) · STD-017
-**Proposes:** **STD-019** (see § THE ROOT LESSON)
+**Proposes:** **STD-019** — ✅ **ACTIVATED 2026-07-16** on David's explicit go (STANDARDS.md v2.4, ACTIVE roster + ENFORCEMENT table). See § THE ROOT LESSON.
 **Closes:** tech-debt #53
 **Scope:** ZERO migration · ZERO new api-fn (12/12 held) · app code only
 
@@ -165,13 +165,30 @@ connectors (`var`/`ssp`/`subsp`/`cv`) are meaningless for people and are not app
 **`nameTokenSet` was NOT modified** — the plant resolver is D-45/D-46 owner-proven territory and
 changing its key is a separate, provable build.
 
-### 🚩 FLAGGED FOR DAVID — a LATENT bug in the plant resolver (found, not fixed)
+### 🚩 FLAGGED — a REAL bug in the plant resolver, CONFIRMED IN LIVE DATA (tech-debt #55, not fixed)
 
-The same apostrophe blind spot means a QR slug `baileys-red-twig-dogwood` will **NOT** match a
-catalog row `Bailey's Red Twig Dogwood` → a false "UNKNOWN" at scan. This is the exact class of bug
-`canonicalName` was built to fix (the LAWNS false-UNKNOWN). Eliding apostrophes would fix it and is
-harmless for existing cases (`'Sierra' Mexican Red Oak` → quotes are at word boundaries either way).
-**Not fixed here** — out of scope, and it touches proven scan behavior. Recommend a separate pass.
+The same apostrophe blind spot breaks **possessive** variety names at scan. **David confirmed
+against live data: 4 of 6 apostrophe varieties are BROKEN** —
+
+| Variety | slug tokens | catalog tokens | result |
+|---|---|---|---|
+| **Basham's Party Pink Crape Myrtle** | `{bashams,…}` | `{basham,…}` | ❌ false UNKNOWN |
+| **Evey's Pride Mimosa** | `{eveys,…}` | `{evey,…}` | ❌ false UNKNOWN |
+| **Summer's Tower Redbud** | `{summers,…}` | `{summer,…}` | ❌ false UNKNOWN |
+| **Hearts A'fire Redbud** | `{afire,…}` | `{fire,…}` | ❌ false UNKNOWN |
+| `'Sierra' Mexican Red Oak` | `{sierra,…}` | `{sierra,…}` | ✅ works |
+
+**All four broken rows carry `variant_group` NULL and have never been counted.**
+
+**Why it hid:** *wrapping quotes survive* (`'Sierra'` → `{sierra}` — the quotes sit at word
+boundaries either way), so the cultivar-quote case, the one anybody eyeballs, works. **Possessives
+don't:** the apostrophe splits the word and the 1-char filter then eats the orphaned `s`
+(`Basham's` → `{basham}` vs slug `{bashams}`).
+
+This is precisely the class `canonicalName` exists to fix (the LAWNS false-UNKNOWN). The fix is the
+same **elide-don't-split** rule `personName.ts` just proved. **Not fixed here** — the plant resolver
+is D-45/D-46 **owner-proven** territory; re-keying it changes live scan behavior and needs its own
+provable build (red-test the four varieties first per STD-002), not a drive-by. → **tech-debt #55**.
 
 ---
 
@@ -194,7 +211,7 @@ harmless for existing cases (`'Sierra' Mexican Red Oak` → quotes are at word b
 
 ---
 
-## THE ROOT LESSON → proposed **STD-019**
+## THE ROOT LESSON → **STD-019** (✅ ACTIVATED 2026-07-16, David's go — STANDARDS.md v2.4)
 
 > **EXTERNAL IDENTITY RESOLVES ON THE FIELD THE EXTERNAL SYSTEM GUARANTEES UNIQUE; AMBIGUITY NEVER
 > AUTO-LINKS; A STORED LINK IS A CACHE, NOT A FACT.**
@@ -215,11 +232,19 @@ Three clauses, all earned by this scar:
 fact; STD-007 governs derived connection STATE (is the token alive), not identity binding. Neither
 covers "which field of an external system carries identity, and what to do when it's ambiguous."
 This is genuinely new territory, it has a named dated scar (nine invoices, two months), a rule that
-would have caught it (name verification on push #1), and a defined scope. **David decides** —
-per the Growth Policy, David owns activation.
+would have caught it (name verification on push #1), and a defined scope.
 
-**Scope (proposed):** every build that binds a TRACE record to an external system's record —
-QBO customers/items/accounts, a payment processor's customer, any future connector.
+**✅ ACTIVATED 2026-07-16** on David's explicit go — STANDARDS.md **v2.4**, ACTIVE roster
+(STD-001…STD-019) + ENFORCEMENT table row + CHANGELOG. Full rule text lives in STANDARDS.md; this
+doc is its scar record.
+
+**Note recorded during activation:** STD-018's CHANGELOG row was **missing** (the header read v2.3
+while the changelog stopped at 2.2 — STD-017). Backfilled as row 2.3 in the same pass, so the
+version history is contiguous again.
+
+**Scope:** every build that binds a TRACE record to an external system's record — QBO
+customers/items/accounts, a payment processor's customer (BENCH-A territory), a supplier catalog,
+any future connector. **Fires on the first bind, not at volume.**
 
 ---
 
@@ -253,12 +278,13 @@ are billed to Andrew O'Brien for sales that never happened. **His call whether t
 
 ## Follow-ups NAMED (not built)
 
-- **(a) Race-proof collision guard.** The guard is a read-then-write check — correct at a
-  single-owner nursery's push volume, not race-proof. The durable form is a partial unique index
-  `UNIQUE (business_id, qb_customer_id) WHERE qb_customer_id IS NOT NULL`. That is a **migration**;
-  the prompt scoped this build as migration-free and the blast radius is zero, so it is flagged
-  rather than taken. **Recommend it before real billing volume.**
-- **(b) The latent plant-resolver apostrophe bug** (see above).
+- **(a) Race-proof collision guard → tech-debt #54.** The guard is a read-then-write check (TOCTOU) —
+  proportionate at a single-owner nursery's push volume, not race-proof. The durable form is a
+  partial unique index `UNIQUE (business_id, qb_customer_id) WHERE qb_customer_id IS NOT NULL`,
+  which the DB enforces atomically. That is a **migration**; this build was scoped migration-free and
+  the blast radius is zero, so it is recorded rather than taken. **Needed before real billing volume.**
+- **(b) The plant-resolver apostrophe bug → tech-debt #55** — CONFIRMED in live data, 4 of 6
+  apostrophe varieties broken (see above). 🔴 it silently breaks real scans today.
 - **(c) BENCH-C review of `[TRACE:QBO]` PII.** Names/emails in operator logs — pre-existing, now
   more prominent. Worth a deliberate call on masking before the trail is made permanent.
 - **(d) Dead readback code.** `pullQBOCustomers` (`packages/shared/src/quickbooks/customer.ts`) +
