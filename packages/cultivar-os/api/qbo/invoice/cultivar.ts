@@ -48,20 +48,72 @@ async function findOrCreateQBCustomer(
   supabaseCustomerId: string,
   db: any,
 ): Promise<string> {
-  // Search by email first
-  const query = `select * from Customer where PrimaryEmailAddr = '${email.replace(/'/g, "\\'")}' MAXRESULTS 1`;
+  // [TRACE:QBO] full accountability trail for the customer find-or-create (STD-003, ON). This maps a
+  // TRACE customer → a QBO customer. The MATCH PREDICATE IS EMAIL-ONLY and does NOT verify the name
+  // before reusing a QBO record — this trail makes that visible per push (surfaced the TERRENCE→Andrew
+  // cross-identity link, 2026-07-15). Behavior is UNCHANGED here; this is instrumentation only.
+  const traceName = `${firstName ?? ''} ${lastName ?? ''}`.trim();
+  // (1) the TRACE customer being resolved
+  console.log('[TRACE:QBO] cust find-or-create — resolving TRACE customer', {
+    traceCustomerId: supabaseCustomerId, traceName, email,
+  });
+
+  // Search by EMAIL ALONE (no name predicate). MAXRESULTS raised 1→20 SO THE FULL CANDIDATE SET IS
+  // OBSERVABLE in the log; the SELECTION rule is unchanged (still index [0], the first hit).
+  const predicate = `PrimaryEmailAddr = '${email.replace(/'/g, "\\'")}'`;
+  const query = `select * from Customer where ${predicate} MAXRESULTS 20`;
+  // (2) the exact query / predicate sent to QBO
+  console.log('[TRACE:QBO] cust search query', {
+    matchOn: 'email-only (DisplayName / name NOT in predicate)',
+    predicate: `PrimaryEmailAddr = '${email}'`,
+    query,
+  });
   const searchResp = await qbGet(realm, token, `query?query=${encodeURIComponent(query)}&minorversion=65`);
   if (searchResp.ok) {
     const searchData = await searchResp.json();
-    const found = searchData?.QueryResponse?.Customer?.[0];
+    const candidates = (searchData?.QueryResponse?.Customer ?? []) as any[];
+    // (3) the FULL result set QBO returned — ALL candidates, not just the pick
+    console.log('[TRACE:QBO] cust search result set', {
+      candidateCount: candidates.length,
+      candidates: candidates.map((c: any) => ({
+        id: c.Id, displayName: c.DisplayName, email: c.PrimaryEmailAddr?.Address ?? null,
+      })),
+    });
+    const found = candidates[0];
     if (found) {
+      const foundName = String(found.DisplayName ?? '').trim();
+      const nameMatches = foundName.toLowerCase() === traceName.toLowerCase();
+      // (4) which candidate was SELECTED and on what rule
+      console.log('[TRACE:QBO] cust SELECTED', {
+        selectedQbId: found.Id,
+        selectedDisplayName: found.DisplayName,
+        selectedEmail: found.PrimaryEmailAddr?.Address ?? null,
+        rule: 'first-hit of the email-only query (index [0]); NO name verification before reuse',
+        traceName, nameMatches,
+      });
+      if (!nameMatches) {
+        // The exact defect class: an email-keyed reuse onto a DIFFERENT person's QBO customer.
+        console.log('[TRACE:QBO] ⚠ NAME MISMATCH — reusing a QBO customer whose name differs from the TRACE customer (email-keyed, name unverified)', {
+          traceCustomerId: supabaseCustomerId, traceName, email,
+          reusedQbId: found.Id, reusedDisplayName: found.DisplayName,
+        });
+      }
       await db.from('customers').update({ qb_customer_id: found.Id }).eq('id', supabaseCustomerId);
+      // (5) REUSED existing  +  (6) the qb_customer_id written back
+      console.log('[TRACE:QBO] cust REUSED — qb_customer_id written back', {
+        action: 'reused-existing', traceCustomerId: supabaseCustomerId, qb_customer_id: found.Id,
+      });
       return found.Id;
     }
+  } else {
+    console.log('[TRACE:QBO] cust search request FAILED — falling through to CREATE', { status: searchResp.status });
   }
 
   // Create new QB customer
   const displayName = `${firstName} ${lastName}`.trim() || email;
+  console.log('[TRACE:QBO] cust — no email match, CREATING new QBO customer', {
+    traceCustomerId: supabaseCustomerId, displayName, email,
+  });
   const createResp = await qbPost(realm, token, 'customer?minorversion=65', {
     GivenName: firstName,
     FamilyName: lastName,
@@ -79,12 +131,20 @@ async function findOrCreateQBCustomer(
     const fallbackData = await fallbackResp.json();
     const qbId = fallbackData?.Customer?.Id;
     if (qbId) await db.from('customers').update({ qb_customer_id: qbId }).eq('id', supabaseCustomerId);
+    // (5) CREATED (fallback)  +  (6) the qb_customer_id written back
+    console.log('[TRACE:QBO] cust CREATED (fallback: email-as-DisplayName) — qb_customer_id written back', {
+      action: 'created-new-fallback', traceCustomerId: supabaseCustomerId, qb_customer_id: qbId, displayName: email,
+    });
     return qbId;
   }
 
   const createData = await createResp.json();
   const qbId = createData?.Customer?.Id;
   if (qbId) await db.from('customers').update({ qb_customer_id: qbId }).eq('id', supabaseCustomerId);
+  // (5) CREATED  +  (6) the qb_customer_id written back
+  console.log('[TRACE:QBO] cust CREATED — qb_customer_id written back', {
+    action: 'created-new', traceCustomerId: supabaseCustomerId, qb_customer_id: qbId, displayName,
+  });
   return qbId;
 }
 
@@ -161,6 +221,15 @@ export default async function handler(req: any, res: any) {
       qbCustomerId = await findOrCreateQBCustomer(
         realm, token, customer.email, customer.first_name, customer.last_name, customer.id, db,
       );
+    } else {
+      // Already linked — find-or-create is SKIPPED, the stored qb_customer_id is used as-is (no
+      // re-check that it still names the same person). Log so a stale/cross-identity link is visible.
+      console.log('[TRACE:QBO] cust — using STORED qb_customer_id (find-or-create SKIPPED, link not re-verified)', {
+        traceCustomerId: customer.id,
+        traceName: `${customer.first_name ?? ''} ${customer.last_name ?? ''}`.trim(),
+        email: customer.email,
+        qb_customer_id: qbCustomerId,
+      });
     }
 
     // Build QB line items
