@@ -50,6 +50,7 @@ import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { SyncEngine } from '@trace/shared/sync';
 import { resolveStockLine, variantGroupSlug, type StockLineResolution } from '@trace/shared/inventory';
+import { canonicalNameKey, nameTokenSet } from '@trace/shared/utils/canonicalName';
 import { QrScanner } from '../components/inventory/QrScanner';
 import { extractTag } from '../lib/scanTag';
 
@@ -258,7 +259,9 @@ export function InventoryCount() {
     if (ctx) {
       if (TRACE_RESOLVE) {
         const layer = resolution.kind === 'collision' ? 'L5 size-collision' : (resolution.kind === 'resolved' && resolution.via === 'sku' ? 'L2 sku' : 'L4 name-token');
-        console.log('[TRACE:RESOLVE]', layer, '—', tag, '→', ctx.varietyName, 'group:', ctx.groupKey, 'sizes:', ctx.siblings.map(s => s.size ?? '—').join(' / '));
+        // key: the normalized token set the L4 equality actually compared (tech-debt #55) —
+        // the scanned key is logged on the HIT so a near-miss is diagnosable from the trail.
+        console.log('[TRACE:RESOLVE]', layer, '—', tag, '→', ctx.varietyName, 'key:', canonicalNameKey(tag), 'group:', ctx.groupKey, 'sizes:', ctx.siblings.map(s => s.size ?? '—').join(' / '));
       }
       openReview(ctx);
       return;
@@ -268,6 +271,11 @@ export function InventoryCount() {
     if (resolution.kind === 'miss' && resolution.reason === 'ambiguous' && TRACE_RESOLVE) {
       console.warn('[TRACE:RESOLVE] L4 AMBIGUOUS —', resolution.ambiguousCount, 'equal-token rows for', tag, '(ungrouped siblings) → typed entry');
     }
+    // A false-UNKNOWN is the #55 class: the tag was RIGHT and the key silently disagreed with
+    // the catalog row's key by one eaten character. Logging the normalized token set at the
+    // MISS is what makes the next one visible in the trail instead of a shrug — this is the
+    // exact diagnostic that was absent while four live varieties scanned UNKNOWN.
+    if (TRACE_RESOLVE) console.warn('[TRACE:RESOLVE] L4 MISS — no name-token match for', tag, 'key:', canonicalNameKey(tag), '(tokens:', JSON.stringify([...nameTokenSet(tag)]) + ')');
     if (TRACE_COUNT) console.log('[TRACE:COUNT] resolve UNKNOWN — tag:', tag);
     setUnknownRaw(raw);
     setUnknownTag(tag);

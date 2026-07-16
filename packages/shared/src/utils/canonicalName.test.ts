@@ -39,6 +39,48 @@ ok(!nameTokenSet('Acer x grandidentata').has('x'), 'hybrid 1-char x dropped');
 ok(!nameTokenSet('Salvia var nemorosa').has('var'), 'botanical connector var dropped');
 ok(nameTokenSet('Salvia var nemorosa').size === 2, 'connectors removed: {salvia,nemorosa}');
 
+// ── THE POSSESSIVE-APOSTROPHE CLASS (tech-debt #55) — RED 2026-07-16 ──────────
+// Four REAL rows in the live catalog, every one `variant_group` NULL and never counted.
+// The apostrophe split the word at the non-alnum boundary step and the 1-char filter
+// (which exists to kill the hybrid marker 'x') then ate the orphaned fragment:
+//   "Basham's" → {basham}  vs slug {bashams}   → false-UNKNOWN at scan.
+//   "Hearts A'fire" → {hearts,fire}            → the 'a' was eaten outright.
+// This never surfaced because WRAPPING quotes survive ('Sierra' → {sierra}) — the quotes
+// sit at word boundaries either way — and the whole D-45/D-46 arc was owner-proven on
+// 'Sierra' Mexican Red Oak, which has no possessive.
+ok(eq('bashams-party-pink-crape-myrtle', "Basham's Party Pink Crape Myrtle"),
+   "#55: Basham's Party Pink Crape Myrtle == bashams-party-pink-crape-myrtle");
+ok(eq('eveys-pride-mimosa', "Evey's Pride Mimosa"),
+   "#55: Evey's Pride Mimosa == eveys-pride-mimosa");
+ok(eq('summers-tower-redbud', "Summer's Tower Redbud"),
+   "#55: Summer's Tower Redbud == summers-tower-redbud");
+ok(eq('hearts-afire-redbud', "Hearts A'fire Redbud"),
+   "#55: Hearts A'fire Redbud == hearts-afire-redbud");
+
+// ORDER OF OPERATIONS is the fix: elide BEFORE the boundary split. Split first and
+// A'fire → 'a' + 'fire' → the 1-char filter eats the 'a' → {fire}. This asserts the
+// possessive 's' and the elided 'a' SURVIVE as part of their word.
+ok(nameTokenSet("Basham's").has('bashams'), "elide precedes split: Basham's → bashams (not basham)");
+ok(nameTokenSet("Hearts A'fire").has('afire'), "elide precedes split: A'fire → afire (not fire)");
+
+// Every apostrophe codepoint real catalog data carries. Live data is U+0027 today, but the
+// scrape source is WordPress, which emits U+2019 — a curly-apostrophe miss is the same bug
+// wearing a different codepoint.
+ok(eq('bashams-party-pink-crape-myrtle', 'Basham’s Party Pink Crape Myrtle'), 'U+2019 curly apostrophe elided');
+ok(eq('bashams-party-pink-crape-myrtle', 'Bashamʼs Party Pink Crape Myrtle'), 'U+02BC modifier apostrophe elided');
+ok(eq('bashams-party-pink-crape-myrtle', 'Basham`s Party Pink Crape Myrtle'), 'U+0060 backtick elided');
+
+// NO REGRESSION — WRAPPING quotes must still resolve (this is the case that HID the bug:
+// the whole D-45/D-46 size-variant arc was owner-proven on 'Sierra' Mexican Red Oak).
+ok(eq('sierra-mexican-red-oak', "'Sierra' Mexican Red Oak"), "unregressed: 'Sierra' Mexican Red Oak (wrapping quotes)");
+ok(nameTokenSet("'Sierra' Mexican Red Oak").has('sierra'), "unregressed: wrapping quotes still yield {sierra}");
+
+// The 1-char filter STAYS (it kills the hybrid marker 'x') — eliding must not resurrect it.
+ok(!nameTokenSet("Acer x 'Autumn Blaze'").has('x'), "elide does not resurrect the hybrid 'x'");
+
+// Eliding must not FALSE-MERGE two genuinely different varieties.
+ok(!eq("Basham's Party Pink Crape Myrtle", "Evey's Pride Mimosa"), 'possessive elide does not false-merge distinct varieties');
+
 // ── Collision SAFETY — cultivar token is the discriminator (recon §3) ─────────
 ok(!eq('cercis-canadensis-forest-pansy-redbud', "Cercis canadensis 'Rising Sun' Redbud"),
    'different cultivar (Forest Pansy vs Rising Sun) → NOT equal');

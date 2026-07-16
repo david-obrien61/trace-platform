@@ -25,18 +25,42 @@ const BOTANICAL_CONNECTORS = new Set(['var', 'ssp', 'subsp', 'cv']);
  * Normalize a raw identifier (slug or name) to a SET of identity tokens.
  *   1. lowercase
  *   2. &/&amp; → space (and drop the stray 'amp' entity leak that slugs carry)
- *   3. any non-alphanumeric → token boundary (handles ®™℠, quotes, hyphens, parens)
- *   4. drop 1-char tokens and botanical connectors (var/ssp/subsp/cv)
- *   5. result = a Set (deduped)
- * Stemming (plural/possessive) is intentionally NOT applied here — that is the
- * deferred L6 fuzzy layer, kept out of the equality key to hold ~0 false-merges.
+ *   3. ELIDE apostrophes — Basham's → bashams (step 3 MUST precede step 4; see below)
+ *   4. any other non-alphanumeric → token boundary (handles ®™℠, hyphens, parens)
+ *   5. drop 1-char tokens and botanical connectors (var/ssp/subsp/cv)
+ *   6. result = a Set (deduped)
+ * Stemming (plural) is intentionally NOT applied here — that is the deferred L6 fuzzy
+ * layer, kept out of the equality key to hold ~0 false-merges.
+ *
+ * WHY THE APOSTROPHE IS ELIDED, NOT SPLIT ON (tech-debt #55, fixed 2026-07-16):
+ *   Treating it as a boundary split the word and the 1-char filter then ate the orphan:
+ *     "Basham's Party Pink Crape Myrtle" → {basham,…}  vs the slug's {bashams,…}  ⇒ MISS
+ *     "Hearts A'fire Redbud"             → {hearts,fire}  — the 'a' eaten outright
+ *   Four of the six apostrophe varieties in the live catalog were false-UNKNOWN at scan.
+ *   It hid because WRAPPING quotes survive either way ('Sierra' → {sierra} — the quotes
+ *   sit at word boundaries), and 'Sierra' Mexican Red Oak is what D-45/D-46 was proven on.
+ *   ORDER IS THE FIX: elide BEFORE the boundary split. Split first and A'fire → a + fire →
+ *   the 1-char filter eats the 'a' → {fire}. The 1-char filter STAYS — it kills the
+ *   botanical hybrid marker 'x' and that reason still holds; eliding merely stops feeding
+ *   it orphans it was never meant to eat.
+ *   DEVIATION FROM THE STANDARD, STATED (§6 r16): Lucene's WordDelimiterGraphFilter STRIPS
+ *   the English possessive ("Basham's" → basham). We ELIDE it ("Basham's" → bashams)
+ *   because our comparison target is a WordPress `sanitize_title` slug, which elides the
+ *   apostrophe and emits "bashams-party-pink". Stripping would yield {basham} and STILL
+ *   miss. Elide matches the source convention. (Same shape personName.ts proved in D-47 —
+ *   kept as two functions: "same PERSON?" and "same PLANT?" are two facts with different
+ *   rules, and personName drops no botanical connectors.)
  */
 export function nameTokenSet(raw: string | null | undefined): Set<string> {
   if (raw == null) return new Set();
   const cleaned = String(raw)
     .toLowerCase()
     .replace(/&amp;|&/g, ' ')        // entity + ampersand → space
-    .replace(/[^a-z0-9]+/g, ' ');    // every non-alphanumeric → boundary
+    .replace(/['’ʼ`´]/g, '')         // ELIDE apostrophes — MUST precede the boundary split.
+                                     // U+0027 ' · U+2019 ’ (what most CMSs emit) · U+02BC ʼ
+                                     // · U+0060 ` · U+00B4 ´ — a curly-apostrophe miss is
+                                     // the same bug wearing a different codepoint.
+    .replace(/[^a-z0-9]+/g, ' ');    // every OTHER non-alphanumeric → boundary
   const tokens = cleaned
     .split(/\s+/)
     .filter(Boolean)
