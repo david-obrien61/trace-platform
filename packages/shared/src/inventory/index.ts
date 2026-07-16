@@ -7,3 +7,5 @@ export {
 } from './stockLineResolver';
 export type { StockLineRow, StockLineResolution } from './stockLineResolver';
 export { variantGroupSlug, skuSizeSuffix, deriveSiblingSku } from './variantGroup';
+export { isVarietyStub, sameSizeLabel, baseSkuOf, resolveCountTarget } from './countPromote';
+export type { StubCandidate, CountSibling, CountTarget } from './countPromote';

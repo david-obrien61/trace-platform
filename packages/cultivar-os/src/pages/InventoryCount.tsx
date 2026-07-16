@@ -29,10 +29,20 @@
 //           size→row siblings); the review sheet then captures the size + qty and PROMOTES.
 // PROMOTE:  variant_group KEY = an existing sibling's shared group, else the scanned QR slug,
 //           else slugify(typed name) (the same product-slug convention populate uses, so
-//           scrape-created and count-created rows converge). MATCH by (variety × size): found →
-//           SET qty (a physical count sets on-hand) + backfill variant_group so the size-picker
-//           fires; not found → CREATE the (variety × size) row (sell_price omitted → null =
-//           needs-price, the cart refuses rather than selling at $0 — D-9 omit-not-fake).
+//           scrape-created and count-created rows converge). The DECISION is the SHARED pure fn
+//           resolveCountTarget (@trace/shared/inventory countPromote.ts) — this screen performs
+//           only the IO it returns (D-47's shape: the decision is testable without a DB).
+//           update  → exact (variety × size): SET qty (a count sets on-hand) + confirm the group.
+//           fill    → D-49: the resolved row is a scraped VARIETY PLACEHOLDER (qty 0, no size, no
+//                     group). The first count FILLS it in place — it does NOT sibling it.
+//           create  → a genuine size-sibling, and the family is left picker-ready BY CONSTRUCTION:
+//                     every blank-group row is regrouped onto the key + the SKU derives from the
+//                     family's base (deriveSiblingSku). sell_price omitted → null = needs-price
+//                     (the cart refuses rather than selling at $0 — D-9 omit-not-fake).
+// D-49:     THE INVARIANT — any path that mints a sibling must leave the family in a state where
+//           the size-picker fires by construction. Violating it is not cosmetic: the next scan
+//           sees >1 token-equal rows, detectSizeCollision correctly refuses to guess, and the
+//           variety resolves UNKNOWN — counting it made it uncountable (tech-debt #57, live).
 //           HOOK (documented, NOT built): size is a FREE LABEL spanning single-plant (4", 30 gal)
 //           AND multi-unit (flat, tray). qty is stored VERBATIM (unit-agnostic) — we do NOT
 //           assume qty = plant count. A future per-size unit-multiplier (a "flat" = N plants)
@@ -49,7 +59,10 @@ import { ArrowLeft, CheckCircle2, X, ScanLine, CloudOff, RefreshCw } from 'lucid
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { SyncEngine } from '@trace/shared/sync';
-import { resolveStockLine, variantGroupSlug, type StockLineResolution } from '@trace/shared/inventory';
+import {
+  resolveStockLine, variantGroupSlug, resolveCountTarget, sameSizeLabel,
+  type StockLineResolution, type CountSibling,
+} from '@trace/shared/inventory';
 import { canonicalNameKey, nameTokenSet } from '@trace/shared/utils/canonicalName';
 import { QrScanner } from '../components/inventory/QrScanner';
 import { extractTag } from '../lib/scanTag';
@@ -66,7 +79,9 @@ type Phase = 'idle' | 'scanning' | 'reviewing' | 'unknown' | 'conflict' | 'done'
 interface Ctx {
   varietyName: string;
   groupKey:    string | null;   // variant_group to write; null = unlinked (plant w/ no lot) → record-only
-  siblings:    { size: string | null; id: string; qty: number | null }[]; // existing rows for this variety
+  // The variety's existing rows, carrying the fields the shared promote decision reads:
+  // variant_group (is this family whole? — the D-49 auto-group) and sku (the lineage base).
+  siblings:    CountSibling[];
   defaultSize: string | null;   // prefill for the size field (resolved row's size / plant container)
   plantTagId:  string | null;
   label:       string;          // display header
@@ -85,10 +100,10 @@ function isMissingTable(err: { code?: string; message?: string } | null): boolea
   return m.includes('does not exist') || m.includes('schema cache') || m.includes('could not find the table');
 }
 
-// Size is a FREE LABEL — compare case/whitespace-insensitively.
-function sameSize(a: string | null, b: string | null): boolean {
-  return (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
-}
+// Size is a FREE LABEL — compare case/whitespace-insensitively. The local copy was RETIRED in
+// favour of the shared sameSizeLabel (STD-011: the promote decision and this screen must agree
+// on what "the same size" means, or the UI's size-chip match and the write's match can diverge).
+const sameSize = sameSizeLabel;
 // variant_group key for a NEW variety when there is no QR slug and no existing sibling to
 // adopt — a product-slug from the name. SHARED with the manual "+ Add size" path
 // (variantGroupSlug, @trace/shared/inventory) so a scan-promoted row and a hand-added size of
@@ -107,7 +122,7 @@ function ctxFromResolution(res: StockLineResolution, slug: string, rawScan: stri
     return {
       varietyName: r.name,
       groupKey:    (r.variant_group?.trim() || slug.toLowerCase()) || null,
-      siblings:    [{ size: r.size, id: r.id, qty: r.qty ?? null }],
+      siblings:    [{ size: r.size, id: r.id, qty: r.qty ?? null, variant_group: r.variant_group, sku: r.sku }],
       defaultSize: r.size,
       plantTagId:  null,
       label:       r.name + (r.sku ? ` (SKU ${r.sku})` : ''),
@@ -118,7 +133,7 @@ function ctxFromResolution(res: StockLineResolution, slug: string, rawScan: stri
     return {
       varietyName: res.variety,
       groupKey:    res.variantGroup,
-      siblings:    res.candidates.map(c => ({ size: c.size, id: c.id, qty: c.qty ?? null })),
+      siblings:    res.candidates.map(c => ({ size: c.size, id: c.id, qty: c.qty ?? null, variant_group: c.variant_group, sku: c.sku })),
       defaultSize: null,
       plantTagId:  null,
       label:       res.variety,
@@ -239,7 +254,7 @@ export function InventoryCount() {
         ? {
             varietyName: name,
             groupKey:    (lot.variant_group?.trim() || tag.toLowerCase()) || null,
-            siblings:    [{ size: lot.size ?? container, id: lot.id, qty: lot.qty ?? null }],
+            siblings:    [{ size: lot.size ?? container, id: lot.id, qty: lot.qty ?? null, variant_group: lot.variant_group, sku: lot.sku }],
             defaultSize: lot.size ?? container,
             plantTagId:  tag,
             label:       container ? `${name}, ${container}` : name,
@@ -333,33 +348,87 @@ export function InventoryCount() {
     setBusy(true); setError(null);
 
     const key = ctx.groupKey;
-    const sib = ctx.siblings.find(s => sameSize(s.size, size));
+    // The DECISION is the shared pure fn (D-49) — update | fill | create | record-only. This
+    // screen only performs the IO it returns. The invariant it enforces: any path that mints a
+    // sibling leaves the family picker-ready by construction (group on EVERY row, distinct
+    // non-empty sizes, SKU lineage) — see countPromote.ts.
+    const target = resolveCountTarget({ siblings: ctx.siblings, groupKey: key, size });
     let targetId: string | null = null;
-    let outcome: 'updated' | 'created' | 'record-only' = 'record-only';
+    let outcome: 'updated' | 'filled' | 'created' | 'record-only' = 'record-only';
 
-    if (sib) {
+    if (target.action === 'update') {
       // Existing (variety × size) → SET on-hand (a physical count sets qty; NOT a decrement).
       // Backfill variant_group so the size-picker fires next time (adopt/confirm the group).
       const set: Record<string, unknown> = { qty };
-      if (key) set.variant_group = key;
-      const res = await engine.update({ table: 'business_inventory', set, match: { id: sib.id, business_id: businessId } });
+      if (target.variantGroup) set.variant_group = target.variantGroup;
+      const res = await engine.update({ table: 'business_inventory', set, match: { id: target.rowId, business_id: businessId } });
       if (res.status === 'failed') { setError(`Couldn't update on-hand: ${res.error}`); setBusy(false); return; }
-      targetId = sib.id; outcome = 'updated';
-    } else if (key) {
-      // New (variety × size) → CREATE. sell_price OMITTED → null = needs-price (cart refuses,
-      // never a $0 sale — D-9). cost_confidence UNKNOWN (we don't know cost from a count).
+      targetId = target.rowId; outcome = 'updated';
+
+    } else if (target.action === 'fill') {
+      // D-49 — the resolved row is a VARIETY PLACEHOLDER (the scrape's qty-0/size-less stub), not
+      // a lot. The first count FILLS it: size + qty + group land on the row that already carries
+      // the SKU and the scrape lineage. Minting a sibling here is what made the variety
+      // permanently unscannable (mixed group + missing size → detectSizeCollision refuses).
+      const set: Record<string, unknown> = { qty, size: target.size };
+      if (target.variantGroup) set.variant_group = target.variantGroup;
+      const res = await engine.update({ table: 'business_inventory', set, match: { id: target.rowId, business_id: businessId } });
+      if (res.status === 'failed') { setError(`Couldn't update on-hand: ${res.error}`); setBusy(false); return; }
+      targetId = target.rowId; outcome = 'filled';
+
+    } else if (target.action === 'create') {
+      // A genuine size-sibling. THE INVARIANT, in two writes that must both land:
+      //   (a) regroup — every blank-group row of the family adopts the key, so parent + sibling
+      //       share ONE group (D-46's rule, #126, applied to the path that skipped it). Without
+      //       it the next scan sees a mixed-group family and goes UNKNOWN.
+      //   (b) SKU lineage — parent SKU + size suffix via the SHARED deriveSiblingSku (STD-011).
+      for (const id of target.regroup) {
+        const rg = await engine.update({
+          table: 'business_inventory',
+          set:   { variant_group: target.variantGroup },
+          match: { id, business_id: businessId },
+        });
+        if (rg.status === 'failed') { setError(`Couldn't group this variety's sizes: ${rg.error}`); setBusy(false); return; }
+        if (TRACE_INV) console.log('[TRACE:INVENTORY] promote — auto-grouped parent', { rowId: id, variant_group: target.variantGroup });
+      }
+
+      // SKU uniqueness — a derived SKU may never collide with an existing row (two rows sharing a
+      // SKU are indistinguishable in QBO/stock lookups). On a collision we OMIT the SKU rather
+      // than block the save: the SKU is a convenience, the count is the point, and refusing a
+      // count in the middle of the lot walk is disproportionate. Blank + loud, never a silent
+      // duplicate (D-9 omit-not-fake) — the owner can assign it in the editor.
+      let sku = target.sku;
+      if (sku) {
+        const { data: clash } = await supabase
+          .from('business_inventory').select('id')
+          .eq('business_id', businessId).ilike('sku', sku).maybeSingle();
+        if (clash) {
+          if (TRACE_INV) console.warn('[TRACE:INVENTORY] promote — derived SKU COLLIDES, omitting:', sku, '(row', (clash as { id: string }).id + ')');
+          sku = null;
+        }
+      }
+
+      // sell_price OMITTED → null = needs-price (cart refuses, never a $0 sale — D-9).
+      // cost_confidence UNKNOWN (we don't know cost from a count).
       const newId = engine.newId();
-      const res = await engine.insert({
-        table: 'business_inventory',
-        row: { id: newId, business_id: businessId, name: ctx.varietyName, size, variant_group: key, qty, status: 'available', cost_confidence: 'UNKNOWN' },
-        clientId: newId,
-      });
+      const row: Record<string, unknown> = {
+        id: newId, business_id: businessId, name: ctx.varietyName, size: target.size,
+        variant_group: target.variantGroup, qty, status: 'available', cost_confidence: 'UNKNOWN',
+      };
+      if (sku) row.sku = sku;   // omit the key entirely when there is no lineage (D-9)
+      const res = await engine.insert({ table: 'business_inventory', row, clientId: newId });
       if (res.status === 'failed') { setError(`Couldn't add the item: ${res.error}`); setBusy(false); return; }
       targetId = newId; outcome = 'created';
     }
-    // else: no group key AND no sibling (plant tag with no lot) → nothing to write to inventory → record-only.
+    // else record-only: no group key AND no sibling (plant tag with no lot) → nothing to write.
 
-    if (TRACE_INV) console.log('[TRACE:INVENTORY] promote —', outcome, { variety: ctx.varietyName, variant_group: key, size, qty, rowId: targetId });
+    // 'filled' vs 'created' is the DEPLOYED-bar signal for D-49 — the two branches must be
+    // distinguishable in the trail, because "created" on a stub count IS the defect.
+    if (TRACE_INV) console.log('[TRACE:INVENTORY] promote —', outcome, {
+      variety: ctx.varietyName, variant_group: key, size, qty, rowId: targetId,
+      sku: target.action === 'create' ? target.sku : undefined,
+      regrouped: target.action === 'create' ? target.regroup.length : 0,
+    });
 
     const rawScan = reason ? `${ctx.rawScan} | recount-reason: ${reason}` : ctx.rawScan;
     await recordCount({
