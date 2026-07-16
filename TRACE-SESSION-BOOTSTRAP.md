@@ -214,6 +214,7 @@
 | OP-9 | DECISIONS.md:228 | The Regina Principle — move "noticing what to do" off the owner onto the tool | suggestion |
 | OP-10 | DECISIONS.md (OP-10) | Structure-Last — the structure tax is paid by the MACHINE, not the human (+ small-grower expression, ~88% no-structure) | platform-wide |
 | OP-12 | DECISIONS.md (OP-12) | Reference-first promotion — code/schema reaches LIVE only by promoting a reference-proven artifact (schema byte-identical, no hand-edits); the 4th completion bar (DEPLOY TO LIVE). DORMANT until 1st paying customer | working-method |
+| OP-13 | DECISIONS.md (OP-13) | Retention over trimming — CLAUDE.md §3 holds **N=3** entries; overflow moves VERBATIM to `handoff-archive.md` BEFORE the new entry (skipping it = INCOMPLETE close, same force as the reconcile gates); the line-3 header is a POINTER, never a summary (STD-011 — it hid ~1,400 tokens/session inside ONE physical line). Gate: `end-of-session-protocol.md`; exec: CLAUDE.md §9 step 0 | working-method |
 | D-1 | DECISIONS.md:256 | Cost-object schema = rename-in-place to ONE FK-able node table | cost-to-produce |
 | D-2 | DECISIONS.md:267 | PMI/service-log child column stays `asset_id` | asset/pmi |
 | D-3 | DECISIONS.md:277 | `parent_id` ON DELETE SET NULL — orphan-to-root, never cascade-destroy | cost-to-produce |

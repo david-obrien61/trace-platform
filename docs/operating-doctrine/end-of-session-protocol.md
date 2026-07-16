@@ -67,6 +67,27 @@ For **each capability touched this session**, confirm all three:
 
 **Relationship to the other end-of-session doc:** the authoritative Thunder close-out checklist (`docs/end-of-session-protocol.md`, Step 17) already requires the built-inventory write-back; this gate is its standing statement of *force* — reconciliation is mandatory, audit-derived, and drift-detecting, not a best-effort. The two agree; if they ever diverge, the code (audit) wins, then both docs get corrected. CLAUDE.md §9 carries the binding STANDING INSTRUCTION and cross-refs this gate.
 
+---
+
+## GATE — CLAUDE.md §3 HANDOFF RETENTION (N=3, mandatory every close, not optional)
+
+**The rule: §3 HANDOFF holds the most recent THREE session entries. At every close-out, any entry beyond the newest three is MOVED — verbatim, not summarized — to `docs/handoff-archive.md`, newest-first, BEFORE the new entry is written.** Nothing is deleted. Nothing is condensed. The archive is append-and-preserve. **A close-out that writes a §3 entry without archiving the overflow is an INCOMPLETE task — same enforcement weight as the BUILT-INVENTORY RECONCILIATION gate above, the close-out-ledger gate, and the ⚡ ACTIVE STATUS gate.**
+
+**Why this is a gate and not a cleanup task.** CLAUDE.md is loaded into context at the start of EVERY session — it is the one doc whose size is a tax on every future session, paid before any work begins. It was trimmed to 746 lines and measured **907** on 2026-07-16: it grew ~100 lines in a single session, and a further ~44 on a build whose write-back was deliberately kept minimal. **The close-out protocol manufactures the bloat faster than any trim removes it** — so a trim is a one-time payment against a recurring cost, and buys roughly five sessions before the problem returns identically. The fix is not a smaller doc; it is a RETENTION RULE that makes the trim self-maintaining. This is AC-4 applied to the handoff: settle it once, encode it as a variable (N=3), stop re-deciding it every session.
+
+**The two clauses:**
+
+1. **N=3, verbatim overflow.** Before writing the new §3 entry, count the existing entries. Entry 4 and beyond move to `docs/handoff-archive.md` — **verbatim**, preserving every link, SHA, and character of formatting, inserted newest-first at the top of the archive's entry list under a dated provenance comment. Then write the new entry. The new entry counts as entry #1; the rule applies to itself from the first close-out. **Verification is arithmetic: entries-in == entries-out.** State the count in the write-back.
+2. **The line-3 header is a POINTER, never a SUMMARY.** CLAUDE.md's `# Last updated:` line is ONE line: a date, a short title, and "see §3." It does NOT restate the newest entry's narrative. A ~600-word prose header restating §3 is a SECOND representation of one fact — precisely the disease **STD-011** names — and because it is a single physical line it hides from the line-count metric entirely while costing ~1,400 tokens on every session load. The narrative lives in §3 and ONLY in §3.
+
+**What is NOT lost.** The archive is the full history and is NOT loaded at session start — it exists for reference. A fact recorded in a §3 entry survives the move identically; only its *location* changes. Canonical "is X closed / owner-proof owed" state does not live in §3 at all — it lives in `docs/CLOSE-OUT-LEDGER.md`, `docs/DECISIONS-INDEX.md`, and `docs/built-inventory.md`, each with its own gate. §3 is the narrative of the last three sessions; it was never the system of record.
+
+**Honest scope (recorded so the next session doesn't re-derive it).** N=3 does not by itself bring CLAUDE.md under its ~600-line budget — measured, it lands around 700. The remaining overage is structural (§2's infra tables, §6's ten coding rules, §9's standing instructions), and is the separate, still-open §4 Housekeeping item *"Lean CLAUDE.md to rules + state + pointers only."* **This gate stops the GROWTH; it does not by itself close the budget.** Do not silently raise or lower N to hit a number — N is David's call, and a miss is a finding to report, not a parameter to tune.
+
+**Relationship to the other gates:** BUILT-INVENTORY reconciles "what exists"; OWNER-PROVEN reconciles "what's proven"; this gate reconciles **"what still needs to be READ."** The first two prevent drift in the record; this one prevents the record from crowding out the work. (Operating principle: **OP-13**. Binding home: CLAUDE.md §9.)
+
+---
+
 **SIBLING GATE — OWNER-PROVEN RECONCILIATION (fires on the OWNER-PROVEN bar, same force):** the gate above fires when a capability is BUILT/changed (BUILDER-COMPLETE). This sibling fires when David reports an **OWNER-PROVEN** (single or batch). **The FIRST action that session is to flip the status marks for those capabilities from 🟡→🟢 across ALL canonical surfaces** — ⚡ ACTIVE STATUS · 📋 24-board · `built-inventory.md` · 🧵 ARC-MAP · any mapped `user_story` — bump `Last updated:` to today, and state in the write-back which caps flipped. A stale 🟡 on an owner-proven capability is DRIFT (tech-debt #39 class); leaving it un-flipped is an INCOMPLETE close, **same enforcement weight as the BUILDER-COMPLETE reconciliation gate above.** The two gates are the two bars of the two-bar rule made self-maintaining: BUILDER-COMPLETE reconciles "what exists," OWNER-PROVEN reconciles "what's proven." (Proposed operating-principle id: **OP-11** — confirm the DECISIONS.md OP sequence before assigning. Binding home: CLAUDE.md §9.)
 
 ---
