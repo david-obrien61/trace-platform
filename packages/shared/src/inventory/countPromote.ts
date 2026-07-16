@@ -34,12 +34,23 @@
 //       the parent if its group was null so the size-picker fires by construction") applied to
 //       the path that skipped it — commitCount backfilled variant_group on the MATCH branch only.
 //
-// DEPENDENCIES: variantGroup.ts (deriveSiblingSku — the ONE SKU-lineage convention, STD-011).
-//               No DB, no React, no vertical noun (AC-1).
-// OUTPUTS:      isVarietyStub · sameSizeLabel · baseSkuOf · resolveCountTarget → CountTarget.
+// SIZE IS REQUIRED (ledger #135 — the invariant's other half, proven live 2026-07-16):
+//   The invariant says every row of the family carries a DISTINCT NON-EMPTY size. D-49 enforced the
+//   "distinct" half and left "non-empty" to the UI, where the field was optional and the save button
+//   did not argue. David counted Alley Cat with the size box EMPTY and it minted
+//   `created {size: null, qty: 60}` beside 15/30/45 — and the re-scan went UNKNOWN. A variety that
+//   was clean at 16:59 was broken at 17:03, by the branch that was supposed to be the fix. Same
+//   destination as the Basham's scar, different road.
+//   So the refusal lives HERE, in the decision, not only in the sheet: the UI asks this same
+//   function what it may do, so the two gates agree BY CONSTRUCTION rather than by parallel
+//   spelling (D-48's shape; §1.6 item 3 — validated before the WRITE, not merely hidden in the UI).
+//
+// DEPENDENCIES: variantGroup.ts (baseSkuOf + deriveSiblingSku — the ONE SKU-lineage convention,
+//               STD-011). No DB, no React, no vertical noun (AC-1).
+// OUTPUTS:      isVarietyStub · sameSizeLabel · resolveCountTarget → CountTarget.
 // ============================================================
 
-import { deriveSiblingSku } from './variantGroup';
+import { baseSkuOf, deriveSiblingSku } from './variantGroup';
 
 /** The minimum a stub check reads. Satisfied by a StockLineRow, a grid row, or a count sibling. */
 export interface StubCandidate {
@@ -96,24 +107,20 @@ export interface CountSibling {
 }
 
 /** The decision. `regroup` carries the ids of family rows whose variant_group is blank and
- *  MUST be backfilled to `variantGroup` in the same pass — that is the invariant, expressed. */
+ *  MUST be backfilled to `variantGroup` in the same pass — that is the invariant, expressed.
+ *  `create.size` is a non-null string: the decision cannot mint a size-less row into a family,
+ *  because the type does not let it (the blank case exits at `refuse` above). */
 export type CountTarget =
   | { action: 'update';      rowId: string; variantGroup: string | null }
   | { action: 'fill';        rowId: string; size: string; variantGroup: string | null }
-  | { action: 'create';      size: string | null; variantGroup: string; sku: string | null; regroup: string[] }
+  | { action: 'create';      size: string; variantGroup: string; sku: string | null; regroup: string[] }
+  | { action: 'refuse';      reason: 'size-required' }
   | { action: 'record-only' };
 
-/**
- * The family's BASE SKU — the lineage root a size-sibling's SKU derives from.
- * Shortest non-blank SKU wins: within ONE variety's family a derived sibling SKU is always its
- * base plus a suffix ("DISC-1001" → "DISC-1001-30G"), so the base is always the shortest.
- * Returns null when no sibling carries a SKU — D-9 omit-not-fake: never invent a base.
- */
-export function baseSkuOf(siblings: Array<{ sku: string | null }>): string | null {
-  const skus = siblings.map(s => (s.sku ?? '').trim()).filter(Boolean);
-  if (skus.length === 0) return null;
-  return skus.reduce((a, b) => (b.length < a.length ? b : a));
-}
+/** The message a refusal shows the counter. Homed with the rule that produces it (STD-011) so the
+ *  sheet cannot drift into explaining the refusal differently from the gate that made it. */
+export const SIZE_REQUIRED_MESSAGE =
+  'Which size? Pick one above or type it — a count has to say which size it counted.';
 
 /**
  * Decide where a counted (variety × size, qty) lands. Pure — no DB, no side effects.
@@ -131,6 +138,26 @@ export function resolveCountTarget(params: {
   const { siblings, groupKey } = params;
   const size = (params.size ?? '').trim() || null;
 
+  // (R) SIZE REQUIRED — the invariant's "non-empty" half, and it must come FIRST.
+  //
+  //     A count that will touch a business_inventory row must say WHICH SIZE it counted. Under
+  //     D-34 the lot IS the SKU and SIZE is the distinguishing attribute, so a lot with no size is
+  //     not identifiable — every commerce platform refuses a variant with an empty required option
+  //     value (§6 r16). "Writes a row" is exactly "not record-only": a plant tag with no linked lot
+  //     writes nothing to inventory, so it needs no size (its size is decorative — it lands in the
+  //     count's item_label and nowhere else).
+  //
+  //     ⚠️ THIS RUNS BEFORE (0) DELIBERATELY, and that ordering is the fix, not a detail.
+  //     A blank size MATCHES a size-less row at (0) — sameSizeLabel(null, null) is true — so a stub
+  //     counted with no size used to take a plain `update`: qty landed on a row that still had no
+  //     size, turning a harmless placeholder into a size-LESS LOT. That is the Basham's shape minted
+  //     through `update` instead of `create`, and D-49's own suite asserted it as CORRECT
+  //     ("stub counted with NO size → plain update"). The defect was tested in and blessed — the
+  //     D-48 scar, verbatim. Refusing after (0) would fix the create branch and leave that one live.
+  if (size === null && (groupKey != null || siblings.length > 0)) {
+    return { action: 'refuse', reason: 'size-required' };
+  }
+
   // (0) Exact (variety × size) → UPDATE on-hand. A physical count SETS qty (never a decrement),
   //     and confirms/backfills the group on the row it touches.
   const exact = siblings.find(s => sameSizeLabel(s.size, size));
@@ -138,7 +165,7 @@ export function resolveCountTarget(params: {
 
   // (1) STUB FILL (D-49) — the one resolved row is a variety PLACEHOLDER and the count supplies
   //     the first real size. Fill it; do NOT mint a sibling beside it. A no-size count can never
-  //     reach here (it matched the stub at (0) — sameSizeLabel(null, null) is true).
+  //     reach here — it is refused at (R) above.
   if (size !== null && siblings.length === 1 && isVarietyStub(siblings[0])) {
     return { action: 'fill', rowId: siblings[0].id, size, variantGroup: groupKey };
   }
@@ -147,7 +174,7 @@ export function resolveCountTarget(params: {
   //     every blank-group row in the family is regrouped onto the same key, and the new row
   //     inherits the family's SKU lineage. Without the regroup the next scan sees a mixed-group
   //     family, detectSizeCollision refuses, and the variety goes UNKNOWN.
-  if (groupKey) {
+  if (groupKey && size !== null) {
     const regroup = siblings.filter(s => (s.variant_group ?? '').trim() === '').map(s => s.id);
     return {
       action: 'create',

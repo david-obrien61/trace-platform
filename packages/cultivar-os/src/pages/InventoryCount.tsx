@@ -39,10 +39,23 @@
 //                     every blank-group row is regrouped onto the key + the SKU derives from the
 //                     family's base (deriveSiblingSku). sell_price omitted → null = needs-price
 //                     (the cart refuses rather than selling at $0 — D-9 omit-not-fake).
+// SIZE:     REQUIRED on BOTH sheets — the review/picker sheet AND the typed UNKNOWN sheet (ledger
+//           #135). The sheet asks the SAME resolveCountTarget the write uses, so the two gates are
+//           ONE rule and cannot drift; a refusal red-borders the size field and says why (the FIX 5
+//           pattern, shared errBorder/FieldError — never a greyed button with no reason).
+//           WHY the UNKNOWN sheet too, on recon and not by symmetry: it runs resolve-before-create,
+//           so a typed name can land INSIDE an existing family, and on a new variety it always sets
+//           groupKey = slugify(name) — every row it mints is in a family by construction. A blank
+//           size there is the same landmine, born in a different room. Only "Skip & flag"
+//           (record-only, no promote) needs no size — nothing is written for a size to describe.
 // D-49:     THE INVARIANT — any path that mints a sibling must leave the family in a state where
 //           the size-picker fires by construction. Violating it is not cosmetic: the next scan
 //           sees >1 token-equal rows, detectSizeCollision correctly refuses to guess, and the
 //           variety resolves UNKNOWN — counting it made it uncountable (tech-debt #57, live).
+//           The invariant's "non-empty size" half is the ledger-#135 fix: D-49 enforced "distinct"
+//           and left "non-empty" to this sheet, where the field was optional and the save button did
+//           not argue — so a blank-size count minted `created {size: null}` beside 15/30/45 and the
+//           re-scan went UNKNOWN. Same destination as the Basham's scar, different road.
 //           HOOK (documented, NOT built): size is a FREE LABEL spanning single-plant (4", 30 gal)
 //           AND multi-unit (flat, tray). qty is stored VERBATIM (unit-agnostic) — we do NOT
 //           assume qty = plant count. A future per-size unit-multiplier (a "flat" = N plants)
@@ -60,9 +73,10 @@ import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { SyncEngine } from '@trace/shared/sync';
 import {
-  resolveStockLine, variantGroupSlug, resolveCountTarget, sameSizeLabel,
+  resolveStockLine, variantGroupSlug, resolveCountTarget, sameSizeLabel, SIZE_REQUIRED_MESSAGE,
   type StockLineResolution, type CountSibling,
 } from '@trace/shared/inventory';
+import { errBorder, FieldError } from '@trace/shared/components/FieldError';
 import { canonicalNameKey, nameTokenSet } from '@trace/shared/utils/canonicalName';
 import { QrScanner } from '../components/inventory/QrScanner';
 import { extractTag } from '../lib/scanTag';
@@ -163,6 +177,10 @@ export function InventoryCount() {
   const [conflictReason, setConflictReason] = useState('');
   const [busy, setBusy]           = useState(false);
   const [error, setError]         = useState<string | null>(null);
+  // Per-field validation (the FIX 5 pattern, ledger #102 — shared errBorder/FieldError): a blocked
+  // save red-borders the offending field and SAYS WHY, on the field. A greyed button that will not
+  // say what is wrong is the anti-pattern this exists to kill.
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Identity — WHO is counting. Resolved on mount; a count cannot START until known.
   const [userId, setUserId] = useState<string | null>(null);
@@ -283,20 +301,37 @@ export function InventoryCount() {
     }
 
     // miss → typed entry (resolve-before-create runs on the typed NAME, not the failed slug).
-    if (resolution.kind === 'miss' && resolution.reason === 'ambiguous' && TRACE_RESOLVE) {
-      console.warn('[TRACE:RESOLVE] L4 AMBIGUOUS —', resolution.ambiguousCount, 'equal-token rows for', tag, '(ungrouped siblings) → typed entry');
+    //
+    // ONE EMIT PER MISS — and it must be true (STD-003: instrumentation is a preserved asset only
+    // if it is honest; one that contradicts itself is worse than none). Two lies lived here:
+    //   (1) the AMBIGUOUS warn and the MISS warn BOTH fired, one line apart — "N equal-token rows"
+    //       immediately followed by "no name-token match". There WERE matches; the second was false.
+    //   (2) the AMBIGUOUS line appended a hardcoded "(ungrouped siblings)" to every ambiguous miss.
+    //       Alley Cat's four rows were ALL grouped — the cause was a blank size — so the emit named
+    //       the wrong cause, confidently, and the real one had to be worked out by hand.
+    // The fix for (2) is to SHOW the candidates rather than assert a cause: {group, size} per row
+    // makes the blank size or the mixed group visible, without re-spelling detectSizeCollision's
+    // predicate here (a second copy of that rule, written only to explain the first, is what drifts).
+    if (TRACE_RESOLVE) {
+      if (resolution.kind === 'miss' && resolution.reason === 'ambiguous') {
+        console.warn('[TRACE:RESOLVE] L4 MISS — ambiguous:', resolution.ambiguousCount,
+          'equal-token rows for', tag, '→ the size-picker refused (see candidates) → typed entry',
+          '\n  candidates:', JSON.stringify((resolution.candidates ?? []).map(c => ({ size: c.size, group: c.variant_group, sku: c.sku }))));
+      } else {
+        // A false-UNKNOWN is the #55 class: the tag was RIGHT and the key silently disagreed with
+        // the catalog row's key by one eaten character. Logging the normalized token set at the
+        // MISS is what makes the next one visible in the trail instead of a shrug — this is the
+        // exact diagnostic that was absent while four live varieties scanned UNKNOWN.
+        console.warn('[TRACE:RESOLVE] L4 MISS — no name-token match for', tag, 'key:', canonicalNameKey(tag), '(tokens:', JSON.stringify([...nameTokenSet(tag)]) + ')');
+      }
     }
-    // A false-UNKNOWN is the #55 class: the tag was RIGHT and the key silently disagreed with
-    // the catalog row's key by one eaten character. Logging the normalized token set at the
-    // MISS is what makes the next one visible in the trail instead of a shrug — this is the
-    // exact diagnostic that was absent while four live varieties scanned UNKNOWN.
-    if (TRACE_RESOLVE) console.warn('[TRACE:RESOLVE] L4 MISS — no name-token match for', tag, 'key:', canonicalNameKey(tag), '(tokens:', JSON.stringify([...nameTokenSet(tag)]) + ')');
     if (TRACE_COUNT) console.log('[TRACE:COUNT] resolve UNKNOWN — tag:', tag);
     setUnknownRaw(raw);
     setUnknownTag(tag);
     setUnknownName('');
     setUnknownSize('');
     setQtyInput('');
+    setFieldErrors({});
     setPhase('unknown');
   }
 
@@ -306,6 +341,7 @@ export function InventoryCount() {
     const sib = ctx.siblings.find(s => sameSize(s.size, ctx.defaultSize));
     setQtyInput(sib?.qty != null ? String(sib.qty) : '');
     setError(null);
+    setFieldErrors({});   // a refusal on the LAST tree must never red-border this one
     setPhase('reviewing');
     if (TRACE_COUNT) console.log('[TRACE:COUNT] resolved —', ctx.label, 'group:', ctx.groupKey, 'siblings:', ctx.siblings.length);
   }
@@ -326,9 +362,24 @@ export function InventoryCount() {
   // ── SAVE → NEXT (resolved item) ───────────────────────────
   async function saveAndNext() {
     if (!resolved || !businessId) return;
-    const qty = parseInt(qtyInput, 10);
-    if (isNaN(qty) || qty < 0) { setError('Enter a count of 0 or more.'); return; }
     const size = sizeInput.trim() || null;
+
+    // SIZE REQUIRED — asked of the SAME shared decision that performs the write (resolveCountTarget),
+    // not re-spelled here. That is what makes the sheet and the write agree BY CONSTRUCTION rather
+    // than by two rules that look alike until one of them changes (D-48's shape; §1.6 item 3).
+    // The live defect: this sheet let a blank size through, the write took it, and the variety was
+    // permanently unscannable a second later.
+    const check = resolveCountTarget({ siblings: resolved.siblings, groupKey: resolved.groupKey, size });
+    if (check.action === 'refuse') {
+      if (TRACE_INV) console.warn('[TRACE:INVENTORY] promote — REFUSED at the sheet:', check.reason, '— variety:', resolved.varietyName, 'group:', resolved.groupKey);
+      setFieldErrors({ size: SIZE_REQUIRED_MESSAGE });
+      setError(null);
+      return;
+    }
+
+    const qty = parseInt(qtyInput, 10);
+    if (isNaN(qty) || qty < 0) { setFieldErrors({ qty: 'Enter a count of 0 or more.' }); return; }
+    setFieldErrors({});
 
     const key = countKey(resolved, size);
     if (key && sessionCounts[key] !== undefined) {
@@ -353,6 +404,20 @@ export function InventoryCount() {
     // sibling leaves the family picker-ready by construction (group on EVERY row, distinct
     // non-empty sizes, SKU lineage) — see countPromote.ts.
     const target = resolveCountTarget({ siblings: ctx.siblings, groupKey: key, size });
+
+    // THE WRITE GATE (§1.6 item 3 — validated before the WRITE, never merely hidden in the UI).
+    // Every caller lands here: the review sheet, the conflict re-save, and the typed UNKNOWN entry.
+    // The sheet asks the same function first, so in practice this never fires from the review sheet
+    // — which is the point: the two gates are the SAME rule, so they cannot disagree, and no future
+    // caller can route around the UI's copy of it (there is no copy).
+    if (target.action === 'refuse') {
+      if (TRACE_INV) console.warn('[TRACE:INVENTORY] promote — REFUSED at the write:', target.reason, '— variety:', ctx.varietyName, 'group:', key, 'siblings:', ctx.siblings.length);
+      setFieldErrors({ size: SIZE_REQUIRED_MESSAGE });
+      setError(SIZE_REQUIRED_MESSAGE);
+      setBusy(false);
+      return;
+    }
+
     let targetId: string | null = null;
     let outcome: 'updated' | 'filled' | 'created' | 'record-only' = 'record-only';
 
@@ -485,10 +550,22 @@ export function InventoryCount() {
     }
 
     const name = unknownName.trim();
-    if (!name) { setError('Enter a variety, or choose Skip & flag.'); setBusy(false); return; }
+    if (!name) { setFieldErrors({ unknownName: 'Enter a variety, or choose Skip & flag.' }); setBusy(false); return; }
     const qty = parseInt(qtyInput, 10);
-    if (isNaN(qty) || qty < 0) { setError('Enter a count of 0 or more.'); setBusy(false); return; }
+    if (isNaN(qty) || qty < 0) { setFieldErrors({ qty: 'Enter a count of 0 or more.' }); setBusy(false); return; }
     const size = unknownSize.trim() || null;
+
+    // SIZE REQUIRED HERE TOO — and this is a deliberate widening of the review-sheet rule, on recon
+    // rather than by symmetry. This sheet is NOT "a different surface with no family to break":
+    //   • it runs RESOLVE-BEFORE-CREATE (below), so a typed name can land INSIDE an existing
+    //     family — the same family, the same blast radius;
+    //   • and on a genuinely new variety it always sets groupKey = slugify(name), so EVERY row it
+    //     mints is in a family by construction.
+    // A size-less row born here is the landmine that detonates when its second size arrives — that
+    // IS the Basham's shape. The write gate in commitCount would refuse it anyway; refusing at the
+    // sheet is what makes the refusal legible instead of a late error.
+    if (!size) { setFieldErrors({ unknownSize: SIZE_REQUIRED_MESSAGE }); setBusy(false); return; }
+    setFieldErrors({});
 
     // RESOLVE-BEFORE-CREATE: match the typed NAME to an existing variety (token-set equality,
     // the #61 resolver reused via resolveStockLine) BEFORE minting a new group — so varied
@@ -523,6 +600,7 @@ export function InventoryCount() {
 
   function resetUnknown() {
     setUnknownName(''); setUnknownSize(''); setUnknownTag(''); setUnknownRaw(''); setQtyInput('');
+    setFieldErrors({});
   }
 
   // Shared insert into inventory_counts + session item_count bump (routed through sync;
@@ -570,6 +648,8 @@ export function InventoryCount() {
 
   const counting = phase === 'scanning' || phase === 'reviewing' || phase === 'unknown' || phase === 'conflict';
   const matchedSib = resolved ? resolved.siblings.find(s => sameSize(s.size, sizeInput.trim() || null)) : undefined;
+  // Only siblings that actually HAVE a size are pickable — a blank-size row is not a size.
+  const sizeChips = resolved ? resolved.siblings.filter(s => (s.size ?? '').trim() !== '') : [];
 
   // ── RENDER ────────────────────────────────────────────────
   return (
@@ -633,32 +713,43 @@ export function InventoryCount() {
               <div style={S.note}>No stock lot is linked to this tag — your count is recorded, but there's no on-hand row to update.</div>
             )}
 
-            <label style={S.label}>Which size?</label>
-            {resolved.siblings.length > 0 && (
+            <label style={S.label}>Which size? *</label>
+            {/* Only rows that HAVE a size get a chip. A "(no size)" chip was a dead affordance
+                (§1.6 item 5): tapping it blanked the field and the save is now refused, so it was a
+                control that could only ever lead to a wall. A size-less row is not a size you can
+                count — it is the thing the first real count FILLS (D-49). */}
+            {sizeChips.length > 0 && (
               <div style={S.chipRow}>
-                {resolved.siblings.map((s, i) => (
+                {sizeChips.map((s, i) => (
                   <button key={i} type="button"
                     style={sameSize(s.size, sizeInput.trim() || null) ? S.chipActive : S.chip}
                     onClick={() => pickSizeChip(s)}>
-                    {s.size ?? '(no size)'}{s.qty != null ? ` · ${s.qty}` : ''}
+                    {s.size}{s.qty != null ? ` · ${s.qty}` : ''}
                   </button>
                 ))}
               </div>
             )}
             <input
-              style={S.input}
+              style={{ ...S.input, ...errBorder(!!fieldErrors.size) }}
               value={sizeInput}
-              onChange={e => setSizeInput(e.target.value)}
+              onChange={e => { setSizeInput(e.target.value); if (fieldErrors.size) setFieldErrors(f => ({ ...f, size: '' })); }}
               placeholder="e.g. 30 gal, 5 gal, flat, 4 in"
             />
-            <p style={S.hint}>Pick an existing size or type a new one — a new size becomes its own stock row under this variety.</p>
+            <FieldError msg={fieldErrors.size} />
+            <p style={S.hint}>
+              {sizeChips.length > 0
+                ? 'Pick an existing size or type a new one — a new size becomes its own stock row under this variety.'
+                : 'Type the size you\'re counting — it becomes this variety\'s first stock row.'}
+            </p>
 
             {matchedSib?.qty != null && (
               <p style={S.subtle}>On-hand now: <strong>{matchedSib.qty}</strong></p>
             )}
             {error && <div style={S.error}>{error}</div>}
             <label style={S.label}>How many did you count?</label>
-            <input style={S.qtyInput} type="number" inputMode="numeric" min="0" value={qtyInput} onChange={e => setQtyInput(e.target.value)} autoFocus />
+            <input style={{ ...S.qtyInput, ...errBorder(!!fieldErrors.qty) }} type="number" inputMode="numeric" min="0" value={qtyInput}
+              onChange={e => { setQtyInput(e.target.value); if (fieldErrors.qty) setFieldErrors(f => ({ ...f, qty: '' })); }} autoFocus />
+            <FieldError msg={fieldErrors.qty} />
             <button style={busy ? S.btnDisabled : S.btnPrimary} disabled={busy} onClick={() => void saveAndNext()}>
               {busy ? 'Saving…' : 'Save → Next'}
             </button>
@@ -707,13 +798,24 @@ export function InventoryCount() {
             </div>
             <p style={S.subtle}>Scanned: <code style={S.code}>{unknownTag}</code></p>
             {error && <div style={S.error}>{error}</div>}
-            <label style={S.label}>Variety</label>
-            <input style={S.input} value={unknownName} onChange={e => setUnknownName(e.target.value)} placeholder="e.g. Live Oak" />
-            <label style={S.label}>Size (optional)</label>
-            <input style={S.input} value={unknownSize} onChange={e => setUnknownSize(e.target.value)} placeholder="e.g. 45 gal, flat, 4 in" />
-            <p style={S.hint}>We'll match this to an existing variety if we can, so different spellings don't split into separate items.</p>
+            <label style={S.label}>Variety *</label>
+            <input style={{ ...S.input, ...errBorder(!!fieldErrors.unknownName) }} value={unknownName}
+              onChange={e => { setUnknownName(e.target.value); if (fieldErrors.unknownName) setFieldErrors(f => ({ ...f, unknownName: '' })); }}
+              placeholder="e.g. Live Oak" />
+            <FieldError msg={fieldErrors.unknownName} />
+            {/* Was "Size (optional)". It is NOT optional: this sheet resolves-before-creates into
+                existing families, and always groups what it mints — so a blank size here is the same
+                landmine as on the review sheet, just born in a different room. */}
+            <label style={S.label}>Size *</label>
+            <input style={{ ...S.input, ...errBorder(!!fieldErrors.unknownSize) }} value={unknownSize}
+              onChange={e => { setUnknownSize(e.target.value); if (fieldErrors.unknownSize) setFieldErrors(f => ({ ...f, unknownSize: '' })); }}
+              placeholder="e.g. 45 gal, flat, 4 in" />
+            <FieldError msg={fieldErrors.unknownSize} />
+            <p style={S.hint}>We'll match this to an existing variety if we can, so different spellings don't split into separate items. Not sure of the size? Use <b>Skip &amp; flag</b> below — that records the count without guessing.</p>
             <label style={S.label}>Count</label>
-            <input style={S.qtyInput} type="number" inputMode="numeric" min="0" value={qtyInput} onChange={e => setQtyInput(e.target.value)} />
+            <input style={{ ...S.qtyInput, ...errBorder(!!fieldErrors.qty) }} type="number" inputMode="numeric" min="0" value={qtyInput}
+              onChange={e => { setQtyInput(e.target.value); if (fieldErrors.qty) setFieldErrors(f => ({ ...f, qty: '' })); }} />
+            <FieldError msg={fieldErrors.qty} />
             <button style={busy ? S.btnDisabled : S.btnPrimary} disabled={busy} onClick={() => void saveUnknown(true)}>
               {busy ? 'Saving…' : 'Save → Next'}
             </button>

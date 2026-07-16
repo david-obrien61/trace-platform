@@ -9,6 +9,8 @@ import {
 // D-40: the tax RATE is per-tenant config data (config.taxRate), not the businesses column, and
 // not a hardcoded default. resolveTaxRate reads it; mergePricingConfig writes it clobber-safe.
 import { readPricingConfig, mergePricingConfig, resolveTaxRate, TX_COMPTROLLER_RATE_LOCATOR_URL } from '../business-logic';
+// The FIX 5 required-field pattern — ONE home, every form inherits it (STD-011, §6 r8).
+import { errBorder, FieldError } from '../components/FieldError';
 
 const GREEN = '#27500A';
 const SAGE  = '#EAF3DE';
@@ -22,12 +24,14 @@ const inputStyle: React.CSSProperties = {
   outline: 'none', fontFamily: 'inherit', color: DARK, background: '#fff',
 };
 
-// ── Required-field validation (the REFERENCE implementation) ─────────────────
+// ── Required-field validation ────────────────────────────────────────────────
 // The cross-cutting platform rule (user_stories.md ## NEEDED): a save with an empty required field
-// BLOCKS, HIGHLIGHTS the offending field, and SAYS WHY — never fails silently. Other forms copy this
-// shape: validate on save-attempt → if the map is non-empty, set it as error state and return.
+// BLOCKS, HIGHLIGHTS the offending field, and SAYS WHY — never fails silently. This form's shape
+// (validate on save-attempt → if the map is non-empty, set it as error state and return) is the
+// REFERENCE; errBorder/FieldError, which used to be defined here and copied into two other files,
+// now live in ONE shared home (../components/FieldError — STD-011, §6 r8 rule of three).
 // 0 is a VALID price (a free service) — only a blank/non-numeric price is rejected (D-9 honesty:
-// blank ≠ free; the owner must state 0). Error red reuses the shared RED (the compliance/netting red).
+// blank ≠ free; the owner must state 0).
 
 function validateServiceForm(f: {
   name: string; price: string; category: string; transportMode?: string;
@@ -41,17 +45,6 @@ function validateServiceForm(f: {
   // Category-scoped: a transport service must say who transports (self / staff).
   if (f.category === 'transport' && !f.transportMode) errs.transportMode = 'Transport mode is required for a transport service.';
   return errs;
-}
-
-// Red error border merged onto an input whose field failed validation.
-function errBorder(hasErr: boolean): React.CSSProperties {
-  return hasErr ? { borderColor: RED, boxShadow: `0 0 0 1px ${RED}` } : {};
-}
-
-// Inline red message under a field. Renders nothing when the field is valid.
-function FieldError({ msg }: { msg?: string }) {
-  if (!msg) return null;
-  return <p style={{ margin: '3px 0 0', fontSize: '0.75rem', fontWeight: 600, color: RED }}>{msg}</p>;
 }
 
 // Small captioned wrapper for a form control — a tiny uppercase label over its input, so the

@@ -26,21 +26,14 @@ import {
   readPricingConfig, mergePricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME,
   type DiscountType, type DiscountTier, type DiscountBasis,
 } from '@trace/shared/business-logic';
+// The FIX 5 required-field pattern — ONE home (STD-011, §6 r8). This file's own comment used to
+// point at Settings as "the reference" while holding a byte-identical copy; now it imports it.
+import { errBorder, FieldError } from '@trace/shared/components/FieldError';
 
 const GREEN = '#27500A';
 const DARK  = '#111827';
 const GRAY  = '#6b7280';
 const RED   = '#A32D2D';
-
-// FIX 5 pattern (Settings/BusinessInventory errBorder/FieldError) — a bad field BLOCKS the save,
-// red-borders the input, and says why; never a silent greyed button.
-function errBorder(hasErr: boolean): React.CSSProperties {
-  return hasErr ? { borderColor: RED, boxShadow: `0 0 0 1px ${RED}` } : {};
-}
-function FieldError({ msg }: { msg?: string }) {
-  if (!msg) return null;
-  return <p style={{ margin: '3px 0 0', fontSize: '0.75rem', fontWeight: 600, color: RED }}>{msg}</p>;
-}
 
 // Suggestion palette — DATA keyed off business_type (the AC-1-sanctioned axis, NOT a code branch).
 // Values are suggested TYPE names the owner can accept or ignore; "+ Custom" always adds any name.

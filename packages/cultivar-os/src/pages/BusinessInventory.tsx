@@ -32,12 +32,12 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Archive, ScanLine, AlertTriangle, Pencil, CopyPlus, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
-import { findDuplicateSizeGroups } from '@trace/shared/discovery/dupSize';
+import { findDuplicateSizeGroups, sizeGroupKey } from '@trace/shared/discovery/dupSize';
 import {
   DataSheet, TextCell, NumberCell, AmountCell, SelectCell, confidenceStyleFor, sheetStyles as SS,
   type DataSheetColumn,
 } from '../components/datasheet/DataSheet';
-import { InventoryEditor, BLANK_INVENTORY_ITEM, type EditorInventoryItem } from '../components/inventory/InventoryEditor';
+import { InventoryEditor, BLANK_INVENTORY_ITEM, type EditorInventoryItem, type InventoryPeer } from '../components/inventory/InventoryEditor';
 import { persistInventoryPatch, renameVariety, deleteInventoryRow } from '../components/inventory/inventoryEdit';
 
 type CostConfidence = 'CONFIRMED' | 'DERIVED' | 'ESTIMATED' | 'UNKNOWN';
@@ -73,10 +73,6 @@ interface InventoryRow {
 const CORE_COLS = 'id,name,sku,qty,unit_cost,sell_price,location,status,serial_number,cost_confidence,size,variant_group,received_at,receipt_id,notes,description,created_at,updated_at';
 const FULL_COLS = `${CORE_COLS},reorder_point`;
 
-function dupKey(vg: string | null, size: string | null): string | null {
-  if (!vg || !vg.trim() || !size || !size.trim()) return null;
-  return `${vg}||${size.trim().toLowerCase()}`;
-}
 function confidenceLabel(c: CostConfidence | null): string {
   if (!c) return '—';
   return { CONFIRMED: 'Confirmed', DERIVED: 'AI-Derived', ESTIMATED: 'Estimated', UNKNOWN: 'Unknown' }[c];
@@ -219,27 +215,38 @@ export function BusinessInventory() {
     await loadItems();
   }
 
-  // ── Dup-size flag: reuse the shared CASE-5 detector; flag any row whose (variant_group,size) collides. ──
+  // ── Dup-size flag: reuse the shared CASE-5 detector; flag any row whose (variant_group,size)
+  //    collides. Computed over ALL items, deliberately: a collision is a fact about the CATALOG,
+  //    so a row must not stop being flagged just because its twin was filtered out of view. Only
+  //    the BANNER's count is view-scoped (partitionFlagged, in the engine) — that is the defect
+  //    fixed this pass, and the distinction is the whole point. ──
   const dupKeys = useMemo(() => {
     const groups = findDuplicateSizeGroups(items.map(r => ({ name: r.name, size: r.size, variant_group: r.variant_group })));
     const set = new Set<string>();
-    for (const g of groups) { const k = dupKey(g.variantGroup, g.size); if (k) set.add(k); }
-    if (groups.length > 0) console.log('[TRACE:invsheet] dup-size flags', { groups: groups.length, collisions: groups.map(g => `${g.variantGroup}/${g.size}×${g.count}`) });
+    for (const g of groups) { const k = sizeGroupKey(g.variantGroup, g.size); if (k) set.add(k); }
+    // The copy counts ROWS and this trace used to count GROUPS, so the banner said "2 size
+    // collisions" while the trace said `collisions: Array(1)`. It is ONE collision involving TWO
+    // rows. Both nouns are now reported and named, so the trace and the copy cannot disagree —
+    // a number that contradicts its own trace is how the next session misdiagnoses this.
+    if (groups.length > 0) {
+      const flaggedRows = groups.reduce((n, g) => n + g.count, 0);
+      console.log('[TRACE:invsheet] dup-size flags', {
+        collisions: groups.length, flaggedRows,
+        pairs: groups.map(g => `${g.variantGroup}/${g.size}×${g.count}`),
+      });
+    }
     return set;
   }, [items]);
-  const isDup = (r: InventoryRow) => { const k = dupKey(r.variant_group, r.size); return k != null && dupKeys.has(k); };
+  const isDup = (r: InventoryRow) => { const k = sizeGroupKey(r.variant_group, r.size); return k != null && dupKeys.has(k); };
 
-  // Every OTHER row's SKU (lowercased) for the editor's uniqueness guard — excludes the row being
-  // edited so re-saving its own SKU never false-collides (a SKU identifies ONE sellable unit).
-  const existingSkus = useMemo(() => {
-    const editingId = editor?.mode === 'edit' ? editor.item.id : null;
-    const s = new Set<string>();
-    for (const r of items) {
-      if (r.id === editingId) continue;
-      if (r.sku && r.sku.trim()) s.add(r.sku.trim().toLowerCase());
-    }
-    return s;
-  }, [items, editor]);
+  // The tenant's rows, as the editor's uniqueness guards need them (SKU + (variant_group, size)).
+  // ONE prop: the editor derives BOTH guards and excludes the row being edited itself — a caller
+  // cannot supply one guard's data and forget the other's, which is precisely how the size guard
+  // came to be missing while the SKU guard shipped (ledger #135).
+  const editorPeers = useMemo<InventoryPeer[]>(
+    () => items.map(r => ({ id: r.id, size: r.size, variant_group: r.variant_group, sku: r.sku, name: r.name })),
+    [items],
+  );
 
   // ── Row actions (Edit · + Add size · Delete). Rendered by the SHARED DataSheet engine in a
   //    LEFT-PINNED column pinned adjacent to the frozen Name column (STD-011 engine behavior), so
@@ -317,10 +324,26 @@ export function BusinessInventory() {
         statusFilter={{ label: 'statuses', options: STATUS_OPTIONS, get: r => r.status }}
         defaultSortKey="name"
         rowFlag={isDup}
-        flagBanner={n => (
+        /* The banner describes the rows ON SCREEN. It used to count flagged rows over the WHOLE
+           catalog and render the number above whatever the filter had narrowed to — so filtering to
+           the clean "alley" rows still shouted "2 size collisions … edit a flagged row", about
+           Acoma, elsewhere, with no flagged row in sight to edit. D-9 inverted: the number was true,
+           the place was a lie. `inView` and `elsewhere` are now two separate honest facts and the
+           copy never lets one masquerade as the other. It counts ROWS throughout — the noun the flag
+           icon marks and the noun the trace reports. */
+        flagBanner={(inView, elsewhere) => (
           <>
             <AlertTriangle size={15} />
-            {n} size {n === 1 ? 'collision' : 'collisions'} — two rows share a variant group and size, so the scanner can’t tell them apart. Edit the <b>&nbsp;size&nbsp;</b> or <b>&nbsp;variant group&nbsp;</b> on a flagged row to fix it.
+            {inView > 0 ? (
+              <>
+                {inView} flagged {inView === 1 ? 'row' : 'rows'} here — each shares a variant group and size with another row, so the scanner can’t tell them apart. Edit the <b>&nbsp;size&nbsp;</b> or <b>&nbsp;variant group&nbsp;</b> on a flagged row to fix it.
+                {elsewhere > 0 && <> {elsewhere} more {elsewhere === 1 ? 'is' : 'are'} outside this filter.</>}
+              </>
+            ) : (
+              <>
+                {elsewhere} flagged {elsewhere === 1 ? 'row' : 'rows'} <b>&nbsp;elsewhere&nbsp;</b> in your inventory share a variant group and size — nothing on this screen is affected. Clear the search or status filter to see {elsewhere === 1 ? 'it' : 'them'}.
+              </>
+            )}
           </>
         )}
         itemNoun="items"
@@ -367,7 +390,7 @@ export function BusinessInventory() {
           mode={editor.mode}
           statusOptions={STATUS_OPTIONS}
           addSizeParent={editor.mode === 'create' ? editor.addSizeParent : undefined}
-          existingSkus={existingSkus}
+          peers={editorPeers}
           onClose={() => setEditor(null)}
           onSaved={() => { void loadItems(); }}
         />

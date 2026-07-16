@@ -15,15 +15,32 @@
 //               the name (variantGroupSlug — SHARED with D-45's count-promote) and the PARENT is
 //               backfilled to that group on save, so parent + new sibling share ONE group and the
 //               size-picker fires by construction (never half-grouped).
+// THE INVARIANT (D-49, and this editor is the OTHER path that must honour it — ledger #135):
+//               any path that mints a row in a variety family leaves that family PICKER-READY BY
+//               CONSTRUCTION — every row grouped, every size NON-EMPTY and DISTINCT, SKU derived
+//               from the family's BASE. The count path proved this live on 2026-07-16; this editor
+//               violated it three ways and each one was minted through the UI the same afternoon:
+//                 • no SIZE-uniqueness guard → "+ Add size" on Acoma Crape Myrtle with size "15"
+//                   minted DISC-1002-15G beside DISC-1002 (same group, same size) — CASE 5, live.
+//                   SKU-unique PASSED, because a SKU and a variant are TWO DIFFERENT FACTS.
+//                 • no size-REQUIRED rule for a row joining a group (the blank-size landmine).
+//                 • the CLICKED row was handed to deriveSiblingSku as the SKU base → the live
+//                   DISC-1003-30G-45G; the next would have been DISC-1003-30G-45G-15G.
+//               All three now route through the SHARED rules the count path already uses, so the
+//               two minting paths cannot drift (STD-011): findSizeTwin (the guard whose detector
+//               sibling puts the amber flag on the grid) + suggestSiblingSku (base + suffix).
 // DEPENDENCIES: useBusinessContext (businessId → RLS scope), sheetStyles (SS), the shared
-//               inventoryEdit helpers (insert/patch/rename), variantGroupSlug (@trace/shared).
-//               NO migration, NO new dep, NO endpoint.
+//               inventoryEdit helpers (insert/patch/rename), variantGroupSlug + suggestSiblingSku
+//               (@trace/shared/inventory), findSizeTwin (@trace/shared/discovery/dupSize), the
+//               shared FIX 5 errBorder/FieldError. NO migration, NO new dep, NO endpoint.
 // INSTRUMENTATION (STD-003): `[TRACE:INVENTORY]` via the shared helpers, ON by default.
 // ============================================================
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useBusinessContext } from '@trace/shared/context';
-import { variantGroupSlug, deriveSiblingSku } from '@trace/shared/inventory';
+import { variantGroupSlug, suggestSiblingSku, baseSkuOf } from '@trace/shared/inventory';
+import { findSizeTwin } from '@trace/shared/discovery/dupSize';
+import { errBorder, FieldError } from '@trace/shared/components/FieldError';
 import { sheetStyles as SS } from '../datasheet/DataSheet';
 import { insertInventory, persistInventoryPatch, renameVariety } from './inventoryEdit';
 
@@ -53,18 +70,30 @@ export const BLANK_INVENTORY_ITEM: EditorInventoryItem = {
   location: null, status: 'available', notes: null,
 };
 
+/** A peer inventory row, as the editor's guards need to see it. The editor is handed the tenant's
+ *  rows (business_id-scoped by the caller's query — AC-3) so it can answer two questions the shipped
+ *  version could not: is this SKU taken, and is this (variant_group, size) taken? */
+export interface InventoryPeer {
+  id: string;
+  size: string | null;
+  variant_group: string | null;
+  sku: string | null;
+  name: string;
+}
+
 interface Props {
   item: EditorInventoryItem;
   mode: 'create' | 'edit';
   statusOptions: string[];
   /** When set, this CREATE is a "+ Add size" seeded from a parent row: name + variant_group are
    *  inherited (name read-only), and the parent is auto-grouped on save if it had no group. The
-   *  sibling's SKU pre-fills as parent-SKU + size-suffix (deriveSiblingSku) — editable, and blank
-   *  when the parent has no SKU (D-9, never fabricate a base). */
+   *  sibling's SKU pre-fills from the FAMILY's base SKU + the size suffix (suggestSiblingSku) —
+   *  editable, and blank when no row in the family has a SKU (D-9, never fabricate a base). */
   addSizeParent?: { id: string; name: string; variant_group: string | null; sku: string | null };
-  /** Every OTHER row's SKU (lowercased) — a SKU identifies ONE sellable unit, so two rows may never
-   *  share one; a create/edit that would collide is blocked (never a silent duplicate). */
-  existingSkus?: Set<string>;
+  /** EVERY inventory row of this tenant. The editor derives its own guards from these — the SKU
+   *  set AND the (variant_group, size) uniqueness check — so a caller cannot supply one and forget
+   *  the other (which is exactly how the size guard came to be missing while the SKU guard shipped). */
+  peers?: InventoryPeer[];
   onClose: () => void;
   onSaved: () => void;
 }
@@ -73,10 +102,6 @@ const groupTitle: React.CSSProperties = {
   fontSize: '0.72rem', fontWeight: 800, color: '#6b7280', textTransform: 'uppercase',
   letterSpacing: '0.06em', margin: '18px 0 8px', paddingBottom: 4, borderBottom: '1px solid #f0f0f0',
 };
-const RED = '#A32D2D';
-function errBorder(hasErr: boolean): React.CSSProperties {
-  return hasErr ? { borderColor: RED, boxShadow: `0 0 0 1px ${RED}` } : {};
-}
 
 // Resolve the group a "+ Add size" sibling (and its backfilled parent) share: the parent's existing
 // non-null group, else a slug derived from the parent's name (SHARED with D-45's promote — STD-011).
@@ -84,14 +109,29 @@ function addSizeGroup(parent: { name: string; variant_group: string | null }): s
   return parent.variant_group?.trim() || variantGroupSlug(parent.name);
 }
 
-export function InventoryEditor({ item, mode, statusOptions, addSizeParent, existingSkus, onClose, onSaved }: Props) {
+export function InventoryEditor({ item, mode, statusOptions, addSizeParent, peers, onClose, onSaved }: Props) {
   const { businessId } = useBusinessContext();
   const creating = mode === 'create';
   const isAddSize = creating && !!addSizeParent;
-  const knownSkus = existingSkus ?? new Set<string>();
+  const allPeers = peers ?? [];
+  // Every OTHER row (never this one) — the basis of both uniqueness guards. Excluding self here,
+  // once, is why re-saving a row its own SKU or its own size can never false-collide.
+  const otherRows = allPeers.filter(r => r.id !== item.id);
+  const knownSkus = new Set(otherRows.map(r => (r.sku ?? '').trim().toLowerCase()).filter(Boolean));
+
+  // The family this row belongs to: the rows sharing its group. Used for the SKU BASE — the live
+  // DISC-1003-30G-45G exists because the editor took the CLICKED row's SKU instead of the family's.
+  const addSizeFamily = isAddSize
+    ? allPeers.filter(r => (r.variant_group ?? '').trim() === addSizeGroup(addSizeParent!)
+                        || r.id === addSizeParent!.id)
+    : [];
+  // Shown in the hint so the owner can SEE which SKU the suggestion descends from — the whole
+  // defect was an invisible wrong base, and a hint naming the clicked row would have looked right.
+  const baseSku = isAddSize ? baseSkuOf(addSizeFamily) : null;
 
   // Seed: an add-size create inherits the parent name + resolved group. The SKU is left blank at
-  // seed (no size yet); it auto-derives to parent-SKU + suffix as the owner types the size below.
+  // seed (no size yet); it auto-derives from the FAMILY's base SKU + suffix as the owner types
+  // the size below.
   const seed: EditorInventoryItem = isAddSize
     ? { ...item, name: addSizeParent!.name, variant_group: addSizeGroup(addSizeParent!) }
     : item;
@@ -106,6 +146,31 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, exis
 
   // A SKU collision check (case-insensitive) — the typed SKU may not match any OTHER row's SKU.
   const skuCollides = (sku: string) => knownSkus.has(sku.trim().toLowerCase());
+
+  // ── THE SIZE RULE — ONE spelling, serving BOTH the create validation and the per-field edit save
+  //    (STD-011; §1.6 item 3). Returns the message to show, or null when the size is fine.
+  //
+  //    A row that is IN a variety family (it carries a variant_group) must have a NON-EMPTY size
+  //    that is DISTINCT within that family — that is `detectSizeCollision`'s contract, which is what
+  //    decides whether a scan resolves or goes UNKNOWN. A row with NO group is a standalone item
+  //    (netting, a tool) and needs no size: the condition is the invariant stated exactly, NOT a
+  //    convenience conditional. "+ Add size" always joins a family, so it is always covered.
+  //
+  //    Both halves are enforced because both were minted live on 2026-07-16 — a same-size twin
+  //    (Acoma) and a blank size (Alley Cat, via the count's sheet). Neither is cosmetic: each one
+  //    makes the whole variety unscannable.
+  function sizeError(group: string | null | undefined, size: string | null | undefined, selfId: string): string | null {
+    const grp = (group ?? '').trim();
+    if (!grp) return null;                        // standalone item — a size is genuinely optional
+    const sz = (size ?? '').trim();
+    if (!sz) return 'Size is required for a size of a variety — the scanner tells the sizes apart by this, and a blank one makes the whole variety unscannable.';
+    const twin = findSizeTwin(otherRows, { variantGroup: grp, size: sz, excludeId: selfId });
+    if (twin) {
+      // Never a bare refusal — name the row and point at the fix (it is almost always what they meant).
+      return `"${sz}" already exists in this variety${twin.sku ? ` (SKU ${twin.sku})` : ''} — edit that row's quantity instead of adding a second one.`;
+    }
+    return null;
+  }
 
   const set = (patch: Partial<EditorInventoryItem>) => {
     setDraft(d => ({ ...d, ...patch }));
@@ -131,6 +196,16 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, exis
     if (field === 'sku' && value && skuCollides(value)) {
       setErrors(e => ({ ...e, sku: `SKU "${value}" is already used by another item — SKUs must be unique.` }));
       return;
+    }
+    // The EDIT path can break the family exactly as the CREATE path can — by blanking the size of a
+    // grouped row, by editing a size onto its twin, or by moving a size-less row INTO a group. Same
+    // rule, same moment (before the write), so the two paths cannot disagree (STD-017: the fix is
+    // true on every surface the capability touches, and edit is a surface).
+    if (field === 'size' || field === 'variant_group') {
+      const group = field === 'variant_group' ? value : draft.variant_group;
+      const size  = field === 'size'          ? value : draft.size;
+      const msg = sizeError(group, size, draft.id);
+      if (msg) { setErrors(e => ({ ...e, [field]: msg })); return; }
     }
     setSavingField(field);
     const res = await persistInventoryPatch({ id: draft.id, businessId: businessId!, patch: { [field]: value } });
@@ -201,6 +276,12 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, exis
     // silently duplicate; two rows sharing a SKU are indistinguishable in QBO/stock lookups).
     const skuVal = draft.sku?.trim();
     if (skuVal && skuCollides(skuVal)) errs.sku = `SKU "${skuVal}" is already used by another item — change it so it's unique.`;
+    // SIZE uniqueness + size-required-when-grouped. A SKU identifies one sellable UNIT; a
+    // (variant_group, size) pair identifies one VARIANT — two different facts, and guarding the SKU
+    // was never guarding the variant. This is the guard whose absence let DISC-1002-15G be minted
+    // beside DISC-1002 at the same size, live, in under a minute (CASE 5, ledger #73/#74).
+    const sizeMsg = sizeError(draft.variant_group, draft.size, draft.id);
+    if (sizeMsg) errs.size = sizeMsg;
     if (Object.keys(errs).length) { setErrors(errs); setError(null); return; }
     setErrors({});
 
@@ -259,13 +340,21 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, exis
           onBlur: (e: React.FocusEvent<HTMLInputElement>) => { void saveText(field, e.target.value); },
         };
 
-  // "+ Add size" size change: auto-derive the sibling SKU (parent SKU + size suffix — SHARED helper,
-  // STD-011) until the owner edits the SKU by hand. ONE setDraft so size + derived SKU move together.
+  // "+ Add size" size change: auto-derive the sibling SKU until the owner edits the SKU by hand.
+  // ONE setDraft so size + derived SKU move together.
+  //
+  // THE FIX (defect 3): the base is resolved from the whole FAMILY (suggestSiblingSku → baseSkuOf),
+  // not taken from the row that happened to be clicked. Passing `addSizeParent.sku` is what minted
+  // the live DISC-1003-30G-45G — David clicked "+ Add size" on the DISC-1003-30G row and its SKU
+  // became the base. deriveSiblingSku cannot detect that; it suffixes whatever it is given, and its
+  // idempotence guard only catches re-appending the SAME suffix. The count path called that same
+  // helper minutes later on this same family and got DISC-1003-60G right — because it resolved the
+  // base first. Now both callers make the identical call (STD-011).
   const onSizeCreateChange = (size: string) => {
     if (isAddSize && !skuTouched) {
-      const derived = deriveSiblingSku(addSizeParent!.sku, size);
+      const derived = suggestSiblingSku(addSizeFamily, size);
       setDraft(d => ({ ...d, size, sku: derived ?? '' }));
-      setErrors(e => (e.sku ? { ...e, sku: '' } : e));
+      setErrors(e => (e.sku || e.size ? { ...e, sku: '', size: '' } : e));
     } else {
       set({ size });
     }
@@ -300,7 +389,7 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, exis
             <input style={{ ...SS.input, ...errBorder(!!errors.name) }} defaultValue={draft.name} disabled={savingField === 'name'}
               onBlur={e => { void saveName(e.target.value); }} placeholder="Variety / item name" />
           )}
-          {errors.name && <p style={{ margin: '3px 0 0', fontSize: '0.75rem', fontWeight: 600, color: RED }}>{errors.name}</p>}
+          <FieldError msg={errors.name} />
           {!creating && draft.variant_group?.trim() && (
             <p style={SS.hint}>This variety has size-siblings — renaming updates the whole group so the sizes stay linked.</p>
           )}
@@ -309,9 +398,9 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, exis
           <label style={SS.label}>SKU</label>
           <input {...textInput('sku', onSkuCreateChange, errBorder(!!errors.sku))}
             placeholder={isAddSize ? 'Auto-fills from the size — editable' : 'Optional'} />
-          {errors.sku && <p style={{ margin: '3px 0 0', fontSize: '0.75rem', fontWeight: 600, color: RED }}>{errors.sku}</p>}
-          {isAddSize && addSizeParent!.sku && (
-            <p style={SS.hint}>Suggested from the parent SKU <b>{addSizeParent!.sku}</b> + the size — edit if yours differs. The parent's SKU is left unchanged.</p>
+          <FieldError msg={errors.sku} />
+          {isAddSize && baseSku && (
+            <p style={SS.hint}>Suggested from this variety's base SKU <b>{baseSku}</b> + the size — edit if yours differs. No existing row's SKU is changed.</p>
           )}
         </div>
 
@@ -319,21 +408,29 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, exis
         <div style={groupTitle}>Size &amp; grouping</div>
         <div style={{ ...SS.row2, ...SS.field }}>
           <div>
-            <label style={SS.label}>Size</label>
-            <input {...textInput('size', onSizeCreateChange)} placeholder="e.g. 30 gal, 45 gal" />
+            {/* Required whenever the row is in a variety group — the label says so rather than
+                letting the owner discover it at the save (§1.6 item 5: no dead affordance). */}
+            <label style={SS.label}>Size {(isAddSize || draft.variant_group?.trim()) ? '*' : ''}</label>
+            <input {...textInput('size', onSizeCreateChange, errBorder(!!errors.size))} placeholder="e.g. 30 gal, 45 gal" />
+            <FieldError msg={errors.size} />
           </div>
           <div>
             <label style={SS.label}>Variant group</label>
             {isAddSize ? (
               <input style={{ ...SS.input, background: '#f3f4f6', color: '#374151' }} value={draft.variant_group ?? ''} readOnly />
             ) : (
-              <input {...textInput('variant_group')} placeholder="Groups sizes of one variety" />
+              <input {...textInput('variant_group', undefined, errBorder(!!errors.variant_group))} placeholder="Groups sizes of one variety" />
             )}
+            <FieldError msg={errors.variant_group} />
           </div>
         </div>
         <p style={SS.hint}>
           Two rows that share a variant group and have distinct sizes become selectable sizes of one variety at checkout.
-          {isAddSize && ' The group is set on this size and the parent so the size-picker fires.'}
+          {isAddSize
+            ? ' The group is set on this size and the parent so the size-picker fires. Each size can appear only once — the scanner tells them apart by it.'
+            : draft.variant_group?.trim()
+              ? ' Each size can appear only once in a group, and none can be blank — that is how the scanner tells them apart.'
+              : ' Leave the group empty for a standalone item (netting, a tool) — those need no size.'}
         </p>
 
         {/* ── PRICING ── */}
@@ -348,7 +445,7 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, exis
               onChange={creating ? e => set({ sell_price: numOrNull(e.target.value) }) : undefined}
               onBlur={creating ? undefined : e => { void saveSellPrice(e.target.value); }}
               placeholder="What the customer pays" />
-            {errors.sell_price && <p style={{ margin: '3px 0 0', fontSize: '0.75rem', fontWeight: 600, color: RED }}>{errors.sell_price}</p>}
+            <FieldError msg={errors.sell_price} />
           </div>
           <div>
             <label style={SS.label}>Unit cost</label>
@@ -374,7 +471,7 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, exis
               disabled={savingField === 'qty'}
               onChange={creating ? e => set({ qty: numOrNull(e.target.value) ?? 0 }) : undefined}
               onBlur={creating ? undefined : e => { void saveNumber('qty', e.target.value); }} />
-            {errors.qty && <p style={{ margin: '3px 0 0', fontSize: '0.75rem', fontWeight: 600, color: RED }}>{errors.qty}</p>}
+            <FieldError msg={errors.qty} />
           </div>
           <div>
             <label style={SS.label}>Reorder point</label>

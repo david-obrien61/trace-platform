@@ -20,7 +20,8 @@
  *     --bundle --platform=node --format=cjs | node
  */
 
-import { resolveCountTarget, isVarietyStub, baseSkuOf, sameSizeLabel, type CountSibling } from './countPromote';
+import { resolveCountTarget, isVarietyStub, sameSizeLabel, type CountSibling } from './countPromote';
+import { baseSkuOf, suggestSiblingSku } from './variantGroup';
 import { detectSizeCollision } from './stockLineResolver';
 
 let passed = 0, failed = 0;
@@ -46,6 +47,8 @@ function applyTarget(family: Row[], target: ReturnType<typeof resolveCountTarget
     for (const id of target.regroup) rows.find(x => x.id === id)!.variant_group = target.variantGroup;
     rows.push({ id: 'NEW', size: target.size, variant_group: target.variantGroup, qty, sku: target.sku });
   }
+  // 'refuse' and 'record-only' write NOTHING — the family comes back untouched, which is the
+  // assertion (a refusal that still wrote a row would not be a refusal).
   return rows;
 }
 /** The scan's own verdict on a family: what L4 → L5 does with >1 token-equal same-name rows. */
@@ -132,10 +135,46 @@ ok(rescanResolves(SIERRA), "'Sierra' UNREGRESSED: the live 2-size family still r
   ok(rescanResolves(applyTarget(SIERRA, t, 5)), "'Sierra': still resolves with three sizes");
 }
 
+// ══ ALLEY CAT — the live family behind BOTH defects 1 and 3 ══════════════════
+// Sizes/SKUs as David reported them after his owner-prove. DISC-1003-30G-45G is defect 3's own
+// artifact (qty 40, unit_cost 121) — minted by "+ Add size" from the DISC-1003-30G row.
+const ALLEY_CAT: Row[] = [
+  { id: 'alley-15', size: '15', variant_group: 'alley-cat-redbud-espalier', qty: 12, sku: 'DISC-1003' },
+  { id: 'alley-30', size: '30', variant_group: 'alley-cat-redbud-espalier', qty: 8,  sku: 'DISC-1003-30G' },
+  { id: 'alley-45', size: '45', variant_group: 'alley-cat-redbud-espalier', qty: 40, sku: 'DISC-1003-30G-45G' },
+];
+
 // ══ SKU LINEAGE ══════════════════════════════════════════════════════════════
 ok(baseSkuOf([{ sku: 'DISC-1001' }, { sku: null }]) === 'DISC-1001', 'baseSku: the one SKU in the family');
 ok(baseSkuOf([{ sku: 'DISC-1001-30G' }, { sku: 'DISC-1001' }]) === 'DISC-1001', 'baseSku: SHORTEST wins — the base, never a derived sibling');
 ok(baseSkuOf([{ sku: null }, { sku: '  ' }]) === null, 'baseSku: no SKU anywhere → null (D-9, never fabricate a base)');
+
+// ══ THE EDITOR'S SKU BASE — lineage must not COMPOUND (ledger #135, PROVEN LIVE) ═══════════════
+// Live, still in the data: DISC-1003-30G-45G (qty 40, unit_cost 121). David hit "+ Add size" from
+// the DISC-1003-30G row and the editor handed THAT row's SKU to deriveSiblingSku as the base. The
+// next one would have been DISC-1003-30G-45G-15G.
+//
+// THE HELPER IS NOT THE BUG — THE CALLER IS: the count path called the SAME deriveSiblingSku
+// minutes later, on this SAME family (which already contained DISC-1003-30G-45G), and produced
+// DISC-1003-60G correctly — because it resolved the base first. Base resolution worked in one
+// place and the other place didn't use it. That is the D-45/D-46 SKU drift, one layer up.
+//
+// The family is ordered CLICKED-ROW-FIRST to simulate the editor seeding from the clicked row —
+// the base must be derived, never positional.
+{
+  const family = [{ sku: 'DISC-1003-30G' }, { sku: 'DISC-1003' }, { sku: 'DISC-1003-30G-45G' }];
+  ok(suggestSiblingSku(family, '45 gal') === 'DISC-1003-45G',
+     'add-size SKU derives from the family BASE (DISC-1003) — NOT DISC-1003-30G-45G (the live defect)');
+  ok(suggestSiblingSku(family, '15 gal') === 'DISC-1003-15G',
+     'add-size: every size derives from the same base, whichever row was clicked');
+  ok(suggestSiblingSku([{ sku: null }, { sku: null }], '45 gal') === null,
+     'add-size: no SKU anywhere in the family → blank, never fabricated (D-9)');
+  ok(suggestSiblingSku([{ sku: 'DISC-1003' }], null) === null,
+     'add-size: no size yet → no SKU to suggest (nothing to suffix)');
+  // The count path and the editor must now agree by construction — same family, same size, same SKU.
+  ok(suggestSiblingSku(sibs(ALLEY_CAT), '60 gal') === 'DISC-1003-60G',
+     'the editor and the count derive the SAME SKU from the SAME family (DISC-1003-60G — the count got this right live)');
+}
 {
   // D-9 omit-not-fake: a no-SKU parent yields a no-SKU sibling — blank, never invented.
   const family: Row[] = [{ id: 'x', size: '5 gal', variant_group: 'g', qty: 2, sku: null }];
@@ -143,12 +182,40 @@ ok(baseSkuOf([{ sku: null }, { sku: '  ' }]) === null, 'baseSku: no SKU anywhere
   ok(t.action === 'create' && t.sku === null, 'no-SKU parent → sibling SKU blank, not fabricated (D-9)');
 }
 
-// ══ PRESERVED BEHAVIOR — the branches that were already right ═════════════════
+// ══ SIZE IS REQUIRED — the blank-size mint (ledger #135, PROVEN LIVE 2026-07-16) ═══════════════
+// David counted Alley Cat Redbud Espalier, left the SIZE box EMPTY, entered 60, and it SAVED:
+//   [TRACE:INVENTORY] promote — created {variant_group:'alley-cat-redbud-espalier', size:null, qty:60}
+// The family went 15/30/45 → 15/30/45/null, and the re-scan came back:
+//   [TRACE:RESOLVE] L4 AMBIGUOUS — 4 equal-token rows for alley-cat-redbud-espalier → typed entry
+// UNKNOWN. A variety that was clean at 16:59 was broken at 17:03 — by D-49's own create branch.
+// Same destination as the Basham's scar, different road. The sheet said "Pick an existing size or
+// type a new one", the field was optional, and the save button did not argue. (ALLEY_CAT — the live
+// family — is declared above, beside the SKU-lineage checks that use the same rows.)
+ok(rescanResolves(ALLEY_CAT), 'Alley Cat: the family is CLEAN before the count (this is what got broken)');
 {
+  const t = resolveCountTarget({ siblings: sibs(ALLEY_CAT), groupKey: 'alley-cat-redbud-espalier', size: null });
+  ok(t.action === 'refuse', 'Alley Cat: a count with a BLANK size is REFUSED — the live defect');
+  ok(applyTarget(ALLEY_CAT, t, 60).length === 3, 'Alley Cat: a refusal writes NO row');
+  ok(rescanResolves(applyTarget(ALLEY_CAT, t, 60)), 'Alley Cat: the family survives the refusal — re-scan still fires the picker');
+}
+{
+  // The SAME defect through the `update` branch — and this is the one D-49's own suite BLESSED.
+  // A stub counted with no size matched at (0) (sameSizeLabel(null,null) is true) and took a plain
+  // update: qty lands on a row that still has no size, turning a harmless placeholder into a
+  // size-LESS LOT. That is the Basham's shape minted one branch over, and the assertion that used
+  // to live here asserted it as correct behavior. The defect was tested IN and blessed (the D-48
+  // scar, verbatim). Corrected — not adjusted to make a fix pass.
   const family: Row[] = [{ id: 'p', size: null, variant_group: null, qty: 0, sku: 'DISC-9' }];
   const t = resolveCountTarget({ siblings: sibs(family), groupKey: 'g', size: null });
-  ok(t.action === 'update' && t.rowId === 'p', 'stub counted with NO size → plain update (it matched at size null)');
+  ok(t.action === 'refuse', 'stub counted with NO size → REFUSED (was: update — the assertion that blessed the defect)');
+  ok(applyTarget(family, t, 60)[0].qty === 0, 'stub + no size: nothing written — it stays a placeholder, not a size-less lot');
 }
+ok(resolveCountTarget({ siblings: [], groupKey: 'new-variety', size: null }).action === 'refuse',
+   'a NEW variety typed with NO size → REFUSED (it would mint the landmine that detonates on its 2nd size)');
+ok(resolveCountTarget({ siblings: [], groupKey: null, size: null }).action === 'record-only',
+   'plant tag with no lot + no size → record-only, NOT refused (no row is written, so no size is needed)');
+
+// ══ PRESERVED BEHAVIOR — the branches that were already right ═════════════════
 ok(resolveCountTarget({ siblings: [], groupKey: null, size: '5 gal' }).action === 'record-only',
    'plant tag with no linked lot → record-only (nothing to write to inventory)');
 ok(resolveCountTarget({ siblings: [], groupKey: 'new-variety', size: '5 gal' }).action === 'create',

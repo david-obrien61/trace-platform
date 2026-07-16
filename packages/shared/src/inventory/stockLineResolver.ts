@@ -60,7 +60,14 @@ export const STOCK_LINE_COLUMNS =
 export type StockLineResolution =
   | { kind: 'resolved'; via: 'sku' | 'name'; row: StockLineRow }
   | { kind: 'collision'; variety: string; variantGroup: string; candidates: StockLineRow[] }
-  | { kind: 'miss'; reason: 'no_match' | 'ambiguous'; ambiguousCount?: number };
+  /** `candidates` is carried on an AMBIGUOUS miss so the caller's trace can SHOW the rows that
+   *  defeated the size-picker instead of asserting a cause. The emit used to append a hardcoded
+   *  "(ungrouped siblings)" to every ambiguous miss — for Alley Cat, whose four rows were all
+   *  grouped and one of which had a blank size, that parenthetical was simply FALSE, and the
+   *  correct diagnosis had to be reached by hand. Printing {group, size} per candidate makes the
+   *  cause VISIBLE without re-spelling detectSizeCollision's predicate anywhere (STD-011 — a
+   *  second copy of that rule, written to explain the first, is exactly what drifts). */
+  | { kind: 'miss'; reason: 'no_match' | 'ambiguous'; ambiguousCount?: number; candidates?: StockLineRow[] };
 
 /**
  * L5 NEED_CLARIFICATION discriminator: are these >1 token-equal matches the SAME variety in
@@ -133,8 +140,9 @@ export async function resolveStockLine(
           candidates,
         };
       }
-      // Genuinely ambiguous (mixed/empty variant_group) — do NOT auto-pick.
-      return { kind: 'miss', reason: 'ambiguous', ambiguousCount: matches.length };
+      // Genuinely ambiguous (mixed/empty variant_group, or a missing/duplicate size) — do NOT
+      // auto-pick. The candidates ride along so the caller can show WHY, not guess why.
+      return { kind: 'miss', reason: 'ambiguous', ambiguousCount: matches.length, candidates: matches };
     }
   }
 

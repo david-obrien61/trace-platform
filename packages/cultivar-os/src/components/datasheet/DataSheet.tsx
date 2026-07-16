@@ -21,6 +21,7 @@
 import { useState, useMemo, useEffect, Fragment } from 'react';
 import { ChevronRight, ChevronDown, SlidersHorizontal, Search, Lock } from 'lucide-react';
 import { lockInfoFor, type SystemFieldInfo } from './systemManagedFields';
+import { partitionFlagged } from './flagCounts';
 
 // ── Column descriptor: drives <thead>/<tbody> render, sort, the show/hide menu, the frozen-column
 //    pin, and the system-managed lock. ──
@@ -67,9 +68,16 @@ interface DataSheetProps<T> {
   statusFilter?: StatusFilterConfig<T>;
   defaultSortKey?: string;
   defaultSortDir?: 'asc' | 'desc';
-  /** Highlight + count rows (e.g. dup-size collisions). */
+  /** Highlight + count rows (e.g. dup-size collisions). Evaluated against the FULL row set — a flag
+   *  is a fact about the data, not about the filter, so a row stays flagged when its twin is
+   *  filtered out. */
   rowFlag?: (r: T) => boolean;
-  flagBanner?: (count: number) => React.ReactNode;
+  /** Renders the banner, given the flagged rows the owner can SEE (`inView`) and those the active
+   *  filter/search is hiding (`elsewhere`) — as two separate facts. Consumers must not add them
+   *  together and call the sum "here": a banner naming a defect that is not in what the owner is
+   *  looking at is D-9 inverted (it mis-attributes a real value rather than fabricating one), and
+   *  it tells them to fix a row that is not on screen. Shown whenever either count is > 0. */
+  flagBanner?: (inView: number, elsewhere: number) => React.ReactNode;
   /** Optional per-row detail drawer. When present, a trailing expand toggle column appears. */
   renderExpand?: (r: T) => React.ReactNode;
   /** Optional per-row action buttons (Edit / Add / Delete). When present, the engine renders them in
@@ -134,11 +142,6 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
     setExpanded(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   }
 
-  const flagCount = useMemo(
-    () => (rowFlag ? rows.filter(rowFlag).length : 0),
-    [rows, rowFlag],
-  );
-
   const view = useMemo(() => {
     const q = search.trim().toLowerCase();
     let out = rows;
@@ -155,6 +158,16 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
     }
     return out;
   }, [rows, search, status, statusFilter, sortKey, sortDir, columns, searchText]);
+
+  // Flagged rows, split by what the filter/search actually SHOWS. Computed AFTER `view` — deriving
+  // it from `rows` (as it did) is exactly the defect: the count was of the whole catalog while the
+  // banner rendered above the filtered view, so a clean screen still carried a red banner about a
+  // collision somewhere else. The rule is pure and lives in flagCounts.ts, because it was
+  // unreachable by any test while it lived inside this memo.
+  const flags = useMemo(
+    () => (rowFlag ? partitionFlagged(rows, view, rowFlag, getRowId) : { inView: 0, elsewhere: 0 }),
+    [rows, view, rowFlag, getRowId],
+  );
 
   const shownCols = columns.filter(c => visible[c.key]);
   const hideable = columns.filter(c => c.hideable !== false);
@@ -283,8 +296,8 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
               <span style={S.countPill}>{view.length} of {rows.length}{status !== 'all' || search ? ' shown' : ` ${itemNoun}`}</span>
             </div>
 
-            {rowFlag && flagCount > 0 && flagBanner && (
-              <div style={S.dupBanner}>{flagBanner(flagCount)}</div>
+            {rowFlag && flagBanner && (flags.inView > 0 || flags.elsewhere > 0) && (
+              <div style={S.dupBanner}>{flagBanner(flags.inView, flags.elsewhere)}</div>
             )}
 
             {/* Table — bounded scroll box: sticky header (top) + frozen identifier column (left),

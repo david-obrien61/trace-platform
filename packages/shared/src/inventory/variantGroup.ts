@@ -58,10 +58,53 @@ export function skuSizeSuffix(size: string): string {
 
 /** Suggested SKU for a size-sibling: parent SKU + '-' + the size suffix (e.g. DISC-1001 + "45 gal" →
  *  "DISC-1001-45G"). Returns null when the parent has NO SKU (D-9 — never fabricate a base) or the
- *  size is blank (nothing to suffix yet). Idempotent — never double-appends an already-present suffix. */
+ *  size is blank (nothing to suffix yet). Idempotent — never double-appends an already-present suffix.
+ *
+ *  ⚠️ `parentSku` MUST be the family's BASE SKU, not whichever row the caller happens to be holding.
+ *  This function cannot tell the difference: given a derived sibling it will happily suffix it again
+ *  (DISC-1003-30G + "45 gal" → DISC-1003-30G-45G — live, 2026-07-16). The idempotence guard below
+ *  only catches re-appending the SAME suffix. Resolve the base with baseSkuOf first, or call
+ *  suggestSiblingSku, which does it for you. */
 export function deriveSiblingSku(parentSku: string | null | undefined, size: string | null | undefined): string | null {
   const base = (parentSku ?? '').trim();
   const suffix = skuSizeSuffix((size ?? '').trim());
   if (!base || !suffix) return null;
   return base.toUpperCase().endsWith(`-${suffix}`) ? base : `${base}-${suffix}`;
+}
+
+/**
+ * The family's BASE SKU — the lineage root every size-sibling's SKU derives from.
+ *
+ * THE ONE base-resolution rule (STD-011). Homed here beside deriveSiblingSku (moved from
+ * countPromote.ts, where it was reachable only by the count path) because SKU lineage is a
+ * SKU fact, not a counting fact — the manual "+ Add size" editor needs the identical rule and
+ * has no business importing the count's promote decision to get it.
+ *
+ * Shortest non-blank SKU wins: within ONE variety's family a derived sibling SKU is always its
+ * base plus a suffix ("DISC-1001" → "DISC-1001-30G"), so the base is always the shortest. This
+ * reaches PAST a sku-null sibling and past an already-compounded one — given the live Alley Cat
+ * family [DISC-1003, DISC-1003-30G, DISC-1003-30G-45G] it returns DISC-1003.
+ * Returns null when no sibling carries a SKU — D-9 omit-not-fake: never invent a base.
+ */
+export function baseSkuOf(siblings: Array<{ sku: string | null }>): string | null {
+  const skus = siblings.map(s => (s.sku ?? '').trim()).filter(Boolean);
+  if (skus.length === 0) return null;
+  return skus.reduce((a, b) => (b.length < a.length ? b : a));
+}
+
+/**
+ * The SKU to suggest for a NEW size added to an existing variety family: the family's base SKU +
+ * the size suffix. THE ONE call every sibling-minting path makes (STD-011) — the count's promote
+ * and the manual "+ Add size" editor, so the two can never derive a SKU by different rules.
+ *
+ * SCAR (live, 2026-07-16): the editor passed the CLICKED ROW's SKU as the base, so adding a size
+ * from the DISC-1003-30G row minted **DISC-1003-30G-45G**, and the next one would have been
+ * DISC-1003-30G-45G-15G. The count path called the same deriveSiblingSku minutes later and got
+ * DISC-1003-60G right — from this very family — because it resolved the base first. Base +
+ * suffix, never suffix-of-suffix (the WooCommerce parent-SKU convention, ledger #127).
+ *
+ * @param family the variety's existing rows (any order — the base is derived, never positional)
+ */
+export function suggestSiblingSku(family: Array<{ sku: string | null }>, size: string | null | undefined): string | null {
+  return deriveSiblingSku(baseSkuOf(family), size);
 }
