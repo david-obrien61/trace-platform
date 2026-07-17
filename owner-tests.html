@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TRACE — Owner Test Board</title>
+<!--
+  PURE RENDERER. Holds ZERO test data of its own.
+  The ONLY source of truth is docs/owner-tests/*-full-surface-test.md (its ## SURFACE: sections).
+  This file PARSES that markdown at open-time and renders it — it never duplicates or hardcodes a
+  check. Delete the .md and this shows "no data", never a stale board.
+  Open: double-click → "Open .md" (or drag-drop the test file).
+
+  Third sibling of status.html / stories.html — same load/render pattern, mirrored styling.
+    status.html      = what's BUILT           (capabilities: green/amber/red)
+    stories.html     = what we're BUILDING TOWARD (day-in-the-life need)
+    owner-tests.html = whether it's PROVEN    (does it actually work, and who checked)
+  Linked by COVERS: (ledger #) and the surface name.
+
+  THE POINT (OP-14): "it works" is a CLAIM until someone drove it through the real UI.
+  This board makes the difference between proven and asserted VISIBLE, so a red 'needs-test'
+  cannot quietly pass for green. A surface with no test is a KNOWN HOLE, not an oversight.
+
+  TAGS on every card (parsed from the .md, never invented here):
+    STATUS: covered | owed | needs-test | blocked
+      covered    = a test exists AND passed on LAST-PROVEN                 (green)
+      owed       = written, not run since the surface changed — NOT proven (amber)
+      needs-test = the surface EXISTS and has NO test — the annotation     (red)
+      blocked    = cannot be run yet, reason on the card                   (slate)
+    DEVICE: phone | desktop | either
+    COVERS: ledger #s / decisions this check defends
+    LAST-PROVEN: YYYY-MM-DD | never
+    SIGNAL: the [TRACE:*] line (always SECONDARY — a PASS must be visible without a console)
+  Default view = "Not proven" (owed + needs-test) — the honest default: what you cannot trust yet.
+-->
+<style>
+  :root{
+    --covered:#16a34a; --owed:#d97706; --needstest:#dc2626; --blocked:#64748b;
+    --bg:#f5f7f2; --card:#ffffff; --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#27500A;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{position:sticky;top:0;z-index:5;background:var(--accent);color:#fff;
+    padding:14px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    box-shadow:0 1px 6px rgba(0,0,0,.15)}
+  header h1{margin:0;font-size:1.05rem;font-weight:800;letter-spacing:.01em}
+  header .sub{font-size:.72rem;opacity:.85;font-weight:500}
+  .spacer{flex:1}
+  .btn{background:#fff;color:var(--accent);border:none;border-radius:8px;
+    padding:8px 14px;font-weight:700;font-size:.82rem;cursor:pointer}
+  .btn.ghost{background:rgba(255,255,255,.15);color:#fff}
+  .wrap{max-width:1100px;margin:0 auto;padding:18px 20px 60px}
+  .hide{display:none}
+  /* tabs */
+  .tabs{display:flex;gap:8px;margin:6px 0 10px;flex-wrap:wrap}
+  .tab{background:var(--card);border:1.5px solid var(--line);border-radius:999px;
+    padding:7px 16px;font-weight:700;font-size:.82rem;cursor:pointer;color:var(--muted)}
+  .tab.active{border-color:var(--accent);color:var(--accent);background:#eef4e6}
+  /* filters */
+  .filters{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:0 0 14px}
+  .fgroup{display:inline-flex;align-items:center;gap:6px;font-size:.76rem;color:var(--muted);font-weight:700}
+  .fgroup select{font:inherit;font-size:.8rem;font-weight:600;color:var(--ink);
+    background:var(--card);border:1.5px solid var(--line);border-radius:8px;padding:5px 9px;cursor:pointer}
+  .clearf{font-size:.72rem;color:var(--accent);font-weight:700;cursor:pointer;text-decoration:underline}
+  /* legend + tally */
+  .legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;
+    font-size:.74rem;color:var(--muted);margin-bottom:6px}
+  .legend .k{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;display:inline-block}
+  .d-covered{background:var(--covered)} .d-owed{background:var(--owed)}
+  .d-needstest{background:var(--needstest)} .d-blocked{background:var(--blocked)}
+  .tally{display:inline-flex;gap:10px;font-weight:800;font-size:.82rem;flex-wrap:wrap}
+  .srcline{font-size:.7rem;color:var(--muted);font-style:italic}
+  /* trust meter — the headline number */
+  .trust{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:14px 18px;margin:0 0 18px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .trust .big{font-size:1.5rem;font-weight:800;letter-spacing:-.01em}
+  .trust .cap{font-size:.74rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+  .bar{display:flex;height:12px;border-radius:999px;overflow:hidden;margin:9px 0 7px;background:var(--line)}
+  .bar span{display:block;height:100%}
+  .bar .b-covered{background:var(--covered)} .bar .b-owed{background:var(--owed)}
+  .bar .b-needstest{background:var(--needstest)} .bar .b-blocked{background:var(--blocked)}
+  .trust .note{font-size:.8rem;color:var(--muted);line-height:1.45}
+  .trust .note b{color:var(--ink)}
+  /* surface band */
+  .band{margin:22px 0 10px;font-size:.78rem;font-weight:800;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--accent);display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .band:first-child{margin-top:4px}
+  .band .sdef{font-size:.7rem;font-weight:500;letter-spacing:0;text-transform:none;color:var(--muted)}
+  .band .scount{font-size:.7rem;font-weight:700;color:var(--muted);background:#eef4e6;border-radius:999px;padding:1px 8px}
+  /* cards */
+  .grid{display:grid;grid-template-columns:1fr;gap:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-left-width:5px;
+    border-radius:10px;padding:13px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .card.c-covered{border-left-color:var(--covered)}
+  .card.c-owed{border-left-color:var(--owed)}
+  .card.c-needstest{border-left-color:var(--needstest);background:#fffafa}
+  .card.c-blocked{border-left-color:var(--blocked);background:#f8fafc}
+  .card .top{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:6px}
+  .card .name{font-weight:800;font-size:1rem;flex:1;min-width:200px}
+  .pill{display:inline-block;font-size:.68rem;font-weight:800;letter-spacing:.04em;
+    text-transform:uppercase;padding:2px 9px;border-radius:999px;white-space:nowrap}
+  .p-covered{background:#dcfce7;color:#166534}
+  .p-owed{background:#fef3c7;color:#92400e}
+  .p-needstest{background:#fee2e2;color:#991b1b}
+  .p-blocked{background:#e2e8f0;color:#334155}
+  /* tag row */
+  .tagrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:2px 0 8px}
+  .dev{display:inline-flex;align-items:center;gap:4px;font-size:.7rem;font-weight:800;
+    border-radius:7px;padding:3px 8px}
+  .dev.v-phone{background:#1e1b4b;color:#c7d2fe}
+  .dev.v-desktop{background:#0f3d2e;color:#a7f3d0}
+  .dev.v-either{background:#eef4e6;color:var(--accent);border:1px solid #d6e6c4}
+  .covers{display:inline-flex;align-items:center;gap:5px;font-size:.74rem;font-weight:800;
+    color:#fff;background:var(--accent);border-radius:7px;padding:3px 9px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .proven{display:inline-flex;align-items:center;gap:4px;font-size:.72rem;font-weight:700;
+    border-radius:7px;padding:3px 9px;background:#f6f8f3;border:1px solid var(--line);color:var(--muted);
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .proven.never{background:#fee2e2;color:#991b1b;border-color:#fecaca;font-weight:800}
+  .sig{display:block;font-size:.72rem;background:#0f172a;color:#a5f3fc;border-radius:7px;
+    padding:5px 9px;margin:0 0 8px;overflow-x:auto;white-space:pre;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .siglbl{font-size:.62rem;color:#64748b;font-weight:800;letter-spacing:.06em}
+  /* body */
+  .nar{font-size:.9rem;line-height:1.55;color:var(--ink)}
+  .nar p{margin:.45em 0}
+  .nar ul{margin:.4em 0;padding-left:1.15em}
+  .nar li{margin:.24em 0}
+  .nar code{background:#f6f8f3;border:1px solid var(--line);border-radius:4px;padding:0 4px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.86em}
+  .nohole{font-size:.84rem;line-height:1.45;background:#fef2f2;border:1px solid #fecaca;
+    border-radius:8px;padding:8px 11px;margin:0 0 8px;color:#991b1b}
+  /* empty */
+  .empty{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:26px;text-align:center}
+  .empty h2{margin:0 0 8px;font-size:1.05rem}
+  .drop{border:2px dashed #cbd5e1;border-radius:10px;padding:26px;margin:14px 0;color:var(--muted)}
+  .drop.over{border-color:var(--accent);background:#eef4e6}
+  .hint{font-size:.8rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>TRACE — Owner Test Board</h1>
+    <div class="sub">Is it PROVEN, or just claimed? · pure renderer of <code>docs/owner-tests/*.md</code></div>
+  </div>
+  <div class="spacer"></div>
+  <span class="tally" id="tally"></span>
+  <button class="btn" id="openBtn">Open .md</button>
+  <button class="btn ghost" id="reloadBtn">Reload</button>
+  <input type="file" id="file" accept=".md,text/markdown" style="display:none" />
+</header>
+
+<div class="wrap">
+  <!-- EMPTY STATE -->
+  <div id="emptyState" class="empty">
+    <h2>No data — open a test source</h2>
+    <p>This board holds no checks of its own. It renders only what it reads from
+       <code>docs/owner-tests/…-full-surface-test.md</code>.</p>
+    <div class="drop" id="drop">
+      <strong>Drop a *-full-surface-test.md here</strong>
+      <div class="hint">or click “Open .md” above and pick it.</div>
+    </div>
+    <p class="hint" id="autoNote"></p>
+  </div>
+
+  <!-- BOARD -->
+  <div id="board" class="hide">
+    <div id="trust" class="trust"></div>
+    <div class="tabs">
+      <button class="tab active" data-view="unproven">⚠ Not proven</button>
+      <button class="tab" data-view="holes">🔴 No test written</button>
+      <button class="tab" data-view="all">📋 All checks</button>
+    </div>
+    <div class="filters">
+      <span class="fgroup">Status
+        <select id="statusFilter">
+          <option value="all">all</option>
+          <option value="covered">covered</option>
+          <option value="owed">owed</option>
+          <option value="needs-test">needs-test</option>
+          <option value="blocked">blocked</option>
+        </select>
+      </span>
+      <span class="fgroup">Surface <select id="surfaceFilter"><option value="all">all</option></select></span>
+      <span class="fgroup">Device <select id="deviceFilter"><option value="all">all</option></select></span>
+      <span class="fgroup">Covers <select id="coversFilter"><option value="all">all</option></select></span>
+      <span class="clearf" id="clearFilters">clear filters</span>
+    </div>
+    <div class="legend">
+      <span class="k"><span class="dot d-covered"></span>covered — a test exists AND passed</span>
+      <span class="k"><span class="dot d-owed"></span>owed — written, never run since the change (NOT proven)</span>
+      <span class="k"><span class="dot d-needstest"></span>needs-test — the surface exists, no test (a known hole)</span>
+      <span class="k"><span class="dot d-blocked"></span>blocked — can't run yet</span>
+    </div>
+    <div class="legend"><span class="srcline" id="srcline"></span></div>
+    <div id="view"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ───────────── status vocab ─────────────
+   PROVEN = trustworthy today.  UNPROVEN = everything else, and the default view. */
+const PROVEN     = ["covered"];
+const UNPROVEN   = ["owed","needs-test","blocked"];
+const RECOGNIZED = [...PROVEN, ...UNPROVEN];
+const CLS = { "covered":"covered", "owed":"owed", "needs-test":"needstest", "blocked":"blocked" };
+
+/* Surface display order + one-line definitions. A surface seen in the .md but not listed here
+   still renders (appended, undefined) — the .md is the authority, this is only presentation. */
+const SURFACES = [
+  ["resolve",      "Resolve",        "scan → identity: L1 plant tag → L2 SKU → L4 name token-set → L5 size-picker"],
+  ["count-promote","Count / Promote","the walk-and-count loop: scan → resolve → which size + qty → save → next"],
+  ["typed-entry",  "Typed Entry",    "the “Didn't recognize this” sheet — resolve-before-create, or skip & flag"],
+  ["add-size",     "Add Size",       "the manual sibling-minting path (the count's twin)"],
+  ["manual-crud",  "Manual CRUD",    "Add Item · Edit · Delete — the full entry surface (STD-018)"],
+  ["grid",         "Grid",           "the /inventory datasheet — the reconcile surface"],
+  ["order-picker", "Order Picker",   "where inventory is READ at checkout — capture → persist → READ"],
+  ["offline",      "Offline / Sync", "the SyncEngine — back-acre dead zones"],
+];
+const S_NAME  = Object.fromEntries(SURFACES.map(s=>[s[0],s[1]]));
+const S_DEF   = Object.fromEntries(SURFACES.map(s=>[s[0],s[2]]));
+const S_ORDER = SURFACES.map(s=>s[0]);
+
+/* ───────────── tiny markdown ───────────── */
+function esc(s){return (s||"").replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function inlineMd(s){
+  let t = esc(s);
+  t = t.replace(/\[([^\]]+)\]\([^)]*\)/g,"$1");
+  t = t.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>");
+  t = t.replace(/`([^`]+)`/g,"<code>$1</code>");
+  t = t.replace(/(^|[\s(])_([^_]+)_(?=[\s.,;:)]|$)/g,"$1<em>$2</em>");
+  t = t.replace(/(^|[\s(])\*([^*]+)\*(?=[\s.,;:)]|$)/g,"$1<em>$2</em>");
+  return t;
+}
+function blockMd(raw){
+  const lines = (raw||"").split(/\n/);
+  let html="", list=[], para=[];
+  const flushP=()=>{ if(para.length){ html+=`<p>${inlineMd(para.join(" ").trim())}</p>`; para=[]; } };
+  const flushL=()=>{ if(list.length){ html+=`<ul>${list.map(li=>`<li>${inlineMd(li)}</li>`).join("")}</ul>`; list=[]; } };
+  for(const ln of lines){
+    const t = ln.trim();
+    if(!t){ flushP(); flushL(); continue; }
+    const m = t.match(/^[-*]\s+(.+)$/);
+    if(m){ flushP(); list.push(m[1]); }
+    else { flushL(); para.push(t); }
+  }
+  flushP(); flushL();
+  return html;
+}
+
+/* ───────────── parse the test .md ─────────────
+   Bands: "## SURFACE: <slug>"   Cards: "### <title>" + TAG: lines + body.
+   Any other "## " section (HOW TO READ, GATE 0, SETUP, RESULTS, APPENDIX…) closes the band and
+   is NOT parsed as checks — those are prose for the human running it, not board data. */
+function parseTests(mdText){
+  const lines = mdText.split(/\r?\n/);
+  const checks = [];
+  let curSurface = null, cur = null;
+  const push = () => {
+    if(cur){ cur.body = cur.bodyLines.join("\n").trim(); delete cur.bodyLines; checks.push(cur); cur = null; }
+  };
+  for(const raw of lines){
+    const t = raw.replace(/\s+$/,"").trim();
+
+    if(/^##\s/.test(t) && !/^###/.test(t)){
+      push();
+      const m = t.match(/^##\s*SURFACE:\s*([a-z0-9-]+)/i);
+      curSurface = m ? m[1].toLowerCase() : null;
+      continue;
+    }
+    if(/^###\s/.test(t)){
+      push();
+      if(!curSurface) continue;                       // a ### outside a SURFACE band is not a check
+      cur = { title:t.replace(/^###\s*/,""), surface:curSurface, status:"", device:"",
+              covers:[], lastProven:"", signal:"", bodyLines:[] };
+      continue;
+    }
+    if(!cur) continue;
+
+    let m;
+    if((m = t.match(/^STATUS:\s*(.+)$/i)))      { cur.status = m[1].trim().toLowerCase(); continue; }
+    if((m = t.match(/^DEVICE:\s*(.+)$/i)))      { cur.device = m[1].trim().toLowerCase(); continue; }
+    if((m = t.match(/^LAST-PROVEN:\s*(.+)$/i))) { cur.lastProven = m[1].trim(); continue; }
+    if((m = t.match(/^SIGNAL:\s*(.+)$/i)))      { cur.signal = m[1].trim().replace(/^`|`$/g,""); continue; }
+    if((m = t.match(/^COVERS:\s*(.+)$/i))){
+      cur.covers = m[1].split(",").map(x=>x.trim()).filter(Boolean);
+      continue;
+    }
+    cur.bodyLines.push(raw);
+  }
+  push();
+  return checks;
+}
+
+/* ───────────── render ───────────── */
+function card(c){
+  const st  = RECOGNIZED.includes(c.status) ? c.status : "owed";
+  const cls = CLS[st];
+  const never = /^never$/i.test(c.lastProven);
+  const isHole = st === "needs-test";
+  return `
+  <div class="card c-${cls}">
+    <div class="top">
+      <div class="name">${inlineMd(c.title)}</div>
+      <span class="pill p-${cls}">${esc(st)}</span>
+    </div>
+    <div class="tagrow">
+      ${c.device ? `<span class="dev v-${esc(c.device)}">${c.device==="phone"?"📱":c.device==="desktop"?"🖥":"◑"} ${esc(c.device)}</span>` : ""}
+      ${c.covers.map(x=>`<span class="covers">${esc(x)}</span>`).join("")}
+      ${c.lastProven ? `<span class="proven ${never?"never":""}">${never?"never proven":"proven "+esc(c.lastProven)}</span>` : ""}
+    </div>
+    ${isHole ? `<div class="nohole"><b>No test written.</b> This surface ships without one — a known hole, recorded rather than discovered at use (OP-14).</div>` : ""}
+    ${c.signal ? `<div class="siglbl">SIGNAL (secondary — a PASS must be visible without it)</div><code class="sig">${esc(c.signal)}</code>` : ""}
+    <div class="nar">${blockMd(c.body)}</div>
+  </div>`;
+}
+
+function trustPanel(all){
+  const n = all.length || 1;
+  const by = s => all.filter(c=>c.status===s).length;
+  const cov = by("covered"), owed = by("owed"), hole = by("needs-test"), blk = by("blocked");
+  const pct = Math.round((cov/n)*100);
+  const seg = (k,v)=> v ? `<span class="b-${k}" style="width:${(v/n)*100}%"></span>` : "";
+  let verdict;
+  if(hole > 0)      verdict = `<b>${hole} surface${hole===1?"":"s"} ship with NO test.</b> Those are known holes, not oversights — each one is a place a fix could be “verified” and still be wrong.`;
+  else if(owed > 0) verdict = `<b>${owed} check${owed===1?"":"s"} are written but unrun.</b> Written ≠ proven. Nothing here is trustworthy until someone drove it through the real UI.`;
+  else              verdict = `<b>Every check is covered.</b> Re-run after the next change to this capability — a covered check goes stale the moment its surface moves.`;
+  return `
+    <div class="cap">Proven</div>
+    <div class="big">${cov} / ${all.length} checks &nbsp;<span style="font-size:1rem;color:var(--muted)">(${pct}%)</span></div>
+    <div class="bar">${seg("covered",cov)}${seg("owed",owed)}${seg("needstest",hole)}${seg("blocked",blk)}</div>
+    <div class="note">${verdict}</div>`;
+}
+
+let currentView="unproven", statusFilter="all", surfaceFilter="all", deviceFilter="all", coversFilter="all";
+
+function renderView(all){
+  document.getElementById("trust").innerHTML = trustPanel(all);
+
+  let rows = all.slice();
+  if(currentView==="unproven") rows = rows.filter(c=>UNPROVEN.includes(c.status));
+  else if(currentView==="holes") rows = rows.filter(c=>c.status==="needs-test");
+  if(statusFilter!=="all")  rows = rows.filter(c=>c.status===statusFilter);
+  if(surfaceFilter!=="all") rows = rows.filter(c=>c.surface===surfaceFilter);
+  if(deviceFilter!=="all")  rows = rows.filter(c=>c.device===deviceFilter);
+  if(coversFilter!=="all")  rows = rows.filter(c=>c.covers.includes(coversFilter));
+
+  const seen = [...new Set(rows.map(c=>c.surface))];
+  const order = [...S_ORDER.filter(s=>seen.includes(s)), ...seen.filter(s=>!S_ORDER.includes(s))];
+
+  let html = "";
+  for(const s of order){
+    const group = rows.filter(c=>c.surface===s);
+    if(!group.length) continue;
+    html += `<div class="band">${esc(S_NAME[s]||s)}
+      <span class="scount">${group.length}</span>
+      <span class="sdef">${esc(S_DEF[s]||"")}</span></div>`;
+    html += `<div class="grid">${group.map(card).join("")}</div>`;
+  }
+  if(!html){
+    const msg = currentView==="holes"
+      ? "No untested surfaces in this filter. 🎉"
+      : (currentView==="unproven" ? "Nothing unproven in this filter — every matching check is covered. 🎉" : "Nothing matches this filter.");
+    html = `<p class="hint">${msg}</p>`;
+  }
+  document.getElementById("view").innerHTML = html;
+
+  const by = s => all.filter(c=>c.status===s).length;
+  document.getElementById("tally").innerHTML =
+    `<span style="color:#bbf7d0">${by("covered")} covered</span>
+     <span style="color:#fde68a">${by("owed")} owed</span>
+     <span style="color:#fecaca">${by("needs-test")} no-test</span>`;
+}
+
+function render(text, label){
+  const all = parseTests(text);
+  window.__checks = all;
+  if(!all.length){ showEmpty("No checks found — is that a *-full-surface-test.md?"); return; }
+  document.getElementById("emptyState").classList.add("hide");
+  document.getElementById("board").classList.remove("hide");
+
+  // populate filters FROM THE DATA (never a hardcoded list — the .md is the authority)
+  const fill = (id, vals) => {
+    const sel = document.getElementById(id);
+    const keep = sel.value;
+    sel.innerHTML = `<option value="all">all</option>` +
+      vals.map(v=>`<option value="${esc(v)}">${esc(S_NAME[v]||v)}</option>`).join("");
+    sel.value = vals.includes(keep) ? keep : "all";
+  };
+  const surfaces = [...new Set(all.map(c=>c.surface))]
+    .sort((a,b)=>(S_ORDER.indexOf(a)+1||99)-(S_ORDER.indexOf(b)+1||99));
+  fill("surfaceFilter", surfaces);
+  fill("deviceFilter", [...new Set(all.map(c=>c.device).filter(Boolean))].sort());
+  fill("coversFilter", [...new Set(all.flatMap(c=>c.covers))].sort());
+
+  const unknown = all.filter(c=>!RECOGNIZED.includes(c.status));
+  document.getElementById("srcline").textContent =
+    `source: ${label} · ${all.length} checks · ${surfaces.length} surfaces` +
+    (unknown.length ? ` · ⚠ ${unknown.length} card(s) have an unrecognized STATUS — shown as "owed"` : "");
+  renderView(all);
+}
+
+/* ───────────── loading / events ───────────── */
+function showEmpty(msg){
+  document.getElementById("board").classList.add("hide");
+  const e=document.getElementById("emptyState");
+  e.classList.remove("hide");
+  if(msg) e.querySelector("h2").textContent = msg;
+  document.getElementById("tally").textContent="";
+}
+function readFile(file){
+  const r=new FileReader();
+  r.onload=()=>render(String(r.result), file.name);
+  r.onerror=()=>showEmpty("Couldn't read that file.");
+  r.readAsText(file);
+}
+document.getElementById("openBtn").onclick=()=>document.getElementById("file").click();
+document.getElementById("file").onchange=e=>{ if(e.target.files[0]) readFile(e.target.files[0]); };
+document.getElementById("reloadBtn").onclick=()=>tryAutoFetch(true);
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+  currentView=t.dataset.view;
+  document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.view===currentView));
+  if(window.__checks) renderView(window.__checks);
+});
+const onFilter = (id, set) => document.getElementById(id).onchange = e => { set(e.target.value); if(window.__checks) renderView(window.__checks); };
+onFilter("statusFilter",  v=>statusFilter=v);
+onFilter("surfaceFilter", v=>surfaceFilter=v);
+onFilter("deviceFilter",  v=>deviceFilter=v);
+onFilter("coversFilter",  v=>coversFilter=v);
+document.getElementById("clearFilters").onclick=()=>{
+  statusFilter=surfaceFilter=deviceFilter=coversFilter="all";
+  ["statusFilter","surfaceFilter","deviceFilter","coversFilter"].forEach(id=>document.getElementById(id).value="all");
+  if(window.__checks) renderView(window.__checks);
+};
+
+// drag-drop
+const drop=document.getElementById("drop");
+["dragenter","dragover"].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();if(ev==="dragleave"&&e.relatedTarget)return;drop.classList.remove("over");}));
+document.addEventListener("drop",e=>{const f=e.dataTransfer.files[0]; if(f) readFile(f);});
+
+/* auto-fetch (works when served; file:// will throw → picker) */
+function tryAutoFetch(manual){
+  fetch("./docs/owner-tests/inventory-full-surface-test.md",{cache:"no-store"})
+    .then(r=>{ if(!r.ok) throw new Error(r.status); return r.text(); })
+    .then(t=>render(t,"./docs/owner-tests/inventory-full-surface-test.md (auto)"))
+    .catch(()=>{
+      document.getElementById("autoNote").textContent =
+        "Auto-load blocked by the browser for local files — pick or drop the .md (this is normal for double-click open).";
+      if(manual) showEmpty("No data — open a test source");
+    });
+}
+tryAutoFetch(false);
+</script>
+</body>
+</html>

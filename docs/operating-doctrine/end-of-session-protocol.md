@@ -92,6 +92,29 @@ For **each capability touched this session**, confirm all three:
 
 ---
 
+## GATE — OWNER-TEST COVERAGE (mandatory on every surface change, not optional)
+
+**The rule: a build that ADDS, CHANGES, or POLISHES a surface must leave that surface with a matching owner-test card — or mark it `STATUS: needs-test` with a reason.** The card lives in the capability's standing test (`docs/owner-tests/<capability>-full-surface-test.md`), rendered by `owner-tests.html`. **A close-out that changed a surface without touching its test is an INCOMPLETE task — same enforcement weight as the BUILT-INVENTORY, §3 RETENTION, close-out-ledger, and ⚡ ACTIVE STATUS gates.**
+
+**Why this is a gate and not a nice-to-have.** *"It works"* is a **claim** until someone drove it through the real UI under real RLS. The two-bar rule (BUILDER-COMPLETE vs OWNER-PROVEN) already says so — **but nothing made the gap between them VISIBLE**, so an unproven surface looked exactly like a proven one, and the honest answer to *"can I trust this?"* was a feeling instead of a number. Measured on the day this gate was written: **the inventory capability was 19% proven — 5 of 27 checks — and FOUR of its eight surfaces shipped with no test at all**, including the order-picker READ, which is the entire reason D-45 exists. None of that was hidden by anyone; it was simply never counted.
+
+**The scar it exists to stop (one day, 2026-07-16, three fixes in a row):** the apostrophe fix (#132) unblocked a resolver path and immediately exposed a promote that had never run on it (#133) — *counting a variety made it permanently unscannable*. Fixing that exposed three more mint paths that didn't obey its invariant (#135) — **all four minted through the UI within the hour.** Each fix was correct. Each was verified on the surface that motivated it. **The surface it didn't reach was where the next defect lived.** STD-017 says a fix must be true on every surface; this gate is what makes that checkable instead of promised.
+
+**The four clauses:**
+
+1. **Touch a surface → touch its card.** Add a check, or update the existing one, or mark it `needs-test` with a reason. Silence is not an option — a surface with no card and no `needs-test` marker is invisible debt, and invisible debt is what this whole gate exists to end.
+2. **`needs-test` is a legitimate, honest answer — and it is RED on the board.** Writing a test is not always this build's job (a probe needs live data; a path needs an offline rig). **Recording that it is missing always is.** A known hole is a decision; an unrecorded hole is a lie by omission. This is D-9 applied to our own confidence.
+3. **Changing a surface INVALIDATES its `covered` status.** Set `LAST-PROVEN` back and flip `covered` → `owed`. **A green check on a moved surface is worse than no check at all** — it is an assertion of proof that nobody performed, which is the precise shape of D-49's own suite blessing the defect it was written to prevent.
+4. **A per-build proof is a FILTER (`COVERS: #NNN`), never a second document.** Two docs answering one question drift, and drift is what makes a test unbelievable (STD-011). The standing test is the only home; the ledger's owner-proof cell points AT it.
+
+**Who runs it.** David, through the real UI, on the real device. **Thunder may never mark a card `covered`** — Thunder can write the check, wire the signal, and set `owed`; only David's live run flips it to `covered` with a date. **The builder does not get to grade their own homework**, and this gate is the mechanical expression of that (it is OP-4's two bars, given a scoreboard).
+
+**Phone-first where the work is phone-first.** A card tagged `DEVICE: phone` must be provable **without a console** — the capture loop happens in a lot, and a check that needs DevTools is a check that never gets run there. `SIGNAL:` lines are secondary evidence, never the PASS criterion. (This is capture=mobile / reconcile=desktop applied to testing itself.)
+
+**Relationship to the other gates:** BUILT-INVENTORY reconciles *"what exists."* OWNER-PROVEN reconciles *"what's proven"* — the FACT. §3 RETENTION reconciles *"what still needs to be read."* This gate reconciles **"how you would KNOW"** — it is the OWNER-PROVEN gate's missing other half: that one records the verdict, this one guarantees a repeatable way to reach it. Together: a capability that exists, has a test, and has been driven. (Operating principle: **OP-14**. Binding home: CLAUDE.md §9 + §1.6 item 11.)
+
+---
+
 ## The why, one more time (so this discipline survives)
 
 You lose context every session — that's structural and permanent. You cannot fix Lightning's memory. You CAN make the cost of Lightning not-remembering drop to near zero, by keeping ONE current, fixed-structure front-door doc. This protocol is what keeps that doc current. Skip it, and next session you're back to screenshots and re-explanation. Do it (5 min), and next session is one paste and you're working.
