@@ -113,15 +113,16 @@ SIGNAL: `[TRACE:RESOLVE] L4 MISS — ambiguous: 2 … candidates: [{size:"15",�
 _The walk-and-count loop: scan → resolve → which size + qty → save → next._
 
 ### A blank size is REFUSED 🔴
-STATUS: owed
+STATUS: covered
 DEVICE: phone
 COVERS: #135, D-49, D-34
-LAST-PROVEN: never
+LAST-PROVEN: 2026-07-17
 SIGNAL: `[TRACE:INVENTORY] promote — REFUSED at the sheet: size-required`
 - **Do:** scan a variety that already has sizes. **Leave Size EMPTY.** Enter a count. Save → Next.
 - **PASS:** blocked. Size red-bordered. A message under it says why. **No row written.**
 - **FAIL:** it saves *(stale bundle — see GATE 0)*, **or** a greyed button with no reason *(a silent refusal is its own defect — the owner must be told why)*.
 - **Why:** you did exactly this at 17:03 and it minted `created {size: null, qty: 60}` next to 15/30/45. The re-scan went UNKNOWN. **A variety that was clean at 16:59 was broken at 17:03 — by the branch that was supposed to be the fix.**
+- **✅ PROVEN 2026-07-17 (David, live) — FIXTURE: Lacey Oak, a VIRGIN STUB (no sizes, no chips at all).** Size left EMPTY, qty 5, Save → *"Which size? Pick one above or type it — a count has to say which size it counted."* Blocked, nothing written, re-scan still resolves. **The fixture is STRONGER than the card asked for:** Bur Oak has an existing size and would have nudged onto the MATCH branch; Lacey Oak has nothing to compare against — **the unconditional case, exactly where a "required only when the family has sizes" fix would have leaked, and did not.**
 
 ### A counted STUB fills in place — the row count does NOT move
 STATUS: covered
@@ -204,25 +205,27 @@ SIGNAL: `[TRACE:INVENTORY] typed resolve-before-create — … → <matched vari
 _"+ Add size" — the manual sibling-minting path (the count's twin)._
 
 ### A size already in the group is REFUSED, and the twin is NAMED
-STATUS: owed
+STATUS: covered
 DEVICE: desktop
 COVERS: #135, #74
-LAST-PROVEN: never
+LAST-PROVEN: 2026-07-17
 - **Do:** on **Acoma Crape Myrtle**, click **+ Add size** and type **`15`** — the size it already has.
 - **PASS:** blocked. The message **names the existing row and its SKU** and says to edit that row instead. *(Either twin's SKU is a pass — it will most likely name `DISC-1002-15G`, since rows arrive newest-first. Which one it names doesn't matter; that it names one, with its SKU, does.)*
 - **FAIL:** it saves → **you just minted another CASE 5 twin**. Or it refuses with no explanation.
 - **Then:** type a size Acoma *doesn't* have (`30 gal`). **PASS:** saves normally — the guard refuses duplicates, not additions.
 - **Why:** the editor enforced **SKU** uniqueness (`DISC-1002-15G` *is* unique → it passed) and never checked **SIZE** uniqueness. **Two different facts:** a SKU identifies one sellable UNIT; a (group, size) pair identifies one VARIANT. This is ledger #74's CASE 5 — **theoretical since 2026-06-30, minted through the UI in under a minute.**
+- **✅ PROVEN 2026-07-17 (David, live) — FIXTURE: the `DISC-1003` (Alley Cat) family** (equivalent to the Acoma example — the guard is generic). "+ Add size", typed `15` (already present) → *"'15' already exists in this variety (SKU DISC-1003) — edit that row's quantity instead of adding a second one."* Blocked, NAMES the row by SKU, OFFERS the alternative — not a bare refusal. This is the input that minted Acoma's CASE 5 twin yesterday.
 
 ### Add-size from a SUFFIXED sibling does not compound the SKU
-STATUS: owed
+STATUS: covered
 DEVICE: desktop
 COVERS: #135, #127, D-46
-LAST-PROVEN: never
+LAST-PROVEN: 2026-07-17
 - **Do:** click **+ Add size** on the **`DISC-1003-30G`** row (the *sibling*, not the base). Type `25 gal`.
 - **PASS:** SKU pre-fills **`DISC-1003-25G`**, and the hint reads *"Suggested from this variety's **base SKU DISC-1003** + the size."*
 - **FAIL:** it pre-fills **`DISC-1003-30G-25G`** — compounded off the row you clicked.
 - **Why:** the live `DISC-1003-30G-45G` in your data. The next would have been `DISC-1003-30G-45G-15G`. **The helper was never the bug — the caller was:** the count path called the *same* helper minutes later and got `DISC-1003-60G` right.
+- **✅ PROVEN 2026-07-17 (David, live) — FIXTURE: the SUFFIXED sibling `DISC-1003-30G`** (deliberately, not the base — the base would prove nothing since base == clicked row). "+ Add size", typed `25 gal`, sell 125 → minted **`DISC-1003-25G`**, NOT `DISC-1003-30G-25G`, with the hint *"Suggested from this variety's base SKU DISC-1003 + the size. No existing row's SKU is changed."* Before/after in one screenshot: yesterday's compounded `DISC-1003-30G-45G` directly above today's `DISC-1003-25G`.
 
 ### Add-size auto-groups an ungrouped parent
 STATUS: covered
@@ -300,33 +303,36 @@ LAST-PROVEN: never
 _The `/inventory` datasheet — the reconcile surface (desktop-first, per capture=mobile/reconcile=desktop)._
 
 ### A clean filtered view does NOT claim a collision is here
-STATUS: owed
+STATUS: covered
 DEVICE: desktop
 COVERS: #135
-LAST-PROVEN: never
+LAST-PROVEN: 2026-07-17
 - **Do:** search **`alley`**.
 - **PASS (either):** no banner, **OR** a banner saying the flagged rows are **elsewhere** — *"N flagged rows elsewhere … nothing on this screen is affected."*
 - **FAIL:** *"N flagged rows here"* while no visible row carries ⚠️.
 - ⚠️ **An "elsewhere" banner is a PASS, not a failure.** Acoma's twin is still in your data — the add-size guard refuses *new* twins; it does not clean up the old one.
 - **Why:** the old banner said *"2 size collisions … edit a flagged row to fix it"* over four clean rows — **naming a real defect, in the wrong place, telling you to fix a row that wasn't on screen.** D-9 inverted: it mis-attributes a real value rather than fabricating one.
+- **✅ PROVEN 2026-07-17 (David, live) — filtered to `alley` (4/123, sizes 15/30/45/60 all distinct):** *"2 flagged rows **elsewhere in your inventory** share a variant group and size — **nothing on this screen is affected.** Clear the search or status filter to see them."* The "elsewhere" branch, exactly.
 
 ### Filtering to the real collision DOES fire the banner
-STATUS: owed
+STATUS: covered
 DEVICE: desktop
 COVERS: #135
-LAST-PROVEN: never
+LAST-PROVEN: 2026-07-17
 - **Do:** search **`acoma`**.
 - **PASS:** banner fires, says **here**, and ⚠️ is on the **two rows that actually collide**.
 - **FAIL:** no banner, or the icon is on the wrong rows.
+- **✅ PROVEN 2026-07-17 (David, live) — via the UNFILTERED full board (123/123), NOT an `acoma` search:** *"2 flagged rows **here** — each shares a variant group and size with another row, so the scanner can't tell them apart."* The two flagged rows ARE the Acoma twin (the only collision in the data, in view because unfiltered), so every PASS condition held — banner fires · says "here" · ⚠️ on the two colliding rows. Same banner code path as the narrow `acoma` filter; David reached "here" via the full view and "elsewhere" via the `alley` filter.
 
 ### The count noun agrees with its own trace
-STATUS: owed
+STATUS: covered
 DEVICE: desktop
 COVERS: #135
-LAST-PROVEN: never
+LAST-PROVEN: 2026-07-17
 SIGNAL: `[TRACE:invsheet] dup-size flags { collisions: 1, flaggedRows: 2, … }`
 - **PASS:** the banner counts **rows** ("2 flagged rows"), matching the two ⚠️ you can see, and the trace agrees.
 - **FAIL:** it says "2 collisions" — there is **one** collision involving **two** rows. **A number that disagrees with its own trace is how the next session misdiagnoses this.**
+- **✅ PROVEN 2026-07-17 (David, live):** the banner read "2 flagged **rows**" — agreeing with the trace's `Array(1)` (one collision, two rows). Yesterday's copy nit ("2 size collisions") is fixed; copy and trace now count the same noun.
 
 ### Inline cell edits persist and the grid reloads
 STATUS: owed
