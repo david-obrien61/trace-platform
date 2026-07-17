@@ -115,6 +115,20 @@ For **each capability touched this session**, confirm all three:
 
 ---
 
+## GATE — DEPLOYED / OWNER-PROVE STEP ZERO (OP-15, mandatory before any observation is evidence)
+
+**The rule: before an owner-prove reads any screen as evidence, confirm the deployment for the EXACT SHA under test is live** — READY, and the SHA that is actually live, not a different push's Ready. If the SHA you are testing is not live, **everything you observe after that is fiction.** This is STEP ZERO — before the hard-refresh, before the bundle-hash check.
+
+**⚠️ PRIMARY HOME IS THE BOARD, NOT THIS DOC — and that is the whole point.** The actor is **David standing at a screen about to test**; he does not read this protocol at that moment. So the enforceable home is a **GATE 0 block at the TOP of every `docs/owner-tests/*-full-surface-test.md`**, above the first card. This section is the Thunder-facing statement of force; the board is where the rule actually fires. **A rule filed only where the actor isn't standing is row 19B** — detected, noted, marked UNBLOCKED–NOT STARTED, and it sat 23 days. Detection produced a note; **notes don't act.**
+
+**Why it needs a gate and not just the words.** *"Confirm Vercel READY"* was already in every Thunder prompt's DEPLOYED-bar section all week, in the right words — and it ran for the first time only when a build failure forced it. **#135 (`313de44`) never deployed** (its Vercel build FAILED, silently — Vercel keeps serving the last-good bundle), and it went live ~20 hours later only as a side effect of an unrelated markdown push. **Vercel deploys the TREE, not the COMMIT:** any push carries every unshipped commit beneath it, so a doc push can ship code and a code push can fail to ship. It collapses two identically-presenting scars into one check — a **stale bundle** (#128/#129) and a **failed deploy** (#60) both mean *the app is not what you think it is.*
+
+**FLAGGED, David rules after the recon: the SHA STAMP.** OP-15 is still a discipline rule — it asks a human to check a second system (the dashboard). The mechanical form stamps `VERCEL_GIT_COMMIT_SHA` into the app at build (`vite.config.ts` has no `define` yet) and renders it on the existing `DebugPanel` (`?debug=1`), so GATE 0 becomes *"does the app say the SHA?"* — one glance, no dashboard; ~30 min, zero new api-fn. The principle underneath is the one that surfaced this session in `business_inventory` (rows cannot say who changed them): **the artifact does not carry its own provenance.**
+
+**Relationship to the other gates:** OP-4 names the DEPLOYED bar; this makes it *checkable* — the missing step between "Thunder pushed" and "David tested." (Operating principle: **OP-15**. Binding home: the GATE 0 block on each owner-test board (PRIMARY) + CLAUDE.md §9 STANDING INSTRUCTION + DEPLOYED-bar description (SECONDARY).)
+
+---
+
 ## The why, one more time (so this discipline survives)
 
 You lose context every session — that's structural and permanent. You cannot fix Lightning's memory. You CAN make the cost of Lightning not-remembering drop to near zero, by keeping ONE current, fixed-structure front-door doc. This protocol is what keeps that doc current. Skip it, and next session you're back to screenshots and re-explanation. Do it (5 min), and next session is one paste and you're working.

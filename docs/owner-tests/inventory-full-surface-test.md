@@ -43,16 +43,32 @@ the run; it is a failure of the *build* that shipped that surface without a test
 
 ---
 
-## ⛔ GATE 0 — CONFIRM YOU ARE TESTING THE DEPLOYED CODE
+## ⛔ GATE 0 — CONFIRM YOU ARE TESTING THE DEPLOYED CODE (OP-15 — owner-prove STEP ZERO)
 
-> **Do not skip. Everything downstream of a stale bundle is fiction.** A stale bundle produced phantom
-> bugs three times on 2026-07-03 and cost half a session of wrong analysis on 2026-07-15.
+> **This is STEP ZERO. Before the hard-refresh, before you read any screen as evidence: confirm the
+> deploy for the SHA under test is live.** If the SHA you are testing is not live, **everything below
+> is fiction.** (OP-15, RATIFIED 2026-07-17.)
+>
+> **Why this is first, and not a footnote (the #135 scar):** `313de44` — the fix this board proves —
+> **never deployed. Its Vercel build FAILED**, so the server kept serving the OLD bundle, and #135
+> went live ~20 hours later only as a side effect of an unrelated markdown push. **A failed deploy is
+> silent** (Vercel serves last-good), and **Vercel deploys the TREE, not the COMMIT** — a green
+> dashboard on a later push does not mean *your* SHA built. A stale bundle also produced phantom bugs
+> 3× on 2026-07-03 and cost half a session on 2026-07-15. **Both present identically: the app is not
+> what you think it is.**
 
-- [ ] Vercel deploy for the commit under test is **READY** (not Building, not Error)
-- [ ] **Hard-refresh** — Chrome/Edge `Cmd+Shift+R` · Safari `Cmd+Option+R` (iOS Safari: close the tab
+- [ ] **① SHA is live.** In the Vercel dashboard, the deployment **for the exact SHA under test** reads
+      **READY** — not Building, not Error, and **not a *different* SHA's** Ready. Write it here: `________`
+      *(Until the SHA stamp ships — OP-15's flagged mechanical form — this is a dashboard check. Once it
+      ships, GATE 0 becomes "does the app footer say the SHA?" — one glance, no dashboard.)*
+- [ ] **② Hard-refresh** — Chrome/Edge `Cmd+Shift+R` · Safari `Cmd+Option+R` (iOS Safari: close the tab
       entirely and reopen — pull-to-refresh is **not** enough). Caching is **per browser**.
-- [ ] **The new-code signal fires.** For the current build (#135) that is: *a count with a blank Size
-      is BLOCKED.* If it SAVES, you are on old code — **stop, and record nothing.**
+- [ ] **③ The new-code signal fires.** Name the build under test and the one signal only it emits, and
+      see it. For the last build (#135, now proven) that was *a count with a blank Size being BLOCKED*.
+      **If the old signal shows, you are on old code — stop, and record nothing.**
+
+> **Standing (OP-15):** every owner-test board carries this GATE 0 at the top. Inventory is the only
+> board today; any future board (the planned orders board included) inherits it by this rule.
 
 ---
 
