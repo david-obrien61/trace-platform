@@ -208,6 +208,8 @@
 | ID | HOME (file:line) | WHAT IT SAYS | ARC |
 |---|---|---|---|
 | OP-1 | DECISIONS.md:99 | Crush competition by ANY *ethical* means within the covenant — ethics is the method | platform-wide |
+| OP-2 | DECISIONS.md (OP-2) | Composite working register — Lightning's voice: Doug (verification) / Darren (directness) / Binder (synthesis) / Scott Morrison (dry edge); "the conversation is the corrector, not either party" → `docs/operating-doctrine/lightning-david-partnership.md` §2–§4 | working-method |
+| OP-3 | DECISIONS.md (OP-3) | "This isn't working" reconsider-framework — five hard triggers + one soft; decision points, not failure points. ⚠️ Criteria are PERSONAL-SENSITIVE and live OUTSIDE the repo (`decisions/PERSONAL-FINANCIAL.local.md`); the framework only is in DECISIONS.md OP-3 | working-method |
 | OP-4 | DECISIONS.md:133 | STD-003: `[TRACE:*]` ON by default, off only after OWNER-PROVEN; two bars (builder vs owner) | platform/arch |
 | OP-5 | DECISIONS.md:153 | Good-enough model + AI-as-equalizer; never demand labor the owner won't give | platform-wide |
 | OP-6 | DECISIONS.md:169 | Graceful degradation — three owner-fidelity tiers (maintain / confirm / infer) | platform-wide |
@@ -218,9 +220,8 @@
 | OP-11 | DECISIONS.md (OP-11) | Reconcile on both bars — an OWNER-PROVEN report triggers the FIRST-action flip 🟡→🟢 across ALL canonical surfaces (⚡ ACTIVE STATUS · 24-board · `built-inventory.md` · ARC-MAP · mapped `user_story`); a stale 🟡 on a proven capability is DRIFT (tech-debt #39 class) | working-method |
 | OP-12 | DECISIONS.md (OP-12) | Reference-first promotion — code/schema reaches LIVE only by promoting a reference-proven artifact (schema byte-identical, no hand-edits); the 4th completion bar (DEPLOY TO LIVE). DORMANT until 1st paying customer | working-method |
 | OP-13 | DECISIONS.md (OP-13) | Retention over trimming — CLAUDE.md §3 holds **N=3** entries; overflow moves VERBATIM to `handoff-archive.md` BEFORE the new entry (skipping it = INCOMPLETE close, same force as the reconcile gates); the line-3 header is a POINTER, never a summary (STD-011 — it hid ~1,400 tokens/session inside ONE physical line). Gate: `end-of-session-protocol.md`; exec: CLAUDE.md §9 step 0 | working-method |
-| OP-15 | DECISIONS.md (OP-15) | Owner-prove STEP ZERO — confirm the deploy for THIS SHA is READY before any observation is evidence (a failed deploy serves the old bundle; Vercel deploys the TREE not the COMMIT). Homed as a GATE 0 block at the TOP of every owner-test board where **DAVID stands** (row-19B: a rule filed only in a protocol doc is a note, and notes don't act). SHA-stamp mechanical form OPEN — David rules after recon | working-method |
-| *(missing)* | — | **OP-2, OP-3, OP-14 also have no CAPTURE-INDEX row** — FLAGGED not silently swept (a capture without an index row is not done, per §202). Add on next touch or a decisions-index sweep. | — |
-| D-1 | DECISIONS.md:256 | Cost-object schema = rename-in-place to ONE FK-able node table | cost-to-produce |
+| OP-14 | DECISIONS.md (OP-14) | A surface without a test is a claim — owner-test coverage gate; Thunder writes the check and sets `owed`, only David's live run flips `covered`; a moved surface flips `covered`→`owed`. Home: `end-of-session-protocol.md` → GATE — OWNER-TEST COVERAGE | working-method |
+| OP-15 | DECISIONS.md (OP-15) | Owner-prove STEP ZERO — confirm the deploy for THIS SHA is READY before any observation is evidence (a failed deploy serves the old bundle; Vercel deploys the TREE not the COMMIT). Homed as a GATE 0 block at the TOP of every owner-test board where **DAVID stands** (row-19B: a rule filed only in a protocol doc is a note, and notes don't act). SHA-stamp mechanical form OPEN — David rules after recon | working-method || D-1 | DECISIONS.md:256 | Cost-object schema = rename-in-place to ONE FK-able node table | cost-to-produce |
 | D-2 | DECISIONS.md:267 | PMI/service-log child column stays `asset_id` | asset/pmi |
 | D-3 | DECISIONS.md:277 | `parent_id` ON DELETE SET NULL — orphan-to-root, never cascade-destroy | cost-to-produce |
 | D-4 | DECISIONS.md:286 | Two edge tables: structural (use_fraction) vs temporal (assignments) | cost-to-produce |
@@ -246,6 +247,28 @@
 | D-24 | DECISIONS.md (D-24) | RIGID SPINE / FLEXIBLE EDGE — per-field rule: operate-on-it → column, describe → JSONB blob (bag UNBUILT) | architecture |
 | D-25 | DECISIONS.md (D-25) | INTELLIGENCE TIERS — Tier-0 world knowledge (ZIP→zone→season) = day-one value before owner data exists | product / discovery |
 | D-26 | DECISIONS.md (D-26) | DUAL LEXICON (Happy Hose) — speak the trade's words + the owner's, translate; canonical = join key (SINGLE-SOURCE) | product / cross-grower |
+| D-27 | DECISIONS.md (D-27) | Residence Product ("Kitchen Loop") = a residence-SCOPED VIEW of the one shared engine — entry-point pointer, not a separate app | product / residence |
+| D-28 | DECISIONS.md (D-28) | API NEUTRALITY — use any API that makes the answer more honest/effortless; refuse any whose price of admission is bias | architecture / all-arcs |
+| D-29 | DECISIONS.md (D-29) | OFFLINE / LOCAL-FIRST capture is platform-wide on an HONEST GRADIENT — capture always works, parsing populates on sync | architecture / platform |
+| D-30 | DECISIONS.md (D-30) | Shared-device auth — three flavors, face-SWAP preferred, face-RECOGNITION do-not-build | identity / device |
+| D-31 | DECISIONS.md (D-31) | Platform DB + spine-first — one platform database (80/20); Ignition retires onto the shared spine | architecture / platform |
+| D-32 | DECISIONS.md (D-32) | Discovery — not every absence is an opportunity (gap vs deliberate business decision) | discovery |
+| D-33 | DECISIONS.md (D-33) | Discovery FIX — Option A gap-vs-decision (scoped, NOT built, post-demo) | discovery |
+| D-34 | DECISIONS.md (D-34) | The LOT is the SKU — lot-level history; `cultivar_plants` is identity-only | inventory |
+| D-35 | DECISIONS.md (D-35) | Sell price is STORED on the stock line (`business_inventory.sell_price`); engine suggests, doesn't govern | inventory / cost |
+| D-36 | DECISIONS.md (D-36) | `order_items` is AC-1-clean — `business_inventory_id` is the SOLE line anchor (`plant_id` DROPPED) | inventory / money |
+| D-40 | DECISIONS.md (D-40) | Tax is a computed line on the shared money boundary (rate-source · taxability seam · party exemption · audited authority) | money / tax |
+
+**DECISIONS homed in `docs/decisions/` (D-42+ — NOT yet folded into DECISIONS.md)** *(canonical decisions whose home is a dated file; flagged for a fold-into-DECISIONS.md pass — see tech-debt #63)*
+| ID | HOME | WHAT IT SAYS | ARC |
+|---|---|---|---|
+| D-42 | docs/decisions/2026-07-13-inventory-decrement-on-paid-D42.md | Inventory decrement-on-PAID (the Amazon model) — stock drops when the order is paid, not at cart | inventory / money |
+| D-43 | docs/decisions/2026-07-13-order-line-breakdown-persisted-D43.md | An order PERSISTS its own line breakdown (frozen-at-charge, show-the-work) | money |
+| D-45 | docs/decisions/2026-07-14-count-promote-D45.md | Count-commit PROMOTES size + qty into a `variant_group`-keyed `business_inventory` row | inventory |
+| D-46 | docs/decisions/2026-07-14-complete-inventory-crud-D46.md | Complete inventory CRUD — ONE editor, from-the-row add-size, reference-aware delete | inventory |
+| D-47 | docs/decisions/2026-07-16-qbo-customer-identity-resolution-D47.md | QBO customer identity — the three-way rule (query email AND DisplayName; ambiguity never auto-links); = STD-019 | identity / money |
+| D-48 | docs/decisions/2026-07-16-service-price-override-is-a-discount-D48.md | A service price OVERRIDE is a DISCOUNT — retail baseline preserved; the concession rides the line's `discountAmt` | money / cost |
+| D-49 | docs/decisions/2026-07-16-count-fills-the-stub-D49.md | A scraped stub is a VARIETY PLACEHOLDER, not a stock line; the first count FILLS it | inventory |
 
 **NORTH STAR + domain knowledge base** *(the master bank, 27–29 June — ledger #64)*
 | NAME | HOME | WHAT IT SAYS | ARC |
