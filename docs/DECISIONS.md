@@ -1109,6 +1109,12 @@ Implementation applies the **local-first LOGIC proven in DataBridge** — **pull
 **Canonical home:** [`docs/decisions/2026-07-13-tax-as-spine-capability-D40.md`](decisions/2026-07-13-tax-as-spine-capability-D40.md) · migrations [20260713_customers_tax_exemption.sql](../supabase/migrations/20260713_customers_tax_exemption.sql) + [20260713_orders_tax_exemption.sql](../supabase/migrations/20260713_orders_tax_exemption.sql) (GATED — David applies as postgres). Industry-standard basis: **§6 r16**.
 **Date captured:** 2026-07-13 · **Status:** DECIDED (BUILDER-COMPLETE; two migrations gated, owner-proof owed).
 
+### D-50 · Inventory movement ledger — movement is truth; on-hand + expected derive; DB-immutable; count is a reconcile not a SET — `[POINTER]`
+**Decision:** Every qty change writes one append-only, DB-immutable ledger row in the same transaction as the change; on-hand and expected both DERIVE from replay (no stored expected_qty); the count becomes a reconcile event that requires the human to account for the physical-vs-book gap in ledger rows. Replay-vs-on-hand must be zero (a gap is a bug); replay-vs-count is the leakage signal, bounded and attributable.
+**Canonical home:** `docs/decisions/2026-07-19-inventory-movement-ledger-D50.md`.
+**Amends** D-45 (count promote stays; the SET becomes a ledger-emitting reconcile). **Supersedes** the expected_qty snapshot.
+**Date:** 2026-07-19 · **Status:** Accepted.
+
 ---
 
 ## PERSONAL-FINANCIAL

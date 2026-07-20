@@ -359,6 +359,16 @@ PIECES: inventory_reconcile
 NEEDS: David to expand into full day-in-the-life prose.
 _Placeholder (David to expand into full day-in-the-life prose)._ After a count, TRACE compares counted-on-hand against what the books expected and surfaces the difference — sold, dead, or missing — so shrinkage and miscounts become visible instead of silently eroding margin. The count loop (#54) deliberately shaped its record model so reconciliation can read it later; reconciliation itself (the 4.2 double-whammy) is deferred and not yet built.
 
+### Reconcile the count against the ledger — leakage becomes arithmetic
+STATUS: needs-input
+SCOPE: platform, vertical:cultivar
+BUILD: active
+ARC: asset-inventory-pmi
+MAPS-TO: 2.3, 5.1
+PIECES: inventory_movement_ledger, count_as_reconcile, reconcile_reader, blind_capture_mode
+NEEDS: two BUILD inputs owed before/at build (the D-50 decision itself is made): (1) where the REAL actor comes from on the service-key and offline-sync write paths; (2) confirm blind-capture ships as a per-session mode, default blind.
+Lauren walks the lot and counts; the number she enters is a physical fact, dated to this walk. The system replays every movement since her last count — receipts added, sales subtracted — to show what the book says should be on hand. Where physical and book agree, the row is done. Where they differ, the system does not guess: it shows the gap, bounded to the window between the two counts, with every actor who touched that row in between, and Lauren accounts for it — 4 dead, 3 unexplained loss — each becoming a permanent, un-editable ledger line. Six months later, "why did we lose 7 Vitex in March" has a dated, named answer. Because the ledger cannot be altered, the trail of who-touched-what can't be quietly cleaned up before the owner looks — so shrinkage stops being a vibe and becomes arithmetic. _Grounded: D-50 (`docs/decisions/2026-07-19-inventory-movement-ledger-D50.md`); amends D-45; the count tables (`20260626`) become readers-plus-reconcile; the D-42 decrement (`submit.ts:792`) becomes a ledger emit point._
+
 ### Inventory — the grower with no system (the count builds the catalog)
 STATUS: written
 SCOPE: vertical:cultivar, platform
