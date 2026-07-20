@@ -4,8 +4,13 @@
 //   captureBuffer (which is always capturing); this is just the UI to retrieve it.
 // DEPENDENCIES: @trace/shared/debug (captureBuffer helpers).
 // OUTPUTS: a floating 🐞 button (bottom-right) → panel with Copy / Share / Download /
-//   Clear. The button only renders when debug is ENABLED, so Lauren's demo stays
-//   clean: enable via URL ?debug=1 (sticky) or localStorage 'traceDebug'='1'.
+//   Clear, and the OP-15 SHA STAMP in the footer (the 7-char commit this bundle was
+//   built from — 'dev' outside Vercel). The button only renders when debug is
+//   ENABLED, so Lauren's demo stays clean: enable via URL ?debug=1 (sticky) or
+//   localStorage 'traceDebug'='1'.
+// NOTE: the SHA stamp makes owner-prove GATE 0 mechanical — read the SHA here
+//   instead of a Vercel dashboard round-trip. __COMMIT_SHA__ is a build-time
+//   define (vite.config.ts), declared for tsc in src/vite-env.d.ts.
 // INSTRUMENTATION: [TRACE:CAPTURE] is emitted by the shared buffer helpers.
 // ───────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState } from 'react';
@@ -108,6 +113,9 @@ export function DebugPanel() {
             background: '#0d1f08', color: '#cfe8b8', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
           }}>{tail || '(no entries yet)'}</pre>
           <div style={{ padding: '6px 10px', fontSize: 10, color: '#777', borderTop: '1px solid #eee' }}>
+            <div style={{ color: '#27500A', fontWeight: 600, fontFamily: 'monospace', marginBottom: 2 }}>
+              SHA: {__COMMIT_SHA__}
+            </div>
             May contain tenant ids/emails — internal use. Add ?debug=0 to URL to hide.
           </div>
         </div>

@@ -57,10 +57,16 @@ the run; it is a failure of the *build* that shipped that surface without a test
 > 3× on 2026-07-03 and cost half a session on 2026-07-15. **Both present identically: the app is not
 > what you think it is.**
 
-- [ ] **① SHA is live.** In the Vercel dashboard, the deployment **for the exact SHA under test** reads
-      **READY** — not Building, not Error, and **not a *different* SHA's** Ready. Write it here: `________`
-      *(Until the SHA stamp ships — OP-15's flagged mechanical form — this is a dashboard check. Once it
-      ships, GATE 0 becomes "does the app footer say the SHA?" — one glance, no dashboard.)*
+- [ ] **① SHA is live — READ IT FROM THE APP.** Open the app with `?debug=1` → tap 🐞 → the panel
+      footer shows **`SHA: xxxxxxx`**. **That 7-char SHA is what is ACTUALLY RUNNING in your browser.**
+      Compare it to the SHA you intend to test (`git log -1 --format=%h`, or the Vercel deployment).
+      Write both here — app: `________` intended: `________`
+      **They must MATCH.** If they differ, you are on old code — stop, and record nothing.
+      - `dev` means a local build, not a Vercel deploy. Blank/missing means a bundle from **before**
+        the stamp shipped (ledger #141) — which is itself proof you are on old code.
+      - *(The stamp is the mechanical form of OP-15 — shipped 2026-07-20. The Vercel dashboard is now
+        the FALLBACK, not the primary: the app tells you what it is. Note it still only proves what
+        the BROWSER has — a matching SHA after a hard-refresh is the full answer.)*
 - [ ] **② Hard-refresh** — Chrome/Edge `Cmd+Shift+R` · Safari `Cmd+Option+R` (iOS Safari: close the tab
       entirely and reopen — pull-to-refresh is **not** enough). Caching is **per browser**.
 - [ ] **③ The new-code signal fires.** Name the build under test and the one signal only it emits, and
@@ -69,6 +75,17 @@ the run; it is a failure of the *build* that shipped that surface without a test
 
 > **Standing (OP-15):** every owner-test board carries this GATE 0 at the top. Inventory is the only
 > board today; any future board (the planned orders board included) inherits it by this rule.
+
+### The app states its own SHA
+STATUS: owed
+DEVICE: phone
+COVERS: #141, OP-15, tech-debt #60
+LAST-PROVEN: never
+SIGNAL: none — **and that is the point.** This card must be provable with NO console, because GATE 0 runs in the lot before every other card.
+- **Do:** open the app with `?debug=1` → tap 🐞 → read the panel footer.
+- **PASS:** the footer reads **`SHA: xxxxxxx`** — 7 hex chars — and it **MATCHES** the commit you pushed (`git log -1 --format=%h`).
+- **FAIL:** blank / absent *(a bundle from before the stamp — you are on old code, which the stamp just told you)* · `dev` *(a local build reached the deploy, not a Vercel build)* · a 7-char SHA that does **not** match *(the deploy under test is not live — every card below is fiction; this is exactly the #135 scar and the stamp has just caught it)*.
+- **Why:** the artifact did not carry its own provenance. A failed Vercel deploy is SILENT (last-good keeps serving) and Vercel deploys the TREE not the COMMIT — so a stale bundle and a failed deploy present identically, and #135 sat dead ~20 hours undetected. The stamp makes both the same one-glance question: *does the app say the SHA I pushed?*
 
 ---
 
@@ -486,6 +503,7 @@ SIGNAL: V6 — row still present with `status='deleted'`; `audit_log` gains `inv
 
 | Surface | Card | Result | Notes |
 |---|---|---|---|
+| GATE 0 | **App states its own SHA (matches push)** 🆕 | ⬜ PASS ⬜ FAIL | app: `________` intended: `________` |
 | GATE 0 | Deployed-code signal fires | ⬜ PASS ⬜ FAIL | |
 | resolve | Possessive variety resolves | ⬜ PASS ⬜ FAIL | |
 | resolve | Multi-size fires the picker | ⬜ PASS ⬜ FAIL | |
