@@ -394,6 +394,92 @@ LAST-PROVEN: never
 
 ---
 
+## SURFACE: movement-ledger (DB layer — D-50 Layer 1)
+_The append-only ledger under everything above: `business_inventory_ledger` + the 6 movement RPCs + the `audit_log` first writer. Migration `20260720_inventory_movement_ledger.sql` (SHA `2caeac7`), ledger #140._
+
+> **⚠️ THESE CARDS PROVE THE DATABASE, NOT THE APP.** Layer 1 is live and proven; **the ten app-side
+> callers are UNCHANGED** — the count loop, the desk grid, and the editor still write qty the old way
+> and do NOT yet route through these RPCs. So a green board here does **not** mean the count is a
+> reconcile yet. **The `count-promote` / `manual-crud` / `grid` cards above stay as they are** — the
+> SET→reconcile rewrite is **Layer 2**, and until it ships, `InventoryCount.tsx:612-614`'s live
+> *"count record SKIPPED … inventory already updated"* warning still stands.
+>
+> **GATE 0 does not apply to these cards** — they are run at a postgres prompt against the live DB,
+> not through a deployed bundle. The apply-state of the migration is the equivalent check.
+
+### The ledger table exists with the right shape and FKs
+STATUS: covered
+DEVICE: postgres
+COVERS: #140, D-50
+LAST-PROVEN: 2026-07-20
+SIGNAL: V1 in the migration footer
+- **Do:** run V1 — `information_schema.columns` for `business_inventory_ledger`, then `pg_constraint` for the FKs.
+- **PASS:** 11 columns as specified; `business_id` → **CASCADE**, `inventory_id` → **SET NULL**.
+- **Why SET NULL matters:** **history outlives the row.** A movement fact must survive even when its lot does not.
+- **✅ PROVEN 2026-07-20 (David, live at postgres):** schema exact, both FK behaviours confirmed.
+
+### UPDATE and DELETE are REFUSED — even for `postgres` 🔴
+STATUS: covered
+DEVICE: postgres
+COVERS: #140, D-50
+LAST-PROVEN: 2026-07-20
+SIGNAL: `ERROR: business_inventory_ledger is append-only: UPDATE is not permitted`
+- **Do:** run V2 — INSERT a probe row, then try to UPDATE it, then try to DELETE it.
+- **PASS:** INSERT succeeds; **both** UPDATE and DELETE raise.
+- **FAIL:** either one succeeds — the ledger is then a convention, not a guarantee.
+- **Why:** D-50's whole claim is that immutability is a **DB guarantee**, not an app rule. *"A 'let owners fix a bad row' button is rejected by the database."* This defends against **our own future code**, which is why it must hold for `postgres` too.
+- **✅ PROVEN 2026-07-20 (David, live):** INSERT ok; UPDATE **and** DELETE both rejected by `reject_inventory_ledger_mutation` — **and the trigger fired for `postgres`**, which is the strong form of the claim.
+- **⚠️ The V2 probe row is PERMANENT and intentional.** Removing it would require exactly the power this table denies. Zero-delta, NULL `inventory_id`, so it does not affect replay.
+
+### Replay EQUALS on-hand for every lot — zero drift
+STATUS: covered
+DEVICE: postgres
+COVERS: #140, D-50
+LAST-PROVEN: 2026-07-20
+SIGNAL: V3(b) returns **0 rows**
+- **Do:** run V3(a) then V3(b) — one `opening_balance` per lot; then `qty` vs `SUM(delta)` per lot.
+- **PASS:** V3(a) 0 exceptions; **V3(b) 0 rows.**
+- **FAIL:** **any row returned is a BUG, not shrinkage** (D-50 disagreement #1). Do not proceed to Layer 2.
+- **Why:** on-hand and replay state the same fact. Same-transaction emission is supposed to make a gap *structurally impossible* — this is the check that says whether it actually is.
+- **✅ PROVEN 2026-07-20 (David, live):** **126 lots / 126 genesis rows**, exactly one each; `qty == SUM(delta)` across every lot, **zero drift**.
+
+### RLS is scoped, FOR ALL, and never `USING(true)`
+STATUS: covered
+DEVICE: postgres
+COVERS: #140, D-50, AC-2, AC-3
+LAST-PROVEN: 2026-07-20
+SIGNAL: V4 — 2 policies, both `cmd = ALL`
+- **Do:** run V4 — `pg_class.relrowsecurity`, then `pg_policies`.
+- **PASS:** RLS on; exactly 2 policies (`owner_all`, `member_all`); both **FOR ALL** so **SELECT is covered**; neither `qual` is `true`.
+- **Why FOR ALL:** Layer 2's reconcile reader must not hit the **missing-SELECT-policy trap** — which has bitten this platform **three times** (modules, nursery_modules, orders).
+- **✅ PROVEN 2026-07-20 (David, live):** both policies present, FOR ALL, business_id-scoped, no `USING(true)`.
+
+### Each RPC moves qty AND lands a ledger row — and refuses a forged or foreign actor
+STATUS: covered
+DEVICE: postgres
+COVERS: #140, D-50, AC-3
+LAST-PROVEN: 2026-07-20
+SIGNAL: V5 — `applied=true` + a matching ledger row per call
+- **Do:** run V5 — owner adjust; a real active **member**; then an all-zero uuid; then the **legacy 3-named-arg** `adjust_inventory_qty` call.
+- **PASS:** qty moves **and** a ledger row appears for each; the bogus actor **RAISES**; the legacy 3-arg call still returns `applied=true`.
+- **FAIL — read carefully:** the legacy call erroring means **checkout is broken on next deploy** (the DROP-and-recreate exists precisely so a defaulted overload can't make `submit.ts`'s call ambiguous to PostgREST).
+- **✅ PROVEN 2026-07-20 (David, live):** owner adjust **37→35** (ledger `delta -2`); a non-owner **MANAGER** **35→34** (`delta -1`) — so the member branch works, not just the owner one; all-zero uuid **RAISED**; **a cross-tenant actor was also correctly refused** (AC-3 — found the hard way when a test run used a uid owning a *different* business).
+
+### Delete TOMBSTONES the lot and writes BOTH a ledger row and an audit row
+STATUS: covered
+DEVICE: postgres
+COVERS: #140, D-50, close-out row 19B
+LAST-PROVEN: 2026-07-20
+SIGNAL: V6 — row still present with `status='deleted'`; `audit_log` gains `inventory.delete`
+- **Do:** run V6 — `soft_delete_inventory`, then confirm the lot row, the ledger row, and the audit row.
+- **PASS:** the lot **STILL EXISTS** (`status='deleted'`, qty 0 — **no `DELETE FROM` anywhere**); a `delete_tombstone` ledger row with `delta = -prior_qty`; an `audit_log` row `inventory.delete` / `success` with the real actor.
+- **FAIL:** the row is gone — history loses its anchor, and every prior ledger row for that lot is orphaned.
+- **Why:** this closes the sharpest emit point in the recon (`inventoryEdit.ts:154`), which removed stock from existence with **no movement row and no tombstone**.
+- **✅ PROVEN 2026-07-20 (David, live):** lot survived as a tombstone; `delete_tombstone` `delta -44`; **`audit_log` received `inventory.delete` / `success` / actor `95c1b2e9`** — the **first application-authored row** in a vault that sat **empty for 27 days**.
+- **⚠️ This does NOT close close-out row 19B.** 19B names `role.factory_reset` (the writer the spine recon ranked FIRST); that one is **still owed**. The vault being non-empty and the governance writer existing are two different facts.
+
+---
+
 ## RESULTS — fill this in
 
 **Row count before:** `______` **Row count after:** `______` **Commit under test:** `__________`
