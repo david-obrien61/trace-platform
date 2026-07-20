@@ -92,13 +92,22 @@ async function resolveItemForServer(
 // qty<=0 → depleted; a manual damaged/returned status is preserved). Replaces the old coarse
 // whole-lot status flip to 'reserved'. Deploy-window-safe: if the RPC is not yet applied the call
 // no-ops loudly (decrement deferred) so checkout never breaks before the gated migration lands.
+// D-50 LAYER 2A-2: the movement is now ATTRIBUTED — who, when, why, and what caused it. The
+// RPC already accepted these (LAYER 1); this path was passing none of them, which is why every
+// order-driven ledger row carried a NULL actor. `actorUserId` is threaded from the real caller
+// and is NULL only where there genuinely is no caller: anonymous QR checkout. That NULL is the
+// HONEST answer, not a gap — assert_movement_actor admits it as a system write, and D-50 §11 is
+// explicit that it must never be defaulted to the owner (a fabricated actor is worse than none).
 async function adjustLotQty(
   db: ReturnType<typeof adminDb>, businessId: string, lotId: string | null, delta: number, ctx: string,
+  mv: { actorUserId: string | null; kind: string; orderId: string; occurredAt: string },
 ): Promise<{ applied: boolean; newQty: number | null; reason: string }> {
   if (!lotId) return { applied: false, newQty: null, reason: 'no_lot' };
   if (delta === 0) return { applied: true, newQty: null, reason: 'noop' };
   const { data, error } = await db.rpc('adjust_inventory_qty', {
     p_lot_id: lotId, p_business_id: businessId, p_delta: delta,
+    p_actor_user_id: mv.actorUserId, p_kind: mv.kind,
+    p_source_type: 'order', p_source_id: mv.orderId, p_occurred_at: mv.occurredAt,
   });
   if (error) {
     // Missing-function (RPC not yet applied) → defer gracefully; anything else → surface, non-fatal.
@@ -111,11 +120,40 @@ async function adjustLotQty(
   }
   const row: any = Array.isArray(data) ? data[0] : data;
   const out = { applied: row?.applied === true, newQty: row?.new_qty ?? null, reason: row?.reason ?? 'unknown' };
-  console.log('[TRACE:INVENTORY] lot qty adjusted', { ctx, lotId, delta, newQty: out.newQty, status: row?.new_status, reason: out.reason });
+  console.log('[TRACE:INVENTORY] lot qty adjusted', { ctx, lotId, delta, newQty: out.newQty, status: row?.new_status, reason: out.reason, kind: mv.kind, actor: mv.actorUserId ?? 'NULL(anon-checkout)', occurredAt: mv.occurredAt });
   if (!out.applied && out.reason === 'oversell_refused') {
     console.log('[TRACE:INVENTORY] OVERSELL REFUSED — qty not driven negative (surfaced, not silent)', { ctx, lotId, delta, currentQty: out.newQty });
   }
   return out;
+}
+
+// D-50 LAYER 2A-2: the ONE order-event seam (§6 r8). Every order-lifecycle transition emits one
+// immutable event through record_order_event — aggregate_type='ORDER', delta 0, real actor, dated.
+// delta 0 is enforced INSIDE the RPC, not passed here: an order event can never move on-hand, so
+// these rows are free to reconcile's SUM. That is what lets ONE log carry both event families.
+//
+// NON-FATAL BY DESIGN, and the asymmetry is deliberate: failing to RECORD a transition must not
+// block the transition itself (§6 r6 — integration failure never blocks an order). A dropped event
+// is surfaced loudly in the trail rather than swallowed. Deploy-window-safe the same way
+// adjustLotQty is: if the gated migration has not landed yet, the call no-ops loudly.
+async function recordOrderEvent(
+  db: ReturnType<typeof adminDb>, businessId: string, orderId: string, eventType: string,
+  actorUserId: string | null, occurredAt: string, reason?: string,
+): Promise<boolean> {
+  const { error } = await db.rpc('record_order_event', {
+    p_business_id: businessId, p_order_id: orderId, p_event_type: eventType,
+    p_actor_user_id: actorUserId, p_reason: reason ?? null, p_occurred_at: occurredAt,
+  });
+  if (error) {
+    if (error.code === 'PGRST202' || error.code === '42883') {
+      console.log('[TRACE:ROSTER] record_order_event RPC absent — order event deferred (migration pending)', { orderId, eventType, code: error.code });
+      return false;
+    }
+    console.log('[TRACE:ROSTER] order event FAILED (transition NOT blocked)', { orderId, eventType, code: error.code, error: error.message });
+    return false;
+  }
+  console.log('[TRACE:ROSTER] order event recorded', { orderId, eventType, actor: actorUserId ?? 'NULL', occurredAt });
+  return true;
 }
 
 // Derive the legacy transport_method value (backward compat: delivery routing query + history).
@@ -779,18 +817,37 @@ async function handleCreate(req: any, res: any) {
       await db.from('order_compliance_records').insert(complianceRows);
     }
 
-    // ── 11. DECREMENT each line's inventory lot (D-42 — decrement-on-paid) ──────────
-    // This is the ORDER-PAID/CONFIRMED commitment point (order written + invoice generated).
+    // ── 11. DECREMENT each line's inventory lot — the SALE event (D-42 · D-50) ──────
+    // ⚠️ COMMENT CORRECTED 2026-07-20 (D-50 2A-2). This block previously described itself as
+    // "the ORDER-PAID/CONFIRMED commitment point ... the stock is committed here, at payment."
+    // That was FALSE and actively misleading: there is no 'paid' status (ORDER_STATUSES is
+    // pending|confirmed|fulfilled|cancelled) and no status transition decrements anything. Stock
+    // leaves at CHECKOUT — here — where the order is born 'pending'. The stale comment is what
+    // made a later build spec go looking for a paid-transition decrement that does not exist
+    // (same class as tech-debt #61: a comment contradicting its own repo costs real reasoning).
+    //
     // Per-unit, ATOMIC (qty = qty - n via the RPC — concurrency-safe, cannot go negative), NOT a
     // whole-lot status flip. Status DERIVES from the new qty inside the RPC. The lot targeted is the
     // SAME id the line ANCHORS on (rl.stockLineId ?? rl.plant.inventory_id — D-34) so it can't
-    // silently no-op on a stock-line line. Delivery is a LATER event that does NOT touch qty (the
-    // stock is committed here, at payment). A rare concurrent-depletion oversell is surfaced by the
-    // RPC (the pre-flight already refused the common case) — logged, never a negative qty.
+    // silently no-op on a stock-line line. Delivery is a LATER event that does NOT touch qty.
+    // A rare concurrent-depletion oversell is surfaced by the RPC (the pre-flight already refused
+    // the common case) — logged, never a negative qty.
+    //
+    // D-50: each decrement now writes a dated 'sale' ledger event carrying its actor. checkoutActor
+    // is the staff member when a signed-in staffer rings the sale, and NULL for a genuine anonymous
+    // QR checkout — the honest value (D-9), never defaulted to the owner. This is the dated sale
+    // stream reconcile subtracts against.
+    const checkoutActor = overrideBy ?? exemptBy ?? (authHeader ? await resolveCallerUid(authHeader) : null);
+    const soldAt = new Date().toISOString();
     for (const rl of resolvedLines) {
       const lotId = rl.stockLineId ?? rl.plant.inventory_id ?? null;
-      await adjustLotQty(db, businessId, lotId, -rl.quantity, 'order-paid decrement');
+      await adjustLotQty(db, businessId, lotId, -rl.quantity, 'checkout sale decrement',
+        { actorUserId: checkoutActor, kind: 'sale', orderId, occurredAt: soldAt });
     }
+
+    // The order's own birth event — the first entry in its lifecycle stream (delta 0).
+    await recordOrderEvent(db, businessId, orderId, 'order_created', checkoutActor, soldAt,
+      'checkout');
 
     // ── 12. Leakage alert to business owner (fire-and-forget) ──────────────
     if (leakageFlag) {
@@ -986,9 +1043,17 @@ async function handleUpdate(req: any, res: any) {
       const delta = Number(x.item.quantity) - effectiveNewQty; // >0 restore, <0 decrement further
       editDeltas.set(lotId, (editDeltas.get(lotId) ?? 0) + delta);
     }
+    // D-50: an edit is a real stock movement and gets a real actor — handleUpdate is manager-gated,
+    // so a NULL here would be a defect, not an honest system write. Direction picks the vocabulary:
+    // restoring stock is a 'sale_reversal', taking more is a further 'sale'.
+    const editActor = await resolveCallerUid(req.headers?.authorization);
+    const editedAt = new Date().toISOString();
     for (const [lotId, delta] of editDeltas) {
-      await adjustLotQty(db, businessId, lotId, delta, 'order edit');
+      await adjustLotQty(db, businessId, lotId, delta, 'order edit',
+        { actorUserId: editActor, kind: delta > 0 ? 'sale_reversal' : 'sale', orderId, occurredAt: editedAt });
     }
+    await recordOrderEvent(db, businessId, orderId, 'order_edited', editActor, editedAt,
+      removed.size > 0 ? `lines removed: ${removed.size}` : undefined);
     console.log('[TRACE:PRICE] order edit — re-reserved + recomputed', {
       orderId, itemCount, linesSubtotal: round2(linesSubtotal), addonsAmount: round2(addonsAmount),
       subtotal, taxAmount, total, leakageFlag, removed: [...removed],
@@ -1083,14 +1148,23 @@ async function handleDelete(req: any, res: any) {
 
     // RESTORE the order's committed stock (D-42) — deleting an order returns its units to the lot.
     // Guarded: a 'cancelled' order ALREADY restored its stock (handleStatus), so don't double-restore.
+    // D-50: attributed + dated, and the event is written BEFORE the row is destroyed. The ledger
+    // rows survive the order they describe — source_id is deliberately not an FK, so the movement
+    // fact outlives the order exactly as it outlives a deleted lot (LAYER 1: history outlives the
+    // row). Deleting an order therefore erases the order, never the record that it existed.
+    const deleteActor = await resolveCallerUid(req.headers?.authorization);
+    const deletedAt = new Date().toISOString();
     let restored = 0;
     if ((order as any).status !== 'cancelled') {
       for (const it of items) {
         if (!it.business_inventory_id) continue;
-        await adjustLotQty(db, businessId, it.business_inventory_id, Number(it.quantity), 'order delete restore');
+        await adjustLotQty(db, businessId, it.business_inventory_id, Number(it.quantity), 'order delete restore',
+          { actorUserId: deleteActor, kind: 'sale_reversal', orderId, occurredAt: deletedAt });
         restored++;
       }
     }
+    await recordOrderEvent(db, businessId, orderId, 'order_deleted', deleteActor, deletedAt,
+      (order as any).status === 'cancelled' ? 'already cancelled — stock not re-restored' : undefined);
 
     await db.from('order_compliance_records').delete().eq('order_id', orderId);
     await db.from('order_service_selections').delete().eq('order_id', orderId);
@@ -1127,23 +1201,47 @@ async function handleStatus(req: any, res: any) {
       .from('orders').select('id, status').eq('id', orderId).eq('business_id', businessId).maybeSingle();
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
+    const prevStatus = (order as any).status ?? null;
+    // A no-op re-submit of the SAME status writes no event. An event log records things that
+    // HAPPENED; emitting 'order_confirmed' when the order was already confirmed would manufacture
+    // a transition nobody performed — the same falsehood OP-14 forbids on a test card.
+    if (prevStatus === status) {
+      console.log('[TRACE:ROSTER] status unchanged — no event written', { orderId, status });
+      return res.json({ ok: true, orderId, status, unchanged: true });
+    }
+
+    // D-50 LAYER 2A-2: the transition is manager-gated above, so the actor is always real here.
+    const statusActor = await resolveCallerUid(req.headers?.authorization);
+    const changedAt = new Date().toISOString();
+
     // Cancelling RESTORES the order's committed stock (D-42 — un-decrement). Only on the transition
     // INTO cancelled from a non-cancelled state (guard against double-restore if already cancelled).
     // R-STATUS preserved: un-cancel does NOT auto-re-decrement — edit the order to re-commit stock.
-    if (status === 'cancelled' && (order as any).status !== 'cancelled') {
+    if (status === 'cancelled' && prevStatus !== 'cancelled') {
       const { data: itemsRaw } = await db
         .from('order_items').select('quantity, business_inventory_id').eq('order_id', orderId);
       const items = (itemsRaw ?? []) as Array<{ quantity: number; business_inventory_id: string | null }>;
       for (const it of items) {
         if (!it.business_inventory_id) continue;
-        await adjustLotQty(db, businessId, it.business_inventory_id, Number(it.quantity), 'order cancel restore');
+        await adjustLotQty(db, businessId, it.business_inventory_id, Number(it.quantity), 'order cancel restore',
+          { actorUserId: statusActor, kind: 'sale_reversal', orderId, occurredAt: changedAt });
       }
     }
 
     const { error: stErr } = await db.from('orders').update({ status }).eq('id', orderId).eq('business_id', businessId);
     if (stErr) throw new Error(`Order status: ${stErr.message}`);
 
-    console.log('[TRACE:ROSTER] order status changed', { orderId, status });
+    // The event is written AFTER the status write succeeds — an event asserts that something
+    // happened, so it must not be recorded for a transition that then failed to land. The reverse
+    // ordering would let a thrown stErr leave a lie in an append-only log that cannot be retracted.
+    //
+    // event_type is DERIVED from the status (`order_${status}`), not a hand-maintained mapping:
+    // ORDER_STATUSES is an OPEN decision (R-STATUS — David ratifies the set), so when a status is
+    // added it emits correctly with no code change here. A switch would silently miss the new one.
+    await recordOrderEvent(db, businessId, orderId, `order_${status}`, statusActor, changedAt,
+      prevStatus ? `from ${prevStatus}` : undefined);
+
+    console.log('[TRACE:ROSTER] order status changed', { orderId, from: prevStatus, to: status, actor: statusActor ?? 'NULL' });
     res.json({ ok: true, orderId, status });
   } catch (err: any) {
     console.error('[orders/submit:status]', err.message);

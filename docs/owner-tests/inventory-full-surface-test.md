@@ -544,6 +544,92 @@ SIGNAL: V6 — row still present with `status='deleted'`; `audit_log` gains `inv
 
 ---
 
+## SURFACE: order-events (D-50 Layer 2A-2 — the order path writes to the ledger)
+_The order half of the funnel: every lifecycle transition and every order-driven stock movement lands in `business_inventory_ledger` as an event. Migration `20260720_ledger_event_store_columns.sql` + `api/orders/submit.ts`._
+
+> **⚠️ READ THIS BEFORE RUNNING — the build spec's premise was wrong and the cards below are corrected.**
+> The spec described a **`paid` transition** that writes the sale event. **There is no `paid` status.**
+> `ORDER_STATUSES` is `pending | confirmed | fulfilled | cancelled` ([orderStatus.ts:13](../../packages/cultivar-os/src/lib/orderStatus.ts#L13)),
+> and **no status transition decrements stock at all** — the decrement fires at **CHECKOUT**
+> ([submit.ts §11](../../packages/cultivar-os/api/orders/submit.ts)), where the order is born `pending`.
+> So **"mark an order PAID" is not a performable step** and is not asked for below. David ruled
+> 2026-07-20: build to the real four statuses, date the sale at checkout, leave R-STATUS unratified.
+>
+> **GATE 0 APPLIES to the app-driven cards** (they run through a deployed bundle) but **not** to the
+> postgres-only ones. The migration is **GATED — apply it first, or every card below fails honestly.**
+
+### The event-store columns exist and no historical row was rewritten 🔴
+STATUS: owed
+DEVICE: postgres
+COVERS: D-50 Layer 2A-2
+LAST-PROVEN: —
+SIGNAL: V1 + V2 in the migration footer
+- **Do:** apply the migration, then run V1 and V2 **before** creating any new order.
+- **PASS:** the 3 columns exist and are nullable; **`untouched == total`** — every pre-existing row still has NULL in all three.
+- **FAIL:** `untouched < total` means something backfilled by UPDATE — which should have been *impossible*.
+- **Why this is the sharpest card here:** the spec asked for a backfill UPDATE. **That UPDATE was deliberately not written.** It would have required `DISABLE TRIGGER` on the one table engineered so that *even `postgres`* cannot amend it — opening the exact door D-50 welded shut, on the ledger's first extension. The data is 100% derivable, so the view resolves it on read instead. **This card checks that the guarantee survived its own first upgrade.**
+
+### The view resolves old rows without touching them
+STATUS: owed
+DEVICE: postgres
+COVERS: D-50 Layer 2A-2
+LAST-PROVEN: —
+SIGNAL: V3 returns 0
+- **Do:** run V3 against `business_inventory_ledger_events`.
+- **PASS:** **0 rows** with a NULL `event_type` / `aggregate_type` / `aggregate_id`.
+- **Why:** this is the other half of the card above. Not backfilling is only correct if reads still get clean values — V2 proves nothing was rewritten, V3 proves nothing was lost.
+
+### Checkout writes a dated `sale` event carrying its actor 🔴
+STATUS: owed
+DEVICE: phone
+COVERS: D-50 Layer 2A-2
+LAST-PROVEN: —
+SIGNAL: `[TRACE:INVENTORY] lot qty adjusted … kind: 'sale', actor: …`
+- **Do:** run a checkout on a **countable lot** — first while **signed in as staff**, then a second one **signed out** via the QR page.
+- **PASS:** each produces a `sale` row, `delta = −qty`, `source_id` = the order, `occurred_at` = the checkout moment. The signed-in one carries **your uid**; the anonymous one carries **NULL**.
+- **⚠️ NULL on the anonymous checkout is a PASS, not a failure.** There is genuinely no caller on the QR path. `assert_movement_actor` admits it as a system write, and D-50 §11 forbids defaulting it to the owner — **a fabricated actor is worse than an absent one** (D-9). A card that demanded non-NULL everywhere would be demanding a lie.
+- **FAIL:** the anonymous checkout records the owner's uid — that is the failure this card exists to catch.
+
+### A status transition writes an ORDER event with delta 0
+STATUS: owed
+DEVICE: desktop
+COVERS: D-50 Layer 2A-2
+LAST-PROVEN: —
+SIGNAL: `[TRACE:ROSTER] order event recorded`
+- **Do:** move an order `pending → confirmed`, then `confirmed → fulfilled`, from the order detail page. Then run the funnel query:
+  ```sql
+  SELECT event_type, aggregate_type, delta, actor_user_id, occurred_at
+    FROM business_inventory_ledger_events
+   WHERE aggregate_id = '<order id>' OR source_id = '<order id>'
+   ORDER BY occurred_at;
+  ```
+- **PASS:** `order_created` (at checkout) then `order_confirmed` then `order_fulfilled` — each `aggregate_type='ORDER'`, **`delta = 0`**, **your real uid**, dated. Alongside them, the `sale` INVENTORY row from checkout with `delta = −qty`.
+- **Why delta 0 matters:** it is what lets **one log** carry both event families. A status event that moved `SUM(delta)` would silently corrupt on-hand for every lot in the order. The RPC hard-codes the zero rather than accepting it as a parameter, so no future caller can get it wrong.
+- **Also check:** re-submitting the **same** status writes **no** event (`status unchanged — no event written`). An event log records what happened; a transition nobody performed must not appear.
+
+### Cancelling restores stock as a `sale_reversal`, attributed
+STATUS: owed
+DEVICE: desktop
+COVERS: D-50 Layer 2A-2
+LAST-PROVEN: —
+SIGNAL: `kind: 'sale_reversal'`
+- **Do:** cancel an order that has a line on a countable lot. Re-run the funnel query.
+- **PASS:** a `sale_reversal` row, `delta = +qty`, **your uid**, plus an `order_cancelled` ORDER event at `delta 0`. The lot's `qty` matches `SUM(delta)` again.
+- **Why:** the reversal is a **new row**, never an edit of the original sale. The original sale still happened and still reads as having happened — that is the append-only model doing its job.
+
+### Order events never move on-hand — the invariant, measured
+STATUS: owed
+DEVICE: postgres
+COVERS: D-50 Layer 2A-2
+LAST-PROVEN: —
+SIGNAL: V6 returns 0
+- **Do:** after all of the above, run V6 — `SELECT sum(delta) FROM business_inventory_ledger WHERE aggregate_type='ORDER'`.
+- **PASS:** **0.** Now and forever, no matter how many orders exist.
+- **FAIL:** anything non-zero means an order event leaked into the stock invariant, and **every** replay number in this document is wrong.
+- **Then re-run V3(b) from the Layer 1 surface** (`qty == SUM(delta)` per lot). It must still return **0 rows** — the Layer 1 guarantee has to survive Layer 2A-2's new writers.
+
+---
+
 ## RESULTS — fill this in
 
 **Row count before:** `______` **Row count after:** `______` **Commit under test:** `__________`
