@@ -421,25 +421,47 @@ export function InventoryCount() {
     let targetId: string | null = null;
     let outcome: 'updated' | 'filled' | 'created' | 'record-only' = 'record-only';
 
-    if (target.action === 'update') {
-      // Existing (variety × size) → SET on-hand (a physical count sets qty; NOT a decrement).
-      // Backfill variant_group so the size-picker fires next time (adopt/confirm the group).
-      const set: Record<string, unknown> = { qty };
-      if (target.variantGroup) set.variant_group = target.variantGroup;
-      const res = await engine.update({ table: 'business_inventory', set, match: { id: target.rowId, business_id: businessId } });
+    if (target.action === 'update' || target.action === 'fill') {
+      // D-50 LAYER 2A — THE COUNT IS NO LONGER A SET. Both branches reconcile through the
+      // RPC, which computes delta = counted − current under a FOR UPDATE lock and writes the
+      // count_reconcile ledger row in the SAME transaction. There is no longer a state where
+      // qty moves without a record.
+      //
+      // WHY ONE CALL FOR TWO BRANCHES: the only difference was that 'fill' also wrote `size`,
+      // and the RPC takes `p_size` with COALESCE(p_size, bi.size) — so 'update' passes null and
+      // keeps the existing size, 'fill' passes the size and lands it. Two engine.update copies
+      // collapse to one RPC call (§6 r8). The D-49 distinction is PRESERVED in `outcome` and in
+      // the TRACE line, because 'created' on a stub count IS the defect that must stay visible.
+      //
+      // OFFLINE: queued as an rpc op (ledger #143) — the dead-zone promise is kept, and the
+      // delta is computed when it DRAINS, which is the correct reading of a physical count.
+      const res = await engine.rpc({
+        table: 'business_inventory',
+        fn: 'count_reconcile_inventory',
+        args: {
+          p_lot_id:        target.rowId,
+          p_business_id:   businessId,
+          p_counted_qty:   qty,
+          p_actor_user_id: userId,
+          p_size:          target.action === 'fill' ? target.size : null,
+          p_reason:        reason || null,
+          p_source_id:     sessionId,
+        },
+      });
       if (res.status === 'failed') { setError(`Couldn't update on-hand: ${res.error}`); setBusy(false); return; }
-      targetId = target.rowId; outcome = 'updated';
 
-    } else if (target.action === 'fill') {
-      // D-49 — the resolved row is a VARIETY PLACEHOLDER (the scrape's qty-0/size-less stub), not
-      // a lot. The first count FILLS it: size + qty + group land on the row that already carries
-      // the SKU and the scrape lineage. Minting a sibling here is what made the variety
-      // permanently unscannable (mixed group + missing size → detectSizeCollision refuses).
-      const set: Record<string, unknown> = { qty, size: target.size };
-      if (target.variantGroup) set.variant_group = target.variantGroup;
-      const res = await engine.update({ table: 'business_inventory', set, match: { id: target.rowId, business_id: businessId } });
-      if (res.status === 'failed') { setError(`Couldn't update on-hand: ${res.error}`); setBusy(false); return; }
-      targetId = target.rowId; outcome = 'filled';
+      // variant_group is IDENTITY, not quantity — it stays a plain update (the RPC is the
+      // funnel for qty, and only qty). Backfilling it is what makes the size-picker fire next
+      // time (D-45/D-46); without it the family goes UNKNOWN on the next scan.
+      if (target.variantGroup) {
+        const rg = await engine.update({
+          table: 'business_inventory',
+          set:   { variant_group: target.variantGroup },
+          match: { id: target.rowId, business_id: businessId },
+        });
+        if (rg.status === 'failed') { setError(`Couldn't group this variety's sizes: ${rg.error}`); setBusy(false); return; }
+      }
+      targetId = target.rowId; outcome = target.action === 'fill' ? 'filled' : 'updated';
 
     } else if (target.action === 'create') {
       // A genuine size-sibling. THE INVARIANT, in two writes that must both land:
@@ -473,17 +495,49 @@ export function InventoryCount() {
         }
       }
 
-      // sell_price OMITTED → null = needs-price (cart refuses, never a $0 sale — D-9).
-      // cost_confidence UNKNOWN (we don't know cost from a count).
-      const newId = engine.newId();
-      const row: Record<string, unknown> = {
-        id: newId, business_id: businessId, name: ctx.varietyName, size: target.size,
-        variant_group: target.variantGroup, qty, status: 'available', cost_confidence: 'UNKNOWN',
-      };
-      if (sku) row.sku = sku;   // omit the key entirely when there is no lineage (D-9)
-      const res = await engine.insert({ table: 'business_inventory', row, clientId: newId });
+      // D-50 LAYER 2A — the new lot is born WITH its genesis ledger row, one transaction
+      // (count_promote_create_inventory). sell_price is OMITTED → null = needs-price (cart
+      // refuses, never a $0 sale — D-9); cost_confidence UNKNOWN (a count doesn't know cost).
+      //
+      // ⚠️ THIS BRANCH IS ONLINE-ONLY, AND THAT IS A DELIBERATE, NARROW REDUCTION — say so
+      // rather than fail silently. The RPC mints the lot id SERVER-side, but `recordCount`
+      // needs that id NOW to link the count record. Offline we would have to write the count
+      // with a null inventory_id and hope to backfill — an unlinked count record is exactly
+      // the silent drift D-50 exists to end, so we refuse honestly instead (D-9).
+      // Counting EXISTING lots still works in a dead zone; only minting a brand-new variety
+      // needs a connection. Closing this needs a client-supplied p_lot_id — a migration.
+      if (!engine.isOnline()) {
+        if (TRACE_INV) console.warn('[TRACE:INVENTORY] promote — create REFUSED offline (new lot needs a server id):', ctx.varietyName, target.size);
+        setError(`You're offline — "${ctx.varietyName}" (${target.size}) is a new size we haven't seen, and adding one needs a connection. Counting sizes you already have still works out here.`);
+        setBusy(false);
+        return;
+      }
+
+      const res = await engine.rpc({
+        table: 'business_inventory',
+        fn: 'count_promote_create_inventory',
+        args: {
+          p_business_id:   businessId,
+          p_actor_user_id: userId,
+          p_name:          ctx.varietyName,
+          p_qty:           qty,
+          p_size:          target.size,
+          p_variant_group: target.variantGroup,
+          p_sku:           sku,            // already collision-checked + nulled above
+          p_reason:        reason || null,
+          p_source_id:     sessionId,
+        },
+      });
       if (res.status === 'failed') { setError(`Couldn't add the item: ${res.error}`); setBusy(false); return; }
-      targetId = newId; outcome = 'created';
+
+      // Read back the id the RPC minted — required to link the count record. Online-only
+      // (guarded above), so `applied` is the expected status here.
+      const { data: made } = await supabase
+        .from('business_inventory').select('id')
+        .eq('business_id', businessId).eq('name', ctx.varietyName).eq('size', target.size)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      targetId = (made as { id: string } | null)?.id ?? null;
+      outcome = 'created';
     }
     // else record-only: no group key AND no sibling (plant tag with no lot) → nothing to write.
 
@@ -610,7 +664,17 @@ export function InventoryCount() {
     counted_qty: number; was_unknown: boolean; raw_scan: string;
   }) {
     if (tablesAbsent || !sessionId || !engine) {
-      if (TRACE_COUNT) console.warn('[TRACE:COUNT] count record SKIPPED (tables absent / no session) — inventory already updated:', row.item_label);
+      // D-50 LAYER 2A — the OLD message here read "inventory already updated", which named a
+      // real hole: qty had moved and NOTHING recorded it. That hole is CLOSED — the movement
+      // and its ledger row are now one transaction inside the RPC, so the movement IS on the
+      // record even when this count-session row can't be written.
+      //
+      // ⚠️ THE GUARD ITSELF STAYS, AND THE PROMPT ASKED FOR IT TO GO — flagged, not silently
+      // kept. It cannot be deleted: `inventory_counts` is a DIFFERENT table from the ledger,
+      // and with no session id / no engine / the table genuinely absent there is nothing to
+      // insert INTO. Deleting the guard would not restore a record, it would just throw on a
+      // missing table. What was wrong was the CLAIM, so the claim is what changed.
+      if (TRACE_COUNT) console.warn('[TRACE:COUNT] count-session record skipped (tables absent / no session) — the MOVEMENT is still on the ledger (D-50):', row.item_label);
       return;
     }
     const res = await engine.insert({

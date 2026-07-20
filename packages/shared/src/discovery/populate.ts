@@ -77,14 +77,34 @@ export async function clearSandbox(businessId: string, supabase: SupabaseClient)
   return counts;
 }
 
-/** Remove THIS module's discovery-populated rows for this business. */
+/** Remove THIS module's discovery-populated rows for this business.
+ *
+ *  D-50 LAYER 2A — routed through `discovery_rescan_clear` instead of a raw DELETE. The RPC
+ *  is not merely equivalent, it is SAFER: a raw `DELETE … LIKE 'DISC-%'` destroys a row even
+ *  if the owner has since COUNTED stock onto it (exactly what D-49 made possible — a scraped
+ *  stub becomes a real lot the moment it is counted). The RPC SKIPS any lot holding stock and
+ *  REPORTS what it skipped, rather than silently deleting counted inventory on a re-scan.
+ *  A no-actor system write: `p_actor_user_id` is honestly absent — no human ran this. */
 export async function clearDiscovery(businessId: string, supabase: SupabaseClient): Promise<number> {
-  const r = await supabase
-    .from('business_inventory')
-    .delete({ count: 'exact' })
-    .eq('business_id', businessId)
-    .like('sku', `${DISC_SKU_PREFIX}%`);
-  return r.count ?? 0;
+  const { data, error } = await supabase.rpc('discovery_rescan_clear', {
+    p_business_id: businessId,
+    p_sku_prefix:  DISC_SKU_PREFIX,
+  });
+  if (error) {
+    console.log(JSON.stringify({ tag: '[TRACE:POPULATE]', phase: 'clear:rpc-error', error: error.message }));
+    return 0;
+  }
+  const out = Array.isArray(data)
+    ? (data[0] as { cleared?: number; skipped?: number; skipped_ids?: string[] } | undefined)
+    : undefined;
+  if (out?.skipped) {
+    // Surfaced, never silent — these rows survived BECAUSE they hold counted stock.
+    console.log(JSON.stringify({
+      tag: '[TRACE:POPULATE]', phase: 'clear:skipped-stocked-lots',
+      skipped: out.skipped, ids: out.skipped_ids ?? [],
+    }));
+  }
+  return out?.cleared ?? 0;
 }
 
 // ── Row mapping (D-9) ───────────────────────────────────────────────────────────

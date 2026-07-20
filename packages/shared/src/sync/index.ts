@@ -9,8 +9,8 @@
 // ============================================================
 
 export { SyncEngine } from './syncEngine';
-export type { SyncEngineOptions, InsertArgs, UpdateArgs } from './syncEngine';
+export type { SyncEngineOptions, InsertArgs, UpdateArgs, RpcArgs } from './syncEngine';
 export { NamespacedStore } from './store';
 export type { StorageAdapter } from './store';
 export { OfflineQueue } from './offlineQueue';
-export type { OfflineOp, OpKind, UpdatePayload, WriteStatus, WriteResult, DrainResult } from './types';
+export type { OfflineOp, OpKind, UpdatePayload, RpcPayload, WriteStatus, WriteResult, DrainResult } from './types';

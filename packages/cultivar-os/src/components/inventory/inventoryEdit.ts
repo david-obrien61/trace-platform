@@ -22,7 +22,8 @@
 // ============================================================
 import { supabase } from '../../lib/supabase';
 
-const ARCHIVED_STATUS = 'archived';
+// (ARCHIVED_STATUS removed in D-50 Layer 2A — the archive status is no longer set from the
+// client; `soft_delete_inventory` owns the tombstone, status and all, inside its transaction.)
 
 // Columns that may not exist live yet (D-42's `20260713_inventory_decrement_and_reorder.sql` is
 // GATED). A write carrying one of these degrades gracefully: on a missing-column error we strip
@@ -52,6 +53,43 @@ export async function persistInventoryPatch(params: {
   patch: Record<string, unknown>;
 }): Promise<{ error: string | null }> {
   const { id, businessId, patch } = params;
+
+  // ── D-50 LAYER 2A — QTY IS SPLIT OFF THE PATCH AND ROUTED THROUGH THE RPC ──────────
+  // A quantity change is a MOVEMENT and must carry a ledger row; every other field on this
+  // grid (name, size, price, sku…) is an attribute and stays a plain RLS UPDATE. So a patch
+  // that happens to include qty is split: the movement goes through adjust_inventory_manual
+  // (qty + ledger row, ONE transaction), the rest continues below unchanged.
+  //
+  // This is the desk/editor path — client-direct under RLS, so auth.uid() is real. We still
+  // pass the actor EXPLICITLY rather than letting the RPC read auth.uid(): the RPC is also
+  // called from the server (service key, uid null), so a caller that relies on the implicit
+  // value works in one context and silently writes a null actor in the other.
+  if ('qty' in patch) {
+    const { qty, ...rest } = patch;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.id) {
+      console.error('[TRACE:INVENTORY] patch — REFUSED, no session user for a qty movement');
+      return { error: 'Your sign-in needs confirming before changing stock — reload and try again.' };
+    }
+    const { data, error: rpcErr } = await supabase.rpc('adjust_inventory_manual', {
+      p_lot_id:        id,
+      p_business_id:   businessId,
+      p_new_qty:       Number(qty),
+      p_actor_user_id: user.id,
+      p_reason:        'desk edit',
+    });
+    if (rpcErr) { console.error('[TRACE:INVENTORY] qty movement error', rpcErr.message); return { error: rpcErr.message }; }
+    const out = Array.isArray(data) ? (data[0] as { applied?: boolean; delta?: number; reason?: string } | undefined) : undefined;
+    if (out && out.applied === false) {
+      console.error('[TRACE:INVENTORY] qty movement REFUSED —', out.reason);
+      return { error: `Couldn't change stock: ${out.reason ?? 'refused'}` };
+    }
+    console.log('[TRACE:INVENTORY] qty movement', { rowId: id, newQty: qty, delta: out?.delta, via: 'adjust_inventory_manual' });
+    // Nothing else in this patch → done. Otherwise fall through with qty removed.
+    if (Object.keys(rest).length === 0) return { error: null };
+    return persistInventoryPatch({ id, businessId, patch: rest });
+  }
+
   console.log('[TRACE:INVENTORY] patch', { rowId: id, fields: Object.keys(patch) });
   let { error } = await supabase.from('business_inventory').update(patch).eq('id', id).eq('business_id', businessId);
   if (error && isMissingColumnError(error) && hasGated(patch)) {
@@ -71,15 +109,42 @@ export async function insertInventory(params: {
   values: Record<string, unknown>;
 }): Promise<{ error: string | null; id: string | null }> {
   const { businessId, values } = params;
-  const row = { business_id: businessId, ...values };
-  console.log('[TRACE:INVENTORY] insert', { businessId, fields: Object.keys(values) });
+
+  // ── D-50 LAYER 2A — THE ONE SITE WITH NO RPC TO ROUTE TO. Read this before "fixing" it. ──
+  // Layer 1 shipped no manual-create function (the set is: adjust · count_reconcile ·
+  // count_promote_create · adjust_manual · soft_delete · discovery_create · discovery_rescan).
+  // `discovery_create_inventory` is the wrong semantics (it mints DISC- catalogue rows and
+  // takes no qty). So rather than invent a meaning for an existing RPC, the row is born at
+  // **qty 0** — never fabricate stock, the same rule populate.ts already follows — and any
+  // opening stock is then MOVED in through adjust_inventory_manual, which carries its ledger
+  // row. Every unit of stock is therefore accounted for.
+  //
+  // ⚠️ WHAT IS STILL OWED, STATED PLAINLY: the row's BIRTH has no `opening_balance` ledger row
+  // (count-created and backfilled lots both have one). Closing that needs a
+  // `manual_create_inventory` RPC — a MIGRATION, which this build is scoped out of. This is
+  // the ONE remaining direct `.insert()` on business_inventory, and the end-of-build grep
+  // reports it rather than pretending the funnel is already airtight.
+  const requestedQty = Number(values.qty ?? 0) || 0;
+  const row = { business_id: businessId, ...values, qty: 0 };
+  console.log('[TRACE:INVENTORY] insert', { businessId, fields: Object.keys(values), bornAtQty: 0, requestedQty });
   let res = await supabase.from('business_inventory').insert(row).select('id').single();
   if (res.error && isMissingColumnError(res.error) && hasGated(row)) {
     console.warn('[TRACE:INVENTORY] insert — gated column absent, retry without', DEPLOY_GATED_COLUMNS);
     res = await supabase.from('business_inventory').insert(stripGated(row)).select('id').single();
   }
   if (res.error) { console.error('[TRACE:INVENTORY] insert error', res.error.message); return { error: res.error.message, id: null }; }
-  return { error: null, id: (res.data as { id: string }).id };
+  const newId = (res.data as { id: string }).id;
+
+  // Opening stock is a MOVEMENT — routed, ledgered, attributed.
+  if (requestedQty > 0) {
+    const { error: qErr } = await persistInventoryPatch({ id: newId, businessId, patch: { qty: requestedQty } });
+    if (qErr) {
+      // The row exists but its stock didn't land — say so rather than report a clean create.
+      console.error('[TRACE:INVENTORY] insert — row created but opening stock failed:', qErr);
+      return { error: `Added "${String(values.name ?? 'item')}", but couldn't set its stock: ${qErr}`, id: newId };
+    }
+  }
+  return { error: null, id: newId };
 }
 
 /**
@@ -141,18 +206,40 @@ export async function deleteInventoryRow(params: {
   const probeError = oi.error || cp.error;
   const referenced = (oi.count ?? 0) > 0 || (cp.count ?? 0) > 0 || !!probeError;
 
-  if (referenced) {
-    const { error } = await supabase
-      .from('business_inventory')
-      .update({ status: ARCHIVED_STATUS })
-      .eq('id', id).eq('business_id', businessId);
-    console.log('[TRACE:INVENTORY] delete', { rowId: id, mode: 'soft', orderRefs: oi.count ?? 0, plantRefs: cp.count ?? 0, probeError: probeError?.message ?? null });
-    if (error) { console.error('[TRACE:INVENTORY] delete(soft) error', error.message); return { error: error.message, mode: null }; }
-    return { error: null, mode: 'soft' };
+  // ── D-50 LAYER 2A — BOTH BRANCHES NOW GO THROUGH soft_delete_inventory ────────────
+  // The RPC tombstones the lot (status flipped, qty → 0) and writes a `delete_tombstone`
+  // ledger row PLUS an `inventory.delete` audit row, in ONE transaction — exactly the V6
+  // path David owner-proved at postgres on 2026-07-20.
+  //
+  // ⚠️ THE HARD DELETE IS GONE, AND THAT IS THE POINT, NOT A SIDE EFFECT. This helper used
+  // to `DELETE FROM` a never-referenced row. Under D-50 that is incoherent: the lot's stock
+  // is ledger history, and destroying the row destroys the explanation for every movement
+  // that referenced it. The ledger's own FK says so — `inventory_id ON DELETE SET NULL`,
+  // i.e. history OUTLIVES the row. So an unreferenced lot is tombstoned like any other; the
+  // `mode` return is kept ('soft' either way) so callers and their copy still work, and the
+  // reference probe is kept because the counts are useful in the trail.
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user?.id) {
+    console.error('[TRACE:INVENTORY] delete — REFUSED, no session user');
+    return { error: 'Your sign-in needs confirming before deleting stock — reload and try again.', mode: null };
   }
 
-  const { error } = await supabase.from('business_inventory').delete().eq('id', id).eq('business_id', businessId);
-  console.log('[TRACE:INVENTORY] delete', { rowId: id, mode: 'hard' });
-  if (error) { console.error('[TRACE:INVENTORY] delete(hard) error', error.message); return { error: error.message, mode: null }; }
-  return { error: null, mode: 'hard' };
+  const { data, error } = await supabase.rpc('soft_delete_inventory', {
+    p_lot_id:        id,
+    p_business_id:   businessId,
+    p_actor_user_id: user.id,
+    p_reason:        referenced ? 'deleted from desk (referenced)' : 'deleted from desk',
+  });
+  const out = Array.isArray(data) ? (data[0] as { applied?: boolean; prior_qty?: number; reason?: string } | undefined) : undefined;
+  console.log('[TRACE:INVENTORY] delete', {
+    rowId: id, mode: 'soft', via: 'soft_delete_inventory',
+    priorQty: out?.prior_qty, orderRefs: oi.count ?? 0, plantRefs: cp.count ?? 0,
+    probeError: probeError?.message ?? null,
+  });
+  if (error) { console.error('[TRACE:INVENTORY] delete error', error.message); return { error: error.message, mode: null }; }
+  if (out && out.applied === false) {
+    console.error('[TRACE:INVENTORY] delete REFUSED —', out.reason);
+    return { error: `Couldn't delete: ${out.reason ?? 'refused'}`, mode: null };
+  }
+  return { error: null, mode: 'soft' };
 }

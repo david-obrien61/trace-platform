@@ -8,13 +8,15 @@
 //           (insert PK = clientId → a 23505 on replay is "already applied").
 // DEPENDENCIES: a SupabaseClient (injected — vertical-agnostic, testable),
 //           OfflineQueue + NamespacedStore (durability), browser online events.
-// OUTPUTS:  SyncEngine { insert, update, syncNow, start, stop, pendingCount, forget, newId }.
+// OUTPUTS:  SyncEngine { insert, update, rpc, syncNow, start, stop, pendingCount, forget, newId }.
+//           `rpc` (D-50, ledger #143) queues a postgres FUNCTION call so a qty movement and
+//           its ledger row stay ONE transaction even when the write was made in a dead zone.
 // ============================================================
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { NamespacedStore } from './store';
 import { OfflineQueue } from './offlineQueue';
-import type { OfflineOp, UpdatePayload, WriteResult, DrainResult } from './types';
+import type { OfflineOp, UpdatePayload, RpcPayload, WriteResult, DrainResult } from './types';
 
 const TRACE_SYNC = true; // [TRACE:SYNC] STD-003 — on until OWNER-PROVEN
 
@@ -46,6 +48,8 @@ export interface SyncEngineOptions {
 
 export interface InsertArgs { table: string; row: Record<string, unknown>; clientId?: string; }
 export interface UpdateArgs { table: string; set: Record<string, unknown>; match: Record<string, unknown>; }
+/** `table` is for the trail/queue readability only; the call is supabase.rpc(fn, args). */
+export interface RpcArgs { fn: string; args: Record<string, unknown>; table?: string; }
 
 export class SyncEngine {
   private supabase: SupabaseClient;
@@ -118,6 +122,21 @@ export class SyncEngine {
     return this.submit(this.envelope('update', args.table, payload, newId()));
   }
 
+  /**
+   * Queue a postgres FUNCTION call (D-50 movement RPCs, ledger #143).
+   *
+   * Use this instead of `update` for any qty movement: the RPC moves the quantity and
+   * writes its ledger row in ONE transaction, so a dead-zone count can no longer be a
+   * naked SET that lands without a record. `table` is carried for the TRACE trail and
+   * queue readability only — the call is `supabase.rpc(fn, args)`.
+   *
+   * Replay semantics and the one known imperfection are documented on `RpcPayload`.
+   */
+  async rpc(args: RpcArgs): Promise<WriteResult> {
+    const payload: RpcPayload = { fn: args.fn, args: args.args };
+    return this.submit(this.envelope('rpc', args.table ?? args.fn, payload, newId()));
+  }
+
   // Always enqueue (durability + FIFO order), then drain now if online. Offline →
   // 'queued' (Save never fails in a dead zone). Online → 'applied' when it lands,
   // 'queued' if connectivity dropped mid-drain, 'failed' on a genuine reject.
@@ -177,6 +196,25 @@ export class SyncEngine {
         if (isConnectivityError(error)) return 'retry';
         return { failed: true, error: error.message };
       }
+      if (op.kind === 'rpc') {
+        // D-50 movement call — qty + ledger row in ONE transaction, whenever it lands.
+        const r = op.payload as RpcPayload;
+        const { data, error } = await this.supabase.rpc(r.fn, r.args);
+        if (error) {
+          if (isConnectivityError(error)) return 'retry';
+          return { failed: true, error: error.message };
+        }
+        // A movement RPC can succeed at the transport level and still REFUSE at the
+        // domain level (oversell guard, lot_not_found, a cross-tenant actor). That is a
+        // genuine reject, not a dead zone — surface it rather than dropping the op
+        // silently, which would look exactly like a successful count.
+        const row = Array.isArray(data) ? (data[0] as { applied?: boolean; reason?: string } | undefined) : undefined;
+        if (row && row.applied === false) {
+          return { failed: true, error: `${r.fn} refused: ${row.reason ?? 'unknown'}` };
+        }
+        return 'applied';
+      }
+
       const p = op.payload as UpdatePayload;
       const { error } = await this.supabase.from(op.table).update(p.set).match(p.match);
       if (!error) return 'applied';
