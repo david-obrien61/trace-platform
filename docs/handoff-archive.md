@@ -7,6 +7,28 @@
 
 ---
 
+<!-- Archived 2026-07-20 from CLAUDE.md §3 HANDOFF — the TENTH application of the N=3
+     retention rule (OP-13), on the dev-surfaces close-out (ledger #142). Moved VERBATIM,
+     never summarized. 1 entry in == 1 entry out. -->
+
+### 2026-07-17 — THUNDER OP-14 RATIFIED + THE WHOLE CAPTURE-INDEX SWEEP — and the finding that named the disease of the whole day: a doctrine corpus that cannot say what is in it. DOCS-ONLY: zero app code, zero schema, zero migration, zero api-fn (12/12).
+
+**Type:** Docs/doctrine — `docs/DECISIONS.md` (OP-14 Status → ✅ RATIFIED) + `docs/DECISIONS-INDEX.md` (OP-14 §5 row + drift line + Last updated) + `TRACE-SESSION-BOOTSTRAP.md` (**21 CAPTURE INDEX rows added**, `*(missing)*` placeholder removed, D-42+ sub-table) + `docs/tech-debt-log.md` (#63 NEW) + `docs/CLOSE-OUT-LEDGER.md` #139 + this §3 + line 3. **ZERO app code / schema / migration / api-fn (12/12).** `npm run verify` NOT run (no code). **NO new decision** (OP-14 ratified unchanged; **OP-15 said docs-only → NO GATE 0 applies, stated not performed**). **§1.6:** most N/A and stated as such; applicable — **1 STORY** (process/doctrine, no user story, same class as OP-13/OP-15), **8 REUSE** (the sweep reuses the existing index shape; the finding reuses the reconcile-gate pattern). **BENCH: no trigger fires** (docs only — no payments/PII/webhooks/AI-calls/invoices/compliance-actions — roster matched, reported per §6 r10).
+
+**OP-14 RATIFIED (David, unchanged from proposed).** Flipped in `DECISIONS.md` + `DECISIONS-INDEX` §5 (#136 proposed → #139 ratified). **Why it needed the explicit call and didn't slide through:** Thunder had FOLLOWED it all day — wrote the standing board, set `owed`, never set `covered`, waited for David's live run; the four #135 cards flipped only after he ran them. **That is the rule working — but it was holding by HABIT, not by force.** A gate that lists itself beside the ratified BUILT-INVENTORY / §3-RETENTION / close-out-ledger / ⚡-ACTIVE-STATUS gates while itself unratified is **a claim, not a capability — which is OP-14's own sentence, pointed at OP-14.**
+
+**⚠️ THE FINDING — RECORD IT, IT IS THE POINT OF THIS PASS.** At 08:00 David asked Lightning what its humor style was. Lightning answered *"not encoded anywhere — not in CLAUDE.md, not in my corpus,"* and offered to make it an AC-4 candidate. **It was OP-2. Dated 2026-06-03. Status Active/canonical. It names Scott Morrison, the dry edge, BY NAME.** Lightning did not reconstruct it wrong — it reported it **ABSENT**, from a retrieval structure with a hole exactly there: OP-2 is `[POINTER]`, its content lives in the partnership doc, and **it had no CAPTURE INDEX row.** The index that exists to answer *"where is X"* answered *"nothing here"* — with the same confidence it answers correctly. **THROUGH-LINE OF 2026-07-17, worth more than any single fix: the artifact does not carry its own provenance** — `business_inventory` rows cannot say who changed them · a deployed bundle cannot say what it is (#60/OP-15) · **and a doctrine corpus cannot say what is in it.** Same disease, three layers.
+
+**THE SWEEP (the count IS the artifact — a retrieval table with holes is worse than no table).** OP-2/3/14 were found last session *incidentally* while adding OP-11's and OP-15's rows — that is not a sweep. This pass reconciled the **WHOLE** index against its sources: **59 canonical decisions** (15 OP + 37 `DECISIONS.md` D-headings + 7 `docs/decisions/`-homed D-42…D-49). **38 present · 21 MISSING · 0 stale** (every referenced file path resolves — checked). **All 21 filled:** OP-2, OP-3, OP-14 · D-27…D-36, D-40 · D-42/43/45/46/47/48/49. The last 7 got a **new sub-table** because they live *outside* `DECISIONS.md` — itself a flagged gap (fold them in). OP-3's row names only the framework + that its criteria are personal-sensitive and live outside the repo — **it does not hint at the criteria**, deliberately.
+
+**tech-debt #63 — THE CAPTURE INDEX HAS NO GATE.** Every other canonical surface has a binding reconciliation gate; the index that makes them all *findable* is maintained by a step-6 **reminder** in `end-of-session-protocol.md` — and **a reminder is what rots** (row-19B: detection produces a note; notes don't act). **NOT proposed as an OP this pass** — David has ratified two OPs in two days; a third now is ceremony. Named, numbered, left to **earn** its gate when the pattern recurs.
+
+**NO OWNER-PROVE OWED** (docs). **built-inventory.md: N/A — nothing built/changed** (doctrine + an index reconcile), stated rather than skipped. The sweep proves itself the next time someone asks *"where is X"* and the index answers correctly.
+
+**FLAGGED FOR DAVID:** **(a)** tech-debt **#63** — the CAPTURE INDEX wants a gate; left to earn it. **(b)** the 7 D-42…D-49 decisions live in `docs/decisions/`, not `DECISIONS.md` — a fold-in pass would single-home the OP/D mirror. **(c)** the humor-style itself is now *findable* (OP-2 has a row) but still lives only in the partnership doc — if you want it in the always-loaded corpus, that is a separate AC-4 call. **(d)** tech-debt **#56** / **#59** remain open, unchanged.
+
+---
+
 <!-- Archived 2026-07-20 from CLAUDE.md §3 HANDOFF — the NINTH application of the N=3 retention
      rule (OP-13), on the SHA-STAMP close-out (ledger #141). Moved VERBATIM, never summarized.
      1 entry in == 1 entry out. -->

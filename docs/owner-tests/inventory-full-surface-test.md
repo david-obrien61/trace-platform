@@ -57,16 +57,20 @@ the run; it is a failure of the *build* that shipped that surface without a test
 > 3× on 2026-07-03 and cost half a session on 2026-07-15. **Both present identically: the app is not
 > what you think it is.**
 
-- [ ] **① SHA is live — READ IT FROM THE APP.** Open the app with `?debug=1` → tap 🐞 → the panel
-      footer shows **`SHA: xxxxxxx`**. **That 7-char SHA is what is ACTUALLY RUNNING in your browser.**
-      Compare it to the SHA you intend to test (`git log -1 --format=%h`, or the Vercel deployment).
-      Write both here — app: `________` intended: `________`
+- [ ] **① SHA is live — READ IT OFF THE SCREEN. No menu, no flag, no dashboard.** The **bottom of
+      every screen** carries the version stamp: **`built <date> · <sha>`**. **That is what is
+      ACTUALLY RUNNING in your browser.** Compare it to the SHA you intend to test
+      (`git log -1 --format=%h`). Write both — app: `________` intended: `________`
       **They must MATCH.** If they differ, you are on old code — stop, and record nothing.
-      - `dev` means a local build, not a Vercel deploy. Blank/missing means a bundle from **before**
-        the stamp shipped (ledger #141) — which is itself proof you are on old code.
-      - *(The stamp is the mechanical form of OP-15 — shipped 2026-07-20. The Vercel dashboard is now
-        the FALLBACK, not the primary: the app tells you what it is. Note it still only proves what
-        the BROWSER has — a matching SHA after a hard-refresh is the full answer.)*
+      - `dev` means a local build, not a Vercel deploy. **Stamp absent entirely** = a bundle from
+        **before** the stamp shipped — which is itself proof you are on old code.
+      - The **built date** answers a question the SHA can't: *how old is this?* Two same-day deploys
+        are told apart by the time, not the date.
+      - *(Ledger #141 put the SHA in the debug panel; **ledger #142 moved it to an always-visible
+        stamp and removed it from the panel** — one home, no drift (STD-011). It is deliberately
+        NOT behind the owner-only debug gate: GATE 0 reads it, so a broken deploy must never be
+        able to hide its own tell. The Vercel dashboard is now the FALLBACK. Note it still proves
+        only what the BROWSER holds — a matching SHA **after a hard-refresh** is the full answer.)*
 - [ ] **② Hard-refresh** — Chrome/Edge `Cmd+Shift+R` · Safari `Cmd+Option+R` (iOS Safari: close the tab
       entirely and reopen — pull-to-refresh is **not** enough). Caching is **per browser**.
 - [ ] **③ The new-code signal fires.** Name the build under test and the one signal only it emits, and
@@ -76,16 +80,59 @@ the run; it is a failure of the *build* that shipped that surface without a test
 > **Standing (OP-15):** every owner-test board carries this GATE 0 at the top. Inventory is the only
 > board today; any future board (the planned orders board included) inherits it by this rule.
 
-### The app states its own SHA
+### The app states its own SHA — visibly, on every screen
 STATUS: owed
 DEVICE: phone
-COVERS: #141, OP-15, tech-debt #60
+COVERS: #141, #142, OP-15, tech-debt #60
 LAST-PROVEN: never
-SIGNAL: none — **and that is the point.** This card must be provable with NO console, because GATE 0 runs in the lot before every other card.
-- **Do:** open the app with `?debug=1` → tap 🐞 → read the panel footer.
-- **PASS:** the footer reads **`SHA: xxxxxxx`** — 7 hex chars — and it **MATCHES** the commit you pushed (`git log -1 --format=%h`).
-- **FAIL:** blank / absent *(a bundle from before the stamp — you are on old code, which the stamp just told you)* · `dev` *(a local build reached the deploy, not a Vercel build)* · a 7-char SHA that does **not** match *(the deploy under test is not live — every card below is fiction; this is exactly the #135 scar and the stamp has just caught it)*.
-- **Why:** the artifact did not carry its own provenance. A failed Vercel deploy is SILENT (last-good keeps serving) and Vercel deploys the TREE not the COMMIT — so a stale bundle and a failed deploy present identically, and #135 sat dead ~20 hours undetected. The stamp makes both the same one-glance question: *does the app say the SHA I pushed?*
+SIGNAL: none — **and that is the point.** This card must be provable with NO console and NO menu, because GATE 0 runs in the lot before every other card.
+- **Do:** open the app. Look at the bottom of the screen. **Do not open a menu, do not type a flag.**
+- **PASS:** a small muted line reads **`built <date> · <sha>`**, the SHA is 7 hex chars and **MATCHES** the commit you pushed (`git log -1 --format=%h`). It is present on **every** screen — check at least three, **including one pre-login** (the `/plant/:tagId` QR page or `/login`).
+- **FAIL:** absent *(a bundle from before the stamp — you are on old code, which its absence just told you)* · `dev` *(a local build reached the deploy)* · a SHA that does **not** match *(the deploy under test is not live — every card below is fiction; the #135 scar, caught)* · **present on some screens but not others** *(it is mounted at the wrong level — it must be outside the router)*.
+- **Also confirm it never blocks a tap:** try to tap a control near the bottom edge. The stamp is `pointer-events: none`; if anything at the bottom of a screen becomes unclickable, that is a FAIL.
+- **Why:** the artifact did not carry its own provenance. A failed Vercel deploy is SILENT (last-good keeps serving) and Vercel deploys the TREE not the COMMIT — so a stale bundle and a failed deploy present identically, and #135 sat dead ~20 hours undetected.
+
+### Dev surfaces are unreachable when signed out
+STATUS: owed
+DEVICE: phone
+COVERS: #142, recon 2026-07-20
+LAST-PROVEN: never
+SIGNAL: `[TRACE:DEVGATE]` should NOT report a bound identity while signed out.
+- **Do:** **sign out.** Open the customer QR page `/plant/SCV-0031`. Then try every old trick: append **`?debug=1`**, append **`?rhythm=1`**, reload with them, try `/login?debug=1`.
+- **PASS:** **no 🐞 button, no 🟢 button, ever.** The flags do nothing at all. The version stamp IS still visible (it is meant to be).
+- **FAIL:** either panel appears, by any means. **This is the leak this build exists to close** — the panel shows tenant ids and emails, and it was previously reachable on the customer-facing QR page by typing six characters.
+- **Why:** the panels used to mount OUTSIDE the router, so they rendered before any auth gate. They now mount inside `AppLayout` (inside `PrivateRoute`) — there is no code path that mounts them for a signed-out visitor. **This card proves the structure, not a conditional.**
+
+### The owner toggles both panels from the account menu
+STATUS: owed
+DEVICE: phone
+COVERS: #142
+LAST-PROVEN: never
+SIGNAL: `[TRACE:DEVGATE] toggle { key: 'debug', on: [...] }`
+- **Do:** sign in **as owner** → tap the avatar (top right) → scroll to the **Developer** block.
+- **PASS:** two rows, **Debug panel** and **Rhythm logger**, each showing **Off**. Tap Debug panel → it reads **On** and the 🐞 button appears (bottom-right). Tap again → **Off**, button gone. Same for Rhythm logger → 🟢 (bottom-left). The state survives a reload.
+- **FAIL:** no Developer block · a toggle that shows no On/Off state *(a dead affordance)* · a panel that does not appear/disappear immediately · state lost on reload.
+- **Why:** this replaces `?debug=1`. Typing a URL flag on a phone in a lot is not a control surface.
+
+### A non-owner never sees the Developer block
+STATUS: owed
+DEVICE: either
+COVERS: #142
+LAST-PROVEN: never
+- **Do:** sign in as a **MANAGER or STAFF** member → open the account menu.
+- **PASS:** **no Developer block at all** — absent, not greyed. No 🐞, no 🟢 anywhere in the app.
+- **FAIL:** the block renders, or renders disabled *(disabled still tells them it exists)*, or a panel is visible.
+- **Why:** the panel exposes tenant ids and emails; it is an owner tool.
+
+### Turning a panel on does not follow you to another account
+STATUS: owed
+DEVICE: either
+COVERS: #142
+LAST-PROVEN: never
+SIGNAL: `[TRACE:DEVGATE] identity cleared — all dev surfaces OFF`
+- **Do:** as owner, turn **Debug panel ON**. **Sign out.** Sign in as a **different** user (or a member).
+- **PASS:** the panel is **OFF** and no 🐞 is visible. Signing back in as the owner may restore it — that is correct, it is *their* setting.
+- **FAIL:** the 🐞 appears for the second account. **That was the old defect:** `traceDebug` was a raw localStorage key with no session coupling, so it survived logout and role change and a device left in debug stayed in debug for whoever signed in next.
 
 ---
 
@@ -503,7 +550,11 @@ SIGNAL: V6 — row still present with `status='deleted'`; `audit_log` gains `inv
 
 | Surface | Card | Result | Notes |
 |---|---|---|---|
-| GATE 0 | **App states its own SHA (matches push)** 🆕 | ⬜ PASS ⬜ FAIL | app: `________` intended: `________` |
+| GATE 0 | **Version stamp visible on every screen (matches push)** 🆕 | ⬜ PASS ⬜ FAIL | app: `________` intended: `________` |
+| GATE 0 | **Signed out: no debug reachable by any means** 🔴🆕 | ⬜ PASS ⬜ FAIL | tried `?debug=1` `?rhythm=1` |
+| GATE 0 | **Owner menu toggles both panels on/off** 🆕 | ⬜ PASS ⬜ FAIL | |
+| GATE 0 | **Non-owner never sees the Developer block** 🆕 | ⬜ PASS ⬜ FAIL | role tested: `________` |
+| GATE 0 | **Panel state does not follow you to another account** 🆕 | ⬜ PASS ⬜ FAIL | |
 | GATE 0 | Deployed-code signal fires | ⬜ PASS ⬜ FAIL | |
 | resolve | Possessive variety resolves | ⬜ PASS ⬜ FAIL | |
 | resolve | Multi-size fires the picker | ⬜ PASS ⬜ FAIL | |
