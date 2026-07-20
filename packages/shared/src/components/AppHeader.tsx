@@ -19,10 +19,21 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBusinessContext } from '../context';
+import { useDevSurface, toggleDevSurface } from '../devtools';
 
 export interface AppHeaderProps {
   /** Account "Sign out" handler — injected by the vertical's layout (does signOut + redirect). */
   onSignOut?: () => void | Promise<void>;
+  /**
+   * Show the OWNER-ONLY developer-surface toggles (Debug panel · Rhythm logger) in the
+   * menu. The vertical's layout passes `isOwner` — the header does not decide authority,
+   * it renders what it is told, the same injection pattern as `onSignOut`.
+   *
+   * These replace the old `?debug=1` / `?rhythm=1` typed URL flags (ledger #142): a flag
+   * you type is not a control surface on a phone, and those flags worked pre-login.
+   * Defaults false, so a vertical that passes nothing shows nothing.
+   */
+  devSurfaces?: boolean;
 }
 
 // Role → badge accent. Renders the 3 roles Cultivar runs today; unknown roles fall back to the
@@ -33,10 +44,12 @@ const ROLE_ACCENT: Record<string, { bg: string; fg: string }> = {
   STAFF:   { bg: '#E5E7EB', fg: '#374151' }, // gray  — staff
 };
 
-export function AppHeader({ onSignOut }: AppHeaderProps = {}) {
+export function AppHeader({ onSignOut, devSurfaces = false }: AppHeaderProps = {}) {
   const { business, userName, userEmail, role, isOwner, loading } = useBusinessContext();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const debugOn = useDevSurface('debug');
+  const rhythmOn = useDevSurface('rhythm');
 
   // Nothing to show until identity resolves — no flash of an empty strip.
   if (loading || !business) return null;
@@ -182,6 +195,34 @@ export function AppHeader({ onSignOut }: AppHeaderProps = {}) {
               <MenuItem label="Your Profile" onClick={() => go('/profile')} />
               <MenuItem label="Help" onClick={() => go('/help')} />
               {isOwner && <MenuItem label="+ Business" onClick={() => go('/add-business')} />}
+
+              {/* DEVELOPER SURFACES — owner-only, quiet, and deliberately BELOW the
+                  account actions in the dead space. Staff/manager never see this block
+                  at all (not disabled — absent). The menu stays closed on toggle so the
+                  owner can flip both without re-opening it. */}
+              {devSurfaces && isOwner && (
+                <>
+                  <div style={{ borderTop: '1px solid #eef1ea' }} />
+                  <p style={{
+                    margin: 0, padding: '10px 16px 4px', fontSize: '0.625rem', fontWeight: 800,
+                    letterSpacing: '0.06em', textTransform: 'uppercase',
+                    color: 'var(--gray-400, #9ca3af)',
+                  }}>
+                    Developer
+                  </p>
+                  <ToggleItem
+                    label="Debug panel"
+                    on={debugOn}
+                    onClick={() => toggleDevSurface('debug')}
+                  />
+                  <ToggleItem
+                    label="Rhythm logger"
+                    on={rhythmOn}
+                    onClick={() => toggleDevSurface('rhythm')}
+                  />
+                </>
+              )}
+
               <div style={{ borderTop: '1px solid #eef1ea' }} />
               <MenuItem label="Sign out" onClick={signOut} />
             </div>
@@ -189,6 +230,45 @@ export function AppHeader({ onSignOut }: AppHeaderProps = {}) {
         )}
       </div>
     </header>
+  );
+}
+
+/**
+ * A menu row that reads as a SWITCH, not a link — it reports its own state so the
+ * owner can tell at a glance whether a panel is on WITHOUT opening it (a menu item
+ * that gives no feedback is the dead-affordance case §1.6 item 5 rules out).
+ * `role="menuitemcheckbox"` + `aria-checked` so the state is real to assistive tech,
+ * not just a colored pill. Min-height 48px per the touch-target rule (§6 r3).
+ */
+function ToggleItem({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
+  return (
+    <button
+      role="menuitemcheckbox"
+      aria-checked={on}
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        width: '100%', minHeight: 48, textAlign: 'left', background: 'none', border: 'none',
+        padding: '10px 16px', fontSize: '0.875rem', fontWeight: 600,
+        color: 'var(--gray-800, #1f2937)', cursor: 'pointer',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f6ee'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+    >
+      <span>{label}</span>
+      <span
+        aria-hidden="true"
+        style={{
+          fontSize: '0.625rem', fontWeight: 800, letterSpacing: '0.06em',
+          textTransform: 'uppercase', padding: '3px 8px', borderRadius: 999,
+          background: on ? '#DCFCE7' : '#E5E7EB',
+          color: on ? '#166534' : '#6B7280',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {on ? 'On' : 'Off'}
+      </span>
+    </button>
   );
 }
 

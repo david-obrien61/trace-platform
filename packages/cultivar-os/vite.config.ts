@@ -13,6 +13,10 @@ export default defineConfig({
     __COMMIT_SHA__: JSON.stringify(
       (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7),
     ),
+    // Build timestamp (ISO, UTC). Answers "how OLD is what I'm looking at?" —
+    // the SHA answers "which code", this answers "from when". Together they are
+    // the always-visible version stamp that GATE 0 reads.
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
   resolve: {
     alias: {

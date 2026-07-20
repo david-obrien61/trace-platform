@@ -4,14 +4,27 @@
 //   captureBuffer (which is always capturing); this is just the UI to retrieve it.
 // DEPENDENCIES: @trace/shared/debug (captureBuffer helpers).
 // OUTPUTS: a floating 🐞 button (bottom-right) → panel with Copy / Share / Download /
-//   Clear, and the OP-15 SHA STAMP in the footer (the 7-char commit this bundle was
-//   built from — 'dev' outside Vercel). The button only renders when debug is
-//   ENABLED, so Lauren's demo stays clean: enable via URL ?debug=1 (sticky) or
-//   localStorage 'traceDebug'='1'.
-// NOTE: the SHA stamp makes owner-prove GATE 0 mechanical — read the SHA here
-//   instead of a Vercel dashboard round-trip. __COMMIT_SHA__ is a build-time
-//   define (vite.config.ts), declared for tsc in src/vite-env.d.ts.
-// INSTRUMENTATION: [TRACE:CAPTURE] is emitted by the shared buffer helpers.
+//   Clear.
+// ACTIVATION (changed 2026-07-20, ledger #142 — read this before "restoring" a flag):
+//   OWNER-ONLY, via the account-menu toggle → the ONE shared gate
+//   (@trace/shared/devtools). `?debug=1` and the raw `traceDebug` localStorage key
+//   are GONE and must not come back:
+//     · the flag had to be TYPED, and typing a URL flag on a phone in a lot is not
+//       a control surface;
+//     · this component mounted OUTSIDE the router, so the flag worked PRE-LOGIN on
+//       the customer-facing /plant/:tagId QR page — and this panel shows tenant ids
+//       and emails (see the footer). That was the leak; the fix is structural.
+//   TWO independent gates now: WHERE it mounts (inside the authenticated shell —
+//   AppLayout) and WHO may toggle it (owner-only menu item). Neither is load-bearing
+//   alone.
+// NOTE: the capture BUFFER is unaffected — installCapture() still runs in main.tsx
+//   before React, so the pre-login trail is still RECORDED. Only the VIEWER is gated:
+//   sign in as owner to read it. No debugging capability was lost.
+// NOTE: the SHA line was REMOVED from this footer — the always-visible
+//   <VersionStamp> is its one home now (STD-011: two surfaces printing one fact
+//   drift, and a drifted version stamp asserts a build you are not running).
+// INSTRUMENTATION: [TRACE:CAPTURE] is emitted by the shared buffer helpers;
+//   [TRACE:DEVGATE] by the shared gate.
 // ───────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -21,26 +34,10 @@ import {
   downloadCapture,
   shareCapture,
 } from '@trace/shared/debug';
-
-function debugEnabled(): boolean {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('debug') === '1') {
-      localStorage.setItem('traceDebug', '1'); // sticky once enabled
-      return true;
-    }
-    if (params.get('debug') === '0') {
-      localStorage.removeItem('traceDebug');
-      return false;
-    }
-    return localStorage.getItem('traceDebug') === '1';
-  } catch {
-    return false;
-  }
-}
+import { useDevSurface } from '@trace/shared/devtools';
 
 export function DebugPanel() {
-  const [enabled] = useState(debugEnabled);
+  const enabled = useDevSurface('debug');
   const [open, setOpen] = useState(false);
   const [count, setCount] = useState(0);
   const [status, setStatus] = useState('');
@@ -113,10 +110,7 @@ export function DebugPanel() {
             background: '#0d1f08', color: '#cfe8b8', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
           }}>{tail || '(no entries yet)'}</pre>
           <div style={{ padding: '6px 10px', fontSize: 10, color: '#777', borderTop: '1px solid #eee' }}>
-            <div style={{ color: '#27500A', fontWeight: 600, fontFamily: 'monospace', marginBottom: 2 }}>
-              SHA: {__COMMIT_SHA__}
-            </div>
-            May contain tenant ids/emails — internal use. Add ?debug=0 to URL to hide.
+            May contain tenant ids/emails — internal use. Turn off in the account menu.
           </div>
         </div>
       )}

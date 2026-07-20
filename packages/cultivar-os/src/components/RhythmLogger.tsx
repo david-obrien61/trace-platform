@@ -8,8 +8,17 @@
 //   optional Web Speech API.
 // OUTPUTS: a floating 🟢 button (bottom-LEFT, to not collide with DebugPanel's
 //   bottom-right) → panel: start/stop logging, add-note (voice/text), shape chips,
-//   thread label, live point/note counts, Share/Download/Clear. Renders ONLY when
-//   ?rhythm=1 (sticky) — normal app stays clean, same as ?debug=1.
+//   thread label, live point/note counts, Share/Download/Clear.
+// ACTIVATION (changed 2026-07-20, ledger #142): OWNER-ONLY via the account-menu
+//   toggle → the ONE shared gate (@trace/shared/devtools). `?rhythm=1` and the raw
+//   `traceRhythm` localStorage key are GONE — same reasoning as DebugPanel: the flag
+//   had to be typed, and it worked PRE-LOGIN because this mounted outside the router.
+//   Gated twice now: by WHERE it mounts (authenticated shell) and WHO can toggle it.
+// ⚠️ SCOPE NOTE: this logs DAVID's physical location and voice notes. It is a
+//   customer-zero research instrument, not an owner feature — the owner gate is the
+//   coarsest correct gate available today, and it is WIDER than the real audience
+//   (any owner would see it, incl. Lauren). Flagged, not silently accepted:
+//   a narrower gate needs a platform-dev role that does not exist yet.
 // INSTRUMENTATION: [TRACE:RHYTHM] emitted by the shared buffer helpers (ON by birth).
 // HONEST CONSTRAINT: FOREGROUND-ONLY. Web apps can't get location while the phone is
 //   locked/pocketed (iOS kills it). Background = a future NATIVE build. The UI says so.
@@ -25,28 +34,12 @@ import {
   haversineMeters,
   type RhythmShape,
 } from '@trace/shared/rhythm';
+import { useDevSurface } from '@trace/shared/devtools';
 
 const MOVE_THRESHOLD_M = 10; // log a point when David moves >10m
 const HEARTBEAT_MS = 60_000; // ...and every 60s while still, so "sat at desk" shows
 
 const SHAPES: RhythmShape[] = ['buy', 'task', 'inventory-check', 'project'];
-
-function rhythmEnabled(): boolean {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('rhythm') === '1') {
-      localStorage.setItem('traceRhythm', '1'); // sticky once enabled
-      return true;
-    }
-    if (params.get('rhythm') === '0') {
-      localStorage.removeItem('traceRhythm');
-      return false;
-    }
-    return localStorage.getItem('traceRhythm') === '1';
-  } catch {
-    return false;
-  }
-}
 
 // Minimal Web Speech typing (not in lib.dom for webkit-prefixed builds).
 interface SREvent {
@@ -79,7 +72,7 @@ interface Pos {
 }
 
 export function RhythmLogger() {
-  const [enabled] = useState(rhythmEnabled);
+  const enabled = useDevSurface('rhythm');
   const [open, setOpen] = useState(false);
   const [logging, setLogging] = useState(false);
   const [pos, setPos] = useState<Pos | null>(null);
