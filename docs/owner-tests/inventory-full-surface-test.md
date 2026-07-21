@@ -585,7 +585,16 @@ DEVICE: phone
 COVERS: D-50 Layer 2A-2
 LAST-PROVEN: —
 SIGNAL: `[TRACE:INVENTORY] lot qty adjusted … kind: 'sale', actor: …`
-- **Do:** run a checkout on a **countable lot** — first while **signed in as staff**, then a second one **signed out** via the QR page.
+
+> **⚠️ AMENDED BY D-52 (2026-07-21) — run this as a WALK-IN only.**
+> This card was written when **every** checkout decremented stock. Under D-52 only a
+> **self-transport (walk-in)** checkout still writes its `sale` event at checkout; a
+> **delivery/install** order writes `order_committed` and deliberately moves **no stock** until it
+> is marked fulfilled. Running this card on a delivery order will show **no `sale` row — and that
+> is the correct new behavior**, not a failure. The delivery half is covered by its own cards under
+> **SURFACE: inventory-states** below.
+
+- **Do:** run a checkout on a **countable lot**, choosing **"No thank you — I'll haul it myself"** — first while **signed in as staff**, then a second one **signed out** via the QR page.
 - **PASS:** each produces a `sale` row, `delta = −qty`, `source_id` = the order, `occurred_at` = the checkout moment. The signed-in one carries **your uid**; the anonymous one carries **NULL**.
 - **⚠️ NULL on the anonymous checkout is a PASS, not a failure.** There is genuinely no caller on the QR path. `assert_movement_actor` admits it as a system write, and D-50 §11 forbids defaulting it to the owner — **a fabricated actor is worse than an absent one** (D-9). A card that demanded non-NULL everywhere would be demanding a lie.
 - **FAIL:** the anonymous checkout records the owner's uid — that is the failure this card exists to catch.
@@ -667,6 +676,107 @@ SIGNAL: V6 returns 0
 | grid | Inline edits persist | ⬜ PASS ⬜ FAIL | |
 
 **Not run (no test written — OP-14 debt):** delete soft/hard · frozen column · **order-picker read** · offline sync.
+
+---
+
+## SURFACE: inventory-states (D-52 — on-hand / committed / available)
+_Stock no longer leaves on-hand at checkout. It leaves when the order is **fulfilled**. Committed and available are **derived**, never stored. `api/orders/submit.ts` · `src/lib/inventoryStates.ts` · `BusinessInventory.tsx` · `Dashboard.tsx` · `api/dashboard.ts`._
+
+> **GATE 0 APPLIES** to every card here — they all run through a deployed bundle. Confirm the Vercel
+> deploy for the SHA under test is READY, then check the version stamp says that SHA (OP-15).
+>
+> **⚠️ RUN THE REMEDIATION REPORT FIRST, AND DO NOT `--apply` UNTIL YOU HAVE READ IT.** Orders placed
+> before this build already took their stock out at checkout. Until they are reconciled, on-hand
+> under-reports and the numbers below will look wrong for those specific lots — *correctly so*.
+
+### A DELIVERY order commits stock without moving on-hand 🔴
+STATUS: owed
+DEVICE: phone
+COVERS: D-52
+LAST-PROVEN: —
+SIGNAL: `[TRACE:INVENTORY] D-52 commit — units COMMITTED, on-hand deliberately UNCHANGED`
+- **Do:** note a lot's **On hand** in the inventory grid. Place an order for 2 of it choosing **Delivery**. Reload the grid.
+- **PASS:** **On hand is UNCHANGED.** Committed shows **2**. Available dropped by **2**.
+- **FAIL:** On hand dropped — the decrement did not move, and this build's central claim is false.
+- **Why:** the plant is still standing in the yard. Saying it left because someone ordered it is the thing D-52 corrects.
+
+### Marking it FULFILLED is what drops on-hand 🔴
+STATUS: owed
+DEVICE: desktop
+COVERS: D-52
+LAST-PROVEN: —
+SIGNAL: `[TRACE:INVENTORY] D-52 fulfilled — on-hand decremented at departure`
+- **Do:** open that order, set status **Fulfilled**. Reload the grid.
+- **PASS:** **On hand drops by 2.** Committed returns to **—**. Available is unchanged *from the committed state* (the units were already not sellable).
+- **PASS:** the ledger has a `sale` row dated **now** (the fulfillment moment), not the checkout moment.
+- **Why the date matters:** reconcile subtracts against this timestamp. Dating a sale at checkout claims stock left on a day it demonstrably had not.
+
+### A WALK-IN collapses both into one instant 🔴
+STATUS: owed
+DEVICE: phone
+COVERS: D-52
+LAST-PROVEN: —
+SIGNAL: `[TRACE:INVENTORY] lot qty adjusted … 'walk-in sale decrement (commit+fulfill collapsed)'`
+- **Do:** checkout on a countable lot choosing **"No thank you — I'll haul it myself."**
+- **PASS:** On hand drops **immediately**. Committed stays **—** (it never sat committed). The order shows **Fulfilled**, not Pending.
+- **PASS:** the ledger holds `order_created`, `order_committed`, `order_fulfilled` and one `sale` — all sharing a timestamp.
+- **⚠️ The order being born Fulfilled is deliberate**, not a bug: the customer has the plant. Leaving it Pending would count units as committed that are already on someone's trailer, permanently understating what you can sell.
+
+### Oversell is refused against AVAILABLE, with stock visibly on hand 🔴
+STATUS: owed
+DEVICE: phone
+COVERS: D-52
+LAST-PROVEN: —
+SIGNAL: `[TRACE:INVENTORY] REFUSED — insufficient AVAILABLE`
+- **Do:** find a lot with **exactly N** on hand. Place a **delivery** order for all N (do not fulfil it). Now try to order **1 more** of the same lot.
+- **PASS:** the second order is **REFUSED**, and the message reads *"Only 0 … available to sell (N on hand, N committed to open orders)"*.
+- **PASS:** the grid still shows **On hand = N** — the stock is genuinely there, and correctly not sellable.
+- **Why this is the card that justifies the build:** under D-42 this second order would have **succeeded**, selling the same physical plants twice. The message names both numbers on purpose — *"only 0 in stock"* against a lot you can see holding N reads as a bug.
+
+### Cancelling an OPEN order invents no stock 🔴
+STATUS: owed
+DEVICE: desktop
+COVERS: D-52
+LAST-PROVEN: —
+SIGNAL: `[TRACE:INVENTORY] D-52 cancelled while open — commitment released, on-hand untouched (nothing was taken)`
+- **Do:** note On hand. Place a **delivery** order for 2 (do not fulfil). **Cancel** it. Reload.
+- **PASS:** On hand is **exactly what it was before the order** — unchanged throughout. Committed returns to **—**; Available returns to its original value.
+- **FAIL:** On hand is **2 higher** than when you started. That is stock invented from nothing.
+- **Why this card exists:** the cancel path used to restore stock unconditionally, which was right when checkout took it. Moving the decrement without moving that assumption would have credited back a decrement that never happened — and an append-only ledger would have recorded the invention as fact. Same for **delete** and for **editing** an open order's quantities: none may move on-hand.
+
+### The grid shows three numbers and only one is editable
+STATUS: owed
+DEVICE: desktop
+COVERS: D-52
+LAST-PROVEN: —
+SIGNAL: —
+- **Do:** open the inventory grid with at least one open delivery order outstanding.
+- **PASS:** columns **On hand · Committed · Available** sit together. Editing **On hand** works; **Committed** and **Available** show a **lock** whose popover explains what sets them.
+- **PASS:** a lot that is fully spoken for (on hand > 0, available 0) renders **Available in amber**.
+- **FAIL:** Committed or Available is greyed with no explanation — a locked field with no reason is a hidden edit function (§6 r13).
+
+### The dashboard stops calling on-hand "available"
+STATUS: owed
+DEVICE: desktop
+COVERS: D-52
+LAST-PROVEN: —
+SIGNAL: —
+- **Do:** with an open delivery order outstanding, load the dashboard **Plants tracked** tile.
+- **PASS:** the sub-line reads **"N available · M committed"** where N + M = the headline.
+- **PASS:** with **no** open orders it reads plainly **"N available"** — no "· 0 committed" noise.
+
+### REMEDIATION — the pre-D-52 orders, report first 🔴
+STATUS: owed
+DEVICE: desktop
+COVERS: D-52
+LAST-PROVEN: —
+SIGNAL: script stdout
+- **Do:** run **report mode** (writes nothing):
+  `SUPABASE_URL=… SUPABASE_SERVICE_KEY=… node scripts/d52-remediate-committed-stock.mjs`
+- **PASS:** read the three tables. Confirm the *"TO REMEDIATE"* list is orders whose plants are **genuinely still on your property**, and that the *"SKIPPED: walk-in"* list is orders whose customers **already drove away**.
+- **⚠️ THE WALK-IN SPLIT IS THE JUDGEMENT CALL, AND IT IS YOURS.** Crediting a walk-in's stock back would invent plants you do not have, in a log that cannot be retracted. The script decides by `transport_method`; if any row in either list looks misfiled, **stop and say so — do not `--apply`.**
+- **Then:** re-run with `--apply` only after you are satisfied. Afterwards, on-hand for those lots should match what you can physically count, and those units should read as **Committed**.
+- **Then:** re-run Layer 1's **V3(b)** — `qty == SUM(delta)` must still return **0 rows**, with the remediation events counted in the sum.
 
 ---
 

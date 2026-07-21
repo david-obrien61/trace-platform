@@ -6,6 +6,7 @@ import { auth } from '../lib/auth';
 import { useBusinessContext } from '@trace/shared/context';
 import { useQboConnect } from '@trace/shared/quickbooks/useQboConnect';
 import { useModules } from '../hooks/useModules';
+import { fetchCommittedByLot, availableFrom } from '../lib/inventoryStates';
 import { requiredPermissionFor } from '../registry/tileRegistry';
 import { TileGrid } from '@trace/shared/components/tiles/TileGrid';
 import { Tile } from '@trace/shared/components/tiles/Tile';
@@ -91,6 +92,9 @@ export function Dashboard() {
 
   const [businessName, setBusinessName]       = useState('');
   const [plantCount, setPlantCount]           = useState(0);
+  // D-52: committed = units on placed-but-unfulfilled orders. DERIVED (never stored), so the
+  // dashboard can show what is actually SELLABLE rather than the raw physical count.
+  const [committedCount, setCommittedCount]   = useState(0);
   const [inventoryValue, setInventoryValue]   = useState(0);
   const [todayOrderCount, setTodayOrderCount] = useState(0);
   const [todayRevenue, setTodayRevenue]       = useState(0);
@@ -191,6 +195,13 @@ export function Dashboard() {
     // plant_count from cultivar_plants identity rows is provided by api/dashboard.ts;
     // this client path uses business_inventory lot count as a proxy until the API is called.
     setPlantCount(inventoryLots.reduce((sum: number, l: any) => sum + Number(l.qty), 0));
+    // D-52: derive COMMITTED alongside on-hand. Read through the ONE shared derivation (§6 r8) so
+    // the dashboard and the checkout guard can never disagree about what is committed. Runs under
+    // the signed-in owner/manager's own RLS — order_items is authenticated-only by policy, which
+    // is precisely why the ANON customer plant page cannot derive this (see the D-52 build notes).
+    setCommittedCount(
+      [...(await fetchCommittedByLot(supabase, businessId!)).values()].reduce((a, b) => a + b, 0),
+    );
     // inventory value is cost-derived — only computed when the session holds view_costs
     setInventoryValue(canViewCosts ? inventoryLots.reduce((sum: number, l: any) => sum + (Number(l.qty) * Number(l.unit_cost ?? 0)), 0) : 0);
 
@@ -522,10 +533,17 @@ export function Dashboard() {
             <div style={{ display: 'flex', gap: 12 }}>
               {canSeeReadout('metric_plants') && (
                 <div style={{ flex: 1, minWidth: 0 }}>
+                  {/* D-52: the headline stays ON-HAND (what is physically in the yard), but the
+                      sub no longer calls that number "available" — it wasn't. Available is
+                      on-hand minus what open orders have already claimed, and the two only
+                      matched under D-42's checkout-decrement. Committed is shown only when it
+                      is non-zero: "· 0 committed" on every quiet day is noise, not information. */}
                   <MetricCard
                     label="Plants tracked"
                     value={String(plantCount)}
-                    sub={`${plantCount} available`}
+                    sub={committedCount > 0
+                      ? `${availableFrom(plantCount, committedCount)} available · ${committedCount} committed`
+                      : `${plantCount} available`}
                   />
                 </div>
               )}

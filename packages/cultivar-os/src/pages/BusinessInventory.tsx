@@ -39,6 +39,7 @@ import {
 } from '../components/datasheet/DataSheet';
 import { InventoryEditor, BLANK_INVENTORY_ITEM, type EditorInventoryItem, type InventoryPeer } from '../components/inventory/InventoryEditor';
 import { persistInventoryPatch, renameVariety, deleteInventoryRow } from '../components/inventory/inventoryEdit';
+import { fetchCommittedByLot, availableFrom, type CommittedByLot } from '../lib/inventoryStates';
 
 type CostConfidence = 'CONFIRMED' | 'DERIVED' | 'ESTIMATED' | 'UNKNOWN';
 const CONFIDENCE_OPTS: CostConfidence[] = ['CONFIRMED', 'DERIVED', 'ESTIMATED', 'UNKNOWN'];
@@ -104,6 +105,9 @@ export function BusinessInventory() {
   const navigate = useNavigate();
 
   const [items, setItems] = useState<InventoryRow[]>([]);
+  // D-52: lot → committed units (open orders). DERIVED, never stored and never written back —
+  // this grid EDITS on-hand, and committed/available are read-only consequences of it.
+  const [committedByLot, setCommittedByLot] = useState<CommittedByLot>(new Map());
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
 
@@ -140,6 +144,10 @@ export function BusinessInventory() {
     const rows = ((data ?? []) as Partial<InventoryRow>[]).map(r => ({ reorder_point: null, ...r })) as InventoryRow[];
     console.log('[TRACE:invsheet] load ok', { businessId, rows: rows.length });
     setItems(rows);
+    // D-52: committed is re-derived on every load, INCLUDING after an on-hand edit, so Available
+    // recomputes the moment Qty changes. Through the ONE shared derivation (§6 r8) — the grid and
+    // the checkout oversell guard read committed the same way or they will eventually disagree.
+    setCommittedByLot(await fetchCommittedByLot(supabase, businessId!));
     setListLoading(false);
   }
 
@@ -274,8 +282,30 @@ export function BusinessInventory() {
       render: r => <TextCell key={`name-${r.id}-${r.updated_at}`} value={r.name} width={150} onCommit={v => doRename(r, v ?? '')} /> },
     { key: 'sku', header: 'SKU', sortable: true, sortVal: r => (r.sku ?? '').toLowerCase(),
       render: r => r.sku ? <span style={SS.skuText}>{r.sku}</span> : <span style={SS.muted}>—</span> },
-    { key: 'qty', header: 'Qty', sortable: true, sortVal: r => r.qty,
+    // D-52 — the three numbers, side by side. On-hand ("Qty") is the ONLY editable one; Committed
+    // and Available are DERIVED and locked (§6 r13: a non-editable field reads as system-managed
+    // WITH a reason, never as a mystery-greyed cell). They sit immediately beside Qty because the
+    // whole point is the comparison — "I have 12, but only 4 are actually sellable" is unreadable
+    // if the numbers are columns apart. Committed renders muted at 0 so a busy lot stands out.
+    { key: 'qty', header: 'On hand', sortable: true, sortVal: r => r.qty,
       render: r => <NumberCell key={`qty-${r.id}-${r.updated_at}`} value={r.qty} onCommit={v => onQty(r, v)} /> },
+    { key: 'committed', header: 'Committed', sortable: true, systemManaged: true,
+      lockReason: 'Units on orders that are placed but not yet fulfilled. Counted up from those open orders every time this page loads, so it is never edited here — cancel or fulfil the order and this follows.',
+      sortVal: r => committedByLot.get(r.id) ?? 0,
+      render: r => {
+        const c = committedByLot.get(r.id) ?? 0;
+        return c > 0 ? <span>{c}</span> : <span style={SS.muted}>—</span>;
+      } },
+    { key: 'available', header: 'Available', sortable: true, systemManaged: true,
+      lockReason: 'On hand minus committed — what a new order can actually take. Calculated from the two, so it is not editable: change On hand, or fulfil/cancel an order, and this follows.',
+      sortVal: r => availableFrom(r.qty, committedByLot.get(r.id) ?? 0),
+      render: r => {
+        const c = committedByLot.get(r.id) ?? 0;
+        const a = availableFrom(r.qty, c);
+        // Amber when stock is present but fully spoken for — the state most likely to be misread
+        // as "in stock" at a glance, and the one that causes a refused sale at the counter.
+        return <span style={a === 0 && r.qty > 0 ? SS.dupTag : undefined}>{a}</span>;
+      } },
     { key: 'size', header: 'Size', sortable: true, sortVal: r => (r.size ?? '').toLowerCase(),
       render: r => <TextCell key={`size-${r.id}-${r.updated_at}`} value={r.size} width={80} placeholder="—" onCommit={v => onText(r, 'size', v)} /> },
     { key: 'variant_group', header: 'Variant grp', sortable: true, sortVal: r => (r.variant_group ?? '').toLowerCase(),

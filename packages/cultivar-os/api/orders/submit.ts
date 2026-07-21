@@ -6,6 +6,7 @@ import { readPricingConfig } from '../../../shared/src/business-logic/financialD
 import { normalizeDiscountTypes, resolveTier, computeOrderPricing, resolveTaxRate, RETAIL_FLOOR, type PricingLineInput, type OrderTaxExemption } from '../../../shared/src/business-logic/tierPricing';
 import { nettedQuantity, lineSubtotal } from '../../src/lib/netting';
 import { ORDER_STATUSES } from '../../src/lib/orderStatus';
+import { fetchCommittedByLot, availableFrom, movesOnHand } from '../../src/lib/inventoryStates';
 
 const LARGE_CONTAINERS = ['15 gal', '30 gal', '45 gal', '60 gal', '100 gal'];
 
@@ -351,6 +352,18 @@ async function handleCreate(req: any, res: any) {
     const goodsInputs: PricingLineInput[] = [];
     let anyLargeContainer = false;
 
+    // ── D-52: read COMMITTED once for the whole business, BEFORE the line loop ──────────────
+    // The oversell guard below checks AVAILABLE (on-hand − committed), not raw on-hand. This is the
+    // reservation protection D-42 could not provide: under checkout-decrement, on-hand and available
+    // were the same number, so a delivery order sitting unfulfilled left its units looking sellable.
+    // ONE query for every lot (not N+1 per line — this is the checkout path).
+    const committedByLot = await fetchCommittedByLot(db, businessId);
+    // Units this SAME cart has already claimed on an earlier line. Two lines can anchor the SAME lot
+    // (e.g. the same variety added twice), and checking each line against the same untouched
+    // available would let a 2-line cart take 2× the stock — each line individually "fits" while the
+    // cart as a whole oversells. Pre-existing hole; fixed here because this is the touched surface.
+    const claimedInThisCart = new Map<string, number>();
+
     for (const line of lines) {
       const plant = line.plant;
       const quantity = Number(line.quantity);
@@ -406,22 +419,40 @@ async function handleCreate(req: any, res: any) {
         });
       }
 
-      // ── OVERSELL PRE-FLIGHT (D-42, Surface Honesty) — refuse the WHOLE order BEFORE any write
-      // if a line's quantity exceeds the lot's on-hand qty, rather than driving stock negative or
-      // silently short-selling. qty is the truth (STD-011) regardless of the lot's current status
-      // (an old-model 'reserved' lot still carries its real qty). The §11 atomic RPC is the
-      // authoritative guard against a concurrent-depletion race; this is the clean common-case
-      // refusal that avoids a half-committed order.
-      if (availableQty != null && quantity > availableQty) {
+      // ── OVERSELL PRE-FLIGHT (D-42 → D-52, Surface Honesty) — refuse the WHOLE order BEFORE any
+      // write if a line's quantity exceeds what is genuinely SELLABLE, rather than driving stock
+      // negative or silently short-selling.
+      //
+      // D-52 changed WHICH number this checks. It was raw on-hand; it is now AVAILABLE
+      // (on-hand − committed − already-claimed-by-this-cart). Under D-42's checkout-decrement the
+      // two were identical, so there was nothing to distinguish. Now that on-hand does NOT move
+      // until fulfillment, a placed-but-undelivered order leaves its units sitting in on-hand —
+      // physically present, already sold. Checking on-hand here would happily sell them TWICE.
+      // The §11/status atomic RPC remains the authoritative guard against a concurrent-depletion
+      // race; this is the clean common-case refusal that avoids a half-committed order.
+      const lotIdForCheck = stockLineId ?? plant.inventory_id ?? null;
+      const committedQty  = lotIdForCheck ? (committedByLot.get(lotIdForCheck) ?? 0) : 0;
+      const cartClaimed   = lotIdForCheck ? (claimedInThisCart.get(lotIdForCheck) ?? 0) : 0;
+      const sellableQty   = availableQty != null
+        ? availableFrom(availableQty, committedQty + cartClaimed)
+        : null;
+      if (sellableQty != null && quantity > sellableQty) {
         const itemName = plant.common_name ?? plant.species ?? 'this item';
-        console.log('[TRACE:INVENTORY] REFUSED — insufficient stock (order blocked, no negative qty written)', {
-          plantId: plant.id, itemName, requested: quantity, availableQty,
+        console.log('[TRACE:INVENTORY] REFUSED — insufficient AVAILABLE (order blocked, no negative qty written)', {
+          plantId: plant.id, itemName, requested: quantity,
+          onHand: availableQty, committed: committedQty, claimedEarlierInCart: cartClaimed, sellable: sellableQty,
         });
+        // The message names AVAILABLE, and says so when stock is present-but-committed — a bare
+        // "only N in stock" against a lot the owner can SEE holding more reads as a bug (D-9).
+        const detail = committedQty + cartClaimed > 0
+          ? `Only ${sellableQty} of ${itemName} available to sell (${availableQty} on hand, ${committedQty + cartClaimed} committed to open orders)`
+          : `Only ${sellableQty} of ${itemName} in stock`;
         return res.status(400).json({
-          error: `Only ${availableQty} of ${itemName} in stock — reduce the quantity or restock before selling.`,
+          error: `${detail} — reduce the quantity or restock before selling.`,
           code: 'INSUFFICIENT_STOCK',
         });
       }
+      if (lotIdForCheck) claimedInThisCart.set(lotIdForCheck, cartClaimed + quantity);
 
       // D-34: for a stock-line order the container is the lot's size (server-fetched).
       const container = stockLineId ? (stockLineSize ?? plant.current_container) : plant.current_container;
@@ -613,6 +644,23 @@ async function handleCreate(req: any, res: any) {
       });
     }
 
+    // ── D-52: WALK-IN COLLAPSES COMMIT AND FULFILL INTO ONE INSTANT ────────────────────────
+    // A self-transport customer pays and drives away: the plant leaves the property AT CHECKOUT,
+    // so the order is born already fulfilled. A delivery/install order is born 'pending' — its
+    // units stay on the property, committed, until someone marks it fulfilled days later. Same two
+    // transitions in both cases (D-52); only the spacing differs.
+    //
+    // The classification is lib/transport.ts's, reached through deriveTransportMethod — NOT a new
+    // flag (§6 r8: one operation, one home). 'self' is the branch that means "customer hauls it."
+    //
+    // ⚠️ The status is not cosmetic here — it is LOAD-BEARING for the derivation. COMMITTED is
+    // derived from open orders (holdsCommitment), so leaving a walk-in at 'pending' would count
+    // units as committed that have physically LEFT — subtracting them from available a second time
+    // after on-hand already dropped, permanently understating what the owner can sell. The
+    // three-number model forces this answer; it is not a preference.
+    const isWalkIn = transportMethod === 'self';
+    const bornStatus = isWalkIn ? 'fulfilled' : 'pending';
+
     const now  = new Date();
     const dp   = now.toISOString().slice(0, 10).replace(/-/g, '');
     const seq  = String(now.getMinutes() * 60 + now.getSeconds()).padStart(3, '0');
@@ -631,7 +679,7 @@ async function handleCreate(req: any, res: any) {
       addons_amount:    addonsAmount,
       leakage_flag:     leakageFlag,
       notes:            invoiceNumber,
-      status:           'pending',
+      status:           bornStatus,   // D-52: 'fulfilled' for a walk-in, 'pending' for delivery
     };
     // GATED columns on `orders` — delivery_date (20260708) + the D-40 tax-exemption cols (20260713).
     // Both are deploy-window-safe: insert WITH them and, on a missing-column error, strip the gated
@@ -817,37 +865,63 @@ async function handleCreate(req: any, res: any) {
       await db.from('order_compliance_records').insert(complianceRows);
     }
 
-    // ── 11. DECREMENT each line's inventory lot — the SALE event (D-42 · D-50) ──────
-    // ⚠️ COMMENT CORRECTED 2026-07-20 (D-50 2A-2). This block previously described itself as
-    // "the ORDER-PAID/CONFIRMED commitment point ... the stock is committed here, at payment."
-    // That was FALSE and actively misleading: there is no 'paid' status (ORDER_STATUSES is
-    // pending|confirmed|fulfilled|cancelled) and no status transition decrements anything. Stock
-    // leaves at CHECKOUT — here — where the order is born 'pending'. The stale comment is what
-    // made a later build spec go looking for a paid-transition decrement that does not exist
-    // (same class as tech-debt #61: a comment contradicting its own repo costs real reasoning).
+    // ── 11. COMMIT the order's stock — and decrement on-hand ONLY on a walk-in (D-52) ──────
+    // ⚠️ D-52 MOVED THE ON-HAND DECREMENT OUT OF CHECKOUT. It used to fire here for every order.
+    // It now fires when the order is FULFILLED — the moment the plant physically leaves — which
+    // for a delivery is days later, in handleStatus. Checkout COMMITS the units (available drops,
+    // on-hand does not) and the commitment is DERIVED from this open order, never stored.
     //
-    // Per-unit, ATOMIC (qty = qty - n via the RPC — concurrency-safe, cannot go negative), NOT a
-    // whole-lot status flip. Status DERIVES from the new qty inside the RPC. The lot targeted is the
-    // SAME id the line ANCHORS on (rl.stockLineId ?? rl.plant.inventory_id — D-34) so it can't
-    // silently no-op on a stock-line line. Delivery is a LATER event that does NOT touch qty.
+    // (History, kept because it cost real reasoning twice: the pre-2026-07-20 comment here claimed
+    // this was "the ORDER-PAID commitment point ... committed at payment", describing a payment
+    // lifecycle the code has never had — no 'paid' status exists. That falsehood sent a build spec
+    // hunting a transition that was never there. Under D-52 the block finally means roughly what
+    // that comment claimed — but by DECISION, not by accident, and the distinction is the point.)
+    //
+    // A WALK-IN is the one case that still decrements here, because commit and fulfill are the same
+    // instant when the customer drives away with the plant. Per-unit, ATOMIC (qty = qty - n via the
+    // RPC — concurrency-safe, cannot go negative), NOT a whole-lot status flip; status DERIVES from
+    // the new qty inside the RPC. The lot targeted is the SAME id the line ANCHORS on
+    // (rl.stockLineId ?? rl.plant.inventory_id — D-34) so it cannot silently no-op on a stock line.
     // A rare concurrent-depletion oversell is surfaced by the RPC (the pre-flight already refused
     // the common case) — logged, never a negative qty.
     //
-    // D-50: each decrement now writes a dated 'sale' ledger event carrying its actor. checkoutActor
-    // is the staff member when a signed-in staffer rings the sale, and NULL for a genuine anonymous
-    // QR checkout — the honest value (D-9), never defaulted to the owner. This is the dated sale
-    // stream reconcile subtracts against.
+    // D-50: the decrement writes a dated 'sale' ledger event carrying its actor. checkoutActor is
+    // the staff member when a signed-in staffer rings the sale, and NULL for a genuine anonymous QR
+    // checkout — the honest value (D-9), never defaulted to the owner.
     const checkoutActor = overrideBy ?? exemptBy ?? (authHeader ? await resolveCallerUid(authHeader) : null);
     const soldAt = new Date().toISOString();
-    for (const rl of resolvedLines) {
-      const lotId = rl.stockLineId ?? rl.plant.inventory_id ?? null;
-      await adjustLotQty(db, businessId, lotId, -rl.quantity, 'checkout sale decrement',
-        { actorUserId: checkoutActor, kind: 'sale', orderId, occurredAt: soldAt });
+
+    if (isWalkIn) {
+      for (const rl of resolvedLines) {
+        const lotId = rl.stockLineId ?? rl.plant.inventory_id ?? null;
+        await adjustLotQty(db, businessId, lotId, -rl.quantity, 'walk-in sale decrement (commit+fulfill collapsed)',
+          { actorUserId: checkoutActor, kind: 'sale', orderId, occurredAt: soldAt });
+      }
+    } else {
+      console.log('[TRACE:INVENTORY] D-52 commit — units COMMITTED, on-hand deliberately UNCHANGED (decrements at fulfillment)', {
+        orderId, transportMethod,
+        lines: resolvedLines.map(rl => ({ lot: rl.stockLineId ?? rl.plant.inventory_id ?? null, qty: rl.quantity })),
+      });
     }
 
     // The order's own birth event — the first entry in its lifecycle stream (delta 0).
     await recordOrderEvent(db, businessId, orderId, 'order_created', checkoutActor, soldAt,
       'checkout');
+
+    // D-52: the COMMIT event — the moment units became spoken-for. This is the start of the
+    // "how long did it sit" clock; the interval to order_fulfilled IS the committed duration.
+    // Emitted for EVERY order including a walk-in, whose commit and fulfill share a timestamp:
+    // recording only the fulfill would erase the fact that a commitment happened at all, and a
+    // zero-length interval is a real, meaningful measurement (it says "collapsed"), not a gap.
+    await recordOrderEvent(db, businessId, orderId, 'order_committed', checkoutActor, soldAt,
+      isWalkIn ? 'walk-in — commit and fulfill collapsed' : `committed at checkout (${transportMethod})`);
+
+    // A walk-in is fulfilled at birth, so its fulfillment event belongs to checkout too. The order
+    // never passes through handleStatus, so this is the ONLY place that event can be written.
+    if (isWalkIn) {
+      await recordOrderEvent(db, businessId, orderId, 'order_fulfilled', checkoutActor, soldAt,
+        'walk-in — customer took delivery at checkout');
+    }
 
     // ── 12. Leakage alert to business owner (fire-and-forget) ──────────────
     if (leakageFlag) {
@@ -1029,19 +1103,29 @@ async function handleUpdate(req: any, res: any) {
       taxableSubtotal: editPricing.taxableSubtotal, tax: taxAmount, exemptApplied: editExemption.exempt,
     });
 
-    // ── Re-adjust inventory qty for the edit (D-42) ────────────────────────────────
-    // Under decrement-on-paid the lot was already decremented by the OLD committed qty at create.
-    // An edit re-commits to the NEW qty, so each lot changes by (oldQty − newQty): reducing a line
-    // or removing it (newQty=0) RESTORES stock (delta>0); increasing it decrements further (delta<0,
-    // guarded against negative by the RPC). Deltas are summed per lot (a lot shared by 2 lines is
-    // adjusted once) and applied atomically. Replaces the old release-all/reserve-kept status flips.
+    // ── Re-adjust inventory qty for the edit (D-42 → D-52) ─────────────────────────
+    // D-52 SPLIT this by whether the order's stock has physically left.
+    //
+    // OPEN order (pending/confirmed — the common edit): on-hand was NEVER decremented, so an edit
+    // must NOT touch it. Editing quantities changes the COMMITMENT, and commitment is DERIVED from
+    // these very line rows — rewriting order_items below IS the adjustment. No stock write at all.
+    // Under D-42 this block adjusted on-hand by (oldQty − newQty) and was correct, because create
+    // had taken the old qty out. With the decrement moved, that same arithmetic would credit or
+    // debit on-hand for a movement that never happened — the same class of bug as the restore
+    // guards, and the reason all four sites had to move together rather than just the two named.
+    //
+    // FULFILLED order (editing after delivery — a correction): on-hand DID move, so the difference
+    // is a real physical adjustment and is applied exactly as before.
+    const editTouchesOnHand = movesOnHand((order as any).status);
     const editDeltas = new Map<string, number>();
-    for (const x of resolvedAll) {
-      const lotId = x.item.business_inventory_id;
-      if (!lotId) continue;
-      const effectiveNewQty = x.keep ? x.newQty : 0;
-      const delta = Number(x.item.quantity) - effectiveNewQty; // >0 restore, <0 decrement further
-      editDeltas.set(lotId, (editDeltas.get(lotId) ?? 0) + delta);
+    if (editTouchesOnHand) {
+      for (const x of resolvedAll) {
+        const lotId = x.item.business_inventory_id;
+        if (!lotId) continue;
+        const effectiveNewQty = x.keep ? x.newQty : 0;
+        const delta = Number(x.item.quantity) - effectiveNewQty; // >0 restore, <0 decrement further
+        editDeltas.set(lotId, (editDeltas.get(lotId) ?? 0) + delta);
+      }
     }
     // D-50: an edit is a real stock movement and gets a real actor — handleUpdate is manager-gated,
     // so a NULL here would be a defect, not an honest system write. Direction picks the vocabulary:
@@ -1049,8 +1133,13 @@ async function handleUpdate(req: any, res: any) {
     const editActor = await resolveCallerUid(req.headers?.authorization);
     const editedAt = new Date().toISOString();
     for (const [lotId, delta] of editDeltas) {
-      await adjustLotQty(db, businessId, lotId, delta, 'order edit',
+      await adjustLotQty(db, businessId, lotId, delta, 'order edit (fulfilled — physical correction)',
         { actorUserId: editActor, kind: delta > 0 ? 'sale_reversal' : 'sale', orderId, occurredAt: editedAt });
+    }
+    if (!editTouchesOnHand) {
+      console.log('[TRACE:INVENTORY] D-52 edit on an OPEN order — commitment re-derived from the new line qtys, on-hand untouched', {
+        orderId, status: (order as any).status, lines: resolvedAll.length,
+      });
     }
     await recordOrderEvent(db, businessId, orderId, 'order_edited', editActor, editedAt,
       removed.size > 0 ? `lines removed: ${removed.size}` : undefined);
@@ -1146,8 +1235,13 @@ async function handleDelete(req: any, res: any) {
       .from('order_items').select('id, quantity, business_inventory_id').eq('order_id', orderId);
     const items = (itemsRaw ?? []) as Array<{ quantity: number; business_inventory_id: string | null }>;
 
-    // RESTORE the order's committed stock (D-42) — deleting an order returns its units to the lot.
-    // Guarded: a 'cancelled' order ALREADY restored its stock (handleStatus), so don't double-restore.
+    // RESTORE on-hand — but ONLY for an order that actually took stock off the property.
+    // D-52: that is exactly a FULFILLED order (movesOnHand). Deleting a pending/confirmed order
+    // returns nothing to the lot, because nothing left it — the units were committed, and the
+    // commitment evaporates on its own when the order rows disappear (committed is DERIVED from
+    // open orders, so deleting the order releases it with no write at all). The prior guard was
+    // "restore unless already cancelled", which was right under checkout-decrement and would have
+    // become a stock-inventing bug the moment the decrement moved to fulfillment.
     // D-50: attributed + dated, and the event is written BEFORE the row is destroyed. The ledger
     // rows survive the order they describe — source_id is deliberately not an FK, so the movement
     // fact outlives the order exactly as it outlives a deleted lot (LAYER 1: history outlives the
@@ -1155,16 +1249,21 @@ async function handleDelete(req: any, res: any) {
     const deleteActor = await resolveCallerUid(req.headers?.authorization);
     const deletedAt = new Date().toISOString();
     let restored = 0;
-    if ((order as any).status !== 'cancelled') {
+    const deletingFulfilled = movesOnHand((order as any).status);
+    if (deletingFulfilled) {
       for (const it of items) {
         if (!it.business_inventory_id) continue;
-        await adjustLotQty(db, businessId, it.business_inventory_id, Number(it.quantity), 'order delete restore',
+        await adjustLotQty(db, businessId, it.business_inventory_id, Number(it.quantity), 'order delete restore (was fulfilled)',
           { actorUserId: deleteActor, kind: 'sale_reversal', orderId, occurredAt: deletedAt });
         restored++;
       }
+    } else {
+      console.log('[TRACE:INVENTORY] D-52 delete — on-hand untouched (order never fulfilled; commitment released by the delete itself)', {
+        orderId, status: (order as any).status, lines: items.length,
+      });
     }
     await recordOrderEvent(db, businessId, orderId, 'order_deleted', deleteActor, deletedAt,
-      (order as any).status === 'cancelled' ? 'already cancelled — stock not re-restored' : undefined);
+      deletingFulfilled ? 'was fulfilled — on-hand restored' : `was ${(order as any).status ?? 'open'} — commitment released, on-hand untouched`);
 
     await db.from('order_compliance_records').delete().eq('order_id', orderId);
     await db.from('order_service_selections').delete().eq('order_id', orderId);
@@ -1172,7 +1271,7 @@ async function handleDelete(req: any, res: any) {
     const { error: delErr } = await db.from('orders').delete().eq('id', orderId).eq('business_id', businessId);
     if (delErr) throw new Error(`Order delete: ${delErr.message}`);
 
-    console.log('[TRACE:ROSTER] order deleted + stock restored', { orderId, restoredLines: restored, wasCancelled: (order as any).status === 'cancelled' });
+    console.log('[TRACE:ROSTER] order deleted', { orderId, restoredLines: restored, wasFulfilled: deletingFulfilled, priorStatus: (order as any).status });
     res.json({ ok: true, orderId });
   } catch (err: any) {
     console.error('[orders/submit:delete]', err.message);
@@ -1214,18 +1313,60 @@ async function handleStatus(req: any, res: any) {
     const statusActor = await resolveCallerUid(req.headers?.authorization);
     const changedAt = new Date().toISOString();
 
-    // Cancelling RESTORES the order's committed stock (D-42 — un-decrement). Only on the transition
-    // INTO cancelled from a non-cancelled state (guard against double-restore if already cancelled).
-    // R-STATUS preserved: un-cancel does NOT auto-re-decrement — edit the order to re-commit stock.
-    if (status === 'cancelled' && prevStatus !== 'cancelled') {
+    // ── D-52: ON-HAND MOVES ON THE FULFILL TRANSITION, AND ONLY THERE ──────────────────────
+    // Both branches below are keyed off movesOnHand() — ONE predicate answering "did/does this
+    // order's stock physically move?" — instead of each site assuming it independently. That
+    // independent assumption is exactly what D-42's checkout-decrement left behind: every restore
+    // path was written believing checkout had already decremented, and moving the decrement without
+    // moving those beliefs would have manufactured stock out of nothing (see the cancel note).
+    const wasOnHandDecremented = movesOnHand(prevStatus);
+    const willDecrementOnHand  = movesOnHand(status) && !wasOnHandDecremented;
+    const mustRestoreOnHand    = wasOnHandDecremented && !movesOnHand(status);
+
+    if (willDecrementOnHand || mustRestoreOnHand) {
       const { data: itemsRaw } = await db
         .from('order_items').select('quantity, business_inventory_id').eq('order_id', orderId);
       const items = (itemsRaw ?? []) as Array<{ quantity: number; business_inventory_id: string | null }>;
-      for (const it of items) {
-        if (!it.business_inventory_id) continue;
-        await adjustLotQty(db, businessId, it.business_inventory_id, Number(it.quantity), 'order cancel restore',
-          { actorUserId: statusActor, kind: 'sale_reversal', orderId, occurredAt: changedAt });
+
+      // → FULFILLED: the plant leaves the property. THIS is the sale decrement — the only place
+      //   on-hand drops for a delivery order, dated at true departure (D-52), which is the
+      //   timestamp reconcile subtracts against. The commitment simultaneously stops being
+      //   derived, because the order is no longer open (holdsCommitment(fulfilled) === false).
+      if (willDecrementOnHand) {
+        for (const it of items) {
+          if (!it.business_inventory_id) continue;
+          await adjustLotQty(db, businessId, it.business_inventory_id, -Number(it.quantity), 'fulfillment sale decrement',
+            { actorUserId: statusActor, kind: 'sale', orderId, occurredAt: changedAt });
+        }
+        console.log('[TRACE:INVENTORY] D-52 fulfilled — on-hand decremented at departure', {
+          orderId, lines: items.length, from: prevStatus,
+        });
       }
+
+      // → BACK OUT OF FULFILLED (e.g. fulfilled → cancelled): the units never left after all, so
+      //   the on-hand decrement is reversed. Note what is NOT here: cancelling a PENDING order
+      //   restores nothing, because nothing was ever taken. Under D-42 this branch restored
+      //   unconditionally — correct then, and silently wrong the instant the decrement moved: it
+      //   would have credited on-hand for a decrement that never happened, inventing stock the
+      //   nursery does not physically have. An append-only ledger would have recorded that
+      //   invention as fact.
+      if (mustRestoreOnHand) {
+        for (const it of items) {
+          if (!it.business_inventory_id) continue;
+          await adjustLotQty(db, businessId, it.business_inventory_id, Number(it.quantity), 'un-fulfill restore',
+            { actorUserId: statusActor, kind: 'sale_reversal', orderId, occurredAt: changedAt });
+        }
+        console.log('[TRACE:INVENTORY] D-52 backed out of fulfilled — on-hand restored', {
+          orderId, lines: items.length, from: prevStatus, to: status,
+        });
+      }
+    } else if (status === 'cancelled') {
+      // The common cancel: an open (pending/confirmed) order. Its commitment simply stops being
+      // derived — available rises the moment the status lands. No stock movement, so no ledger row:
+      // recording a movement here would assert a physical event that did not occur.
+      console.log('[TRACE:INVENTORY] D-52 cancelled while open — commitment released, on-hand untouched (nothing was taken)', {
+        orderId, from: prevStatus,
+      });
     }
 
     const { error: stErr } = await db.from('orders').update({ status }).eq('id', orderId).eq('business_id', businessId);
