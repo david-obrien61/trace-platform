@@ -348,6 +348,11 @@ export const NAV_IA: NavNode[] = [
   { key: 'nav_assets',          section: 'dashboard', parent: 'nav_operating_costs', tileKey: 'assets' },
   // /inventory is served by two tiles (manual + intake); the nav node owns the route once, label 'Inventory'.
   { key: 'nav_inventory',       section: 'dashboard', parent: 'nav_operating_costs', label: 'Inventory', route: '/inventory', required_permission: 'view_costs' },
+  // Reconcile is a REAL destination, not a sub-flow: the owner goes to the desk deliberately to turn
+  // a walk into stamped truth. /inventory/count is an EXCEPTION in the nav-integrity check because it
+  // is entered from the grid mid-task; this one earns its own node so it is discoverable without
+  // knowing the URL. Same view_costs gate as its route (nav and route agree, by construction).
+  { key: 'nav_inventory_reconcile', section: 'dashboard', parent: 'nav_inventory', label: 'Reconcile count', route: '/inventory/reconcile', required_permission: 'view_costs' },
   { key: 'nav_receipts',        section: 'dashboard', parent: 'nav_operating_costs', tileKey: 'receipt_keeper' },
   { key: 'nav_pmi',             section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'pmi' },
   { key: 'nav_social',          section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'social_media' },

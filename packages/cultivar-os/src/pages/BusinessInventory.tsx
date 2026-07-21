@@ -29,7 +29,7 @@
 // ============================================================
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Archive, ScanLine, AlertTriangle, Pencil, CopyPlus, Trash2 } from 'lucide-react';
+import { Plus, Archive, ScanLine, AlertTriangle, Pencil, CopyPlus, Trash2, ClipboardCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { findDuplicateSizeGroups, sizeGroupKey } from '@trace/shared/discovery/dupSize';
@@ -405,6 +405,11 @@ export function BusinessInventory() {
           <>
             <button style={SS.primaryBtn} onClick={() => navigate('/inventory/count')}>
               <ScanLine size={16} /> Start count
+            </button>
+            {/* The desk half of capture=mobile/reconcile=desktop. Sits beside "Start count" because
+                that is the pair: walk the lot, then stamp it here. */}
+            <button style={SS.addBtn} onClick={() => navigate('/inventory/reconcile')}>
+              <ClipboardCheck size={16} /> Reconcile count
             </button>
             <button style={SS.addBtn} onClick={() => setEditor({ mode: 'create', item: { ...BLANK_INVENTORY_ITEM } })}>
               <Plus size={16} /> Add Item

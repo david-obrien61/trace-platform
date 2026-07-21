@@ -818,4 +818,113 @@ nothing), a stale schema doc, and a code-read false-positive — **none of them 
 | `[TRACE:invsheet] dup-size flags` | `collisions` vs `flaggedRows` — **the two nouns, named** |
 | `[TRACE:invsheet] load ok` | the grid's own row count — *if it disagrees with a SQL probe, one of them is lying* |
 | `[TRACE:COUNT] save` | what landed, on which row |
+
+
+---
+
+## SURFACE: reconcile (D-50 payoff — the count becomes stamped truth)
+_The desk surface that turns a physical count into an append-only, dated, actor-stamped ledger event. `/inventory/reconcile` · `src/pages/InventoryReconcile.tsx` · `src/lib/reconcileMath.ts` (the pure decision) · RPCs `count_reconcile_inventory` + `adjust_inventory_manual`._
+
+> **GATE 0 APPLIES** to every card here. Confirm the Vercel deploy for the SHA under test is READY,
+> then check the version stamp says that SHA (OP-15).
+>
+> **Nothing on this screen writes until you press Accept.** Typing a count is free; every card below
+> that says "PASS: a ledger row exists" is asserting a row that **cannot be edited or deleted**.
+
+### BASELINE mode shows NO sales column on a fresh lot 🔴
+STATUS: owed
+DEVICE: desktop
+COVERS: #145
+LAST-PROVEN: —
+SIGNAL: `[TRACE:RECONCILE] load ok` — `baseline:` count > 0, `delta:` 0 on a never-counted tenant
+- **Do:** open **/inventory/reconcile** on lots that have never been counted.
+- **PASS:** there is **no "Since last count" column at all** — not an empty one.
+- **FAIL:** an empty "sold" column renders. An empty column on a clean slate reads as a broken feature, which is exactly what the demo must not show.
+- **Why:** baseline has no window. A column with nothing in it invites the question "why is this blank?" on the screen meant to prove how easy this is.
+
+### A baseline Accept stamps the count as on-hand, with your name and the time 🔴
+STATUS: owed
+DEVICE: desktop
+COVERS: #145
+LAST-PROVEN: —
+SIGNAL: `[TRACE:RECONCILE] accept — plan` then `accept — step ok` with a `ledgerId`
+- **Do:** pick a real lot. Note its **Book on-hand**. Type a different count. Press **Accept**, read the "What Accept writes" box, confirm.
+- **PASS:** the sheet lists exactly **ONE** step (`count_reconcile`). On-hand becomes your counted number.
+- **PASS (the actual proof, in SQL):** a `business_inventory_ledger` row, `kind='count_reconcile'`, `reason='baseline'`, `occurred_at` = **now**, `actor_user_id` = **your uid** — not null, not the system.
+- **FAIL:** `actor_user_id` is NULL. This screen is always driven by a signed-in human; a null actor here would mean the page could not name who asserted the count.
+
+### Nothing is written until you Accept 🔴
+STATUS: owed
+DEVICE: desktop
+COVERS: #145
+LAST-PROVEN: —
+SIGNAL: no `[TRACE:RECONCILE] accept` line at all
+- **Do:** type counts into **three** rows. Do **not** press Accept. Reload the page.
+- **PASS:** all three lots still show their **original** book on-hand; `SELECT count(*) FROM business_inventory_ledger` is **unchanged**.
+- **Why:** the log is append-only. A screen that wrote on blur or on navigate would put un-retractable rows in it for a number someone was still typing.
+
+### DELTA mode replays the window and names the movements 🔴
+STATUS: owed
+DEVICE: desktop
+COVERS: #145
+LAST-PROVEN: —
+SIGNAL: `[TRACE:RECONCILE] load ok` — `delta:` > 0
+- **Do:** on the lot you just baselined, place a **delivery** order for 2 and mark it **Fulfilled** (that is the D-52 moment stock actually leaves). Return to /inventory/reconcile.
+- **PASS:** that lot now reads **DELTA**; "Since last count" says **2 sold — 1 order**.
+- **PASS:** count the physical truth (book − 2). The math cell reads **agrees — done**, and Accept asks for **no attribution**.
+- **Why:** the sale is already on the ledger and already in the book. A screen that made you explain a sale it recorded itself would be asking you to account for its own arithmetic.
+
+### ⚠️ A RECEIVE in the window must NOT read as a residual 🔴
+STATUS: owed
+DEVICE: desktop
+COVERS: #145
+LAST-PROVEN: —
+SIGNAL: `[TRACE:RECONCILE] load ok`, then the row's math cell
+- **Do:** on a DELTA lot, add stock (any path that writes a non-`sale` ledger row — a manual qty edit on /inventory works). Then reconcile, counting the lot **honestly** (i.e. matching book).
+- **PASS:** residual is **0**. The "Since last count" strip names **both** the sale and the adjustment.
+- **FAIL:** a nonzero residual appears and the sheet asks you to attribute it to dead/lost. **This is the exact defect the build spec's formula would have shipped** — subtracting only sales turns every receive into phantom shrinkage.
+- **Why:** it would ask a human to account, permanently and by name, for a movement the system itself recorded.
+
+### ⚠️ Attribution SPLITS the delta — it must not decrement twice 🔴
+STATUS: owed
+DEVICE: desktop
+COVERS: #145
+LAST-PROVEN: —
+SIGNAL: `[TRACE:RECONCILE] accept — plan` — read `netDelta` and compare it to (counted − book)
+- **Do:** on a DELTA lot holding (say) 30, count **13**. Attribute **4 dead** and **3 lost**. Read the "What Accept writes" box **before** confirming.
+- **PASS:** exactly **THREE** steps — `dead → 26`, `loss → 23`, `count_reconcile → 13`. The **last** step lands on **13**.
+- **PASS:** after accepting, on-hand is **13** — and `SUM(delta)` for the three new rows is **−17**, not −24.
+- **FAIL:** on-hand ends at **6**, or the ledger sums to −24. That is the double-decrement — **7 plants invented as dead** in a log that cannot be retracted.
+- **Why:** both RPCs move qty. Running a full `count_reconcile` and *then* the attributions applies the shrinkage twice.
+
+### The plan refuses to drive on-hand below zero 🔴
+STATUS: owed
+DEVICE: desktop
+COVERS: #145
+LAST-PROVEN: —
+SIGNAL: the refusal text in the sheet; **no** `[TRACE:RECONCILE] accept — plan` line
+- **Do:** on a lot holding 3, count 0 and attribute **9 dead**.
+- **PASS:** refused **before any write**, and the message **names the number** — "9 dead is more than the 3 this lot has on hand".
+- **FAIL:** a bare "invalid input", or a partial write that lands the first step and then errors.
+
+### `qty == SUM(delta)` still holds after a reconcile 🔴
+STATUS: owed
+DEVICE: desktop
+COVERS: #145
+LAST-PROVEN: —
+SIGNAL: — (SQL)
+- **Do:** re-run D-50 Layer 1's **V3(b)**: every lot's `qty` equals the `SUM(delta)` of its ledger rows.
+- **PASS:** **0 rows** disagree, with this build's reconcile events included in the sum.
+- **Why:** this is the one check that proves the new writer did not break the guarantee the whole ledger rests on.
+
+### The unresolved-scan queue reads, and offers nothing it cannot do 🔴
+STATUS: owed
+DEVICE: desktop
+COVERS: #145
+LAST-PROVEN: —
+SIGNAL: `[TRACE:RECONCILE] load ok` — `unresolvedScans:`
+- **Do:** have (or make) an unrecognized scan during a phone count, then open /inventory/reconcile.
+- **PASS:** an amber card lists it with its label, qty, time, and raw scan — **and says plainly that resolving it is not built yet.**
+- **FAIL:** a "Resolve" button exists. A control that looks actionable and isn't is a dead affordance (§1.6 item 5); saying so is the honest form.
+
 | `[TRACE:SYNC]` | the offline queue depth + drain |

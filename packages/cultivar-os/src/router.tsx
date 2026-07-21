@@ -32,6 +32,7 @@ import { BusinessAssets }    from './pages/BusinessAssets';
 import { AssetCapture }      from './pages/AssetCapture';
 import { BusinessInventory } from './pages/BusinessInventory';
 import { InventoryCount }    from './pages/InventoryCount';
+import { InventoryReconcile } from './pages/InventoryReconcile';
 import { CostToProduce }     from './pages/CostToProduce';
 import { OperatingCosts }    from './pages/OperatingCosts';
 import { Customers }         from './pages/Customers';
@@ -176,6 +177,12 @@ export function AppRouter() {
             <Route path="/assets/capture"    element={<AssetCapture />} />
             <Route path="/inventory"         element={<BusinessInventory />} />
             <Route path="/inventory/count"   element={<InventoryCount />} />
+            {/* The desk RECONCILE surface — same VIEW_COSTS gate as /inventory and /inventory/count,
+                deliberately: it reads and writes the same stock, so a second, looser door onto the
+                same numbers would be the gap route-entry enforcement exists to close. The RPCs it
+                calls are additionally member-checked server-side (assert_movement_actor), so the
+                route gate is defence-in-depth, not the only lock. */}
+            <Route path="/inventory/reconcile" element={<InventoryReconcile />} />
             <Route path="/operating-costs"   element={<OperatingCosts />} />
             <Route path="/pmi"               element={<PMI />} />
           </Route>
