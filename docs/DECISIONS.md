@@ -1119,6 +1119,9 @@ Implementation applies the **local-first LOGIC proven in DataBridge** — **pull
 **Decision:** Two append-only immutable logs: the event log (`business_inventory_ledger`, source of truth, checkpoint-and-archivable) and the audit log (`audit_log`, accountability, retained). A discretionary act writes BOTH; a routine state event writes only the event log. Split physically NOW on test data — the only no-migration window before live customers.
 **Extends** D-50. **Canonical home:** `docs/decisions/2026-07-21-event-log-audit-log-retention-split-D51.md`. **Date:** 2026-07-21 · **Status:** Accepted.
 
+### D-52 · Inventory states: on-hand / committed / available — commit at checkout, decrement at fulfill — `[POINTER]`
+Adopts the unanimous industry three-state model. Checkout commits (available→committed, on-hand unchanged); fulfillment decrements on-hand; walk-in collapses both. Supersedes D-42's checkout-decrement. Oversell checks available. **Canonical home:** `docs/decisions/2026-07-21-inventory-states-onhand-committed-available-D52.md`. **Date:** 2026-07-21 · **Status:** Accepted.
+
 ---
 
 ## PERSONAL-FINANCIAL

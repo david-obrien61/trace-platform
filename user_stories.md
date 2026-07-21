@@ -379,6 +379,16 @@ PIECES: event_log_source_of_truth, audit_log_retained, dual_write_on_discretion,
 NEEDS: build input — confirm which discretionary acts dual-write to audit_log at split time (delete is in; override / tier-change / permission-change to confirm).
 The system keeps two records. One is the truth of what's on the shelf — every movement, replayed to a number, checkpointed and archived as it grows so it stays fast without ever losing the state it computes. The other is the truth of who did what — the deletes, the overrides, the price changes — kept for years, never folded away, because when something looks wrong months later the question is not "how many" but "who, and when, and why." A routine sale touches only the first. A deletion touches both: the stock left (state) and someone chose to remove it (accountability). Split into two tables now, while it is test data and free, so the live system customers depend on is born correct and never needs a migration under load. _Grounded: D-51; extends D-50._
 
+### A plant sold isn't a plant gone — on-hand, committed, available
+STATUS: needs-input
+SCOPE: platform, vertical:cultivar
+BUILD: active
+ARC: asset-inventory-pmi
+MAPS-TO: 2.3, 5.1
+PIECES: committed_state, decrement_at_fulfill, available_derivation, walkin_collapse, oversell_on_available, pending16_remediation
+NEEDS: build input — how committed is stored (derived from open orders vs a stored column); the 16-pending remediation approach.
+When a customer buys a tree for delivery next week, the tree is sold but still in the yard — watered, moved, insured, and physically present. The books have to know all three things at once: what's on the property (on-hand), what's promised (committed), and what's still sellable (available). A new customer sees only available, so the promised tree can't be sold twice. On-hand drops the day the truck rolls, not the day the order is written — which is also the day the walk-in pays and drives away, the two just happen together for him. The gap between promised and gone is a real interval the owner can measure: how long did this sit, and why. _Grounded: D-52 (industry standard: Shopify/Oracle/Dynamics/ERPAG/Sellbrite); supersedes D-42 timing; the fulfill-time on-hand decrement is what reconcile (D-50) dates against._
+
 ### Inventory — the grower with no system (the count builds the catalog)
 STATUS: written
 SCOPE: vertical:cultivar, platform
