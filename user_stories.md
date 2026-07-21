@@ -369,6 +369,16 @@ PIECES: inventory_movement_ledger, count_as_reconcile, reconcile_reader, blind_c
 NEEDS: two BUILD inputs owed before/at build (the D-50 decision itself is made): (1) where the REAL actor comes from on the service-key and offline-sync write paths; (2) confirm blind-capture ships as a per-session mode, default blind.
 Lauren walks the lot and counts; the number she enters is a physical fact, dated to this walk. The system replays every movement since her last count — receipts added, sales subtracted — to show what the book says should be on hand. Where physical and book agree, the row is done. Where they differ, the system does not guess: it shows the gap, bounded to the window between the two counts, with every actor who touched that row in between, and Lauren accounts for it — 4 dead, 3 unexplained loss — each becoming a permanent, un-editable ledger line. Six months later, "why did we lose 7 Vitex in March" has a dated, named answer. Because the ledger cannot be altered, the trail of who-touched-what can't be quietly cleaned up before the owner looks — so shrinkage stops being a vibe and becomes arithmetic. _Grounded: D-50 (`docs/decisions/2026-07-19-inventory-movement-ledger-D50.md`); amends D-45; the count tables (`20260626`) become readers-plus-reconcile; the D-42 decrement (`submit.ts:792`) becomes a ledger emit point._
 
+### The log that proves what happened outlives the log that proves what's on hand
+STATUS: needs-input
+SCOPE: platform
+BUILD: active
+ARC: asset-inventory-pmi
+MAPS-TO: 2.3, 5.1
+PIECES: event_log_source_of_truth, audit_log_retained, dual_write_on_discretion, snapshot_compaction (later), audit_retention_policy (later)
+NEEDS: build input — confirm which discretionary acts dual-write to audit_log at split time (delete is in; override / tier-change / permission-change to confirm).
+The system keeps two records. One is the truth of what's on the shelf — every movement, replayed to a number, checkpointed and archived as it grows so it stays fast without ever losing the state it computes. The other is the truth of who did what — the deletes, the overrides, the price changes — kept for years, never folded away, because when something looks wrong months later the question is not "how many" but "who, and when, and why." A routine sale touches only the first. A deletion touches both: the stock left (state) and someone chose to remove it (accountability). Split into two tables now, while it is test data and free, so the live system customers depend on is born correct and never needs a migration under load. _Grounded: D-51; extends D-50._
+
 ### Inventory — the grower with no system (the count builds the catalog)
 STATUS: written
 SCOPE: vertical:cultivar, platform

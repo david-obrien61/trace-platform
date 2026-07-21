@@ -1115,6 +1115,10 @@ Implementation applies the **local-first LOGIC proven in DataBridge** — **pull
 **Amends** D-45 (count promote stays; the SET becomes a ledger-emitting reconcile). **Supersedes** the expected_qty snapshot.
 **Date:** 2026-07-19 · **Status:** Accepted.
 
+### D-51 · Event log vs audit log — two tables split by retention — `[POINTER]`
+**Decision:** Two append-only immutable logs: the event log (`business_inventory_ledger`, source of truth, checkpoint-and-archivable) and the audit log (`audit_log`, accountability, retained). A discretionary act writes BOTH; a routine state event writes only the event log. Split physically NOW on test data — the only no-migration window before live customers.
+**Extends** D-50. **Canonical home:** `docs/decisions/2026-07-21-event-log-audit-log-retention-split-D51.md`. **Date:** 2026-07-21 · **Status:** Accepted.
+
 ---
 
 ## PERSONAL-FINANCIAL
