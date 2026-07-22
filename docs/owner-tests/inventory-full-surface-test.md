@@ -690,48 +690,52 @@ _Stock no longer leaves on-hand at checkout. It leaves when the order is **fulfi
 > under-reports and the numbers below will look wrong for those specific lots — *correctly so*.
 
 ### A DELIVERY order commits stock without moving on-hand 🔴
-STATUS: owed
+STATUS: covered
 DEVICE: phone
 COVERS: D-52
-LAST-PROVEN: —
+LAST-PROVEN: 2026-07-22
 SIGNAL: `[TRACE:INVENTORY] D-52 commit — units COMMITTED, on-hand deliberately UNCHANGED`
 - **Do:** note a lot's **On hand** in the inventory grid. Place an order for 2 of it choosing **Delivery**. Reload the grid.
 - **PASS:** **On hand is UNCHANGED.** Committed shows **2**. Available dropped by **2**.
 - **FAIL:** On hand dropped — the decrement did not move, and this build's central claim is false.
 - **Why:** the plant is still standing in the yard. Saying it left because someone ordered it is the thing D-52 corrects.
+- **✅ PROVEN 2026-07-22 (David, live — `aca0b5d`/`679fb9a`, tenant `f7ec5d67`):** order `897be269` (delivery) wrote `order_created` + `order_committed` at 16:49:15 with **delta 0** — on-hand UNTOUCHED and **no `sale` event at all**. The D-42→D-52 relocation, proven at the event level rather than inferred from a grid number.
 
 ### Marking it FULFILLED is what drops on-hand 🔴
-STATUS: owed
+STATUS: covered
 DEVICE: desktop
 COVERS: D-52
-LAST-PROVEN: —
+LAST-PROVEN: 2026-07-22
 SIGNAL: `[TRACE:INVENTORY] D-52 fulfilled — on-hand decremented at departure`
 - **Do:** open that order, set status **Fulfilled**. Reload the grid.
 - **PASS:** **On hand drops by 2.** Committed returns to **—**. Available is unchanged *from the committed state* (the units were already not sellable).
 - **PASS:** the ledger has a `sale` row dated **now** (the fulfillment moment), not the checkout moment.
 - **Why the date matters:** reconcile subtracts against this timestamp. Dating a sale at checkout claims stock left on a day it demonstrably had not.
+- **✅ PROVEN 2026-07-22 (David, live — `aca0b5d`/`679fb9a`, tenant `f7ec5d67`):** the same order wrote `order_fulfilled` + `sale −6` at **16:53:34** — the same instant as each other, and **four minutes after checkout**. The sale is dated at departure, not at order.
 
 ### A WALK-IN collapses both into one instant 🔴
-STATUS: owed
+STATUS: covered
 DEVICE: phone
 COVERS: D-52
-LAST-PROVEN: —
+LAST-PROVEN: 2026-07-22
 SIGNAL: `[TRACE:INVENTORY] lot qty adjusted … 'walk-in sale decrement (commit+fulfill collapsed)'`
 - **Do:** checkout on a countable lot choosing **"No thank you — I'll haul it myself."**
 - **PASS:** On hand drops **immediately**. Committed stays **—** (it never sat committed). The order shows **Fulfilled**, not Pending.
 - **PASS:** the ledger holds `order_created`, `order_committed`, `order_fulfilled` and one `sale` — all sharing a timestamp.
 - **⚠️ The order being born Fulfilled is deliberate**, not a bug: the customer has the plant. Leaving it Pending would count units as committed that are already on someone's trailer, permanently understating what you can sell.
+- **✅ PROVEN 2026-07-22 (David, live — `aca0b5d`/`679fb9a`, tenant `f7ec5d67`):** a self-transport checkout wrote `sale −2` at **17:06:50 — at checkout**, commit and fulfill collapsed into one instant with no separate fulfill step. **One model, two spacings** — the delivery order above and this walk-in differ only in how far apart the events sit.
 
 ### Oversell is refused against AVAILABLE, with stock visibly on hand 🔴
-STATUS: owed
+STATUS: covered
 DEVICE: phone
 COVERS: D-52
-LAST-PROVEN: —
+LAST-PROVEN: 2026-07-22
 SIGNAL: `[TRACE:INVENTORY] REFUSED — insufficient AVAILABLE`
 - **Do:** find a lot with **exactly N** on hand. Place a **delivery** order for all N (do not fulfil it). Now try to order **1 more** of the same lot.
 - **PASS:** the second order is **REFUSED**, and the message reads *"Only 0 … available to sell (N on hand, N committed to open orders)"*.
 - **PASS:** the grid still shows **On hand = N** — the stock is genuinely there, and correctly not sellable.
 - **Why this is the card that justifies the build:** under D-42 this second order would have **succeeded**, selling the same physical plants twice. The message names both numbers on purpose — *"only 0 in stock"* against a lot you can see holding N reads as a bug.
+- **✅ PROVEN 2026-07-22 (David, live — `aca0b5d`/`679fb9a`, tenant `f7ec5d67`):** the checkout review refused and named both figures — **"0 available (29 on hand, 57 committed)"**. Refused against AVAILABLE with the stock visibly on hand.
 
 ### Cancelling an OPEN order invents no stock 🔴
 STATUS: owed
@@ -832,90 +836,98 @@ _The desk surface that turns a physical count into an append-only, dated, actor-
 > that says "PASS: a ledger row exists" is asserting a row that **cannot be edited or deleted**.
 
 ### BASELINE mode shows NO sales column on a fresh lot 🔴
-STATUS: owed
+STATUS: covered
 DEVICE: desktop
 COVERS: #145
-LAST-PROVEN: —
+LAST-PROVEN: 2026-07-22
 SIGNAL: `[TRACE:RECONCILE] load ok` — `baseline:` count > 0, `delta:` 0 on a never-counted tenant
 - **Do:** open **/inventory/reconcile** on lots that have never been counted.
 - **PASS:** there is **no "Since last count" column at all** — not an empty one.
 - **FAIL:** an empty "sold" column renders. An empty column on a clean slate reads as a broken feature, which is exactly what the demo must not show.
 - **Why:** baseline has no window. A column with nothing in it invites the question "why is this blank?" on the screen meant to prove how easy this is.
+- **✅ PROVEN 2026-07-22 (David, live — `aca0b5d`/`679fb9a`, tenant `f7ec5d67`):** reported green as part of the full-surface run. *(No itemized figure cited for this card — it rests on David's "all cards green" report rather than a quoted number.)*
 
 ### A baseline Accept stamps the count as on-hand, with your name and the time 🔴
-STATUS: owed
+STATUS: covered
 DEVICE: desktop
 COVERS: #145
-LAST-PROVEN: —
+LAST-PROVEN: 2026-07-22
 SIGNAL: `[TRACE:RECONCILE] accept — plan` then `accept — step ok` with a `ledgerId`
 - **Do:** pick a real lot. Note its **Book on-hand**. Type a different count. Press **Accept**, read the "What Accept writes" box, confirm.
 - **PASS:** the sheet lists exactly **ONE** step (`count_reconcile`). On-hand becomes your counted number.
 - **PASS (the actual proof, in SQL):** a `business_inventory_ledger` row, `kind='count_reconcile'`, `reason='baseline'`, `occurred_at` = **now**, `actor_user_id` = **your uid** — not null, not the system.
 - **FAIL:** `actor_user_id` is NULL. This screen is always driven by a signed-in human; a null actor here would mean the page could not name who asserted the count.
+- **✅ PROVEN 2026-07-22 (David, live — `aca0b5d`/`679fb9a`, tenant `f7ec5d67`):** lot `3ec53db3` (Shoal Creek Vitex 45), book **60** → counted **58**. Accept wrote **ONE** `count_reconcile`, **delta −2**, `actor_user_id` **95c1b2e9** (not null), reason carried, qty → **58**. Stamped, dated, attributed truth through the surface — never a silent overwrite.
 
 ### Nothing is written until you Accept 🔴
-STATUS: owed
+STATUS: covered
 DEVICE: desktop
 COVERS: #145
-LAST-PROVEN: —
+LAST-PROVEN: 2026-07-22
 SIGNAL: no `[TRACE:RECONCILE] accept` line at all
 - **Do:** type counts into **three** rows. Do **not** press Accept. Reload the page.
 - **PASS:** all three lots still show their **original** book on-hand; `SELECT count(*) FROM business_inventory_ledger` is **unchanged**.
 - **Why:** the log is append-only. A screen that wrote on blur or on navigate would put un-retractable rows in it for a number someone was still typing.
+- **✅ PROVEN 2026-07-22 (David, live — `aca0b5d`/`679fb9a`, tenant `f7ec5d67`):** reported green as part of the full-surface run. *(No itemized figure cited — rests on the "all cards green" report.)*
 
 ### DELTA mode replays the window and names the movements 🔴
-STATUS: owed
+STATUS: covered
 DEVICE: desktop
 COVERS: #145
-LAST-PROVEN: —
+LAST-PROVEN: 2026-07-22
 SIGNAL: `[TRACE:RECONCILE] load ok` — `delta:` > 0
 - **Do:** on the lot you just baselined, place a **delivery** order for 2 and mark it **Fulfilled** (that is the D-52 moment stock actually leaves). Return to /inventory/reconcile.
 - **PASS:** that lot now reads **DELTA**; "Since last count" says **2 sold — 1 order**.
 - **PASS:** count the physical truth (book − 2). The math cell reads **agrees — done**, and Accept asks for **no attribution**.
 - **Why:** the sale is already on the ledger and already in the book. A screen that made you explain a sale it recorded itself would be asking you to account for its own arithmetic.
+- **✅ PROVEN 2026-07-22 (David, live — `aca0b5d`/`679fb9a`, tenant `f7ec5d67`):** the evidence strip read **"6 sold — 1 order"** against the D-52 delivery order above, and at counted **38** vs book **40** only the **−2** residual surfaced for attribution. **The sales-netting math works on real events** — the 6 it recorded itself was never put to the owner to explain.
 
 ### ⚠️ A RECEIVE in the window must NOT read as a residual 🔴
-STATUS: owed
+STATUS: covered
 DEVICE: desktop
 COVERS: #145
-LAST-PROVEN: —
+LAST-PROVEN: 2026-07-22
 SIGNAL: `[TRACE:RECONCILE] load ok`, then the row's math cell
 - **Do:** on a DELTA lot, add stock (any path that writes a non-`sale` ledger row — a manual qty edit on /inventory works). Then reconcile, counting the lot **honestly** (i.e. matching book).
 - **PASS:** residual is **0**. The "Since last count" strip names **both** the sale and the adjustment.
 - **FAIL:** a nonzero residual appears and the sheet asks you to attribute it to dead/lost. **This is the exact defect the build spec's formula would have shipped** — subtracting only sales turns every receive into phantom shrinkage.
 - **Why:** it would ask a human to account, permanently and by name, for a movement the system itself recorded.
+- **✅ PROVEN 2026-07-22 (David, live — `aca0b5d`/`679fb9a`, tenant `f7ec5d67`):** a **+5 desk edit** was absorbed into expected — residual **0**, itemized as *"5 adjusted by hand"*, **not phantom shrinkage**. **Fix A held:** expected is a full replay of every delta, not `prior_count − sales`.
 
 ### ⚠️ Attribution SPLITS the delta — it must not decrement twice 🔴
-STATUS: owed
+STATUS: covered
 DEVICE: desktop
 COVERS: #145
-LAST-PROVEN: —
+LAST-PROVEN: 2026-07-22
 SIGNAL: `[TRACE:RECONCILE] accept — plan` — read `netDelta` and compare it to (counted − book)
 - **Do:** on a DELTA lot holding (say) 30, count **13**. Attribute **4 dead** and **3 lost**. Read the "What Accept writes" box **before** confirming.
 - **PASS:** exactly **THREE** steps — `dead → 26`, `loss → 23`, `count_reconcile → 13`. The **last** step lands on **13**.
 - **PASS:** after accepting, on-hand is **13** — and `SUM(delta)` for the three new rows is **−17**, not −24.
 - **FAIL:** on-hand ends at **6**, or the ledger sums to −24. That is the double-decrement — **7 plants invented as dead** in a log that cannot be retracted.
 - **Why:** both RPCs move qty. Running a full `count_reconcile` and *then* the attributions applies the shrinkage twice.
+- **✅ PROVEN 2026-07-22 (David, live — `aca0b5d`/`679fb9a`, tenant `f7ec5d67`):** **−17 partitioned into `dead −4` + `loss −3` + `count_reconcile −10` = exactly −17**, landing on **46**. **Not −24.** **Fix B held:** attribution splits the delta, it never adds a second movement. The 7 invented dead plants did not happen.
 
 ### The plan refuses to drive on-hand below zero 🔴
-STATUS: owed
+STATUS: covered
 DEVICE: desktop
 COVERS: #145
-LAST-PROVEN: —
+LAST-PROVEN: 2026-07-22
 SIGNAL: the refusal text in the sheet; **no** `[TRACE:RECONCILE] accept — plan` line
 - **Do:** on a lot holding 3, count 0 and attribute **9 dead**.
 - **PASS:** refused **before any write**, and the message **names the number** — "9 dead is more than the 3 this lot has on hand".
 - **FAIL:** a bare "invalid input", or a partial write that lands the first step and then errors.
+- **✅ PROVEN 2026-07-22 (David, live — `aca0b5d`/`679fb9a`, tenant `f7ec5d67`):** reported green as part of the full-surface run. *(No itemized figure cited — rests on the "all cards green" report.)*
 
 ### `qty == SUM(delta)` still holds after a reconcile 🔴
-STATUS: owed
+STATUS: covered
 DEVICE: desktop
 COVERS: #145
-LAST-PROVEN: —
+LAST-PROVEN: 2026-07-22
 SIGNAL: — (SQL)
 - **Do:** re-run D-50 Layer 1's **V3(b)**: every lot's `qty` equals the `SUM(delta)` of its ledger rows.
 - **PASS:** **0 rows** disagree, with this build's reconcile events included in the sum.
 - **Why:** this is the one check that proves the new writer did not break the guarantee the whole ledger rests on.
+- **✅ PROVEN 2026-07-22 (David, live — `aca0b5d`/`679fb9a`, tenant `f7ec5d67`):** **V3(b) returned ZERO rows across all lots**, with every reconcile write of this session counted in the sum. `qty == SUM(delta)` survived its new writer.
 
 ## SURFACE: sellability (the ONE predicate — cap, not just display)
 _`checkSellable()` in `src/lib/inventoryStates.ts` is the single answer to "can this be sold?" — read by the scan picker, the scan review sheet, and the anonymous QR page. The server refusal in `submit.ts` STAYS as defence in depth._
@@ -997,36 +1009,40 @@ SIGNAL: `[TRACE:INVENTORY] QR page sellability — committed NOT derivable for a
 ---
 
 ### ⚠️ REGRESSION — the genesis row must not be replayed as a movement 🔴
-STATUS: owed
+STATUS: covered
 DEVICE: desktop
 COVERS: #146
-LAST-PROVEN: —
+LAST-PROVEN: 2026-07-22
 SIGNAL: the row's math cell — the "ledger replays to X but book says Y" line
 - **Do:** open **/inventory/reconcile** on lot **3ec53db3** (Shoal Creek Vitex 45). Do not enter a count.
-- **PASS:** the replay figure reads **58** and the *"ledger replays to X but the book says Y"* line **does not render** (they agree).
-- **FAIL:** it reads **116 / 120**, or the mismatch line appears against a lot whose SQL replay is clean.
-- **Cross-check (SQL):** `SELECT COUNT(*), SUM(delta) FROM business_inventory_ledger WHERE inventory_id='3ec53db3-…';` → **2 rows, 58**. The screen must agree with that number.
+- **PASS:** the replay figure **equals the book** and the *"ledger replays to X but the book says Y"* line **does not render**.
+- **FAIL:** the replay reads ~2× the book, or the mismatch line appears against a lot whose SQL replay is clean.
+- **Cross-check (SQL):** `SELECT COUNT(*), SUM(delta) FROM business_inventory_ledger WHERE inventory_id='3ec53db3-…';` — the screen must agree with that number.
+- **⚠️ FIXTURE NOTE (2026-07-22):** this card originally asserted the literal figures **58 / 2 rows**. That was correct when written; the same lot was then used for the ATTRIBUTION-SPLIT card, which legitimately moved it to **46** with more rows. The card now asserts the **invariant (replay == book, no banner)** rather than a frozen number — a fixture that drifts by design must not be pinned to a constant, or it manufactures a false FAIL on its next run.
 - **Why it was load-bearing:** DELTA-mode `expected` is computed from replay. A doubled replay makes expected ~2× reality and surfaces a **phantom surplus** — asking the owner to account for stock that never existed. Same failure class as the `prior−sales` bug this build already corrected.
+- **✅ PROVEN 2026-07-22 (David, live — `aca0b5d`/`679fb9a`, tenant `f7ec5d67`):** replay read **46**, agreeing with book **46**, and the *"replays to X but book says Y"* banner **disappeared**. ⚠️ **The root cause in the original report was WRONG** — it was not a table+view double-read (there is exactly ONE read); it was the genesis `opening_balance` being both **seeded AND summed**. `isMovement()` now distinguishes a **position-assertion** from a **change**.
 
 ### ⚠️ REGRESSION — the checkout picker shows AVAILABLE, not on-hand 🔴
-STATUS: owed
+STATUS: covered
 DEVICE: phone
 COVERS: #146
-LAST-PROVEN: —
+LAST-PROVEN: 2026-07-22
 SIGNAL: the picker sub-line under each size/match
 - **Do:** on **/checkout/scan**, search a term matching **Shoal Creek 30 (DISC-1105)** so the multi-match picker opens. Compare against /inventory's **AVAILABLE** column for the same lot.
 - **PASS:** the picker reads **0 available (29 on hand, 57 committed)** — the same number the grid shows, with both figures named.
 - **FAIL:** it reads **"29 available"**. That is raw on-hand wearing the word available, and it offers stock the server will then refuse at submit.
 - **Why both numbers are named:** a bare "0 available" against a lot the owner can see holding 29 reads as a bug, not a rule — the same reason D-52's refusal copy names both.
+- **✅ PROVEN 2026-07-22 (David, live — `aca0b5d`/`679fb9a`, tenant `f7ec5d67`):** the picker read **"0 available (29 on hand, 57 committed)"** — matching the grid's AVAILABLE column exactly.
 
 ### The unresolved-scan queue reads, and offers nothing it cannot do 🔴
-STATUS: owed
+STATUS: covered
 DEVICE: desktop
 COVERS: #145
-LAST-PROVEN: —
+LAST-PROVEN: 2026-07-22
 SIGNAL: `[TRACE:RECONCILE] load ok` — `unresolvedScans:`
 - **Do:** have (or make) an unrecognized scan during a phone count, then open /inventory/reconcile.
 - **PASS:** an amber card lists it with its label, qty, time, and raw scan — **and says plainly that resolving it is not built yet.**
 - **FAIL:** a "Resolve" button exists. A control that looks actionable and isn't is a dead affordance (§1.6 item 5); saying so is the honest form.
+- **✅ PROVEN 2026-07-22 (David, live — `aca0b5d`/`679fb9a`, tenant `f7ec5d67`):** the queue rendered **3 unrecognized scans** with honest copy and **no fake Resolve button**.
 
 | `[TRACE:SYNC]` | the offline queue depth + drain |
