@@ -19,7 +19,7 @@
  */
 
 import {
-  reconcileRow, buildWritePlan, planNetDelta, isVariance, summarizeMovements,
+  reconcileRow, buildWritePlan, planNetDelta, isVariance, summarizeMovements, isMovement,
   type LedgerMovement, type Attribution,
 } from './reconcileMath';
 
@@ -67,6 +67,43 @@ const mv = (kind: string, delta: number, occurred_at = '2026-07-15T12:00:00Z'): 
   ok(r.residual === 0, 'THE CORRECTION (A): a fully-explained window shows ZERO residual — the spec\'s formula would have shown +10 and asked the owner to account for a receive the system itself recorded');
   ok(r.bookAgreesWithReplay === true, 'book and replay agree — the D-50 `qty == SUM(delta)` guarantee holds for this lot');
   ok(r.attributionRequired === false, 'nothing to attribute');
+}
+
+// ══ A — THE GENESIS ROW IS A POSITION, NOT A MOVEMENT (THE LIVE 2026-07-22 DEFECT) ══
+// Lot 3ec53db3 (Shoal Creek Vitex 45), reported live on 6245f27. True ledger: opening_balance +60,
+// count_reconcile −2 → SUM(delta) = 58. The screen said "replays to 120 but book says 60".
+// The genesis backfill dates opening_balance at MIGRATION-APPLY TIME, so for a lot last counted
+// before 2026-07-20 it lands INSIDE the window and is replayed as if the stock just arrived:
+// prior 60 + genesis 60 = 120. It looks like a 2× read; it is one read counting a starting
+// position as a change.
+{
+  const r = reconcileRow({
+    bookOnHand: 60, committed: 0,
+    prior: { counted_qty: 60, counted_at: '2026-06-28T00:00:00Z' },
+    movementsSincePrior: [mv('opening_balance', 60, '2026-07-20T18:00:00Z')],
+    counted: null,
+  });
+  ok(r.replayExpected === 60, 'THE LIVE DEFECT: a genesis opening_balance inside the window must NOT be replayed — 60, never the reported 120');
+  ok(r.bookAgreesWithReplay === true, 'and so the false "ledger replays to 120 but book says 60" line does NOT render');
+  ok(r.evidence.length === 0, 'nor is it shown as EVIDENCE — "60 opening balance" is not something that happened since the count');
+}
+{
+  // The full live row, after David's baseline accept took it 60 → 58.
+  const r = reconcileRow({
+    bookOnHand: 58, committed: 0,
+    prior: { counted_qty: 60, counted_at: '2026-06-28T00:00:00Z' },
+    movementsSincePrior: [
+      mv('opening_balance', 60, '2026-07-20T18:00:00Z'),
+      mv('count_reconcile', -2, '2026-07-21T22:00:00Z'),
+    ],
+    counted: null,
+  });
+  ok(r.replayExpected === 58, 'the true replay is 58 — prior 60, less the −2 count_reconcile, genesis excluded');
+  ok(r.bookAgreesWithReplay === true, 'book 58 == replay 58 — David\'s VERIFY condition, asserted');
+}
+{
+  ok(isMovement('sale') === true && isMovement('count_reconcile') === true, 'sales and counts are movements');
+  ok(isMovement('opening_balance') === false, 'an opening balance asserts a POSITION, never a change');
 }
 
 // ══ A — THE LEDGER-INTEGRITY TELL ════════════════════════════════════════════

@@ -917,6 +917,29 @@ SIGNAL: — (SQL)
 - **PASS:** **0 rows** disagree, with this build's reconcile events included in the sum.
 - **Why:** this is the one check that proves the new writer did not break the guarantee the whole ledger rests on.
 
+### ⚠️ REGRESSION — the genesis row must not be replayed as a movement 🔴
+STATUS: owed
+DEVICE: desktop
+COVERS: #146
+LAST-PROVEN: —
+SIGNAL: the row's math cell — the "ledger replays to X but book says Y" line
+- **Do:** open **/inventory/reconcile** on lot **3ec53db3** (Shoal Creek Vitex 45). Do not enter a count.
+- **PASS:** the replay figure reads **58** and the *"ledger replays to X but the book says Y"* line **does not render** (they agree).
+- **FAIL:** it reads **116 / 120**, or the mismatch line appears against a lot whose SQL replay is clean.
+- **Cross-check (SQL):** `SELECT COUNT(*), SUM(delta) FROM business_inventory_ledger WHERE inventory_id='3ec53db3-…';` → **2 rows, 58**. The screen must agree with that number.
+- **Why it was load-bearing:** DELTA-mode `expected` is computed from replay. A doubled replay makes expected ~2× reality and surfaces a **phantom surplus** — asking the owner to account for stock that never existed. Same failure class as the `prior−sales` bug this build already corrected.
+
+### ⚠️ REGRESSION — the checkout picker shows AVAILABLE, not on-hand 🔴
+STATUS: owed
+DEVICE: phone
+COVERS: #146
+LAST-PROVEN: —
+SIGNAL: the picker sub-line under each size/match
+- **Do:** on **/checkout/scan**, search a term matching **Shoal Creek 30 (DISC-1105)** so the multi-match picker opens. Compare against /inventory's **AVAILABLE** column for the same lot.
+- **PASS:** the picker reads **0 available (29 on hand, 57 committed)** — the same number the grid shows, with both figures named.
+- **FAIL:** it reads **"29 available"**. That is raw on-hand wearing the word available, and it offers stock the server will then refuse at submit.
+- **Why both numbers are named:** a bare "0 available" against a lot the owner can see holding 29 reads as a bug, not a rule — the same reason D-52's refusal copy names both.
+
 ### The unresolved-scan queue reads, and offers nothing it cannot do 🔴
 STATUS: owed
 DEVICE: desktop

@@ -26,6 +26,7 @@ import { ArrowLeft, Minus, Plus, ScanLine, UserPlus, UserCheck, X } from 'lucide
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { resolveStockLine, searchStockLines, STOCK_LINE_COLUMNS } from '@trace/shared/inventory';
+import { fetchCommittedByLot, availableFrom } from '../lib/inventoryStates';
 import type { StockLineRow } from '@trace/shared/inventory';
 import {
   readPricingConfig, normalizeDiscountTypes, resolveTier, RETAIL_TIER_NAME, type DiscountType,
@@ -91,6 +92,29 @@ function customerToInput(r: CustomerHit): CustomerInput {
     tax_exempt_reason:   r.tax_exempt_reason ?? null,
     tax_exempt_cert_ref: r.tax_exempt_cert_ref ?? null,
   };
+}
+
+/**
+ * The picker's availability line — DERIVED, never raw on-hand.
+ *
+ * ── THE LIVE DEFECT THIS FIXES (2026-07-22) ─────────────────────────────────────────────────
+ * Both pickers read `row.qty` and labelled it "available". For Shoal Creek 30 (DISC-1105) that
+ * printed **"29 available"** while /inventory showed **AVAILABLE 0** (29 on hand, 57 committed):
+ * one fact, two surfaces, two numbers — and the picker was the one offering stock the server
+ * would then REFUSE at submit (D-52 checks AVAILABLE). A picker that shows sellable stock the
+ * checkout will refuse teaches the owner to distrust the refusal, not the picker.
+ *
+ * Availability now comes from the SAME derivation the grid and the oversell guard use
+ * (`availableFrom` over `fetchCommittedByLot`, D-52 / §6 r8) — there is no second definition to
+ * drift. When units are committed, BOTH numbers are named, exactly as the D-52 refusal copy does:
+ * a bare "0 available" against a lot the owner can see holding 29 reads as a bug, not a rule.
+ */
+function availabilityLabel(qty: number | null | undefined, committed: number): string {
+  if (qty == null) return '';
+  const onHand = Number(qty);
+  const avail = availableFrom(onHand, committed);
+  if (committed > 0) return `${avail} available (${onHand} on hand, ${committed} committed)`;
+  return `${avail} available`;
 }
 
 export function ScanOrder() {
@@ -231,10 +255,13 @@ export function ScanOrder() {
     }
 
     if (resolution.kind === 'collision') {
+      // Read committed ONCE for the whole business (not per candidate) — the same shape the grid
+      // and the checkout guard use. Only fires when a picker is actually needed.
+      const committed = await fetchCommittedByLot(supabase, businessId);
       const choices: PickChoice[] = resolution.candidates.map(row => ({
         inventoryId: row.id,
         title:       (row.size ?? '').trim() || 'Unspecified size',
-        sub:         row.qty != null ? `${row.qty} available` : '',
+        sub:         availabilityLabel(row.qty, committed.get(row.id) ?? 0),
         row,
       }));
       if (TRACE_CART) console.log('[TRACE:CART] scan size collision — picker:', choices.map(c => c.title).join(' / '));
@@ -267,12 +294,13 @@ export function ScanOrder() {
       openReview(plant);
       return;
     }
+    const committed = await fetchCommittedByLot(supabase, businessId);
     const choices: PickChoice[] = results.map(row => ({
       inventoryId: row.id,
       title: `${row.name}${(row.size ?? '').trim() ? ` · ${(row.size ?? '').trim()}` : ''}`,
       sub: [
         row.sku ?? '',
-        row.qty != null ? `${row.qty} available` : '',
+        availabilityLabel(row.qty, committed.get(row.id) ?? 0),
         (row.sell_price != null && Number(row.sell_price) > 0) ? `$${Number(row.sell_price).toFixed(2)}` : '',
       ].filter(Boolean).join(' · '),
       row,

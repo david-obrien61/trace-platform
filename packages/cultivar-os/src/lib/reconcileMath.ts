@@ -120,6 +120,37 @@ export function isVariance(residual: number, expected: number): boolean {
 // have two places to import it from — which is how two definitions eventually appear.
 import { availableFrom as available } from './inventoryStates';
 
+/**
+ * Does this ledger row record a CHANGE, or assert a POSITION?
+ *
+ * `opening_balance` asserts a position — "this lot stood at N when the ledger adopted it". It is
+ * NOT a movement, and replaying it on top of a prior count adds the entire stock a second time.
+ *
+ * ── THE LIVE DEFECT THIS FIXES (2026-07-22, lot 3ec53db3 Shoal Creek Vitex 45) ──────────────
+ * The screen read "the ledger replays to 120 but the book says 60" against a true replay of 58.
+ * It looked like an exact doubling, and the reported hypothesis was that the replay summed both
+ * the base table and the D-51 read-view. It did not — there is ONE read, of the base table.
+ *
+ * The real cause is that the D-50 genesis backfill dates every opening_balance at `now()` —
+ * MIGRATION-APPLY TIME (`20260720_inventory_movement_ledger.sql:360`), not the lot's origin. So
+ * for any lot last counted BEFORE 2026-07-20, the genesis row falls INSIDE the since-that-count
+ * window and gets replayed as if the stock had just arrived:
+ *
+ *     prior count 60  +  genesis opening_balance +60  =  120   vs book 60
+ *
+ * It reads as a clean 2× only because genesis `delta = bi.qty` = current on-hand, which for a lot
+ * untouched since its last count IS `prior.counted_qty`. Two different numbers that happen to be
+ * equal — which is exactly how a doubling illusion is manufactured out of a single read.
+ *
+ * Excluding it is correct in EVERY case, not a patch for the synthetic date: a genesis row older
+ * than the window is already excluded by date, and a lot born AFTER adoption gets a ZERO-delta
+ * opening_balance (`:798`; a promoted lot with real stock is written as `count_reconcile`, `:584`).
+ * So this never discards a real quantity — it only stops a starting position being counted as a change.
+ */
+export function isMovement(kind: string): boolean {
+  return kind !== 'opening_balance';
+}
+
 export function summarizeMovements(movements: LedgerMovement[]): MovementSummary[] {
   const byKind = new Map<string, MovementSummary>();
   for (const m of movements) {
@@ -136,8 +167,13 @@ export function reconcileRow(input: ReconcileInput): ReconcileResult {
   const { bookOnHand, committed, prior, movementsSincePrior, counted } = input;
   const mode: ReconcileMode = prior ? 'delta' : 'baseline';
 
-  const evidence = mode === 'delta' ? summarizeMovements(movementsSincePrior) : [];
-  const netSincePrior = movementsSincePrior.reduce((s, m) => s + Number(m.delta ?? 0), 0);
+  // ONE filter, applied ONCE, feeding BOTH the arithmetic and the evidence strip — so the number
+  // the owner is asked to explain and the movements they are shown as the explanation can never
+  // disagree about what counts as a movement (STD-011).
+  const moves = movementsSincePrior.filter(m => isMovement(m.kind));
+
+  const evidence = mode === 'delta' ? summarizeMovements(moves) : [];
+  const netSincePrior = moves.reduce((s, m) => s + Number(m.delta ?? 0), 0);
   const replayExpected = prior ? prior.counted_qty + netSincePrior : null;
 
   // Book is authoritative for `expected` — it is the number the rest of the app transacts
