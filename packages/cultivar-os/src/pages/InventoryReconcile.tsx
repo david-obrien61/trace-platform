@@ -27,7 +27,7 @@ import { ScanLine, AlertTriangle, Check, X, HelpCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { DataSheet, sheetStyles as SS, type DataSheetColumn } from '../components/datasheet/DataSheet';
-import { fetchCommittedByLot, type CommittedByLot } from '../lib/inventoryStates';
+import { fetchCommittedByLot, ALL_STATUS_VALUES, type CommittedByLot } from '../lib/inventoryStates';
 import {
   reconcileRow, buildWritePlan, planNetDelta,
   type LedgerMovement, type PriorCount, type ReconcileResult, type Attribution, type AttributionKind,
@@ -342,7 +342,7 @@ export function InventoryReconcile() {
         searchText={r => [r.name, r.sku, r.size].filter(Boolean).join(' ')}
         searchPlaceholder="Search the lot you counted…"
         defaultSortKey="name"
-        statusFilter={{ label: 'Status', options: ['available', 'reserved', 'depleted', 'damaged', 'returned'], get: r => r.status }}
+        statusFilter={{ label: 'Status', options: [...ALL_STATUS_VALUES], get: r => r.status }}
         rowFlag={r => resultFor(r).varianceFlag || !resultFor(r).bookAgreesWithReplay}
         flagBanner={(inView, elsewhere) => (
           <span>

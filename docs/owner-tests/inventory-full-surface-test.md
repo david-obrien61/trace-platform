@@ -917,6 +917,85 @@ SIGNAL: — (SQL)
 - **PASS:** **0 rows** disagree, with this build's reconcile events included in the sum.
 - **Why:** this is the one check that proves the new writer did not break the guarantee the whole ledger rests on.
 
+## SURFACE: sellability (the ONE predicate — cap, not just display)
+_`checkSellable()` in `src/lib/inventoryStates.ts` is the single answer to "can this be sold?" — read by the scan picker, the scan review sheet, and the anonymous QR page. The server refusal in `submit.ts` STAYS as defence in depth._
+
+> **GATE 0 APPLIES.** Confirm the Vercel deploy for the SHA under test is READY and the stamp says it.
+
+### DISC-1105 cannot be ADDED, not merely labelled correctly 🔴
+STATUS: owed
+DEVICE: phone
+COVERS: #147
+LAST-PROVEN: —
+SIGNAL: the review sheet's red reason block; no `[TRACE:CART] scan-add` line
+- **Do:** on **/checkout/scan**, reach **DISC-1105** (29 on hand, 57 committed) via scan or search.
+- **PASS:** the picker line reads the blocking reason; the review sheet shows **"None available to sell (29 on hand, 57 committed)"**, the quantity stepper is **gone**, and the button reads **"Can't be added"** and is **disabled**.
+- **FAIL:** it adds to the cart. That is the live defect — display fixed, cap missing, refusal five screens later at review.
+- **Why:** a picker that offers stock the server will refuse teaches the owner to distrust the refusal, not the picker.
+
+### A DAMAGED lot cannot be sold anywhere 🔴
+STATUS: owed
+DEVICE: phone
+COVERS: #147
+LAST-PROVEN: —
+SIGNAL: `[TRACE:INVENTORY] QR page sellability` — `reason: 'condition'`
+- **Do:** mark a healthy, priced lot **damaged** in /inventory. Try to add it at **/checkout/scan** AND at its **QR page**.
+- **PASS:** both refuse, and both say **"Marked damaged — clear the condition in Inventory before selling it."**
+- **PASS:** the reason is about CONDITION, not quantity — a damaged lot holding 50 must **not** be described as "0 available".
+- **Then:** set status back to the **derived** option and confirm it sells again — the condition flag is not a one-way door.
+
+### A healthy lot still sells normally 🔴
+STATUS: owed
+DEVICE: phone
+COVERS: #147
+LAST-PROVEN: —
+SIGNAL: `[TRACE:CART] scan-add`
+- **Do:** add **DISC-1104** (10 available) at /checkout/scan.
+- **PASS:** adds normally; the stepper stops at **10** and the + button greys at the cap.
+- **FAIL:** the cap blocks a healthy lot. A guard that blocks good sales is worse than the bug it fixed.
+
+### Scanning the SAME lot twice cannot exceed its available 🔴
+STATUS: owed
+DEVICE: phone
+COVERS: #147
+LAST-PROVEN: —
+SIGNAL: the review sheet's availability note on the second scan
+- **Do:** on a lot with 10 available, add **10**. Scan it again.
+- **PASS:** the second sheet reports **none available** and refuses — the units already in this cart count as committed.
+- **Why:** without this, a 10-lot scans twice into a 20-line and the refusal waits for the server.
+
+### The status control offers only what it owns 🔴
+STATUS: owed
+DEVICE: desktop
+COVERS: #147
+LAST-PROVEN: —
+SIGNAL: `[TRACE:invsheet] edit … field: 'status'` — note `selected` vs the persisted `to`
+- **Do:** open the Status dropdown on any /inventory row, and on the Edit sheet.
+- **PASS:** exactly **four** entries — **`available (derived from qty)`** (or `depleted`, matching that row's qty) plus **damaged · returned · archived**. **No `reserved`. No settable `available`/`depleted`.**
+- **PASS:** choosing the derived option on a damaged lot **clears** it back to available/depleted per qty.
+- **Why:** David set `depleted` by hand on a lot holding 29 and it still sold — correctly, since status derives from qty. A control that appears to do something and doesn't is a fake surface (D-9).
+
+### The server refusal still fires 🔴
+STATUS: owed
+DEVICE: phone
+COVERS: #147
+LAST-PROVEN: —
+SIGNAL: `[TRACE:INVENTORY] REFUSED — insufficient AVAILABLE`
+- **Do:** build a cart, then have someone else commit the stock (or edit qty down) before submitting.
+- **PASS:** submit still refuses server-side with the named numbers. **The UI cap is a courtesy, not the authority.**
+- **FAIL:** the order goes through because "the UI already checked". That would make the cap load-bearing, which it must never be.
+
+### ⚠️ KNOWN GAP — the anon QR page still cannot see committed 🔴
+STATUS: needs-test
+DEVICE: phone
+COVERS: #147
+LAST-PROVEN: —
+SIGNAL: `[TRACE:INVENTORY] QR page sellability — committed NOT derivable for anon (#66)`
+- **Reason it is `needs-test`, not `owed`:** this cannot PASS today. `order_items` RLS is `authenticated_*`, so an anonymous scanner cannot derive committed at all. The page now says **"in stock"** (on-hand — the honest word) instead of "available", and caps at on-hand, but **a fully-committed lot will still let an anonymous customer build a cart.** The server refuses at submit, so it is a late-refusal UX gap, not an oversell hole.
+- **The fix, PROPOSED not built (it is a migration):** `SECURITY DEFINER public.lot_available(uuid) RETURNS int`, GRANTed to `anon`, returning **only the derived integer** — no order rows, no customer data. Closes #66 without widening `order_items` RLS and without a new api function. **David's call.**
+
+---
+
 ### ⚠️ REGRESSION — the genesis row must not be replayed as a movement 🔴
 STATUS: owed
 DEVICE: desktop

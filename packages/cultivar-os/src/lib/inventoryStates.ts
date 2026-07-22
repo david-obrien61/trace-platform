@@ -108,3 +108,144 @@ export async function fetchCommittedByLot(
   });
   return committed;
 }
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// SELLABILITY — the ONE predicate (STD-011 / §6 r8)
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// WHY THIS EXISTS: "can this be sold?" was answered independently at three surfaces, in three
+// different ways, and they disagreed in the way that matters — the checkout picker would ADD a
+// lot with 0 available and the refusal arrived FIVE SCREENS LATER at review. PlantProfile
+// checked `status === 'available'` and ignored price and committed; the scan picker checked
+// NOTHING; only the server checked AVAILABLE. Three answers to one question.
+//
+// THE VERDICT CARRIES ITS OWN SENTENCE, deliberately. If this returned a bare boolean, every
+// call site would write its own "why not" copy and they would drift — which is exactly how a
+// lot came to read "29 available" on one screen and "AVAILABLE 0" on another. One function
+// decides AND explains, so the reason the owner reads is the reason the code applied.
+//
+// THE SERVER GUARD IN submit.ts STAYS. This is a UI cap, and a UI cap is a courtesy — it stops
+// a dead-end five screens early. It is NOT the authority: a client can be stale, offline, or
+// bypassed, and the authoritative refusal remains server-side (defence in depth, not either/or).
+
+/** Conditions a HUMAN asserts about a lot. These are the only values the status control offers. */
+export const MANUAL_CONDITION_STATUSES = ['damaged', 'returned', 'archived'] as const;
+
+/** Values DERIVED from qty (D-42: qty > 0 → available, else depleted). Never manually settable:
+ *  the next qty write recomputes them, so offering them as a choice is a control that appears to
+ *  do something and does not (D-9 — no fake surface). `reserved` is DELIBERATELY ABSENT: D-52
+ *  replaced whole-lot reservation with a derived QUANTITY, so a lot-wide 'reserved' status is a
+ *  vestige that only invites the confusion it looks like it resolves. */
+export const DERIVED_STATUSES = ['available', 'depleted'] as const;
+
+/** The status a lot's qty implies (D-42). Used to CLEAR a manual condition flag back to derived. */
+export function deriveStatus(onHand: number): 'available' | 'depleted' {
+  return Number(onHand ?? 0) > 0 ? 'available' : 'depleted';
+}
+
+export function isManualCondition(status: string | null | undefined): boolean {
+  return (MANUAL_CONDITION_STATUSES as readonly string[]).includes(String(status ?? ''));
+}
+
+interface SellabilityInput {
+  onHand: number | null | undefined;
+  /** Units on open orders. Pass 0 where it genuinely cannot be derived — and SAY SO at that
+   *  surface rather than letting a 0 read as "nothing is committed" (see PlantProfile / #66). */
+  committed: number;
+  status: string | null | undefined;
+  sellPrice: number | null | undefined;
+}
+
+type SellableVerdict =
+  | { sellable: true;  available: number; reason: null }
+  | { sellable: false; available: number; reason: 'condition' | 'no_price' | 'none_available'; detail: string };
+
+/**
+ * Can this lot be sold RIGHT NOW, and if not, what does the person in front of it need to hear?
+ *
+ * Order of checks is the order of usefulness, not of cost: a DAMAGED lot is not a quantity
+ * problem, so saying "0 available" about it would be true and useless. Condition first, then
+ * price (a $0 lot is a setup gap, not a stock gap), then quantity.
+ */
+export function checkSellable(x: SellabilityInput): SellableVerdict {
+  const onHand = Number(x.onHand ?? 0);
+  const available = availableFrom(onHand, x.committed);
+
+  if (isManualCondition(x.status)) {
+    const word = String(x.status);
+    return {
+      sellable: false, available, reason: 'condition',
+      detail: word === 'archived'
+        ? 'Archived — this lot has been retired from the catalog.'
+        : `Marked ${word} — clear the condition in Inventory before selling it.`,
+    };
+  }
+
+  const price = Number(x.sellPrice ?? 0);
+  if (!Number.isFinite(price) || price <= 0) {
+    return {
+      sellable: false, available, reason: 'no_price',
+      detail: 'No price set — set it in Inventory before this can be sold.',
+    };
+  }
+
+  if (available <= 0) {
+    return {
+      sellable: false, available, reason: 'none_available',
+      detail: x.committed > 0
+        ? `None available to sell (${onHand} on hand, ${x.committed} committed to open orders).`
+        : 'None in stock.',
+    };
+  }
+
+  return { sellable: true, available, reason: null };
+}
+
+/**
+ * The availability sentence, in ONE place.
+ *
+ * Names BOTH numbers whenever units are committed — a bare "0 available" against a lot the owner
+ * can SEE holding 29 reads as a bug, not a rule. Same reason D-52's server refusal names both.
+ */
+export function availabilityLabel(onHand: number | null | undefined, committed: number): string {
+  if (onHand == null) return '';
+  const n = Number(onHand);
+  const avail = availableFrom(n, committed);
+  return committed > 0
+    ? `${avail} available (${n} on hand, ${committed} committed)`
+    : `${avail} available`;
+}
+
+// ── The status CONTROL, defined once (BUILD 3) ───────────────────────────────────────────────
+// Two surfaces edit status (the grid cell and the InventoryEditor sheet). They get their options,
+// their displayed value, and their save-resolution from HERE, so they cannot offer different
+// vocabularies — which is how 'reserved' survived in one list after D-52 retired the concept.
+
+/** Sentinel VALUE for "no manual condition — let qty derive it". Never persisted: it resolves to
+ *  the derived status on save. A sentinel rather than '' because an empty <option> reads as a
+ *  missing choice, and this is a real, meaningful selection. */
+const STATUS_DERIVED = '__derived__';
+
+/** What the control should show as selected for a row. A derived status is not a "choice" the
+ *  owner made, so it renders as the derived option, not as itself. */
+export function statusSelectValue(status: string | null | undefined): string {
+  return isManualCondition(status) ? String(status) : STATUS_DERIVED;
+}
+
+/** The options, with the DERIVED one labelled by what qty actually implies — so the owner reads
+ *  the true current state ("available (derived from qty)") instead of an opaque placeholder. */
+export function statusSelectOptions(onHand: number): Array<{ value: string; label: string }> {
+  return [
+    { value: STATUS_DERIVED, label: `${deriveStatus(onHand)} (derived from qty)` },
+    ...MANUAL_CONDITION_STATUSES.map(s => ({ value: s, label: s })),
+  ];
+}
+
+/** What to PERSIST for a selection. Choosing the derived option writes the value qty implies —
+ *  which is what clears a condition flag, and is also exactly what the next qty write would set. */
+export function resolveStatusSelection(selected: string, onHand: number): string {
+  return selected === STATUS_DERIVED ? deriveStatus(onHand) : selected;
+}
+
+/** Status values that can legitimately EXIST on a row — for FILTER lists, which must offer what
+ *  the data contains (including derived values), not what the editor may set. */
+export const ALL_STATUS_VALUES = [...DERIVED_STATUSES, ...MANUAL_CONDITION_STATUSES] as const;

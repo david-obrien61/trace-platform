@@ -26,7 +26,7 @@ import { ArrowLeft, Minus, Plus, ScanLine, UserPlus, UserCheck, X } from 'lucide
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { resolveStockLine, searchStockLines, STOCK_LINE_COLUMNS } from '@trace/shared/inventory';
-import { fetchCommittedByLot, availableFrom } from '../lib/inventoryStates';
+import { fetchCommittedByLot, checkSellable, availabilityLabel, type CommittedByLot } from '../lib/inventoryStates';
 import type { StockLineRow } from '@trace/shared/inventory';
 import {
   readPricingConfig, normalizeDiscountTypes, resolveTier, RETAIL_TIER_NAME, type DiscountType,
@@ -94,27 +94,13 @@ function customerToInput(r: CustomerHit): CustomerInput {
   };
 }
 
-/**
- * The picker's availability line — DERIVED, never raw on-hand.
- *
- * ── THE LIVE DEFECT THIS FIXES (2026-07-22) ─────────────────────────────────────────────────
- * Both pickers read `row.qty` and labelled it "available". For Shoal Creek 30 (DISC-1105) that
- * printed **"29 available"** while /inventory showed **AVAILABLE 0** (29 on hand, 57 committed):
- * one fact, two surfaces, two numbers — and the picker was the one offering stock the server
- * would then REFUSE at submit (D-52 checks AVAILABLE). A picker that shows sellable stock the
- * checkout will refuse teaches the owner to distrust the refusal, not the picker.
- *
- * Availability now comes from the SAME derivation the grid and the oversell guard use
- * (`availableFrom` over `fetchCommittedByLot`, D-52 / §6 r8) — there is no second definition to
- * drift. When units are committed, BOTH numbers are named, exactly as the D-52 refusal copy does:
- * a bare "0 available" against a lot the owner can see holding 29 reads as a bug, not a rule.
- */
-function availabilityLabel(qty: number | null | undefined, committed: number): string {
-  if (qty == null) return '';
-  const onHand = Number(qty);
-  const avail = availableFrom(onHand, committed);
-  if (committed > 0) return `${avail} available (${onHand} on hand, ${committed} committed)`;
-  return `${avail} available`;
+
+/** The picker sub-line: the availability count when sellable, the BLOCKING REASON when not — so a
+ *  pick never leads straight into a "Can't be added" the list could have named up front. Both come
+ *  from the ONE predicate, so the picker and the review sheet cannot disagree. */
+function pickerSub(row: { qty?: number | null; status?: string | null; sell_price?: number | null }, committed: number): string {
+  const v = checkSellable({ onHand: row.qty ?? null, committed, status: row.status ?? null, sellPrice: row.sell_price ?? null });
+  return v.sellable ? availabilityLabel(row.qty ?? null, committed) : v.detail;
 }
 
 export function ScanOrder() {
@@ -242,6 +228,30 @@ export function ScanOrder() {
   }
   function closeCustomer() { setCustomerView(null); }
 
+  // D-52 committed, held for the session so the REVIEW sheet can cap without a round-trip per
+  // scan. Refreshed after each add — a line added here claims units that must not be re-offered.
+  const [committedByLot, setCommittedByLot] = useState<CommittedByLot>(new Map());
+  useEffect(() => {
+    if (!businessId) return;
+    void fetchCommittedByLot(supabase, businessId).then(setCommittedByLot);
+  }, [businessId]);
+
+  /** The lot a Plant anchors on — the SAME discriminator submit.ts uses (stock_line_id ?? inventory_id). */
+  function lotIdOf(p: Plant | null): string | null {
+    return p ? (p.stock_line_id ?? p.inventory_id ?? null) : null;
+  }
+
+  /** Units of this lot ALREADY in the cart. Without this, scanning a 10-lot twice adds 20 and the
+   *  refusal waits for the server — the same five-screens-late failure this build exists to close. */
+  function claimedInCart(lotId: string | null, exclude?: Plant | null): number {
+    if (!lotId) return 0;
+    const excludeKey = exclude ? anchorKey(exclude) : null;
+    return items.reduce((n, l) => {
+      if (excludeKey && anchorKey(l.plant) === excludeKey) return n;
+      return lotIdOf(l.plant) === lotId ? n + l.quantity : n;
+    }, 0);
+  }
+
   async function handleScan(raw: string) {
     if (!businessId) return;
     const tag = extractTag(raw);
@@ -261,7 +271,7 @@ export function ScanOrder() {
       const choices: PickChoice[] = resolution.candidates.map(row => ({
         inventoryId: row.id,
         title:       (row.size ?? '').trim() || 'Unspecified size',
-        sub:         availabilityLabel(row.qty, committed.get(row.id) ?? 0),
+        sub:         pickerSub(row, committed.get(row.id) ?? 0),
         row,
       }));
       if (TRACE_CART) console.log('[TRACE:CART] scan size collision — picker:', choices.map(c => c.title).join(' / '));
@@ -300,7 +310,7 @@ export function ScanOrder() {
       title: `${row.name}${(row.size ?? '').trim() ? ` · ${(row.size ?? '').trim()}` : ''}`,
       sub: [
         row.sku ?? '',
-        availabilityLabel(row.qty, committed.get(row.id) ?? 0),
+        pickerSub(row, committed.get(row.id) ?? 0),
         (row.sell_price != null && Number(row.sell_price) > 0) ? `$${Number(row.sell_price).toFixed(2)}` : '',
       ].filter(Boolean).join(' · '),
       row,
@@ -338,7 +348,7 @@ export function ScanOrder() {
   }
 
   function addToOrder() {
-    if (!resolved) return;
+    if (!resolved || !verdict.sellable) return;   // the gate, not just the styling (§1.6 item 3)
     addLine(resolved, qty);   // [TRACE:CART] scan-add fires in the store (merge-by-anchor)
     setResolved(null);
     setPhase('scanning');
@@ -361,6 +371,23 @@ export function ScanOrder() {
   }
 
   const sellPrice = resolved?.business_inventory?.sell_price ?? 0;
+
+  // ── THE CAP (BUILD 2). ONE predicate, the same one the grid and the server use. ────────────
+  // Committed here is (open orders) + (units of this lot ALREADY in this cart), because both
+  // are spoken for — the second is the case that let a 10-lot be scanned twice into a 20-line.
+  const resolvedLotId = lotIdOf(resolved);
+  const resolvedCommitted =
+    (resolvedLotId ? (committedByLot.get(resolvedLotId) ?? 0) : 0) + claimedInCart(resolvedLotId, resolved);
+  const verdict = checkSellable({
+    onHand:    resolved?.business_inventory?.qty ?? null,
+    committed: resolvedCommitted,
+    status:    resolved?.business_inventory?.status ?? null,
+    sellPrice,
+  });
+  // Cap the stepper at what is genuinely sellable — a stepper that climbs past the cap is a
+  // control that lets you build a number the system will refuse.
+  const maxQty = Math.max(1, verdict.available);
+  useEffect(() => { setQty(q => Math.min(q, Math.max(1, verdict.available))); }, [verdict.available]);
 
   return (
     <div style={S.page}>
@@ -430,15 +457,36 @@ export function ScanOrder() {
             <p style={sellPrice > 0 ? S.price : S.priceNone}>
               {sellPrice > 0 ? `$${sellPrice.toFixed(2)} each` : 'No price set — you can set it in Inventory before checkout'}
             </p>
-            <div style={S.qtyRow}>
-              <span style={S.qtyLabel}>Quantity</span>
-              <div style={S.stepper}>
-                <button style={S.stepBtn} onClick={() => setQty(q => Math.max(1, q - 1))} aria-label="Decrease"><Minus size={16} color="#374151" /></button>
-                <span style={S.stepVal}>{qty}</span>
-                <button style={S.stepBtn} onClick={() => setQty(q => q + 1)} aria-label="Increase"><Plus size={16} color="#374151" /></button>
+
+            {/* THE REASON, from the predicate itself — not re-worded here, so what the owner reads
+                is exactly what the code applied. */}
+            {!verdict.sellable && <p style={S.blocked}>{verdict.detail}</p>}
+            {verdict.sellable && resolvedCommitted > 0 && (
+              <p style={S.availNote}>
+                {availabilityLabel(resolved.business_inventory?.qty ?? null, resolvedCommitted)}
+              </p>
+            )}
+
+            {verdict.sellable && (
+              <div style={S.qtyRow}>
+                <span style={S.qtyLabel}>Quantity</span>
+                <div style={S.stepper}>
+                  <button style={S.stepBtn} onClick={() => setQty(q => Math.max(1, q - 1))} aria-label="Decrease"><Minus size={16} color="#374151" /></button>
+                  <span style={S.stepVal}>{qty}</span>
+                  <button style={qty >= maxQty ? S.stepBtnOff : S.stepBtn} disabled={qty >= maxQty}
+                          onClick={() => setQty(q => Math.min(maxQty, q + 1))} aria-label="Increase"><Plus size={16} color={qty >= maxQty ? '#9ca3af' : '#374151'} /></button>
+                </div>
               </div>
-            </div>
-            <button style={S.btnPrimary} onClick={addToOrder}>Add to order</button>
+            )}
+
+            <button
+              style={verdict.sellable ? S.btnPrimary : S.btnPrimaryOff}
+              disabled={!verdict.sellable}
+              onClick={addToOrder}
+              title={verdict.sellable ? undefined : verdict.detail}
+            >
+              {verdict.sellable ? 'Add to order' : "Can't be added"}
+            </button>
             <button style={S.btnGhost} onClick={pass}>Pass — scan the next</button>
           </div>
         </div>
@@ -577,6 +625,10 @@ const S = {
   subtle:     { color: '#6b7280', fontSize: '0.88rem', margin: '0 0 1rem' } as React.CSSProperties,
   code:       { background: '#f3f4f6', borderRadius: 4, padding: '1px 6px', fontSize: '0.82rem', color: '#374151' } as React.CSSProperties,
   btnPrimary: { width: '100%', minHeight: 48, background: '#27500A', color: '#fff', border: 'none', borderRadius: 10, fontSize: '1rem', fontWeight: 700, cursor: 'pointer' } as React.CSSProperties,
+  blocked: { margin: '0 0 12px', padding: '0.6rem 0.75rem', background: '#fee2e2', color: '#991b1b', borderRadius: 8, fontSize: '0.85rem', fontWeight: 600, lineHeight: 1.45 } as React.CSSProperties,
+  availNote: { margin: '0 0 12px', fontSize: '0.82rem', color: '#6b7280' } as React.CSSProperties,
+  stepBtnOff: { width: 40, height: 40, border: '1.5px solid #e5e7eb', borderRadius: 8, background: '#f9fafb', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'not-allowed' } as React.CSSProperties,
+  btnPrimaryOff: { width: '100%', minHeight: 48, background: '#9ca3af', color: '#fff', border: 'none', borderRadius: 10, fontSize: '1rem', fontWeight: 600, cursor: 'not-allowed', marginBottom: 8 } as React.CSSProperties,
   btnGhost:   { width: '100%', minHeight: 44, background: 'none', color: '#6b7280', border: '1.5px solid #d1d5db', borderRadius: 10, fontSize: '0.92rem', fontWeight: 600, cursor: 'pointer', marginTop: 10 } as React.CSSProperties,
   pickBtn:    { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3, width: '100%', minHeight: 52, background: '#fff', border: '1.5px solid #27500A', borderRadius: 10, padding: '0.7rem 1rem', cursor: 'pointer', marginBottom: 10, textAlign: 'left' } as React.CSSProperties,
   pickSize:   { fontSize: '1.02rem', fontWeight: 700, color: '#1a2e0a' } as React.CSSProperties,

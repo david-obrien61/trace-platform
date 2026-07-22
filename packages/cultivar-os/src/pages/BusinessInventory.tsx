@@ -39,12 +39,31 @@ import {
 } from '../components/datasheet/DataSheet';
 import { InventoryEditor, BLANK_INVENTORY_ITEM, type EditorInventoryItem, type InventoryPeer } from '../components/inventory/InventoryEditor';
 import { persistInventoryPatch, renameVariety, deleteInventoryRow } from '../components/inventory/inventoryEdit';
-import { fetchCommittedByLot, availableFrom, type CommittedByLot } from '../lib/inventoryStates';
+import {
+  fetchCommittedByLot, availableFrom, statusSelectValue, statusSelectOptions,
+  resolveStatusSelection, ALL_STATUS_VALUES, type CommittedByLot,
+} from '../lib/inventoryStates';
 
 type CostConfidence = 'CONFIRMED' | 'DERIVED' | 'ESTIMATED' | 'UNKNOWN';
 const CONFIDENCE_OPTS: CostConfidence[] = ['CONFIRMED', 'DERIVED', 'ESTIMATED', 'UNKNOWN'];
-// 'archived' is the SOFT-DELETE value (status is plain text, no CHECK — AC-1 string value, no migration).
-const STATUS_OPTIONS = ['available', 'reserved', 'depleted', 'damaged', 'returned', 'archived'];
+// ── STATUS OFFERS ONLY WHAT IT OWNS (BUILD 3) ───────────────────────────────────────────────
+// The old list mixed two different kinds of thing and pretended they were one choice:
+//   DERIVED  — available / depleted, COMPUTED from qty (D-42). Setting these by hand does
+//              nothing durable: the next qty write recomputes them. David proved it live —
+//              he set 'depleted' on a lot holding 29 and it still sold, correctly.
+//              A control that appears to do something and does not is a fake surface (D-9).
+//   MANUAL   — damaged / returned / archived. A human's assertion ABOUT the lot, which no
+//              amount of counting can derive. These are the only real choices.
+//   GONE     — 'reserved'. D-52 replaced whole-lot reservation with a DERIVED QUANTITY
+//              (committed). Keeping a lot-wide status of the same name invites exactly the
+//              confusion it looks like it resolves. Nothing reads it — verified, see below.
+// The blank option CLEARS a condition back to derived; without it a damaged lot could be
+// marked and never un-marked, which would make the control a one-way door.
+// 'archived' remains the SOFT-DELETE value. status is plain text with NO CHECK constraint
+// (AC-1 / the migration says so explicitly), so narrowing this list needs NO migration.
+// The FILTER offers every value a row can legitimately HOLD (derived included) — a filter must
+// match the data, whereas the editor must only offer what a human actually owns.
+const STATUS_FILTER_OPTIONS = [...ALL_STATUS_VALUES];
 
 interface InventoryRow {
   id: string;
@@ -186,9 +205,12 @@ export function BusinessInventory() {
     console.log('[TRACE:invsheet] edit', { rowId: row.id, field: 'reorder_point', to: value });
     void doPatch(row, { reorder_point: value });
   }
-  function onStatus(row: InventoryRow, value: string) {
+  function onStatus(row: InventoryRow, selected: string) {
+    // Selecting the DERIVED option writes what qty implies — which is what CLEARS a condition
+    // flag, and is also exactly what the next qty write would have set anyway (D-42).
+    const value = resolveStatusSelection(selected, row.qty);
     if (value === row.status) return;
-    console.log('[TRACE:invsheet] edit', { rowId: row.id, field: 'status', from: row.status, to: value });
+    console.log('[TRACE:invsheet] edit', { rowId: row.id, field: 'status', from: row.status, to: value, selected });
     void doPatch(row, { status: value });
   }
   function onUnitCost(row: InventoryRow, value: number | null) {
@@ -319,7 +341,7 @@ export function BusinessInventory() {
     { key: 'cost_confidence', header: 'Conf.', sortable: true, sortVal: r => r.cost_confidence ?? '',
       render: r => <SelectCell value={r.cost_confidence ?? 'UNKNOWN'} options={CONFIDENCE_OPTS.map(o => ({ value: o, label: o }))} onChange={v => onConfidence(r, v as CostConfidence)} styleFor={confidenceStyleFor} title={confidenceLabel(r.cost_confidence)} /> },
     { key: 'status', header: 'Status', sortable: true, sortVal: r => r.status,
-      render: r => <SelectCell value={r.status} options={STATUS_OPTIONS.map(s => ({ value: s, label: s }))} onChange={v => onStatus(r, v)} /> },
+      render: r => <SelectCell value={statusSelectValue(r.status)} options={statusSelectOptions(r.qty)} onChange={v => onStatus(r, v)} /> },
     { key: 'location', header: 'Location', sortable: true, sortVal: r => (r.location ?? '').toLowerCase(),
       render: r => <TextCell key={`loc-${r.id}-${r.updated_at}`} value={r.location} width={110} placeholder="—" onCommit={v => onText(r, 'location', v)} /> },
     { key: 'serial_number', header: 'Serial', sortable: true, sortVal: r => (r.serial_number ?? '').toLowerCase(), defaultVisible: false,
@@ -351,7 +373,7 @@ export function BusinessInventory() {
         rowActionsWidth={122}
         searchText={r => [r.name, r.sku, r.size, r.variant_group, r.location, r.serial_number, r.notes].filter(Boolean).join(' ')}
         searchPlaceholder="Search name, SKU, size, location…"
-        statusFilter={{ label: 'statuses', options: STATUS_OPTIONS, get: r => r.status }}
+        statusFilter={{ label: 'statuses', options: STATUS_FILTER_OPTIONS, get: r => r.status }}
         defaultSortKey="name"
         rowFlag={isDup}
         /* The banner describes the rows ON SCREEN. It used to count flagged rows over the WHOLE
@@ -423,7 +445,7 @@ export function BusinessInventory() {
         <InventoryEditor
           item={editor.item}
           mode={editor.mode}
-          statusOptions={STATUS_OPTIONS}
+          statusOptions={statusSelectOptions(editor.item.qty ?? 0)}
           addSizeParent={editor.mode === 'create' ? editor.addSizeParent : undefined}
           peers={editorPeers}
           onClose={() => setEditor(null)}

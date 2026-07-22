@@ -43,6 +43,7 @@ import { findSizeTwin } from '@trace/shared/discovery/dupSize';
 import { errBorder, FieldError } from '@trace/shared/components/FieldError';
 import { sheetStyles as SS } from '../datasheet/DataSheet';
 import { insertInventory, persistInventoryPatch, renameVariety } from './inventoryEdit';
+import { statusSelectValue, resolveStatusSelection } from '../../lib/inventoryStates';
 
 export type CostConfidence = 'CONFIRMED' | 'DERIVED' | 'ESTIMATED' | 'UNKNOWN';
 
@@ -84,7 +85,10 @@ export interface InventoryPeer {
 interface Props {
   item: EditorInventoryItem;
   mode: 'create' | 'edit';
-  statusOptions: string[];
+  /** {value,label} pairs from `statusSelectOptions()` — NOT raw strings. The DERIVED option
+   *  carries a sentinel value that `resolveStatusSelection()` turns into the qty-implied status
+   *  on save, so this sheet and the grid cell offer the identical vocabulary (STD-011). */
+  statusOptions: Array<{ value: string; label: string }>;
   /** When set, this CREATE is a "+ Add size" seeded from a parent row: name + variant_group are
    *  inherited (name read-only), and the parent is auto-grouped on save if it had no group. The
    *  sibling's SKU pre-fills from the FAMILY's base SKU + the size suffix (suggestSiblingSku) —
@@ -485,9 +489,12 @@ export function InventoryEditor({ item, mode, statusOptions, addSizeParent, peer
           </div>
           <div>
             <label style={SS.label}>Status</label>
-            <select style={SS.select} value={draft.status} disabled={savingField === 'status'}
-              onChange={e => { if (creating) set({ status: e.target.value }); else void saveStatus(e.target.value); }}>
-              {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
+            <select style={SS.select} value={statusSelectValue(draft.status)} disabled={savingField === 'status'}
+              onChange={e => {
+                const v = resolveStatusSelection(e.target.value, draft.qty ?? 0);
+                if (creating) set({ status: v }); else void saveStatus(v);
+              }}>
+              {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
         </div>

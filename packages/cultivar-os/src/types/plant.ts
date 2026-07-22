@@ -44,7 +44,6 @@ export interface PlantEvent {
     | 'treated'
     | 'photo'
     | 'priced'
-    | 'reserved'
     | 'sold'
     | 'lost'
     | 'returned';
