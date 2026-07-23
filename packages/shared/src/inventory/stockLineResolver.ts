@@ -46,6 +46,9 @@ export interface StockLineRow {
   status?: string | null;
   received_at?: string | null;
   description?: string | null;
+  // import-extended (present iff selected via STOCK_LINE_IMPORT_COLUMNS) — 20260723 columns.
+  price_basis?: string | null;
+  attributes?: Record<string, string> | null;
 }
 
 // The minimal identity SELECT — byte-identical to InventoryCount's proven L4 query, so
@@ -56,6 +59,12 @@ export const STOCK_LINE_IDENTITY_COLUMNS = 'id, name, sku, qty, size, variant_gr
 // sell_price column (migration 20260707_business_inventory_sell_price) to be applied.
 export const STOCK_LINE_COLUMNS =
   'id, name, sku, qty, size, variant_group, sell_price, unit_cost, status, received_at, description';
+
+// The import SELECT — identity + the pricing/attribute fields the CSV importer reconciles a row
+// against (so an UPDATE merges into an existing attribute bag rather than clobbering it). Requires
+// the 20260723 columns (price_basis, attributes) applied.
+export const STOCK_LINE_IMPORT_COLUMNS =
+  'id, name, sku, qty, size, variant_group, status, sell_price, price_basis, attributes';
 
 export type StockLineResolution =
   | { kind: 'resolved'; via: 'sku' | 'name'; row: StockLineRow }
@@ -90,44 +99,39 @@ export function detectSizeCollision(
 }
 
 /**
- * Resolve an identifier to a business_inventory stock line via SKU → NAME → SIZE-picker.
- * business_id-scoped (AC-3). Vertical-agnostic (AC-1) — names only business_inventory.
+ * THE PURE LADDER — resolve an identifier against an ALREADY-FETCHED catalog, no DB, no async.
+ * SKU exact → NAME token-set equality → SIZE-picker, identical in behaviour to resolveStockLine's
+ * L2/L4/L5 (which now delegates here).
  *
- * @param columns  the SELECT column set. Default = identity-only (migration-independent,
- *                 count flow); pass STOCK_LINE_COLUMNS for the purchase-path synthesis.
+ * WHY THIS EXISTS (STD-011 — the prompt's "reuse the resolver, do not fork a second matcher"):
+ * the CSV catalog import must resolve a whole file of rows against the tenant's catalog in the
+ * BROWSER, with no per-row round-trip and no service key — a pure decision over an in-memory
+ * array, the reconcileMath.ts shape. It cannot call resolveStockLine (that reads the DB). So the
+ * decision is extracted here ONCE and both callers share it: resolveStockLine fetches then
+ * delegates; the importer fetches the catalog once and delegates per row. There is one matcher.
+ *
+ * @param catalog     the tenant's business_inventory rows (business_id-scoping is the caller's
+ *                    job — this function names no tenant and reads no DB; AC-1/AC-3).
+ * @param identifier  a SKU, a scanned slug, or a name.
  */
-export async function resolveStockLine(
-  supabase: SupabaseClient,
-  businessId: string,
+export function resolveAgainstCatalog(
+  catalog: StockLineRow[],
   identifier: string,
-  opts?: { columns?: string },
-): Promise<StockLineResolution> {
-  const columns = opts?.columns ?? STOCK_LINE_IDENTITY_COLUMNS;
-  const id = identifier.trim();
+): StockLineResolution {
+  const id = (identifier ?? '').trim();
   if (!id) return { kind: 'miss', reason: 'no_match' };
 
-  // L2 — SKU exact.
-  const { data: lot } = await supabase
-    .from('business_inventory')
-    .select(columns)
-    .eq('business_id', businessId)
-    .ilike('sku', id)
-    .maybeSingle();
-  if (lot) return { kind: 'resolved', via: 'sku', row: lot as unknown as StockLineRow };
+  // L2 — SKU exact (case-insensitive, trimmed). In-memory equivalent of the .ilike() query.
+  const idLower = id.toLowerCase();
+  const skuHit = catalog.find(r => (r.sku ?? '').trim().toLowerCase() === idLower);
+  if (skuHit) return { kind: 'resolved', via: 'sku', row: skuHit };
 
-  // L4 — NAME token-set equality (fetch the tenant's rows, filter by canonical key).
+  // L4 — NAME token-set equality.
   const scannedKey = nameTokenSet(id);
   if (scannedKey.size > 0) {
-    const { data: rows } = await supabase
-      .from('business_inventory')
-      .select(columns)
-      .eq('business_id', businessId);
-    const matches = ((rows ?? []) as unknown as StockLineRow[]).filter(row =>
-      tokenSetsEqual(nameTokenSet(row.name), scannedKey));
+    const matches = catalog.filter(row => tokenSetsEqual(nameTokenSet(row.name), scannedKey));
 
-    if (matches.length === 1) {
-      return { kind: 'resolved', via: 'name', row: matches[0] };
-    }
+    if (matches.length === 1) return { kind: 'resolved', via: 'name', row: matches[0] };
     if (matches.length > 1) {
       // L5 — SAME variety, different sizes → size-picker.
       if (detectSizeCollision(matches)) {
@@ -147,6 +151,45 @@ export async function resolveStockLine(
   }
 
   return { kind: 'miss', reason: 'no_match' };
+}
+
+/**
+ * Resolve an identifier to a business_inventory stock line via SKU → NAME → SIZE-picker.
+ * business_id-scoped (AC-3). Vertical-agnostic (AC-1) — names only business_inventory.
+ *
+ * @param columns  the SELECT column set. Default = identity-only (migration-independent,
+ *                 count flow); pass STOCK_LINE_COLUMNS for the purchase-path synthesis.
+ */
+export async function resolveStockLine(
+  supabase: SupabaseClient,
+  businessId: string,
+  identifier: string,
+  opts?: { columns?: string },
+): Promise<StockLineResolution> {
+  const columns = opts?.columns ?? STOCK_LINE_IDENTITY_COLUMNS;
+  const id = identifier.trim();
+  if (!id) return { kind: 'miss', reason: 'no_match' };
+
+  // L2 — SKU exact as a TARGETED query, unchanged: preserves the count flow's proven query shape
+  // (#72 no-regress) and returns without fetching the whole tenant on a SKU hit.
+  const { data: lot } = await supabase
+    .from('business_inventory')
+    .select(columns)
+    .eq('business_id', businessId)
+    .ilike('sku', id)
+    .maybeSingle();
+  if (lot) return { kind: 'resolved', via: 'sku', row: lot as unknown as StockLineRow };
+
+  // L4/L5 — fetch the tenant's rows and delegate the token-equality + size-collision decision to
+  // the ONE pure ladder (STD-011). The ladder re-runs an in-memory SKU pass which necessarily
+  // misses here (the targeted query above already missed), so the result is identical to the
+  // former inline logic — with the sole marginal difference that a SKU differing only in
+  // whitespace, which .ilike would miss, now matches; that is a strict improvement, not a regress.
+  const { data: rows } = await supabase
+    .from('business_inventory')
+    .select(columns)
+    .eq('business_id', businessId);
+  return resolveAgainstCatalog((rows ?? []) as unknown as StockLineRow[], id);
 }
 
 /**

@@ -1046,3 +1046,139 @@ SIGNAL: `[TRACE:RECONCILE] load ok` — `unresolvedScans:`
 - **✅ PROVEN 2026-07-22 (David, live — `aca0b5d`/`679fb9a`, tenant `f7ec5d67`):** the queue rendered **3 unrecognized scans** with honest copy and **no fake Resolve button**.
 
 | `[TRACE:SYNC]` | the offline queue depth + drain |
+
+---
+
+## SURFACE: csv-import
+_The second half of onboarding: `/inventory/import` (owner-only, desktop). Load a grower price list, map columns to the spine, review a per-row plan, Accept. Two steps; nothing written until Accept. Prove all 14 with `docs/owner-tests/fixtures/test-grower-pricelist-FIXTURE.csv` and WITHOUT a console._
+
+### 1 — `Ready` maps to qty only AFTER you confirm it (L3 never auto-applies)
+STATUS: owed
+DEVICE: desktop
+COVERS: #148
+LAST-PROVEN: —
+- **Do:** upload the fixture. On the mapping step, find the **`Ready`** column.
+- **PASS:** it shows an amber **"guessed — confirm"** control; its values do NOT import as quantity until you click confirm (or pick "Quantity on hand" yourself).
+- **FAIL:** `Ready` is silently mapped to quantity with no confirm — an L3 guess that auto-applied.
+- **Why:** `ready` is deliberately NOT a synonym; it is inferred from its integer values and must be confirmed (a guess that acts on its own is how the wrong column becomes stock).
+
+### 2 — `Cont.` maps to size by synonym, and the rung is visible
+STATUS: owed
+DEVICE: desktop
+COVERS: #148
+LAST-PROVEN: —
+- **Do:** on the mapping step, find **`Cont.`**.
+- **PASS:** it reads **Size / container**, and the "Why" column says **known synonym**.
+- **FAIL:** it lands unmapped, or the reason for the match is not shown.
+
+### 3 — Every mapping is overridable, including an exact match
+STATUS: owed
+DEVICE: desktop
+COVERS: #148
+LAST-PROVEN: —
+- **Do:** change any column's "Maps to" dropdown — including one the system matched confidently.
+- **PASS:** the override sticks and drives the plan.
+- **FAIL:** a matched column is locked / not editable.
+
+### 4 — The five descriptive columns land in the attribute bag under their own names
+STATUS: owed
+DEVICE: desktop
+COVERS: #148
+LAST-PROVEN: —
+- **Do:** leave **Sun, Height, Spread, Notes, Zone** as "Keep as a note (attribute)". Accept, then open one imported lot.
+- **PASS:** those five values are preserved on the lot, keyed by the grower's own header names, verbatim.
+- **FAIL:** a descriptive column is dropped, renamed, or forced into a spine field.
+
+### 5 — 🔴 `Wholesale` is FLAGGED as spine-shaped, held in the bag, and nothing computes on it
+STATUS: owed
+DEVICE: desktop
+COVERS: #148
+LAST-PROVEN: —
+- **Do:** on the mapping step, find **`Wholesale`** (a currency column).
+- **PASS:** it is flagged **"looks like money — kept as a note, nothing computes on it"**; it lands in the attribute bag and NO price/margin is computed from it.
+- **FAIL:** it is silently mapped to sell price, or silently bagged with no flag.
+- **Why:** a blob field may never be money — making Wholesale a real field is a spine decision + a migration, not something an import invents.
+
+### 6 — The basis question is asked ONCE; "I don't know" writes NULL
+STATUS: owed
+DEVICE: desktop
+COVERS: #148
+LAST-PROVEN: —
+- **Do:** on the mapping step, use the single **"What does each price apply to?"** control; choose **"I don't know — leave it blank"**. Accept, then open a priced lot.
+- **PASS:** asked exactly once for the whole file; the lot's price basis is **blank** (not a guessed unit).
+- **FAIL:** asked per row, or "don't know" writes a fabricated basis.
+
+### 7 — Possessive and wrapping-quoted names resolve on the first pass
+STATUS: owed
+DEVICE: desktop
+COVERS: #148, #132
+LAST-PROVEN: —
+- **Do:** review the plan for **Basham's …**, **Hearts A'fire …**, and **'Sierra' Mexican Red Oak**.
+- **PASS:** each resolves to a verdict (UPDATE / CREATE / FILL) against the right variety — none falls to "no name" or an unexpected new variety because of the apostrophe/quotes.
+- **FAIL:** an apostrophe or wrapping-quote name mis-resolves.
+
+### 8 — The size-less Alley Cat row is HELD as AMBIGUOUS and names its candidate sizes
+STATUS: owed
+DEVICE: desktop
+COVERS: #148
+LAST-PROVEN: —
+- **Do:** review the **Alley Cat** row (no size, multi-size family).
+- **PASS:** verdict **AMBIGUOUS**, with a size picker listing the family's sizes; it is excluded from the Accept count until you pick one.
+- **FAIL:** it silently picks a size, or creates a size-less row.
+
+### 9 — 🔴 The Shoal Creek CONFLICT row does NOT overwrite the count by default
+STATUS: owed
+DEVICE: desktop
+COVERS: #148
+LAST-PROVEN: —
+- **Do:** review **Shoal Creek Vitex** (a lot you have physically counted; the CSV qty disagrees).
+- **PASS:** verdict **CONFLICT**; it shows counted-vs-CSV and is EXCLUDED from Accept until you tick "Overwrite the physical count". Left untouched, Accept never changes its qty.
+- **FAIL:** the CSV qty lands on a counted lot without an explicit per-row action.
+- **Why:** David's ruling 2026-07-23 — a CSV may never overwrite a physical count unless the owner says so explicitly, per row.
+
+### 10 — 🔴 `$0.00` and blank prices land as UNKNOWN; those lots stay NOT sellable
+STATUS: owed
+DEVICE: desktop
+COVERS: #148
+LAST-PROVEN: —
+- **Do:** review the **'Sierra' 45 gal** ($0.00) and **Texas Mountain Laurel** (blank price) rows. Accept. Try to sell one on /checkout/scan.
+- **PASS:** neither writes a price; both lots have NO sell price and checkout refuses them as unpriced.
+- **FAIL:** either lands at price 0 (as if free) or becomes sellable.
+- **Why:** $0.00 and blank are BOTH unknown (D-9); an unknown price is never "free".
+
+### 11 — The quoted-comma row, the padded name, and the blank line all parse correctly
+STATUS: owed
+DEVICE: desktop
+COVERS: #148
+LAST-PROVEN: —
+- **Do:** confirm the plan has the right number of rows and that **Hearts A'fire** (quoted "Full sun, part shade") and **`  Shoal Creek Vitex  `** (padded) resolved.
+- **PASS:** the embedded comma did not split a column; the blank line produced no phantom row; the padded name resolved to Shoal Creek.
+- **FAIL:** an extra/short row, or a padded name failing to resolve.
+
+### 12 — Nothing is written until Accept
+STATUS: owed
+DEVICE: desktop
+COVERS: #148
+LAST-PROVEN: —
+- **Do:** upload, map, preview the plan — then leave the screen (Back to inventory) without Accepting.
+- **PASS:** the catalog is unchanged; no new lots, no qty moves.
+- **FAIL:** any row landed before Accept.
+
+### 13 — 🔴 After Accept, `qty == SUM(delta)` holds and every qty change names the import
+STATUS: owed
+DEVICE: desktop
+COVERS: #148
+LAST-PROVEN: —
+SIGNAL: `[TRACE:IMPORT] setLot / create` and the ledger
+- **Do:** Accept a plan that includes qty changes. Then run V3(b): `SELECT bi.id FROM business_inventory bi WHERE bi.qty <> (SELECT COALESCE(SUM(l.delta),0) FROM business_inventory_ledger l WHERE l.inventory_id = bi.id)` (David-query).
+- **PASS:** **ZERO rows.** Each imported qty change has a ledger row of `kind='import'` whose `reason` names the CSV file, with the real actor.
+- **FAIL:** any row where qty ≠ SUM(delta), or a bare UPDATE with no ledger row, or a `count_reconcile` row minted by the import.
+
+### 14 — A price-only change writes NO ledger event
+STATUS: owed
+DEVICE: desktop
+COVERS: #148
+LAST-PROVEN: —
+- **Do:** import a row that changes only a lot's price/notes (qty already agrees, e.g. Hearts A'fire at 8). Check the ledger for that lot.
+- **PASS:** the price/attributes updated; NO new ledger row was written (a price is not a movement).
+- **FAIL:** a ledger row appears for a price-only change.

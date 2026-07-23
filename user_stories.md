@@ -267,7 +267,7 @@ ARC: discovery
 MAPS-TO: 1.3, 5.1
 PIECES: catalog_import, priced_offerings_activate
 NEEDS: David to activate the 116-row LAWNS WooCommerce catalog (already in hand as a CSV export) as priced offerings on the live demo tenant, so the demo dashboard shows LAWNS's ACTUAL trees, not sample data.
-The catalog-populate engine is BUILT (board 1.3 — 114 real varieties read live 06-21, D-9 honesty-flagged). This is the demo-facing activation: land LAWNS's own 116 rows as real, priced inventory so a walk-and-count / QR-checkout demo runs on real stock. _Grounded: board 1.3 (`discovery/catalog.ts`, migration-gated); the Woo CSV in hand; board 5.1 inventory live._
+The catalog-populate engine is BUILT (board 1.3 — 114 real varieties read live 06-21, D-9 honesty-flagged). **The MECHANISM this story was waiting on is now built:** the CSV catalog import (ledger #148, `/inventory/import`) is BUILDER-COMPLETE (owner-proof owed) — it maps the Woo export's columns, resolves each row against the catalog, and lands it as REAL PRICED stock through the D-50 ledger (never overwriting a physical count without an explicit per-row say-so). This is the demo-facing activation path: feed LAWNS's own 116-row CSV through `/inventory/import`. _Grounded: board 1.3 (`discovery/catalog.ts` + the new `packages/shared/src/import/` core); the Woo CSV in hand; board 5.1 inventory live._
 
 ---
 
@@ -689,13 +689,14 @@ PIECES: data_export_csv, portability
 NEEDS: David to scope — on-thesis for the loose-coupling / no-lock-in pitch (the owner can always take their data). Concept only today; no export path built.
 _Coverage placeholder, not a fabricated scenario._ The owner can export their own data (customers, inventory, orders) as CSV — portability that backs the "we don't lock you in" promise. Not built; a standard capability the roster now tracks so it isn't ambushed later.
 
-### CSV catalog / customer import (GAP)
-STATUS: gap
+### CSV catalog / customer import (INVENTORY HALF BUILT — customer half still GAP)
+STATUS: written
 SCOPE: platform, vertical:cultivar
+BUILD: active
 MAPS-TO: 1.3
 PIECES: csv_import
-NEEDS: distinguish from receipt-OCR (which is IMAGE-only). A catalog import exists (the Woo/discovery catalog path); a general CSV import for customers/inventory is the gap. A CSV mistakenly fed to the image-OCR path is not import — it's the wrong door.
-_Coverage placeholder, not a fabricated scenario._ A first-class CSV import path for customers/inventory, distinct from the image-only receipt-OCR pipeline. The catalog-populate engine imports a Woo export; a general owner-facing CSV import is not built.
+NEEDS: the CUSTOMER half. Distinguish from receipt-OCR (which is IMAGE-only); a CSV mistakenly fed to the image-OCR path is not import — it's the wrong door.
+_The INVENTORY half is BUILDER-COMPLETE (2026-07-23, ledger #148, owner-proof owed):_ `/inventory/import` (owner-only, desktop, its own door) — an owner uploads a grower price-list CSV, maps its columns to the catalog spine (a 4-rung ladder over ONE platform-wide synonym dictionary), reviews a per-row plan (FILL/UPDATE/CREATE/AMBIGUOUS/CONFLICT/REFUSED — a physical count is never overwritten without an explicit per-row action, David 2026-07-23), and Accepts. Writes ride the D-50 ledger RPCs (qty, kind='import') + the patch path (price/`price_basis`/`attributes`); zero new api-fn. Pure core in `packages/shared/src/import/`. **STILL A GAP: a first-class CUSTOMER CSV import** — the same door shape, distinct from this inventory path and from the image-only receipt-OCR pipeline.
 
 ### Tax exemption reachable + working via the customer editor (DEMO-OPERATIONAL)
 STATUS: demo-operational

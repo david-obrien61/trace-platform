@@ -1,0 +1,70 @@
+-- ============================================================
+-- Migration: business_inventory — the CSV-import pair of columns
+-- Project: bgobkjcopcxusjsetfob (Cultivar OS / shared layer)
+-- Date: 2026-07-23 (verified via `date`)
+-- ⚠️  DAVID APPLIES AS postgres in the Supabase SQL editor. The schema-verification
+--     gate (CLAUDE.md §9) runs AFTER apply — verify block (A)-(E) at the bottom.
+-- ============================================================
+-- WHAT THIS ADDS — two NULLABLE columns, NO CHECK, NO default, NO new policy.
+--
+--   price_basis text
+--     The D-9 pair-partner to the existing `sell_price` (added 20260707). A bare price is a
+--     number with no unit — "$10" says nothing without "per tree / per foot / per gallon".
+--     `sell_price` landed alone (D-35); this is its missing half
+--     (docs/decisions/2026-06-21-grower-import-and-mobile-roles.md §3). TEXT and flexible: the
+--     unit vocabulary varies by grower and vertical, so it is never a global enum (AC-1),
+--     exactly as `size` and `variant_group` were kept text in 20260628.
+--
+--   attributes jsonb
+--     The D-24 attribute bag — the "flexible edge" the rigid spine has always pointed to and
+--     that D-24 recorded as NOT YET BUILT. A grower's price list carries descriptive columns
+--     the platform will never OPERATE on (Sun, Height, Spread, Zone, grower notes): the system
+--     never counts, queries, groups, reconciles, or gates on them, so per D-24's own rule they
+--     are DESCRIPTION, not spine → a blob, keyed by the grower's OWN header text, value
+--     preserved verbatim. A column the system WILL operate on (qty, price, size) stays a real
+--     column; this bag is only for the rest.
+--     NAME: `attributes` — a generic, vertical-neutral noun (AC-1). Not `grower_attributes`,
+--     not `nursery_extra`, not `csv_columns`: no vertical noun, and no coupling to the import
+--     surface that first fills it (any future importer / manual editor can write it too).
+--
+-- ⚠️ THE BAG IS NEVER MONEY OR QUANTITY. Nothing computes on it — that is the whole point of
+--    the spine/blob cut (D-24). A currency-looking unmapped column (`Wholesale`, `Cost`,
+--    `Net`, `Landed`) is HELD in the bag AND FLAGGED to the owner as "this looks load-bearing;
+--    nothing will compute on it." Making it a real field is a spine decision + its own
+--    migration, never something an import invents.
+--
+-- Additive + append-only (§6 r1): ADD COLUMN IF NOT EXISTS, both nullable, both without a
+-- default or CHECK. Existing rows stay price_basis NULL / attributes NULL. The two columns
+-- inherit business_inventory's existing owner/member RLS unchanged — NO policy change
+-- (the 20260628 / 20260707 precedent). D-52 unaffected: neither column is qty; neither is a
+-- movement; import touches on-hand ONLY through the D-50 Layer-1 RPCs, never these columns.
+
+ALTER TABLE business_inventory
+  ADD COLUMN IF NOT EXISTS price_basis text,
+  ADD COLUMN IF NOT EXISTS attributes  jsonb;
+
+-- ── VERIFY (David runs after apply — catalog-backed, not from memory) ───────────────
+-- (A) both columns exist with the right types:
+--   SELECT column_name, data_type, is_nullable
+--   FROM information_schema.columns
+--   WHERE table_name = 'business_inventory' AND column_name IN ('price_basis','attributes')
+--   ORDER BY column_name;
+--   → 2 rows; attributes data_type 'jsonb'; price_basis data_type 'text'.
+--
+-- (B) both NULLABLE:
+--   (same query) → is_nullable 'YES' for both.
+--
+-- (C) NO new CHECK constraint landed on either (flexible by design):
+--   SELECT conname, pg_get_constraintdef(oid)
+--   FROM pg_constraint
+--   WHERE conrelid = 'business_inventory'::regclass AND contype = 'c';
+--   → no constraint referencing price_basis / attributes.
+--
+-- (D) existing row count UNCHANGED (additive columns move no rows):
+--   SELECT count(*) FROM business_inventory;
+--   → same count as before apply.
+--
+-- (E) RLS policies on the table UNCHANGED in number and shape (no policy added/dropped):
+--   SELECT policyname, cmd, qual IS NOT NULL AS has_using, with_check IS NOT NULL AS has_check
+--   FROM pg_policies WHERE tablename = 'business_inventory' ORDER BY policyname;
+--   → identical set to before apply (business_inventory_owner_all + business_inventory_member_all).

@@ -33,6 +33,7 @@ import { AssetCapture }      from './pages/AssetCapture';
 import { BusinessInventory } from './pages/BusinessInventory';
 import { InventoryCount }    from './pages/InventoryCount';
 import { InventoryReconcile } from './pages/InventoryReconcile';
+import { InventoryImport }    from './pages/InventoryImport';
 import { CostToProduce }     from './pages/CostToProduce';
 import { OperatingCosts }    from './pages/OperatingCosts';
 import { Customers }         from './pages/Customers';
@@ -192,6 +193,11 @@ export function AppRouter() {
               (required_permission=owner-only) so nav AND route agree. Add Business is an account
               action; Customers matches customers_business_owner RLS (owner-only). */}
           <Route element={<PermissionRoute permission="owner-only" />}>
+            {/* CSV catalog import — OWNER-ONLY (SCOPE: bulk catalog overwrite is owner-grade), reached
+                from the inventory grid. Server write-authority is the same member-scoped D-50 RPCs +
+                RLS as /inventory/reconcile; this route gate is the owner-facing lock (a true
+                server-side owner-only lock on import writes would be an RLS change, out of scope). */}
+            <Route path="/inventory/import"  element={<InventoryImport />} />
             <Route path="/costs"             element={<CostToProduce />} />
             <Route path="/customers"         element={<Customers />} />
             <Route path="/customers/:id"     element={<CustomerDetail />} />

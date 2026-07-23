@@ -672,6 +672,7 @@ function capR(key, v) {
     '/onboarding',            // first-run flow
     '/assets/capture',        // sub-flow reached from /assets
     '/inventory/count',       // sub-flow reached from /inventory
+    '/inventory/import',       // sub-flow reached from /inventory ("Import CSV" on the grid); owner-only
   ]);
 
   const orphans  = routerPaths.filter((p) => !EXCEPTIONS.has(p) && !navReachable(p));

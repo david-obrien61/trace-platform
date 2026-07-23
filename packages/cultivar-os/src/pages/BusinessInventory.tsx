@@ -29,7 +29,7 @@
 // ============================================================
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Archive, ScanLine, AlertTriangle, Pencil, CopyPlus, Trash2, ClipboardCheck } from 'lucide-react';
+import { Plus, Archive, ScanLine, AlertTriangle, Pencil, CopyPlus, Trash2, ClipboardCheck, Upload } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { findDuplicateSizeGroups, sizeGroupKey } from '@trace/shared/discovery/dupSize';
@@ -435,6 +435,11 @@ export function BusinessInventory() {
             </button>
             <button style={SS.addBtn} onClick={() => setEditor({ mode: 'create', item: { ...BLANK_INVENTORY_ITEM } })}>
               <Plus size={16} /> Add Item
+            </button>
+            {/* The second half of onboarding — bulk-load a grower's price list. Owner-only route;
+                its own door (never the receipt path). */}
+            <button style={SS.addBtn} onClick={() => navigate('/inventory/import')}>
+              <Upload size={16} /> Import CSV
             </button>
           </>
         }
