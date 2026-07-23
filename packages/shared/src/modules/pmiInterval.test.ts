@@ -17,8 +17,6 @@
  * Exits non-zero if any assertion fails.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
 import {
   INTERVAL_DAYS,
   taskIntervalToDays,
@@ -27,7 +25,7 @@ import {
   pmiStatusFrom,
   type ScheduleTask,
 } from './pmiInterval';
-import { ALL_ACTION_PERMISSIONS, ACTION_ROLE_DEFAULTS, OVERRIDE_MAINTENANCE } from '../auth/actionPermissions';
+import { ALL_ACTION_PERMISSIONS, UNWIRED_ACTION_PERMISSIONS, ACTION_ROLE_DEFAULTS, OVERRIDE_MAINTENANCE } from '../auth/actionPermissions';
 import { ALL_FINANCIAL_PERMISSIONS } from '../auth/financialPermissions';
 
 // ── tiny harness ─────────────────────────────────────────────────────────────────
@@ -99,39 +97,30 @@ console.log('\n(2) usage-based tasks do NOT silently set a fake interval');
   check('unknown phrase → null (not fabricated)', taskIntervalToDays('whenever it feels right') === null);
 }
 
-// ── (3) override_maintenance: chip catalog + default ON/OFF ─────────────────────────
-console.log('\n(3) override_maintenance is declared, chip-visible, and OFF for STAFF');
+// ── (3) override_maintenance: DECLARED but UNWIRED → HIDDEN from the role editor ─────
+// Rewritten 2026-07-23 (David's ruling #3): the mechanism is not built, so a grantable pill
+// for it would be a fake surface (D-9). It now renders NOWHERE until wired. This replaces the
+// old "chip-visible" assertions and the DEFAULT_PERMISSIONS source-regex (that const is retired).
+console.log('\n(3) override_maintenance is declared, UNWIRED, and hidden from the chip catalog');
 {
   check('override_maintenance constant', OVERRIDE_MAINTENANCE === 'override_maintenance');
-  check('in ALL_ACTION_PERMISSIONS', ALL_ACTION_PERMISSIONS.includes('override_maintenance'));
+  check('string still exists in ALL_ACTION_PERMISSIONS', ALL_ACTION_PERMISSIONS.includes('override_maintenance'));
 
-  // Replicate the RoleConfig chip catalog union (registryPermissions ∪ financial ∪ action,
-  // minus the structural owner-only gate). A registry that knows nothing of this action perm
-  // would NOT surface it — the union via ALL_ACTION_PERMISSIONS is what makes it a chip.
+  // The ONE source that names the fake pills (STD-011) — the role editor filters against it.
+  check('listed as UNWIRED (fake pill)', UNWIRED_ACTION_PERMISSIONS.includes('override_maintenance'));
+
+  // Replicate the TeamConsole chip-catalog union MINUS owner-only MINUS the unwired set.
   const registryStub = ['view_dashboard', 'qr_checkout', 'view_orders', 'view_costs', 'owner-only'];
+  const hidden = new Set(['owner-only', ...UNWIRED_ACTION_PERMISSIONS]);
   const catalog = [...new Set([...registryStub, ...ALL_FINANCIAL_PERMISSIONS, ...ALL_ACTION_PERMISSIONS])]
-    .filter((p) => p !== 'owner-only');
-  check('appears in the role-config chip catalog', catalog.includes('override_maintenance'));
-  check('catalog excludes the structural owner-only gate', !catalog.includes('owner-only'));
+    .filter((perm) => !hidden.has(perm));
+  check('HIDDEN from the role-config chip catalog (ruling #3)', !catalog.includes('override_maintenance'));
+  check('apply_discount is also hidden', !catalog.includes('apply_discount'));
+  check('WIRED action perms still render (apply_tax_exempt, import_pricing)',
+    catalog.includes('apply_tax_exempt') && catalog.includes('import_pricing'));
 
-  // canonical role defaults (single source of intent)
-  check('default ON for OWNER',   ACTION_ROLE_DEFAULTS.OWNER.includes('override_maintenance'));
-  check('default ON for MANAGER', ACTION_ROLE_DEFAULTS.MANAGER.includes('override_maintenance'));
-  check('default OFF for STAFF', !ACTION_ROLE_DEFAULTS.STAFF.includes('override_maintenance'));
-
-  // the cultivar DEFAULT_PERMISSIONS bundle must match that intent (read the source so the
-  // test fails if the bundle drifts from the canonical default). Resolved from cwd — run from
-  // the repo root (how all verify scripts run).
-  const rolesPath = path.resolve(process.cwd(), 'packages/cultivar-os/src/auth/roles.ts');
-  check('cultivar roles.ts found (run from repo root)', fs.existsSync(rolesPath), rolesPath);
-  const rolesSrc = fs.existsSync(rolesPath) ? fs.readFileSync(rolesPath, 'utf8') : '';
-  const block = (role: string): string => {
-    const m = rolesSrc.match(new RegExp(`${role}:\\s*\\[([\\s\\S]*?)\\]`));
-    return m ? m[1] : '';
-  };
-  check('cultivar DEFAULT_PERMISSIONS.OWNER has OVERRIDE_MAINTENANCE',   /OVERRIDE_MAINTENANCE/.test(block('OWNER')));
-  check('cultivar DEFAULT_PERMISSIONS.MANAGER has OVERRIDE_MAINTENANCE', /OVERRIDE_MAINTENANCE/.test(block('MANAGER')));
-  check('cultivar DEFAULT_PERMISSIONS.STAFF does NOT have OVERRIDE_MAINTENANCE', !/OVERRIDE_MAINTENANCE/.test(block('STAFF')));
+  // The canonical role-default MAP still records intent (unchanged; separate from rendering).
+  check('ACTION_ROLE_DEFAULTS.STAFF omits it', !ACTION_ROLE_DEFAULTS.STAFF.includes('override_maintenance'));
 }
 
 // ── summary ────────────────────────────────────────────────────────────────────────

@@ -6,23 +6,27 @@
 //               it against the seeded role_definitions catalog, resilient to a role missing from
 //               the catalog (never silently drops a real role — Surface Honesty).
 // DEPENDENCIES: shared auth backend (reused verbatim, NOT rewritten): createInvitation /
-//               getPendingInvitations / revokeInvitation / getMembersByBusiness / updateMemberRole
-//               / removeMember / getRoleDefinitions / resolveRoles / upsertTenantRole /
-//               deleteTenantRole · device spine (listDevicesByBusiness / setDeviceActive /
-//               deleteDevice). ALL vertical-specific inputs arrive as PROPS (theme, permission
-//               catalog, invite roles, supabase, businessId/isOwner) — NO Cultivar/Ignition imports.
+//               getPendingInvitations / revokeInvitation / getMembersByBusiness / removeMember /
+//               getRoleDefinitions / resolveRoles · THE PERMISSION FUNNEL (2026-07-23) —
+//               saveRolePermissions / assignMemberRole / diffPermissions (the ONLY way a
+//               role→permission fact changes; retired the direct upsertTenantRole /
+//               deleteTenantRole / updateMemberRole writes) · device spine (listDevicesByBusiness
+//               / setDeviceActive / deleteDevice). ALL vertical-specific inputs arrive as PROPS
+//               (theme, permission catalog, invite roles, supabase, businessId/isOwner) — NO
+//               Cultivar/Ignition imports.
 // OUTPUTS:      <MemberConsole/> — Cultivar mounts it at /team; Ignition can mount the same
 //               component with its own theme + permission catalog + supabase client.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  getMembersByBusiness, updateMemberRole, removeMember, setMemberActive, setMemberPhone,
+  getMembersByBusiness, removeMember, setMemberActive, setMemberPhone,
   createInvitation, getPendingInvitations, revokeInvitation,
-  getRoleDefinitions, resolveRoles, upsertTenantRole, deleteTenantRole,
+  getRoleDefinitions, resolveRoles,
+  saveRolePermissions, assignMemberRole, diffPermissions,
   listDevicesByBusiness, setDeviceActive, deleteDevice, armPinReset,
 } from '../../auth';
-import type { Member, Invitation, Device, ResolvedRole, RoleDefinitionRow } from '../../auth';
+import type { Member, Invitation, Device, ResolvedRole, RoleDefinitionRow, RoleSaveOp } from '../../auth';
 import { generateQR } from '../../qr/generate';
 
 // ── theming (vertical passes its own tokens — AC-4: only color/vocabulary vary) ────────
@@ -49,8 +53,6 @@ export interface MemberConsoleProps {
   permissionGroups: PermGroup[];
   /** Roles offerable at invite (OWNER excluded by the caller). */
   inviteRoleOptions: InviteRoleOption[];
-  /** Role → default permission set, used when creating an invite. */
-  defaultPermissionsFor: (roleKey: string) => string[];
   inviteBaseUrl: string;
   invitePath?: string;
   showDevices?: boolean;
@@ -67,7 +69,7 @@ const badge = (bg: string, fg: string): React.CSSProperties => ({
 export function MemberConsole(props: MemberConsoleProps) {
   const {
     supabase, businessId, isOwner, can, theme: T,
-    permissionGroups, inviteRoleOptions, defaultPermissionsFor,
+    permissionGroups, inviteRoleOptions,
     inviteBaseUrl, invitePath = '/join', showDevices = true,
     managePermission = 'manage_settings',
   } = props;
@@ -154,7 +156,7 @@ export function MemberConsole(props: MemberConsoleProps) {
           <UsersTab
             T={T} supabase={supabase} businessId={businessId}
             members={members} pending={pending} resolved={resolved} devices={devices}
-            inviteRoleOptions={inviteRoleOptions} defaultPermissionsFor={defaultPermissionsFor}
+            inviteRoleOptions={inviteRoleOptions}
             inviteBaseUrl={inviteBaseUrl} invitePath={invitePath} showDevices={showDevices}
             busy={busy} setBusy={setBusy} reload={reload} setLoadError={setLoadError}
           />
@@ -162,7 +164,7 @@ export function MemberConsole(props: MemberConsoleProps) {
         {tab === 'roles' && (
           <RolesTab
             T={T} supabase={supabase} businessId={businessId} isOwner={isOwner}
-            resolved={resolved} permissionGroups={permissionGroups}
+            resolved={resolved} permissionGroups={permissionGroups} members={members}
             busy={busy} setBusy={setBusy} reload={reload} setLoadError={setLoadError}
           />
         )}
@@ -185,11 +187,11 @@ type InvitePhase = 'list' | 'form' | 'link';
 function UsersTab(p: {
   T: MemberConsoleTheme; supabase: SupabaseClient; businessId: string;
   members: Member[]; pending: Invitation[]; resolved: ResolvedRole[]; devices: Device[];
-  inviteRoleOptions: InviteRoleOption[]; defaultPermissionsFor: (r: string) => string[];
+  inviteRoleOptions: InviteRoleOption[];
   inviteBaseUrl: string; invitePath: string; showDevices: boolean;
   busy: boolean; setBusy: (b: boolean) => void; reload: () => Promise<void>; setLoadError: (s: string) => void;
 }) {
-  const { T, supabase, businessId, members, pending, resolved, devices, inviteRoleOptions, defaultPermissionsFor, inviteBaseUrl, invitePath, showDevices, busy, setBusy, reload, setLoadError } = p;
+  const { T, supabase, businessId, members, pending, resolved, devices, inviteRoleOptions, inviteBaseUrl, invitePath, showDevices, busy, setBusy, reload, setLoadError } = p;
   const [phase, setPhase] = useState<InvitePhase>('list');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -214,13 +216,14 @@ function UsersTab(p: {
   }
 
   async function assignRole(m: Member, roleKey: string) {
-    const target = resolved.find((r) => r.role_key === roleKey);
     setBusy(true);
     try {
-      // Applies that role's current permission set to the member's own row. business_members.role
-      // is the ONE source; updateMemberRole writes role AND permissions. Owner-only by RLS.
-      await updateMemberRole(supabase, m.id, roleKey, target?.permissions ?? defaultPermissionsFor(roleKey));
-      console.log('[TRACE:MEMBERCONSOLE] assignRole', { memberId: m.id, roleKey, fromCatalog: !!target });
+      // THE FUNNEL (assign_member_role RPC): resolves the role server-side, re-materializes the
+      // member's permissions from it, and audits — in one transaction. The old direct
+      // updateMemberRole is retired; a direct role/permissions UPDATE is refused by the DB (§1).
+      const res = await assignMemberRole(supabase, businessId, m.id, roleKey);
+      if (!res.applied) { setLoadError(res.reason ?? 'Assignment refused'); return; }
+      console.log('[TRACE:MEMBERCONSOLE] assignRole (funnel)', { memberId: m.id, roleKey, from: res.roleBefore, permsAfter: res.after?.length });
       await reload();
     } catch (err) { setLoadError(err instanceof Error ? err.message : 'Assignment failed'); }
     finally { setBusy(false); }
@@ -244,9 +247,14 @@ function UsersTab(p: {
     if (!name.trim()) { setInviteError('Name is required.'); return; }
     setBusy(true); setInviteError('');
     try {
+      // Mint defaults READ THE RESOLVED FLOOR (David's ruling 2026-07-23 — DEFAULT_PERMISSIONS
+      // retired). `resolved` is the floor+override chain already loaded for this tab, so the
+      // invite seeds the member row from the SAME source the Roles tab renders and the funnel
+      // writes — no fourth stale copy (STD-011). An owner still tunes the member via the funnel.
+      const invitePerms = resolved.find((r) => r.role_key === role)?.permissions ?? [];
       const { inviteLink } = await createInvitation(
         supabase,
-        { businessId, name: name.trim(), email: email.trim() || undefined, role, permissions: defaultPermissionsFor(role) },
+        { businessId, name: name.trim(), email: email.trim() || undefined, role, permissions: invitePerms },
         inviteBaseUrl, invitePath,
       );
       console.log('[TRACE:MEMBERCONSOLE] invite created', { role });
@@ -406,7 +414,7 @@ function QrImage({ content, T, caption }: { content: string; T: MemberConsoleThe
 
 // ══════════════════════════════════════════════════════════════════════════════════════
 // MEMBER DETAIL — one person, every action in one place (role · devices · invite · reset PIN ·
-// deactivate · remove). Re-composition: reuses updateMemberRole/setDeviceActive/deleteDevice/
+// deactivate · remove). Re-composition: reuses assignMemberRole/setDeviceActive/deleteDevice/
 // createInvitation/generateQR/armPinReset/setMemberActive/removeMember — no new backend.
 // ══════════════════════════════════════════════════════════════════════════════════════
 function MemberDetail(p: {
@@ -633,10 +641,10 @@ function MemberDetail(p: {
 // ══════════════════════════════════════════════════════════════════════════════════════
 function RolesTab(p: {
   T: MemberConsoleTheme; supabase: SupabaseClient; businessId: string; isOwner: boolean;
-  resolved: ResolvedRole[]; permissionGroups: PermGroup[];
+  resolved: ResolvedRole[]; permissionGroups: PermGroup[]; members: Member[];
   busy: boolean; setBusy: (b: boolean) => void; reload: () => Promise<void>; setLoadError: (s: string) => void;
 }) {
-  const { T, supabase, businessId, resolved, permissionGroups, busy, setBusy, reload, setLoadError } = p;
+  const { T, supabase, businessId, resolved, permissionGroups, members, busy, setBusy, reload, setLoadError } = p;
   const [draft, setDraft] = useState<Record<string, string[]>>({});
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [savedKey, setSavedKey] = useState('');
@@ -649,6 +657,10 @@ function RolesTab(p: {
 
   const roleBadge = (key: string): string =>
     ({ OWNER: T.primary, MANAGER: '#2563EB', STAFF: '#64748B' } as Record<string, string>)[key] ?? '#7C3AED';
+  const hp = (perm: string): string => perm.replace(/_/g, ' ');
+
+  // Every chip the catalog offers (for the owner's every-pill-lit render, ruling #3).
+  const allChipIds = permissionGroups.flatMap((g) => g.chips.map((c) => c.id));
 
   function toggle(roleKey: string, permId: string) {
     setDraft((d) => {
@@ -658,54 +670,69 @@ function RolesTab(p: {
     setDirty((s) => new Set(s).add(roleKey));
   }
 
-  async function save(role: ResolvedRole) {
+  // BLAST RADIUS (sub-ruling #1): who is re-materialized by saving this role, and what each
+  // GAINS / LOSES. Propagation WIPES a member to the role's set exactly, so every affected
+  // member's `after` is `next` and the diff is against their CURRENT stored permissions.
+  function blastRadius(roleKey: string, next: string[]): { count: number; added: string[]; removed: string[] } {
+    const affected = members.filter((m) => (m.role ?? '').toUpperCase() === roleKey && m.active);
+    const added = new Set<string>();
+    const removed = new Set<string>();
+    for (const m of affected) {
+      const d = diffPermissions((m.permissions as string[]) ?? [], next);
+      d.added.forEach((x) => added.add(x));
+      d.removed.forEach((x) => removed.add(x));
+    }
+    return { count: affected.length, added: [...added], removed: [...removed] };
+  }
+
+  async function runFunnel(roleKey: string, op: RoleSaveOp, fields: { label?: string | null; description?: string | null; permissions?: string[] }, onOk?: () => void) {
     setBusy(true);
     try {
-      await upsertTenantRole(supabase, businessId, role.role_key, {
-        is_system: false, label: role.label, description: role.description, permissions: draft[role.role_key] ?? [],
-      });
-      console.log('[TRACE:MEMBERCONSOLE] saveRole', { roleKey: role.role_key, source: role.source });
-      setSavedKey(role.role_key); setTimeout(() => setSavedKey(''), 2500);
+      const res = await saveRolePermissions(supabase, businessId, roleKey, op, fields);
+      if (!res.applied) { setLoadError(res.reason ?? 'Change refused'); return; }
+      console.log('[TRACE:MEMBERCONSOLE] funnel', { roleKey, op, membersAffected: res.affected.length });
+      onOk?.();
       await reload();
-    } catch (err) { setLoadError(err instanceof Error ? err.message : 'Save failed'); }
+    } catch (err) { setLoadError(err instanceof Error ? err.message : 'Change failed'); }
     finally { setBusy(false); }
+  }
+
+  async function save(role: ResolvedRole) {
+    const next = draft[role.role_key] ?? [];
+    // Name the blast radius BEFORE the write (ruling #1's consequence — a silent revocation is
+    // the same defect class as a silent grant). A save that touches ≥1 active member confirms.
+    const br = blastRadius(role.role_key, next);
+    if (br.count > 0) {
+      const lines = [`Saving ${role.role_key} re-sets ${br.count} active member${br.count > 1 ? 's' : ''} to this exact role.`];
+      if (br.removed.length) lines.push(`\nThey will LOSE: ${br.removed.map(hp).join(', ')}`);
+      if (br.added.length) lines.push(`They will GAIN: ${br.added.map(hp).join(', ')}`);
+      lines.push('\nMembers hold exactly what their role grants — nothing more. Continue?');
+      if (!window.confirm(lines.join('\n'))) return;
+    }
+    await runFunnel(role.role_key, 'save', { label: role.label, description: role.description, permissions: next },
+      () => { setSavedKey(role.role_key); setTimeout(() => setSavedKey(''), 2500); });
   }
 
   async function clone(role: ResolvedRole) {
     let key = `${role.role_key}_COPY`; let n = 2;
     while (resolved.some((r) => r.role_key === key)) key = `${role.role_key}_COPY_${n++}`;
-    setBusy(true);
-    try {
-      await upsertTenantRole(supabase, businessId, key, { is_system: false, label: key, description: `Cloned from ${role.role_key}`, permissions: [...(draft[role.role_key] ?? role.permissions)] });
-      console.log('[TRACE:MEMBERCONSOLE] cloneRole', { from: role.role_key, to: key });
-      await reload();
-    } catch (err) { setLoadError(err instanceof Error ? err.message : 'Clone failed'); }
-    finally { setBusy(false); }
+    await runFunnel(key, 'create', { label: key, description: `Cloned from ${role.role_key}`, permissions: [...(draft[role.role_key] ?? role.permissions)] });
   }
 
   async function factoryReset(role: ResolvedRole) {
-    if (!window.confirm(`Reset ${role.role_key} to the standard definition?`)) return;
-    setBusy(true);
-    try { await deleteTenantRole(supabase, businessId, role.role_key); await reload(); }
-    catch (err) { setLoadError(err instanceof Error ? err.message : 'Reset failed'); }
-    finally { setBusy(false); }
+    if (!window.confirm(`Reset ${role.role_key} to the standard definition? Active ${role.role_key} members will be re-set to the standard permissions.`)) return;
+    await runFunnel(role.role_key, 'reset', { permissions: [] });
   }
 
   async function del(role: ResolvedRole) {
     if (!window.confirm(`Delete custom role ${role.role_key}?`)) return;
-    setBusy(true);
-    try { await deleteTenantRole(supabase, businessId, role.role_key); await reload(); }
-    catch (err) { setLoadError(err instanceof Error ? err.message : 'Delete failed'); }
-    finally { setBusy(false); }
+    await runFunnel(role.role_key, 'delete', { permissions: [] });
   }
 
   async function addCustom() {
     const key = newRoleName.trim().toUpperCase().replace(/\s+/g, '_');
     if (!key || resolved.some((r) => r.role_key === key)) return;
-    setBusy(true);
-    try { await upsertTenantRole(supabase, businessId, key, { is_system: false, label: key, permissions: [] }); setNewRoleName(''); await reload(); }
-    catch (err) { setLoadError(err instanceof Error ? err.message : 'Create failed'); }
-    finally { setBusy(false); }
+    await runFunnel(key, 'create', { label: key, permissions: [] }, () => setNewRoleName(''));
   }
 
   const card: React.CSSProperties = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 18 };
@@ -728,43 +755,59 @@ function RolesTab(p: {
       {resolved.map((role) => {
         const perms = draft[role.role_key] ?? [];
         const isDirty = dirty.has(role.role_key);
+        // THE OWNER ROW IS LIT AND LOCKED (ruling #3). Owner authority comes from
+        // businesses.owner_id, not the member array — so every pill renders ON and non-togglable,
+        // and there is no Save. A togglable/unlit owner pill would state something false on the one
+        // screen an owner consults to check who can do what.
+        const isOwnerRole = role.role_key === 'OWNER';
         return (
           <div key={role.role_key} style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ background: roleBadge(role.role_key), color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 8 }}>{role.role_key}</span>
-                <span style={{ fontSize: 11, color: T.sub }}>{perms.length} permissions</span>
-                {role.locked && <span style={{ fontSize: 10, color: T.sub, textTransform: 'uppercase', border: `1px solid ${T.border}`, borderRadius: 6, padding: '1px 6px' }}>system role</span>}
-                {role.isOverridden && <span style={{ fontSize: 10, color: T.primary, textTransform: 'uppercase' }}>tuned</span>}
+                <span style={{ fontSize: 11, color: T.sub }}>{isOwnerRole ? 'Full access' : `${perms.length} permissions`}</span>
+                {isOwnerRole && <span style={{ fontSize: 10, color: T.sub, textTransform: 'uppercase', border: `1px solid ${T.border}`, borderRadius: 6, padding: '1px 6px' }}>set by ownership</span>}
+                {!isOwnerRole && role.locked && <span style={{ fontSize: 10, color: T.sub, textTransform: 'uppercase', border: `1px solid ${T.border}`, borderRadius: 6, padding: '1px 6px' }}>system role</span>}
+                {!isOwnerRole && role.isOverridden && <span style={{ fontSize: 10, color: T.primary, textTransform: 'uppercase' }}>tuned</span>}
                 {role.source === 'custom' && <span style={{ fontSize: 10, color: '#7C3AED', textTransform: 'uppercase' }}>custom</span>}
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {role.locked && <button onClick={() => { void clone(role); }} disabled={busy} style={{ background: 'none', border: `1px solid ${T.border}`, color: T.primary, fontSize: 11, fontWeight: 700, padding: '6px 10px', borderRadius: 8, cursor: 'pointer' }}>Clone to custom</button>}
-                {role.isOverridden && <button onClick={() => { void factoryReset(role); }} disabled={busy} style={{ background: 'none', border: `1px solid ${T.border}`, color: T.sub, fontSize: 11, fontWeight: 700, padding: '6px 10px', borderRadius: 8, cursor: 'pointer' }}>Reset to standard</button>}
-                {!role.locked && <button onClick={() => { void del(role); }} disabled={busy} style={{ background: 'none', border: `1px solid ${T.border}`, color: T.danger, fontSize: 11, fontWeight: 700, padding: '6px 10px', borderRadius: 8, cursor: 'pointer' }}>Delete</button>}
-              </div>
+              {!isOwnerRole && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {role.locked && <button onClick={() => { void clone(role); }} disabled={busy} style={{ background: 'none', border: `1px solid ${T.border}`, color: T.primary, fontSize: 11, fontWeight: 700, padding: '6px 10px', borderRadius: 8, cursor: 'pointer' }}>Clone to custom</button>}
+                  {role.isOverridden && <button onClick={() => { void factoryReset(role); }} disabled={busy} style={{ background: 'none', border: `1px solid ${T.border}`, color: T.sub, fontSize: 11, fontWeight: 700, padding: '6px 10px', borderRadius: 8, cursor: 'pointer' }}>Reset to standard</button>}
+                  {!role.locked && <button onClick={() => { void del(role); }} disabled={busy} style={{ background: 'none', border: `1px solid ${T.border}`, color: T.danger, fontSize: 11, fontWeight: 700, padding: '6px 10px', borderRadius: 8, cursor: 'pointer' }}>Delete</button>}
+                </div>
+              )}
             </div>
             {permissionGroups.map((grp) => (
               <div key={grp.key} style={{ marginBottom: 10 }}>
                 <p style={{ fontSize: 10, fontWeight: 800, color: T.sub, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{grp.label}</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {grp.chips.map((chip) => {
-                    const on = perms.includes(chip.id);
+                    // owner: every chip lit + locked; others: reflect the draft + togglable.
+                    const on = isOwnerRole ? true : perms.includes(chip.id);
+                    const locked = isOwnerRole;
                     return (
-                      <button key={chip.id} onClick={() => toggle(role.role_key, chip.id)} disabled={busy}
-                        title={chip.tiles.length ? `Unlocks: ${chip.tiles.join(', ')}` : 'Data-layer permission'}
-                        style={{ fontSize: 11, fontWeight: 700, padding: '5px 11px', borderRadius: 8, cursor: 'pointer', background: on ? T.chipOnBg : T.chipOffBg, border: `1px solid ${on ? T.chipOnBorder : T.chipOffBorder}`, color: on ? T.primary : T.sub }}>
-                        {chip.label}
+                      <button key={chip.id} onClick={() => { if (!locked) toggle(role.role_key, chip.id); }} disabled={busy || locked}
+                        title={locked ? 'The owner can do everything — set by business ownership' : (chip.tiles.length ? `Unlocks: ${chip.tiles.join(', ')}` : 'Data-layer permission')}
+                        style={{ fontSize: 11, fontWeight: 700, padding: '5px 11px', borderRadius: 8, cursor: locked ? 'default' : 'pointer', background: on ? T.chipOnBg : T.chipOffBg, border: `1px solid ${on ? T.chipOnBorder : T.chipOffBorder}`, color: on ? T.primary : T.sub, opacity: locked ? 0.85 : 1 }}>
+                        {locked && '🔒 '}{chip.label}
                       </button>
                     );
                   })}
                 </div>
               </div>
             ))}
-            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
-              <button onClick={() => { void save(role); }} disabled={busy || !isDirty} style={{ background: isDirty ? T.primary : '#C7D3B5', color: '#fff', fontWeight: 800, padding: '9px 18px', borderRadius: 10, border: 'none', fontSize: 12, cursor: isDirty ? 'pointer' : 'default' }}>Save {role.role_key}</button>
-              {savedKey === role.role_key && <span style={{ color: T.primary, fontSize: 12, fontWeight: 700 }}>Saved ✓</span>}
-            </div>
+            {isOwnerRole ? (
+              <p style={{ marginTop: 12, fontSize: 12, color: T.sub }}>
+                The owner can do everything — {allChipIds.length} of {allChipIds.length} permissions. This is set by business ownership and can’t be changed here.
+              </p>
+            ) : (
+              <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <button onClick={() => { void save(role); }} disabled={busy || !isDirty} style={{ background: isDirty ? T.primary : '#C7D3B5', color: '#fff', fontWeight: 800, padding: '9px 18px', borderRadius: 10, border: 'none', fontSize: 12, cursor: isDirty ? 'pointer' : 'default' }}>Save {role.role_key}</button>
+                {savedKey === role.role_key && <span style={{ color: T.primary, fontSize: 12, fontWeight: 700 }}>Saved ✓ — members updated</span>}
+              </div>
+            )}
           </div>
         );
       })}

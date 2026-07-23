@@ -47,53 +47,12 @@ export const PERMISSIONS = {
   APPLY_DISCOUNT,                          // apply a discount / owner price-override on an order (D-40 matched pair); owner + manager
 } as const;
 
-export const DEFAULT_PERMISSIONS: Record<CultivarRole, string[]> = {
-  OWNER: [
-    PERMISSIONS.VIEW_DASHBOARD,
-    PERMISSIONS.QR_CHECKOUT,
-    PERMISSIONS.VIEW_ORDERS,
-    PERMISSIONS.MANAGE_ORDERS,
-    PERMISSIONS.MANAGE_DELIVERIES,
-    PERMISSIONS.MANAGE_CUSTOMERS,
-    PERMISSIONS.MANAGE_CAMPAIGNS,
-    PERMISSIONS.VIEW_REPORTS,
-    PERMISSIONS.MANAGE_SETTINGS,
-    PERMISSIONS.VIEW_CUSTOMERS,
-    // financial wall — owner sees all four
-    PERMISSIONS.VIEW_WAGES,
-    PERMISSIONS.VIEW_PRICING_CONFIG,
-    PERMISSIONS.VIEW_COSTS,
-    PERMISSIONS.VIEW_MARGIN,
-    // action permissions — owner may override a maintenance schedule, exempt/discount an order
-    PERMISSIONS.OVERRIDE_MAINTENANCE,
-    PERMISSIONS.APPLY_TAX_EXEMPT,
-    PERMISSIONS.APPLY_DISCOUNT,
-  ],
-  MANAGER: [
-    PERMISSIONS.VIEW_DASHBOARD,
-    PERMISSIONS.QR_CHECKOUT,
-    PERMISSIONS.VIEW_ORDERS,
-    PERMISSIONS.MANAGE_ORDERS,
-    PERMISSIONS.MANAGE_DELIVERIES,
-    PERMISSIONS.MANAGE_CUSTOMERS,
-    PERMISSIONS.MANAGE_CAMPAIGNS,
-    PERMISSIONS.VIEW_REPORTS,
-    PERMISSIONS.VIEW_CUSTOMERS,
-    // financial wall — ops see what's selling short, NOT the pricing recipe, NOT payroll
-    PERMISSIONS.VIEW_COSTS,
-    PERMISSIONS.VIEW_MARGIN,
-    // action permissions — manager runs the floor; may keep equipment moving, exempt/discount
-    PERMISSIONS.OVERRIDE_MAINTENANCE,
-    PERMISSIONS.APPLY_TAX_EXEMPT,
-    PERMISSIONS.APPLY_DISCOUNT,
-  ],
-  STAFF: [
-    PERMISSIONS.VIEW_DASHBOARD,
-    PERMISSIONS.QR_CHECKOUT,
-    PERMISSIONS.VIEW_ORDERS,
-    // financial wall — none (granted explicitly if ever needed)
-  ],
-};
+// ⚠️ DEFAULT_PERMISSIONS was RETIRED 2026-07-23 (David's ruling OPTION 1). It was a THIRD
+// representation of role→permission facts (beside the role_definitions floor and the member
+// rows) and was already stale — OWNER 17 / MANAGER 14 against a floor of 12/9 — which is exactly
+// the STD-011 drift the funnel exists to end. Mints now READ THE RESOLVED FLOOR via
+// resolveRoleDefaults(supabase, businessId, roleKey) (shared/auth/roleDefinitions.ts), the SAME
+// resolution the Roles tab renders and the funnel writes. There is no client-side default map.
 
 // Human-readable role labels for the invite UI.
 export const ROLE_LABELS: Record<CultivarRole, string> = {

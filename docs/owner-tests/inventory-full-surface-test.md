@@ -1211,6 +1211,7 @@ STATUS: owed
 DEVICE: desktop
 COVERS: #149
 LAST-PROVEN: —
+RUN 2026-07-23 (David, live): PASSED — a direct `import_write_price` call as the un-granted manager returned `applied=false` and the lot's `sell_price` was UNCHANGED. Thunder does NOT mark this `covered` (OP-14 clause 3 — only David's flip sets `covered`); recorded here as a passing owner run pending his flip.
 SIGNAL: `import_write_price` returns `applied=false`, and the lot's `sell_price` is UNCHANGED
 - **Why:** a client-side marker is render-only (2026-06-21 record) — hiding a field in the UI while the API still ships the write is not security. The gate must be server-side.
 - **Do:** call the RPC directly as the un-granted manager (V5 in `20260723_inventory_import_pricing_gate.sql`): `SELECT * FROM import_write_price('<lot>', '<business>', '<manager uid>', 99.00, 'each');` and then read that lot's `sell_price`.
@@ -1218,14 +1219,16 @@ SIGNAL: `import_write_price` returns `applied=false`, and the lot's `sell_price`
 - **FAIL:** the price changes, or the RPC accepts the write for a member without the grant.
 
 ### 18 — The owner grants it on `/team`; the same manager re-runs the identical file and prices land
-STATUS: owed
+STATUS: failed
 DEVICE: desktop
 COVERS: #149
 LAST-PROVEN: —
+FAILED-ON-RUN: 2026-07-23 (David, live)
 SIGNAL: the "Prices won't be saved" notice is GONE; the done screen reports no held prices
 - **Do:** as the owner, grant **bulk price import** to that manager on the existing `/team` member/role-config surface (ledger #86). The manager re-runs the **identical** CSV.
 - **PASS:** the notice is gone, `import_write_price` returns `applied=true`, and the priced lots now carry the CSV's prices. Nothing else about the run changed.
 - **FAIL:** prices still don't land after the grant, or a NEW admin screen was required to grant it (it must be the existing /team surface).
+- **🔴 FAILED LIVE 2026-07-23 (David).** The owner granted "Import Pricing" to MANAGER on `/team → Roles` and saved; the manager's import STILL showed the no-permission banner and `sell_price`/`price_basis` still landed null. **Root cause is NOT the import — it is the permission plumbing:** the Roles tab writes `role_definitions` (`upsertTenantRole`), while the gate `has_permission_for` reads `business_members.permissions`, and nothing propagates one to the other (recon `docs/decisions/2026-07-23-permission-write-sites-recon.md`). **Evidence:** the manager's `business_members` row (`df7723be-bd28-4750-96fe-023279806489`) still carries `updated_at = 2026-07-10 20:11:46` — the Save never touched it — and its `permissions` array (11 entries) does not contain `import_pricing`. **NOT bandaided green with a SQL grant** (David's ruling #2: a permission that must be set by SQL is not shipped). This card stays FAILED until the /team grant actually writes the store the gate reads.
 
 ### 19 — An OWNER is unaffected throughout — no new friction on the owner path
 STATUS: owed

@@ -12,10 +12,11 @@ import {
   createInvitation,
   getPendingInvitations,
   revokeInvitation,
+  resolveRoleDefaults,
 } from '@trace/shared/auth';
 import type { Member, Invitation } from '@trace/shared/auth';
 import {
-  ROLES, DEFAULT_PERMISSIONS, ROLE_LABELS, ROLE_DESCRIPTIONS,
+  ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS,
 } from '../auth/roles';
 import type { CultivarRole } from '../auth/roles';
 
@@ -199,7 +200,9 @@ function TeamSection({ businessId }: { businessId: string }) {
           name:        inviteName.trim(),
           email:       inviteEmail.trim() || undefined,
           role:        inviteRole,
-          permissions: DEFAULT_PERMISSIONS[inviteRole],
+          // Mint defaults READ THE RESOLVED FLOOR (DEFAULT_PERMISSIONS retired 2026-07-23) — the
+          // ONE source the Roles tab renders and the funnel writes (STD-011).
+          permissions: await resolveRoleDefaults(supabase, businessId, inviteRole),
         },
         baseUrl,
         '/join',

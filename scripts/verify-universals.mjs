@@ -545,14 +545,16 @@ function capS(key, v) {
 // ════════════════════════════════════════════════════════════════════════════════
 // CAPABILITY f — Tenant role override/custom not visible cross-tenant; a tenant edit never
 //   mutates the shared floor (clone-not-mutate). Promoted from ACCEPTANCE (f) → live 2026-06-23.
-//   Source-decidable: role_definitions RLS (floor not tenant-writable, tenant rows owner-only +
-//   member-scoped) + the console writes tenant rows via upsertTenantRole, never the floor.
+//   UPDATED 2026-07-23: tenant role writes now go through THE PERMISSION FUNNEL (save_role_permissions,
+//   20260723_permission_funnel.sql), which writes the business_id-scoped tenant row AND
+//   re-materializes member rows AND audits in one txn — never the floor. The RLS proof (floor
+//   not tenant-writable, tenant rows owner-only + member-read-scoped) is unchanged.
 // ════════════════════════════════════════════════════════════════════════════════
 function capF(key, v) {
   if (!isMultiTenant(v)) return SKIP('role_definitions store is a Cultivar multi-tenant surface (out of scope for Ignition).');
   const sql = concatSql(v.migrationsDir);
-  const mod = read('packages/shared/src/auth/roleDefinitions.ts');
-  // The role editor is now the agnostic MemberConsole (Roles tab), mounted by TeamConsole.
+  // The role editor is the agnostic MemberConsole (Roles tab), mounted by TeamConsole; it writes
+  // through the funnel wrapper saveRolePermissions.
   const ui  = read('packages/shared/src/components/team/MemberConsole.tsx');
   const problems = [];
   if (!/CREATE TABLE IF NOT EXISTS role_definitions/.test(sql)) problems.push('role_definitions table not created');
@@ -566,30 +568,35 @@ function capF(key, v) {
   }
   const readPol = effectivePolicy(sql, 'rd_read');
   if (!readPol || !/is_active_member/.test(readPol)) problems.push('rd_read does not scope tenant rows to active members (cross-tenant leak)');
-  // clone-not-mutate at the code layer: tenant writes force non-system rows; console never mutates the floor
-  if (!/is_system\s*\?\?\s*false/.test(mod)) problems.push('roleDefinitions: tenant insert does not force is_system=false');
-  if (!/upsertTenantRole/.test(ui)) problems.push('console does not write via upsertTenantRole (clone-not-mutate)');
+  // clone-not-mutate through the funnel: the funnel forces non-system tenant rows + inserts them
+  // business_id-scoped (never the floor), and the console writes ONLY via the funnel wrapper.
+  if (!/CREATE OR REPLACE FUNCTION public\.save_role_permissions/.test(sql)) problems.push('permission funnel (save_role_permissions) not present — role writes are not funneled');
+  if (!/INSERT INTO public\.role_definitions[\s\S]*?false/.test(sql)) problems.push('funnel does not force is_system=false on a new tenant row');
+  if (!/saveRolePermissions/.test(ui)) problems.push('console does not write roles via the funnel (saveRolePermissions)');
+  if (/\b(?:upsertTenantRole|deleteTenantRole|updateMemberRole)\s*\(/.test(ui)) problems.push('console still CALLS a retired direct role writer (funnel bypass)');
   if (!/!role\.locked/.test(ui)) problems.push('console does not lock system roles from delete (locked-role check)');
   if (problems.length === 0) {
-    return PASS('role_definitions: shared floor is not tenant-writable; tenant rows are owner-only + member-scoped (cross-tenant invisible, AC-3); the console clones-not-mutates and locks system roles.');
+    return PASS('role_definitions: shared floor not tenant-writable; tenant rows owner-only + member-scoped (cross-tenant invisible, AC-3); all role writes funnel through save_role_permissions (business_id-scoped, non-system) and the console keeps no direct-write bypass.');
   }
-  return FAIL(`role-store isolation/clone-not-mutate gaps: ${problems.join('; ')}`);
+  return FAIL(`role-store isolation/funnel gaps: ${problems.join('; ')}`);
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
 // CAPABILITY g — Factory-reset of a tuned system role DELETES the tenant override → the shared
 //   floor shows through unchanged (NOT a snapshot restore). Promoted from ACCEPTANCE (g) → live.
+//   UPDATED 2026-07-23: factory-reset now runs through the funnel (save_role_permissions op='reset'),
+//   which DELETEs the business_id-scoped tenant row and re-materializes members to the floor.
 // ════════════════════════════════════════════════════════════════════════════════
 function capG(key, v) {
   if (!isMultiTenant(v)) return SKIP('role override / factory-reset is a Cultivar surface (out of scope for Ignition).');
-  const mod = read('packages/shared/src/auth/roleDefinitions.ts');
+  const sql = concatSql(v.migrationsDir);
   const ui  = read('packages/shared/src/components/team/MemberConsole.tsx');
   const problems = [];
-  if (!/export async function deleteTenantRole/.test(mod) || !/\.delete\(\)/.test(mod)) problems.push('deleteTenantRole (override delete) missing');
-  if (!/\.eq\('business_id', businessId\)/.test(mod)) problems.push('deleteTenantRole not business_id-scoped (could touch the floor)');
-  if (!/factoryReset/.test(ui) || !/deleteTenantRole/.test(ui)) problems.push('console factory-reset does not delete the tenant override');
+  // the funnel's reset/delete branch is business_id-scoped so it can never touch the floor.
+  if (!/DELETE FROM public\.role_definitions\s*\n?\s*WHERE business_id = p_business_id/.test(sql)) problems.push('funnel reset/delete not business_id-scoped (could touch the floor)');
+  if (!/factoryReset/.test(ui) || !/'reset'/.test(ui)) problems.push('console factory-reset does not run the funnel reset op');
   if (problems.length === 0) {
-    return PASS('factory-reset deletes the per-tenant override row (business_id-scoped) → the shared floor shows through unchanged; not a snapshot restore (MB_D-010).');
+    return PASS('factory-reset deletes the per-tenant override row through the funnel (business_id-scoped) → the shared floor shows through unchanged and members re-materialize to it; not a snapshot restore (MB_D-010).');
   }
   return FAIL(`factory-reset gaps: ${problems.join('; ')}`);
 }

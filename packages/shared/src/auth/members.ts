@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Member, Role } from './types';
+import type { Member } from './types';
 import { normalizePhone } from '../utils/normalizePhone';
 
 // All functions here run client-side with the owner's authenticated session.
@@ -21,19 +21,11 @@ export async function getMembersByBusiness(
   return (data ?? []) as Member[];
 }
 
-export async function updateMemberRole(
-  supabase: SupabaseClient,
-  memberId: string,
-  role: Role,
-  permissions: string[]
-): Promise<void> {
-  const { error } = await supabase
-    .from('business_members')
-    .update({ role, permissions })
-    .eq('id', memberId);
-
-  if (error) throw new Error(`updateMemberRole: ${error.message}`);
-}
+// NOTE: updateMemberRole (a direct UPDATE of role+permissions) was RETIRED 2026-07-23 — role
+// assignment now goes through the funnel (assignMemberRole → assign_member_role RPC), which
+// resolves the role server-side, re-materializes permissions, and audits. The migration's §1
+// side-door close REFUSES a direct JWT UPDATE of role/permissions anyway, so this path is gone
+// by construction, not merely by convention.
 
 export async function removeMember(
   supabase: SupabaseClient,

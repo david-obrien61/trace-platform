@@ -94,6 +94,22 @@ export const ALL_ACTION_PERMISSIONS: string[] = [
   IMPORT_PRICING,
 ];
 
+/**
+ * DECLARED-BUT-UNWIRED action permissions — the fake pills (D-9). Each string EXISTS (so code
+ * that references the constant compiles and a future wiring has a name to gate on) but NOTHING
+ * enforces it today: `override_maintenance`'s mechanism is not built, and `apply_discount` rides
+ * MANAGE_ORDERS (its own doc says so). Per David's ruling 2026-07-23 (#3), a pill that gates
+ * nothing must NOT render as a grantable chip on /team — a control that looks real and controls
+ * nothing is a lie about who can do what. The role editor filters this set out of its catalog.
+ * ⚠️ WIRING ONE = REMOVE IT FROM HERE in the SAME commit its enforcement lands (never before —
+ * a chip that grants an unenforced string is the exact fake surface this list retires).
+ * apply_tax_exempt and import_pricing are DELIBERATELY absent: both are enforced server-side.
+ */
+export const UNWIRED_ACTION_PERMISSIONS: string[] = [
+  OVERRIDE_MAINTENANCE,
+  APPLY_DISCOUNT,
+];
+
 // ── role defaults (DEFAULT-DENY) ────────────────────────────────────────────
 
 /**

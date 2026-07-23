@@ -5,16 +5,17 @@
 // DEPENDENCIES: @trace/shared/components/team/MemberConsole · useBusinessContext (businessId/
 //               isOwner/can) · tileRegistry (allTiles/registryPermissions → chip catalog, ONE
 //               source, no hardcoded permission list) · shared financial/action permission consts
-//               · auth/roles (DEFAULT_PERMISSIONS/ROLE_LABELS/ROLE_DESCRIPTIONS) · lib/supabase.
+//               · UNWIRED_ACTION_PERMISSIONS (the fake pills filtered out of the chip catalog,
+//               ruling #3) · auth/roles (ROLE_LABELS/ROLE_DESCRIPTIONS) · lib/supabase.
 // OUTPUTS:      <TeamConsole/> — owner-only console (route gated by PermissionRoute manage_settings).
 
 import { useMemo } from 'react';
 import { useBusinessContext } from '@trace/shared/context';
 import { MemberConsole } from '@trace/shared/components/team/MemberConsole';
 import type { PermChip, PermGroup, MemberConsoleTheme } from '@trace/shared/components/team/MemberConsole';
-import { ALL_FINANCIAL_PERMISSIONS, ALL_ACTION_PERMISSIONS } from '@trace/shared/auth';
+import { ALL_FINANCIAL_PERMISSIONS, ALL_ACTION_PERMISSIONS, UNWIRED_ACTION_PERMISSIONS } from '@trace/shared/auth';
 import { allTiles, registryPermissions } from '../registry/tileRegistry';
-import { ROLES, DEFAULT_PERMISSIONS, ROLE_LABELS, ROLE_DESCRIPTIONS } from '../auth/roles';
+import { ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS } from '../auth/roles';
 import type { CultivarRole } from '../auth/roles';
 import { supabase } from '../lib/supabase';
 
@@ -39,7 +40,12 @@ export function TeamConsole() {
   const permissionGroups = useMemo<PermGroup[]>(() => {
     const tilesByPerm: Record<string, string[]> = {};
     for (const t of allTiles()) (tilesByPerm[t.required_permission] ||= []).push(t.label);
-    const ids = [...new Set([...registryPermissions(), ...ALL_FINANCIAL_PERMISSIONS, ...ALL_ACTION_PERMISSIONS])].filter((p) => p !== 'owner-only');
+    // Exclude 'owner-only' (a structural route gate, not a grantable pill) AND the two
+    // DECLARED-BUT-UNWIRED action perms (apply_discount / override_maintenance) — a pill that
+    // gates nothing is a fake surface (D-9; David's ruling 2026-07-23 #3). They render again the
+    // commit their enforcement lands (UNWIRED_ACTION_PERMISSIONS, ONE source — STD-011).
+    const hidden = new Set(['owner-only', ...UNWIRED_ACTION_PERMISSIONS]);
+    const ids = [...new Set([...registryPermissions(), ...ALL_FINANCIAL_PERMISSIONS, ...ALL_ACTION_PERMISSIONS])].filter((p) => !hidden.has(p));
     const chips: PermChip[] = ids.map((id) => {
       const fromTile = allTiles().find((t) => t.required_permission === id)?.group;
       const group = fromTile ?? (ALL_FINANCIAL_PERMISSIONS.includes(id) ? 'financial' : ALL_ACTION_PERMISSIONS.includes(id) ? 'fulfilment' : 'other');
@@ -66,7 +72,6 @@ export function TeamConsole() {
       theme={THEME}
       permissionGroups={permissionGroups}
       inviteRoleOptions={inviteRoleOptions}
-      defaultPermissionsFor={(rk) => DEFAULT_PERMISSIONS[rk as CultivarRole] ?? []}
       inviteBaseUrl={typeof window !== 'undefined' ? window.location.origin : ''}
       invitePath="/join"
       showDevices

@@ -5,8 +5,15 @@
 //               per-tenant custom roles. RLS: rd_read (floor + own tenant rows), rd_owner_write
 //               (owner only, tenant rows only — the floor is never tenant-writable). Runs with
 //               the owner's authenticated Supabase session (same contract as members.ts).
-// OUTPUTS:      getRoleDefinitions, resolveRoles, upsertTenantRole, deleteTenantRole +
+// OUTPUTS:      getRoleDefinitions, resolveRoles, resolveRoleDefaults +
 //               ResolvedRole / RoleDefinitionRow types.
+//
+// ⚠️ WRITES MOVED TO THE FUNNEL (2026-07-23, David's ruling OPTION 1). upsertTenantRole /
+// deleteTenantRole were RETIRED — a role_definitions write with no propagation to the member
+// rows the gate reads was the whole defect (recon 2026-07-23). All role writes now go through
+// saveRolePermissions (roleFunnel.ts → save_role_permissions RPC), which writes the template
+// AND re-materializes member permissions AND audits, in one transaction. This module is now
+// READ-ONLY: it resolves the floor+override chain for rendering and for mint defaults.
 //
 // RESOLUTION CHAIN (MB_D-010): shared floor → per-tenant override (replaces the floor for a
 // matching role_key) → [member's own business_members.permissions jsonb, applied elsewhere].
@@ -113,63 +120,19 @@ export function resolveRoles(
 }
 
 /**
- * Write (insert or update) a per-tenant role row. Used for BOTH tuning a system role
- * (role_key = a floor key → creates/updates the override) and saving a custom role
- * (role_key = a new key). Never touches the shared floor (RLS forbids it anyway).
- * Avoids PostgREST upsert because the uniqueness is a PARTIAL index, which conflict
- * inference can't target — so we explicit select-then-insert/update by (business_id, role_key).
+ * Resolve a single role's effective permission set (floor → per-tenant override), for use as
+ * MINT DEFAULTS. This is the ONE source that replaces the retired DEFAULT_PERMISSIONS constant
+ * (David's ruling 2026-07-23 — "mints read the resolved floor"): an invite and an owner-signup
+ * seed the new member row from the SAME resolution the Roles tab renders and the funnel writes,
+ * so a fourth stale copy of "what MANAGER means" cannot exist (STD-011). Reuses
+ * getRoleDefinitions + resolveRoles — never a second resolution. Returns [] for an unknown role.
  */
-export async function upsertTenantRole(
+export async function resolveRoleDefaults(
   supabase: SupabaseClient,
   businessId: string,
   roleKey: string,
-  fields: { is_system?: boolean; label?: string | null; description?: string | null; permissions: string[] },
-): Promise<void> {
-  const { data: existing, error: selErr } = await supabase
-    .from('role_definitions')
-    .select('id')
-    .eq('business_id', businessId)
-    .eq('role_key', roleKey)
-    .maybeSingle();
-
-  if (selErr) throw new Error(`upsertTenantRole(select): ${selErr.message}`);
-
-  if (existing) {
-    const patch: Record<string, unknown> = { permissions: fields.permissions };
-    if (fields.label !== undefined) patch.label = fields.label;
-    if (fields.description !== undefined) patch.description = fields.description;
-    const { error } = await supabase
-      .from('role_definitions')
-      .update(patch)
-      .eq('id', (existing as { id: string }).id);
-    if (error) throw new Error(`upsertTenantRole(update): ${error.message}`);
-  } else {
-    const { error } = await supabase.from('role_definitions').insert({
-      business_id: businessId,
-      role_key: roleKey,
-      is_system: fields.is_system ?? false, // tenant rows are never system anchors
-      label: fields.label ?? null,
-      description: fields.description ?? null,
-      permissions: fields.permissions,
-    });
-    if (error) throw new Error(`upsertTenantRole(insert): ${error.message}`);
-  }
-}
-
-/**
- * Delete a per-tenant role row. For a system role_key this is FACTORY-RESET (removes the
- * override → the shared floor shows through again). For a custom role_key it deletes the
- * custom role. The shared floor is never matched (business_id scope).
- */
-export async function deleteTenantRole(
-  supabase: SupabaseClient,
-  businessId: string,
-  roleKey: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from('role_definitions')
-    .delete()
-    .eq('business_id', businessId)
-    .eq('role_key', roleKey);
-  if (error) throw new Error(`deleteTenantRole: ${error.message}`);
+): Promise<string[]> {
+  const defs = await getRoleDefinitions(supabase, businessId);
+  const roles = resolveRoles(defs.floor, defs.tenant);
+  return roles.find((r) => r.role_key === roleKey)?.permissions ?? [];
 }

@@ -6,7 +6,7 @@ import {
   Truck, Navigation, Send, Copy, X, Plus,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { DEFAULT_PERMISSIONS } from '../auth/roles';
+import { resolveRoleDefaults } from '@trace/shared/auth';
 
 // ─── Brand ───────────────────────────────────────────────────────────────────
 const GREEN = '#27500A';
@@ -554,7 +554,11 @@ export function OnboardingWizard() {
           email: user.email ?? null,
           phone: null,
           role: 'OWNER',
-          permissions: DEFAULT_PERMISSIONS.OWNER,
+          // Owner mint reads the RESOLVED FLOOR (DEFAULT_PERMISSIONS retired 2026-07-23). The
+          // owner's authority is owner_id-based regardless (can() short-circuits, has_permission_for
+          // owner-inclusive), so this array is cosmetic — but it seeds from the ONE source, not a
+          // stale copy. Floor (business_id IS NULL) is always present, so this resolves at onboarding.
+          permissions: await resolveRoleDefaults(supabase, businessId, 'OWNER'),
           active: true,
           invite_id: null,
         });

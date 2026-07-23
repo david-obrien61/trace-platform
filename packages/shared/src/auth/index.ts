@@ -21,7 +21,6 @@ export type {
 // Client-side: runs with owner's authenticated Supabase session
 export {
   getMembersByBusiness,
-  updateMemberRole,
   removeMember,
   setMemberActive,
   setMemberPhone,
@@ -45,14 +44,29 @@ export {
   deleteDevice,
 } from './devices';
 
-// Three-tier role-definition store (role-config console — visibility axis, MB_D-010)
+// Three-tier role-definition store (role-config console — visibility axis, MB_D-010).
+// READ-ONLY since 2026-07-23: writes moved to the funnel (roleFunnel.ts).
 export {
   getRoleDefinitions,
   resolveRoles,
-  upsertTenantRole,
-  deleteTenantRole,
+  resolveRoleDefaults,
 } from './roleDefinitions';
 export type { RoleDefinitionRow, ResolvedRole, RoleSource } from './roleDefinitions';
+
+// THE PERMISSION FUNNEL (David's ruling 2026-07-23, OPTION 1) — the ONLY way a role→permission
+// fact changes: save_role_permissions / assign_member_role RPCs + the pure blast-radius diff.
+export {
+  saveRolePermissions,
+  assignMemberRole,
+  diffPermissions,
+} from './roleFunnel';
+export type {
+  RoleSaveOp,
+  RoleSaveResult,
+  AffectedMember,
+  MemberRoleResult,
+  PermissionDiff,
+} from './roleFunnel';
 
 // Client-side invite management (owner session) + server-side expiry cleanup
 export {
@@ -118,6 +132,7 @@ export {
   IMPORT_PRICING,
   ACTION_PERMISSIONS,
   ALL_ACTION_PERMISSIONS,
+  UNWIRED_ACTION_PERMISSIONS,
   ACTION_ROLE_DEFAULTS,
   actionDefaultsForRole,
 } from './actionPermissions';
