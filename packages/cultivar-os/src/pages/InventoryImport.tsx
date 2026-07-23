@@ -41,7 +41,7 @@ const TARGET_OPTIONS: { value: MapTarget; label: string }[] = [
   { value: 'size', label: 'Size / container' },
   { value: 'qty', label: 'Quantity on hand' },
   { value: 'sell_price', label: 'Sell price' },
-  { value: 'sku', label: 'Item # / SKU' },
+  { value: 'sku', label: 'Their item # (kept as a note — we match on name + size)' },
   { value: 'attribute', label: 'Keep as a note (attribute)' },
   { value: 'ignore', label: 'Ignore this column' },
 ];
@@ -151,7 +151,9 @@ export function InventoryImport() {
 
       const p = resolveImportPlan({ rows, catalog: catalogRows, countedLotIds: counted });
       const init: Record<number, RowChoice> = {};
-      for (const r of p.rows) init[r.rowIndex] = { include: true, overwrite: false, pickedLotId: null };
+      // D-47 — a row whose item # collides with a DIFFERENT catalog lot is EXCLUDED by default
+      // (owner opts in), so a surfaced disagreement is never silently written. All others default in.
+      for (const r of p.rows) init[r.rowIndex] = { include: !r.foreignIdConflict, overwrite: false, pickedLotId: null };
       console.log('[TRACE:IMPORT] plan', { file: fileName, counts: p.counts, held: p.rows.filter(r => ['AMBIGUOUS', 'CONFLICT', 'REFUSED'].includes(r.verdict)).map(r => r.rowIndex) });
 
       setCatalog(catalogRows); setCountedIds(counted); setMappedRows(rows);
@@ -325,6 +327,15 @@ export function InventoryImport() {
                       </td>
                       <td style={{ ...mapTd, whiteSpace: 'normal', color: '#374151' }}>
                         <div>{p.reason}</div>
+                        {/* D-47 — the grower's item # corroborated or disagreed. A disagreement is
+                            surfaced in red and the row is unchecked above until the owner opts in. */}
+                        {p.foreignIdNote && (
+                          <div style={{ marginTop: 3, fontSize: '0.78rem', display: 'flex', alignItems: 'flex-start', gap: 5,
+                            color: p.foreignIdConflict ? '#b91c1c' : '#166534' }}>
+                            {p.foreignIdConflict && <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 1 }} />}
+                            <span>{p.foreignIdNote}{p.foreignIdConflict ? ' — tick the row above only if this is the right plant.' : ''}</span>
+                          </div>
+                        )}
                         {p.fieldDeltas.length > 0 && (
                           <div style={{ color: '#6b7280', fontSize: '0.78rem', marginTop: 2 }}>
                             {p.fieldDeltas.map(d => `${d.field}: ${d.from ?? '—'} → ${d.to ?? '—'}`).join('  ·  ')}
@@ -339,9 +350,9 @@ export function InventoryImport() {
                           </div>
                         )}
                         {p.verdict === 'CONFLICT' && (
-                          <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, color: '#b91c1c' }}>
+                          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 6, color: '#b91c1c' }}>
                             <input type="checkbox" checked={c?.overwrite ?? false} onChange={e => setChoices(s => ({ ...s, [p.rowIndex]: { ...s[p.rowIndex], overwrite: e.target.checked } }))} />
-                            Overwrite the physical count with {p.qtyTo}
+                            <span>Overwrite this counted lot — set qty {p.qtyFrom} → {p.qtyTo} and apply the file's price/details. Left unticked, this whole row is skipped.</span>
                           </label>
                         )}
                       </td>

@@ -1116,6 +1116,7 @@ LAST-PROVEN: —
 - **Do:** review the plan for **Basham's …**, **Hearts A'fire …**, and **'Sierra' Mexican Red Oak**.
 - **PASS:** each resolves to a verdict (UPDATE / CREATE / FILL) against the right variety — none falls to "no name" or an unexpected new variety because of the apostrophe/quotes.
 - **FAIL:** an apostrophe or wrapping-quote name mis-resolves.
+- **Note:** on your live catalog, Basham's and 'Sierra' also carry a red **item-# collision note** and default unchecked — that is **card 20** (the item # never sources); the NAME resolution proved here is separate and still holds.
 
 ### 8 — The size-less Alley Cat row is HELD as AMBIGUOUS and names its candidate sizes
 STATUS: owed
@@ -1129,12 +1130,13 @@ LAST-PROVEN: —
 ### 9 — 🔴 The Shoal Creek CONFLICT row does NOT overwrite the count by default
 STATUS: owed
 DEVICE: desktop
-COVERS: #148
+COVERS: #148, #150
 LAST-PROVEN: —
-- **Do:** review **Shoal Creek Vitex** (a lot you have physically counted; the CSV qty disagrees).
-- **PASS:** verdict **CONFLICT**; it shows counted-vs-CSV and is EXCLUDED from Accept until you tick "Overwrite the physical count". Left untouched, Accept never changes its qty.
-- **FAIL:** the CSV qty lands on a counted lot without an explicit per-row action.
+- **Do:** review the **Shoal Creek Vitex · 45 gal** row (lot `3ec53db3`, physically counted at 38 on 2026-07-22; the CSV says 99). _(The fixture's `45 gal` row exists to exercise this against your real counted lot — the earlier `30 gal` row routes to CREATE and never reaches CONFLICT.)_
+- **PASS:** verdict **CONFLICT**; it shows counted **38** vs CSV **99** and is EXCLUDED from Accept until you tick the overwrite box. Left untouched, Accept never changes its qty **or its price** (stays 205.00, not the file's 310.00).
+- **FAIL:** the CSV qty (or price) lands on a counted lot without ticking overwrite.
 - **Why:** David's ruling 2026-07-23 — a CSV may never overwrite a physical count unless the owner says so explicitly, per row.
+- **Note — the hold is WHOLE-ROW (stated for David's question):** a CONFLICT holds the **entire row**, not just the quantity. Un-ticked → nothing writes (qty stays 38, price stays 205.00). Ticked → both land (qty→99 **and** price→310.00). The checkbox says so. This matches the "held rows don't count until you resolve them" contract; if you want a CONFLICT to let the safe fields (price/notes) flow while holding only the qty, that is a deliberate change — flagged, not assumed.
 
 ### 10 — 🔴 `$0.00` and blank prices land as UNKNOWN; those lots stay NOT sellable
 STATUS: owed
@@ -1234,3 +1236,26 @@ SIGNAL: no "Prices won't be saved" notice ever appears for the owner
 - **Do:** as the owner, run a priced import exactly as before this build.
 - **PASS:** prices import with no extra step and no notice — the owner is authorized by `owner_id` (owner-inclusive `has_permission_for`), with zero dependency on any member-row permission.
 - **FAIL:** the owner sees the manager's "won't be saved" notice, or is asked to grant themselves anything.
+
+### 20 — 🔴 A foreign item # NEVER sources a match; name + size decide, and a collision is SURFACED
+STATUS: owed
+DEVICE: desktop
+COVERS: #150, #128
+LAST-PROVEN: —
+- **Why this card exists (D-47 / STD-019, live 2026-07-23):** our `business_inventory.sku` holds internal `DISC-` discovery-scrape ids; a grower's item number is THEIR namespace. The first owner-prove bound the file's **Basham's** row (item # `DISC-1101`) to our **Texas Redbud** and **'Sierra'** (item # `DISC-1104`) to **Flip Side Vitex** — the exact QBO-email-match shape (nine mis-billed invoices) on a new surface. A foreign identifier must never bind on a field it shares no guaranteed meaning with.
+- **Do:** upload the fixture. Your live catalog carries `DISC-1101` / `DISC-1104` as unrelated scraped varieties. Review the **Basham's Party Pink Crape Myrtle** and **'Sierra' Mexican Red Oak** rows.
+- **PASS:** each resolves to the **right variety by name + size** (Basham's → its own lot; 'Sierra' 45 gal → a new Sierra sibling), the reason says **"by name + size"**, and a **red note** names the different plant the item # points at ("…item # DISC-1101 matches a DIFFERENT plant … Texas Redbud … Ignored — matched by name + size"). The row is **unchecked by default** — it is not written until you tick it.
+- **FAIL:** either row binds to the plant its item # points at (Texas Redbud / Flip Side Vitex), OR the collision is silent (no note), OR the "Matched by item #" wording reappears.
+- **Note:** the grower's item # is still KEPT — as a descriptive attribute under its own header ("Item #") on the resolved lot — it is simply never treated as our sku (D-24 / point 3).
+
+### 21 — 🔴 A size written in a different format than the catalog stores resolves to the SAME lot
+STATUS: owed
+DEVICE: desktop
+COVERS: #150
+LAST-PROVEN: —
+- **Why this card exists (live 2026-07-23):** the catalog stores DISC-1105 "Shoal Creek Vitex" size **`30`** (a bare trade number) while a CSV says **`30 gal`**. Compared as exact strings they differ, so the import **CREATEs a duplicate lot** instead of resolving to the one already there. Size was the one attribute never given the name-matcher's fold-before-compare treatment (D-45 did it for names).
+- **Do:** in the fixture, the **Shoal Creek Vitex · 45 gal** row targets your lot `3ec53db3` whose size is stored as **`45`**. Review its verdict. (Also check any lot whose stored size is a bare number against a `N gal` CSV row.)
+- **PASS:** the `45 gal` CSV row resolves to the existing `45` lot — it becomes the **CONFLICT** of card 9 (a counted lot), NOT a new duplicate `45 gal` sibling. No second Shoal Creek 45 lot is minted. The whole gallon family folds: `45` / `45 gal` / `45gal` / `45G` / `#45` / `45-gallon` are one size.
+- **FAIL:** a duplicate lot appears because the size format differed, or card 9 never fires because the `45 gal` row CREATEd instead of matching.
+- **Note:** the fold is COMPARISON-ONLY — your stored `45` stays `45` on its row (D-23, faithful-before-connected); it is never rewritten to `45 Gallon`.
+- **⚠️ Blast-radius (probe, do not assume):** if any ONE variety already holds two rows that are the same size in different spellings (e.g. a `15` row AND a `15 gal` row under one variant_group), the size-picker now reads them as a duplicate and that variety needs those two rows merged — a read-only check (`SELECT variant_group, size FROM business_inventory` grouped) is worth a glance during this prove. This is tech-debt #56's deferred merge half; the comparison fix here does not itself merge existing rows.

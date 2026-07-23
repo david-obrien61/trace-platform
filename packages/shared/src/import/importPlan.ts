@@ -39,7 +39,9 @@ export interface MappedRow {
   name: string | null;
   size: string | null;
   qty: number | null;                   // null = unknown (blank/unparseable) — NEVER 0 (D-9)
-  sku: string | null;
+  sku: string | null;                   // the grower's ITEM # — a FOREIGN id (D-47). Carried ONLY for
+                                        // the corroborate/conflict cross-check; it NEVER sources a
+                                        // match and is stored in `attributes` under its own header.
   sellPrice: number | null;             // null = unknown ($0.00 AND blank → null) (D-9)
   priceBasis: string | null;            // the file-level answer (null = "don't know")
   attributes: Record<string, string>;   // kept columns, keyed by their own header, verbatim
@@ -64,6 +66,13 @@ export interface ImportRowPlan {
   fieldDeltas: FieldDelta[];            // size/price/basis/attributes old → new, for display
   patch: Record<string, unknown>;       // the exact non-qty patch to persist (never includes qty)
   candidates?: { lotId: string; size: string | null }[];  // AMBIGUOUS — the sizes to pick from
+  // ── D-47 / STD-019 — the grower's item # is a FOREIGN identifier, never a match SOURCE. It may
+  //    CORROBORATE the name+size match (points at the SAME lot) or CONFLICT with it (points at a
+  //    DIFFERENT catalog lot). Either way the verdict above is decided by NAME + SIZE; this only
+  //    annotates it. A conflict defaults the row to EXCLUDED (the surface unchecks it) — "surface
+  //    it, do not silently proceed" — without ever binding on the foreign field.
+  foreignIdNote?: string;               // the corroborate/conflict sentence, in the owner's words
+  foreignIdConflict?: boolean;          // true = item # points at a DIFFERENT lot → held by default
 }
 
 export interface ImportPlan {
@@ -103,7 +112,8 @@ export function projectRows(
   const spineAt = (target: string) =>
     mappings.find(m => m.target === target && !m.proposed)?.index ?? -1;
   const iName = spineAt('name'), iSize = spineAt('size'), iQty = spineAt('qty');
-  const iSku = spineAt('sku'), iPrice = spineAt('sell_price');
+  const iPrice = spineAt('sell_price');
+  const skuCol = mappings.find(m => m.target === 'sku' && !m.proposed);  // the grower's ITEM # (foreign)
   const attrCols = mappings.filter(m => m.target === 'attribute');
 
   return parsedRows.map((cells, r): MappedRow => {
@@ -113,12 +123,17 @@ export function projectRows(
       const v = S(cells[m.index]);
       if (v !== '') attributes[m.header] = v;    // verbatim; blanks are simply absent
     }
+    // D-47 / point 3 — the grower's item # is a DESCRIPTIVE field. It is KEPT in the attribute bag
+    // under THEIR own header (verbatim), and carried on `sku` ONLY so resolveRow can cross-check it
+    // against our catalog for corroboration/conflict. It is NEVER written as our sku, NEVER sources.
+    const foreignId = skuCol ? (S(cells[skuCol.index]) || null) : null;
+    if (foreignId && skuCol) attributes[skuCol.header] = foreignId;
     return {
       rowIndex: r + 1,
       name: S(at(iName)) || null,
       size: S(at(iSize)) || null,
       qty: parseQty(at(iQty)),
-      sku: S(at(iSku)) || null,
+      sku: foreignId,
       sellPrice: parsePrice(at(iPrice)),
       priceBasis: fileBasis,
       attributes,
@@ -154,7 +169,7 @@ export function resolveImportPlan(params: {
  * surface from re-spelling the decision (STD-011).
  */
 export function planAgainstLot(row: MappedRow, lot: StockLineRow, counted: Set<string>): ImportRowPlan {
-  return decideAgainstLot(row, lot, counted, `Matched "${lot.name}"${lot.size ? ` (${lot.size})` : ''}.`);
+  return decideAgainstLot(row, lot, counted, `Matched "${lot.name}"${lot.size ? ` (${lot.size})` : ''} by name + size (you picked the size).`);
 }
 
 function resolveRow(row: MappedRow, catalog: StockLineRow[], counted: Set<string>): ImportRowPlan {
@@ -167,12 +182,12 @@ function resolveRow(row: MappedRow, catalog: StockLineRow[], counted: Set<string
   const name = S(row.name);
   if (!name) return refuse('This row has no plant name — there is nothing to import it as.');
 
-  // ── SKU-exact fast path — the most specific identity. A SKU names ONE lot. ──────
-  const skuHit = row.sku
-    ? catalog.find(r => S(r.sku).toLowerCase() === S(row.sku).toLowerCase() && S(r.sku) !== '')
-    : undefined;
-  if (skuHit) return decideAgainstLot(row, skuHit, counted, `Matched by item # ${row.sku}.`);
-
+  // ── D-47 / STD-019 — NAME + SIZE ARE THE MATCH; THERE IS NO SKU FAST PATH. ────────
+  //    Our `sku` holds internal DISC- scrape ids; the grower's item # is a FOREIGN identifier that
+  //    shares no guaranteed meaning with it. Sourcing a match on that field cross-wrote price and
+  //    attributes onto unrelated plants live (2026-07-23) — the QBO-email-match shape, new surface.
+  //    The item # may only CORROBORATE or CONFLICT with the name+size result (applyForeignId,
+  //    below); it never binds. This is the same authority the resolver already owns and proves.
   // ── Name family (L4 token equality) ─────────────────────────────────────────────
   const key = nameTokenSet(name);
   const family = catalog.filter(r => tokenSetsEqual(nameTokenSet(r.name), key));
@@ -208,25 +223,53 @@ function resolveRow(row: MappedRow, catalog: StockLineRow[], counted: Set<string
   switch (target.action) {
     case 'update': {
       const lot = family.find(f => f.id === target.rowId)!;
-      return decideAgainstLot(row, lot, counted, `Matched "${lot.name}"${lot.size ? ` (${lot.size})` : ''}.`);
+      return applyForeignId(decideAgainstLot(row, lot, counted,
+        `Matched "${lot.name}"${lot.size ? ` (${lot.size})` : ''} by name + size.`), row, catalog);
     }
     case 'fill': {
       const lot = family.find(f => f.id === target.rowId)!;
-      return decideAgainstLot(row, lot, counted, `Filling the "${lot.name}" placeholder with its first size + stock.`, target.size);
+      return applyForeignId(decideAgainstLot(row, lot, counted,
+        `Filled the "${lot.name}" placeholder by name + size — its first size + stock.`, target.size), row, catalog);
     }
     case 'create': {
       const p = buildPatch(row, null);
-      return { ...base, verdict: 'CREATE',
-        reason: `New: "${name}"${row.size ? ` (${row.size})` : ''}.`,
+      return applyForeignId({ ...base, verdict: 'CREATE',
+        reason: `New variety "${name}"${row.size ? ` (${row.size})` : ''} — no name + size match in your catalog.`,
         create: { name, size: target.size, variantGroup: target.variantGroup, sku: target.sku, regroup: target.regroup },
         qtyFrom: 0, qtyTo: row.qty, qtyChanges: (row.qty ?? 0) > 0,
-        fieldDeltas: createDeltas(row, target.size), patch: p };
+        fieldDeltas: createDeltas(row, target.size), patch: p }, row, catalog);
     }
     case 'refuse':
       return refuse(`"${name}" needs a size — a lot has to say which size it is (the count size rule).`);
     default:  // 'record-only' — unreachable for import (a name always yields a groupKey), fail safe
       return refuse(`"${name}" could not be resolved to a lot safely.`);
   }
+}
+
+/**
+ * D-47 / STD-019 — annotate a NAME+SIZE-resolved plan with the grower's item # (a FOREIGN id), which
+ * may only CORROBORATE or CONFLICT, never source. If the item # matches a catalog row's sku:
+ *   • SAME lot as the name+size target  → corroboration (a positive note; nothing else changes).
+ *   • DIFFERENT lot                     → conflict: surface the disagreement and mark the row held
+ *                                         (the surface unchecks it by default). We do NOT re-bind —
+ *                                         name+size already decided, correctly.
+ * Applies only to resolving verdicts (UPDATE/FILL/CREATE). A count-CONFLICT / AMBIGUOUS / REFUSED row
+ * is already held or unresolved, so a foreign-id note would only add noise. The item # that matches
+ * NOTHING in our catalog is simply kept as a note (done in projectRows) — the normal grower case.
+ */
+function applyForeignId(plan: ImportRowPlan, row: MappedRow, catalog: StockLineRow[]): ImportRowPlan {
+  if (plan.verdict !== 'UPDATE' && plan.verdict !== 'FILL' && plan.verdict !== 'CREATE') return plan;
+  const fid = S(row.sku);
+  if (!fid) return plan;
+  const hit = catalog.find(r => S(r.sku) !== '' && S(r.sku).toLowerCase() === fid.toLowerCase());
+  if (!hit) return plan;   // foreign id names nothing of ours → already kept as a note; not our sku
+  if (plan.lotId && hit.id === plan.lotId) {
+    // Report the OBSERVATION, never the conclusion (David 2026-07-23): a foreign item # equalling our
+    // sku on the row name+size already chose is a coincidence between unrelated namespaces, not proof.
+    return { ...plan, foreignIdConflict: false, foreignIdNote: `Their item # "${fid}" also matches our SKU on this row.` };
+  }
+  return { ...plan, foreignIdConflict: true,
+    foreignIdNote: `Your file's item # "${fid}" matches a DIFFERENT plant already in your catalog ("${hit.name}"). Ignored — matched by name + size, not by item #.` };
 }
 
 /** Decide UPDATE vs CONFLICT against a specific existing lot, and build its field patch. */

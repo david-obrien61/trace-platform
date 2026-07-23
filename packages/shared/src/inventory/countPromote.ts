@@ -51,6 +51,12 @@
 // ============================================================
 
 import { baseSkuOf, deriveSiblingSku } from './variantGroup';
+import { sameSizeLabel } from '../utils/sizeLabel';
+
+// sameSizeLabel now lives in the ONE shared home (STD-011) — `utils/sizeLabel` — so the count path,
+// the import matcher, and the L5 size-picker fold sizes the SAME way. Re-exported to keep this
+// module's public API (inventory/index + tests) stable.
+export { sameSizeLabel };
 
 /** The minimum a stub check reads. Satisfied by a StockLineRow, a grid row, or a count sibling. */
 export interface StubCandidate {
@@ -79,22 +85,9 @@ export function isVarietyStub(row: StubCandidate): boolean {
     && (row.variant_group ?? '').trim() === '';
 }
 
-/**
- * Size is a FREE LABEL — compare case/whitespace-insensitively. Moved here from
- * InventoryCount's local copy so the count path and this decision share ONE definition
- * (STD-011); it is also the single place the known size-VOCABULARY defect gets fixed.
- *
- * KNOWN LIMIT, RECORDED NOT FIXED (tech-debt #56): this is exact string equality after
- * trim/case-fold. The live catalog already carries mixed size vocabulary — 'Sierra' Mexican
- * Red Oak is live with sizes ["15", "30 gal"] — so counting "15 gal" against a "15" row does
- * NOT match here and mints a THIRD row: two spellings of one physical size in the picker.
- * D-45 built resolve-before-create so varied NAME spellings converge; the same was never done
- * for SIZES. A normalizeSize exists in the scrape parser, not on the count path. Deliberately
- * NOT fixed in this pass (it is its own defect, its own blast radius, its own RED test).
- */
-export function sameSizeLabel(a: string | null | undefined, b: string | null | undefined): boolean {
-  return (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
-}
+// Size comparison (sameSizeLabel) is the shared, size-normalizing test imported + re-exported above
+// (tech-debt #56 — the mixed-vocabulary defect — is CLOSED there: "15" now equals "15 gal" because
+// both fold through normalizeSize before comparison, exactly as D-45 did for names).
 
 /** A sibling row of one variety, as the count decision needs it (DB field names — matches
  *  StockLineRow, so callers map nothing). */

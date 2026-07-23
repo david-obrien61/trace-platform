@@ -399,22 +399,12 @@ function htmlUnescape(s: string): string {
     .replace(/&amp;/g, '&');
 }
 
-/**
- * normalizeSize — canonical TRADE-size string. The gallon family ("5-gallon" / "5 gal"
- * / "#5" / "5G" / "5 Gallon") collapses to one form "5 Gallon". Size spans systems
- * (container gallons / caliper inches / height) across growers, so anything that is NOT
- * a recognizable gallon form is passed through trimmed — kept as free TEXT, never forced
- * into a gallon it isn't (ANSI Z60.1: "gallon" is a container-class trade label).
- */
-export function normalizeSize(raw: string): string {
-  const s = raw.trim().toLowerCase().replace(/\s+/g, ' ');
-  const gal =
-    s.match(/(\d+(?:\.\d+)?)\s*-?\s*gal(?:lon)?s?\b/) ||   // 5 gallon / 5-gallon / 5gal / 5 gals
-    s.match(/(\d+(?:\.\d+)?)\s*g\b/) ||                    // 5g / 5 g
-    s.match(/^#\s*(\d+(?:\.\d+)?)\b/);                     // #5  (container-number = gallon-class)
-  if (gal) return `${gal[1].replace(/\.0+$/, '')} Gallon`;
-  return raw.trim().replace(/\s+/g, ' ');
-}
+// normalizeSize now lives in the ONE shared home (STD-011) — `utils/sizeLabel` — so the scrape and
+// the count/import matcher fold sizes the SAME way (bare "30" ⇔ "30 gal"). Re-exported here to keep
+// this module's public API (discovery/index) stable. The scrape still normalizes on WRITE (its
+// design); the count/import paths use it for COMPARISON only (D-23).
+import { normalizeSize } from '../utils/sizeLabel';
+export { normalizeSize };
 
 /** /product/<slug>/ → "<slug>" (lowercased) — the variant_group grouping key. */
 export function productSlugFromUrl(url: string): string | null {

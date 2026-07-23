@@ -28,6 +28,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { nameTokenSet, tokenSetsEqual } from '../utils/canonicalName';
+import { normalizeSize } from '../utils/sizeLabel';
 
 // A resolved business_inventory row. The core identity fields are always selected; the
 // pricing/status fields are present only when the caller requests the extended column set
@@ -93,9 +94,12 @@ export function detectSizeCollision(
   const group = matches[0].variant_group;
   if (group == null || group.trim() === '') return false;             // group must be set…
   if (!matches.every(m => m.variant_group === group)) return false;   // …and shared by all
-  const sizes = matches.map(m => (m.size ?? '').trim());
+  // Sizes are folded through the ONE shared vocabulary (normalizeSize) before the distinctness
+  // test, so "15" and "15 gal" are ONE size, not two — a family carrying both spellings of one
+  // physical size is a DUP (not a clean picker), and detectSizeCollision correctly declines it.
+  const sizes = matches.map(m => normalizeSize(m.size).toLowerCase());
   if (sizes.some(s => s === '')) return false;                        // every row needs a size
-  return new Set(sizes).size === matches.length;                      // all distinct
+  return new Set(sizes).size === matches.length;                      // all distinct (normalized)
 }
 
 /**

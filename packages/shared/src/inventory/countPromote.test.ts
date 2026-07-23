@@ -221,7 +221,9 @@ ok(resolveCountTarget({ siblings: [], groupKey: null, size: '5 gal' }).action ==
 ok(resolveCountTarget({ siblings: [], groupKey: 'new-variety', size: '5 gal' }).action === 'create',
    'a brand-new variety with a group key → create');
 ok(sameSizeLabel(' 30 GAL ', '30 gal'), 'size compare: case/whitespace-insensitive (free label)');
-ok(!sameSizeLabel('15', '15 gal'), 'size compare: "15" != "15 gal" — RECORDED as tech-debt #56, not fixed here');
+ok(sameSizeLabel('15', '15 gal'), 'size compare: "15" == "15 gal" — tech-debt #56 FIXED via shared normalizeSize (was the RED case)');
+ok(sameSizeLabel('#30', '30-gallon') && sameSizeLabel('45G', '45 gal'), 'size compare: the whole gallon family folds to one (#30 == 30-gallon, 45G == 45 gal)');
+ok(!sameSizeLabel('1.5', '1.5 gal'), 'size compare: a bare DECIMAL is NOT folded to gallon (likely caliper) — only bare integers');
 
 console.log(`\ncountPromote: ${passed} passed, ${failed} failed`);
 if (failed > 0) { console.error('\nFAILURES:\n' + failures.join('\n')); process.exit(1); }

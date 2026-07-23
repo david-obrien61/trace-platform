@@ -25,6 +25,12 @@ const lot = (p: Partial<StockLineRow> & { id: string; name: string }): StockLine
 });
 
 // ── The synthetic catalog (mirrors the fixture's varieties) ─────────────────────
+// ⚠️ THE TWO `DISC-` ROWS ARE THE LIVE DEFECT, REPRODUCED (D-47 / STD-019, 2026-07-23).
+// Our `business_inventory.sku` holds INTERNAL discovery-scrape ids ("DISC- is a scrape id, not
+// owner-facing" — ledger #128). The fixture's grower rows carry item numbers DISC-1101 / DISC-1104
+// that COLLIDE with two UNRELATED catalog rows (Texas Redbud / Flip Side Vitex). The old SKU-exact
+// fast path SOURCED the match on that field and cross-wrote price+attributes onto the wrong plants.
+// These rows were ABSENT from the prior catalog, which is exactly why the green test hid the bug.
 const CATALOG: StockLineRow[] = [
   lot({ id: 'b1', name: "Basham's Party Pink Crape Myrtle", qty: 5, size: '30 gal', variant_group: 'bashams' }),
   lot({ id: 'h1', name: "Hearts A'fire Redbud", qty: 8, size: '15 gal', variant_group: 'heartsafire' }),
@@ -35,6 +41,11 @@ const CATALOG: StockLineRow[] = [
   lot({ id: 'a3', name: 'Alley Cat', qty: 7, size: '45 gal', variant_group: 'alleycat' }),
   lot({ id: 'sh1', name: 'Shoal Creek Vitex', qty: 12, size: '30 gal', variant_group: 'shoalcreek' }),
   lot({ id: 'st1', name: 'Retama', qty: 0, size: null, variant_group: null }),   // a scraped STUB
+  // ⛔ the collision rows — our sku field holds DISC- ids for UNRELATED varieties:
+  lot({ id: 'txr', name: 'Texas Redbud', qty: 3, size: null, variant_group: null, sku: 'DISC-1101' }),
+  lot({ id: 'flip', name: 'Flip Side Vitex', qty: 4, size: '45 gal', variant_group: 'flipside', sku: 'DISC-1104' }),
+  // 📏 a lot whose size is stored as a BARE trade number "30" — a CSV "30 gal" must resolve HERE:
+  lot({ id: 'crm', name: 'Red Crape Myrtle', qty: 22, size: '30', variant_group: 'redcrape' }),
 ];
 const COUNTED = new Set<string>(['sh1']);   // Shoal Creek was physically counted
 
@@ -52,6 +63,8 @@ const ROWS: MappedRow[] = [
   mr({ rowIndex: 7, name: 'Montezuma Cypress', size: '15 gal', qty: 30, sellPrice: 65 }),                           // new, clean
   mr({ rowIndex: 8, name: 'Retama', size: '15 gal', qty: 25, sellPrice: 40 }),                                      // fills the stub
   mr({ rowIndex: 9, name: null }),                                                                                  // no name
+  mr({ rowIndex: 10, name: "'Sierra' Mexican Red Oak", size: '15 gal', qty: 10, sku: 'SMR-15', sellPrice: 120 }),  // item # AGREES → corroboration
+  mr({ rowIndex: 11, name: 'Red Crape Myrtle', size: '30 gal', qty: 50, sellPrice: 80 }),                          // CSV "30 gal" vs catalog "30" → same lot
 ];
 
 const plan = resolveImportPlan({ rows: ROWS, catalog: CATALOG, countedLotIds: COUNTED });
@@ -77,6 +90,31 @@ ok(at(2).qtyChanges === false, 'row 2 qty 8 == book 8 → no movement, only a pr
 ok(at(3).verdict === 'CREATE' && at(3).create?.size === '45 gal', 'row 3 → CREATE the 45 gal Sierra sibling (name resolved, card 7)');
 ok(at(3).create?.variantGroup === 'sierra', 'row 3 create inherits the family group');
 ok(!('sell_price' in at(3).patch), 'row 3 ($0.00) writes NO price — the lot lands unpriced, not sellable (card 10)');
+
+// ── 🔴 D-47 — a FOREIGN item # NEVER SOURCES a match; name + size decide, disagreement surfaced ──
+// row 1 item # DISC-1101 collides with an UNRELATED catalog row (Texas Redbud, id 'txr'). The old
+// SKU-exact fast path bound row 1 → txr and cross-wrote price/attributes onto it. It must NOT.
+ok(at(1).lotId !== 'txr', 'row 1 does NOT bind to Texas Redbud via the colliding item # DISC-1101 (D-47)');
+ok(at(1).lotId === 'b1', 'row 1 resolves to Basham\'s by NAME + SIZE, not the foreign item # (D-47)');
+ok(at(1).foreignIdConflict === true, 'row 1 SURFACES the item-# disagreement (does not silently proceed)');
+ok(/Texas Redbud/.test(at(1).foreignIdNote ?? ''), 'row 1 note NAMES the different plant the item # points at');
+ok(/name \+ size/i.test(at(1).reason), 'row 1 reason states WHICH RULE fired — name + size (point 4)');
+// row 3 item # DISC-1104 collides with Flip Side Vitex (id 'flip', size 45). Old path bound it there.
+ok(at(3).lotId !== 'flip' && at(3).create?.size === '45 gal', 'row 3 does NOT bind to Flip Side Vitex via DISC-1104 — CREATEs the Sierra sibling (D-47)');
+ok(at(3).foreignIdConflict === true && /Flip Side Vitex/.test(at(3).foreignIdNote ?? ''), 'row 3 surfaces the DISC-1104 disagreement');
+
+// ── CORROBORATION — item # that agrees with the name+size match is a POSITIVE confirmation ──
+// row 10: 'Sierra' 15 gal with item # SMR-15 (== the sku ALREADY on s15). Same lot → confirms.
+ok(at(10).verdict === 'UPDATE' && at(10).lotId === 's15', 'row 10 → UPDATE s15 by name + size');
+ok(at(10).foreignIdConflict !== true, 'row 10 item # SMR-15 AGREES with the name+size match — no conflict');
+ok(/also matches our SKU/i.test(at(10).foreignIdNote ?? '') && !/confirm/i.test(at(10).foreignIdNote ?? ''),
+   'row 10 note states the OBSERVATION ("also matches our SKU"), NOT the conclusion ("confirms") — David 2026-07-23');
+
+// ── 🔴 SIZE NORMALIZATION — a size in a different format than the catalog stores resolves to the SAME lot ──
+// row 11 is 'Red Crape Myrtle · "30 gal"'; the catalog stores that lot's size as the bare "30". Exact
+// string compare CREATEs a duplicate; the shared normalizeSize folds both → ONE lot (tech-debt #56).
+ok(at(11).verdict === 'UPDATE' && at(11).lotId === 'crm', 'row 11 → UPDATE crm: CSV "30 gal" resolves to catalog "30" via normalizeSize (NOT a duplicate CREATE)');
+ok(at(11).qtyFrom === 22 && at(11).qtyTo === 50, 'row 11 carries the qty move 22 → 50 onto the existing lot');
 
 // ── AMBIGUOUS — blank size in a multi-size family names its candidates (card 8) ──
 ok(at(4).verdict === 'AMBIGUOUS', 'row 4 (Alley Cat, no size) → AMBIGUOUS, not a guess (card 8)');
@@ -116,7 +154,11 @@ ok(plan.counts.CONFLICT === 1 && plan.counts.AMBIGUOUS === 1 && plan.counts.REFU
   ok(mapped[0].qty === 7, 'confirmed L3 Ready projects to qty 7');
   ok(mapped[0].sellPrice === 50, '$50.00 projects to 50');
   ok(mapped[0].priceBasis === 'per tree', 'the file-level basis is stamped on the row');
-  ok(!('Retail' in mapped[0].attributes) && Object.keys(mapped[0].attributes).length === 0, 'mapped spine columns do NOT leak into the attribute bag');
+  ok(!('Retail' in mapped[0].attributes), 'a real spine column (Retail/price) does NOT leak into the attribute bag');
+  // D-47 / point 3 — the grower's item # is RETAINED as a descriptive attribute under its own header
+  // ("Item #"), verbatim, AND carried on `sku` for the cross-check — never written as our sku.
+  ok(mapped[0].sku === 'DISC-9', 'the foreign item # is carried on `sku` for the corroborate/conflict cross-check');
+  ok(mapped[0].attributes['Item #'] === 'DISC-9', 'the foreign item # is KEPT as a note under its own header (point 3)');
 }
 
 console.log(`\nimportPlan — ${passed} passed, ${failed} failed`);
