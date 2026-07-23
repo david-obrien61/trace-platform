@@ -672,7 +672,7 @@ function capR(key, v) {
     '/onboarding',            // first-run flow
     '/assets/capture',        // sub-flow reached from /assets
     '/inventory/count',       // sub-flow reached from /inventory
-    '/inventory/import',       // sub-flow reached from /inventory ("Import CSV" on the grid); owner-only
+    '/inventory/import',       // sub-flow reached from /inventory ("Import CSV" on the grid); VIEW_COSTS gate (import_pricing gates bulk price writes server-side)
   ]);
 
   const orphans  = routerPaths.filter((p) => !EXCEPTIONS.has(p) && !navReachable(p));

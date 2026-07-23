@@ -17,8 +17,15 @@
 //     David's PHYSICAL counts. An import must never masquerade as a physical count — so it is born
 //     empty (opening_balance) and its stock arrives as an honest kind='import' movement. Provenance
 //     stays clean and a re-import cannot false-CONFLICT against an import's own genesis.
-//   • sell_price / price_basis / attributes / size → persistInventoryPatch (the shared patch path).
-//     A price is not a movement; it writes NO ledger row.
+//   • attributes / size → persistInventoryPatch (the shared patch path). A field change writes
+//     NO ledger row. These follow the QUANTITY path, not the price path — they are not pricing.
+//   • sell_price / price_basis → the GATED import_write_price RPC (David's ruling 2026-07-23).
+//     Bulk price import defaults to owner-only and is grantable to a manager (`import_pricing`).
+//     The RPC checks has_permission_for on the PASSED actor SERVER-SIDE and refuses regardless of
+//     what the client sends — a manager without the grant still imports quantities/details, and
+//     the price is HELD (not a row failure) with the reason surfaced. NOT a price wall: a
+//     view_costs manager can already edit sell_price one cell at a time on the grid; this gates
+//     the BULK write only. A soft `applied:false` from the RPC is the server refusal.
 //
 // PARTIAL FAILURE IS SURFACED PER ROW (#69): the sequence of RPCs for one row is NOT one
 // transaction, and the ledger is append-only — earlier steps cannot be rolled back. So each row's
@@ -58,10 +65,56 @@ export interface ApplyResult { applied: number; failed: number; outcomes: ApplyO
 
 const importReason = (fileName: string) => `CSV import: ${fileName}`;
 
+/** The two PRICE columns — split out of every patch so they go through the gated RPC, never the
+ *  ungated shared patch path. Everything else (attributes, size, variant_group) is not pricing. */
+const PRICE_KEYS = ['sell_price', 'price_basis'] as const;
+
+/** Persist a NON-price patch (attributes / size / variant_group) through the shared patch path.
+ *  Used for the regroup backfill and as the non-price half of writeFields. */
 async function patchIfAny(id: string, businessId: string, patch: Record<string, unknown>): Promise<string | null> {
   if (!patch || Object.keys(patch).length === 0) return null;
   const { error } = await persistInventoryPatch({ id, businessId, patch });
   return error;
+}
+
+/**
+ * Write a row's fields, splitting PRICE from the rest. Non-price fields ride persistInventoryPatch
+ * (unchanged). Price fields ride import_write_price, the server-authoritative gate — the client
+ * marker is a courtesy, this is the authority. A permission refusal HOLDS the price (returns
+ * priceHeld) without failing the row; only a non-price persist error is a hard error.
+ */
+async function writeFields(
+  id: string, businessId: string, actorId: string, patch: Record<string, unknown>,
+): Promise<{ error: string | null; priceHeld: string | null }> {
+  const rest: Record<string, unknown> = {};
+  const price: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(patch ?? {})) {
+    if ((PRICE_KEYS as readonly string[]).includes(k)) price[k] = v; else rest[k] = v;
+  }
+
+  const rErr = await patchIfAny(id, businessId, rest);
+  if (rErr) return { error: rErr, priceHeld: null };
+  if (Object.keys(price).length === 0) return { error: null, priceHeld: null };
+
+  // PRICE → the gated RPC. The server decides regardless of what the client sends (card 17).
+  const { data, error } = await supabase.rpc('import_write_price', {
+    p_lot_id: id, p_business_id: businessId, p_actor_user_id: actorId,
+    p_sell_price: (price.sell_price ?? null) as number | null,
+    p_price_basis: (price.price_basis ?? null) as string | null,
+  });
+  if (error) {
+    // RPC absent (either 20260723 migration still gated) or a RAISE — surface, never swallow. Held,
+    // not fatal: the row's qty/details already landed, and a missing price is safe (never invented).
+    console.log('[TRACE:IMPORT] price write refused/absent', { id, code: (error as { code?: string }).code, msg: error.message });
+    return { error: null, priceHeld: `prices not saved (${error.message})` };
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  if (row && row.applied === false) {
+    console.log('[TRACE:IMPORT] price HELD — server refused', { id, reason: row.reason });
+    return { error: null, priceHeld: `prices held — ${row.reason ?? 'permission needed'}` };
+  }
+  console.log('[TRACE:IMPORT] price written', { id });
+  return { error: null, priceHeld: null };
 }
 
 /** Move an existing lot's on-hand to `newQty` via the import-kinded ledger RPC. Returns an error
@@ -115,9 +168,9 @@ export async function applyImportPlan(
         const newId = row.inventory_id as string;
         console.log('[TRACE:IMPORT] create', { rowIndex: w.rowIndex, id: newId, name: w.name, size: w.size });
 
-        // 2 — its fields (price/basis/attributes).
-        const pErr = await patchIfAny(newId, businessId, w.patch);
-        if (pErr) { stop(`created the lot, but its price/details didn't save: ${pErr}`); continue; }
+        // 2 — its fields (attributes/size via the patch path; price via the gated RPC).
+        const { error: pErr, priceHeld } = await writeFields(newId, businessId, actorId, w.patch);
+        if (pErr) { stop(`created the lot, but its details didn't save: ${pErr}`); continue; }
 
         // 3 — its opening stock as an import movement.
         if ((w.qty ?? 0) > 0) {
@@ -130,19 +183,19 @@ export async function applyImportPlan(
           const gErr = await patchIfAny(sibId, businessId, { variant_group: w.variantGroup });
           if (gErr) { stop(`created + stocked the lot, but grouping its family failed: ${gErr}`); break; }
         }
-        outcomes.push({ rowIndex: w.rowIndex, ok: true, detail: `created "${w.name}" (${w.size})` });
+        outcomes.push({ rowIndex: w.rowIndex, ok: true, detail: `created "${w.name}" (${w.size})${priceHeld ? ` · ${priceHeld}` : ''}` });
         continue;
       }
 
       // setLot — an existing lot (FILL / UPDATE / overwritten CONFLICT / resolved AMBIGUOUS).
-      const pErr = await patchIfAny(w.lotId, businessId, w.patch);
+      const { error: pErr, priceHeld } = await writeFields(w.lotId, businessId, actorId, w.patch);
       if (pErr) { stop(`details didn't save: ${pErr}`); continue; }
       if (w.newQty != null) {
         const qErr = await moveQtyImport(w.lotId, businessId, actorId, w.newQty, fileName);
         if (qErr) { stop(`its details saved, but the stock change failed: ${qErr}`); continue; }
       }
       console.log('[TRACE:IMPORT] setLot', { rowIndex: w.rowIndex, lotId: w.lotId, newQty: w.newQty });
-      outcomes.push({ rowIndex: w.rowIndex, ok: true, detail: 'updated' });
+      outcomes.push({ rowIndex: w.rowIndex, ok: true, detail: `updated${priceHeld ? ` · ${priceHeld}` : ''}` });
     } catch (e) {
       stop(e instanceof Error ? e.message : String(e));
     }

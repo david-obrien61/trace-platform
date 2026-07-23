@@ -184,6 +184,12 @@ export function AppRouter() {
                 calls are additionally member-checked server-side (assert_movement_actor), so the
                 route gate is defence-in-depth, not the only lock. */}
             <Route path="/inventory/reconcile" element={<InventoryReconcile />} />
+            {/* CSV catalog import — VIEW_COSTS gate (same as /inventory), NOT owner-only (David's
+                ruling 2026-07-23): a manager with inventory access imports QUANTITIES. BULK PRICE
+                import is the separate authority `import_pricing` — defaults owner-only, grantable on
+                /team, enforced SERVER-SIDE by the import_write_price RPC. Routing this owner-only
+                would block the manager's quantity import the ruling explicitly allows. */}
+            <Route path="/inventory/import"  element={<InventoryImport />} />
             <Route path="/operating-costs"   element={<OperatingCosts />} />
             <Route path="/pmi"               element={<PMI />} />
           </Route>
@@ -193,11 +199,6 @@ export function AppRouter() {
               (required_permission=owner-only) so nav AND route agree. Add Business is an account
               action; Customers matches customers_business_owner RLS (owner-only). */}
           <Route element={<PermissionRoute permission="owner-only" />}>
-            {/* CSV catalog import — OWNER-ONLY (SCOPE: bulk catalog overwrite is owner-grade), reached
-                from the inventory grid. Server write-authority is the same member-scoped D-50 RPCs +
-                RLS as /inventory/reconcile; this route gate is the owner-facing lock (a true
-                server-side owner-only lock on import writes would be an RLS change, out of scope). */}
-            <Route path="/inventory/import"  element={<InventoryImport />} />
             <Route path="/costs"             element={<CostToProduce />} />
             <Route path="/customers"         element={<Customers />} />
             <Route path="/customers/:id"     element={<CustomerDetail />} />

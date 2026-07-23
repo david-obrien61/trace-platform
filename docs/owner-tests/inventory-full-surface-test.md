@@ -1182,3 +1182,55 @@ LAST-PROVEN: —
 - **Do:** import a row that changes only a lot's price/notes (qty already agrees, e.g. Hearts A'fire at 8). Check the ledger for that lot.
 - **PASS:** the price/attributes updated; NO new ledger row was written (a price is not a movement).
 - **FAIL:** a ledger row appears for a price-only change.
+
+### 15 — 🔴 A row that fails mid-write is NAMED, not swallowed
+STATUS: owed
+DEVICE: desktop
+COVERS: #148, #149
+LAST-PROVEN: —
+SIGNAL: the done screen lists `Row N: created the lot, but its stock didn't land …` per failed row
+- **Why this card exists:** a CREATE is two sequential RPCs (create-at-qty-0, then the import move) and the ledger is append-only, so the sequence is NOT one transaction (#69). The failure direction is SAFE — a row stranded at qty 0 is a stub (missing stock, never invented) — but card 13's `qty == SUM(delta)` invariant is BLIND to it: a half-created row at qty 0 with no delta satisfies the invariant perfectly. An import could silently under-deliver and every other card would pass. This card is the only one that can catch it.
+- **Do:** run an Accept, then read the done screen against the plan's accepted count.
+- **PASS:** **rows written == rows accepted.** Every row that did NOT complete is NAMED with what landed and what did not (`applyImportPlan` returns a per-row outcome; the surface renders every failure). The success banner's count matches the number of green rows.
+- **FAIL:** the banner says "N saved" but fewer rows actually changed, and no row is named as incomplete — a silent under-delivery.
+
+### 16 — A MANAGER without `import_pricing` imports QUANTITIES; price columns show as won't-be-written
+STATUS: owed
+DEVICE: desktop
+COVERS: #149
+LAST-PROVEN: —
+SIGNAL: the amber "Prices won't be saved" notice on the map/plan steps
+- **Do:** sign in as a manager who has inventory access (`view_costs`) but was NOT granted bulk price import. Open `/inventory/import`, map a file that includes a price column, and reach the plan.
+- **PASS:** the manager REACHES the surface (not bounced), a **"Prices won't be saved"** notice appears with the reason and the Team-page remedy, and Accept imports **quantities and details** — the done screen confirms prices were held on the priced rows.
+- **FAIL:** the manager is bounced from the route entirely (quantity import blocked), OR prices import silently despite the missing grant.
+
+### 17 — 🔴 That manager's price write is refused BY THE SERVER even if the client sends it
+STATUS: owed
+DEVICE: desktop
+COVERS: #149
+LAST-PROVEN: —
+SIGNAL: `import_write_price` returns `applied=false`, and the lot's `sell_price` is UNCHANGED
+- **Why:** a client-side marker is render-only (2026-06-21 record) — hiding a field in the UI while the API still ships the write is not security. The gate must be server-side.
+- **Do:** call the RPC directly as the un-granted manager (V5 in `20260723_inventory_import_pricing_gate.sql`): `SELECT * FROM import_write_price('<lot>', '<business>', '<manager uid>', 99.00, 'each');` and then read that lot's `sell_price`.
+- **PASS:** `applied=false`, the reason names `import_pricing`, and the lot's `sell_price` is **unchanged** — the server refused independently of any client.
+- **FAIL:** the price changes, or the RPC accepts the write for a member without the grant.
+
+### 18 — The owner grants it on `/team`; the same manager re-runs the identical file and prices land
+STATUS: owed
+DEVICE: desktop
+COVERS: #149
+LAST-PROVEN: —
+SIGNAL: the "Prices won't be saved" notice is GONE; the done screen reports no held prices
+- **Do:** as the owner, grant **bulk price import** to that manager on the existing `/team` member/role-config surface (ledger #86). The manager re-runs the **identical** CSV.
+- **PASS:** the notice is gone, `import_write_price` returns `applied=true`, and the priced lots now carry the CSV's prices. Nothing else about the run changed.
+- **FAIL:** prices still don't land after the grant, or a NEW admin screen was required to grant it (it must be the existing /team surface).
+
+### 19 — An OWNER is unaffected throughout — no new friction on the owner path
+STATUS: owed
+DEVICE: desktop
+COVERS: #149
+LAST-PROVEN: —
+SIGNAL: no "Prices won't be saved" notice ever appears for the owner
+- **Do:** as the owner, run a priced import exactly as before this build.
+- **PASS:** prices import with no extra step and no notice — the owner is authorized by `owner_id` (owner-inclusive `has_permission_for`), with zero dependency on any member-row permission.
+- **FAIL:** the owner sees the manager's "won't be saved" notice, or is asked to grant themselves anything.

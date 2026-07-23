@@ -1,5 +1,12 @@
 // ============================================================
-// InventoryImport — the CSV catalog-import surface (/inventory/import) — owner-only, desktop.
+// InventoryImport — the CSV catalog-import surface (/inventory/import) — desktop.
+// ACCESS:       Reached from the inventory grid; gated by VIEW_COSTS (same as /inventory) so a
+//               manager with inventory access can import QUANTITIES. BULK PRICE import is a
+//               separate authority (`import_pricing`, David's ruling 2026-07-23) — defaults
+//               owner-only, grantable to a manager on /team. Without it, prices are mapped and
+//               shown in the plan but NOT written (the server refuses; the marker here is a
+//               courtesy). NOT a price wall — a view_costs manager can already edit sell_price
+//               one cell at a time on the grid; this gates the bulk write only.
 // PURPOSE:      The SECOND HALF of onboarding: load a grower's price-list CSV, map its columns to
 //               the catalog spine, review a per-row PLAN, and only on Accept write it — on-hand
 //               through the D-50 ledger RPCs, price/attributes through the patch path. It is its
@@ -55,8 +62,13 @@ const VERDICT_STYLE: Record<ImportVerdict, { bg: string; fg: string }> = {
 interface RowChoice { include: boolean; overwrite: boolean; pickedLotId: string | null }
 
 export function InventoryImport() {
-  const { businessId } = useBusinessContext();
+  const { businessId, can } = useBusinessContext();
   const navigate = useNavigate();
+
+  // Bulk price import is a grantable authority (import_pricing). Owner ⇒ can() short-circuits true.
+  // A manager without it can still import quantities; price columns are shown as won't-be-saved.
+  // This is a COURTESY marker only — the server (import_write_price) is the authority.
+  const canImportPricing = can('import_pricing');
 
   const [step, setStep] = useState<Step>('upload');
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +120,9 @@ export function InventoryImport() {
   const dupTargets = useMemo(() => duplicateSpineTargets(mappings), [mappings]);
   const hasName = mappings.some(m => m.target === 'name' && !m.proposed);
   const basisChosen = basis !== '';
+  // A price column is mapped but this member cannot bulk-import prices → they won't be written.
+  const priceMapped = mappings.some(m => m.target === 'sell_price' && !m.proposed);
+  const priceWontWrite = priceMapped && !canImportPricing;
 
   // ── STEP: map → plan ──────────────────────────────────────────────────────────────
   async function buildPlan() {
@@ -190,6 +205,17 @@ export function InventoryImport() {
       </div>
 
       {error && <div style={SS.error}>{error}</div>}
+
+      {priceWontWrite && (step === 'map' || step === 'plan') && (
+        <div style={priceNotice}>
+          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>
+            <strong>Prices won't be saved.</strong> A price column is mapped, but you don't have
+            permission to import prices in bulk. Quantities and details will still import. Ask the
+            owner to grant <strong>bulk price import</strong> on the Team page, then run the file again.
+          </span>
+        </div>
+      )}
 
       {step === 'upload' && (
         <div style={card}>
@@ -343,6 +369,15 @@ export function InventoryImport() {
               {result.outcomes.filter(o => !o.ok).map(o => <li key={o.rowIndex}>Row {o.rowIndex}: {o.detail}</li>)}
             </ul>
           )}
+          {/* Rows that saved but whose PRICE was held (permission) — surfaced honestly, not swallowed. */}
+          {result.outcomes.filter(o => o.ok && /held|prices not saved/i.test(o.detail)).length > 0 && (
+            <div style={{ ...priceNotice, marginTop: 12 }}>
+              <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>Quantities and details saved, but <strong>prices were not written</strong> on
+                {' '}{result.outcomes.filter(o => o.ok && /held|prices not saved/i.test(o.detail)).length} row(s)
+                {' '}— bulk price import needs the owner's permission (Team page).</span>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button style={SS.primaryBtn} onClick={() => navigate('/inventory')}>Back to inventory</button>
             <button style={SS.addBtn} onClick={() => { setStep('upload'); setResult(null); setPlan([]); setError(null); }}>Import another</button>
@@ -364,3 +399,4 @@ const mapTh: React.CSSProperties = { textAlign: 'left', padding: '0.4rem 0.5rem'
 const mapTd: React.CSSProperties = { padding: '0.45rem 0.5rem', borderBottom: '1px solid #f3f4f6', color: '#111827', verticalAlign: 'top', whiteSpace: 'nowrap' };
 const chip: React.CSSProperties = { display: 'inline-block', borderRadius: 6, padding: '2px 7px', fontSize: '0.75rem', fontWeight: 700, marginTop: 3 };
 const confirmBtn: React.CSSProperties = { background: '#fef3c7', border: '1px solid #fcd34d', color: '#92400e', borderRadius: 6, padding: '2px 8px', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' };
+const priceNotice: React.CSSProperties = { display: 'flex', gap: 8, alignItems: 'flex-start', background: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e', borderRadius: 10, padding: '0.75rem 1rem', marginBottom: 16, fontSize: '0.88rem', lineHeight: 1.45 };

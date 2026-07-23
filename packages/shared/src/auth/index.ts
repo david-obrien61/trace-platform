@@ -115,6 +115,7 @@ export type { FinancialPermission } from './financialPermissions';
 export {
   OVERRIDE_MAINTENANCE,
   VIEW_CUSTOMERS,
+  IMPORT_PRICING,
   ACTION_PERMISSIONS,
   ALL_ACTION_PERMISSIONS,
   ACTION_ROLE_DEFAULTS,

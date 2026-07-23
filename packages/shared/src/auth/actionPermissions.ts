@@ -54,11 +54,32 @@ export const APPLY_TAX_EXEMPT = 'apply_tax_exempt';
  */
 export const APPLY_DISCOUNT = 'apply_discount';
 
+/**
+ * BULK-IMPORT the catalog's PRICES from a CSV (the /inventory/import price columns). Gates a
+ * BLAST-RADIUS behavior, NOT a price wall: `business_inventory` is already `view_costs`-gated
+ * (is_active_member AND has_permission('view_costs') on USING + WITH CHECK — 20260622), so a
+ * manager holding view_costs can ALREADY edit `sell_price` one CELL at a time through the grid.
+ * This permission separates BULK price writes (a whole file at once) from single-cell ones — it
+ * creates no price authority that did not already exist. David's ruling 2026-07-23: at LAWNS the
+ * manager does the paperwork and informs the owner, so hardcoding owner-only would force the owner
+ * into data entry he does not do — hence a GRANTABLE permission rather than a hard owner lock.
+ *
+ * DEFAULTS TO OWNER ONLY (unlike its siblings, which default OWNER + MANAGER): a manager gets it
+ * ONLY when the owner grants it per-member on /team. QUANTITY import is unaffected — a manager may
+ * import counts without this. WIRED server-side, not merely declared: the import's price write
+ * rides the SECURITY DEFINER `import_write_price` RPC, which checks `has_permission_for(business,
+ * actor, 'import_pricing')` on the PASSED actor — so this is NOT the apply_discount trap (declared
+ * but riding another gate). A client-side check alone would be render-only (2026-06-21 record); the
+ * server refuses regardless of what the client sends.
+ */
+export const IMPORT_PRICING = 'import_pricing';
+
 export const ACTION_PERMISSIONS = {
   OVERRIDE_MAINTENANCE,
   VIEW_CUSTOMERS,
   APPLY_TAX_EXEMPT,
   APPLY_DISCOUNT,
+  IMPORT_PRICING,
 } as const;
 
 export type ActionPermission =
@@ -70,19 +91,21 @@ export const ALL_ACTION_PERMISSIONS: string[] = [
   VIEW_CUSTOMERS,
   APPLY_TAX_EXEMPT,
   APPLY_DISCOUNT,
+  IMPORT_PRICING,
 ];
 
 // ── role defaults (DEFAULT-DENY) ────────────────────────────────────────────
 
 /**
  * Role string → its default action grants.
- *   OWNER   → all (override_maintenance, view_customers, apply_tax_exempt, apply_discount).
- *   MANAGER → same (runs the floor: keeps equipment moving, looks up customers, may exempt/discount).
+ *   OWNER   → all (override_maintenance, view_customers, apply_tax_exempt, apply_discount, import_pricing).
+ *   MANAGER → all EXCEPT import_pricing (runs the floor: keeps equipment moving, looks up customers,
+ *             may exempt/discount) — import_pricing DEFAULTS OFF and is owner-granted per member.
  *   STAFF   → none.
  * Keys match the free-form `business_members.role` strings; an unlisted role gets [].
  */
 export const ACTION_ROLE_DEFAULTS: Record<string, string[]> = {
-  OWNER: [OVERRIDE_MAINTENANCE, VIEW_CUSTOMERS, APPLY_TAX_EXEMPT, APPLY_DISCOUNT],
+  OWNER: [OVERRIDE_MAINTENANCE, VIEW_CUSTOMERS, APPLY_TAX_EXEMPT, APPLY_DISCOUNT, IMPORT_PRICING],
   MANAGER: [OVERRIDE_MAINTENANCE, VIEW_CUSTOMERS, APPLY_TAX_EXEMPT, APPLY_DISCOUNT],
   STAFF: [],
 };
