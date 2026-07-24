@@ -194,15 +194,23 @@ export function AppRouter() {
             <Route path="/pmi"               element={<PMI />} />
           </Route>
 
-          {/* OWNER-ONLY — the cost moat (D-009) + owner-scoped RLS surfaces. Even a Manager who
-              holds view_costs must NOT reach /costs by URL. Matches the registry tiles
-              (required_permission=owner-only) so nav AND route agree. Add Business is an account
-              action; Customers matches customers_business_owner RLS (owner-only). */}
+          {/* OWNER-ONLY — the cost moat (D-009) + owner-scoped account surfaces. Even a Manager who
+              holds view_costs must NOT reach /costs by URL. Add Business is an account action. */}
           <Route element={<PermissionRoute permission="owner-only" />}>
             <Route path="/costs"             element={<CostToProduce />} />
+            <Route path="/add-business"      element={<AddBusiness />} />
+          </Route>
+
+          {/* CUSTOMERS — view_customers (STD-020 · David's ruling 2026-07-24). The ROUTE now checks
+              the SAME permission the TABLE checks (customers_member RLS gates SELECT on
+              is_active_member AND has_permission('view_customers'), 20260710) — the principle
+              applied: route and data agree. The old literal "owner-only" gate was UNHOLDABLE by any
+              member, so /customers was unreachable at ANY permission WHILE the table already granted
+              managers SELECT — locked at the door, vault standing open. Owner passes (can() short-
+              circuits). A member without view_customers is refused at entry AND filtered by RLS. */}
+          <Route element={<PermissionRoute permission={PERMISSIONS.VIEW_CUSTOMERS} />}>
             <Route path="/customers"         element={<Customers />} />
             <Route path="/customers/:id"     element={<CustomerDetail />} />
-            <Route path="/add-business"      element={<AddBusiness />} />
           </Route>
         </Route>
       </Route>

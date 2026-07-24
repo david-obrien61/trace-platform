@@ -192,6 +192,29 @@ export async function readPricingConfig(
 }
 
 /**
+ * fetchTaxRate — read a business's SALES-TAX rate through the NARROW SECURITY DEFINER function
+ * get_business_tax_rate(uuid) (migration 20260724, STD-020 / gap #4). The rate is printed on every
+ * invoice and the customer reads it, so ANY active member may read it — but it lives in the
+ * view_pricing_config-walled business_pricing_config table, so a manager reading it via
+ * readPricingConfig() gets null (RLS-filtered) and checkout shows "Tax: not identified" over a
+ * rate that IS set (D-9 — blaming the owner for a state that does not exist, under-billing the
+ * invoice). This function returns ONLY the rate — never the pricing recipe (cost/markup/margin) —
+ * so the moat stays owner-only while the tax number is readable.
+ *
+ * Returns null when genuinely unset (the redline) OR when the caller is not an active member.
+ * Semantics match resolveTaxRate (tierPricing.ts): absent/empty/garbage/negative → null.
+ */
+export async function fetchTaxRate(
+  supabase: SupabaseClient,
+  businessId: string,
+): Promise<number | null> {
+  const { data, error } = await supabase.rpc('get_business_tax_rate', { p_business_id: businessId });
+  if (error || data == null) return null;
+  const n = Number(data);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/**
  * Write the pricing config to the gated table (or the legacy location pre-migration), and
  * keep the business_modules cost_to_produce ENABLEMENT flags (enabled/configured) set —
  * those govern module enablement and stay on business_modules either way.

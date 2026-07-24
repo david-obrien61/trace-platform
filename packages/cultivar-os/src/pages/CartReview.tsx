@@ -6,7 +6,7 @@ import { useSubmitOrder } from '../hooks/useSubmitOrder';
 import { useBusinessContext } from '@trace/shared/context';
 import {
   computeOrderPricing, RETAIL_FLOOR, resolveTier, readPricingConfig, normalizeDiscountTypes,
-  resolveTaxRate, describeTaxLine, TAX_EXEMPTION_REASONS, taxExemptionLabel,
+  fetchTaxRate, describeTaxLine, TAX_EXEMPTION_REASONS, taxExemptionLabel,
   type PricingLineInput, type DiscountType, type OrderTaxExemption,
 } from '@trace/shared/business-logic';
 import { supabase } from '../lib/supabase';
@@ -46,7 +46,11 @@ export function CartReview() {
       const { data } = await readPricingConfig(supabase, bid);
       const cfg = (data?.config ?? {}) as Record<string, unknown>;
       setDiscountTypes(normalizeDiscountTypes(cfg));
-      setTaxRate(resolveTaxRate(cfg));
+      // GAP #4 (STD-020): read the tax RATE through the NARROW get_business_tax_rate RPC — NOT
+      // resolveTaxRate(cfg), because cfg is view_pricing_config-walled and a MANAGER reads null
+      // from it → "not identified" over a rate that IS set (D-9). fetchTaxRate returns the rate to
+      // any active member without exposing the pricing recipe.
+      setTaxRate(await fetchTaxRate(supabase, bid));
       setTaxLoaded(true);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -519,8 +523,13 @@ export function CartReview() {
             <span>{taxView.amount ?? ''}</span>
           </div>
           {taxView.state === 'not_identified' && (
+            /* D-9 / STD-020: HONEST copy — states the fact and names who can fix it, without
+               commanding the reader (a MANAGER now reads the real rate via the narrow RPC; a
+               genuine "not identified" means no rate is set, and only the OWNER can set it —
+               Settings is manage_settings-gated). The old "set your tax rate in Settings" blamed
+               a reader who may neither own the gap nor be able to reach Settings. */
             <p style={{ fontSize: '0.75rem', color: '#92400e', margin: '0 0 2px' }}>
-              No tax was applied — set your business's sales tax rate in Settings so the invoice is correct.
+              No sales tax rate is set for this business — the owner can add it in Settings, then invoices will include tax.
             </p>
           )}
           <div style={{

@@ -25,7 +25,7 @@ import {
   pmiStatusFrom,
   type ScheduleTask,
 } from './pmiInterval';
-import { ALL_ACTION_PERMISSIONS, UNWIRED_ACTION_PERMISSIONS, ACTION_ROLE_DEFAULTS, OVERRIDE_MAINTENANCE } from '../auth/actionPermissions';
+import { ALL_ACTION_PERMISSIONS, UNWIRED_ACTION_PERMISSIONS, UNWIRED_REGISTRY_PERMISSIONS, ACTION_ROLE_DEFAULTS, OVERRIDE_MAINTENANCE } from '../auth/actionPermissions';
 import { ALL_FINANCIAL_PERMISSIONS } from '../auth/financialPermissions';
 
 // ── tiny harness ─────────────────────────────────────────────────────────────────
@@ -109,15 +109,28 @@ console.log('\n(3) override_maintenance is declared, UNWIRED, and hidden from th
   // The ONE source that names the fake pills (STD-011) — the role editor filters against it.
   check('listed as UNWIRED (fake pill)', UNWIRED_ACTION_PERMISSIONS.includes('override_maintenance'));
 
-  // Replicate the TeamConsole chip-catalog union MINUS owner-only MINUS the unwired set.
-  const registryStub = ['view_dashboard', 'qr_checkout', 'view_orders', 'view_costs', 'owner-only'];
-  const hidden = new Set(['owner-only', ...UNWIRED_ACTION_PERMISSIONS]);
+  // Replicate the TeamConsole chip-catalog union MINUS owner-only MINUS BOTH unwired sets.
+  // The registry stub now includes the two PLANNED-group fake pills (manage_customers via the
+  // followup_engine tile, view_reports via business_insights) — RED-first: before they were added
+  // to UNWIRED_REGISTRY_PERMISSIONS these assertions FAILED (both were in the catalog).
+  const registryStub = ['view_dashboard', 'qr_checkout', 'view_orders', 'view_costs', 'owner-only',
+                        'manage_customers', 'view_reports'];
+  const hidden = new Set(['owner-only', ...UNWIRED_ACTION_PERMISSIONS, ...UNWIRED_REGISTRY_PERMISSIONS]);
   const catalog = [...new Set([...registryStub, ...ALL_FINANCIAL_PERMISSIONS, ...ALL_ACTION_PERMISSIONS])]
     .filter((perm) => !hidden.has(perm));
   check('HIDDEN from the role-config chip catalog (ruling #3)', !catalog.includes('override_maintenance'));
   check('apply_discount is also hidden', !catalog.includes('apply_discount'));
   check('WIRED action perms still render (apply_tax_exempt, import_pricing)',
     catalog.includes('apply_tax_exempt') && catalog.includes('import_pricing'));
+
+  // ── STD-020 (David 2026-07-24): the two PLANNED-group registry fake pills are hidden too ──────
+  check('manage_customers listed as UNWIRED registry pill', UNWIRED_REGISTRY_PERMISSIONS.includes('manage_customers'));
+  check('view_reports listed as UNWIRED registry pill', UNWIRED_REGISTRY_PERMISSIONS.includes('view_reports'));
+  check('manage_customers HIDDEN from the chip catalog (planned tile, nothing consults it)', !catalog.includes('manage_customers'));
+  check('view_reports HIDDEN from the chip catalog (no live surface consumes it)', !catalog.includes('view_reports'));
+  // The still-WIRED read grant view_customers must NOT be hidden — it powers the roster + attach.
+  check('view_customers still renders (wired: customers_member RLS)',
+    !UNWIRED_REGISTRY_PERMISSIONS.includes('view_customers'));
 
   // The canonical role-default MAP still records intent (unchanged; separate from rendering).
   check('ACTION_ROLE_DEFAULTS.STAFF omits it', !ACTION_ROLE_DEFAULTS.STAFF.includes('override_maintenance'));

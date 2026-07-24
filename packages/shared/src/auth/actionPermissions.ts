@@ -110,6 +110,28 @@ export const UNWIRED_ACTION_PERMISSIONS: string[] = [
   APPLY_DISCOUNT,
 ];
 
+/**
+ * DECLARED-BUT-UNWIRED REGISTRY-TILE permissions — the PLANNED-group fake pills (D-9). Same defect
+ * class as UNWIRED_ACTION_PERMISSIONS, one layer over: these gate a dashboard TILE (surfaced by
+ * registryPermissions()), but the tile is `status: 'planned'` and NOT built, so nothing consults
+ * the permission. Worse than an action fake pill because the pill APPEARS to respond — toggle it,
+ * the funnel saves, an audit row lands — and nothing changes (David's live evidence 2026-07-24:
+ * toggling manage_customers OFF/ON changed the member row both times and reached no capability).
+ *   · manage_customers — followup_engine tile (planned). ⚠️ David owes a ruling (STD-020 report):
+ *     HIDE (reversible default, taken here) vs make it REAL (a member WRITE policy on customers, so
+ *     a manager can add/edit customers — Lauren's job at LAWNS — which means granting member WRITE
+ *     to customer PII; customers_member is SELECT-only today). Until David rules, HIDDEN.
+ *   · view_reports — business_insights tile (planned, nav_eligible:false). STEP 0 found NO live
+ *     navigable surface consumes it → HIDE (per David's ruling: "no surface → hide it").
+ * ⚠️ WIRING ONE = REMOVE IT FROM HERE in the SAME commit its tile/enforcement ships — a chip that
+ * grants access to a not-built surface is the exact fake pill this list retires (STD-011: ONE
+ * source; the TeamConsole chip catalog filters against it, and the shared block-3 test asserts it).
+ */
+export const UNWIRED_REGISTRY_PERMISSIONS: string[] = [
+  'manage_customers',
+  'view_reports',
+];
+
 // ── role defaults (DEFAULT-DENY) ────────────────────────────────────────────
 
 /**

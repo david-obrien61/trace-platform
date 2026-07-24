@@ -114,8 +114,11 @@ export function OrderTotals(props: OrderTotalsProps) {
           <span>{taxView.redline ? '⚠ ' : ''}{taxView.label}</span><span>{taxView.amount ?? ''}</span>
         </div>
         {taxView.state === 'not_identified' && (
+          /* D-9 / STD-020: honest, non-blaming copy — see CartReview for the rationale. A manager
+             now reads the real rate via the narrow RPC, so "not identified" means genuinely unset,
+             and only the owner (manage_settings) can set it. */
           <p style={{ fontSize: '0.72rem', color: '#92400e', margin: '0 0 2px' }}>
-            No tax was applied — set your business's sales tax rate in Settings so the invoice is correct.
+            No sales tax rate is set for this business — the owner can add it in Settings, then invoices will include tax.
           </p>
         )}
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.0625rem', fontWeight: 700, color: '#1f2937', paddingTop: 6, borderTop: '1px solid #e5e7eb' }}>

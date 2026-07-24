@@ -1,7 +1,7 @@
 # STANDARDS.md — TRACE Engineering Standards
-# Version: 2.4
+# Version: 2.5
 # Created: 2026-06-04
-# Last updated: 2026-07-16 (STD-019 added + ACTIVATED — external identity binds on the field the external system guarantees unique; ambiguity never auto-links; a stored link is a CACHE, not a FACT. Scar: an email-only QBO match with no name verification and a never-re-checked stored link cross-billed NINE real invoices to the wrong person over two months — silent because every TRACE surface showed the correct customer. D-47.)
+# Last updated: 2026-07-24 (STD-020 added + ACTIVATED — one permission = one capability, checked at EVERY layer it touches (route/table/function agree). Scar: a MANAGER could take an order but not read it (orders route open on view_orders, RLS owner-only — open at the door, locked at the vault) while /customers was unreachable at any permission over a table that already granted the read (locked at the door, vault open); an untaxed $544 invoice because the tax rate shared the pricing-recipe wall. David's ruling 2026-07-24.)
 # Owner: David O'Brien / TRACE Enterprises
 
 > Every standard on this list traces to a real failure that bit us.
@@ -26,7 +26,7 @@ Standards exist in three states. The point is not to hold every industry standar
 it is to hold the ones that apply to *our* stack, activate them at the right moment,
 and never carry noise.
 
-- **ACTIVE** (on the field — enforced now): STD-001 through STD-019 below. Each has
+- **ACTIVE** (on the field — enforced now): STD-001 through STD-020 below. Each has
   a confirming scar and is enforced every relevant session. Two origins:
     - *TRACE scars* — failures from this codebase (the QB lying flag, the
       hand-applied constraint, the hardcoded channels).
@@ -861,6 +861,81 @@ any future connector. Fires on the first bind, not at volume.
 
 ---
 
+### STD-020 — ONE PERMISSION = ONE CAPABILITY, CHECKED AT EVERY LAYER THAT CAPABILITY TOUCHES
+
+**Rule (David's ruling 2026-07-24):** A capability may be gated in up to three independent layers —
+the **ROUTE** (`PermissionRoute permission={X}`), the **TABLE** (an RLS policy), and the **FUNCTION**
+(a `SECURITY DEFINER` RPC that checks a permission). When a capability is permission-gated, **every
+layer it touches checks the SAME permission string.** Hold that permission and the whole path works —
+route opens, data returns, function runs. Don't hold it and the surface does not appear. The two
+forbidden states are:
+
+- **Open at the door, locked at the vault** — the route admits you on permission X but the table's
+  RLS filters every row (the surface appears-and-fails).
+- **Locked at the door, vault standing open** — the route is gated on a string no member can hold
+  while the table already grants the read (the surface is unreachable-despite-holding-the-capability).
+
+A capability MAY be **membership-only** rather than permission-gated — that is a legitimate choice —
+but it must be **DELIBERATE and RECORDED** (in the permission-enforcement map), not the residue of
+whatever gate was convenient the day the surface was built. Corollary: **a grantable pill must gate a
+real capability.** A permission that is assignable in the role console but that no layer consults is a
+fake pill (D-9) and is hidden until its enforcement ships (the two UNWIRED lists).
+
+**Scar (2026-07-24, PROVEN LIVE — a manager who could take an order but not read it):** signed in as
+a MANAGER (tenant f7ec5d67, member df7723be) with permissions confirmed in the member row after a
+working funnel grant, David found BOTH failure states at once:
+- **`/orders` — open at the door, locked at the vault.** The route gated on `view_orders` (the
+  manager held it, the page opened) while `orders` RLS was owner-only → every row filtered → "No
+  orders yet · 0 recent checkouts" on orders the manager had personally created (twice: CLV-20260723-
+  3077 and another). `order_items` was owner-only too, so the committed-stock derivation read
+  `lotsCommitted: 0` and 132 spoken-for units rendered as AVAILABLE.
+- **`/customers` — locked at the door, vault standing open.** The route gated on the literal string
+  `owner-only`, which no member can ever hold → unreachable at ANY permission → while
+  `customers_member` RLS already granted member SELECT on `view_customers` (the reason the manager
+  COULD look a customer up during checkout but not open the roster).
+- **The sales-tax rate** shared a table (`business_pricing_config`) with the pricing recipe, so the
+  only gate available was `view_pricing_config` (owner-only, correct for the recipe). A manager read
+  null → "Tax: not identified" over a rate that WAS set → the invoice went out at $544.00 **untaxed**,
+  and the copy told the manager to "set your tax rate in Settings" — a surface the manager cannot
+  reach, blaming the reader for a state that does not exist (D-9).
+- **Two dead pills** (`manage_customers`, `view_reports`) were grantable and audited correctly and
+  reached no capability — toggling `manage_customers` OFF/ON changed the member row both times and
+  did nothing.
+
+Root cause, one sentence: **each surface got whichever gate seemed right when it was built, and
+nothing ever required the route's permission to be the table's permission.** Nobody cross-checked
+the layers because there was no artifact that put them side by side.
+
+**In practice:**
+- When you build or touch a permission-gated surface, **name the permission once** and use that same
+  string at the route, the RLS policy, and any RPC. If a value is protected only because it shares a
+  table with something more sensitive (the tax rate behind the pricing wall), **give it its own
+  narrow read** (a `SECURITY DEFINER` function returning the ONE value, membership-checked) rather
+  than widening the shared gate.
+- **An expansion is unproven without a NEGATIVE test.** Every additive policy needs a twin proof that
+  a member WITHOUT the permission still sees nothing (default-deny holds).
+- **Record the gate in the permission-enforcement map** (`docs/standards/permission-enforcement-map.md`)
+  — one row per capability, columns for route/table/function, and an explicit DO-THEY-AGREE. A
+  membership-only or ungated layer is stated, never left blank (blank = "not yet examined"). Adding a
+  permission or a gated surface updates the map, or the close-out is not done.
+- **A pill that gates nothing renders nowhere** until its enforcement lands (`UNWIRED_ACTION_PERMISSIONS`
+  / `UNWIRED_REGISTRY_PERMISSIONS`, ONE source — STD-011).
+
+**Relationship:** STD-011 (one canonical representation of a fact) is the parent — this applies it to
+*authorization*: one permission is the single representation of "may do capability X", and every
+layer references it rather than re-deciding. STD-017 says a fix is true on every surface a capability
+touches; STD-020 says a *gate* is consistent across every layer a capability touches — the same
+enumerate-all-surfaces discipline, turned on the authorization stack. It is the app-layer twin of the
+D-50 permission funnel (which made one RPC the only writer of authority); STD-020 governs the READ/
+gate side the funnel did not reach.
+
+**Scope:** Every build that adds or touches a route gate, an RLS policy, or a permission-checking RPC.
+Fires on the first gated surface, not at volume. (Deferred, recorded not built: a `verify-universals`
+cap that FAILS THE BUILD when a route and a table disagree — the mechanical enforcement after the map
+exists and after LAWNS.)
+
+---
+
 ## ENFORCEMENT
 
 | Standard | Applies to | Gate type |
@@ -884,6 +959,7 @@ any future connector. Fires on the first bind, not at volume.
 | STD-017 | Every fix/build touching a capability with more than one surface (pricing/tax value, customer/order field, create-vs-edit path, capture-then-read flow) | Enumerate the capability's surfaces before building; fix true on ALL (or explicitly scoped + rest flagged); owner-prove enumerates EVERY surface; orphan columns (written-not-read / read-not-written) flagged |
 | STD-018 | Every build introducing/touching an owner-managed entity (a table the owner creates/edits/removes rows in — inventory, customers, assets, service offerings) | Enumerate the full entry surface at build time (C+R+U+D + scan/OCR/import as the workflow needs); implement each or explicitly scope-and-flag the deferral; Update = full field set via ONE editor (STD-011); Delete = safe soft/hard policy by FK check, confirm-first, actor logged |
 | STD-019 | Every build that binds a TRACE record to an external system's record (QBO customer/item/account, payment-processor customer, supplier catalog, any connector) | Bind on the field the external system GUARANTEES unique (never one it permits to collide); two independent fields must concur before binding; ambiguity → CREATE or SURFACE, never a guessed link; a stored external id is a CACHE — re-verify against the live record before acting on it; collision-guard the id; absence is never agreement |
+| STD-020 | Every build that adds/touches a route gate, an RLS policy, or a permission-checking RPC | One permission = one capability, checked at EVERY layer it touches (route/table/function agree on the same string); no open-at-door-locked-at-vault, no locked-at-door-vault-open; membership-only is allowed but must be DELIBERATE and recorded in the permission-enforcement map; every access EXPANSION ships a NEGATIVE test; a pill that gates nothing renders nowhere |
 | BENCH-A, BENCH-C, BENCH-D, BENCH-F | Every session (STEP 0 roster match against ACTIVATE WHEN triggers) | Catastrophic-class match → stop and ask David; hygiene-class match → apply and report |
 | BENCH-E | Any session that adds an external AI provider call that is user-facing | Apply try-chain pattern; provider 3 slot in comments; operator log on fallback; clean user error on all-fail |
 | BENCH-G | Any session adding/altering a compliance action whose history is auditable (tax exemption apply/remove, waiver, money-authority grant) | Hygiene: write the immutable event row alongside current-state columns; escalates to catastrophic (BENCH-F) if it touches an issued invoice |
@@ -1147,6 +1223,7 @@ a standard's application."
 
 | Version | Date | Change |
 |---|---|---|
+| 2.5 | 2026-07-24 | **STD-020 added + ACTIVATED (David's ruling 2026-07-24)** — ONE PERMISSION = ONE CAPABILITY, CHECKED AT EVERY LAYER THAT CAPABILITY TOUCHES. A capability is gated in up to three layers (route / RLS table / SECURITY DEFINER RPC); every gated layer checks the SAME permission string — hold it and the whole path works, don't and the surface does not appear. The two forbidden states: open-at-door-locked-at-vault (route admits, RLS filters every row) and locked-at-door-vault-open (route gated on an unholdable string over a table that already grants the read). Scar (2026-07-24, proven live as a MANAGER): `/orders` route open on `view_orders` while `orders`/`order_items` RLS was owner-only → "No orders yet" on orders the manager created + 132 committed units read as AVAILABLE (open-at-door); `/customers` route gated on the literal `owner-only` (unholdable) while `customers_member` already granted the SELECT (locked-at-door); the sales-tax rate shared `business_pricing_config` with the pricing recipe so the only gate was `view_pricing_config` (owner-only) → a $544 invoice went out UNTAXED with copy blaming the manager to "set your tax rate in Settings" (a surface a manager can't reach). Root cause: each surface got whichever gate was convenient and nothing required route=table; no artifact put the layers side by side. Fix: additive member policies gating orders/order_items/service_offerings on the route's own permission; a NARROW `get_business_tax_rate` RPC (membership-checked, returns ONLY the rate, never the recipe); `/customers` re-gated to `view_customers`; two dead pills hidden; AND the permission-enforcement map (`docs/standards/permission-enforcement-map.md`) as the reconciliation artifact. Membership-only is allowed but must be DELIBERATE + recorded; every EXPANSION ships a NEGATIVE test. App-layer twin of the D-50 permission funnel. |
 | 1.0 | 2026-06-04 | Created. Six standards seeded from session scars. Adopted immediately. |
 | 1.1 | 2026-06-08 | STD-007 added. Scar: QB `accounting_needs_reconnect` lying flag — reactive-only flag kept dead connection silent. Fixed by proactive `accounting_token_expires_at` check in `qbo/status.ts`. |
 | 1.2 | 2026-06-08 | STD-008 added. Scar: `20260604_social_drafts_voice_learning.sql` committed-but-unapplied — every generate-posts INSERT failed silently; loadSocialDrafts 400'd; ~0 rows across multiple sessions. STD-008 adds live-schema verification gate. |

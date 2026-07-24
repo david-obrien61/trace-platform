@@ -765,7 +765,13 @@ function RolesTab(p: {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ background: roleBadge(role.role_key), color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 8 }}>{role.role_key}</span>
-                <span style={{ fontSize: 11, color: T.sub }}>{isOwnerRole ? 'Full access' : `${perms.length} permissions`}</span>
+                {/* Count only RENDERABLE permissions (STD-020 / David 2026-07-24): perms.length
+                    counted hidden entries too (e.g. override_maintenance, retained in the array but
+                    filtered from the chip catalog), so the MANAGER card read "12 permissions" over
+                    11 lit pills. A hidden permission gates nothing renderable by definition — count
+                    what the owner can actually see. The hidden entry stays in the array (removing it
+                    would be a silent revocation). */}
+                <span style={{ fontSize: 11, color: T.sub }}>{isOwnerRole ? 'Full access' : `${perms.filter((id) => allChipIds.includes(id)).length} permissions`}</span>
                 {isOwnerRole && <span style={{ fontSize: 10, color: T.sub, textTransform: 'uppercase', border: `1px solid ${T.border}`, borderRadius: 6, padding: '1px 6px' }}>set by ownership</span>}
                 {!isOwnerRole && role.locked && <span style={{ fontSize: 10, color: T.sub, textTransform: 'uppercase', border: `1px solid ${T.border}`, borderRadius: 6, padding: '1px 6px' }}>system role</span>}
                 {!isOwnerRole && role.isOverridden && <span style={{ fontSize: 10, color: T.primary, textTransform: 'uppercase' }}>tuned</span>}
