@@ -1196,6 +1196,8 @@ SIGNAL: the done screen lists `Row N: created the lot, but its stock didn't land
 - **PASS:** **rows written == rows accepted.** Every row that did NOT complete is NAMED with what landed and what did not (`applyImportPlan` returns a per-row outcome; the surface renders every failure). The success banner's count matches the number of green rows.
 - **FAIL:** the banner says "N saved" but fewer rows actually changed, and no row is named as incomplete — a silent under-delivery.
 
+⛔ SUPERSEDED 2026-07-26 → R-10 on `rbac-resource-action-full-surface-test.md` (`import_pricing` → `inventory:import_price`). Do not run as evidence.
+
 ### 16 — A MANAGER without `import_pricing` imports QUANTITIES; price columns show as won't-be-written
 STATUS: owed
 DEVICE: desktop
@@ -1205,6 +1207,8 @@ SIGNAL: the amber "Prices won't be saved" notice on the map/plan steps
 - **Do:** sign in as a manager who has inventory access (`view_costs`) but was NOT granted bulk price import. Open `/inventory/import`, map a file that includes a price column, and reach the plan.
 - **PASS:** the manager REACHES the surface (not bounced), a **"Prices won't be saved"** notice appears with the reason and the Team-page remedy, and Accept imports **quantities and details** — the done screen confirms prices were held on the priced rows.
 - **FAIL:** the manager is bounced from the route entirely (quantity import blocked), OR prices import silently despite the missing grant.
+
+⛔ SUPERSEDED 2026-07-26 → R-11 on `rbac-resource-action-full-surface-test.md` (`import_pricing` → `inventory:import_price`). Do not run as evidence.
 
 ### 17 — 🔴 That manager's price write is refused BY THE SERVER even if the client sends it
 STATUS: owed
@@ -1217,6 +1221,8 @@ SIGNAL: `import_write_price` returns `applied=false`, and the lot's `sell_price`
 - **Do:** call the RPC directly as the un-granted manager (V5 in `20260723_inventory_import_pricing_gate.sql`): `SELECT * FROM import_write_price('<lot>', '<business>', '<manager uid>', 99.00, 'each');` and then read that lot's `sell_price`.
 - **PASS:** `applied=false`, the reason names `import_pricing`, and the lot's `sell_price` is **unchanged** — the server refused independently of any client.
 - **FAIL:** the price changes, or the RPC accepts the write for a member without the grant.
+
+⛔ SUPERSEDED 2026-07-26 → R-12 on `rbac-resource-action-full-surface-test.md` (`import_pricing` → `inventory:import_price`). Do not run as evidence.
 
 ### 18 — The owner grants it on `/team`; the same manager re-runs the identical file and prices land
 STATUS: failed

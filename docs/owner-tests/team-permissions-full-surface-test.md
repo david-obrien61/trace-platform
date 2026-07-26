@@ -18,6 +18,14 @@ and nothing carried an edit from the first into the second — so **"Save MANAGE
 reads.** `import_pricing` was minted and gated the same hour it became *ungrantable to any manager*. The
 funnel closes that; card 1 is the live proof.
 
+
+> ## ⛔ SUPERSEDED BY THE resource:action REBUILD (2026-07-26, Phase 0)
+>
+> **CARD 6 IS RETIRED. CARDS 1, 2, 3, 4, 5 AND 7 SURVIVE UNCHANGED AND STAY HERE** — see `docs/owner-tests/rbac-resource-action-full-surface-test.md`.
+> Per spec §9 the old cards are **not edited into the new model**: the string mapping changed
+> enough that editing would carry a stale assumption forward. The six survivors test the **FUNNEL and the audit row**, which the resource:action refit does not change — so they are NOT copied to the new board (a card in two places is two cards that will disagree, STD-011). They count toward the 42. Card **6** ("the two fake pills no longer render") is **RETIRED**: the retired set changes shape entirely — `view_dashboard` and `view_reports` retire, and `manage_orders` is **KEPT, corrected** (it is enforced at four api sites in `submit.ts`, which two prior analyses missed by not scanning the api layer). **N-3** replaces it.
+> **Do not run a superseded card as evidence** — it asserts a string that is being retired.
+
 ---
 
 ## HOW TO READ A CARD
@@ -99,7 +107,8 @@ SIGNAL: none — visual + one query
 - **PASS:** the two numbers are equal.
 - **FAIL:** the card shows one number and the member row another *(the screen and the gate read different stores — the R3 defect)*.
 
-### 6. The two fake pills no longer render
+### 6. ⛔ RETIRED (2026-07-26) — replaced by N-3 on the resource:action board.
+#### Original card: The two fake pills no longer render
 STATUS: owed
 DEVICE: desktop
 COVERS: sub-ruling #3, D-9, UNWIRED_ACTION_PERMISSIONS

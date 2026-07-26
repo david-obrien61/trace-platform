@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '../supabase/client';
 import { can as sharedCan } from '../auth/permissions';
-import { applyFinancialDependencies } from '../auth/financialPermissions';
+import { applyPermissionDependencies } from '../auth/permissionManifest';
 
 const SM_DEBUG = false; // flip to true to re-enable legacy [SM-TRACE] diagnostics
 
@@ -693,7 +693,7 @@ export function BusinessProvider({
   const can = React.useCallback(
     (permissionId: string): boolean => {
       if (isOwnerActive) return true; // owner: full access (userPermissions === null)
-      const effective = applyFinancialDependencies(activePermissions ?? []);
+      const effective = applyPermissionDependencies(activePermissions ?? []);
       return sharedCan({ permissions: effective }, permissionId);
     },
     [isOwnerActive, activePermissions],
@@ -709,7 +709,7 @@ export function BusinessProvider({
       // owner ⇒ all access implied; member ⇒ dependency-resolved explicit list
       effectivePermissions: isOwnerActive
         ? 'OWNER_ALL'
-        : applyFinancialDependencies(activePermissions ?? []),
+        : applyPermissionDependencies(activePermissions ?? []),
     });
   }, [activeResolved, isOwnerActive, activePermissions]);
 

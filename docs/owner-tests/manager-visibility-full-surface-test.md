@@ -18,6 +18,16 @@ at the vault); `/customers` was unreachable at any permission over a table that 
 read (locked at the door, vault open); a $544 invoice went out UNTAXED because the tax rate shared the
 pricing-recipe wall. Cards 1/5/7 are the live proofs; cards 2/6/8/10 prove the wall.
 
+
+> ## ⛔ SUPERSEDED BY THE resource:action REBUILD (2026-07-26, Phase 0)
+>
+> **ALL 10 CARDS ON THIS BOARD ARE SUPERSEDED** — see `docs/owner-tests/rbac-resource-action-full-surface-test.md`.
+> Per spec §9 the old cards are **not edited into the new model**: the string mapping changed
+> enough that editing would carry a stale assumption forward. Cards **1–8 and 10** are RE-WRITTEN as **R-1 … R-9** against the new strings (`orders:read`, `order_items:read`, `service_offerings:read`, `tax_rate:read`, `customers:read`, `pricing_recipe:read`). Card **9** (pill count == lit pills) is **RETIRED** — the Roles page will render FROM the manifest, so N-4 asserts the stronger claim.
+>
+> 🔴 **Two of the re-written cards ship with a REQUIRED `SETUP` block, because the live tenant contradicts their as-shipped premise:** card 2 (the live STAFF member HOLDS `view_orders`, so the Note A split is not the shipped configuration) and card 10 (the live MANAGER HOLDS `view_pricing_config`, so the card asserts the wall holds when the string is ABSENT — not that this manager is currently walled). Running either as-configured fails for the wrong reason.
+> **Do not run a superseded card as evidence** — it asserts a string that is being retired.
+
 ---
 
 ## HOW TO READ A CARD

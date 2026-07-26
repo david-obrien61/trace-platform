@@ -25,8 +25,12 @@ import {
   pmiStatusFrom,
   type ScheduleTask,
 } from './pmiInterval';
-import { ALL_ACTION_PERMISSIONS, UNWIRED_ACTION_PERMISSIONS, UNWIRED_REGISTRY_PERMISSIONS, ACTION_ROLE_DEFAULTS, OVERRIDE_MAINTENANCE } from '../auth/actionPermissions';
-import { ALL_FINANCIAL_PERMISSIONS } from '../auth/financialPermissions';
+import {
+  ALL_ACTION_PERMISSIONS, ALL_FINANCIAL_PERMISSIONS, HIDDEN_PERMISSIONS, OVERRIDE_MAINTENANCE,
+  PERMISSION_MANIFEST, ALL_MODEL_PERMISSIONS, LEGACY_PERMISSIONS, ALIAS_PAIRS, MAPPABLE_LEGACY,
+  STRIPPED_AT_BACKFILL, MANAGER_DEFAULT_BUNDLE, STAFF_DEFAULT_BUNDLE,
+  splitPermission, unmetDependencies, createWithoutRead, applyPermissionDependencies,
+} from '../auth/permissionManifest';
 
 // ── tiny harness ─────────────────────────────────────────────────────────────────
 let passed = 0;
@@ -97,43 +101,153 @@ console.log('\n(2) usage-based tasks do NOT silently set a fake interval');
   check('unknown phrase → null (not fabricated)', taskIntervalToDays('whenever it feels right') === null);
 }
 
-// ── (3) override_maintenance: DECLARED but UNWIRED → HIDDEN from the role editor ─────
-// Rewritten 2026-07-23 (David's ruling #3): the mechanism is not built, so a grantable pill
-// for it would be a fake surface (D-9). It now renders NOWHERE until wired. This replaces the
-// old "chip-visible" assertions and the DEFAULT_PERMISSIONS source-regex (that const is retired).
-console.log('\n(3) override_maintenance is declared, UNWIRED, and hidden from the chip catalog');
+// ── (3) the fake pills stay HIDDEN — now filtered by the ONE manifest list ───────────
+// Rewritten 2026-07-26 (Phase 0, resource:action RBAC): UNWIRED_ACTION_PERMISSIONS and
+// UNWIRED_REGISTRY_PERMISSIONS are RETIRED. HIDDEN_PERMISSIONS replaces both, DERIVED from the
+// declarations that own the fact (legacy `unwired` flags + model status 'declared-unwired').
+// These assertions are unchanged in FORCE — the same four pills must stay hidden, the same two
+// wired ones must render. Phase 0 is neutral, and this block is how that is proven.
+console.log('\n(3) the declared-but-unwired pills are hidden from the chip catalog (ONE filter)');
 {
   check('override_maintenance constant', OVERRIDE_MAINTENANCE === 'override_maintenance');
   check('string still exists in ALL_ACTION_PERMISSIONS', ALL_ACTION_PERMISSIONS.includes('override_maintenance'));
 
-  // The ONE source that names the fake pills (STD-011) — the role editor filters against it.
-  check('listed as UNWIRED (fake pill)', UNWIRED_ACTION_PERMISSIONS.includes('override_maintenance'));
-
-  // Replicate the TeamConsole chip-catalog union MINUS owner-only MINUS BOTH unwired sets.
-  // The registry stub now includes the two PLANNED-group fake pills (manage_customers via the
-  // followup_engine tile, view_reports via business_insights) — RED-first: before they were added
-  // to UNWIRED_REGISTRY_PERMISSIONS these assertions FAILED (both were in the catalog).
+  // Replicate the TeamConsole chip-catalog union MINUS the ONE hidden set.
   const registryStub = ['view_dashboard', 'qr_checkout', 'view_orders', 'view_costs', 'owner-only',
                         'manage_customers', 'view_reports'];
-  const hidden = new Set(['owner-only', ...UNWIRED_ACTION_PERMISSIONS, ...UNWIRED_REGISTRY_PERMISSIONS]);
+  const hidden = new Set(HIDDEN_PERMISSIONS);
   const catalog = [...new Set([...registryStub, ...ALL_FINANCIAL_PERMISSIONS, ...ALL_ACTION_PERMISSIONS])]
     .filter((perm) => !hidden.has(perm));
-  check('HIDDEN from the role-config chip catalog (ruling #3)', !catalog.includes('override_maintenance'));
+  check('override_maintenance HIDDEN (ruling #3)', !catalog.includes('override_maintenance'));
   check('apply_discount is also hidden', !catalog.includes('apply_discount'));
   check('WIRED action perms still render (apply_tax_exempt, import_pricing)',
     catalog.includes('apply_tax_exempt') && catalog.includes('import_pricing'));
-
-  // ── STD-020 (David 2026-07-24): the two PLANNED-group registry fake pills are hidden too ──────
-  check('manage_customers listed as UNWIRED registry pill', UNWIRED_REGISTRY_PERMISSIONS.includes('manage_customers'));
-  check('view_reports listed as UNWIRED registry pill', UNWIRED_REGISTRY_PERMISSIONS.includes('view_reports'));
   check('manage_customers HIDDEN from the chip catalog (planned tile, nothing consults it)', !catalog.includes('manage_customers'));
   check('view_reports HIDDEN from the chip catalog (no live surface consumes it)', !catalog.includes('view_reports'));
-  // The still-WIRED read grant view_customers must NOT be hidden — it powers the roster + attach.
-  check('view_customers still renders (wired: customers_member RLS)',
-    !UNWIRED_REGISTRY_PERMISSIONS.includes('view_customers'));
+  check('view_customers still renders (wired: customers_member RLS)', catalog.includes('view_customers'));
+  check("'owner-only' route sentinel is never a pill", !catalog.includes('owner-only'));
 
-  // The canonical role-default MAP still records intent (unchanged; separate from rendering).
-  check('ACTION_ROLE_DEFAULTS.STAFF omits it', !ACTION_ROLE_DEFAULTS.STAFF.includes('override_maintenance'));
+  // NEUTRALITY: the hidden set is EXACTLY the previous two lists' union. If this drifts, a pill
+  // silently appeared or vanished on /team — the one thing Phase 0 must not do.
+  const expectedHidden = ['owner-only', 'manage_customers', 'view_reports', 'override_maintenance',
+                          'apply_discount', 'maintenance:override', 'order_discount:apply'];
+  check('HIDDEN_PERMISSIONS covers every previously-hidden string',
+    expectedHidden.filter((p) => !p.includes(':')).every((p) => hidden.has(p)));
+  check('the two orphans are NOT hidden-as-pills (they are stripped, not filtered)',
+    !hidden.has('process_orders') && !hidden.has('manage_team'));
+}
+
+// ── (4) THE PERMISSION MANIFEST — spec v3 invariants ─────────────────────────────────
+// NEW 2026-07-26 (Phase 0). Each check is an assertion the spec makes, expressed so that a
+// manifest edit that breaks the model fails HERE rather than in production.
+console.log('\n(4) permission manifest — the model, the dashes, the dependencies, the aliases');
+{
+  // — the parse rule: split on the LAST colon (resource names may contain dots) —
+  check('splitPermission: dotted sub-resource parses on the LAST colon',
+    splitPermission('deliveries.route:read')?.resource === 'deliveries.route' &&
+    splitPermission('deliveries.route:read')?.verb === 'read');
+  check('splitPermission: a legacy string has no resource:verb shape',
+    splitPermission('view_costs') === null);
+  check('splitPermission: capability verb parses', splitPermission('inventory:import_price')?.verb === 'import_price');
+
+  // — R2/A3: THE FIVE UNMINTABLE DELETES. A dash means the string does not exist. —
+  for (const r of ['customers', 'service_offerings', 'deliveries', 'campaigns', 'assets']) {
+    check(`${r}:delete is UNMINTABLE (R2/A3 — no tombstone)`, !(`${r}:delete` in PERMISSION_MANIFEST));
+  }
+  check('inventory:delete DOES exist (the one real tombstone)', 'inventory:delete' in PERMISSION_MANIFEST);
+  check('audit_log:create takes NO manifest entry (system-only writer)', !('audit_log:create' in PERMISSION_MANIFEST));
+  check('inventory_ledger update/delete are structurally absent (append-only)',
+    !('inventory_ledger:update' in PERMISSION_MANIFEST) && !('inventory_ledger:delete' in PERMISSION_MANIFEST));
+  check('margin has read only — no write verb is implied (spec §4.1)',
+    'margin:read' in PERMISSION_MANIFEST && !('margin:update' in PERMISSION_MANIFEST) &&
+    !('margin:create' in PERMISSION_MANIFEST) && !('margin:delete' in PERMISSION_MANIFEST));
+
+  // — RULE 1: MODIFY requires read. CREATE requires NOTHING (R1). —
+  const badStructural = ALL_MODEL_PERMISSIONS.filter((p) => {
+    const e = PERMISSION_MANIFEST[p];
+    if (e.verb === 'update' || e.verb === 'delete') return e.structural[0] !== `${e.resource}:read`;
+    return false;
+  });
+  check('Rule 1: every update/delete declares its resource read', badStructural.length === 0);
+  const createDeps = ALL_MODEL_PERMISSIONS.filter((p) => PERMISSION_MANIFEST[p].verb === 'create'
+    && PERMISSION_MANIFEST[p].structural.length > 0);
+  check('R1: NO create verb carries a structural prerequisite', createDeps.length === 0);
+  check('R1 inverse: orders:create without orders:read is NOT a dependency violation',
+    unmetDependencies(['orders:create']).length === 0);
+  check('R1 inverse: it IS reported as a deliberate asymmetry for the Roles page',
+    createWithoutRead(['orders:create']).includes('orders:create'));
+  check('Rule 1 bites: orders:update without orders:read IS a violation',
+    unmetDependencies(['orders:update']).some((d) => d.missing === 'orders:read'));
+
+  // — RULE 2 (content) and RULE 3 (inheritance) —
+  check('Rule 2: margin:read requires costs:read', PERMISSION_MANIFEST['margin:read'].content.includes('costs:read'));
+  check('Rule 2 bites: margin:read alone is a violation',
+    unmetDependencies(['margin:read']).some((d) => d.missing === 'costs:read'));
+  check('R8: order_discount:apply depends on orders:CREATE, never orders:update',
+    PERMISSION_MANIFEST['order_discount:apply'].content.includes('orders:create') &&
+    !PERMISSION_MANIFEST['order_discount:apply'].content.includes('orders:update'));
+  check('Rule 3: deliveries.route:* inherits deliveries:read',
+    PERMISSION_MANIFEST['deliveries.route:update'].inheritance.includes('deliveries:read'));
+  check('Rule 3 bites: deliveries.route:update alone is a violation',
+    unmetDependencies(['deliveries.route:update']).some((d) => d.missing === 'deliveries:read'));
+
+  // — status + sensitivity (spec §7.1 / §4) —
+  check('R9: margin:read status is `derived` (no gate of its own)', PERMISSION_MANIFEST['margin:read'].status === 'derived');
+  check('R6: maintenance:override is declared-unwired', PERMISSION_MANIFEST['maintenance:override'].status === 'declared-unwired');
+  check('the four confidential resources are flagged confidential',
+    ['pricing_recipe:read', 'costs:read', 'margin:read', 'wages:read']
+      .every((p) => PERMISSION_MANIFEST[p].sensitivity === 'confidential'));
+  check('audit_log:read is owner-only (never a grantable pill)', PERMISSION_MANIFEST['audit_log:read'].sensitivity === 'owner-only');
+  check('inventory:read is operational, NOT confidential (the split is by field, not table)',
+    PERMISSION_MANIFEST['inventory:read'].sensitivity === 'operational');
+
+  // — the default bundles (§5) — seed data, and they must satisfy their own rules —
+  check('MANAGER bundle satisfies every dependency class', unmetDependencies(MANAGER_DEFAULT_BUNDLE).length === 0);
+  check('STAFF bundle satisfies every dependency class', unmetDependencies(STAFF_DEFAULT_BUNDLE).length === 0);
+  check('R1/Note A: STAFF holds orders:create and NOT orders:read',
+    STAFF_DEFAULT_BUNDLE.includes('orders:create') && !STAFF_DEFAULT_BUNDLE.includes('orders:read'));
+  check('Note A is surfaced as deliberate, not silent', createWithoutRead(STAFF_DEFAULT_BUNDLE).includes('orders:create'));
+  check('no bundle seeds a confidential read',
+    [...MANAGER_DEFAULT_BUNDLE, ...STAFF_DEFAULT_BUNDLE]
+      .every((p) => PERMISSION_MANIFEST[p]?.sensitivity !== 'confidential'));
+  check('no bundle seeds an unmintable delete',
+    [...MANAGER_DEFAULT_BUNDLE, ...STAFF_DEFAULT_BUNDLE].every((p) => p in PERMISSION_MANIFEST));
+
+  // — the legacy register + the alias layer (§2 / §8) —
+  check('the register carries all 21 legacy strings (19 from §2 + the 2 orphans §2 missed)',
+    LEGACY_PERMISSIONS.length === 21);
+  check('16 of the 19 §2 rows are mappable (retire ×2 + sentinel produce no pair)', MAPPABLE_LEGACY.length === 16);
+  check('the two orphans produce NO alias pair', !ALIAS_PAIRS.some((a) => a.from === 'process_orders' || a.from === 'manage_team'));
+  check('view_dashboard / view_reports / owner-only produce NO alias pair',
+    !ALIAS_PAIRS.some((a) => ['view_dashboard', 'view_reports', 'owner-only'].includes(a.from)));
+
+  // ALIAS ROUND-TRIP, BOTH DIRECTIONS — the Phase 0 exit gate, asserted in source.
+  const forward = (from: string, implies: string) => ALIAS_PAIRS.some((a) => a.from === from && a.implies === implies);
+  check('alias forward: view_costs → inventory:read', forward('view_costs', 'inventory:read'));
+  check('alias reverse: inventory:read → view_costs', forward('inventory:read', 'view_costs'));
+  check('alias forward: manage_orders → orders:update AND orders:delete',
+    forward('manage_orders', 'orders:update') && forward('manage_orders', 'orders:delete'));
+  check('alias reverse: orders:delete → manage_orders', forward('orders:delete', 'manage_orders'));
+  check('every alias pair has a mirror (both directions, no orphan edge)',
+    ALIAS_PAIRS.every((a) => ALIAS_PAIRS.some((b) => b.from === a.implies && b.implies === a.from)));
+  check('every alias target is a real manifest entry (no pair points at a dash)',
+    ALIAS_PAIRS.filter((a) => a.from.includes(':')).every((a) => a.from in PERMISSION_MANIFEST));
+
+  // — R-B: the three stripped classes (backfill contract) —
+  check('R-B retired class = view_dashboard + view_reports',
+    STRIPPED_AT_BACKFILL.retired.length === 2 && STRIPPED_AT_BACKFILL.retired.includes('view_dashboard'));
+  check('R-B unwired class = override_maintenance (carrying it forward = an INVISIBLE grant)',
+    STRIPPED_AT_BACKFILL.unwired.includes('override_maintenance'));
+  check('R-B unmapped class = the two orphans (A1.1)',
+    STRIPPED_AT_BACKFILL.unmapped.includes('process_orders') && STRIPPED_AT_BACKFILL.unmapped.includes('manage_team'));
+
+  // — neutrality of the dependency filter (the applyFinancialDependencies successor) —
+  check('legacy behavior preserved: view_margin stripped without view_costs',
+    !applyPermissionDependencies(['view_margin']).includes('view_margin'));
+  check('legacy behavior preserved: view_margin kept with view_costs',
+    applyPermissionDependencies(['view_costs', 'view_margin']).includes('view_margin'));
+  check('new vocabulary: margin:read stripped without costs:read',
+    !applyPermissionDependencies(['margin:read']).includes('margin:read'));
 }
 
 // ── summary ────────────────────────────────────────────────────────────────────────

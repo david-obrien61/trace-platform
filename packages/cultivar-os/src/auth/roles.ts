@@ -9,43 +9,18 @@
 // Permissions are stored as string arrays in the business_members.permissions JSONB column.
 // Use checkPermission(member.permissions, 'manage_settings') at call sites to gate UI.
 //
-// FINANCIAL-DATA permissions (view_costs/view_pricing_config/view_wages/view_margin) are
-// defined ONCE in the shared module and imported here so the role wall's vocabulary cannot
-// drift between the chokepoint, these bundles, the backfill script, and the RLS layer.
-// Source: docs/decisions/2026-06-21-role-financial-permissions.md.
-
-import {
-  VIEW_COSTS,
-  VIEW_PRICING_CONFIG,
-  VIEW_WAGES,
-  VIEW_MARGIN,
-} from '@trace/shared/auth/financialPermissions';
-import { OVERRIDE_MAINTENANCE, VIEW_CUSTOMERS, APPLY_TAX_EXEMPT, APPLY_DISCOUNT } from '@trace/shared/auth/actionPermissions';
+// ⚠️ PERMISSIONS was RETIRED 2026-07-26 (Phase 0 of the resource:action RBAC refit). It was
+// the FIFTH representation of one fact — beside financialPermissions.ts, actionPermissions.ts
+// and the two UNWIRED_* lists — and STD-011 says one fact gets one home. Every string it
+// held now lives in packages/shared/src/auth/permissionManifest.ts as LEGACY_PERMISSION,
+// beside the resource:verb model those strings decompose into and the alias layer that
+// bridges them. Route gates import LEGACY_PERMISSION; nothing imports a permission from
+// this file. Source: docs/resource-action-permission-spec.md (v3).
+//
+// This file keeps what it alone owns: the Cultivar ROLE vocabulary and its labels.
 
 export const ROLES = ['OWNER', 'MANAGER', 'STAFF'] as const;
 export type CultivarRole = typeof ROLES[number];
-
-export const PERMISSIONS = {
-  VIEW_DASHBOARD:    'view_dashboard',
-  QR_CHECKOUT:       'qr_checkout',
-  VIEW_ORDERS:       'view_orders',
-  MANAGE_ORDERS:     'manage_orders',      // edit / delete / status-change an order (roster CRUD); owner + manager
-  MANAGE_DELIVERIES: 'manage_deliveries',
-  MANAGE_CUSTOMERS:  'manage_customers',
-  MANAGE_CAMPAIGNS:  'manage_campaigns',
-  VIEW_REPORTS:      'view_reports',
-  MANAGE_SETTINGS:   'manage_settings',   // settings page, QB connect, team management
-  VIEW_CUSTOMERS,                          // read customers (roster + order-entry lookup/attach); RLS-gated (20260710). owner + manager
-  // ── financial-data wall (v1) — default-deny; backfilled onto existing members ──
-  VIEW_COSTS,                              // operational unit_cost (shaping)
-  VIEW_PRICING_CONFIG,                     // pricing recipe / moat (hard wall)
-  VIEW_WAGES,                              // HR pay (hard wall)
-  VIEW_MARGIN,                             // margin verdict (shaping; requires VIEW_COSTS)
-  // ── action permissions (gate a behavior, not a tile) ──
-  OVERRIDE_MAINTENANCE,                    // defer/use an asset against its PMI schedule (mechanism not yet built)
-  APPLY_TAX_EXEMPT,                        // zero an order's tax via a documented exemption (D-40); owner + manager
-  APPLY_DISCOUNT,                          // apply a discount / owner price-override on an order (D-40 matched pair); owner + manager
-} as const;
 
 // ⚠️ DEFAULT_PERMISSIONS was RETIRED 2026-07-23 (David's ruling OPTION 1). It was a THIRD
 // representation of role→permission facts (beside the role_definitions floor and the member

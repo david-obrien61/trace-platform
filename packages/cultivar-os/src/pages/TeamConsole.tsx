@@ -4,16 +4,16 @@
 //               console; this wrapper is config only (the same component Ignition can mount).
 // DEPENDENCIES: @trace/shared/components/team/MemberConsole · useBusinessContext (businessId/
 //               isOwner/can) · tileRegistry (allTiles/registryPermissions → chip catalog, ONE
-//               source, no hardcoded permission list) · shared financial/action permission consts
-//               · UNWIRED_ACTION_PERMISSIONS (the fake pills filtered out of the chip catalog,
-//               ruling #3) · auth/roles (ROLE_LABELS/ROLE_DESCRIPTIONS) · lib/supabase.
+//               source, no hardcoded permission list) · permissionManifest (ALL_FINANCIAL_PERMISSIONS
+//               / ALL_ACTION_PERMISSIONS + HIDDEN_PERMISSIONS — the ONE fake-pill filter, STD-011)
+//               · auth/roles (ROLE_LABELS/ROLE_DESCRIPTIONS) · lib/supabase.
 // OUTPUTS:      <TeamConsole/> — owner-only console (route gated by PermissionRoute manage_settings).
 
 import { useMemo } from 'react';
 import { useBusinessContext } from '@trace/shared/context';
 import { MemberConsole } from '@trace/shared/components/team/MemberConsole';
 import type { PermChip, PermGroup, MemberConsoleTheme } from '@trace/shared/components/team/MemberConsole';
-import { ALL_FINANCIAL_PERMISSIONS, ALL_ACTION_PERMISSIONS, UNWIRED_ACTION_PERMISSIONS, UNWIRED_REGISTRY_PERMISSIONS } from '@trace/shared/auth';
+import { ALL_FINANCIAL_PERMISSIONS, ALL_ACTION_PERMISSIONS, HIDDEN_PERMISSIONS } from '@trace/shared/auth';
 import { allTiles, registryPermissions } from '../registry/tileRegistry';
 import { ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS } from '../auth/roles';
 import type { CultivarRole } from '../auth/roles';
@@ -40,13 +40,13 @@ export function TeamConsole() {
   const permissionGroups = useMemo<PermGroup[]>(() => {
     const tilesByPerm: Record<string, string[]> = {};
     for (const t of allTiles()) (tilesByPerm[t.required_permission] ||= []).push(t.label);
-    // Exclude 'owner-only' (a structural route gate, not a grantable pill), the DECLARED-BUT-UNWIRED
-    // action perms (apply_discount / override_maintenance), AND the DECLARED-BUT-UNWIRED registry
-    // perms (manage_customers / view_reports — PLANNED tiles nothing consults; STD-020 / David's
-    // ruling 2026-07-24). A pill that gates nothing — or gates a not-built surface — is a fake
-    // surface (D-9). Each renders again the commit its enforcement/tile ships (both UNWIRED lists,
-    // ONE source — STD-011).
-    const hidden = new Set(['owner-only', ...UNWIRED_ACTION_PERMISSIONS, ...UNWIRED_REGISTRY_PERMISSIONS]);
+    // HIDDEN_PERMISSIONS is the ONE filter (permissionManifest) — it replaces the two ad-hoc
+    // UNWIRED_* lists with a set DERIVED from the declarations that own the fact: the 'owner-only'
+    // route sentinel (a structural gate, never a grantable pill), any legacy entry flagged
+    // `unwired` (apply_discount / override_maintenance / manage_customers / view_reports), and any
+    // model entry with status 'declared-unwired'. A pill that gates nothing — or gates a not-built
+    // surface — is a fake surface (D-9); each renders again the commit its enforcement ships.
+    const hidden = new Set(HIDDEN_PERMISSIONS);
     const ids = [...new Set([...registryPermissions(), ...ALL_FINANCIAL_PERMISSIONS, ...ALL_ACTION_PERMISSIONS])].filter((p) => !hidden.has(p));
     const chips: PermChip[] = ids.map((id) => {
       const fromTile = allTiles().find((t) => t.required_permission === id)?.group;

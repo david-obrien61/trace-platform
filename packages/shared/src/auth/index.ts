@@ -111,33 +111,51 @@ export type { OwnerSignupConfig, VerticalStep, VerticalStepProps } from './Owner
 export { can, hasRole, canAccessModule, expandRoles, deriveAllowed } from './permissions';
 export type { PermissionPolicy, SessionLike } from './permissions';
 
-// Financial-data permission vocabulary (the v1 role wall) — single source of truth
+// THE PERMISSION MANIFEST — the ONE source for what a permission is (spec v3, 2026-07-26).
+// Absorbs and replaces financialPermissions.ts, actionPermissions.ts, the two UNWIRED_*
+// lists, and roles.ts PERMISSIONS — five representations of one fact became one (STD-011).
 export {
+  // the model
+  PERMISSION_MANIFEST,
+  ALL_MODEL_PERMISSIONS,
+  splitPermission,
+  dependenciesOf,
+  unmetDependencies,
+  createWithoutRead,
+  applyPermissionDependencies,
+  // the legacy register + the alias layer it seeds
+  LEGACY_PERMISSIONS,
+  ALL_LEGACY_PERMISSIONS,
+  LEGACY_PERMISSION,
+  ALIAS_PAIRS,
+  MAPPABLE_LEGACY,
+  STRIPPED_AT_BACKFILL,
+  // the Roles-page filter (replaces UNWIRED_ACTION_PERMISSIONS + UNWIRED_REGISTRY_PERMISSIONS)
+  HIDDEN_PERMISSIONS,
+  // fresh-role seed data (NOT a backfill input — see R-A on DEFAULT_BUNDLES)
+  DEFAULT_BUNDLES,
+  MANAGER_DEFAULT_BUNDLE,
+  STAFF_DEFAULT_BUNDLE,
+  // legacy string constants — live until Phase 7 CONTRACT
   VIEW_COSTS,
   VIEW_PRICING_CONFIG,
   VIEW_WAGES,
   VIEW_MARGIN,
-  FINANCIAL_PERMISSIONS,
-  ALL_FINANCIAL_PERMISSIONS,
-  FINANCIAL_ROLE_DEFAULTS,
-  financialDefaultsForRole,
-  applyFinancialDependencies,
-} from './financialPermissions';
-export type { FinancialPermission } from './financialPermissions';
-
-// Action-permission vocabulary — behavior-gating perms (not tile perms) — single source
-export {
-  OVERRIDE_MAINTENANCE,
   VIEW_CUSTOMERS,
+  OVERRIDE_MAINTENANCE,
+  APPLY_TAX_EXEMPT,
+  APPLY_DISCOUNT,
   IMPORT_PRICING,
-  ACTION_PERMISSIONS,
+  ALL_FINANCIAL_PERMISSIONS,
   ALL_ACTION_PERMISSIONS,
-  UNWIRED_ACTION_PERMISSIONS,
-  UNWIRED_REGISTRY_PERMISSIONS,
-  ACTION_ROLE_DEFAULTS,
-  actionDefaultsForRole,
-} from './actionPermissions';
-export type { ActionPermission } from './actionPermissions';
+} from './permissionManifest';
+export type {
+  ManifestEntry,
+  LegacyEntry,
+  PermissionStatus,
+  PermissionSensitivity,
+  LegacyFate,
+} from './permissionManifest';
 
 // Abuse guards for business creation — shipped OFF, genuine kill-switches
 export { runBusinessCreationGuards } from './businessGuards';

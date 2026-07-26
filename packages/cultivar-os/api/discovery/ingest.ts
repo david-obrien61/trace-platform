@@ -19,7 +19,7 @@ import { reasonCostTurn, applyCostReasoning } from '../../../shared/src/discover
 import type { CostDiscoveryLine, CostAnswer, CostReasoning } from '../../../shared/src/discovery/costDiscovery';
 import { compareEnteredVsSite, type Discrepancy } from '../../../shared/src/discovery/compare';
 import { populateCatalog } from '../../../shared/src/discovery/populate';
-import { VIEW_COSTS } from '../../../shared/src/auth/financialPermissions';
+import { VIEW_COSTS } from '../../../shared/src/auth/permissionManifest';
 import { sendNotification } from '../../../shared/src/notifications/send';
 import type { VerticalSchema, SilentPartnerAnalysis } from '../../../shared/src/discovery/types';
 

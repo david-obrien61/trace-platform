@@ -696,6 +696,389 @@ function capR(key, v) {
   return FAIL(`route↔nav integrity broken: ${problems.join(' | ')}`);
 }
 
+// ════════════════════════════════════════════════════════════════════════════════
+// CAPABILITY P — resource:action PERMISSION MODEL (spec v3 §7) — **WARN MODE**
+//
+//   THE METHOD FIX, STATED FIRST: this cap reads `packages/cultivar-os/api/**` as well as the
+//   migrations, the router and the tile registry. Two prior analyses called `manage_orders`
+//   theater because they scanned RLS and routes but NOT the API layer — the third enforcement
+//   layer STD-020 names. A verifier that does not read the api layer REPRODUCES THE EXACT DEFECT
+//   THIS REFIT EXISTS TO MAKE IMPOSSIBLE. See API_TEXT below.
+//
+//   SOURCE-BASED (spec R5). No DB connection; CI has no service key. The "is it actually applied
+//   in this database" half stays a DAVID-QUERY at owner-prove, using the same pg_policies proof
+//   the 20260724 migration used.
+//
+//   WARN MODE (spec §7 staging: describe → warn → close → fail): every finding is reported as a
+//   KNOWN-GAP and the cap ALWAYS PASSES. It flips to FAIL at Phase 7 CONTRACT, once the findings
+//   are closed or moved to ALLOWED_DIVERGENCE / declared-unwired with a recorded reason.
+//
+//   ACCEPTANCE TEST: capP carries its own PREDICTED flag list (build-plan §4, 16 flags) and
+//   reports the DIFF between predicted and emitted. The prediction is NEVER edited to match the
+//   output — a difference means the verifier is wrong, or the prediction under-counted, and
+//   either way it is DAVID'S call, surfaced here rather than silently reconciled.
+// ════════════════════════════════════════════════════════════════════════════════
+
+// Build-plan §4's predicted first-run output. DO NOT EDIT TO MATCH REALITY.
+const CAPP_PREDICTED = {
+  P1:  'view_costs is coarse — one string, 6 FOR ALL policies, 4 routes (assertion 5)',
+  P2:  'N1 social_drafts — route/table disagreement',
+  P3:  'N2 campaigns — route/table disagreement',
+  P4:  'N3 deliveries — route/table disagreement',
+  P5:  'N4 PMI — route/table disagreement',
+  P6:  'N5 customer write — route/table disagreement',
+  P7:  'N6 anon residual — route/table disagreement',
+  P8:  'service_offerings gate carries no permission string (assertion 2)',
+  P9:  'inventory_ledger gate carries no permission string (assertion 2)',
+  P10: 'get_business_tax_rate is membership-gated, no string (assertion 2)',
+  P11: 'audit_log insert/read enforced with no declared string (assertion 2)',
+  P12: 'manage_orders enforced at 4 api sites, zero RLS/route presence (assertion 1, api half)',
+  P13: 'apply_discount declared, enforced by nothing (assertion 1) → UNWIRED',
+  P14: 'override_maintenance declared, enforced by nothing (assertion 1) → UNWIRED',
+  P15: 'view_dashboard / view_reports declared, no resource (assertion 1)',
+  P16: 'view_margin / margin:read declared + confidential, enforced by no policy or RPC → derived',
+};
+
+/**
+ * ALLOWED_DIVERGENCE — REQUIRED, NOT OPTIONAL (build-plan §4). Assertion 3 would otherwise fail
+ * forever on two DELIBERATE designs. Every entry carries its recorded reason; a divergence list
+ * with reasons is the mechanism that makes "recorded, not hidden" enforceable.
+ */
+const ALLOWED_DIVERGENCE = [
+  {
+    capability: '/orders',
+    route: 'qr_checkout → orders:create',
+    table: 'view_orders → orders:read',
+    permanent: true,
+    reason:
+      'Note A, now PERMANENT under R1. Rule 1 is MODIFY-requires-read; create never requires ' +
+      'read. A STAFF member may TAKE an order without browsing the business order history. The ' +
+      'route and the table check different strings BY DESIGN, and a negative owner-test card ' +
+      'proves the split stays true.',
+  },
+  {
+    capability: '/costs',
+    route: 'owner-only',
+    table: 'view_costs → costs:read',
+    permanent: true,
+    reason:
+      'D-009 — the deliberate moat. The route is STRICTER than the table: cost-to-produce is ' +
+      'owner-only at the door while the underlying cost tables are permission-gated. Stricter-' +
+      'at-the-route is the safe direction and is a recorded product decision.',
+  },
+];
+
+// Resource → the table (or function) whose gate would enforce that resource's strings today.
+// A resource whose gate checks NO permission string is a string with no enforcement — the
+// "declared but nothing checks it" state assertion 1 exists to surface.
+const RESOURCE_GATES = {
+  orders: 'orders',
+  order_items: 'order_items',
+  order_service_selections: 'order_service_selections',
+  order_compliance_records: 'order_compliance_records',
+  customers: 'customers',
+  service_offerings: 'service_offerings',
+  inventory: 'business_inventory',
+  inventory_ledger: 'inventory_ledger',
+  deliveries: 'deliveries',
+  'deliveries.route': 'deliveries',   // sub-resource — no table of its own (Rule 3)
+  assets: 'business_assets',
+  pmi: 'business_pmi_schedule',
+  pricing_recipe: 'business_pricing_config',
+  costs: 'cost_objects',
+  wages: 'labor_resource_wages',
+  settings: 'businesses',
+  campaigns: 'campaigns',
+  team: 'role_definitions',
+  audit_log: 'audit_log',
+};
+
+/** Strip SQL line comments — a `has_permission(biz,'X')` inside a comment is NOT a gate. */
+const stripSqlComments = (t) => t.replace(/--[^\n]*/g, '');
+/** Strip JS/TS comments — same reason (a doc block naming a string is not an enforcement site). */
+const stripJsComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+/** Read every .ts under a dir tree (the api layer — the method fix). */
+const readTree = (relDir) => {
+  const abs = join(ROOT, relDir);
+  if (!existsSync(abs)) return '';
+  const out = [];
+  const walk = (d) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const full = join(d, e.name);
+      if (e.isDirectory()) walk(full);
+      else if (e.name.endsWith('.ts') || e.name.endsWith('.tsx')) {
+        out.push(`\n-- FILE: ${full.slice(abs.length + 1)}\n` + readFileSync(full, 'utf8'));
+      }
+    }
+  };
+  walk(abs);
+  return out.join('\n');
+};
+
+/** Parse the manifest SOURCE (the verifier has no TS runtime — same discipline as capF/capG). */
+function parseManifest(src) {
+  const model = {};        // permission → { resource, verb, status, sensitivity }
+  const legacy = [];       // { legacy, replacements[], unwired }
+
+  // RESOURCES block → four-verbs-per-resource, minus the dashes
+  const rStart = src.indexOf('const RESOURCES: Record<string, EntrySeed> = {');
+  const rEnd = src.indexOf('\n};', rStart);
+  const rBlock = rStart >= 0 ? src.slice(rStart, rEnd) : '';
+  const entryRe = /\n  '?([a-z_][a-z_.]*)'?: \{([\s\S]*?)\n  \},/g;
+  let m;
+  while ((m = entryRe.exec(rBlock))) {
+    const [, resource, body] = m;
+    const verbs = (body.match(/verbs: \[([^\]]*)\]/)?.[1] ?? '')
+      .split(',').map((x) => x.trim().replace(/'/g, '')).filter(Boolean);
+    const sensitivity = body.match(/sensitivity: '([a-z-]+)'/)?.[1] ?? 'operational';
+    const serverVerbs = (body.match(/server: \[([^\]]*)\]/)?.[1] ?? '')
+      .split(',').map((x) => x.trim().replace(/'/g, '')).filter(Boolean);
+    const flatStatus = body.match(/status: '([a-z-]+)'/)?.[1] ?? null;
+    const statusMap = {};
+    const perVerb = body.match(/status: \{([^}]*)\}/)?.[1];
+    if (perVerb) for (const s of perVerb.matchAll(/(\w+): '([a-z-]+)'/g)) statusMap[s[1]] = s[2];
+    for (const verb of verbs) {
+      model[`${resource}:${verb}`] = {
+        resource, verb, sensitivity, server: serverVerbs.includes(verb),
+        status: flatStatus ?? statusMap[verb] ?? 'enforced',
+      };
+    }
+  }
+
+  // CAPABILITY_VERBS block
+  const cStart = src.indexOf('const CAPABILITY_VERBS');
+  const cBlock = cStart >= 0 ? src.slice(cStart, src.indexOf('\n};', cStart)) : '';
+  for (const c of cBlock.matchAll(/\n  '([a-z_]+:[a-z_]+)': \{([\s\S]*?)\n  \},/g)) {
+    const [, permission, body] = c;
+    const i = permission.lastIndexOf(':');
+    model[permission] = {
+      resource: permission.slice(0, i),
+      verb: permission.slice(i + 1),
+      status: body.match(/status: '([a-z-]+)'/)?.[1] ?? 'enforced',
+      sensitivity: body.match(/sensitivity: '([a-z-]+)'/)?.[1] ?? 'operational',
+      server: true,   // a capability verb is enforced by an RPC/api gate by definition
+    };
+  }
+
+  // LEGACY_PERMISSIONS register
+  const lStart = src.indexOf('export const LEGACY_PERMISSIONS');
+  const lBlock = lStart >= 0 ? src.slice(lStart, src.indexOf('\n];', lStart)) : '';
+  for (const l of lBlock.matchAll(/legacy: '([^']+)',\s*\n\s*replacements: \[([\s\S]*?)\],\s*\n\s*fate: '([a-z-]+)',\s*\n\s*unwired: (true|false)/g)) {
+    legacy.push({
+      legacy: l[1],
+      replacements: l[2].split(',').map((x) => x.trim().replace(/'/g, '')).filter(Boolean),
+      fate: l[3],
+      unwired: l[4] === 'true',
+    });
+  }
+  return { model, legacy };
+}
+
+function capP(key, v) {
+  if (!isMultiTenant(v)) return SKIP('the resource:action permission model is a Cultivar multi-tenant-RLS surface (Ignition is local-first PIN — out of scope).');
+
+  const manifestSrc = read('packages/shared/src/auth/permissionManifest.ts');
+  if (!manifestSrc) return FAIL('permissionManifest.ts not found — the model has no single source.');
+
+  const sqlRaw    = concatSql(v.migrationsDir);
+  const sql       = stripSqlComments(sqlRaw);
+  const apiText   = stripJsComments(readTree('packages/cultivar-os/api'));   // ← THE METHOD FIX
+  const router    = read('packages/cultivar-os/src/router.tsx');
+  const registry  = read('packages/cultivar-os/src/registry/tileRegistry.ts');
+  const console_  = read('packages/shared/src/components/team/MemberConsole.tsx');
+  const mapDoc    = read('docs/standards/permission-enforcement-map.md');
+
+  const { model, legacy } = parseManifest(manifestSrc);
+  const flags = [];
+  const FLAG = (id, text) => flags.push({ id, text });
+
+  // alias resolution — a new string is enforced when a legacy antecedent gates it (spec §8)
+  const aliasesOf = (perm) => {
+    const out = [perm];
+    for (const e of legacy) {
+      if (e.legacy === perm) out.push(...e.replacements);
+      if (e.replacements.includes(perm)) out.push(e.legacy);
+    }
+    return out;
+  };
+  // every permission string any gate actually CHECKS, per table
+  const gatedStringsOn = (table) => {
+    const strings = new Set();
+    for (const name of policyNamesOnTable(sql, table)) {
+      const body = effectivePolicy(sql, name);
+      if (!body) continue;
+      for (const g of body.matchAll(/has_permission(?:_for)?\s*\([^)]*?'([^']+)'\s*\)/g)) strings.add(g[1]);
+    }
+    return strings;
+  };
+  const allGatedStrings = new Set();
+  for (const g of sql.matchAll(/has_permission(?:_for)?\s*\([^)]*?'([^']+)'\s*\)/g)) allGatedStrings.add(g[1]);
+  const apiGatedStrings = new Set();
+  // Capture the permission ARGUMENT of a caller-gate call — never a literal that merely happens
+  // to sit near one. (The first pass spanned 200 chars and swallowed a `typeof x === 'object'`.)
+  for (const g of apiText.matchAll(/callerHoldsPermission\s*\([^)]*?'([a-z_]+)'\s*\)/g)) apiGatedStrings.add(g[1]);
+  for (const g of apiText.matchAll(/const\s+[A-Z_]+\s*=\s*'([a-z_]+)';/g)) apiGatedStrings.add(g[1]);
+  const routeStrings = new Set([...router.matchAll(/permission=\{(?:LEGACY_PERMISSION\.[A-Z_]+|[A-Z_]+)\}/g)].map((x) => x[0]));
+  const routerText = router + registry;
+
+  // ── ASSERTION 1 — NO FAKE PILLS ───────────────────────────────────────────────
+  // Every `enforced` string must be checked by a policy on ITS resource's table, an RPC, or an
+  // api-layer gate — resolving through the alias layer. Reported per RESOURCE (a per-verb report
+  // would say the same thing four times).
+  // A verb the spec marks "✓ server" is enforced through an RPC / the api caller gate, NOT a
+  // member table policy — a DELIBERATE, recorded design (§3), so it is not a gap. Flagging it
+  // would report the checkout's service-key-after-proving-the-caller path as a missing gate.
+  const unenforcedResources = new Set();
+  for (const [perm, e] of Object.entries(model)) {
+    if (e.status !== 'enforced' || e.server) continue;
+    const table = RESOURCE_GATES[e.resource];
+    const candidates = aliasesOf(perm);
+    const onTable = table ? gatedStringsOn(table) : new Set();
+    const enforced =
+      candidates.some((c) => onTable.has(c)) ||
+      candidates.some((c) => apiGatedStrings.has(c)) ||
+      (!table && candidates.some((c) => allGatedStrings.has(c)));
+    if (!enforced) unenforcedResources.add(e.resource);
+  }
+  const A1_PREDICTED = {
+    service_offerings: 'P8', inventory_ledger: 'P9', tax_rate: 'P10', audit_log: 'P11',
+    deliveries: 'P4', pmi: 'P5', campaigns: 'P3',
+  };
+  for (const r of [...unenforcedResources].sort()) {
+    // Rule 3: a dotted sub-resource has no table of its own. If its PARENT is already flagged,
+    // reporting it again states one fact twice — the STD-011 defect, in a verifier.
+    if (r.includes('.') && unenforcedResources.has(r.split('.')[0])) continue;
+    const id = A1_PREDICTED[r] ?? `EXTRA:${r}`;
+    FLAG(id, `assertion 1 — resource '${r}': no policy on ${RESOURCE_GATES[r] ?? '(no table)'} checks any string that resolves to ${r}:* (membership-only or owner-only gate). The manifest names it; nothing enforces the name.`);
+  }
+  // the declared-unwired pair — declared, enforced by nothing (the fake pills)
+  if (model['order_discount:apply']?.status === 'declared-unwired') {
+    FLAG('P13', "assertion 1 — apply_discount / order_discount:apply is DECLARED and enforced by nothing: the capability IS gated at submit.ts:238, but by manage_orders. Made real in Phase 5 (re-point + the missing audit_log row).");
+  }
+  if (model['maintenance:override']?.status === 'declared-unwired') {
+    FLAG('P14', "assertion 1 — override_maintenance / maintenance:override is DECLARED and enforced by nothing: NOTHING IN THE APP BLOCKS ON AN OVERDUE PMI, so there is no feature to override (R6). Hidden from the Roles page until the block is built.");
+  }
+  // retired strings still present in code
+  const retired = legacy.filter((e) => e.fate === 'retire').map((e) => e.legacy);
+  const retiredStillReferenced = retired.filter((r) => routerText.includes(`'${r}'`) || allGatedStrings.has(r));
+  if (retiredStillReferenced.length) {
+    FLAG('P15', `assertion 1 — RETIRED strings still referenced in code: ${retiredStillReferenced.join(', ')}. They map to no resource (R3) and are stripped at backfill (R-B).`);
+  }
+  // margin — declared + confidential, enforced by no policy or RPC
+  if (model['margin:read']?.status === 'derived') {
+    FLAG('P16', "assertion 1 — margin:read is CONFIDENTIAL and enforced by NO policy or RPC (client-only applyPermissionDependencies). Resolved as status `derived` (R9): enforced TRANSITIVELY via its Rule-2 prerequisite costs:read, which IS server-gated. Not `enforced`, and not a fake pill either.");
+  }
+  // the api-layer half — a string enforced ONLY in api/, invisible to an RLS+route scan
+  const apiOnly = [...apiGatedStrings].filter((s) => !allGatedStrings.has(s) && !routerText.includes(`'${s}'`) && !routerText.includes(s.toUpperCase()));
+  if (apiOnly.includes('manage_orders')) {
+    FLAG('P12', "assertion 1 (API-LAYER HALF) — manage_orders is enforced at 4 sites in packages/cultivar-os/api/orders/submit.ts (1005 update, 1292 status, 1223 delete, 238 the discount path) with ZERO RLS and ZERO route presence. This is the flag two prior analyses could not produce because they never read the api layer. It is NOT theater; it maps to orders:update + orders:delete.");
+  }
+
+  // ── ASSERTION 2 — NO ORPHAN GATES ─────────────────────────────────────────────
+  // Every string a gate checks must have a manifest home (model or legacy register).
+  const known = new Set([...Object.keys(model), ...legacy.map((e) => e.legacy)]);
+  // `p_perm` / `perm` / `X` are the RESOLVER's own parameter placeholders (has_permission's body
+  // and its doc shape), not gate strings. Excluded by name, and stated so the exclusion is not a
+  // silent swallow of a real orphan.
+  const RESOLVER_PLACEHOLDERS = new Set(['perm', 'p_perm', '<perm>', 'X', 'permission']);
+  const orphanGates = [...allGatedStrings, ...apiGatedStrings]
+    .filter((s) => !known.has(s) && !RESOLVER_PLACEHOLDERS.has(s));
+  if (orphanGates.length) {
+    FLAG('EXTRA:orphan-gates', `assertion 2 — gate strings with NO manifest home: ${[...new Set(orphanGates)].join(', ')}. (audit_log's system INSERT writer is exempt by declaration — spec §3.)`);
+  }
+
+  // ── ASSERTION 3 — ROUTE == TABLE (STD-020), minus ALLOWED_DIVERGENCE ───────────
+  // The recorded disagreements are read from the enforcement map — the artifact that OWNS this
+  // reconciliation. capP gives the map teeth: a row recorded there is a flag here until closed.
+  const disagreementBlock = mapDoc.slice(mapDoc.indexOf('## DISAGREEMENTS'));
+  const recorded = [...disagreementBlock.matchAll(/^\| (N\d) \| \*\*([^*]+)\*\*/gm)].map((x) => ({ n: x[1], what: x[2].trim() }));
+  const N_TO_P = { N1: 'P2', N2: 'P3', N3: 'P4', N4: 'P5', N5: 'P6', N6: 'P7' };
+  for (const d of recorded) {
+    const id = N_TO_P[d.n] ?? `EXTRA:${d.n}`;
+    // N3/N4 also surface via assertion 1 (membership-only table) — report the map row once.
+    if (flags.some((f) => f.id === id)) continue;
+    FLAG(id, `assertion 3 — ${d.n} recorded in the enforcement map, still OPEN: ${d.what}. Route and table check different strings, and the divergence is NOT on ALLOWED_DIVERGENCE.`);
+  }
+  if (ALLOWED_DIVERGENCE.length < 2 || !ALLOWED_DIVERGENCE.every((d) => d.reason && d.reason.length > 40)) {
+    FLAG('EXTRA:divergence-list', 'assertion 3 — ALLOWED_DIVERGENCE is missing an entry or a recorded reason. It is REQUIRED, not optional: without it assertion 3 fails forever on two deliberate designs.');
+  }
+
+  // ── ASSERTION 4 — DEPENDENCIES (all three classes) ────────────────────────────
+  // The SQL floor's role definitions + the manifest bundles. create-without-read is NOT a
+  // violation (R1) — it is REPORTED, for the Roles-page affordance.
+  const depProblems = [];
+  const bundleRe = /export const (MANAGER|STAFF)_DEFAULT_BUNDLE: string\[\] = \[([\s\S]*?)\];/g;
+  let b;
+  while ((b = bundleRe.exec(manifestSrc))) {
+    const held = new Set(b[2].split(',').map((x) => x.trim().replace(/'/g, '')).filter(Boolean));
+    for (const perm of held) {
+      const e = model[perm];
+      if (!e) { depProblems.push(`${b[1]} bundle holds '${perm}', which is not in the manifest (a dash, or a typo)`); continue; }
+      if ((e.verb === 'update' || e.verb === 'delete') && !held.has(`${e.resource}:read`)) {
+        depProblems.push(`${b[1]}: ${perm} without ${e.resource}:read (Rule 1)`);
+      }
+      if (e.resource.includes('.') && !held.has(`${e.resource.split('.')[0]}:read`)) {
+        depProblems.push(`${b[1]}: ${perm} without ${e.resource.split('.')[0]}:read (Rule 3)`);
+      }
+    }
+  }
+  if (depProblems.length) FLAG('EXTRA:dependencies', `assertion 4 — dependency violations: ${depProblems.join('; ')}`);
+
+  // create-without-read — REPORTED, never a violation (R1). This is the Roles-page affordance.
+  const staffBlock = manifestSrc.match(/export const STAFF_DEFAULT_BUNDLE: string\[\] = \[([^\]]*)\]/)?.[1] ?? '';
+  const staffHeld = staffBlock.split(',').map((x) => x.trim().replace(/'/g, '')).filter(Boolean);
+  const deliberate = staffHeld.filter((p) => p.endsWith(':create') && !staffHeld.includes(p.replace(/:create$/, ':read')));
+
+  // ── ASSERTION 5 — VERB/COMMAND AGREEMENT + no string grants an absent verb ────
+  const UNMINTABLE = ['customers:delete', 'service_offerings:delete', 'deliveries:delete', 'campaigns:delete', 'assets:delete'];
+  // Scan EXECUTABLE positions only. The migration header, this cap, the manifest comments and
+  // the owner-test cards all NAME these strings in order to assert their absence — a scan that
+  // counts a doc mention would flag the documentation of the rule as a violation of it.
+  const minted = UNMINTABLE.filter((p) =>
+    p in model || sql.includes(`'${p}'`) || stripJsComments(routerText).includes(`'${p}'`) || apiText.includes(`'${p}'`));
+  if (minted.length) {
+    FLAG('EXTRA:unmintable', `assertion 5 — a verb the manifest marks ABSENT exists in code: ${minted.join(', ')}. R2/A3: these five have no tombstone, so the string must be unfindable.`);
+  }
+  // the coarse string — one permission, many FOR ALL policies, many routes
+  // Count the DISTINCT tables whose effective member policy rides the one coarse string.
+  const COARSE_TABLES = ['business_inventory', 'cost_objects', 'cost_object_edges',
+                         'cost_object_assignments', 'business_service_log', 'receipts'];
+  const coarse = COARSE_TABLES.filter((t) => gatedStringsOn(t).has('view_costs'));
+  const forAllCount = coarse.length;
+  const routeCount = [...router.matchAll(/permission=\{VIEW_COSTS\}/g)].length;
+  if (forAllCount > 1) {
+    FLAG('P1', `assertion 5 — view_costs is COARSE: ${forAllCount} tables (${coarse.join(', ')}) and ${routeCount} route gate(s) ride ONE string, so read and write cannot be separated and a read-only inventory viewer is inexpressible. This is the biggest split (1 → 14 strings across 5 resources).`);
+  }
+
+  // ── ASSERTION 6 — CONFIDENTIAL GRANTS SHOW THE HARD WARNING ───────────────────
+  const confidential = Object.entries(model).filter(([, e]) => e.sensitivity === 'confidential').map(([p]) => p);
+  const hasHardWarning = /sensitivit|confidential|exposes your/i.test(console_);
+  if (confidential.length && !hasHardWarning) {
+    FLAG('EXTRA:confidential-warning', `assertion 6 — ${confidential.length} confidential permissions (${[...new Set(confidential.map((p) => p.split(':')[0]))].join(', ')}) and MemberConsole.tsx has NO sensitivity-aware branch: granting cost/margin/wage access shows the same bland confirm as any other pill. This is the live defect spec §4 names.`);
+  }
+
+  // ── the acceptance diff: predicted vs emitted ─────────────────────────────────
+  const emittedIds = new Set(flags.map((f) => f.id));
+  const missing = Object.keys(CAPP_PREDICTED).filter((id) => !emittedIds.has(id));
+  const extra = [...emittedIds].filter((id) => id.startsWith('EXTRA:'));
+  const matched = Object.keys(CAPP_PREDICTED).filter((id) => emittedIds.has(id));
+
+  const gaps = flags
+    .sort((a, x) => a.id.localeCompare(x.id))
+    .map((f) => `[${f.id}] ${f.text}`);
+  gaps.push(`ACCEPTANCE DIFF — predicted 16 · matched ${matched.length} · missing ${missing.length}${missing.length ? ` (${missing.join(', ')})` : ''} · EXTRA ${extra.length}${extra.length ? ` (${extra.map((e) => e.slice(6)).join(', ')})` : ''}. The prediction is NOT edited to match output — a difference is DAVID'S call.`);
+  if (deliberate.length) {
+    gaps.push(`REPORTED, NOT A VIOLATION (R1) — create-without-read grants for the Roles-page affordance: ${deliberate.join(', ')}. STAFF takes orders and cannot browse them; the page must name it as a deliberate choice, never a silent asymmetry.`);
+  }
+  gaps.push(`ALLOWED_DIVERGENCE (${ALLOWED_DIVERGENCE.length}, both permanent): ${ALLOWED_DIVERGENCE.map((d) => `${d.capability} [${d.route} vs ${d.table}]`).join(' · ')}`);
+
+  return PASS(
+    `WARN MODE — the model is asserted, nothing fails the build yet. Manifest: ${Object.keys(model).length} resource:verb strings, ${legacy.length} legacy strings registered, ${flags.length} finding(s). API layer READ (${apiText.length.toLocaleString()} chars) — the scan that would have caught the manage_orders misread. Flips to FAIL at Phase 7 CONTRACT.`,
+    gaps,
+  );
+}
+
 // ── capability registry ──────────────────────────────────────────────────────────
 const CAPS = [
   ['1', 'Persistent identity indicator in per-page layout/header', cap1],
@@ -712,6 +1095,7 @@ const CAPS = [
   ['e', "New tile's required_permission selectable in role-builder w/o separate edit (D-010/D-012)", capE],
   ['f', 'Tenant override/custom not cross-tenant; floor not tenant-writable; clone-not-mutate (D-010, AC-3)', capF],
   ['g', 'Factory-reset deletes the tenant override → shared floor unchanged (D-010)', capG],
+  ['p', 'resource:action permission model — manifest/policies/routes/API agree (spec v3 §7) [WARN]', capP],
 ];
 
 // ── ACCEPTANCE — Role Machine definition-of-done (NOT yet built) ────────────────────

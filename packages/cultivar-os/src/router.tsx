@@ -1,8 +1,8 @@
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { PrivateRoute }    from './components/layout/PrivateRoute';
 import { AppLayout }       from './components/layout/AppLayout';
-import { VIEW_COSTS, PermissionRoute } from '@trace/shared/auth';
-import { PERMISSIONS }     from './auth/roles';
+import { VIEW_COSTS, LEGACY_PERMISSION, PermissionRoute } from '@trace/shared/auth';
+
 import { PlantProfile }    from './pages/PlantProfile';
 import { AddOns }          from './pages/AddOns';
 import { ScanOrder }       from './pages/ScanOrder';
@@ -131,14 +131,14 @@ export function AppRouter() {
 
           {/* Orders — qr_checkout (STAFF holds it; guarded for completeness so the class has no gap).
               /checkout/scan is the multi-item scan-loop front door (needs businessId + inventory RLS). */}
-          <Route element={<PermissionRoute permission={PERMISSIONS.QR_CHECKOUT} />}>
+          <Route element={<PermissionRoute permission={LEGACY_PERMISSION.QR_CHECKOUT} />}>
             <Route path="/orders"       element={<Orders />} />
             <Route path="/orders/:id"   element={<OrderDetail />} />
             <Route path="/checkout/scan" element={<ScanOrder />} />
           </Route>
 
           {/* Delivery — manage_deliveries (STAFF lacks it → refused at entry, was URL-reachable). */}
-          <Route element={<PermissionRoute permission={PERMISSIONS.MANAGE_DELIVERIES} />}>
+          <Route element={<PermissionRoute permission={LEGACY_PERMISSION.MANAGE_DELIVERIES} />}>
             <Route path="/deliveries"        element={<DeliveryRoute />} />
             <Route path="/delivery-schedule" element={<DeliverySchedule />} />
           </Route>
@@ -146,7 +146,7 @@ export function AppRouter() {
           {/* Social + Campaigns — manage_campaigns. Campaign Scheduler is the reported bug: STAFF
               reached /campaigns via the dashboard card despite lacking this permission. Now every
               door (tile, deep link, typed URL) is refused at route entry. */}
-          <Route element={<PermissionRoute permission={PERMISSIONS.MANAGE_CAMPAIGNS} />}>
+          <Route element={<PermissionRoute permission={LEGACY_PERMISSION.MANAGE_CAMPAIGNS} />}>
             <Route path="/social/setup" element={<SocialSetup />} />
             <Route path="/campaigns"         element={<Campaigns />} />
             <Route path="/campaigns/:id"     element={<CampaignDetail />} />
@@ -158,7 +158,7 @@ export function AppRouter() {
               page (Services/Team/cost config). AGNOSTIC member/device console (D-31): invite + roles
               (visibility axis) + devices. /roles REDIRECTS here (the old page is superseded). Admin
               landing index — each card additionally respects its own permission. */}
-          <Route element={<PermissionRoute permission={PERMISSIONS.MANAGE_SETTINGS} />}>
+          <Route element={<PermissionRoute permission={LEGACY_PERMISSION.MANAGE_SETTINGS} />}>
             <Route path="/settings/:section" element={<Settings />} />
             <Route path="/team"            element={<TeamConsole />} />
             <Route path="/roles"           element={<Navigate to="/team" replace />} />
@@ -208,7 +208,7 @@ export function AppRouter() {
               member, so /customers was unreachable at ANY permission WHILE the table already granted
               managers SELECT — locked at the door, vault standing open. Owner passes (can() short-
               circuits). A member without view_customers is refused at entry AND filtered by RLS. */}
-          <Route element={<PermissionRoute permission={PERMISSIONS.VIEW_CUSTOMERS} />}>
+          <Route element={<PermissionRoute permission={LEGACY_PERMISSION.VIEW_CUSTOMERS} />}>
             <Route path="/customers"         element={<Customers />} />
             <Route path="/customers/:id"     element={<CustomerDetail />} />
           </Route>
