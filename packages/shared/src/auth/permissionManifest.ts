@@ -104,6 +104,13 @@ export interface ManifestEntry {
   status: PermissionStatus;
   /** §4 — what granting this hands over. Present on `confidential` entries; capQ (e) requires it. */
   exposure?: string;
+  /**
+   * TRUE when this resource's read is enforced at the ROUTE (and/or an RPC) rather than by a
+   * member table policy — because the table read is membership-by-necessity. Declared, never
+   * inferred: capP's assertion 1 would otherwise report a missing gate where the design is
+   * deliberate. STD-020 wants the layer STATED, not identical everywhere.
+   */
+  routeEnforced?: boolean;
   sensitivity: PermissionSensitivity;
   /** TRUE when the spec marks this verb "✓ server" — enforced by an RPC/api gate, not a policy. */
   server: boolean;
@@ -189,6 +196,11 @@ interface EntrySeed {
    */
   exposure?: string;
   status?: PermissionStatus | Partial<Record<string, PermissionStatus>>;
+  /**
+   * TRUE when the read is enforced at the ROUTE (and/or an RPC) rather than by a member table
+   * policy, because the table read is membership-BY-NECESSITY. Declared, never inferred.
+   */
+  routeEnforced?: boolean;
   content?: Record<string, string[]>;
   inheritance?: string[];
   note?: string;
@@ -314,16 +326,21 @@ const RESOURCES: Record<string, EntrySeed> = {
   },
 
   // ── assets + pmi (R4 — operational, NOT financial) ───────────────────────────
-  assets: {
-    // delete — : A3, tombstone query returned NOTHING for business_assets.
-    verbs: ['read', 'create', 'update'],
-    sensitivity: 'operational',
-    note:
-      'business_assets — trucks, equipment. Operational, not financial: the table is ' +
-      'already membership-gated and only the ROUTE is view_costs-stricter (disagreement ' +
-      'N4). A3: the tombstone query returned NOTHING — no deleted_at, no is_deleted, no ' +
-      'status, no archived_at — so assets:delete DOES NOT MINT. It joins the unmintable five.',
-  },
+  // ── RETIRED 2026-07-27 (David's ruling) ────────────────────────────────────────
+  // `assets` was minted by R4 from a description of `business_assets` — A TABLE RENAMED TO
+  // `cost_objects` ON 2026-06-15, six weeks before the ruling. The resource lived in three
+  // bundles and no schema. R4's "operational, not financial" argument was about a table that no
+  // longer exists.
+  //
+  // The /assets surface reads `cost_objects` (BusinessAssets.tsx:122), which is CONFIDENTIAL per
+  // §4 and gated on `costs:read`. So the route now gates on `costs:read` too — door matches vault.
+  // Until this ruling a MANAGER held `assets:read` (bundle) and not `costs:read` (confidential),
+  // so they passed the door and read ZERO ROWS: #153's defect, reintroduced by the BUILD 2 route
+  // split, landing on the first tenant created from the aligned floor.
+  //
+  // `assets:*` RETURNS when 3b's projection makes an operational/financial split inside
+  // cost_objects real. STRINGS LAND WHEN ENFORCED, NOT BEFORE.
+
   pmi: {
     verbs: ['read', 'update'],
     sensitivity: 'operational',
@@ -394,6 +411,13 @@ const RESOURCES: Record<string, EntrySeed> = {
   // ── business surfaces ────────────────────────────────────────────────────────
   settings: {
     verbs: ['read', 'update'],
+    // ROUTE-ENFORCED, NOT TABLE-ENFORCED, and that is correct (David's ruling 2026-07-27).
+    // `businesses_member_select` is USING(is_active_member(id)) — membership-only BY NECESSITY:
+    // BusinessProvider resolves EVERY member's business from it, so gating it on settings:read
+    // would break a STAFF session outright. settings:read is enforced at the /settings route and
+    // by get_business_tax_rate; settings:update by the narrow set_business_profile RPC. Recorded
+    // so capP's assertion 1 reads a DECLARED enforcement layer rather than a missing one.
+    routeEnforced: true,
     sensitivity: 'operational',
     note: 'business profile — name, address, hours. read+update.',
   },
@@ -409,6 +433,12 @@ const RESOURCES: Record<string, EntrySeed> = {
   },
   team: {
     verbs: ['read', 'create', 'update', 'delete'],
+    // ROUTE-ENFORCED, NOT TABLE-ENFORCED, and that is correct (David's ruling 2026-07-27).
+    // `rd_read` is USING(business_id IS NULL OR is_active_member(...)) — membership-only BY
+    // NECESSITY: it is the role CATALOG the Roles page renders for everyone. team:read is
+    // enforced at the /team route; team:create/update/delete are declared-unwired because the
+    // funnel is the only writer.
+    routeEnforced: true,
     sensitivity: 'owner-only',
     status: { read: 'enforced', create: 'declared-unwired', update: 'declared-unwired', delete: 'declared-unwired' },
     note:
@@ -512,6 +542,7 @@ function buildManifest(): Record<string, ManifestEntry> {
         verb,
         status,
         exposure: seed.exposure,
+        routeEnforced: seed.routeEnforced,
         sensitivity: seed.sensitivity,
         // Class 1 — STRUCTURAL. Generated, never hand-listed: modify requires read.
         // `create` requires NOTHING (R1) — deliberately, and the verifier must not
@@ -668,9 +699,6 @@ export const LEGACY_PERMISSIONS: LegacyEntry[] = [
       'costs:update',
       'costs:delete',
       'inventory_ledger:read',
-      'assets:read',
-      'assets:create',
-      'assets:update',
       'pmi:read',
       'pmi:update',
     ],
@@ -907,7 +935,6 @@ export const MANAGER_DEFAULT_BUNDLE: string[] = [
   'inventory_ledger:read',
   'deliveries:read', 'deliveries:update',
   'deliveries.route:read',
-  'assets:read', 'assets:create', 'assets:update',
   'pmi:read', 'pmi:update',
   'tax_rate:read', 'tax_rate:update',
   'settings:read', 'settings:update',
@@ -966,9 +993,6 @@ export const STAFF_DEFAULT_BUNDLE: string[] = [
  * test asserts it still equals the computed set, so a new permission cannot quietly skip OWNER.
  */
 export const OWNER_DEFAULT_BUNDLE: string[] = [
-  'assets:create',
-  'assets:read',
-  'assets:update',
   'audit_log:read',
   'campaigns:read',
   'campaigns:update',

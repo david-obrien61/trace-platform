@@ -196,7 +196,12 @@ export function AppRouter() {
             <Route path="/receipts"          element={<ReceiptKeeper />} />
             <Route path="/operating-costs"   element={<OperatingCosts />} />
           </Route>
-          <Route element={<PermissionRoute permission="assets:read" />}>
+          {/* /assets reads `cost_objects` (BusinessAssets.tsx:122) — the SAME table /receipts and
+              /operating-costs read, gated `costs:read`. It briefly gated on `assets:read`, which
+              MANAGER held and `costs:read` which they did not: door open, vault locked. `assets:*`
+              RETIRED 2026-07-27 — the resource was minted from `business_assets`, renamed to
+              `cost_objects` six weeks earlier. */}
+          <Route element={<PermissionRoute permission="costs:read" />}>
             <Route path="/assets"            element={<BusinessAssets />} />
             <Route path="/assets/capture"    element={<AssetCapture />} />
           </Route>

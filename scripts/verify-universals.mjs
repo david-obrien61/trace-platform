@@ -816,7 +816,8 @@ const RESOURCE_GATES = {
   inventory_ledger: 'inventory_ledger',
   deliveries: 'deliveries',
   'deliveries.route': 'deliveries',   // sub-resource — no table of its own (Rule 3)
-  assets: 'business_assets',
+  // assets: RETIRED 2026-07-27 — it mapped to `business_assets`, RENAMED to `cost_objects`
+  // on 2026-06-15. capP asserted against that phantom for six weeks and PASSED. See capS.
   pmi: 'business_pmi_schedule',
   pricing_recipe: 'business_pricing_config',
   costs: 'cost_objects',
@@ -833,7 +834,7 @@ const stripSqlComments = (t) => t.replace(/--[^\n]*/g, '');
 const stripJsComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
 /** LIST every .ts under a dir tree (paths, not contents) — capK needs per-file verdicts. */
-const listTreeFiles = (relDir) => {
+const listTreeFiles = (relDir, ext = '.ts') => {
   const abs = join(ROOT, relDir);
   if (!existsSync(abs)) return [];
   const out = [];
@@ -841,7 +842,7 @@ const listTreeFiles = (relDir) => {
     for (const e of readdirSync(d, { withFileTypes: true })) {
       const full = join(d, e.name);
       if (e.isDirectory()) walk(full);
-      else if (e.name.endsWith('.ts')) out.push(full.slice(ROOT.length + 1));
+      else if (e.name.endsWith(ext)) out.push(full.slice(ROOT.length + 1));
     }
   };
   walk(abs);
@@ -1287,7 +1288,13 @@ function capQ(key, v) {
       manifestSrc,
       sqlAll: concatSql(v.migrationsDir),
     }),
-    ...qFloorViolations(read('supabase/migrations/20260727_align_floor_to_bundles.sql') || '', manifestSrc),
+    ...qFloorViolations(
+      // the LATEST floor-alignment migration — applied files are never edited (§6 r1), so a
+      // re-alignment is a NEW file and this must follow it or capQ reconciles a superseded one.
+      (listTreeFiles('supabase/migrations', '.sql').filter((f) => /_align_floor/.test(f)).sort().slice(-1)
+        .map((f) => read(f) || '')[0]) || '',
+      manifestSrc,
+    ),
     ...qExposureViolations(manifestSrc, read('packages/shared/src/components/team/MemberConsole.tsx') || ''),
   ];
 
@@ -1370,7 +1377,7 @@ function capP(key, v) {
     deliveries: 'P4', pmi: 'P5', campaigns: 'P3',
     // 2026-07-27 — the four capP's first run found that §4 had not predicted, promoted to
     // P17-P20 by David's ruling so the acceptance diff reconciles against the amended 20.
-    assets: 'P17', settings: 'P18', team: 'P19',
+    settings: 'P18', team: 'P19',
   };
   for (const r of [...unenforcedResources].sort()) {
     // Rule 3: a dotted sub-resource has no table of its own. If its PARENT is already flagged,

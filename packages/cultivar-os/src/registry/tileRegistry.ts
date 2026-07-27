@@ -121,7 +121,7 @@ export const TILE_REGISTRY: TileEntry[] = [
     icon: Truck,       color: '#22d3ee', bg: DASH_BG, route: '/delivery-schedule', module_key: 'delivery_routing', note: 'driver-handoff mechanism UNDECIDED' },
   { key: 'operating_costs',  vertical: 'general', label: 'Operating Costs',           group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'costs:read',         status: 'live',    depends_on: null,
     icon: HandCoins,   color: '#fbbf24', bg: DASH_BG, route: '/operating-costs' },
-  { key: 'assets',           vertical: 'general', label: 'Assets',                    group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'assets:read',         status: 'live',    depends_on: null,
+  { key: 'assets',           vertical: 'general', label: 'Assets',                    group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'costs:read',         status: 'live',    depends_on: null,
     icon: Building2,   color: '#a78bfa', bg: DASH_BG, route: '/assets' },
   // Inventory is TWO siblings sharing the inventory data model — NOT a collapse.
   { key: 'inventory_manual', vertical: 'general', label: 'Inventory (manual)',        group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'inventory:read',         status: 'live',    depends_on: null,
