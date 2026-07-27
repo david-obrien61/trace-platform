@@ -60,7 +60,13 @@ CREATE POLICY campaign_posts_member_update ON public.campaign_posts FOR UPDATE T
 -- no notes) with anon SELECT on the VIEW, and `usePlant` repointed to it. That is the same
 -- projection pattern as 3b and the dashboard money redaction — the third instance this week — and
 -- it is the correct shape here because RLS has no column-level control.
-DROP POLICY IF EXISTS "anon_select_plant_events" ON public.plant_events;
+-- 🔧 CORRECTED 2026-07-27 (David). The first draft dropped ONE policy. `plant_events` carries
+-- TWO unscoped public reads, and my sweep found one because its CORPUS WAS THE `anon` ROLE ONLY —
+-- `TO public` INCLUDES anon, and I never looked. Fourth instance of the negative-claim shape
+-- (STD-021) this week, in a security sweep, by the person who wrote the standard. Dropping one of
+-- two would have left the exposure fully open while the migration read as though it closed it.
+DROP POLICY IF EXISTS "anon_select_plant_events"   ON public.plant_events;
+DROP POLICY IF EXISTS "plant_events_select_public" ON public.plant_events;
 
 -- ── V1 — campaigns/campaign_posts now carry member policies. EXPECT 6 rows, no DELETE among them.
 -- SELECT tablename, policyname, cmd FROM pg_policies
@@ -71,9 +77,11 @@ DROP POLICY IF EXISTS "anon_select_plant_events" ON public.plant_events;
 -- SELECT policyname FROM pg_policies WHERE schemaname='public'
 --   AND tablename IN ('campaigns','campaign_posts') AND cmd='DELETE' AND policyname ~ 'member';
 
--- ── V3 — NEGATIVE: anon can no longer read plant_events. EXPECT 0 rows.
--- SELECT policyname, roles::text FROM pg_policies
---  WHERE schemaname='public' AND tablename='plant_events' AND roles::text LIKE '%anon%';
+-- ── V3 — NEGATIVE: NO unscoped public read survives on plant_events. Corpus is BOTH roles —
+--    `TO public` includes anon, which is what the first draft of this file missed. EXPECT 0 rows.
+-- SELECT policyname, cmd, roles::text, qual FROM pg_policies
+--  WHERE schemaname='public' AND tablename='plant_events'
+--    AND (roles::text LIKE '%anon%' OR roles::text LIKE '%public%');
 
 -- ── V4 — the trigger for the follow-up: is the table still empty? While this returns 0 the
 --    public timeline is unaffected. The FIRST row makes the provenance view due.
