@@ -434,3 +434,141 @@ and Contract sits behind it because Contract removes the fallback. **Neither rea
 
 **One thing: approve the plan as amended** — the 44-string union (§9.2) and the 9-string STAFF set
 (§9.3). No open questions remain.
+
+---
+
+# 10. AMENDMENT 2 — REVIEW RESPONSE (2026-07-27)
+
+Four items from review. In the order they must be acted on.
+
+## 10.1 ✅ ITEM 2 CLOSED FROM CODE — the route layer DOES bypass for the owner
+
+The check was correctly demanded ahead of BUILD 1, and correctly demanded **from code**: what I
+had quoted earlier (`owner ⇒ true; member ⇒ list`) was a **comment** at
+`BusinessProvider.tsx:167`, and a comment contradicting its repo is tech-debt #61.
+
+**The implementation, `packages/shared/src/context/BusinessProvider.tsx:694-700`:**
+
+```ts
+const can = React.useCallback((permissionId: string): boolean => {
+  if (isOwnerActive) return true;          // ← line 695, the bypass, in code
+  const effective = applyPermissionDependencies(activePermissions ?? []);
+  return sharedCan({ permissions: effective }, permissionId);
+}, [isOwnerActive, activePermissions]);
+```
+
+`isOwnerActive` = `activeResolved?.isOwner`, and `isOwner: true` is set at **line 466** for every
+row returned by the **owner path** query against `businesses` — i.e. from `owner_id`, never from an
+array. That same push sets `permissions: null`, so **the owner's member array is never consulted at
+the UI layer at all** — which is precisely why the 6-string fiction has been invisible for months.
+
+**Verdict: all three STD-020 layers have an owner fallthrough.** Table = 20 `*_owner_all` policies.
+API = `callerIsBusinessOwner` (`submit.ts:37`). Route/UI = `BusinessProvider.tsx:695`. **The flip
+cannot brick David's access, and the mint fix is safe.** Hazard closed, not assumed closed.
+
+## 10.2 ✅ ITEM 1 ACCEPTED — two funnel calls, not one union
+
+The review is right and the naming is load-bearing. §9.2's single 44-string call conflates two
+operations under one label, and if it ships as "the backfill" then **R-A is violated in its first
+application** and Phase 7's zero-check can no longer assert "no member gained authority through the
+migration" — because one did, invisibly, inside a union.
+
+**Two calls, same transaction, two audit rows:**
+
+| call | op | permissions | what it is |
+|---|---|---|---|
+| **1 — RENAME** | `save_role_permissions(… 'save' …)` | `decomposition(her 13 live strings)` = **36** | The backfill. R-A compliant, mechanical, zero judgment. Before = all-legacy, after = all-new. |
+| **2 — GRANT** | `save_role_permissions(… 'save' …)` | `36 ∪ 8` = **44** | New authority David decided to give. Before = the 36, after = 44. |
+
+Identical end state; the audit log can now answer *"what did the migration do"* vs *"what did David
+decide"* a year from now.
+
+**Additional, to make that distinction explicit rather than inferred:** BUILD 1 adds an optional
+`p_reason text DEFAULT NULL` to `save_role_permissions`, landing in the audit `detail`. The two
+calls pass `rbac-migration:rename` and `rbac-migration:grant`. Both rows are
+`role.permissions_changed`, and without a reason a reader must infer which was which from the
+before/after shape. **This is tech-debt #72's lesson** (the `sale` ledger row's `reason` is NULL
+while every neighbouring kind explains itself) applied before we repeat it — and it directly serves
+ruling 4: an audit log should say WHY, not only WHAT. Additive default-NULL param; no caller breaks.
+
+**Recorded as a DEPARTURE, not absorbed:** spec §5's `MANAGER_DEFAULT_BUNDLE` is deliberately
+`orders:read/create/update` — **it excludes `orders:delete`**. Granting cancel is a defensible owner
+call (ruling 5), *not* a bundle default, and the ledger row says so in those words. Same for
+`order_discount:apply`, which is a Phase 5 authority act, not a bundle member.
+
+## 10.3 🔴 ITEM 3 — THE AUDIT ANSWERS HALF, AND THE UNANSWERED HALF IS WORSE
+
+The `audit_log` query came back **non-empty**, and what it shows is good:
+
+- The **tenant** MANAGER row's entire evolution is audited — 10 `role.permissions_changed` rows,
+  every one actor `95c1b2e9` (the owner), through the funnel. The 13 strings are fully explained.
+- **Two `permission.self_elevation_denied` rows, actor `df7723be`** (2026-07-24 14:11, 2026-07-25
+  19:23) — the manager attempting to grant themselves `view_costs`/`view_pricing_config` and later a
+  15-string set. **The #152 self-elevation guard fired and audited it, live.** That is candidate
+  evidence for team-permissions card 7 (Thunder does not mark cards covered — David's call).
+
+**But none of it explains the FLOOR drift, and the funnel is structurally incapable of causing it.**
+`save_role_permissions` only ever touches `business_id = p_business_id`
+(`20260723_permission_funnel.sql:242/247/250/256` — its own comment says *"floor (business_id NULL)
+never matched"*). Every audited row above wrote the **tenant** row. **The system floor — MANAGER
+9→11, OWNER 12→14, both gaining `override_maintenance` + `view_customers` — was written by
+something that is neither the funnel nor a migration, and left no audit row.**
+
+**And there is a mechanism sitting right there:** Block C shows `role_definitions` carries
+`rd_owner_write [ALL]`. **The #152 §1 trigger closed the direct-write side door on
+`business_members` ONLY — `role_definitions` has no equivalent guard.** So the funnel is the only
+*app* path, not the only *possible* path. If `rd_owner_write` does not scope `business_id`, then
+**any tenant owner can rewrite the PLATFORM floor**, which affects every tenant — an AC-3 class
+cross-tenant hole, on the exact mechanism the whole backfill rides on.
+
+**⛔ ONE QUERY NEEDED BEFORE BUILD 1:**
+
+```sql
+SELECT policyname, cmd, roles::text, qual, with_check
+  FROM pg_policies
+ WHERE schemaname = 'public' AND tablename = 'role_definitions';
+```
+
+- If `rd_owner_write` is scoped so `business_id IS NULL` can never be written by a JWT caller → the
+  floor was hand-edited as `postgres` (benign, platform-owner acting as platform owner). **Record
+  it and move on.**
+- If it is NOT scoped → the side door is open on the funnel's own template store, and closing it is
+  the same one-line trigger shape as #152 §1. **That lands in BUILD 1**, because shipping a
+  migration that depends on the funnel's guarantee while the guarantee has a hole is not something
+  to discover later.
+
+## 10.4 ITEM 4 — STAFF, and what its own correctness retires
+
+**The 9 strings, enumerated by name** (this list was given in §9.3 and in the message; the review's
+count of eight missed the two delivery strings — restating so the set is approved by NAME, never by
+cardinality, which is the shape we keep catching):
+
+1. `orders:create` 2. `orders:read` 3. `order_items:read` 4. `order_service_selections:read`
+5. `order_compliance_records:read` 6. `customers:read` 7. `deliveries:read`
+8. `deliveries.route:read` 9. `inventory:read`
+
+**R1's motivating example is now unoccupied — recorded so nobody "simplifies" the rule away.**
+STAFF holds `orders:create` AND `orders:read`, so **no role in the platform exercises the
+create-without-read split.** Rule 1 (MODIFY-requires-read; create never requires read) **stays
+correct** — a rule that forbids a legitimate state is a bad rule whether or not anyone occupies that
+state today — but the concrete case that justified it is gone. Anyone re-reading R1 in six months
+will find an abstract rule with no live example and be tempted to collapse it back to
+write-requires-read. **This paragraph is the defence against that.** Owner-test card 2 is rewritten
+from *"staff cannot see orders"* to *"staff cannot see order MONEY"* and marked `needs-test` until
+the orders projection exists.
+
+**`deliveries` is FOLDED INTO THE FLIP** (a change to §9.4, +1 table). `deliveries_member_all [ALL]`
+carries no permission string, so every active member — STAFF included — can already create, update
+and **DELETE** deliveries. It is not on the 14-row flip list, so after the flip we would be granting
+STAFF `deliveries:read` while the table hands them `ALL`. **Declaring a constraint the table does
+not enforce is the exact STD-020 failure this migration exists to end**, on a demo-critical surface
+(Lauren schedules deliveries). One policy becomes four verb-split member policies:
+`deliveries:read` / `deliveries:update` / `deliveries.route:read` / `deliveries.route:update`, with
+no delete verb (R2 — `deliveries` has no tombstone). **BUILD 1 is now 14 + 1 = 15 policy sites.**
+
+## 10.5 STILL NEEDED TO START
+
+1. **Approve** the two-call split (§10.2), the 9-string STAFF set by name (§10.4), the 44-string end
+   state, and folding `deliveries` into the flip (§10.4).
+2. **Run the one query in §10.3** — it decides whether BUILD 1 also carries a `role_definitions`
+   side-door close.
