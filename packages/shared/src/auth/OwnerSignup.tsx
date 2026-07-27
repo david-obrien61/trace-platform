@@ -5,6 +5,7 @@ import { runBusinessCreationGuards } from './businessGuards';
 import { normalizePhone } from '../utils/normalizePhone';
 import { findOrCreatePerson } from '../business-logic/personUpsert';
 import { resolveRoleDefaults } from './roleDefinitions';
+import { seedPricingConfig } from '../business-logic/seedPricingConfig';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -293,6 +294,15 @@ export function OwnerSignup({ config, navigate }: Props) {
       return null;
     }
     const businessId = bizData.id as string;
+
+    // Seed the FULL pricing-config row (David's ruling 2026-07-27). A fresh tenant had NO row at
+    // all until someone typed into Settings, so get_business_tax_rate had nothing to read — and
+    // neither did the margin baseline, the tiers, the reference price or the cost structure. The
+    // tax redline was the visible symptom; the missing row was the defect. taxRate seeds NULL by
+    // design: a wrong rate is worse than no rate, and the wizard asks for it.
+    // NON-BLOCKING (§6 r6): a seed failure must not lose a business that already exists.
+    const { error: seedErr } = await seedPricingConfig(supabase, businessId);
+    if (seedErr) console.warn('[TRACE:SIGNUP] pricing-config seed failed — Settings will create it on first save:', seedErr.message);
 
     // 2. Hash PIN using same algorithm as authenticate() in auth.ts
     const pinHash = await hashPin(businessId, pinVal);

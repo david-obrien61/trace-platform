@@ -1,5 +1,5 @@
 # STANDARDS.md — TRACE Engineering Standards
-# Version: 2.7
+# Version: 2.8
 # Created: 2026-06-04
 # Last updated: 2026-07-27 (STD-021 + STD-022 added + ACTIVATED — the EVIDENCE pair. STD-021: a NEGATIVE claim names its corpus and its method or it is not a finding. STD-022: a verifier assertion ships with a PLANTED-BAD probe it must reject in the same pass. Scars: three negative claims asserted with unstated or absent corpora (§2's legacy inventory built from code and never checked against data; `manage_orders` "gates nothing" twice, from scans that never read the api layer; "no migration wrote the floor drift", asserted with no scan at all), and THREE FALSE GREENS from verifier checks that were not running — two of them reported PASS and one was cited in a close-out commit as proof of correctness. David's ruling 2026-07-27.)
 # Owner: David O'Brien / TRACE Enterprises
@@ -1277,6 +1277,32 @@ behind it. Do not file them as one class.
 CONTRACT is built entirely out of them — *no member holds a legacy string; no gate references one* —
 and Contract is irreversible. A programme with a 3-for-3 record of unstated corpora, gating its one
 irreversible step on exactly that claim type, is the definition of an unearned green.
+
+**🔴 AMENDMENT 2026-07-27 — NAMING A CORPUS IS NECESSARY; NAMING THE *RIGHT KIND* OF CORPUS IS
+WHAT WAS MISSING.**
+
+> **A CLAIM ABOUT A DATABASE OBJECT IS VERIFIED AGAINST THE CATALOG, NOT THE REPO.**
+
+Every negative claim that went wrong this week stated its corpus honestly — and verified it
+against the wrong kind of source:
+
+| claim | corpus used | what the catalog would have said |
+|---|---|---|
+| "the legacy permission inventory is complete" | migration + app source | `business_members.permissions` holds `process_orders`, `manage_team` |
+| "`assets` maps to `business_assets`" | the manifest and a doc | `business_assets` has not existed since 2026-06-15 |
+| "three unscoped public reads on `plant_events` et al." | `grep` for the `anon` role | `pg_policies` returns **six** — `TO public` INCLUDES anon |
+
+The third is the sharpest: `pg_policies` would have returned all six **regardless of which role
+string was grepped for**, because the catalog stores the resolved role list rather than the text
+someone wrote. A repo grep can only find the spelling you thought of; the catalog contains what
+is actually there. That is the whole difference.
+
+**SO:** if a claim is about a table, column, policy, function, index, constraint or role, the
+corpus is `pg_policies` / `pg_proc` / `information_schema` — quoted, with its output. Source is
+evidence about INTENT; the catalog is evidence about REALITY, and a negative claim is a claim
+about reality. Where the verifier cannot reach a database (it is source-only), the claim is
+marked as source-derived and the catalog check is a DAVID-QUERY whose OUTPUT is pasted, never
+summarised.
 
 **IN PRACTICE:** a negative claim in a build report, a migration comment, a ledger row or a
 close-out states the trees searched and the method used, and where it gates something

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { resolveRoleDefaults } from '@trace/shared/auth';
+import { seedPricingConfig } from '@trace/shared/business-logic';
 
 // ─── Brand ───────────────────────────────────────────────────────────────────
 const GREEN = '#27500A';
@@ -538,6 +539,14 @@ export function OnboardingWizard() {
           return;
         }
         businessId = newBusinessId;
+
+        // Seed the FULL pricing-config row on THIS path too (David's ruling 2026-07-27). This is
+        // the LEGACY create path — OwnerSignup covers the modern one — and a business created here
+        // had no business_pricing_config row either. Same seeder, so the two paths cannot drift:
+        // one of them silently producing an unconfigured tenant is exactly how the missing row
+        // survived this long. NON-BLOCKING (§6 r6).
+        const { error: seedErr } = await seedPricingConfig(supabase, newBusinessId);
+        if (seedErr) console.warn('[TRACE:ONBOARD] pricing-config seed failed — Settings will create it on first save:', seedErr.message);
 
         // business_members row only needed on the legacy path; OwnerSignup already creates it.
         // PERSON NAME source of truth = auth.user_metadata.full_name. Prefer it; if this legacy

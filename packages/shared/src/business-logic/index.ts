@@ -174,3 +174,6 @@ export type { LaborResourceRow } from './financialDataAccess';
 
 // the ONE list of what the pricing recipe IS — paths read from the type, not from the spec
 export { PRICING_RECIPE_PROTECTED_PATHS, TAX_RATE_PATH, jsonbPath } from './pricingRecipeFields';
+
+// seed a FULL pricing-config row at business creation — the missing row, not just the rate
+export { seedPricingConfig } from './seedPricingConfig';

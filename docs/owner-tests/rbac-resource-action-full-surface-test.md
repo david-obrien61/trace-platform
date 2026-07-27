@@ -131,6 +131,18 @@ LAST-PROVEN: never
 - **FAIL:** an empty add-on menu — the sell-side catalog was filtered.
 - **Why:** the catalog is printed to the customer and carries no cost column; every active member needs it to run checkout.
 
+### ⚙️ SETUP BEFORE R-5 — TERRY SETS THE TAX RATE
+STATUS: owed
+PHASE: 1
+DEVICE: desktop
+COVERS: the seeded config row · taxRate seeds NULL by design · the D-9 redline
+LAST-PROVEN: never
+- **Do:** as the OWNER, on a FRESH tenant, go to Settings → Business and set the sales tax rate. Only then run R-5.
+- **PASS:** the rate saves, and the redline on Cart Review is replaced by a real tax line.
+- **FAIL:** there is no field to set it · the save does not persist · Cart Review still redlines after saving.
+- **🔴 WHY THIS IS ITS OWN STEP AND NOT AN ASSUMPTION.** `taxRate` SEEDS AS NULL, deliberately — a wrong rate is worse than no rate, and `resolveTaxRate` already refuses to fabricate one (D-9). So a brand-new tenant renders **"⚠ Tax: not identified"** until an owner answers, and that is the CORRECT state, not a bug. **This was a manual step nobody had written down**, discovered when David found `businesses.tax_rate` (0.0825) and `config.taxRate` (0.076) disagreeing while only the config is read. Same class as mgr-vis 2's "revoke `orders:read` first": a setup act the test depends on, made explicit so the demo does not discover it in front of Lauren.
+- **Note:** the *missing config row* was the real defect — a fresh tenant had none at all, so the margin baseline, tiers, reference price and cost structure were equally unset. `seedPricingConfig` now writes the whole shape at business creation on both paths; the tax rate was just the part that renders.
+
 ### R-5 — A MANAGER's order applies tax at the tenant's real rate
 STATUS: owed
 PHASE: 1
