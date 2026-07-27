@@ -83,7 +83,7 @@ Each row: the resource, whether each verb is *reachable* (a policy/RPC can enfor
 | `assets` | ✓ | ✓ | ✓ | **— A3** | *(NEW in v3, R4.)* `business_assets` — trucks, equipment. Operational, not financial: the table is already membership-gated; only the ROUTE is `view_costs`-stricter (disagreement N4). **`delete` DOES NOT MINT — RESOLVED 2026-07-26 (A3):** the tombstone query returned NOTHING for `business_assets` (no `deleted_at`, no `is_deleted`, no `status`, no `archived_at`). It joins the unmintable set, which is now **FIVE**, all confirmed |
 | `pmi` | ✓ | — | ✓ | — | *(NEW in v3, R4.)* `business_pmi_schedule` — service cadence and due dates. read+update. Operational. This is the parent `maintenance:override` hangs from |
 | `tax_rate` | ✓ | — | ✓ | — | a single value inside `business_pricing_config`; read+update only (you don't create/delete a rate). Narrow SECURITY DEFINER read/write — NEVER grant the whole pricing_config table. The read exists (`get_business_tax_rate`, applied 2026-07-24); **the WRITE does not yet exist and must be built** (`set_business_tax_rate`) |
-| `pricing_recipe` | ✓ | — | ✓ | — | baseline margin, reference price, markup — the confidential recipe inside `business_pricing_config`. read+update only. Owner-confidential: see §4 |
+| `pricing_recipe` | ✓ | — | ✓ | — | margin.baseline, margin.tiers, priceReference, discountTypes, denominators, locations — the confidential recipe inside `business_pricing_config`. read+update only. Owner-confidential: see §4 |
 | `costs` | ✓ | ✓ | ✓ | ✓ | `cost_objects`, `receipts` — cost basis / unit cost. Confidential |
 | `margin` | ✓ | — | — | — | the R/Y/G health signal. READ-ONLY as a permission — a computed judgment, not stored data. `margin:read` requires `costs:read` (Rule 2). ⚠️ THE LEVER IS ELSEWHERE: you cannot "change margin" through this resource — margin is fixed by editing the recipe. The write path is `pricing_recipe:update` (§4.1). ⚠️ **Manifest status `derived` (R9)** — it has no gate of its own; it is enforced transitively by its Rule-2 prerequisite (§7.1) |
 | `wages` | ✓ | ✓ | ✓ | ✓ | `labor_resource_wages`. Confidential; Andrew's case (read without write) |
@@ -125,7 +125,7 @@ Not every read is free. Three tiers:
 `margin` and `pricing_recipe` are two different resources on purpose, and a person managing pricing needs both — but the split must be stated so nobody hunts for a `margin:update` that does not exist:
 
 - `margin:read` — SEE the red/yellow/green judgment. Confidential. Requires `costs:read` (Rule 2).
-- `pricing_recipe:update` — CHANGE the thing that makes a price red or green (baseline margin, reference price, markup). This is the ONLY write path that moves margin health.
+- `pricing_recipe:update` — CHANGE the thing that makes a price red or green (margin.baseline, margin.tiers, priceReference, discountTypes — see the CORRECTION note below; the earlier prose named `markup`, which exists nowhere, markup). This is the ONLY write path that moves margin health.
 - There is deliberately no `margin:create/update/delete`. Margin is computed, not stored; you do not edit it directly, you edit the recipe and the signal recomputes.
 
 So a full "pricing manager" (Lauren) holds `margin:read` + `costs:read` (to see the health) AND `pricing_recipe:read` + `pricing_recipe:update` (to act on it). A person granted only `margin:read` can SEE which items are underpriced but cannot fix them — a legitimate, deliberate state (a reviewer who flags but doesn't set prices). The Roles page and any "manage pricing" affordance must not imply a margin write verb exists; the affordance to FIX a flagged price routes to the recipe.
@@ -287,3 +287,46 @@ The current permission cards are written against the coarse model. Under this sp
 ---
 
 *v3, 2026-07-26. All nine rulings folded. Nothing open. Companions: `docs/decisions/2026-07-26-rbac-build-plan.md` (the phased build plan + the card list), `docs/standards/permission-enforcement-map.md` (STD-020).*
+
+---
+
+## 🔧 CORRECTION 2026-07-27 — §5's PROTECTED-FIELD NAMES WERE WRONG, 3 OF 4
+
+Found by David on the V7-positive read of `set_business_tax_rate`. §5 named the confidential
+recipe in prose as *"baseline margin, reference price, markup"*, and when that prose was turned
+into key checks it became `baselineMargin` / `referencePrice` / `markup` / `discountTypes`.
+**Checked against the live config and against `CostToProduceConfig`, three of the four do not
+exist:**
+
+| documented | actual | note |
+|---|---|---|
+| `baselineMargin` | **`margin.baseline`** | NESTED, not top-level |
+| `referencePrice` | **`priceReference`** | the words are reversed |
+| `markup` | **exists nowhere** | not in the type, not in a live row, not in any migration |
+| `discountTypes` | `discountTypes` | correct |
+
+**A guard that cannot fail is not a guard.** `config ? 'baselineMargin'` returned false whether or
+not the recipe had been damaged. The tax writer's behaviour was proven clean anyway — by diffing
+the WHOLE config against a before-image — so this was a latent trap rather than a live defect, but
+the flag beside that diff was theatre.
+
+**ROOT CAUSE — the guard was written against the shape of the ANSWER, not the shape of the thing
+being protected.** `baselineMargin` *does* exist: on **`CostToProduceResult`** ([CostToProduce.ts:376](../packages/shared/src/business-logic/CostToProduce.ts#L376)),
+the COMPUTED OUTPUT. So does `priceReference`. But the protected thing is **`CostToProduceConfig`**,
+the STORED INPUT, where the same two facts are `margin.baseline` and `priceReference`. Two of the
+four names were lifted from the wrong interface. `markup` came from neither — the only `markup` in
+the repo is `packages/ignition-os/modules/IgnitionProt.jsx:266`, **a different vertical's pricing
+model**.
+
+**Same family as `verify-financial-permissions.mjs` asserting against business ids that do not
+exist: an assertion written from a DOCUMENT instead of from the DATA.**
+
+**The list was also INCOMPLETE, not merely misspelt.** `margin.tiers`, `denominators` and
+`locations` — the tier overrides, the sensitivity knob and the cost structure — are every bit as
+confidential and were never named. A projection built from the old list would have protected three
+phantoms *and* left `margin.baseline`, the tiers and the whole cost structure exposed.
+
+**THE LIST NOW LIVES IN CODE**, not in this document:
+`packages/shared/src/business-logic/pricingRecipeFields.ts` →
+`PRICING_RECIPE_PROTECTED_PATHS`. 3b's projection and every future recipe writer read it from
+there; this section is the narrative, not the source.

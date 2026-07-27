@@ -171,3 +171,6 @@ export {
   fetchTaxRate,
 } from './financialDataAccess';
 export type { LaborResourceRow } from './financialDataAccess';
+
+// the ONE list of what the pricing recipe IS — paths read from the type, not from the spec
+export { PRICING_RECIPE_PROTECTED_PATHS, TAX_RATE_PATH, jsonbPath } from './pricingRecipeFields';

@@ -423,7 +423,7 @@ narrowed at the same time.** If `inventory:read` still grants direct `SELECT *` 
 |---|---|---|---|---|
 | **`list_business_inventory(p_business_id, …)`** *(NEW)* | `inventory:read` | `id, business_id, name, sku, size, variant_group, qty, sell_price, status, created_at, updated_at` | **`unit_cost`, `cost_confidence` → NULL unless the caller also holds `costs:read`** | to build (Phase 3b) |
 | **`get_business_tax_rate(p_business_id)`** | `membership` → **re-gate to `tax_rate:read`** | `config->>'taxRate'` **only** | the entire pricing recipe | **exists** (20260724:138-158), applied + verified live 2026-07-24 |
-| **`set_business_tax_rate(p_business_id, p_rate, p_actor)`** *(NEW)* | `tax_rate:update` | writes **only** `config->'taxRate'` via `jsonb_set` | must not touch `baselineMargin`, `referencePrice`, `markup`, `discountTypes` | to build (Phase 1) |
+| **`set_business_tax_rate(p_business_id, p_rate, p_actor)`** *(NEW)* | `tax_rate:update` | writes **only** `config->'taxRate'` via `jsonb_set` | must not touch the pricing recipe — `margin.baseline`, `margin.tiers`, `priceReference`, `discountTypes`, `denominators`, `locations` (CORRECTED 2026-07-27: the earlier list was wrong 3 of 4 and incomplete; the ONE list is `pricingRecipeFields.ts`) | to build (Phase 1) |
 
 Design notes, all inherited from proven patterns:
 - All three: `SECURITY DEFINER`, `SET search_path = ''`, `REVOKE ALL … FROM public`,

@@ -287,7 +287,7 @@ REVOKE ALL ON FUNCTION public.get_business_tax_rate(uuid) FROM public, anon;
 GRANT EXECUTE ON FUNCTION public.get_business_tax_rate(uuid) TO authenticated, service_role;
 
 -- THE NARROW WRITER. Writes ONLY config->'taxRate' via jsonb_set. It must never be able to
--- touch baselineMargin / referencePrice / markup / discountTypes — that is the pricing recipe,
+-- touch margin.baseline / margin.tiers / priceReference / discountTypes — that is the pricing recipe,
 -- and the whole point of a separate tax_rate resource is that setting a tax rate is not the
 -- same authority as setting prices. Audited in the same transaction (ruling 4).
 CREATE OR REPLACE FUNCTION public.set_business_tax_rate(
@@ -592,7 +592,9 @@ COMMIT;
 --  WHERE bm.active AND x.s IN ('maintenance:override','deliveries.route:update');
 
 -- ── V6 — the tax writer cannot touch the recipe. Run as a member holding tax_rate:update.
--- EXPECT: taxRate changes; baselineMargin / referencePrice / markup / discountTypes IDENTICAL.
+-- EXPECT: taxRate changes; margin.baseline / margin.tiers / priceReference / discountTypes /
+--         denominators / locations IDENTICAL. (Corrected 2026-07-27 — the earlier names were
+--         wrong 3 of 4; see pricingRecipeFields.ts. `markup` exists nowhere.)
 -- BEGIN;
 --   SELECT config FROM public.business_pricing_config WHERE business_id='f7ec5d67-a9ef-4cb0-b807-438d67687d1b';
 --   SELECT * FROM public.set_business_tax_rate('f7ec5d67-a9ef-4cb0-b807-438d67687d1b', 0.0825,

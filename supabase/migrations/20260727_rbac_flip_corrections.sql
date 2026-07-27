@@ -116,11 +116,19 @@ DROP POLICY IF EXISTS bpc_member_insert ON public.business_pricing_config;
 --
 --   -- (c) READ IT BACK, and prove the RECIPE IS UNTOUCHED. EXPECT taxrate_now = 0.0625 and
 --   --     every other key byte-identical to (a) — this is the assertion, not the rate itself.
---   SELECT config->>'taxRate'          AS taxrate_now,
---          config - 'taxRate'          AS recipe_without_tax,   -- diff THIS against (a) minus taxRate
---          config ? 'baselineMargin'   AS has_baseline_margin,
---          config ? 'pricingTiers'     AS has_pricing_tiers,
---          config ? 'discountTypes'    AS has_discount_types
+--   -- 🔧 CORRECTED 2026-07-27. The first draft flagged `config ? 'baselineMargin'`,
+--   -- `'pricingTiers'` and `'markup'` — NONE OF WHICH EXIST. Those checks returned false whether
+--   -- or not the recipe had been damaged: a guard that cannot fail is not a guard. Real paths
+--   -- read from CostToProduceConfig and a live row; the ONE list is
+--   -- packages/shared/src/business-logic/pricingRecipeFields.ts.
+--   SELECT config->>'taxRate'                 AS taxrate_now,
+--          config - 'taxRate'                 AS recipe_without_tax,  -- diff THIS against (a) minus taxRate
+--          config#>>'{margin,baseline}'       AS margin_baseline,     -- was 'baselineMargin' (nested, not top-level)
+--          jsonb_array_length(config#>'{margin,tiers}') AS margin_tier_count,
+--          config->>'priceReference'          AS price_reference,     -- was 'referencePrice' (reversed)
+--          config ? 'discountTypes'           AS has_discount_types,  -- the only original that was right
+--          jsonb_array_length(config->'denominators')   AS denominator_count,
+--          jsonb_array_length(config->'locations')      AS location_count
 --     FROM public.business_pricing_config
 --    WHERE business_id = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b';
 -- ROLLBACK;   -- ⚠️ restores 0.0825 without a second write. If you COMMIT instead, set it back.
