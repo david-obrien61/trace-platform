@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { callerCan } from '../../shared/src/auth/callerPermission';
 import { generateCampaignPosts, type AdvertChannel } from '../../shared/src/campaigns/generate';
 
 const ADVERT_DEBUG = false;
@@ -21,6 +22,19 @@ function adminDb() {
   return createClient(url, process.env.SUPABASE_SERVICE_KEY!);
 }
 
+// 🔴 CALLER AUTHORITY — MB_D-015. ADDED 2026-07-27; this endpoint had NONE.
+// Both branches take `businessId` off the REQUEST BODY and write through adminDb() — the SERVICE
+// KEY, which bypasses RLS entirely. Until this gate existed anyone reaching the URL could write
+// campaigns, campaign_posts and business_voice_samples into ANY tenant by naming its id.
+// `campaigns:update` is the authority for both: generating a campaign and editing a post's copy
+// are both AUTHORING acts on the campaign surface. Owner passes via businesses.owner_id.
+async function requireCampaignAuthority(req: any, res: any, businessId: string): Promise<boolean> {
+  if (await callerCan(req.headers?.authorization, businessId, 'campaigns:update')) return true;
+  console.log('[TRACE:AUTHORITY] campaigns REFUSED — caller lacks campaigns:update/owner', { businessId });
+  res.status(403).json({ error: 'Not authorized to author campaigns for this business', code: 'FORBIDDEN' });
+  return false;
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -33,6 +47,7 @@ export default async function handler(req: any, res: any) {
     if (!businessId || !campaign?.name) {
       return res.status(400).json({ error: 'businessId and campaign.name are required' });
     }
+    if (!(await requireCampaignAuthority(req, res, businessId))) return;
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return res.status(503).json({ error: 'AI unavailable' });
@@ -136,6 +151,7 @@ export default async function handler(req: any, res: any) {
     if (!postId || !businessId) {
       return res.status(400).json({ error: 'postId and businessId are required' });
     }
+    if (!(await requireCampaignAuthority(req, res, businessId))) return;
 
     const db = adminDb();
 

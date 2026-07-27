@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { authHeaders } from '@trace/shared/auth';
 import { useBusinessContext } from '@trace/shared/context';
 import {
   LineItem,
@@ -524,14 +525,11 @@ export function ReceiptKeeper() {
         // Attach the caller's Bearer token — the server now PROVES the caller before any
         // service-key write (MB_D-015). Without this header the request is refused 403, which is
         // the correct behaviour: an unidentified caller has no authority over a tenant.
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData.session?.access_token;
+        // Uses the ONE shared helper (§6 r8) rather than a local getSession — retrofitted here in
+        // commit 2 so the first fix does not become the second copy.
         const cRes  = await fetch('/api/customers/create', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
+          headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
           body: JSON.stringify(custBody),
         });
         const cData = await cRes.json().catch(() => ({}));

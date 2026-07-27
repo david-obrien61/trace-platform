@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { authHeaders } from '@trace/shared/auth';
 import { useBusinessContext } from '@trace/shared/context';
 import type { Campaign, CampaignPost } from '@trace/shared/campaigns/types';
 
@@ -100,7 +101,7 @@ export function CampaignDetail() {
         // Mark reviewed via API — saves tone sample if edited, updates status
         const resp = await fetch('/api/campaigns', {
           method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
           body: JSON.stringify({
             action:     'copy-post',
             postId:     post.id,
@@ -145,7 +146,7 @@ export function CampaignDetail() {
     try {
       const resp = await fetch('/api/campaigns', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
         body: JSON.stringify({
           action: 'generate',
           businessId,

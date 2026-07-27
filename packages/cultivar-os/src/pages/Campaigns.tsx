@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { authHeaders } from '@trace/shared/auth';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
@@ -76,7 +77,7 @@ export function Campaigns() {
     try {
       const resp = await fetch('/api/campaigns', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
         body: JSON.stringify({ action: 'generate', businessId, campaign: { ...form } }),
       });
       const data = await resp.json();

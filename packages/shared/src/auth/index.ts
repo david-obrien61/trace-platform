@@ -163,3 +163,6 @@ export type {
 // Abuse guards for business creation — shipped OFF, genuine kill-switches
 export { runBusinessCreationGuards } from './businessGuards';
 export type { GuardResult } from './businessGuards';
+
+// the CLIENT half of MB_D-015 — attach the caller's token to our own service-key endpoints
+export { authHeaders } from './authHeaders';
