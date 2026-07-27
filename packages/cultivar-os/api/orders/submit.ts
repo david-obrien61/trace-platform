@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { pushQboInvoice } from '../qbo/invoice/cultivar';
 import { sendNotification } from '../../../shared/src/notifications/send';
 import { findOrCreateCustomer } from '../../../shared/src/business-logic/customerUpsert';
 import { callerHoldsPermission, callerIsBusinessOwner, resolveCallerUid } from '../../../shared/src/auth/callerPermission';
@@ -993,8 +994,56 @@ async function handleCreate(req: any, res: any) {
       goodsAfterDiscount: round2(pricing.goodsRetailSubtotal - pricing.discountTotal),
       discountedSubtotal: subtotal, tax: taxAmount, total,
     });
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // THE QBO PUSH — INLINE, AND DELIBERATELY LAST (2026-07-27)
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // It used to be a SECOND request from the browser to /api/qbo/invoice/cultivar, which had no
+    // caller check and took business_id from the body — the last of the eight unauthenticated
+    // cross-tenant writes. It is fixed by DELETING THE HOP, not by crendentialing it: this handler
+    // already holds the order, the business and the service key, and it has already proven the
+    // caller for everything else it did. A hop that does not exist needs no token.
+    //
+    // 🔴 ORDERING IS THE TIMEOUT DEFENCE, NOT try/catch. Every order write above has ALREADY
+    // COMMITTED — there is no wrapping transaction; each supabase call auto-commits on its own
+    // (verified across this file: the only `COMMIT` tokens here are D-52 domain language in
+    // comments). So if the invocation is KILLED mid-push, the catch below NEVER RUNS and cannot
+    // save anything — but the order still exists, whole, with no invoice. That is precisely the
+    // state manual re-push exists to repair. A clean failure mode beats a rescued one.
+    //
+    // §6 r6 — INTEGRATION FAILURE NEVER BLOCKS AN ORDER. The push is wrapped, and D-48's three
+    // honest states move here intact: success / not_connected (503) / failed. The client renders
+    // exactly what it renders today; it simply reads the fields off THIS response instead of
+    // making a second call.
+    let qbInvoiceId: string | undefined;
+    let qbInvoiceNumber: string | undefined;
+    let qbInvoiceUrl: string | undefined;
+    let qbStatus: 'success' | 'failed' | 'not_connected' = 'failed';
+    let qbError: string | undefined;
+    try {
+      const qb = await pushQboInvoice(orderId, businessId);
+      const qbBody = qb.body as Record<string, any>;
+      if (qb.status === 200 && qbBody.success === true && qbBody.qb_invoice_id) {
+        qbInvoiceId     = qbBody.qb_invoice_id;
+        qbInvoiceNumber = qbBody.qb_invoice_number;
+        qbInvoiceUrl    = qbBody.qb_invoice_url;
+        qbStatus        = 'success';
+      } else if (qb.status === 503) {
+        qbStatus = 'not_connected';
+        qbError  = String(qbBody.error ?? 'QuickBooks not connected');
+      } else {
+        qbStatus = 'failed';
+        qbError  = String(qbBody.error ?? 'QuickBooks returned no invoice for this order.');
+      }
+    } catch (qbErr: any) {
+      qbStatus = 'failed';
+      qbError  = qbErr?.message || 'QuickBooks push failed';
+    }
+    console.log('[TRACE:QBO] inline push', { orderId, businessId, qbStatus, qbInvoiceId: qbInvoiceId ?? null, qbError: qbError ?? null });
+
     res.json({
       orderId, invoiceNumber, total, subtotal, taxAmount, pricingNotes, breakdown,
+      // the QBO result, from the SAME response the order came in — one round trip, not two
+      qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus, qbError,
       // D-40: the authoritative tax state → Confirmation + email render it (redline / taxed / exempt),
       // no surface re-derives. taxRate carried so a taxed surface shows the exact %.
       taxStatus: pricing.taxStatus, taxRate,

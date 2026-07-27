@@ -120,51 +120,26 @@ export function useSubmitOrder() {
       }
 
       const { orderId, invoiceNumber, total, subtotal, taxAmount, breakdown,
-              taxStatus, taxRate, taxExemptReason, taxExemptCertRef } = await res.json();
-
-      // ── QB invoice — non-blocking ────────────────────────────────────────
-      let qbInvoiceId: string | undefined;
-      let qbInvoiceNumber: string | undefined;
-      let qbInvoiceUrl: string | undefined;
-      // D-48 (D-9 Surface Honesty): THREE honest states, not two. The old code collapsed every
-      // non-success into 'pending', so a hard 400 rendered "Invoice will sync to QuickBooks shortly
-      // — Connect QuickBooks from the owner dashboard". That was wrong twice: QBO WAS connected
-      // (it had created a customer seconds earlier), and nothing was going to sync — ever. A
-      // validation failure is not a connection problem and it is not a pending sync.
-      let qbStatus: QbSyncStatus = 'failed';
-      let qbError: string | undefined;
-
-      try {
-        const qbRes = await fetch('/api/qbo/invoice/cultivar', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ order_id: orderId, business_id: businessId }),
-        });
-        if (qbRes.ok) {
-          const qbData    = await qbRes.json();
-          qbInvoiceId     = qbData.qb_invoice_id   ?? undefined;
-          qbInvoiceNumber = qbData.qb_invoice_number ?? undefined;
-          qbInvoiceUrl    = qbData.qb_invoice_url   ?? undefined;
-          qbStatus        = qbData.success === true && qbInvoiceId ? 'success' : 'failed';
-          if (qbStatus === 'failed') qbError = 'QuickBooks returned no invoice for this order.';
-        } else {
-          // 503 = genuinely not connected / token expired → the connect prompt IS the right answer.
-          // Anything else (400 validation, 409 identity conflict, 500) is a REAL failure the owner
-          // must see and act on. NON-BLOCKING either way: the order already exists and stands.
-          const body = await qbRes.json().catch(() => ({} as any));
-          qbStatus = qbRes.status === 503 ? 'not_connected' : 'failed';
-          qbError  = body?.error || `QuickBooks rejected the invoice (HTTP ${qbRes.status}).`;
-          console.log('[TRACE:CHECKOUT] QBO invoice NOT created — degraded gracefully, did NOT throw',
-            { status: qbRes.status, qbStatus, orderId, code: body?.code ?? null, detail: qbError });
-        }
-      } catch (qbErr) {
-        // A network/parse throw is a failure, NOT "not connected" — do not point the owner at the
-        // connect button for a problem that isn't the connection.
-        qbStatus = 'failed';
-        qbError  = qbErr instanceof Error ? qbErr.message : String(qbErr);
-        console.log('[TRACE:CHECKOUT] QBO invoice call threw — caught, degraded gracefully, order stands',
-          { qbStatus, orderId, error: qbError });
-      }
+              taxStatus, taxRate, taxExemptReason, taxExemptCertRef,
+              // ── QB invoice — now returned BY THE SUBMIT RESPONSE ────────────────────────────
+              // The browser used to make a SECOND call to /api/qbo/invoice/cultivar right here.
+              // That endpoint had no caller check and took business_id from the body — the last
+              // of the eight unauthenticated cross-tenant writes (2026-07-27). It is closed by
+              // DELETING THE HOP: submit.ts already holds the order, the business and the service
+              // key, so it pushes inline and returns the result. One round trip, not two.
+              //
+              // D-48's THREE HONEST STATES are unchanged, they are just decided server-side now:
+              // success · not_connected (QBO genuinely not connected → the connect prompt IS the
+              // right answer) · failed (a real failure the owner must see and act on). Everything
+              // downstream reads the same variables it always did.
+              //
+              // NON-BLOCKING still holds (§6 r6): the order writes COMMIT BEFORE the push begins,
+              // so a failed — or even a KILLED — push leaves a whole order with qbStatus 'failed',
+              // which is exactly what the manual re-push endpoint repairs.
+              qbInvoiceId, qbInvoiceNumber, qbInvoiceUrl, qbStatus: qbStatusRaw, qbError } = await res.json();
+      const qbStatus: QbSyncStatus = (qbStatusRaw as QbSyncStatus) ?? 'failed';
+      console.log('[TRACE:CHECKOUT] QBO result carried on the submit response —',
+        { orderId, qbStatus, qbInvoiceId: qbInvoiceId ?? null, qbError: qbError ?? null });
 
       // ── Order confirmation email — non-blocking ──────────────────────────
       const plantCount   = totalPlantCount(lines);

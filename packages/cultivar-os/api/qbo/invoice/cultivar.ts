@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { callerCan } from '../../../../shared/src/auth/callerPermission';
 import { refreshQBToken } from '../../../../shared/src/quickbooks/refresh';
 import { readQBSecrets } from '../../../../shared/src/quickbooks/secrets';
 import { taxExemptionLabel } from '../../../../shared/src/business-logic/taxExemption';
@@ -318,13 +319,23 @@ function discountLine(description: string, amount: number): Record<string, unkno
   };
 }
 
-export default async function handler(req: any, res: any) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
-
-  const { order_id, business_id } = req.body as { order_id: string; business_id: string };
-  if (!order_id || !business_id) {
-    return res.status(400).json({ error: 'order_id and business_id required' });
-  }
+/**
+ * THE QBO INVOICE PUSH, AS A CALLABLE — extracted from the handler 2026-07-27.
+ *
+ * WHY: the endpoint was the LAST unauthenticated cross-tenant write (capK). Every other one took
+ * a caller gate, but this one is reached by ANONYMOUS QR CHECKOUT — /checkout/* are public routes
+ * — so a caller gate would 403 every anon order and silently kill US-008 invoicing.
+ * The fix is not a credential. `submit.ts` ALREADY has the order, the business and the service
+ * key, so it pushes DIRECTLY and the untrusted hop stops existing. A hop you delete needs no
+ * token, no signature, no single-use storage and no replay window.
+ *
+ * Returns `{ status, body }` instead of writing to `res` — the 8 former `return res.*` sites map
+ * one-for-one, so the HTTP contract of the endpoint is unchanged for its remaining caller.
+ */
+export async function pushQboInvoice(
+  order_id: string,
+  business_id: string,
+): Promise<{ status: number; body: Record<string, unknown> }> {
 
   const db = supabase();
 
@@ -337,7 +348,7 @@ export default async function handler(req: any, res: any) {
       .single();
 
     if (bizErr || !business?.accounting_company_id) {
-      return res.status(503).json({ error: 'QuickBooks not connected — connect from dashboard first' });
+      return { status: 503, body: { error: 'QuickBooks not connected — connect from dashboard first' } };
     }
 
     // Bearer secrets come from the owner-only secrets table (not the businesses row).
@@ -348,7 +359,7 @@ export default async function handler(req: any, res: any) {
       accounting_token_expires_at: business.accounting_token_expires_at,
     });
     if (!token) {
-      return res.status(503).json({ error: 'qb_token_expired' });
+      return { status: 503, body: { error: 'qb_token_expired' } };
     }
     const realm: string = business.accounting_company_id;
 
@@ -359,7 +370,7 @@ export default async function handler(req: any, res: any) {
       .eq('id', order_id)
       .single();
 
-    if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (!order) return { status: 404, body: { error: 'Order not found' } };
     const customer = order.customers;
     const invoiceNumber: string = order.notes || `CLV-${order_id.slice(0, 8)}`;
 
@@ -658,12 +669,12 @@ export default async function handler(req: any, res: any) {
       status: 'invoiced',
     }).eq('id', order_id);
 
-    return res.json({
+    return { status: 200, body: {
       success: true,
       qb_invoice_id: qbInvoiceId,
       qb_invoice_number: qbDocNumber,
       qb_invoice_url: qbInvoiceUrl,
-    });
+    } };
 
   } catch (err: any) {
     // A real identity ambiguity is NOT a server fault — it is a decision only the owner can
@@ -673,9 +684,40 @@ export default async function handler(req: any, res: any) {
       console.log('[TRACE:QBO] ⚠ PUSH REFUSED — customer identity must be resolved by the owner', {
         order_id, business_id, reason: err.message,
       });
-      return res.status(409).json({ error: err.message, code: 'qb_customer_identity_conflict' });
+      return { status: 409, body: { error: err.message, code: 'qb_customer_identity_conflict' } };
     }
     console.error('[QB invoice/cultivar]', err);
-    return res.status(500).json({ error: err?.message || 'QB invoice creation failed' });
+    return { status: 500, body: { error: err?.message || 'QB invoice creation failed' } };
   }
+}
+
+/**
+ * THE ENDPOINT — kept as the MANUAL RE-PUSH / RECOVERY path (David, 2026-07-27).
+ *
+ * `submit.ts` now pushes inline at order creation, so this is no longer on the checkout path and
+ * no longer has an anonymous caller. It is what fixes an order whose inline push FAILED — and
+ * without it a failed push has no retry but re-submitting the order, which would mint a second
+ * order to fix an invoice.
+ *
+ * A re-push ALWAYS has a session (someone is looking at a failed order and pressing a button), so
+ * it takes the standard caller gate like every other endpoint: `orders:update` — re-pushing an
+ * invoice is an act on the order.
+ */
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+
+  const { order_id, business_id } = req.body as { order_id: string; business_id: string };
+  if (!order_id || !business_id) {
+    return res.status(400).json({ error: 'order_id and business_id required' });
+  }
+
+  // 🔴 CALLER AUTHORITY — MB_D-015. This endpoint had NONE until 2026-07-27, and was the LAST of
+  // the eight: anyone could push an invoice into ANY tenant's QuickBooks by naming its id.
+  if (!(await callerCan(req.headers?.authorization, business_id, 'orders:update'))) {
+    console.log('[TRACE:AUTHORITY] qbo/invoice REFUSED — caller lacks orders:update/owner', { business_id, order_id });
+    return res.status(403).json({ error: 'Not authorized to push invoices for this business', code: 'FORBIDDEN' });
+  }
+
+  const { status, body } = await pushQboInvoice(order_id, business_id);
+  return res.status(status).json(body);
 }
