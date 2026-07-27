@@ -17,6 +17,7 @@
 // ============================================================
 
 import type { SyncEngine } from '@trace/shared/sync';
+import { authHeaders } from '@trace/shared/auth';
 import {
   putPendingAsset, listPendingAssets, deletePendingAsset,
   type PendingAssetCapture,
@@ -64,7 +65,7 @@ async function runAssetOcr(
   try {
     const res = await fetch('/api/receipts/ocr', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
       body: JSON.stringify({ businessId, userId, imageBase64: base64, mimeType, shape: 'asset', categoryHint }),
     });
     if (!res.ok) {

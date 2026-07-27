@@ -18,6 +18,7 @@
 //   - QB write-back for receipts → benched; v1 is local-only
 
 import Anthropic from '@anthropic-ai/sdk';
+import { callerCan } from '../../../shared/src/auth/callerPermission';
 import { createClient } from '@supabase/supabase-js';
 
 const TRACE_RECEIPT = true; // [TRACE:RECEIPT] STD-003 — comment out when David says "proven"
@@ -319,6 +320,30 @@ export default async function handler(req: any, res: any) {
     req.body?.shape === 'invoice' ? 'invoice' :
     req.body?.shape === 'asset'   ? 'asset'   : 'receipt';
   const activePrompt = promptForShape(shape, typeof categoryHint === 'string' ? categoryHint : undefined);
+
+  // 🔴 CALLER AUTHORITY — MB_D-015. ADDED 2026-07-27; this endpoint had NONE.
+  // `businessId` came off the REQUEST BODY, the handler runs under the SERVICE KEY, and the work
+  // it does is a paid AI call. Anyone reaching the URL could burn OUR Anthropic spend at will and
+  // attribute the capture to ANY tenant. A read-only handler is still an open till.
+  //
+  // GATED PER SHAPE, matching the routes the two callers come from, so route and endpoint agree
+  // (STD-020): an ASSET capture is `assets:read` (/assets/capture); a receipt or invoice capture
+  // is `costs:read` (/receipts).
+  //
+  // ⚠️ `userId` ARRIVES IN THE BODY — a caller asserting its own identity, which is the exact
+  // thing MB_D-015 forbids. Checked before writing this comment: it is REQUIRED by the 400 guard
+  // below and then NEVER READ AGAIN (corpus: every `userId` occurrence in this file). So nothing
+  // is currently attributed to it and there is nothing to overwrite — but it is a LOADED TRAP:
+  // the moment someone uses it for attribution, the record names whoever the caller claimed to be.
+  // Left in place rather than removed (it is a caller-visible contract) and named here so the next
+  // person to reach for it resolves the uid from the token instead.
+  const authHeaderOcr = req.headers?.authorization;
+  const ocrShape = req.body?.shape === 'asset' ? 'asset' : 'receipt';
+  const ocrPerm  = ocrShape === 'asset' ? 'assets:read' : 'costs:read';
+  if (businessId && !(await callerCan(authHeaderOcr, businessId, ocrPerm))) {
+    console.log('[TRACE:AUTHORITY] receipts/ocr REFUSED — caller lacks ' + ocrPerm + '/owner', { businessId, shape: ocrShape });
+    return res.status(403).json({ error: 'Not authorized to capture for this business', code: 'FORBIDDEN' });
+  }
 
   if (!businessId || !userId || !imageBase64 || !mimeType) {
     return res.status(400).json({ error: 'businessId, userId, imageBase64, and mimeType are required' });

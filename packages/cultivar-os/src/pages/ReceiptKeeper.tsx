@@ -229,7 +229,7 @@ export function ReceiptKeeper() {
     try {
       const res = await fetch('/api/receipts/ocr', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
         body: JSON.stringify({ businessId, userId: user.id, imageBase64, mimeType, fileSizeBytes, shape: OCR_SHAPE }),
       });
 
