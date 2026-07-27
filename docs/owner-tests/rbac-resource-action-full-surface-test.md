@@ -137,10 +137,33 @@ PHASE: 1
 DEVICE: either
 COVERS: mgr-vis 5 · `tax_rate:read` · the untaxed $544 invoice
 LAST-PROVEN: never
-- **Do:** as the MANAGER, take an order to Cart Review.
-- **PASS:** tax is computed at the tenant's configured rate (8.25% at LAWNS) and appears on the total.
-- **FAIL:** tax reads $0.00, or the copy says "set your tax rate in Settings" when it IS set.
+- **Do:** **READ THE RATE FIRST** — `SELECT config->>'taxRate' FROM business_pricing_config WHERE business_id = :bid;` — then, as the MANAGER, take an order to Cart Review and check the tax against THAT number.
+- **PASS:** tax is computed at the rate you just read, and appears on the total.
+- **FAIL:** tax reads $0.00 · the copy says "set your tax rate in Settings" when it IS set · **or the rate applied is not the one in `config`**.
 - **Why:** a $544 invoice went out UNTAXED because the rate shared the pricing-recipe wall.
+- **🔴 DO NOT ASSERT A LITERAL RATE (corrected 2026-07-27).** This card said **8.25% at LAWNS**. The tenant's actual value is **0.076** — David changed it during testing, and **#153's catalog verification is stale on that number**. A hardcoded rate tests the DOC, not the SYSTEM: it would fail a correct system or pass a broken one depending on which way the drift ran.
+
+### R-5b — 🔴 The invoice number and URL appear on the confirmation screen, FROM THE SUBMIT RESPONSE
+STATUS: owed
+PHASE: 1
+DEVICE: either
+COVERS: the CHANGED checkout mechanism (ledger #157) · US-008 · D-48's three states
+LAST-PROVEN: never
+- **Do:** take ONE order all the way through to the confirmation screen — as the MANAGER, and again as an ANONYMOUS QR checkout (`/checkout/*` are public routes; sign out to prove it).
+- **PASS:** the QuickBooks invoice NUMBER and LINK are on the confirmation screen, both paths. In the network tab there is **ONE** request — `/api/orders/submit` — carrying `qbInvoiceId`/`qbInvoiceNumber`/`qbInvoiceUrl`/`qbStatus` in its response.
+- **FAIL:** a SECOND request to `/api/qbo/invoice/cultivar` (the old two-hop shape is still deployed) · the invoice fields are absent · the anon path shows no invoice.
+- **Why:** **this is a DIFFERENT MECHANISM than it was on 2026-07-26 and it is the demo spine**, so it gets its own line rather than being assumed inside "a manager takes a taxed order end-to-end". The browser used to make a second call to an endpoint with NO caller check that took `business_id` from the body — the last of the eight (ledger #157). It was closed by DELETING THE HOP: `submit.ts` already held the order, the business and the service key, so it pushes inline and returns the result.
+
+### R-5c — 🔴 (NEG) A FAILED push renders honestly and the order is WHOLE
+STATUS: owed
+PHASE: 1
+DEVICE: either
+COVERS: §6 r6 (integration failure never blocks an order) · D-48's three states · the recovery path
+LAST-PROVEN: never
+- **Do:** force a failure — easiest is to disconnect QuickBooks in Settings, then take an order to confirmation.
+- **PASS:** the order EXISTS, complete, with its own number and total. The QuickBooks line reads honestly — `not_connected` gives the connect prompt, a real failure says so — and **never a fabricated or pending invoice number**. The order appears on `/orders` in full.
+- **FAIL:** the order is missing or partial · the screen claims an invoice that does not exist · a hard failure renders as "will sync shortly".
+- **Why:** the order writes COMMIT BEFORE the push begins — there is no wrapping transaction — so even a KILLED invocation leaves a whole order with `qbStatus: 'failed'`. **Ordering is the defence, not `try/catch`: a catch never runs on a killed invocation.** That state is exactly what the gated manual re-push endpoint repairs, which is why it was kept rather than deleted.
 
 ### R-6 — 🔴 (NEG) A non-member gets NO rate from the narrow read
 STATUS: owed

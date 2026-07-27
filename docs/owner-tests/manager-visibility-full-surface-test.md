@@ -106,10 +106,11 @@ STATUS: owed
 DEVICE: phone
 COVERS: gap #4 (`get_business_tax_rate`), STD-020, the untaxed $544 invoice, D-9 copy fix
 LAST-PROVEN: never
-- **Do:** as the MANAGER, build the SAME kind of order that went out at $544.00 untaxed. Reach review.
-- **PASS:** the tax line shows the tenant's real rate applied (the amount is non-zero, no ⚠ redline), and the total includes tax. The order that went out untaxed now carries tax.
-- **FAIL:** "⚠ Tax: not identified", tax $0, total excludes tax — over a rate that IS set.
+- **Do:** **FIRST read the tenant's CURRENT rate** — `SELECT config->>'taxRate' FROM business_pricing_config WHERE business_id = :bid;` — and use THAT number for the arithmetic below. Then, as the MANAGER, build the SAME kind of order that went out at $544.00 untaxed. Reach review.
+- **PASS:** the tax line shows **the rate you just read**, applied (amount non-zero, no ⚠ redline), and the total includes it. The order that went out untaxed now carries tax.
+- **FAIL:** "⚠ Tax: not identified", tax $0, total excludes tax — over a rate that IS set. Also FAIL if the rate shown is not the one in `config`.
 - **Why:** the rate lives behind the `view_pricing_config` wall; the manager read null. The narrow `get_business_tax_rate` RPC returns the rate to any member.
+- **🔴 DO NOT ASSERT A LITERAL RATE (corrected 2026-07-27).** Earlier docs carry **0.0825**; the tenant's actual value is **0.076**, changed by David during testing, and **#153's catalog verification is STALE on that number**. A card that hardcodes a rate tests the DOC, not the SYSTEM — and it would fail a correct system or pass a broken one depending on which way the drift ran. **Read it at run time, every time.** This is the same class as spec §5 naming three protected fields that were not there: an assertion written from a document rather than from the data.
 
 ### 6. (NEGATIVE) A non-member gets NO tax rate from the narrow read
 STATUS: owed
