@@ -69,8 +69,21 @@ function handleAuthUrl(req: any, res: any) {
     console.log('[TRACE:AUTHORITY] qbo/auth-url REFUSED — caller lacks settings:update/owner', { businessId: nurseryId });
     return res.status(403).json({ error: 'Not authorized to connect QuickBooks for this business', code: 'FORBIDDEN' });
   }
-  const random    = crypto.randomBytes(16).toString('hex');
-  const state     = `${nurseryId}__${random}`;
+  // MINTED HERE, BY AN AUTHENTICATED CALLER — the gate above (settings:update) is what makes this
+  // state trustworthy at all: a client cannot mint one, so a valid state proves an authorised
+  // human began this connect for THIS business.
+  const state = mintState(nurseryId);
+  {
+    const db = supabase();
+    const { error: stateErr } = await db
+      .from('business_accounting_secrets')
+      .upsert({ business_id: nurseryId, oauth_state: state, oauth_state_at: new Date().toISOString() },
+              { onConflict: 'business_id' });
+    if (stateErr) {
+      console.log('[TRACE:AUTHORITY] qbo/auth-url could not store pending state', { businessId: nurseryId, error: stateErr.message });
+      return res.status(500).json({ error: 'Could not begin the QuickBooks connect — please retry.' });
+    }
+  }
 
   let url: string;
   try {
@@ -92,6 +105,51 @@ function handleAuthUrl(req: any, res: any) {
   return res.json({ url });
 }
 
+
+// ════════════════════════════════════════════════════════════════════════════════
+// THE OAuth STATE — SIGNED, BUSINESS-BOUND, STORED PENDING, SINGLE-USE
+// ════════════════════════════════════════════════════════════════════════════════
+// Format: `v2.<businessId>.<nonce>.<issuedAtMs>.<hmac>` — versioned so the OLD
+// `${businessId}__${random}` shape is not merely unparseable but IDENTIFIABLE, and can be
+// rejected LOUDLY rather than falling through some generic 400.
+//
+// Signed with QBO_CLIENT_SECRET — an EXISTING server secret (David: do not introduce a new one to
+// rotate). Rotating QBO credentials invalidates in-flight states, which is correct: they live ten
+// minutes and a credential rotation should end them.
+//
+// 🔴 THE SIGNATURE IS NOT THE SECURITY BOUNDARY ON ITS OWN. It proves the state was minted by us;
+// the STORED, SINGLE-USE copy proves it has not been used before. Both are required — a signed
+// state with no storage is replayable for its whole TTL.
+const STATE_TTL_MS = 10 * 60 * 1000;
+
+function signState(businessId: string, nonce: string, issuedAt: number): string {
+  const secret = process.env.QBO_CLIENT_SECRET || '';
+  return crypto.createHmac('sha256', secret)
+    .update(`${businessId}.${nonce}.${issuedAt}`)
+    .digest('hex');
+}
+
+function mintState(businessId: string): string {
+  const nonce    = crypto.randomBytes(16).toString('hex');
+  const issuedAt = Date.now();
+  return `v2.${businessId}.${nonce}.${issuedAt}.${signState(businessId, nonce, issuedAt)}`;
+}
+
+/** Parse + verify the SIGNATURE and TTL. Storage/single-use is checked separately, by the caller. */
+function verifyStateSignature(state: string): { businessId: string; issuedAt: number } | null {
+  const parts = state.split('.');
+  if (parts.length !== 5 || parts[0] !== 'v2') return null;
+  const [, businessId, nonce, issuedAtRaw, mac] = parts;
+  const issuedAt = Number(issuedAtRaw);
+  if (!businessId || !nonce || !Number.isFinite(issuedAt)) return null;
+  const expected = signState(businessId, nonce, issuedAt);
+  // timing-safe compare — lengths are equal by construction (both hex sha256)
+  if (mac.length !== expected.length) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(mac, 'hex'), Buffer.from(expected, 'hex'))) return null;
+  if (Date.now() - issuedAt > STATE_TTL_MS) return null;
+  return { businessId, issuedAt };
+}
+
 // ─── callback ────────────────────────────────────────────────────────────────
 
 async function handleCallback(req: any, res: any) {
@@ -102,7 +160,53 @@ async function handleCallback(req: any, res: any) {
     return res.status(400).send('<h2>Missing OAuth parameters. Please try connecting again.</h2>');
   }
 
-  const businessId = state.split('__')[0] || '';
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 VALIDATE THE STATE. This is the ONLY thing standing between Intuit's redirect and a write
+  // of another tenant's QuickBooks tokens — there is no Bearer token here and there never can be.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // (1) OLD FORMAT — REJECTED OUTRIGHT, NO COMPATIBILITY WINDOW (David's ruling). A window on a
+  //     forgeable format is a hole with a schedule. Logged LOUDLY, not silently 400'd: after this
+  //     ships, an old-format state means either a stale in-flight connect or someone probing, and
+  //     both are worth seeing.
+  if (state.includes('__') && !state.startsWith('v2.')) {
+    console.log('[TRACE:AUTHORITY] 🔴 qbo/callback REJECTED an OLD-FORMAT state — forgeable `businessId__random` shape. Either a connect started before 2026-07-27 or someone probing.', {
+      statePrefix: state.slice(0, 12), realmId,
+    });
+    res.setHeader('Content-Type', 'text/html');
+    return res.status(400).send('<h2>This QuickBooks connection link is no longer valid. Please start the connect again from Settings.</h2>');
+  }
+
+  // (2) SIGNATURE + TTL — proves WE minted it, for THIS business, recently.
+  const verified = verifyStateSignature(state);
+  if (!verified) {
+    console.log('[TRACE:AUTHORITY] 🔴 qbo/callback REJECTED a state that failed signature or TTL.', {
+      statePrefix: state.slice(0, 12), realmId,
+    });
+    res.setHeader('Content-Type', 'text/html');
+    return res.status(400).send('<h2>This QuickBooks connection link is not valid. Please start the connect again from Settings.</h2>');
+  }
+  const businessId = verified.businessId;
+
+  // (3) SINGLE-USE, ENFORCED BY STORAGE — the condition is ON THE UPDATE, so two simultaneous
+  //     callbacks cannot both win: the second matches zero rows. Clearing it here is also the
+  //     cleanup path (see the migration header) — there is no table of pending rows to sweep.
+  {
+    const db = supabase();
+    const { data: claimed, error: claimErr } = await db
+      .from('business_accounting_secrets')
+      .update({ oauth_state: null, oauth_state_at: null })
+      .eq('business_id', businessId)
+      .eq('oauth_state', state)
+      .select('business_id');
+    if (claimErr || !claimed || claimed.length === 0) {
+      console.log('[TRACE:AUTHORITY] 🔴 qbo/callback REJECTED a state that was already used, unknown, or for another business — REPLAY or FORGERY.', {
+        businessId, statePrefix: state.slice(0, 12), realmId, error: claimErr?.message ?? null,
+      });
+      res.setHeader('Content-Type', 'text/html');
+      return res.status(400).send('<h2>This QuickBooks connection link has already been used. Please start the connect again from Settings.</h2>');
+    }
+  }
+  console.log('[TRACE:AUTHORITY] qbo/callback state VALIDATED — signed, in-date, claimed single-use', { businessId, realmId });
 
   const credentials = Buffer.from(
     `${process.env.QBO_CLIENT_ID}:${process.env.QBO_CLIENT_SECRET}`
