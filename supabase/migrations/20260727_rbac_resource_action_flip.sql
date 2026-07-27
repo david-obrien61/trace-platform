@@ -440,16 +440,69 @@ GRANT EXECUTE ON FUNCTION public.save_role_permissions(uuid, uuid, text, text, t
 -- strings (view_dashboard / view_reports have no alias rows at all). A hand-typed list here
 -- would be the fourth unstated-corpus claim in this program.
 --
+-- ── THE OWNER FLOOR — DECOMPOSED, NOT EMPTIED (decision, David 2026-07-27, reason on record) ──
+-- The recommendation on the table was to EMPTY the OWNER floor: owner authority is `owner_id` at
+-- all three layers (table = 20 `*_owner_all`; api = `callerIsBusinessOwner`; route =
+-- BusinessProvider.tsx:695), so the array is decorative for the actual owner — and a decorative
+-- array is what produced the 6-string fiction.
+--
+-- FIRST, THE FACT THAT WAS MISSING: something DOES read it.
+-- `OnboardingWizard.tsx:561` calls `resolveRoleDefaults(supabase, businessId, 'OWNER')` and mints
+-- the owner's member row FROM THE FLOOR. (`SignUp.tsx:34` does not — it writes a hardcoded
+-- 5-string literal. The two mint paths disagree; BUILD 2 makes SignUp read the floor too.)
+-- CORPUS: packages/shared/src, packages/cultivar-os/src, packages/cultivar-os/api — grep
+-- `role_definitions` + `resolveRoleDefaults`; readers are roleDefinitions.ts (the accessor),
+-- MemberConsole (display), OnboardingWizard:561 (OWNER), Settings:205 (invite role).
+--
+-- DECISION: DECOMPOSE. Two reasons.
+--   1. `role_key = 'OWNER'` and `businesses.owner_id` are DIFFERENT THINGS. Every current OWNER
+--      member happens to be the owner_id (STEP 0 Block D2), but the model permits a member with
+--      role OWNER who is not the owner. That person gets NO owner bypass at any layer and falls
+--      back to the array — an empty floor would silently give them nothing. Fail-closed, but a
+--      trap laid for a state the model allows.
+--   2. Emptying is a REVOCATION dressed as cleanup, and this migration is a RENAME. Same
+--      discipline as the two-call tenant split: removing authority is its own act, with its own
+--      audit row and its own reason string.
+-- The fiction is fixed at its actual source — the hardcoded mint literal — not by hollowing out
+-- the template. **David may overrule; emptying it later is one UPDATE and one audit row.**
+--
 -- ⚠️ THIS IS A RENAME, NOT AN ALIGNMENT. The floor becomes exactly what it already granted, in
 -- new words. It is NOT set to MANAGER_DEFAULT_BUNDLE / STAFF_DEFAULT_BUNDLE — aligning the
 -- floor to the designed bundles is a GRANT decision and therefore a separate authority act,
 -- the same discipline as the two-call tenant split.
 --
--- DECLARED-UNWIRED HELD BACK (David's ruling): `maintenance:override` and
--- `deliveries.route:update` are excluded here and from every bundle. A declared-unwired string
--- in a role definition is UN-REMOVABLE through the UI (MemberConsole.tsx:651 seeds the draft
--- from the resolved set; §7.1 filters it from the catalog), so seeding one mints the very
--- defect this migration removes.
+-- ── R-B2 — THE OUTPUT FILTER. A DISTINCT MECHANISM FROM R-B, AT A DIFFERENT PIPELINE POINT ──
+-- 🔧 CORRECTION (David, 2026-07-27). An earlier write-up claimed this exclusion "is R-A's
+-- existing rule" and that `deliveries.route:update` merely "joins override_maintenance in
+-- STRIPPED_AT_BACKFILL.unwired". THAT WAS WRONG. The SQL below was right and the prose was not.
+--
+--   R-B  (STRIPPED_AT_BACKFILL) is an INPUT filter. It drops a LEGACY string before
+--        decomposition, so its replacements are never produced. Its members are legacy strings:
+--        `override_maintenance`, `view_dashboard`, `view_reports`, `process_orders`, `manage_team`.
+--
+--   R-B2 (this clause) is an OUTPUT filter. It drops a specific NEW string FROM the
+--        decomposition, while its legacy antecedent stays fully wired and fully kept.
+--
+-- THE PROOF THEY ARE NOT THE SAME RULE: `deliveries.route:update` descends from
+-- `manage_deliveries`, which is wired, kept, and decomposes into three other strings we DO want.
+-- No input filter can reach it — dropping `manage_deliveries` would also destroy `deliveries:read`,
+-- `deliveries:update` and `deliveries.route:read`. Only an output filter reaches this case.
+-- (`maintenance:override` is caught by BOTH mechanisms; `deliveries.route:update` by R-B2 alone.
+-- That asymmetry is exactly why the two need separate names.)
+--
+-- WHY ANY OF IT IS FILTERED: a `declared-unwired` string in a role definition is UN-REMOVABLE
+-- through the UI — §7.1 filters it out of the Roles-page catalog, and MemberConsole.tsx:651 seeds
+-- its draft from the RESOLVED SET, so a held string with no chip survives every save. Seeding one
+-- mints the very defect this migration exists to remove.
+--
+-- ⚠️ THE LITERAL BELOW IS A HAND-MADE SNAPSHOT AND IS NOT THE AUTHORITY. The authority is
+-- `permissionManifest.ts` — any string whose status is `declared-unwired`. SQL cannot read the TS
+-- register, so the loop is closed in the OTHER direction, by the verifier (BUILD 2):
+--   (a) capQ FAILS if any DEFAULT bundle contains a declared-unwired string;
+--   (b) capQ FAILS if THIS LIST diverges from the manifest's declared-unwired set — so adding a
+--       new declared-unwired string to the manifest breaks the build until this line is updated;
+--   (c) V5 below FAILS if any role_definitions row — floor OR tenant — holds one.
+-- Three surfaces, one authority, no silent drift.
 UPDATE public.role_definitions rd
    SET permissions = COALESCE((
          SELECT jsonb_agg(DISTINCT a.from_perm)
@@ -498,14 +551,24 @@ COMMIT;
 --  WHERE schemaname='public' AND tablename='deliveries'
 --    AND cmd IN ('INSERT','DELETE') AND policyname ~ 'member';
 
--- ── V5 — the floor speaks the new vocabulary and holds NO declared-unwired string.
--- EXPECT: 3 rows, every `legacy_left` = 0, every `unwired_left` = 0.
--- SELECT role_key, jsonb_array_length(permissions) AS n,
+-- ── V5 — R-B2 / R-C SIDEWAYS: EVERY role_definitions row — FLOOR **AND TENANT** — speaks the
+--    new vocabulary and holds NO declared-unwired string.
+-- CORPUS: public.role_definitions, all rows, both scopes. Not just the floor: a legacy or unwired
+-- string surviving in a TENANT override seeds it into the next member minted for that role.
+-- EXPECT: every row `legacy_left` = 0 AND `unwired_left` = 0.
+-- SELECT COALESCE(business_id::text,'(FLOOR)') AS scope, role_key,
+--        jsonb_array_length(permissions) AS n,
 --        (SELECT count(*) FROM jsonb_array_elements_text(permissions) x(s) WHERE x.s NOT LIKE '%:%') AS legacy_left,
 --        (SELECT count(*) FROM jsonb_array_elements_text(permissions) x(s)
 --          WHERE x.s IN ('maintenance:override','deliveries.route:update')) AS unwired_left,
 --        permissions
---   FROM public.role_definitions WHERE business_id IS NULL ORDER BY role_key;
+--   FROM public.role_definitions ORDER BY (business_id IS NOT NULL), role_key;
+
+-- ── V5b — THE SAME INVARIANT AGAINST MEMBER ARRAYS (run after the funnel calls).
+-- EXPECT: 0 rows. A declared-unwired string in a member array is un-removable through the UI.
+-- SELECT bm.business_id, bm.name, bm.role, x.s AS unwired_string
+--   FROM public.business_members bm, jsonb_array_elements_text(bm.permissions) x(s)
+--  WHERE bm.active AND x.s IN ('maintenance:override','deliveries.route:update');
 
 -- ── V6 — the tax writer cannot touch the recipe. Run as a member holding tax_rate:update.
 -- EXPECT: taxRate changes; baselineMargin / referencePrice / markup / discountTypes IDENTICAL.

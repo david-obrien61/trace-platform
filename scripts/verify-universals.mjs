@@ -875,6 +875,92 @@ function parseManifest(src) {
   return { model, legacy };
 }
 
+// ════════════════════════════════════════════════════════════════════════════════
+// capQ — THE DECLARED-UNWIRED INVARIANT (David's ruling, 2026-07-27). FAILS, not WARNS.
+// ════════════════════════════════════════════════════════════════════════════════
+// NO default bundle, and no role definition, may contain a `declared-unwired` string.
+//
+// WHY THIS FAILS THE BUILD instead of flagging: §7.1 filters a declared-unwired string out of the
+// Roles-page catalog, and MemberConsole.tsx:651 seeds its draft from the RESOLVED SET rather than
+// the rendered chips — so a held string with no chip is submitted unchanged by every save and is
+// UN-REMOVABLE THROUGH THE UI. Seeding one does not create a tidy-up item; it creates a permanent
+// grant that costs raw SQL to undo. `override_maintenance` is the live proof: it sits in the
+// MANAGER floor and the f7ec5d67 tenant row today and no owner can take it off.
+//
+// TWO ASSERTIONS, because the authority lives in TypeScript and the enforcement lives in SQL:
+//   (a) BUNDLES   — no DEFAULT_BUNDLES entry contains a declared-unwired string.
+//   (b) THE R-B2 LIST — the `NOT IN (…)` output filter in 20260727_rbac_resource_action_flip.sql
+//       §5 must equal DECLARED_UNWIRED_PERMISSIONS exactly. SQL cannot read the TS register, so
+//       the loop closes in this direction: adding a declared-unwired string to the manifest FAILS
+//       the build until the migration's list agrees. Without (b) the hand-typed literal silently
+//       rots, which is the whole class of defect this program keeps finding.
+// The third surface — role_definitions rows and member arrays — is the same invariant asserted
+// against the DATABASE, which this verifier cannot read (F5). It is V5/V5b of that migration, and
+// their OUTPUT is pasted into the ledger row.
+function capQ(key, v) {
+  if (!isMultiTenant(v)) return SKIP('the resource:action permission model is a Cultivar multi-tenant-RLS surface.');
+
+  const manifestSrc = read('packages/shared/src/auth/permissionManifest.ts');
+  if (!manifestSrc) return FAIL('permissionManifest.ts not found — the invariant has no authority.');
+
+  // The declared-unwired set, read from the manifest source (the single authority).
+  // ⚠️ THERE ARE TWO ENTRY SHAPES and BOTH must be parsed — capQ's first run FAILED because it
+  // read only the first, which is the exact unstated-corpus defect this program keeps finding,
+  // committed by the check written to prevent it:
+  //   (A) RESOURCES seed, keyed by RESOURCE, per-verb status map:
+  //       'deliveries.route': { verbs: [...], status: { read: 'enforced', update: 'declared-unwired' } }
+  //       (honored by buildManifest():449-452 via seed.status?.[verb])
+  //   (B) flat override, keyed by the FULL PERMISSION, scalar status:
+  //       'maintenance:override': { permission: '…', status: 'declared-unwired' }
+  const unwired = new Set();
+  for (const m of manifestSrc.matchAll(/'([a-z_.:]+)':\s*\{[\s\S]*?\n  \}/g)) {
+    const [, resource] = m;
+    // (A) per-verb status map on a resource seed
+    const statusBlock = m[0].match(/status:\s*\{([^}]*)\}/);
+    if (statusBlock) {
+      for (const sm of statusBlock[1].matchAll(/(\w+):\s*'declared-unwired'/g)) unwired.add(`${resource}:${sm[1]}`);
+    }
+    // (B) scalar status — either a flat 'resource:verb' key, or a whole resource marked unwired
+    if (/status:\s*'declared-unwired'/.test(m[0])) {
+      if (resource.includes(':')) {
+        unwired.add(resource);                       // already a full permission string
+      } else {
+        for (const vm of (m[0].match(/verbs:\s*\[([^\]]*)\]/) || [, ''])[1].matchAll(/'(\w+)'/g)) {
+          unwired.add(`${resource}:${vm[1]}`);
+        }
+      }
+    }
+  }
+  const gaps = [];
+
+  // (a) bundles
+  for (const bundleName of ['MANAGER_DEFAULT_BUNDLE', 'STAFF_DEFAULT_BUNDLE']) {
+    const block = manifestSrc.match(new RegExp(`export const ${bundleName}: string\\[\\] = \\[([\\s\\S]*?)\\];`));
+    if (!block) { gaps.push(`${bundleName} not found — cannot assert the invariant over it.`); continue; }
+    for (const pm of block[1].matchAll(/'([a-z_.]+:[a-z_]+)'/g)) {
+      if (unwired.has(pm[1])) gaps.push(`${bundleName} contains declared-unwired '${pm[1]}' — it would mint an UN-REMOVABLE grant (MemberConsole.tsx:651).`);
+    }
+  }
+
+  // (b) the R-B2 output filter in the flip migration must equal the manifest set
+  const flip = read('supabase/migrations/20260727_rbac_resource_action_flip.sql');
+  if (!flip) {
+    gaps.push('20260727_rbac_resource_action_flip.sql not found — the R-B2 list cannot be reconciled.');
+  } else {
+    const notIn = flip.match(/a\.from_perm NOT IN \(([^)]*)\)/);
+    if (!notIn) {
+      gaps.push('the R-B2 `NOT IN (…)` output filter is missing from the flip migration §5 — the floor rewrite would seed declared-unwired strings.');
+    } else {
+      const inSql = new Set([...notIn[1].matchAll(/'([^']+)'/g)].map((x) => x[1]));
+      for (const u of unwired) if (!inSql.has(u)) gaps.push(`declared-unwired '${u}' is NOT in the migration's R-B2 list — the floor rewrite would seed it.`);
+      for (const q of inSql) if (!unwired.has(q)) gaps.push(`migration R-B2 excludes '${q}' but the manifest does not mark it declared-unwired — the list has rotted, or the status is wrong.`);
+    }
+  }
+
+  if (gaps.length) return FAIL(`declared-unwired invariant BROKEN — ${gaps.length} violation(s).`, gaps);
+  return PASS(`declared-unwired invariant holds — ${unwired.size} string(s) [${[...unwired].join(', ')}], absent from both bundles and reconciled with the migration's R-B2 list.`);
+}
+
 function capP(key, v) {
   if (!isMultiTenant(v)) return SKIP('the resource:action permission model is a Cultivar multi-tenant-RLS surface (Ignition is local-first PIN — out of scope).');
 
@@ -1096,6 +1182,7 @@ const CAPS = [
   ['f', 'Tenant override/custom not cross-tenant; floor not tenant-writable; clone-not-mutate (D-010, AC-3)', capF],
   ['g', 'Factory-reset deletes the tenant override → shared floor unchanged (D-010)', capG],
   ['p', 'resource:action permission model — manifest/policies/routes/API agree (spec v3 §7) [WARN]', capP],
+  ['q', 'declared-unwired invariant — no bundle or role definition may hold an un-removable string', capQ],
 ];
 
 // ── ACCEPTANCE — Role Machine definition-of-done (NOT yet built) ────────────────────

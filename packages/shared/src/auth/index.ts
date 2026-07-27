@@ -132,6 +132,8 @@ export {
   STRIPPED_AT_BACKFILL,
   // the Roles-page filter (replaces UNWIRED_ACTION_PERMISSIONS + UNWIRED_REGISTRY_PERMISSIONS)
   HIDDEN_PERMISSIONS,
+  // the declared-unwired set — the invariant capQ enforces across bundles + the R-B2 list
+  DECLARED_UNWIRED_PERMISSIONS,
   // fresh-role seed data (NOT a backfill input — see R-A on DEFAULT_BUNDLES)
   DEFAULT_BUNDLES,
   MANAGER_DEFAULT_BUNDLE,

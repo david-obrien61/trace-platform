@@ -258,6 +258,16 @@ const RESOURCES: Record<string, EntrySeed> = {
     verbs: ['read', 'update'],
     sensitivity: 'operational',
     inheritance: ['deliveries:read'],
+    // STATUS SPLIT (2026-07-27, corpus stated — do NOT collapse these to one value):
+    //   read   = ENFORCED at TWO layers. router.tsx:140-143 splits the single manage_deliveries
+    //            PermissionRoute so /deliveries gates on this string; tileRegistry.ts:346
+    //            `nav_delivery_route` repoints to it. Route and tile ARE enforcement (STD-020) —
+    //            concluding "unwired" from the table layer alone is the manage_orders mistake.
+    //   update = DECLARED-UNWIRED. No route is persisted: DeliveryRoute.tsx:385 is a SELECT, and
+    //            nothing writes a route. CORPUS: packages/cultivar-os/src, packages/cultivar-os/api,
+    //            packages/shared/src, api/, supabase/migrations (RPCs) — zero writers.
+    //            Held out of every bundle and every role definition (R-B2) until a writer exists.
+    status: { read: 'enforced', update: 'declared-unwired' },
     note:
       'SUB-RESOURCE of deliveries (the dotted name signals the parent). Rule 3: any ' +
       'deliveries.route:* grant requires deliveries:read — no deliveries, no route. Kept ' +
@@ -757,6 +767,28 @@ export const STRIPPED_AT_BACKFILL: Record<'retired' | 'unwired' | 'unmapped', st
  *   · the `owner-only` route sentinel (never a member-held permission)
  * ⚠️ WIRING ONE = flip its `unwired`/`status` in the SAME commit its enforcement lands.
  */
+/**
+ * THE `declared-unwired` SET — resource:verb strings ONLY (no legacy, no owner-only sentinel).
+ *
+ * 🔴 THE INVARIANT (David's ruling, 2026-07-27): **no default bundle and no role definition —
+ * floor or tenant — may contain a string from this set, and no member array may hold one.**
+ *
+ * WHY it is stronger than "a fake pill is untidy": §7.1 filters a declared-unwired string out of
+ * the Roles-page catalog, and `MemberConsole.tsx:651` seeds its draft from the RESOLVED SET, not
+ * from the rendered chips. So a held string with no chip is submitted unchanged by every save and
+ * is **UN-REMOVABLE THROUGH THE UI**. Granting one does not create a harmless fake pill; it
+ * creates a permanent grant nobody can revoke without SQL.
+ *
+ * This is the SINGLE AUTHORITY for the set. The `NOT IN (…)` literal in
+ * `20260727_rbac_resource_action_flip.sql` §5 (R-B2) is a hand-made snapshot of it, and capQ
+ * FAILS when the two diverge — so adding a string here breaks the build until the migration
+ * agrees. Three enforcement surfaces (bundles, the migration list, role_definitions/members via
+ * that migration's V5/V5b), one source.
+ */
+export const DECLARED_UNWIRED_PERMISSIONS: string[] = Object.values(PERMISSION_MANIFEST)
+  .filter((e) => e.status === 'declared-unwired')
+  .map((e) => e.permission);
+
 export const HIDDEN_PERMISSIONS: string[] = [
   'owner-only',
   ...LEGACY_PERMISSIONS.filter((e) => e.unwired && e.fate !== 'unmapped-orphan').map((e) => e.legacy),
@@ -777,7 +809,17 @@ export const HIDDEN_PERMISSIONS: string[] = [
 // array and a bundle is a SEPARATE owner act through the funnel, AFTER Contract, with its
 // own audit row. Backfill never silently means re-permission.
 
-/** MANAGER — on by default (spec §5). A starting grant, changeable verb-by-verb. */
+/**
+ * MANAGER — on by default (spec §5). A starting grant, changeable verb-by-verb.
+ *
+ * ⚠️ `deliveries.route:update` was REMOVED 2026-07-27. It is `declared-unwired`, and a bundle
+ * carrying one MINTS an un-removable grant: §7.1 hides the chip, and MemberConsole.tsx:651 seeds
+ * the draft from the resolved set, so it survives every save with no way to toggle it off.
+ * Enforced by capQ. Re-add it in the same commit that ships a route writer — not before.
+ *
+ * NOTE ON PLACEMENT: this note lives ABOVE the array, never inside it. capP parses the literal
+ * and reads an inline comment as a permission string.
+ */
 export const MANAGER_DEFAULT_BUNDLE: string[] = [
   'orders:read', 'orders:create', 'orders:update',
   'order_items:read',
@@ -788,7 +830,7 @@ export const MANAGER_DEFAULT_BUNDLE: string[] = [
   'inventory:read', 'inventory:create', 'inventory:update',
   'inventory_ledger:read',
   'deliveries:read', 'deliveries:update',
-  'deliveries.route:read', 'deliveries.route:update',
+  'deliveries.route:read',
   'assets:read', 'assets:create', 'assets:update',
   'pmi:read', 'pmi:update',
   'tax_rate:read', 'tax_rate:update',
