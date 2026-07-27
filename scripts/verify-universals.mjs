@@ -832,6 +832,28 @@ const stripSqlComments = (t) => t.replace(/--[^\n]*/g, '');
 /** Strip JS/TS comments — same reason (a doc block naming a string is not an enforcement site). */
 const stripJsComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
+/** LIST every .ts under a dir tree (paths, not contents) — capK needs per-file verdicts. */
+const listTreeFiles = (relDir) => {
+  const abs = join(ROOT, relDir);
+  if (!existsSync(abs)) return [];
+  const out = [];
+  const walk = (d) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const full = join(d, e.name);
+      if (e.isDirectory()) walk(full);
+      else if (e.name.endsWith('.ts')) out.push(full.slice(ROOT.length + 1));
+    }
+  };
+  walk(abs);
+  return out;
+};
+/** Immediate subdirectory names of a relative dir — used to discover each package api dir. */
+const listDirs = (relDir) => {
+  const abs = join(ROOT, relDir);
+  if (!existsSync(abs)) return [];
+  return readdirSync(abs, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+};
+
 /** Read every .ts under a dir tree (the api layer — the method fix). */
 const readTree = (relDir) => {
   const abs = join(ROOT, relDir);
@@ -907,6 +929,119 @@ function parseManifest(src) {
     });
   }
   return { model, legacy };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// capK — SERVICE-KEY WRITES MUST PROVE THE CALLER (MB_D-015). FAILS, not WARNS.
+// NAME: David specified 'capR'. THE LETTER r IS ALREADY TAKEN by the nav-integrity cap
+// (line ~669, matrix row #r), so this is capK — service-KEY authority. Renamed, not collided;
+// two caps sharing a key would have silently overwritten one row of the matrix.
+// ════════════════════════════════════════════════════════════════════════════════
+// A handler that uses the SERVICE KEY bypasses RLS completely. On that path every policy in the
+// platform is inert — the flip, the twenty *_owner_all policies, is_active_member,
+// has_permission, all of it. So the handler must prove the CALLER's authority for the TARGET
+// business ITSELF, from the AUTH CONTEXT (the Bearer token), NEVER from the request body. A
+// forged businessId the caller does not belong to must fail.
+//
+// 🔴 WHY THIS CAP EXISTS. The doctrine was already written — verbatim, in
+// packages/shared/src/auth/callerPermission.ts lines 2-9. orders/submit.ts obeys it FIFTEEN
+// times. discovery/ingest.ts obeys it twice. SIX SIBLING ENDPOINTS IN THE SAME DIRECTORY IGNORED
+// IT ENTIRELY, and nothing failed — no test, no gate, no review caught it, for months.
+// A RULE ENFORCED BY MEMORY IS NOT ENFORCED. capK is what makes the 2026-07-27 sweep
+// unrepeatable rather than a thing someone has to remember to redo.
+//
+// EXEMPTIONS ARE NAMED AND REASONED — never a bare path list (the ALLOWED_DIVERGENCE pattern).
+const CAPK_EXEMPT = [
+  {
+    file: 'members/invite.ts',
+    reason:
+      'Authorises on a SINGLE-USE INVITE TOKEN carried in the body, which IS a credential. There ' +
+      'is no session to read by construction — the invitee is not a member until they accept, so ' +
+      'demanding a Bearer token here would make invitation impossible.',
+  },
+  {
+    file: 'members/accept-invite.ts',
+    reason: 'Same invite-token credential; the account does not exist yet at call time.',
+  },
+  {
+    file: 'members/preview-invite.ts',
+    reason: 'Same invite-token credential; read-only preview of the invitation the token names.',
+  },
+];
+
+// Detectors extracted PURE so STD-022 probes can run them against planted bad input.
+export const kUsesServiceKey = (src) => /SUPABASE_SERVICE_KEY|adminDb\s*\(\s*\)/.test(src);
+export const kHasCallerGate = (src) =>
+  /callerHoldsPermission|callerIsBusinessOwner|resolveCallerUid/.test(src) ||
+  /headers\s*\??\.\s*authorization/i.test(src) ||
+  /auth\s*\.\s*getUser\s*\(/.test(src);
+/** Tenant id read off the request rather than resolved from the token — the forgeable surface. */
+export const kTenantFromRequest = (src) =>
+  src.split('\n').some((l) => /req\.(body|query)/.test(l) &&
+    /\b(businessId|business_id|nurseryId|nursery_id|shopId|shop_id)\b/.test(l));
+export const kIsExempt = (rel) => CAPK_EXEMPT.find((e) => rel.endsWith(e.file));
+
+const K_PROBES = [
+  ['detects-service-key',      () => kUsesServiceKey('const db = adminDb();') === true],
+  ['detects-service-key-env',  () => kUsesServiceKey('process.env.SUPABASE_SERVICE_KEY!') === true],
+  ['ignores-anon-handler',     () => kUsesServiceKey('createClient(url, ANON_KEY)') === false],
+  ['detects-caller-gate',      () => kHasCallerGate('await callerIsBusinessOwner(authHeader, businessId)') === true],
+  ['detects-raw-token-read',   () => kHasCallerGate('const t = req.headers?.authorization;') === true],
+  ['planted-bad-endpoint',     () => {
+    // the exact shape of the six: service key, tenant off the body, no gate. MUST be rejected.
+    const bad = "const db = adminDb();\nconst { businessId } = req.body;\nawait db.from('x').insert({});";
+    return kUsesServiceKey(bad) && !kHasCallerGate(bad) && kTenantFromRequest(bad);
+  }],
+  ['planted-good-endpoint',    () => {
+    // orders/submit's shape. MUST NOT be rejected — a cap that flags everything is not a cap.
+    const good = "const db = adminDb();\nconst { businessId } = req.body;\nif (!(await callerIsBusinessOwner(req.headers?.authorization, businessId))) return res.status(403).json({});";
+    return kUsesServiceKey(good) && kHasCallerGate(good);
+  }],
+];
+
+function capK(key, v) {
+  if (!isMultiTenant(v)) return SKIP('service-key handlers are a Cultivar api-layer surface (Ignition is local-first PIN).');
+
+  const dead = K_PROBES.filter(([, run]) => { try { return !run(); } catch { return true; } }).map(([n]) => n);
+  if (dead.length) {
+    return FAIL(
+      `capK SELF-TEST FAILED — ${dead.length} detector(s) did not behave on planted input: ${dead.join(', ')}. ` +
+      `The cap is NOT checking anything and any green from it is false.`,
+      dead.map((n) => `probe '${n}' did not produce its engineered result.`),
+    );
+  }
+
+  // CORPUS (STD-021): every .ts under the root api dir and each packages/<pkg>/api dir.
+  const roots = ['api', ...listDirs('packages').map((d) => `packages/${d}/api`)];
+  const files = [...new Set(roots.flatMap((r) => listTreeFiles(r)))];
+  const gaps = [];
+  let gated = 0, exempt = 0, anon = 0;
+
+  for (const f of files) {
+    const src = stripJsComments(read(f) || '');
+    if (!kUsesServiceKey(src)) { anon++; continue; }
+    const ex = kIsExempt(f);
+    if (ex) { exempt++; continue; }
+    if (kHasCallerGate(src)) { gated++; continue; }
+    gaps.push(
+      `${f} uses the SERVICE KEY (RLS bypassed) with NO caller-authority check` +
+      `${kTenantFromRequest(src) ? ' AND takes the tenant id from the REQUEST' : ''} — ` +
+      `authority must come from the AUTH CONTEXT, never the body (MB_D-015; the pattern is in orders/submit.ts).`,
+    );
+  }
+
+  if (gaps.length) {
+    return FAIL(
+      `SERVICE-KEY AUTHORITY: ${gaps.length} handler(s) bypass RLS with no proof of the caller. ` +
+      `${gated} gated · ${exempt} exempt-with-reason · ${anon} no-service-key. ` +
+      `${K_PROBES.length}/${K_PROBES.length} planted probes behaved.`,
+      gaps,
+    );
+  }
+  return PASS(
+    `every service-key handler proves the caller (${gated} gated · ${exempt} exempt-with-reason · ${anon} no-service-key). ` +
+    `${K_PROBES.length}/${K_PROBES.length} planted probes behaved — the detectors are demonstrably running.`,
+  );
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -1251,6 +1386,7 @@ const CAPS = [
   ['g', 'Factory-reset deletes the tenant override → shared floor unchanged (D-010)', capG],
   ['p', 'resource:action permission model — manifest/policies/routes/API agree (spec v3 §7) [WARN]', capP],
   ['q', 'declared-unwired invariant — no bundle or role definition may hold an un-removable string', capQ],
+  ['k', 'SERVICE-KEY handlers prove the caller — no RLS-bypassing write on an unproven identity (MB_D-015)', capK],
 ];
 
 // ── ACCEPTANCE — Role Machine definition-of-done (NOT yet built) ────────────────────
