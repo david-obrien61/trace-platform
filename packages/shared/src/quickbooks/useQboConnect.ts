@@ -18,6 +18,7 @@
  * Instrumentation: emits [TRACE:QBO] on a confirmed connect. ON by default.
  */
 import { useEffect, useRef, useState } from 'react';
+import { authHeaders } from '../auth/authHeaders';
 
 export interface UseQboConnectOptions {
   businessId: string | null | undefined;
@@ -46,7 +47,7 @@ export function useQboConnect({ businessId, apiBase = '', onConnected }: UseQboC
 
   async function checkStatus(): Promise<boolean> {
     try {
-      const res = await fetch(`${apiBase}/api/qbo/status?business_id=${businessId!}`);
+      const res = await fetch(`${apiBase}/api/qbo/status?business_id=${businessId!}`, { headers: await authHeaders() });
       if (res.ok) {
         failRef.current = 0; // endpoint healthy — reset the breaker
         const data = await res.json();
@@ -72,7 +73,7 @@ export function useQboConnect({ businessId, apiBase = '', onConnected }: UseQboC
       popup = window.open('', 'qb-connect', 'width=720,height=640,left=200,top=100');
 
       step = 'fetch';
-      const res = await fetch(`${apiBase}/api/qbo/auth-url?business_id=${businessId}`);
+      const res = await fetch(`${apiBase}/api/qbo/auth-url?business_id=${businessId}`, { headers: await authHeaders() });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(`[step:${step}] ` + (body.error || `Server error ${res.status}`));

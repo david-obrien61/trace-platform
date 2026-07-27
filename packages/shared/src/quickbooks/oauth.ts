@@ -1,3 +1,4 @@
+import { authHeaders } from '../auth/authHeaders';
 /**
  * oauth.ts — QuickBooks OAuth 2.0 flow (frontend side).
  * Extracted from CAI/ExternalBridge.js — universal (web).
@@ -69,7 +70,7 @@ export async function getQBOStatus(): Promise<{ connected: boolean; realmId?: st
  * Resolves with the status object on success; rejects on cancel or timeout.
  */
 export async function initiateOAuth(): Promise<{ connected: boolean; realmId?: string; companyName?: string }> {
-  const res = await fetch(`${API_URL}/api/qbo/auth-url`);
+  const res = await fetch(`${API_URL}/api/qbo/auth-url`, { headers: await authHeaders() });
   if (!res.ok) throw new Error('Backend unavailable. Make sure the API server is running.');
   const { url } = await res.json();
 

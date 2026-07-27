@@ -283,7 +283,7 @@ export function Dashboard() {
 
   async function checkQbStatus(): Promise<boolean> {
     try {
-      const res = await fetch(`/api/qbo/status?business_id=${businessId!}`);
+      const res = await fetch(`/api/qbo/status?business_id=${businessId!}`, { headers: await authHeaders() });
       if (res.ok) {
         qbStatusFailRef.current = 0; // endpoint healthy — reset the breaker
         const data = await res.json();

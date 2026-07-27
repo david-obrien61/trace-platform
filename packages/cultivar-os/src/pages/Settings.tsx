@@ -599,9 +599,13 @@ export function Settings() {
     return null;
   }
 
-  const accountingConnectUrl = businessId
-    ? `/api/qbo/auth-url?business_id=${businessId}`
-    : undefined;
+  // RETIRED 2026-07-27. This was a plain <a href> to /api/qbo/auth-url — a browser NAVIGATION,
+  // which cannot carry a Bearer token. Now that the endpoint proves the caller (MB_D-015) the link
+  // would 403 every time: a dead affordance (§1.6 item 5), and a worse one than before because it
+  // LOOKS like the connect button. The live path is `onConnectAccounting` (useQboConnect — popup +
+  // poll), which fetches with the token; the shared Settings already prefers it and the comment
+  // there already called this href "the broken Settings connect path".
+  const accountingConnectUrl = undefined;
 
   // The vertical sections (cost config / install price / team) live on the FULL page only — when a
   // section filter is active the shared page renders just that one card, so we pass nothing here.

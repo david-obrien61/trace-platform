@@ -11,6 +11,7 @@
  */
 
 import crypto from 'crypto';
+import { callerCan } from '../../../shared/src/auth/callerPermission';
 import { createClient } from '@supabase/supabase-js';
 import { refreshQBToken } from '../../../shared/src/quickbooks/refresh';
 import { readQBSecrets, writeQBSecrets } from '../../../shared/src/quickbooks/secrets';
@@ -53,6 +54,21 @@ function handleAuthUrl(req: any, res: any) {
   if (!redirectUri) return res.status(500).json({ error: 'QBO_REDIRECT_URI not configured' });
 
   const nurseryId = (req.query.business_id as string) || (req.query.nursery_id as string) || 'demo';
+
+  // 🔴 CALLER AUTHORITY — MB_D-015. ADDED 2026-07-27 (item (a) of the qbo split).
+  // Starting an OAuth connect binds a QuickBooks company to THIS tenant, and the callback that
+  // follows WRITES `businesses` accounting tokens under the service key. Until this gate existed
+  // anyone could begin that flow for ANY tenant by naming its id in the query string.
+  // `settings:update` — it changes the business's accounting configuration.
+  // ⚠️ THE CALLBACK BRANCH IS DELIBERATELY NOT GATED HERE: Intuit redirects the BROWSER to it, so
+  // no Bearer token can exist. It needs a signed, single-use, business-bound `state` — a different
+  // mechanism, shipping as its own commit. The `state` built below is currently
+  // `${nurseryId}__${random}`: it carries the tenant but is NEITHER SIGNED NOR SINGLE-USE, so it
+  // is forgeable. That is the (b) work, named here so nobody reads this gate as closing it.
+  if (!(await callerCan(req.headers?.authorization, nurseryId, 'settings:update'))) {
+    console.log('[TRACE:AUTHORITY] qbo/auth-url REFUSED — caller lacks settings:update/owner', { businessId: nurseryId });
+    return res.status(403).json({ error: 'Not authorized to connect QuickBooks for this business', code: 'FORBIDDEN' });
+  }
   const random    = crypto.randomBytes(16).toString('hex');
   const state     = `${nurseryId}__${random}`;
 
@@ -167,6 +183,14 @@ async function handleCallback(req: any, res: any) {
 async function handleStatus(req: any, res: any) {
   const businessId = (req.query.business_id as string) || (req.query.nursery_id as string);
   if (!businessId) return res.json({ connected: false });
+
+  // 🔴 CALLER AUTHORITY — MB_D-015 (item (a)). Reads `businesses` under the service key and
+  // discloses whether a named tenant has QuickBooks connected, plus its company id. A read, but
+  // the same missing check. `settings:read` — it is business configuration state.
+  if (!(await callerCan(req.headers?.authorization, businessId, 'settings:read'))) {
+    console.log('[TRACE:AUTHORITY] qbo/status REFUSED — caller lacks settings:read/owner', { businessId });
+    return res.status(403).json({ error: 'Not authorized to read accounting status for this business', code: 'FORBIDDEN' });
+  }
 
   try {
     const db = supabase();
