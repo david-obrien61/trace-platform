@@ -193,15 +193,18 @@ function cap1(key) {
 //   (canonical has_permission(...,'perm') OR the equivalent inline `permissions ? 'perm'`).
 // ════════════════════════════════════════════════════════════════════════════════
 const FINANCIAL_POLICIES = [
-  ['cost_objects_member_all', 'view_costs'],
-  ['business_inventory_member_all', 'view_costs'],
-  ['cost_object_edges_member_all', 'view_costs'],
-  ['cost_object_assignments_member_all', 'view_costs'],
-  ['business_service_log_member_all', 'view_costs'],
-  ['receipts_member_all', 'view_costs'],
-  ['labor_resources_member_all', 'view_wages'],
-  ['lrw_member_view_wages', 'view_wages'], // labor_resource_wages
-  ['bpc_member_view_pricing', 'view_pricing_config'], // business_pricing_config
+  // FLIPPED 2026-07-27 (20260727_rbac_resource_action_flip.sql). Each coarse `FOR ALL` policy
+  // became verb-split policies, so the READ assertion names the SELECT policy and the fine
+  // read string. The write verbs are asserted by cap #7, which is where they belong.
+  ['cost_objects_member_select', 'costs:read'],
+  ['business_inventory_member_select', 'inventory:read'],
+  ['cost_object_edges_member_select', 'costs:read'],
+  ['cost_object_assignments_member_select', 'costs:read'],
+  ['business_service_log_member_select', 'pmi:read'],
+  ['receipts_member_select', 'costs:read'],
+  ['labor_resources_member_select', 'wages:read'],
+  ['lrw_member_select', 'wages:read'], // labor_resource_wages
+  ['bpc_member_select', 'pricing_recipe:read'], // business_pricing_config
 ];
 function cap2(key, v) {
   if (!isMultiTenant(v)) return SKIP(v.scopeNote);
@@ -229,15 +232,17 @@ function cap2(key, v) {
 // ════════════════════════════════════════════════════════════════════════════════
 const DUAL_TABLES = [
   ['businesses', 'businesses_member_select'],
-  ['receipts', 'receipts_member_all'],
-  ['cost_objects', 'cost_objects_member_all'],
-  ['business_inventory', 'business_inventory_member_all'],
+  // FLIPPED 2026-07-27 — the `_member_all` policies were replaced by verb-split policies; dual
+  // RLS is now proven by the SELECT half (the read path is what this cap exists to assert).
+  ['receipts', 'receipts_member_select'],
+  ['cost_objects', 'cost_objects_member_select'],
+  ['business_inventory', 'business_inventory_member_select'],
   ['business_pmi_schedule', 'business_pmi_schedule_member_all'],
-  ['business_service_log', 'business_service_log_member_all'],
-  ['labor_resources', 'labor_resources_member_all'],
-  ['cost_object_edges', 'cost_object_edges_member_all'],
-  ['cost_object_assignments', 'cost_object_assignments_member_all'],
-  ['deliveries', 'deliveries_member_all'],
+  ['business_service_log', 'business_service_log_member_select'],
+  ['labor_resources', 'labor_resources_member_select'],
+  ['cost_object_edges', 'cost_object_edges_member_select'],
+  ['cost_object_assignments', 'cost_object_assignments_member_select'],
+  ['deliveries', 'deliveries_member_select'],
   ['business_modules', 'business_modules_member_access'],
   ['cultivar_plants', 'cultivar_plants_owner_all'], // member branch fused (owner_id OR is_active_member)
 ];
@@ -344,32 +349,40 @@ function cap5(key, v) {
 //   owner-proof. It needs NO live session — it is decidable from the migration SQL.
 // ════════════════════════════════════════════════════════════════════════════════
 const HAR_COST_TABLES = [
-  ['cost_objects', 'view_costs'],
-  ['business_inventory', 'view_costs'],
-  ['business_pricing_config', 'view_pricing_config'],
+  // FLIPPED 2026-07-27 — same wall, fine strings. The guard is unchanged in force: a member
+  // WITHOUT the read string still matches zero rows (200 []).
+  // 2026-07-27: the entry is now the RESOURCE, not one string per table. The coarse `FOR ALL`
+  // policies split by verb, so a table's INSERT policy is gated on `<resource>:create` while its
+  // SELECT is gated on `<resource>:read`. Asserting one string against every command would fail a
+  // FINER wall as though it were a MISSING one — the wall did not weaken, it gained verbs.
+  ['cost_objects', 'costs'],
+  ['business_inventory', 'inventory'],
+  ['business_pricing_config', 'pricing_recipe'],
 ];
 function cap6(key, v) {
   if (!isMultiTenant(v)) return SKIP(v.scopeNote);
   const sql = concatSql(v.migrationsDir);
   const problems = [];
-  for (const [table, perm] of HAR_COST_TABLES) {
+  for (const [table, resource] of HAR_COST_TABLES) {
+    const readPerm = `${resource}:read`;
     let permGatedMemberPolicy = false;
     for (const name of policyNamesOnTable(sql, table)) {
       const body = effectivePolicy(sql, name); // null = dropped-last (no effect)
       if (!body) continue;
       if (/AS\s+RESTRICTIVE/i.test(body)) continue; // restrictive only narrows; cannot leak
       const ownerScoped = /owner_id\s*=\s*auth\.uid\(\)/.test(body);
+      // ANY verb of this resource gates the policy; the READ half is asserted separately below.
       const permGated =
-        new RegExp(`has_permission\\([^)]*'${perm}'`).test(body) ||
-        new RegExp(`permissions\\s*\\?\\s*'${perm}'`).test(body);
-      if (permGated) permGatedMemberPolicy = true;
+        new RegExp(`has_permission\\([^)]*'${resource}:[a-z_]+'`).test(body) ||
+        new RegExp(`permissions\\s*\\?\\s*'${resource}:[a-z_]+'`).test(body);
+      if (new RegExp(`has_permission\\([^)]*'${readPerm}'`).test(body)) permGatedMemberPolicy = true;
       // a permissive policy that is neither owner-scoped nor permission-gated = ungated read path
       if (!ownerScoped && !permGated) {
-        problems.push(`${table}: permissive policy \`${name}\` is neither owner-scoped nor ${perm}-gated → ungated member read path (the leak re-opened)`);
+        problems.push(`${table}: permissive policy \`${name}\` is neither owner-scoped nor ${resource}:*-gated → ungated member read path (the leak re-opened)`);
       }
     }
     if (!permGatedMemberPolicy) {
-      problems.push(`${table}: NO ${perm}-gated member policy — the cost wall for this table is GONE`);
+      problems.push(`${table}: NO ${readPerm}-gated member SELECT policy — the cost wall for this table is GONE`);
     }
   }
   if (problems.length === 0) {
@@ -404,10 +417,13 @@ function cap7(key, v) {
   else if (writeIdx < 0) problems.push('cost-apply: applyCostReasoning write not found (endpoint shape changed?)');
   else if (gateIdx > writeIdx) problems.push('cost-apply: permission gate runs AFTER the write (bypass)');
   if (!/\[TRACE:WRITEWALL\]/.test(ep)) problems.push('cost-apply: no [TRACE:WRITEWALL] refusal emit');
-  if (!/VIEW_COSTS/.test(ep)) problems.push('cost-apply: gate does not reference VIEW_COSTS');
+  if (!/'costs:read'/.test(ep)) problems.push("cost-apply: gate does not reference 'costs:read'");
   // (b) RLS WITH CHECK write gate on the HAR triplet (write-side of cap #6)
   const sql = concatSql(v.migrationsDir);
-  for (const [table, perm] of HAR_COST_TABLES) {
+  for (const [table, resource] of HAR_COST_TABLES) {
+    // The write wall is now VERB-SPECIFIC: create/update (and delete where minted). Requiring the
+    // READ string in WITH CHECK would demand the coarse policy back.
+    const writeVerbs = '(create|update|delete|import_price)';
     let writeGated = false;
     for (const name of policyNamesOnTable(sql, table)) {
       const body = effectivePolicy(sql, name);
@@ -415,10 +431,10 @@ function cap7(key, v) {
       const wc = body.search(/WITH CHECK/i);
       if (wc < 0) continue;
       const after = body.slice(wc);
-      if (new RegExp(`has_permission\\([^)]*'${perm}'`).test(after) ||
-          new RegExp(`permissions\\s*\\?\\s*'${perm}'`).test(after)) writeGated = true;
+      if (new RegExp(`has_permission\\([^)]*'${resource}:${writeVerbs}'`).test(after) ||
+          new RegExp(`permissions\\s*\\?\\s*'${resource}:${writeVerbs}'`).test(after)) writeGated = true;
     }
-    if (!writeGated) problems.push(`${table}: no member policy with has_permission('${perm}') in WITH CHECK → INSERT/UPDATE ungated`);
+    if (!writeGated) problems.push(`${table}: no member policy with has_permission('${resource}:${writeVerbs}') in WITH CHECK → INSERT/UPDATE ungated`);
   }
   if (problems.length === 0) {
     return PASS(

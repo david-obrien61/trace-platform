@@ -74,7 +74,7 @@ export default async function handler(req: any, res: any) {
     // WRITE-WALL (MB_D-015): the caller must hold view_costs for THIS business, resolved from the
     // auth context (never the body). The service-key write below runs ONLY after this gate passes —
     // closing the bypass where a service-key write tunneled under the cost-wall RLS.
-    const allowed = await callerHoldsPermission(req.headers?.authorization, costLine.businessId, VIEW_COSTS);
+    const allowed = await callerHoldsPermission(req.headers?.authorization, costLine.businessId, 'costs:read');
     if (!allowed) {
       console.warn(`[TRACE:WRITEWALL] cost-apply REFUSED — caller lacks ${VIEW_COSTS} for business ${costLine.businessId}`);
       return res.status(403).json({ ok: false, error: `forbidden: ${VIEW_COSTS} required` });

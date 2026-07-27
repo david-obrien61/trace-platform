@@ -4,6 +4,7 @@ import { hashPin } from '../supabase/auth';
 import { runBusinessCreationGuards } from './businessGuards';
 import { normalizePhone } from '../utils/normalizePhone';
 import { findOrCreatePerson } from '../business-logic/personUpsert';
+import { resolveRoleDefaults } from './roleDefinitions';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -31,7 +32,10 @@ export interface OwnerSignupConfig {
   memberTable: 'business_members' | 'shop_members';
   memberFKColumn: 'business_id' | 'shop_id';
   ownerRole: string;              // 'OWNER' | 'ADMIN' etc.
-  ownerPermissions: string[];
+  /** @deprecated RETIRED 2026-07-27 — the owner's permissions resolve from role_definitions
+   *  (the floor), never a per-vertical literal. Field kept optional only so an unmigrated
+   *  vertical config still type-checks; it is IGNORED. Delete it from your config. */
+  ownerPermissions?: string[];
   signInPath: string;             // '/login' — shown in already-registered error
   collectPhone?: boolean;         // default true
   collectAddress?: boolean;       // default true
@@ -85,7 +89,6 @@ export function OwnerSignup({ config, navigate }: Props) {
     memberTable,
     memberFKColumn,
     ownerRole,
-    ownerPermissions,
     signInPath,
     collectPhone  = true,
     collectAddress = true,
@@ -316,13 +319,20 @@ export function OwnerSignup({ config, navigate }: Props) {
       }
     }
 
-    // 3. Create member row (owner) in the vertical's member table
+    // 3. Create member row (owner) in the vertical's member table.
+    // 🔴 THE MINT FIX (David, 2026-07-27). This used to write a HARDCODED per-vertical literal
+    // (`ownerPermissions`, e.g. SignUp.tsx:34's five strings), which is why every live OWNER row
+    // carried a 6-string fiction that matched neither the 14-string floor nor anything a gate
+    // reads. The literal is DELETED, not corrected — correcting its contents would leave two
+    // authorities for one fact and the next floor change would reopen the gap. This now resolves
+    // from `role_definitions`, matching OnboardingWizard.tsx:561, so there is ONE source.
+    const resolvedOwnerPermissions = await resolveRoleDefaults(supabase, businessId, ownerRole);
     const memberInsert: Record<string, unknown> = {
       [memberFKColumn]: businessId,
       name:        ownerName.trim(),
       email:       email.trim(),
       role:        ownerRole,
-      permissions: ownerPermissions,
+      permissions: resolvedOwnerPermissions,
       pin_hash:    pinHash,
       active:      true,
     };

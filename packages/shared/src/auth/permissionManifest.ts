@@ -409,7 +409,11 @@ const CAPABILITY_VERBS: Record<string, Omit<ManifestEntry, 'resource' | 'verb' |
   },
   'order_discount:apply': {
     permission: 'order_discount:apply',
-    status: 'declared-unwired',
+    // STATUS FLIPPED declared-unwired → enforced 2026-07-27, in the SAME commit that wired it:
+    // submit.ts:238 now returns 403 FORBIDDEN_DISCOUNT instead of silently discarding the
+    // override. capQ blocks granting a declared-unwired string, so this flip and the wiring
+    // are inseparable — MANAGER is 43 only because both landed together.
+    status: 'enforced',
     sensitivity: 'operational',
     structural: [],
     content: ['orders:create'],

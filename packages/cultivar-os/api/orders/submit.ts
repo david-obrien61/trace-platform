@@ -11,12 +11,14 @@ import { fetchCommittedByLot, availableFrom, movesOnHand } from '../../src/lib/i
 const LARGE_CONTAINERS = ['15 gal', '30 gal', '45 gal', '60 gal', '100 gal'];
 
 // The permission that gates order EDIT / DELETE / STATUS. Mirrors cultivar roles.ts
-// PERMISSIONS.MANAGE_ORDERS (owner + manager, NOT staff) — a string VALUE (AC-1), kept local so
+// the fine strings that replaced manage_orders (AC-1 string VALUEs), kept local so
 // the api bundle doesn't pull the frontend role tree.
-const MANAGE_ORDERS = 'manage_orders';
+const ORDERS_UPDATE = 'orders:update';
+const ORDERS_DELETE = 'orders:delete';
+const ORDER_DISCOUNT_APPLY = 'order_discount:apply';
 // D-40: the gated + LOGGED authority to zero an order's tax via a per-order exemption OVERRIDE.
 // Owner OR a member holding apply_tax_exempt. The anon/public path has no token → never self-exempt.
-const APPLY_TAX_EXEMPT = 'apply_tax_exempt';
+const APPLY_TAX_EXEMPT = 'tax_exempt:apply';
 
 // Order-exemption cols on `orders` are gated (20260713). Stripped-and-retried on 42703/PGRST204.
 const ORDER_EXEMPT_KEYS = ['tax_exempt_applied', 'tax_exempt_reason', 'tax_exempt_cert_ref', 'tax_exempt_by'];
@@ -33,9 +35,9 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 // Owner (by businesses.owner_id) OR a member holding manage_orders. Resolved from the caller's
 // Bearer token (never the body), for the TARGET business (AC-3). The service key does the write
 // AFTER this passes (MB_D-015 — write-authority proven independently of RLS-bypassing key).
-async function callerCanManageOrders(authHeader: string | undefined, businessId: string): Promise<boolean> {
+async function callerCanManageOrders(authHeader: string | undefined, businessId: string, perm: string): Promise<boolean> {
   if (await callerIsBusinessOwner(authHeader, businessId)) return true;
-  return callerHoldsPermission(authHeader, businessId, MANAGE_ORDERS);
+  return callerHoldsPermission(authHeader, businessId, perm);
 }
 
 // D-40 tax-exemption authority gate — owner OR a member holding apply_tax_exempt. Same shape as the
@@ -234,9 +236,21 @@ async function handleCreate(req: any, res: any) {
     const hasOverrides = Object.keys(overridesIn).length > 0;
     let callerManages = false;
     let overrideBy: string | null = null;
+    // D-9 / David's ruling 6 (2026-07-27): this gate FAILED SOFT — an unauthorized tier or price
+    // override was silently DISCARDED and only logged, so a manager's $350 planting give vanished
+    // with no message. A control that silently drops input is a false surface regardless of who
+    // holds the string. It now REFUSES, and says why. `order_discount:apply` is the authority
+    // (spec §7 authority act), not orders:update — invoking a tier is a pricing act.
     if (invokedTierName || hasOverrides) {
-      callerManages = await callerCanManageOrders(authHeader, businessId);
-      if (callerManages) overrideBy = await resolveCallerUid(authHeader);
+      callerManages = await callerCanManageOrders(authHeader, businessId, ORDER_DISCOUNT_APPLY);
+      if (!callerManages) {
+        console.log('[TRACE:PRICE] override/tier REFUSED — caller lacks order_discount:apply/owner', { businessId, invokedTierName, overrideCount: Object.keys(overridesIn).length });
+        return res.status(403).json({
+          error: 'Not authorized to apply a tier or override a service price',
+          code: 'FORBIDDEN_DISCOUNT',
+        });
+      }
+      overrideBy = await resolveCallerUid(authHeader);
     }
 
     // ── 1. Resolve the customer ─────────────────────────────────────────────
@@ -1002,8 +1016,8 @@ async function handleUpdate(req: any, res: any) {
   const { orderId, businessId, quantities, removedItemIds, deliveryDate } = req.body || {};
   if (!orderId || !businessId) return res.status(400).json({ error: 'Missing orderId or businessId' });
 
-  if (!(await callerCanManageOrders(req.headers?.authorization, businessId))) {
-    console.log('[TRACE:ROSTER] update REFUSED — caller lacks manage_orders/owner', { orderId, businessId });
+  if (!(await callerCanManageOrders(req.headers?.authorization, businessId, ORDERS_UPDATE))) {
+    console.log('[TRACE:ROSTER] update REFUSED — caller lacks orders:update/owner', { orderId, businessId });
     return res.status(403).json({ error: 'Not authorized to edit orders', code: 'FORBIDDEN' });
   }
 
@@ -1220,8 +1234,8 @@ async function handleDelete(req: any, res: any) {
   const { orderId, businessId } = req.body || {};
   if (!orderId || !businessId) return res.status(400).json({ error: 'Missing orderId or businessId' });
 
-  if (!(await callerCanManageOrders(req.headers?.authorization, businessId))) {
-    console.log('[TRACE:ROSTER] delete REFUSED — caller lacks manage_orders/owner', { orderId, businessId });
+  if (!(await callerCanManageOrders(req.headers?.authorization, businessId, ORDERS_DELETE))) {
+    console.log('[TRACE:ROSTER] delete REFUSED — caller lacks orders:delete/owner', { orderId, businessId });
     return res.status(403).json({ error: 'Not authorized to delete orders', code: 'FORBIDDEN' });
   }
 
@@ -1289,8 +1303,8 @@ async function handleStatus(req: any, res: any) {
     return res.status(400).json({ error: `Invalid status: ${status}`, code: 'BAD_STATUS' });
   }
 
-  if (!(await callerCanManageOrders(req.headers?.authorization, businessId))) {
-    console.log('[TRACE:ROSTER] status REFUSED — caller lacks manage_orders/owner', { orderId, businessId });
+  if (!(await callerCanManageOrders(req.headers?.authorization, businessId, ORDERS_UPDATE))) {
+    console.log('[TRACE:ROSTER] status REFUSED — caller lacks orders:update/owner', { orderId, businessId });
     return res.status(403).json({ error: 'Not authorized to change order status', code: 'FORBIDDEN' });
   }
 

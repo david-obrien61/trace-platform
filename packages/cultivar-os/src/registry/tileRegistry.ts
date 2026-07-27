@@ -112,27 +112,27 @@ const DASH_BG = '#1e293b'; // dashboard tile icon-box background (dark slate, es
 export const TILE_REGISTRY: TileEntry[] = [
   // ── Dashboard — actions & contexts (live) ──────────────────────────────────────
   // Label 'Orders' (was 'QR Checkout') — QR is the capture METHOD, not the surface's name (Nav C2).
-  { key: 'qr_checkout',      vertical: 'general', label: 'Orders',                   group: 'checkout',  kind: 'action',  placement: 'dashboard', nav_eligible: true,  required_permission: 'qr_checkout',        status: 'live',    depends_on: null,
+  { key: 'qr_checkout',      vertical: 'general', label: 'Orders',                   group: 'checkout',  kind: 'action',  placement: 'dashboard', nav_eligible: true,  required_permission: 'orders:create',        status: 'live',    depends_on: null,
     icon: QrCode,      color: '#34d399', bg: DASH_BG, route: '/orders',            module_key: 'qr_checkout' },
   // Delivery = ONE evolving context entry. Live capability inside it = delivery_routing.
   // `opportunities` (Regina surfacing) is a PLANNED capability inside this same context.
   // Driver-handoff mechanism = UNDECIDED (do NOT build — see note).
-  { key: 'delivery',         vertical: 'general', label: 'Delivery',                  group: 'fulfilment', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'manage_deliveries',  status: 'live',    depends_on: null,
+  { key: 'delivery',         vertical: 'general', label: 'Delivery',                  group: 'fulfilment', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'deliveries:read',  status: 'live',    depends_on: null,
     icon: Truck,       color: '#22d3ee', bg: DASH_BG, route: '/delivery-schedule', module_key: 'delivery_routing', note: 'driver-handoff mechanism UNDECIDED' },
-  { key: 'operating_costs',  vertical: 'general', label: 'Operating Costs',           group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'view_costs',         status: 'live',    depends_on: null,
+  { key: 'operating_costs',  vertical: 'general', label: 'Operating Costs',           group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'costs:read',         status: 'live',    depends_on: null,
     icon: HandCoins,   color: '#fbbf24', bg: DASH_BG, route: '/operating-costs' },
-  { key: 'assets',           vertical: 'general', label: 'Assets',                    group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'view_costs',         status: 'live',    depends_on: null,
+  { key: 'assets',           vertical: 'general', label: 'Assets',                    group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'assets:read',         status: 'live',    depends_on: null,
     icon: Building2,   color: '#a78bfa', bg: DASH_BG, route: '/assets' },
   // Inventory is TWO siblings sharing the inventory data model — NOT a collapse.
-  { key: 'inventory_manual', vertical: 'general', label: 'Inventory (manual)',        group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'view_costs',         status: 'live',    depends_on: null,
+  { key: 'inventory_manual', vertical: 'general', label: 'Inventory (manual)',        group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'inventory:read',         status: 'live',    depends_on: null,
     icon: Boxes,       color: '#f472b6', bg: DASH_BG, route: '/inventory' },
-  { key: 'inventory_intake', vertical: 'general', label: 'Inventory Intake (mobile)', group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'view_costs',         status: 'live',    depends_on: null,
+  { key: 'inventory_intake', vertical: 'general', label: 'Inventory Intake (mobile)', group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'inventory:read',         status: 'live',    depends_on: null,
     icon: Camera,      color: '#fb7185', bg: DASH_BG, route: '/inventory',         module_key: 'inventory_intake' },
-  { key: 'receipt_keeper',   vertical: 'general', label: 'Receipts',                  group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'view_costs',         status: 'live',    depends_on: null,
+  { key: 'receipt_keeper',   vertical: 'general', label: 'Receipts',                  group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'costs:read',         status: 'live',    depends_on: null,
     icon: Receipt,     color: '#38bdf8', bg: DASH_BG, route: '/receipts' },
-  { key: 'pmi',              vertical: 'general', label: 'PMI',                       group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'view_costs',         status: 'live',    depends_on: null,
+  { key: 'pmi',              vertical: 'general', label: 'PMI',                       group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'pmi:read',         status: 'live',    depends_on: null,
     icon: Wrench,      color: '#94a3b8', bg: DASH_BG, route: '/pmi' },
-  { key: 'social_media',     vertical: 'general', label: 'Social',                    group: 'growth',    kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'manage_campaigns',   status: 'live',    depends_on: null,
+  { key: 'social_media',     vertical: 'general', label: 'Social',                    group: 'growth',    kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'campaigns:read',   status: 'live',    depends_on: null,
     icon: Share2,      color: '#f472b6', bg: DASH_BG, route: '/social/setup',      module_key: 'social_media' },
   // Customers ROSTER (3rd DataSheet consumer). OWNER-ONLY — matches customers_business_owner RLS
   // (owner-only, FOR ALL) so the nav never opens onto an empty RLS wall for staff (Gate-3 lesson).
@@ -140,38 +140,38 @@ export const TILE_REGISTRY: TileEntry[] = [
     icon: Users,       color: '#818cf8', bg: DASH_BG, route: '/customers' },
 
   // ── Dashboard — readouts (live). A readout LEAKS data by rendering → gate on what it exposes.
-  { key: 'leakage_alert',          vertical: 'general', label: 'Leakage alert',     group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'view_orders',    status: 'live', depends_on: null,
+  { key: 'leakage_alert',          vertical: 'general', label: 'Leakage alert',     group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'orders:read',    status: 'live', depends_on: null,
     icon: AlertTriangle, color: '#f59e0b', bg: DASH_BG },
-  { key: 'metric_plants',          vertical: 'general', label: 'Plants tracked',    group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'view_dashboard', status: 'live', depends_on: null,
+  { key: 'metric_plants',          vertical: 'general', label: 'Plants tracked',    group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'member', status: 'live', depends_on: null,
     icon: Sprout,        color: '#4ade80', bg: DASH_BG },
-  { key: 'metric_inventory_value', vertical: 'general', label: 'Inventory value',   group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'view_costs',     status: 'live', depends_on: null,
+  { key: 'metric_inventory_value', vertical: 'general', label: 'Inventory value',   group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'inventory:read',     status: 'live', depends_on: null,
     icon: DollarSign,    color: '#2dd4bf', bg: DASH_BG },
   // GATED (was ungated) — revenue is moat-class; locked to view_costs.
-  { key: 'metric_today_sales',     vertical: 'general', label: "Today's sales",     group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'view_costs',     status: 'live', depends_on: null,
+  { key: 'metric_today_sales',     vertical: 'general', label: "Today's sales",     group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'costs:read',     status: 'live', depends_on: null,
     icon: TrendingUp,    color: '#34d399', bg: DASH_BG },
-  { key: 'metric_installs',        vertical: 'general', label: 'Installs this week', group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'view_dashboard', status: 'live', depends_on: null,
+  { key: 'metric_installs',        vertical: 'general', label: 'Installs this week', group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'member', status: 'live', depends_on: null,
     icon: BarChart2,     color: '#818cf8', bg: DASH_BG },
-  { key: 'qb_status',              vertical: 'general', label: 'QuickBooks status', group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'manage_settings', status: 'live', depends_on: null,
+  { key: 'qb_status',              vertical: 'general', label: 'QuickBooks status', group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'settings:read', status: 'live', depends_on: null,
     icon: BadgeCheck,    color: '#60a5fa', bg: DASH_BG },
 
   // ── Settings (config) ───────────────────────────────────────────────────────────
-  { key: 'qb_invoicing',     vertical: 'general', label: 'QuickBooks',                group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'manage_settings', status: 'live',    depends_on: null,
+  { key: 'qb_invoicing',     vertical: 'general', label: 'QuickBooks',                group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'settings:read', status: 'live',    depends_on: null,
     icon: BookOpen,    color: '#60a5fa', bg: DASH_BG, route: '/settings', module_key: 'qb_invoicing' },
-  { key: 'business_profile', vertical: 'general', label: 'Business Profile',          group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'manage_settings', status: 'live',    depends_on: null,
+  { key: 'business_profile', vertical: 'general', label: 'Business Profile',          group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'settings:read', status: 'live',    depends_on: null,
     icon: Building2,   color: '#94a3b8', bg: DASH_BG, route: '/settings' },
-  { key: 'tax_rate',         vertical: 'general', label: 'Tax Rate',                  group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'manage_settings', status: 'live',    depends_on: null,
+  { key: 'tax_rate',         vertical: 'general', label: 'Tax Rate',                  group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'tax_rate:update', status: 'live',    depends_on: null,
     icon: Percent,     color: '#fbbf24', bg: DASH_BG, route: '/settings' },
-  { key: 'cost_config',      vertical: 'general', label: 'Cost-to-Produce Settings',  group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'view_costs',      status: 'live',    depends_on: null,
+  { key: 'cost_config',      vertical: 'general', label: 'Cost-to-Produce Settings',  group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'costs:read',      status: 'live',    depends_on: null,
     icon: CostCalc,    color: '#2dd4bf', bg: DASH_BG, route: '/settings' },
-  { key: 'install_price',    vertical: 'general', label: 'Install Price',             group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'manage_settings', status: 'live',    depends_on: null,
+  { key: 'install_price',    vertical: 'general', label: 'Install Price',             group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'settings:read', status: 'live',    depends_on: null,
     icon: Hammer,      color: '#fb923c', bg: DASH_BG, route: '/settings' },
-  { key: 'team_management',  vertical: 'general', label: 'Team',                      group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'manage_settings', status: 'live',    depends_on: null,
+  { key: 'team_management',  vertical: 'general', label: 'Team',                      group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'team:read', status: 'live',    depends_on: null,
     icon: Users,       color: '#818cf8', bg: DASH_BG, route: '/settings' },
-  { key: 'online_shop',      vertical: 'general', label: 'Online Shop',               group: 'settings', kind: 'context', placement: 'settings', nav_eligible: false, required_permission: 'manage_settings', status: 'planned', depends_on: null,
+  { key: 'online_shop',      vertical: 'general', label: 'Online Shop',               group: 'settings', kind: 'context', placement: 'settings', nav_eligible: false, required_permission: 'settings:read', status: 'planned', depends_on: null,
     icon: ShoppingBag, color: '#c084fc', bg: DASH_BG },
-  { key: 'contractor_tiers', vertical: 'general', label: 'Contractors',               group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'manage_settings', status: 'planned', depends_on: null,
+  { key: 'contractor_tiers', vertical: 'general', label: 'Contractors',               group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'pricing_recipe:update', status: 'planned', depends_on: null,
     icon: Users,       color: '#fb923c', bg: DASH_BG },
-  { key: 'seasonal_module',  vertical: 'general', label: 'Seasonal',                  group: 'settings', kind: 'context', placement: 'settings', nav_eligible: false, required_permission: 'manage_settings', status: 'planned', depends_on: null,
+  { key: 'seasonal_module',  vertical: 'general', label: 'Seasonal',                  group: 'settings', kind: 'context', placement: 'settings', nav_eligible: false, required_permission: 'settings:read', status: 'planned', depends_on: null,
     icon: Leaf,        color: '#4ade80', bg: DASH_BG },
 
   // ── Admin ─────────────────────────────────────────────────────────────────────
@@ -184,20 +184,20 @@ export const TILE_REGISTRY: TileEntry[] = [
     icon: Calculator,  color: '#2dd4bf', bg: DASH_BG, route: '/costs',             module_key: 'cost_to_produce' },
   // Discounts — customer discount types × tiers (relocated out of Cost-to-Produce Block 5, 2026-07-10).
   // manage_settings (pricing authority; owner in Cultivar today), matching the /discounts route gate.
-  { key: 'discounts',        vertical: 'general', label: 'Discounts',                 group: 'admin',    kind: 'action',  placement: 'admin',    nav_eligible: false, required_permission: 'manage_settings',  status: 'live',    depends_on: null,
+  { key: 'discounts',        vertical: 'general', label: 'Discounts',                 group: 'admin',    kind: 'action',  placement: 'admin',    nav_eligible: false, required_permission: 'pricing_recipe:update',  status: 'live',    depends_on: null,
     icon: Percent,     color: '#fbbf24', bg: DASH_BG, route: '/discounts' },
 
   // ── Planned (greyed) — forward declarations. Permissions marked PROVISIONAL where the
   //    seed did not pin one (adjustable); the seed-pinned ones are locked like all others.
-  { key: 'services',         vertical: 'general', label: 'Services',                  group: 'planned',  kind: 'context', placement: 'TBD',       nav_eligible: false, required_permission: 'view_dashboard',   status: 'planned', depends_on: null,
+  { key: 'services',         vertical: 'general', label: 'Services',                  group: 'planned',  kind: 'context', placement: 'TBD',       nav_eligible: false, required_permission: 'member',   status: 'planned', depends_on: null,
     icon: Wrench,      color: '#94a3b8', bg: DASH_BG, note: 'EDITOR LIVE — the service_offerings CRUD (transport / add-ons incl. netting companion / other services) renders in shared Settings.tsx. NAV rewire 2026-07-07 (tech-debt #47): it now has a first-class section-isolated DESTINATION at /settings/services via the nav_services Admin IA node (peer of Business Profile / Accounting), no longer orphaned at /settings/all. This tile (status:planned/placement:TBD) refers to a future DASHBOARD tile, not the editor or its nav destination. permission PROVISIONAL.' },
-  { key: 'opportunities',    vertical: 'general', label: 'Opportunities',             group: 'planned',  kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'view_orders',     status: 'planned', depends_on: 'services',
+  { key: 'opportunities',    vertical: 'general', label: 'Opportunities',             group: 'planned',  kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'orders:read',     status: 'planned', depends_on: 'services',
     icon: TrendingUp,  color: '#22d3ee', bg: DASH_BG, note: 'Regina surfacing; permission PROVISIONAL' },
-  { key: 'followup_engine',  vertical: 'general', label: 'Follow-Up',                 group: 'planned',  kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'manage_customers', status: 'planned', depends_on: null,
+  { key: 'followup_engine',  vertical: 'general', label: 'Follow-Up',                 group: 'planned',  kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'customers:update', status: 'planned', depends_on: null,
     icon: MessageCircle, color: '#fbbf24', bg: DASH_BG },
-  { key: 'business_insights', vertical: 'general', label: 'Insights',                 group: 'planned',  kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'view_reports',    status: 'planned', depends_on: null,
+  { key: 'business_insights', vertical: 'general', label: 'Insights',                 group: 'planned',  kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'reports:read',    status: 'planned', depends_on: null,
     icon: BarChart2,   color: '#818cf8', bg: DASH_BG },
-  { key: 'campaigns',        vertical: 'general', label: 'Campaign Scheduler',        group: 'planned',  kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'manage_campaigns', status: 'planned', depends_on: 'social_media',
+  { key: 'campaigns',        vertical: 'general', label: 'Campaign Scheduler',        group: 'planned',  kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'campaigns:read', status: 'planned', depends_on: 'social_media',
     icon: CalendarClock, color: '#f472b6', bg: DASH_BG, route: '/campaigns' },
 ];
 
@@ -329,30 +329,30 @@ export interface NavNode {
 
 export const NAV_IA: NavNode[] = [
   // ── Top-level sections (the hamburger / nav-rail) ──
-  { key: 'sec_dashboard', section: 'dashboard', parent: null, label: 'Dashboard', route: '/dashboard', required_permission: 'view_dashboard' },
+  { key: 'sec_dashboard', section: 'dashboard', parent: null, label: 'Dashboard', route: '/dashboard', required_permission: 'member' },
   // SETTINGS = USER-level (what a person changes about THEMSELVES). NOW a real destination: clicking
   // it lands on a SHORT index (/settings → SettingsIndex), NOT the long business-settings wall
   // (direct-access over scroll, D-21). Shown to EVERY authenticated user (view_dashboard); its child
   // is Your Profile. Business administration lives in the Admin section (RULE 1, ledger #50).
-  { key: 'sec_settings',  section: 'settings',  parent: null, label: 'Settings',  route: '/settings', required_permission: 'view_dashboard' },
+  { key: 'sec_settings',  section: 'settings',  parent: null, label: 'Settings',  route: '/settings', required_permission: 'member' },
   // ADMIN = BUSINESS-ENTITY administration (business-level config). NOW a clickable destination
   // (/admin → AdminIndex, a section index), gated to manage_settings so Staff never sees it (its
   // children are all owner/manage_settings-scoped anyway). Owner short-circuits manage_settings.
-  { key: 'sec_admin',     section: 'admin',     parent: null, label: 'Admin',     route: '/admin', required_permission: 'manage_settings' },
+  { key: 'sec_admin',     section: 'admin',     parent: null, label: 'Admin',     route: '/admin', required_permission: 'settings:read' },
 
   // ── Dashboard branch ──
   { key: 'nav_orders',          section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'qr_checkout' },
   { key: 'nav_delivery',        section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'delivery' },
-  { key: 'nav_delivery_route',  section: 'dashboard', parent: 'nav_delivery',        label: 'Route', route: '/deliveries', matchRoute: '/deliveries', required_permission: 'manage_deliveries' },
+  { key: 'nav_delivery_route',  section: 'dashboard', parent: 'nav_delivery',        label: 'Route', route: '/deliveries', matchRoute: '/deliveries', required_permission: 'deliveries.route:read' },
   { key: 'nav_operating_costs', section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'operating_costs' },
   { key: 'nav_assets',          section: 'dashboard', parent: 'nav_operating_costs', tileKey: 'assets' },
   // /inventory is served by two tiles (manual + intake); the nav node owns the route once, label 'Inventory'.
-  { key: 'nav_inventory',       section: 'dashboard', parent: 'nav_operating_costs', label: 'Inventory', route: '/inventory', required_permission: 'view_costs' },
+  { key: 'nav_inventory',       section: 'dashboard', parent: 'nav_operating_costs', label: 'Inventory', route: '/inventory', required_permission: 'inventory:read' },
   // Reconcile is a REAL destination, not a sub-flow: the owner goes to the desk deliberately to turn
   // a walk into stamped truth. /inventory/count is an EXCEPTION in the nav-integrity check because it
   // is entered from the grid mid-task; this one earns its own node so it is discoverable without
   // knowing the URL. Same view_costs gate as its route (nav and route agree, by construction).
-  { key: 'nav_inventory_reconcile', section: 'dashboard', parent: 'nav_inventory', label: 'Reconcile count', route: '/inventory/reconcile', required_permission: 'view_costs' },
+  { key: 'nav_inventory_reconcile', section: 'dashboard', parent: 'nav_inventory', label: 'Reconcile count', route: '/inventory/reconcile', required_permission: 'inventory:read' },
   { key: 'nav_receipts',        section: 'dashboard', parent: 'nav_operating_costs', tileKey: 'receipt_keeper' },
   { key: 'nav_pmi',             section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'pmi' },
   { key: 'nav_social',          section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'social_media' },
@@ -363,24 +363,24 @@ export const NAV_IA: NavNode[] = [
   // Campaign detail — COLLAPSED breadcrumb (Dashboard / Campaigns / Campaign): drops "Social" so the
   // leaf stays 3-deep (ratified). parent stays nav_campaigns for section grouping; breadcrumb override
   // controls the displayed trail.
-  { key: 'nav_campaign_detail', section: 'dashboard', parent: 'nav_campaigns',       label: 'Campaign', route: '/campaigns/:id', matchRoute: '/campaigns/:id', required_permission: 'manage_campaigns', breadcrumb: ['sec_dashboard', 'nav_campaigns'] },
+  { key: 'nav_campaign_detail', section: 'dashboard', parent: 'nav_campaigns',       label: 'Campaign', route: '/campaigns/:id', matchRoute: '/campaigns/:id', required_permission: 'campaigns:read', breadcrumb: ['sec_dashboard', 'nav_campaigns'] },
   // Help — reached from the Dashboard header's Help button, so the IA parent is Dashboard
   // (breadcrumb: Dashboard / Help). view_dashboard = visible to every authenticated session. The
   // /help page is PUBLIC (prospects can read it) so it mounts the nav chrome itself rather than via
   // AppLayout — this node supplies its breadcrumb trail + active-section highlight either way.
-  { key: 'nav_help',            section: 'dashboard', parent: 'sec_dashboard',        label: 'Help', route: '/help', required_permission: 'view_dashboard' },
+  { key: 'nav_help',            section: 'dashboard', parent: 'sec_dashboard',        label: 'Help', route: '/help', required_permission: 'member' },
 
   // ── Settings branch (USER-level only) ──
   // Your Profile — the personal identity surface (name/phone/email). PRIMARY entry is the header
   // avatar menu; this node is the secondary nav entry. view_dashboard = reachable by EVERY
   // authenticated role (incl. STAFF — every person can edit their own profile). Breadcrumb:
   // Settings / Your Profile. (Roles & Permissions MOVED to Admin — it is business-level, ledger #50.)
-  { key: 'nav_profile',         section: 'settings',  parent: 'sec_settings',        label: 'Your Profile', route: '/profile', required_permission: 'view_dashboard' },
+  { key: 'nav_profile',         section: 'settings',  parent: 'sec_settings',        label: 'Your Profile', route: '/profile', required_permission: 'member' },
   // The full business-settings page (Services / Team / tax rate / install price / cost config) is no
   // longer the default Settings landing — it is a deliberate destination reached from the Settings
   // index. Declared here so it still gets a breadcrumb ("Settings / All settings"); EXCLUDED from the
   // nav drawer (NAV_EXCLUDE in AppNav) so it doesn't clutter the menu — same pattern as nav_help.
-  { key: 'nav_all_settings',    section: 'settings',  parent: 'sec_settings',        label: 'All settings', route: '/settings/all', matchRoute: '/settings/all', required_permission: 'manage_settings' },
+  { key: 'nav_all_settings',    section: 'settings',  parent: 'sec_settings',        label: 'All settings', route: '/settings/all', matchRoute: '/settings/all', required_permission: 'settings:read' },
 
   // ── Admin branch (BUSINESS administration) — each a DIRECT menu destination (RULE 2a) ──
   // Business Profile + Accounting are section-isolated views of the /settings page (/settings/:section)
@@ -388,18 +388,18 @@ export const NAV_IA: NavNode[] = [
   // owner-only (account action / cost moat — D-009); the rest are manage_settings (owner-default,
   // delegable to a manager via /roles). Staff holds neither → sees no Admin item.
   { key: 'nav_add_business',     section: 'admin',     parent: 'sec_admin',           tileKey: 'add_business' },
-  { key: 'nav_business_profile', section: 'admin',     parent: 'sec_admin',           label: 'Business Profile', route: '/settings/business',    matchRoute: '/settings/business',    required_permission: 'manage_settings' },
-  { key: 'nav_accounting',       section: 'admin',     parent: 'sec_admin',           label: 'Accounting',       route: '/settings/accounting', matchRoute: '/settings/accounting', required_permission: 'manage_settings' },
+  { key: 'nav_business_profile', section: 'admin',     parent: 'sec_admin',           label: 'Business Profile', route: '/settings/business',    matchRoute: '/settings/business',    required_permission: 'settings:read' },
+  { key: 'nav_accounting',       section: 'admin',     parent: 'sec_admin',           label: 'Accounting',       route: '/settings/accounting', matchRoute: '/settings/accounting', required_permission: 'settings:read' },
   // Services — the service_offerings editor (transport / add-ons incl. netting companion / other
   // services + "+ Add service" + On/Off) as a FIRST-CLASS section-isolated destination (RULE 2a).
   // Was orphaned: reachable only via /settings/all → scroll (tech-debt #47). Now a discoverable
   // Admin nav item at /settings/services, peer of Business Profile / Accounting. manage_settings-
   // gated (owner-default, delegable). Served by the /settings/:section route (no router change).
-  { key: 'nav_services',         section: 'admin',     parent: 'sec_admin',           label: 'Services',         route: '/settings/services',   matchRoute: '/settings/services',   required_permission: 'manage_settings' },
+  { key: 'nav_services',         section: 'admin',     parent: 'sec_admin',           label: 'Services',         route: '/settings/services',   matchRoute: '/settings/services',   required_permission: 'settings:read' },
   // Team & Roles — the agnostic member/device console (D-31): invite, roles (visibility axis),
   // devices. Supersedes the old /roles page (which now redirects here). manage_settings-gated
   // (owner-default, delegable) so Staff never sees it.
-  { key: 'nav_team',             section: 'admin',     parent: 'sec_admin',           label: 'Team & Roles', route: '/team', required_permission: 'manage_settings' },
+  { key: 'nav_team',             section: 'admin',     parent: 'sec_admin',           label: 'Team & Roles', route: '/team', required_permission: 'team:read' },
   { key: 'nav_discounts',        section: 'admin',     parent: 'sec_admin',           tileKey: 'discounts' },
   { key: 'nav_cost_to_produce',  section: 'admin',     parent: 'sec_admin',           tileKey: 'cost_to_produce' },
 ];

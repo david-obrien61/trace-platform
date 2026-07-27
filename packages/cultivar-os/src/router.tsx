@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { PrivateRoute }    from './components/layout/PrivateRoute';
 import { AppLayout }       from './components/layout/AppLayout';
-import { VIEW_COSTS, LEGACY_PERMISSION, PermissionRoute } from '@trace/shared/auth';
+import { PermissionRoute } from '@trace/shared/auth';
 
 import { PlantProfile }    from './pages/PlantProfile';
 import { AddOns }          from './pages/AddOns';
@@ -129,53 +129,81 @@ export function AppRouter() {
               tileRegistry required_permission values exactly — nav AND route agree.
               ════════════════════════════════════════════════════════════════════════════════ */}
 
-          {/* Orders — qr_checkout (STAFF holds it; guarded for completeness so the class has no gap).
+          {/* Orders — `orders:create` (STAFF holds it; guarded for completeness so the class has no gap).
+              PURE RENAME of the recorded ALLOWED_DIVERGENCE (Note A, permanent under R1): the route
+              checks create while the table checks orders:read. Deliberate, not an oversight.
               /checkout/scan is the multi-item scan-loop front door (needs businessId + inventory RLS). */}
-          <Route element={<PermissionRoute permission={LEGACY_PERMISSION.QR_CHECKOUT} />}>
+          <Route element={<PermissionRoute permission="orders:create" />}>
             <Route path="/orders"       element={<Orders />} />
             <Route path="/orders/:id"   element={<OrderDetail />} />
             <Route path="/checkout/scan" element={<ScanOrder />} />
           </Route>
 
-          {/* Delivery — manage_deliveries (STAFF lacks it → refused at entry, was URL-reachable). */}
-          <Route element={<PermissionRoute permission={LEGACY_PERMISSION.MANAGE_DELIVERIES} />}>
-            <Route path="/deliveries"        element={<DeliveryRoute />} />
+          {/* SPLIT 2026-07-27 — two surfaces, two strings. `manage_deliveries` gated both; the
+              schedule (the list of deliveries) and the route (the day's stops → Maps handoff) are
+              separately registered surfaces (tileRegistry `nav_delivery` vs `nav_delivery_route`)
+              and now gate separately. THIS is what makes `deliveries.route:read` ENFORCED rather
+              than declared-unwired: route + tile are real enforcement layers under STD-020. Its
+              sibling `deliveries.route:update` stays declared-unwired — nothing persists a route. */}
+          <Route element={<PermissionRoute permission="deliveries:read" />}>
             <Route path="/delivery-schedule" element={<DeliverySchedule />} />
           </Route>
+          <Route element={<PermissionRoute permission="deliveries.route:read" />}>
+            <Route path="/deliveries"        element={<DeliveryRoute />} />
+          </Route>
 
-          {/* Social + Campaigns — manage_campaigns. Campaign Scheduler is the reported bug: STAFF
+          {/* Social + Campaigns — `campaigns:read`. Campaign Scheduler is the reported bug: STAFF
               reached /campaigns via the dashboard card despite lacking this permission. Now every
               door (tile, deep link, typed URL) is refused at route entry. */}
-          <Route element={<PermissionRoute permission={LEGACY_PERMISSION.MANAGE_CAMPAIGNS} />}>
+          <Route element={<PermissionRoute permission="campaigns:read" />}>
             <Route path="/social/setup" element={<SocialSetup />} />
             <Route path="/campaigns"         element={<Campaigns />} />
             <Route path="/campaigns/:id"     element={<CampaignDetail />} />
           </Route>
 
-          {/* Business administration — manage_settings (held by OWNER alone in Cultivar today).
+          {/* Business administration — was ONE `manage_settings` gate; now split per destination below.
               Section-isolated Settings destinations (RULE 2a) — /settings/business, /settings/
               accounting land on JUST that section; /settings/all renders the FULL business-settings
               page (Services/Team/cost config). AGNOSTIC member/device console (D-31): invite + roles
               (visibility axis) + devices. /roles REDIRECTS here (the old page is superseded). Admin
               landing index — each card additionally respects its own permission. */}
-          <Route element={<PermissionRoute permission={LEGACY_PERMISSION.MANAGE_SETTINGS} />}>
+          {/* `manage_settings` was ONE string over five destinations; it decomposes 5 ways and each
+              door now names the authority it actually needs. /team + /roles are TEAM authority, not
+              settings authority — a manager who may edit business settings is not thereby a manager
+              of people. /discounts is PRICING authority (it writes the recipe). */}
+          <Route element={<PermissionRoute permission="settings:read" />}>
             <Route path="/settings/:section" element={<Settings />} />
+          </Route>
+          <Route element={<PermissionRoute permission="team:read" />}>
             <Route path="/team"            element={<TeamConsole />} />
             <Route path="/roles"           element={<Navigate to="/team" replace />} />
-            {/* Discounts — customer discount types × tiers (pricing authority). WRITE gated here at
-                manage_settings (owner in Cultivar today); the READ of the set stays business-scoped
-                in the data layer (roster picker + checkout resolve it independently of this route). */}
+          </Route>
+          {/* Discounts — customer discount types × tiers. Re-gated from `manage_settings` to
+              `pricing_recipe:update`, the string that names what this door actually does: it WRITES
+              the pricing recipe. The READ of the set stays business-scoped in the data layer (roster
+              picker + checkout resolve it independently of this route). */}
+          <Route element={<PermissionRoute permission="pricing_recipe:update" />}>
             <Route path="/discounts"       element={<Discounts />} />
+          </Route>
+          <Route element={<PermissionRoute permission="settings:read" />}>
             <Route path="/admin"           element={<AdminIndex />} />
           </Route>
 
-          {/* COST-ANALYSIS surfaces — require view_costs (decision 2026-06-21, Phase 3/4).
-              A low-role member is redirected to /dashboard, so the cost SELECT never fires.
-              /receipts joins this group (registry receipt_keeper tile → view_costs). */}
-          <Route element={<PermissionRoute permission={VIEW_COSTS} />}>
+          {/* `view_costs` was ONE string over NINE doors across four resources. Each door now
+              names the resource it opens — this is the split that makes a cost-blind inventory
+              viewer expressible for the first time. */}
+          <Route element={<PermissionRoute permission="costs:read" />}>
             <Route path="/receipts"          element={<ReceiptKeeper />} />
+            <Route path="/operating-costs"   element={<OperatingCosts />} />
+          </Route>
+          <Route element={<PermissionRoute permission="assets:read" />}>
             <Route path="/assets"            element={<BusinessAssets />} />
             <Route path="/assets/capture"    element={<AssetCapture />} />
+          </Route>
+          <Route element={<PermissionRoute permission="pmi:read" />}>
+            <Route path="/pmi"               element={<PMI />} />
+          </Route>
+          <Route element={<PermissionRoute permission="inventory:read" />}>
             <Route path="/inventory"         element={<BusinessInventory />} />
             <Route path="/inventory/count"   element={<InventoryCount />} />
             {/* The desk RECONCILE surface — same VIEW_COSTS gate as /inventory and /inventory/count,
@@ -190,8 +218,6 @@ export function AppRouter() {
                 /team, enforced SERVER-SIDE by the import_write_price RPC. Routing this owner-only
                 would block the manager's quantity import the ruling explicitly allows. */}
             <Route path="/inventory/import"  element={<InventoryImport />} />
-            <Route path="/operating-costs"   element={<OperatingCosts />} />
-            <Route path="/pmi"               element={<PMI />} />
           </Route>
 
           {/* OWNER-ONLY — the cost moat (D-009) + owner-scoped account surfaces. Even a Manager who
@@ -201,14 +227,14 @@ export function AppRouter() {
             <Route path="/add-business"      element={<AddBusiness />} />
           </Route>
 
-          {/* CUSTOMERS — view_customers (STD-020 · David's ruling 2026-07-24). The ROUTE now checks
+          {/* CUSTOMERS — `customers:read` (STD-020 · David's ruling 2026-07-24). The ROUTE checks
               the SAME permission the TABLE checks (customers_member RLS gates SELECT on
               is_active_member AND has_permission('view_customers'), 20260710) — the principle
               applied: route and data agree. The old literal "owner-only" gate was UNHOLDABLE by any
               member, so /customers was unreachable at ANY permission WHILE the table already granted
               managers SELECT — locked at the door, vault standing open. Owner passes (can() short-
               circuits). A member without view_customers is refused at entry AND filtered by RLS. */}
-          <Route element={<PermissionRoute permission={LEGACY_PERMISSION.VIEW_CUSTOMERS} />}>
+          <Route element={<PermissionRoute permission="customers:read" />}>
             <Route path="/customers"         element={<Customers />} />
             <Route path="/customers/:id"     element={<CustomerDetail />} />
           </Route>

@@ -20,7 +20,6 @@ const addBusinessConfig: OwnerSignupConfig = {
   memberTable:      'business_members',
   memberFKColumn:   'business_id',
   ownerRole:        'OWNER',
-  ownerPermissions: ['manage_settings', 'manage_team', 'view_orders', 'process_orders', 'view_reports'],
   signInPath:       '/login',
   collectPhone:     true,
   collectAddress:   true,

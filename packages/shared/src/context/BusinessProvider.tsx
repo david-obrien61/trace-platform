@@ -693,6 +693,13 @@ export function BusinessProvider({
   const can = React.useCallback(
     (permissionId: string): boolean => {
       if (isOwnerActive) return true; // owner: full access (userPermissions === null)
+      // R3 — `view_dashboard` RETIRES INTO MEMBERSHIP. It never gated anything a member lacked,
+      // so it has no resource:verb successor; the seven navigation-scaffolding surfaces that used
+      // it (Dashboard/Settings sections, Help, Profile, the two headline metrics, Services) now
+      // declare `member`. Reaching this callback at all means an ACTIVE membership resolved for
+      // this business, so the sentinel is true by construction — it is the honest spelling of
+      // "no capability beyond membership is required", not a permission.
+      if (permissionId === 'member') return true;
       const effective = applyPermissionDependencies(activePermissions ?? []);
       return sharedCan({ permissions: effective }, permissionId);
     },
