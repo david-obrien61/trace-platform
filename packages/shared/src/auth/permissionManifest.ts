@@ -882,10 +882,109 @@ export const MANAGER_DEFAULT_BUNDLE: string[] = [
  * requires read. The Roles page surfaces it as a deliberate choice, and a negative
  * owner-test card proves it stays true.
  */
-export const STAFF_DEFAULT_BUNDLE: string[] = ['orders:create', 'inventory:read'];
+/**
+ * STAFF — THE FULFILMENT SET (David's ruling 2026-07-27). Previously the two strings
+ * orders-create and inventory-read, written when R1's Note A still withheld the order read.
+ * David retired that case with one question: "staff needs to view order — how else can they fill
+ * the order?" A staff member READS what the work requires and WRITES nothing without an explicit
+ * grant. The same question answered customers: a driver needs the address, and duplicating it
+ * onto a delivery record to dodge the permission is STD-011.
+ *
+ * NOTE ON PLACEMENT: this lives ABOVE the array, never inside it. capQ and capP parse the LITERAL,
+ * so a quoted permission string in an inline comment is counted as a member — the first draft of
+ * this note made the bundle read as 12 strings instead of 10.
+ */
+export const STAFF_DEFAULT_BUNDLE: string[] = [
+  'orders:create',
+  'orders:read', 'order_items:read',
+  'order_service_selections:read', 'order_compliance_records:read',  // the netting/planting add-ons
+  'customers:read',                                                  // where to deliver
+  'inventory:read',                                                  // which lot to pull
+  'deliveries:read', 'deliveries:update',                            // see the stop, mark it done
+  'deliveries.route:read',
+  // deliveries.route:update is HELD — declared-unwired, nothing persists a route (R-B2/capQ).
+];
 
 /** Fresh-role seed by role key. OWNER is absent BY DESIGN — owner authority is owner_id. */
+/**
+ * OWNER — every ENFORCED string. ADDED 2026-07-27 (David's ruling A).
+ *
+ * The bundles used to omit OWNER on the theory that owner authority is `businesses.owner_id`.
+ * That theory is FALSE for one reachable state, established two days earlier: `assign_member_role`
+ * accepts `p_role_key = 'OWNER'` for any role that resolves, so a member can hold role OWNER
+ * WITHOUT being `businesses.owner_id` — and that person gets NO bypass at the table, api or route
+ * layer. Their array is all they have. The OWNER floor row must therefore stay populated.
+ *
+ * WHY IN THE BUNDLE RATHER THAN EXCLUDED FROM THE DERIVATION: excluding it would leave the OWNER
+ * floor row with NO authority holding it — unmanaged, unreconciled, free to drift. That is exactly
+ * the shape this whole alignment exists to close (the 2026-07-10 floor drift). A role the system
+ * can assign is a role the source must define.
+ *
+ * CONTENT IS NOT A JUDGEMENT CALL: it is every permission in PERMISSION_MANIFEST whose status is
+ * not `declared-unwired` — 55 of 63 today. Materialised as a literal so capQ can reconcile it
+ * against the floor-seeding migration the same way it reconciles the R-B2 list; the accompanying
+ * test asserts it still equals the computed set, so a new permission cannot quietly skip OWNER.
+ */
+export const OWNER_DEFAULT_BUNDLE: string[] = [
+  'assets:create',
+  'assets:read',
+  'assets:update',
+  'audit_log:read',
+  'campaigns:read',
+  'campaigns:update',
+  'costs:create',
+  'costs:delete',
+  'costs:read',
+  'costs:update',
+  'customers:create',
+  'customers:read',
+  'customers:update',
+  'deliveries.route:read',
+  'deliveries:create',
+  'deliveries:read',
+  'deliveries:update',
+  'inventory:create',
+  'inventory:delete',
+  'inventory:import_price',
+  'inventory:read',
+  'inventory:update',
+  'inventory_ledger:read',
+  'margin:read',
+  'order_compliance_records:create',
+  'order_compliance_records:read',
+  'order_compliance_records:update',
+  'order_discount:apply',
+  'order_items:create',
+  'order_items:delete',
+  'order_items:read',
+  'order_items:update',
+  'order_service_selections:create',
+  'order_service_selections:delete',
+  'order_service_selections:read',
+  'order_service_selections:update',
+  'orders:create',
+  'orders:delete',
+  'orders:read',
+  'orders:update',
+  'pmi:read',
+  'pmi:update',
+  'pricing_recipe:read',
+  'pricing_recipe:update',
+  'service_offerings:read',
+  'settings:read',
+  'settings:update',
+  'tax_exempt:apply',
+  'tax_rate:read',
+  'tax_rate:update',
+  'team:read',
+  'wages:create',
+  'wages:delete',
+  'wages:read',
+  'wages:update',
+];
+
 export const DEFAULT_BUNDLES: Record<string, string[]> = {
+  OWNER: OWNER_DEFAULT_BUNDLE,
   MANAGER: MANAGER_DEFAULT_BUNDLE,
   STAFF: STAFF_DEFAULT_BUNDLE,
 };

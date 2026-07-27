@@ -1104,6 +1104,35 @@ export const qListViolations = (flipSql, unwired) => {
   for (const q of inSql) if (!unwired.has(q)) out.push(`migration R-B2 excludes '${q}' but the manifest does not mark it declared-unwired — the list has rotted, or the status is wrong.`);
   return out;
 };
+/**
+ * (d) THE FLOOR IS THE BUNDLE'S MATERIALISATION — assert the derivation, do not trust it.
+ *
+ * capQ reads TypeScript; it cannot read `role_definitions`, so it can never assert
+ * floor == bundle AT RUNTIME. What it CAN assert is that the migration which SEEDS the floor was
+ * generated from the bundle and has not drifted from it since. Two agreeing representations with
+ * no mechanical guard is the 2026-07-10 floor-drift shape; this is the guard.
+ *
+ * Same pattern as (b) reconciling the R-B2 NOT IN list against DECLARED_UNWIRED_PERMISSIONS: the
+ * SQL literal is a materialisation, the TS is the authority, and divergence FAILS THE BUILD in
+ * either direction — a string added to the bundle and not regenerated, or edited into the SQL by
+ * hand.
+ */
+export const qFloorViolations = (floorSql, manifestSrc) => {
+  const out = [];
+  for (const role of ['OWNER', 'MANAGER', 'STAFF']) {
+    const bm = manifestSrc.match(new RegExp(`export const ${role}_DEFAULT_BUNDLE: string\\[\\] = \\[([\\s\\S]*?)\\];`));
+    if (!bm) { out.push(`${role}_DEFAULT_BUNDLE not found — the floor has no authority to derive from.`); continue; }
+    const bundle = new Set([...bm[1].matchAll(/'([a-z_.]+:[a-z_]+)'/g)].map((x) => x[1]));
+    const rm = floorSql.match(new RegExp(`\\('${role}',\\s*'(\\[[^']*\\])'::jsonb\\)`));
+    if (!rm) { out.push(`the floor migration has no seeded row for ${role} — it would keep whatever the floor already held.`); continue; }
+    let seeded;
+    try { seeded = new Set(JSON.parse(rm[1])); } catch { out.push(`${role} floor row is not parseable JSON.`); continue; }
+    for (const p of bundle) if (!seeded.has(p)) out.push(`${role}: '${p}' is in the bundle but NOT in the floor migration — regenerate, do not hand-edit.`);
+    for (const p of seeded) if (!bundle.has(p)) out.push(`${role}: '${p}' is in the floor migration but NOT in the bundle — the SQL has been hand-edited or the bundle shrank.`);
+  }
+  return out;
+};
+
 export const qSentinelViolations = ({ routerSrc, manifestSrc, sqlAll }) => {
   const out = [];
   if (/PermissionRoute permission=["']member["']/.test(routerSrc)) out.push('`member` appears in a PermissionRoute — a route needing only membership needs NO gate. Legal home: tileRegistry required_permission ONLY.');
@@ -1124,6 +1153,9 @@ const Q_PROBES = [
   ['sentinel/route',      () => qSentinelViolations({ routerSrc: '<PermissionRoute permission="member" />', manifestSrc: '', sqlAll: '' }).length > 0],
   ['sentinel/bundle',     () => qSentinelViolations({ routerSrc: '', manifestSrc: "export const X_BUNDLE: string[] = [\n  'member',\n];", sqlAll: '' }).length > 0],
   ['sentinel/policy',     () => qSentinelViolations({ routerSrc: '', manifestSrc: '', sqlAll: "has_permission(business_id, 'member')" }).length > 0],
+  ['floor/drifted-seed',  () => qFloorViolations("('OWNER', '[\"a:b\"]'::jsonb)", "export const OWNER_DEFAULT_BUNDLE: string[] = [\n  'c:d',\n];").length > 0],
+  ['floor/missing-role',  () => qFloorViolations('no rows at all', "export const OWNER_DEFAULT_BUNDLE: string[] = [\n  'a:b',\n];").length > 0],
+  ['floor/matching-seed', () => qFloorViolations("('OWNER', '[\"a:b\"]'::jsonb)", "export const OWNER_DEFAULT_BUNDLE: string[] = [\n  'a:b',\n];\nexport const MANAGER_DEFAULT_BUNDLE: string[] = [\n];\nexport const STAFF_DEFAULT_BUNDLE: string[] = [\n];").filter((g) => g.startsWith('OWNER')).length === 0],
 ];
 
 function capQ(key, v) {
@@ -1154,6 +1186,7 @@ function capQ(key, v) {
       manifestSrc,
       sqlAll: concatSql(v.migrationsDir),
     }),
+    ...qFloorViolations(read('supabase/migrations/20260727_align_floor_to_bundles.sql') || '', manifestSrc),
   ];
 
   if (gaps.length) return FAIL(`declared-unwired invariant BROKEN — ${gaps.length} violation(s).`, gaps);

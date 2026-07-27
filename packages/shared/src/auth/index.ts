@@ -137,6 +137,7 @@ export {
   MEMBERSHIP_SENTINEL,
   // fresh-role seed data (NOT a backfill input — see R-A on DEFAULT_BUNDLES)
   DEFAULT_BUNDLES,
+  OWNER_DEFAULT_BUNDLE,
   MANAGER_DEFAULT_BUNDLE,
   STAFF_DEFAULT_BUNDLE,
   // legacy string constants — live until Phase 7 CONTRACT
