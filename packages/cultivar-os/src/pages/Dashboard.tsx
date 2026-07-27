@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@trace/shared/components/Card';
+import { authHeaders } from '@trace/shared/auth';
 import { supabase } from '../lib/supabase';
 import { auth } from '../lib/auth';
 import { useBusinessContext } from '@trace/shared/context';
@@ -270,7 +271,7 @@ export function Dashboard() {
     try {
       const res = await fetch('/api/social/generate-posts', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
         body:    JSON.stringify({ business_id: businessId }),
       });
       if (res.ok) await loadSocialDrafts();

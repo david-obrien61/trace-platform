@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { callerCan } from '../../../shared/src/auth/callerPermission';
 import { generateSocialDrafts } from '../../../shared/src/social/generate';
 
 const SOCIALDRAFT_DEBUG = false;
@@ -23,6 +24,17 @@ export default async function handler(req: any, res: any) {
 
   const { business_id, period_days: rawPeriodDays } = req.body;
   if (!business_id) return res.status(400).json({ error: 'Missing business_id' });
+
+  // 🔴 CALLER AUTHORITY — MB_D-015. ADDED 2026-07-27; this endpoint had NONE.
+  // `business_id` comes off the REQUEST BODY and the draft insert below runs through adminDb() —
+  // the SERVICE KEY, RLS bypassed. Until this gate existed anyone reaching the URL could generate
+  // AI social drafts into ANY tenant by naming its id, burning that tenant's Anthropic spend and
+  // planting copy in their queue. `campaigns:update` is the authority: a generated draft is an
+  // authoring act on the campaign/social surface, the same string /social/setup is gated on.
+  if (!(await callerCan(req.headers?.authorization, business_id, 'campaigns:update'))) {
+    console.log('[TRACE:AUTHORITY] social/generate-posts REFUSED — caller lacks campaigns:update/owner', { business_id });
+    return res.status(403).json({ error: 'Not authorized to generate social drafts for this business', code: 'FORBIDDEN' });
+  }
 
   const db = adminDb();
 
