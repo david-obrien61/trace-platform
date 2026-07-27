@@ -1,6 +1,8 @@
 # RBAC TRANSITION — EXECUTION PLAN (2026-07-27)
 
 **Status:** ⛔ **AWAITING DAVID'S APPROVAL. Nothing built.**
+**AMENDED 2026-07-27 after STEP 0 ran — see §9. The grant changed 33 → 44; §2 and §7 are
+superseded by §9.2 and §9.3. Read §9 first.**
 **Ruled by:** David, 2026-07-27 — seven rulings taken today (below).
 **Companions:** `docs/resource-action-permission-spec.md` v3 (RULED, nothing open) ·
 `docs/decisions/2026-07-26-rbac-build-plan.md` (the phased plan this SUPERSEDES for sequencing) ·
@@ -245,3 +247,157 @@ Lauren, not a gap to explain.
 4. **Run STEP 0** (§3) and paste the output. I cannot write BUILD 1 without it.
 
 Nothing is built until 1–4 are answered.
+
+---
+
+# 9. AMENDMENT 1 — AFTER STEP 0 (2026-07-27)
+
+STEP 0 ran. **It caught a 9-string revocation this plan would otherwise have shipped**, and it
+resolved five assumptions. §2 (the grant) and §7 (STAFF) are superseded by §9.2 and §9.3.
+
+## 9.1 What the catalog said
+
+**BLOCK A — the flip list is FOURTEEN policies, not the 15-30 I guessed.** Every one corresponds to
+a migration file. **No live-only policy drift.** The full list:
+
+| table | policy | cmd | legacy string |
+|---|---|---|---|
+| `business_inventory` | `business_inventory_member_all` | ALL | `view_costs` |
+| `business_service_log` | `business_service_log_member_all` | ALL | `view_costs` |
+| `cost_objects` | `cost_objects_member_all` | ALL | `view_costs` |
+| `cost_object_assignments` | `cost_object_assignments_member_all` | ALL | `view_costs` |
+| `cost_object_edges` | `cost_object_edges_member_all` | ALL | `view_costs` |
+| `receipts` | `receipts_member_all` | ALL | `view_costs` |
+| `business_pricing_config` | `bpc_member_view_pricing` | ALL | `view_pricing_config` |
+| `labor_resources` | `labor_resources_member_all` | ALL | `view_wages` |
+| `labor_resource_wages` | `lrw_member_view_wages` | ALL | `view_wages` |
+| `customers` | `customers_member` | SELECT | `view_customers` |
+| `orders` | `orders_member_select` | SELECT | `view_orders` |
+| `order_items` | `order_items_member` | SELECT | `view_orders` (via subquery on `orders`) |
+| `order_service_selections` | `order_service_selections_member` | SELECT | `view_orders` (subquery) |
+| `order_compliance_records` | `order_compliance_records_member` | SELECT | `view_orders` |
+
+**BLOCK B — ONE function gate:** `import_write_price` (`import_pricing`). `get_business_tax_rate` is
+membership-only, as #153 built it. Smaller than feared.
+
+**BLOCK C — three findings that are NOT in this plan's scope but must be recorded:**
+- ✅ `business_inventory_owner_all` EXISTS → **3b's narrowing cannot lock the owner out.** Cleared.
+- 🔴 **`deliveries_member_all [ALL]` carries NO permission string** — every active member, including
+  STAFF, can already CREATE, UPDATE and **DELETE** deliveries. This is a live authority hole, wider
+  than anything this migration touches. It also means staff delivery reads work today by accident.
+- 🔴 **`campaigns`, `campaign_posts`, `social_drafts`, `losses`, `opportunity_items`, `order_addons`,
+  `nursery_profiles`, `invitations`, `business_voice_samples` are OWNER-ONLY — no member policy.**
+  So a MANAGER holding `manage_campaigns` **cannot read a single campaign row.** N1/N2 confirmed
+  live, not theoretical. `audit_log` is owner-read-only (correct, but managers cannot see the trail).
+
+**BLOCK D1 — the floor has DRIFTED from its migration.** MANAGER is **11** (not the seeded 9) and
+OWNER is **14** (not 12) — both gained `override_maintenance` + `view_customers`. **And a TENANT
+OVERRIDE ROW EXISTS** for `f7ec5d67` MANAGER with **13** strings, including `view_wages`,
+`view_pricing_config` and `import_pricing` that the floor MANAGER does not have. Someone (the #152
+funnel, working) already granted those. **This is the finding that changes the grant.**
+
+**BLOCK D2 — owner-masking definitively ruled out.** `is_owner = false` for MANAGER `df7723be`
+(member `3dd661c3`) and STAFF `39691f0b` at `f7ec5d67` ("Test Dave's Tree Nest" — the only tenant
+carrying all three roles, therefore THE standing test tenant). All three owners carry the same
+6-string fiction (`manage_settings, manage_team, view_orders, process_orders, view_reports,
+view_customers`) — the mint-site literal, confirmed across three tenants.
+
+**BLOCK E — ledger #155 IS APPLIED and VERIFIED.** `total 53 · legacy 7/7 · new 46/45` (distinct 52)
+= **W1 PASSES**; indexes show `permission_aliases_legacy_is_rename_only` present and
+`permission_aliases_one_reverse_target` **absent** = **W3 PASSES**. W2/W4/W5/W6/W7 remain owed.
+
+**BLOCK F —** `business_inventory` has 23 columns. The projection redacts `unit_cost` +
+`cost_confidence` and returns the other 21. ⚠️ **Open question: `price_basis`** ("at-cost" vs
+"retail") leaks how the price was derived. Redact it too, or not? Flagged, not decided.
+
+## 9.2 THE GRANT IS 44, NOT 33 — and §2 would have REVOKED nine strings
+
+§2 computed the grant as `MANAGER_DEFAULT_BUNDLE + 4`. That was wrong, and only the catalog could
+have shown it: the live MANAGER at `f7ec5d67` holds **13** strings — more than the floor — because
+`view_wages`, `view_pricing_config` and `import_pricing` were granted through the funnel earlier.
+Seeding the bundle over that would have **destroyed nine capabilities**: `costs:create/update/delete`,
+`wages:read/create/update/delete`, `pricing_recipe:read/update`, `inventory:delete`,
+`inventory:import_price`. The wipe is not a merge.
+
+**Correct computation — a UNION of three sets, not a replacement:**
+
+```
+GRANT = rename_decomposition(her 13 live strings)     36
+      ∪ MANAGER_DEFAULT_BUNDLE                        +6 new
+      ∪ {orders:delete, order_discount:apply}         +2 new
+      = 44
+```
+
+- **36 from the rename** — `view_costs`→14 · `view_orders`→4 · `manage_deliveries`→4 ·
+  `view_wages`→4 · `manage_campaigns`→2 · `manage_customers`→2 · `view_pricing_config`→2 ·
+  `qr_checkout`→1 · `view_customers`→1 · `view_margin`→1 · `import_pricing`→1.
+  `view_dashboard` RETIRED (R3); `override_maintenance` STRIPPED (R-B unwired).
+- **+6 the bundle adds:** `orders:update` · `service_offerings:read` · `tax_rate:read` ·
+  `tax_rate:update` · `settings:read` · `settings:update`.
+- **+2 named (rulings 5/6):** `orders:delete` · `order_discount:apply`.
+  (`costs:read` and `margin:read` from ruling 7 are already inside the 36 — no revocation risk after
+  all, but only because the union is computed rather than the bundle seeded.)
+
+**The union is computed FROM the live row at grant time, not from this document.** A number in a
+plan is a claim; the funnel's blast-radius diff is the proof.
+
+## 9.3 STAFF — SUPERSEDES §7 (David's ruling, 2026-07-27)
+
+§7 asked whether STAFF keeps `orders:read`. **The question was wrong** and David's answer says why:
+*"staff needs to view order — how else can they fill the order?"*, and *"if a staff member cannot
+read a customer's address or phone how will the staff member deliver?"*
+
+**RULING: a staff member READS what they need to do the work, and WRITES nothing without an explicit
+grant.** Read is operational; write is authority.
+
+**STAFF = 9 strings:** `orders:create` · `orders:read` · `order_items:read` ·
+`order_service_selections:read` · `order_compliance_records:read` · `customers:read` ·
+`deliveries:read` · `deliveries.route:read` · `inventory:read`.
+
+### The structural finding this exposes — ONE PATTERN, THREE PLACES
+
+R1's Note A was not wrong about the concern; it picked the wrong instrument. Three permissions are
+each carrying two different capabilities:
+
+| string | operational meaning | confidential meaning |
+|---|---|---|
+| `view_costs` | see the item, its qty, its location | see what it COST |
+| `orders:read` | see the order I am filling | see the totals and discounts |
+| `customers:read` | see where I am delivering | see the customer's financial history |
+
+**Every one is a FIELD-level privacy problem being solved with a TABLE-level permission, and the
+cost each time is a role that cannot do its job.** The durable fix is one projection pattern applied
+three times. **3b is the first instance and is therefore built as a REUSABLE SHAPE, not a one-off** —
+the orders and customers projections follow it as their own builds.
+
+Two consequences for sequencing:
+1. 🔴 **Granting STAFF `inventory:read` before 3b ships means staff see `unit_cost`.** 3b is now a
+   PREREQUISITE for the STAFF grant, not an independent item. Either 3b lands first, or the STAFF
+   grant holds `inventory:read` back until it does.
+2. Owner-test card 2 ("staff cannot see orders") is REWRITTEN to "staff cannot see order MONEY" and
+   marked `needs-test` until the orders projection exists. It currently asserts a rule we are
+   deliberately retiring.
+
+## 9.4 What BUILD 1 now is, concretely
+
+14 `ALTER POLICY` statements + 1 `CREATE OR REPLACE FUNCTION` (`import_write_price`) + the new
+`set_business_tax_rate` writer. The six `FOR ALL` policies gated on `view_costs` **split by command**
+into SELECT/INSERT/UPDATE/DELETE on `inventory:{read,create,update,delete}` (and `costs:*` for the
+cost tables). No live-only drift to reconcile. **This is smaller than §5 estimated.**
+
+## 9.5 Recorded, NOT in this pass
+
+- 🔴 `deliveries_member_all` grants unrestricted member WRITE incl. DELETE, with no permission
+  string. Wider than this migration; needs its own ruling.
+- 🔴 The nine owner-only tables (campaigns et al.) mean `manage_campaigns` grants nothing readable.
+  N1/N2 — recorded in the enforcement map, not fixed here.
+- The floor drift (MANAGER 9→11, OWNER 12→14) is undocumented — no migration wrote it. Provenance
+  unknown; recorded as a finding.
+- `price_basis` redaction — open question for 3b.
+
+## 9.6 STILL NEEDED TO START
+
+1. **Approve this amendment** (the 44-string union and the 9-string STAFF set).
+2. **Rule §9.3 consequence 1** — does 3b land BEFORE the STAFF grant, or does STAFF wait for
+   `inventory:read`?
+3. **`price_basis`** — redact behind `costs:read`, or leave visible?
