@@ -1,7 +1,7 @@
 # STANDARDS.md — TRACE Engineering Standards
-# Version: 2.5
+# Version: 2.6
 # Created: 2026-06-04
-# Last updated: 2026-07-24 (STD-020 added + ACTIVATED — one permission = one capability, checked at EVERY layer it touches (route/table/function agree). Scar: a MANAGER could take an order but not read it (orders route open on view_orders, RLS owner-only — open at the door, locked at the vault) while /customers was unreachable at any permission over a table that already granted the read (locked at the door, vault open); an untaxed $544 invoice because the tax rate shared the pricing-recipe wall. David's ruling 2026-07-24.)
+# Last updated: 2026-07-27 (STD-021 + STD-022 added + ACTIVATED — the EVIDENCE pair. STD-021: a NEGATIVE claim names its corpus and its method or it is not a finding. STD-022: a verifier assertion ships with a PLANTED-BAD probe it must reject in the same pass. Scars: three negative claims asserted with unstated or absent corpora (§2's legacy inventory built from code and never checked against data; `manage_orders` "gates nothing" twice, from scans that never read the api layer; "no migration wrote the floor drift", asserted with no scan at all), and THREE FALSE GREENS from verifier checks that were not running — two of them reported PASS and one was cited in a close-out commit as proof of correctness. David's ruling 2026-07-27.)
 # Owner: David O'Brien / TRACE Enterprises
 
 > Every standard on this list traces to a real failure that bit us.
@@ -26,7 +26,7 @@ Standards exist in three states. The point is not to hold every industry standar
 it is to hold the ones that apply to *our* stack, activate them at the right moment,
 and never carry noise.
 
-- **ACTIVE** (on the field — enforced now): STD-001 through STD-020 below. Each has
+- **ACTIVE** (on the field — enforced now): STD-001 through STD-022 below. Each has
   a confirming scar and is enforced every relevant session. Two origins:
     - *TRACE scars* — failures from this codebase (the QB lying flag, the
       hand-applied constraint, the hardcoded channels).
@@ -1250,3 +1250,67 @@ a standard's application."
 
 *TRACE Enterprises · Built with CAI*
 *Update this file when a new scar earns a standard. Never adopt standards by reputation.*
+
+---
+
+### STD-021 — A NEGATIVE CLAIM NAMES ITS CORPUS AND ITS METHOD, OR IT IS NOT A FINDING
+
+**Ruled by David, 2026-07-27.**
+
+"Nothing enforces X." "No migration wrote Y." "That string gates nothing." A **negative** claim is
+not assertable on its own. It is assertable only as: *"`grep -rn X` across `supabase/migrations`,
+`packages/cultivar-os/api`, `router.tsx`, `tileRegistry.ts` and `packages/shared/src` returned N
+hits, all read."* **A negative without a corpus is an opinion wearing a fact's clothes.**
+
+**THE THREE SCARS, and they are not the same failure:**
+
+| claim | what it missed | why |
+|---|---|---|
+| "the legacy permission inventory is complete" | `process_orders`, `manage_team` — live in member arrays | built from **CODE**, never checked against **DATA** |
+| "`manage_orders` gates nothing" — *twice, by two analyses* | 4 enforced sites in `submit.ts` | the scan covered RLS + routes + registry, **never the api layer** |
+| "no migration wrote the floor drift" | `20260710_customers_member_read.sql:63-67` | **no scan at all** — asserted from an absence of expectation |
+
+The first two were scans with unstated coverage. The third was worse: an assertion with no search
+behind it. Do not file them as one class.
+
+**WHY IT IS BINDING AND NOT A NICETY: negative claims are the ones that license removal.** Phase 7
+CONTRACT is built entirely out of them — *no member holds a legacy string; no gate references one* —
+and Contract is irreversible. A programme with a 3-for-3 record of unstated corpora, gating its one
+irreversible step on exactly that claim type, is the definition of an unearned green.
+
+**IN PRACTICE:** a negative claim in a build report, a migration comment, a ledger row or a
+close-out states the trees searched and the method used, and where it gates something
+irreversible, the **raw output is pasted** rather than summarised as "passed".
+
+---
+
+### STD-022 — A VERIFIER ASSERTION SHIPS WITH A PLANTED-BAD PROBE IT MUST REJECT
+
+**Ruled by David, 2026-07-27. The mechanical twin of STD-021.**
+
+Every automated check — a `verify-universals` cap, a quality gate, a migration V-check — carries at
+least one input **engineered to be rejected**, executed in the same pass. If the probe comes back
+clean, the check FAILS on that alone, before it reports anything about the real input.
+
+**AN ASSERTION NEVER OBSERVED FAILING IS NOT KNOWN TO BE RUNNING.**
+
+**THE SCAR — three false greens in one build:**
+- `capP`'s parser missed the api layer, so `manage_orders` read as ungated for two analyses.
+- `capQ`'s key pattern required quotes, so every unquoted resource entry was invisible. It
+  reported **PASS** on a manifest it had not read.
+- `capQ`'s R-B2 list match used `[^)]*`, so a parenthesis inside a comment truncated it to zero
+  strings. It reported **PASS** again.
+
+**One of those greens was cited in a close-out commit as proof of correctness.** That is the whole
+danger: a silent detector is *worse* than no detector, because the board shows green either way and
+the green is the thing people act on.
+
+**IN PRACTICE:** extract the detector as a pure function, feed it a fixture built to trip it, and
+assert it trips. `capQ` is the reference implementation — nine probes covering both manifest entry
+shapes, all three assertions, and the two specific patterns that produced the false greens. Its
+PASS line reports `N/N planted-bad probes REJECTED`, so the board states not merely that the
+invariant holds but that **the check for it is demonstrably alive**.
+
+**PROOF OF FORCE (2026-07-27):** reintroducing the original quote-only key pattern makes `capQ`
+FAIL with *"SELF-TEST FAILED — parser/unquoted-key did NOT reject planted bad input"*, instead of
+the PASS it used to print. The standard was verified by breaking the code, not by asserting it.

@@ -753,7 +753,25 @@ const CAPP_PREDICTED = {
   P14: 'override_maintenance declared, enforced by nothing (assertion 1) → UNWIRED',
   P15: 'view_dashboard / view_reports declared, no resource (assertion 1)',
   P16: 'view_margin / margin:read declared + confidential, enforced by no policy or RPC → derived',
+  // ── AMENDED 16 → 20 (David's ruling, 2026-07-27) ────────────────────────────────────────────
+  // capP's FIRST RUN surfaced four findings the build-plan §4 prediction did not contain. They are
+  // recorded here as PREDICTED — found by the verifier, not by review — because Phase 7's
+  // WARN→FAIL gate closes against this number and it cannot sit at a count we know is wrong.
+  // The prediction is still never edited to MATCH output; it is amended by RULING, and that
+  // distinction is the whole value of the acceptance test.
+  P17: 'assets — no policy on business_assets checks any string resolving to assets:* (capP first run)',
+  P18: 'settings — no policy on businesses checks any string resolving to settings:* (capP first run)',
+  P19: 'team — no policy on role_definitions checks any string resolving to team:*; route+tile enforce it (capP first run)',
+  P20: 'confidential-warning — 11 confidential permissions and MemberConsole has NO sensitivity-aware branch (spec §4, card N-5)',
 };
+
+/**
+ * EXPECTED-BY-DESIGN, not a finding. `deliveries.route:update` is `declared-unwired` deliberately:
+ * no route is persisted, so there is nothing to write. capP reports it as an unenforced resource,
+ * which is correct and must NOT be counted as an open gap — it closes the day route persistence
+ * ships, and until then it is held out of every bundle by R-B2/capQ.
+ */
+const CAPP_EXPECTED_BY_DESIGN = ['deliveries.route'];
 
 /**
  * ALLOWED_DIVERGENCE — REQUIRED, NOT OPTIONAL (build-plan §4). Assertion 3 would otherwise fail
@@ -892,115 +910,115 @@ function parseManifest(src) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// capQ — THE DECLARED-UNWIRED INVARIANT (David's ruling, 2026-07-27). FAILS, not WARNS.
+// capQ — THE DECLARED-UNWIRED INVARIANT + THE `member` SENTINEL. FAILS, not WARNS.
 // ════════════════════════════════════════════════════════════════════════════════
-// NO default bundle, and no role definition, may contain a `declared-unwired` string.
+// NO default bundle and no role definition may hold a `declared-unwired` string, and the
+// `member` sentinel may live in exactly one place. §7.1 filters a declared-unwired string out of
+// the Roles-page catalog while MemberConsole.tsx:651 seeds its draft from the RESOLVED SET — so a
+// held string with no chip survives every save and is UN-REMOVABLE without raw SQL.
 //
-// WHY THIS FAILS THE BUILD instead of flagging: §7.1 filters a declared-unwired string out of the
-// Roles-page catalog, and MemberConsole.tsx:651 seeds its draft from the RESOLVED SET rather than
-// the rendered chips — so a held string with no chip is submitted unchanged by every save and is
-// UN-REMOVABLE THROUGH THE UI. Seeding one does not create a tidy-up item; it creates a permanent
-// grant that costs raw SQL to undo. `override_maintenance` is the live proof: it sits in the
-// MANAGER floor and the f7ec5d67 tenant row today and no owner can take it off.
-//
-// TWO ASSERTIONS, because the authority lives in TypeScript and the enforcement lives in SQL:
-//   (a) BUNDLES   — no DEFAULT_BUNDLES entry contains a declared-unwired string.
-//   (b) THE R-B2 LIST — the `NOT IN (…)` output filter in 20260727_rbac_resource_action_flip.sql
-//       §5 must equal DECLARED_UNWIRED_PERMISSIONS exactly. SQL cannot read the TS register, so
-//       the loop closes in this direction: adding a declared-unwired string to the manifest FAILS
-//       the build until the migration's list agrees. Without (b) the hand-typed literal silently
-//       rots, which is the whole class of defect this program keeps finding.
-// The third surface — role_definitions rows and member arrays — is the same invariant asserted
-// against the DATABASE, which this verifier cannot read (F5). It is V5/V5b of that migration, and
-// their OUTPUT is pasted into the ledger row.
-function capQ(key, v) {
-  if (!isMultiTenant(v)) return SKIP('the resource:action permission model is a Cultivar multi-tenant-RLS surface.');
-
-  const manifestSrc = read('packages/shared/src/auth/permissionManifest.ts');
-  if (!manifestSrc) return FAIL('permissionManifest.ts not found — the invariant has no authority.');
-
-  // The declared-unwired set, read from the manifest source (the single authority).
-  // ⚠️ THERE ARE TWO ENTRY SHAPES and BOTH must be parsed — capQ's first run FAILED because it
-  // read only the first, which is the exact unstated-corpus defect this program keeps finding,
-  // committed by the check written to prevent it:
-  //   (A) RESOURCES seed, keyed by RESOURCE, per-verb status map:
-  //       'deliveries.route': { verbs: [...], status: { read: 'enforced', update: 'declared-unwired' } }
-  //       (honored by buildManifest():449-452 via seed.status?.[verb])
-  //   (B) flat override, keyed by the FULL PERMISSION, scalar status:
-  //       'maintenance:override': { permission: '…', status: 'declared-unwired' }
+// 🔴 THE DETECTORS ARE EXTRACTED PURE AND RUN AGAINST PLANTED BAD INPUT (STD-021, 2026-07-27).
+// This cap reported PASS TWICE on checks that were not running — first a key pattern that
+// required quotes (every unquoted resource entry invisible), then a list match truncated by a
+// parenthesis inside a comment (zero strings captured). capP had done the same before it, and a
+// close-out commit cited one of those greens as proof of correctness. An assertion never observed
+// rejecting anything is not known to be running, and a silent detector is WORSE than no detector
+// because the board shows green either way and the green is what people act on.
+export const qParseUnwired = (manifestSrc) => {
   const unwired = new Set();
-  // ⚠️ THIRD PARSER GAP, FIXED: keys appear BOTH quoted ('deliveries.route':) and UNQUOTED
-  // (deliveries:). The earlier pattern required quotes, so every unquoted resource entry was
-  // silently invisible and capQ PASSED on a manifest it had not actually read. Anchored to the
-  // 2-space indent of the object literal so it cannot match nested shapes.
+  // TWO ENTRY SHAPES, both required: quoted full-permission keys ('maintenance:override': {…})
+  // and UNQUOTED resource keys (deliveries: {…}) carrying a per-verb status map.
   for (const m of manifestSrc.matchAll(/^  '?([a-z_.:]+)'?:\s*\{[\s\S]*?^  \},/gm)) {
     const [, resource] = m;
-    // (A) per-verb status map on a resource seed
     const statusBlock = m[0].match(/status:\s*\{([^}]*)\}/);
     if (statusBlock) {
       for (const sm of statusBlock[1].matchAll(/(\w+):\s*'declared-unwired'/g)) unwired.add(`${resource}:${sm[1]}`);
     }
-    // (B) scalar status — either a flat 'resource:verb' key, or a whole resource marked unwired
     if (/status:\s*'declared-unwired'/.test(m[0])) {
-      if (resource.includes(':')) {
-        unwired.add(resource);                       // already a full permission string
-      } else {
-        for (const vm of (m[0].match(/verbs:\s*\[([^\]]*)\]/) || [, ''])[1].matchAll(/'(\w+)'/g)) {
-          unwired.add(`${resource}:${vm[1]}`);
-        }
-      }
+      if (resource.includes(':')) unwired.add(resource);
+      else for (const vm of (m[0].match(/verbs:\s*\[([^\]]*)\]/) || [, ''])[1].matchAll(/'(\w+)'/g)) unwired.add(`${resource}:${vm[1]}`);
     }
   }
-  const gaps = [];
-
-  // (a) bundles
-  for (const bundleName of ['MANAGER_DEFAULT_BUNDLE', 'STAFF_DEFAULT_BUNDLE']) {
-    const block = manifestSrc.match(new RegExp(`export const ${bundleName}: string\\[\\] = \\[([\\s\\S]*?)\\];`));
-    if (!block) { gaps.push(`${bundleName} not found — cannot assert the invariant over it.`); continue; }
+  return unwired;
+};
+export const qBundleViolations = (manifestSrc, unwired) => {
+  const out = [];
+  for (const name of ['MANAGER_DEFAULT_BUNDLE', 'STAFF_DEFAULT_BUNDLE']) {
+    const block = manifestSrc.match(new RegExp(`export const ${name}: string\\[\\] = \\[([\\s\\S]*?)\\];`));
+    if (!block) { out.push(`${name} not found — cannot assert the invariant over it.`); continue; }
     for (const pm of block[1].matchAll(/'([a-z_.]+:[a-z_]+)'/g)) {
-      if (unwired.has(pm[1])) gaps.push(`${bundleName} contains declared-unwired '${pm[1]}' — it would mint an UN-REMOVABLE grant (MemberConsole.tsx:651).`);
+      if (unwired.has(pm[1])) out.push(`${name} contains declared-unwired '${pm[1]}' — it would mint an UN-REMOVABLE grant (MemberConsole.tsx:651).`);
     }
   }
+  return out;
+};
+export const qListViolations = (flipSql, unwired) => {
+  const out = [];
+  const notIn = flipSql.match(/a\.from_perm NOT IN \(([^)]*)\)/);
+  if (!notIn) return ['the R-B2 `NOT IN (…)` output filter is missing or unparseable in the flip migration §5 — the floor rewrite would seed declared-unwired strings.'];
+  const inSql = new Set([...notIn[1].matchAll(/'([^']+)'/g)].map((x) => x[1]));
+  for (const u of unwired) if (!inSql.has(u)) out.push(`declared-unwired '${u}' is NOT in the migration's R-B2 list — the floor rewrite would seed it.`);
+  for (const q of inSql) if (!unwired.has(q)) out.push(`migration R-B2 excludes '${q}' but the manifest does not mark it declared-unwired — the list has rotted, or the status is wrong.`);
+  return out;
+};
+export const qSentinelViolations = ({ routerSrc, manifestSrc, sqlAll }) => {
+  const out = [];
+  if (/PermissionRoute permission=["']member["']/.test(routerSrc)) out.push('`member` appears in a PermissionRoute — a route needing only membership needs NO gate. Legal home: tileRegistry required_permission ONLY.');
+  if ([...manifestSrc.matchAll(/_BUNDLE[^=]*=\s*\[([\s\S]*?)\];/g)].some((b) => /'member'/.test(b[1]))) out.push('`member` appears in a default bundle — it is true by construction and must never be grantable.');
+  if (/has_permission(?:_for)?\s*\([^)]*'member'/.test(sqlAll)) out.push('`member` is checked by an RLS policy or RPC — a tautology dressed as a gate.');
+  return out;
+};
 
-  // (b) the R-B2 output filter in the flip migration must equal the manifest set
-  const flip = read('supabase/migrations/20260727_rbac_resource_action_flip.sql');
-  if (!flip) {
-    gaps.push('20260727_rbac_resource_action_flip.sql not found — the R-B2 list cannot be reconciled.');
-  } else {
-    const notIn = flip.match(/a\.from_perm NOT IN \(([^)]*)\)/);
-    if (!notIn) {
-      gaps.push('the R-B2 `NOT IN (…)` output filter is missing from the flip migration §5 — the floor rewrite would seed declared-unwired strings.');
-    } else {
-      const inSql = new Set([...notIn[1].matchAll(/'([^']+)'/g)].map((x) => x[1]));
-      for (const u of unwired) if (!inSql.has(u)) gaps.push(`declared-unwired '${u}' is NOT in the migration's R-B2 list — the floor rewrite would seed it.`);
-      for (const q of inSql) if (!unwired.has(q)) gaps.push(`migration R-B2 excludes '${q}' but the manifest does not mark it declared-unwired — the list has rotted, or the status is wrong.`);
-    }
+// Each probe feeds a detector input ENGINEERED TO BE REJECTED. A clean return means the detector
+// is dead. The two parser probes are the specific gaps that produced the two false greens.
+const Q_PROBES = [
+  ['parser/unquoted-key', () => qParseUnwired("  deliveries: {\n    verbs: ['read'],\n    status: { read: 'declared-unwired' },\n  },").size > 0],
+  ['parser/quoted-key',   () => qParseUnwired("  'maintenance:override': {\n    status: 'declared-unwired',\n  },").size > 0],
+  ['bundles',             () => qBundleViolations("export const MANAGER_DEFAULT_BUNDLE: string[] = [\n  'planted:bad',\n];", new Set(['planted:bad'])).length > 0],
+  ['r-b2/missing-string', () => qListViolations("AND a.from_perm NOT IN ('other:thing')", new Set(['planted:bad'])).length > 0],
+  ['r-b2/rotted-entry',   () => qListViolations("AND a.from_perm NOT IN ('planted:bad')", new Set()).length > 0],
+  ['r-b2/unparseable',    () => qListViolations('no filter here at all', new Set()).length > 0],
+  ['sentinel/route',      () => qSentinelViolations({ routerSrc: '<PermissionRoute permission="member" />', manifestSrc: '', sqlAll: '' }).length > 0],
+  ['sentinel/bundle',     () => qSentinelViolations({ routerSrc: '', manifestSrc: "export const X_BUNDLE: string[] = [\n  'member',\n];", sqlAll: '' }).length > 0],
+  ['sentinel/policy',     () => qSentinelViolations({ routerSrc: '', manifestSrc: '', sqlAll: "has_permission(business_id, 'member')" }).length > 0],
+];
+
+function capQ(key, v) {
+  if (!isMultiTenant(v)) return SKIP('the resource:action permission model is a Cultivar multi-tenant-RLS surface.');
+
+  // SELF-TEST FIRST — if a detector cannot reject planted bad input, nothing it says about the
+  // real input means anything, so capQ fails BEFORE it reports on the real input.
+  const dead = Q_PROBES.filter(([, run]) => { try { return !run(); } catch { return true; } }).map(([n]) => n);
+  if (dead.length) {
+    return FAIL(
+      `capQ SELF-TEST FAILED — ${dead.length} detector(s) did NOT reject planted bad input: ${dead.join(', ')}. ` +
+      `The invariant is NOT being checked and any green from it is false.`,
+      dead.map((n) => `probe '${n}' returned clean against input engineered to be rejected — that detector is not running.`),
+    );
   }
 
-  // (c) THE `member` SENTINEL IS CONFINED TO tileRegistry (David's ruling, 2026-07-27).
-  // It returns true by construction after the owner check, so anywhere it could be GRANTED or
-  // ENFORCED it is a lie: in an array it reads as a capability, in a policy or route it is a
-  // tautology dressed as a gate. Exactly one legal home.
-  const SENTINEL = /'member'/;
-  const confined = [
-    ['packages/cultivar-os/src/router.tsx', 'a PermissionRoute — a route needing only membership needs NO gate'],
-    ['packages/shared/src/auth/permissionManifest.ts', 'a default bundle / the model'],
+  const manifestSrc = read('packages/shared/src/auth/permissionManifest.ts');
+  if (!manifestSrc) return FAIL('permissionManifest.ts not found — the invariant has no authority.');
+  const flipSql = read('supabase/migrations/20260727_rbac_resource_action_flip.sql');
+  if (!flipSql) return FAIL('20260727_rbac_resource_action_flip.sql not found — the R-B2 list cannot be reconciled.');
+
+  const unwired = qParseUnwired(manifestSrc);
+  const gaps = [
+    ...qBundleViolations(manifestSrc, unwired),
+    ...qListViolations(flipSql, unwired),
+    ...qSentinelViolations({
+      routerSrc: read('packages/cultivar-os/src/router.tsx') || '',
+      manifestSrc,
+      sqlAll: concatSql(v.migrationsDir),
+    }),
   ];
-  for (const [file, what] of confined) {
-    const src = read(file) || '';
-    // the manifest legitimately DEFINES the sentinel; only a bundle/model USE is illegal
-    const offending = file.endsWith('permissionManifest.ts')
-      ? [...src.matchAll(/_BUNDLE[^=]*=\s*\[([\s\S]*?)\];/g)].some((b) => SENTINEL.test(b[1]))
-      : new RegExp(`PermissionRoute permission=["']member["']`).test(src);
-    if (offending) gaps.push(`\`member\` appears in ${what} (${file}) — it is true by construction and must never be grantable or enforceable. Legal home: tileRegistry required_permission ONLY.`);
-  }
-  const sqlAll = concatSql(v.migrationsDir);
-  if (/has_permission(?:_for)?\s*\([^)]*'member'/.test(sqlAll)) {
-    gaps.push('`member` is checked by an RLS policy or RPC — a tautology dressed as a gate. Legal home: tileRegistry required_permission ONLY.');
-  }
 
   if (gaps.length) return FAIL(`declared-unwired invariant BROKEN — ${gaps.length} violation(s).`, gaps);
-  return PASS(`declared-unwired invariant holds — ${unwired.size} string(s) [${[...unwired].sort().join(', ')}] absent from both bundles and reconciled with the migration's R-B2 list; \`member\` sentinel confined to tileRegistry.`);
+  return PASS(
+    `declared-unwired invariant holds — ${unwired.size} string(s) [${[...unwired].sort().join(', ')}] absent from both bundles ` +
+    `and reconciled with the migration's R-B2 list; \`member\` sentinel confined to tileRegistry. ` +
+    `${Q_PROBES.length}/${Q_PROBES.length} planted-bad probes REJECTED — the detectors are demonstrably running.`,
+  );
 }
 
 function capP(key, v) {
@@ -1072,11 +1090,19 @@ function capP(key, v) {
   const A1_PREDICTED = {
     service_offerings: 'P8', inventory_ledger: 'P9', tax_rate: 'P10', audit_log: 'P11',
     deliveries: 'P4', pmi: 'P5', campaigns: 'P3',
+    // 2026-07-27 — the four capP's first run found that §4 had not predicted, promoted to
+    // P17-P20 by David's ruling so the acceptance diff reconciles against the amended 20.
+    assets: 'P17', settings: 'P18', team: 'P19',
   };
   for (const r of [...unenforcedResources].sort()) {
     // Rule 3: a dotted sub-resource has no table of its own. If its PARENT is already flagged,
     // reporting it again states one fact twice — the STD-011 defect, in a verifier.
     if (r.includes('.') && unenforcedResources.has(r.split('.')[0])) continue;
+    // EXPECTED BY DESIGN — reported, but never counted as an open gap (see CAPP_EXPECTED_BY_DESIGN).
+    if (CAPP_EXPECTED_BY_DESIGN.includes(r)) {
+      FLAG(`BY-DESIGN:${r}`, `assertion 1 — resource '${r}': unenforced BY DESIGN. Its only write verb is declared-unwired (nothing persists a route), so there is nothing to gate. Held out of every bundle by R-B2/capQ; closes when route persistence ships.`);
+      continue;
+    }
     const id = A1_PREDICTED[r] ?? `EXTRA:${r}`;
     FLAG(id, `assertion 1 — resource '${r}': no policy on ${RESOURCE_GATES[r] ?? '(no table)'} checks any string that resolves to ${r}:* (membership-only or owner-only gate). The manifest names it; nothing enforces the name.`);
   }
@@ -1183,7 +1209,7 @@ function capP(key, v) {
   const confidential = Object.entries(model).filter(([, e]) => e.sensitivity === 'confidential').map(([p]) => p);
   const hasHardWarning = /sensitivit|confidential|exposes your/i.test(console_);
   if (confidential.length && !hasHardWarning) {
-    FLAG('EXTRA:confidential-warning', `assertion 6 — ${confidential.length} confidential permissions (${[...new Set(confidential.map((p) => p.split(':')[0]))].join(', ')}) and MemberConsole.tsx has NO sensitivity-aware branch: granting cost/margin/wage access shows the same bland confirm as any other pill. This is the live defect spec §4 names.`);
+    FLAG('P20', `assertion 6 — ${confidential.length} confidential permissions (${[...new Set(confidential.map((p) => p.split(':')[0]))].join(', ')}) and MemberConsole.tsx has NO sensitivity-aware branch: granting cost/margin/wage access shows the same bland confirm as any other pill. This is the live defect spec §4 names.`);
   }
 
   // ── the acceptance diff: predicted vs emitted ─────────────────────────────────
@@ -1195,7 +1221,7 @@ function capP(key, v) {
   const gaps = flags
     .sort((a, x) => a.id.localeCompare(x.id))
     .map((f) => `[${f.id}] ${f.text}`);
-  gaps.push(`ACCEPTANCE DIFF — predicted 16 · matched ${matched.length} · missing ${missing.length}${missing.length ? ` (${missing.join(', ')})` : ''} · EXTRA ${extra.length}${extra.length ? ` (${extra.map((e) => e.slice(6)).join(', ')})` : ''}. The prediction is NOT edited to match output — a difference is DAVID'S call.`);
+  gaps.push(`ACCEPTANCE DIFF — predicted ${Object.keys(CAPP_PREDICTED).length} · matched ${matched.length} · missing ${missing.length}${missing.length ? ` (${missing.join(', ')})` : ''} · EXTRA ${extra.length}${extra.length ? ` (${extra.map((e) => e.slice(6)).join(', ')})` : ''}. The prediction is NOT edited to match output — a difference is DAVID'S call.`);
   if (deliberate.length) {
     gaps.push(`REPORTED, NOT A VIOLATION (R1) — create-without-read grants for the Roles-page affordance: ${deliberate.join(', ')}. STAFF takes orders and cannot browse them; the page must name it as a deliberate choice, never a silent asymmetry.`);
   }
