@@ -178,6 +178,14 @@ CREATE POLICY customers_member_update ON public.customers FOR UPDATE TO authenti
   USING (public.is_active_member(business_id) AND public.has_permission(business_id, 'customers:update'))
   WITH CHECK (public.is_active_member(business_id) AND public.has_permission(business_id, 'customers:update'));
 
+-- ── 1.10b service_offerings — the sell-side menu. ADDED 2026-07-27: the plan named this and the
+-- first draft omitted it (capP P8 caught it). `service_offerings_member` gated on membership ALONE,
+-- so `service_offerings:read` was a declared string nothing enforced. Writes stay owner-only —
+-- service_offerings:create/update remain declared-unwired until a member-authored path exists.
+DROP POLICY IF EXISTS service_offerings_member ON public.service_offerings;
+CREATE POLICY service_offerings_member ON public.service_offerings FOR SELECT TO authenticated
+  USING (public.is_active_member(business_id) AND public.has_permission(business_id, 'service_offerings:read'));
+
 -- ── 1.11-1.14 the order-read family — view_orders → the four read strings ────────────────────
 -- SELECT-only, exactly as today: every order WRITE goes through the service-key api layer
 -- (submit.ts), so no member write policy is added here and none is removed.
@@ -509,7 +517,21 @@ UPDATE public.role_definitions rd
            FROM jsonb_array_elements_text(rd.permissions) AS legacy(s)
            JOIN public.permission_aliases a ON a.implies_perm = legacy.s
           WHERE a.from_perm LIKE '%:%'
-            AND a.from_perm NOT IN ('maintenance:override', 'deliveries.route:update')
+            AND a.from_perm NOT IN (
+              -- R-B2, reconciled with permissionManifest.ts by capQ assertion b. Every string is
+              -- `declared-unwired`: DECLARED by the model, enforced by NOTHING, and therefore
+              -- un-removable if it ever lands in an array. capQ FAILS if this list and the
+              -- manifest disagree in either direction.
+              'maintenance:override',        -- R6: nothing blocks on an overdue PMI
+              'deliveries.route:update',     -- no route is persisted; nothing writes one
+              'deliveries:create',           -- only INSERT is service-key: customers/create.ts:101
+              'campaigns:create',            -- campaigns is owner-only; no member policy at all
+              'service_offerings:create',    -- writes owner-only; §1.10b gates the READ only
+              'service_offerings:update',
+              'team:create',                 -- role_definitions writes go through the funnel
+              'team:update',
+              'team:delete'
+            )
        ), '[]'::jsonb)
  WHERE rd.business_id IS NULL
    AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(rd.permissions) AS x(s)

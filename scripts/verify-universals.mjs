@@ -929,7 +929,11 @@ function capQ(key, v) {
   //   (B) flat override, keyed by the FULL PERMISSION, scalar status:
   //       'maintenance:override': { permission: '…', status: 'declared-unwired' }
   const unwired = new Set();
-  for (const m of manifestSrc.matchAll(/'([a-z_.:]+)':\s*\{[\s\S]*?\n  \}/g)) {
+  // ⚠️ THIRD PARSER GAP, FIXED: keys appear BOTH quoted ('deliveries.route':) and UNQUOTED
+  // (deliveries:). The earlier pattern required quotes, so every unquoted resource entry was
+  // silently invisible and capQ PASSED on a manifest it had not actually read. Anchored to the
+  // 2-space indent of the object literal so it cannot match nested shapes.
+  for (const m of manifestSrc.matchAll(/^  '?([a-z_.:]+)'?:\s*\{[\s\S]*?^  \},/gm)) {
     const [, resource] = m;
     // (A) per-verb status map on a resource seed
     const statusBlock = m[0].match(/status:\s*\{([^}]*)\}/);
@@ -973,8 +977,30 @@ function capQ(key, v) {
     }
   }
 
+  // (c) THE `member` SENTINEL IS CONFINED TO tileRegistry (David's ruling, 2026-07-27).
+  // It returns true by construction after the owner check, so anywhere it could be GRANTED or
+  // ENFORCED it is a lie: in an array it reads as a capability, in a policy or route it is a
+  // tautology dressed as a gate. Exactly one legal home.
+  const SENTINEL = /'member'/;
+  const confined = [
+    ['packages/cultivar-os/src/router.tsx', 'a PermissionRoute — a route needing only membership needs NO gate'],
+    ['packages/shared/src/auth/permissionManifest.ts', 'a default bundle / the model'],
+  ];
+  for (const [file, what] of confined) {
+    const src = read(file) || '';
+    // the manifest legitimately DEFINES the sentinel; only a bundle/model USE is illegal
+    const offending = file.endsWith('permissionManifest.ts')
+      ? [...src.matchAll(/_BUNDLE[^=]*=\s*\[([\s\S]*?)\];/g)].some((b) => SENTINEL.test(b[1]))
+      : new RegExp(`PermissionRoute permission=["']member["']`).test(src);
+    if (offending) gaps.push(`\`member\` appears in ${what} (${file}) — it is true by construction and must never be grantable or enforceable. Legal home: tileRegistry required_permission ONLY.`);
+  }
+  const sqlAll = concatSql(v.migrationsDir);
+  if (/has_permission(?:_for)?\s*\([^)]*'member'/.test(sqlAll)) {
+    gaps.push('`member` is checked by an RLS policy or RPC — a tautology dressed as a gate. Legal home: tileRegistry required_permission ONLY.');
+  }
+
   if (gaps.length) return FAIL(`declared-unwired invariant BROKEN — ${gaps.length} violation(s).`, gaps);
-  return PASS(`declared-unwired invariant holds — ${unwired.size} string(s) [${[...unwired].join(', ')}], absent from both bundles and reconciled with the migration's R-B2 list.`);
+  return PASS(`declared-unwired invariant holds — ${unwired.size} string(s) [${[...unwired].sort().join(', ')}] absent from both bundles and reconciled with the migration's R-B2 list; \`member\` sentinel confined to tileRegistry.`);
 }
 
 function capP(key, v) {

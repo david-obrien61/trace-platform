@@ -58,6 +58,27 @@
 export type PermissionStatus = 'enforced' | 'declared-unwired' | 'derived';
 
 /**
+ * THE `member` SENTINEL — a DECLARED ABSENCE OF REQUIREMENT (David, 2026-07-27).
+ *
+ * Not a permission and not a status: a fourth concept alongside enforced / declared-unwired /
+ * derived. It is what R3 turned `view_dashboard` into. That string retired because it gated
+ * nothing a member lacked — but seven navigation surfaces DECLARED it, and after the flip nobody
+ * holds a retired string, so those surfaces would have VANISHED for every member. `member` says
+ * the true thing instead: this surface requires membership and nothing more.
+ *
+ * `can()` returns true for it after the owner check (BusinessProvider.tsx). Reaching `can()` at
+ * all means an active membership resolved for the business, so it is true BY CONSTRUCTION.
+ *
+ * 🔴 THEREFORE IT MUST NEVER BE GRANTABLE OR ENFORCEABLE. It may appear in EXACTLY ONE PLACE —
+ * `tileRegistry.ts` `required_permission`. Never in a PermissionRoute (a route needing only
+ * membership needs no gate — leave it ungated rather than gate it on a tautology). Never in an
+ * RLS policy, an RPC, a role definition, or a default bundle: a string that returns true by
+ * construction, sitting in a permissions array, reads as a granted capability and is not one.
+ * Enforced by capQ assertion (c).
+ */
+export const MEMBERSHIP_SENTINEL = 'member';
+
+/**
  * How confidential a READ is (spec §4).
  *   operational  — granted to MANAGER by default.
  *   confidential — an owner GRANT, off by default; granting it shows the HARD warning.
@@ -203,7 +224,8 @@ const RESOURCES: Record<string, EntrySeed> = {
   customers: {
     verbs: ['read', 'create', 'update'],
     sensitivity: 'operational',
-    status: { read: 'enforced', create: 'declared-unwired', update: 'declared-unwired' },
+    // create/update FLIPPED declared-unwired → enforced 2026-07-27: the flip added customers_member_insert / _update gated on these strings (N5, David's ruling). Wired in the same pass that grants them.
+    status: { read: 'enforced', create: 'enforced', update: 'enforced' },
     note:
       'R2: no delete verb — no tombstone (the `status` column is lifecycle, not a ' +
       'tombstone; A3). A future customers:delete is a scoped build gated on first ' +
@@ -248,6 +270,12 @@ const RESOURCES: Record<string, EntrySeed> = {
   deliveries: {
     verbs: ['read', 'create', 'update'],
     sensitivity: 'operational',
+    // create = DECLARED-UNWIRED (2026-07-27 — found by capP's P4 on the BUILD 2 run, not
+    // predicted). The flip deliberately adds NO member INSERT policy: the only INSERT in the
+    // codebase is server-side under the service key (api/customers/create.ts:101), which bypasses
+    // RLS entirely. So the string gates nothing and must not be grantable — held out of every
+    // bundle by R-B2/capQ. It becomes enforced the day a member-authored create path exists.
+    status: { read: 'enforced', update: 'enforced', create: 'declared-unwired' },
     note:
       'R2: no delete verb — no tombstone (the `status` column is lifecycle: ' +
       'pending/delivered; A3). Table is membership-only today while the ROUTE checks a ' +
@@ -298,7 +326,8 @@ const RESOURCES: Record<string, EntrySeed> = {
   tax_rate: {
     verbs: ['read', 'update'],
     sensitivity: 'operational',
-    status: { read: 'enforced', update: 'declared-unwired' },
+    // update FLIPPED declared-unwired → enforced 2026-07-27: set_business_tax_rate gates on it (§3 of the flip) and writes ONLY config->'taxRate'.
+    status: { read: 'enforced', update: 'enforced' },
     note:
       "a single value inside business_pricing_config. The READ exists as a narrow " +
       'SECURITY DEFINER function (get_business_tax_rate, applied 2026-07-24) returning ' +
