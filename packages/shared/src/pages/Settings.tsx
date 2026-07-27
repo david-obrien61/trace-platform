@@ -244,14 +244,26 @@ export function Settings({
     if (!businessId) return;
     setSaving(true);
     setSaveMsg('');
-    // Business identity → businesses row (tax_rate is NO LONGER written here — D-40).
-    const { error } = await supabase.from('businesses').update({
-      name:     form.name.trim(),
-      phone:    normalizePhone(form.phone),   // ONE shared storage normalization (R1/R3/profile)
-      address:  form.address.trim()  || null,
-      email:    form.email.trim()    || null,
-      website:  form.website.trim()  || null,
-    }).eq('id', businessId);
+    // Business identity → the NARROW WRITER, not a direct table UPDATE (2026-07-27).
+    // A direct UPDATE only ever worked for the OWNER: `businesses` carries no member UPDATE
+    // policy, so `settings:update` would have been a route plus a Save that RLS refuses.
+    // And the one-line fix — a member UPDATE policy — would have been WORSE: RLS has no
+    // column-level restriction, so it would also permit `SET owner_id = <self>`. The RPC's
+    // column list IS the column-level policy: name/phone/address/email/website, nothing else.
+    const { data: prof } = await supabase.auth.getUser();
+    const { data: profRes, error: profErr } = await supabase.rpc('set_business_profile', {
+      p_business_id:   businessId,
+      p_actor_user_id: prof?.user?.id ?? null,
+      p_name:          form.name.trim(),
+      p_phone:         normalizePhone(form.phone),   // ONE shared storage normalization (R1/R3/profile)
+      p_address:       form.address.trim()  || null,
+      p_email:         form.email.trim()    || null,
+      p_website:       form.website.trim()  || null,
+    });
+    const refused = Array.isArray(profRes) ? profRes[0] : profRes;
+    const error = profErr ?? (refused && refused.applied === false
+      ? { message: refused.reason ?? 'Change refused' }
+      : null);
 
     // D-40: the tax RATE → config.taxRate (clobber-safe merge). BLANK = unset = "not identified"
     // (redline) — NEVER coerced to 0.0825. A non-numeric entry also stores unset (never a fabricated
