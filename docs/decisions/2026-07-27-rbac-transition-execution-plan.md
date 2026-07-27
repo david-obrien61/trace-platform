@@ -690,3 +690,99 @@ Computing the 44 from the live row at grant time rather than from this document:
 **eleven times in three days**, most recently 2026-07-26 18:02 — `manage_settings` off, three
 financial strings on. Any number written down was stale before it was written. The two funnel calls
 read the row at execution time; this document's numbers are commentary.
+
+---
+
+# 12. AMENDMENT 4 — THE PATTERN, AND STAFF'S DELIVERY WRITE (2026-07-27)
+
+## 12.1 The 20260710 re-check was already run — hypothesis confirmed (see §11.1)
+
+Review asked for a targeted re-grep of `supabase/migrations/20260710*`. **It ran one amendment
+earlier and is recorded in §11.1**: `20260710_customers_member_read.sql:63-67` writes the floor
+(`WHERE role_key IN ('OWNER','MANAGER') AND business_id IS NULL`), which is exactly the
+one-statement-two-rows signature the identical-microsecond `updated_at` implies, with STAFF
+untouched. **Provenance for `view_customers` is solved and benign.** `override_maintenance` remains
+unexplained (§11.2) and `updated_at` cannot date it.
+
+Reported as what it was: **not a scan miss — a claim made with no scan behind it.** That distinction
+matters for §12.2.
+
+## 12.2 🔴 THE PATTERN — THREE NEGATIVE CLAIMS, NONE OF WHICH NAMED ITS CORPUS
+
+Review is right that this is a family, not a third one-off. All three are **negative** claims, and
+negative claims are the dangerous ones because they license removal, retirement, and Contract.
+
+| # | Claim | What it missed | Why |
+|---|---|---|---|
+| 1 | "§2's legacy inventory is complete" | `process_orders`, `manage_team` — live in member arrays | The inventory was built from **CODE** and never checked against **DATA** |
+| 2 | "`manage_orders` gates nothing" (two prior analyses) | 4 enforced sites in `submit.ts` | The scan covered RLS + routes + registry, **not `packages/cultivar-os/api`** |
+| 3 | "no migration wrote the floor drift" (§9.5, mine) | `20260710_…:63-67` | **No scan at all.** Asserted from an absence of expectation |
+
+**#1 and #2 were scans with unstated coverage. #3 was worse — an assertion with no search behind
+it.** Naming it as the same class would be generous in the wrong direction.
+
+**The rule this earns — proposed, unnumbered (confirm the OP sequence before assigning):**
+
+> **A NEGATIVE CLAIM NAMES ITS CORPUS AND ITS METHOD, OR IT IS NOT A FINDING.**
+> "Nothing enforces X" is not assertable; "`grep -rn X` across `supabase/migrations`,
+> `packages/cultivar-os/api`, `router.tsx`, `tileRegistry.ts` and `packages/shared/src` returned N
+> hits, all read" is. A negative without a corpus is an opinion wearing a fact's clothes.
+
+**Why this is load-bearing RIGHT NOW and not a process nicety: Phase 7 CONTRACT is built entirely
+out of negative claims** — *no member holds a legacy string; no gate references one.* Contract is
+irreversible. If this project's negative claims have a 3-for-3 record of being asserted without a
+stated corpus, then **the gate on the one irreversible step is exactly the kind of claim we keep
+getting wrong.** BUILD 6's zero-checks therefore state their corpus in the migration text and run as
+catalog/grep output pasted into the ledger row — not as a sentence.
+
+## 12.3 ✅ STAFF DELIVERIES — review is right; the spec default would REVOKE live capability
+
+`deliveries_member_all [ALL]` carries no permission string, so **STAFF today can create, update and
+delete deliveries.** Granting only `deliveries:read` + `deliveries.route:read` means **the person who
+drives the route can no longer mark it delivered.**
+
+This is the identical shape to the `orders:read` finding — *a spec-derived default quietly revoking
+something a live role does today* — and consistency requires taking it the same way. Since every
+option narrows (today is unrestricted CRUD), the question is only where to land. **David's ruling
+recorded in §12.5.**
+
+## 12.4 ⚠️ THE STAFF GRANT MINTS A TENANT OVERRIDE — deliberate, recorded, not discovered later
+
+Block D1 shows **no tenant STAFF row** at `f7ec5d67` — only MANAGER. `save_role_permissions` writes
+tenant rows only (§11.3), so granting STAFF **creates** one, and from that moment **this tenant's
+STAFF permanently stops tracking the system floor.** Same one-way door the MANAGER row crossed on
+2026-07-23, and the same consequence: a later change to the shared floor will not reach it.
+
+Accepted deliberately. Recorded here so it is a decision, not a discovery. The same is already true
+of MANAGER (its tenant row exists), so after this pass **both roles at this tenant are override-
+governed and the floor is seed-only for them.**
+
+## 12.5 THE FINAL STAFF SET
+
+**RULED (David, 2026-07-27): ELEVEN.** Read + update on both delivery resources.
+
+1. `orders:create` 2. `orders:read` 3. `order_items:read` 4. `order_service_selections:read`
+5. `order_compliance_records:read` 6. `customers:read` 7. `inventory:read`
+8. `deliveries:read` 9. **`deliveries:update`** 10. `deliveries.route:read`
+11. **`deliveries.route:update`**
+
+**This is STILL a narrowing, stated plainly:** STAFF holds unrestricted CRUD on `deliveries` today;
+after the flip they hold read + update and **lose CREATE and DELETE**. A driver can complete a stop
+and resequence a route — the job as it is actually done — and can no longer invent or destroy a
+delivery. That removal is the intended half; the `deliveries:update` grant is the half that would
+otherwise have been an accidental revocation.
+
+Approved by NAME, not by cardinality (§10.4's rule, applied to itself).
+
+## 12.6 STILL OUTSTANDING
+
+1. **`rd_owner_write`** — the one query, run regardless of provenance. It answers an AC-3 question
+   that stands on its own: *can a tenant owner with a JWT write a `business_id IS NULL` floor row,
+   which would affect every tenant?* If unscoped, BUILD 1 carries the same one-line trigger close
+   as #152 §1.
+   ```sql
+   SELECT policyname, cmd, roles::text, qual, with_check
+     FROM pg_policies WHERE schemaname='public' AND tablename='role_definitions';
+   ```
+2. **Approve §10.5** — the two-call split, the 44-string MANAGER end state, `deliveries` folded into
+   the flip (BUILD 1 = 15 policy sites), and the 11-string STAFF set above.
