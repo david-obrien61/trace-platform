@@ -15,6 +15,7 @@
  * OUTPUTS      { ok, customerId, created, deliveryId?, deliveryError? } | { ok:false, error }.
  */
 import { createClient } from '@supabase/supabase-js';
+import { callerCan } from '../../../shared/src/auth/callerPermission';
 import { findOrCreateCustomer } from '../../../shared/src/business-logic/customerUpsert';
 
 const TRACE_ROUTER   = true; // [TRACE:ROUTER]   STD-003 — ON until David owner-proves
@@ -43,6 +44,29 @@ export default async function handler(req: any, res: any) {
 
   if (!businessId || !customer || !customer.first_name) {
     return res.status(400).json({ error: 'businessId and customer.first_name are required' });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 CALLER AUTHORITY — MB_D-015. ADDED 2026-07-27; THIS ENDPOINT HAD NONE.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // `businessId` above comes off the REQUEST BODY, and every write below goes through adminDb()
+  // — the SERVICE KEY, which bypasses RLS completely. Until this gate existed, anyone who could
+  // reach the URL could write a customer and a delivery into ANY tenant by naming its id: AC-3
+  // with no layer beneath it. The header of `callerPermission.ts` has stated the rule the whole
+  // time ("authority is resolved from the AUTH CONTEXT, NEVER the request body") and
+  // `orders/submit.ts` obeys it fifteen times, in this same directory.
+  //
+  // The gate is per-RESOURCE, not per-endpoint: this handler writes TWO things, so it proves
+  // authority for each. A caller who may add a customer is not thereby allowed to schedule a
+  // delivery. Owner passes either check via businesses.owner_id (callerCan tries owner first).
+  const authHeader = req.headers?.authorization;
+  if (!(await callerCan(authHeader, businessId, 'customers:create'))) {
+    console.log('[TRACE:AUTHORITY] customers/create REFUSED — caller lacks customers:create/owner', { businessId });
+    return res.status(403).json({ error: 'Not authorized to create a customer for this business', code: 'FORBIDDEN' });
+  }
+  if (delivery && !(await callerCan(authHeader, businessId, 'deliveries:create'))) {
+    console.log('[TRACE:AUTHORITY] customers/create REFUSED delivery — caller lacks deliveries:create/owner', { businessId });
+    return res.status(403).json({ error: 'Not authorized to schedule a delivery for this business', code: 'FORBIDDEN_DELIVERY' });
   }
 
   if (TRACE_ROUTER) console.log('[TRACE:ROUTER] customer create — businessId:', businessId, 'hasEmail:', !!customer.email, 'source:', source ?? 'ocr-invoice', 'withDelivery:', !!delivery);

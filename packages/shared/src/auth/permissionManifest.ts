@@ -270,12 +270,15 @@ const RESOURCES: Record<string, EntrySeed> = {
   deliveries: {
     verbs: ['read', 'create', 'update'],
     sensitivity: 'operational',
-    // create = DECLARED-UNWIRED (2026-07-27 — found by capP's P4 on the BUILD 2 run, not
-    // predicted). The flip deliberately adds NO member INSERT policy: the only INSERT in the
-    // codebase is server-side under the service key (api/customers/create.ts:101), which bypasses
-    // RLS entirely. So the string gates nothing and must not be grantable — held out of every
-    // bundle by R-B2/capQ. It becomes enforced the day a member-authored create path exists.
-    status: { read: 'enforced', update: 'enforced', create: 'declared-unwired' },
+    // create = SERVER-ENFORCED (§3's "✓ server" shape), RECLASSIFIED 2026-07-27 in the commit
+    // that earned it. It was briefly `declared-unwired` — correctly, because the sole INSERT is
+    // service-key (api/customers/create.ts) and NOTHING checked the caller. That was rider A's
+    // bad branch: not a status question but an UNGATED WRITE PATH. Now `customers/create` calls
+    // callerCan(auth, businessId, 'deliveries:create') before the insert, so the verb is enforced
+    // INSIDE THE FUNCTION rather than at the table — which is exactly what `server` declares.
+    // There is still no member INSERT policy, and that remains deliberate.
+    server: ['create'],
+    status: { read: 'enforced', update: 'enforced', create: 'enforced' },
     note:
       'R2: no delete verb — no tombstone (the `status` column is lifecycle: ' +
       'pending/delivered; A3). Table is membership-only today while the ROUTE checks a ' +

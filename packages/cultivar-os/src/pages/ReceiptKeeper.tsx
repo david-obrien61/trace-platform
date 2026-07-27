@@ -521,9 +521,17 @@ export function ReceiptKeeper() {
       if (scheduleDelivery && TRACE_DELIVERY) console.log('[TRACE:DELIVERY] scheduling in same call — date:', custBody.delivery.deliveryDate ?? '(none)', 'serviceType:', serviceType,
         'addr:', [custBody.delivery.address.line1, custBody.delivery.address.city, custBody.delivery.address.state, custBody.delivery.address.zip].filter(Boolean).join(', ') || '(none)');
       try {
+        // Attach the caller's Bearer token — the server now PROVES the caller before any
+        // service-key write (MB_D-015). Without this header the request is refused 403, which is
+        // the correct behaviour: an unidentified caller has no authority over a tenant.
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
         const cRes  = await fetch('/api/customers/create', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify(custBody),
         });
         const cData = await cRes.json().catch(() => ({}));

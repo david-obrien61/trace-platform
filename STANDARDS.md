@@ -1,5 +1,5 @@
 # STANDARDS.md — TRACE Engineering Standards
-# Version: 2.6
+# Version: 2.7
 # Created: 2026-06-04
 # Last updated: 2026-07-27 (STD-021 + STD-022 added + ACTIVATED — the EVIDENCE pair. STD-021: a NEGATIVE claim names its corpus and its method or it is not a finding. STD-022: a verifier assertion ships with a PLANTED-BAD probe it must reject in the same pass. Scars: three negative claims asserted with unstated or absent corpora (§2's legacy inventory built from code and never checked against data; `manage_orders` "gates nothing" twice, from scans that never read the api layer; "no migration wrote the floor drift", asserted with no scan at all), and THREE FALSE GREENS from verifier checks that were not running — two of them reported PASS and one was cited in a close-out commit as proof of correctness. David's ruling 2026-07-27.)
 # Owner: David O'Brien / TRACE Enterprises
@@ -1305,8 +1305,19 @@ clean, the check FAILS on that alone, before it reports anything about the real 
 danger: a silent detector is *worse* than no detector, because the board shows green either way and
 the green is the thing people act on.
 
+**BOTH DIRECTIONS ARE REQUIRED (amended 2026-07-27, David — capK found the reason).** An
+assertion ships with a planted-BAD probe it must **reject** AND a planted-GOOD probe it must
+**accept**. Without the second, *a cap that flags everything self-tests green and is useless* —
+it would satisfy every bad probe by construction while telling you nothing. capK's
+`planted-good-endpoint` feeds it `orders/submit.ts`'s exact shape and requires a clean verdict.
+
+**COMMENTS ARE STRIPPED BEFORE DETECTION (same amendment).** A doc block naming the gate function
+must not count as the gate. `callerPermission.ts` documents `callerHoldsPermission` in prose;
+without stripping, any file quoting that doctrine would read as compliant while gating nothing —
+the tech-debt #61 class (a comment contradicting its repo), turned into a false green.
+
 **IN PRACTICE:** extract the detector as a pure function, feed it a fixture built to trip it, and
-assert it trips. `capQ` is the reference implementation — nine probes covering both manifest entry
+assert it trips; then feed it a fixture built to pass, and assert it does not trip. `capQ` is the reference implementation — nine probes covering both manifest entry
 shapes, all three assertions, and the two specific patterns that produced the false greens. Its
 PASS line reports `N/N planted-bad probes REJECTED`, so the board states not merely that the
 invariant holds but that **the check for it is demonstrably alive**.

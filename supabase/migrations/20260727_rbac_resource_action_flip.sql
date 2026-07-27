@@ -524,7 +524,6 @@ UPDATE public.role_definitions rd
               -- manifest disagree in either direction.
               'maintenance:override',        -- R6: nothing blocks on an overdue PMI
               'deliveries.route:update',     -- no route is persisted; nothing writes one
-              'deliveries:create',           -- only INSERT is service-key: customers/create.ts:101
               'campaigns:create',            -- campaigns is owner-only; no member policy at all
               'service_offerings:create',    -- writes owner-only; §1.10b gates the READ only
               'service_offerings:update',

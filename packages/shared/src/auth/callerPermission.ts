@@ -81,6 +81,29 @@ export async function callerIsBusinessOwner(
 }
 
 /**
+ * THE ONE CALLER-AUTHORITY GATE for a service-key handler: is the caller the OWNER of this
+ * business, or a member holding `perm`? Owner FIRST, because owner authority comes from
+ * `businesses.owner_id` and must not depend on the owner's member-row array (which may pre-date
+ * a newly-minted permission — the 6-string fiction is exactly that failure).
+ *
+ * EXTRACTED 2026-07-27 (§6 r8 — the same OPERATION in one place). `submit.ts` had this shape
+ * inline; eight more endpoints need it, and eight hand-written copies of an authority check is
+ * eight chances to write one of them wrong. Use THIS, not a local re-implementation.
+ *
+ * 🔴 IT IS THE ONLY THING BETWEEN A SERVICE-KEY WRITE AND A FORGED `businessId`. The service key
+ * bypasses RLS, so no policy runs on that path — call this BEFORE the write, and refuse loudly
+ * when it returns false. Enforced mechanically by capK.
+ */
+export async function callerCan(
+  authHeader: string | undefined,
+  businessId: string,
+  perm: string,
+): Promise<boolean> {
+  if (await callerIsBusinessOwner(authHeader, businessId)) return true;
+  return callerHoldsPermission(authHeader, businessId, perm);
+}
+
+/**
  * Resolve the CALLER's auth.uid() from the Bearer token (or null if no/invalid token). Used to
  * ATTRIBUTE a privileged act (e.g. a price-override give) to the acting user, server-side — never
  * a client-posted id. Only call after an authority gate (callerIsBusinessOwner / callerHoldsPermission)

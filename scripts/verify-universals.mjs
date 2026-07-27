@@ -972,10 +972,16 @@ const CAPK_EXEMPT = [
 // Detectors extracted PURE so STD-022 probes can run them against planted bad input.
 export const kUsesServiceKey = (src) => /SUPABASE_SERVICE_KEY|adminDb\s*\(\s*\)/.test(src);
 export const kHasCallerGate = (src) =>
-  /callerHoldsPermission|callerIsBusinessOwner|resolveCallerUid/.test(src) ||
+  /callerCan\s*\(|callerHoldsPermission|callerIsBusinessOwner|resolveCallerUid/.test(src) ||
   /headers\s*\??\.\s*authorization/i.test(src) ||
   /auth\s*\.\s*getUser\s*\(/.test(src);
-/** Tenant id read off the request rather than resolved from the token — the forgeable surface. */
+/**
+ * ⚠️ BEST-EFFORT ANNOTATION, NOT THE ASSERTION. It reports whether a tenant id is visibly read
+ * off `req.body`/`req.query` on one line, and it MISSES indirection — `campaigns.ts` destructures
+ * `businessId` from an intermediate `body` variable and is not detected here. THE THING THAT
+ * FAILS THE BUILD IS `kHasCallerGate`, which flags campaigns correctly. Do not read this
+ * annotation as the finding; it is colour on the finding.
+ */
 export const kTenantFromRequest = (src) =>
   src.split('\n').some((l) => /req\.(body|query)/.test(l) &&
     /\b(businessId|business_id|nurseryId|nursery_id|shopId|shop_id)\b/.test(l));
@@ -992,6 +998,8 @@ const K_PROBES = [
     const bad = "const db = adminDb();\nconst { businessId } = req.body;\nawait db.from('x').insert({});";
     return kUsesServiceKey(bad) && !kHasCallerGate(bad) && kTenantFromRequest(bad);
   }],
+  ['detects-shared-callerCan', () => kHasCallerGate('if (!(await callerCan(auth, businessId, "customers:create"))) return res.status(403).json({});') === true],
+  ['comment-is-not-a-gate',    () => kHasCallerGate(stripJsComments('// this endpoint should use callerHoldsPermission one day\nconst db = adminDb();')) === false],
   ['planted-good-endpoint',    () => {
     // orders/submit's shape. MUST NOT be rejected — a cap that flags everything is not a cap.
     const good = "const db = adminDb();\nconst { businessId } = req.body;\nif (!(await callerIsBusinessOwner(req.headers?.authorization, businessId))) return res.status(403).json({});";
