@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { authHeaders } from '@trace/shared/auth';
 import { useNavigate } from 'react-router-dom';
 import { useBusinessContext } from '@trace/shared/context';
 import { supabase } from '../lib/supabase';
@@ -95,7 +96,7 @@ export function SocialSetup() {
     try {
       const res = await fetch('/api/social/enable', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
         body:    JSON.stringify({ business_id: businessId!, advert_channels: channels, cadence }),
       });
 
