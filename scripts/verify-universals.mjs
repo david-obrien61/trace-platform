@@ -1053,6 +1053,73 @@ function capK(key, v) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
+// capC — EVERY PRICING-CONFIG FIELD IS CLASSIFIED. NO DEFAULT. FAILS, not WARNS.
+// ════════════════════════════════════════════════════════════════════════════════
+// Every top-level key of `CostToProduceConfig` must appear in EITHER
+// PRICING_RECIPE_PROTECTED_PATHS or PRICING_RECIPE_NOT_CONFIDENTIAL. Neither = FAIL.
+//
+// 🔴 WHY EXHAUSTIVE AND NOT ENUMERATIVE (David, 2026-07-27). A protected list ALONE says what IS
+// confidential and is SILENT about everything else — so the next field added to the config is
+// unprotected BY DEFAULT and announces nothing. That is the drift the bundle-as-source pattern
+// closed, appearing in a second place within the same day. Two lists make the classification
+// total: a new field cannot enter without its author deciding, once, in public.
+//
+// The list this guards was itself wrong 3 of 4 until 2026-07-27 — it named `baselineMargin`,
+// `referencePrice` and `markup`, of which only the first two exist AND ONLY ON
+// `CostToProduceResult`, the computed OUTPUT, rather than on `CostToProduceConfig`, the stored
+// INPUT being protected. A guard written from the shape of the ANSWER. This cap is the mechanical
+// answer to that: it reads the TYPE.
+export const cParseConfigKeys = (src) => {
+  const m = src.match(/export interface CostToProduceConfig \{([\s\S]*?)\n\}/);
+  if (!m) return null;
+  return [...m[1].matchAll(/^  ([a-zA-Z_][\w]*)\??:/gm)].map((x) => x[1]);
+};
+export const cClassify = (keys, protectedPaths, notConfidential) => {
+  const prot = new Set(protectedPaths.map((p) => p[0]));
+  const ok   = new Set(notConfidential);
+  return keys.filter((k) => !prot.has(k) && !ok.has(k));
+};
+
+const C_PROBES = [
+  ['parses-the-type',      () => (cParseConfigKeys('export interface CostToProduceConfig {\n  alpha: number;\n  beta?: string;\n}') || []).join() === 'alpha,beta'],
+  ['unclassified-fails',   () => cClassify(['alpha'], [['beta']], ['gamma']).length === 1],
+  ['classified-passes',    () => cClassify(['alpha', 'beta'], [['alpha']], ['beta']).length === 0],
+  ['nested-path-counts',   () => cClassify(['margin'], [['margin', 'baseline']], []).length === 0],
+];
+
+function capC(key, v) {
+  if (!isMultiTenant(v)) return SKIP('the pricing recipe is a Cultivar cost-model surface.');
+
+  const dead = C_PROBES.filter(([, run]) => { try { return !run(); } catch { return true; } }).map(([n]) => n);
+  if (dead.length) return FAIL(`capC SELF-TEST FAILED — ${dead.join(', ')} did not behave on planted input; any green is false.`, dead);
+
+  const typeSrc  = read('packages/shared/src/business-logic/CostToProduce.ts');
+  const fieldSrc = read('packages/shared/src/business-logic/pricingRecipeFields.ts');
+  if (!typeSrc || !fieldSrc) return FAIL('CostToProduce.ts or pricingRecipeFields.ts not found — the classification has no source.');
+
+  const keys = cParseConfigKeys(typeSrc);
+  if (!keys) return FAIL('CostToProduceConfig interface not found — cannot enumerate the fields to classify.');
+
+  const protectedPaths = [...fieldSrc.matchAll(/\[([^\]]*?)\],\s*\/\//g)]
+    .map((m) => [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1])).filter((p) => p.length);
+  const notConfidential = [...fieldSrc.matchAll(/\{ key: '([^']+)'/g)].map((m) => m[1]);
+  const liveOnly = (fieldSrc.match(/PRICING_RECIPE_LIVE_ONLY_KEYS: string\[\] = \[([^\]]*)\]/) || [, ''])[1];
+  const allKeys = [...new Set([...keys, ...[...liveOnly.matchAll(/'([^']+)'/g)].map((x) => x[1])])];
+
+  const unclassified = cClassify(allKeys, protectedPaths, notConfidential);
+  if (unclassified.length) {
+    return FAIL(
+      `PRICING CONFIG: ${unclassified.length} field(s) classified as NEITHER confidential nor not-confidential.`,
+      unclassified.map((k) => `'${k}' is a key of CostToProduceConfig (or a known live-only key) and appears in neither PRICING_RECIPE_PROTECTED_PATHS nor PRICING_RECIPE_NOT_CONFIDENTIAL. A field with no classification is unprotected BY DEFAULT and silent about it — decide, in pricingRecipeFields.ts.`),
+    );
+  }
+  return PASS(
+    `every pricing-config field is classified (${allKeys.length} keys: ${protectedPaths.length} protected paths · ${notConfidential.length} explicitly not-confidential). ` +
+    `${C_PROBES.length}/${C_PROBES.length} planted probes behaved — a new unclassified field WOULD fail.`,
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
 // capQ — THE DECLARED-UNWIRED INVARIANT + THE `member` SENTINEL. FAILS, not WARNS.
 // ════════════════════════════════════════════════════════════════════════════════
 // NO default bundle and no role definition may hold a `declared-unwired` string, and the
@@ -1427,6 +1494,7 @@ const CAPS = [
   ['g', 'Factory-reset deletes the tenant override → shared floor unchanged (D-010)', capG],
   ['p', 'resource:action permission model — manifest/policies/routes/API agree (spec v3 §7) [WARN]', capP],
   ['q', 'declared-unwired invariant — no bundle or role definition may hold an un-removable string', capQ],
+  ['c', 'every pricing-config field is CLASSIFIED confidential or not — no default', capC],
   ['k', 'SERVICE-KEY handlers prove the caller — no RLS-bypassing write on an unproven identity (MB_D-015)', capK],
 ];
 

@@ -47,8 +47,34 @@ export const PRICING_RECIPE_PROTECTED_PATHS: string[][] = [
   ['locations'],            // the cost structure itself
 ];
 
+/**
+ * EXPLICITLY NOT CONFIDENTIAL — classified, never defaulted (David, 2026-07-27).
+ *
+ * 🔴 THE POINT OF THIS LIST IS THAT IT EXISTS. A protected list alone is ENUMERATIVE: it says
+ * what IS confidential and is silent about everything else, so the next field added to
+ * `CostToProduceConfig` is unprotected BY DEFAULT and says nothing about it. That is the drift
+ * the bundle-as-source pattern closed, in a second place.
+ *
+ * With both lists, classification is EXHAUSTIVE: capC fails when a top-level key of the type
+ * appears in neither. A new field cannot be added silently — its author must decide, once, in
+ * public. No default, in either direction.
+ */
+export const PRICING_RECIPE_NOT_CONFIDENTIAL: Array<{ key: string; reason: string }> = [
+  { key: 'version',     reason: 'schema version of the config blob — structural, carries no business fact.' },
+  { key: 'unitLabel',   reason: "the noun the business sells ('plant', 'customer-month'). Vocabulary, not money; it is on every screen already." },
+  { key: 'taxRate',     reason: 'DELIBERATELY writable by tax_rate:update — the one field a tax write may change, and the reason set_business_tax_rate exists. Confidential would contradict its own resource.' },
+];
+
 /** The ONE field a tax write may change. Everything else in the config is the recipe. */
 export const TAX_RATE_PATH: string[] = ['taxRate'];
+
+/**
+ * Live-only keys — present in a real config row but ABSENT from `CostToProduceConfig`.
+ * `discountTypes` is the case today: added to live data and never typed, which is tech-debt #39's
+ * class (live schema not in version control). Listed so capC can classify it despite the type not
+ * naming it, and so the gap is visible rather than merely worked around.
+ */
+export const PRICING_RECIPE_LIVE_ONLY_KEYS: string[] = ['discountTypes', 'taxRate'];
 
 /** `['margin','baseline']` → `{margin,baseline}` — for `config#>>'{…}'` in SQL/verifies. */
 export const jsonbPath = (path: string[]): string => `{${path.join(',')}}`;
