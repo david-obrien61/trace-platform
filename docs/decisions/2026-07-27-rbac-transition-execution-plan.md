@@ -572,3 +572,121 @@ no delete verb (R2 — `deliveries` has no tombstone). **BUILD 1 is now 14 + 1 =
    state, and folding `deliveries` into the flip (§10.4).
 2. **Run the one query in §10.3** — it decides whether BUILD 1 also carries a `role_definitions`
    side-door close.
+
+---
+
+# 11. AMENDMENT 3 — THE FLOOR DRIFT AND THE HIDDEN-PILL SAVE, BOTH RESOLVED FROM SOURCE (2026-07-27)
+
+## 11.1 🔧 CORRECTION — the floor drift IS in version control. My §9.5 claim was wrong.
+
+Amendment 1 §9.5 recorded *"the floor drift (MANAGER 9→11, OWNER 12→14) is undocumented — no
+migration wrote it."* **That is wrong for the larger half of it, and the migration was in the repo
+the whole time.**
+
+`supabase/migrations/20260710_customers_member_read.sql:63-67`:
+
+```sql
+-- (b) shared floor catalog
+UPDATE public.role_definitions
+   SET permissions = COALESCE(permissions,'[]'::jsonb) || '["view_customers"]'::jsonb
+ WHERE role_key IN ('OWNER', 'MANAGER')
+   AND business_id IS NULL
+   AND NOT (COALESCE(permissions,'[]'::jsonb) ? 'view_customers');
+```
+
+**It explains the evidence exactly.** One statement, `role_key IN ('OWNER','MANAGER')`, floor scope —
+which is why both floor rows carry the *identical microsecond* `updated_at`
+(`2026-07-10 19:47:00.222737+00`) and **STAFF was untouched** (STAFF was never in the WHERE, and its
+`updated_at` still equals its `created_at`). A funnel call writes one `role_key` at a time and could
+never produce that signature. The migration also seeds `business_members` (a) and tenant overrides
+(c) in the same transaction — deliberate, documented, in its own header.
+
+**`view_customers` is fully accounted for: +1 to OWNER and MANAGER, by a migration.**
+
+## 11.2 `override_maintenance` is still unexplained — and `updated_at` CANNOT date it
+
+MANAGER 9→**11**, OWNER 12→**14** is +2 each. §11.1 accounts for one. The other,
+`override_maintenance`, is written by **no migration** — the only three files touching
+`role_definitions` are the 20260623 seed (which does not contain it), 20260710 (`view_customers`
+only), and the 20260723 funnel.
+
+**`updated_at` cannot narrow it, because it records only the LAST write.** The 07-10 migration
+stamped over whatever came before. So the window is creation → last write: **2026-07-06 16:42:59 →
+2026-07-10 19:47:00**, and nothing in the catalog can tighten it. `audit_log` cannot either — its
+earliest role row is 2026-07-24, and the table sat empty for 23 days before that despite a correct
+schema, so absence proves nothing.
+
+**What IS definitive: it did not go through the funnel, because the funnel did not exist.**
+`20260723_permission_funnel.sql` is dated 13 days after the window closed.
+
+Stakes are low — `override_maintenance` is `declared-unwired` and gates nothing — but it is evidence
+for §11.3, which is the part that matters.
+
+## 11.3 ⚠️ ANSWERED FROM SOURCE — `save_role_permissions` CANNOT write a floor row
+
+The question was: does the funnel accept `p_business_id = NULL`? **No, and it fails closed.**
+
+Its first statement is `PERFORM assert_movement_actor(p_business_id, p_actor_user_id)`, which calls
+`is_member_of`, whose body opens `SELECT p_user_id IS NOT NULL AND p_business_id IS NOT NULL AND (…)`
+(`20260720_inventory_movement_ledger.sql:255`). A NULL business_id returns false → `RAISE EXCEPTION
+… insufficient_privilege`. Even past that, the ownership check `WHERE id = p_business_id AND
+owner_id = …` cannot match a NULL id, so it would write `permission.self_elevation_denied` and
+return. Both paths refuse.
+
+**So "one write funnel" was ALWAYS scoped to tenant rows. The system floor has no funnel, no audit,
+and its only sanctioned writer is a migration.** The plan treated the funnel guarantee as absolute;
+it is not, and this is the scope limit stated plainly. The `rd_owner_write [ALL]` question from
+§10.3 is therefore narrower than I framed it but still open: it decides whether a **tenant owner
+with a JWT** can write a floor row that affects every tenant. **Still worth the one query, now
+ranked as hardening rather than a blocker.**
+
+## 11.4 ✅ THE HIDDEN-PILL SAVE — D9(b) IS A HARDENING, NOT A LIVE DEFECT
+
+The 2026-07-24 14:30:31 save dropped `manage_customers` + `view_reports` (12→10), and
+`manage_customers` returned 81 seconds later. The question — chips-only, or resolved ± deltas —
+**decides it, and it is readable in the client** rather than inferable from the log.
+
+`packages/shared/src/components/team/MemberConsole.tsx:651`:
+
+```ts
+setDraft(Object.fromEntries(resolved.map((r) => [r.role_key, [...r.permissions]])));
+```
+
+**The draft is seeded from the RESOLVED SET, not from the chip catalog.** `toggle()` adds or removes
+exactly one id; `save()` submits `draft[role_key]`. So the submitted set is **resolved ± deltas**,
+and **a hidden string survives a save by construction** — it is in the draft, no chip can toggle it,
+and it is written back unchanged.
+
+**Therefore the 14:30:31 drop was NOT a silent client wipe.** Those two strings could only leave by
+being toggled off, which requires their chips to have been RENDERED. `1aaf99e` (#153, which hid
+them) was committed **13:58:54 UTC** — 32 minutes earlier — and committed ≠ deployed. The pills were
+still rendering. The 14:31:52 re-add of `manage_customers` is then exactly what it looks like: David
+toggling it back on. **No defect. D9(b) — the funnel refusing a save that would drop an unseen
+string — is a hardening we may or may not want, not a bug we must fix.**
+
+### 11.4a 🔴 But the MIRROR defect is real, and it is live right now
+
+Because the draft is resolved ± deltas and a hidden string has no chip, **a hidden string can never
+be REMOVED through the UI.** It is in every draft, in every submitted set, forever. That is D-9
+inverted: not a silent grant, a **silently un-revocable** one.
+
+`override_maintenance` is sitting in the live MANAGER floor **and** the `f7ec5d67` tenant row right
+now, and no owner can take it off through the Roles page. **The only thing that currently removes it
+is this migration** — `override_maintenance` is in `STRIPPED_AT_BACKFILL.unwired`, so RENAME (call 1)
+drops it. Recorded as a finding of its own; the general fix (a hidden-but-held string rendering as a
+locked, removable row with an explanation — §6 r13's lock-with-explanation applied to permissions)
+is a separate build.
+
+## 11.5 ✅ ACCEPTED — Phase 7's zero-check extends to `role_definitions`
+
+R-C's zero-check reads member arrays. **It must also cover `role_definitions` — the floor AND every
+tenant override** — or a legacy string survives Contract inside the template that seeds new members,
+and the first member minted after Contract arrives holding a string the model has retired. R-C,
+extended one table sideways. Folded into BUILD 6.
+
+## 11.6 The live-read decision is vindicated by the log
+
+Computing the 44 from the live row at grant time rather than from this document: that array changed
+**eleven times in three days**, most recently 2026-07-26 18:02 — `manage_settings` off, three
+financial strings on. Any number written down was stale before it was written. The two funnel calls
+read the row at execution time; this document's numbers are commentary.
