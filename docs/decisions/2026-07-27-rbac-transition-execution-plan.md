@@ -395,9 +395,42 @@ cost tables). No live-only drift to reconcile. **This is smaller than §5 estima
   unknown; recorded as a finding.
 - `price_basis` redaction — open question for 3b.
 
-## 9.6 STILL NEEDED TO START
+## 9.6 THE TWO QUESTIONS ARE WITHDRAWN — AND WHY (David, 2026-07-27)
 
-1. **Approve this amendment** (the 44-string union and the 9-string STAFF set).
-2. **Rule §9.3 consequence 1** — does 3b land BEFORE the STAFF grant, or does STAFF wait for
-   `inventory:read`?
-3. **`price_basis`** — redact behind `costs:read`, or leave visible?
+§9.5 closed with two questions. **Both were confidentiality questions, and confidentiality is not
+a constraint today.** David's correction, verbatim: *"what does it matter if staff sees unit cost
+since David is the only owner, manager, staff? These questions need to remember the current
+situation and why we are doing the migration in this manner."*
+
+**The premise, held rather than re-derived:** David is the only human with access. ~4 tenants,
+~6 member rows, every one his. He holds OWNER, MANAGER and STAFF himself. **The absence of real
+users is not a caveat to work around — it is the REASON this migration runs now instead of after
+the demo.** Treating it as a risk to sequence around inverts the argument that authorized the
+one-pass approach in the first place.
+
+**THE STANDING RULE FOR THIS BUILD — two axes, only one of them constrains:**
+
+| axis | status today | example |
+|---|---|---|
+| **Exposure / confidentiality** | **NOT a constraint.** Build the model correctly because it must be right before real users exist — but never sequence around who-can-see-what, and never hold a grant pending a projection. | "staff would see `unit_cost` before 3b lands" — irrelevant; it is David's test cost on David's test account |
+| **Technical risk** | **Still a real constraint.** | "3b narrows a base-table SELECT across 24 read sites and can break already-proven inventory ground" — legitimate, and it still governs ordering |
+
+**Both questions, answered — not deferred:**
+
+1. **Does 3b land before the STAFF grant? — No constraint. STAFF gets all 9 strings immediately**,
+   `inventory:read` included. 3b lands wherever it fits the build order. §9.3 consequence 1 is
+   **WITHDRAWN**; the only ordering constraint on 3b is the technical one (repoint the 24 readers
+   before or with the narrowing, never after).
+2. **`price_basis` — REDACTED with `unit_cost` and `cost_confidence`.** Decided on design grounds,
+   not risk: `price_basis` ("at-cost" vs "retail") is cost-DERIVATION metadata, and the projection's
+   job is a clean cut — *everything except how this item relates to cost*. Three columns move as one
+   set. Reversible in one line if it proves wrong operationally.
+
+**What still governs the cut line in §6** is therefore unchanged but rests on the correct grounds:
+3b is held for its own session because it touches 24 sites and can regress proven inventory ground,
+and Contract sits behind it because Contract removes the fallback. **Neither reason is exposure.**
+
+## 9.7 STILL NEEDED TO START
+
+**One thing: approve the plan as amended** — the 44-string union (§9.2) and the 9-string STAFF set
+(§9.3). No open questions remain.
