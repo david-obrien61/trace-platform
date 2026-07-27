@@ -81,6 +81,36 @@ export async function callerIsBusinessOwner(
 }
 
 /**
+ * Is the CALLER a member (or the owner) of this business — with NO permission requirement?
+ *
+ * The honest bar for a service-key READ that membership alone should grant. It is NOT a weaker
+ * `callerCan`: it answers a different question. Reaching for `callerCan(auth, biz, 'something')`
+ * when no permission is genuinely required means inventing a string, and an invented string in a
+ * gate is the fake-pill defect one layer down.
+ *
+ * ⚠️ IT IS NOT A LICENCE TO RETURN EVERYTHING. Membership answers "may you see this tenant at
+ * all", never "may you see this FIELD". A handler whose payload mixes operational and
+ * confidential data still redacts per-field — see api/dashboard.ts, which gates on membership and
+ * then withholds inventory_value from a caller lacking costs:read.
+ */
+export async function callerIsMember(
+  authHeader: string | undefined,
+  businessId: string,
+): Promise<boolean> {
+  if (await callerIsBusinessOwner(authHeader, businessId)) return true;
+  const uid = await resolveCallerUid(authHeader);
+  if (!uid) return false;
+  const token = bearer(authHeader);
+  const e = env();
+  if (!e) return false;
+  const caller = createClient(e.url, e.anon, { global: { headers: { Authorization: `Bearer ${token}` } } });
+  const { data, error } = await caller
+    .from('business_members').select('id')
+    .eq('business_id', businessId).eq('user_id', uid).eq('active', true).maybeSingle();
+  return !error && !!data;
+}
+
+/**
  * THE ONE CALLER-AUTHORITY GATE for a service-key handler: is the caller the OWNER of this
  * business, or a member holding `perm`? Owner FIRST, because owner authority comes from
  * `businesses.owner_id` and must not depend on the owner's member-row array (which may pre-date
