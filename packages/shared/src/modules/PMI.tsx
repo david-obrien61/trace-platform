@@ -69,6 +69,18 @@ type InspectionResult = 'PASS' | 'NEEDS_ATTENTION' | 'FAIL';
 
 export interface PMIProps {
   businessId: string;
+  /**
+   * Does the caller hold `costs:read`? The ASSET LIST comes from `cost_objects`, which is
+   * CONFIDENTIAL per spec §4 and gated on `costs:read` — while the PMI SCHEDULE and SERVICE LOG
+   * are this module's own tables and need only `pmi:read`. So a manager can legitimately hold
+   * pmi:read and NOT costs:read.
+   *
+   * 🔴 WHEN FALSE THE ASSET LIST IS REDACTED WITH AN EXPLANATION, NEVER LEFT EMPTY. An empty list
+   * reads as "you have no equipment" — a FALSE STATEMENT RENDERED AS FACT, which is D-9 exactly,
+   * and the same defect as returning 0 for redacted revenue instead of null. Redaction announces
+   * itself. The host supplies this (the module stays context-agnostic — AC-4).
+   */
+  canSeeCosts?: boolean;
   /** Label for one asset — "Tool", "Equipment", "Vehicle", "Unit" */
   assetLabel?: string;
   /** Vertical-specific type options shown in the add form */
@@ -130,6 +142,7 @@ const EMPTY_LOG = {
 
 export function PMI({
   businessId,
+  canSeeCosts = true,
   assetLabel   = 'Asset',
   assetTypes   = ['Vehicle', 'Equipment', 'Tool', 'Other'],
   serviceTypes = ['Inspection', 'Oil Change', 'Filter Replacement', 'Fluid Top-Off', 'Belt / Chain', 'Blade / Bit', 'Repair', 'Other'],
@@ -158,6 +171,9 @@ export function PMI({
   async function loadAssets() {
     setLoading(true);
     console.log('[TRACE:pmi] loadAssets → cost_objects (node_type=ASSET)', { businessId });
+    // The asset list is the confidential half of this screen — skip the read entirely when the
+    // caller cannot see costs, rather than firing a query RLS will filter to nothing.
+    if (!canSeeCosts) { setAssets([]); setLoading(false); return; }
     const { data: assetRows, error: assetErr } = await supabase
       .from('cost_objects')
       .select('*')
@@ -795,6 +811,26 @@ export function PMI({
       {/* Asset list */}
       {loading ? (
         <p style={{ color: '#9ca3af', fontSize: '0.8rem', textAlign: 'center' as const, padding: '40px 0' }}>Loading…</p>
+      ) : !canSeeCosts ? (
+        /* 🔴 THE NAMED REDACTION (D-9). The asset list lives in `cost_objects`, which is
+           confidential; the schedule and service log above are this module's own tables and are
+           shown IN FULL. Falling through to "No equipment registered" would state something FALSE
+           as fact — the same defect as returning 0 for redacted revenue. Say what is withheld and
+           why, and name the permission so the reader knows what to ask their owner for. */
+        <div style={{ textAlign: 'center' as const, padding: '48px 16px', color: '#6b7280' }}>
+          <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>🔒</p>
+          <p style={{ fontWeight: 700, fontSize: '0.875rem', color: '#374151' }}>
+            {assetLabel} list hidden — cost-basis access required
+          </p>
+          <p style={{ fontSize: '0.8rem', marginTop: 6, maxWidth: 380, marginLeft: 'auto', marginRight: 'auto' }}>
+            The {assetLabel.toLowerCase()} register is part of the cost basis, so it needs the
+            <strong> Costs Read</strong> permission. Your maintenance schedule and service history
+            above are complete and unaffected. Ask the owner to grant it on the Team page.
+          </p>
+          <p style={{ fontSize: '0.75rem', marginTop: 10, color: '#9ca3af' }}>
+            This is a redaction, not an empty list — you may well have {assetLabel.toLowerCase()}s registered.
+          </p>
+        </div>
       ) : assets.length === 0 && !showAdd ? (
         <div style={{ textAlign: 'center' as const, padding: '60px 0', color: '#9ca3af' }}>
           <p style={{ fontSize: '2rem', marginBottom: 8 }}>🔧</p>

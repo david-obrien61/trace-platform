@@ -13,13 +13,17 @@ const CULTIVAR_SERVICE_TYPES = [
 ];
 
 export default function PMI() {
-  const { businessId, loading } = useBusinessContext();
+  const { businessId, loading, can } = useBusinessContext();
 
   if (loading || !businessId) return null;
 
   return (
     <PMIModule
       businessId={businessId}
+      // The asset list reads `cost_objects` (confidential, §4). The schedule and service log are
+      // PMI's own tables. A manager may hold pmi:read and not costs:read — the module then shows
+      // a NAMED redaction where the list would be, never an empty list that reads as "no equipment".
+      canSeeCosts={can('costs:read')}
       assetLabel="Equipment"
       assetTypes={CULTIVAR_ASSET_TYPES}
       serviceTypes={CULTIVAR_SERVICE_TYPES}
