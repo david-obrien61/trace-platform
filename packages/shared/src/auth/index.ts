@@ -132,6 +132,8 @@ export {
   STRIPPED_AT_BACKFILL,
   // the Roles-page filter (replaces UNWIRED_ACTION_PERMISSIONS + UNWIRED_REGISTRY_PERMISSIONS)
   HIDDEN_PERMISSIONS,
+  // spec §4 — what granting a confidential permission actually hands over
+  CONFIDENTIAL_EXPOSURE,
   // the declared-unwired set — the invariant capQ enforces across bundles + the R-B2 list
   DECLARED_UNWIRED_PERMISSIONS,
   MEMBERSHIP_SENTINEL,

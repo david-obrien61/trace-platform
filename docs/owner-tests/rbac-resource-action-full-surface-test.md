@@ -165,6 +165,18 @@ LAST-PROVEN: never
 - **FAIL:** the order is missing or partial · the screen claims an invoice that does not exist · a hard failure renders as "will sync shortly".
 - **Why:** the order writes COMMIT BEFORE the push begins — there is no wrapping transaction — so even a KILLED invocation leaves a whole order with `qbStatus: 'failed'`. **Ordering is the defence, not `try/catch`: a catch never runs on a killed invocation.** That state is exactly what the gated manual re-push endpoint repairs, which is why it was kept rather than deleted.
 
+### N-5 — 🔴 Granting a CONFIDENTIAL permission shows the SPECIFIC exposure, not a bland confirm
+STATUS: owed
+PHASE: 1
+DEVICE: desktop
+COVERS: spec §4 · capP P20 · CONFIDENTIAL_EXPOSURE
+LAST-PROVEN: never
+- **Do:** on `/team → Roles`, tick **Costs Read** for MANAGER and press Save. Read the confirm before accepting. Then repeat with **Orders Read**, an operational permission.
+- **PASS:** the confidential save names WHAT IS BEING HANDED OVER — "the COST BASIS — what each item actually cost you…" — plus that it is an owner decision and reversible. The operational save shows the ordinary blast-radius confirm with **no** ⚠️ CONFIDENTIAL block.
+- **FAIL:** both look the same · the warning is generic ("this is sensitive") · the block appears on an operational grant · **or it fires again when re-saving a role that ALREADY held the string** (that is not a new grant, and a warning that nags gets clicked through).
+- **Why:** eleven confidential permissions showed the same bland confirm as a dashboard toggle, on the exact screen the owner uses to hand a manager the cost basis. §4 says a confidential read is an owner GRANT that shows the hard warning; the warning did not exist.
+- **Note:** the copy is DATA (`CONFIDENTIAL_EXPOSURE`, from the manifest), so a twelfth confidential permission inherits this with no UI edit — and capQ (e) fails the build if one ships without its exposure line.
+
 ### R-6 — 🔴 (NEG) A non-member gets NO rate from the narrow read
 STATUS: owed
 PHASE: 1

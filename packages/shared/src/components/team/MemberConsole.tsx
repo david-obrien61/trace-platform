@@ -23,7 +23,7 @@ import {
   getMembersByBusiness, removeMember, setMemberActive, setMemberPhone,
   createInvitation, getPendingInvitations, revokeInvitation,
   getRoleDefinitions, resolveRoles,
-  saveRolePermissions, assignMemberRole, diffPermissions,
+  saveRolePermissions, assignMemberRole, diffPermissions, CONFIDENTIAL_EXPOSURE,
   listDevicesByBusiness, setDeviceActive, deleteDevice, armPinReset,
 } from '../../auth';
 import type { Member, Invitation, Device, ResolvedRole, RoleDefinitionRow, RoleSaveOp } from '../../auth';
@@ -706,6 +706,34 @@ function RolesTab(p: {
       const lines = [`Saving ${role.role_key} re-sets ${br.count} active member${br.count > 1 ? 's' : ''} to this exact role.`];
       if (br.removed.length) lines.push(`\nThey will LOSE: ${br.removed.map(hp).join(', ')}`);
       if (br.added.length) lines.push(`They will GAIN: ${br.added.map(hp).join(', ')}`);
+
+      // ══════════════════════════════════════════════════════════════════════════════════════
+      // 🔴 THE CONFIDENTIAL WARNING (spec §4, card N-5) — ADDED 2026-07-27.
+      // ══════════════════════════════════════════════════════════════════════════════════════
+      // Until now ELEVEN confidential permissions showed the SAME BLAND CONFIRM as a dashboard
+      // toggle: granting `costs:read` looked exactly like granting `orders:read`, on the very
+      // screen an owner uses to hand a manager the cost basis. §4 says a confidential read is an
+      // owner GRANT that shows the hard warning. The warning did not exist.
+      //
+      // It names the SPECIFIC exposure, never a generic caution — "this is sensitive" tells an
+      // owner nothing they can act on. The copy is DATA (CONFIDENTIAL_EXPOSURE, derived from the
+      // manifest's `exposure` field), so a TWELFTH confidential permission inherits this with NO
+      // EDIT HERE. A hardcoded list in this component would be a fifth representation of one
+      // fact, and it would go stale the way every other one did this week. capQ (e) fails the
+      // build if a confidential resource ships without its exposure line.
+      //
+      // Fires on the ADDED set only: re-saving a role that already held the string is not a new
+      // grant and must not nag, or the warning becomes noise and gets clicked through — the exact
+      // way a hold on a 116-row import would have (D-24's soft-surface reasoning, applied here).
+      const newlyConfidential = [...new Set(
+        br.added.map((p) => p.split(':')[0]).filter((r) => r in CONFIDENTIAL_EXPOSURE),
+      )];
+      if (newlyConfidential.length) {
+        lines.push('\n⚠️ CONFIDENTIAL — this grant hands over:');
+        for (const r of newlyConfidential) lines.push(`  • ${CONFIDENTIAL_EXPOSURE[r]}`);
+        lines.push('\nThis is an OWNER DECISION, not a default. It is reversible — remove the permission and save again.');
+      }
+
       lines.push('\nMembers hold exactly what their role grants — nothing more. Continue?');
       if (!window.confirm(lines.join('\n'))) return;
     }

@@ -102,6 +102,8 @@ export interface ManifestEntry {
   /** Everything after the LAST colon. */
   verb: string;
   status: PermissionStatus;
+  /** §4 — what granting this hands over. Present on `confidential` entries; capQ (e) requires it. */
+  exposure?: string;
   sensitivity: PermissionSensitivity;
   /** TRUE when the spec marks this verb "✓ server" — enforced by an RPC/api gate, not a policy. */
   server: boolean;
@@ -180,6 +182,12 @@ interface EntrySeed {
    */
   server?: string[];
   sensitivity: PermissionSensitivity;
+  /**
+   * REQUIRED on every `confidential` resource: the SPECIFIC exposure a grant creates, in the
+   * owner's words. Rendered verbatim in the Roles-page confirm. Absent on operational resources.
+   * capQ (e) FAILS when a confidential resource has none — a generic caution is not a warning.
+   */
+  exposure?: string;
   status?: PermissionStatus | Partial<Record<string, PermissionStatus>>;
   content?: Record<string, string[]>;
   inheritance?: string[];
@@ -340,6 +348,9 @@ const RESOURCES: Record<string, EntrySeed> = {
   pricing_recipe: {
     verbs: ['read', 'update'],
     sensitivity: 'confidential',
+    // What the OWNER is actually handing over. Rendered verbatim in the grant confirm.
+    exposure:
+      'the PRICING RECIPE — the baseline margin, the tier overrides, the reference price and the cost structure. They can see, and change, how every price on the platform is decided.',
     note:
       'baseline margin, reference price, markup — the confidential recipe inside ' +
       'business_pricing_config. THE LEVER: this is the only write path that moves margin ' +
@@ -348,12 +359,18 @@ const RESOURCES: Record<string, EntrySeed> = {
   costs: {
     verbs: ['read', 'create', 'update', 'delete'],
     sensitivity: 'confidential',
+    // What the OWNER is actually handing over. Rendered verbatim in the grant confirm.
+    exposure:
+      'the COST BASIS — what each item actually cost you. Margins, supplier pricing and your negotiating position are all derivable from it.',
     note: 'cost_objects, receipts — cost basis / unit cost. Confidential.',
   },
   margin: {
     // create/update/delete — : margin is COMPUTED, never stored. The lever is the recipe.
     verbs: ['read'],
     sensitivity: 'confidential',
+    // What the OWNER is actually handing over. Rendered verbatim in the grant confirm.
+    exposure:
+      'the MARGIN VERDICT on every item — which lines make money and which do not. It requires costs:read, so granting it grants the basis too (Rule 2).',
     status: 'derived',
     content: { read: ['costs:read'] },
     note:
@@ -368,6 +385,9 @@ const RESOURCES: Record<string, EntrySeed> = {
   wages: {
     verbs: ['read', 'create', 'update', 'delete'],
     sensitivity: 'confidential',
+    // What the OWNER is actually handing over. Rendered verbatim in the grant confirm.
+    exposure:
+      'PAYROLL — labour resources and their wage rates. What every person on the team is paid.',
     note: "labor_resource_wages. Confidential; Andrew's case (read without write).",
   },
 
@@ -491,6 +511,7 @@ function buildManifest(): Record<string, ManifestEntry> {
         resource,
         verb,
         status,
+        exposure: seed.exposure,
         sensitivity: seed.sensitivity,
         // Class 1 — STRUCTURAL. Generated, never hand-listed: modify requires read.
         // `create` requires NOTHING (R1) — deliberately, and the verifier must not
@@ -824,6 +845,25 @@ export const STRIPPED_AT_BACKFILL: Record<'retired' | 'unwired' | 'unmapped', st
 export const DECLARED_UNWIRED_PERMISSIONS: string[] = Object.values(PERMISSION_MANIFEST)
   .filter((e) => e.status === 'declared-unwired')
   .map((e) => e.permission);
+
+/**
+ * THE CONFIDENTIAL EXPOSURE COPY — resource → what granting it actually hands over.
+ *
+ * 🔴 WHY IT IS DATA AND NOT UI TEXT (David's ruling, 2026-07-27). Eleven confidential permissions
+ * showed the SAME BLAND CONFIRM as a dashboard toggle. Granting `costs:read` on that screen looked
+ * exactly like granting `orders:read`, on the surface the owner uses to give a manager the cost
+ * basis. Spec §4 says a confidential read is an owner GRANT that shows the hard warning; the
+ * warning did not exist.
+ *
+ * Driven by the manifest so a TWELFTH confidential permission inherits it WITH NO UI EDIT — the
+ * same reason the Roles page renders its chips from here. A hardcoded list in the component would
+ * be a fifth representation, and it would go stale the way every other one this week did.
+ */
+export const CONFIDENTIAL_EXPOSURE: Record<string, string> = Object.fromEntries(
+  Object.values(PERMISSION_MANIFEST)
+    .filter((e) => e.sensitivity === 'confidential' && e.exposure)
+    .map((e) => [e.resource, e.exposure as string]),
+);
 
 export const HIDDEN_PERMISSIONS: string[] = [
   'owner-only',

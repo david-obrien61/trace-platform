@@ -1200,6 +1200,36 @@ export const qFloorViolations = (floorSql, manifestSrc) => {
   return out;
 };
 
+/**
+ * (e) EVERY CONFIDENTIAL RESOURCE CARRIES ITS EXPOSURE COPY, AND THE CONFIRM RENDERS IT.
+ *
+ * Spec §4 says a confidential read is an OWNER GRANT that shows the hard warning. Until
+ * 2026-07-27 ELEVEN confidential permissions showed the SAME BLAND CONFIRM as a dashboard toggle
+ * — granting `costs:read` looked exactly like granting `orders:read`, on the screen an owner uses
+ * to hand over the cost basis.
+ *
+ * Two assertions, because either alone is theatre:
+ *   · every `sensitivity: 'confidential'` resource has non-empty `exposure` copy — a warning that
+ *     says "this is sensitive" names nothing the owner can act on, so blank is a FAIL, and
+ *   · MemberConsole actually reads CONFIDENTIAL_EXPOSURE — copy nothing renders is a doc.
+ * A twelfth confidential permission therefore inherits the warning with NO UI EDIT, and CANNOT
+ * ship without its own line.
+ */
+export const qExposureViolations = (manifestSrc, consoleSrc) => {
+  const out = [];
+  for (const m of manifestSrc.matchAll(/^  '?([a-z_.:]+)'?:\s*\{[\s\S]*?^  \},/gm)) {
+    if (!/sensitivity:\s*'confidential'/.test(m[0])) continue;
+    const ex = m[0].match(/exposure:\s*\n?\s*'([^']*)'/);
+    if (!ex || !ex[1].trim()) {
+      out.push(`resource '${m[1]}' is sensitivity:'confidential' with NO exposure copy — the grant confirm would show a generic caution, which names nothing the owner can act on (spec §4, card N-5).`);
+    }
+  }
+  if (consoleSrc && !/CONFIDENTIAL_EXPOSURE/.test(consoleSrc)) {
+    out.push('MemberConsole does not read CONFIDENTIAL_EXPOSURE — the exposure copy exists but nothing renders it, which is a doc, not a warning.');
+  }
+  return out;
+};
+
 export const qSentinelViolations = ({ routerSrc, manifestSrc, sqlAll }) => {
   const out = [];
   if (/PermissionRoute permission=["']member["']/.test(routerSrc)) out.push('`member` appears in a PermissionRoute — a route needing only membership needs NO gate. Legal home: tileRegistry required_permission ONLY.');
@@ -1222,6 +1252,10 @@ const Q_PROBES = [
   ['sentinel/policy',     () => qSentinelViolations({ routerSrc: '', manifestSrc: '', sqlAll: "has_permission(business_id, 'member')" }).length > 0],
   ['floor/drifted-seed',  () => qFloorViolations("('OWNER', '[\"a:b\"]'::jsonb)", "export const OWNER_DEFAULT_BUNDLE: string[] = [\n  'c:d',\n];").length > 0],
   ['floor/missing-role',  () => qFloorViolations('no rows at all', "export const OWNER_DEFAULT_BUNDLE: string[] = [\n  'a:b',\n];").length > 0],
+  ['exposure/missing',    () => qExposureViolations("  costs: {\n    sensitivity: 'confidential',\n  },", 'CONFIDENTIAL_EXPOSURE').length > 0],
+  ['exposure/blank',      () => qExposureViolations("  costs: {\n    sensitivity: 'confidential',\n    exposure:\n      '',\n  },", 'CONFIDENTIAL_EXPOSURE').length > 0],
+  ['exposure/unrendered', () => qExposureViolations("  costs: {\n    sensitivity: 'confidential',\n    exposure:\n      'x',\n  },", 'no reference here').length > 0],
+  ['exposure/complete',   () => qExposureViolations("  costs: {\n    sensitivity: 'confidential',\n    exposure:\n      'the cost basis',\n  },", 'CONFIDENTIAL_EXPOSURE').length === 0],
   ['floor/matching-seed', () => qFloorViolations("('OWNER', '[\"a:b\"]'::jsonb)", "export const OWNER_DEFAULT_BUNDLE: string[] = [\n  'a:b',\n];\nexport const MANAGER_DEFAULT_BUNDLE: string[] = [\n];\nexport const STAFF_DEFAULT_BUNDLE: string[] = [\n];").filter((g) => g.startsWith('OWNER')).length === 0],
 ];
 
@@ -1254,6 +1288,7 @@ function capQ(key, v) {
       sqlAll: concatSql(v.migrationsDir),
     }),
     ...qFloorViolations(read('supabase/migrations/20260727_align_floor_to_bundles.sql') || '', manifestSrc),
+    ...qExposureViolations(manifestSrc, read('packages/shared/src/components/team/MemberConsole.tsx') || ''),
   ];
 
   if (gaps.length) return FAIL(`declared-unwired invariant BROKEN — ${gaps.length} violation(s).`, gaps);
