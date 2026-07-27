@@ -1297,8 +1297,24 @@ string was grepped for**, because the catalog stores the resolved role list rath
 someone wrote. A repo grep can only find the spelling you thought of; the catalog contains what
 is actually there. That is the whole difference.
 
-**SO:** if a claim is about a table, column, policy, function, index, constraint or role, the
-corpus is `pg_policies` / `pg_proc` / `information_schema` — quoted, with its output. Source is
+**🔴 NAMED INSTANCE — PRIVILEGES ARE CATALOG FACTS, AND A MIGRATION'S `GRANT` LINE DOES NOT
+DESCRIBE AN OBJECT'S ACTUAL PRIVILEGES.**
+
+`20260720_ledger_event_store_columns.sql:101` wrote exactly one grant:
+`GRANT SELECT ON public.business_inventory_ledger_events TO authenticated, service_role`. It
+granted `anon` nothing and granted INSERT/UPDATE/DELETE to nobody. **The catalog showed `anon`
+with seven privileges and `authenticated` with seven** — including the INSERT that made an
+auto-updatable view a forge path into an append-only ledger.
+
+The likely source is the platform's DEFAULT PRIVILEGES on `public`, which apply to objects the
+migration never mentions. **Which means the object is unlikely to be alone, and every grant claim
+in this corpus derived from reading migrations is UNVERIFIED.** A migration says what someone
+INTENDED to grant. `information_schema.role_table_grants` says what is granted. Only the second is
+a claim about reality.
+
+**SO:** if a claim is about a table, column, policy, function, index, constraint, role **or
+privilege**, the corpus is `pg_policies` / `pg_proc` / `information_schema.role_table_grants` /
+`information_schema.tables` — quoted, with its output. Source is
 evidence about INTENT; the catalog is evidence about REALITY, and a negative claim is a claim
 about reality. Where the verifier cannot reach a database (it is source-only), the claim is
 marked as source-derived and the catalog check is a DAVID-QUERY whose OUTPUT is pasted, never

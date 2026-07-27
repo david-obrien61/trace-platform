@@ -91,3 +91,40 @@ hold — the exact "surface honesty" failure the whole programme exists to end.
 
 **Nothing is fixed here. Scope is David's call:** one endpoint, the six writers, or all eight
 including the reads — and whether the two-sided token attachment lands in the same pass.
+
+---
+
+## 6. 🟡 N6 — THE TWO HELD PUBLIC READS. RECORDED, NOT UNEXAMINED.
+
+**Both are OPEN FINDINGS with their reasoning attached, so they do not block Contract.** Contract's
+gate is that every finding is closed *or recorded with a reason*; these are the second kind.
+
+| policy | table | predicate | why it is held |
+|---|---|---|---|
+| `anon_select_plants` | `cultivar_plants` | `SELECT TO anon USING (true)` | **load-bearing for the QR path** |
+| `anon_select_addons` · `addons_select_public` | `addons` | `SELECT USING (true)` | **load-bearing for the QR path** |
+
+**WHY THEY ARE NOT SIMPLY WRONG.** A scanned tag must resolve **without a session** — that is the
+product. `/plant/:tagId` and `/checkout/*` are public routes by design, and a customer holding a
+QR code has no account and never will. Removing anon here does not tighten the platform, it breaks
+the front door.
+
+**WHAT THE ACTUAL EXPOSURE IS, STATED PRECISELY: CROSS-TENANT ENUMERATION, NOT THE READ ITSELF.**
+`USING (true)` means anon may read *every* tenant's rows, not merely the one whose tag was scanned.
+The intended read — one plant, one add-on menu, by tag — is legitimate and must stay. The
+unintended capability is `SELECT *` across the table, which yields every tenant's catalogue and
+pricing.
+
+**WHY NARROWING IS A DIFFERENT RISK SHAPE FROM THE REST OF THIS SWEEP.** Every other item was a
+missing check on a path that already knew who was calling. Here there IS no caller — so the fix is
+not a gate, it is a **scoped read**: resolve by tag and return that tag's row, rather than exposing
+the table. That is a change to the demo spine's front door, with its own failure mode (a scan that
+stops working is worse than a catalogue that is readable), and it is the third instance of the
+projection pattern — `plant_events`, `dashboard` money, and this.
+
+**CONTRAST — why `plant_events` was NOT held.** Its columns are internal operational history
+(`employee_id`, `notes`, `from_container`/`to_container`): staff attribution and staff notes, which
+no public page should ever render. `cultivar_plants` and `addons` carry the catalogue a customer is
+*meant* to see. The distinction is what the data IS, not who can reach it.
+
+**NOT PROPOSED. Recorded so the next reader finds a decision, not a gap.**

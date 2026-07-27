@@ -45,9 +45,35 @@
 -- IF A READER APPEARS LATER, recreate it WITH `security_invoker = on` and grant SELECT
 -- explicitly — never rely on the default grants that produced this.
 
+-- ── ⛔ DEPENDENCY CHECK — RUN BOTH BEFORE THE DROP. Catalog, not grep: a dependent object need
+--    never appear in this repo (ten tables have no migration at all), and a grep cannot see a
+--    view built in the SQL editor. Same discipline as the nurseries proposal.
+--
+-- (i) Any VIEW or MATERIALIZED VIEW built on it. EXPECT 0 rows.
+-- SELECT dep.relname AS dependent_object,
+--        CASE dep.relkind WHEN 'v' THEN 'view' WHEN 'm' THEN 'materialized view' ELSE dep.relkind::text END AS kind
+--   FROM pg_depend d
+--   JOIN pg_rewrite r   ON r.oid = d.objid
+--   JOIN pg_class   dep ON dep.oid = r.ev_class
+--   JOIN pg_class   src ON src.oid = d.refobjid
+--  WHERE src.relname = 'business_inventory_ledger_events'
+--    AND dep.relname <> 'business_inventory_ledger_events';
+--
+-- (ii) Any FUNCTION whose body references it. EXPECT 0 rows.
+-- SELECT proname, pg_get_function_identity_arguments(oid) AS args
+--   FROM pg_proc
+--  WHERE pronamespace = 'public'::regnamespace
+--    AND prosrc ILIKE '%business_inventory_ledger_events%';
+--
+-- If either returns a row, STOP. RESTRICT below will refuse the DROP, which is the correct
+-- outcome — decide what that dependent should read instead, rather than letting CASCADE decide.
+
 BEGIN;
 
-DROP VIEW IF EXISTS public.business_inventory_ledger_events;
+-- RESTRICT, never CASCADE. It is the default for DROP VIEW, and it is written EXPLICITLY because
+-- a reader should not have to know the default to know the intent: if anything depends on this,
+-- the DROP must FAIL LOUDLY rather than quietly taking a dependent object with it.
+DROP VIEW IF EXISTS public.business_inventory_ledger_events RESTRICT;
 
 COMMIT;
 
