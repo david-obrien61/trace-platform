@@ -782,6 +782,13 @@ function capR(key, v) {
   // `/add-business` and `services` against `/campaigns`, two pairings that do not exist. A cap that
   // invents findings is worse than one that misses them: it trains the reader to dismiss the
   // output. Split on the object delimiter first, then read fields WITHIN one object.
+  // Tiles whose route legitimately carries no PermissionRoute — declared, with the reason, the
+  // same way ALLOWED_DIVERGENCE carries /orders and /costs. Every entry is a CARD on the
+  // deliberately-ungated /settings index (router.tsx:114-118: "per-person, not gated
+  // capabilities"), so its required_permission gates the card's visibility, not a route.
+  const TILE_ROUTE_UNGATED_OK = new Set([
+    'qb_invoicing', 'business_profile', 'tax_rate', 'cost_config', 'install_price', 'team_management',
+  ]);
   const tileBlockR = reg.slice(0, reg.indexOf('export const NAV_IA'));
   const layerMismatch = [];
   for (const chunk of tileBlockR.split(/\n  \{ key: /).slice(1)) {
@@ -791,7 +798,21 @@ function capR(key, v) {
     const tileRoute = (body.match(/route:\s*'([^']+)'/) || [])[1];
     if (!tileKey || !tilePerm || !tileRoute) continue;   // a tile with no route has no route gate to disagree with
     const gate = routeGates.get(tileRoute);
-    if (gate && gate !== tilePerm) layerMismatch.push(`${tileKey}: tile gates '${tilePerm}' but route ${tileRoute} gates '${gate}'`);
+    if (gate === undefined) {
+      // 🔴 SILENCE ON AN UNKNOWN IS THE DEFECT CLASS, so this branch is explicit rather than a
+      // skipped iteration. A tile whose route carries NO PermissionRoute is not automatically an
+      // agreement — it is a DIFFERENT RELATIONSHIP that must be declared. The six /settings cards
+      // (qb_invoicing, business_profile, tax_rate, cost_config, install_price, team_management)
+      // are `nav_eligible: false` CARDS on a per-person index that router.tsx:114-118 leaves
+      // ungated DELIBERATELY: their required_permission gates the CARD, not a route. That is
+      // legitimate and recorded; a tile pointing at an ungated route that ISN'T on this list is a
+      // finding, because it means a capability-bearing surface has a gate on the tile only.
+      if (!TILE_ROUTE_UNGATED_OK.has(tileKey)) {
+        layerMismatch.push(`${tileKey}: tile gates '${tilePerm}' but its route ${tileRoute} has NO PermissionRoute — the tile is the only gate`);
+      }
+      continue;
+    }
+    if (gate !== tilePerm) layerMismatch.push(`${tileKey}: tile gates '${tilePerm}' but route ${tileRoute} gates '${gate}'`);
   }
 
   const problems = [];

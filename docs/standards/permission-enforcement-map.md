@@ -1,6 +1,6 @@
 # Permission Enforcement Map
 
-**Last updated:** 2026-07-24 (created — manager-visibility build, ledger #153)
+**Last updated:** 2026-07-28 (**🔴 THE MAP HAS A FOURTH COLUMN — TILE. Every row below was reconciled across THREE layers and is silently unreconciled on the fourth**; ledger #167) · created 2026-07-24 (manager-visibility build, ledger #153)
 **Owner:** David O'Brien / TRACE Enterprises
 **Standard:** STD-020 · Decision: David's ruling 2026-07-24 · Recon: R5b (deferred, then re-ranked on live evidence)
 
@@ -43,7 +43,28 @@ and stated here**, never the residue of whatever was convenient. **Blank = "not 
 | **Route gate** | The `PermissionRoute` permission (or `—` if the route is public/ungated). |
 | **Table policy** | The RLS policy that governs the data the capability reads, and what it checks: a permission string, `membership` (`is_active_member` only), `owner` (owner_id only), or `service-key` (writes bypass RLS). |
 | **Function gate** | A `SECURITY DEFINER` RPC that checks a permission on this path (or `—`). |
+| **Tile gate** 🔴 | **ADDED 2026-07-28.** The `tileRegistry.ts` `required_permission` for the tile this capability renders as (or `—` if it has no tile). **This is a REAL gate, not a display hint:** a `NAV_IA` node carrying `tileKey` INHERITS this string, so it decides menu visibility. A tile stricter than its route makes the surface URL-reachable and menu-invisible; a tile looser than its route advertises a destination the route refuses. |
 | **Agree?** | ✅ layers agree · ⚠️ disagree (recorded reason) · 🟦 deliberately membership-only/ungated. |
+
+> **🔴 WHY THE FOURTH COLUMN EXISTS (ledger #167).** The `customers` tile held `required_permission:
+> 'owner-only'` for **four days** after #153 re-gated the `/customers` route to `customers:read` and
+> added the `customers_member` RLS policy — so a MANAGER holding `customers:read` could reach the
+> page by URL and never see it in the menu. **Three separate passes reconciled this capability and
+> all three missed it, because the standard named three layers and the map had three columns.** A
+> layer nobody writes down is a layer nobody checks.
+>
+> **Every row below predates this column and is therefore UNVERIFIED on it.** The sweep that
+> produced this amendment covered the CODE — 33 tiles, 20 carrying a route, **1 disagreement
+> (`customers`, now fixed), 0 remaining** — so the code is clean today and it is the MAP that is
+> behind. Filling the column per row is owed; `capR` (3) is the mechanism that keeps it true, and
+> it fails the build on any tile↔route disagreement.
+>
+> **A tile whose route is deliberately ungated is a DIFFERENT relationship, not an agreement.** The
+> six `/settings` index cards (`qb_invoicing`, `business_profile`, `tax_rate`, `cost_config`,
+> `install_price`, `team_management`) are `nav_eligible: false` cards on a per-person index that
+> `router.tsx:114-118` leaves ungated on purpose: their `required_permission` gates the CARD, not a
+> route. They are declared in `capR`'s `TILE_ROUTE_UNGATED_OK` with that reason, rather than
+> silently skipped — **silence on an unknown is not a pass.**
 
 ---
 

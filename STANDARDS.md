@@ -863,6 +863,26 @@ any future connector. Fires on the first bind, not at volume.
 
 ### STD-020 — ONE PERMISSION = ONE CAPABILITY, CHECKED AT EVERY LAYER THAT CAPABILITY TOUCHES
 
+> **🔴 AMENDED 2026-07-28 (ledger #167) — THERE ARE FOUR LAYERS, NOT THREE.** This standard shipped
+> naming **route · table · API**. The **TILE** (`tileRegistry.ts` `required_permission`) is a fourth
+> gate, and it is the one that bit: the `customers` tile held `owner-only` while the route and the
+> table both said `customers:read`, so a MANAGER could reach `/customers` by URL and never see it in
+> the menu. **The disagreement stood for four days on a capability three separate passes had
+> reconciled** — because every pass reconciled the three layers the standard named. A layer nobody
+> writes down is a layer nobody checks.
+>
+> **The tile is a real gate, not a display hint:** `nav_customers` carries `tileKey: 'customers'`
+> and INHERITS its permission, so the tile string decides menu visibility. Nav resolution
+> (`navNodeForPath`) matches by ROUTE regardless of permission, which is why the node can resolve
+> as `activeKey` while the builder has already filtered it out — **two code paths, one trace, and
+> the trace reads like an orphaned node.**
+>
+> **Enforced by capR (3)**, which asserts tile-gate == route-gate for every tile carrying a route,
+> with legitimate cases declared (a tile whose route is deliberately ungated — the six `/settings`
+> index cards — is a DIFFERENT relationship: its permission gates the CARD, not a route, and it is
+> listed rather than silently skipped). The enforcement map carries a **TILE column**; a row
+> reconciled across three layers is silently unreconciled on the fourth.
+
 **Rule (David's ruling 2026-07-24):** A capability may be gated in up to three independent layers —
 the **ROUTE** (`PermissionRoute permission={X}`), the **TABLE** (an RLS policy), and the **FUNCTION**
 (a `SECURITY DEFINER` RPC that checks a permission). When a capability is permission-gated, **every
@@ -1421,3 +1441,52 @@ proceed without this check?* A build answers both.
 **Why it is a standard and not a note in #74.** The defect is not about permissions. It is about
 the relationship between a check and the thing it checks, and that relationship exists in every
 migration, every runbook, every API handler, and every RPC in the platform.
+
+
+---
+
+### STD-024 — A CAP SHIPPED FOR A DEFECT MUST BE RUN AGAINST THAT DEFECT AND SHOWN TO FAIL
+
+**The rule.** When a verifier assertion is added in response to a real defect, it is not done when
+it passes. It is done when it has been **run against the actual instance and observed to FAIL**,
+then observed to pass after the fix. *"We added a check"* is not *"we added the check that catches
+it."* This is STD-022's planted-bad probe pointed at the **real** instance instead of a synthetic
+one — and the two are not interchangeable, because a synthetic probe only proves the detector can
+reject input the author already imagined.
+
+**The instance that produced it (2026-07-28, ledger #167).** A nav defect was diagnosed as an
+orphaned node, and the cap asked for was a **reachability walk**: every nav node must resolve to a
+root. It was built, it shipped with four planted-bad probes, and **it would have found nothing** —
+there was no orphan. 26 nodes, every parent key present, every node rooted. The actual defect was a
+TILE whose permission disagreed with its own route, and it was caught by a *different* assertion
+written in the same pass. Had only the requested check been built, the board would have gained a
+green row that proved the wrong thing, over a live defect.
+
+**How it is applied.** State, in the build write-back, **which assertion fires on the instance**,
+and say plainly when a newly added check would NOT have caught the defect that prompted it. A cap
+that cannot be shown failing against its own motivating case is a candidate for deletion, not a
+green row. Run order is: write the cap → run it on the unfixed tree → **see it FAIL** → fix → see
+it pass. A cap first run after the fix has never been observed doing its job.
+
+**THE SECOND CLAUSE — A CAP THAT INVENTS FINDINGS IS WORSE THAN ONE THAT MISSES THEM.** In the same
+pass, the first draft of the tile↔route assertion used one lazy `[\s\S]*?` spanning
+key → permission → route, which crossed OBJECT BOUNDARIES whenever a tile had no `route:` and
+paired one tile's permission with the NEXT tile's route. It reported `online_shop` against
+`/add-business` and `services` against `/campaigns` — **two pairings that do not exist.** Caught
+before the findings were reported.
+
+A false positive costs more than a false negative here: a missed defect leaves the reader neutral,
+but an invented one **teaches them to skim the output**, and a board nobody reads carefully is
+worth less than no board. So: structural parsers read fields WITHIN one object (split on the
+delimiter first), and any cap whose first run produces a finding gets that finding **verified by
+hand against the source** before it is reported as real.
+
+**Corollary — silence on an unknown is not a pass.** The same assertion originally `continue`d
+when a tile's route had no gate, which silently treated *"I could not determine this"* as
+*"this agrees."* Unknowns are now an explicit branch with a declared allowlist and a reason, the
+way `ALLOWED_DIVERGENCE` carries `/orders` and `/costs`.
+
+**Family:** STD-021 (a negative claim names its corpus and method) · STD-022 (an assertion ships a
+planted-bad probe) · **STD-023** (a guard the write does not depend on is advice, not a gate) ·
+STD-024 (a cap is proven against its own motivating defect). All four answer one question in
+different places: *is this check actually doing anything?*
