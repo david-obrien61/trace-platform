@@ -97,6 +97,8 @@ export type LegacyFate =
 export interface ManifestEntry {
   /** The full string, e.g. `deliveries.route:update`. */
   permission: string;
+  /** Roles-page section, declared on the resource seed. Never inferred from a tile. */
+  category: string;
   /** Everything before the LAST colon — may contain dots. */
   resource: string;
   /** Everything after the LAST colon. */
@@ -178,6 +180,22 @@ export function splitPermission(permission: string): { resource: string; verb: s
 // SYSTEM WRITER and is exempt from verifier assertion 2.
 
 interface EntrySeed {
+  /**
+   * WHICH SECTION OF THE ROLES PAGE THIS RESOURCE'S PILLS LAND IN (David's ruling 2026-07-28).
+   *
+   * 🔴 DECLARED HERE, ON THE RESOURCE, AND NOWHERE ELSE. The Roles page used to group chips by
+   * looking up a TILE that happened to gate on the same string — so the 31 permissions with no
+   * tile (the whole order family, customers, every inventory and delivery WRITE) fell into a
+   * bucket called "Other", and the page read as a curated list plus a dump. The obvious fix — a
+   * category map in the component — would have been the SIXTH hand-maintained list duplicating
+   * something derivable, shipped in the build that closed the fifth.
+   *
+   * Declaring it on the seed keeps ONE declaration per resource, in the object that already
+   * declares everything else about it, and costs the UI nothing: a new resource lands in a real
+   * section with NO UI EDIT. capP asserts every declared category appears in
+   * PERMISSION_CATEGORY_ORDER, so a new one cannot silently fall off the page.
+   */
+  category: string;
   verbs: string[];
   /**
    * Verbs the spec marks "✓ server" (§3): enforcement is a SECURITY DEFINER RPC or the api
@@ -209,6 +227,7 @@ interface EntrySeed {
 const RESOURCES: Record<string, EntrySeed> = {
   // ── the order family (spec §3) ────────────────────────────────────────────────
   orders: {
+    category: 'checkout',
     verbs: ['read', 'create', 'update', 'delete'],
     server: ['create', 'update', 'delete'],
     sensitivity: 'operational',
@@ -221,18 +240,21 @@ const RESOURCES: Record<string, EntrySeed> = {
       'dependency; a MANAGER passes only by holding the string.',
   },
   order_items: {
+    category: 'checkout',
     verbs: ['read', 'create', 'update', 'delete'],
     server: ['create', 'update', 'delete'],
     sensitivity: 'operational',
     note: 'lifecycle owned by the order RPCs; read is the member-facing verb.',
   },
   order_service_selections: {
+    category: 'checkout',
     verbs: ['read', 'create', 'update', 'delete'],
     server: ['create', 'update', 'delete'],
     sensitivity: 'operational',
     note: 'the netting/add-ons on an order; same lifecycle as order_items.',
   },
   order_compliance_records: {
+    category: 'checkout',
     // delete — : effectively write-once at sale (the Regina netting-warning record).
     verbs: ['read', 'create', 'update'],
     server: ['create', 'update'],
@@ -242,6 +264,7 @@ const RESOURCES: Record<string, EntrySeed> = {
 
   // ── customers (R2 — NO delete verb) ──────────────────────────────────────────
   customers: {
+    category: 'customers',
     verbs: ['read', 'create', 'update'],
     sensitivity: 'operational',
     // create/update FLIPPED declared-unwired → enforced 2026-07-27: the flip added customers_member_insert / _update gated on these strings (N5, David's ruling). Wired in the same pass that grants them.
@@ -255,6 +278,7 @@ const RESOURCES: Record<string, EntrySeed> = {
 
   // ── the sell-side menu (R2 — NO delete verb) ─────────────────────────────────
   service_offerings: {
+    category: 'checkout',
     verbs: ['read', 'create', 'update'],
     sensitivity: 'operational',
     status: { read: 'enforced', create: 'declared-unwired', update: 'declared-unwired' },
@@ -267,6 +291,7 @@ const RESOURCES: Record<string, EntrySeed> = {
 
   // ── inventory — the big split, and the ONE real tombstone ────────────────────
   inventory: {
+    category: 'inventory',
     verbs: ['read', 'create', 'update', 'delete'],
     sensitivity: 'operational',
     note:
@@ -277,6 +302,7 @@ const RESOURCES: Record<string, EntrySeed> = {
       'costs:read at Phase 3b (spec §4 — the field-level split).',
   },
   inventory_ledger: {
+    category: 'inventory',
     // create/update/delete — : append-only. The immutability trigger rejects even postgres.
     verbs: ['read'],
     sensitivity: 'operational',
@@ -288,6 +314,7 @@ const RESOURCES: Record<string, EntrySeed> = {
 
   // ── deliveries + its sub-resource (R2 — NO delete verb) ──────────────────────
   deliveries: {
+    category: 'fulfilment',
     verbs: ['read', 'create', 'update'],
     sensitivity: 'operational',
     // create = SERVER-ENFORCED (§3's "✓ server" shape), RECLASSIFIED 2026-07-27 in the commit
@@ -305,6 +332,7 @@ const RESOURCES: Record<string, EntrySeed> = {
       'permission — disagreement N3, closed in Phase 2.',
   },
   'deliveries.route': {
+    category: 'fulfilment',
     // create/delete — : a route has no independent existence apart from its deliveries.
     verbs: ['read', 'update'],
     sensitivity: 'operational',
@@ -342,6 +370,7 @@ const RESOURCES: Record<string, EntrySeed> = {
   // cost_objects real. STRINGS LAND WHEN ENFORCED, NOT BEFORE.
 
   pmi: {
+    category: 'maintenance',
     verbs: ['read', 'update'],
     sensitivity: 'operational',
     note:
@@ -352,6 +381,7 @@ const RESOURCES: Record<string, EntrySeed> = {
 
   // ── the narrow money reads (spec §4 / §5) ────────────────────────────────────
   tax_rate: {
+    category: 'settings',
     verbs: ['read', 'update'],
     sensitivity: 'operational',
     // update FLIPPED declared-unwired → enforced 2026-07-27: set_business_tax_rate gates on it (§3 of the flip) and writes ONLY config->'taxRate'.
@@ -363,6 +393,7 @@ const RESOURCES: Record<string, EntrySeed> = {
       '(set_business_tax_rate, Phase 1), hence declared-unwired.',
   },
   pricing_recipe: {
+    category: 'financial',
     verbs: ['read', 'update'],
     sensitivity: 'confidential',
     // What the OWNER is actually handing over. Rendered verbatim in the grant confirm.
@@ -374,6 +405,7 @@ const RESOURCES: Record<string, EntrySeed> = {
       'health (spec §4.1). Owner-confidential; the moat (D-009).',
   },
   costs: {
+    category: 'financial',
     verbs: ['read', 'create', 'update', 'delete'],
     sensitivity: 'confidential',
     // What the OWNER is actually handing over. Rendered verbatim in the grant confirm.
@@ -382,6 +414,7 @@ const RESOURCES: Record<string, EntrySeed> = {
     note: 'cost_objects, receipts — cost basis / unit cost. Confidential.',
   },
   margin: {
+    category: 'financial',
     // create/update/delete — : margin is COMPUTED, never stored. The lever is the recipe.
     verbs: ['read'],
     sensitivity: 'confidential',
@@ -400,6 +433,7 @@ const RESOURCES: Record<string, EntrySeed> = {
       'recipe and the signal recomputes (spec §4.1).',
   },
   wages: {
+    category: 'financial',
     verbs: ['read', 'create', 'update', 'delete'],
     sensitivity: 'confidential',
     // What the OWNER is actually handing over. Rendered verbatim in the grant confirm.
@@ -410,6 +444,7 @@ const RESOURCES: Record<string, EntrySeed> = {
 
   // ── business surfaces ────────────────────────────────────────────────────────
   settings: {
+    category: 'settings',
     verbs: ['read', 'update'],
     // ROUTE-ENFORCED, NOT TABLE-ENFORCED, and that is correct (David's ruling 2026-07-27).
     // `businesses_member_select` is USING(is_active_member(id)) — membership-only BY NECESSITY:
@@ -422,6 +457,7 @@ const RESOURCES: Record<string, EntrySeed> = {
     note: 'business profile — name, address, hours. read+update.',
   },
   campaigns: {
+    category: 'growth',
     verbs: ['read', 'create', 'update'],
     sensitivity: 'operational',
     status: { read: 'enforced', create: 'declared-unwired', update: 'enforced' },
@@ -432,6 +468,7 @@ const RESOURCES: Record<string, EntrySeed> = {
       'owner-only (disagreements N1/N2), closed in Phase 4.',
   },
   team: {
+    category: 'admin',
     verbs: ['read', 'create', 'update', 'delete'],
     // ROUTE-ENFORCED, NOT TABLE-ENFORCED, and that is correct (David's ruling 2026-07-27).
     // `rd_read` is USING(business_id IS NULL OR is_active_member(...)) — membership-only BY
@@ -447,6 +484,7 @@ const RESOURCES: Record<string, EntrySeed> = {
       'string authorizes them. Granting/revoking is itself an owner-only capability.',
   },
   audit_log: {
+    category: 'admin',
     // create — : NOT a grantable user verb. System-only writer (spec §3). No entry.
     // update/delete — : structurally blocked by the immutability trigger.
     verbs: ['read'],
@@ -465,6 +503,7 @@ const RESOURCES: Record<string, EntrySeed> = {
  */
 const CAPABILITY_VERBS: Record<string, Omit<ManifestEntry, 'resource' | 'verb' | 'server'>> = {
   'inventory:import_price': {
+    category: 'inventory',
     permission: 'inventory:import_price',
     status: 'enforced',
     sensitivity: 'operational',
@@ -478,6 +517,7 @@ const CAPABILITY_VERBS: Record<string, Omit<ManifestEntry, 'resource' | 'verb' |
       'single write (Rule 2 in spirit).',
   },
   'tax_exempt:apply': {
+    category: 'checkout',
     permission: 'tax_exempt:apply',
     status: 'enforced',
     sensitivity: 'operational',
@@ -490,6 +530,7 @@ const CAPABILITY_VERBS: Record<string, Omit<ManifestEntry, 'resource' | 'verb' |
       'never self-exempt.',
   },
   'order_discount:apply': {
+    category: 'checkout',
     permission: 'order_discount:apply',
     // STATUS FLIPPED declared-unwired → enforced 2026-07-27, in the SAME commit that wired it:
     // submit.ts:238 now returns 403 FORBIDDEN_DISCOUNT instead of silently discarding the
@@ -512,6 +553,7 @@ const CAPABILITY_VERBS: Record<string, Omit<ManifestEntry, 'resource' | 'verb' |
       '"discounting is a manager act" force lives in the default bundle, where this is OFF.',
   },
   'maintenance:override': {
+    category: 'maintenance',
     permission: 'maintenance:override',
     status: 'declared-unwired',
     sensitivity: 'operational',
@@ -540,6 +582,7 @@ function buildManifest(): Record<string, ManifestEntry> {
         permission,
         resource,
         verb,
+        category: seed.category,
         status,
         exposure: seed.exposure,
         routeEnforced: seed.routeEnforced,
@@ -923,10 +966,50 @@ export const HIDDEN_PERMISSIONS: string[] = [
  * capP asserts the rendered catalog is EXACTLY this set — not a subset, not a superset — so a pill
  * that gates nothing fails the build.
  */
-export const ENFORCED_PERMISSIONS: string[] = Object.values(PERMISSION_MANIFEST)
-  .filter((e) => e.status === 'enforced')
+export const CATALOG_PERMISSIONS: string[] = Object.values(PERMISSION_MANIFEST)
+  .filter((e) => e.status === 'enforced' || e.status === 'derived')
+  .filter((e) => e.sensitivity !== 'owner-only')
   .map((e) => e.permission)
   .filter((p) => !HIDDEN_PERMISSIONS.includes(p));
+
+/**
+ * The catalog members that are RENDERED BUT NOT TOGGLEABLE (R9). A `derived` string has no gate
+ * of its own — it is enforced transitively by its Rule-2 prerequisite — so it is shown, counted,
+ * and explained, but an owner cannot grant or revoke it directly. Granting the prerequisite is
+ * the act; this pill is the consequence, made visible.
+ */
+export const DERIVED_PERMISSIONS: string[] = Object.values(PERMISSION_MANIFEST)
+  .filter((e) => e.status === 'derived')
+  .map((e) => e.permission);
+
+/**
+ * What a `derived` string is implied BY — its Rule-2 (content) prerequisite. `margin:read` →
+ * `costs:read`. Used for the pill's explanatory label, so the page says WHY the string is held
+ * rather than showing a chip nobody can move.
+ */
+export function impliedBy(permission: string): string[] {
+  const e = PERMISSION_MANIFEST[permission];
+  return e ? [...e.content, ...e.inheritance] : [];
+}
+
+/** Roles-page section for a permission, declared on its resource seed. Never inferred. */
+export function permissionCategory(permission: string): string {
+  return PERMISSION_MANIFEST[permission]?.category ?? 'other';
+}
+
+/**
+ * THE SECTION ORDER — the one presentation decision that cannot be derived.
+ *
+ * MEMBERSHIP is derived (each resource declares its own `category`); ORDER is not, because
+ * "which section comes first" is a judgement about how an owner reads the page, not a fact about
+ * the model. It lives here rather than in the component so the UI still needs no edit, and capP
+ * asserts every category any resource declares appears in this array — so a new category cannot
+ * silently fall off the end of the page the way `Other` silently swallowed thirty-one strings.
+ */
+export const PERMISSION_CATEGORY_ORDER: string[] = [
+  'checkout', 'customers', 'inventory', 'fulfilment', 'maintenance',
+  'financial', 'growth', 'settings', 'admin',
+];
 
 /**
  * THE PILL LABEL — DERIVED from `resource` + `verb`, never a hand-maintained display map.

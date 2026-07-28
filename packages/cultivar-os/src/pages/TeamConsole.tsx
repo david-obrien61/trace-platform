@@ -3,7 +3,7 @@
 //               invite roles + business context. All member/role/device logic lives in the shared
 //               console; this wrapper is config only (the same component Ignition can mount).
 // DEPENDENCIES: @trace/shared/components/team/MemberConsole · useBusinessContext (businessId/
-//               isOwner/can) · permissionManifest (ENFORCED_PERMISSIONS = the chip catalog, ONE
+//               isOwner/can) · permissionManifest (CATALOG_PERMISSIONS = the chip catalog, ONE
 //               source; permissionLabel = the DERIVED pill label — no hand-maintained display map)
 //               · tileRegistry (allTiles → chip GROUPING + the "used by" trail only, never catalog
 //               membership)
@@ -14,7 +14,7 @@ import { useMemo } from 'react';
 import { useBusinessContext } from '@trace/shared/context';
 import { MemberConsole } from '@trace/shared/components/team/MemberConsole';
 import type { PermChip, PermGroup, MemberConsoleTheme } from '@trace/shared/components/team/MemberConsole';
-import { ENFORCED_PERMISSIONS, PERMISSION_MANIFEST, permissionLabel } from '@trace/shared/auth';
+import { CATALOG_PERMISSIONS, DERIVED_PERMISSIONS, PERMISSION_CATEGORY_ORDER, impliedBy, permissionCategory, permissionLabel } from '@trace/shared/auth';
 import { allTiles } from '../registry/tileRegistry';
 import { ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS } from '../auth/roles';
 import type { CultivarRole } from '../auth/roles';
@@ -26,11 +26,6 @@ const THEME: MemberConsoleTheme = {
   chipOnBg: 'rgba(39,80,10,0.12)', chipOnBorder: '#27500A', chipOffBg: '#F4F6EE', chipOffBorder: '#D8E2C8',
 };
 
-const GROUP_ORDER = ['checkout', 'fulfilment', 'financial', 'growth', 'readout', 'settings', 'admin', 'planned', 'other'];
-const GROUP_LABELS: Record<string, string> = {
-  checkout: 'Checkout', fulfilment: 'Fulfilment', financial: 'Financial', growth: 'Growth',
-  readout: 'Readouts', settings: 'Settings', admin: 'Admin', planned: 'Planned', other: 'Other',
-};
 
 export function TeamConsole() {
   const { businessId, isOwner, can } = useBusinessContext();
@@ -64,18 +59,29 @@ export function TeamConsole() {
   const permissionGroups = useMemo<PermGroup[]>(() => {
     const tilesByPerm: Record<string, string[]> = {};
     for (const t of allTiles()) (tilesByPerm[t.required_permission] ||= []).push(t.label);
-    const ids = ENFORCED_PERMISSIONS;
-    const chips: PermChip[] = ids.map((id) => {
-      const fromTile = allTiles().find((t) => t.required_permission === id)?.group;
-      const group = fromTile ?? (PERMISSION_MANIFEST[id]?.sensitivity === 'confidential' ? 'financial' : 'other');
+    const derived = new Set(DERIVED_PERMISSIONS);
+    const ids = CATALOG_PERMISSIONS;
+    const chips: PermChip[] = ids.map((id) => ({
+      id,
       // LABEL IS DERIVED (permissionLabel = resource + verb). "View Costs" / "View Wages" /
-      // "View Margin" were legacy DISPLAY names for retired strings — a label map would be the
+      // "View Margin" were legacy DISPLAY names for retired strings; a label map would be the
       // sixth representation of something the string already contains.
-      return { id, label: permissionLabel(id), group: GROUP_ORDER.includes(group) ? group : 'other', tiles: tilesByPerm[id] ?? [] };
-    });
+      label: permissionLabel(id),
+      // SECTION IS DECLARED ON THE RESOURCE SEED, never inferred from a tile that happens to gate
+      // on the same string. That inference is what put 31 of 51 permissions in "Other".
+      group: permissionCategory(id),
+      tiles: tilesByPerm[id] ?? [],
+      derived: derived.has(id) || undefined,
+      impliedBy: derived.has(id) ? impliedBy(id).map(permissionLabel) : undefined,
+    }));
     const byGroup: Record<string, PermChip[]> = {};
     for (const c of chips) (byGroup[c.group] ||= []).push(c);
-    return GROUP_ORDER.filter((k) => byGroup[k]?.length).map((k) => ({ key: k, label: GROUP_LABELS[k], chips: byGroup[k] }));
+    // ORDER is the one presentation decision that cannot be derived; MEMBERSHIP is. A category a
+    // resource declares but the order array omits would vanish — capP asserts that cannot happen,
+    // and the fallback below renders it rather than dropping it silently (D-9).
+    const ordered = [...PERMISSION_CATEGORY_ORDER, ...Object.keys(byGroup).filter((k) => !PERMISSION_CATEGORY_ORDER.includes(k))];
+    const title = (k: string): string => k.replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    return ordered.filter((k) => byGroup[k]?.length).map((k) => ({ key: k, label: title(k), chips: byGroup[k] }));
   }, []);
 
   const inviteRoleOptions = useMemo(

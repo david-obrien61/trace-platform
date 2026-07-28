@@ -37,7 +37,19 @@ export interface MemberConsoleTheme {
 }
 
 /** A permission the vertical exposes for role editing (built from the vertical's tile registry). */
-export interface PermChip { id: string; label: string; group: string; tiles: string[]; }
+export interface PermChip {
+  id: string; label: string; group: string; tiles: string[];
+  /**
+   * R9 — this string has NO gate of its own; it is enforced TRANSITIVELY through `impliedBy`.
+   * Rendered and COUNTED like any other (it is genuinely held), but never toggleable: granting
+   * the prerequisite is the act, and this pill is the visible consequence. Excluding it from the
+   * catalog is what made `margin:read` a held-but-invisible-and-un-removable string — the exact
+   * defect R9 created the status to prevent.
+   */
+  derived?: boolean;
+  /** The prerequisite(s) that imply a `derived` string, for its explanatory label. */
+  impliedBy?: string[];
+}
 /** Group ordering + labels for the Roles tab (vertical-supplied). */
 export interface PermGroup { key: string; label: string; chips: PermChip[]; }
 /** A role offerable at invite time. */
@@ -820,12 +832,19 @@ function RolesTab(p: {
                   {grp.chips.map((chip) => {
                     // owner: every chip lit + locked; others: reflect the draft + togglable.
                     const on = isOwnerRole ? true : perms.includes(chip.id);
-                    const locked = isOwnerRole;
+                    // A `derived` string (R9) is SHOWN and COUNTED but never toggleable: it has no
+                    // gate of its own, so granting it directly would imply an authority the model
+                    // does not hand out. Its prerequisite is the lever, and the label says so.
+                    const locked = isOwnerRole || chip.derived === true;
+                    const impliedNote = chip.impliedBy?.length ? `implied by ${chip.impliedBy.join(' + ')}` : 'implied by its prerequisite';
                     return (
                       <button key={chip.id} onClick={() => { if (!locked) toggle(role.role_key, chip.id); }} disabled={busy || locked}
-                        title={locked ? 'The owner can do everything — set by business ownership' : (chip.tiles.length ? `Unlocks: ${chip.tiles.join(', ')}` : 'Data-layer permission')}
+                        title={chip.derived
+                          ? `Not granted directly — ${impliedNote}. Held whenever the prerequisite is held (R9).`
+                          : (isOwnerRole ? 'The owner can do everything — set by business ownership' : (chip.tiles.length ? `Unlocks: ${chip.tiles.join(', ')}` : 'Data-layer permission'))}
                         style={{ fontSize: 11, fontWeight: 700, padding: '5px 11px', borderRadius: 8, cursor: locked ? 'default' : 'pointer', background: on ? T.chipOnBg : T.chipOffBg, border: `1px solid ${on ? T.chipOnBorder : T.chipOffBorder}`, color: on ? T.primary : T.sub, opacity: locked ? 0.85 : 1 }}>
-                        {locked && '🔒 '}{chip.label}
+                        {isOwnerRole && '🔒 '}{chip.derived && !isOwnerRole && '↳ '}{chip.label}
+                        {chip.derived && <span style={{ fontWeight: 500, opacity: 0.75 }}> · {impliedNote}</span>}
                       </button>
                     );
                   })}

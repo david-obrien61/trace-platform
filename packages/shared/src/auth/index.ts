@@ -117,7 +117,11 @@ export type { PermissionPolicy, SessionLike } from './permissions';
 export {
   // the model
   PERMISSION_MANIFEST,
-  ENFORCED_PERMISSIONS,
+  CATALOG_PERMISSIONS,
+  DERIVED_PERMISSIONS,
+  PERMISSION_CATEGORY_ORDER,
+  impliedBy,
+  permissionCategory,
   permissionLabel,
   ALL_MODEL_PERMISSIONS,
   splitPermission,

@@ -543,10 +543,10 @@ function capE(key, v) {
   // role-builder-selectable AS SOON AS THE MODEL DECLARES IT ENFORCED — never before. The
   // EXACTNESS of that set (subset AND superset, with planted-bad probes) is capP assertion 7.
   if (!console_) problems.push('Team console wrapper (TeamConsole.tsx) not found — (e) cannot be exercised');
-  else if (!/\bENFORCED_PERMISSIONS\b/.test(stripComments(console_))) problems.push('Team console does not build its chips from ENFORCED_PERMISSIONS (the catalog must be the manifest enforced set, not a registry union or a hardcoded list)');
+  else if (!/\bCATALOG_PERMISSIONS\b/.test(stripComments(console_))) problems.push('Team console does not build its chips from CATALOG_PERMISSIONS (the catalog must be the manifest-derived CATALOG_PERMISSIONS, not a registry union or a hardcoded list)');
   else if (/registryPermissions\s*\(|ALL_FINANCIAL_PERMISSIONS|ALL_ACTION_PERMISSIONS/.test(stripComments(console_))) problems.push('Team console still reads a SECOND permission-list source — the union this replaced is re-opening');
   if (problems.length === 0) {
-    return PASS(`every registry entry declares required_permission; allTiles() exposes the full set AND the role-config console builds its chips from the manifest's ENFORCED_PERMISSIONS → a newly registered tile's permission is role-builder-selectable as soon as the model declares it enforced, with no separate edit. Exactness (subset AND superset) is capP assertion 7.`);
+    return PASS(`every registry entry declares required_permission; allTiles() exposes the full set AND the role-config console builds its chips from the manifest's CATALOG_PERMISSIONS → a newly registered tile's permission is role-builder-selectable as soon as the model declares it enforced (or derived), with no separate edit. Exactness (subset AND superset) is capP assertion 7.`);
   }
   return FAIL(`role-builder single-source not established: ${problems.join('; ')}`);
 }
@@ -1530,7 +1530,7 @@ function capP(key, v) {
   // exists to prevent. The verifier has NO TS RUNTIME (same constraint as capF/capG/capQ), so it
   // cannot execute the component and diff the rendered ids against the manifest. What it CAN do is
   // assert the SHAPE that makes the two equal BY CONSTRUCTION: the chip id set is the bare
-  // identifier `ENFORCED_PERMISSIONS` and nothing else — no spread, no filter, no concat, no
+  // identifier `CATALOG_PERMISSIONS` and nothing else — no spread, no filter, no concat, no
   // second source, no literal. If the set is that identifier, render == enforced is not a
   // coincidence to be re-checked; it is the only value the expression can take.
   const P_RENDER_IDS = (src) => {
@@ -1541,7 +1541,7 @@ function capP(key, v) {
   const P_RENDER_OK = (src) => {
     const expr = P_RENDER_IDS(src);
     if (expr === null) return false;
-    if (!/^\(*\s*ENFORCED_PERMISSIONS\s*\)*$/.test(expr)) return false;
+    if (!/^\(*\s*CATALOG_PERMISSIONS\s*\)*$/.test(expr)) return false;
     // a second permission-list source anywhere in the CODE re-opens the union this replaced.
     // stripComments: the file's own comment names what it replaced — prose must not fail a cap.
     if (/registryPermissions\s*\(|ALL_FINANCIAL_PERMISSIONS|ALL_ACTION_PERMISSIONS/.test(stripComments(src))) return false;
@@ -1551,20 +1551,20 @@ function capP(key, v) {
   //    reject engineered-bad input is indistinguishable from one that works, so capP FAILS on a
   //    dead probe BEFORE it reports anything about the real file.
   const P_RENDER_PROBES = [
-    ['exact',    () => P_RENDER_OK("const ids = ENFORCED_PERMISSIONS;\n") === true],
+    ['exact',    () => P_RENDER_OK("const ids = CATALOG_PERMISSIONS;\n") === true],
     // SUPERSET — a rendered string with no manifest entry must fail (a pill that gates nothing).
-    ['superset', () => P_RENDER_OK("const ids = [...ENFORCED_PERMISSIONS, 'view_costs'];\n") === false],
+    ['superset', () => P_RENDER_OK("const ids = [...CATALOG_PERMISSIONS, 'view_costs'];\n") === false],
     // SUBSET — an enforced string missing from the render must fail (a capability with no pill,
     // which on this page is worse: the draft seeds from the RESOLVED SET, so a held string with
     // no chip is invisible AND UN-REMOVABLE through the UI).
-    ['subset',   () => P_RENDER_OK("const ids = ENFORCED_PERMISSIONS.filter((p) => p !== 'costs:read');\n") === false],
+    ['subset',   () => P_RENDER_OK("const ids = CATALOG_PERMISSIONS.filter((p) => p !== 'costs:read');\n") === false],
     ['foreign',  () => P_RENDER_OK("const ids = registryPermissions();\n") === false],
     ['literal',  () => P_RENDER_OK("const ids = ['orders:read', 'costs:read'];\n") === false],
     ['absent',   () => P_RENDER_OK("const chips = somethingElse();\n") === false],
     // PROSE IS NOT CODE — a comment naming the replaced sources must NOT fail the cap. This
     // probe is the reason stripComments exists; without it the detector punishes documentation
     // and can be silenced by deleting a comment.
-    ['comment',  () => P_RENDER_OK("// was registryPermissions() u ALL_ACTION_PERMISSIONS\nconst ids = ENFORCED_PERMISSIONS;\n") === true],
+    ['comment',  () => P_RENDER_OK("// was registryPermissions() u ALL_ACTION_PERMISSIONS\nconst ids = CATALOG_PERMISSIONS;\n") === true],
   ];
   const pDead = P_RENDER_PROBES.filter(([, run]) => { try { return !run(); } catch { return true; } }).map(([n]) => n);
   if (pDead.length) {
@@ -1574,11 +1574,64 @@ function capP(key, v) {
       pDead.map((n) => `probe '${n}' did not return its expected verdict — that detector is not running.`),
     );
   }
+  // ── THE MEMBERSHIP HALF (added 2026-07-28 after assertion 7 MISSED `audit_log:read`).
+  //
+  // 🔴 WHY THE FIRST VERSION MISSED IT, stated plainly: assertion 7 asserted the WIRING and called
+  // it exactness. It checked that the chip set IS the identifier `CATALOG_PERMISSIONS` — which was
+  // true — and said nothing about what that identifier CONTAINS. The constant filtered on `status`
+  // alone, so `audit_log:read` (status `enforced`, sensitivity `owner-only`, backed by
+  // `audit_owner_read` with NO member policy) rendered as a grantable pill, and a subset defect
+  // hid on the other side of the same blind spot: `margin:read` (status `derived`) was excluded,
+  // leaving one held-but-invisible-and-un-removable string. Shape ≠ membership. Both halves now
+  // have assertions and both have probes.
+  const C_DEF = (src) => {
+    const i = src.indexOf('export const CATALOG_PERMISSIONS');
+    if (i < 0) return null;
+    const j = src.indexOf(';', src.indexOf('.filter', i) >= 0 ? i : i);
+    return j < 0 ? null : stripComments(src.slice(i, j));
+  };
+  const C_OK = (src) => {
+    const def = C_DEF(src);
+    if (!def) return false;
+    // must admit `derived` (R9 — else margin:read is invisible AND un-removable)
+    if (!/status\s*===\s*'derived'/.test(def)) return false;
+    // must exclude owner-only (spec §4 — else audit_log:read is a grantable fake pill)
+    if (!/sensitivity\s*!==\s*'owner-only'/.test(def)) return false;
+    // must still exclude declared-unwired + HIDDEN
+    if (!/status\s*===\s*'enforced'/.test(def)) return false;
+    if (!/HIDDEN_PERMISSIONS\.includes/.test(def)) return false;
+    return true;
+  };
+  const C_PROBES = [
+    ['catalog-exact',       () => C_OK("export const CATALOG_PERMISSIONS = x\n.filter((e) => e.status === 'enforced' || e.status === 'derived')\n.filter((e) => e.sensitivity !== 'owner-only')\n.filter((p) => !HIDDEN_PERMISSIONS.includes(p));") === true],
+    // the ACTUAL 2026-07-28 defect, both directions:
+    ['catalog-owner-only',  () => C_OK("export const CATALOG_PERMISSIONS = x\n.filter((e) => e.status === 'enforced' || e.status === 'derived')\n.filter((p) => !HIDDEN_PERMISSIONS.includes(p));") === false],
+    ['catalog-drops-derived',() => C_OK("export const CATALOG_PERMISSIONS = x\n.filter((e) => e.status === 'enforced')\n.filter((e) => e.sensitivity !== 'owner-only')\n.filter((p) => !HIDDEN_PERMISSIONS.includes(p));") === false],
+    ['catalog-drops-hidden',() => C_OK("export const CATALOG_PERMISSIONS = x\n.filter((e) => e.status === 'enforced' || e.status === 'derived')\n.filter((e) => e.sensitivity !== 'owner-only');") === false],
+    ['catalog-absent',      () => C_OK("export const SOMETHING_ELSE = [];") === false],
+  ];
+  const cDead = C_PROBES.filter(([, run]) => { try { return !run(); } catch { return true; } }).map(([n]) => n);
+  if (cDead.length) {
+    return FAIL(
+      `capP ASSERTION-7 (MEMBERSHIP) SELF-TEST FAILED — ${cDead.length} probe(s) did not behave: ${cDead.join(', ')}.`,
+      cDead.map((n) => `probe '${n}' did not return its expected verdict — that detector is not running.`),
+    );
+  }
+  if (!C_OK(read('packages/shared/src/auth/permissionManifest.ts'))) {
+    FLAG('EXTRA:catalog-membership', 'assertion 7 (membership) — CATALOG_PERMISSIONS does not filter on BOTH status and sensitivity. It must admit `enforced` AND `derived` (R9 — else a derived string is held, uncounted and un-removable) and exclude `owner-only` (spec §4 — else an owner-only string renders as a grantable pill over a table with no member policy) and HIDDEN.');
+  }
+  // every declared category must have a home in the order array, or a section vanishes silently
+  const declaredCats = [...new Set([...read('packages/shared/src/auth/permissionManifest.ts').matchAll(/category:\s*'([a-z_]+)'/g)].map((m) => m[1]))];
+  const orderBlock = (read('packages/shared/src/auth/permissionManifest.ts').match(/PERMISSION_CATEGORY_ORDER[^=]*=\s*\[([\s\S]*?)\]/) || [])[1] || '';
+  const orphanCats = declaredCats.filter((c) => !orderBlock.includes(`'${c}'`));
+  if (orphanCats.length) {
+    FLAG('EXTRA:category-order', `assertion 7 (sections) — resource categor(ies) declared but absent from PERMISSION_CATEGORY_ORDER: ${orphanCats.join(', ')}. Their pills would render in an unordered tail rather than a named section.`);
+  }
   const teamConsoleSrc = read('packages/cultivar-os/src/pages/TeamConsole.tsx');
   if (!teamConsoleSrc) {
     FLAG('EXTRA:render-catalog', 'assertion 7 — TeamConsole.tsx not found; the Roles-page catalog cannot be reconciled against the manifest.');
   } else if (!P_RENDER_OK(teamConsoleSrc)) {
-    FLAG('EXTRA:render-catalog', `assertion 7 — the Roles-page chip catalog is NOT exactly the manifest's enforced set. Found \`const ids = ${P_RENDER_IDS(teamConsoleSrc) ?? '(no id set found)'}\`. It must be the bare identifier ENFORCED_PERMISSIONS, with no other permission-list source in the file — a subset hides a held-and-un-removable string, a superset renders a pill that gates nothing.`);
+    FLAG('EXTRA:render-catalog', `assertion 7 — the Roles-page chip catalog is NOT exactly the manifest's enforced set. Found \`const ids = ${P_RENDER_IDS(teamConsoleSrc) ?? '(no id set found)'}\`. It must be the bare identifier CATALOG_PERMISSIONS, with no other permission-list source in the file — a subset hides a held-and-un-removable string, a superset renders a pill that gates nothing.`);
   }
   // ── the INVERSE half: a TILE gating on a string the model does not declare. Its chip is
   //    correctly absent (the manifest is the catalog), but the gate is real, so the mismatch is a
