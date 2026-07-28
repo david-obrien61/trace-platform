@@ -56,10 +56,44 @@ SELECT 'member_array', jsonb_array_length(bm.permissions),
  WHERE b.id::text LIKE 'f7ec5d67%' AND bm.role = 'MANAGER' AND bm.active;
 
 -- ════════════════════════════════════════════════════════════════════════════════
+-- 🔴 CORRECTED 2026-07-28 AFTER THE GATE FAILED IN PRODUCTION — READ THIS BEFORE RUNNING.
+-- ════════════════════════════════════════════════════════════════════════════════
+-- The first version of this file put the halt gate in a `DO $$` block SITTING BESIDE the call.
+-- On 2026-07-28 the file was run a second time, 88 seconds after the real work; the tenant held
+-- ZERO `assets:*`; the gate's own rule said refuse — and CALL 5 executed anyway, writing a
+-- 40 → 40 audit row with outcome `success`. **An audit row that records a change where none
+-- occurred asserts an event nobody caused** — the same class as a green check on a moved surface.
+--
+-- WHY IT DID NOT HOLD, from source. Two independent structural bypasses, neither of them
+-- operator error:
+--   (1) THE GUARD WAS A STATEMENT BESIDE THE WRITE, NOT A CONDITION OF IT. Nothing bound them.
+--       `DO $$ … RAISE $$;` and the `SELECT … save_role_permissions(…)` were separate top-level
+--       statements with no transaction around them, so whether the RAISE stopped the call was a
+--       property of the CLIENT, not of this file: psql without `ON_ERROR_STOP=on` runs straight
+--       past a failed statement, and highlighting the call alone in a SQL editor never reaches
+--       the gate at all. A guard the write does not DEPEND on is advice, not a gate.
+--   (2) `save_role_permissions` ITSELF ACCEPTS A NO-OP. There is no `IS DISTINCT FROM` check
+--       anywhere in the function; it writes the `audit_log` row unconditionally. So even a
+--       perfect guard here protects only THIS FILE — **the /team Roles tab writes a
+--       `role.permissions_changed` row every time Save is pressed with nothing changed.**
+--       That half is a FUNNEL fix (migration, all 13 write sites) and is David's ruling —
+--       flagged in the ledger and tech-debt, deliberately not taken here.
+--
+-- THE FIX APPLIED BELOW, both halves:
+--   · The whole run is wrapped in an EXPLICIT `BEGIN … COMMIT`, so a RAISE in either gate rolls
+--     the call back regardless of client error-handling.
+--   · **The premise is now part of the write's own statement** — CALL 5 selects from a subquery
+--     that returns ZERO ROWS when the tenant holds no `assets:*`, so the LATERAL function is
+--     never invoked. You cannot highlight-and-run past this one; there is nothing to run.
+-- The 40 → 40 row is NOT deleted. It is the evidence that the gate needed fixing.
+
+BEGIN;
+
+-- ════════════════════════════════════════════════════════════════════════════════
 -- STEP 1 — THE HALT GATE. Re-reads every premise at RUN TIME and RAISEs rather than
 -- proceeding on a stale assumption. (#159 / #162: the guard lives in the file, not in the
 -- conversation. This one is not irreversible, but it is auditable, and a wrong audit row is
--- permanent.)
+-- permanent.) NOW INSIDE THE TRANSACTION — a RAISE here aborts the call below.
 -- ════════════════════════════════════════════════════════════════════════════════
 DO $$
 DECLARE
@@ -120,7 +154,26 @@ END $$;
 -- The permissions argument is read from the TENANT TEMPLATE at execution time (not from this
 -- document, and not from the member row) — §11.6's live-read rule: any number written down here
 -- is stale before it is read. The gate above has already proved template == member arrays.
-SELECT f.* FROM public.businesses b,
+--
+-- 🔴 THE NO-OP GUARD IS THE `FROM` CLAUSE, NOT A COMMENT AND NOT A NEIGHBOURING STATEMENT.
+-- The driving subquery yields a row ONLY IF the tenant actually holds an `assets:*` string. On a
+-- second run it returns zero rows, the LATERAL `save_role_permissions(…)` is never invoked, and
+-- no audit row is written. Expressed as a subquery rather than a trailing `WHERE … EXISTS` on
+-- purpose: with the filter inside the driving relation, "zero rows in ⇒ function not called" is
+-- a property of the query SHAPE, not a planner choice about when to apply a qual to a lateral
+-- join against a VOLATILE function.
+-- EXPECT: one row on the first run, ZERO ROWS (and no audit row) on every run after.
+SELECT f.* FROM (
+  SELECT b.id, b.owner_id
+    FROM public.businesses b
+   WHERE b.id::text LIKE 'f7ec5d67%'
+     AND EXISTS (SELECT 1
+                   FROM public.role_definitions rd,
+                        jsonb_array_elements_text(rd.permissions) s
+                  WHERE rd.business_id = b.id
+                    AND rd.role_key = 'MANAGER'
+                    AND s LIKE 'assets:%')
+) b,
   LATERAL public.save_role_permissions(
     b.id, b.owner_id, 'MANAGER', 'save', 'Manager',
     'Day-to-day ops — checkout, deliveries, campaigns, orders',
@@ -130,8 +183,7 @@ SELECT f.* FROM public.businesses b,
               WHERE rd.business_id = b.id AND rd.role_key = 'MANAGER') x
       WHERE x.s NOT LIKE 'assets:%'),
     'rbac-cleanup:assets-retired'
-  ) f
- WHERE b.id::text LIKE 'f7ec5d67%';
+  ) f;
 
 -- ════════════════════════════════════════════════════════════════════════════════
 -- STEP 2 — POST-STATE. Fails loudly if the arithmetic did not land.
@@ -160,6 +212,14 @@ BEGIN
 
   RAISE NOTICE 'POST-STATE CLEAN — tenant MANAGER 40 · zero assets:* in any member array · floor 25 · zero alias rows';
 END $$;
+
+COMMIT;
+
+-- ⚠️ EXPECTED BEHAVIOUR ON ANY RUN AFTER THE FIRST: STEP 1 RAISEs
+-- `HALT: tenant MANAGER holds no assets:* string — already clean…`, the transaction aborts, and
+-- NOTHING is written. That is the file working, not the file broken. CALL 5's zero-row driving
+-- subquery is the second, independent guard behind it — defence in depth, because on 2026-07-28
+-- the single-guard version of this file wrote a 40 → 40 row.
 
 -- ── V-audit — the reason string landed, and the row reads as a subtraction with a stated cause.
 -- EXPECT one row, reason `rbac-cleanup:assets-retired`, before 43 → after 40.
