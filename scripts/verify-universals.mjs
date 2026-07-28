@@ -63,6 +63,19 @@ const concatSql = (relDir) => {
     .map((f) => `\n-- FILE: ${f}\n` + readFileSync(join(abs, f), 'utf8'))
     .join('\n');
 };
+/**
+ * Strip // line-comments and block-comments from TS/JS source before a structural regex runs.
+ *
+ * 🔴 WHY THIS EXISTS (2026-07-28). capE and capP assertion 7 both ask "does this file reference a
+ * SECOND permission-list source?" — and both went RED against a correct file, because the file's
+ * own explanatory comment NAMES the sources it replaced ("the catalog was registryPermissions() u
+ * ALL_FINANCIAL_PERMISSIONS ..."). A detector that reads prose as code punishes documentation and,
+ * worse, can be silenced by DELETING a comment. Same family as capQ's parenthesis-in-a-comment
+ * defect. Any cap matching identifiers must run on CODE, not on the file.
+ */
+const stripComments = (src) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+
 /** 1-based line of the first regex hit, or null. */
 const lineOf = (text, re) => {
   const lines = text.split('\n');
@@ -509,7 +522,7 @@ function capE(key, v) {
   const console_ = read('packages/cultivar-os/src/pages/TeamConsole.tsx');
   const problems = [];
   if (!/required_permission:\s*string/.test(reg)) problems.push('TileEntry has no required_permission field');
-  if (!/export function registryPermissions\b/.test(reg)) problems.push('no registryPermissions() enumerator (role-builder source)');
+
   if (!/export function allTiles\b/.test(reg)) problems.push('no allTiles() selector (role-config/marketplace source)');
   // every entry must actually declare required_permission (count entries vs occurrences).
   // Scope to the TILE_REGISTRY block — NAV_IA nodes below also use `key:` but are not tiles.
@@ -520,12 +533,20 @@ function capE(key, v) {
   if (entryCount === 0 || permCount < entryCount) {
     problems.push(`not every entry declares required_permission (${permCount}/${entryCount})`);
   }
-  // NOW EXERCISED: the role-config console must actually FEED its chips from registryPermissions()
-  // (B2 one-source guarantee) — not a hardcoded permission list. This is what makes (e) real.
+  // 🔴 RE-POINTED 2026-07-28 (N-4/N-3, David's ruling) — THE SOURCE CHANGED, AND SO DID THE
+  // INVARIANT. capE used to assert the chip catalog was REGISTRY-fed. That is now wrong: a tile's
+  // permission being grantable merely because a tile declares it is how RETIRED legacy strings
+  // (`view_costs`, `view_wages`, `view_margin`) rendered as pills beside their replacements, and
+  // how `reports:read` — a `status:'planned'` tile with no route — offered a pill for an unbuilt
+  // surface. The catalog is now the MANIFEST's enforced set, so the D-010/D-012 guarantee reads
+  // one notch stricter and one notch truer: a newly registered tile's permission is
+  // role-builder-selectable AS SOON AS THE MODEL DECLARES IT ENFORCED — never before. The
+  // EXACTNESS of that set (subset AND superset, with planted-bad probes) is capP assertion 7.
   if (!console_) problems.push('Team console wrapper (TeamConsole.tsx) not found — (e) cannot be exercised');
-  else if (!/registryPermissions\(\)/.test(console_)) problems.push('Team console does not read registryPermissions() (chip list must be registry-fed, not hardcoded)');
+  else if (!/\bENFORCED_PERMISSIONS\b/.test(stripComments(console_))) problems.push('Team console does not build its chips from ENFORCED_PERMISSIONS (the catalog must be the manifest enforced set, not a registry union or a hardcoded list)');
+  else if (/registryPermissions\s*\(|ALL_FINANCIAL_PERMISSIONS|ALL_ACTION_PERMISSIONS/.test(stripComments(console_))) problems.push('Team console still reads a SECOND permission-list source — the union this replaced is re-opening');
   if (problems.length === 0) {
-    return PASS(`every registry entry declares required_permission; registryPermissions()/allTiles() expose the full set AND the role-config console feeds its chips from registryPermissions() → a newly registered tile's permission is role-builder-selectable with no separate edit.`);
+    return PASS(`every registry entry declares required_permission; allTiles() exposes the full set AND the role-config console builds its chips from the manifest's ENFORCED_PERMISSIONS → a newly registered tile's permission is role-builder-selectable as soon as the model declares it enforced, with no separate edit. Exactness (subset AND superset) is capP assertion 7.`);
   }
   return FAIL(`role-builder single-source not established: ${problems.join('; ')}`);
 }
@@ -1495,6 +1516,83 @@ function capP(key, v) {
   const hasHardWarning = /sensitivit|confidential|exposes your/i.test(console_);
   if (confidential.length && !hasHardWarning) {
     FLAG('P20', `assertion 6 — ${confidential.length} confidential permissions (${[...new Set(confidential.map((p) => p.split(':')[0]))].join(', ')}) and MemberConsole.tsx has NO sensitivity-aware branch: granting cost/margin/wage access shows the same bland confirm as any other pill. This is the live defect spec §4 names.`);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // ASSERTION 7 — THE ROLES PAGE RENDERS **EXACTLY** THE ENFORCED SET (N-4/N-3, David 2026-07-28)
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // Not a subset, not a superset. This is the assertion that makes the manifest-derived catalog
+  // STICK: without it, the next person adds one convenience string to the chip list and the page
+  // silently starts offering a pill that gates nothing. capP could not assert this before, because
+  // the catalog was a hardcoded union capP does not read.
+  //
+  // 🔴 WHAT THIS CAN AND CANNOT SEE — stated, because an overstated check is the thing STD-022
+  // exists to prevent. The verifier has NO TS RUNTIME (same constraint as capF/capG/capQ), so it
+  // cannot execute the component and diff the rendered ids against the manifest. What it CAN do is
+  // assert the SHAPE that makes the two equal BY CONSTRUCTION: the chip id set is the bare
+  // identifier `ENFORCED_PERMISSIONS` and nothing else — no spread, no filter, no concat, no
+  // second source, no literal. If the set is that identifier, render == enforced is not a
+  // coincidence to be re-checked; it is the only value the expression can take.
+  const P_RENDER_IDS = (src) => {
+    const m = stripComments(src).match(/const\s+ids\s*=\s*([^;]+);/);
+    return m ? m[1].trim() : null;
+  };
+  // EXACT means exact: the bare identifier, optionally parenthesised. Anything else is rejected.
+  const P_RENDER_OK = (src) => {
+    const expr = P_RENDER_IDS(src);
+    if (expr === null) return false;
+    if (!/^\(*\s*ENFORCED_PERMISSIONS\s*\)*$/.test(expr)) return false;
+    // a second permission-list source anywhere in the CODE re-opens the union this replaced.
+    // stripComments: the file's own comment names what it replaced — prose must not fail a cap.
+    if (/registryPermissions\s*\(|ALL_FINANCIAL_PERMISSIONS|ALL_ACTION_PERMISSIONS/.test(stripComments(src))) return false;
+    return true;
+  };
+  // ── PLANTED-BAD PROBES (STD-022), BOTH DIRECTIONS as David specified. A detector that cannot
+  //    reject engineered-bad input is indistinguishable from one that works, so capP FAILS on a
+  //    dead probe BEFORE it reports anything about the real file.
+  const P_RENDER_PROBES = [
+    ['exact',    () => P_RENDER_OK("const ids = ENFORCED_PERMISSIONS;\n") === true],
+    // SUPERSET — a rendered string with no manifest entry must fail (a pill that gates nothing).
+    ['superset', () => P_RENDER_OK("const ids = [...ENFORCED_PERMISSIONS, 'view_costs'];\n") === false],
+    // SUBSET — an enforced string missing from the render must fail (a capability with no pill,
+    // which on this page is worse: the draft seeds from the RESOLVED SET, so a held string with
+    // no chip is invisible AND UN-REMOVABLE through the UI).
+    ['subset',   () => P_RENDER_OK("const ids = ENFORCED_PERMISSIONS.filter((p) => p !== 'costs:read');\n") === false],
+    ['foreign',  () => P_RENDER_OK("const ids = registryPermissions();\n") === false],
+    ['literal',  () => P_RENDER_OK("const ids = ['orders:read', 'costs:read'];\n") === false],
+    ['absent',   () => P_RENDER_OK("const chips = somethingElse();\n") === false],
+    // PROSE IS NOT CODE — a comment naming the replaced sources must NOT fail the cap. This
+    // probe is the reason stripComments exists; without it the detector punishes documentation
+    // and can be silenced by deleting a comment.
+    ['comment',  () => P_RENDER_OK("// was registryPermissions() u ALL_ACTION_PERMISSIONS\nconst ids = ENFORCED_PERMISSIONS;\n") === true],
+  ];
+  const pDead = P_RENDER_PROBES.filter(([, run]) => { try { return !run(); } catch { return true; } }).map(([n]) => n);
+  if (pDead.length) {
+    return FAIL(
+      `capP ASSERTION-7 SELF-TEST FAILED — ${pDead.length} probe(s) did not behave on planted input: ${pDead.join(', ')}. ` +
+      `The render-exactness invariant is NOT being checked and any green from it is false.`,
+      pDead.map((n) => `probe '${n}' did not return its expected verdict — that detector is not running.`),
+    );
+  }
+  const teamConsoleSrc = read('packages/cultivar-os/src/pages/TeamConsole.tsx');
+  if (!teamConsoleSrc) {
+    FLAG('EXTRA:render-catalog', 'assertion 7 — TeamConsole.tsx not found; the Roles-page catalog cannot be reconciled against the manifest.');
+  } else if (!P_RENDER_OK(teamConsoleSrc)) {
+    FLAG('EXTRA:render-catalog', `assertion 7 — the Roles-page chip catalog is NOT exactly the manifest's enforced set. Found \`const ids = ${P_RENDER_IDS(teamConsoleSrc) ?? '(no id set found)'}\`. It must be the bare identifier ENFORCED_PERMISSIONS, with no other permission-list source in the file — a subset hides a held-and-un-removable string, a superset renders a pill that gates nothing.`);
+  }
+  // ── the INVERSE half: a TILE gating on a string the model does not declare. Its chip is
+  //    correctly absent (the manifest is the catalog), but the gate is real, so the mismatch is a
+  //    finding rather than a silence. Sentinels are exempt by declaration: `member` is a declared
+  //    absence of requirement and `owner-only` is a structural route gate — neither is grantable.
+  const tileSrc = read('packages/cultivar-os/src/registry/tileRegistry.ts');
+  if (tileSrc) {
+    const enforcedSet = new Set(Object.entries(model).filter(([, e]) => e.status === 'enforced').map(([p]) => p));
+    const sentinels = new Set(['member', 'owner-only']);
+    const tilePerms = [...new Set([...tileSrc.matchAll(/required_permission:\s*'([^']+)'/g)].map((m) => m[1]))];
+    const orphanTiles = tilePerms.filter((p) => !sentinels.has(p) && !enforcedSet.has(p));
+    if (orphanTiles.length) {
+      FLAG('EXTRA:tile-not-in-manifest', `assertion 7 (inverse) — tile gate(s) on a string the manifest does not declare enforced: ${orphanTiles.join(', ')}. The chip is correctly absent, but the tile still gates on it. Each is either a manifest entry that is owed, or a planned tile whose gate is aspirational.`);
+    }
   }
 
   // ── the acceptance diff: predicted vs emitted ─────────────────────────────────

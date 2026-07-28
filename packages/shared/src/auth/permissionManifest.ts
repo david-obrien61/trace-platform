@@ -901,6 +901,61 @@ export const HIDDEN_PERMISSIONS: string[] = [
     .map((e) => e.permission),
 ];
 
+/**
+ * ══════════════════════════════════════════════════════════════════════════════════════════════
+ * THE ROLES-PAGE CATALOG — every string an owner may grant, and NOTHING ELSE (N-4/N-3).
+ * ══════════════════════════════════════════════════════════════════════════════════════════════
+ * `status === 'enforced'` per §7.1, minus HIDDEN_PERMISSIONS. `declared-unwired` and `derived`
+ * are excluded BY THE SAME RULE that defines them, not by a removal list:
+ *   · `declared-unwired` — the string exists and NOTHING enforces it. A pill for it is a fake
+ *     surface (D-9) and, worse, an UN-REMOVABLE one: the Roles tab seeds its draft from the
+ *     RESOLVED SET (`MemberConsole.tsx:654`), so a held string with no chip survives every save.
+ *     Rendering one mints the exact defect R-B2 and capQ exist to prevent.
+ *   · `derived` (`margin:read`) — enforced transitively by its Rule-2 prerequisite, with no gate
+ *     of its own. Granting it directly would imply an authority the model does not hand out.
+ *
+ * 🔴 THE POINT: the legacy pills (`view_costs`, `view_wages`, `view_margin`, …) disappear because
+ * they are NOT IN THE MANIFEST — no removal list, no exceptions file, nothing to keep in sync.
+ * That is the whole design. A sixth hand-maintained list would have joined
+ * PRICING_RECIPE_PROTECTED_PATHS, the R-B2 list, OWNER_ONLY_PENDING, the bundles and the old chip
+ * catalog on the pile of things that duplicate something derivable and then go stale.
+ *
+ * capP asserts the rendered catalog is EXACTLY this set — not a subset, not a superset — so a pill
+ * that gates nothing fails the build.
+ */
+export const ENFORCED_PERMISSIONS: string[] = Object.values(PERMISSION_MANIFEST)
+  .filter((e) => e.status === 'enforced')
+  .map((e) => e.permission)
+  .filter((p) => !HIDDEN_PERMISSIONS.includes(p));
+
+/**
+ * THE PILL LABEL — DERIVED from `resource` + `verb`, never a hand-maintained display map.
+ *
+ * 🔴 WHY DERIVED (David's ruling, 2026-07-28). The page was showing "View Costs" / "View Wages" /
+ * "View Margin" — LEGACY display names for strings the model has retired — beside their
+ * replacements, so the owner read both vocabularies at once and could not tell which one the gates
+ * actually consult. A label map would be the sixth list duplicating something derivable.
+ *
+ * The label is therefore a pure function of the string itself: dots and underscores become spaces,
+ * each word is capitalised, and the verb is separated by a middot. `tax_rate:update` →
+ * "Tax Rate · Update"; `deliveries.route:read` → "Deliveries Route · Read". A new permission gets
+ * its label the moment it enters the manifest, with NO EDIT ANYWHERE — which is the property that
+ * made every other derived surface stop drifting.
+ *
+ * Some read a little mechanically ("Order Discount · Apply"). That is the accepted cost: a label
+ * that is always true beats a prettier one that silently describes a string nobody enforces.
+ */
+export function permissionLabel(permission: string): string {
+  const entry = PERMISSION_MANIFEST[permission];
+  const [resource, verb] = entry
+    ? [entry.resource, entry.verb]
+    : [permission.slice(0, permission.lastIndexOf(':')), permission.slice(permission.lastIndexOf(':') + 1)];
+  const words = (s: string): string =>
+    s.replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return resource ? `${words(resource)} · ${words(verb)}` : words(permission);
+}
+
+
 // ════════════════════════════════════════════════════════════════════════════════
 // THE DEFAULT BUNDLES (spec §5) — SEED DATA FOR A FRESH ROLE, NOT A MIGRATION TARGET
 // ════════════════════════════════════════════════════════════════════════════════

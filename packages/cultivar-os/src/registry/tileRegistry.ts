@@ -283,9 +283,6 @@ export function requiredPermissionFor(key: string): string | undefined {
  * enumerates registryPermissions() — registering a tile with a new permission surfaces it here
  * automatically. (verify-universals acceptance (e).)
  */
-export function registryPermissions(): string[] {
-  return [...new Set(TILE_REGISTRY.map((t) => t.required_permission))].sort();
-}
 
 // ════════════════════════════════════════════════════════════════════════════════
 // NAVIGATION IA — Model C2 (ratified by David 2026-06-24).
