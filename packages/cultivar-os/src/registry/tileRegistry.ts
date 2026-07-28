@@ -345,6 +345,7 @@ export const NAV_IA: NavNode[] = [
 
   // ── Dashboard branch ──
   { key: 'nav_orders',          section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'qr_checkout' },
+  { key: 'nav_customers',       section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'customers' },
   { key: 'nav_delivery',        section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'delivery' },
   { key: 'nav_delivery_route',  section: 'dashboard', parent: 'nav_delivery',        label: 'Route', route: '/deliveries', matchRoute: '/deliveries', required_permission: 'deliveries.route:read' },
   { key: 'nav_operating_costs', section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'operating_costs' },
@@ -361,7 +362,6 @@ export const NAV_IA: NavNode[] = [
   { key: 'nav_social',          section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'social_media' },
   // Customers roster — standalone OWNER-ONLY nav node (inherits owner-only from the tile). Under the
   // Dashboard section (operational surface the owner works with), NOT Operating Costs (view_costs).
-  { key: 'nav_customers',       section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'customers' },
   { key: 'nav_campaigns',       section: 'dashboard', parent: 'nav_social',          tileKey: 'campaigns', label: 'Campaigns', route: '/campaigns' },
   // Campaign detail — COLLAPSED breadcrumb (Dashboard / Campaigns / Campaign): drops "Social" so the
   // leaf stays 3-deep (ratified). parent stays nav_campaigns for section grouping; breadcrumb override
