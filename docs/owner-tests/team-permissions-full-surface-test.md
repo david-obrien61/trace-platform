@@ -128,3 +128,32 @@ SIGNAL: the audit row
 - **PASS:** returns `applied=false` naming owner-only, the manager's row is UNCHANGED, and `audit_log` gains a `permission.self_elevation_denied` row with `outcome='denied'`.
 - **FAIL:** the call changes any permission *(self-elevation succeeded — the worst case)*.
 - **Note:** a raw-SQL direct `UPDATE` (not the RPC) is REFUSED by the §1 trigger but cannot self-audit (a BEFORE-trigger RAISE rolls back the txn; Postgres has no autonomous transaction). The durable denial row is written when a non-owner CALLS the funnel — the reachable app path.
+
+### 8. A Save that changes NOTHING records the act without claiming a change — and rewrites no member row
+STATUS: owed
+DEVICE: desktop
+COVERS: tech-debt #74, ledger #163, migration `20260728c`, STD-023
+LAST-PROVEN: never
+SIGNAL: `outcome` on the newest `audit_log` row — `no_change`, not `success`
+- **Do:** as the OWNER, open `/team → Roles`, select MANAGER, **change nothing**, press Save. Then:
+  `SELECT action, outcome, detail->>'members_affected' FROM audit_log ORDER BY created_at DESC LIMIT 1;`
+- **PASS:** exactly one new row · `action='role.permissions_changed'` · **`outcome='no_change'`** ·
+  `members_affected=0` · `detail->'before'` equals `detail->'after'` · and **no member row was touched**
+  (`SELECT updated_at FROM business_members WHERE business_id=:bid AND role='MANAGER'` is unchanged from
+  before the Save — read it first).
+- **FAIL:** `outcome='success'` *(the action name asserts an event that did not occur — this is the
+  original defect)* · OR no row at all *(the operator act was lost — silence gains nothing and loses
+  who-touched-what)* · OR any member `updated_at` moves *(the arrays were re-materialized for nothing)*.
+- **🔴 THE NEGATIVE TWIN, and it is the one that matters most:** now change **one** permission and Save.
+  **PASS:** `outcome='success'`, `members_affected` ≥ 1, and the member array actually changes.
+  A short-circuit that fires when it should not is a WORSE defect than the one it fixed — it would
+  silently discard a real grant. Card 1 is the standing proof of that direction; this line is its
+  pairing at the same keystroke.
+- **The reorder case (why set-comparison, not array-comparison):** jsonb array ordering is not stable
+  across a re-materialization, so an implementation comparing raw arrays reports a change on a pure
+  REORDERING. Provable at the DB with `20260728c` V3 (same elements, reversed order → still `no-op`);
+  it is **not** provable from the screen, which is why it lives in the migration's verification and is
+  named here rather than pretended at.
+- **Note:** `no_change` rows are ignorable by anything counting changes and present for anything
+  reconstructing who touched what — but **any query counting permission changes must now filter on
+  `outcome`**, because `action='role.permissions_changed'` alone includes them.

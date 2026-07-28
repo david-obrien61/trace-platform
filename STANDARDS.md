@@ -1367,3 +1367,57 @@ invariant holds but that **the check for it is demonstrably alive**.
 **PROOF OF FORCE (2026-07-27):** reintroducing the original quote-only key pattern makes `capQ`
 FAIL with *"SELF-TEST FAILED — parser/unquoted-key did NOT reject planted bad input"*, instead of
 the PASS it used to print. The standard was verified by breaking the code, not by asserting it.
+
+---
+
+### STD-023 — A GUARD THE WRITE DOES NOT DEPEND ON IS ADVICE, NOT A GATE
+
+**The rule.** A precondition only protects a write if the write **cannot execute without it**.
+A check that merely *sits beside* the operation it is meant to prevent is documentation with a
+`RAISE` in it — whether it actually stops anything is a property of the caller, the client, or
+the planner, none of which the file controls. **State the premise as the branch condition, the
+`WHERE` clause, the driving relation, or the constraint — never as a neighbouring statement.**
+
+**The instance that produced it (2026-07-28, ledger #163, tech-debt #74).** A cleanup runbook
+carried an explicit halt gate whose own rule was *"refuse if there is nothing to clear — never
+write an audit row for a no-op."* The file was re-run 88 seconds after the real work, on a tenant
+already clean, and **the call executed anyway and wrote a `40 → 40` audit row with outcome
+`success`** — an audit row asserting an event nobody caused, in the one artifact whose entire
+value is that it is evidence. The gate was a `DO $$ … RAISE $$;` block and the call was a separate
+top-level statement, **with no transaction binding them**. So whether the `RAISE` stopped the call
+depended entirely on the client: `psql` without `ON_ERROR_STOP=on` runs straight past a failed
+statement, and highlighting the call alone in a SQL editor never reaches the gate at all. The
+guard read as enforcement in review, and enforced nothing.
+
+**THE COROLLARY — PLANNER-DEPENDENT SAFETY IS NOT SAFETY.** The fix expresses the premise as the
+**driving relation of the write itself**: the statement selects `FROM (…WHERE EXISTS <premise>) b,
+LATERAL <the writing function>(…)`, so zero rows in ⇒ the function is never invoked. This was
+chosen over the more natural trailing `WHERE … EXISTS` on purpose. A trailing qual referencing
+only the outer relation *would probably* be pushed below the lateral join — but "probably" is a
+planner decision about a `VOLATILE` function, not a guarantee the file makes. **Putting the
+premise in the driving relation makes "no rows ⇒ not called" a property of the query SHAPE.**
+Generalised: when a safety property depends on evaluation order, optimiser behaviour, client
+error-handling, or operator discipline, it is not a safety property — it is a hope with good odds.
+
+**Same family as STD-022.** STD-022 says an assertion that cannot fail is indistinguishable from
+one that works. STD-023 is its twin one layer out: **a guard that can be walked around is
+indistinguishable from one that holds** — and both fail the same way, silently, while the board
+stays green. STD-022 asks *can this check ever fail?*; STD-023 asks *can the operation ever
+proceed without this check?* A build answers both.
+
+**How it is applied.**
+1. **Runbooks and migrations.** A guarded write is wrapped in an explicit `BEGIN … COMMIT` so a
+   `RAISE` aborts the write regardless of client error-handling — **and** the premise appears in
+   the writing statement itself. Two independent mechanisms, because the 2026-07-28 defect proved
+   one is a single point of failure.
+2. **Functions.** A precondition belongs *inside* the function that performs the write (the #74
+   fix moved the no-op test into `save_role_permissions`), not in every caller. A rule enforced by
+   each caller remembering it is enforced by memory, which is not enforcement.
+3. **Review test.** For any guard, ask: *"what is the shortest path by which this write executes
+   and this check does not run?"* If that path exists and requires nothing exotic — running the
+   file in a different client, highlighting one statement, calling the function from somewhere
+   else — the guard is advice. Rewrite it or record it as advice, but do not call it a gate.
+
+**Why it is a standard and not a note in #74.** The defect is not about permissions. It is about
+the relationship between a check and the thing it checks, and that relationship exists in every
+migration, every runbook, every API handler, and every RPC in the platform.
