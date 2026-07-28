@@ -41,33 +41,80 @@ COMMIT;
 
 
 -- ════════════════════════════════════════════════════════════════════════════════
--- 🔴 THE RESIDUAL — THIS IS NOT FULLY CLOSED, AND THE GAP IS A WORKFLOW, NOT A STATEMENT
+-- 🔴 THE RESIDUAL — NOT FULLY CLOSED, AND THE GAP IS A WORKFLOW, NOT A STATEMENT
 -- ════════════════════════════════════════════════════════════════════════════════
+-- ✏️ SCOPE CORRECTED 2026-07-28, AFTER THE V4 PROBE (comment-only — no statement in this file was
+--    changed, and it had already been applied; recorded inline rather than silently reworded).
+--    The first draft said "the dashboard," which was too broad and would have banned a path that
+--    is fine.
+--
 -- THE SAME `ALTER` AGAINST `supabase_admin` WAS **DENIED**. Supabase owns that role and does not
 -- grant membership in it, so its default ACL on `public` cannot be altered from here. It is not an
 -- oversight and there is no statement that fixes it — it is a property of managed Postgres.
 --
 -- WHY THAT MATTERS: `supabase_admin` is the role that creates tables WHEN SUPABASE DOES — i.e.
--- **the dashboard table editor**. Its default ACL still grants TRUNCATE and REFERENCES to `anon`.
+-- **the dashboard TABLE EDITOR**. Its default ACL still grants TRUNCATE and REFERENCES to `anon`.
 --
---   ⇒ A TABLE CREATED THROUGH THE DASHBOARD UI ARRIVES WITH `TRUNCATE` AND `REFERENCES`
---     GRANTED TO `anon` ALL OVER AGAIN — silently, looking exactly like every other table.
+--   ⇒ A TABLE CREATED THROUGH THE DASHBOARD **TABLE EDITOR** ARRIVES WITH `TRUNCATE` AND
+--     `REFERENCES` GRANTED TO `anon` ALL OVER AGAIN — silently, looking exactly like every
+--     other table.
+--
+-- ⚠️ THE SQL EDITOR IS **NOT** THE GAP — PROVEN, NOT ASSUMED. The V4 probe below was created
+--    through the SQL editor and inherited the **postgres** default: five privileges arrived,
+--    TRUNCATE and REFERENCES did not. So the two surfaces people both call "the dashboard" behave
+--    DIFFERENTLY, and only one re-grants. Saying "not the dashboard" would have forbidden a safe
+--    path and, worse, taught a rule that the next probe visibly contradicts — which is how a
+--    correct rule gets discarded wholesale.
 --
 -- ⚠️ THE WORKFLOW CONSTRAINT THAT FOLLOWS (binding):
 --
---        ***  CREATE TABLES THROUGH MIGRATIONS, NOT THE DASHBOARD.  ***
+--        ***  CREATE TABLES THROUGH MIGRATIONS, NOT THE DASHBOARD TABLE EDITOR.  ***
+--        ***  (the SQL editor inherits the corrected postgres default and is fine)  ***
 --
---    Not a style preference. The migration path runs as `postgres`, whose default ACL is now
---    correct; the dashboard path runs as `supabase_admin`, whose default ACL cannot be corrected.
---    Same table, same schema, different privileges — decided by which window it was typed into.
+--    Not a style preference. The migration and SQL-editor paths run as `postgres`, whose default
+--    ACL is now correct; the table-editor path runs as `supabase_admin`, whose default ACL cannot
+--    be corrected. Same table, same schema, different privileges — decided by which window it was
+--    typed into.
+--
+-- ── AN EXTERNAL CONTROL THAT EXISTS, AND IS NOT OURS ────────────────────────────
+-- Supabase's SQL editor warns before running a `CREATE TABLE` without RLS: *"Clients using anon or
+-- authenticated keys may be able to access public.<table>."* The platform guards the same shape we
+-- spent this week finding. Recorded as an external control that EXISTS — not as something we
+-- built, and not as something to rely on: it is a warning on one surface, it is dismissible, and
+-- it speaks to RLS rather than to the privilege layer this file is about.
 --
 -- THE GOOD NEWS: this is DETECTABLE, and the detector is exact. A table in `public` carrying
 -- TRUNCATE or REFERENCES for `anon` after this migration was, with near-certainty, created outside
 -- the migration path. The privilege is the fingerprint.
 
--- ── ASSERTION A — 🔴 THE DASHBOARD-CREATED-TABLE DETECTOR. EXPECT 0 ROWS, ALWAYS, FOREVER.
---    Any row is a table that acquired these privileges outside the migration path. Remediate with
---    the §1 statement above, then find out who created it and how.
+-- ════════════════════════════════════════════════════════════════════════════════
+-- ✅ VERIFIED 2026-07-28 (David, live at postgres, `bgobkjcopcxusjsetfob`) — ALL FOUR CLEAN.
+-- ════════════════════════════════════════════════════════════════════════════════
+--  V1 — **ZERO ROWS.** No TRUNCATE and no REFERENCES for `anon` or `authenticated` anywhere in
+--       `public`. The negative this migration exists to produce.
+--  V2 — ordinary CRUD UNTOUCHED, which is the half that matters more: `anon` on 45 tables,
+--       `authenticated` on 46, both at DELETE/INSERT/SELECT/TRIGGER/UPDATE. RLS is still doing
+--       exactly the filtering it was always doing.
+--       ⚠️ THE 45-vs-46 GAP IS EXPLAINED, NOT A DEFECT: it is
+--       `business_inventory_ledger_events` — `anon` was revoked BY HAND yesterday (containment,
+--       ledger #159), `authenticated` still holds it. **It resolves when `20260727f` DROPS the
+--       view.** Recorded here so a later reader does not re-investigate a known, queued item.
+--  V3 — `audit_log` and `business_inventory_ledger` both at **INSERT, SELECT, TRIGGER** per role.
+--       REFERENCES gone; TRUNCATE was already gone (`20260624` / `20260720:209`). The tightest
+--       privilege set in the schema, and it got tighter — the intended interaction, confirmed.
+--  V4 — 🔴 **THE DURABILITY PROOF PASSES.** A fresh table inherited exactly five privileges —
+--       DELETE, INSERT, SELECT, TRIGGER, UPDATE — and **NO TRUNCATE, NO REFERENCES.**
+--       **That is precisely the distinction the probe exists to make:** the default ACL is LIVE
+--       (five privileges arrived, so there WAS something there) **AND** narrowed (two did not
+--       arrive). Neither reading alone would have proven it. A statement that had silently
+--       no-opped would have produced seven privileges; an absent default would have produced
+--       none. Five is the only outcome that means "fixed."
+-- ════════════════════════════════════════════════════════════════════════════════
+
+-- ── ASSERTION A — 🔴 THE TABLE-EDITOR-CREATED-TABLE DETECTOR. EXPECT 0 ROWS, ALWAYS, FOREVER.
+--    Any row is a table that acquired these privileges outside the migration path — in practice,
+--    one created in the dashboard TABLE EDITOR. Remediate with the §1 statement above, then find
+--    out who created it and how. ✅ Returned 0 rows on 2026-07-28 (this is V1).
 --
 -- SELECT c.relname                    AS table_name,
 --        a.grantee::regrole::text     AS grantee,
@@ -109,6 +156,8 @@ COMMIT;
 
 -- ── ASSERTION C — proven by BREAKING it (STD-022). A fresh table is the only thing that
 --    distinguishes "the default ACL was fixed" from "there was never one to fix." Rolls back.
+--    ✅ RAN 2026-07-28 — five privileges, no TRUNCATE, no REFERENCES. This is V4, and it also
+--    established that the SQL editor inherits the POSTGRES default (see the residual above).
 -- BEGIN;
 --   CREATE TABLE public._privilege_probe (id int);
 --   SELECT a.grantee::regrole::text AS grantee, a.privilege_type
