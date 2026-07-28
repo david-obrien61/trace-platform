@@ -136,7 +136,13 @@ export const TILE_REGISTRY: TileEntry[] = [
     icon: Share2,      color: '#f472b6', bg: DASH_BG, route: '/social/setup',      module_key: 'social_media' },
   // Customers ROSTER (3rd DataSheet consumer). OWNER-ONLY — matches customers_business_owner RLS
   // (owner-only, FOR ALL) so the nav never opens onto an empty RLS wall for staff (Gate-3 lesson).
-  { key: 'customers',        vertical: 'general', label: 'Customers',                 group: 'crm',       kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'owner-only',         status: 'live',    depends_on: null,
+  // 🔴 'owner-only' → 'customers:read' (2026-07-28, ledger #167). #153 re-gated the /customers
+  // ROUTE and added the customers_member RLS policy on 2026-07-24, and NOBODY TOUCHED THE TILE —
+  // so `nav_customers` (tileKey: 'customers') inherited `owner-only`, and a MANAGER holding
+  // customers:read could reach /customers by URL while the menu never showed it. Route open,
+  // table open, NAV shut: STD-020's third failure on this one capability, at the layer the
+  // enforcement map had no column for. capR now asserts tile-gate == route-gate.
+  { key: 'customers',        vertical: 'general', label: 'Customers',                 group: 'crm',       kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'customers:read',     status: 'live',    depends_on: null,
     icon: Users,       color: '#818cf8', bg: DASH_BG, route: '/customers' },
 
   // ── Dashboard — readouts (live). A readout LEAKS data by rendering → gate on what it exposes.

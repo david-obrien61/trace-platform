@@ -724,11 +724,83 @@ function capR(key, v) {
   const routerReachable = (r) => routerPaths.some((p) => seg(r, p));
   const deadNav  = navRoutes.filter((r) => !routerReachable(r));
 
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // (2) NODE REACHABILITY — a nav node must resolve to a root (added 2026-07-28, David's ask).
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // capR compared route PATHS and called it nav integrity. A node can hold a valid route, be
+  // found by `navNodeForPath` (so it resolves as `activeKey`), and still never appear in the
+  // rendered menu — which is the same user-visible defect as a URL-only orphan, arrived at from
+  // the other side. This half asserts the TREE: every node walks up to a `parent: null` root.
+  const navBlock = reg.slice(reg.indexOf('export const NAV_IA'));
+  const navNodes = [...navBlock.matchAll(/\{\s*key:\s*'([^']+)'[^}]*?parent:\s*(null|'[^']+')/g)]
+    .map((m) => ({ key: m[1], parent: m[2] === 'null' ? null : m[2].slice(1, -1) }));
+  const navReachesRoot = (nodes, n, seen = new Set()) => {
+    if (n.parent === null) return true;
+    if (seen.has(n.key)) return false;                       // a cycle is not a root
+    seen.add(n.key);
+    const parent = nodes.find((x) => x.key === n.parent);
+    return parent ? navReachesRoot(nodes, parent, seen) : false;   // missing parent = orphan
+  };
+  // ── PLANTED-BAD PROBES (STD-022): a detector that cannot reject engineered-bad input is
+  //    indistinguishable from one that works, so capR FAILS on a dead probe BEFORE reporting.
+  const R_PROBES = [
+    ['root',     () => navReachesRoot([{ key: 'a', parent: null }], { key: 'a', parent: null }) === true],
+    ['child',    () => navReachesRoot([{ key: 'a', parent: null }, { key: 'b', parent: 'a' }], { key: 'b', parent: 'a' }) === true],
+    // the case David asked for: a node with a route and NO parent in the tree must be rejected
+    ['orphan',   () => navReachesRoot([{ key: 'a', parent: null }, { key: 'b', parent: 'ghost' }], { key: 'b', parent: 'ghost' }) === false],
+    ['cycle',    () => navReachesRoot([{ key: 'b', parent: 'c' }, { key: 'c', parent: 'b' }], { key: 'b', parent: 'c' }) === false],
+  ];
+  const rDead = R_PROBES.filter(([, run]) => { try { return !run(); } catch { return true; } }).map(([n]) => n);
+  if (rDead.length) {
+    return FAIL(
+      `capR SELF-TEST FAILED — ${rDead.length} reachability probe(s) did not behave: ${rDead.join(', ')}. ` +
+      `The tree invariant is NOT being checked and any green from it is false.`,
+      rDead.map((n) => `probe '${n}' did not return its expected verdict — that detector is not running.`),
+    );
+  }
+  const unrooted = navNodes.filter((n) => !navReachesRoot(navNodes, n)).map((n) => `${n.key} (parent: ${n.parent ?? 'null'})`);
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // (3) THE FOURTH LAYER — a nav entry gated on a DIFFERENT string than its own route (STD-020).
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 THIS is what would have caught the 2026-07-28 defect, and neither capR nor capP did: the
+  // `customers` TILE still declared `required_permission: 'owner-only'` while the /customers ROUTE
+  // had been re-gated to `customers:read` on 2026-07-24 (#153). Route fixed, table fixed, TILE
+  // NEVER TOUCHED — so a MANAGER could reach /customers by URL and never see it in the menu.
+  // STD-020 says one capability is checked at every layer it touches; the enforcement map had
+  // columns for route, table and function, and the TILE is a fourth layer nobody was reconciling.
+  //
+  // ALLOWED: a tile may be owner-only when its ROUTE is owner-only too (that is agreement, not
+  // divergence) — /costs is the deliberate D-009 moat, and `add_business` has no route at all.
+  const routeGates = new Map();
+  for (const blk of router.matchAll(/<Route\s+element=\{<PermissionRoute\s+permission="([^"]+)"[^>]*\/>\}>([\s\S]*?)<\/Route>/g)) {
+    for (const r of blk[2].matchAll(/<Route\s+path="([^"]+)"/g)) routeGates.set(r[1], blk[1]);
+  }
+  // ⚠️ PARSE PER-TILE, NOT ACROSS THE BLOCK. The first draft of this used one `[\s\S]*?` spanning
+  // key→permission→route, which happily crossed OBJECT BOUNDARIES whenever a tile had no `route:`
+  // and paired a tile's permission with the NEXT tile's route — it reported `online_shop` against
+  // `/add-business` and `services` against `/campaigns`, two pairings that do not exist. A cap that
+  // invents findings is worse than one that misses them: it trains the reader to dismiss the
+  // output. Split on the object delimiter first, then read fields WITHIN one object.
+  const tileBlockR = reg.slice(0, reg.indexOf('export const NAV_IA'));
+  const layerMismatch = [];
+  for (const chunk of tileBlockR.split(/\n  \{ key: /).slice(1)) {
+    const body = chunk.slice(0, chunk.indexOf('\n  {') >= 0 ? chunk.indexOf('\n  {') : undefined);
+    const tileKey = (body.match(/^'([^']+)'/) || [])[1];
+    const tilePerm = (body.match(/required_permission:\s*'([^']+)'/) || [])[1];
+    const tileRoute = (body.match(/route:\s*'([^']+)'/) || [])[1];
+    if (!tileKey || !tilePerm || !tileRoute) continue;   // a tile with no route has no route gate to disagree with
+    const gate = routeGates.get(tileRoute);
+    if (gate && gate !== tilePerm) layerMismatch.push(`${tileKey}: tile gates '${tilePerm}' but route ${tileRoute} gates '${gate}'`);
+  }
+
   const problems = [];
   if (orphans.length) problems.push(`routes reachable but with NO nav entry (URL-only/orphaned): ${orphans.join(', ')}`);
   if (deadNav.length) problems.push(`nav entries pointing at no route (dead link): ${deadNav.join(', ')}`);
+  if (unrooted.length) problems.push(`nav node(s) that do not resolve to a root — present in the registry, absent from the rendered tree: ${unrooted.join(', ')}`);
+  if (layerMismatch.length) problems.push(`STD-020 fourth layer — tile gate disagrees with its own route gate, so the surface is URL-reachable but menu-invisible: ${layerMismatch.join(' | ')}`);
   if (problems.length === 0) {
-    return PASS(`route↔nav integrity: all ${routerPaths.length} router paths are nav-reachable or a documented exception (${EXCEPTIONS.size} exceptions: public/auth/checkout/redirect/param/sub-flow); no dead nav links.`);
+    return PASS(`route↔nav integrity: all ${routerPaths.length} router paths are nav-reachable or a documented exception (${EXCEPTIONS.size} exceptions: public/auth/checkout/redirect/param/sub-flow); no dead nav links; all ${navNodes.length} nav nodes resolve to a root (4 planted-bad probes REJECTED); every tile gate agrees with its own route gate (STD-020 fourth layer).`);
   }
   return FAIL(`route↔nav integrity broken: ${problems.join(' | ')}`);
 }
