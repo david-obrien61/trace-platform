@@ -4,6 +4,23 @@
 -- APPLY AS: postgres, AFTER 20260727_rbac_resource_action_flip.sql (APPLIED — it owns the
 -- current 8-arg signature with `p_reason`). §6 r1: a new file, never an edit of an applied one.
 --
+-- ✅ APPLIED AND VERIFIED 2026-07-28 (David, at postgres). V1 → `applied=false, reason='no-op',
+-- outcome='no_change'`, 40 → 40 · **🔴 V3 REORDER — same 40 elements, reversed order → still
+-- `no-op`. SET COMPARISON CONFIRMED**, and V3 is the ONLY probe that distinguishes this build
+-- from an array-comparison one (an array build returns `applied=true` there and passes every
+-- other check) · V4 label-change → `applied=true`, member_id populated, rolled back · `prosrc`
+-- confirmed to contain the short-circuit.
+--
+-- 🔴 DO NOT PRUNE THE PROBE ROWS FROM `audit_log`. They are the fix's own before/after, and
+-- better evidence than any comment in this file:
+--     18:13:29  rbac-cleanup:assets-retired  success     40 → 40   ← the defect
+--     18:45:08  v1-noop-probe                no_change   40 → 40   ← fixed
+--     18:45:25  v3-reorder-probe             no_change   40 → 40   ← fixed, and order-insensitive
+-- Three rows, same tenant, same role, same counts — the only difference is `outcome`, which is
+-- exactly the property this migration exists to establish. A future audit-log cleanup that
+-- removes "probe noise" would delete the demonstration that the guard is alive (STD-022's whole
+-- concern, applied to the evidence rather than to the check).
+--
 -- WHY. Tech-debt #74 / ledger #163. `save_role_permissions` had no `IS DISTINCT FROM` check
 -- anywhere: it re-materialized every active member's array and appended the `audit_log` row
 -- UNCONDITIONALLY. Found 2026-07-28 when the CALL 5 cleanup runbook was re-run 88 seconds after

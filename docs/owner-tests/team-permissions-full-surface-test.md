@@ -149,11 +149,22 @@ SIGNAL: `outcome` on the newest `audit_log` row — `no_change`, not `success`
   A short-circuit that fires when it should not is a WORSE defect than the one it fixed — it would
   silently discard a real grant. Card 1 is the standing proof of that direction; this line is its
   pairing at the same keystroke.
+- **✅ THE RPC HALF IS ALREADY PROVEN — this card is now about the SCREEN ONLY.** `20260728c` was
+  applied and verified 2026-07-28: V1 no-op → `applied=false, reason='no-op', outcome='no_change'` ·
+  **V3 REORDER (same 40 elements, reversed) → still `no-op` — SET COMPARISON CONFIRMED** · V4 label
+  edit → `applied=true`, rolled back · `prosrc` contains the short-circuit. What is unproven is the
+  path from **the button** to that function: the screen may send a different payload than the probe
+  did (a re-ordered array, a label it thinks unchanged, a stale draft). That is exactly the gap
+  BUILDER-COMPLETE → OWNER-PROVEN names, so **do not read the green DB result as this card passing.**
 - **The reorder case (why set-comparison, not array-comparison):** jsonb array ordering is not stable
   across a re-materialization, so an implementation comparing raw arrays reports a change on a pure
-  REORDERING. Provable at the DB with `20260728c` V3 (same elements, reversed order → still `no-op`);
-  it is **not** provable from the screen, which is why it lives in the migration's verification and is
-  named here rather than pretended at.
+  REORDERING. Proven at the DB by V3 above; it is **not** provable from the screen, which is why it
+  lives in the migration's verification and is named here rather than pretended at.
+- **🔴 THE EVIDENCE IS IN `audit_log` AND MUST NOT BE PRUNED.** Three rows, same tenant, same role,
+  same counts, differing only in `outcome` — `18:13:29 · success · 40 → 40` (the defect) ·
+  `18:45:08 v1-noop-probe · no_change` · `18:45:25 v3-reorder-probe · no_change`. That is the fix's
+  own before/after, and better evidence than any comment. A cleanup that removes "probe noise" would
+  delete the demonstration that the guard is alive.
 - **Note:** `no_change` rows are ignorable by anything counting changes and present for anything
   reconstructing who touched what — but **any query counting permission changes must now filter on
   `outcome`**, because `action='role.permissions_changed'` alone includes them.
