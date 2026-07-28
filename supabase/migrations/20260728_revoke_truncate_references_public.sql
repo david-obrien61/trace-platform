@@ -1,0 +1,192 @@
+-- ════════════════════════════════════════════════════════════════════════════════
+-- 20260728 — REVOKE TRUNCATE, REFERENCES on schema `public` from anon + authenticated
+-- ════════════════════════════════════════════════════════════════════════════════
+-- APPLY AS: postgres.
+--
+-- ⚠️ REPO-AUTHORITY RECORD. David is applying this statement now, in the SQL editor. This file
+--    exists so the repo does not fall behind the database — which is its own finding (#155: a
+--    hand-fix applied live and only later given a replayable form). Idempotent: REVOKE of a
+--    privilege that is not held is a no-op, so this is safe to re-run and safe to replay onto a
+--    rebuilt project.
+--
+-- ── WHY TRUNCATE ────────────────────────────────────────────────────────────────
+-- TRUNCATE IS NOT SUBJECT TO ROW-LEVEL SECURITY. RLS governs SELECT, INSERT, UPDATE and DELETE,
+-- and nothing else. There is no policy that can filter a TRUNCATE, and a FOR EACH ROW trigger does
+-- not fire on one. `anon` held TRUNCATE on ~45 tables — a privilege the entire security model is
+-- structurally unable to see, let alone constrain.
+--
+-- NOT REACHABLE TODAY, WHICH IS WHY THIS IS LATENT AND NOT LIVE: PostgREST exposes no TRUNCATE
+-- verb, so no HTTP request carrying the anon key can invoke it. The exposure is the privilege
+-- sitting there against a future path — a direct connection, a new client library, a `SECURITY
+-- DEFINER` function written without care. Stated plainly so nobody reads this file as an incident
+-- report and nobody reads it as busywork either. It is a standing grant the model cannot filter.
+--
+-- This is the third time the same lesson has been paid for. `audit_log` (20260624) and
+-- `business_inventory_ledger` (20260720:207-209) each revoked TRUNCATE from the untrusted roles on
+-- discovering it, one table at a time, because an append-only trigger alone is insufficient. This
+-- statement generalises those two scars across the schema.
+--
+-- ── WHY REFERENCES ──────────────────────────────────────────────────────────────
+-- REFERENCES permits a role to create a foreign key AGAINST a table. No client needs it — FKs are
+-- authored in migrations, as postgres. Held by a client role it is a lever on the target table's
+-- lifecycle: a referencing constraint constrains what the referenced table may do.
+--
+-- ── WHAT THE V4 SWEEP FOUND (David's read of the catalog, 2026-07-27/28) ─────────
+-- ⚠️ PROVENANCE, per STD-021 v2.8 and the #159b workflow seam: the facts in this section are from
+--    DAVID'S live catalog output relayed to me. They are not my own catalog read — I have no
+--    database access from here — and they are recorded as relayed, not as independently verified.
+--
+--   • EVERY BASE TABLE HAS RLS ENABLED. No table is naked. The grant pattern is Supabase's uniform
+--     default applied at project creation, not a choice anyone made per-table — which is why it is
+--     uniform, and why the fix is one statement rather than forty-five.
+--   • THE VIEW WAS THE ONLY OBJECT WHERE A GRANT WAS THE SOLE LINE OF DEFENCE. That is the
+--     difference between #159 and this file: `business_inventory_ledger_events` had no policies to
+--     fall back on (a view has none), so its grants WERE its security, and it was dropped. Here,
+--     RLS holds underneath on every base table. This revoke removes a privilege RLS cannot reach —
+--     it is not what is protecting the data.
+--   • TWO TABLES ALREADY PROVE THE GOOD PATTERN EXISTS: `audit_log` and
+--     `business_inventory_ledger` carry INSERT / REFERENCES / SELECT / TRIGGER only. Someone
+--     deliberately revoked the write privileges, so append-only is enforced at the PRIVILEGE layer
+--     AND by the trigger. Two independent layers — and it is the only place in the schema where
+--     that happens.
+--
+--   ⚠️ NOTE THE INTERACTION, because it is intended and a reader will otherwise think it a slip:
+--      this statement also strips REFERENCES from those two exemplar tables, narrowing them to
+--      INSERT / SELECT / TRIGGER. Their TRUNCATE was already gone (that is what 20260624 and
+--      20260720:209 did). The blanket form tightens them further rather than leaving them alone.
+--
+-- ── BLAST RADIUS ────────────────────────────────────────────────────────────────
+-- CORPUS + METHOD (STD-021): case-insensitive grep for `TRUNCATE` across `supabase/migrations/`,
+-- `scripts/`, `packages/shared/src`, `packages/cultivar-os/src`, `packages/cultivar-os/api`, `api`.
+-- ONE executing consumer exists: `scripts/wipe-for-person-spine.sql` (the full-nuke teardown),
+-- which runs AS POSTGRES and is explicitly documented to disable the append-only guards for its
+-- window. postgres retains TRUNCATE; the script is UNAFFECTED. Every other hit is prose in a
+-- comment. No application code path issues TRUNCATE or REFERENCES under an anon or authenticated
+-- role, because neither is reachable through PostgREST.
+--
+-- ⚠️ SCOPE STATED HONESTLY — SERVICE_ROLE IS NOT INCLUDED. The two precedent revokes each named
+--    three roles (`FROM anon, authenticated, service_role`). This statement names two, so
+--    `service_role` RETAINS TRUNCATE on every table other than those two. That is David's
+--    statement as given and it is recorded, not silently widened — service_role is a trusted
+--    server-side key, and broadening a blanket revoke to it is a separate decision with its own
+--    blast radius (the sale path runs under it). Named here so the asymmetry is visible rather
+--    than discovered later.
+--
+-- ⚠️ THIS IS A POINT-IN-TIME STATEMENT. `ALL TABLES IN SCHEMA public` expands, once, over the
+--    tables that exist AT APPLY TIME (48 per the sweep — and note that in Postgres `ALL TABLES`
+--    includes views). It does NOT govern tables created afterwards. That gap is §2 below.
+
+BEGIN;
+
+-- ── §1 — the revoke over today's tables ─────────────────────────────────────────
+REVOKE TRUNCATE, REFERENCES ON ALL TABLES IN SCHEMA public FROM anon;
+REVOKE TRUNCATE, REFERENCES ON ALL TABLES IN SCHEMA public FROM authenticated;
+
+COMMIT;
+
+
+-- ════════════════════════════════════════════════════════════════════════════════
+-- §2 — DEFAULT PRIVILEGES — ⛔ PENDING DAVID'S `pg_default_acl` OUTPUT. NOT YET WRITTEN.
+-- ════════════════════════════════════════════════════════════════════════════════
+-- §1 covers the 48 tables that exist today. If a DEFAULT ACL grants these privileges on `public`,
+-- THE NEXT TABLE CREATED RE-GRANTS THEM and §1 decays from the moment the next migration runs.
+-- The durable half is ALTER DEFAULT PRIVILEGES, and it belongs in this file — but it cannot be
+-- written correctly without seeing the catalog, because the statement's shape depends on WHICH
+-- ROLE OWNS the default ACL entry.
+--
+-- THE READ (David is running this):
+-- SELECT d.defaclrole::regrole AS granting_role,
+--        n.nspname            AS schema,
+--        d.defaclobjtype      AS obj_type,   -- 'r' = tables/views, 'S' = sequences, 'f' = functions
+--        d.defaclacl          AS acl
+--   FROM pg_default_acl d
+--   JOIN pg_namespace n ON n.oid = d.defaclnamespace
+--  WHERE n.nspname = 'public';
+--
+-- HOW TO READ IT: in each `defaclacl` entry, `anon=arwdDxt/postgres` means role `anon` was granted
+-- a…t BY postgres. `D` is TRUNCATE and `x` is REFERENCES — those two letters are what we are
+-- looking for, on the `anon` and `authenticated` entries, for obj_type 'r'.
+--
+-- THE TWO OUTCOMES:
+--   (a) NO ROW grants TRUNCATE/REFERENCES to anon or authenticated on public → §1 is the whole
+--       fix and this section becomes a recorded negative (with its corpus and method — STD-021),
+--       not a silent omission.
+--   (b) A ROW DOES → append the statement below, ONCE PER `granting_role` the read names:
+--
+--         ALTER DEFAULT PRIVILEGES FOR ROLE <granting_role> IN SCHEMA public
+--           REVOKE TRUNCATE, REFERENCES ON TABLES FROM anon, authenticated;
+--
+--       🔴 `FOR ROLE` IS NOT OPTIONAL HERE AND IS THE WHOLE REASON WE WAIT. A default ACL is keyed
+--       by (grantor, schema, object type). Omitting `FOR ROLE` targets only entries whose grantor
+--       is the CURRENT role, so if Supabase created the entry as `supabase_admin`, the bare form
+--       RUNS CLEAN, REPORTS SUCCESS, AND CHANGES NOTHING — a silent no-op that reads as a fix.
+--       That is the exact failure shape STD-021 exists for. The executing role must also be a
+--       member of `<granting_role>` or the ALTER is refused; if it is refused, that is a finding to
+--       surface, not a line to drop.
+--
+-- ⚠️ SEQUENCING NOTE (§6 r1 — migrations are append-only, never edited). If §1 has ALREADY been
+--    applied by the time the read comes back, §2 does NOT get written into this file. It becomes
+--    its own appended migration (`20260728b_…`), because editing an applied file puts the repo and
+--    the database into exactly the disagreement this record exists to prevent. Ideal case: the
+--    read lands first and §2 is written here before the apply.
+
+
+-- ════════════════════════════════════════════════════════════════════════════════
+-- POST-APPLY VERIFICATION — run as postgres. Catalog, not repo (STD-021 v2.8).
+-- ════════════════════════════════════════════════════════════════════════════════
+--
+-- ── V1 — NEGATIVE, the point of the migration. No TRUNCATE or REFERENCES anywhere in `public`
+--    for either client role. EXPECT 0 ROWS.
+-- SELECT table_name, grantee, privilege_type
+--   FROM information_schema.role_table_grants
+--  WHERE table_schema = 'public'
+--    AND grantee IN ('anon', 'authenticated')
+--    AND privilege_type IN ('TRUNCATE', 'REFERENCES')
+--  ORDER BY table_name, grantee;
+--
+-- ── V2 — POSITIVE, and the one that matters more: THE APP STILL WORKS. The ordinary CRUD
+--    privileges are untouched, which is what makes this a safe blanket statement — RLS is still
+--    doing the filtering it was always doing. EXPECT the familiar SELECT/INSERT/UPDATE/DELETE
+--    pattern across the tenant tables, unchanged.
+-- SELECT grantee, string_agg(DISTINCT privilege_type, ', ' ORDER BY privilege_type) AS privileges,
+--        count(DISTINCT table_name) AS tables
+--   FROM information_schema.role_table_grants
+--  WHERE table_schema = 'public' AND grantee IN ('anon', 'authenticated')
+--  GROUP BY grantee;
+--
+-- ── V3 — the two append-only tables, re-read. EXPECT `INSERT, SELECT, TRIGGER` for each role on
+--    each table — REFERENCES now gone, TRUNCATE already gone since 20260624 / 20260720. This is
+--    the narrowest privilege set in the schema and it should have got narrower, not wider.
+-- SELECT table_name, grantee,
+--        string_agg(privilege_type, ', ' ORDER BY privilege_type) AS privileges
+--   FROM information_schema.role_table_grants
+--  WHERE table_schema = 'public'
+--    AND table_name IN ('audit_log', 'business_inventory_ledger')
+--    AND grantee IN ('anon', 'authenticated')
+--  GROUP BY table_name, grantee
+--  ORDER BY table_name, grantee;
+--
+-- ── V4 — 🔴 THE DURABILITY CHECK, AND IT CANNOT BE RUN YET. Create a throwaway table and read its
+--    grants; if `anon` comes up holding TRUNCATE on a table no migration granted anything on, the
+--    default ACL is live and §2 is REQUIRED. Run this AFTER §2 is resolved, inside a transaction
+--    that rolls back so nothing is left behind.
+-- BEGIN;
+--   CREATE TABLE public._privilege_probe (id int);
+--   SELECT grantee, privilege_type FROM information_schema.role_table_grants
+--    WHERE table_schema = 'public' AND table_name = '_privilege_probe'
+--      AND grantee IN ('anon', 'authenticated')
+--    ORDER BY grantee, privilege_type;
+-- ROLLBACK;
+--
+--    EXPECT after §2: no TRUNCATE, no REFERENCES on the probe. That is the assertion proven by
+--    BREAKING it (STD-022) — a fresh table is the only thing that can tell the difference between
+--    "the default ACL was fixed" and "there was never a default ACL to fix."
+
+
+-- ── STILL RECORDED, NOT CLOSED BY THIS FILE ─────────────────────────────────────
+-- `anon` HOLDS INSERT / UPDATE / DELETE ON ~45 TABLES. Probably wrong: the QR path reads a
+-- catalog, and every write goes through the service-key `submit.ts`. But scoping it down needs a
+-- corpus check of what anon actually writes — which surfaces, under which policies — and that is
+-- its own build, not a line appended to this one. RLS is filtering those three verbs today, which
+-- is the difference from TRUNCATE and the reason this is a follow-on rather than a hole. Recorded
+-- here so the next reader of this file does not mistake it for a completed privilege audit.
