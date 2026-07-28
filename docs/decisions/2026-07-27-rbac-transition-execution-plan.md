@@ -693,6 +693,56 @@ tenant override** — or a legacy string survives Contract inside the template t
 and the first member minted after Contract arrives holding a string the model has retired. R-C,
 extended one table sideways. Folded into BUILD 6.
 
+### 11.5b 🔴 FINDING (2026-07-28, ledger #164) — THE ZERO-CHECK IS BLIND TO A RETIRED *RESOURCE*
+
+**Extending R-C sideways one table is necessary and not sufficient.** Both halves — member arrays
+and `role_definitions` — scan for **LEGACY** strings. `assets:read` is **not legacy**. It is
+*new-vocabulary* for a resource the model has since **RETIRED**, and it passes every existing
+assertion untouched:
+
+| assertion | what it scans for | verdict on `assets:read` |
+|---|---|---|
+| R-C zero-check (member arrays) | a string in `ALL_LEGACY_PERMISSIONS` | **passes** — not legacy |
+| §11.5 extension (`role_definitions`) | same list, one table sideways | **passes** — not legacy |
+| capP assertion 1 | manifest ↔ policy/route/API agreement **in SOURCE** | **passes** — source is correct |
+
+Found live: f7ec5d67's MANAGER holds `assets:create/read/update` for a resource with no table, no
+policy, and no manifest entry, and **every check we own is green on it.** Contract is the
+irreversible step — it drops the alias layer — so a retired resource's strings would survive the
+one gate designed to prove nothing survives.
+
+**THE SECOND ASSERTION, required before Contract:**
+
+> Every string held in any `business_members.permissions` array or any `role_definitions` row —
+> floor **and** tenant — resolves to a resource the manifest **still declares**.
+
+**Where it belongs, and why not in the cap.** This is capP's assertion 1 pointed at **live data
+instead of source**, and spec §7 already concedes that half is a **David-query at owner-prove**:
+the verifier has no database connection and CI has no service key. So it lands in the **Phase 7
+runbook as a catalog check**, beside R-C — *not* in `verify-universals`, where it could only re-read
+the source that is already correct and report green a second time.
+
+```sql
+-- Phase 7 CONTRACT gate, assertion 2. EXPECT 0 rows.
+-- Manifest resources are supplied as a literal because SQL cannot read permissionManifest.ts —
+-- the same one-authority/closed-in-the-other-direction discipline as R-B2 (capQ assertion b).
+SELECT src, role_or_member, s AS orphan_string FROM (
+  SELECT 'role_definitions' AS src, rd.role_key AS role_or_member, x.s
+    FROM public.role_definitions rd, jsonb_array_elements_text(rd.permissions) x(s)
+  UNION ALL
+  SELECT 'business_members', bm.role, x.s
+    FROM public.business_members bm, jsonb_array_elements_text(bm.permissions) x(s)
+   WHERE bm.active
+) t
+WHERE split_part(s, ':', 1) <> ALL (ARRAY[ /* manifest resources, generated */ ]);
+```
+
+**The generalisation, which is the part worth keeping:** a retirement has **two** surfaces —
+the model (bundles, manifest, capP) and the **data** (floor, tenant overrides, live member arrays).
+`20260727b` retired `assets` on the first and was never applied to the second, and **nothing we own
+compares them.** Every negative assertion in this program scans for what the model *used to*
+declare; none scans for what it *no longer* declares. That asymmetry is the finding.
+
 ## 11.6 The live-read decision is vindicated by the log
 
 Computing the 44 from the live row at grant time rather than from this document: that array changed
