@@ -285,10 +285,19 @@ membership-only, as #153 built it. Smaller than feared.
 - 🔴 **`deliveries_member_all [ALL]` carries NO permission string** — every active member, including
   STAFF, can already CREATE, UPDATE and **DELETE** deliveries. This is a live authority hole, wider
   than anything this migration touches. It also means staff delivery reads work today by accident.
-- 🔴 **`campaigns`, `campaign_posts`, `social_drafts`, `losses`, `opportunity_items`, `order_addons`,
+- 🔴 **`campaigns`, `campaign_posts`, `social_drafts`, ~~`losses`~~, `opportunity_items`, `order_addons`,
   `nursery_profiles`, `invitations`, `business_voice_samples` are OWNER-ONLY — no member policy.**
   So a MANAGER holding `manage_campaigns` **cannot read a single campaign row.** N1/N2 confirmed
   live, not theoretical. `audit_log` is owner-read-only (correct, but managers cannot see the trail).
+  - ✅ **`social_drafts` CLOSED 2026-07-28** — `social_drafts_member_select` + `_member_update`
+    created (`20260727g`); V2 running with STAFF `39691f0b`.
+  - ⚠️ **`losses` STRUCK 2026-07-28 — RETIRED BY REMOVAL, NOT BY FIX (ledger #162).** The table is
+    dropped by GATED `20260727d_drop_losses_and_nurseries.sql`: it is the pre-`businesses`
+    generation (keys on `nursery_id`), empty, with no page, route, permission string or client
+    call. Struck rather than deleted from the line so this does not later read as an unresolved
+    member-policy gap, and so nobody writes the member policy for a table that no longer exists.
+    Loss recording, when it is built, reads `plant_events['lost']` — a table that already carries
+    its own member scope (`20260727c`).
 
 **BLOCK D1 — the floor has DRIFTED from its migration.** MANAGER is **11** (not the seeded 9) and
 OWNER is **14** (not 12) — both gained `override_maintenance` + `view_customers`. **And a TENANT
