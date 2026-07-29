@@ -1,0 +1,21 @@
+// FIXTURE — NOT COMPILED, NOT DEPLOYED. Extension is .txt so no build ever reaches it.
+//
+// This is the REAL defect, extracted verbatim in shape from
+// packages/cultivar-os/api/qbo/router.ts as it stood BEFORE a13d354 (introduced by the capK gate
+// at 9a57e07 on 2026-07-27). It is the probe for `verify-api-parses` per STD-024: the cap is
+// demonstrated against the actual failure it exists to catch, not a synthetic one.
+//
+// The defect: `handleAuthUrl` was declared WITHOUT `async` and awaited `callerCan`. `await` in a
+// non-async function is a SyntaxError, so the MODULE never parsed — and a module that does not
+// parse takes every route with it. auth-url, status AND callback all 500'd, even though
+// handleStatus was correct code. Nothing in `npm run verify` looked at api/, so it shipped.
+//
+// esbuild's message: ✘ "await" can only be used inside an "async" function
+
+function handleAuthUrl(req: any, res: any) {
+  const nurseryId = (req.query.business_id as string) || 'demo';
+  if (!(await callerCan(req.headers?.authorization, nurseryId, 'settings:update'))) {
+    return res.status(403).json({ error: 'Not authorized', code: 'FORBIDDEN' });
+  }
+  return res.status(200).json({ ok: true });
+}

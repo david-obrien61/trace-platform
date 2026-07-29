@@ -181,6 +181,35 @@ reader by presenting a hole as a number.
   not `0`** — `api/dashboard.ts:31`, *"a redaction must not read as a real figure (D-9)."* Same rule,
   reader side. **This is the shape the other two should have had.**
 
+### A10 · EVERY DEPLOYED ARTIFACT IS CHECKED BY SOMETHING THAT CAN FAIL
+
+If code ships, a check that is **capable of failing** must look at it. Not a check that happens to
+pass — one whose failure path has been exercised. **A layer nothing looks at is worse than a layer
+with a weak check**, because the green result from elsewhere is read as covering it.
+
+- **CHECK: ✅ ENFORCED for the parse class — `npm run verify:api-parses`, chained FIRST in
+  `npm run verify`.** Parse-only, no baseline, ~30ms. 7 probes; **the first probe is the REAL defect,
+  not a synthetic one** (STD-024), and the cap was demonstrated against the actual pre-fix tree.
+- **🔴 STILL UNCHECKED, and this is the honest half:** `api/` has **no TYPE check**. All three
+  tsconfigs are `include: ["src"]` and no tsconfig in the repo names `api/`, so the quality gate's
+  `tsc -p` never sees the deployed backend. Filed as **tech-debt #77** — a separate build, because it
+  likely needs a ratchet over pre-existing errors, and a cap that ships now beats a better one that
+  waits.
+- **Counter-example, ours — the fourth "green means nothing" this week and the largest.** On
+  2026-07-27 a capK gate added `await callerCan(...)` to `handleAuthUrl` without making it `async`.
+  `await` in a non-async function is a **SyntaxError**, so the module never parsed — and a module
+  that cannot parse **takes every route with it**: auth-url, status *and* callback all returned 500,
+  even though `handleStatus` was correct code that never got to run. It shipped behind a green
+  `npm run verify` and a green `build:cultivar` — the latter is **vite building the frontend**, so
+  its exit 0 was true and meaningless for that file. The user-visible result sat on the dashboard
+  where a buyer clicks Connect QuickBooks.
+- **How this one differs from the other three green-means-nothing findings**, which is why it earned
+  a rule: STD-022 (a detector with no failing path), STD-023 (a guard the write did not depend on)
+  and STD-024 (a cap never run red) are each about **one check that could not fail**. This is an
+  **entire deployed layer that nothing looked at** — twelve serverless functions, no parse check, no
+  type check. The failure mode is not a bad check; it is the *absence* of one, masked by the presence
+  of checks aimed elsewhere.
+
 ---
 
 ## How this is enforced
