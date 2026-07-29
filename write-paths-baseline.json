@@ -1,0 +1,132 @@
+{
+  "_comment": "Known write paths as of the stamp below. RATCHET baseline — the build fails on any NEW undeclared path, not on these. Shrink it; never grow it casually. Regenerate: npm run write-paths:baseline",
+  "stamped": "2026-07-29",
+  "tables": {
+    "business_members": [
+      "packages/cultivar-os/src/pages/OnboardingWizard.tsx",
+      "packages/cultivar-os/src/pages/Profile.tsx",
+      "packages/shared/src/auth/acceptInvitation.ts",
+      "packages/shared/src/auth/invitations.ts",
+      "packages/shared/src/auth/members.ts",
+      "packages/shared/src/auth/pinReset.ts"
+    ],
+    "businesses": [
+      "packages/cultivar-os/api/qbo/router.ts",
+      "packages/cultivar-os/src/pages/OnboardingWizard.tsx",
+      "packages/shared/src/auth/OwnerSignup.tsx",
+      "packages/shared/src/discovery/DiscoveryGlimpse.tsx",
+      "packages/shared/src/quickbooks/refresh.ts",
+      "packages/shared/src/quickbooks/secrets.ts"
+    ],
+    "cost_objects": [
+      "packages/cultivar-os/src/components/ProjectCostTree.tsx",
+      "packages/cultivar-os/src/components/ProjectsManager.tsx",
+      "packages/cultivar-os/src/pages/BusinessAssets.tsx",
+      "packages/cultivar-os/src/pages/OperatingCosts.tsx",
+      "packages/shared/src/components/CostToProduceSettings.tsx",
+      "packages/shared/src/modules/PMI.tsx"
+    ],
+    "customers": [
+      "packages/cultivar-os/api/qbo/invoice/cultivar.ts",
+      "packages/cultivar-os/src/components/customers/customerEdit.ts",
+      "packages/cultivar-os/src/pages/Customers.tsx",
+      "packages/shared/src/business-logic/customerUpsert.ts",
+      "packages/shared/src/discovery/populate.ts"
+    ],
+    "member_devices": [
+      "packages/shared/src/auth/deviceHandoff.ts",
+      "packages/shared/src/auth/devices.ts",
+      "packages/shared/src/context/BusinessProvider.tsx",
+      "packages/shared/src/supabase/auth.ts"
+    ],
+    "business_inventory": [
+      "packages/cultivar-os/src/components/inventory/inventoryEdit.ts",
+      "packages/shared/src/discovery/costDiscovery.ts",
+      "packages/shared/src/discovery/populate.ts"
+    ],
+    "orders": [
+      "packages/cultivar-os/api/orders/submit.ts",
+      "packages/cultivar-os/api/qbo/invoice/cultivar.ts",
+      "packages/shared/src/discovery/populate.ts"
+    ],
+    "business_accounting_secrets": [
+      "packages/cultivar-os/api/qbo/router.ts",
+      "packages/shared/src/quickbooks/secrets.ts"
+    ],
+    "business_modules": [
+      "packages/cultivar-os/api/social/enable.ts",
+      "packages/shared/src/business-logic/financialDataAccess.ts"
+    ],
+    "business_pricing_config": [
+      "packages/shared/src/business-logic/financialDataAccess.ts",
+      "packages/shared/src/business-logic/seedPricingConfig.ts"
+    ],
+    "campaign_posts": [
+      "packages/cultivar-os/api/campaigns.ts",
+      "packages/cultivar-os/src/pages/CampaignDetail.tsx"
+    ],
+    "deliveries": [
+      "packages/cultivar-os/api/customers/create.ts",
+      "packages/cultivar-os/src/pages/DeliverySchedule.tsx"
+    ],
+    "invitations": [
+      "packages/shared/src/auth/acceptInvitation.ts",
+      "packages/shared/src/auth/invitations.ts"
+    ],
+    "labor_resources": [
+      "packages/shared/src/business-logic/financialDataAccess.ts",
+      "packages/shared/src/components/CostToProduceSettings.tsx"
+    ],
+    "nursery_profiles": [
+      "packages/cultivar-os/src/pages/OnboardingWizard.tsx",
+      "packages/cultivar-os/src/pages/Settings.tsx"
+    ],
+    "service_offerings": [
+      "packages/shared/src/discovery/seed.ts",
+      "packages/shared/src/pages/Settings.tsx"
+    ],
+    "social_drafts": [
+      "packages/cultivar-os/api/social/generate-posts.ts",
+      "packages/cultivar-os/src/pages/Dashboard.tsx"
+    ],
+    "business_discovery_profiles": [
+      "packages/shared/src/discovery/populate.ts"
+    ],
+    "business_pmi_schedule": [
+      "packages/shared/src/modules/PMI.tsx"
+    ],
+    "business_service_log": [
+      "packages/shared/src/modules/PMI.tsx"
+    ],
+    "business_voice_samples": [
+      "packages/cultivar-os/api/campaigns.ts"
+    ],
+    "campaigns": [
+      "packages/cultivar-os/api/campaigns.ts"
+    ],
+    "cultivar_plants": [
+      "packages/shared/src/discovery/populate.ts"
+    ],
+    "labor_resource_wages": [
+      "packages/shared/src/business-logic/financialDataAccess.ts"
+    ],
+    "member_device_handoffs": [
+      "packages/shared/src/auth/deviceHandoff.ts"
+    ],
+    "order_compliance_records": [
+      "packages/cultivar-os/api/orders/submit.ts"
+    ],
+    "order_items": [
+      "packages/cultivar-os/api/orders/submit.ts"
+    ],
+    "order_service_selections": [
+      "packages/cultivar-os/api/orders/submit.ts"
+    ],
+    "people": [
+      "packages/shared/src/business-logic/personUpsert.ts"
+    ],
+    "receipts": [
+      "packages/cultivar-os/src/pages/ReceiptKeeper.tsx"
+    ]
+  }
+}

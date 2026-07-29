@@ -5,238 +5,187 @@
 //               Generating a new component is cheaper than finding and reusing the existing one —
 //               reuse requires reading and understanding what is there first — so write paths to a
 //               table accumulate, each locally sensible, each shipped in a session that could not
-//               see the others. `customers` reached SEVEN. This cap asks the question mechanically.
-// THE RULE:     One write path per table is correct. More than one FAILS, naming every path. An
-//               intentional second path is DECLARED in ALLOWED_DIVERGENCE with its reason —
-//               declared, not discovered. Declaring is not a blanket exemption: a NEW path that is
-//               not in the declared set still fails, so the list cannot silently absorb drift.
+//               see the others. `customers` reached five in app code alone. This cap asks the
+//               question mechanically.
+// THE RULE:     One write path per table is correct. An intentional second path is DECLARED in
+//               ALLOWED_DIVERGENCE with its reason — declared, not discovered.
+// TWO VERDICTS, REPORTED TOGETHER (deliberate):
+//               · GOAL   — one path per table. Informational. The 17 known failures stay VISIBLE
+//                          so they cannot quietly become invisible debt.
+//               · RATCHET — the build-failing assertion: no NEW undeclared path versus
+//                          `write-paths-baseline.json`. Same zero-net-new shape `npm run verify`
+//                          already uses for tsc/eslint/knip. WHY: a gate that blocks every build
+//                          gets worked around, and a worked-around gate is worse than none. This
+//                          makes surface EIGHT impossible tomorrow without waiting for the seven.
 // UNIT:         A PATH IS A FILE, not a call site. `inventoryEdit.ts` writes business_inventory at
-//               five call sites and is ONE path — one module, one field list. That is the shape
-//               this cap is protecting (§6 r8 rule-of-three / STD-011).
-// DEPENDENCIES: none (node stdlib only). Reads repo SOURCE — it cannot see the live catalog, so
-//               an RPC's target table is not knowable here (see the ADVISORY section).
-// OUTPUTS:      exit 0 = every table has one path or a satisfied declaration. exit 1 = a violation,
-//               with every offending table, its path count, and each path listed.
-// PROBES:       STD-022 — self-tests run BEFORE the real scan, in BOTH directions (a planted
-//               two-path table must FAIL; one path and declared-two must PASS; a new path beside a
-//               declaration must FAIL). If a probe misbehaves the cap refuses to report at all: a
-//               checker that has never been seen failing is not evidence of anything.
+//               five call sites and is ONE path — one module, one field list (§6 r8 / STD-011).
+// FLOOR, NOT TOTAL: this cap reads SOURCE. An RPC's target table lives in the DATABASE, so ~11 RPC
+//               writers and 12 dynamic table names are REPORTED and not judged. Every count here is
+//               a FLOOR. The rpc→table map is the cap's own next build — it is owed.
+// DEPENDENCIES: none (node stdlib only).
+// OUTPUTS:      exit 0 = no new undeclared path. exit 1 = a new path (named). exit 2 = the cap's
+//               own probes failed, so it refuses to report at all.
+// USAGE:        npm run verify:write-paths          — assert
+//               npm run write-paths:baseline        — re-record the baseline (lock a win)
 // ============================================================
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, statSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const ROOT = process.cwd();
+const BASELINE_FILE = join(ROOT, 'write-paths-baseline.json');
+const UPDATE = process.argv.includes('--update');
 
 // ── CORPUS (named, per STD-021) ──────────────────────────────────────────────
 const SCAN_ROOTS = [
-  'packages/cultivar-os/src',
-  'packages/cultivar-os/api',
-  'packages/shared/src',
-  'packages/trace-app/src',
-  'api',
-  'scripts',
+  'packages/cultivar-os/src', 'packages/cultivar-os/api',
+  'packages/shared/src', 'packages/trace-app/src', 'api', 'scripts',
 ];
 // ignition-os is FROZEN donor code (CLAUDE.md §2) — excluded deliberately, not by oversight.
-const EXCLUDE_DIRS  = new Set(['node_modules', 'dist', 'build', '.git', 'fixtures']);
-// This file's own planted probes contain literal `.from('widgets').insert(...)` strings; scanning
-// itself would report `widgets`/`gears` as real tables. Self-excluded — stated, not silent.
-const EXCLUDE_FILE  = /(\.(test|spec)\.[tj]sx?|verify-write-paths\.mjs)$/;
-const SOURCE_EXT    = /\.(ts|tsx|js|jsx|mjs)$/;
+const EXCLUDE_DIRS = new Set(['node_modules', 'dist', 'build', '.git', 'fixtures']);
+// This file's own planted probes contain literal `.from('widgets').insert(...)`; scanning itself
+// would report `widgets`/`gears` as real tables. Self-excluded — stated, not silent.
+const EXCLUDE_FILE = /(\.(test|spec)\.[tj]sx?|verify-write-paths\.mjs)$/;
+const SOURCE_EXT   = /\.(ts|tsx|js|jsx|mjs)$/;
+
+// `scripts/` is one-off TOOLING — seeds, backfills, verifiers: run by hand, never deployed, and
+// legitimately touching many tables at once. REPORTED, never asserted. A cap that silently narrows
+// its own scope reads as "covered everything" when it did not.
+const isTooling = p => p.startsWith('scripts/');
 
 // ── DECLARED DIVERGENCE — an intentional second path, WITH ITS REASON ────────
-// Shape: table -> { reason, paths: [repo-relative file, ...] }
-// A table passes when its OBSERVED path set is a subset of its DECLARED set. A path that appears
-// and is not declared fails even when the table is listed — the list records decisions already
-// made, it does not pre-authorize the next one.
+// table -> { reason, paths: [...] }. Declaring is not a blanket exemption: a path that appears and
+// is not declared still fails, so the list records decisions made rather than pre-authorizing the next.
 const ALLOWED_DIVERGENCE = {
-  // (empty on the first run — every entry here must be a decision David made, not a
-  //  convenience the builder granted itself. See the first-run report.)
+  // Empty by design. Every entry must be a decision David made, not a convenience the builder
+  // granted itself. The 17 known multi-path tables are held by the BASELINE, not by declarations —
+  // the baseline says "known today", a declaration says "correct forever". They are different claims.
 };
 
-// ── ANALYZER (pure over [{path, content}] so the probes can drive it) ────────
+// ── ANALYZER (pure) ──────────────────────────────────────────────────────────
 const WRITE_VERBS = ['insert', 'update', 'upsert', 'delete'];
 
-/** Strip comments so a header describing a write is not counted as one. Conservative: block
- *  comments, and lines whose first non-space char begins a line comment or continues a banner.
- *  String literals containing "//" (URLs) are left alone by only cutting FULL comment lines. */
 function stripComments(src) {
-  const noBlocks = src.replace(/\/\*[\s\S]*?\*\//g, '');
-  return noBlocks
+  return src.replace(/\/\*[\s\S]*?\*\//g, '')
     .split('\n')
-    .map(l => {
-      const t = l.trimStart();
-      return t.startsWith('//') || t.startsWith('*') ? '' : l;
-    })
+    .map(l => { const t = l.trimStart(); return t.startsWith('//') || t.startsWith('*') ? '' : l; })
     .join('\n');
 }
 
 export function analyze(files) {
-  const tables  = new Map(); // table -> Map(path -> Set(verb))
-  const rpcs    = new Map(); // rpcName -> Set(path)
-  const dynamic = [];        // { path, expr } — from(<non-literal>)
-
+  const tables = new Map(), rpcs = new Map(), dynamic = [];
   for (const { path, content } of files) {
     const src = stripComments(content);
-
-    // ---- supabase-js: .from('<table>') … .insert/.update/.upsert/.delete( ----
     const fromRe = /\.from\(\s*(['"`])([^'"`]+)\1\s*\)/g;
     let m;
     while ((m = fromRe.exec(src)) !== null) {
       const table = m[2];
-      // Window = from the match to the end of THIS statement, so a later statement's write on a
-      // different table is never attributed here.
+      // Window bounded by the end of THIS statement, so a later statement's write on another table
+      // is never attributed here.
       const rest = src.slice(m.index);
       const semi = rest.indexOf(';');
       const win  = semi === -1 ? rest.slice(0, 400) : rest.slice(0, semi);
       const verbs = WRITE_VERBS.filter(v => win.includes(`.${v}(`));
-      if (verbs.length === 0) continue; // a read — not a write path
+      if (verbs.length === 0) continue;
       if (!tables.has(table)) tables.set(table, new Map());
       const byPath = tables.get(table);
       if (!byPath.has(path)) byPath.set(path, new Set());
       verbs.forEach(v => byPath.get(path).add(v));
     }
-
-    // ---- dynamic table names: .from(SOME_CONST) — cannot be resolved statically ----
     const dynRe = /\.from\(\s*([A-Za-z_$][\w$.]*)\s*\)/g;
     while ((m = dynRe.exec(src)) !== null) dynamic.push({ path, expr: m[1] });
-
-    // ---- RPC calls (advisory — target table not knowable from source) ----
     const rpcRe = /\.rpc\(\s*(['"`])([^'"`]+)\1/g;
     while ((m = rpcRe.exec(src)) !== null) {
-      const name = m[2];
-      if (!rpcs.has(name)) rpcs.set(name, new Set());
-      rpcs.get(name).add(path);
+      if (!rpcs.has(m[2])) rpcs.set(m[2], new Set());
+      rpcs.get(m[2]).add(path);
     }
   }
-
-  // ---- verdict per table ----
-  // ASSERTED on APP paths only. `scripts/` is one-off TOOLING — seeds, backfills, verifiers — run
-  // by hand, never deployed, and legitimately touching many tables at once. Counting them would
-  // make every table fail for a reason that is not the defect this cap exists for. They are
-  // REPORTED in their own section rather than dropped: a cap that silently narrows its own scope
-  // reads as "covered everything" when it did not.
-  const isTooling = p => p.startsWith('scripts/');
-  const rows = [];
-  for (const [table, byPathAll] of tables) {
-    const byPath   = new Map([...byPathAll].filter(([p]) => !isTooling(p)));
-    const tooling  = [...byPathAll.keys()].filter(isTooling).sort();
-    if (byPath.size === 0 && tooling.length === 0) continue;
-    const paths    = [...byPath.keys()].sort();
-    const declared = ALLOWED_DIVERGENCE[table];
-    let status, note = '';
-    if (paths.length <= 1) {
-      status = 'PASS';
-    } else if (!declared) {
-      status = 'FAIL';
-      note   = 'more than one write path, none declared';
-    } else {
-      const undeclared = paths.filter(p => !declared.paths.includes(p));
-      if (undeclared.length === 0) {
-        status = 'PASS';
-        note   = `declared: ${declared.reason}`;
-      } else {
-        status = 'FAIL';
-        note   = `declared, but NEW undeclared path(s): ${undeclared.join(', ')}`;
-      }
-    }
-    rows.push({ table, paths, verbs: byPath, status, note, tooling });
-  }
-  rows.sort((a, b) => b.paths.length - a.paths.length || a.table.localeCompare(b.table));
-  return { rows, rpcs, dynamic };
+  return { tables, rpcs, dynamic };
 }
 
-// ── PROBES (STD-022 — both directions, before the real scan) ─────────────────
+// ── JUDGE (pure — separate from observation so both verdicts are testable) ───
+export function judge(tables, { baseline = {}, allowed = ALLOWED_DIVERGENCE } = {}) {
+  const rows = [];
+  for (const [table, byPathAll] of tables) {
+    const appPaths = [...byPathAll.keys()].filter(p => !isTooling(p)).sort();
+    const tooling  = [...byPathAll.keys()].filter(isTooling).sort();
+    const declared = allowed[table];
+    const known    = new Set([...(baseline[table] ?? []), ...(declared?.paths ?? [])]);
+
+    // GOAL verdict — one path, or every path declared. Informational.
+    let goal, goalNote = '';
+    if (appPaths.length <= 1) goal = 'PASS';
+    else if (declared && appPaths.every(p => declared.paths.includes(p))) { goal = 'PASS'; goalNote = `declared: ${declared.reason}`; }
+    else { goal = 'FAIL'; goalNote = declared ? 'declared, but undeclared path(s) present' : 'more than one write path, none declared'; }
+
+    // RATCHET verdict — the build-failing one. A NEW path is one neither baselined nor declared.
+    const isNewTable = !(table in baseline) && !declared;
+    const newPaths = appPaths.filter(p => !known.has(p));
+    // A brand-new table with a single path is fine — that is a normal first build.
+    const ratchetFail = isNewTable ? appPaths.length > 1 : newPaths.length > 0;
+    const removed = [...(baseline[table] ?? [])].filter(p => !appPaths.includes(p));
+
+    rows.push({ table, appPaths, tooling, goal, goalNote, newPaths, removed, ratchetFail, isNewTable });
+  }
+  rows.sort((a, b) => b.appPaths.length - a.appPaths.length || a.table.localeCompare(b.table));
+  return rows;
+}
+
+// ── PROBES (STD-022 — planted, BOTH directions, before the real scan) ────────
 function runProbes() {
   const f = (path, content) => ({ path, content });
-  const probes = [
-    {
-      name: 'P1 two undeclared paths → FAIL',
-      files: [f('a.ts', `supabase.from('widgets').insert(x);`), f('b.ts', `supabase.from('widgets').update(y);`)],
-      table: 'widgets', expect: 'FAIL',
-    },
-    {
-      name: 'P2 one path, many call sites → PASS',
-      files: [f('a.ts', `supabase.from('widgets').insert(x);\nsupabase.from('widgets').update(y);\nsupabase.from('widgets').delete();`)],
-      table: 'widgets', expect: 'PASS',
-    },
-    {
-      name: 'P3 reads only → not a write path at all',
-      files: [f('a.ts', `supabase.from('widgets').select('id');`), f('b.ts', `supabase.from('widgets').select('*');`)],
-      table: 'widgets', expect: 'ABSENT',
-    },
-    {
-      name: 'P4 a comment describing a write is NOT a write',
-      files: [f('a.ts', `// supabase.from('widgets').update(z);\nsupabase.from('widgets').insert(x);`), f('b.ts', `/* .from('widgets').delete() */ const q = 1;`)],
-      table: 'widgets', expect: 'PASS',
-    },
-    {
-      name: 'P5 a later statement is not attributed to an earlier read',
-      files: [f('a.ts', `supabase.from('widgets').select('id');\nsupabase.from('gears').update(y);`)],
-      table: 'widgets', expect: 'ABSENT',
-    },
-    {
-      name: 'P8 one APP path + many scripts/ tooling paths → PASS (tooling is not asserted)',
-      files: [
-        f('packages/x/a.ts', `supabase.from('widgets').update(y);`),
-        f('scripts/seed.mjs', `supabase.from('widgets').insert(x);`),
-        f('scripts/verify.mjs', `supabase.from('widgets').delete();`),
-      ],
-      table: 'widgets', expect: 'PASS',
-    },
-    {
-      name: 'P9 TWO app paths still FAIL even when tooling also writes',
-      files: [
-        f('packages/x/a.ts', `supabase.from('widgets').update(y);`),
-        f('packages/x/b.ts', `supabase.from('widgets').insert(x);`),
-        f('scripts/seed.mjs', `supabase.from('widgets').insert(x);`),
-      ],
-      table: 'widgets', expect: 'FAIL',
-    },
-  ];
+  const R = [];
+  const check = (name, expect, got) => R.push({ name, expect, got, ok: got === expect });
+  const goalOf  = (files, table, opts) => { const r = judge(analyze(files).tables, opts).find(x => x.table === table); return r ? r.goal : 'ABSENT'; };
+  const ratchOf = (files, table, opts) => { const r = judge(analyze(files).tables, opts).find(x => x.table === table); return r ? (r.ratchetFail ? 'NEW' : 'OK') : 'ABSENT'; };
 
-  const results = [];
-  for (const p of probes) {
-    const { rows } = analyze(p.files);
-    const row = rows.find(r => r.table === p.table);
-    const got = row ? row.status : 'ABSENT';
-    results.push({ name: p.name, expect: p.expect, got, ok: got === p.expect });
-  }
+  // -- detection --
+  check('P1 two undeclared paths → GOAL FAIL', 'FAIL',
+    goalOf([f('a.ts', `supabase.from('w').insert(x);`), f('b.ts', `supabase.from('w').update(y);`)], 'w'));
+  check('P2 one path, many call sites → GOAL PASS', 'PASS',
+    goalOf([f('a.ts', `supabase.from('w').insert(x);\nsupabase.from('w').update(y);\nsupabase.from('w').delete();`)], 'w'));
+  check('P3 reads only → not a write path at all', 'ABSENT',
+    goalOf([f('a.ts', `supabase.from('w').select('id');`), f('b.ts', `supabase.from('w').select('*');`)], 'w'));
+  check('P4 a comment describing a write is NOT a write', 'PASS',
+    goalOf([f('a.ts', `// supabase.from('w').update(z);\nsupabase.from('w').insert(x);`), f('b.ts', `/* .from('w').delete() */ const q=1;`)], 'w'));
+  check('P5 a later statement is not attributed to an earlier read', 'ABSENT',
+    goalOf([f('a.ts', `supabase.from('w').select('id');\nsupabase.from('g').update(y);`)], 'w'));
+  check('P8 one APP path + tooling paths → GOAL PASS', 'PASS',
+    goalOf([f('packages/x/a.ts', `supabase.from('w').update(y);`), f('scripts/seed.mjs', `supabase.from('w').insert(x);`)], 'w'));
+  check('P9 two APP paths still FAIL when tooling also writes', 'FAIL',
+    goalOf([f('packages/x/a.ts', `supabase.from('w').update(y);`), f('packages/x/b.ts', `supabase.from('w').insert(x);`), f('scripts/s.mjs', `supabase.from('w').insert(x);`)], 'w'));
 
-  // P6/P7 exercise the DECLARATION branch, which needs a temporary declaration.
-  const saved = { ...ALLOWED_DIVERGENCE };
-  ALLOWED_DIVERGENCE['widgets'] = { reason: 'probe', paths: ['a.ts', 'b.ts'] };
-  {
-    const { rows } = analyze([
-      { path: 'a.ts', content: `supabase.from('widgets').insert(x);` },
-      { path: 'b.ts', content: `supabase.from('widgets').update(y);` },
-    ]);
-    const got = rows.find(r => r.table === 'widgets').status;
-    results.push({ name: 'P6 two DECLARED paths → PASS', expect: 'PASS', got, ok: got === 'PASS' });
-  }
-  {
-    const { rows } = analyze([
-      { path: 'a.ts', content: `supabase.from('widgets').insert(x);` },
-      { path: 'b.ts', content: `supabase.from('widgets').update(y);` },
-      { path: 'c.ts', content: `supabase.from('widgets').delete();` },
-    ]);
-    const got = rows.find(r => r.table === 'widgets').status;
-    results.push({ name: 'P7 a NEW path beside a declaration → FAIL', expect: 'FAIL', got, ok: got === 'FAIL' });
-  }
-  Object.keys(ALLOWED_DIVERGENCE).forEach(k => delete ALLOWED_DIVERGENCE[k]);
-  Object.assign(ALLOWED_DIVERGENCE, saved);
+  // -- declaration --
+  const dec = { w: { reason: 'probe', paths: ['a.ts', 'b.ts'] } };
+  check('P6 two DECLARED paths → GOAL PASS', 'PASS',
+    goalOf([f('a.ts', `supabase.from('w').insert(x);`), f('b.ts', `supabase.from('w').update(y);`)], 'w', { allowed: dec }));
+  check('P7 a NEW path beside a declaration → GOAL FAIL', 'FAIL',
+    goalOf([f('a.ts', `supabase.from('w').insert(x);`), f('b.ts', `supabase.from('w').update(y);`), f('c.ts', `supabase.from('w').delete();`)], 'w', { allowed: dec }));
 
-  return results;
+  // -- RATCHET, both directions --
+  const base = { w: ['a.ts', 'b.ts'] };
+  check('R1 a NEW path not in baseline → RATCHET NEW', 'NEW',
+    ratchOf([f('a.ts', `supabase.from('w').insert(x);`), f('b.ts', `supabase.from('w').update(y);`), f('c.ts', `supabase.from('w').delete();`)], 'w', { baseline: base }));
+  check('R2 exactly the baseline paths → RATCHET OK', 'OK',
+    ratchOf([f('a.ts', `supabase.from('w').insert(x);`), f('b.ts', `supabase.from('w').update(y);`)], 'w', { baseline: base }));
+  check('R3 FEWER than baseline (a fix landed) → RATCHET OK', 'OK',
+    ratchOf([f('a.ts', `supabase.from('w').insert(x);`)], 'w', { baseline: base }));
+  check('R4 a NEW TABLE born with two paths → RATCHET NEW', 'NEW',
+    ratchOf([f('a.ts', `supabase.from('fresh').insert(x);`), f('b.ts', `supabase.from('fresh').update(y);`)], 'fresh', { baseline: base }));
+  check('R5 a NEW TABLE with one path → RATCHET OK', 'OK',
+    ratchOf([f('a.ts', `supabase.from('fresh').insert(x);`)], 'fresh', { baseline: base }));
+  check('R6 a new path that IS declared → RATCHET OK', 'OK',
+    ratchOf([f('a.ts', `supabase.from('w').insert(x);`), f('b.ts', `supabase.from('w').update(y);`), f('c.ts', `supabase.from('w').delete();`)],
+      'w', { baseline: base, allowed: { w: { reason: 'probe', paths: ['c.ts'] } } }));
+  return R;
 }
 
 // ── FILE WALK ────────────────────────────────────────────────────────────────
 function walk(dir, out = []) {
-  let entries;
-  try { entries = readdirSync(dir); } catch { return out; }
+  let entries; try { entries = readdirSync(dir); } catch { return out; }
   for (const e of entries) {
     if (EXCLUDE_DIRS.has(e)) continue;
     const full = join(dir, e);
-    let st;
-    try { st = statSync(full); } catch { continue; }
+    let st; try { st = statSync(full); } catch { continue; }
     if (st.isDirectory()) walk(full, out);
     else if (SOURCE_EXT.test(e) && !EXCLUDE_FILE.test(e)) out.push(full);
   }
@@ -244,69 +193,70 @@ function walk(dir, out = []) {
 }
 
 // ── MAIN ─────────────────────────────────────────────────────────────────────
-const BOLD = '\x1b[1m', DIM = '\x1b[2m', RED = '\x1b[31m', GREEN = '\x1b[32m', YEL = '\x1b[33m', OFF = '\x1b[0m';
+const B = '\x1b[1m', D = '\x1b[2m', RED = '\x1b[31m', GRN = '\x1b[32m', YEL = '\x1b[33m', O = '\x1b[0m';
+console.log(`\n${B}WRITE-PATH CAP — more than one write path to a table fails unless declared${O}\n`);
 
-console.log(`\n${BOLD}WRITE-PATH CAP — more than one write path to a table fails unless declared${OFF}\n`);
+const probes = runProbes();
+const bad = probes.filter(p => !p.ok);
+console.log(`${B}PROBES (STD-022 — planted, both directions)${O}`);
+for (const p of probes) console.log(`  ${p.ok ? GRN + 'ok  ' + O : RED + 'BAD ' + O} ${p.name}${p.ok ? '' : `  ${RED}(expected ${p.expect}, got ${p.got})${O}`}`);
+if (bad.length) { console.error(`\n${RED}${B}✗ THE CAP'S OWN PROBES FAILED — refusing to report a scan from a checker that does not work.${O}\n`); process.exit(2); }
 
-// 1. Probes first. A cap that has not been seen failing is not evidence.
-const probeResults = runProbes();
-const probeBad = probeResults.filter(p => !p.ok);
-console.log(`${BOLD}PROBES (STD-022 — planted, both directions)${OFF}`);
-for (const p of probeResults) {
-  console.log(`  ${p.ok ? GREEN + 'ok  ' + OFF : RED + 'BAD ' + OFF} ${p.name}${p.ok ? '' : `  ${RED}(expected ${p.expect}, got ${p.got})${OFF}`}`);
+const files = SCAN_ROOTS.flatMap(r => walk(join(ROOT, r))).map(f => ({ path: relative(ROOT, f), content: readFileSync(f, 'utf8') }));
+const { tables, rpcs, dynamic } = analyze(files);
+const baselineDoc = existsSync(BASELINE_FILE) ? JSON.parse(readFileSync(BASELINE_FILE, 'utf8')) : null;
+const rows = judge(tables, { baseline: baselineDoc?.tables ?? {} });
+
+if (UPDATE) {
+  const out = { _comment: 'Known write paths as of the stamp below. RATCHET baseline — the build fails on any NEW undeclared path, not on these. Shrink it; never grow it casually. Regenerate: npm run write-paths:baseline', stamped: new Date().toISOString().slice(0, 10), tables: {} };
+  for (const r of rows) if (r.appPaths.length > 0) out.tables[r.table] = r.appPaths;
+  writeFileSync(BASELINE_FILE, JSON.stringify(out, null, 2) + '\n');
+  console.log(`\n${GRN}${B}✓ baseline written${O} — ${Object.keys(out.tables).length} tables, ${Object.values(out.tables).flat().length} paths → write-paths-baseline.json\n`);
+  process.exit(0);
 }
-if (probeBad.length > 0) {
-  console.error(`\n${RED}${BOLD}✗ THE CAP'S OWN PROBES FAILED — refusing to report a scan from a checker that does not work.${OFF}\n`);
-  process.exit(2);
-}
 
-// 2. The real scan.
-const files = SCAN_ROOTS.flatMap(r => walk(join(ROOT, r)))
-  .map(f => ({ path: relative(ROOT, f), content: readFileSync(f, 'utf8') }));
+console.log(`\n${B}SCANNED${O} ${files.length} source files · ${D}corpus: ${SCAN_ROOTS.join(' · ')} — ignition-os excluded (frozen donor)${O}`);
+console.log(`${B}BASELINE${O} ${baselineDoc ? `${Object.keys(baselineDoc.tables).length} tables, stamped ${baselineDoc.stamped}` : `${YEL}none — run npm run write-paths:baseline${O}`}\n`);
 
-const { rows, rpcs, dynamic } = analyze(files);
+const goalFails = rows.filter(r => r.goal === 'FAIL');
+const ratchetFails = rows.filter(r => r.ratchetFail);
 
-console.log(`\n${BOLD}SCANNED${OFF} ${files.length} source files across ${SCAN_ROOTS.length} roots`);
-console.log(`${DIM}corpus: ${SCAN_ROOTS.join(' · ')} — ignition-os excluded (frozen donor), *.test.* excluded${OFF}\n`);
-
-console.log(`${BOLD}APP WRITE PATHS BY TABLE${OFF}  ${DIM}(asserted — scripts/ tooling is reported separately below)${OFF}`);
-const fails = rows.filter(r => r.status === 'FAIL');
+console.log(`${B}APP WRITE PATHS BY TABLE${O}  ${D}(GOAL = one path · RATCHET = no NEW path vs baseline)${O}`);
 for (const r of rows) {
-  if (r.paths.length === 0) continue; // tooling-only table — listed in the tooling section
-  const tag = r.status === 'FAIL' ? `${RED}FAIL${OFF}` : `${GREEN}PASS${OFF}`;
-  console.log(`\n  ${tag}  ${BOLD}${r.table}${OFF} — ${r.paths.length} app path${r.paths.length === 1 ? '' : 's'}${r.note ? ` ${DIM}(${r.note})${OFF}` : ''}`);
-  for (const p of r.paths) {
-    console.log(`         ${DIM}·${OFF} ${p} ${DIM}[${[...r.verbs.get(p)].sort().join(',')}]${OFF}`);
+  if (!r.appPaths.length) continue;
+  const g = r.goal === 'FAIL' ? `${RED}GOAL:FAIL${O}` : `${GRN}GOAL:PASS${O}`;
+  const t = r.ratchetFail ? `${RED}${B}RATCHET:NEW${O}` : `${GRN}RATCHET:OK${O}`;
+  console.log(`\n  ${g} ${t}  ${B}${r.table}${O} — ${r.appPaths.length} app path${r.appPaths.length === 1 ? '' : 's'}${r.goalNote ? ` ${D}(${r.goalNote})${O}` : ''}`);
+  for (const p of r.appPaths) {
+    const isNew = r.newPaths.includes(p);
+    console.log(`         ${isNew ? RED + '+NEW' + O : D + '   ·' + O} ${p} ${D}[${[...tables.get(r.table).get(p)].sort().join(',')}]${O}`);
   }
-  if (r.tooling.length > 0) console.log(`         ${DIM}+ ${r.tooling.length} tooling path(s): ${r.tooling.join(', ')}${OFF}`);
+  if (r.removed.length) console.log(`         ${GRN}−gone${O} ${D}${r.removed.join(', ')} — run npm run write-paths:baseline to lock the win${O}`);
+  if (r.tooling.length) console.log(`         ${D}+ ${r.tooling.length} tooling path(s): ${r.tooling.join(', ')}${O}`);
 }
 
-const toolingOnly = rows.filter(r => r.paths.length === 0);
-if (toolingOnly.length > 0) {
-  console.log(`\n${BOLD}${YEL}TOOLING-ONLY TABLES (reported, NOT asserted)${OFF}`);
-  console.log(`${DIM}Written only by scripts/ — seeds, backfills, verifiers. No app path exists.${OFF}`);
-  for (const r of toolingOnly) console.log(`  ${r.table} ${DIM}← ${r.tooling.join(', ')}${OFF}`);
+const toolingOnly = rows.filter(r => !r.appPaths.length);
+if (toolingOnly.length) {
+  console.log(`\n${B}${YEL}TOOLING-ONLY TABLES (reported, NOT asserted)${O}`);
+  for (const r of toolingOnly) console.log(`  ${r.table} ${D}← ${r.tooling.join(', ')}${O}`);
 }
 
-if (rpcs.size > 0) {
-  console.log(`\n${BOLD}${YEL}ADVISORY — RPC CALLERS (NOT ASSERTED)${OFF}`);
-  console.log(`${DIM}This cap reads SOURCE. Which table an RPC writes lives in the database, so it cannot be`);
-  console.log(`resolved here. These are REPORTED, not judged — an rpc→table map is owed before they can be.${OFF}`);
-  for (const [name, paths] of [...rpcs].sort()) {
-    console.log(`  ${name} ${DIM}← ${[...paths].sort().join(', ')}${OFF}`);
-  }
+if (rpcs.size) {
+  console.log(`\n${B}${YEL}ADVISORY — RPC CALLERS (NOT ASSERTED — every count above is a FLOOR)${O}`);
+  console.log(`${D}This cap reads SOURCE. Which table an RPC writes lives in the database. The rpc→table map${O}`);
+  console.log(`${D}is the cap's own next build and is OWED; until it exists these are reported, not judged.${O}`);
+  for (const [n, p] of [...rpcs].sort()) console.log(`  ${n} ${D}← ${[...p].sort().join(', ')}${O}`);
+}
+if (dynamic.length) {
+  console.log(`\n${B}${YEL}ADVISORY — DYNAMIC TABLE NAMES (NOT RESOLVED)${O}`);
+  for (const u of [...new Set(dynamic.map(d => `${d.expr} ← ${d.path}`))]) console.log(`  ${D}${u}${O}`);
 }
 
-if (dynamic.length > 0) {
-  const uniq = [...new Set(dynamic.map(d => `${d.expr} ← ${d.path}`))];
-  console.log(`\n${BOLD}${YEL}ADVISORY — DYNAMIC TABLE NAMES (NOT RESOLVED)${OFF}`);
-  for (const u of uniq) console.log(`  ${DIM}${u}${OFF}`);
-}
-
-console.log('');
-if (fails.length > 0) {
-  console.error(`${RED}${BOLD}✗ ${fails.length} table(s) with more than one undeclared write path: ${fails.map(f => f.table).join(', ')}${OFF}`);
-  console.error(`${DIM}Fix = collapse to one module, or declare the divergence WITH ITS REASON in ALLOWED_DIVERGENCE.${OFF}\n`);
+console.log(`\n${B}SUMMARY${O}  goal: ${goalFails.length} table(s) with >1 undeclared path ${D}(known debt — 17 failures = 17 DECISIONS owed, not 17 builds)${O}`);
+if (ratchetFails.length) {
+  console.error(`\n${RED}${B}✗ RATCHET — ${ratchetFails.length} table(s) gained a NEW undeclared write path:${O}`);
+  for (const r of ratchetFails) console.error(`   ${RED}${r.table}${O}: ${r.isNewTable ? `new table born with ${r.appPaths.length} paths` : r.newPaths.join(', ')}`);
+  console.error(`${D}Reuse the existing path, or declare it in ALLOWED_DIVERGENCE with its reason.${O}\n`);
   process.exit(1);
 }
-console.log(`${GREEN}${BOLD}✓ every table has exactly one write path, or a satisfied declaration.${OFF}\n`);
+console.log(`${GRN}${B}✓ RATCHET CLEAN — no table gained a write path.${O}\n`);
