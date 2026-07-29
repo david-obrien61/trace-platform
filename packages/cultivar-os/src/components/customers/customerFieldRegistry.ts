@@ -105,10 +105,10 @@ const CUSTOMER_FIELDS: readonly CustomerFieldDef[] = [
 // ── DERIVATIONS — each one replaces a list that used to be maintained by hand ─
 const by = (p: (f: CustomerFieldDef) => boolean) => CUSTOMER_FIELDS.filter(p).map(f => f.key);
 
-// NOTE: the text-field derivation (`kind === 'text' | 'textarea'`) is NOT exported yet — its
-// consumer is the `CustomerTextField` union in customerEdit.ts, which is still hand-written and
-// collapses in phase B. Shipping it now would be an unused export asserting a consolidation that
-// has not happened. It returns with its consumer.
+/** Editable plain-text fields (blank → null unless notNull). Withheld in phase A because it had no
+ *  consumer; phase B's `buildCustomerPatch` is that consumer, so it returns — as promised. */
+export const CUSTOMER_TEXT_FIELDS = by(f => f.kind === 'text' || f.kind === 'textarea');
+
 
 /** NOT NULL columns — blank coerces to '' rather than null. Was `NOT_NULL_FIELDS`. */
 export const CUSTOMER_NOT_NULL_FIELDS = by(f => !!f.notNull);
@@ -121,8 +121,10 @@ export const CUSTOMER_BILLING_MIRROR: Record<string, string> = Object.fromEntrie
   CUSTOMER_FIELDS.filter(f => f.legacyMirror).map(f => [f.key, f.legacyMirror as string]),
 );
 
-/** The CREATE payload's plain-text pass. Was the `addText` array inside `saveCreate`. */
-export const CUSTOMER_CREATE_TEXT_FIELDS = by(f => !!f.createText);
+// NOTE: the create-only text pass (`createText`) no longer has a derivation exported. Phase B
+// retired its consumer — `buildCustomerPatch` builds the INSERT from the same diff as the UPDATE,
+// which is the point of one commit model. The flag stays on the registry because it still describes
+// the field; an unused EXPORT would be a claim that something consumes it.
 
 /** Guaranteed-live columns (everything pre-2026-07-13). Was the `CORE` select string. */
 export const CUSTOMER_SELECT_CORE = by(f => !f.gated).join(',');

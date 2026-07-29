@@ -16,7 +16,7 @@
 //               comment out), with tax_id / credit_limit VALUE-MASKED (BENCH-C).
 // ============================================================
 import { supabase } from '../../lib/supabase';
-import { CUSTOMER_NOT_NULL_FIELDS, CUSTOMER_SENSITIVE_FIELDS } from './customerFieldRegistry';
+import { CUSTOMER_NOT_NULL_FIELDS, CUSTOMER_SENSITIVE_FIELDS, CUSTOMER_TEXT_FIELDS, CUSTOMER_BILLING_MIRROR } from './customerFieldRegistry';
 
 // RESIDUAL of list 5 (E6): the runtime list is now derived from `customerFields.ts`; this UNION is
 // its compile-time half and is still written by hand. It collapses in phase B, when the form's
@@ -160,4 +160,83 @@ export async function insertCustomer(params: {
     .single();
   if (error) { console.error('[TRACE:customers] insert error', error.message); return { error: error.message, id: null }; }
   return { error: null, id: (data as { id: string }).id };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A3 / E2 PHASE B — THE ONE DIFF. The form buffers every field and commits ONCE, so this replaces
+// the per-field writers entirely. It is PURE (no supabase, no React) so the rules can be reasoned
+// about and tested without a browser, and it is the single place the coercion runs — the defect it
+// retires is a coercion that ran per-keystroke-blur against the wrong base.
+//
+// FIELD SET IS DERIVED (A4/E6): the text fields come from the registry, not from a list written here.
+// ─────────────────────────────────────────────────────────────────────────────
+interface TaxDraft {
+  exempt: boolean; reasonCode: string; otherText: string; certRef: string; expires: string;
+}
+
+/**
+ * Diff the on-screen draft against the last-persisted row and return ONLY what changed.
+ * `creating` builds a full insert payload instead (same rules, one branch for the NOT NULL defaults).
+ * Returns `{ error }` on a validation failure — validated ONCE here, not per field.
+ */
+export function buildCustomerPatch(params: {
+  saved: Record<string, unknown>;
+  draft: Record<string, unknown>;
+  tax: TaxDraft;
+  creating: boolean;
+}): { values: Record<string, unknown>; error: string | null } {
+  const { saved, draft, tax, creating } = params;
+  const values: Record<string, unknown> = {};
+
+  // ── identity + required ──
+  const first = String(draft.first_name ?? '').trim();
+  if (!first) return { values: {}, error: 'First name is required.' };
+
+  // ── the tax invariant (D-40), checked ONCE: never exempt without a recorded reason ──
+  let taxReason: string | null = null;
+  if (tax.exempt) {
+    taxReason = tax.reasonCode === 'other' ? tax.otherText.trim() : tax.reasonCode;
+    if (!taxReason) return { values: {}, error: 'A reason is required to make a customer tax-exempt.' };
+  }
+
+  const put = (k: string, v: unknown) => { if (creating || v !== saved[k]) values[k] = v; };
+
+  // ── text fields, from the registry ──
+  for (const field of CUSTOMER_TEXT_FIELDS) {
+    if (field === 'tax_exempt_cert_ref') continue;             // owned by the tax block below
+    if (Object.values(CUSTOMER_BILLING_MIRROR).includes(field)) continue; // legacy mirrors are derived, never edited
+    const raw = draft[field];
+    if (raw === undefined) continue;
+    const trimmed = String(raw ?? '').trim();
+    const notNull = CUSTOMER_NOT_NULL_FIELDS.includes(field);
+    const value = trimmed === '' ? (notNull ? '' : null) : trimmed;
+    put(field, value);
+    // D-41 bridge: a canonical billing field carries its legacy twin with it.
+    const mirror = CUSTOMER_BILLING_MIRROR[field];
+    if (mirror && (creating ? value != null : value !== saved[mirror])) values[mirror] = value;
+  }
+
+  // ── typed fields ──
+  put('customer_type', draft.customer_type ?? 'person');
+  put('price_tier',    draft.price_tier ?? 'retail');
+  put('status',        draft.status ?? 'active');
+  const cl = draft.credit_limit;
+  if (cl !== undefined) {
+    const n = cl === null || cl === '' ? null : Number(String(cl).replace(/[$,]/g, ''));
+    if (n !== null && Number.isNaN(n)) return { values: {}, error: 'Credit limit must be a number.' };
+    put('credit_limit', n);
+  }
+
+  // ── the tax set, written as a UNIT (it was atomic before and stays atomic) ──
+  put('tax_exempt',          tax.exempt);
+  put('tax_exempt_reason',   tax.exempt ? taxReason : null);
+  put('tax_exempt_cert_ref', tax.exempt ? (tax.certRef.trim() || null) : null);
+  put('tax_exempt_expires',  tax.exempt ? (tax.expires || null) : null);
+
+  if (creating) {
+    values.source = 'manual';
+    values.first_name = first;
+    values.last_name = String(draft.last_name ?? '').trim();   // NOT NULL → '' never null
+  }
+  return { values, error: null };
 }

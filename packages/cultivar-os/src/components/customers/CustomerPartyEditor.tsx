@@ -10,13 +10,14 @@
 //               reason / cert / expiry) is UI-editable — closing the D-40 owner-prove blocker.
 // MODES:        The ONLY differences between create and edit are (a) title, (b) empty-vs-populated
 //               initial values, (c) insert-vs-update on save. Everything else is identical.
-//               EDIT: auto-save, ONE commit model for EVERY group — text fields commit on blur,
-//               selects/number/date on change. The tax set is an ORDINARY field group (2026-07-29):
-//               it commits like everything else, its atomic four-field write lives in commitExemption,
-//               and the D-40 rule still holds absolutely (tax_exempt=true is never written without a
-//               reason). The old "Save exemption" button is GONE — the footer promises auto-save, so
-//               a group that needed a button was copy that lied, and a certificate number typed into
-//               it was silently lost on close. Each write is an owner-only RLS UPDATE.
+//               COMMIT MODEL (A3/E2, phase B — ONE MODEL, BOTH MODES): the RECORD is the unit of
+//               work, so this panel is a FORM. Every field BUFFERS into `draft`; nothing is written
+//               until Save; Cancel genuinely discards. Create and edit differ ONLY in title and
+//               insert-vs-update. The per-field writers are gone, and with them three defects:
+//               Cancel that meant "keep everything so far", a tax group that needed its own button
+//               the footer said did not exist, and validation that ran per field instead of once.
+//               The diff + coercion + the D-40 tax invariant live in ONE pure function,
+//               `buildCustomerPatch` (customerEdit.ts), over the registry's derived field list.
 //               CREATE: all fields buffer locally; ONE "Save Customer" INSERT (owner-only RLS, no
 //               endpoint) after validation (first_name required; exempt requires a reason).
 //               Billing address is mirrored to the legacy consumed address_* on save (both modes) —
@@ -37,10 +38,9 @@ import { X } from 'lucide-react';
 import { useBusinessContext } from '@trace/shared/context';
 import { sheetStyles as SS } from '../datasheet/DataSheet';
 import {
-  coerceCustomerField, persistCustomerField, persistCustomerPatch, insertCustomer, type CustomerTextField,
+  persistCustomerPatch, insertCustomer, buildCustomerPatch, type CustomerTextField,
 } from './customerEdit';
 import { TAX_EXEMPTION_REASONS } from '@trace/shared/business-logic';
-import { CUSTOMER_BILLING_MIRROR, CUSTOMER_CREATE_TEXT_FIELDS } from './customerFieldRegistry';
 
 // The full party row the editor reads. Party-record cols (2026-07-13) are optional so a
 // pre-migration row (cols stripped by the roster's deploy-safe fallback) still opens cleanly.
@@ -81,8 +81,6 @@ export const BLANK_PARTY_CUSTOMER: PartyCustomer = {
 // (follow-up (b) will repoint them). To avoid regressing a manually-added customer's checkout address,
 // the shared editor writes billing AND the legacy field together — in BOTH create and edit — keeping
 // the consumed field in sync until (b) folds address_* into billing_* and drops this mirror.
-// E6 (Phase A): DERIVED from the one field registry (each canonical field declares its legacyMirror).
-const BILLING_MIRROR: Record<string, string> = CUSTOMER_BILLING_MIRROR;
 
 interface Props {
   customer: PartyCustomer;
@@ -120,11 +118,10 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
   const creating = mode === 'create';
   // TWO values, deliberately: `draft` is the ON-SCREEN working copy (every keystroke lands here via
   // `input()`), `saved` is the LAST PERSISTED row. Collapsing them is the defect fixed 2026-07-29 —
-  // an unchanged-check that reads the working copy can never see a change. See commitText.
+  // an unchanged-check that reads the working copy can never see a change. `saved` is now the DIFF BASE.
   const [draft, setDraft] = useState<PartyCustomer>(customer);
   const [saved, setSaved] = useState<PartyCustomer>(customer);
   const [error, setError] = useState<string | null>(null);
-  const [savingField, setSavingField] = useState<string | null>(null);
   const [savingNew, setSavingNew] = useState(false);
 
   // Tax-exemption sub-state (validated trio). Seed from the row; when exempt is ON but no reason
@@ -141,163 +138,67 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
 
   const set = (patch: Partial<PartyCustomer>) => setDraft(d => ({ ...d, ...patch }));
 
-  // ── Nullable-text field on blur. CREATE = buffer into draft only (one INSERT on Save Customer).
-  //    EDIT = persist (billing fields mirror to the legacy consumed address_* — see BILLING_MIRROR).
-  //
-  //    🔴 THE COMPARISON BASE IS `saved`, NEVER `draft` (fixed 2026-07-29). `draft` is the ON-SCREEN
-  //    working copy and `input()` writes every keystroke into it, so coercing against `draft` asks
-  //    "does what I typed equal what I typed?" — always yes, always `skip`, and EVERY text field in
-  //    this form silently wrote NOTHING while the footer said "Changes save automatically." The
-  //    persisted row and the working copy must be two values; CustomerEditModal always kept them
-  //    apart (`draft` persisted / `form` working) and is why that surface never had this defect. ──
-  async function commitText(field: CustomerTextField, raw: string) {
+  // ── A3 / E2 PHASE B — ONE COMMIT MODEL, BOTH MODES. The record is the unit of work here, so this
+  //    panel is a FORM: every field BUFFERS into `draft` and NOTHING is written until Save. The
+  //    per-field writers (commitText / commitPatch / commitCredit / commitExemption) are GONE.
+  //    Three things fall out of that and each was a real defect:
+  //      · CANCEL MEANS DISCARD. It used to mean "stop, keeping every write so far" — there was no
+  //        way to back out of a partial edit, and the X implied one.
+  //      · THE TAX SET NEEDS NO SPECIAL ATOMIC PATH. commitExemption existed only because everything
+  //        around it was per-field; under one Save every multi-field invariant is atomic by shape.
+  //      · VALIDATION RUNS ONCE, in buildCustomerPatch, for create and edit alike.
+  //    `saved` survives phase A and gets MORE useful: it is now the DIFF BASE. ──
+  const dirty = JSON.stringify(draft) !== JSON.stringify(saved) ||
+    exempt !== !!saved.tax_exempt ||
+    (certRef || null) !== (saved.tax_exempt_cert_ref ?? null) ||
+    (expires || null) !== (saved.tax_exempt_expires ?? null);
+
+  async function save() {
     if (!businessId) return;
-    const r = coerceCustomerField(saved as unknown as Record<string, unknown>, field, raw);
-    if (r.skip) {
-      // Unchanged, or first_name blanked (identity — never blank). Snap the input back to the
-      // PERSISTED value: the screen must never show a value the database does not hold (D-9).
-      set({ [field]: (saved as unknown as Record<string, unknown>)[field] ?? '' } as Partial<PartyCustomer>);
-      return;
-    }
-    if (creating) { set({ [field]: r.value } as Partial<PartyCustomer>); return; }
-    const mirror = BILLING_MIRROR[field];
-    setSavingField(field);
-    const res = mirror
-      ? await persistCustomerPatch({ id: draft.id, businessId, patch: { [field]: r.value, [mirror]: r.value } })
-      : await persistCustomerField({ id: draft.id, businessId, field, from: (saved as any)[field], value: r.value });
-    setSavingField(null);
-    if (res.error) { setError(res.error); return; }
-    const landed = { [field]: r.value, ...(mirror ? { [mirror]: r.value } : {}) } as Partial<PartyCustomer>;
-    set(landed);
-    setSaved(s => ({ ...s, ...landed })); // the write landed → it is now the persisted value
-    setError(null); onSaved();
-  }
+    const { values, error: vErr } = buildCustomerPatch({
+      saved: saved as unknown as Record<string, unknown>,
+      draft: draft as unknown as Record<string, unknown>,
+      tax: { exempt, reasonCode, otherText, certRef, expires },
+      creating,
+    });
+    if (vErr) { setError(vErr); setTaxErr(vErr.includes('tax-exempt') ? vErr : null); return; }
 
-  // ── Typed/select field on change. CREATE = buffer; EDIT = one patch write. ──
-  async function commitPatch(patch: Record<string, unknown>, local: Partial<PartyCustomer>) {
-    if (creating) { set(local); return; }
-    if (!businessId) return;
-    const res = await persistCustomerPatch({ id: draft.id, businessId, patch });
-    if (res.error) { setError(res.error); return; }
-    set(local);
-    setSaved(s => ({ ...s, ...local })); // keep the persisted mirror in step with the write
-    setError(null); onSaved();
-  }
+    // A no-op Save is not an error and not a write — say so plainly and close (STD-023's shape:
+    // the write does not run, rather than running and being ignored).
+    if (!creating && Object.keys(values).length === 0) { setError(null); onClose(); return; }
 
-  // ── credit_limit numeric on blur (blank → null; NaN rejected). CREATE buffers; EDIT persists. ──
-  async function commitCredit(raw: string) {
-    const t = raw.trim();
-    let val: number | null;
-    if (t === '') val = null;
-    else { const n = Number(t.replace(/[$,]/g, '')); if (Number.isNaN(n)) { setError('Credit limit must be a number.'); return; } val = n; }
-    if (val === (draft.credit_limit ?? null)) return;
-    await commitPatch({ credit_limit: val }, { credit_limit: val });
-  }
-
-  // ── TAX EXEMPTION — an ORDINARY field group (2026-07-29 ruling). Every control here commits the
-  //    way every other group in this form commits: edit it, it saves. There is no "Save exemption"
-  //    button, because the footer promises auto-save and ONE group opting out is copy that lies —
-  //    a certificate number typed into a group that needs a button nobody knew to press is silently
-  //    lost on close. The D-40 invariant is UNCHANGED and now lives in exactly ONE place: this
-  //    function is the only writer of the tax set, and it NEVER writes tax_exempt=true without a
-  //    non-empty reason. CREATE buffers (saveCreate validates once and writes with the row); EDIT
-  //    writes the four tax fields ATOMICALLY in one patch, so the flag and its reason cannot split.
-  //    Callers pass the control's NEW value (setState is async — reading state here would lag one edit).
-  async function commitExemption(next: {
-    exempt?: boolean; reasonCode?: string; otherText?: string; certRef?: string; expires?: string;
-  }) {
-    const on    = next.exempt     ?? exempt;
-    const code  = next.reasonCode ?? reasonCode;
-    const other = next.otherText  ?? otherText;
-    const cert  = next.certRef    ?? certRef;
-    const exp   = next.expires    ?? expires;
-
-    // OFF is the safe default — clears the whole set, never leaves an orphan reason/cert behind.
-    if (!on) {
-      setTaxErr(null);
-      if (creating) return; // buffered — nothing to clear on a row that doesn't exist yet
-      const cleared = { tax_exempt: false, tax_exempt_reason: null, tax_exempt_cert_ref: null, tax_exempt_expires: null };
-      await commitPatch(cleared, cleared);
-      return;
-    }
-
-    const reason = code === 'other' ? other.trim() : code;
-    // D-40: never zero a customer's tax without a recorded reason. Blocks the WRITE (M2 — surfaced,
-    // not silent); the checkbox stays visibly on so the owner can finish the reason they started.
-    if (!reason) { setTaxErr('A reason is required to make a customer tax-exempt.'); return; }
-    setTaxErr(null);
-    if (creating) return; // buffered — saveCreate re-validates and writes it with the INSERT
-
-    const trio = {
-      tax_exempt: true,
-      tax_exempt_reason: reason,
-      tax_exempt_cert_ref: cert.trim() || null,
-      tax_exempt_expires: exp || null,
-    };
-    await commitPatch(trio, trio);
-  }
-
-  // ── CREATE — validate (first_name required; exempt requires a reason) then ONE insert. Same rules
-  //    as edit; billing mirrored to the legacy consumed address_*; tax_id/credit_limit masked (BENCH-C). ──
-  async function saveCreate() {
-    if (!businessId) return;
-    const first = draft.first_name.trim();
-    if (!first) { setError('First name is required.'); return; }
-    let taxReason: string | null = null;
-    if (exempt) {
-      taxReason = reasonCode === 'other' ? otherText.trim() : reasonCode;
-      if (!taxReason) { setTaxErr('A reason is required to make a customer tax-exempt.'); return; }
-    }
-    setTaxErr(null); setError(null);
-
-    const values: Record<string, unknown> = {
-      source: 'manual',
-      first_name: first,
-      last_name: (draft.last_name ?? '').trim(), // NOT NULL — '' when blank, never null
-      customer_type: draft.customer_type ?? 'person',
-      price_tier: draft.price_tier ?? 'retail',
-      status: draft.status ?? 'active',
-    };
-    const addText = (k: keyof PartyCustomer) => {
-      const v = ((draft[k] as string) ?? '').trim();
-      if (v) values[k] = v;
-    };
-    // E6 (Phase A): was a hand-maintained array here — the create path's OWN enumeration of the
-    // fields, independent of the edit path's. Now DERIVED, so create and edit cannot disagree.
-    (CUSTOMER_CREATE_TEXT_FIELDS as (keyof PartyCustomer)[]).forEach(addText);
-    // legacy consumed-address mirror (billing_line2 has no legacy equivalent)
-    for (const [billing, legacy] of Object.entries(BILLING_MIRROR)) {
-      if (values[billing] != null) values[legacy] = values[billing];
-    }
-    if (draft.credit_limit != null) values.credit_limit = draft.credit_limit;
-    if (exempt) {
-      values.tax_exempt = true;
-      values.tax_exempt_reason = taxReason;
-      values.tax_exempt_cert_ref = certRef.trim() || null;
-      values.tax_exempt_expires = expires || null;
-    }
-
-    setSavingNew(true);
-    const res = await insertCustomer({ businessId, values });
+    setSavingNew(true); setError(null); setTaxErr(null);
+    const res = creating
+      ? await insertCustomer({ businessId, values })
+      : await persistCustomerPatch({ id: draft.id, businessId, patch: values });
     setSavingNew(false);
-    if (res.error) { setError(res.error); return; }
+    if (res.error) { setError(res.error); return; }   // includes the A8 zero-row refusal message
+    setSaved({ ...draft, ...(values as Partial<PartyCustomer>) });
     onSaved();
     onClose();
   }
+
+  // Cancel now genuinely discards. Guard only when there is something to lose.
+  function cancel() {
+    if (dirty && !window.confirm('Discard your changes to this customer?')) return;
+    onClose();
+  }
+
+  const set2 = (field: CustomerTextField, v: string) => set({ [field]: v } as Partial<PartyCustomer>);
 
   const input = (field: keyof PartyCustomer, extra?: React.CSSProperties): React.InputHTMLAttributes<HTMLInputElement> => ({
     style: { ...SS.input, ...extra },
     value: (draft[field] as string) ?? '',
     onChange: e => set({ [field]: e.target.value } as Partial<PartyCustomer>),
-    disabled: savingField === field,
+    disabled: savingNew,
   });
 
   return (
-    <div style={overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div style={overlay} onClick={e => { if (e.target === e.currentTarget) cancel(); }}>
       <div style={dialog}>
         <div style={SS.sheetHeader}>
           <h2 style={{ ...SS.sectionTitle, margin: 0 }}>{creating ? 'Add Customer' : 'Edit customer'}</h2>
-          <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }} onClick={onClose}>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }} onClick={cancel}>
             <X size={20} color="#6b7280" />
           </button>
         </div>
@@ -308,27 +209,27 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
         <div style={{ ...SS.row2, ...SS.field }}>
           <div>
             <label style={SS.label}>First name *</label>
-            <input {...input('first_name')} onBlur={e => { void commitText('first_name', e.target.value); }} placeholder="e.g. Marcus" />
+            <input {...input('first_name')} onBlur={e => { set2('first_name', e.target.value); }} placeholder="e.g. Marcus" />
           </div>
           <div>
             <label style={SS.label}>Last name</label>
-            <input {...input('last_name')} onBlur={e => { void commitText('last_name', e.target.value); }} placeholder="e.g. Webb" />
+            <input {...input('last_name')} onBlur={e => { set2('last_name', e.target.value); }} placeholder="e.g. Webb" />
           </div>
         </div>
         <div style={{ ...SS.row2, ...SS.field }}>
           <div>
             <label style={SS.label}>Organization name</label>
-            <input {...input('organization_name')} onBlur={e => { void commitText('organization_name', e.target.value); }} placeholder="e.g. Cedar Park HOA" />
+            <input {...input('organization_name')} onBlur={e => { set2('organization_name', e.target.value); }} placeholder="e.g. Cedar Park HOA" />
           </div>
           <div>
             <label style={SS.label}>Display name (invoice)</label>
-            <input {...input('display_name')} onBlur={e => { void commitText('display_name', e.target.value); }} placeholder="Optional" />
+            <input {...input('display_name')} onBlur={e => { set2('display_name', e.target.value); }} placeholder="Optional" />
           </div>
         </div>
         <div style={SS.field}>
           <label style={SS.label}>Type</label>
           <select style={SS.input} value={draft.customer_type ?? 'person'}
-            onChange={e => { void commitPatch({ customer_type: e.target.value }, { customer_type: e.target.value }); }}>
+            onChange={e => { set({ customer_type: e.target.value }); }}>
             <option value="person">Person</option>
             <option value="organization">Organization</option>
           </select>
@@ -339,11 +240,11 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
         <div style={{ ...SS.row2, ...SS.field }}>
           <div>
             <label style={SS.label}>Email</label>
-            <input {...input('email')} type="email" onBlur={e => { void commitText('email', e.target.value); }} placeholder="Optional" />
+            <input {...input('email')} type="email" onBlur={e => { set2('email', e.target.value); }} placeholder="Optional" />
           </div>
           <div>
             <label style={SS.label}>Phone</label>
-            <input {...input('phone')} onBlur={e => { void commitText('phone', e.target.value); }} placeholder="Optional" />
+            <input {...input('phone')} onBlur={e => { set2('phone', e.target.value); }} placeholder="Optional" />
           </div>
         </div>
 
@@ -351,24 +252,24 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
         <div style={groupTitle}>Billing address</div>
         <div style={SS.field}>
           <label style={SS.label}>Line 1</label>
-          <input {...input('billing_line1')} onBlur={e => { void commitText('billing_line1', e.target.value); }} placeholder="Street address" />
+          <input {...input('billing_line1')} onBlur={e => { set2('billing_line1', e.target.value); }} placeholder="Street address" />
         </div>
         <div style={SS.field}>
           <label style={SS.label}>Line 2</label>
-          <input {...input('billing_line2')} onBlur={e => { void commitText('billing_line2', e.target.value); }} placeholder="Suite, unit (optional)" />
+          <input {...input('billing_line2')} onBlur={e => { set2('billing_line2', e.target.value); }} placeholder="Suite, unit (optional)" />
         </div>
         <div style={{ ...SS.row3, ...SS.field }}>
           <div>
             <label style={SS.label}>City</label>
-            <input {...input('billing_city')} onBlur={e => { void commitText('billing_city', e.target.value); }} placeholder="City" />
+            <input {...input('billing_city')} onBlur={e => { set2('billing_city', e.target.value); }} placeholder="City" />
           </div>
           <div>
             <label style={SS.label}>State</label>
-            <input {...input('billing_state')} onBlur={e => { void commitText('billing_state', e.target.value); }} placeholder="TX" />
+            <input {...input('billing_state')} onBlur={e => { set2('billing_state', e.target.value); }} placeholder="TX" />
           </div>
           <div>
             <label style={SS.label}>ZIP</label>
-            <input {...input('billing_zip')} onBlur={e => { void commitText('billing_zip', e.target.value); }} placeholder="ZIP" />
+            <input {...input('billing_zip')} onBlur={e => { set2('billing_zip', e.target.value); }} placeholder="ZIP" />
           </div>
         </div>
 
@@ -376,11 +277,11 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
         <div style={groupTitle}>Tax</div>
         <div style={SS.field}>
           <label style={SS.label}>Tax ID (EIN / resale no.)</label>
-          <input {...input('tax_id')} onBlur={e => { void commitText('tax_id', e.target.value); }} placeholder="Optional" />
+          <input {...input('tax_id')} onBlur={e => { set2('tax_id', e.target.value); }} placeholder="Optional" />
         </div>
         <div style={{ ...SS.field, display: 'flex', alignItems: 'center', gap: 8 }}>
           <input type="checkbox" checked={exempt}
-            onChange={e => { setExempt(e.target.checked); void commitExemption({ exempt: e.target.checked }); }}
+            onChange={e => { setExempt(e.target.checked); setTaxErr(null); }}
             style={{ width: 18, height: 18 }} />
           <label style={{ ...SS.label, margin: 0 }}>Tax-exempt customer</label>
         </div>
@@ -392,26 +293,26 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
             <div style={SS.field}>
               <label style={SS.label}>Reason</label>
               <select style={SS.input} value={reasonCode}
-                onChange={e => { setReasonCode(e.target.value); void commitExemption({ reasonCode: e.target.value }); }}>
+                onChange={e => { setReasonCode(e.target.value); setTaxErr(null); }}>
                 {TAX_EXEMPTION_REASONS.map(r => <option key={r.code} value={r.code}>{r.label}</option>)}
               </select>
             </div>
             {reasonCode === 'other' && (
               <div style={SS.field}>
                 <input style={SS.input} value={otherText} onChange={e => setOtherText(e.target.value)}
-                  onBlur={e => { void commitExemption({ otherText: e.target.value }); }} placeholder="Reason (required)" />
+                  placeholder="Reason (required)" />
               </div>
             )}
             <div style={{ ...SS.row2, ...SS.field }}>
               <div>
                 <label style={SS.label}>Certificate #</label>
                 <input style={SS.input} value={certRef} onChange={e => setCertRef(e.target.value)}
-                  onBlur={e => { void commitExemption({ certRef: e.target.value }); }} placeholder="Optional" />
+                  placeholder="Optional" />
               </div>
               <div>
                 <label style={SS.label}>Cert expires</label>
                 <input style={SS.input} type="date" value={expires}
-                  onChange={e => { setExpires(e.target.value); void commitExemption({ expires: e.target.value }); }} />
+                  onChange={e => setExpires(e.target.value)} />
               </div>
             </div>
             {/* The certificate DOCUMENT is deliberately not stored here (2026-07-29 ruling). TRACE
@@ -433,20 +334,20 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
           <div>
             <label style={SS.label}>Price tier</label>
             <select style={SS.input} value={draft.price_tier ?? 'retail'}
-              onChange={e => { void commitPatch({ price_tier: e.target.value }, { price_tier: e.target.value }); }}>
+              onChange={e => { set({ price_tier: e.target.value }); }}>
               {tierOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
           <div>
             <label style={SS.label}>Payment terms</label>
-            <input {...input('payment_terms')} list={DATALIST_ID} onBlur={e => { void commitText('payment_terms', e.target.value); }} placeholder="e.g. net_30" />
+            <input {...input('payment_terms')} list={DATALIST_ID} onBlur={e => { set2('payment_terms', e.target.value); }} placeholder="e.g. net_30" />
             <datalist id={DATALIST_ID}>{PAYMENT_TERMS_SUGGESTIONS.map(t => <option key={t} value={t} />)}</datalist>
           </div>
         </div>
         <div style={SS.field}>
           <label style={SS.label}>Credit limit</label>
-          <input style={SS.input} defaultValue={draft.credit_limit != null ? String(draft.credit_limit) : ''} inputMode="decimal"
-            onBlur={e => { void commitCredit(e.target.value); }} placeholder="Optional" />
+          <input style={SS.input} value={draft.credit_limit != null ? String(draft.credit_limit) : ''} inputMode="decimal"
+            onChange={e => set({ credit_limit: e.target.value as unknown as number })} placeholder="Optional" />
         </div>
 
         {/* ── STATUS ── */}
@@ -454,7 +355,7 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
         <div style={SS.field}>
           <label style={SS.label}>Account status</label>
           <select style={SS.input} value={draft.status ?? 'active'}
-            onChange={e => { void commitPatch({ status: e.target.value }, { status: e.target.value }); }}>
+            onChange={e => { set({ status: e.target.value }); }}>
             <option value="active">Active</option>
             <option value="inactive">Inactive (soft-deactivated)</option>
           </select>
@@ -463,17 +364,22 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
           <label style={SS.label}>Notes (internal)</label>
           <textarea style={{ ...SS.input, minHeight: 64, resize: 'vertical' }}
             value={draft.notes ?? ''} onChange={e => set({ notes: e.target.value })}
-            onBlur={e => { void commitText('notes', e.target.value); }} placeholder="Internal memo — not shown to the customer" />
+            onBlur={e => { set2('notes', e.target.value); }} placeholder="Internal memo — not shown to the customer" />
         </div>
 
-        {creating ? (
-          <button type="button" onClick={() => { void saveCreate(); }} disabled={savingNew}
-            style={savingNew ? SS.submitBtnDisabled : { ...SS.submitBtn, marginTop: 6 }}>
-            {savingNew ? 'Saving…' : 'Save Customer'}
+        {/* E3 — the copy states the model and the surface implements it. The old footer promised
+            auto-save; this panel is a FORM in both modes, so it has one button in both modes. */}
+        <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+          <button type="button" onClick={() => { void save(); }} disabled={savingNew}
+            style={savingNew ? SS.submitBtnDisabled : { ...SS.submitBtn, flex: 1 }}>
+            {savingNew ? 'Saving…' : creating ? 'Save Customer' : 'Save changes'}
           </button>
-        ) : (
-          <p style={SS.hint}>Changes save automatically as you edit. Close when you're done.</p>
-        )}
+          <button type="button" onClick={cancel} disabled={savingNew}
+            style={{ ...SS.input, width: 'auto', padding: '0 18px', cursor: 'pointer', background: '#fff' }}>
+            Cancel
+          </button>
+        </div>
+        <p style={SS.hint}>Nothing is saved until you press Save. Cancel discards your changes.</p>
       </div>
     </div>
   );

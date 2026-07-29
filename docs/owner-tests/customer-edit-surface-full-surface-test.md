@@ -8,7 +8,7 @@
 > `/customers` roster's inline cells. A per-build proof is a FILTER (`COVERS: #NNN`), never a second doc.
 
 **Purpose:** prove the customer form actually WRITES what it says it writes. Every card below is a
-`STATUS: owed` — the whole board is 0 of 7.
+`STATUS: owed` — the whole board is 0 of 8.
 
 **Why this exists (the defect these cards defend against):** `CustomerPartyEditor` compared each
 edited field against `draft` — the ON-SCREEN working copy that `input()` had already updated on every
@@ -17,7 +17,7 @@ yes, and returned without writing. **Every plain text field in the one customer 
 nothing in edit mode, while the footer read "Changes save automatically as you edit."** Separately,
 the Tax group alone required a "Save exemption" button that the same footer told the owner did not
 exist — a certificate number typed there was lost on close. Cards 1–4 are the live proofs of the
-write; cards 5–7 prove the rules that survived the change.
+write; cards 5–8 prove the rules that survived the change.
 
 ---
 
@@ -59,11 +59,11 @@ DEVICE: desktop
 COVERS: the commitText working-copy defect (2026-07-29)
 SIGNAL: `[TRACE:customers] edit {field: 'email', from: …, to: …}`
 
-Open `/customers` → **Edit** on any customer → change **Email** to something new → click outside the
-field (blur) → **close the dialog** → **reload the page** → re-open the same customer.
+**REWRITTEN 2026-07-29 for phase B — the panel is now a FORM.** Open `/customers` → **Edit** →
+change **Email** → **press Save changes** → **reload the page** → re-open.
 **PASS:** the new email is there. **FAIL (the old behaviour):** the old email is back.
-Reload is the whole point — before the fix the value stayed on screen and was never written, so
-*not* reloading is exactly how this hid.
+Reload is the whole point — the original defect left the value on screen while writing nothing, so
+*not* reloading is exactly how it hid.
 
 ### CARD 2 — the same, on a field in every other group
 STATUS: owed
@@ -71,10 +71,10 @@ LAST-PROVEN: never
 DEVICE: desktop
 COVERS: the commitText working-copy defect — group coverage
 
-Repeat card 1's edit-blur-close-**reload** loop once per group: **Identity** (Display name) ·
+Change one field in every group, then press **Save changes ONCE**, then reload: **Identity** (Display name) ·
 **Contact** (Phone) · **Billing address** (City) · **Commercial terms** (Payment terms) ·
-**Status** (Notes). **PASS:** all five survive the reload. One group failing means the fix reached
-some paths and not others.
+**Status** (Notes). **PASS:** all five survive the reload **from a single Save** — that is the phase-B
+claim, that one commit carries the whole record. One group missing means the diff skipped a field.
 
 ### CARD 3 — the Tax group commits with no button (the fold)
 STATUS: owed
@@ -82,11 +82,12 @@ LAST-PROVEN: never
 DEVICE: desktop
 COVERS: the tax-group commit-model fold (2026-07-29)
 
-Edit a customer → tick **Tax-exempt customer** → set a **Reason** → type a **Certificate #** → set
-**Cert expires** → **do not look for a Save button, there isn't one** → close → reload → re-open.
-**PASS:** exemption, reason, certificate number and expiry are all there. **This is the card that
-proves the lost-certificate defect is dead** — the number used to require a "Save exemption" press
-the footer copy said was unnecessary.
+**REWRITTEN 2026-07-29.** Edit a customer → tick **Tax-exempt** → set a **Reason** → type a
+**Certificate #** → set **Cert expires** → press **Save changes** → reload → re-open.
+**PASS:** all four are there, saved by the SAME button as every other field — the tax group has no
+button of its own and needs none. **This is the card that proves the lost-certificate defect is
+dead**: the number used to require a "Save exemption" press the footer said was unnecessary, and now
+there is exactly one Save for the whole record.
 
 ### CARD 4 — the roster reflects it without a manual refresh
 STATUS: owed
@@ -94,8 +95,8 @@ LAST-PROVEN: never
 DEVICE: desktop
 COVERS: the `onSaved()` reload path
 
-With the editor open over the roster, change the **Tax** state → close the dialog.
-**PASS:** the roster's **Tax** column already reads the new state — no page refresh.
+With the editor open over the roster, change the **Tax** state → **Save changes**.
+**PASS:** the dialog closes and the roster's **Tax** column already reads the new state — no refresh.
 
 ### CARD 5 — NEGATIVE: exempt without a reason is REFUSED, and says so
 STATUS: owed
@@ -110,15 +111,31 @@ appears **and nothing is written** — close, reload, re-open: the customer is s
 **FAIL:** the customer comes back exempt with a blank reason. This is the rule the removed button
 used to carry; it now lives in `commitExemption` and must still hold.
 
-### CARD 6 — NEGATIVE: first name cannot be blanked, and the screen tells the truth
+### CARD 6 — NEGATIVE: first name cannot be blanked, and Save says why
 STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
-COVERS: first_name is identity (`coerceCustomerField`) + D-9 (screen never shows what the DB lacks)
+COVERS: first_name is identity + D-9 + M2 (validation surfaced, never silent)
 
-Edit a customer → clear **First name** entirely → click outside the field.
-**PASS:** the field **snaps back** to the stored name immediately. **FAIL:** the box stays empty —
-that is the screen showing a value the database does not have, which is the defect one layer over.
+**REWRITTEN 2026-07-29 — the rule moved.** Under per-field auto-save this snapped the input back on
+blur; under one Save it is a validation failure at Save, which is the honest shape (you can hold an
+invalid draft on screen, you just cannot commit it).
+Edit a customer → clear **First name** → press **Save changes**.
+**PASS:** *"First name is required."* appears, the dialog STAYS OPEN, and nothing is written —
+reload and the old name is intact. **FAIL:** it saves, or the button does nothing with no message.
+
+### CARD 8 — CANCEL DISCARDS, and it never did before
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: A3/E2 phase B — Cancel meant "stop, keeping every write so far"
+
+Edit a customer → change **Phone**, **City** and the **Tier** → press **Cancel** → confirm the
+discard prompt → reload → re-open.
+**PASS:** none of the three changed. **FAIL (the old behaviour):** some or all of them persisted —
+which is what the X used to do, while looking exactly like discard.
+Then the guard's negative: open a customer, change **nothing**, press **Cancel**. **PASS:** it closes
+with NO prompt — a confirm on a clean form trains people to dismiss it.
 
 ### CARD 7 — NEGATIVE: a save that cannot write must NOT say it saved
 STATUS: owed
