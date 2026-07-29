@@ -116,6 +116,20 @@ PIECES: ocr_lineitem_model
 NEEDS: LOOK before fixing (may be the OCR adapter or the line-item type). Recon-first, found 2026-06-28 on a real Lowe's receipt.
 _Coverage placeholder, not a fabricated scenario._ The parser models "DISCOUNT EACH" as standalone negative line items instead of a per-unit modifier on the line above, and drops qty/unit-price ("2 @ 6.28") → a false "$3.06 below total — possibly tax/tip" warning on a receipt that actually reconciles. OCR read fine; the **line-item MODEL** is wrong (needs qty + unit_price + per_unit_discount + extended net). Discounts are cost-to-produce signal. → CLOSE-OUT-LEDGER GENUINELY OPEN.
 
+### The receipt reaches QuickBooks — the throughput's missing second half
+STATUS: gap
+SCOPE: vertical:cultivar, platform
+BUILD: active
+ARC: ocr-doc-routing
+MAPS-TO: —
+PIECES: qbo_buyside_push, receipts_qb_link_column, qbo_attachable_upload
+NEEDS: OWN BUILD SLOT — a QBO integration build, NOT part of an RBAC/UI pass. Ordered: (1) buy-side transaction push, then (2) the attachment. Read Intuit's live portal for the file-size cap + allowed-extension list before (2) is scoped (the doc pages are JS-rendered and truncate on fetch — do not assert them from memory). Corpus verified 2026-07-29.
+_The owner photographs a receipt, TRACE reads it — and then the cost stops there._ **The receipt's DATA is as stranded as its image.** TRACE captures a document only to extract data from it and pass it through to the system that is the record (MASTER_BRIEF § *TRACE Is Not a Record System*); for a receipt that system is QuickBooks, and today **nothing reaches it**. Verified: zero occurrences of `receipt` in the QBO directories, zero of `qbo`/`quickbooks` in `ReceiptKeeper.tsx` or `api/receipts/`, and **no `qb_*` column on `receipts` across all four of its migrations** — no field exists that could even hold the destination id. The two QBO call sites that exist are connect/status (`api/qbo/router.ts`) and invoice push (`api/qbo/invoice/cultivar.ts`).
+
+**TWO BUILDS, ORDERED — and (1) is the real one.** **(1) BUY-SIDE TRANSACTION PUSH** — receipt → QBO `Purchase`/`Bill`, storing the returned id on `receipts` in the `qb_*` column that does not exist. *This is what makes the cost data reach the record system at all.* **(2) ATTACHABLE UPLOAD** against that id — `POST /v3/company/{realmId}/upload`, `multipart/form-data` (`file_metadata_nn` + `file_content_nn`), linked via `AttachableRef[].EntityRef {type, value}`. **(2) is unbuildable without (1) and secondary to it:** an `Attachable` needs a transaction to point at, **we create Invoices only — sell-side** — and a receipt is buy-side. The image is not "an upload we never wired"; it is **a document with no parent to attach to**.
+
+**CARRY THE INVERSION — it will be missed otherwise.** Today the image is **LOAD-BEARING**: a storage failure aborts the receipt row entirely (`ReceiptKeeper.tsx:403-408`). Once QBO is the record that **inverts** — the TRANSACTION must not fail, and the image becomes droppable after it lands. Same shape as the order/QBO ordering settled at `a3439a6`: **the durable fact commits first, the integration follows and can fail without taking anything with it.** A deliberate change, not a side effect. _Grounded: the 2026-07-29 corpus report (`packages/shared/src/quickbooks/`, `packages/cultivar-os/api/qbo/**`, `api/**`, `supabase/migrations/*.sql`); Intuit Attachable API reference._
+
 ### The receipt-cost meter — what it costs, and is the OCR good enough
 STATUS: needs-input
 SCOPE: vertical:cultivar, platform

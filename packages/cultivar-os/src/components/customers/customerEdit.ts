@@ -23,7 +23,10 @@ export type CustomerTextField =
   // Party-record (2026-07-13) text fields — all nullable (blank → null via coerceCustomerField).
   | 'organization_name' | 'display_name'
   | 'billing_line1' | 'billing_line2' | 'billing_city' | 'billing_state' | 'billing_zip'
-  | 'tax_id' | 'payment_terms' | 'notes';
+  | 'tax_id' | 'payment_terms' | 'notes'
+  // The exemption certificate REFERENCE (a number the customer holds, not a document we store —
+  // TRACE connects systems, it does not become the record for someone else's paperwork).
+  | 'tax_exempt_cert_ref';
 
 // first_name / last_name are NOT NULL (last_name defaults to ''); these must never be written
 // null. Everything else is nullable → blank clears to null.

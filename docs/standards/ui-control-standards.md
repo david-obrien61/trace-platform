@@ -1,6 +1,6 @@
 # UI Control Standards — the bar every platform control meets
 
-**Last updated: 2026-07-09**
+**Last updated: 2026-07-29**
 **Status: BINDING (CLAUDE.md §6 rules 13–15). Rendered board: [/ui-standards.html](../../ui-standards.html) (pure renderer of the compliance manifest).**
 
 This is the **bar**, not a found-issue log. Each entry states the industry-standard behavior a
@@ -74,6 +74,31 @@ Every field a grid or form displays MUST declare its editability honestly:
 
 **Deliberate exclusion (documented, not an oversight):** `cost_confidence` / `estimated_value_confidence` are derived-by-default BUT manually overridable on the reconcile grids → genuinely editable there → NOT auto-locked. A read-only surface can still force the lock per-column via `systemManaged: true`.
 
+| # | Standard | Descends from | Why |
+|---|----------|---------------|-----|
+| F4 | **A document field is a REFERENCE, not an upload target** — unless TRACE extracts data from the document, or is passing it through to the system that is its record. Otherwise the field holds a link/number + the facts we answer questions from, and the UI says whose copy is authoritative. | MASTER_BRIEF § *TRACE Is Not a Record System* (ruled 2026-07-29). | TRACE connects systems; it does not become the filing cabinet for someone else's paperwork. An upload control implies we are the record — a promise we then owe forever. |
+
+**F4 applied (the two live cases):** the tax-exemption **certificate** is the customer's proof in the customer's own drive → the customer form holds `tax_exempt_cert_ref` + `tax_exempt_expires` and states so in copy; the upload shell was **removed, feature ruled out, not deferred**. A **receipt image** IS in transit (extract → QuickBooks) → staged, not stored, and the storage-vs-record inversion is tracked on the `user_stories.md` gap.
+
+---
+
+## 4. RECORD EDITING (one record, one edit surface)
+
+Every record a user can edit MUST satisfy:
+
+| # | Standard | Descends from | Why |
+|---|----------|---------------|-----|
+| E1 | **ONE RECORD, ONE EDIT SURFACE** — a given field of a record is editable in exactly ONE component. A second surface over the same record is a re-use of the first (mounted in context), never a second implementation. | STD-011 (one representation of one fact); the #119 "one customer form" pattern. | Two edit surfaces drift. The moment one gains a field or a rule, the other is quietly wrong, and nobody finds out from the code. |
+| E2 | **ONE COMMIT MODEL PER SURFACE — the datasheet/form commit rule.** A **datasheet cell** commits immediately on change (per-cell write, no Save button). A **form** commits per-field on blur/change in EDIT mode, or buffers everything to a single explicit Save in CREATE mode. A surface picks one and applies it to EVERY field group. | Spreadsheet vs. dialog conventions; users read the model once and generalize it. | A field group that needs its own Save button inside an auto-save form loses data silently — the user was told, correctly, that editing saves. |
+| E3 | **The copy states the model and the surface implements it** — "Changes save automatically" is a claim about every field on that surface, and it must be true of every field on that surface. | D-9 Surface Honesty. | Copy is the only place the commit model is visible. Copy that outruns the implementation is the most trusted lie on the screen. |
+| E4 | **The unchanged-check reads the PERSISTED value, never the on-screen working copy.** A surface that keeps one state object for both is structurally incapable of detecting a change. | The two-value form pattern (working copy vs. last-saved). | Coercing against the working copy asks "does what I typed equal what I typed?" — always yes, always skip, and every field silently writes nothing. |
+| E5 | **A write that changed nothing MUST NOT report success** — a mutation reports success only on evidence it landed (affected-row count), not merely on the absence of an error. | STD-023 (*a guard the write does not depend on is advice, not a gate*); tech-debt #74. | A PostgREST UPDATE matching zero rows returns NO error. Under a policy the caller can't satisfy, every save "succeeds" and nothing is written. |
+| E6 | **One declarative field list per record** — the columns selected, the type, the editable set and the form's rendered groups derive from ONE source, not from lists hand-maintained in parallel. | Single-source-of-truth config (the F3 pattern, applied to fields rather than locks). | Parallel field lists are how a field gets added to the form, the type and the grid — and missed in the select, so it silently reads back null. |
+
+**Current implementation (customers — the reference record):** E1 **partial** — `CustomerPartyEditor` is the one full editor (roster Add + roster Edit + `CustomerDetail` all mount it), but `CustomerEditModal` + `CustomerFields` remain a SECOND 8-field editor mounted from `DeliverySchedule`. E2 met on the form as of 2026-07-29 (the Tax group's "Save exemption" button removed — it now commits like every other group). E3 met on the same change. E4 met on the same change (`draft` working copy / `saved` persisted, split). E5 **NOT met anywhere** — no write on this record checks affected rows. E6 **NOT met** — five parallel field lists (see below).
+
+**Known gaps (on the board):** E1 (the second customer editor), E5 (platform-wide — no mutation checks affected rows), E6 (parallel field lists). All three are KNOWN amber/red, not silently assumed done.
+
 ---
 
 ## System-managed field registry (the F2/F3 set — David to confirm)
@@ -103,4 +128,5 @@ Per-grid coverage (locks the field only where that grid shows it as a column):
 
 1. **Fix in the shared control → all consumers inherit.** A grid standard lands in `DataSheet.tsx`; a field-lock lands in `systemManagedFields.ts`; a modal convention lands in `sheetStyles.modal`. No per-consumer copies to keep in sync.
 2. **The compliance board is glanceable.** [/ui-standards.html](../../ui-standards.html) renders control × standard from a manifest, so remaining gaps (escape/focus-trap/backdrop) are visible, not buried.
-3. **New controls are measured here.** A new grid, modal, or form is checked against §1/§2/§3 in its build (CLAUDE.md §1.6 gate item 5 — UI/modals). A control below the bar is a KNOWN amber/red row, reconciled or explicitly deferred — never a silent gap.
+3. **New controls are measured here.** A new grid, modal, or form is checked against §1/§2/§3/§4 in its build (CLAUDE.md §1.6 gate item 5 — UI/modals). A control below the bar is a KNOWN amber/red row, reconciled or explicitly deferred — never a silent gap.
+4. **A new edit surface is measured against §4 BEFORE it is written.** The question is not "is this component good?" but "does this record already have an edit surface?" — if it does, mount that one (E1). A build that adds a second editor for a record already covered is re-derivation, and it is caught here or not at all.

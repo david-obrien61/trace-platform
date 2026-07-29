@@ -879,13 +879,27 @@ Cost-to-Produce tile in Cultivar.
 
 **Question answered:** "What did I spend?"
 
-**STATE: WORKS (Receipt Keeper v1)**
+**STATE: PARTIAL (Receipt Keeper v1 — capture WORKS, the QuickBooks push does NOT exist)**
 
 Capabilities at Tier 1:
-- Capture receipt → OCR → review → accept → write to `receipts` table
-- Push to QuickBooks (receipt attach / expense record)
-- Asset registry (list of assets with purchase cost)
-- Basic cost-per-receipt view
+- ✅ Capture receipt → OCR → review → accept → write to `receipts` table
+- 🔴 **Push to QuickBooks (receipt attach / expense record) — NOT BUILT.** Corrected 2026-07-29
+  after a corpus check: nothing in the receipt path touches QBO (zero `qbo`/`quickbooks` references
+  in `ReceiptKeeper.tsx` or `api/receipts/`, zero `receipt` references in the QBO directories, and
+  no `qb_*` column on `receipts` in any of its four migrations). Filed as a named gap —
+  `user_stories.md` → ARC: ocr-doc-routing → *"The receipt reaches QuickBooks."* Two builds,
+  ordered: buy-side `Purchase`/`Bill` push first, `Attachable` upload second.
+- ✅ Asset registry (list of assets with purchase cost)
+- ✅ Basic cost-per-receipt view
+
+> **Why this line is called out rather than quietly edited.** It claimed a capability that does not
+> exist, and it did so **under a `STATE:` header** — not in a spec (which describes intent), not in a
+> cap (which is checked). **A STATE claim is the line a reader trusts most and the one nobody
+> re-derives**, so it is the costliest possible place for this class to land: every downstream plan
+> that read "WORKS" inherited the error for free. This is the seventh instance of the class recorded
+> in this program — *an artifact confidently naming something that is not there* (ledger #164) — and
+> it is the first found in a state assertion rather than a specification. **Found by David reading
+> output, not by any check firing**, which remains true of all seven.
 
 **Why it's table-stakes:** Capture is a saturated market. QuickBooks native, Dext,
 Expensify, Ramp, BILL all do this. TRACE's Core capture must be cheap, reliable, and

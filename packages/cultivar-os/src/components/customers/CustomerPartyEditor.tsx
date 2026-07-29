@@ -10,9 +10,13 @@
 //               reason / cert / expiry) is UI-editable — closing the D-40 owner-prove blocker.
 // MODES:        The ONLY differences between create and edit are (a) title, (b) empty-vs-populated
 //               initial values, (c) insert-vs-update on save. Everything else is identical.
-//               EDIT: auto-save — text fields commit on blur, selects/number/date on change, and the
-//               tax exemption is a VALIDATED trio ("Save exemption" — cannot mark exempt without a
-//               reason, mirrors D-40's server refusal). Each write is an owner-only RLS UPDATE.
+//               EDIT: auto-save, ONE commit model for EVERY group — text fields commit on blur,
+//               selects/number/date on change. The tax set is an ORDINARY field group (2026-07-29):
+//               it commits like everything else, its atomic four-field write lives in commitExemption,
+//               and the D-40 rule still holds absolutely (tax_exempt=true is never written without a
+//               reason). The old "Save exemption" button is GONE — the footer promises auto-save, so
+//               a group that needed a button was copy that lied, and a certificate number typed into
+//               it was silently lost on close. Each write is an owner-only RLS UPDATE.
 //               CREATE: all fields buffer locally; ONE "Save Customer" INSERT (owner-only RLS, no
 //               endpoint) after validation (first_name required; exempt requires a reason).
 //               Billing address is mirrored to the legacy consumed address_* on save (both modes) —
@@ -114,7 +118,11 @@ const DATALIST_ID = 'party-payment-terms';
 export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onClose, onSaved }: Props) {
   const { businessId } = useBusinessContext();
   const creating = mode === 'create';
+  // TWO values, deliberately: `draft` is the ON-SCREEN working copy (every keystroke lands here via
+  // `input()`), `saved` is the LAST PERSISTED row. Collapsing them is the defect fixed 2026-07-29 —
+  // an unchanged-check that reads the working copy can never see a change. See commitText.
   const [draft, setDraft] = useState<PartyCustomer>(customer);
+  const [saved, setSaved] = useState<PartyCustomer>(customer);
   const [error, setError] = useState<string | null>(null);
   const [savingField, setSavingField] = useState<string | null>(null);
   const [savingNew, setSavingNew] = useState(false);
@@ -134,20 +142,34 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
   const set = (patch: Partial<PartyCustomer>) => setDraft(d => ({ ...d, ...patch }));
 
   // ── Nullable-text field on blur. CREATE = buffer into draft only (one INSERT on Save Customer).
-  //    EDIT = persist (billing fields mirror to the legacy consumed address_* — see BILLING_MIRROR). ──
+  //    EDIT = persist (billing fields mirror to the legacy consumed address_* — see BILLING_MIRROR).
+  //
+  //    🔴 THE COMPARISON BASE IS `saved`, NEVER `draft` (fixed 2026-07-29). `draft` is the ON-SCREEN
+  //    working copy and `input()` writes every keystroke into it, so coercing against `draft` asks
+  //    "does what I typed equal what I typed?" — always yes, always `skip`, and EVERY text field in
+  //    this form silently wrote NOTHING while the footer said "Changes save automatically." The
+  //    persisted row and the working copy must be two values; CustomerEditModal always kept them
+  //    apart (`draft` persisted / `form` working) and is why that surface never had this defect. ──
   async function commitText(field: CustomerTextField, raw: string) {
     if (!businessId) return;
-    const r = coerceCustomerField(draft as unknown as Record<string, unknown>, field, raw);
-    if (r.skip) return;
+    const r = coerceCustomerField(saved as unknown as Record<string, unknown>, field, raw);
+    if (r.skip) {
+      // Unchanged, or first_name blanked (identity — never blank). Snap the input back to the
+      // PERSISTED value: the screen must never show a value the database does not hold (D-9).
+      set({ [field]: (saved as unknown as Record<string, unknown>)[field] ?? '' } as Partial<PartyCustomer>);
+      return;
+    }
     if (creating) { set({ [field]: r.value } as Partial<PartyCustomer>); return; }
     const mirror = BILLING_MIRROR[field];
     setSavingField(field);
     const res = mirror
       ? await persistCustomerPatch({ id: draft.id, businessId, patch: { [field]: r.value, [mirror]: r.value } })
-      : await persistCustomerField({ id: draft.id, businessId, field, from: (draft as any)[field], value: r.value });
+      : await persistCustomerField({ id: draft.id, businessId, field, from: (saved as any)[field], value: r.value });
     setSavingField(null);
     if (res.error) { setError(res.error); return; }
-    set({ [field]: r.value } as Partial<PartyCustomer>);
+    const landed = { [field]: r.value, ...(mirror ? { [mirror]: r.value } : {}) } as Partial<PartyCustomer>;
+    set(landed);
+    setSaved(s => ({ ...s, ...landed })); // the write landed → it is now the persisted value
     setError(null); onSaved();
   }
 
@@ -157,7 +179,9 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
     if (!businessId) return;
     const res = await persistCustomerPatch({ id: draft.id, businessId, patch });
     if (res.error) { setError(res.error); return; }
-    set(local); setError(null); onSaved();
+    set(local);
+    setSaved(s => ({ ...s, ...local })); // keep the persisted mirror in step with the write
+    setError(null); onSaved();
   }
 
   // ── credit_limit numeric on blur (blank → null; NaN rejected). CREATE buffers; EDIT persists. ──
@@ -170,32 +194,47 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
     await commitPatch({ credit_limit: val }, { credit_limit: val });
   }
 
-  // ── Tax exemption toggle. CREATE = buffer the flag only (validated at Save Customer). EDIT: ON
-  //    reveals the validated trio; OFF is an immediate safe-default clear. ──
-  function toggleExempt(checked: boolean) {
-    if (creating) { setExempt(checked); if (!checked) setTaxErr(null); return; }
-    if (checked) setExempt(true); else void clearExemption();
-  }
+  // ── TAX EXEMPTION — an ORDINARY field group (2026-07-29 ruling). Every control here commits the
+  //    way every other group in this form commits: edit it, it saves. There is no "Save exemption"
+  //    button, because the footer promises auto-save and ONE group opting out is copy that lies —
+  //    a certificate number typed into a group that needs a button nobody knew to press is silently
+  //    lost on close. The D-40 invariant is UNCHANGED and now lives in exactly ONE place: this
+  //    function is the only writer of the tax set, and it NEVER writes tax_exempt=true without a
+  //    non-empty reason. CREATE buffers (saveCreate validates once and writes with the row); EDIT
+  //    writes the four tax fields ATOMICALLY in one patch, so the flag and its reason cannot split.
+  //    Callers pass the control's NEW value (setState is async — reading state here would lag one edit).
+  async function commitExemption(next: {
+    exempt?: boolean; reasonCode?: string; otherText?: string; certRef?: string; expires?: string;
+  }) {
+    const on    = next.exempt     ?? exempt;
+    const code  = next.reasonCode ?? reasonCode;
+    const other = next.otherText  ?? otherText;
+    const cert  = next.certRef    ?? certRef;
+    const exp   = next.expires    ?? expires;
 
-  // ── EDIT-mode exemption save — VALIDATED. Turning ON requires a reason before it persists
-  //    (D-40: never zero tax without a recorded reason). ──
-  async function saveExemption() {
-    if (!businessId) return;
-    const reason = reasonCode === 'other' ? otherText.trim() : reasonCode;
+    // OFF is the safe default — clears the whole set, never leaves an orphan reason/cert behind.
+    if (!on) {
+      setTaxErr(null);
+      if (creating) return; // buffered — nothing to clear on a row that doesn't exist yet
+      const cleared = { tax_exempt: false, tax_exempt_reason: null, tax_exempt_cert_ref: null, tax_exempt_expires: null };
+      await commitPatch(cleared, cleared);
+      return;
+    }
+
+    const reason = code === 'other' ? other.trim() : code;
+    // D-40: never zero a customer's tax without a recorded reason. Blocks the WRITE (M2 — surfaced,
+    // not silent); the checkbox stays visibly on so the owner can finish the reason they started.
     if (!reason) { setTaxErr('A reason is required to make a customer tax-exempt.'); return; }
     setTaxErr(null);
-    await commitPatch(
-      { tax_exempt: true, tax_exempt_reason: reason, tax_exempt_cert_ref: certRef.trim() || null, tax_exempt_expires: expires || null },
-      { tax_exempt: true, tax_exempt_reason: reason, tax_exempt_cert_ref: certRef.trim() || null, tax_exempt_expires: expires || null },
-    );
-    setExempt(true);
-  }
-  async function clearExemption() {
-    setExempt(false); setTaxErr(null);
-    await commitPatch(
-      { tax_exempt: false, tax_exempt_reason: null, tax_exempt_cert_ref: null, tax_exempt_expires: null },
-      { tax_exempt: false, tax_exempt_reason: null, tax_exempt_cert_ref: null, tax_exempt_expires: null },
-    );
+    if (creating) return; // buffered — saveCreate re-validates and writes it with the INSERT
+
+    const trio = {
+      tax_exempt: true,
+      tax_exempt_reason: reason,
+      tax_exempt_cert_ref: cert.trim() || null,
+      tax_exempt_expires: exp || null,
+    };
+    await commitPatch(trio, trio);
   }
 
   // ── CREATE — validate (first_name required; exempt requires a reason) then ONE insert. Same rules
@@ -341,7 +380,7 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
         </div>
         <div style={{ ...SS.field, display: 'flex', alignItems: 'center', gap: 8 }}>
           <input type="checkbox" checked={exempt}
-            onChange={e => toggleExempt(e.target.checked)}
+            onChange={e => { setExempt(e.target.checked); void commitExemption({ exempt: e.target.checked }); }}
             style={{ width: 18, height: 18 }} />
           <label style={{ ...SS.label, margin: 0 }}>Tax-exempt customer</label>
         </div>
@@ -352,34 +391,39 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
             </p>
             <div style={SS.field}>
               <label style={SS.label}>Reason</label>
-              <select style={SS.input} value={reasonCode} onChange={e => setReasonCode(e.target.value)}>
+              <select style={SS.input} value={reasonCode}
+                onChange={e => { setReasonCode(e.target.value); void commitExemption({ reasonCode: e.target.value }); }}>
                 {TAX_EXEMPTION_REASONS.map(r => <option key={r.code} value={r.code}>{r.label}</option>)}
               </select>
             </div>
             {reasonCode === 'other' && (
               <div style={SS.field}>
-                <input style={SS.input} value={otherText} onChange={e => setOtherText(e.target.value)} placeholder="Reason (required)" />
+                <input style={SS.input} value={otherText} onChange={e => setOtherText(e.target.value)}
+                  onBlur={e => { void commitExemption({ otherText: e.target.value }); }} placeholder="Reason (required)" />
               </div>
             )}
             <div style={{ ...SS.row2, ...SS.field }}>
               <div>
                 <label style={SS.label}>Certificate #</label>
-                <input style={SS.input} value={certRef} onChange={e => setCertRef(e.target.value)} placeholder="Optional" />
+                <input style={SS.input} value={certRef} onChange={e => setCertRef(e.target.value)}
+                  onBlur={e => { void commitExemption({ certRef: e.target.value }); }} placeholder="Optional" />
               </div>
               <div>
                 <label style={SS.label}>Cert expires</label>
-                <input style={SS.input} type="date" value={expires} onChange={e => setExpires(e.target.value)} />
+                <input style={SS.input} type="date" value={expires}
+                  onChange={e => { setExpires(e.target.value); void commitExemption({ expires: e.target.value }); }} />
               </div>
             </div>
-            {/* STD-010 SLOT — deferred: the on-file cert document upload rides the Receipt Keeper
-                ingest pattern later. Present but disabled so the hook is visible. */}
-            <button type="button" disabled title="Coming soon — upload the certificate document"
-              style={{ ...SS.input, cursor: 'not-allowed', color: '#9ca3af', background: '#f3f4f6', textAlign: 'left' }}>
-              Attach certificate document (coming soon)
-            </button>
+            {/* The certificate DOCUMENT is deliberately not stored here (2026-07-29 ruling). TRACE
+                captures a document only to EXTRACT data from it, or to PASS it through to the system
+                that is the record — nothing extracts from a resale certificate and it is in transit
+                nowhere. It is the CUSTOMER's proof, held in the customer's own drive. We keep the
+                facts that answer "is this exemption valid today?" — the reference and the expiry. */}
+            <p style={{ fontSize: '0.72rem', color: '#6b7280', margin: '2px 0 0', lineHeight: 1.5 }}>
+              Keep the certificate itself on file with your own records — TRACE stores its number and
+              expiry date so orders can check the exemption is still valid, not the document.
+            </p>
             {taxErr && <div style={SS.error}>{taxErr}</div>}
-            {/* EDIT persists the exemption atomically here; CREATE buffers it and saves with the row. */}
-            {!creating && <button type="button" onClick={() => { void saveExemption(); }} style={{ ...SS.submitBtn, marginTop: 8 }}>Save exemption</button>}
           </div>
         )}
 

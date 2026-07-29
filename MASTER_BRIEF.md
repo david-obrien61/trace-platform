@@ -73,6 +73,41 @@ LOOSE COUPLING (what we build):
 → They keep their tools, we add intelligence
 ```
 
+### TRACE Is Not a Record System (ruled 2026-07-29)
+
+Loose coupling stated at the level of a single field — the test that decides whether a document
+belongs in our database at all.
+
+> **TRACE captures a document only to EXTRACT DATA FROM IT, and passes the document THROUGH to the
+> system that is the record. It never holds an artifact as an end in itself.**
+
+Two documents show both halves of the rule:
+
+- **A receipt image** is captured to extract cost data, and is intended as a **throughput to
+  QuickBooks** — QuickBooks is the record system for a receipt. `receipts.image_url` is a **staging
+  location for something in transit**, not a store. It already behaves like one: it holds a path
+  into a private bucket, signed at view time, never a hosted artifact. That is not an exception to
+  the rule; it is the rule **with its second half unbuilt** (see the named gap on `user_stories.md`
+  → ARC: ocr-doc-routing — the buy-side push to QBO, then the attachment).
+- **A tax-exemption certificate** has nothing to extract and is in transit nowhere. It is proof the
+  **customer** holds, in the customer's own drive. TRACE stores the **reference, and the expiry** —
+  the facts that answer *"is this exemption valid today?"* — and **never the file**. A
+  `tax_exempt_cert_doc_url` would be a URL field pointing at the customer's copy, **never an upload
+  target**. The certificate-upload shell on the customer form was removed on this ruling: the
+  feature is **ruled out, not deferred**.
+
+**How to apply it to a new document type**, in order: (1) What data does TRACE extract from this?
+If nothing — do not capture it. (2) Which system is the record for it? If another system is — pass
+it through and keep only the facts we answer questions from. (3) If TRACE genuinely is the only
+place it can live, that is a **decision to state out loud**, not a default to arrive at by nobody
+having decided otherwise.
+
+**The inversion this implies for storage** (carried into the gap, because it is easy to miss): while
+a document's destination is unbuilt, our copy is *load-bearing* — today a receipt's storage failure
+aborts the whole receipt row. Once the destination exists, that inverts: **the durable fact commits
+first, the integration follows and may fail without taking anything with it** (the order/QBO ordering
+settled at `a3439a6`). Deliberate change, not a side effect.
+
 ### Mission
 Replace paper, gut-feel pricing, and lost margin with AI-native workflows — for the business owner who doesn't have an IT department.
 
