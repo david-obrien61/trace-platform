@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
 import { useBusinessContext } from '@trace/shared/context';
 import { supabase } from '../lib/supabase';
+import { CustomerSearch, type CustomerSearchHit } from '../components/customers/CustomerSearch';
+import { phoneMatchKey } from '@trace/shared/utils/normalizePhone';
 import type { CustomerInput } from '../types/customer';
 
 const TRACE_DELIVERY = true; // [TRACE:DELIVERY] STD-003 — on until OWNER-PROVEN
@@ -69,6 +71,11 @@ function Field({
   );
 }
 
+// SEARCH BEFORE ADD (2026-07-29). The step opens on a search; the add form is a FALLBACK from a
+// search that found nothing. Structural anti-duplicate measure, not workflow polish — D-47 and
+// customerUpsert's dedup key both exist because nothing forced a look first.
+type Step = { kind: 'search' } | { kind: 'add' };
+
 export function CustomerCapture() {
   const navigate = useNavigate();
   const {
@@ -89,6 +96,9 @@ export function CustomerCapture() {
   const [optIn,     setOptIn]     = useState(saved?.marketing_opt_in ?? true);
   const [delivDate, setDelivDate] = useState(savedDeliveryDate ?? '');
   const [touched,   setTouched]   = useState(false);
+  // Search first. An existing customer already in the cart context skips straight to the form so a
+  // back-navigation does not force a re-search of someone already chosen.
+  const [step, setStep] = useState<Step>(saved?.first_name ? { kind: 'add' } : { kind: 'search' });
 
   // FIX 3 — a delivery order needs a ship-to. Read the requirement FROM the chosen transport
   // service (requires_address, owner-set) or its shape (a staff/delivery branch), never hardcoded.
@@ -99,7 +109,11 @@ export function CustomerCapture() {
   const canSetDeliveryDate = isOwner || role === 'MANAGER';
   const showDeliveryDate   = deliveryRequired && canSetDeliveryDate;
 
-  const phoneValid   = phone.replace(/\D/g, '').length === 10;
+  // A6 — VALIDATION LIVES WITH THE ENTITY. This was a PRIVATE 10-digit filter, the standard's own
+  // counter-example: an entity rule living on a surface, so no other writer honoured it, and at the
+  // payload site it SILENTLY DROPPED a phone that failed it. Now the shared rule: a phone is usable
+  // when it yields a match key (phoneMatchKey — 7+ digits, last 10), and nothing is dropped silently.
+  const phoneValid   = phoneMatchKey(phone) !== null;
 
   const emailError   = touched && !email.trim() ? 'Email is required'
                      : touched && !isValidEmail(email) ? 'Enter a valid email address'
@@ -110,6 +124,17 @@ export function CustomerCapture() {
   const phoneError   = touched && deliveryRequired && !phoneValid ? 'A phone number is required for delivery' : '';
   const hasErrors    = !firstName.trim() || !lastName.trim() || !isValidEmail(email)
                      || (deliveryRequired && (!address.trim() || !phoneValid));
+
+  // Chose an EXISTING customer. Populate from the hit and go straight on — the whole point is that a
+  // repeat customer is two taps, not a re-typed form.
+  function onSelectExisting(h: CustomerSearchHit) {
+    console.log('[TRACE:customers] checkout selected existing', { id: h.id, tier: h.price_tier, exempt: !!h.tax_exempt });
+    setFirstName(h.first_name ?? '');
+    setLastName(h.last_name ?? '');
+    setEmail(h.email ?? '');
+    setPhone(h.phone ?? '');
+    setStep({ kind: 'add' }); // same form, now pre-filled — the operator confirms and continues
+  }
 
   async function handleSubmit() {
     setTouched(true);
@@ -163,7 +188,7 @@ export function CustomerCapture() {
       first_name:      firstName.trim(),
       last_name:       lastName.trim(),
       email:           emailLower,
-      phone:           phone.replace(/\D/g, '').length === 10 ? phone : undefined,
+      phone:           phone.trim() || undefined, // A9 — never silently discard what was typed
       address_line1:   address.trim() || undefined,
       city:            city.trim() || undefined,
       state:           state.trim() || 'TX',
@@ -179,6 +204,47 @@ export function CustomerCapture() {
     setCustomer(c);
     setDeliveryDate(showDeliveryDate ? (delivDate || null) : null);
     navigate('/checkout/review');
+  }
+
+  // ── SEARCH STEP ─────────────────────────────────────────────────────────────────────────────
+  // Rendered INSTEAD of the form, not beside it. "Add new" is reachable only from the no-match state
+  // inside <CustomerSearch> — never from no-permission, because creating is not the answer to being
+  // unable to look (A9).
+  if (step.kind === 'search') {
+    return (
+      <div className="page">
+        <div style={{ padding: '16px 16px 0' }}>
+          {firstItem && (
+            <button
+              onClick={() => navigate(items.length === 1 ? `/plant/${firstItem.plant.tag_id}/addons` : '/checkout/addons')}
+              style={{ background: 'none', border: 'none', color: '#27500A', fontSize: '0.9375rem', fontWeight: 600, cursor: 'pointer', padding: 0 }}>
+              ← Back
+            </button>
+          )}
+          <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#1f2937', margin: '12px 0 4px' }}>Customer</h1>
+          <p style={{ fontSize: '0.85rem', color: '#6b7280', margin: '0 0 16px' }}>
+            Look them up first — a repeat customer keeps their pricing and their history.
+          </p>
+        </div>
+        <div style={{ padding: '0 16px 24px' }}>
+          {businessId ? (
+            <CustomerSearch
+              businessId={businessId}
+              onSelect={onSelectExisting}
+              onAddNew={({ query }) => {
+                // Seed the name from what they searched — retyping it is the friction that makes a
+                // cashier skip the search next time.
+                if (query && !firstName.trim()) setFirstName(query);
+                console.log('[TRACE:customers] checkout add-new from no-match', { query });
+                setStep({ kind: 'add' });
+              }}
+            />
+          ) : (
+            <p style={{ fontSize: '0.85rem', color: '#6b7280' }}>Loading business…</p>
+          )}
+        </div>
+      </div>
+    );
   }
 
   return (

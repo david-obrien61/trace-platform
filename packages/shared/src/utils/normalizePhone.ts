@@ -15,3 +15,20 @@ export function normalizePhone(raw: string | null | undefined): string | null {
   const cleaned = String(raw).trim().replace(/\s+/g, ' ');
   return cleaned.length > 0 ? cleaned : null;
 }
+
+// phoneMatchKey — ONE canonical MATCHING normalization. Sibling of normalizePhone, deliberately
+// separate and in the same file so nobody writes a third.
+//
+// WHY IT IS NOT normalizePhone: that function is a STORAGE normalizer and preserves the
+// human-entered format on purpose. Matching on it would miss "(512) 456-3632" vs "5124563632" —
+// which is precisely the case a checkout customer-search exists to catch, because the customer is
+// standing there reading their number aloud in whatever shape they say it.
+//
+// Last 10 digits: drops a leading 1 / +1 so a number typed with a country code matches one without.
+// Returns null when there are too few digits to identify anyone — an ABSENT key, never a loose one
+// (A9: a 3-digit "key" would match half the roster and read as a hit).
+export function phoneMatchKey(raw: string | null | undefined): string | null {
+  const digits = String(raw ?? '').replace(/\D/g, '');
+  if (digits.length < 7) return null;
+  return digits.slice(-10);
+}

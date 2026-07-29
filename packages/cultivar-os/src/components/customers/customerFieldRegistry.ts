@@ -129,6 +129,16 @@ export const CUSTOMER_BILLING_MIRROR: Record<string, string> = Object.fromEntrie
 /** Guaranteed-live columns (everything pre-2026-07-13). Was the `CORE` select string. */
 export const CUSTOMER_SELECT_CORE = by(f => !f.gated).join(',');
 
+/** The checkout customer-SEARCH projection — the facts a cashier identifies a customer BY, plus the
+ *  three that must be correct on the invoice (tier, tax, exemption reason) so the result row can show
+ *  them before selection. DERIVED, not a literal: A4's cap counts hand-written column strings, and a
+ *  new read path added with a literal would fail it. Kept narrow deliberately — a search result is a
+ *  projection, not the record. */
+export const CUSTOMER_SEARCH_COLS = [
+  'id', 'first_name', 'last_name', 'organization_name', 'display_name', 'customer_type',
+  'phone', 'email', 'price_tier', 'tax_exempt', 'tax_exempt_reason',
+].filter(k => CUSTOMER_FIELDS.some(f => f.key === k)).join(',');
+
 /** CORE + the gated 2026-07-13 columns. Was the `FULL` select string. The roster tries FULL and
  *  falls back to CORE on a missing-column error, so a pre-migration read never breaks the page. */
 export const CUSTOMER_SELECT_FULL = CUSTOMER_FIELDS.map(f => f.key).join(',');
