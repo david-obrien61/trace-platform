@@ -160,10 +160,31 @@ export function buildRpcTableMap(migrations) {
         /\bDELETE\s+FROM\s+(?:public\.)?"?([a-zA-Z_][\w]*)"?/gi,
       ]) { let w; while ((w = re.exec(body)) !== null) writes.add(w[1]); }
 
-      map.set(fn, { writes, dynamic: /\bEXECUTE\b/i.test(body), source: path }); // later wins
+      map.set(fn, { writes, dynamic: /\bEXECUTE\b/i.test(body), source: path, body }); // later wins
     }
   }
+  // SECOND PASS — gap (3) made CONCRETE. A function that writes by CALLING another function is not
+  // followed, but we can at least NAME the chain instead of describing the gap in the abstract:
+  // for each function, record which OTHER mapped functions its body invokes. Only mapped names are
+  // considered, so built-ins (coalesce/now/jsonb_build_object) never appear.
+  for (const [, def] of map) {
+    def.calls = new Set();
+    for (const other of map.keys()) {
+      if (other === def.name) continue;
+      if (new RegExp(`\\b${other}\\s*\\(`, 'i').test(def.body)) def.calls.add(other);
+    }
+  }
+  for (const [fn, def] of map) def.name = fn;
   return map;
+}
+
+/** Provenance of a table's discovery: was it visible in SOURCE at all, or ONLY through an RPC? */
+export function provenanceOf(byPath) {
+  let src = false, rpc = false;
+  for (const verbs of byPath.values()) {
+    for (const v of verbs) (String(v).startsWith('rpc:') ? (rpc = true) : (src = true));
+  }
+  return src && rpc ? 'both' : rpc ? 'rpc-only' : 'source';
 }
 
 /** Fold RPC callers into the observed table→path map. Returns the RPC provenance for reporting. */
@@ -323,6 +344,37 @@ function runProbes() {
     check('M8 an RPC with no migration definition is REPORTED, not silently dropped', 'not_in_migrations',
       unknown.map(u => u.fn).join(','));
   }
+  // -- PROVENANCE: is a table visible in SOURCE at all, or ONLY through an RPC? (the audit_log case) --
+  {
+    const { tables: T, rpcs: RP } = analyze([f('packages/x/c.ts', `await supabase.rpc('writes_w', {});`)]);
+    foldRpcWriters(T, RP, RPCMAP);
+    check('PR1 a table written ONLY via RPC is flagged rpc-only', 'rpc-only', provenanceOf(T.get('w')));
+  }
+  {
+    const { tables: T, rpcs: RP } = analyze([
+      f('packages/x/h.ts', `supabase.from('w').update(y);`),
+      f('packages/x/c.ts', `await supabase.rpc('writes_w', {});`),
+    ]);
+    foldRpcWriters(T, RP, RPCMAP);
+    check('PR2 a table written in source AND via RPC is flagged both', 'both', provenanceOf(T.get('w')));
+  }
+  {
+    const { tables: T } = analyze([f('packages/x/h.ts', `supabase.from('w').update(y);`)]);
+    check('PR3 a table written only in source is flagged source', 'source', provenanceOf(T.get('w')));
+  }
+  // -- GAP 3 instantiated: the call graph names the chain rather than describing it --
+  {
+    const M = buildRpcTableMap([
+      mig('010.sql', `CREATE FUNCTION inner_w() RETURNS void AS $$ BEGIN INSERT INTO hidden_t(a) VALUES(1); END; $$ LANGUAGE plpgsql;`),
+      mig('011.sql', `CREATE FUNCTION outer_w() RETURNS void AS $$ BEGIN PERFORM inner_w(); END; $$ LANGUAGE plpgsql;`),
+    ]);
+    check('G3 a function calling another mapped writer records the CHAIN', 'inner_w',
+      [...(M.get('outer_w')?.calls ?? [])].join(','));
+    check('G3b …and the hidden table is nameable from it', 'hidden_t',
+      [...(M.get('inner_w')?.writes ?? [])].join(','));
+    check('G3c …while the outer function alone shows NO writes (why the gap is real)', '0',
+      String(M.get('outer_w')?.writes.size));
+  }
   return R;
 }
 
@@ -404,17 +456,49 @@ if (rpcMap.size) {
   const readOnly = [...rpcs.keys()].filter(n => rpcMap.get(n) && rpcMap.get(n).writes.size === 0);
   if (readOnly.length) console.log(`  ${D}read-only (caller is NOT a write path): ${readOnly.sort().join(', ')}${O}`);
 }
-console.log(`\n${B}${YEL}KNOWN GAPS IN THIS MAP — printed every run, not absorbed${O}`);
-console.log(`  ${D}(1) a function created OUTSIDE the migration path is invisible here (CLAUDE.md §6 r17's class)${O}`);
-console.log(`  ${D}(2) dynamic SQL (EXECUTE) inside a body cannot be resolved statically${O}`);
-console.log(`  ${D}(3) a function that writes by CALLING another function is not followed (transitive)${O}`);
-if (rpcFold.unknown.length) {
-  console.log(`  ${YEL}UNRESOLVED — called in source, no definition found in migrations (gap 1):${O}`);
-  for (const { fn, callers } of rpcFold.unknown) console.log(`    ${fn} ${D}← ${callers.join(', ')}${O}`);
+// ── WHICH GAP MIGHT BE HIDING A TABLE — instantiated, never abstract ─────────
+// `audit_log` went 0 → 3 the moment RPCs were resolved: a table NOTHING in source revealed. So the
+// gaps are only useful if they name the specific thing that could still be hiding one.
+const rpcOnly = rows.filter(r => r.appPaths.length && provenanceOf(tables.get(r.table)) === 'rpc-only');
+if (rpcOnly.length) {
+  console.log(`\n${B}${YEL}🔴 RPC-ONLY TABLES — no source file reveals these exist${O}`);
+  console.log(`${D}Found ONLY by resolving an RPC. Source-only analysis was blind to the table itself, so${O}`);
+  console.log(`${D}anything else touching it is invisible too. This is the audit_log case (0 → 3).${O}`);
+  for (const r of rpcOnly) console.log(`  ${B}${r.table}${O} ${D}— ${r.appPaths.length} path(s), all via RPC${O}`);
 }
+
+console.log(`\n${B}${YEL}KNOWN GAPS — named where they bite, not described in the abstract${O}`);
+// gap 1
+if (rpcFold.unknown.length) {
+  console.log(`  ${YEL}(1) COULD BE HIDING A TABLE${O} — called in source, no definition in migrations:`);
+  for (const { fn, callers } of rpcFold.unknown) console.log(`      ${B}${fn}${O} ${D}← ${callers.join(', ')}${O}`);
+} else {
+  console.log(`  ${D}(1) a function created outside the migration path would be invisible — none called in source today${O}`);
+}
+// gap 2
 if (rpcFold.dynamic.length) {
-  console.log(`  ${YEL}DYNAMIC — body uses EXECUTE, targets not resolvable (gap 2):${O}`);
-  for (const { fn } of rpcFold.dynamic) console.log(`    ${fn}`);
+  console.log(`  ${YEL}(2) COULD BE HIDING A TABLE${O} — body uses EXECUTE, targets unresolvable:`);
+  for (const { fn, callers } of rpcFold.dynamic) console.log(`      ${B}${fn}${O} ${D}← ${callers.join(', ')}${O}`);
+} else {
+  console.log(`  ${D}(2) dynamic SQL (EXECUTE) is unresolvable — no called function uses it today${O}`);
+}
+// gap 3 — instantiated from the call graph
+const transitive = [];
+for (const [fn, callers] of rpcs) {
+  const def = rpcMap.get(fn);
+  if (!def) continue;
+  for (const callee of def.calls ?? []) {
+    const cd = rpcMap.get(callee);
+    if (!cd) continue;
+    const unattributed = [...cd.writes].filter(t => !def.writes.has(t));
+    if (unattributed.length) transitive.push({ fn, callee, tables: unattributed, callers: [...callers] });
+  }
+}
+if (transitive.length) {
+  console.log(`  ${YEL}(3) COULD BE HIDING A TABLE${O} — a called function writes via ANOTHER function (not followed):`);
+  for (const t of transitive) console.log(`      ${B}${t.fn}${O} → calls ${B}${t.callee}${O} which writes ${YEL}${t.tables.join(', ')}${O} ${D}← ${t.callers.join(', ')}${O}`);
+} else {
+  console.log(`  ${D}(3) transitive writes are not followed — no called function invokes another mapped writer today${O}`);
 }
 if (dynamic.length) {
   console.log(`\n${B}${YEL}ADVISORY — DYNAMIC TABLE NAMES (NOT RESOLVED)${O}`);
