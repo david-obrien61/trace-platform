@@ -49,7 +49,11 @@ const COLUMN_LIST = /^[a-z_][a-z0-9_]*(\s*,\s*[a-z_][a-z0-9_]*){2,}$/i;
 const ALLOWED_DIVERGENCE = {};
 
 function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '')
+  // Replace a block comment with the SAME NUMBER OF NEWLINES, never with ''. Collapsing it shifted
+  // every reported line number after it — DeliverySchedule's real site at :146 was reported as :121,
+  // which sends a reader to a line that is not the defect. A cap whose citation is wrong is worse
+  // than one that says nothing, because the reader concludes the cap is broken and stops reading it.
+  return src.replace(/\/\*[\s\S]*?\*\//g, m => '\n'.repeat((m.match(/\n/g) ?? []).length))
     .split('\n')
     .map(l => { const t = l.trimStart(); return t.startsWith('//') || t.startsWith('*') ? '' : l; })
     .join('\n');

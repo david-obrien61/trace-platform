@@ -17,6 +17,7 @@ interface DeliveryOrder {
     last_name: string;
     phone: string | null;
     address_line1: string | null;
+    billing_line1?: string | null; billing_city?: string | null; billing_state?: string | null; billing_zip?: string | null;
     city: string | null;
     state: string | null;
     zip: string | null;
@@ -31,7 +32,11 @@ const DARK  = '#111827';
 
 function fullAddress(c: DeliveryOrder['customers']): string {
   if (!c) return '';
-  const parts = [c.address_line1, c.city, c.state, c.zip].filter(Boolean);
+// D-41 read repoint (2026-07-29): billing_* is canonical, the unprefixed columns are its
+// legacy mirror. Read canonical FIRST and fall back — the same order the QBO invoice already used,
+// which is why the invoice printed the curated address while these surfaces showed the stale one.
+  const parts = [c.billing_line1 ?? c.address_line1, c.billing_city ?? c.city,
+                 c.billing_state ?? c.state, c.billing_zip ?? c.zip].filter(Boolean);
   return parts.join(', ');
 }
 
@@ -423,7 +428,7 @@ export function DeliveryRoute() {
       .from('orders')
       .select(`
         id, created_at, notes,
-        customers ( first_name, last_name, phone, address_line1, city, state, zip ),
+        customers ( first_name, last_name, phone, address_line1, city, state, zip, billing_line1, billing_city, billing_state, billing_zip ),
         order_items ( business_inventory ( name ) )
       `)
       .eq('business_id', businessId!)

@@ -53,6 +53,7 @@ interface CustomerHit {
   id: string; first_name: string; last_name: string | null;
   phone: string | null; email: string | null;
   address_line1: string | null; city: string | null; state: string | null; zip: string | null;
+  billing_line1?: string | null; billing_city?: string | null; billing_state?: string | null; billing_zip?: string | null;
   price_tier: string | null;
   // D-40 (optional — gated cols 20260713): the persistent exemption, carried so Review reflects it.
   tax_exempt?: boolean | null; tax_exempt_reason?: string | null; tax_exempt_cert_ref?: string | null;
@@ -83,7 +84,7 @@ function customerToInput(r: CustomerHit): CustomerInput {
     last_name:     r.last_name ?? '',
     email:         r.email ?? '', // CustomerInput.email is required; CustomerCapture requires a valid one before submit
     phone:         r.phone ?? undefined,
-    address_line1: r.address_line1 ?? undefined,
+    address_line1: r.billing_line1 ?? r.address_line1 ?? undefined,
     city:          r.city ?? undefined,
     state:         r.state ?? undefined,
     zip:           r.zip ?? undefined,
@@ -165,7 +166,8 @@ export function ScanOrder() {
       .limit(10);
     // D-40 gated cols (20260713) — deploy-window-safe: try with the exemption cols; on a missing-column
     // error retry WITHOUT them so customer search never breaks before the migration applies.
-    const BASE = 'id,first_name,last_name,phone,email,address_line1,city,state,zip,price_tier';
+    // D-41: canonical billing_* first, legacy as fallback (see the invoice's billAddrFrom).
+    const BASE = 'id,first_name,last_name,phone,email,address_line1,city,state,zip,price_tier,billing_line1,billing_city,billing_state,billing_zip';
     let { data, error } = await runSearch(`${BASE},tax_exempt,tax_exempt_reason,tax_exempt_cert_ref`);
     if (error && (error.code === '42703' || error.code === 'PGRST204')) {
       console.log('[TRACE:TAX] customer exemption cols absent — search retrying without them (migration pending)', { code: error.code });

@@ -119,7 +119,7 @@ export function DeliverySchedule() {
       .from('deliveries')
       .select(`
         id, customer_id, delivery_date, address_line1, city, state, zip, status, service_type, notes,
-        customers ( first_name, last_name, phone, email, address_line1, city, state, zip )
+        customers ( first_name, last_name, phone, email, address_line1, city, state, zip, billing_line1, billing_city, billing_state, billing_zip )
       `)
       .eq('business_id', businessId!)
       .neq('status', 'cancelled')
@@ -141,13 +141,15 @@ export function DeliverySchedule() {
     const next = newVal || null;
     if (next === d.delivery_date) return; // no change → no write
     setSavingId(d.id);
-    const { error: err } = await supabase
+    const { data: hit, error: err } = await supabase
       .from('deliveries')
       .update({ delivery_date: next })
       .eq('id', d.id)
-      .eq('business_id', businessId!);
-    if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] date edit', { id: d.id, from: d.delivery_date, to: next, error: err?.message ?? null });
+      .eq('business_id', businessId!)
+      .select('id'); // A8 — evidence it landed, not merely the absence of an error
+    if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] date edit', { id: d.id, from: d.delivery_date, to: next, rows: hit?.length ?? 0, error: err?.message ?? null });
     if (err) { setError(err.message); setSavingId(null); return; }
+    if (!hit?.length) { setError('That delivery date was not saved — you may not have permission, or the delivery was removed.'); setSavingId(null); return; }
     await load();
     setSavingId(null);
   }

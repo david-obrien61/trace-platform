@@ -156,6 +156,31 @@ if (!data?.length) return { error: 'Not saved — you may not have permission to
   their edit saved when nothing was written** — the same silent-success class as the
   coerce-against-itself defect, one layer down, and firing on a permission refusal.
 
+### A9 · ABSENT IS NOT EMPTY
+
+**A writer never supplies a value for a field it did not load or was not given. A reader never
+renders an absence as a fact.** "I did not ask" and "there is none" are different states, and code
+that collapses them fabricates data — the writer by asserting a default it has no evidence for, the
+reader by presenting a hole as a number.
+
+- **CHECK:** none, and **honestly none is possible in general** — the distinction is about what the
+  caller *knew*, which no static analysis can see. **UNENFORCED, and a REVIEW RULE.** Per the
+  enforcement section below, that makes it **a placeholder for a cap, not a finished control**; the
+  narrow slices that *are* checkable (a `?? <default>` on a field in an update payload) may be worth
+  a cap later.
+- **Counter-example 1 — a partial row handed to a full-record editor.** `/delivery-schedule` joined
+  8 columns; the customer editor edits ~18. A Save would have written `'person'` over an organization
+  and `'retail'` over a contractor tier, because the form defaulted fields the page never loaded.
+  Fixed at both ends: fetch the full row, AND refuse to emit a typed default for any field the caller
+  did not supply.
+- **Counter-example 2 — `?? null` in a machine writer.** `customerUpsert` coerced every unsupplied
+  field to `null`, so a counter checkout that collected no address **nulled a curated one**. Absence
+  from ignorance, asserted as fact.
+- **Exemplar 3 — the one place we already got it right, and it is worth naming as the pattern:**
+  the dashboard withholds `today_revenue` from a caller without `costs:read` by returning **`null`,
+  not `0`** — `api/dashboard.ts:31`, *"a redaction must not read as a real figure (D-9)."* Same rule,
+  reader side. **This is the shape the other two should have had.**
+
 ---
 
 ## How this is enforced
@@ -178,6 +203,15 @@ if (!data?.length) return { error: 'Not saved — you may not have permission to
    that lives only in a document is enforced by whoever happens to remember it, which is the same
    failure that produced seven write paths to one table. **So an unenforced rule here is a
    placeholder for a cap, not a finished control** — and each one should say which it is.
+
+   **🔴 THE FOURTH CATCH CLOSES THE ARGUMENT RATHER THAN SUPPORTING IT.** The first three were rules
+   written *the day before*. This one was not: in phase B, `buildCustomerPatch` re-implemented the
+   trim / blank→null / NOT NULL coercion **directly beside `coerceCustomerField`, its original** —
+   a semantic duplicate squarely covered by **§6 r8, a long-standing rule that had been read in this
+   same session**. It survived the build, the review, and the commit message. **Knip caught it, and
+   only because deleting a component orphaned the original.** So the failure is not that a rule was
+   too new to recall; it is that *knowing a rule does not make you apply it while writing the code
+   the rule is about*. **A rule with no mechanical check will be broken by someone who knows it.**
 2. **A build spec names the entity it touches** and confirms the entity already has its surface (A1),
    its write module (A2), and its field list (A4) before adding any of them. *"Does this record already
    have one?"* is the question that was never asked.

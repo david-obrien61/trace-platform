@@ -103,19 +103,50 @@ export async function findOrCreateCustomer(
     console.log('[TRACE:PERSON] organization customer — skipping people link', { businessId, source });
   }
 
-  // Fields written on both update and insert.
-  const fields: Record<string, unknown> = {
-    first_name:       customer.first_name,
-    last_name:        customer.last_name ?? '', // customers.last_name is NOT NULL — empty string, never null
-    customer_type:    isOrg ? 'organization' : 'person',
-    phone:            customer.phone ?? null,
-    address_line1:    customer.address_line1 ?? null,
-    city:             customer.city ?? null,
-    state:            customer.state ?? 'TX',
-    zip:              customer.zip ?? null,
-    marketing_opt_in: customer.marketing_opt_in ?? true,
+  // ── A9 + the machine-writer ruling (David, 2026-07-29) ──────────────────────────────────────
+  // THE DEFECT THIS REPLACES: every field was coerced with `?? null`, so a counter checkout that
+  // collected no address NULLED a curated one. `undefined` from the caller means "I did not ask",
+  // not "there is none" — ABSENT IS NOT EMPTY (A9). And the legacy unprefixed columns were written
+  // while the party editor wrote the canonical `billing_*`, so one fact had two homes and no
+  // precedence rule: the invoice printed one address and the delivery route showed another.
+  //
+  // THREE RULES, in order:
+  //   (a) NEVER NULL   — a field the caller did not supply is OMITTED from the payload entirely.
+  //   (b) FILL, NEVER CLOBBER — on UPDATE a supplied value lands only where the stored one is blank.
+  //       A counter checkout capturing a phone for a customer who has none SHOULD save it; that is
+  //       the capture path earning its keep. Overwriting a curated value is the failure.
+  //   (c) CANONICAL + MIRROR — billing_* is the home; the legacy four are written alongside it,
+  //       exactly as the party editor does, so the two column sets cannot diverge at the source.
+  // ─────────────────────────────────────────────────────────────────────────────────────────────
+  const given = (v: unknown) => v !== undefined && v !== null && String(v).trim() !== '';
+
+  // legacy column → its canonical billing twin (D-41). Both are written, always together.
+  const CANONICAL: Record<string, string> = {
+    address_line1: 'billing_line1', city: 'billing_city', state: 'billing_state', zip: 'billing_zip',
   };
-  if (personId) fields.person_id = personId;
+
+  /** Only what the caller actually supplied — rule (a). Each address field carries its twin — (c). */
+  const supplied: Record<string, unknown> = {};
+  const offer = (col: string, v: unknown) => {
+    if (!given(v)) return;                       // (a) absent ≠ empty — omit, never null
+    supplied[col] = typeof v === 'string' ? v.trim() : v;
+    const canon = CANONICAL[col];
+    if (canon) supplied[canon] = supplied[col];  // (c) canonical + mirror, written together
+  };
+  offer('first_name', customer.first_name);
+  offer('last_name',  customer.last_name);
+  offer('phone',      customer.phone);
+  offer('address_line1', customer.address_line1);
+  offer('city',  customer.city);
+  offer('state', customer.state);
+  offer('zip',   customer.zip);
+  if (customer.marketing_opt_in !== undefined) supplied.marketing_opt_in = customer.marketing_opt_in;
+  if (personId) supplied.person_id = personId;
+
+  // customer_type is DERIVED from the payload shape, not supplied by the caller, so it is always known.
+  const fields: Record<string, unknown> = { ...supplied, customer_type: isOrg ? 'organization' : 'person' };
+  // last_name is NOT NULL in the schema; on INSERT it must be present even when blank.
+  const insertDefaults: Record<string, unknown> = { last_name: '' };
 
   // 2. Dedup WITHIN the business.
   //    - PERSON: prefer person_id (covers the phone-only repeat, since the person was already
@@ -165,11 +196,41 @@ export async function findOrCreateCustomer(
   }
 
   if (existingId) {
-    let { error: updErr } = await db.from('customers').update(fields).eq('id', existingId);
+    // (b) FILL, NEVER CLOBBER — read the stored row and keep only the fields that are blank there.
+    // A customer curated on /customers is never overwritten by a later counter checkout.
+    const FILLABLE = ['first_name', 'last_name', 'phone', 'address_line1', 'city', 'state', 'zip',
+                      'billing_line1', 'billing_city', 'billing_state', 'billing_zip', 'marketing_opt_in'];
+    let stored: Record<string, unknown> = {};
+    {
+      const { data } = await db.from('customers').select(FILLABLE.join(',')).eq('id', existingId).maybeSingle();
+      stored = (data ?? {}) as Record<string, unknown>;
+    }
+    const patch: Record<string, unknown> = {};
+    for (const [col, v] of Object.entries(fields)) {
+      if (col === 'customer_type' || col === 'person_id') { patch[col] = v; continue; } // derived/link — always current
+      if (!FILLABLE.includes(col)) { patch[col] = v; continue; }
+      if (!given(stored[col])) patch[col] = v;                                          // blank → fill
+    }
+    if (Object.keys(patch).length === 0) {
+      console.log('[TRACE:PERSON] link: existing customer already complete — nothing to fill', { customerId: existingId, businessId, source });
+      return { customerId: existingId, created: false };
+    }
+    const filled = Object.keys(patch).filter(k => k !== 'customer_type' && k !== 'person_id');
+    if (filled.length) console.log('[TRACE:PERSON] fill: writing only fields blank on the stored row', { customerId: existingId, filled });
+
+    // A8 — a write that affects zero rows is a failure and says so. This path runs under the
+    // SERVICE KEY (checkout + OCR ingest), so a zero-row result is not an RLS refusal here — it
+    // means the row vanished between the dedup read and this write. Either way it must not be
+    // reported as a fill that happened.
+    let { data: updRows, error: updErr } = await db.from('customers').update(patch).eq('id', existingId).select('id');
     if (updErr && isMissingCustomerTypeColumn(updErr)) {
       console.warn('[TRACE:PERSON] customer_type column absent — retrying update without it (apply 20260702_customers_customer_type.sql)');
-      const noType = { ...fields }; delete noType.customer_type;
-      ({ error: updErr } = await db.from('customers').update(noType).eq('id', existingId));
+      const noType = { ...patch }; delete noType.customer_type;
+      ({ data: updRows, error: updErr } = await db.from('customers').update(noType).eq('id', existingId).select('id'));
+      if (!updErr && updRows?.length === 0) throw new Error(`Customer: the row being filled no longer exists (${existingId}).`);
+    }
+    if (!updErr && (!updRows || updRows.length === 0)) {
+      throw new Error(`Customer: the row being filled no longer exists (${existingId}).`);
     }
     console.log('[TRACE:PERSON] link: customer resolved to existing row', {
       customerId: existingId, personId, businessId, source, isOrg,
@@ -177,7 +238,7 @@ export async function findOrCreateCustomer(
     return { customerId: existingId, created: false };
   }
 
-  const insertRow = { business_id: businessId, email: customer.email ?? null, source, ...fields };
+  const insertRow = { business_id: businessId, email: customer.email ?? null, source, ...insertDefaults, ...fields };
   let { data: newCustomer, error: custErr } = await db
     .from('customers').insert(insertRow).select('id').single();
   if (custErr && isMissingCustomerTypeColumn(custErr)) {

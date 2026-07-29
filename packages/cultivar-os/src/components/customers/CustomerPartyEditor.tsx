@@ -94,17 +94,12 @@ interface Props {
   onSaved: () => void;
 }
 
-// Centered dialog (mirrors CustomerEditModal — not the SS bottom-sheet; a tall grouped form must
-// stay in view). Caps at 88vh with internal scroll.
-const overlay: React.CSSProperties = {
-  position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-  display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16,
-};
-const dialog: React.CSSProperties = {
-  background: '#fff', borderRadius: 16, padding: '1.5rem',
-  width: '100%', maxWidth: 680, maxHeight: '88vh', overflowY: 'auto',
-  boxShadow: '0 10px 40px rgba(0,0,0,0.25)',
-};
+// A5 — the modal comes from the SHARED vocabulary (M1 centered, one convention). This component
+// used to carry its own `overlay`/`dialog` style objects; that was the last own-copy modal on the
+// /customers surface AND, since phase C mounted this editor over /delivery-schedule, on that one
+// too — so this single edit moves BOTH surfaces from HALF to SHARED.
+const overlay: React.CSSProperties = SS.modal;                                  // the shared centered backdrop
+const dialog: React.CSSProperties = { ...SS.sheet, maxWidth: 680, maxHeight: '88vh' }; // shared sheet, wider for 6 groups
 const groupTitle: React.CSSProperties = {
   fontSize: '0.72rem', fontWeight: 800, color: '#6b7280', textTransform: 'uppercase',
   letterSpacing: '0.06em', margin: '18px 0 8px', paddingBottom: 4, borderBottom: '1px solid #f0f0f0',
