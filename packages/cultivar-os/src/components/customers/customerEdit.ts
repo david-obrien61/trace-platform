@@ -41,6 +41,13 @@ const NOT_NULL_FIELDS: string[] = CUSTOMER_NOT_NULL_FIELDS;
 // name + "changed", never the from/to value. ONE source both write helpers read (STD-011).
 const SENSITIVE_CUSTOMER_FIELDS = new Set<string>(CUSTOMER_SENSITIVE_FIELDS);
 
+// A8 — a write that affects ZERO ROWS is a FAILURE and says so. PostgREST returns NO ERROR when an
+// UPDATE matches no rows, and under RLS "matched zero rows" is exactly what a REFUSED write looks
+// like: `customers_member_update` gates on `customers:update`, and a STAFF member holding only
+// `customers:read` would otherwise be told their edit saved. The message names the likely cause
+// without asserting it (D-9) — the row may also have been deleted by someone else.
+const NOT_SAVED = 'That change was not saved. You may not have permission to edit this customer, or it may have been removed.';
+
 /** Log a field write with BENCH-C value-masking for the sensitive set. */
 function traceEdit(customerId: string, field: string, from: unknown, to: unknown) {
   if (SENSITIVE_CUSTOMER_FIELDS.has(field)) {
@@ -88,12 +95,17 @@ export async function persistCustomerField(params: {
 }): Promise<{ error: string | null }> {
   const { id, businessId, field, from, value } = params;
   traceEdit(id, field, from, value);
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('customers')
     .update({ [field]: value })
     .eq('id', id)
-    .eq('business_id', businessId);
+    .eq('business_id', businessId)
+    .select('id'); // A8 — the affected-row evidence; without it a refused write reports success
   if (error) { console.error('[TRACE:customers] edit error', field, error.message); return { error: error.message }; }
+  if (!data?.length) {
+    console.error('[TRACE:customers] edit AFFECTED ZERO ROWS — refused or missing', { customerId: id, field });
+    return { error: NOT_SAVED };
+  }
   return { error: null };
 }
 
@@ -111,12 +123,17 @@ export async function persistCustomerPatch(params: {
 }): Promise<{ error: string | null }> {
   const { id, businessId, patch } = params;
   for (const [field, to] of Object.entries(patch)) traceEdit(id, field, undefined, to);
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('customers')
     .update(patch)
     .eq('id', id)
-    .eq('business_id', businessId);
+    .eq('business_id', businessId)
+    .select('id'); // A8 — see NOT_SAVED
   if (error) { console.error('[TRACE:customers] patch error', Object.keys(patch).join(','), error.message); return { error: error.message }; }
+  if (!data?.length) {
+    console.error('[TRACE:customers] patch AFFECTED ZERO ROWS — refused or missing', { customerId: id, fields: Object.keys(patch) });
+    return { error: NOT_SAVED };
+  }
   return { error: null };
 }
 

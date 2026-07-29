@@ -150,8 +150,11 @@ export function Customers() {
     const bid = businessId;
     console.log('[TRACE:customers] tier edit', { id: c.id, from: c.price_tier, to: v });
     void (async () => {
-      const { error } = await supabase.from('customers').update({ price_tier: v }).eq('id', c.id).eq('business_id', bid);
+      // A8 — a grid cell is a write too: without the affected-row check a refused tier change
+      // silently repaints as if it landed, then reverts on the next load.
+      const { data, error } = await supabase.from('customers').update({ price_tier: v }).eq('id', c.id).eq('business_id', bid).select('id');
       if (error) { setListError(error.message); return; }
+      if (!data?.length) { setListError('That tier change was not saved — you may not have permission to edit this customer.'); return; }
       await loadCustomers();
     })();
   }
@@ -173,8 +176,10 @@ export function Customers() {
     const bid = businessId;
     console.log('[TRACE:customers] status edit', { id: c.id, from: c.status, to: v });
     void (async () => {
-      const { error } = await supabase.from('customers').update({ status: v }).eq('id', c.id).eq('business_id', bid);
+      // A8 — see onTier.
+      const { data, error } = await supabase.from('customers').update({ status: v }).eq('id', c.id).eq('business_id', bid).select('id');
       if (error) { setListError(error.message); return; }
+      if (!data?.length) { setListError('That status change was not saved — you may not have permission to edit this customer.'); return; }
       await loadCustomers();
     })();
   }

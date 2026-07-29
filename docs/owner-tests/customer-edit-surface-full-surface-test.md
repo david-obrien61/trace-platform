@@ -120,26 +120,46 @@ Edit a customer → clear **First name** entirely → click outside the field.
 **PASS:** the field **snaps back** to the stored name immediately. **FAIL:** the box stays empty —
 that is the screen showing a value the database does not have, which is the defect one layer over.
 
-### CARD 7 — 🔴 NEGATIVE, the OPEN one: a save that cannot write must not say it saved
-STATUS: needs-test
+### CARD 7 — NEGATIVE: a save that cannot write must NOT say it saved
+STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
-COVERS: ui-control-standards E5 · STD-023 · tech-debt #74's class
+COVERS: A8 · ui-control-standards E5 · STD-023's class
+SIGNAL: `[TRACE:customers] edit AFFECTED ZERO ROWS — refused or missing`
 
-**REASON THIS IS `needs-test` AND NOT `owed`: the behaviour it checks is NOT FIXED.** No write on
-this record checks affected rows, and a PostgREST UPDATE matching zero rows returns **no error** — so
-a save by a caller the RLS policy refuses reports success and writes nothing. Today `customers` is
-owner-only FOR ALL, so an owner always matches and this cannot be triggered through the UI; it is
-**latent, not live**. It goes live the moment a non-owner is given a write path. Recorded now so the
-hole is counted rather than discovered later. **Write the check when E5 is built, not before.**
+**This card was `needs-test` until 2026-07-29 because the behaviour did not exist. It does now.**
+`customers_member_update` gates on `customers:update`. A STAFF member holds `customers:read` and NOT
+`customers:update`, so their UPDATE matches zero rows — and PostgREST returns **no error**, which is
+why the form used to report success.
+
+**SETUP:** sign in as a STAFF member of tenant `f7ec5d67` (not the MANAGER, not the owner). Confirm on
+`/team` that the member holds `customers:read` and does **not** hold `customers:update`.
+
+Open a customer, change **Phone**, click outside the field.
+**PASS:** an error appears — *"That change was not saved. You may not have permission to edit this
+customer, or it may have been removed."* — and after a reload the old phone is still there.
+**FAIL (the defect):** the field shows the new value, no error, and the reload reverts it.
+
+Then the **grid** half, which is the same defect one surface over: on `/customers`, change a **Tier**
+cell as the same STAFF member. **PASS:** *"That tier change was not saved…"*. **FAIL:** the cell
+repaints as if it landed.
+
+**POSITIVE CONTROL — run it in the same sitting or the card proves nothing:** repeat both edits as the
+MANAGER `df7723be` (who DOES hold `customers:update`). Both must save silently and survive a reload.
+*A refusal message that also fires for the permitted user is a new defect, not a fix.*
 
 ---
 
 ## WHAT THIS BOARD DOES NOT COVER (stated, not silent)
 
 - **`CustomerEditModal`** (the 8-field editor mounted from `DeliverySchedule`) is a SECOND edit
-  surface over the same record — a live E1 violation. It was **not changed** by this build and has
+  surface over the same record — a live A1/E1 violation. It was **not changed** by this build and has
   **no cards here**. It never had the working-copy defect (it keeps `draft` persisted and `form`
-  working, which is how the defect was diagnosed). Cards arrive when the merge does.
-- **The roster inline cells** (Tier, Status) write immediately and correctly today; no card.
+  working, which is how the defect was diagnosed). **It DOES still have the A8 defect** — it writes
+  through `persistCustomerField`, so it inherits the fix, but its own error surfacing is unproven.
+  Cards arrive when the merge does.
+- **The roster inline cells** now carry the A8 check (card 7's second half); no other card.
 - **Create mode** ("Add Customer") buffers to one INSERT and was not the defect; no card.
+- **The other 80 unchecked mutation sites platform-wide** are held by
+  `zero-row-writes-baseline.json` and are NOT covered here — they are rows on the architecture
+  backlog, not customer-surface tests.

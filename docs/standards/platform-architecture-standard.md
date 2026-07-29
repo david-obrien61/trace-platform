@@ -125,6 +125,37 @@ always-open or always-shut, and both look like working code.
 - **Counter-example, ours:** a nav entry gated on a string that had not existed for four days; and three
   `assets:*` strings minted into a live tenant for a resource whose table was renamed six weeks earlier.
 
+### A8 · A WRITE THAT AFFECTS ZERO ROWS IS A FAILURE AND SAYS SO
+
+A mutation reports success only on **evidence it landed** — affected rows — never on the mere absence of
+an error. **PostgREST returns no error when an UPDATE matches zero rows.** Under RLS, "matched zero
+rows" is exactly what a *refused* write looks like, so the caller most likely to hit this is the one who
+was supposed to be refused. Never silence, never success: the surface says the change was not saved and
+why (D-9 — the same clause as the PMI redaction and the discount refusal).
+
+**Mechanically this is a count check, not a redesign:** add `.select('id')` to the chain and treat an
+empty result as failure.
+
+```ts
+const { data, error } = await supabase.from('x').update(patch).eq('id', id).select('id');
+if (error) return { error: error.message };
+if (!data?.length) return { error: 'Not saved — you may not have permission to change this.' };
+```
+
+- **CHECK: ✅ ENFORCED — `npm run verify:zero-row-writes`, chained into `npm run verify`.** Planted
+  probes both directions; RATCHET fails the build on any NEW unchecked mutation against
+  `zero-row-writes-baseline.json`.
+- **Measured 2026-07-29, before any fix: 84 app mutation sites cannot check at all** (no `.select()` in
+  the chain), plus 3 that select without a length check. **Exactly ONE site in the codebase checked
+  affected rows** — `api/qbo/router.ts:187`, the OAuth state single-use claim. *The one time it was
+  treated as a security boundary it was written correctly; everywhere else it was treated as plumbing.*
+- **Counter-example, ours, and it is live not theoretical:** `customers_member_update` gates on
+  `customers:update`. A STAFF member holds `customers:read` and **not** `customers:update`; their edit
+  matches zero rows, PostgREST returns no error, and the form says it saved.
+- **Distinct from tech-debt #74**, which wrote a *truthful* audit row for a no-op. **This tells the USER
+  their edit saved when nothing was written** — the same silent-success class as the
+  coerce-against-itself defect, one layer down, and firing on a permission refusal.
+
 ---
 
 ## How this is enforced
