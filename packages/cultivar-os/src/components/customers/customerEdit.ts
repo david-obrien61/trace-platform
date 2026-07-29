@@ -16,7 +16,11 @@
 //               comment out), with tax_id / credit_limit VALUE-MASKED (BENCH-C).
 // ============================================================
 import { supabase } from '../../lib/supabase';
+import { CUSTOMER_NOT_NULL_FIELDS, CUSTOMER_SENSITIVE_FIELDS } from './customerFieldRegistry';
 
+// RESIDUAL of list 5 (E6): the runtime list is now derived from `customerFields.ts`; this UNION is
+// its compile-time half and is still written by hand. It collapses in phase B, when the form's
+// per-field writers are replaced by one diffed Save. Keys here must match CUSTOMER_TEXT_FIELDS.
 export type CustomerTextField =
   | 'first_name' | 'last_name' | 'phone' | 'email'
   | 'address_line1' | 'city' | 'state' | 'zip'
@@ -28,14 +32,14 @@ export type CustomerTextField =
   // TRACE connects systems, it does not become the record for someone else's paperwork).
   | 'tax_exempt_cert_ref';
 
-// first_name / last_name are NOT NULL (last_name defaults to ''); these must never be written
-// null. Everything else is nullable → blank clears to null.
-const NOT_NULL_FIELDS: CustomerTextField[] = ['first_name', 'last_name'];
+// E6 (Phase A): these were two hand-maintained lists. They are now DERIVED from the ONE customer
+// field registry, so a field marked notNull/sensitive there is honoured here without a second edit.
+const NOT_NULL_FIELDS: string[] = CUSTOMER_NOT_NULL_FIELDS;
 
 // BENCH-C (PII) — value-MASKED in the [TRACE:customers] diagnostic: an EIN / resale number and a
 // credit figure are PII and must never appear in plaintext logs. For these fields we log the field
 // name + "changed", never the from/to value. ONE source both write helpers read (STD-011).
-const SENSITIVE_CUSTOMER_FIELDS = new Set<string>(['tax_id', 'credit_limit']);
+const SENSITIVE_CUSTOMER_FIELDS = new Set<string>(CUSTOMER_SENSITIVE_FIELDS);
 
 /** Log a field write with BENCH-C value-masking for the sensitive set. */
 function traceEdit(customerId: string, field: string, from: unknown, to: unknown) {

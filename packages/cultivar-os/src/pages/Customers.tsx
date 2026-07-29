@@ -35,6 +35,7 @@ import {
   type DataSheetColumn,
 } from '../components/datasheet/DataSheet';
 import { CustomerPartyEditor, BLANK_PARTY_CUSTOMER, type PartyCustomer } from '../components/customers/CustomerPartyEditor';
+import { CUSTOMER_SELECT_CORE, CUSTOMER_SELECT_FULL } from '../components/customers/customerFieldRegistry';
 import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME, taxExemptionLabel, type DiscountType } from '@trace/shared/business-logic';
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -109,8 +110,10 @@ export function Customers() {
     // CORE = guaranteed-live set (everything pre-2026-07-13). FULL adds the D-40 exemption trio +
     // the party-record cols (both gated 20260713). Deploy-window-safe: try FULL, retry CORE on a
     // missing-column error so the roster never breaks before the migrations apply.
-    const CORE = 'id,first_name,last_name,phone,email,address_line1,city,state,zip,price_tier,customer_type,source,qb_customer_id,created_at';
-    const FULL = `${CORE},tax_exempt,tax_exempt_reason,tax_exempt_cert_ref,organization_name,display_name,billing_line1,billing_line2,billing_city,billing_state,billing_zip,tax_id,tax_exempt_expires,payment_terms,credit_limit,status,notes`;
+    // E6 (Phase A): these were two hand-maintained column strings — the list most likely to silently
+    // omit a field (a field added to the form but missed here reads back null forever). Now DERIVED.
+    const CORE = CUSTOMER_SELECT_CORE;
+    const FULL = CUSTOMER_SELECT_FULL;
     const run = (cols: string) => supabase.from('customers').select(cols).eq('business_id', businessId).order('created_at', { ascending: false });
     let { data, error } = await run(FULL);
     if (error && ((error as any).code === '42703' || (error as any).code === 'PGRST204')) {

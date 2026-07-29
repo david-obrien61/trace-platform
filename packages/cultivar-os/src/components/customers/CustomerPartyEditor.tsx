@@ -40,6 +40,7 @@ import {
   coerceCustomerField, persistCustomerField, persistCustomerPatch, insertCustomer, type CustomerTextField,
 } from './customerEdit';
 import { TAX_EXEMPTION_REASONS } from '@trace/shared/business-logic';
+import { CUSTOMER_BILLING_MIRROR, CUSTOMER_CREATE_TEXT_FIELDS } from './customerFieldRegistry';
 
 // The full party row the editor reads. Party-record cols (2026-07-13) are optional so a
 // pre-migration row (cols stripped by the roster's deploy-safe fallback) still opens cleanly.
@@ -80,9 +81,8 @@ export const BLANK_PARTY_CUSTOMER: PartyCustomer = {
 // (follow-up (b) will repoint them). To avoid regressing a manually-added customer's checkout address,
 // the shared editor writes billing AND the legacy field together — in BOTH create and edit — keeping
 // the consumed field in sync until (b) folds address_* into billing_* and drops this mirror.
-const BILLING_MIRROR: Record<string, string> = {
-  billing_line1: 'address_line1', billing_city: 'city', billing_state: 'state', billing_zip: 'zip',
-};
+// E6 (Phase A): DERIVED from the one field registry (each canonical field declares its legacyMirror).
+const BILLING_MIRROR: Record<string, string> = CUSTOMER_BILLING_MIRROR;
 
 interface Props {
   customer: PartyCustomer;
@@ -262,9 +262,9 @@ export function CustomerPartyEditor({ customer, mode = 'edit', tierOptions, onCl
       const v = ((draft[k] as string) ?? '').trim();
       if (v) values[k] = v;
     };
-    (['organization_name', 'display_name', 'email', 'phone',
-      'billing_line1', 'billing_line2', 'billing_city', 'billing_state', 'billing_zip',
-      'tax_id', 'payment_terms', 'notes'] as (keyof PartyCustomer)[]).forEach(addText);
+    // E6 (Phase A): was a hand-maintained array here — the create path's OWN enumeration of the
+    // fields, independent of the edit path's. Now DERIVED, so create and edit cannot disagree.
+    (CUSTOMER_CREATE_TEXT_FIELDS as (keyof PartyCustomer)[]).forEach(addText);
     // legacy consumed-address mirror (billing_line2 has no legacy equivalent)
     for (const [billing, legacy] of Object.entries(BILLING_MIRROR)) {
       if (values[billing] != null) values[legacy] = values[billing];
