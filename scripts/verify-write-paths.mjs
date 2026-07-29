@@ -55,10 +55,20 @@ const isTooling = p => p.startsWith('scripts/');
 // ── DECLARED DIVERGENCE — an intentional second path, WITH ITS REASON ────────
 // table -> { reason, paths: [...] }. Declaring is not a blanket exemption: a path that appears and
 // is not declared still fails, so the list records decisions made rather than pre-authorizing the next.
+// Every entry is a decision David made, not a convenience the builder granted itself. The other
+// known multi-path tables are held by the BASELINE, not by declarations — the baseline says
+// "known today", a declaration says "correct forever". They are different claims.
 const ALLOWED_DIVERGENCE = {
-  // Empty by design. Every entry must be a decision David made, not a convenience the builder
-  // granted itself. The 17 known multi-path tables are held by the BASELINE, not by declarations —
-  // the baseline says "known today", a declaration says "correct forever". They are different claims.
+  // APPROVED 2026-07-29 (David) after inspection: no column overlap, and the state upsert was
+  // proven non-clobbering (PostgREST builds ON CONFLICT DO UPDATE SET from the supplied columns
+  // only, so minting a state on a row holding live tokens leaves the tokens untouched).
+  'business_accounting_secrets': {
+    reason: 'Two disjoint concerns on one table: secrets.ts owns the QB credential columns, '
+          + 'qbo/router.ts owns the OAuth handshake state (mint + single-use claim). '
+          + 'No column overlap; the state upsert does not touch tokens.',
+    paths: ['packages/cultivar-os/api/qbo/router.ts',
+            'packages/shared/src/quickbooks/secrets.ts'],
+  },
 };
 
 // ── ANALYZER (pure) ──────────────────────────────────────────────────────────
@@ -100,6 +110,83 @@ export function analyze(files) {
     }
   }
   return { tables, rpcs, dynamic };
+}
+
+// ── RPC → TABLE MAP (tech-debt #76) ──────────────────────────────────────────
+// An RPC's target table lives in the DATABASE, which a source-reading cap cannot see. It CAN see
+// the migrations that created the function, and those are in version control. So: parse
+// CREATE FUNCTION bodies, extract what each one writes, and fold every `.rpc('name')` caller into
+// that table's path count. Later migrations win — a function can be replaced.
+//
+// THREE GAPS, PRINTED ON EVERY RUN RATHER THAN ABSORBED:
+//  (1) a function created OUTSIDE the migration path is invisible here (CLAUDE.md §6 r17's class);
+//  (2) dynamic SQL (EXECUTE ...) inside a body cannot be resolved statically;
+//  (3) a function that writes by CALLING another function is not followed (transitive writes).
+function stripSql(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map(l => l.replace(/--.*$/, '')).join('\n');
+}
+
+export function buildRpcTableMap(migrations) {
+  const map = new Map();      // fn -> { writes:Set<table>, dynamic:boolean, source:string }
+  for (const { path, content } of migrations) {  // caller passes these in filename order
+    const src = stripSql(content);
+    const fnRe = /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public\.)?"?([a-zA-Z_][\w]*)"?\s*\(/gi;
+    let m;
+    while ((m = fnRe.exec(src)) !== null) {
+      const fn = m[1];
+      // Body is dollar-quoted: find the opening tag after the signature, then its match.
+      const after = src.slice(m.index);
+      const tagM = after.match(/\$([a-zA-Z_]*)\$/);
+      if (!tagM) continue;
+      const tag = tagM[0];
+      const bodyStart = after.indexOf(tag) + tag.length;
+      const bodyEnd = after.indexOf(tag, bodyStart);
+      if (bodyEnd === -1) continue;
+      // Strip single-quoted SQL literals ('' escapes an inner quote) BEFORE scanning. Without this,
+      // `'settings:update permission required'::text` yielded a table called `permission`.
+      // NOTE: deliberately NOT filtered against a CREATE TABLE allowlist — `customers`/`orders`/
+      // `order_items` have no migrations at all (tech-debt #39), so an allowlist would drop real
+      // tables and trade a visible false positive for an invisible false negative.
+      const body = after.slice(bodyStart, bodyEnd).replace(/'(?:[^']|'')*'/g, "''");
+
+      const writes = new Set();
+      for (const re of [
+        /\bINSERT\s+INTO\s+(?:public\.)?"?([a-zA-Z_][\w]*)"?/gi,
+        // NOT `…"?(\w+)"?\s+SET` — a table ALIAS sits between them (`UPDATE public.business_inventory bi
+        // SET …`), and requiring SET made `adjust_inventory_qty` read as READ-ONLY: a false negative
+        // that renders a written table CLEAN, which is the exact defect class this cap exists for.
+        // `(?<!\bFOR\s)` excludes `SELECT … FOR UPDATE`, which is a lock, not a write.
+        /(?<!\bFOR\s)\bUPDATE\s+(?:ONLY\s+)?(?:public\.)?"?([a-zA-Z_][\w]*)"?/gi,
+        /\bDELETE\s+FROM\s+(?:public\.)?"?([a-zA-Z_][\w]*)"?/gi,
+      ]) { let w; while ((w = re.exec(body)) !== null) writes.add(w[1]); }
+
+      map.set(fn, { writes, dynamic: /\bEXECUTE\b/i.test(body), source: path }); // later wins
+    }
+  }
+  return map;
+}
+
+/** Fold RPC callers into the observed table→path map. Returns the RPC provenance for reporting. */
+export function foldRpcWriters(tables, rpcs, rpcMap) {
+  const folded = [];   // { fn, table, callers[] }
+  const unknown = [];  // rpc names with no definition in migrations
+  const dynamic = [];  // rpc names whose body uses EXECUTE
+  for (const [fn, callers] of rpcs) {
+    const def = rpcMap.get(fn);
+    if (!def) { unknown.push({ fn, callers: [...callers] }); continue; }
+    if (def.dynamic) dynamic.push({ fn, callers: [...callers] });
+    if (def.writes.size === 0) continue; // a read-only function: its caller is not a write path
+    for (const table of def.writes) {
+      if (!tables.has(table)) tables.set(table, new Map());
+      const byPath = tables.get(table);
+      for (const c of callers) {
+        if (!byPath.has(c)) byPath.set(c, new Set());
+        byPath.get(c).add(`rpc:${fn}`);
+      }
+      folded.push({ fn, table, callers: [...callers] });
+    }
+  }
+  return { folded, unknown, dynamic };
 }
 
 // ── JUDGE (pure — separate from observation so both verdicts are testable) ───
@@ -176,6 +263,66 @@ function runProbes() {
   check('R6 a new path that IS declared → RATCHET OK', 'OK',
     ratchOf([f('a.ts', `supabase.from('w').insert(x);`), f('b.ts', `supabase.from('w').update(y);`), f('c.ts', `supabase.from('w').delete();`)],
       'w', { baseline: base, allowed: { w: { reason: 'probe', paths: ['c.ts'] } } }));
+
+  // -- RPC → TABLE MAP (tech-debt #76), both directions --
+  const mig = (path, content) => ({ path, content });
+  const MIGS = [
+    mig('001.sql', `CREATE OR REPLACE FUNCTION public.writes_w() RETURNS void AS $$ BEGIN UPDATE w SET a=1 WHERE id=2; END; $$ LANGUAGE plpgsql;`),
+    mig('002.sql', `CREATE FUNCTION reads_only() RETURNS int AS $$ SELECT count(*) FROM w; $$ LANGUAGE sql;`),
+    mig('003.sql', `CREATE FUNCTION dyn_writer() RETURNS void AS $$ BEGIN EXECUTE 'INSERT INTO ' || t; END; $$ LANGUAGE plpgsql;`),
+    mig('004.sql', `CREATE FUNCTION multi() RETURNS void AS $$ BEGIN INSERT INTO w(a) VALUES(1); DELETE FROM g WHERE id=1; END; $$ LANGUAGE plpgsql;`),
+    // The live shape that produced a FALSE NEGATIVE on 2026-07-29: a table ALIAS between the table
+    // name and SET, with SET on the next line. Requiring `\s+SET` made adjust_inventory_qty read as
+    // read-only and left business_inventory looking clean.
+    mig('005.sql', `CREATE FUNCTION aliased() RETURNS void AS $$ BEGIN\n  UPDATE public.w bi\n     SET qty = bi.qty + 1\n   WHERE bi.id = 1;\nEND; $$ LANGUAGE plpgsql;`),
+    mig('006.sql', `CREATE FUNCTION locks_only() RETURNS int AS $$ BEGIN\n  SELECT id FROM w WHERE id=1 FOR UPDATE;\n  RETURN 1;\nEND; $$ LANGUAGE plpgsql;`),
+    // A STRING LITERAL mentioning an update is not a write — the second false positive of 2026-07-29
+    // ('settings:update permission required' yielded a phantom table called `permission`).
+    mig('007.sql', `CREATE FUNCTION only_talks() RETURNS void AS $$ BEGIN\n  RAISE NOTICE 'settings:update permission required';\nEND; $$ LANGUAGE plpgsql;`),
+  ];
+  const RPCMAP = buildRpcTableMap(MIGS);
+  check('M1 CREATE FUNCTION body parsed — UPDATE target found', 'true', String(RPCMAP.get('writes_w')?.writes.has('w')));
+  check('M2 a SELECT-only function writes nothing', '0', String(RPCMAP.get('reads_only')?.writes.size));
+  check('M3 EXECUTE in a body is flagged dynamic', 'true', String(RPCMAP.get('dyn_writer')?.dynamic));
+  check('M4 a body with INSERT + DELETE yields BOTH tables', 'g,w',
+    [...(RPCMAP.get('multi')?.writes ?? [])].sort().join(','));
+  check('M4b 🔴 an UPDATE with a table ALIAS is still a write (the 2026-07-29 false negative)', 'true',
+    String(RPCMAP.get('aliased')?.writes.has('w')));
+  check('M4c SELECT … FOR UPDATE is a LOCK, not a write', '0',
+    String(RPCMAP.get('locks_only')?.writes.size));
+  check('M4d 🔴 an UPDATE inside a STRING LITERAL is not a write (the phantom `permission` table)', '0',
+    String(RPCMAP.get('only_talks')?.writes.size));
+  {
+    // An rpc CALLER becomes a write path to the function's target table.
+    const { tables: T, rpcs: RP } = analyze([f('packages/x/caller.ts', `await supabase.rpc('writes_w', {});`)]);
+    foldRpcWriters(T, RP, RPCMAP);
+    check('M5 an RPC caller becomes a write path to the target table', 'PASS',
+      judge(T, {}).find(r => r.table === 'w')?.goal ?? 'ABSENT');
+    check('M5b …and the path is the CALLING FILE', 'packages/x/caller.ts',
+      judge(T, {}).find(r => r.table === 'w')?.appPaths.join(',') ?? 'ABSENT');
+  }
+  {
+    // The case that matters: a table reading CLEAN at 1 source path, failing once RPCs count.
+    const { tables: T, rpcs: RP } = analyze([
+      f('packages/x/helper.ts', `supabase.from('w').update(y);`),
+      f('packages/x/other.ts', `await supabase.rpc('writes_w', {});`),
+    ]);
+    check('M6 BEFORE the fold: looks like a clean single path', 'PASS', judge(T, {}).find(r => r.table === 'w').goal);
+    foldRpcWriters(T, RP, RPCMAP);
+    check('M6b AFTER the fold: the hidden RPC writer FAILS it', 'FAIL', judge(T, {}).find(r => r.table === 'w').goal);
+  }
+  {
+    const { tables: T, rpcs: RP } = analyze([f('packages/x/c.ts', `await supabase.rpc('reads_only', {});`)]);
+    foldRpcWriters(T, RP, RPCMAP);
+    check('M7 a READ-only RPC does not make its caller a write path', 'ABSENT',
+      judge(T, {}).find(r => r.table === 'w')?.goal ?? 'ABSENT');
+  }
+  {
+    const { tables: T, rpcs: RP } = analyze([f('packages/x/c.ts', `await supabase.rpc('not_in_migrations', {});`)]);
+    const { unknown } = foldRpcWriters(T, RP, RPCMAP);
+    check('M8 an RPC with no migration definition is REPORTED, not silently dropped', 'not_in_migrations',
+      unknown.map(u => u.fn).join(','));
+  }
   return R;
 }
 
@@ -204,6 +351,13 @@ if (bad.length) { console.error(`\n${RED}${B}✗ THE CAP'S OWN PROBES FAILED —
 
 const files = SCAN_ROOTS.flatMap(r => walk(join(ROOT, r))).map(f => ({ path: relative(ROOT, f), content: readFileSync(f, 'utf8') }));
 const { tables, rpcs, dynamic } = analyze(files);
+
+// tech-debt #76 — resolve RPC callers to the tables their functions write, from the migrations.
+const MIG_DIR = join(ROOT, 'supabase/migrations');
+const migrations = (existsSync(MIG_DIR) ? readdirSync(MIG_DIR).filter(f => f.endsWith('.sql')).sort() : [])
+  .map(f => ({ path: `supabase/migrations/${f}`, content: readFileSync(join(MIG_DIR, f), 'utf8') }));
+const rpcMap = buildRpcTableMap(migrations);
+const rpcFold = foldRpcWriters(tables, rpcs, rpcMap);
 const baselineDoc = existsSync(BASELINE_FILE) ? JSON.parse(readFileSync(BASELINE_FILE, 'utf8')) : null;
 const rows = judge(tables, { baseline: baselineDoc?.tables ?? {} });
 
@@ -241,11 +395,26 @@ if (toolingOnly.length) {
   for (const r of toolingOnly) console.log(`  ${r.table} ${D}← ${r.tooling.join(', ')}${O}`);
 }
 
-if (rpcs.size) {
-  console.log(`\n${B}${YEL}ADVISORY — RPC CALLERS (NOT ASSERTED — every count above is a FLOOR)${O}`);
-  console.log(`${D}This cap reads SOURCE. Which table an RPC writes lives in the database. The rpc→table map${O}`);
-  console.log(`${D}is the cap's own next build and is OWED; until it exists these are reported, not judged.${O}`);
-  for (const [n, p] of [...rpcs].sort()) console.log(`  ${n} ${D}← ${[...p].sort().join(', ')}${O}`);
+if (rpcMap.size) {
+  console.log(`\n${B}RPC → TABLE MAP${O}  ${D}(${rpcMap.size} functions parsed from ${migrations.length} migrations — tech-debt #76)${O}`);
+  if (rpcFold.folded.length) {
+    console.log(`  ${B}RESOLVED — these callers ARE write paths and are counted above:${O}`);
+    for (const { fn, table, callers } of rpcFold.folded) console.log(`    ${fn} → ${B}${table}${O} ${D}← ${callers.join(', ')}${O}`);
+  }
+  const readOnly = [...rpcs.keys()].filter(n => rpcMap.get(n) && rpcMap.get(n).writes.size === 0);
+  if (readOnly.length) console.log(`  ${D}read-only (caller is NOT a write path): ${readOnly.sort().join(', ')}${O}`);
+}
+console.log(`\n${B}${YEL}KNOWN GAPS IN THIS MAP — printed every run, not absorbed${O}`);
+console.log(`  ${D}(1) a function created OUTSIDE the migration path is invisible here (CLAUDE.md §6 r17's class)${O}`);
+console.log(`  ${D}(2) dynamic SQL (EXECUTE) inside a body cannot be resolved statically${O}`);
+console.log(`  ${D}(3) a function that writes by CALLING another function is not followed (transitive)${O}`);
+if (rpcFold.unknown.length) {
+  console.log(`  ${YEL}UNRESOLVED — called in source, no definition found in migrations (gap 1):${O}`);
+  for (const { fn, callers } of rpcFold.unknown) console.log(`    ${fn} ${D}← ${callers.join(', ')}${O}`);
+}
+if (rpcFold.dynamic.length) {
+  console.log(`  ${YEL}DYNAMIC — body uses EXECUTE, targets not resolvable (gap 2):${O}`);
+  for (const { fn } of rpcFold.dynamic) console.log(`    ${fn}`);
 }
 if (dynamic.length) {
   console.log(`\n${B}${YEL}ADVISORY — DYNAMIC TABLE NAMES (NOT RESOLVED)${O}`);

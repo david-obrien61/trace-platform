@@ -8,15 +8,25 @@
       "packages/shared/src/auth/acceptInvitation.ts",
       "packages/shared/src/auth/invitations.ts",
       "packages/shared/src/auth/members.ts",
-      "packages/shared/src/auth/pinReset.ts"
+      "packages/shared/src/auth/pinReset.ts",
+      "packages/shared/src/auth/roleFunnel.ts"
     ],
     "businesses": [
       "packages/cultivar-os/api/qbo/router.ts",
       "packages/cultivar-os/src/pages/OnboardingWizard.tsx",
       "packages/shared/src/auth/OwnerSignup.tsx",
       "packages/shared/src/discovery/DiscoveryGlimpse.tsx",
+      "packages/shared/src/pages/Settings.tsx",
       "packages/shared/src/quickbooks/refresh.ts",
       "packages/shared/src/quickbooks/secrets.ts"
+    ],
+    "business_inventory": [
+      "packages/cultivar-os/api/orders/submit.ts",
+      "packages/cultivar-os/src/components/inventory/inventoryEdit.ts",
+      "packages/cultivar-os/src/pages/InventoryReconcile.tsx",
+      "packages/cultivar-os/src/pages/importWrites.ts",
+      "packages/shared/src/discovery/costDiscovery.ts",
+      "packages/shared/src/discovery/populate.ts"
     ],
     "cost_objects": [
       "packages/cultivar-os/src/components/ProjectCostTree.tsx",
@@ -39,10 +49,10 @@
       "packages/shared/src/context/BusinessProvider.tsx",
       "packages/shared/src/supabase/auth.ts"
     ],
-    "business_inventory": [
+    "audit_log": [
       "packages/cultivar-os/src/components/inventory/inventoryEdit.ts",
-      "packages/shared/src/discovery/costDiscovery.ts",
-      "packages/shared/src/discovery/populate.ts"
+      "packages/shared/src/auth/roleFunnel.ts",
+      "packages/shared/src/pages/Settings.tsx"
     ],
     "orders": [
       "packages/cultivar-os/api/orders/submit.ts",
@@ -127,6 +137,9 @@
     ],
     "receipts": [
       "packages/cultivar-os/src/pages/ReceiptKeeper.tsx"
+    ],
+    "role_definitions": [
+      "packages/shared/src/auth/roleFunnel.ts"
     ]
   }
 }
