@@ -46,7 +46,21 @@ const COLUMN_LIST = /^[a-z_][a-z0-9_]*(\s*,\s*[a-z_][a-z0-9_]*){2,}$/i;
 
 // An entity deliberately carrying more than one enumeration, WITH ITS REASON. Same discipline as the
 // other caps: a decision on the record, never a convenience the builder grants itself.
-const ALLOWED_DIVERGENCE = {};
+const ALLOWED_DIVERGENCE = {
+  // APPROVED 2026-07-29 (David). THE DISTINCTION IS THE POINT OF THE ENTRY, so the next reader does
+  // not "fix" it: these are 3-column lookup PROJECTIONS, not record shapes. A4 exists to stop a
+  // RECORD's field set being restated in many places; a projection selecting three columns to answer
+  // ONE question is a different thing, and forcing a derivation would make the code worse to satisfy
+  // a rule aimed elsewhere. `customers`' record shape IS derived — customerFieldRegistry.ts.
+  customers: {
+    reason: '3-column lookup PROJECTIONS, not record shapes: the QBO invoice reads the billing '
+          + 'address it is about to push, and customerUpsert reads the org dedup key '
+          + '(name + billing address). A4 targets a restated RECORD field set; the record shape '
+          + 'is derived in customerFieldRegistry.ts.',
+    paths: ['packages/cultivar-os/api/qbo/invoice/cultivar.ts',
+            'packages/shared/src/business-logic/customerUpsert.ts'],
+  },
+};
 
 function stripComments(src) {
   // Replace a block comment with the SAME NUMBER OF NEWLINES, never with ''. Collapsing it shifted

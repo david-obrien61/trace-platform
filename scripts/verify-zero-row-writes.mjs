@@ -177,6 +177,13 @@ console.log(`\n${B}SCANNED${O} ${files.length} files · ${D}corpus: ${SCAN_ROOTS
 console.log(`${B}APP MUTATION SITES${O}  ${GRN}CHECKED ${checked.length}${O} · ${RED}UNCHECKABLE ${v.app.filter(s=>s.status==='UNCHECKABLE').length}${O} · ${YEL}NEEDS_CHECK ${v.app.filter(s=>s.status==='NEEDS_CHECK').length}${O} · ${D}tooling (not asserted) ${v.tooling.length}${O}`);
 console.log(`${B}BASELINE${O} ${baselineDoc ? `${baselineDoc.unchecked.length} known, stamped ${baselineDoc.stamped}` : `${YEL}none — run npm run zero-row-writes:baseline${O}`}`);
 
+console.log(`\n${B}${YEL}WHAT THIS CAP CANNOT SEE — printed every run, not discovered later${O}`);
+console.log(`  ${D}(1) IT READS PER STATEMENT. A guard covering TWO branches (a write plus its retry)${O}`);
+console.log(`  ${D}      reads as unchecked on the second — customerUpsert's retry is the live example.${O}`);
+console.log(`  ${D}(2) A check further than ~400 chars after the statement is not seen.${O}`);
+console.log(`  ${D}(3) A row-count check performed by a CALLER, not at the write site, is invisible.${O}`);
+console.log(`  ${D}So NEEDS_CHECK means "this cap cannot prove it is checked", not "it is unchecked".${O}`);
+
 if (checked.length) {
   console.log(`\n${B}${GRN}CHECKED — these prove the pattern${O}`);
   for (const s of checked) console.log(`  ${s.tag} ${D}[${s.verb}]${O}`);
