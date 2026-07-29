@@ -17,7 +17,8 @@
     "knip": "knip",
     "quality:gate": "node scripts/quality-gate.mjs",
     "quality:baseline": "node scripts/quality-gate.mjs --update",
-    "verify": "node scripts/quality-gate.mjs && npm run verify:universals"
+    "verify": "node scripts/quality-gate.mjs && npm run verify:universals",
+    "verify:write-paths": "node scripts/verify-write-paths.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
