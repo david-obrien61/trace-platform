@@ -69,6 +69,22 @@ const ALLOWED_DIVERGENCE = {
     paths: ['packages/cultivar-os/api/qbo/router.ts',
             'packages/shared/src/quickbooks/secrets.ts'],
   },
+  // APPROVED 2026-07-29 (David) — AND THE INTERPRETATION IS THE POINT OF THE ENTRY.
+  // Five paths here are NOT five competing writers. They are ONE writer — `emit_inventory_movement`
+  // — invoked from seven RPCs across five files, on an APPEND-ONLY table whose trigger rejects even
+  // `postgres` (tech-debt #70). A single emitter behind a table nobody may amend is the CORRECT
+  // architecture. Without this note the number reads as an alarm, and the table it guards is the
+  // ledger D-50's entire integrity claim rests on.
+  'business_inventory_ledger': {
+    reason: 'ONE writer (emit_inventory_movement) invoked from seven RPCs; append-only table whose '
+          + 'trigger rejects even postgres (#70). A single emitter behind an unamendable ledger is '
+          + 'the intended shape — a declaration, never a merge.',
+    paths: ['packages/cultivar-os/api/orders/submit.ts',
+            'packages/cultivar-os/src/components/inventory/inventoryEdit.ts',
+            'packages/cultivar-os/src/pages/InventoryReconcile.tsx',
+            'packages/cultivar-os/src/pages/importWrites.ts',
+            'packages/shared/src/discovery/populate.ts'],
+  },
 };
 
 // ── ANALYZER (pure) ──────────────────────────────────────────────────────────
@@ -188,26 +204,55 @@ export function provenanceOf(byPath) {
 }
 
 /** Fold RPC callers into the observed table→path map. Returns the RPC provenance for reporting. */
+// ONE HOP ONLY (David, 2026-07-29). A called function's own writes count, AND the writes of the
+// functions it DIRECTLY calls — because `business_inventory_ledger` is written by
+// `emit_inventory_movement`, which nobody calls from source, so a direct-only fold left the ledger
+// invisible to source AND to the RPC map. A walk of ARBITRARY depth is deliberately NOT done: it
+// converts "who writes this table" into "what could eventually reach it" — a different and less
+// useful question. A chain TWO deep is NAMED AS UNRESOLVED, the same discipline as the other gaps.
 export function foldRpcWriters(tables, rpcs, rpcMap) {
-  const folded = [];   // { fn, table, callers[] }
+  const folded = [];   // { fn, table, callers[], via? }
   const unknown = [];  // rpc names with no definition in migrations
   const dynamic = [];  // rpc names whose body uses EXECUTE
+  const twoHop = [];   // { fn, via, then, tables[], callers[] } — NOT folded, named instead
+
+  const attribute = (table, callers, tag) => {
+    if (!tables.has(table)) tables.set(table, new Map());
+    const byPath = tables.get(table);
+    for (const c of callers) {
+      if (!byPath.has(c)) byPath.set(c, new Set());
+      byPath.get(c).add(tag);
+    }
+  };
+
   for (const [fn, callers] of rpcs) {
     const def = rpcMap.get(fn);
     if (!def) { unknown.push({ fn, callers: [...callers] }); continue; }
     if (def.dynamic) dynamic.push({ fn, callers: [...callers] });
-    if (def.writes.size === 0) continue; // a read-only function: its caller is not a write path
-    for (const table of def.writes) {
-      if (!tables.has(table)) tables.set(table, new Map());
-      const byPath = tables.get(table);
-      for (const c of callers) {
-        if (!byPath.has(c)) byPath.set(c, new Set());
-        byPath.get(c).add(`rpc:${fn}`);
+    const cs = [...callers];
+
+    // hop 0 — what the called function writes itself
+    for (const table of def.writes) { attribute(table, cs, `rpc:${fn}`); folded.push({ fn, table, callers: cs }); }
+
+    // hop 1 — what the functions it directly calls write
+    for (const callee of def.calls ?? []) {
+      const cd = rpcMap.get(callee);
+      if (!cd) continue;
+      for (const table of cd.writes) {
+        if (def.writes.has(table)) continue; // already attributed at hop 0
+        attribute(table, cs, `rpc:${fn}→${callee}`);
+        folded.push({ fn, table, callers: cs, via: callee });
       }
-      folded.push({ fn, table, callers: [...callers] });
+      // hop 2 — NOT followed. Named, so the BOUND is visible rather than assumed.
+      for (const deeper of cd.calls ?? []) {
+        const dd = rpcMap.get(deeper);
+        if (!dd) continue;
+        const unattributed = [...dd.writes].filter(t => !def.writes.has(t) && !cd.writes.has(t));
+        if (unattributed.length) twoHop.push({ fn, via: callee, then: deeper, tables: unattributed, callers: cs });
+      }
     }
   }
-  return { folded, unknown, dynamic };
+  return { folded, unknown, dynamic, twoHop };
 }
 
 // ── JUDGE (pure — separate from observation so both verdicts are testable) ───
@@ -374,6 +419,23 @@ function runProbes() {
       [...(M.get('inner_w')?.writes ?? [])].join(','));
     check('G3c …while the outer function alone shows NO writes (why the gap is real)', '0',
       String(M.get('outer_w')?.writes.size));
+
+    // H1/H2 — ONE HOP is folded; TWO is the stated bound, named not followed.
+    const M2 = buildRpcTableMap([
+      mig('010.sql', `CREATE FUNCTION deep_w() RETURNS void AS $$ BEGIN INSERT INTO deep_t(a) VALUES(1); END; $$ LANGUAGE plpgsql;`),
+      mig('011.sql', `CREATE FUNCTION inner_w() RETURNS void AS $$ BEGIN INSERT INTO hidden_t(a) VALUES(1); PERFORM deep_w(); END; $$ LANGUAGE plpgsql;`),
+      mig('012.sql', `CREATE FUNCTION outer_w() RETURNS void AS $$ BEGIN PERFORM inner_w(); END; $$ LANGUAGE plpgsql;`),
+    ]);
+    const { tables: T, rpcs: RP } = analyze([f('packages/x/c.ts', `await supabase.rpc('outer_w', {});`)]);
+    const fold = foldRpcWriters(T, RP, M2);
+    check('H1 🔴 ONE HOP IS FOLDED — the caller becomes a path to the table its callee writes', 'packages/x/c.ts',
+      judge(T, {}).find(r => r.table === 'hidden_t')?.appPaths.join(',') ?? 'ABSENT');
+    check('H1b …and the hop-folded table is flagged rpc-only (nothing in source reveals it)', 'rpc-only',
+      provenanceOf(T.get('hidden_t')));
+    check('H2 🔴 TWO HOPS ARE NOT FOLDED — the depth-2 table is absent from the counts', 'ABSENT',
+      judge(T, {}).find(r => r.table === 'deep_t')?.appPaths.join(',') ?? 'ABSENT');
+    check('H2b …but it IS NAMED as unresolved, with its chain', 'outer_w→inner_w→deep_w:deep_t',
+      fold.twoHop.map(t => `${t.fn}→${t.via}→${t.then}:${t.tables.join('|')}`).join(','));
   }
   return R;
 }
@@ -482,23 +544,22 @@ if (rpcFold.dynamic.length) {
 } else {
   console.log(`  ${D}(2) dynamic SQL (EXECUTE) is unresolvable — no called function uses it today${O}`);
 }
-// gap 3 — instantiated from the call graph
-const transitive = [];
-for (const [fn, callers] of rpcs) {
-  const def = rpcMap.get(fn);
-  if (!def) continue;
-  for (const callee of def.calls ?? []) {
-    const cd = rpcMap.get(callee);
-    if (!cd) continue;
-    const unattributed = [...cd.writes].filter(t => !def.writes.has(t));
-    if (unattributed.length) transitive.push({ fn, callee, tables: unattributed, callers: [...callers] });
-  }
-}
-if (transitive.length) {
-  console.log(`  ${YEL}(3) COULD BE HIDING A TABLE${O} — a called function writes via ANOTHER function (not followed):`);
-  for (const t of transitive) console.log(`      ${B}${t.fn}${O} → calls ${B}${t.callee}${O} which writes ${YEL}${t.tables.join(', ')}${O} ${D}← ${t.callers.join(', ')}${O}`);
+// gap 3 — ONE HOP IS NOW FOLDED into the counts above. What remains unresolved is depth TWO.
+if (rpcFold.twoHop.length) {
+  console.log(`  ${YEL}(3) COULD BE HIDING A TABLE${O} — a chain TWO deep (one hop is folded, two is the bound):`);
+  for (const t of rpcFold.twoHop) console.log(`      ${B}${t.fn}${O} → ${t.via} → ${B}${t.then}${O} writes ${YEL}${t.tables.join(', ')}${O} ${D}← ${t.callers.join(', ')}${O}`);
 } else {
-  console.log(`  ${D}(3) transitive writes are not followed — no called function invokes another mapped writer today${O}`);
+  console.log(`  ${D}(3) one hop IS folded into the counts; a chain two deep would be unresolved — none today${O}`);
+}
+const hopFolded = rpcFold.folded.filter(f => f.via);
+if (hopFolded.length) {
+  const seen = new Set();
+  console.log(`\n${B}ONE-HOP WRITES FOLDED IN${O} ${D}(the writing function is never the one called)${O}`);
+  for (const f of hopFolded) {
+    const k = `${f.fn}→${f.via}→${f.table}`;
+    if (seen.has(k)) continue; seen.add(k);
+    console.log(`  ${f.fn} → ${B}${f.via}${O} writes ${B}${f.table}${O}`);
+  }
 }
 if (dynamic.length) {
   console.log(`\n${B}${YEL}ADVISORY — DYNAMIC TABLE NAMES (NOT RESOLVED)${O}`);

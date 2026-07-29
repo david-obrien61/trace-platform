@@ -36,6 +36,13 @@
       "packages/shared/src/components/CostToProduceSettings.tsx",
       "packages/shared/src/modules/PMI.tsx"
     ],
+    "business_inventory_ledger": [
+      "packages/cultivar-os/api/orders/submit.ts",
+      "packages/cultivar-os/src/components/inventory/inventoryEdit.ts",
+      "packages/cultivar-os/src/pages/InventoryReconcile.tsx",
+      "packages/cultivar-os/src/pages/importWrites.ts",
+      "packages/shared/src/discovery/populate.ts"
+    ],
     "customers": [
       "packages/cultivar-os/api/qbo/invoice/cultivar.ts",
       "packages/cultivar-os/src/components/customers/customerEdit.ts",
