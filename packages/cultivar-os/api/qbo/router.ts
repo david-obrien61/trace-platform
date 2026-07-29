@@ -40,7 +40,11 @@ function peek(val: string | undefined): string {
 
 // ─── auth-url ────────────────────────────────────────────────────────────────
 
-function handleAuthUrl(req: any, res: any) {
+// `async` is LOAD-BEARING: this handler awaits `callerCan` (the 2026-07-27 capK gate) and the
+// pending-state upsert. Without it the `await` on line ~68 is a SyntaxError, the MODULE never
+// parses, and every route through this router 500s — auth-url, status AND callback — even though
+// handleStatus is correct. Removing it does not break one branch; it breaks the file.
+async function handleAuthUrl(req: any, res: any) {
   const clientId    = process.env.QBO_CLIENT_ID;
   const redirectUri = process.env.QBO_REDIRECT_URI;
   const clientSecret = process.env.QBO_CLIENT_SECRET;
