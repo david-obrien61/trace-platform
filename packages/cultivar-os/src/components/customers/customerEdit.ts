@@ -32,10 +32,8 @@ export type CustomerTextField =
   // TRACE connects systems, it does not become the record for someone else's paperwork).
   | 'tax_exempt_cert_ref';
 
-// E6 (Phase A): these were two hand-maintained lists. They are now DERIVED from the ONE customer
-// field registry, so a field marked notNull/sensitive there is honoured here without a second edit.
-const NOT_NULL_FIELDS: string[] = CUSTOMER_NOT_NULL_FIELDS;
-
+// E6: derived from the ONE customer field registry. (The NOT_NULL alias died with
+// coerceCustomerField in phase C — buildCustomerPatch reads CUSTOMER_NOT_NULL_FIELDS directly.)
 // BENCH-C (PII) — value-MASKED in the [TRACE:customers] diagnostic: an EIN / resale number and a
 // credit figure are PII and must never appear in plaintext logs. For these fields we log the field
 // name + "changed", never the from/to value. ONE source both write helpers read (STD-011).
@@ -57,57 +55,15 @@ function traceEdit(customerId: string, field: string, from: unknown, to: unknown
   }
 }
 
-type CoerceResult =
-  | { skip: true }
-  | { skip: false; value: string | null };
-
-/**
- * Coerce a raw text edit into the value to persist, applying the rules the roster and the
- * modal MUST share identically:
- *  - first_name is the identity → never blank (skip)
- *  - NOT NULL fields (first/last) → '' when cleared, never null
- *  - nullable fields → null when cleared
- *  - value unchanged from current → skip (no write)
- */
-export function coerceCustomerField(
-  current: Record<string, unknown>,
-  field: CustomerTextField,
-  raw: string | null,
-): CoerceResult {
-  const trimmed = (raw ?? '').trim();
-  if (field === 'first_name' && trimmed === '') return { skip: true }; // identity — never blank
-  const notNull = (NOT_NULL_FIELDS as string[]).includes(field);
-  const value = trimmed === '' ? (notNull ? '' : null) : trimmed;
-  if (value === current[field]) return { skip: true };
-  return { skip: false, value };
-}
-
-/**
- * Persist ONE coerced customer field via an owner-only RLS UPDATE, scoped to the row id AND
- * the business. Emits the shared `[TRACE:customers] edit` trace verbatim.
- */
-export async function persistCustomerField(params: {
-  id: string;
-  businessId: string;
-  field: CustomerTextField;
-  from: unknown;
-  value: string | null;
-}): Promise<{ error: string | null }> {
-  const { id, businessId, field, from, value } = params;
-  traceEdit(id, field, from, value);
-  const { data, error } = await supabase
-    .from('customers')
-    .update({ [field]: value })
-    .eq('id', id)
-    .eq('business_id', businessId)
-    .select('id'); // A8 — the affected-row evidence; without it a refused write reports success
-  if (error) { console.error('[TRACE:customers] edit error', field, error.message); return { error: error.message }; }
-  if (!data?.length) {
-    console.error('[TRACE:customers] edit AFFECTED ZERO ROWS — refused or missing', { customerId: id, field });
-    return { error: NOT_SAVED };
-  }
-  return { error: null };
-}
+// ── coerceCustomerField / persistCustomerField were DELETED in phase C (2026-07-29) ─────────────
+// Their last consumers were `CustomerEditModal` (deleted — one surface per entity, A1) and
+// `CustomerPartyEditor`'s per-field writers (replaced by one buffered Save, A3). Leaving them would
+// have been worse than unused code: `buildCustomerPatch` had re-implemented the same trim /
+// blank→null / NOT NULL coercion beside them, which is §6 r8's semantic duplicate — the same
+// OPERATION in two places, drifting the moment one is touched. The coercion now lives in exactly one
+// function, and the first_name identity rule survives there in the shape the new model needs (a
+// validation failure at Save, rather than a silent skip at blur).
+// ────────────────────────────────────────────────────────────────────────────────────────────────
 
 /**
  * Persist a PATCH of typed customer fields (numbers, dates, booleans, select values, or the atomic
@@ -217,9 +173,16 @@ export function buildCustomerPatch(params: {
   }
 
   // ── typed fields ──
-  put('customer_type', draft.customer_type ?? 'person');
-  put('price_tier',    draft.price_tier ?? 'retail');
-  put('status',        draft.status ?? 'active');
+  // 🔴 A field the caller never LOADED must never be written. Phase C mounts this editor from
+  // /delivery-schedule, and if that page ever hands over a partial row, defaulting here would write
+  // 'person' over an organization or 'retail' over a contractor tier. Absent ≠ empty.
+  const putTyped = (k: string, dflt: unknown) => {
+    if (draft[k] === undefined && !creating) return;
+    put(k, draft[k] ?? dflt);
+  };
+  putTyped('customer_type', 'person');
+  putTyped('price_tier',    'retail');
+  putTyped('status',        'active');
   const cl = draft.credit_limit;
   if (cl !== undefined) {
     const n = cl === null || cl === '' ? null : Number(String(cl).replace(/[$,]/g, ''));

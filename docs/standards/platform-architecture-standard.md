@@ -160,8 +160,24 @@ if (!data?.length) return { error: 'Not saved — you may not have permission to
 
 ## How this is enforced
 
-1. **A2 fails the build today.** A1/A3/A4/A5/A6 do not. That asymmetry is stated, not hidden — three of
-   the six are review-only, and the honest consequence is that they will drift between reviews.
+1. **A2, A4 and A8 fail the build today.** A1/A3/A5/A6 do not. That asymmetry is stated, not hidden —
+   the unenforced ones will drift between reviews.
+
+   **🔴 WHY THAT IS A REAL PROBLEM RATHER THAN A TOLERABLE ONE — three self-catches in twenty-four
+   hours, all by the author, all within a day of writing the rule:**
+   - E2 was written on 2026-07-28 and its own author recorded a PASS on `customers` that was not one,
+     through a loophole in his own drafting.
+   - A4 was scored from a read in the audit; the cap landed the same day and **contradicted the
+     audit's own ranking**.
+   - `customerFieldRegistry.ts` had *"an export with no consumer is a claim that a consolidation
+     happened when it has not"* in its header, and **two unused exports were shipped into that same
+     file the next day** — caught by knip, not by the author reading his own header.
+
+   **The author of a rule violates it within a day. That is not carelessness — the rule simply is not
+   in working memory at the moment of writing, and no amount of documenting changes that.** A rule
+   that lives only in a document is enforced by whoever happens to remember it, which is the same
+   failure that produced seven write paths to one table. **So an unenforced rule here is a
+   placeholder for a cap, not a finished control** — and each one should say which it is.
 2. **A build spec names the entity it touches** and confirms the entity already has its surface (A1),
    its write module (A2), and its field list (A4) before adding any of them. *"Does this record already
    have one?"* is the question that was never asked.

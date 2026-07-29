@@ -29,7 +29,9 @@ import { useNavigate } from 'react-router-dom';
 import { Truck, MapPin, Navigation, Phone, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
-import { CustomerEditModal, type EditableCustomer } from '../components/customers/CustomerEditModal';
+import { CustomerPartyEditor, type PartyCustomer } from '../components/customers/CustomerPartyEditor';
+import { CUSTOMER_SELECT_FULL, CUSTOMER_SELECT_CORE } from '../components/customers/customerFieldRegistry';
+import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME } from '@trace/shared/business-logic';
 import { CaptureInvoiceLauncher } from '../components/CaptureInvoiceLauncher';
 
 const TRACE_DELIVERY = true; // [TRACE:DELIVERY] STD-003 — ON until David owner-proves
@@ -86,11 +88,29 @@ export function DeliverySchedule() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [editing, setEditing] = useState<EditableCustomer | null>(null);
+  // A1/E1 — ONE customer form. This route mounts the SAME <CustomerPartyEditor> the /customers
+  // roster and /customers/:id use; the old 8-field CustomerEditModal is deleted. Cost of the merge,
+  // accepted deliberately (David, 2026-07-29): this surface loses per-field auto-save and gains a
+  // Save button. "Small change, close, stay on the route" is exactly where a silent partial write
+  // does the most damage, because the user never looks at the record again.
+  const [editing, setEditing] = useState<PartyCustomer | null>(null);
+  const [tierOptions, setTierOptions] = useState<{ value: string; label: string }[]>([{ value: RETAIL_TIER_NAME, label: 'Retail (no discount)' }]);
 
   useEffect(() => {
     if (!businessId) return;
-    load();
+    void load(); // pre-existing floating promise, fixed in passing (§1.6 fix-all-in-one-pass)
+  }, [businessId]);
+
+  // The editor prices from the configured tiers, same source the roster uses.
+  useEffect(() => {
+    if (!businessId) return;
+    void (async () => {
+      const { data } = await readPricingConfig(supabase, businessId);
+      const opts = [{ value: RETAIL_TIER_NAME, label: 'Retail (no discount)' }];
+      for (const ty of normalizeDiscountTypes((data?.config ?? {}) as Record<string, unknown>))
+        for (const ti of ty.tiers) opts.push({ value: ti.name, label: `${ty.name} · ${ti.name}` });
+      setTierOptions(opts);
+    })();
   }, [businessId]);
 
   async function load() {
@@ -132,31 +152,22 @@ export function DeliverySchedule() {
     setSavingId(null);
   }
 
-  // Open the in-context customer editor (owner-only, mounted below). Builds the EditableCustomer
-  // straight from the widened join (3a) — no extra round-trip, no re-nav off this route page.
-  function openEditor(d: DeliveryRow) {
-    if (!d.customer_id || !d.customers) return;
-    const c = d.customers;
-    setEditing({
-      id: d.customer_id,
-      first_name: c.first_name, last_name: c.last_name,
-      phone: c.phone, email: c.email,
-      address_line1: c.address_line1, city: c.city, state: c.state, zip: c.zip,
-    });
+  // Open the ONE customer editor over this page (owner-only). 🔴 It fetches the FULL row rather than
+  // reusing this page's 8-column join: the editor edits the whole party record, and handing it a
+  // partial row would let a Save write defaults over fields the page never loaded. One extra
+  // round-trip, deliberately. Columns come from the field registry (A4) — deploy-window-safe.
+  async function openEditor(d: DeliveryRow) {
+    if (!d.customer_id) return;
+    let { data, error } = await supabase.from('customers').select(CUSTOMER_SELECT_FULL).eq('id', d.customer_id).maybeSingle();
+    if (error && ((error as any).code === '42703' || (error as any).code === 'PGRST204')) {
+      ({ data, error } = await supabase.from('customers').select(CUSTOMER_SELECT_CORE).eq('id', d.customer_id).maybeSingle());
+    }
+    if (error || !data) { console.error('[TRACE:customers] could not open editor', error?.message); return; }
+    setEditing(data as unknown as PartyCustomer);
   }
 
-  // Reflect a persisted customer edit onto every card sharing that customer — no reload, no re-nav.
-  function onCustomerEdited(u: EditableCustomer) {
-    setEditing(u);
-    setRows(prev => prev.map(r =>
-      r.customer_id === u.id && r.customers
-        ? { ...r, customers: {
-            first_name: u.first_name, last_name: u.last_name, phone: u.phone, email: u.email,
-            address_line1: u.address_line1, city: u.city, state: u.state, zip: u.zip,
-          } }
-        : r,
-    ));
-  }
+  // The editor commits ONCE now (A3/E2 phase B), so there is nothing to stream per field — reload
+  // the cards after a successful Save so every card sharing that customer reflects it.
 
   // Group by delivery_date, soonest day forward (undated grouped last).
   const groups: { date: string | null; items: DeliveryRow[] }[] = [];
@@ -302,7 +313,7 @@ export function DeliverySchedule() {
                           object from the widened join; close → stay on the same route, no re-nav. */}
                       {isOwner && d.customer_id && d.customers && (
                         <button
-                          onClick={() => openEditor(d)}
+                          onClick={() => { void openEditor(d); }}
                           style={{
                             marginTop: 8, background: 'none', border: 'none', padding: 0,
                             color: GREEN, fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer',
@@ -334,12 +345,12 @@ export function DeliverySchedule() {
         )}
       </div>
 
-      {/* In-context customer editor (owner-only). Opens over this route page; per-field-on-blur
-          persist shared with the /customers roster; edits reflect on the cards, no re-nav. */}
+      {/* The ONE customer form (A1/E1), opened over this route page — no re-nav to the roster. */}
       {editing && (
-        <CustomerEditModal
+        <CustomerPartyEditor
           customer={editing}
-          onEdited={onCustomerEdited}
+          tierOptions={tierOptions}
+          onSaved={() => { void load(); }}
           onClose={() => setEditing(null)}
         />
       )}
