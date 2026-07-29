@@ -17,11 +17,13 @@
     "knip": "knip",
     "quality:gate": "node scripts/quality-gate.mjs",
     "quality:baseline": "node scripts/quality-gate.mjs --update",
-    "verify": "node scripts/quality-gate.mjs && npm run verify:universals && npm run verify:write-paths && npm run verify:zero-row-writes",
+    "verify": "node scripts/quality-gate.mjs && npm run verify:universals && npm run verify:write-paths && npm run verify:zero-row-writes && npm run verify:field-lists",
     "verify:write-paths": "node scripts/verify-write-paths.mjs",
     "write-paths:baseline": "node scripts/verify-write-paths.mjs --update",
     "verify:zero-row-writes": "node scripts/verify-zero-row-writes.mjs",
-    "zero-row-writes:baseline": "node scripts/verify-zero-row-writes.mjs --update"
+    "zero-row-writes:baseline": "node scripts/verify-zero-row-writes.mjs --update",
+    "verify:field-lists": "node scripts/verify-field-lists.mjs",
+    "field-lists:baseline": "node scripts/verify-field-lists.mjs --update"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
