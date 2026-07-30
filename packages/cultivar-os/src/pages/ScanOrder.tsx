@@ -12,7 +12,7 @@
 //           then routes to /checkout/addons. [TRACE:CART] on each scan-add / pass / miss.
 // CUSTOMER-FIRST (ways 1 & 4): a customer-attach strip lets a manager attach a customer BEFORE
 //           pricing — WAY 1 look up an existing customer (reads via customers_member RLS,
-//           20260710; gated on view_customers) and attach their stored tier; WAY 4 add a new
+//           20260710; gated on customers:read) and attach their stored tier; WAY 4 add a new
 //           customer inline + invoke an order-scoped discount (owner/manager). The attached
 //           customerId + invokedTier flow through the cart → submit (which honors them). The
 //           anonymous QR path (path B) attaches nothing and is unchanged. [TRACE:lookup] on
@@ -48,7 +48,7 @@ type Phase = 'scanning' | 'reviewing' | 'picker' | 'unknown';
 interface PickChoice { inventoryId: string; title: string; sub: string; row: StockLineRow }
 
 // A customer row for the attach lookup (way 1). Read via the customers_member RLS (20260710) —
-// an owner reads via the owner policy, a manager holding view_customers via the member policy.
+// an owner reads via the owner policy, a manager holding customers:read via the member policy.
 interface CustomerHit {
   id: string; first_name: string; last_name: string | null;
   phone: string | null; email: string | null;
@@ -132,9 +132,13 @@ export function ScanOrder() {
   const [nfTier, setNfTier] = useState(RETAIL_TIER_NAME);
   const [nfError, setNfError] = useState('');
 
-  // A manager holding view_customers (or the owner) may LOOK UP existing customers; without it
+  // A manager holding customers:read (or the owner) may LOOK UP existing customers; without it
   // the search would always return empty (RLS), so we offer only the "add new" path (honest).
-  const canLookup = isOwner || can('view_customers');
+  // 🔴 A7 (2026-07-30): this read `view_customers`, RETIRED at #166 — `can()` is a literal array
+  // membership test with NO alias resolution, so it was FALSE for every member, the strip read
+  // "Add a customer", and the search was unreachable on the path a cashier walks. The route
+  // (router.tsx:242) and the RLS policy (20260727:174) had both moved; this gate had not.
+  const canLookup = isOwner || can('customers:read');
   // The order-scoped tier INVOKE (way 4) is an owner/manager act, server-verified at submit —
   // hide the picker for staff (their new customers ring at retail).
   const canInvoke = isOwner || can('manage_orders');
