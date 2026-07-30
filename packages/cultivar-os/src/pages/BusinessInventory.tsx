@@ -90,8 +90,20 @@ interface InventoryRow {
 // SELECT column sets. reorder_point is a DEPLOY-GATED column (D-42 migration is gated) — the load
 // tries the FULL set and, on a missing-column error, falls back to CORE so the grid still renders
 // (deploy-window-safe, mirrors D-41's FULL→CORE fallback).
-const CORE_COLS = 'id,name,sku,qty,unit_cost,sell_price,location,status,serial_number,cost_confidence,size,variant_group,received_at,receipt_id,notes,description,created_at,updated_at';
-const FULL_COLS = `${CORE_COLS},reorder_point`;
+//
+// 🔴 COST COLUMNS ARE REQUESTED ONLY WITH `costs:read` (2026-07-30, tech-debt #81). The grid used
+// to name `unit_cost` unconditionally, so a member without costs:read received the owner's cost
+// basis in the payload and it was hidden only by not rendering it. Same pattern Dashboard.tsx
+// already used (`select(canViewCosts ? 'qty, unit_cost' : 'qty')`) — copied, not invented.
+//
+// ⚠️ THIS DOES NOT CLOSE THE LEAK, and must not be recorded as the wall. RLS is ROW-level and the
+// base table still grants SELECT on every column, so a member with devtools reads unit_cost with
+// one query. This removes it from the rendered surface and is prerequisite work for the real fix
+// (#81 option (b) — move cost to a costs:read-gated side table, the labor_resource_wages shape).
+const BASE_COLS = 'id,name,sku,qty,sell_price,location,status,serial_number,size,variant_group,received_at,receipt_id,notes,description,created_at,updated_at';
+const COST_COLS = 'unit_cost,cost_confidence';
+const coreCols = (canCosts: boolean) => (canCosts ? `${BASE_COLS},${COST_COLS}` : BASE_COLS);
+const fullCols = (canCosts: boolean) => `${coreCols(canCosts)},reorder_point`;
 
 function confidenceLabel(c: CostConfidence | null): string {
   if (!c) return '—';
@@ -120,7 +132,9 @@ type EditorState =
   | { mode: 'edit'; item: EditorInventoryItem };
 
 export function BusinessInventory() {
-  const { businessId } = useBusinessContext();
+  const { businessId, can } = useBusinessContext();
+  // #81: gates the COST COLUMNS in the select below. Render-gating alone left them in the payload.
+  const canViewCosts = can('costs:read');
   const navigate = useNavigate();
 
   const [items, setItems] = useState<InventoryRow[]>([]);
@@ -145,7 +159,7 @@ export function BusinessInventory() {
     setListError(null);
     const full = await supabase
       .from('business_inventory')
-      .select(FULL_COLS)
+      .select(fullCols(canViewCosts))
       .eq('business_id', businessId)
       .order('created_at', { ascending: false });
     let data: unknown = full.data;
@@ -154,7 +168,7 @@ export function BusinessInventory() {
       console.warn('[TRACE:invsheet] reorder_point absent — FULL→CORE fallback (migration pending)');
       const core = await supabase
         .from('business_inventory')
-        .select(CORE_COLS)
+        .select(coreCols(canViewCosts))
         .eq('business_id', businessId)
         .order('created_at', { ascending: false });
       data = core.data; error = core.error;

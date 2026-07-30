@@ -67,7 +67,12 @@ function writeCache(tagId: string, data: Omit<PlantCache, 'cachedAt'>): void {
 
 export function usePlant(tagId: string | undefined): UsePlantResult {
   const cached = tagId ? readCache(tagId) : null;
-  const { businessId } = useBusinessContext();
+  const { businessId, can } = useBusinessContext();
+  // #81 (2026-07-30): the embedded business_inventory select named unit_cost unconditionally, so
+  // a plant profile handed the owner's cost basis to any member who could open a plant. Does NOT
+  // close the leak (RLS is row-level; the base table still grants the column) — it removes it
+  // from this payload and is prerequisite work for #81 option (b).
+  const canViewCosts = can('costs:read');
 
   const [plant,          setPlant]          = useState<Plant | null>(cached?.plant ?? null);
   const [events,         setEvents]         = useState<PlantEvent[]>(cached?.events ?? []);
@@ -95,7 +100,9 @@ export function usePlant(tagId: string | undefined): UsePlantResult {
       // a lot that has no specimen row (the discovery-seeded catalog, D-34).
       const { data: plantData, error: plantErr } = await supabase
         .from('cultivar_plants')
-        .select('*, business_inventory ( id, qty, unit_cost, sell_price, status, received_at )')
+        .select(canViewCosts
+          ? '*, business_inventory ( id, qty, unit_cost, sell_price, status, received_at )'
+          : '*, business_inventory ( id, qty, sell_price, status, received_at )')
         .ilike('tag_id', tagId!)
         .maybeSingle();
 
@@ -169,7 +176,8 @@ export function usePlant(tagId: string | undefined): UsePlantResult {
 
     fetchFromNetwork();
     return () => { cancelled = true; };
-  }, [tagId, businessId]);
+  }, [tagId, businessId, canViewCosts]);   // canViewCosts: #81 — the select's column list depends on it, so a
+                                          // permission resolving AFTER first render must re-fetch, not serve a stale shape.
 
   // The customer chose a size from the collision picker → synthesize that stock line.
   function chooseSize(inventoryId: string) {

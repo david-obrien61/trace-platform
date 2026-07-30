@@ -53,11 +53,15 @@ const AMBER = '#b45309';
 
 const money = (n: number) => `$${n.toFixed(2)}`;
 
-interface InventoryRow { name: string; unit_cost: number | null; cost_confidence: string | null; }
+interface InventoryRow { name: string; unit_cost?: number | null; cost_confidence?: string | null; }
 
 export function CostToProduce() {
   const navigate = useNavigate();
-  const { businessId, business } = useBusinessContext();
+  const { businessId, business, can } = useBusinessContext();
+  // #81 (2026-07-30): request the cost columns only with costs:read. This page IS the cost
+  // surface, so a member without costs:read has no business here at all — but the select must
+  // not hand over the basis regardless. Does NOT close the leak; see BusinessInventory's note.
+  const canViewCosts = can('costs:read');
 
   const [result, setResult]   = useState<CostToProduceResult | null>(null);
   const [hasConfig, setHasConfig] = useState(false);
@@ -78,7 +82,7 @@ export function CostToProduce() {
       const [modRes, invRes] = await Promise.all([
         // pricing config via the gated table (Phase 2 wall) with legacy fallback
         readPricingConfig(supabase, businessId),
-        supabase.from('business_inventory').select('name, unit_cost, cost_confidence').eq('business_id', businessId),
+        supabase.from('business_inventory').select(canViewCosts ? 'name, unit_cost, cost_confidence' : 'name').eq('business_id', businessId),
       ]);
       if (cancelled) return;
 
@@ -86,7 +90,11 @@ export function CostToProduce() {
       const cfg = stored && Array.isArray(stored.locations) && stored.locations.length ? stored : null;
       setHasConfig(!!cfg);
 
-      const inv = (invRes.data ?? []) as InventoryRow[];
+      // `as unknown as` because the select string is now CONDITIONAL (#81 — cost columns only
+      // with costs:read) and PostgREST's generic cannot infer a runtime-chosen column list. The
+      // shape is still checked at the read sites below; without costs:read unit_cost/
+      // cost_confidence are simply absent, which the `?? null` guards already handle.
+      const inv = (invRes.data ?? []) as unknown as InventoryRow[];
       setInventory(inv);
       // Fold inventory rows with UNKNOWN cost into the engine's unknown count (Surface Honesty)
       const unknownInv = inv.filter(r => (r.cost_confidence ?? '').toUpperCase() === 'UNKNOWN' || r.unit_cost == null).map(r => `Inventory: ${r.name}`);
@@ -188,7 +196,8 @@ export function CostToProduce() {
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [businessId, reloadKey]);
+  }, [businessId, reloadKey, canViewCosts]);   // canViewCosts: #81 — the select's column list depends
+                                                // on it; a permission resolving after first render must re-fetch, not keep a stale shape.
 
   return (
     <div style={{ minHeight: '100vh', background: SAGE, paddingBottom: 48 }}>
