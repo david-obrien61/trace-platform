@@ -6,6 +6,29 @@
  * tests ARE that pin: single name match, size-collision → picker, ambiguous → miss, SKU exact,
  * no-match. The count + purchase paths flow through here, so a green run here guards them too.
  *
+ * ⚠️ PROVENANCE — THIS IS A CHARACTERIZATION TEST. READ BEFORE TRUSTING A GREEN RUN.
+ *   (Standing finding, 2026-07-30 test-suite audit. Flagged HERE, not only in the ledger,
+ *    because the reader who needs it is standing in this file.)
+ *
+ *   The expected values here came from THE CODE'S OWN PRIOR BEHAVIOUR — not from a decision
+ *   doc, not from a David ruling, not from a live measurement. That was the correct and
+ *   deliberate choice for a REFACTOR (the pin exists to prove the extraction moved nothing),
+ *   but it has a permanent consequence worth stating plainly:
+ *
+ *     IF THE INLINE LADDER WAS ALREADY WRONG, THIS SUITE LOCKS THE WRONG BEHAVIOUR IN AND
+ *     REPORTS GREEN FOREVER. A passing run here proves the extraction is FAITHFUL. It does
+ *     NOT prove the ladder is CORRECT. Those are different claims and only the first is tested.
+ *
+ *   This is the sharpest instance in the suite of David's question: "a test asserting 6 × 6 = 36
+ *   proves the code computes 36; it does not prove 36 is what a nursery should charge." Every
+ *   other file's expected values trace to a decision (D-47/D-49/D-39…), a live defect David
+ *   reproduced, or an external standard. This one traces to its own author's predecessor.
+ *
+ *   WHAT WOULD CLOSE IT: a ruling on what the SKU→NAME→SIZE ladder SHOULD do when it is
+ *   ambiguous — specifically whether "ambiguous → miss" is the intended refusal (it is the
+ *   D-47-shaped answer, and would then have real provenance) or merely what the inline code
+ *   happened to do. Until then, treat green here as "unchanged", never as "right".
+ *
  * Run:  node_modules/.bin/esbuild packages/shared/src/inventory/resolveAgainstCatalog.test.ts \
  *         --bundle --platform=node --format=cjs | node
  */

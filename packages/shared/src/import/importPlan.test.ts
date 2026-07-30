@@ -1,6 +1,11 @@
 /**
  * ── importPlan — row resolution → plan · CSV catalog import · 2026-07-23 ──
  *
+ * ⚠️ PROVENANCE — MIXED (standing finding, 2026-07-30 test-suite audit). Shares columnMap's
+ * shape: the fixture ROWS are real LAWNS catalog data, but the row→verdict mapping runs through
+ * the author's synonym table. Mitigated by the same thing — the plan is SHOWN before it applies,
+ * so a wrong mapping is visible to the owner rather than silently written. See columnMap.test.ts.
+ *
  * RED-first. Every fixture row is a case, and each asserts the INVARIANT of its verdict, never a
  * pinned snapshot count (the standing lesson — a pinned fixture manufactures false FAILs). The
  * synthetic catalog mirrors the fixture's named varieties so the live owner-test resolves the

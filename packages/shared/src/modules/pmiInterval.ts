@@ -17,7 +17,16 @@
 //               (confidence-honesty — don't invent a cadence we cannot derive).
 // ============================================================
 
-/** The five time-based intervals we can convert to a day cadence (Ignition donor map). */
+/** The five time-based intervals we can convert to a day cadence (Ignition donor map).
+ *
+ *  ⚠️ PROVENANCE — UNRULED DONOR VALUES (standing finding, 2026-07-30 test-suite audit).
+ *  These numbers were PORTED FROM `Ignition PredictiveKey.jsx`, not ruled on by David and not
+ *  traced to any decision doc. `monthly: 30` and `annually: 365` are APPROXIMATIONS — a month
+ *  is not 30 days and a year is not 365 — carried across because the donor used them. The tests
+ *  in pmiInterval.test.ts assert these values, so they pin the donor's convention rather than a
+ *  decision, and will report green whether or not the convention is right for PMI scheduling.
+ *  Low stakes today (PMI is a cadence hint, not money), which is why this is RECORDED rather
+ *  than fixed. It matters the moment a due-date drives a customer-visible commitment. */
 export const INTERVAL_DAYS: Record<string, number> = {
   daily: 1,
   weekly: 7,

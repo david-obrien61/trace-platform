@@ -19,13 +19,12 @@
  *   assertions below sat unread. Home an assertion with the thing it asserts (STD-011's
  *   shape applied to tests): a check filed under the wrong subject is a check nobody runs.
  *
- * 🔴 TWO ASSERTIONS ARE KNOWN-RED AND ARE **NOT** TO BE EDITED GREEN (open finding, 2026-07-30):
- *   `R1/Note A: STAFF holds orders:create and NOT orders:read` and its companion assert the
- *   PRE-RULING model. David RETIRED the Note A split on 2026-07-27 ("staff needs to view
- *   order — how else can they fill the order?", commit 03497aa) and `orders:read` is now IN
- *   STAFF_DEFAULT_BUNDLE by his ruling. The test is stale, not the code. Whether the
- *   assertion is deleted or inverted is DAVID'S RULING, not a test edit — so it stays RED
- *   and visible until he rules. See the write-back and the ledger row.
+ * ✅ RESOLVED 2026-07-30 — the two Note A assertions that arrived here RED are DELETED by
+ *   David's ruling (not inverted, not edited green). They asserted the PRE-RULING model:
+ *   the Note A split was retired at 03497aa on 2026-07-27 and `orders:read` is in
+ *   STAFF_DEFAULT_BUNDLE by that ruling. The TEST was stale, not the code — and it only
+ *   surfaced because chaining the suite into `npm run verify` made a red assertion a build
+ *   failure instead of a file nobody ran. See the deletion note at the bundle checks below.
  *
  * Run: node scripts/run-tests.mjs permissionManifest
  */
@@ -148,9 +147,13 @@ console.log('\n(4) permission manifest — the model, the dashes, the dependenci
   // — the default bundles (§5) — seed data, and they must satisfy their own rules —
   check('MANAGER bundle satisfies every dependency class', unmetDependencies(MANAGER_DEFAULT_BUNDLE).length === 0);
   check('STAFF bundle satisfies every dependency class', unmetDependencies(STAFF_DEFAULT_BUNDLE).length === 0);
-  check('R1/Note A: STAFF holds orders:create and NOT orders:read',
-    STAFF_DEFAULT_BUNDLE.includes('orders:create') && !STAFF_DEFAULT_BUNDLE.includes('orders:read'));
-  check('Note A is surfaced as deliberate, not silent', createWithoutRead(STAFF_DEFAULT_BUNDLE).includes('orders:create'));
+  // NOTE-A ASSERTIONS DELETED 2026-07-30 (David's ruling), NOT inverted. The Note A split —
+  // STAFF takes an order at the tag and cannot browse order history — was RETIRED at 03497aa
+  // on 2026-07-27 ("staff needs to view order — how else can they fill the order?").
+  // Nothing to invert TO: the split no longer exists as a concept, so an inverted check would
+  // assert the ABSENCE of a thing rather than a behaviour. STAFF's actual read scope is asserted
+  // by 'STAFF bundle satisfies every dependency class' directly above and by the two negative
+  // bundle checks directly below. `createWithoutRead` keeps its own coverage at R1-inverse.
   check('no bundle seeds a confidential read',
     [...MANAGER_DEFAULT_BUNDLE, ...STAFF_DEFAULT_BUNDLE]
       .every((p) => PERMISSION_MANIFEST[p]?.sensitivity !== 'confidential'));

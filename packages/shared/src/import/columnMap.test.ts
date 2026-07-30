@@ -4,6 +4,14 @@
  * RED-first. Every assertion is the fixture's own headers, so the owner-test cards (mapping
  * rung visible, L3 never auto-applies, Wholesale flagged, overrides) have a proven engine.
  *
+ * ⚠️ PROVENANCE — MIXED (standing finding, 2026-07-30 test-suite audit). The fixture VALUES are
+ * real (LAWNS catalog strings — DISC- SKUs, Basham's Party Pink, 'Sierra' Mexican Red Oak), so
+ * the parse cases have genuine provenance. The SYNONYM TABLE they resolve through — which header
+ * spelling means `sku` vs `size` vs `name` — is the AUTHOR'S, not a ruling and not a grower's
+ * stated vocabulary. A wrong synonym is locked in green here. It surfaces safely in practice
+ * because L3 never auto-applies and the mapping rung is shown to the owner before import, which
+ * is why this is recorded rather than fixed: the UI is the real gate, and it is honest.
+ *
  * Run:  node_modules/.bin/esbuild packages/shared/src/import/columnMap.test.ts \
  *         --bundle --platform=node --format=cjs | node
  */

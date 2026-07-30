@@ -68,6 +68,33 @@ const TRACE_TERRENCE = { name: 'TERRENCE OBRIEN', email: 'david_obrien2016@outlo
   ok(/different person with the same name/i.test(v.reason), 'surface reason is owner-actionable');
 }
 
+// ── TWO records concur on BOTH fields → SURFACE, never an arbitrary pick ──────────────
+// ADDED 2026-07-30, closing a LIVE MUTANT. Mutation testing found this branch was the one
+// path in the file nothing constructed: replacing its `surface` with `link: concur[0].id`
+// left the suite at 22 passed / 0 failed. The branch's own source comment reads "that
+// arbitrary [0] pick IS the scar" — so the code written to prevent D-47's scar was the one
+// piece of it no test proved.
+//
+// WHY IT IS WORTH A TEST despite being improbable: it is improbable only because QBO enforces
+// DisplayName UNIQUE. "An external system's constraint will hold" is EXACTLY the assumption
+// D-47 exists to reject — the scar happened because we trusted QBO's email field to mean
+// identity. A constraint we do not own is not an invariant we may rely on; duplicates arrive
+// through merges, imports, and sandbox-vs-production drift.
+{
+  const dupA: QboCustomerCandidate = { id: '201', displayName: 'TERRENCE OBRIEN', email: 'david_obrien2016@outlook.com' };
+  const dupB: QboCustomerCandidate = { id: '202', displayName: "Terrence O'Brien", email: 'DAVID_OBRIEN2016@Outlook.com' };
+  const v = resolveQboCustomerMatch(TRACE_TERRENCE, [dupA, dupB]);
+  ok(v.action === 'surface', 'two records concur on BOTH email AND name → SURFACE, never link');
+  ok(v.qbCustomerId === undefined, 'a multi-concur surface hands back NO qb id — nothing to mis-bill');
+  ok(v.emailHits.length === 2 && v.nameHits.length === 2,
+    'both records are reported as hits on both fields — the ambiguity is OBSERVABLE, not swallowed');
+  ok(/will not guess/i.test(v.reason), 'the refusal says WHY, in owner-actionable prose');
+  ok(/201/.test(v.reason) && /202/.test(v.reason), 'the reason names BOTH candidates so the owner can go merge them');
+  // Order must not decide it — the same defect shape as the original candidates[0] bug.
+  const flipped = resolveQboCustomerMatch(TRACE_TERRENCE, [dupB, dupA]);
+  ok(flipped.action === 'surface', 'candidate ORDER does not turn a multi-concur into a link');
+}
+
 // ── split case: email hits record A, name hits record B → SURFACE ─────────────────────
 {
   const nameTwin: QboCustomerCandidate = { id: '77', displayName: 'TERRENCE OBRIEN', email: 'someone.else@example.com' };

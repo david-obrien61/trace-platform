@@ -1080,14 +1080,6 @@ export const MANAGER_DEFAULT_BUNDLE: string[] = [
 ];
 
 /**
- * STAFF — the small subset (spec §5).
- * ⚠️ STAFF DELIBERATELY DOES NOT HOLD `orders:read` (R1). This is the Note A split: a
- * seasonal hire can TAKE an order at the tag and cannot browse the business's order
- * history — customer names, totals, discounts. Rule 1 permits it because create never
- * requires read. The Roles page surfaces it as a deliberate choice, and a negative
- * owner-test card proves it stays true.
- */
-/**
  * STAFF — THE FULFILMENT SET (David's ruling 2026-07-27). Previously the two strings
  * orders-create and inventory-read, written when R1's Note A still withheld the order read.
  * David retired that case with one question: "staff needs to view order — how else can they fill

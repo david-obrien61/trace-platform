@@ -1,6 +1,13 @@
 /**
  * ── parseCsv — RFC-4180 reader · CSV catalog import · 2026-07-23 ──
  *
+ * ✅ PROVENANCE — EXTERNAL STANDARD (standing finding, 2026-07-30 test-suite audit; recorded as
+ * the ACCEPTABLE case of the four). The expected values here trace to RFC-4180, not to a TRACE
+ * decision and not to a David ruling. That is the one form of "the author decided" that carries
+ * real authority: the spec is the authority, and §6 r16 (industry-standard-first) is satisfied
+ * by building to it. Noted only so the audit's four author-sourced files are each accounted for
+ * — no action owed. If a grower's real export ever violates RFC-4180, THAT is a decision.
+ *
  * RED-first (STD-002): every messy case the grower fixture deliberately carries is asserted
  * here as an INVARIANT of the parse, not a pinned snapshot count — quoted commas, embedded
  * newlines, escaped quotes, CRLF/CR/LF, a BOM, blank lines, padded short rows.
