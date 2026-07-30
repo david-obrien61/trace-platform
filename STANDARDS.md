@@ -1,7 +1,7 @@
 # STANDARDS.md — TRACE Engineering Standards
-# Version: 2.8
+# Version: 2.9
 # Created: 2026-06-04
-# Last updated: 2026-07-27 (STD-021 + STD-022 added + ACTIVATED — the EVIDENCE pair. STD-021: a NEGATIVE claim names its corpus and its method or it is not a finding. STD-022: a verifier assertion ships with a PLANTED-BAD probe it must reject in the same pass. Scars: three negative claims asserted with unstated or absent corpora (§2's legacy inventory built from code and never checked against data; `manage_orders` "gates nothing" twice, from scans that never read the api layer; "no migration wrote the floor drift", asserted with no scan at all), and THREE FALSE GREENS from verifier checks that were not running — two of them reported PASS and one was cited in a close-out commit as proof of correctness. David's ruling 2026-07-27.)
+# Last updated: 2026-07-30 (STD-025 added — a test asserts a CAPABILITY, never a CONFIGURATION; scar: the Note A pair, where the TEST asserted the contents of STAFF_DEFAULT_BUNDLE and went red on David's ruling, while the owner-test CARD asserted that the split is expressible-and-enforced and survived the same ruling untouched. David's ruling 2026-07-30.) PRIOR: 2026-07-27 (STD-021 + STD-022 added + ACTIVATED — the EVIDENCE pair. STD-021: a NEGATIVE claim names its corpus and its method or it is not a finding. STD-022: a verifier assertion ships with a PLANTED-BAD probe it must reject in the same pass. Scars: three negative claims asserted with unstated or absent corpora (§2's legacy inventory built from code and never checked against data; `manage_orders` "gates nothing" twice, from scans that never read the api layer; "no migration wrote the floor drift", asserted with no scan at all), and THREE FALSE GREENS from verifier checks that were not running — two of them reported PASS and one was cited in a close-out commit as proof of correctness. David's ruling 2026-07-27.)
 # Owner: David O'Brien / TRACE Enterprises
 
 > Every standard on this list traces to a real failure that bit us.
@@ -1490,3 +1490,51 @@ way `ALLOWED_DIVERGENCE` carries `/orders` and `/costs`.
 planted-bad probe) · **STD-023** (a guard the write does not depend on is advice, not a gate) ·
 STD-024 (a cap is proven against its own motivating defect). All four answer one question in
 different places: *is this check actually doing anything?*
+---
+
+### STD-025 — A TEST ASSERTS A CAPABILITY, NEVER A CONFIGURATION
+
+**Ruled by David 2026-07-30.** Scar: the Note A pair.
+
+**The rule.** A test asserts what the platform CAN DO and DOES ENFORCE. It never asserts what a
+tenant, a role, or a seed array HAPPENS TO CONTAIN. A capability is a property of the system; a
+configuration is a decision the owner is entitled to change. **When the owner exercises that
+entitlement, a test scoped to configuration goes red for no defect — and the only available fix is
+to edit the test, which trains everyone to edit tests when they go red.** That is the habit this
+standard exists to prevent.
+
+**The scar, and it is unusually clean because the two artifacts were written for the SAME rule and
+only one survived.** R1's "Note A" split said a seasonal hire can TAKE an order and not browse
+order history.
+
+- **The TEST asserted a CONFIGURATION:** `STAFF_DEFAULT_BUNDLE.includes('orders:create') &&
+  !STAFF_DEFAULT_BUNDLE.includes('orders:read')` — a claim about the contents of a seed array.
+  David retired the split on 2026-07-27 (`03497aa`: *"staff needs to view order — how else can
+  they fill the order?"*). **The assertion went red on a ruling, not a regression.** It was
+  DELETED, not inverted — there was nothing to invert to, because the split no longer existed as a
+  concept and an inverted check would assert the ABSENCE of a thing rather than a behaviour.
+- **The CARD asserted a CAPABILITY:** owner-test R-2 claims the split is *expressible and
+  enforced* — that `orders:create` without `orders:read` is a grantable, working configuration.
+  **It survived the ruling untouched,** and says so in its own SETUP block: *"This card asserts a
+  capability of the PLATFORM — that the split is expressible and enforced — not a claim about how
+  LAWNS is configured today."*
+
+One rule, two artifacts, one ruling. The card was still true afterwards. The test was not.
+
+**The test.** Ask of every assertion: *if David rules differently tomorrow, does this go red?* If
+yes, and no code would have changed, it is scoped to configuration — rescope it or delete it. The
+capability form is almost always available and is usually the stronger claim: not *"STAFF holds
+X"* but *"a role holding X and not Y behaves thus, and the platform enforces it."*
+
+**Binding scope.** Every DB-facing test written against the test inventory (2026-07-30) is scoped
+this way, and **each states in its own header which CAPABILITY it asserts** — the header is the
+mechanism, because a scope that lives only in the author's intent is not checkable by the next
+reader. Unenforced by tooling today: this is a review-read rule, and per the architectural
+standard's own convention it is **a placeholder for a cap**, not a finished control.
+
+**Family:** STD-021 (a negative claim names its corpus) · STD-024 (a cap is proven against its
+motivating defect) · **STD-025**. All three are about an assertion meaning what it appears to
+mean. STD-025 is the one that governs whether an assertion stays true over TIME, and its
+companion finding is recorded the same day: **the alias layer can make a test pass for the wrong
+reason** (`verify-financial-wall-rls-auto.mjs` granted legacy vocabulary through the
+resource:action flip, asserting the alias layer while appearing to assert the permission).
