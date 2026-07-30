@@ -128,15 +128,36 @@ export async function withMemberSession({ businessId, role = 'STAFF', permission
     const { error: sErr } = await client.auth.signInWithPassword({ email, password });
     if (sErr) throw new Error(`member sign-in: ${sErr.message}`);
 
+    // A8 applies HERE: a permission re-grant that silently matched zero rows would leave the
+    // caller asserting against the OLD permission set while believing it changed — a green run
+    // proving nothing. Check the affected row, not just the error.
     const setPermissions = async (next) => {
-      const { error } = await admin.from('business_members').update({ permissions: next }).eq('id', memberId);
+      const { data, error } = await admin.from('business_members')
+        .update({ permissions: next }).eq('id', memberId).select('id');
       if (error) throw new Error(`setPermissions: ${error.message}`);
+      if ((data ?? []).length !== 1) {
+        throw new Error(`setPermissions affected ${(data ?? []).length} rows, expected 1 — the grant did not land, so every assertion after this point would be meaningless.`);
+      }
     };
 
     return await fn({ client, userId, memberId, businessId, admin, setPermissions });
   } finally {
-    if (memberId) await admin.from('business_members').delete().eq('id', memberId);
-    if (userId) await admin.auth.admin.deleteUser(userId);
+    // A8 APPLIES TO TEARDOWN — this is the defect that cost an hour on 2026-07-30 (tech-debt #79).
+    // An unchecked `.delete()` here refused every time and left residue that corrupted the NEXT
+    // run and read as a platform defect. We do NOT throw from a `finally` (it would mask the real
+    // failure), so residue is reported LOUDLY instead: an unremoved principal is a fact the next
+    // run needs, and silence is what made it expensive.
+    if (memberId) {
+      const { data, error } = await admin.from('business_members').delete().eq('id', memberId).select('id');
+      if (error || (data ?? []).length !== 1) {
+        console.error(`⚠️  TEARDOWN INCOMPLETE — business_members ${memberId} NOT removed`
+          + `${error ? `: ${error.message}` : ' (0 rows affected)'}. This row will outlive the test.`);
+      }
+    }
+    if (userId) {
+      const { error } = await admin.auth.admin.deleteUser(userId);
+      if (error) console.error(`⚠️  TEARDOWN INCOMPLETE — auth user ${userId} NOT removed: ${error.message}`);
+    }
   }
 }
 
@@ -167,7 +188,15 @@ export async function withThrowawayCustomer({ businessId, fields = {} }, fn) {
     customerId = data.id;
     return await fn(data);
   } finally {
-    if (customerId) await admin.from('customers').delete().eq('id', customerId);
+    // A8 on teardown — see withMemberSession's finally for why this is checked and why it reports
+    // rather than throws. A throwaway customer that survives is a real row in a real tenant.
+    if (customerId) {
+      const { data: gone, error } = await admin.from('customers').delete().eq('id', customerId).select('id');
+      if (error || (gone ?? []).length !== 1) {
+        console.error(`⚠️  TEARDOWN INCOMPLETE — throwaway customer ${customerId} NOT removed`
+          + `${error ? `: ${error.message}` : ' (0 rows affected)'}. It is live data now — remove it by hand.`);
+      }
+    }
   }
 }
 

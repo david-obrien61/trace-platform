@@ -130,10 +130,25 @@ CREATE TABLE IF NOT EXISTS business_inventory_ledger (
   id             uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id    uuid        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,  -- tenant scope (AC-3)
 
-  -- NULLABLE + ON DELETE SET NULL, deliberately: HISTORY OUTLIVES THE ROW. The ruling is
-  -- that a lot is never hard-deleted (it is tombstoned — §7e), so this should stay populated
-  -- in normal operation. SET NULL is the belt for the rare true removal (e.g. a business_id
-  -- cascade elsewhere) — the movement fact survives even when its lot does not.
+  -- NULLABLE, deliberately: HISTORY OUTLIVES THE ROW. The ruling is that a lot is never
+  -- hard-deleted (it is tombstoned — §7e), so this stays populated in normal operation.
+  --
+  -- ⚠️ CORRECTED 2026-07-30 — THE `ON DELETE SET NULL` CLAUSE BELOW IS INERT. DO NOT RELY ON IT.
+  -- This comment previously called SET NULL "the belt for the rare true removal (e.g. a
+  -- business_id cascade elsewhere)". THAT BELT HAS NEVER WORKED, and the example it cited is
+  -- exactly the case that fails. SET NULL is an UPDATE on this table, and §2's trigger is
+  -- `BEFORE UPDATE OR DELETE … RAISE EXCEPTION` with no exemption — a referential-integrity
+  -- cascade fires row triggers like any other write. So:
+  --   · DELETE on business_inventory  → SET NULL here → REFUSED (observed live: "business_
+  --     inventory_ledger is append-only: UPDATE is not permitted"). A lot with history is
+  --     UNDELETABLE.
+  --   · DELETE on businesses → CASCADE deletes these rows (business_id, below) → the SAME
+  --     trigger → REFUSED. A TENANT WITH INVENTORY HISTORY IS UNDELETABLE, which is why this
+  --     is not cosmetic: it blocks the OP-12 reference-environment teardown.
+  -- Two individually-correct mechanisms that were never exercised together until an RLS test
+  -- tried to clean up after itself. Tracked as tech-debt #79 — the ruling there decides whether
+  -- to accept this (tombstone is the only removal) or exempt the cascade. Until then, treat
+  -- removal as TOMBSTONE-ONLY and this clause as decoration.
   inventory_id   uuid        REFERENCES business_inventory(id) ON DELETE SET NULL,
 
   -- SIGNED: + is stock IN (receive, found, restore, opening balance), - is stock OUT

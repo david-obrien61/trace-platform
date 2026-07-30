@@ -1581,3 +1581,56 @@ line kept silently is a lie about coverage.** Mark it, keep it, do not count it.
 against its own motivating defect and shown to fail) · **STD-026** (the same demand, one level down
 — per assertion). Together: a check nobody has seen fail is not known to check anything, at every
 granularity from the suite to the single `ok()`.
+
+---
+
+## THE SELF-CATCH TALLY — five instances, all by the author (2026-07-29 → 2026-07-30)
+
+Recorded in one place because the pattern, not any single instance, is the finding. Every one was
+committed or nearly committed by the person who had just written or just read the rule it broke.
+
+1. **E2 recorded a PASS that was not one** — through a loophole in its own drafting ("every field
+   GROUP", which let a create-vs-edit MODE split through). Author scored their own standard.
+2. **A4 was scored from a read** — and the cap contradicted the audit's own ranking the same day.
+3. **Two unused exports shipped into the very file whose header forbids them.** Knip caught it.
+4. **Phase B re-implemented a coercion beside its original** — covered by §6 r8, a long-standing
+   rule read in that same session. It survived the build, the review, and the commit message.
+   **Knip caught it. Not the rule.**
+5. 🔴 **THE SHARPEST — an unchecked write inside the test written about unchecked writes**
+   (2026-07-30). `scripts/rls/inventory-ledger-replay.rls.mjs` called `.delete()` in its `finally`
+   and never checked the result. The delete was refused every time (tech-debt #79), so four
+   undeletable lots accumulated silently — one carrying drift planted by a mutation probe, which
+   then **failed the next run of the very invariant the file exists to assert** and read as a
+   platform defect rather than as litter.
+
+**Why #5 closes the argument rather than adding to it.** The file's own purpose is A8: *a write
+that affects zero rows is a failure and says so.* Its header argues for A8. Its assertions prove
+A8. And its teardown violated A8, in the same file, in the same sitting. This is #4's lesson at
+maximum contrast: **knowing a rule — even writing the code that enforces it, that hour — does not
+make you apply it to your own adjacent code.**
+
+**So the conclusion is no longer "an unenforced rule will eventually be broken." It is: an
+unenforced rule WILL be broken, by the author, within the hour, in the file about the rule.**
+
+**MADE MECHANICAL, same day.** `verify-zero-row-writes.mjs`'s tooling exemption was narrowed:
+`scripts/lib/` and `scripts/rls/` are now ASSERTED, not merely reported. The original exemption's
+reason — *"a seed that no-ops is not a lie to a user"* — is sound for seeds and false for teardown,
+because **a teardown that no-ops leaves residue that corrupts the next run.** On its first run after
+the narrowing the cap immediately found **three more instances of the same defect in the same
+library** (`memberSession.mjs` — both teardown deletes and the permission re-grant), none of which
+any human had noticed. Probes Z12/Z13 fail if the narrowing is removed (STD-022).
+
+## THE COUNTER-EXAMPLE — STD-025 bit BEFORE it shipped
+
+Worth recording beside the five, because it is the first rule this week that caught something
+**before** the commit rather than after.
+
+**STD-025** (*a test asserts a capability, never a configuration*) was written on 2026-07-30 ahead
+of the I10 build, deliberately, so it would govern rather than be applied retroactively. Within the
+hour, the first draft of I10 asserted `qty === 7` on a lot the test reuses across runs — a
+CONFIGURATION claim that is false on the second run. **The standard caught the author's own code
+while it was still being written.**
+
+The difference from the five above is the only variable that changed: **the rule existed, in
+writing, before the code it governs was authored.** That is the argument for writing the standard
+first — not as ceremony, but because it is the only intervention in this tally that worked.

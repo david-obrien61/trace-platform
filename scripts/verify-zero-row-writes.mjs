@@ -37,7 +37,24 @@ const SCAN_ROOTS = [
 const EXCLUDE_DIRS = new Set(['node_modules', 'dist', 'build', '.git', 'fixtures']);
 const EXCLUDE_FILE = /(\.(test|spec)\.[tj]sx?|verify-zero-row-writes\.mjs)$/;
 const SOURCE_EXT   = /\.(ts|tsx|js|jsx|mjs)$/;
-const isTooling = p => p.startsWith('scripts/');
+// TOOLING EXEMPTION, NARROWED 2026-07-30 — and the narrowing is a paid-for correction.
+//
+// The original rule was "all of `scripts/` is tooling", on the reason "a seed that no-ops is not a
+// lie to a user." That reason is SOUND FOR SEEDS AND VERIFIERS and it still holds for them. It does
+// NOT hold for TEST INFRASTRUCTURE, and the difference cost a real hour:
+//
+//   `scripts/rls/inventory-ledger-replay.rls.mjs` called `.delete()` in its `finally` WITHOUT
+//   CHECKING THE RESULT. The delete was refused every time (a lot with ledger rows cannot be
+//   hard-deleted — tech-debt #79), so four undeletable rows accumulated silently, one of them
+//   carrying drift planted by a mutation probe. That row then FAILED THE NEXT RUN of the very
+//   invariant the file exists to assert, and read as a platform defect rather than as litter.
+//
+// A seed that no-ops leaves the world unchanged. A TEARDOWN that no-ops leaves residue that
+// CORRUPTS THE NEXT RUN — and a test whose result depends on the previous run's leftovers is a
+// test that reports on the wrong thing (the same class as the empty-`labor_resource_wages` gate).
+// So `scripts/lib/` and `scripts/rls/` are ASSERTED; the rest of `scripts/` stays reported-only.
+const isTestInfra = p => p.startsWith('scripts/rls/') || p.startsWith('scripts/lib/');
+const isTooling = p => p.startsWith('scripts/') && !isTestInfra(p);
 
 // A mutation that is DELIBERATELY unchecked, with its reason. Same discipline as the write-path cap:
 // declaring is a decision on the record, not a convenience the builder grants itself.
@@ -136,6 +153,18 @@ function runProbes() {
       { baseline: ['packages/x/a.ts:1'] }).fixed.length));
   ck('Z11 scripts/ tooling is reported, never asserted', '0',
     String(judge(analyze([{ path: 'scripts/seed.mjs', content: `await supabase.from('t').update(p);` }]).sites,
+      { baseline: [] }).fresh.length));
+  // Z12/Z13 — the 2026-07-30 narrowing. These MUST fail if `isTestInfra` is removed; that is the
+  // planted-bad probe STD-022 requires of the extension, and it is the exact shape of the defect:
+  // an unchecked teardown `.delete()` inside test infrastructure.
+  ck('Z12 an unchecked teardown in scripts/rls/ IS asserted (the #79 defect)', '1',
+    String(judge(analyze([{ path: 'scripts/rls/x.rls.mjs', content: `await admin.from('t').delete().eq('id', id);` }]).sites,
+      { baseline: [] }).fresh.length));
+  ck('Z13 …and in scripts/lib/ too (withThrowawayCustomer lives there)', '1',
+    String(judge(analyze([{ path: 'scripts/lib/memberSession.mjs', content: `await admin.from('t').delete().eq('id', id);` }]).sites,
+      { baseline: [] }).fresh.length));
+  ck('Z14 a CHECKED teardown in test infra passes', '0',
+    String(judge(analyze([{ path: 'scripts/rls/x.rls.mjs', content: `const { data } = await admin.from('t').delete().eq('id', id).select('id').single();` }]).sites,
       { baseline: [] }).fresh.length));
   return R;
 }
