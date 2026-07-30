@@ -72,7 +72,13 @@ await withThrowawayCustomer({ businessId }, async (customer) => {
       ok((res2.data ?? []).length === 1,
         'the UPDATE now affects EXACTLY ONE ROW',
         `affected=${(res2.data ?? []).length}${res2.error ? ' err=' + res2.error.message : ''}`);
-      ok(res2.error == null, 'no error on the permitted write');
+      // 🔴 VACUOUS — DOCUMENTATION, NOT COVERAGE (STD-026). Proven vacuous by mutation on
+      // 2026-07-30: withholding customers:update from this principal fired 4 assertions and this
+      // one STAYED GREEN, because a DENIED write also returns no error. It cannot distinguish the
+      // two worlds it appears to separate. KEPT because it tells the next reader WHY the
+      // affected-row checks above and below exist — the refusal here is silent, so counting rows
+      // is the only recourse (A8). DO NOT COUNT IT AS COVERAGE.
+      ok(res2.error == null, 'no error on the permitted write (vacuous — see STD-026)');
       ok(res2.data?.[0]?.phone === NEW_PHONE,
         'the returned row carries the NEW phone',
         `phone="${res2.data?.[0]?.phone}"`);

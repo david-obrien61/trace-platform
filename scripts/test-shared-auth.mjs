@@ -16,6 +16,15 @@
  * Exit 0 = all steps passed. Exit 1 = failure (see output for which step).
  */
 
+import { refuseRetired } from './lib/retiredScript.mjs';
+refuseRetired({
+  script:       'test-shared-auth.mjs',
+  retiredOn:    "2026-07-30 (David's ruling — same historical class as the two writers)",
+  supersededBy: 'scripts/rls/*.rls.mjs via scripts/lib/memberSession.mjs (npm run verify:rls). The invite/accept flow it covers is unchanged, but its permission arrays are pre-flip.',
+  wrote:        'business_members / invite rows carrying LEGACY permission arrays (view_orders, manage_deliveries) into a live tenant.',
+  why:          'It exercised the invite-accept-verify flow against the pre-flip vocabulary and asserts with the service key.',
+});
+
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';

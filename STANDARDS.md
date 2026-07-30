@@ -1,7 +1,7 @@
 # STANDARDS.md — TRACE Engineering Standards
-# Version: 2.9
+# Version: 3.0
 # Created: 2026-06-04
-# Last updated: 2026-07-30 (STD-025 added — a test asserts a CAPABILITY, never a CONFIGURATION; scar: the Note A pair, where the TEST asserted the contents of STAFF_DEFAULT_BUNDLE and went red on David's ruling, while the owner-test CARD asserted that the split is expressible-and-enforced and survived the same ruling untouched. David's ruling 2026-07-30.) PRIOR: 2026-07-27 (STD-021 + STD-022 added + ACTIVATED — the EVIDENCE pair. STD-021: a NEGATIVE claim names its corpus and its method or it is not a finding. STD-022: a verifier assertion ships with a PLANTED-BAD probe it must reject in the same pass. Scars: three negative claims asserted with unstated or absent corpora (§2's legacy inventory built from code and never checked against data; `manage_orders` "gates nothing" twice, from scans that never read the api layer; "no migration wrote the floor drift", asserted with no scan at all), and THREE FALSE GREENS from verifier checks that were not running — two of them reported PASS and one was cited in a close-out commit as proof of correctness. David's ruling 2026-07-27.)
+# Last updated: 2026-07-30 (STD-025 + STD-026 added. STD-026: an assertion that holds under its OWN mutation is documentation, not a check — scar: 'no error on the permitted write' stayed green while the permission was withheld, because a DENIED write also returns no error. Keep it, mark it, never count it as coverage. PRIOR SAME DAY: STD-025 added — a test asserts a CAPABILITY, never a CONFIGURATION; scar: the Note A pair, where the TEST asserted the contents of STAFF_DEFAULT_BUNDLE and went red on David's ruling, while the owner-test CARD asserted that the split is expressible-and-enforced and survived the same ruling untouched. David's ruling 2026-07-30.) PRIOR: 2026-07-27 (STD-021 + STD-022 added + ACTIVATED — the EVIDENCE pair. STD-021: a NEGATIVE claim names its corpus and its method or it is not a finding. STD-022: a verifier assertion ships with a PLANTED-BAD probe it must reject in the same pass. Scars: three negative claims asserted with unstated or absent corpora (§2's legacy inventory built from code and never checked against data; `manage_orders` "gates nothing" twice, from scans that never read the api layer; "no migration wrote the floor drift", asserted with no scan at all), and THREE FALSE GREENS from verifier checks that were not running — two of them reported PASS and one was cited in a close-out commit as proof of correctness. David's ruling 2026-07-27.)
 # Owner: David O'Brien / TRACE Enterprises
 
 > Every standard on this list traces to a real failure that bit us.
@@ -1538,3 +1538,46 @@ mean. STD-025 is the one that governs whether an assertion stays true over TIME,
 companion finding is recorded the same day: **the alias layer can make a test pass for the wrong
 reason** (`verify-financial-wall-rls-auto.mjs` granted legacy vocabulary through the
 resource:action flip, asserting the alias layer while appearing to assert the permission).
+
+---
+
+### STD-026 — AN ASSERTION THAT HOLDS UNDER ITS OWN MUTATION IS DOCUMENTATION, NOT A CHECK
+
+**Ruled by David 2026-07-30.** STD-022 pointed at INDIVIDUAL ASSERTIONS rather than whole detectors.
+
+**The rule.** Break the thing an assertion claims to test. If the assertion stays GREEN, it is not
+testing that thing. Keep it if it EXPLAINS something to a reader — but **never count it as
+coverage**, and say in the file that it does not count. A suite's assertion count is a claim about
+how much is guarded; a vacuous assertion inflates that claim while guarding nothing, which is
+strictly worse than having no assertion at all, because absence is visible and a false green is not.
+
+**The scar (`scripts/rls/customer-write-permission.rls.mjs`, the day it was written).** The card 7
+proof asserts a member without `customers:update` cannot write. Withholding the permission from the
+GRANTED principal fired 4 of 6 positive-side assertions — and one stayed green:
+
+```
+✅ no error on the permitted write
+```
+
+**Because a DENIED write also returns no error.** That is the entire defect card 7 exists for:
+PostgREST answers a refused UPDATE with success and an empty row set. So the assertion is true in
+both worlds it was meant to distinguish, and could never have failed. It reads like a check and is
+a comment. The assertions that DID fire are the affected-row counts — which is precisely the point
+**A8** makes, and the reason A8 has to be enforced in application code rather than trusted to the
+transport.
+
+**The test, and it is cheap.** When writing an assertion, ask: *what would I break to make this go
+red?* If the answer is "nothing I can name," or "only something a neighbouring assertion already
+covers," it is documentation. Under a mutation run (**STD-024**), the assertions that stay green
+are the vacuous ones — mutation testing surfaces this class automatically and for free, which is
+the argument for running one on every new check.
+
+**Deliberately NOT "delete it."** The `no error on the permitted write` line is retained, because it
+tells the next reader *why* the affected-row check exists — a refusal here is silent, so counting
+rows is the only recourse. **A vacuous assertion kept WITH ITS VACUITY STATED is useful; the same
+line kept silently is a lie about coverage.** Mark it, keep it, do not count it.
+
+**Family:** STD-022 (a verifier ships a planted-bad probe it must reject) · STD-024 (a cap is run
+against its own motivating defect and shown to fail) · **STD-026** (the same demand, one level down
+— per assertion). Together: a check nobody has seen fail is not known to check anything, at every
+granularity from the suite to the single `ok()`.

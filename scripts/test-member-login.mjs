@@ -20,6 +20,15 @@
  * Exit 0 = all steps passed. Exit 1 = failure.
  */
 
+import { refuseRetired } from './lib/retiredScript.mjs';
+refuseRetired({
+  script:       'test-member-login.mjs',
+  retiredOn:    "2026-07-30 (David's ruling — same historical class as the two writers)",
+  supersededBy: 'scripts/rls/*.rls.mjs via scripts/lib/memberSession.mjs (npm run verify:rls) — which signs in with the ANON key under REAL RLS instead of asserting with the service key.',
+  wrote:        'business_members rows carrying LEGACY permission arrays (view_dashboard, qr_checkout, view_orders, manage_customers, manage_deliveries, manage_settings, view_reports) into a live tenant.',
+  why:          'It proved the BusinessProvider member-path fix in 2026-06 against the pre-flip vocabulary, and it asserts with the service key, so it never tested RLS in the first place.',
+});
+
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';

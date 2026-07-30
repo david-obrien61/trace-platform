@@ -20,6 +20,15 @@
  *   node scripts/backfill-financial-permissions.mjs --apply    # writes the union
  */
 
+import { refuseRetired } from './lib/retiredScript.mjs';
+refuseRetired({
+  script:       'backfill-financial-permissions.mjs',
+  retiredOn:    "2026-07-30 (David's ruling)",
+  supersededBy: 'supabase/migrations/20260727_rbac_resource_action_flip.sql — the resource:action flip. The four strings this grants were RETIRED there; the live equivalents are wages:read, pricing_recipe:read, costs:read, margin:read.',
+  wrote:        'LEGACY permission arrays (view_costs / view_pricing_config / view_wages / view_margin) onto every live business_members row. Re-running would inject retired strings into a live tenant — the #163 phantom-string defect.',
+  why:          'Its Phase 1 backfill COMPLETED on 2026-06-21 and the vocabulary it writes no longer exists.',
+});
+
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';

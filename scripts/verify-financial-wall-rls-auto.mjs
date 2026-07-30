@@ -18,19 +18,23 @@
  *   node scripts/verify-financial-wall-rls-auto.mjs
  * Requires packages/cultivar-os/.env.local (SUPABASE_URL + SERVICE_KEY + ANON_KEY).
  *
- * 🔴 KNOWN RED — 5 pass / 1 fail, AND IT IS A DATA CONDITION, NOT A PERMISSION DEFECT (2026-07-30).
- *   `labor_resource_wages` is EMPTY platform-wide (zero rows, every business — probed with the
- *   service key), so the ALLOW half of the wages assertion ("rows visible after wages:read
- *   granted") cannot pass: there are no rows to become visible. The DENY half is genuinely proven,
- *   and pricing proves BOTH directions.
- *   VERIFIED NOT a vocabulary artifact: the pre-fix legacy version was run on the same tenant and
- *   fails IDENTICALLY, 5/1. The alias layer was therefore NOT covering a permission gap here.
- *   WHAT IT DOES EXPOSE: this gate has been failing for an unknown period and nobody knew, because
- *   nothing runs it. That is the third instance this week of an unwired check rotting — the same
- *   shape as the 24 unchained tests and the stale Note A assertions.
- *   TO CLOSE: seed a labor_resource_wages row for the test business, or scope the assertion to
- *   "no rows leak when denied" and drop the allow-half for wages. DAVID'S CALL — it is a question
- *   about what the demo tenant should contain, not a test edit.
+ * ✅ 6 PASS / 0 FAIL as of 2026-07-30 — both directions, on resource:action vocabulary.
+ *
+ * IT WAS 5/1 FOR AN UNKNOWN PERIOD AND NOBODY KNEW, and the cause is worth keeping:
+ *   `labor_resources` AND `labor_resource_wages` were BOTH EMPTY PLATFORM-WIDE (probed with the
+ *   service key, every business), so the ALLOW half of the wages assertion could not pass — there
+ *   were no rows to become visible. The DENY half was genuinely proven throughout; pricing proved
+ *   both. VERIFIED NOT a vocabulary artifact: the pre-fix legacy version was run on the same tenant
+ *   and failed IDENTICALLY 5/1, so the alias layer was NOT covering a permission gap here.
+ *   David ruled: SEED THE ROW, do not drop the assertion — the emptiness was itself the finding,
+ *   because everything downstream of wages was unexercised. → `scripts/seed-labor-wage-reference.mjs`.
+ *
+ * THE CLASS, recorded because it is the third instance this week (STD-026's neighbour):
+ *   A TEST THAT NEEDS DATA THE TENANT DOES NOT HAVE PASSES OR FAILS FOR REASONS UNRELATED TO ITS
+ *   SUBJECT. Its red said "the wall is broken"; the truth was "there is no payroll data anywhere."
+ *   A gate whose result is decided by seed data is not measuring the thing it names — and because
+ *   nothing ran it, the wrong signal sat unread. Siblings: the 24 unchained unit tests, and the
+ *   stale Note A assertions.
  */
 
 import { createClient } from '@supabase/supabase-js';

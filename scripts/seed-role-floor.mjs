@@ -24,6 +24,15 @@
  *         node scripts/seed-role-floor.mjs --verify   # read-only readback, no writes
  *         node scripts/seed-role-floor.mjs --clear     # remove the floor (reversal)
  */
+import { refuseRetired } from './lib/retiredScript.mjs';
+refuseRetired({
+  script:       'seed-role-floor.mjs',
+  retiredOn:    "2026-07-30 (David's ruling)",
+  supersededBy: 'supabase/migrations/20260727_align_floor_to_bundles.sql (+ 20260727b assets retirement) — the floor is now seeded from the MANAGER/STAFF bundles in resource:action vocabulary. Catalog-verified post-state: floor MANAGER 25, zero assets:* on any surface.',
+  wrote:        'LEGACY role_definitions floor rows (view_orders, manage_orders, view_costs, view_wages, override_maintenance, ...) with business_id IS NULL, is_system=true — the SHARED anchor every tenant resolves against. Re-running would overwrite the aligned floor with retired strings.',
+  why:          'Its one-time floor seed COMPLETED and the floor has since been realigned twice by migration.',
+});
+
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 
