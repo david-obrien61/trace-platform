@@ -272,3 +272,34 @@ COMMIT;
 --   SELECT public.has_permission_for('<BUSINESS UUID>', '<SECOND PERSON auth.users.id>', 'costs:read')
 --            AS second_owner_has_costs;
 -- ROLLBACK;
+
+-- ── V6 — 🔴 THE LIVE owner_id POLICY COUNT (run BEFORE touching any RLS policy) ─────────────────
+-- WHY THIS QUERY EXISTS. A source grep of `supabase/migrations/*.sql` returns 141 lines matching
+-- `owner_id = auth.uid()`. THAT NUMBER IS AN UPPER BOUND AND MUST NOT BE ACTED ON: migrations are
+-- append-only, so 20260528/20260529 policies that were later replaced by the 20260724 RBAC wave
+-- still match the grep while no longer existing in the database. The catalog is the only truth.
+--
+-- This build did NOT touch a single RLS policy — the owner branch it removed lives in two FUNCTIONS
+-- (§1), not in policies. The `*_owner_all` policies are still there and still work, because the
+-- owner is still the owner; what changed is that authority no longer FLOWS from that fact on the
+-- client. Retiring the policy-level owner branch is a SEPARATE build, and this is its first input.
+--
+-- EXPECT: a per-table count. Read it before proposing any policy change; do not size that work
+-- from the grep.
+-- SELECT tablename,
+--        count(*) FILTER (WHERE (COALESCE(qual,'') || ' ' || COALESCE(with_check,'')) ~ 'owner_id')
+--          AS owner_id_policies,
+--        count(*) AS total_policies,
+--        string_agg(policyname, ', ') FILTER (
+--          WHERE (COALESCE(qual,'') || ' ' || COALESCE(with_check,'')) ~ 'owner_id') AS which
+--   FROM pg_policies
+--  WHERE schemaname = 'public'
+--  GROUP BY tablename
+--  HAVING count(*) FILTER (WHERE (COALESCE(qual,'') || ' ' || COALESCE(with_check,'')) ~ 'owner_id') > 0
+--  ORDER BY owner_id_policies DESC, tablename;
+
+-- ── V7 — the same, as ONE number, for the ledger row ───────────────────────────────────────────
+-- SELECT count(*) AS live_owner_id_policies
+--   FROM pg_policies
+--  WHERE schemaname = 'public'
+--    AND (COALESCE(qual,'') || ' ' || COALESCE(with_check,'')) ~ 'owner_id';
