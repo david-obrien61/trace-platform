@@ -149,6 +149,21 @@ SIGNAL: `[TRACE:customers] edit AFFECTED ZERO ROWS — refused or missing`
 `customers:update`, so their UPDATE matches zero rows — and PostgREST returns **no error**, which is
 why the form used to report success.
 
+> ### 🤖 MACHINE HALF — the POLICY is proven; this card proves the SCREEN
+> `npm run verify:rls` → **`scripts/rls/customer-write-permission.rls.mjs`** · **11/11 green
+> 2026-07-30**, and observed RED under mutation (withhold `customers:update` from the granted
+> principal → 4 assertions fire).
+>
+> It signs in as an **ephemeral STAFF member** with the **anon key** under real RLS, edits a
+> **throwaway customer** (minted and deleted in a `finally` — nothing touches a real customer row),
+> and proves: zero rows affected **AND no error** on the denied write · the old value survives a
+> reload · one row affected once `customers:update` is granted **on the same session** · and the
+> write closes again when it is revoked, so the gate is the PERMISSION and not mere membership.
+>
+> **⚠️ THIS DOES NOT MARK THE CARD `covered` (OP-14).** It proves the POLICY refuses. This card
+> proves the SCREEN tells the truth when it is refused — the error copy below, on the real form.
+> A machine can do the first; only David's live run does the second. **STATUS stays `owed`.**
+
 **SETUP:** sign in as a STAFF member of tenant `f7ec5d67` (not the MANAGER, not the owner). Confirm on
 `/team` that the member holds `customers:read` and does **not** hold `customers:update`.
 

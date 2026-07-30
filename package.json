@@ -18,6 +18,7 @@
     "quality:gate": "node scripts/quality-gate.mjs",
     "quality:baseline": "node scripts/quality-gate.mjs --update",
     "test": "node scripts/run-tests.mjs",
+    "verify:rls": "node scripts/run-rls-tests.mjs",
     "verify": "node scripts/verify-api-parses.mjs && node scripts/quality-gate.mjs && npm run verify:universals && npm run verify:write-paths && npm run verify:zero-row-writes && npm run verify:field-lists && npm test",
     "verify:write-paths": "node scripts/verify-write-paths.mjs",
     "write-paths:baseline": "node scripts/verify-write-paths.mjs --update",
