@@ -1612,6 +1612,45 @@ make you apply it to your own adjacent code.**
 **So the conclusion is no longer "an unenforced rule will eventually be broken." It is: an
 unenforced rule WILL be broken, by the author, within the hour, in the file about the rule.**
 
+6. 🔴 **TWO VACUOUS ASSERTIONS, WRITTEN THE SAME HOUR AS STD-026** (2026-07-30).
+   `scripts/rls/inventory-read-model.rls.mjs` shipped `ok(releasedUnits === 0 || true, …)` and a
+   predicate ending `&& false` — **both unconditionally true**, in a file authored immediately
+   after writing the standard that exists to name exactly that defect. Caught on review before the
+   commit; **not by any check.**
+
+## 🔴 THE OPERATIVE CONCLUSION — six instances against one intervention
+
+**Six self-catches, all by the author, all within a day of writing or reading the rule they broke.
+Against exactly ONE intervention that worked.**
+
+| | Rule existed BEFORE the code? | Outcome |
+|---|---|---|
+| #1 E2 loophole | after (self-scored) | shipped, caught later |
+| #2 A4 scored from a read | after | contradicted by its own cap same day |
+| #3 unused exports | after | **knip** caught it |
+| #4 duplicated coercion (§6 r8) | rule read that session, code written after | **knip** caught it — not the rule |
+| #5 unchecked write in the test about unchecked writes (A8) | after | caught by consequence, an hour later |
+| #6 two vacuous assertions (STD-026) | after, by one hour | caught on review |
+| **STD-025 — `qty === 7`** | **BEFORE — written deliberately ahead of the build** | **caught while the code was still being written** |
+
+**The only variable that differs is WHEN THE RULE WAS WRITTEN RELATIVE TO THE CODE.** Not the
+author's attention, not the rule's clarity, not how recently it was read — #4 and #6 were both
+broken within the same session as reading or writing the rule.
+
+**A RULE WRITTEN AFTER THE CODE CANNOT PROTECT IT. A RULE WRITTEN BEFORE IT CAN.**
+
+That is why the standard gets written first — not as ceremony, and not because writing it down
+makes anyone remember it (six instances prove it does not). It is because a rule that exists in
+writing before authorship begins is the only form that has ever changed an outcome in this
+programme. Every other instance was caught by a MECHANICAL check (knip, twice) or by a
+CONSEQUENCE (a failing run, a review) — never by the author knowing the rule.
+
+**Corollary, and it is the honest one: writing the standard first is NOT a substitute for the
+cap.** STD-025 caught one defect in one file because its author happened to be holding it in mind
+while writing that file. It has no enforcement. The architectural standard's convention holds —
+**an unenforced rule is a placeholder for a cap** — and the ordering result above says only that
+a placeholder written FIRST is worth more than the same placeholder written after.
+
 **MADE MECHANICAL, same day.** `verify-zero-row-writes.mjs`'s tooling exemption was narrowed:
 `scripts/lib/` and `scripts/rls/` are now ASSERTED, not merely reported. The original exemption's
 reason — *"a seed that no-ops is not a lie to a user"* — is sound for seeds and false for teardown,

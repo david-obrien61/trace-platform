@@ -1,0 +1,159 @@
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- D-52 §R3 — THE ONE-TIME RECONCILIATION OF PRE-CUTOVER OPEN ORDERS
+--
+-- ⛔ GATED. DO NOT APPLY WITHOUT DAVID'S EXPLICIT RULING. This is a MONEY-ADJACENT WRITE: it
+--    changes which orders are considered open, and therefore what the platform says is available
+--    to sell. Thunder wrote it; Thunder has not run it and must not.
+--
+-- STATUS: PROPOSAL. Section 3 is DELIBERATELY COMMENTED OUT — the ruling in §2 has to be made
+--         first, and the two candidate rulings need DIFFERENT statements. Uncomment one.
+--
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- WHY THIS EXISTS
+--
+-- D-52 (2026-07-21) said, in its own §R3 heading "The 16 existing pending orders (recon R3)":
+--   "They decremented on-hand at checkout under D-42, before the ledger existed; genesis absorbed
+--    those sales. Under D-52 their stock should be on-hand-committed, not gone. Remediation is a
+--    one-time reconciliation of those orders at build time — SCOPED IN THE BUILD, not this
+--    decision."
+--
+-- IT WAS NEVER RUN. Found 2026-07-30 by `scripts/rls/inventory-read-model.rls.mjs` (test-inventory
+-- row I14), which asserts committed never exceeds on-hand and failed on live data.
+--
+-- THE DOUBLE-COUNT, precisely: an order placed before the cutover decremented on-hand AT CHECKOUT
+-- (D-42's rule). It is still `pending`/`confirmed`/`invoiced`, so under D-52 it ALSO holds
+-- commitment. The same units are therefore subtracted twice — once physically (already gone from
+-- qty) and once logically (committed). AVAILABLE = on-hand − committed is understated by exactly
+-- the pre-cutover commitment.
+--
+-- MEASURED STATE at 2026-07-30 on tenant f7ec5d67 (service-key read; four lots affected, 139 units):
+--
+--   LOT                        SIZE      ON-HAND  COMMITTED  AVAIL  PRE-D52  POST-D52
+--   Shoal Creek Vitex          30             29         61      0       61         0   🔴 OVERSOLD
+--   Live Oak                   30 gal         75         61     14       61         0   understated
+--   'Sierra' Mexican Red Oak   15             34         13     21       13         0   understated
+--   Arizona Cypress Blue Ice   30             41          4     37        4         0   understated
+--
+-- Only ONE lot tips into oversold, but all four have depressed availability, and Shoal Creek
+-- Vitex 30 reads 0 AVAILABLE WITH 29 PHYSICALLY PRESENT — it cannot be sold on any surface that
+-- respects available.
+--
+-- ✅ THE FORWARD PATH IS HEALTHY — VERIFIED, NOT ASSUMED. State this as loudly as the defect:
+--    · The sibling lot "Shoal Creek Vitex 45" carries ONLY post-cutover commitment and reads
+--      on-hand 38 / committed 8 / available 30 — correct.
+--    · "Alley Cat Redbud Espalier 15" is post-cutover only: 39 / 6 / 33 — correct.
+--    · The oversell guard is LIVE at `packages/cultivar-os/api/orders/submit.ts:371-375` and
+--      checks AVAILABLE, not raw on-hand.
+--    THE RULE WORKS. THE BACKLOG DOES NOT. This is a data condition, not a broken invariant —
+--    which is why it is tech-debt #82 (🟡) and the cost-wall leak is #81 (🔴).
+--
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- §1 — DAVID-QUERY, BEFORE. Run this FIRST. Read it. Do not skip to §3.
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- Every open order line created before the D-52 cutover, with its lot's arithmetic. THIS IS THE
+-- LIST YOU ARE RULING ON — each row is an order somebody may have actually placed.
+
+-- SELECT
+--   bi.name                                   AS lot,
+--   bi.size,
+--   bi.qty                                    AS on_hand,
+--   o.id                                      AS order_id,
+--   o.status,
+--   o.created_at::date                        AS placed,
+--   oi.quantity                               AS units,
+--   c.first_name || ' ' || c.last_name        AS customer
+-- FROM public.order_items oi
+-- JOIN public.orders o             ON o.id = oi.order_id
+-- LEFT JOIN public.business_inventory bi ON bi.id = oi.business_inventory_id
+-- LEFT JOIN public.customers c     ON c.id = o.customer_id
+-- WHERE o.business_id = '<BUSINESS_ID>'
+--   AND o.status NOT IN ('fulfilled', 'cancelled')
+--   AND o.created_at < '2026-07-21'::timestamptz          -- the D-52 cutover
+-- ORDER BY bi.name, o.created_at;
+
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- §2 — THE RULING DAVID OWES, AND WHY THE OBVIOUS ANSWER IS WRONG
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- These orders' stock ALREADY LEFT on-hand (D-42 decremented at checkout, and the D-50 genesis
+-- backfill absorbed those sales into `opening_balance`). So the physical movement is DONE and is
+-- already reflected in both qty and the ledger. What is wrong is only the ORDER'S STATUS.
+--
+-- ⚠️ THEREFORE: DO NOT route these through the normal fulfil path. `record_order_event`
+--    ('fulfilled') EMITS AN ON-HAND MOVEMENT — it would decrement a second time and turn a
+--    reporting error into a real stock error. That is the trap in this remediation.
+--
+-- ⚠️ AND DO NOT "fix" the ledger. It is append-only and its trigger refuses even `postgres`
+--    (D-50). A correction is a NEW ROW, never an edit — and here NO new row is warranted,
+--    because nothing physically moves at reconciliation time.
+--
+-- RULING A — TERMINAL-BY-STATUS (recommended if these are test traffic).
+--   Set status to 'cancelled' (or 'fulfilled' for any that were genuinely delivered) WITHOUT
+--   emitting any ledger row. Commitment releases; on-hand is untouched and stays correct,
+--   because the units really are gone. Available becomes on-hand, which is the truth.
+--   ⚠️ Note the asymmetry with D-52's normal rule: ordinarily "cancelled → on-hand never changed,
+--      so nothing to restore." Here on-hand DID change, under the OLD rule. We are not restoring
+--      it, because the plants are not coming back. Cancelling a legacy order is a BOOKKEEPING act
+--      on a pre-cutover record, not a business cancellation.
+--
+-- RULING B — RESTORE-AND-KEEP-OPEN (if any of these are REAL orders still owed to a customer).
+--   The units are owed and physically absent. Emit a compensating `receive` ledger row per lot
+--   restoring on-hand to on-hand-plus-committed, leave the order open, and the commitment then
+--   sits against real stock. Only correct if the plants are actually still in the yard and the
+--   D-42 decrement was the error.
+--   🔴 THIS IS A REAL STOCK CLAIM AND MUST BE PHYSICALLY VERIFIED BEFORE IT IS WRITTEN. Do not
+--      choose B from a screen; choose it from a walk.
+--
+-- THE DECISION IS PER-ORDER, NOT IN BULK. §1's list has customer names on it. A 2026-07-07
+-- 'pending' order on a demo tenant is almost certainly test traffic; an 'invoiced' one may not be.
+--
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- §3 — THE WRITE. COMMENTED OUT UNTIL §2 IS RULED.
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- Guarded in the shape STD-023 requires: the premise is the DRIVING RELATION of the write, not a
+-- trailing WHERE and not a separate RAISE beside it — zero qualifying rows means the UPDATE
+-- touches nothing, as a property of the query shape rather than a planner choice. Wrapped in an
+-- explicit transaction so a failed guard rolls the whole thing back regardless of client settings
+-- (the #163 lesson: a guard the write does not depend on is advice, not a gate).
+
+-- BEGIN;
+--
+-- -- RULING A form. Replace <BUSINESS_ID>; add explicit order ids to the NOT IN list for any
+-- -- order §2 ruled is REAL and must stay open.
+-- WITH legacy AS (
+--   SELECT o.id
+--   FROM public.orders o
+--   WHERE o.business_id = '<BUSINESS_ID>'
+--     AND o.status NOT IN ('fulfilled', 'cancelled')
+--     AND o.created_at < '2026-07-21'::timestamptz
+--     AND o.id NOT IN ('<ANY_ORDER_TO_KEEP_OPEN>')
+-- )
+-- UPDATE public.orders o
+--    SET status = 'cancelled',
+--        updated_at = now()
+--   FROM legacy
+--  WHERE o.id = legacy.id;
+--
+-- COMMIT;
+
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- §4 — DAVID-QUERY, AFTER. The proof. Every lot must read committed <= on_hand.
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+
+-- SELECT
+--   bi.name AS lot, bi.size, bi.qty AS on_hand,
+--   COALESCE(SUM(oi.quantity) FILTER (WHERE o.status NOT IN ('fulfilled','cancelled')), 0) AS committed,
+--   GREATEST(0, bi.qty - COALESCE(SUM(oi.quantity) FILTER (WHERE o.status NOT IN ('fulfilled','cancelled')), 0)) AS available,
+--   CASE WHEN COALESCE(SUM(oi.quantity) FILTER (WHERE o.status NOT IN ('fulfilled','cancelled')), 0) > bi.qty
+--        THEN '🔴 STILL OVERSOLD' ELSE 'ok' END AS verdict
+-- FROM public.business_inventory bi
+-- LEFT JOIN public.order_items oi ON oi.business_inventory_id = bi.id
+-- LEFT JOIN public.orders o       ON o.id = oi.order_id
+-- WHERE bi.business_id = '<BUSINESS_ID>'
+-- GROUP BY bi.id, bi.name, bi.size, bi.qty
+-- HAVING COALESCE(SUM(oi.quantity), 0) > 0
+-- ORDER BY verdict DESC, bi.name;
+
+-- MACHINE PROOF, and it is the real one — re-run the test that found this:
+--   RLS_BUSINESS_ID=<id> node scripts/rls/inventory-read-model.rls.mjs
+-- The I14 assertions ("COMMITTED never exceeds ON-HAND", "AVAILABLE is non-negative") must go
+-- GREEN. They are currently RED, deliberately, so this stays visible until it is ruled.
