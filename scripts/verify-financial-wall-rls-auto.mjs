@@ -17,6 +17,20 @@
  * Run AFTER applying 20260621_financial_wall_phase2.sql:
  *   node scripts/verify-financial-wall-rls-auto.mjs
  * Requires packages/cultivar-os/.env.local (SUPABASE_URL + SERVICE_KEY + ANON_KEY).
+ *
+ * 🔴 KNOWN RED — 5 pass / 1 fail, AND IT IS A DATA CONDITION, NOT A PERMISSION DEFECT (2026-07-30).
+ *   `labor_resource_wages` is EMPTY platform-wide (zero rows, every business — probed with the
+ *   service key), so the ALLOW half of the wages assertion ("rows visible after wages:read
+ *   granted") cannot pass: there are no rows to become visible. The DENY half is genuinely proven,
+ *   and pricing proves BOTH directions.
+ *   VERIFIED NOT a vocabulary artifact: the pre-fix legacy version was run on the same tenant and
+ *   fails IDENTICALLY, 5/1. The alias layer was therefore NOT covering a permission gap here.
+ *   WHAT IT DOES EXPOSE: this gate has been failing for an unknown period and nobody knew, because
+ *   nothing runs it. That is the third instance this week of an unwired check rotting — the same
+ *   shape as the 24 unchained tests and the stale Note A assertions.
+ *   TO CLOSE: seed a labor_resource_wages row for the test business, or scope the assertion to
+ *   "no rows leak when denied" and drop the allow-half for wages. DAVID'S CALL — it is a question
+ *   about what the demo tenant should contain, not a test edit.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -72,27 +86,40 @@ try {
 
   console.log('\n=== NO-PERM member — must be REFUSED at the data layer ===');
   const w0 = await member.from('labor_resource_wages').select('resource_id,base_wage,cost_rate').eq('business_id', businessId);
-  ok(!w0.error && (w0.data ?? []).length === 0, 'labor_resource_wages → 0 rows (view_wages denied)', `rows=${(w0.data ?? []).length}${w0.error ? ' err=' + w0.error.message : ''}`);
+  ok(!w0.error && (w0.data ?? []).length === 0, 'labor_resource_wages → 0 rows (wages:read denied)', `rows=${(w0.data ?? []).length}${w0.error ? ' err=' + w0.error.message : ''}`);
   const b0 = await member.from('labor_resources').select('id,base_wage,cost_rate,bill_rate,rate').eq('business_id', businessId);
   const leaked = (b0.data ?? []).filter((r) => r.base_wage != null || r.cost_rate != null || r.bill_rate != null || r.rate != null);
   ok(!b0.error && leaked.length === 0, 'labor_resources base wages → NULL (value moved off member-readable table)', `leaked=${leaked.length}`);
   const p0 = await member.from('business_pricing_config').select('business_id,config').eq('business_id', businessId);
-  ok(!p0.error && (p0.data ?? []).length === 0, 'business_pricing_config → 0 rows (view_pricing_config denied)', `rows=${(p0.data ?? []).length}`);
+  ok(!p0.error && (p0.data ?? []).length === 0, 'business_pricing_config → 0 rows (pricing_recipe:read denied)', `rows=${(p0.data ?? []).length}`);
   const lc0 = await member.from('business_modules').select('config').eq('business_id', businessId).eq('module_key', 'cost_to_produce');
   const dirty = (lc0.data ?? []).filter((r) => r.config && Object.keys(r.config).length > 0);
   ok(!lc0.error && dirty.length === 0, 'legacy business_modules cost_to_produce config empty (recipe not leaked)', `non-empty=${dirty.length}`);
 
-  // 3. grant the four perms to the SAME member → SAME session must now READ (RLS re-evaluates live)
+  // 3. grant the perms to the SAME member → SAME session must now READ (RLS re-evaluates live)
+  //
+  // 🔴 VOCABULARY CORRECTED 2026-07-30. This granted the LEGACY four —
+  // ['view_wages','view_pricing_config','view_costs','view_margin'] — from 2026-06-22 until today,
+  // i.e. straight through the resource:action flip. The policies below check `wages:read` and
+  // `pricing_recipe:read` (20260727_rbac_resource_action_flip.sql:139,160), so the legacy strings
+  // passed ONLY because has_permission resolves them through the ALIAS layer.
+  //
+  // THE CLASS, worth more than the fix: THE ALIAS LAYER CAN MAKE A TEST PASS FOR THE WRONG REASON.
+  // A green run asserted "the wall is permission-keyed" while actually asserting "the alias layer
+  // still maps view_wages". Those are different claims and only the second was being tested — so
+  // this script would have kept reporting GATE 2 PROVEN even if `wages:read` had never been wired
+  // to a single policy. Anything written before the flip and still green is suspect the same way.
+  // Now grants the resource:action strings the policies actually name, so the assertion is direct.
   const { error: gErr } = await admin.from('business_members')
-    .update({ permissions: ['view_wages', 'view_pricing_config', 'view_costs', 'view_margin'] })
+    .update({ permissions: ['wages:read', 'pricing_recipe:read', 'costs:read', 'margin:read'] })
     .eq('id', memberId);
   if (gErr) throw new Error(`grant: ${gErr.message}`);
 
   console.log('\n=== SAME member, perms GRANTED — wall opens (permission-keyed, not blanket) ===');
   const w1 = await member.from('labor_resource_wages').select('resource_id,base_wage').eq('business_id', businessId);
-  ok(!w1.error && (w1.data ?? []).length > 0, 'labor_resource_wages → rows visible after view_wages granted', `rows=${(w1.data ?? []).length}`);
+  ok(!w1.error && (w1.data ?? []).length > 0, 'labor_resource_wages → rows visible after wages:read granted', `rows=${(w1.data ?? []).length}`);
   const p1 = await member.from('business_pricing_config').select('business_id,config').eq('business_id', businessId);
-  ok(!p1.error && (p1.data ?? []).length > 0, 'business_pricing_config → row visible after view_pricing_config granted', `rows=${(p1.data ?? []).length}`);
+  ok(!p1.error && (p1.data ?? []).length > 0, 'business_pricing_config → row visible after pricing_recipe:read granted', `rows=${(p1.data ?? []).length}`);
 } finally {
   // 4. cleanup (best-effort)
   if (memberId) await admin.from('business_members').delete().eq('id', memberId);
