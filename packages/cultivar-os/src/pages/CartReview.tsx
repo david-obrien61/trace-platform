@@ -15,6 +15,7 @@ import {
   totalPlantCount, nettedQuantity, lineSubtotal, isNettingOffering,
 } from '../lib/netting';
 import type { ServiceOffering } from '../types/plant';
+import { NotPermitted } from '@trace/shared/components/SurfaceState';
 
 const TRACE_CART = true; // [TRACE:CART] STD-003 — on until OWNER-PROVEN
 
@@ -598,6 +599,12 @@ export function CartReview() {
 
         {/* D-40: per-order tax-exemption control (owner/manager + apply_tax_exempt). Zeroing tax
             REQUIRES a reason (the auditable control). Server re-verifies authority + reason. */}
+        {/* NOT PERMITTED (Phase 3): the control RENDERS when refused, naming its permission.
+            Hidden, it taught the taker that per-order exemption does not exist — and the way a
+            business resolves that misunderstanding is by making somebody an owner. */}
+        {!canApplyTaxExempt && (
+          <NotPermitted permission="tax_exempt:apply" what="Tax exemption for this order" />
+        )}
         {canApplyTaxExempt && (
           <TaxExemptControl
             effective={effectiveExemption}

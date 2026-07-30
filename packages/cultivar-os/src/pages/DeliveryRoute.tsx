@@ -7,6 +7,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { CaptureInvoiceLauncher } from '../components/CaptureInvoiceLauncher';
+import { NotPermitted } from '@trace/shared/components/SurfaceState';
 
 interface DeliveryOrder {
   id: string;
@@ -546,6 +547,9 @@ export function DeliveryRoute() {
         {/* Capturing an invoice WRITES a cost record — `costs:create`, the capability exercised,
             rather than the identity of the person exercising it (ruling 2026-07-30). */}
         {can('costs:create') && <CaptureInvoiceLauncher />}
+        {!can('costs:create') && (
+          <NotPermitted permission="costs:create" what="Capturing an invoice" inline />
+        )}
       </div>
 
       <div style={{ padding: '16px 16px 0' }}>

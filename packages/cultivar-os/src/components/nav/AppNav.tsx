@@ -26,6 +26,7 @@ import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { useBusinessContext } from '@trace/shared/context';
+import { requirementText } from '@trace/shared/components/SurfaceState';
 import {
   navSections, navChildrenOf, navRoute, navPermission, navLabel, navNodeForPath,
   type NavNode,
@@ -44,12 +45,26 @@ export function AppNav() {
   const [open, setOpen] = useState(false);
 
   const canSee = (n: NavNode) => can(navPermission(n));
-  // A node's visible children that actually link somewhere (its sub-pages in the tree).
+
+  // 🔴 THE MENU SHOWS EVERY ITEM (ruling 2026-07-30 — "MENU shows every item at every width").
+  // It used to FILTER OUT anything the session could not reach, which made the nav the first of
+  // the silent refusals: the feature did not look forbidden, it looked NON-EXISTENT. Someone who
+  // cannot see a menu item does not ask for access to it — they conclude the platform cannot do
+  // the thing, and either work around it or ask for a role that carries everything.
+  //
+  // Now the item RENDERS, marked, and still navigates — landing on the route's own
+  // PageWithoutAccess, which names the permission and who grants it. Nav and route tell ONE story.
+  // The width half of the ruling was already satisfied: this nav has no breakpoint by design
+  // (4c6308a), so it lands identically on phone and desktop.
+  const isRefused = (n: NavNode) => !canSee(n);
+  // A node's children that link somewhere. NO LONGER permission-filtered — refused ones render
+  // marked rather than vanishing.
   const linkChildren = (n: NavNode): NavNode[] =>
-    navChildrenOf(n.key).filter((c) => !NAV_EXCLUDE.has(c.key) && canSee(c) && navRoute(c) !== null);
-  // A node is shown when the session can see it AND it links somewhere OR has ≥1 visible child.
+    navChildrenOf(n.key).filter((c) => !NAV_EXCLUDE.has(c.key) && navRoute(c) !== null);
+  // A node is shown when it links somewhere OR has ≥1 child that does. Permission no longer
+  // decides EXISTENCE — only presentation.
   const isVisible = (n: NavNode): boolean =>
-    !NAV_EXCLUDE.has(n.key) && canSee(n) && (navRoute(n) !== null || linkChildren(n).length > 0);
+    !NAV_EXCLUDE.has(n.key) && (navRoute(n) !== null || linkChildren(n).length > 0);
 
   const sections = navSections();
   const dashboard = sections.find((s) => s.section === 'dashboard') ?? null;
@@ -59,6 +74,12 @@ export function AppNav() {
   // Promote the dashboard branch's surfaces to top-level peers of the Dashboard home. Their own
   // children (Route, Assets/Inventory/Receipts, Campaigns) render as indented sub-links.
   const dashSurfaces = dashboard ? navChildrenOf(dashboard.key).filter(isVisible) : [];
+
+  // A refused item still navigates — the destination explains itself. `title` carries the reason
+  // for a pointer user; the lock glyph carries it for everyone else.
+  const refusedProps = (n: NavNode) => (isRefused(n)
+    ? { style: { opacity: 0.55 }, title: requirementText(navPermission(n)), 'data-surface-state': 'not-permitted' }
+    : {});
 
   const activeNode = navNodeForPath(location.pathname);
   const activeKey = activeNode?.key ?? null;
@@ -72,7 +93,10 @@ export function AppNav() {
   // [TRACE:NAV] the structure the active session can see (ON by default, STD-003).
   console.log('[TRACE:NAV] menu', {
     dashboardHome: dashboard && isVisible(dashboard) ? dashboard.key : null,
-    surfaces: dashSurfaces.map((s) => ({ key: s.key, subs: linkChildren(s).map((c) => c.key) })),
+    surfaces: dashSurfaces.map((s) => ({ key: s.key, refused: isRefused(s), subs: linkChildren(s).map((c) => c.key) })),
+    // NAMED so the trail shows what the session is being SHOWN-BUT-REFUSED, not only what it holds.
+    refusedItems: [dashboard, ...dashSurfaces, admin, settings]
+      .filter((n): n is NavNode => !!n && isVisible(n) && isRefused(n)).map((n) => n.key),
     admin: admin && isVisible(admin) ? linkChildren(admin).map((c) => c.key) : null,
     settings: settings && isVisible(settings)
       ? { key: settings.key, subs: linkChildren(settings).map((c) => c.key) }
@@ -99,7 +123,9 @@ export function AppNav() {
             className="appnav-link"
             aria-current={activeKey === node.key ? 'page' : undefined}
             onClick={() => go(route)}
+            {...refusedProps(node)}
           >
+            {isRefused(node) && <span aria-hidden style={{ marginRight: 6, opacity: 0.8 }}>🔒</span>}
             {navLabel(node)}
           </button>
         ) : (
@@ -111,7 +137,9 @@ export function AppNav() {
             className="appnav-link appnav-sublink"
             aria-current={activeKey === c.key ? 'page' : undefined}
             onClick={() => go(navRoute(c))}
+            {...refusedProps(c)}
           >
+            {isRefused(c) && <span aria-hidden style={{ marginRight: 6, opacity: 0.8 }}>🔒</span>}
             {navLabel(c)}
           </button>
         ))}

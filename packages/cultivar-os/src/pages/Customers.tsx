@@ -37,6 +37,7 @@ import {
 import { CustomerPartyEditor, BLANK_PARTY_CUSTOMER, type PartyCustomer } from '../components/customers/CustomerPartyEditor';
 import { CUSTOMER_SELECT_CORE, CUSTOMER_SELECT_FULL } from '../components/customers/customerFieldRegistry';
 import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME, taxExemptionLabel, type DiscountType } from '@trace/shared/business-logic';
+import { requirementText } from '@trace/shared/components/SurfaceState';
 
 const SOURCE_LABEL: Record<string, string> = {
   'qr-scan':     'QR checkout',
@@ -86,7 +87,17 @@ const sourceStyle: React.CSSProperties = { fontSize: '0.72rem', fontWeight: 600,
 const tierSelectStyle = (): React.CSSProperties => ({ color: '#3730a3', fontWeight: 700 });
 
 export function Customers() {
-  const { businessId } = useBusinessContext();
+  const { businessId, can } = useBusinessContext();
+  // PRE-EMPTIVE, not apologetic (Phase 3, ruling 2026-07-30). These grid cells were among the only
+  // three surfaces on the platform that SPOKE when a write was refused — correct that they speak,
+  // wrong that they speak AFTER. A person changed a tier, watched it repaint, and was told a
+  // moment later it had not saved. The permission is knowable BEFORE the click.
+  //
+  // 🔴 THE POST-WRITE CHECK STAYS. It is not redundant: this flag is the CLIENT's belief, and RLS
+  // is the authority. A write can still be refused for a reason the client cannot predict (a
+  // policy narrower than the string, a row that moved). Pre-emptive copy prevents the ordinary
+  // case; the A8 check catches the case the client got wrong. Removing either one loses something.
+  const canEditCustomer = can('customers:update');
   const navigate = useNavigate();
 
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
@@ -147,6 +158,7 @@ export function Customers() {
   // discount (submit.ts) — tagging a customer 'contractor' is how they get contractor pricing.
   function onTier(c: CustomerRow, v: string) {
     if (!businessId || v === (c.price_tier ?? 'retail')) return;
+    if (!canEditCustomer) { setListError(requirementText('customers:update')); return; }
     const bid = businessId;
     console.log('[TRACE:customers] tier edit', { id: c.id, from: c.price_tier, to: v });
     void (async () => {
@@ -173,6 +185,7 @@ export function Customers() {
   // ── Status inline (quick soft-deactivate; full editor also carries it). Immediate RLS write. ──
   function onStatus(c: CustomerRow, v: string) {
     if (!businessId || v === (c.status ?? 'active')) return;
+    if (!canEditCustomer) { setListError(requirementText('customers:update')); return; }
     const bid = businessId;
     console.log('[TRACE:customers] status edit', { id: c.id, from: c.status, to: v });
     void (async () => {

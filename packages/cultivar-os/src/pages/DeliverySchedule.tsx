@@ -33,6 +33,7 @@ import { CustomerPartyEditor, type PartyCustomer } from '../components/customers
 import { CUSTOMER_SELECT_FULL, CUSTOMER_SELECT_CORE } from '../components/customers/customerFieldRegistry';
 import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME } from '@trace/shared/business-logic';
 import { CaptureInvoiceLauncher } from '../components/CaptureInvoiceLauncher';
+import { NotPermitted, WithheldData, requirementText } from '@trace/shared/components/SurfaceState';
 
 const TRACE_DELIVERY = true; // [TRACE:DELIVERY] STD-003 — ON until David owner-proves
 
@@ -141,6 +142,10 @@ export function DeliverySchedule() {
     const next = newVal || null;
     if (next === d.delivery_date) return; // no change → no write
     setSavingId(d.id);
+    // PRE-EMPTIVE, not apologetic (Phase 3). Same reasoning as Customers' grid cells: the
+    // permission is knowable before the write, and the post-write check below stays as the
+    // backstop for refusals the client cannot predict.
+    if (!can('deliveries:update')) { setError(requirementText('deliveries:update')); setSavingId(null); return; }
     const { data: hit, error: err } = await supabase
       .from('deliveries')
       .update({ delivery_date: next })
@@ -198,6 +203,9 @@ export function DeliverySchedule() {
         {/* Second door into the invoice OCR→infer→route flow (owner action, matches "Edit customer" gating). */}
         {/* `costs:create` — see DeliveryRoute. Same control, same string, one rule. */}
         {can('costs:create') && <CaptureInvoiceLauncher />}
+        {!can('costs:create') && (
+          <NotPermitted permission="costs:create" what="Capturing an invoice" inline />
+        )}
       </div>
 
       <div style={{ padding: '16px 16px 0' }}>
@@ -316,6 +324,15 @@ export function DeliverySchedule() {
                           `customers:update` — the capability the modal exercises (ruling
                           2026-07-30). The customer BLOCK's own redaction is handled in Phase 3;
                           this gate is only the edit affordance. */}
+                      {/* 🔴 WITHHELD DATA (Phase 3) — the counter-example named in the ruling.
+                          The customer block simply VANISHED for anyone without access, leaving a
+                          delivery row that read as "this delivery has no customer" — a fact about
+                          the BUSINESS, not about the viewer. That is the dangerous half of the
+                          silent-refusal class: plausible, and acted upon. */}
+                      {!can('customers:read') && d.customer_id && (
+                        <WithheldData permission="customers:read" what="Customer details" inline
+                          style={{ marginTop: 8 }} />
+                      )}
                       {can('customers:update') && d.customer_id && d.customers && (
                         <button
                           onClick={() => { void openEditor(d); }}

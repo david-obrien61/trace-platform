@@ -38,6 +38,7 @@ import { extractTag } from '../lib/scanTag';
 import { totalPlantCount } from '../lib/netting';
 import type { Plant } from '../types/plant';
 import type { CustomerInput } from '../types/customer';
+import { NotPermitted } from '@trace/shared/components/SurfaceState';
 
 const TRACE_CART = true; // [TRACE:CART] STD-003 — on until OWNER-PROVEN
 
@@ -596,6 +597,12 @@ export function ScanOrder() {
                 {nfError && <p style={S.priceNone}>{nfError}</p>}
                 <button style={S.btnPrimary} onClick={useNewCustomerForOrder}>Use for this order</button>
                 {canLookup && <button style={S.btnGhost} onClick={() => setCustomerView('lookup')}>← Look up an existing customer</button>}
+                {/* NOT PERMITTED (Phase 3). Without this the strip silently degraded to
+                    create-only — the exact shape of #170, where a gate on a retired string made
+                    the search path unreachable and the screen looked intentional. */}
+                {!canLookup && (
+                  <NotPermitted permission="customers:read" what="Looking up an existing customer" inline />
+                )}
               </>
             )}
           </div>

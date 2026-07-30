@@ -19,6 +19,7 @@ import { orderItemName, orderItemAnchor, type OrderItemAnchorFields } from '../l
 import { ORDER_STATUSES, ORDER_STATUS_META } from '../lib/orderStatus';
 import { OrderTotals } from '../components/checkout/OrderTotals';
 import type { TaxStatus } from '@trace/shared/business-logic';
+import { NotPermitted } from '@trace/shared/components/SurfaceState';
 
 interface DetailItem extends OrderItemAnchorFields {
   id: string;
@@ -428,8 +429,12 @@ export function OrderDetail() {
           </button>
         </>
       )}
+      {/* NOT PERMITTED (Phase 3). This surface was already one of the honest few — it SAID
+          something. What it did not say was WHICH PERMISSION, so a reader learned they were
+          blocked and not what to ask for: a nicer-looking dead end, still a dead end. */}
       {!canManage && (
-        <p style={{ ...sub, textAlign: 'center', marginTop: 20 }}>You have view-only access to orders.</p>
+        <NotPermitted permission="orders:update" what="Editing this order"
+          style={{ marginTop: 20, justifyContent: 'center' }} />
       )}
     </Shell>
   );
