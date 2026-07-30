@@ -697,7 +697,16 @@ Before writing any code confirm:
 7. **STD-003 instrumentation (binding gate):** any build that adds/changes a capability ships `[TRACE:area]` instrumentation ON BY DEFAULT (emitting, not flagged-off, not silent, not deleted) and keeps it on until OWNER-PROVEN by David through the real UI under RLS. Omitting/pre-silencing debug = INCOMPLETE. Fires even if this prompt didn't ask. State which bar each deliverable is at: BUILDER-COMPLETE vs OWNER-PROVEN (§9, partnership doc §16, DECISIONS.md OP-4).
 8. **Story reconciliation (binding gate — every build traces to a story):** which story on `user_stories.md` does this build satisfy, and has its flow-spec section (in `docs/user-stories/`) been read? Bounce the intended build against the board: MATCH → cite it; NO MATCH → a story is created first; CONFLICT → STOP and surface; IN-CODE-NOT-ON-BOARD → flag + write the story; UNCLEAR → surface to David. A build spec that cites no upstream story/spec is re-derivation — do not start on it (§9 story-reconciliation gate; story-location rule; `docs/decisions/2026-07-08-as-built-purchase-workflow.md`).
 
-Do not start until you confirm all eight.
+9. **RULINGS (binding gate — read `docs/RULINGS.md` IN FULL, every session, before any build):** one line
+   per ruling David has made, newest first, each marked IMPLEMENTED / PARTIAL / OPEN / OWED with the
+   cap that guards it. It is deliberately short enough that reading it is free. **A build that
+   contradicts an IMPLEMENTED ruling STOPS and surfaces; a build that lands an OPEN one flips its
+   line in the same commit.** WHY: four rulings evaporated between the session that made them and
+   the session that built against them (2026-07-30) — not disputed, forgotten, because they lived
+   only in §3 prose that scrolled out at N=3. The OWED table is David's queue; do not silently
+   answer one of those questions by picking a default in code.
+
+Do not start until you confirm all nine.
 Do not touch ignition-os, old Supabase project,
 or QB oauth.ts.
 ```

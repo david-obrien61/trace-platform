@@ -56,9 +56,14 @@ export function CartReview() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId]);
 
-  // D-40: per-order tax-exemption OVERRIDE (owner/manager + apply_tax_exempt). Null → the customer's
-  // PERSISTENT exemption governs. { exempt:false } un-exempts a standing-exempt customer for this order.
-  const canApplyTaxExempt = isOwner || can('apply_tax_exempt');
+  // D-40: per-order tax-exemption OVERRIDE. Null → the customer's PERSISTENT exemption governs.
+  // { exempt:false } un-exempts a standing-exempt customer for this order.
+  //
+  // THE STRING IS THE ONE THE SERVER ENFORCES (Phase 1b, 2026-07-30). This read `apply_tax_exempt`
+  // — the LEGACY antecedent — while submit.ts:22 gates on `tax_exempt:apply`. The alias layer made
+  // the two resolve alike for a member, so the disagreement was invisible; it is still two answers
+  // to one question, and the client's was the wrong one to keep. `isOwner ||` is removed in Phase 2.
+  const canApplyTaxExempt = isOwner || can('tax_exempt:apply');
   const [orderExempt, setOrderExempt] = useState<OrderTaxExemption | null>(null);
 
   // Owner overrides for a service's netted quantity (review-only refinement; default = the
@@ -70,7 +75,13 @@ export function CartReview() {
   // A give-away (e.g. planting 6×$225=$1350 → flat $1000) is honored ONLY on a token-verified
   // owner/manager path server-side (submit.ts); the public path stays server-authoritative +
   // tamper-defended. `canOverride` gates the affordance; the server independently re-verifies.
-  const canOverride = isOwner || can('manage_orders');
+  //
+  // THE STRING IS THE ONE THE SERVER ENFORCES (Phase 1b, 2026-07-30). This read `manage_orders`,
+  // the coarse legacy string, while submit.ts:246 refuses on `order_discount:apply` — the FINE
+  // string that replaced it. A member holding order-management but not discount authority saw the
+  // override control and had the write refused server-side: the affordance promised an act the
+  // server would not perform. `isOwner ||` is removed in Phase 2.
+  const canOverride = isOwner || can('order_discount:apply');
   const [serviceOverride, setServiceOverride] = useState<Record<string, { amount: number; reason: string }>>({});
   const setOverride = (id: string, next: { amount: number; reason: string } | null) =>
     setServiceOverride(m => {
