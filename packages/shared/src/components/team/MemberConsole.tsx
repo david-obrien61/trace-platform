@@ -24,6 +24,7 @@ import {
   createInvitation, getPendingInvitations, revokeInvitation,
   getRoleDefinitions, resolveRoles,
   saveRolePermissions, assignMemberRole, diffPermissions, CONFIDENTIAL_EXPOSURE,
+  OWNER_LOCKED_SET,
   listDevicesByBusiness, setDeviceActive, deleteDevice, armPinReset,
 } from '../../auth';
 import type { Member, Invitation, Device, ResolvedRole, RoleDefinitionRow, RoleSaveOp } from '../../auth';
@@ -83,7 +84,7 @@ export function MemberConsole(props: MemberConsoleProps) {
     supabase, businessId, isOwner, can, theme: T,
     permissionGroups, inviteRoleOptions,
     inviteBaseUrl, invitePath = '/join', showDevices = true,
-    managePermission = 'manage_settings',
+    managePermission = 'team:read',
   } = props;
 
   const [tab, setTab] = useState<Tab>('users');
@@ -125,7 +126,10 @@ export function MemberConsole(props: MemberConsoleProps) {
 
   useEffect(() => { void reload(); }, [reload]);
 
-  if (!isOwner && !can(managePermission)) {
+  // `isOwner &&` removed (ruling 2026-07-30) — an OWNER-role session holds the string and passes
+  // on the same branch as everyone else. The default moved from the coarse `manage_settings` to
+  // `team:read`, which is what this console actually is and what its route is already gated on.
+  if (!can(managePermission)) {
     return <div style={{ padding: 24, color: T.sub }}>Team management is available to the business owner.</div>;
   }
 
@@ -795,11 +799,19 @@ function RolesTab(p: {
       {resolved.map((role) => {
         const perms = draft[role.role_key] ?? [];
         const isDirty = dirty.has(role.role_key);
-        // THE OWNER ROW IS LIT AND LOCKED (ruling #3). Owner authority comes from
-        // businesses.owner_id, not the member array — so every pill renders ON and non-togglable,
-        // and there is no Save. A togglable/unlit owner pill would state something false on the one
-        // screen an owner consults to check who can do what.
+        // THE OWNER ROW RENDERS ITS COMPUTED SET, AND IS LOCKED (ruling 2026-07-30 — this
+        // SUPERSEDES ruling #3's reasoning while keeping its shape). It used to say owner authority
+        // comes from businesses.owner_id; it does not, and it never should have. It comes from
+        // OWNER_LOCKED_SET, every enforced string the manifest declares.
+        //
+        // 🔴 WHY THAT CHANGES WHAT IS ON SCREEN even though the row still looks lit: a chip is now
+        // ON because the SET CONTAINS IT. Before, `isOwnerRole ? true : …` lit every chip
+        // unconditionally — the screen an owner consults to check who can do what was rendering a
+        // ternary, not a fact, and would have shown "full access" over a model that had drifted.
+        // Locked stays locked: this is a computed set with no per-tenant copy to edit.
         const isOwnerRole = role.role_key === 'OWNER';
+        const ownerHolds  = (id: string) => OWNER_LOCKED_SET.includes(id);
+        const ownerHeldChipCount = allChipIds.filter(ownerHolds).length;
         return (
           <div key={role.role_key} style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
@@ -811,8 +823,8 @@ function RolesTab(p: {
                     11 lit pills. A hidden permission gates nothing renderable by definition — count
                     what the owner can actually see. The hidden entry stays in the array (removing it
                     would be a silent revocation). */}
-                <span style={{ fontSize: 11, color: T.sub }}>{isOwnerRole ? 'Full access' : `${perms.filter((id) => allChipIds.includes(id)).length} permissions`}</span>
-                {isOwnerRole && <span style={{ fontSize: 10, color: T.sub, textTransform: 'uppercase', border: `1px solid ${T.border}`, borderRadius: 6, padding: '1px 6px' }}>set by ownership</span>}
+                <span style={{ fontSize: 11, color: T.sub }}>{isOwnerRole ? `${ownerHeldChipCount} permissions` : `${perms.filter((id) => allChipIds.includes(id)).length} permissions`}</span>
+                {isOwnerRole && <span style={{ fontSize: 10, color: T.sub, textTransform: 'uppercase', border: `1px solid ${T.border}`, borderRadius: 6, padding: '1px 6px' }}>computed from the model</span>}
                 {!isOwnerRole && role.locked && <span style={{ fontSize: 10, color: T.sub, textTransform: 'uppercase', border: `1px solid ${T.border}`, borderRadius: 6, padding: '1px 6px' }}>system role</span>}
                 {!isOwnerRole && role.isOverridden && <span style={{ fontSize: 10, color: T.primary, textTransform: 'uppercase' }}>tuned</span>}
                 {role.source === 'custom' && <span style={{ fontSize: 10, color: '#7C3AED', textTransform: 'uppercase' }}>custom</span>}
@@ -830,8 +842,10 @@ function RolesTab(p: {
                 <p style={{ fontSize: 10, fontWeight: 800, color: T.sub, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{grp.label}</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {grp.chips.map((chip) => {
-                    // owner: every chip lit + locked; others: reflect the draft + togglable.
-                    const on = isOwnerRole ? true : perms.includes(chip.id);
+                    // OWNER: lit because the COMPUTED SET CONTAINS IT — not because of a ternary.
+                    // If a chip ever renders OFF on the owner row, the model and the catalog have
+                    // diverged and the screen is now the first place that says so.
+                    const on = isOwnerRole ? ownerHolds(chip.id) : perms.includes(chip.id);
                     // A `derived` string (R9) is SHOWN and COUNTED but never toggleable: it has no
                     // gate of its own, so granting it directly would imply an authority the model
                     // does not hand out. Its prerequisite is the lever, and the label says so.
@@ -841,7 +855,7 @@ function RolesTab(p: {
                       <button key={chip.id} onClick={() => { if (!locked) toggle(role.role_key, chip.id); }} disabled={busy || locked}
                         title={chip.derived
                           ? `Not granted directly — ${impliedNote}. Held whenever the prerequisite is held (R9).`
-                          : (isOwnerRole ? 'The owner can do everything — set by business ownership' : (chip.tiles.length ? `Unlocks: ${chip.tiles.join(', ')}` : 'Data-layer permission'))}
+                          : (isOwnerRole ? 'Held by every OWNER-role member — computed from the permission model, not editable' : (chip.tiles.length ? `Unlocks: ${chip.tiles.join(', ')}` : 'Data-layer permission'))}
                         style={{ fontSize: 11, fontWeight: 700, padding: '5px 11px', borderRadius: 8, cursor: locked ? 'default' : 'pointer', background: on ? T.chipOnBg : T.chipOffBg, border: `1px solid ${on ? T.chipOnBorder : T.chipOffBorder}`, color: on ? T.primary : T.sub, opacity: locked ? 0.85 : 1 }}>
                         {isOwnerRole && '🔒 '}{chip.derived && !isOwnerRole && '↳ '}{chip.label}
                         {chip.derived && <span style={{ fontWeight: 500, opacity: 0.75 }}> · {impliedNote}</span>}
@@ -853,7 +867,9 @@ function RolesTab(p: {
             ))}
             {isOwnerRole ? (
               <p style={{ marginTop: 12, fontSize: 12, color: T.sub }}>
-                The owner can do everything — {allChipIds.length} of {allChipIds.length} permissions. This is set by business ownership and can’t be changed here.
+                {ownerHeldChipCount} of {allChipIds.length} permissions. Every OWNER-role member holds this
+                set — it is computed from the permission model, so a new permission is inherited
+                automatically and none can be removed, including by the owner.
               </p>
             ) : (
               <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12 }}>

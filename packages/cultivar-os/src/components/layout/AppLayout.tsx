@@ -28,7 +28,7 @@ export function AppLayout() {
   // userEmail is the identity key: the context does NOT expose a raw user id, and
   // email is unique per signed-in user. `role` here is the context's display-ready
   // role ('OWNER' | 'MANAGER' | 'STAFF'), not the nullable membership role.
-  const { userEmail, role, isOwner } = useBusinessContext();
+  const { userEmail, role, can } = useBusinessContext();
 
   // Bind the dev-surface gate to the SIGNED-IN identity. If the person or the role
   // changes, the gate purges its stored state — a dev panel never carries across a
@@ -49,7 +49,9 @@ export function AppLayout() {
       {/* Header + nav chrome are ONE sticky stack, so the nav pins WITH the banner and never
           slides under it (the prior bug: two independent sticky siblings both at top:0). */}
       <div className="appchrome-stack">
-        <AppHeader onSignOut={handleSignOut} devSurfaces={isOwner} />
+        {/* devSurfaces is a CAPABILITY (it exposes internal state), so it is keyed on a held
+            string rather than on who the person is — ruling 2026-07-30. */}
+        <AppHeader onSignOut={handleSignOut} devSurfaces={can('owner-only')} />
         <div className="appchrome">
           <AppNav />
           <Breadcrumb />

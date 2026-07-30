@@ -27,7 +27,7 @@ export function CartReview() {
     setLineQty, removeLine, toggleService, setNettingDeclined, setPlantingSelected,
   } = useCart();
   const { submit, submitting, error: submitError } = useSubmitOrder();
-  const { business, businessId, isOwner, can } = useBusinessContext();
+  const { business, businessId, can } = useBusinessContext();
   const [payOnline, setPayOnline] = useState<boolean | null>(null);
 
   // D-39 (E1) — the AUTHORITATIVE tier resolution for the Review preview. Load the business's
@@ -63,7 +63,7 @@ export function CartReview() {
   // — the LEGACY antecedent — while submit.ts:22 gates on `tax_exempt:apply`. The alias layer made
   // the two resolve alike for a member, so the disagreement was invisible; it is still two answers
   // to one question, and the client's was the wrong one to keep. `isOwner ||` is removed in Phase 2.
-  const canApplyTaxExempt = isOwner || can('tax_exempt:apply');
+  const canApplyTaxExempt = can('tax_exempt:apply');
   const [orderExempt, setOrderExempt] = useState<OrderTaxExemption | null>(null);
 
   // Owner overrides for a service's netted quantity (review-only refinement; default = the
@@ -81,7 +81,7 @@ export function CartReview() {
   // string that replaced it. A member holding order-management but not discount authority saw the
   // override control and had the write refused server-side: the affordance promised an act the
   // server would not perform. `isOwner ||` is removed in Phase 2.
-  const canOverride = isOwner || can('order_discount:apply');
+  const canOverride = can('order_discount:apply');
   const [serviceOverride, setServiceOverride] = useState<Record<string, { amount: number; reason: string }>>({});
   const setOverride = (id: string, next: { amount: number; reason: string } | null) =>
     setServiceOverride(m => {

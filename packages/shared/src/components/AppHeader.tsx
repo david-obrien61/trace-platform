@@ -9,7 +9,7 @@
  *               this menu — Settings is a nav-rail section, and listing it here re-creates the
  *               duplicate-nav bug we removed.
  * DEPENDENCIES: useBusinessContext (BusinessProvider) — the ONE canonical identity source (business
- *               name · userName · userEmail · role · isOwner · loading). NEVER queries the DB itself —
+ *               name · userName · userEmail · role · can · loading). NEVER queries the DB itself —
  *               identity is read from context only, no client or network call here (cap #1 enforces this).
  *               react-router useNavigate for the menu links. Sign out is INJECTED via the `onSignOut`
  *               prop (AppLayout wires it to the vertical's auth client) so the header stays client-free.
@@ -26,7 +26,7 @@ export interface AppHeaderProps {
   onSignOut?: () => void | Promise<void>;
   /**
    * Show the OWNER-ONLY developer-surface toggles (Debug panel · Rhythm logger) in the
-   * menu. The vertical's layout passes `isOwner` — the header does not decide authority,
+   * menu. The vertical's layout passes `devSurfaces` — the header does not decide authority,
    * it renders what it is told, the same injection pattern as `onSignOut`.
    *
    * These replace the old `?debug=1` / `?rhythm=1` typed URL flags (ledger #142): a flag
@@ -45,7 +45,9 @@ const ROLE_ACCENT: Record<string, { bg: string; fg: string }> = {
 };
 
 export function AppHeader({ onSignOut, devSurfaces = false }: AppHeaderProps = {}) {
-  const { business, userName, userEmail, role, isOwner, loading } = useBusinessContext();
+  // `isOwner` is read for DISPLAY ONLY here — the role pill. Authority in this component goes
+  // through can() (ruling 2026-07-30: isOwner survives for display and the Roles owner row).
+  const { business, userName, userEmail, role, can, loading } = useBusinessContext();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const debugOn = useDevSurface('debug');
@@ -194,13 +196,18 @@ export function AppHeader({ onSignOut, devSurfaces = false }: AppHeaderProps = {
               {/* items — Settings deliberately omitted (it is a nav-rail section, not an account action) */}
               <MenuItem label="Your Profile" onClick={() => go('/profile')} />
               <MenuItem label="Help" onClick={() => go('/help')} />
-              {isOwner && <MenuItem label="+ Business" onClick={() => go('/add-business')} />}
+              {/* `owner-only` is a STRING THE OWNER HOLDS, not an identity check (ruling
+                  2026-07-30) — the same string /add-business's route is gated on, so the menu
+                  item and the destination can no longer disagree. */}
+              {can('owner-only') && <MenuItem label="+ Business" onClick={() => go('/add-business')} />}
 
               {/* DEVELOPER SURFACES — owner-only, quiet, and deliberately BELOW the
                   account actions in the dead space. Staff/manager never see this block
                   at all (not disabled — absent). The menu stays closed on toggle so the
                   owner can flip both without re-opening it. */}
-              {devSurfaces && isOwner && (
+              {/* Dev surfaces are an authority, not a decoration — they expose internal state.
+                  `owner-only`, the same string the caller uses to compute devSurfaces. */}
+              {devSurfaces && can('owner-only') && (
                 <>
                   <div style={{ borderTop: '1px solid #eef1ea' }} />
                   <p style={{

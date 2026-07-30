@@ -33,6 +33,7 @@ import {
   ALL_ACTION_PERMISSIONS, ALL_FINANCIAL_PERMISSIONS, HIDDEN_PERMISSIONS, OVERRIDE_MAINTENANCE,
   PERMISSION_MANIFEST, ALL_MODEL_PERMISSIONS, LEGACY_PERMISSIONS, ALIAS_PAIRS, MAPPABLE_LEGACY,
   STRIPPED_AT_BACKFILL, MANAGER_DEFAULT_BUNDLE, STAFF_DEFAULT_BUNDLE,
+  OWNER_DEFAULT_BUNDLE, OWNER_LOCKED_SET, DECLARED_UNWIRED_PERMISSIONS, CATALOG_PERMISSIONS,
   splitPermission, unmetDependencies, createWithoutRead, applyPermissionDependencies,
 } from './permissionManifest';
 
@@ -187,6 +188,32 @@ console.log('\n(4) permission manifest — the model, the dashes, the dependenci
     STRIPPED_AT_BACKFILL.unwired.includes('override_maintenance'));
   check('R-B unmapped class = the two orphans (A1.1)',
     STRIPPED_AT_BACKFILL.unmapped.includes('process_orders') && STRIPPED_AT_BACKFILL.unmapped.includes('manage_team'));
+
+
+  // — THE OWNER'S SET IS COMPUTED, NOT CURATED (ruling 2026-07-30) —
+  // The header of OWNER_DEFAULT_BUNDLE has claimed since 2026-07-27 that "the accompanying test
+  // asserts it still equals the computed set." THAT TEST DID NOT EXIST — a comment asserting a
+  // check nobody wrote, which is #164's class and the exact thing capA is being built to stop.
+  // It exists now. It is what keeps the SQL literal in 20260730a honest against the manifest.
+  check('OWNER_LOCKED_SET = every non-declared-unwired manifest entry, PLUS the owner-only sentinel',
+    OWNER_LOCKED_SET.length === Object.values(PERMISSION_MANIFEST)
+      .filter((e) => e.status !== 'declared-unwired').length + 1);
+  // The stored array (business_members.permissions, backfilled by 20260730a) is the SERVER's copy.
+  // It deliberately does NOT carry `owner-only`: that sentinel gates two CLIENT ROUTES and no SQL
+  // policy checks it, so storing it would put a string in the database that nothing reads.
+  check('OWNER_DEFAULT_BUNDLE (the stored materialisation) EQUALS the computed set minus the sentinel',
+    JSON.stringify([...OWNER_DEFAULT_BUNDLE].sort())
+      === JSON.stringify(OWNER_LOCKED_SET.filter((p) => p !== 'owner-only').sort()));
+  check('the owner holds owner-only — without it, deleting the short-circuit strips /costs and /add-business',
+    OWNER_LOCKED_SET.includes('owner-only'));
+  check('owner-only is NOT grantable — it never appears as a Roles-page chip',
+    HIDDEN_PERMISSIONS.includes('owner-only') && !CATALOG_PERMISSIONS.includes('owner-only'));
+  check('the owner set holds tax_rate:read — the string whose absence produced "Tax: not identified"',
+    OWNER_LOCKED_SET.includes('tax_rate:read'));
+  check('the owner set holds NO declared-unwired string (un-removable phantom grant)',
+    OWNER_LOCKED_SET.every((p) => !DECLARED_UNWIRED_PERMISSIONS.includes(p)));
+  check('the owner set is NOT the membership sentinel',
+    !OWNER_LOCKED_SET.includes('member'));
 
   // — neutrality of the dependency filter (the applyFinancialDependencies successor) —
   check('legacy behavior preserved: view_margin stripped without view_costs',

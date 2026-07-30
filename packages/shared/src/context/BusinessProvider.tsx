@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '../supabase/client';
 import { can as sharedCan } from '../auth/permissions';
-import { applyPermissionDependencies } from '../auth/permissionManifest';
+import { applyPermissionDependencies, OWNER_LOCKED_SET } from '../auth/permissionManifest';
 
 const SM_DEBUG = false; // flip to true to re-enable legacy [SM-TRACE] diagnostics
 
@@ -462,6 +462,14 @@ export function BusinessProvider({
           });
         }
 
+        // OWNERSHIP IS A FACT, NOT A GRANT (ruling 2026-07-30). `owner_id` says WHO OWNS the
+        // business; it does not say what they may do. The permission set comes from the ROLE, and
+        // it is filled in below — this loop records the fact and nothing else.
+        //
+        // `permissions: null` here no longer means "everything" (it meant exactly that until this
+        // ruling, via the can() short-circuit that is now deleted). It means UNRESOLVED, and the
+        // member-row merge two blocks down is what resolves it. An owner whose member row is
+        // missing is caught explicitly there rather than silently granted or silently denied.
         for (const biz of (ownedBizzes ?? [])) {
           resolved.push({ business: biz as Business, isOwner: true, permissions: null, role: null, memberName: null, memberId: null });
         }
@@ -518,14 +526,40 @@ export function BusinessProvider({
         // entries' memberId from the raw memberships list here. (null for legacy owners with no
         // member row → the device gate no-ops for them.)
         const memberIdByBusiness = new Map<string, string>();
+        const memberRowByBusiness = new Map<string, { id?: string; role?: string | null; permissions?: string[] | null; name?: string | null }>();
         for (const m of (memberships ?? [])) {
           const bId = (m as { business_id?: string }).business_id;
           const mId = (m as { id?: string }).id;
           if (bId && mId) memberIdByBusiness.set(bId, mId);
+          if (bId) memberRowByBusiness.set(bId, m as never);
         }
         for (const r of resolved) {
-          if (r.isOwner && r.memberId === null) {
-            r.memberId = memberIdByBusiness.get(r.business.id) ?? null;
+          if (!r.isOwner) continue;
+          const row = memberRowByBusiness.get(r.business.id);
+          if (r.memberId === null) r.memberId = memberIdByBusiness.get(r.business.id) ?? null;
+
+          // THE OWNER'S AUTHORITY COMES FROM THEIR ROLE, LIKE EVERYONE ELSE'S (ruling 2026-07-30).
+          // The owner path deduped this person out of the member loop, so their role/permissions
+          // were never filled in — that was fine only while can() short-circuited on isOwner.
+          r.role        = (row?.role as string) ?? r.role;
+          r.permissions = (row?.permissions as string[]) ?? r.permissions;
+          r.memberName  = (row?.name as string) ?? r.memberName;
+
+          // 🔴 THE LOCKOUT CASE, NAMED RATHER THAN PAPERED OVER. A legacy owner with NO
+          // business_members row has no role and no array, so after the short-circuit's removal
+          // they would resolve to ZERO permissions and see a platform that refuses them
+          // everywhere — the precise failure the phase order exists to prevent.
+          //
+          // We do NOT silently grant here: falling back to the owner set on a missing row would
+          // re-introduce owner_id as an authority mechanism through the back door, which is the
+          // defect being removed. Instead the state is made LOUD and REPAIRABLE: it is reported
+          // here, and `20260730b` creates the missing rows so the state cannot exist in the data.
+          if (!row) {
+            console.log('[TRACE:PERM] OWNER WITHOUT A MEMBER ROW — no role, no permissions', {
+              businessId: r.business.id,
+              userId,
+              fix: 'supabase/migrations/20260730b_owner_member_row_invariant.sql',
+            });
           }
         }
 
@@ -666,18 +700,37 @@ export function BusinessProvider({
   const allBusinesses = resolvedBusinesses.map(r => r.business);
 
   // ─── Permission chokepoint ───────────────────────────────────────────────────
-  // The single true checker for the active business. Owner ⇒ full access (matches
-  // the existing isOwner=>userPermissions=null contract). Member ⇒ the shared can()
-  // helper over their explicit list, with view_margin⊆view_costs enforced so the
-  // margin verdict never resolves true for a session denied its cost inputs.
-  // Phase 1: this ESTABLISHES the chokepoint. It is not yet wired into every gate
-  // (the existing inline .includes() gates are migrated in the render-gate phase).
+  // The single true checker for the active business. EVERY session — owner included — is checked
+  // against a resolved permission set. There is no exception path (ruling 2026-07-30).
   const isOwnerActive = activeResolved?.isOwner ?? false;
-  const activePermissions = activeResolved?.permissions ?? null;
+
+  // THE OWNER'S SET IS COMPUTED FROM THE MANIFEST, NOT READ FROM THE ROW (ruling 2026-07-30).
+  // A session whose ROLE is OWNER resolves to OWNER_LOCKED_SET — every enforced permission the
+  // model declares. Consequences, and each is the point rather than a side effect:
+  //   · a new permission is inherited on the next page load, with no migration and no drift window
+  //   · nobody can remove one, because there is nothing per-tenant to edit
+  //   · TWO OWNERS is expressible — two members with role OWNER hold the same locked set, and
+  //     `owner_id` (single-valued, and therefore unable to express it) is not consulted at all
+  //
+  // 🔴 KEYED ON THE ROLE, NOT ON isOwner. That is the whole ruling in one line: a second owner
+  // added as an OWNER-role member gets full authority without touching `businesses.owner_id`.
+  // The stored array (backfilled by 20260730a) is what the SERVER reads; this is what the client
+  // reads; capA assertion 3 fails the build if the two disagree.
+  const activePermissions = activeResolved
+    ? ((activeResolved.role ?? '').toUpperCase() === 'OWNER'
+        ? OWNER_LOCKED_SET
+        : activeResolved.permissions)
+    : null;
 
   // Display-ready role for the active business. Owner ⇒ OWNER; member ⇒ their raw role
   // uppercased (the role they ACTUALLY hold — rendered live, not a hardcoded list; falls
   // back to STAFF only when a member row carries no role). null when nothing is resolved.
+  //
+  // isOwner still participates HERE and this is one of the two places it legitimately survives
+  // (ruling 2026-07-30: isOwner means DISPLAY, and the Roles page's owner row). It answers "what
+  // does the header call this person", not "what may they do". A legacy owner with no member row
+  // still reads OWNER in the chrome — honest about who they are, while `can()` above is honest
+  // about what they currently hold.
   const activeRole: string | null = activeResolved
     ? (isOwnerActive ? 'OWNER' : (activeResolved.role ?? 'STAFF').toUpperCase())
     : null;
@@ -692,7 +745,19 @@ export function BusinessProvider({
     : (authName ?? userEmail);
   const can = React.useCallback(
     (permissionId: string): boolean => {
-      if (isOwnerActive) return true; // owner: full access (userPermissions === null)
+      // 🔴 THE OWNER SHORT-CIRCUIT IS DELETED (ruling 2026-07-30). It read:
+      //     if (isOwnerActive) return true;  // owner: full access
+      // Every isOwner check in the app inherited its authority from this one line, and the line
+      // itself inherited from `businesses.owner_id` — a single-valued column that CANNOT express
+      // the two-owner fact David ruled on 2026-07-26. An owner now passes because their resolved
+      // set CONTAINS the string, exactly like every other member.
+      //
+      // WHAT THIS COST BEFORE IT WAS REMOVED: the short-circuit made the client MORE permissive
+      // than the server, and the gap was invisible precisely because the owner never hit it.
+      // `get_business_tax_rate` calls `has_permission`, which has no owner branch, so the owner
+      // failed the SQL check and read "Tax: not identified" while the client cheerfully rendered
+      // every control. One layer said yes, the other said no, and the owner was worse off than
+      // his own manager. Client and server now answer from the same model.
       // R3 — `view_dashboard` RETIRES INTO MEMBERSHIP. It never gated anything a member lacked,
       // so it has no resource:verb successor; the seven navigation-scaffolding surfaces that used
       // it (Dashboard/Settings sections, Help, Profile, the two headline metrics, Services) now
@@ -703,7 +768,7 @@ export function BusinessProvider({
       const effective = applyPermissionDependencies(activePermissions ?? []);
       return sharedCan({ permissions: effective }, permissionId);
     },
-    [isOwnerActive, activePermissions],
+    [activePermissions],
   );
 
   // [TRACE:PERM] resolved permission snapshot for the active business — ON by
@@ -712,11 +777,17 @@ export function BusinessProvider({
     if (!activeResolved) return;
     console.log('[TRACE:PERM] active business permissions', {
       businessId: activeResolved.business.id,
+      // ownership FACT and authority ROLE, reported separately — they are different things now,
+      // and a session where they disagree is exactly what this trail needs to make visible.
       isOwner: isOwnerActive,
-      // owner ⇒ all access implied; member ⇒ dependency-resolved explicit list
-      effectivePermissions: isOwnerActive
-        ? 'OWNER_ALL'
-        : applyPermissionDependencies(activePermissions ?? []),
+      role: (activeResolved.role ?? '(none)').toUpperCase(),
+      source: (activeResolved.role ?? '').toUpperCase() === 'OWNER'
+        ? 'OWNER_LOCKED_SET (computed from the manifest)'
+        : 'business_members.permissions (stored)',
+      // NO 'OWNER_ALL' SENTINEL ANY MORE. It printed a claim instead of a set, so the one session
+      // that most needed reading was the one the trail said least about — the owner's.
+      effectivePermissions: applyPermissionDependencies(activePermissions ?? []),
+      count: applyPermissionDependencies(activePermissions ?? []).length,
     });
   }, [activeResolved, isOwnerActive, activePermissions]);
 
@@ -770,7 +841,10 @@ export function BusinessProvider({
       businessError,
       loading,
       reload: () => setTick(t => t + 1),
-      userPermissions: activeResolved?.permissions ?? null,
+      // The RESOLVED set, not the raw row — so an OWNER-role session exposes its computed set here
+      // too. Consumers that read this directly (rather than through can()) were the ones that
+      // needed `isOwner ||` bolted on beside them; they no longer do.
+      userPermissions: activePermissions,
       isOwner: isOwnerActive,
       userEmail,
       userName: activeName,

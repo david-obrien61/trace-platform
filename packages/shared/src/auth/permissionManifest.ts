@@ -1135,9 +1135,15 @@ export const STAFF_DEFAULT_BUNDLE: string[] = [
  * can assign is a role the source must define.
  *
  * CONTENT IS NOT A JUDGEMENT CALL: it is every permission in PERMISSION_MANIFEST whose status is
- * not `declared-unwired` — 55 of 63 today. Materialised as a literal so capQ can reconcile it
- * against the floor-seeding migration the same way it reconciles the R-B2 list; the accompanying
- * test asserts it still equals the computed set, so a new permission cannot quietly skip OWNER.
+ * not `declared-unwired` — **52 of 60 today**. Materialised as a literal so capQ can reconcile it
+ * against the floor-seeding migration the same way it reconciles the R-B2 list.
+ *
+ * 🔧 TWO CORRECTIONS (2026-07-30, found while building the owner ruling — both in this paragraph):
+ *   · The count read "55 of 63". It is 52 of 60, and had been since the model last moved.
+ *   · "the accompanying test asserts it still equals the computed set" — **THAT TEST DID NOT
+ *     EXIST.** A comment asserting a check nobody wrote is #164's class, sitting in the file whose
+ *     job is to be the one true source. It exists now (`permissionManifest.test.ts`, 5 assertions
+ *     against `OWNER_LOCKED_SET`), and the sentence is true for the first time.
  */
 export const OWNER_DEFAULT_BUNDLE: string[] = [
   'audit_log:read',
@@ -1193,6 +1199,54 @@ export const OWNER_DEFAULT_BUNDLE: string[] = [
   'wages:read',
   'wages:update',
 ];
+
+/**
+ * ══════════════════════════════════════════════════════════════════════════════════════════════
+ * THE OWNER'S SET — COMPUTED, NOT CURATED. THE CLIENT READS THIS, NOT THE STORED ARRAY.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════
+ * RULING (David, 2026-07-30): "The OWNER role holds every enforced permission, LOCKED — computed
+ * from the manifest, not stored, so a new permission is inherited automatically and nobody can
+ * remove one." `businesses.owner_id` is a FACT ABOUT WHO OWNS THE BUSINESS; it is NOT an authority
+ * mechanism. Two owners = two members holding this same locked set. Nothing special-cased.
+ *
+ * WHY COMPUTED AND STORED BOTH EXIST, AND WHY THAT IS NOT STD-011 DRIFT:
+ *   · THIS (computed) is what `can()` reads on the CLIENT. Add a permission to the manifest and
+ *     every owner holds it on the next page load — no migration, no backfill, no drift window.
+ *   · The STORED array (`business_members.permissions`, backfilled by 20260730a) is what the
+ *     SERVER reads — `has_permission` is SQL and cannot import a TS module.
+ *   They are two MATERIALISATIONS of one authority, not two authorities, and the direction of
+ *   truth is one-way: the manifest is the source, the array is a copy. capA assertion 3 FAILS the
+ *   build when the copy disagrees, which is the only thing that makes the arrangement safe.
+ *
+ * DERIVATION: every entry whose status is not `declared-unwired`. `derived` members (margin:read)
+ * ARE included — the owner holds the prerequisite, so the derived string resolves true anyway;
+ * excluding it would make the owner's set disagree with its own dependency rule. `declared-unwired`
+ * is excluded by the same invariant that governs every other role: a string nothing enforces is
+ * un-removable through the UI, so granting one creates a permanent phantom (ruling 2026-07-27).
+ *
+ * 🔴 NOT the MEMBERSHIP_SENTINEL. `member` is a declared absence of requirement, never a held
+ * string — `can()` answers it before consulting any set at all.
+ *
+ * ── THE `owner-only` SENTINEL IS A MEMBER OF THIS SET, AND THAT IS THE RULING, NOT AN EXCEPTION ──
+ * `owner-only` is the route sentinel guarding `/costs` and `/add-business` (router.tsx:230). It is
+ * NOT a manifest entry, so the derivation above cannot produce it — and until 2026-07-30 it did not
+ * need to, because `can()` short-circuited before ever looking. Delete the short-circuit without
+ * this line and the owner silently loses Cost-to-Produce and Add Business.
+ *
+ * It is appended HERE rather than special-cased at the gate because that is the difference between
+ * a permission and an exception path: it is a STRING IN A SET, checked exactly like the other 52.
+ * A second OWNER-role member holds it (two owners, by ruling). A manager does not, and cannot be
+ * given it — it stays in HIDDEN_PERMISSIONS, so it is never a grantable chip on the Roles page.
+ * "Owner-level access" is now a permission somebody holds, not an identity somebody is.
+ */
+export const OWNER_ONLY_SENTINEL = 'owner-only';
+
+export const OWNER_LOCKED_SET: string[] = [
+  ...Object.values(PERMISSION_MANIFEST)
+    .filter((e) => e.status !== 'declared-unwired')
+    .map((e) => e.permission),
+  OWNER_ONLY_SENTINEL,
+].sort();
 
 export const DEFAULT_BUNDLES: Record<string, string[]> = {
   OWNER: OWNER_DEFAULT_BUNDLE,

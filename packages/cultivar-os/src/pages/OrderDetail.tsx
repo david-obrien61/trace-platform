@@ -3,10 +3,10 @@
 // PURPOSE: the roster (Orders.tsx) shows first-line-only and no detail. This is the drill-in the
 //   as-built recon §7 named missing — ALL line items (dual-anchor names), ALL services
 //   (order_service_selections, written but never displayed), customer, delivery date, transport,
-//   status, totals. Owner/manager (isOwner || can('manage_orders')) can edit line quantities +
+//   status, totals. A session holding `orders:update` can edit line quantities +
 //   delivery date, remove lines, change status, and delete the order; staff is READ-ONLY (the
 //   controls never render, and the server independently refuses — submit.ts action gate).
-// DEPENDENCIES: supabase (owner-RLS read), useBusinessContext (isOwner/can), /api/orders/submit
+// DEPENDENCIES: supabase (owner-RLS read), useBusinessContext (can), /api/orders/submit
 //   (action=update|delete|status, Bearer-token gated), orderItemName, orderStatus.
 // OUTPUTS: the order detail view + the edit/delete/status affordances.
 // ============================================================
@@ -98,8 +98,11 @@ const ITEM_COLS_FULL = `${ITEM_COLS_CORE}, retail_unit, discount_pct, discount_a
 export function OrderDetail() {
   const { id }           = useParams<{ id: string }>();
   const navigate         = useNavigate();
-  const { businessId, isOwner, can } = useBusinessContext();
-  const canManage        = isOwner || can('manage_orders');
+  const { businessId, can } = useBusinessContext();
+  // `orders:update` — the fine string that replaced manage_orders. submit.ts enforces it on the
+  // line-edit and status paths this flag gates. `isOwner ||` removed (ruling 2026-07-30): an
+  // OWNER-role session holds orders:update in its computed set and passes on the same branch.
+  const canManage        = can('orders:update');
 
   const [order,   setOrder]   = useState<OrderDetailRow | null>(null);
   const [loading, setLoading] = useState(true);

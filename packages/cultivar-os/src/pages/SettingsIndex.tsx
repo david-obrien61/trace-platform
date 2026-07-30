@@ -6,7 +6,7 @@
  *               primary entry; for those with access, a clear link to business administration and
  *               to the full business-settings page (the Services/Team/cost-config wall, now a
  *               deliberate destination rather than the default landing).
- * DEPENDENCIES: useBusinessContext (isOwner / userPermissions → who may see business settings) ·
+ * DEPENDENCIES: useBusinessContext (can('settings:read') → who may see business settings) ·
  *               react-router.
  * OUTPUTS:      Your Profile (every authenticated user) + (manage_settings) Business administration
  *               (→ /admin) + All business settings (→ /settings/all).
@@ -21,8 +21,10 @@ const GREEN = '#27500A';
 
 export function SettingsIndex() {
   const navigate = useNavigate();
-  const { isOwner, userPermissions } = useBusinessContext();
-  const canManageSettings = isOwner || (userPermissions ?? []).includes('manage_settings');
+  const { can } = useBusinessContext();
+  // The INDEX only lists sections — it is a read surface, so it takes the read string. Settings.tsx
+  // independently requires settings:update to write, so a settings:read holder browses and cannot edit.
+  const canManageSettings = can('settings:read');
 
   console.log('[TRACE:NAV] settings-index', { canManageSettings });
 

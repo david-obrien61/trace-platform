@@ -338,7 +338,7 @@ export function DeliveryRoute() {
   // When ?date=YYYY-MM-DD is present we route SCHEDULED deliveries (the `deliveries`
   // table) for that day. Absent → the original cart-order route path, unchanged.
   const dateParam = searchParams.get('date');
-  const { businessId, isOwner } = useBusinessContext();
+  const { businessId, can } = useBusinessContext();
 
   const [orders, setOrders]     = useState<DeliveryOrder[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -543,7 +543,9 @@ export function DeliveryRoute() {
           </p>
         </div>
         {/* Second door into the invoice OCR→infer→route flow (owner action, matches the delivery-card gating). */}
-        {isOwner && <CaptureInvoiceLauncher />}
+        {/* Capturing an invoice WRITES a cost record — `costs:create`, the capability exercised,
+            rather than the identity of the person exercising it (ruling 2026-07-30). */}
+        {can('costs:create') && <CaptureInvoiceLauncher />}
       </div>
 
       <div style={{ padding: '16px 16px 0' }}>

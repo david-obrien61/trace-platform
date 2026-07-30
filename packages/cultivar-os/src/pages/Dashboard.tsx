@@ -83,8 +83,11 @@ const PLATFORM_URLS: Record<string, string> = {
 export function Dashboard() {
   const { user } = auth.useSession();
   const navigate  = useNavigate();
-  const { business, businessId, loading: businessLoading, businessError, userPermissions, isOwner, can } = useBusinessContext();
-  const canManageSettings = isOwner || (userPermissions ?? []).includes('manage_settings');
+  // isOwner is read ONLY for the heading string below (display — the ruling's surviving use).
+  const { business, businessId, loading: businessLoading, businessError, isOwner, can } = useBusinessContext();
+  // Gates the profile-incomplete prompt, whose only action is a link into the settings WRITE surface.
+  // Offering it to someone who cannot write there is a dead affordance (§1.6 gate 5).
+  const canManageSettings = can('settings:update');
   const canViewCosts = can('view_costs'); // gates the cost-derived inventory-value metric
   // Readout visibility is registry-driven (MB_D-012): a readout LEAKS data by rendering, so it
   // shows only if the session holds the registry's required_permission for that readout key.

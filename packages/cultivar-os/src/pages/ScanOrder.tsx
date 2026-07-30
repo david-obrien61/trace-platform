@@ -106,7 +106,7 @@ function pickerSub(row: { qty?: number | null; status?: string | null; sell_pric
 
 export function ScanOrder() {
   const navigate = useNavigate();
-  const { businessId, isOwner, can } = useBusinessContext();
+  const { businessId, can } = useBusinessContext();
   const {
     items, addLine, removeLine, clear,
     attachedCustomerName, orderTierLabel, attachCustomer, clearAttachedCustomer,
@@ -138,10 +138,14 @@ export function ScanOrder() {
   // membership test with NO alias resolution, so it was FALSE for every member, the strip read
   // "Add a customer", and the search was unreachable on the path a cashier walks. The route
   // (router.tsx:242) and the RLS policy (20260727:174) had both moved; this gate had not.
-  const canLookup = isOwner || can('customers:read');
+  // `isOwner ||` removed (ruling 2026-07-30). This line is the #170 fix from one day earlier, and
+  // the short-circuit is exactly what hid that bug: the owner never hit the broken branch.
+  const canLookup = can('customers:read');
   // The order-scoped tier INVOKE (way 4) is an owner/manager act, server-verified at submit —
   // hide the picker for staff (their new customers ring at retail).
-  const canInvoke = isOwner || can('manage_orders');
+  // Checkout CREATES an order — `orders:create`, which is also what the route itself is gated on
+  // (router.tsx:136). The old manage_orders read demanded UPDATE+DELETE authority to place a sale.
+  const canInvoke = can('orders:create');
 
   const plantCount = totalPlantCount(items);
   const customerOpen = customerView !== null;

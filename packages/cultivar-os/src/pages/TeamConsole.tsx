@@ -103,7 +103,7 @@ export function TeamConsole() {
       inviteBaseUrl={typeof window !== 'undefined' ? window.location.origin : ''}
       invitePath="/join"
       showDevices
-      managePermission="manage_settings"
+      managePermission="team:read"
     />
   );
 }

@@ -82,7 +82,7 @@ export function CustomerCapture() {
     setCustomer, customer: saved, items, selectedTransport,
     deliveryDate: savedDeliveryDate, setDeliveryDate,
   } = useCart();
-  const { isOwner, role, business, businessId } = useBusinessContext();
+  const { can, business, businessId } = useBusinessContext();
   const firstItem = items[0] ?? null;
 
   const [firstName, setFirstName] = useState(saved?.first_name ?? '');
@@ -106,7 +106,16 @@ export function CustomerCapture() {
     && (selectedTransport.requires_address || selectedTransport.transport_mode === 'staff');
   // FIX 4 — the delivery date is entered by owner/manager (the manual precursor to customer
   // self-scheduling). Shown only when a delivery branch is selected.
-  const canSetDeliveryDate = isOwner || role === 'MANAGER';
+  //
+  // 🔴 THIS LINE WAS ITS OWN DEFECT CLASS (ruling 2026-07-30). It read
+  //     isOwner || role === 'MANAGER'
+  // — a RAW ROLE-STRING COMPARE that never touched can(), so it was invisible to the manifest,
+  // to the alias layer, and to every cap keyed on permissions. A tenant that renamed MANAGER, or
+  // granted delivery authority to STAFF, changed nothing here: the string is hardcoded authority.
+  // capA assertion 2 now FAILS the build on any role-string compare in an authority position.
+  // `deliveries:create` is the capability actually being exercised — entering the date is what
+  // creates the delivery.
+  const canSetDeliveryDate = can('deliveries:create');
   const showDeliveryDate   = deliveryRequired && canSetDeliveryDate;
 
   // A6 — VALIDATION LIVES WITH THE ENTITY. This was a PRIVATE 10-digit filter, the standard's own

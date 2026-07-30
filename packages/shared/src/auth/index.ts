@@ -146,6 +146,8 @@ export {
   // fresh-role seed data (NOT a backfill input — see R-A on DEFAULT_BUNDLES)
   DEFAULT_BUNDLES,
   OWNER_DEFAULT_BUNDLE,
+  // the owner's COMPUTED set — what can() reads for an OWNER-role session (ruling 2026-07-30)
+  OWNER_LOCKED_SET,
   MANAGER_DEFAULT_BUNDLE,
   STAFF_DEFAULT_BUNDLE,
   // legacy string constants — live until Phase 7 CONTRACT

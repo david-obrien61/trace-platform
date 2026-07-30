@@ -569,7 +569,7 @@ function TeamSection({ businessId }: { businessId: string }) {
 export function Settings() {
   const navigate = useNavigate();
   const { section: sectionParam } = useParams<{ section?: string }>();
-  const { businessId, isOwner, userPermissions, reload } = useBusinessContext();
+  const { businessId, can, reload } = useBusinessContext();
 
   // RULE 2a (ledger #50): a section param renders JUST that section as a direct menu destination.
   // Business Profile + Accounting + Services are isolated destinations; an unknown param falls back
@@ -591,7 +591,10 @@ export function Settings() {
     onConnected: () => { reload(); },
   });
 
-  const canManageSettings = isOwner || (userPermissions ?? []).includes('manage_settings');
+  // This page WRITES business settings, so it takes the write string, not the coarse legacy one.
+  // manage_settings split five ways (settings:read/update, team:read/update, pricing_recipe:update);
+  // reading the whole legacy string here granted four capabilities this screen never uses.
+  const canManageSettings = can('settings:update');
 
   // Redirect members without settings permission back to dashboard
   if (businessId && !canManageSettings) {

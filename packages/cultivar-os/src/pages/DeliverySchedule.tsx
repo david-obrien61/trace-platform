@@ -82,7 +82,7 @@ function formatDay(dateStr: string | null): string {
 
 export function DeliverySchedule() {
   const navigate = useNavigate();
-  const { businessId, isOwner } = useBusinessContext();
+  const { businessId, can } = useBusinessContext();
 
   const [rows, setRows]       = useState<DeliveryRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -196,7 +196,8 @@ export function DeliverySchedule() {
           </p>
         </div>
         {/* Second door into the invoice OCR→infer→route flow (owner action, matches "Edit customer" gating). */}
-        {isOwner && <CaptureInvoiceLauncher />}
+        {/* `costs:create` — see DeliveryRoute. Same control, same string, one rule. */}
+        {can('costs:create') && <CaptureInvoiceLauncher />}
       </div>
 
       <div style={{ padding: '16px 16px 0' }}>
@@ -310,10 +311,12 @@ export function DeliverySchedule() {
                         )}
                       </div>
 
-                      {/* Edit customer → in-context modal over THIS page (owner-gated so staff
-                          never hit the owner-only customers RLS wall). Opens the full customer
-                          object from the widened join; close → stay on the same route, no re-nav. */}
-                      {isOwner && d.customer_id && d.customers && (
+                      {/* Edit customer → in-context modal over THIS page. Opens the full customer
+                          object from the widened join; close → stay on the same route, no re-nav.
+                          `customers:update` — the capability the modal exercises (ruling
+                          2026-07-30). The customer BLOCK's own redaction is handled in Phase 3;
+                          this gate is only the edit affordance. */}
+                      {can('customers:update') && d.customer_id && d.customers && (
                         <button
                           onClick={() => { void openEditor(d); }}
                           style={{
