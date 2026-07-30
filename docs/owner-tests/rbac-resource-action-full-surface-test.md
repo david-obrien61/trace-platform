@@ -27,6 +27,7 @@ disposition in `docs/decisions/2026-07-26-rbac-build-plan.md` §6.
 | **On THIS file** | 12 re-written + 24 new = **36** |
 | **On `team-permissions-full-surface-test.md`** | the **6 SURVIVORS** (cards 1, 2, 3, 4, 5, 7 — they test the FUNNEL and the audit row, which this refit does not change). They stay where they are, unchanged, and they count toward the 42. |
 | **PROVEN COUNT ON DAY ONE** | **0 of 42.** |
+| **AMENDED 2026-07-30 (ledger #170)** | **+1 — `R-7b`**, the checkout customer-attach CLIENT gate. Not a re-write of anything above: R-7/R-8 test the route and the policy, and **neither one moved when the client gate broke.** Board is now **43**; the 2026-07-26 reconciliation above is left intact as the historical record. |
 
 > **The 0-of-42 is NOT a regression, and the record should not later read as one.** Measured on
 > 2026-07-26 before this rebuild: of the 20 permission-relevant cards, **zero were `covered`** — 19
@@ -218,6 +219,32 @@ LAST-PROVEN: never
 - **SETUP:** revoke `customers:read` from a test member through `/team` first.
 - **PASS:** the route refuses AND, if reached by URL, the roster is empty (both layers hold).
 - **FAIL:** either layer admits.
+
+### R-7b — 🔴 THE CHECKOUT CUSTOMER SEARCH IS REACHABLE — the client gate names a string that exists (A7)
+STATUS: owed
+PHASE: 2
+DEVICE: either
+COVERS: ledger #170 · A7 second instance · `customers:read` at a CLIENT gate (`ScanOrder.tsx:141`)
+LAST-PROVEN: never
+- **Why this card exists:** R-7 proves the ROUTE and the RLS policy honor `customers:read`. Neither
+  touches the **client render gate** at checkout, which went on naming the RETIRED `view_customers`
+  after #166 renamed it. `can()` is a literal array membership test with **no alias resolution**, so
+  the gate was FALSE for every member — the strip read "Add a customer", `openCustomer()` opened the
+  **create** form directly, and the search built at `6016afa` was unreachable on the path a cashier
+  actually walks. **capP never saw it** (its retired-string scan covers `view_dashboard`, not a
+  legacy string with a live successor) — this card is the only check that catches this class.
+- **SETUP:** sign in as the **MANAGER** (`df7723be`, tenant `f7ec5d67`) — **not as the owner.**
+  `isOwner` short-circuits the gate, so an owner session proves nothing about this fix.
+- **Do:** open `/checkout/scan` and read the customer-attach strip. Tap it. Type a **surname** that
+  exists in the roster. Pick a result.
+- **PASS:** the strip reads **"Look up or add a customer"** · tapping it opens the **lookup** view,
+  not the create form · the surname returns matching customers · picking one attaches to the order
+  and their stored tier badge appears.
+- **FAIL:** the strip reads "Add a customer", **or** it opens straight to the new-customer form —
+  the gate is false and the search is unreachable. (A blank result list for a surname you know
+  exists is a *different* failure — that is RLS, not this gate.)
+- SIGNAL: `[TRACE:lookup]` on search/attach. **Secondary — the strip's own wording is the proof, and
+  it is readable on a phone without a console.**
 
 ### R-9 — 🔴 (NEG) The pricing RECIPE is still walled from a manager
 STATUS: owed
