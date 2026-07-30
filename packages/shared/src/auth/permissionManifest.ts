@@ -426,9 +426,26 @@ const RESOURCES: Record<string, EntrySeed> = {
     note:
       'the R/Y/G health signal — a computed judgment, not stored data. STATUS `derived` ' +
       '(R9): margin has no table, no policy and no RPC; the only thing enforcing it is a ' +
-      'client-side filter, and render-only is not enforcement. But margin is computed FROM ' +
-      'unit_cost, which IS server-gated, so a member without costs:read cannot produce the ' +
-      'verdict regardless of what the client hands them. Rule 2 makes that structural. ' +
+      'client-side filter, and render-only is not enforcement. ' +
+      '🔴 CORRECTED 2026-07-30 — THIS NOTE PREVIOUSLY ASSERTED A SECURITY PROPERTY THAT DOES ' +
+      'NOT EXIST. It said margin is computed FROM unit_cost, "which IS server-gated, so a ' +
+      'member without costs:read cannot produce the verdict regardless of what the client ' +
+      'hands them." unit_cost is NOT server-gated. RLS is ROW-level: ' +
+      '`business_inventory_member_select` gates the whole ROW on inventory:read, and no ' +
+      'column-level GRANT or narrowed view exists for this table. PROVEN under a real anon ' +
+      'session (scripts/rls/inventory-read-model.rls.mjs): a MANAGER holding inventory:read ' +
+      'and NOT costs:read read 14 unit costs in one query. See tech-debt #81. ' +
+      'SO, TODAY: `derived` rests on a client-side filter ALONE, and a member who wants the ' +
+      'margin verdict can compute it themselves from the cost they can already read. The ' +
+      'Rule-2 content dependency (margin:read requires costs:read) is enforced when the ROLES ' +
+      'PAGE grants, not when the DATA is read — it governs what an owner can hand over, not ' +
+      'what a holder can obtain. ' +
+      'ONCE #81 OPTION (b) LANDS — unit_cost moved to a costs:read-gated side table, the ' +
+      'labor_resource_wages shape — this note becomes TRUE AS ORIGINALLY WRITTEN, because the ' +
+      'basis really will be unreachable without costs:read and Rule 2 really will make it ' +
+      'structural. `derived` was CORRECT IN INTENT AND PREMATURE IN FACT: it described the ' +
+      'model we designed rather than the one we had shipped. Do not re-mint margin:read as ' +
+      '`enforced` when (b) lands — derived is the right status; it just needs its premise built. ' +
       'THERE IS DELIBERATELY NO margin:update — you do not edit a verdict, you edit the ' +
       'recipe and the signal recomputes (spec §4.1).',
   },
