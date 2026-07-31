@@ -22,7 +22,7 @@ import type { LucideProps } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { dashboardTilesForVerticals, verticalsForBusinessType } from '../registry/tileRegistry';
 
-export type TileState = 'active' | 'available' | 'locked';
+export type TileState = 'active' | 'available' | 'locked' | 'planned';
 
 export interface ModuleTile {
   key: string;
@@ -84,12 +84,25 @@ export function useModules(
         // vertical-aware: only this business's verticals (general + its own) reach the grid.
         const verticals = verticalsForBusinessType(businessType);
         const result: ModuleTile[] = dashboardTilesForVerticals(verticals)
-          // visibility: vertical-scoped + dashboard placement; gate on the locked permission.
-          .filter((t) => can(t.required_permission))
+          // ═══════════════════════════════════════════════════════════════════════════════════
+          // 🔴 THE PERMISSION FILTER NO LONGER RUNS BEFORE THE STATUS READ (ledger #176).
+          // ═══════════════════════════════════════════════════════════════════════════════════
+          // It read `.filter((t) => can(t.required_permission))` — full stop — and the `status ===
+          // 'planned'` branch below sat AFTER it. So a planned tile only ever rendered if the
+          // session already held its string: **`planned` was reachable exactly for the people who
+          // did not need to be told the feature was coming.** That is the inverse of what the
+          // state is for. A planned tile must render BECAUSE IT IS PLANNED (David's ruling).
+          //
+          // The permission gate still applies to everything else, unchanged — this widens the grid
+          // by the planned tiles ONLY, and a planned tile exposes nothing: it has no route, no
+          // data, and cannot be clicked.
+          .filter((t) => t.status === 'planned' || can(t.required_permission))
           .map((t) => {
             let state: TileState;
             if (t.status === 'planned') {
-              state = 'locked'; // greyed/disabled forward declaration
+              // 'planned', NOT 'locked'. The old mapping rendered a RED LOCK on every unbuilt
+              // tile, so "not built yet" and "not allowed" were the same pixel. See Tile.tsx.
+              state = 'planned';
             } else if (t.module_key) {
               // a tile backed by an enablement row: active once enabled+configured, else available
               const nm = nmByKey[t.module_key] ?? null;

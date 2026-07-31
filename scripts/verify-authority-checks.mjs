@@ -433,6 +433,72 @@ function sweepFile(file, text, model) {
   return out;
 }
 
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// ASSERTION 6 — A TILE GATING ON A `planned` PERMISSION MUST ITSELF BE `planned`
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+//
+// ONE DIRECTION ONLY, and the asymmetry is DELIBERATE (David's ruling, 2026-07-31):
+//   · ASSERTED     — required_permission is `planned` ⇒ the tile must be status:'planned'.
+//                    A tile gating on a permission for an unbuilt feature IS an unbuilt surface;
+//                    saying otherwise would render a live-looking tile nobody can ever reach.
+//   · NOT ASSERTED — the converse. **A planned SURFACE may legitimately gate on a LIVE string**,
+//                    and 7 of the 8 planned tiles do exactly that today (`online_shop` on
+//                    settings:read, `contractor_tiers` on pricing_recipe:update, …). Asserting the
+//                    converse would fail the build on seven correct rows.
+//
+// This is the "one source per surface" ruling given teeth from the only side it can be: the Roles
+// page reads the MANIFEST, the dashboard reads the TILE, and neither derives from the other —
+// `maintenance:override` is the proof, a planned permission with no tile at all. What must never
+// happen is the two DISAGREEING about a tile that exists.
+
+const TILE_REGISTRY_PATH = 'packages/cultivar-os/src/registry/tileRegistry.ts';
+
+// Parse `{ key: 'x', … required_permission: 'y' … status: 'z' … }` rows. Comment-stripped first:
+// the registry documents retired keys in prose, and a cap that reads prose reports fiction.
+function parseTiles(src) {
+  const body = src.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
+  const out = [];
+  for (const m of body.matchAll(/\{\s*key:\s*'([a-z_]+)'[\s\S]*?\}/g)) {
+    const row = m[0];
+    const perm = row.match(/required_permission:\s*'([^']+)'/);
+    const status = row.match(/status:\s*'([a-z]+)'/);
+    if (!perm) continue;
+    out.push({ key: m[1], permission: perm[1], status: status ? status[1] : null });
+  }
+  return out;
+}
+
+function tilePlannedViolations(tiles, plannedPerms) {
+  return tiles
+    .filter((t) => plannedPerms.has(t.permission) && t.status !== 'planned')
+    .map((t) => ({
+      key: t.key, permission: t.permission, status: t.status,
+      how: `tile '${t.key}' gates on the PLANNED permission '${t.permission}' but is status:'${t.status ?? 'none'}' — `
+         + 'a tile gating on a permission for an unbuilt feature is an unbuilt surface, and this one would render as live to nobody',
+    }));
+}
+
+// Read the `planned` set out of the manifest — the same seed table assertion 5 parses.
+function readPlannedPermissions() {
+  const src = readFileSync(join(ROOT, 'packages/shared/src/auth/permissionManifest.ts'), 'utf8');
+  const rs = src.slice(src.indexOf('const RESOURCES'), src.indexOf('function buildManifest'));
+  const planned = new Set();
+  for (const block of rs.split(/\n(?=\s{2}'?[a-z_])/)) {
+    const name = block.match(/^\s*'?([a-z_]+(?:\.[a-z_]+)?(?::[a-z_]+)?)'?:\s*\{/);
+    if (!name) continue;
+    const statusMap = block.match(/status:\s*\{([^}]*)\}/);
+    if (statusMap) {
+      for (const sm of statusMap[1].matchAll(/(\w+):\s*'planned'/g)) planned.add(`${name[1]}:${sm[1]}`);
+      continue;
+    }
+    if (/status:\s*'planned'/.test(block)) {
+      if (name[1].includes(':')) planned.add(name[1]);
+      else for (const vm of (block.match(/verbs:\s*\[([^\]]*)\]/) || [, ''])[1].matchAll(/'(\w+)'/g)) planned.add(`${name[1]}:${vm[1]}`);
+    }
+  }
+  return planned;
+}
+
 // ── PROBES (STD-022 — planted, BOTH directions, BEFORE the scan) ────────────────────────────────
 function runProbes() {
   const p = [];
@@ -578,6 +644,25 @@ function runGrantProbes() {
     sw("const msg = 'Delivery date is required for this order';").length === 0);
   t('S12 a colon in ordinary copy is not a resource:verb',
     sw("const label = 'Tax: not identified';").length === 0);
+
+  // ── ASSERTION 6 probes — the ONE-DIRECTION tile/manifest agreement ──
+  const PP = new Set(['reports:read', 'maintenance:override']);
+  const tiles = (src) => parseTiles(src);
+  t('T1 \u{1f534} a tile gating on a PLANNED permission but NOT status:planned FAILS',
+    tilePlannedViolations([{ key: 'x', permission: 'reports:read', status: 'live' }], PP).length === 1);
+  t('T2 \u{1f534} …and the same tile with NO status at all FAILS',
+    tilePlannedViolations([{ key: 'x', permission: 'reports:read', status: null }], PP).length === 1);
+  t('T3 a tile gating on a planned permission AND status:planned passes',
+    tilePlannedViolations([{ key: 'x', permission: 'reports:read', status: 'planned' }], PP).length === 0);
+  t('T4 \u{1f534} THE CONVERSE IS NOT ASSERTED — a PLANNED tile on a LIVE string passes (7 of 8 do)',
+    tilePlannedViolations([{ key: 'online_shop', permission: 'settings:read', status: 'planned' }], PP).length === 0);
+  t('T5 a live tile on a live string passes',
+    tilePlannedViolations([{ key: 'x', permission: 'settings:read', status: 'live' }], PP).length === 0);
+  t('T6 the registry parser reads key + permission + status off one row',
+    (() => { const r = tiles("{ key: 'a_b', label: 'X', required_permission: 'reports:read', status: 'planned' }");
+             return r.length === 1 && r[0].permission === 'reports:read' && r[0].status === 'planned'; })());
+  t('T7 a COMMENTED-OUT registry row is not a tile (the registry documents retired keys in prose)',
+    tiles("// { key: 'old', required_permission: 'reports:read', status: 'live' }").length === 0);
 
   return p;
 }
@@ -783,6 +868,28 @@ if (sweepFindings.length === 0) {
     how: `'${str}' is ${v.kind === 'legacy' ? 'a LEGACY string — can() does no alias resolution, so this gate is dead' : 'shaped like a permission but is NOT in PERMISSION_MANIFEST'} (${v.hits.length} site(s))`,
     text: v.hits[0].text,
   });
+}
+
+// ── ASSERTION 6 — the tile/manifest agreement, one direction ────────────────────────────────────
+const plannedPerms = readPlannedPermissions();
+const registrySrc = existsSync(join(ROOT, TILE_REGISTRY_PATH)) ? readFileSync(join(ROOT, TILE_REGISTRY_PATH), 'utf8') : '';
+const allTilesParsed = parseTiles(registrySrc);
+const tileViolations = tilePlannedViolations(allTilesParsed, plannedPerms);
+const plannedTiles = allTilesParsed.filter((t) => t.status === 'planned');
+
+console.log(`\n${B}ASSERTION 6 — a tile on a \`planned\` permission must itself be planned${O}`);
+console.log(`  ${DIM}${allTilesParsed.length} registry row(s) · ${plannedPerms.size} planned permission(s) · ${plannedTiles.length} planned tile(s)${O}`);
+if (!registrySrc) {
+  console.log(`  ${YEL}skip${O} ${TILE_REGISTRY_PATH} not present`);
+} else if (tileViolations.length) {
+  console.log(`  ${RED}BAD ${O} ${tileViolations.length} tile(s) disagree with the model`);
+  for (const v of tileViolations) console.log(`        ${RED}${v.key}${O} ${DIM}→ ${v.permission} (status: ${v.status ?? 'none'})${O}`);
+  for (const v of tileViolations) violations.push({ file: TILE_REGISTRY_PATH, line: 0, rule: 'tile-planned', how: v.how, text: '' });
+} else {
+  const onLive = plannedTiles.filter((t) => !plannedPerms.has(t.permission));
+  console.log(`  ${GRN}ok  ${O} every tile on a planned permission is itself planned`);
+  console.log(`        ${DIM}${onLive.length} planned tile(s) gate on a LIVE string — CORRECT, and why the converse is not asserted:${O}`);
+  console.log(`        ${DIM}${onLive.map((t) => t.key).join(', ') || '(none)'}${O}`);
 }
 
 if (allDynamic.length) {

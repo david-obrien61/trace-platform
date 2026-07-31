@@ -12,14 +12,14 @@
 permissions rather than by being the owner, that removing `isOwner` took nothing away from him, and
 that a refused surface now SAYS SO instead of vanishing.
 
-**Board: 0 of 18.** Every card is `STATUS: owed`.
+**Board: 0 of 20.** Every card is `STATUS: owed`.
 
 **Why this exists.** `businesses.owner_id` was the authority mechanism at three layers. It is
 single-valued, so it cannot express the TWO OWNERS David ruled on 2026-07-26 — and the client's
 owner short-circuit made the client MORE PERMISSIVE THAN THE SERVER, which is how the owner came to
 read *"Tax: not identified"* on his own dashboard while his manager read the rate correctly.
 Separately, ~30 refusal surfaces were measured: 27 silent, 3 apologising after a failed write, 0
-pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (#172); 16–17 prove the two LIVE defects the A7 sweep found (#174); 18 proves the fourth permission status (#175).
+pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (#172); 16–17 prove the two LIVE defects the A7 sweep found (#174); 18 proves the fourth permission status (#175); 19–20 prove its tile path (#176), and 20 is runnable ONLY as staff.
 
 ---
 
@@ -240,16 +240,23 @@ The old copy — *"that tier change was not saved — you may not have permissio
 late. A person who has already made a decision on a value that never saved has been misled once.
 
 ### CARD 12 — BEING BUILT is distinguishable from NOT PERMITTED
-STATUS: needs-test
+STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
 COVERS: the BEING BUILT state
 
-**`needs-test`, and the reason is recorded rather than hidden:** `<BeingBuilt>` is built and exported
-but **not yet mounted on any surface**. The tile registry carries `status: 'planned'` on five tiles
-(`online_shop`, `contractor_tiers`, `seasonal_module`, `services`, `opportunities`), which is the
-fact it should read — wiring it is a separate build against those tiles, and doing it inside an
-authority commit would have widened the blast radius for no gain. **There is no card to run yet.**
+✅ **`needs-test` → `owed` on 2026-07-31 (ledger #176): `<BeingBuilt>` IS NOW MOUNTED.** The old text
+read *"built and exported but not yet mounted on any surface … there is no card to run yet"* — true
+when written, and true for eight days. BUILD 2 wired it to the `business_insights` readout on
+`/dashboard`, and the planned TILES got their own amber `SOON` treatment in `Tile.tsx`.
+
+**As the OWNER**, open `/dashboard` and compare two things on one screen:
+**PASS:** the **"Business insights — coming soon"** panel (BEING BUILT — nobody can have it) reads
+differently from a 🔒 NOT PERMITTED refusal (a permission you could be granted).
+**FAIL:** they look the same, or the insights panel is missing.
+
+Run **cards 19 and 20** with this one — 20 is the only card that proves the underlying fix, and it
+must be run as STAFF.
 
 ### CARD 13 — the owner's set is COMPUTED, so a new permission is inherited
 STATUS: needs-test
@@ -378,3 +385,44 @@ Contrast it with a **`declared-unwired`** string on the same screen — `campaig
 `team:create`, `service_offerings:create` — which must **NOT** appear at all. That is the
 distinction the fourth status exists for: *scoped and coming* renders; *an accident or a deliberate
 no* does not.
+
+---
+
+## SURFACE: the planned TILE path (added 2026-07-31, ledger #176 — BUILD 2)
+
+### CARD 19 — 🚧 A PLANNED TILE LOOKS LIKE A ROADMAP ITEM, NOT A SNUB
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #176 — the `planned` TileState + the mounted `<BeingBuilt>`
+
+**As the OWNER**, open `/dashboard`.
+**PASS — both:**
+① the planned modules (Online Shop, Contractors, Seasonal, Opportunities, Follow-Up, Campaigns)
+   render with an **amber `SOON` badge**, keep their own colour, and **do not respond to a click**;
+② below the metric row there is a **"Business insights — coming soon"** panel.
+**FAIL:** a planned tile shows a **red lock on a grey square** — that is the OLD mapping, which said
+*"you are not allowed"* about something nobody is allowed because it does not exist · or the
+Business insights panel is absent.
+
+🔴 **Clause ② has never rendered before, on any session.** `business_insights` is a READOUT, and
+readouts are excluded from the tile grid by `kind !== 'readout'`, so it had no render site at all —
+it carried `status:'planned'` from the day it was registered and showed nothing to anyone.
+`<BeingBuilt>` itself was written in Phase 3 and mounted for the first time by this build.
+
+### CARD 20 — 🔴 THE FIX, PROVEN FROM THE ONLY SESSION THAT CAN PROVE IT
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #176 — the permission filter no longer runs before the status read
+
+**As STAFF** (not the owner, not the manager), open `/dashboard`.
+**PASS:** the planned tiles are **still there**, amber and inert, exactly as the owner sees them.
+**FAIL:** they are missing.
+
+**This is the entire defect and it can only be seen from here.** The filter used to be
+`can(required_permission)` alone, so a planned tile rendered only for someone who already held its
+string — Contractors gates on `pricing_recipe:update`, Follow-Up on `customers:update`, and staff
+hold neither. **`planned` was reachable exactly for the people who did not need to be told the
+feature was coming.** As the owner this card passes either way, which is precisely why it must be
+run as staff.

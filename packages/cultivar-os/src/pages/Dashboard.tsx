@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@trace/shared/components/Card';
+import { BeingBuilt } from '@trace/shared/components/SurfaceState';
 import { authHeaders } from '@trace/shared/auth';
 import { supabase } from '../lib/supabase';
 import { auth } from '../lib/auth';
@@ -8,7 +9,7 @@ import { useBusinessContext } from '@trace/shared/context';
 import { useQboConnect } from '@trace/shared/quickbooks/useQboConnect';
 import { useModules } from '../hooks/useModules';
 import { fetchCommittedByLot, availableFrom } from '../lib/inventoryStates';
-import { requiredPermissionFor } from '../registry/tileRegistry';
+import { requiredPermissionFor, tileByKey } from '../registry/tileRegistry';
 import { TileGrid } from '@trace/shared/components/tiles/TileGrid';
 import { Tile } from '@trace/shared/components/tiles/Tile';
 
@@ -101,6 +102,15 @@ export function Dashboard() {
   // shows only if the session holds the registry's required_permission for that readout key.
   // (today_sales is now view_costs-gated — revenue is moat-class. Was ungated.)
   const canSeeReadout = (key: string) => can(requiredPermissionFor(key) ?? 'owner-only');
+  // A READOUT THE PLATFORM HAS NOT BUILT (ledger #176). Readouts are excluded from
+  // `dashboardTiles()` by `kind !== 'readout'`, so they never reach `useModules` and never got the
+  // grid's planned treatment — `business_insights` has carried `status:'planned'` since it was
+  // registered and rendered NOTHING, on any session, ever.
+  //
+  // 🔴 READS THE TILE'S STATUS, NOT THE MANIFEST'S — one source per surface, as ruled. The Roles
+  // page reads the manifest; the dashboard reads the tile. `maintenance:override` is the proof
+  // they must stay separate: a `planned` PERMISSION with no tile at all.
+  const readoutPlanned = (key: string) => tileByKey(key)?.status === 'planned';
 
   const [businessName, setBusinessName]       = useState('');
   const [plantCount, setPlantCount]           = useState(0);
@@ -593,6 +603,18 @@ export function Dashboard() {
                 </div>
               )}
             </div>
+
+            {/* ── Business insights (readout: business_insights → reports:read, status:'planned') ──
+                The tile that started the fourth-status thread. It is NOT permission-gated here:
+                a planned readout renders BECAUSE it is planned, and nobody holds `reports:read`
+                (it is un-grantable until the readout ships). <BeingBuilt> is MOUNTED for the first
+                time by this line — it was written in Phase 3 and never used. */}
+            {readoutPlanned('business_insights') && (
+              <BeingBuilt
+                what="Business insights"
+                detail="Insights will read your sales, cost and margin together. It is on the roadmap, not hidden from you — and nobody can be granted it until it ships."
+              />
+            )}
 
             {/* ── Leakage alert tile (readout: leakage_alert → view_orders) ── */}
             {canSeeReadout('leakage_alert') && (leakageCount > 0 ? (

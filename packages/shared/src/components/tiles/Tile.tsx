@@ -2,7 +2,19 @@ import React from 'react';
 import type { LucideProps } from 'lucide-react';
 import { Lock } from 'lucide-react';
 
-export type TileState = 'active' | 'available' | 'locked';
+/**
+ * `planned` ADDED 2026-07-31 (David's ruling, ledger #176 — BUILD 2 of the fourth-status work).
+ *
+ * 🔴 IT IS NOT `locked`, AND THE DISTINCTION IS THE POINT. `locked` renders a RED LOCK on a
+ * greyscale tile, which reads as "you are not allowed" — a snub. A `planned` tile is a ROADMAP
+ * ITEM: nobody is allowed, because the thing does not exist yet. Collapsing them makes a roadmap
+ * item look like a snub and a snub look like a roadmap item — the six-state ruling's own words,
+ * applied to the grid instead of a page.
+ *
+ * Until today the two WERE collapsed: `useModules` mapped `status:'planned'` → `'locked'`, so the
+ * only tiles ever rendering a red lock were the unbuilt ones.
+ */
+export type TileState = 'active' | 'available' | 'locked' | 'planned';
 
 export interface TileProps {
   id: string;
@@ -28,7 +40,10 @@ export function Tile({
   tierRequired,
   count,
 }: TileProps) {
-  const isLocked    = state === 'locked';
+  const isPlanned   = state === 'planned';
+  // A planned tile is INERT like a locked one — no navigate, no enable, no focus — so everything
+  // keyed on "cannot be interacted with" reads both. Only the BADGE and the palette differ.
+  const isLocked    = state === 'locked' || isPlanned;
   const isAvailable = state === 'available';
   const isActive    = state === 'active';
 
@@ -62,16 +77,18 @@ export function Tile({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: isLocked ? '#e5e7eb' : bg,
-          filter: isLocked ? 'grayscale(1)' : 'none',
-          opacity: isLocked ? 0.4 : 1,
+          // Planned keeps its own colour at reduced strength — a greyscale tile reads as disabled,
+          // and "coming soon" is not disabled, it is not-yet.
+          background: isPlanned ? '#fffbeb' : (isLocked ? '#e5e7eb' : bg),
+          filter: isPlanned ? 'none' : (isLocked ? 'grayscale(1)' : 'none'),
+          opacity: isPlanned ? 0.75 : (isLocked ? 0.4 : 1),
           border: '1px solid rgba(0,0,0,0.07)',
           boxShadow: isActive
             ? '0 2px 8px rgba(0,0,0,0.12)'
             : '0 1px 3px rgba(0,0,0,0.06)',
           transition: 'box-shadow 0.15s',
         }}>
-          <Icon size={28} color={isLocked ? '#9ca3af' : color} />
+          <Icon size={28} color={isPlanned ? '#b45309' : (isLocked ? '#9ca3af' : color)} />
         </div>
 
         {/* Active + count → amber notification badge top-left */}
@@ -110,8 +127,19 @@ export function Tile({
           }} />
         )}
 
+        {/* Planned → amber 🚧 badge. Deliberately NOT the red lock: this is a roadmap item. */}
+        {isPlanned && (
+          <div style={{
+            position: 'absolute', top: -6, right: -6,
+            borderRadius: 9, background: '#f59e0b', border: '2px solid #fff',
+            padding: '0 4px', lineHeight: '15px', height: 17,
+          }}>
+            <span style={{ fontSize: '0.55rem', fontWeight: 800, color: '#fff' }}>SOON</span>
+          </div>
+        )}
+
         {/* Locked → red lock badge (matches CAI pattern) */}
-        {isLocked && (
+        {!isPlanned && isLocked && (
           <div style={{
             position: 'absolute',
             top: -4,
