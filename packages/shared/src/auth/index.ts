@@ -142,6 +142,8 @@ export {
   CONFIDENTIAL_EXPOSURE,
   // the declared-unwired set — the invariant capQ enforces across bundles + the R-B2 list
   DECLARED_UNWIRED_PERMISSIONS,
+  PLANNED_PERMISSIONS,
+  UNGRANTABLE_PERMISSIONS,
   MEMBERSHIP_SENTINEL,
   // fresh-role seed data (NOT a backfill input — see R-A on DEFAULT_BUNDLES)
   DEFAULT_BUNDLES,

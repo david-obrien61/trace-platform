@@ -453,7 +453,6 @@
     }
   },
   "a7Declared": {
-    "view_dashboard": "AWAITING RULING #87 — navPermission()'s fallback (tileRegistry.ts:432-433). R3 retired the string into the `member` sentinel. UNREACHABLE TODAY: 0 of 26 nav nodes hit it, because every node declares a tileKey or its own permission. A landmine, not a live defect — the next node added without either goes invisible to EVERYONE including the owner. Fallback to `member`, or delete the fallback and make the field required? David rules.",
-    "reports:read": "AWAITING RULING #88 — the `business_insights` tile (tileRegistry.ts:204). The string is in NO manifest, current or legacy. The tile is status:'planned', nav_eligible:false, so nothing is broken today; it ships invisible on the day it is built, and that will read as a build bug rather than a permission one. Mint `reports:read` in the model, or point the tile at an existing string? David rules."
+    "view_dashboard": "AWAITING RULING #87 — navPermission()'s fallback (tileRegistry.ts:432-433). R3 retired the string into the `member` sentinel. UNREACHABLE TODAY: 0 of 26 nav nodes hit it, because every node declares a tileKey or its own permission. A landmine, not a live defect — the next node added without either goes invisible to EVERYONE including the owner. Fallback to `member`, or delete the fallback and make the field required? David rules."
   }
 }

@@ -12,14 +12,14 @@
 permissions rather than by being the owner, that removing `isOwner` took nothing away from him, and
 that a refused surface now SAYS SO instead of vanishing.
 
-**Board: 0 of 17.** Every card is `STATUS: owed`.
+**Board: 0 of 18.** Every card is `STATUS: owed`.
 
 **Why this exists.** `businesses.owner_id` was the authority mechanism at three layers. It is
 single-valued, so it cannot express the TWO OWNERS David ruled on 2026-07-26 — and the client's
 owner short-circuit made the client MORE PERMISSIVE THAN THE SERVER, which is how the owner came to
 read *"Tax: not identified"* on his own dashboard while his manager read the rate correctly.
 Separately, ~30 refusal surfaces were measured: 27 silent, 3 apologising after a failed write, 0
-pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (#172); 16–17 prove the two LIVE defects the A7 sweep found (#174).
+pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (#172); 16–17 prove the two LIVE defects the A7 sweep found (#174); 18 proves the fourth permission status (#175).
 
 ---
 
@@ -345,3 +345,36 @@ COVERS: ledger #174 — `import_pricing` → `inventory:import_price` (A7 instan
 The old string was `import_pricing`, renamed to `inventory:import_price`. This was never a security
 hole (the server's `import_write_price` RPC is the authority) — it was the app **lying to the owner
 about his own authority**, which is D-9 pointed at the person who owns the business.
+
+---
+
+## SURFACE: the `planned` permission status (added 2026-07-31, ledger #175 — BUILD 1)
+
+### CARD 18 — 🚧 A PLANNED PERMISSION RENDERS AND CANNOT BE GRANTED
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #175 — the fourth status; the six-state ruling's BEING BUILT, applied to a permission
+
+**As the OWNER**, open `/team` → **Roles** → select any role that is **not** OWNER.
+
+**PASS — all four:**
+① three chips render **dashed amber with a 🚧 and the words "coming soon"**: **Overdue PMI Override**,
+   **Route Update**, and **Reports Read**;
+② hovering one says it is not built yet and cannot be granted until it ships;
+③ **clicking one does NOT tick it** — it stays exactly as it was;
+④ Save, then **reload the page**: the role's permission **count is unchanged**.
+
+**FAIL:** any of those chips is missing entirely (that is the old `declared-unwired` treatment, which
+this ruling overturned) · or a chip ticks · or the count moves after a save.
+
+🔴 **Clause ④ is the one that matters and it is worth saying why.** The chip is deliberately
+rendered but un-grantable, and the failure this guards against is silent: an owner who believes he
+granted access to a feature that does not exist. If the count moves, the string reached a role
+array — and because a planned string is filtered out of nothing, it would then be held, invisible
+on some screens, and removable only by SQL.
+
+Contrast it with a **`declared-unwired`** string on the same screen — `campaigns:create`,
+`team:create`, `service_offerings:create` — which must **NOT** appear at all. That is the
+distinction the fourth status exists for: *scoped and coming* renders; *an accident or a deliberate
+no* does not.

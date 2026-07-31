@@ -45,17 +45,43 @@
 // ════════════════════════════════════════════════════════════════════════════════
 
 /**
- * What enforces a string (spec §7.1). Exactly three values — do NOT add a fourth
- * without a ruling; the three exist so assertion 1 can be TRUTHFUL mid-migration
- * instead of failing until the last phase.
+ * What enforces a string (spec §7.1). FOUR values — the fourth was added 2026-07-31 by David's
+ * ruling, which is the ruling the old "do NOT add a fourth without one" comment was waiting for.
  *   enforced         — a policy, RPC, or api-layer gate checks this string, or checks a
  *                      legacy antecedent that resolves to it through the alias layer.
  *   declared-unwired — the string exists, NOTHING enforces it, and it is filtered out of
  *                      the Roles page catalog (never rendered as a grantable pill).
  *   derived          — enforced TRANSITIVELY by its Rule-2 prerequisite; no gate of its
  *                      own. `margin:read` is the only member (R9).
+ *   planned          — the feature is SCOPED and NOT BUILT. The string will be enforced when it
+ *                      ships. It RENDERS in the catalog, visually distinct, and is NOT GRANTABLE.
+ *
+ * ═══ WHY `planned` EXISTS (David's ruling, 2026-07-31) ═══
+ * `declared-unwired` conflated two different facts, and the model contradicted itself in one
+ * conversation because of it. The same morning's SIX-STATE ruling says BEING BUILT renders
+ * distinctly with a "coming soon" hover; §7.1 then said an unwired string is FILTERED OUT of the
+ * catalog. Opposite answers about the same string.
+ *
+ * David's resolution: **THE PILL IS REAL, THE FEATURE IS NOT BUILT — and that is not a fake pill.**
+ * A fake pill claims something works when it does not. A PLANNED pill says a thing is coming,
+ * which is TRUE, and it is the conversation starter: the customer sees it, taps it, and tells us
+ * what they actually need from it before we build the wrong thing.
+ *
+ * `planned` and `declared-unwired` share the UN-GRANTABLE invariant and differ in rendering — a
+ * counter-argument that was raised, and knowingly rejected: **they also differ in INTENT, and
+ * intent is what a reader needs.** One is scoped and coming; the other is an accident or a
+ * deliberate no. That is a semantic difference, not a presentational one.
+ *
+ * 🔴 THE FLOOR — `planned` REQUIRES A BUILD BEHIND IT (David, same ruling): a named gap, a card,
+ * a slot, or a decision. Anything else STAYS `declared-unwired` until it earns the status.
+ * Without that floor everything imaginable becomes `planned` and the distinction dies. This is
+ * why `campaigns:create` is NOT planned — "the next verb is obvious" is not a scoped build.
+ *
+ * OPTION A WAS CHOSEN OVER a `roadmap: true` second axis, for the reason the week supplied: every
+ * consumer here is status-keyed, and a second axis is a second thing to forget. Every drift paid
+ * for this week came from two representations of one fact.
  */
-export type PermissionStatus = 'enforced' | 'declared-unwired' | 'derived';
+export type PermissionStatus = 'enforced' | 'declared-unwired' | 'derived' | 'planned';
 
 /**
  * THE `member` SENTINEL — a DECLARED ABSENCE OF REQUIREMENT (David, 2026-07-27).
@@ -346,7 +372,11 @@ const RESOURCES: Record<string, EntrySeed> = {
     //            nothing writes a route. CORPUS: packages/cultivar-os/src, packages/cultivar-os/api,
     //            packages/shared/src, api/, supabase/migrations (RPCs) — zero writers.
     //            Held out of every bundle and every role definition (R-B2) until a writer exists.
-    status: { read: 'enforced', update: 'declared-unwired' },
+    // update: declared-unwired → **planned** 2026-07-31 (David's ruling). It CLEARS THE FLOOR: the
+    // note below already said "re-add it in the same commit that ships a route writer" — a roadmap
+    // item written as a prohibition. `/deliveries/route` exists and reads; nothing PERSISTS a
+    // route. That is a scoped, named, unbuilt feature, which is exactly what `planned` means.
+    status: { read: 'enforced', update: 'planned' },
     note:
       'SUB-RESOURCE of deliveries (the dotted name signals the parent). Rule 3: any ' +
       'deliveries.route:* grant requires deliveries:read — no deliveries, no route. Kept ' +
@@ -512,6 +542,31 @@ const RESOURCES: Record<string, EntrySeed> = {
       'of an audited action, so no member ever holds audit_log:create and the audit_insert ' +
       'policy is exempt from verifier assertion 2 as a SYSTEM WRITER.',
   },
+
+  // ── reports (MINTED 2026-07-31 as `planned` — David's ruling, #88) ────────────
+  // 🔴 THIS STRING WAS BEING USED WITHOUT EXISTING. `tileRegistry.ts:204` gates the
+  // `business_insights` tile on `reports:read`, and the string was in NO manifest — current or
+  // legacy — so capA assertion 5 reported it as "shaped like a permission but NOT in the model".
+  // Minting it as `planned` IS the resolution: the tile has carried `status:'planned'` all along,
+  // so the SURFACE half could say "coming soon" and the PERMISSION half had no way to say it.
+  // CLEARS THE `planned` FLOOR: a named tile, a declared surface, and an owner-test card. The
+  // status flips to `enforced` in the SAME commit that ships the Insights readout.
+  reports: {
+    category: 'financial',
+    verbs: ['read'],
+    sensitivity: 'confidential',
+    // CONFIDENTIAL BY ANTICIPATION, not by later remembering: insights are DERIVED from sales,
+    // cost and margin, so the exposure warning is correct on the day it ships. Category is
+    // `financial` for the same reason — a one-chip 'insights' section would have to be added to
+    // PERMISSION_CATEGORY_ORDER, and the owner looks for cost-derived numbers under financial.
+    // A small call, easily overturned; it is NOT a claim that reports are only ever financial.
+    exposure: 'Business insights are derived from sales, cost and margin — reading them is reading the numbers underneath.',
+    status: 'planned',
+    note:
+      'read the derived business-insights readout. PLANNED: the `business_insights` tile ' +
+      'exists (tileRegistry.ts:204, status:\'planned\', no route) and nothing serves it yet. ' +
+      'R2: no write verbs — a report is derived, never authored.',
+  },
 };
 
 /**
@@ -572,16 +627,23 @@ const CAPABILITY_VERBS: Record<string, Omit<ManifestEntry, 'resource' | 'verb' |
   'maintenance:override': {
     category: 'maintenance',
     permission: 'maintenance:override',
-    status: 'declared-unwired',
+    // declared-unwired → **planned** 2026-07-31 (David's ruling; he called this "the interesting
+    // one" and he was right). R6 says the PMI block is DELIBERATE and unbuilt — which is a scoped
+    // feature, not an accident. The note below was accurate about the mechanism and WRONG about
+    // the consequence: "hidden from the Roles page until the block is built" is precisely the
+    // treatment the ruling overturns. An owner who sees this chip learns the PMI block is coming;
+    // an owner who sees nothing learns nothing at all.
+    status: 'planned',
     sensitivity: 'operational',
     structural: [],
     content: ['pmi:read'],
     inheritance: [],
     note:
-      'authorize an asset to be used with overdue PMI. DECLARED-UNWIRED (R6): NOTHING IN ' +
-      'THE APP BLOCKS ON AN OVERDUE PMI, so there is no feature to override. An override ' +
-      'permission with nothing to override is not a permission — it is a name. Hidden from ' +
-      'the Roles page until the block is built; its dependency is dormant until then.',
+      'authorize an asset to be used with overdue PMI. PLANNED (R6): NOTHING IN THE APP ' +
+      'BLOCKS ON AN OVERDUE PMI YET, so there is nothing to override TODAY — the block is ' +
+      'scoped, not accidental. Rendered on the Roles page as a coming-soon chip that cannot ' +
+      'be granted; its dependency (pmi:read) stays dormant until the block ships, and the ' +
+      'status flips to enforced in the SAME commit that ships it.',
   },
 };
 
@@ -935,6 +997,46 @@ export const DECLARED_UNWIRED_PERMISSIONS: string[] = Object.values(PERMISSION_M
   .map((e) => e.permission);
 
 /**
+ * THE `planned` SET — scoped, unbuilt, RENDERED, and NOT GRANTABLE (David's ruling, 2026-07-31).
+ *
+ * Kept SEPARATE from DECLARED_UNWIRED_PERMISSIONS on purpose. The two sets share one invariant and
+ * differ in one behaviour, and collapsing them would lose the fact a reader actually needs:
+ *   · SHARED — neither may appear in a bundle, a role definition, or a member array. Enforced by
+ *     capQ over UNGRANTABLE_PERMISSIONS below.
+ *   · DIFFERENT — a `planned` string RENDERS in the catalog (visually distinct, non-interactive);
+ *     a `declared-unwired` string is filtered out entirely.
+ *
+ * THE FLOOR: a string earns `planned` only with a build behind it — a named gap, a card, a slot,
+ * or a decision. `campaigns:create` is the worked counter-example: the next verb being obvious is
+ * NOT a scoped build, so it stays declared-unwired. Without that floor everything imaginable
+ * becomes planned and the status means nothing.
+ */
+export const PLANNED_PERMISSIONS: string[] = Object.values(PERMISSION_MANIFEST)
+  .filter((e) => e.status === 'planned')
+  .map((e) => e.permission);
+
+/**
+ * UN-GRANTABLE — the union, and the set the INVARIANT is actually about.
+ *
+ * 🔴 THE INVARIANT (David 2026-07-27, extended to `planned` 2026-07-31): **no default bundle and
+ * no role definition — floor or tenant — may contain a string from this set, and no member array
+ * may hold one.** Rendering is not holding: a `planned` chip appears on the Roles page and still
+ * may not be written to anybody, because an owner who believes he granted access to a feature
+ * that does not exist is the exact defect the status was created to avoid.
+ *
+ * WHY THE UNION AND NOT THE TWO SETS SEPARATELY: capQ reconciles this against the R-B2 `NOT IN`
+ * literal in the APPLIED migration `20260727_rbac_resource_action_flip.sql`, which §6 r1 forbids
+ * editing. Reconciling against `declared-unwired` ALONE would fail the moment a string moved to
+ * `planned` — it would leave the manifest set while remaining in the migration's list. Against
+ * the UNION, a status move is invisible to the reconciliation, which is correct: both statuses
+ * are stripped at backfill for the same reason.
+ */
+export const UNGRANTABLE_PERMISSIONS: string[] = [
+  ...DECLARED_UNWIRED_PERMISSIONS,
+  ...PLANNED_PERMISSIONS,
+];
+
+/**
  * THE CONFIDENTIAL EXPOSURE COPY — resource → what granting it actually hands over.
  *
  * 🔴 WHY IT IS DATA AND NOT UI TEXT (David's ruling, 2026-07-27). Eleven confidential permissions
@@ -953,6 +1055,11 @@ export const CONFIDENTIAL_EXPOSURE: Record<string, string> = Object.fromEntries(
     .map((e) => [e.resource, e.exposure as string]),
 );
 
+/**
+ * ⚠️ `planned` IS DELIBERATELY ABSENT FROM THIS LIST (2026-07-31). Hiding is exactly what the
+ * status exists to stop — a planned string renders, non-interactively. Only `declared-unwired`
+ * is hidden. If you are adding a status here, check first that you do not mean UNGRANTABLE.
+ */
 export const HIDDEN_PERMISSIONS: string[] = [
   'owner-only',
   ...LEGACY_PERMISSIONS.filter((e) => e.unwired && e.fate !== 'unmapped-orphan').map((e) => e.legacy),
@@ -984,7 +1091,11 @@ export const HIDDEN_PERMISSIONS: string[] = [
  * that gates nothing fails the build.
  */
 export const CATALOG_PERMISSIONS: string[] = Object.values(PERMISSION_MANIFEST)
-  .filter((e) => e.status === 'enforced' || e.status === 'derived')
+  // `planned` JOINED THIS FILTER 2026-07-31 (David's ruling). It is the whole point of the status:
+  // a planned string RENDERS — "the pill is real, the feature is not built" — where a
+  // declared-unwired string is still filtered out. The two share the un-grantable invariant and
+  // differ HERE, which is the one place the difference is supposed to show.
+  .filter((e) => e.status === 'enforced' || e.status === 'derived' || e.status === 'planned')
   .filter((e) => e.sensitivity !== 'owner-only')
   .map((e) => e.permission)
   .filter((p) => !HIDDEN_PERMISSIONS.includes(p));
@@ -1243,7 +1354,15 @@ export const OWNER_ONLY_SENTINEL = 'owner-only';
 
 export const OWNER_LOCKED_SET: string[] = [
   ...Object.values(PERMISSION_MANIFEST)
-    .filter((e) => e.status !== 'declared-unwired')
+    // 🔴 `planned` JOINED THIS EXCLUSION 2026-07-31, and the test caught it before the commit did.
+    // The filter used to read `!== 'declared-unwired'`, so the three new `planned` strings would
+    // have entered the OWNER'S COMPUTED SET — the owner would "hold" `reports:read` for a readout
+    // that does not exist, capA assertion 3 would then demand the SQL literal grow 52 → 55, and an
+    // APPLIED migration would need editing to record a grant of nothing. **Nobody holds a planned
+    // string, including the owner, because there is nothing to hold.** The correct predicate is
+    // UN-GRANTABLE, not declared-unwired — the same conflation the fourth status exists to end,
+    // reappearing one derivation later.
+    .filter((e) => !UNGRANTABLE_PERMISSIONS.includes(e.permission))
     .map((e) => e.permission),
   OWNER_ONLY_SENTINEL,
 ].sort();

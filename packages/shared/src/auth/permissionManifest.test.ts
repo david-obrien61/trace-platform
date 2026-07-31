@@ -34,6 +34,7 @@ import {
   PERMISSION_MANIFEST, ALL_MODEL_PERMISSIONS, LEGACY_PERMISSIONS, ALIAS_PAIRS, MAPPABLE_LEGACY,
   STRIPPED_AT_BACKFILL, MANAGER_DEFAULT_BUNDLE, STAFF_DEFAULT_BUNDLE,
   OWNER_DEFAULT_BUNDLE, OWNER_LOCKED_SET, DECLARED_UNWIRED_PERMISSIONS, CATALOG_PERMISSIONS,
+  PLANNED_PERMISSIONS, UNGRANTABLE_PERMISSIONS,
   splitPermission, unmetDependencies, createWithoutRead, applyPermissionDependencies,
 } from './permissionManifest';
 
@@ -137,7 +138,31 @@ console.log('\n(4) permission manifest — the model, the dashes, the dependenci
 
   // — status + sensitivity (spec §7.1 / §4) —
   check('R9: margin:read status is `derived` (no gate of its own)', PERMISSION_MANIFEST['margin:read'].status === 'derived');
-  check('R6: maintenance:override is declared-unwired', PERMISSION_MANIFEST['maintenance:override'].status === 'declared-unwired');
+  // R6 + David's ruling 2026-07-31: `planned`, not `declared-unwired`. The PMI block is DELIBERATE
+  // and unbuilt — a scoped feature, not an accident — so the chip renders "coming soon" instead of
+  // vanishing. Flips to `enforced` in the same commit that ships the block.
+  check('R6: maintenance:override is `planned` (the PMI block is scoped, not accidental)',
+    PERMISSION_MANIFEST['maintenance:override'].status === 'planned');
+  check('reports:read is MINTED and `planned` (it was used by a tile without existing at all)',
+    PERMISSION_MANIFEST['reports:read']?.status === 'planned');
+  check('deliveries.route:update is `planned` (its note already read as a roadmap item)',
+    PERMISSION_MANIFEST['deliveries.route:update'].status === 'planned');
+  check('campaigns:create STAYS declared-unwired — the next verb being obvious is not a scoped build',
+    PERMISSION_MANIFEST['campaigns:create'].status === 'declared-unwired');
+  check('team:create/update/delete STAY declared-unwired — a deliberate architectural NO, not a roadmap',
+    ['team:create', 'team:update', 'team:delete'].every((p) => PERMISSION_MANIFEST[p].status === 'declared-unwired'));
+  // THE INVARIANT THE FOURTH STATUS MUST NOT WEAKEN: planned renders, but nobody holds it.
+  check('no `planned` string appears in ANY default bundle (un-grantable, same as declared-unwired)',
+    PLANNED_PERMISSIONS.every((p) => ![...OWNER_DEFAULT_BUNDLE, ...MANAGER_DEFAULT_BUNDLE, ...STAFF_DEFAULT_BUNDLE].includes(p)));
+  check('no `planned` string is in OWNER_LOCKED_SET — the owner holds nothing that does not exist',
+    PLANNED_PERMISSIONS.every((p) => !OWNER_LOCKED_SET.includes(p)));
+  check('every `planned` string IS in the rendered catalog — that is the whole point of the status',
+    PLANNED_PERMISSIONS.every((p) => CATALOG_PERMISSIONS.includes(p)));
+  check('no `planned` string is HIDDEN — hiding is what the status exists to stop',
+    PLANNED_PERMISSIONS.every((p) => !HIDDEN_PERMISSIONS.includes(p)));
+  check('UNGRANTABLE = declared-unwired ∪ planned, with no overlap between the two sets',
+    UNGRANTABLE_PERMISSIONS.length === DECLARED_UNWIRED_PERMISSIONS.length + PLANNED_PERMISSIONS.length
+    && !DECLARED_UNWIRED_PERMISSIONS.some((p) => PLANNED_PERMISSIONS.includes(p)));
   check('the four confidential resources are flagged confidential',
     ['pricing_recipe:read', 'costs:read', 'margin:read', 'wages:read']
       .every((p) => PERMISSION_MANIFEST[p].sensitivity === 'confidential'));
@@ -195,9 +220,13 @@ console.log('\n(4) permission manifest — the model, the dashes, the dependenci
   // asserts it still equals the computed set." THAT TEST DID NOT EXIST — a comment asserting a
   // check nobody wrote, which is #164's class and the exact thing capA is being built to stop.
   // It exists now. It is what keeps the SQL literal in 20260730a honest against the manifest.
-  check('OWNER_LOCKED_SET = every non-declared-unwired manifest entry, PLUS the owner-only sentinel',
+  // PREDICATE CORRECTED 2026-07-31 with the fourth status: the exclusion is UN-GRANTABLE
+  // (declared-unwired ∪ planned), not declared-unwired alone. This assertion is what CAUGHT the
+  // derivation still reading the old predicate — which would have put `reports:read` in the
+  // owner's set and demanded an APPLIED migration grow 52 → 55 to record a grant of nothing.
+  check('OWNER_LOCKED_SET = every GRANTABLE manifest entry, PLUS the owner-only sentinel',
     OWNER_LOCKED_SET.length === Object.values(PERMISSION_MANIFEST)
-      .filter((e) => e.status !== 'declared-unwired').length + 1);
+      .filter((e) => !UNGRANTABLE_PERMISSIONS.includes(e.permission)).length + 1);
   // The stored array (business_members.permissions, backfilled by 20260730a) is the SERVER's copy.
   // It deliberately does NOT carry `owner-only`: that sentinel gates two CLIENT ROUTES and no SQL
   // policy checks it, so storing it would put a string in the database that nothing reads.

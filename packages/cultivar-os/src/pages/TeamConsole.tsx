@@ -14,7 +14,7 @@ import { useMemo } from 'react';
 import { useBusinessContext } from '@trace/shared/context';
 import { MemberConsole } from '@trace/shared/components/team/MemberConsole';
 import type { PermChip, PermGroup, MemberConsoleTheme } from '@trace/shared/components/team/MemberConsole';
-import { CATALOG_PERMISSIONS, DERIVED_PERMISSIONS, PERMISSION_CATEGORY_ORDER, impliedBy, permissionCategory, permissionLabel } from '@trace/shared/auth';
+import { CATALOG_PERMISSIONS, DERIVED_PERMISSIONS, PERMISSION_CATEGORY_ORDER, PLANNED_PERMISSIONS, impliedBy, permissionCategory, permissionLabel } from '@trace/shared/auth';
 import { allTiles } from '../registry/tileRegistry';
 import { ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS } from '../auth/roles';
 import type { CultivarRole } from '../auth/roles';
@@ -52,14 +52,26 @@ export function TeamConsole() {
   // being wrong, and the count faithfully reporting it. One source, so they cannot disagree again.
   //
   // TILES STILL SUPPLY GROUPING AND THE "used by" TRAIL — but never MEMBERSHIP of the catalog. A
-  // tile gating on a string the model does not declare is a finding for capP, not a pill: today
-  // that is `reports:read` on `business_insights`, `status:'planned'`, no route. Its chip
-  // correctly disappears — a pill for an unbuilt surface is the fake-pill class D-9 names, and the
-  // same one #153 hid `view_reports` for.
+  // tile gating on a string the model does not declare is a finding for capP, not a pill.
+  //
+  // 🔴 THIS PARAGRAPH ARGUED THE OPPOSITE UNTIL 2026-07-31, AND IT WAS WRONG. It said the
+  // `reports:read` chip "correctly disappears — a pill for an unbuilt surface is the fake-pill
+  // class D-9 names." David overturned that in the same conversation as the six-state ruling,
+  // which the old position directly contradicted: BEING BUILT renders distinctly with a
+  // "coming soon" hover, while §7.1 filtered the very same string out of this catalog. Opposite
+  // answers about one string.
+  //
+  // THE RULING: **the pill is real, the feature is not built — and that is not a fake pill.** A
+  // fake pill claims something WORKS when it does not. A planned pill says a thing is COMING,
+  // which is true, and it is the conversation starter. `reports:read` is now MINTED as `planned`
+  // and renders here, non-interactive; it was never in the manifest at all, which was #88's
+  // actual defect. The fake-pill class D-9 names is still real — it is `declared-unwired`, which
+  // is still filtered out.
   const permissionGroups = useMemo<PermGroup[]>(() => {
     const tilesByPerm: Record<string, string[]> = {};
     for (const t of allTiles()) (tilesByPerm[t.required_permission] ||= []).push(t.label);
     const derived = new Set(DERIVED_PERMISSIONS);
+    const planned = new Set(PLANNED_PERMISSIONS);
     const ids = CATALOG_PERMISSIONS;
     const chips: PermChip[] = ids.map((id) => ({
       id,
@@ -73,6 +85,8 @@ export function TeamConsole() {
       tiles: tilesByPerm[id] ?? [],
       derived: derived.has(id) || undefined,
       impliedBy: derived.has(id) ? impliedBy(id).map(permissionLabel) : undefined,
+      // SCOPED, NOT BUILT — rendered distinctly, never grantable (David's ruling 2026-07-31).
+      planned: planned.has(id) || undefined,
     }));
     const byGroup: Record<string, PermChip[]> = {};
     for (const c of chips) (byGroup[c.group] ||= []).push(c);

@@ -1249,6 +1249,21 @@ function capC(key, v) {
 // close-out commit cited one of those greens as proof of correctness. An assertion never observed
 // rejecting anything is not known to be running, and a silent detector is WORSE than no detector
 // because the board shows green either way and the green is what people act on.
+/**
+ * THE UN-GRANTABLE SET = `declared-unwired` ∪ `planned` (extended 2026-07-31, David's ruling).
+ *
+ * Both statuses share ONE invariant — no bundle, no role definition, no member array may contain
+ * the string — and differ only in whether the Roles page RENDERS it. capQ is the invariant's
+ * guard, so it must read the UNION; the name `unwired` is kept because three assertions and the
+ * migration's R-B2 list already speak it.
+ *
+ * 🔴 READING THE UNION IS ALSO WHAT MAKES A STATUS MOVE SAFE. capQ reconciles this set against the
+ * `NOT IN (…)` literal in the APPLIED migration 20260727_rbac_resource_action_flip.sql, which §6
+ * r1 forbids editing. Against `declared-unwired` alone, moving a string to `planned` would fail
+ * with "migration R-B2 excludes 'X' but the manifest does not mark it declared-unwired" — a build
+ * break caused by a reclassification that changes nothing about backfill. Against the union, the
+ * move is invisible here, which is correct: both are stripped at backfill for the same reason.
+ */
 export const qParseUnwired = (manifestSrc) => {
   const unwired = new Set();
   // TWO ENTRY SHAPES, both required: quoted full-permission keys ('maintenance:override': {…})
@@ -1257,9 +1272,9 @@ export const qParseUnwired = (manifestSrc) => {
     const [, resource] = m;
     const statusBlock = m[0].match(/status:\s*\{([^}]*)\}/);
     if (statusBlock) {
-      for (const sm of statusBlock[1].matchAll(/(\w+):\s*'declared-unwired'/g)) unwired.add(`${resource}:${sm[1]}`);
+      for (const sm of statusBlock[1].matchAll(/(\w+):\s*'(?:declared-unwired|planned)'/g)) unwired.add(`${resource}:${sm[1]}`);
     }
-    if (/status:\s*'declared-unwired'/.test(m[0])) {
+    if (/status:\s*'(?:declared-unwired|planned)'/.test(m[0])) {
       if (resource.includes(':')) unwired.add(resource);
       else for (const vm of (m[0].match(/verbs:\s*\[([^\]]*)\]/) || [, ''])[1].matchAll(/'(\w+)'/g)) unwired.add(`${resource}:${vm[1]}`);
     }
@@ -1282,7 +1297,33 @@ export const qListViolations = (flipSql, unwired) => {
   const notIn = flipSql.match(/a\.from_perm NOT IN \(([^)]*)\)/);
   if (!notIn) return ['the R-B2 `NOT IN (…)` output filter is missing or unparseable in the flip migration §5 — the floor rewrite would seed declared-unwired strings.'];
   const inSql = new Set([...notIn[1].matchAll(/'([^']+)'/g)].map((x) => x[1]));
-  for (const u of unwired) if (!inSql.has(u)) out.push(`declared-unwired '${u}' is NOT in the migration's R-B2 list — the floor rewrite would seed it.`);
+  // ⚠️ THE `manifest ⊆ R-B2` DIRECTION WAS REMOVED 2026-07-31, and the reasoning matters because
+  // removing half a reconciliation is normally how a cap goes quietly blind.
+  //
+  // It read: "declared-unwired 'X' is NOT in the migration's R-B2 list — the floor rewrite would
+  // seed it." That was true when written, and it is **false for a string minted after the
+  // migration ran**. `20260727_rbac_resource_action_flip.sql` is APPLIED; its list is a HISTORICAL
+  // SNAPSHOT of what was stripped from member arrays that day. A string minted on 2026-07-31
+  // (`reports:read`) cannot be seeded by a rewrite that already executed, and §6 r1 forbids
+  // editing the migration to add it — so the assertion demanded an impossible edit.
+  //
+  // 🔴 IT IS NOT A GAP, because the live path is asserted ELSEWHERE and more directly:
+  //   · qBundleViolations — no un-grantable string may appear in ANY default bundle.
+  //   · qFloorViolations  — the LATEST `_align_floor` migration (the one that actually seeds the
+  //     floor today) is reconciled against those bundles.
+  // The floor is materialised FROM the bundles, the bundles are clean, so the floor cannot acquire
+  // an un-grantable string. That chain covers the CURRENT seeding path; the deleted direction was
+  // guarding a spent one.
+  //
+  // ⚠️ AND IT IS NOT DERIVABLE INSTEAD, which was checked before deleting rather than assumed:
+  // "the R-B2 list is the alias-reachable un-grantable strings" was tested and is FALSE — only 3
+  // of its 8 members (`deliveries.route:update`, `maintenance:override`, `team:update`) have a
+  // legacy antecedent. The list is a snapshot, not a derivation, and pretending otherwise would
+  // have been a rule that reads well and fails on five strings.
+  //
+  // THE RETAINED DIRECTION IS THE ONE WITH TEETH: a string the migration STRIPPED must still be
+  // un-grantable. If someone wires one without flipping its status, the model and the migration
+  // disagree about a string that was taken away from real members, and this fails.
   for (const q of inSql) if (!unwired.has(q)) out.push(`migration R-B2 excludes '${q}' but the manifest does not mark it declared-unwired — the list has rotted, or the status is wrong.`);
   return out;
 };
@@ -1359,7 +1400,15 @@ const Q_PROBES = [
   ['parser/unquoted-key', () => qParseUnwired("  deliveries: {\n    verbs: ['read'],\n    status: { read: 'declared-unwired' },\n  },").size > 0],
   ['parser/quoted-key',   () => qParseUnwired("  'maintenance:override': {\n    status: 'declared-unwired',\n  },").size > 0],
   ['bundles',             () => qBundleViolations("export const MANAGER_DEFAULT_BUNDLE: string[] = [\n  'planted:bad',\n];", new Set(['planted:bad'])).length > 0],
-  ['r-b2/missing-string', () => qListViolations("AND a.from_perm NOT IN ('other:thing')", new Set(['planted:bad'])).length > 0],
+  // REPLACED 2026-07-31: the old probe asserted `manifest ⊆ R-B2`, the direction removed above.
+  // Its replacement asserts the NEW behaviour in the SAME position, so the change is visible in the
+  // probe list rather than as a quietly missing line.
+  // The exact post-mint scenario: the migration's snapshot holds 'team:create'; the manifest holds
+  // that PLUS a string minted afterwards. The extra manifest member must NOT be a violation.
+  ['r-b2/post-mint-tolerated', () => qListViolations("AND a.from_perm NOT IN ('team:create')", new Set(['team:create', 'reports:read'])).length === 0],
+  ['parser/planned-verb',  () => qParseUnwired("  reports: {\n    verbs: ['read'],\n    status: 'planned',\n  },").has('reports:read')],
+  ['parser/planned-map',   () => qParseUnwired("  'deliveries.route': {\n    verbs: ['read','update'],\n    status: { read: 'enforced', update: 'planned' },\n  },").has('deliveries.route:update')],
+  ['bundles/planned',      () => qBundleViolations("export const MANAGER_DEFAULT_BUNDLE: string[] = [\n  'reports:read',\n];", new Set(['reports:read'])).length > 0],
   ['r-b2/rotted-entry',   () => qListViolations("AND a.from_perm NOT IN ('planted:bad')", new Set()).length > 0],
   ['r-b2/unparseable',    () => qListViolations('no filter here at all', new Set()).length > 0],
   ['sentinel/route',      () => qSentinelViolations({ routerSrc: '<PermissionRoute permission="member" />', manifestSrc: '', sqlAll: '' }).length > 0],

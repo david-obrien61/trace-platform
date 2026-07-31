@@ -50,13 +50,36 @@ export interface PermChip {
   derived?: boolean;
   /** The prerequisite(s) that imply a `derived` string, for its explanatory label. */
   impliedBy?: string[];
+  /**
+   * `planned` (David's ruling 2026-07-31) — the feature is SCOPED and NOT BUILT. Rendered
+   * distinctly, NEVER toggleable, and never counted as held.
+   *
+   * 🔴 THE PILL IS REAL, THE FEATURE IS NOT. That is not a fake pill: a fake pill claims
+   * something works when it does not; a planned pill says a thing is coming, which is TRUE, and
+   * it is the conversation starter — the customer sees it, taps it, and tells us what they need
+   * from it before we build the wrong thing. Ticking it must never write the string to a role:
+   * an owner who believes he granted access to a feature that does not exist is the defect.
+   */
+  planned?: boolean;
 }
 /** Group ordering + labels for the Roles tab (vertical-supplied). */
 export interface PermGroup { key: string; label: string; chips: PermChip[]; }
+
+// The `planned` chip palette — amber, dashed, deliberately NOT the on/off pair. A planned chip is
+// not "off" (which reads as revocable); it is a different KIND of thing, and it should not be
+// mistakable for a permission the owner forgot to grant. Same amber family as <BeingBuilt>.
+const PLANNED_BG = '#fffbeb', PLANNED_BORDER = '#f59e0b', PLANNED_FG = '#92400e';
 /** A role offerable at invite time. */
 export interface InviteRoleOption { role_key: string; label: string; description: string; }
 
 export interface MemberConsoleProps {
+  /**
+   * Clicking a `planned` chip. THE HOOK IS NOT BUILT — David's model is "select and get info, or
+   * push a requirement to an email/chat bot", and this is the seam it hangs on. Undefined today,
+   * so a planned chip is informational (its hover explains). Declared now rather than later so
+   * the chip is not re-plumbed when the hook arrives.
+   */
+  onPlannedSelect?: (permissionId: string, label: string) => void;
   supabase: SupabaseClient;
   businessId: string;
   isOwner: boolean;
@@ -85,6 +108,7 @@ export function MemberConsole(props: MemberConsoleProps) {
     permissionGroups, inviteRoleOptions,
     inviteBaseUrl, invitePath = '/join', showDevices = true,
     managePermission = 'team:read',
+    onPlannedSelect,
   } = props;
 
   const [tab, setTab] = useState<Tab>('users');
@@ -182,6 +206,7 @@ export function MemberConsole(props: MemberConsoleProps) {
             T={T} supabase={supabase} businessId={businessId} isOwner={isOwner}
             resolved={resolved} permissionGroups={permissionGroups} members={members}
             busy={busy} setBusy={setBusy} reload={reload} setLoadError={setLoadError}
+            onPlannedSelect={onPlannedSelect}
           />
         )}
         {tab === 'devices' && showDevices && (
@@ -659,8 +684,9 @@ function RolesTab(p: {
   T: MemberConsoleTheme; supabase: SupabaseClient; businessId: string; isOwner: boolean;
   resolved: ResolvedRole[]; permissionGroups: PermGroup[]; members: Member[];
   busy: boolean; setBusy: (b: boolean) => void; reload: () => Promise<void>; setLoadError: (s: string) => void;
+  onPlannedSelect?: (permissionId: string, label: string) => void;
 }) {
-  const { T, supabase, businessId, resolved, permissionGroups, members, busy, setBusy, reload, setLoadError } = p;
+  const { T, supabase, businessId, resolved, permissionGroups, members, busy, setBusy, reload, setLoadError, onPlannedSelect } = p;
   const [draft, setDraft] = useState<Record<string, string[]>>({});
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [savedKey, setSavedKey] = useState('');
@@ -849,15 +875,34 @@ function RolesTab(p: {
                     // A `derived` string (R9) is SHOWN and COUNTED but never toggleable: it has no
                     // gate of its own, so granting it directly would imply an authority the model
                     // does not hand out. Its prerequisite is the lever, and the label says so.
-                    const locked = isOwnerRole || chip.derived === true;
+                    // A `derived` string (R9) is SHOWN and COUNTED but never toggleable. A
+                    // `planned` string is SHOWN and NEVER HELD — the feature does not exist, so
+                    // there is nothing to grant. Both are locked; only the reason differs, and the
+                    // reason is what the chip has to say out loud.
+                    const locked = isOwnerRole || chip.derived === true || chip.planned === true;
                     const impliedNote = chip.impliedBy?.length ? `implied by ${chip.impliedBy.join(' + ')}` : 'implied by its prerequisite';
+                    // 🚧 A planned chip renders OFF even on the OWNER row, and that is correct:
+                    // the owner does not hold it either, because there is nothing to hold. The
+                    // owner row is otherwise "every enforced string", and this is the honest
+                    // exception rather than a chip that lies about the computed set.
+                    const plannedOff = chip.planned === true;
                     return (
-                      <button key={chip.id} onClick={() => { if (!locked) toggle(role.role_key, chip.id); }} disabled={busy || locked}
-                        title={chip.derived
-                          ? `Not granted directly — ${impliedNote}. Held whenever the prerequisite is held (R9).`
-                          : (isOwnerRole ? 'Held by every OWNER-role member — computed from the permission model, not editable' : (chip.tiles.length ? `Unlocks: ${chip.tiles.join(', ')}` : 'Data-layer permission'))}
-                        style={{ fontSize: 11, fontWeight: 700, padding: '5px 11px', borderRadius: 8, cursor: locked ? 'default' : 'pointer', background: on ? T.chipOnBg : T.chipOffBg, border: `1px solid ${on ? T.chipOnBorder : T.chipOffBorder}`, color: on ? T.primary : T.sub, opacity: locked ? 0.85 : 1 }}>
-                        {isOwnerRole && '🔒 '}{chip.derived && !isOwnerRole && '↳ '}{chip.label}
+                      <button key={chip.id}
+                        onClick={() => { if (chip.planned) { onPlannedSelect?.(chip.id, chip.label); return; } if (!locked) toggle(role.role_key, chip.id); }}
+                        disabled={busy || (locked && !chip.planned)}
+                        title={chip.planned
+                          ? `${chip.label} is not built yet — it is on the roadmap, not hidden from you. It cannot be granted until it ships.`
+                          : chip.derived
+                            ? `Not granted directly — ${impliedNote}. Held whenever the prerequisite is held (R9).`
+                            : (isOwnerRole ? 'Held by every OWNER-role member — computed from the permission model, not editable' : (chip.tiles.length ? `Unlocks: ${chip.tiles.join(', ')}` : 'Data-layer permission'))}
+                        style={{ fontSize: 11, fontWeight: 700, padding: '5px 11px', borderRadius: 8,
+                          cursor: chip.planned ? 'help' : (locked ? 'default' : 'pointer'),
+                          background: plannedOff ? PLANNED_BG : (on ? T.chipOnBg : T.chipOffBg),
+                          border: `1px ${plannedOff ? 'dashed' : 'solid'} ${plannedOff ? PLANNED_BORDER : (on ? T.chipOnBorder : T.chipOffBorder)}`,
+                          color: plannedOff ? PLANNED_FG : (on ? T.primary : T.sub),
+                          opacity: locked && !plannedOff ? 0.85 : 1 }}>
+                        {chip.planned ? '🚧 ' : (isOwnerRole ? '🔒 ' : '')}{chip.derived && !isOwnerRole && '↳ '}{chip.label}
+                        {chip.planned && <span style={{ fontWeight: 500, opacity: 0.8 }}> · coming soon</span>}
                         {chip.derived && <span style={{ fontWeight: 500, opacity: 0.75 }}> · {impliedNote}</span>}
                       </button>
                     );
