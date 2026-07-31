@@ -12,14 +12,14 @@
 permissions rather than by being the owner, that removing `isOwner` took nothing away from him, and
 that a refused surface now SAYS SO instead of vanishing.
 
-**Board: 0 of 14.** Every card is `STATUS: owed`.
+**Board: 0 of 15.** Every card is `STATUS: owed`.
 
 **Why this exists.** `businesses.owner_id` was the authority mechanism at three layers. It is
 single-valued, so it cannot express the TWO OWNERS David ruled on 2026-07-26 — and the client's
 owner short-circuit made the client MORE PERMISSIVE THAN THE SERVER, which is how the owner came to
 read *"Tax: not identified"* on his own dashboard while his manager read the rate correctly.
 Separately, ~30 refusal surfaces were measured: 27 silent, 3 apologising after a failed write, 0
-pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces.
+pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (ledger #172).
 
 ---
 
@@ -74,6 +74,10 @@ SIGNAL: `[TRACE:PERM] active business permissions {role: 'OWNER', source: 'OWNER
 This failed for the owner and PASSED for the manager, because the manager's array had been
 backfilled and the owner's had not — the owner was worse off than his own employee. If this still
 fails, check 20260730a's V2 first: the array, not the code, is the thing that changed.
+**CANDIDATE (2026-07-31, MANAGER walk — NOT this card's script, recorded honestly):** the MANAGER
+read **7.60% / $74.86** on Checkout → Review. That is the MIRROR of this card, not the card: the
+symptom was the OWNER reading "not identified" while the manager read a rate, and the manager half
+never failed. **This card still needs the OWNER-session run to close.**
 
 ### CARD 2 — the owner lost NOTHING when isOwner was removed
 STATUS: owed
@@ -127,6 +131,8 @@ SIGNAL: `[TRACE:PERMGATE] route entry refused {behavior: 'render-and-say-so'}`
 **As MANAGER `df7723be`**, open `/costs`.
 **PASS:** the page RENDERS, stays on `/costs` in the address bar, and names the permission.
 **FAIL:** you land on `/dashboard` (the old bounce), or you get in.
+**CANDIDATE (2026-07-31, MANAGER `df7723be` walk — awaiting David's mark):** reported passing in the
+same walk that surfaced the delivery-date gap.
 
 ### CARD 6 — the manager's own capabilities are UNCHANGED
 STATUS: owed
@@ -142,6 +148,15 @@ string narrower than the one the server enforces — read the name on the refusa
 `submit.ts`.
 🔴 The customer search is called out deliberately: it is the #170 surface, broken one day before
 this build by a gate on a retired string, and it is the most likely thing to break again.
+🔴 **THIS CARD'S FAIL CLAUSE FIRED — 2026-07-31, MANAGER `df7723be`, first time, on the site it was
+written about.** Tax, customer search and "Adjust price" all worked. **The delivery+planting branch
+did not:** the delivery-date field was absent because Phase 2 mapped `CustomerCapture.tsx` to
+`deliveries:create`, a string `MANAGER_DEFAULT_BUNDLE` does not contain — *"a converted site took a
+string narrower than the one the server enforces"*, verbatim. **It is worth recording WHAT caught
+it: this card, on a walk. No cap moved** — capA asserts shape, and the shape was perfect. Fixed to
+`orders:update` (ledger #172; the string now matches what the code writes). **This card stays
+`owed`** and is re-walked WITH the delivery branch — the walk that found the defect is not the walk
+that proves the fix.
 
 ---
 
@@ -162,6 +177,8 @@ COVERS: the ruling's headline clause · the Accounting-bounce counter-example
 **FAIL:** you are on `/dashboard` with no explanation.
 Clause ② matters more than it looks: with the URL intact the person can paste the link to whoever
 grants permissions. A redirect destroys the only thing they had to show.
+**CANDIDATE (2026-07-31, MANAGER `df7723be` walk — awaiting David's mark):** reported passing in the
+same walk that surfaced the delivery-date gap.
 
 ### CARD 8 — the menu shows every item, marked
 STATUS: owed
@@ -203,6 +220,11 @@ COVERS: the "Adjust price absent for a manager who held the permission" counter-
 **FAIL:** nothing is there at all.
 Same check for tax exemption (`tax_exempt:apply`) on the same screen, and for **Editing this order**
 on `/orders/:id`.
+**CANDIDATE (2026-07-31, MANAGER `df7723be` walk — awaiting David's mark; this is where the walk's
+third observation actually lands, NOT on cards 5–7):** "Adjust price" rendered **with** its reason
+field and baseline — invisible the day before because the gate read `isOwner` — and tax exemption
+rendered as 🔒 *"Tax exemption for this order — Requires Tax Exempt · Apply — ask the owner"*. A
+named refusal beside a granted control, on one screen, in one session.
 
 ### CARD 11 — a refusal is PRE-EMPTIVE, not an apology
 STATUS: owed
@@ -253,3 +275,33 @@ Run 20260730a's **V4** and 20260730c's **V3** in the SQL editor.
 `role.locked_write_refused` row with `outcome denied`.
 **FAIL:** a `permission.self_elevation_denied` row in V4 — that is an `owner_id` problem on that
 business, not a permission problem. Read the business name and fix the row.
+
+---
+
+## SURFACE: the delivery date on the checkout customer step (added 2026-07-31, ledger #172)
+
+### CARD 15 — 🔴 THE MANAGER CAN SET A DELIVERY DATE (the lossy conversion, dead)
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #172 — the Phase 2 string chosen from the surface name instead of from what is written
+SIGNAL: `[TRACE:DELIVERY] delivery date set { deliveryDate: '…' }` (secondary — the field is visible without a console)
+
+**As MANAGER `df7723be`, never as the owner.** The owner passed this the whole time; that is precisely
+why it went unnoticed for a day.
+
+`/checkout/scan` → scan a plant → choose the **delivery + planting** transport → `/checkout/customer`.
+**PASS:** below Zip there is a **Delivery date** field with the helper *"When is this going out? You
+set the date now; customer self-scheduling comes later."* A date sets, survives to Review, and the
+order appears under that day on `/deliveries`.
+**FAIL:** the step ends at Zip — the original defect, 2026-07-31 09:59.
+
+🔴 **What this card is really guarding is the STRING, not the field.** It was `deliveries:create` — a
+string the manager does not hold and, more to the point, **wrong on the merits**: this field writes
+`orders.delivery_date`, a column on `orders`, and never touches the `deliveries` table. If it ever
+fails again, read the permission name on the refusal and check it against what `submit.ts:702-713`
+actually writes, not against what the surface is called.
+
+⚠️ **This gate is CLIENT-ONLY** — `submit.ts` has no authority check on `delivery_date` (tech-debt
+#84). A PASS here proves the field renders for the right person; it does **not** prove the server
+would refuse the wrong one. Do not read it as an enforcement proof.

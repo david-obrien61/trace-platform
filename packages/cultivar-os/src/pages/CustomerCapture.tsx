@@ -113,9 +113,31 @@ export function CustomerCapture() {
   // to the alias layer, and to every cap keyed on permissions. A tenant that renamed MANAGER, or
   // granted delivery authority to STAFF, changed nothing here: the string is hardcoded authority.
   // capA assertion 2 now FAILS the build on any role-string compare in an authority position.
-  // `deliveries:create` is the capability actually being exercised — entering the date is what
-  // creates the delivery.
-  const canSetDeliveryDate = can('deliveries:create');
+  //
+  // 🔴 THE STRING WAS WRONG UNTIL 2026-07-31, AND WRONG ON THE MERITS — not merely wrong for the
+  // MANAGER bundle. Phase 2 took `deliveries:create`, reasoning that "entering the date is what
+  // creates the delivery." THAT SENTENCE HAS TWO ANSWERS DEPENDING ON THE PATH, and it is kept
+  // here rather than deleted because the next reader needs to know that:
+  //   · RECEIPTKEEPER path — TRUE. api/customers/create.ts:125 INSERTs a row into `deliveries`,
+  //     and :67 gates it on `deliveries:create`. Correct there; leave it alone.
+  //   · THIS (CHECKOUT) path — FALSE. The field writes `orders.delivery_date`, a COLUMN ON
+  //     `orders` (api/orders/submit.ts:702-713). Nothing on this path touches the `deliveries`
+  //     table at all — `grep deliveries submit.ts` returns nothing.
+  // So the resource being exercised here is `orders`, and the verb is UPDATE (the row is created
+  // by the same submit; the date is a field on it). David's ruling 2026-07-31: NARROWER AND
+  // CORRECT BEATS WIDER AND CONVENIENT — granting a manager `deliveries:create` to fix a field on
+  // a different table would also hand her the ReceiptKeeper delivery INSERT she was never owed.
+  //
+  // WHAT IT COST: the MANAGER holds orders:create/read/update but NOT deliveries:create, so the
+  // delivery-date field vanished for her on the demo path while the owner kept it. The conversion
+  // was LOSSY — the predicate it replaced named MANAGER explicitly — and capA cannot see that
+  // class: it asserts SHAPE (no identity token in an authority position), and this line's shape
+  // was perfect the whole time. Nothing compares who-passed-before to who-passes-after. See
+  // ledger #172.
+  //
+  // ⚠️ THIS CLIENT GATE IS THE ONLY GATE. submit.ts checks discount, tax_exempt, orders:update
+  // (edit) and orders:delete — NOTHING guards `delivery_date` on the create path. Tech-debt #84.
+  const canSetDeliveryDate = can('orders:update');
   const showDeliveryDate   = deliveryRequired && canSetDeliveryDate;
 
   // A6 — VALIDATION LIVES WITH THE ENTITY. This was a PRIVATE 10-digit filter, the standard's own
