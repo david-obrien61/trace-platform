@@ -11,7 +11,7 @@
 // commit implementing that rule. Knowing a rule does not make you apply it while writing the code
 // the rule is about. **A rule with no mechanical check will be broken by someone who knows it.**
 //
-// THREE ASSERTIONS:
+// FOUR ASSERTIONS (the fourth added 2026-07-31 by David's R-GRANTDIFF ruling):
 //   1. NO `isOwner` IN AN AUTHORITY POSITION. `isOwner` may be READ for display (a role pill, a
 //      heading, which name to show). It may NOT decide what someone is allowed to do.
 //   2. NO ROLE-STRING COMPARE IN AN AUTHORITY POSITION. `role === 'MANAGER'` is the same defect
@@ -22,6 +22,45 @@
 //   3. THE SQL COPY OF THE OWNER SET MATCHES THE MANIFEST. `20260730a` hardcodes 52 strings because
 //      SQL cannot import TypeScript. A hand copy goes stale; this closes the loop from the other
 //      side, the same shape as capQ over the R-B2 list.
+//   4. 🔴 THE GRANT SET OF EVERY AUTHORITY SITE IS BASELINED — WHO PASSES, not what the check looks
+//      like. Assertions 1-3 are all about SHAPE. A site can be perfectly shaped and still admit a
+//      different set of people than it did yesterday.
+//
+// WHY ASSERTION 4 EXISTS — the argument is its own first run, and the direction is the point.
+// On 2026-07-31 the Phase 2 conversion was audited by hand for the first time. FOUR findings across
+// 15 sites, and **THREE OF THEM WERE WIDENINGS**:
+//   · CustomerCapture     — NARROWED. The manager lost the delivery-date field. Found by DAVID, in
+//                           about twenty minutes, because a person noticed something missing.
+//   · ScanOrder:149       — WIDENED to STAFF. Probably right (the 2026-07-27 fulfilment ruling).
+//   · DeliverySchedule    — WIDENED to MANAGER on customer edit. Probably right too.
+//   · manage_orders → two verbs; manage_settings → three. Defensible per site, invisible as a set.
+// **A NARROWING GETS REPORTED BY THE PERSON WHO LOST SOMETHING. A WIDENING IS REPORTED BY NOBODY,
+// EVER** — the person who gained access does not file a ticket. That asymmetry is why this cannot
+// be left to owner-tests: the tests are written from the perspective of someone trying to DO
+// something, and nobody writes a card asserting they still cannot. "Probably right and undeclared"
+// is precisely the state the permission model exists to eliminate, and all three happened INSIDE
+// the build whose purpose was to make authority explicit.
+//
+// HOW ASSERTION 4 WORKS (the same ratchet as verify-write-paths):
+//   · every authority SITE is resolved to the set of ROLES that pass it, against the three bundles
+//     in permissionManifest.ts — the only source of who-holds-what.
+//   · the answer is recorded in `authority-grants-baseline.json`, keyed on `file::binding` — NOT on
+//     `file:line`. That is deliberate: tech-debt #78 is that the other caps' line-keyed baselines
+//     report a false NEW on any comment edit above a tracked site. A binding name survives the edit.
+//   · a site whose role set CHANGES fails the build. The fix is to revert it, or to re-baseline
+//     WITH a `why` — a recorded reason, which is what "declared" means here.
+//   · a site that admits NOBODY (`roles: []`) must carry a `why` even on first sight. An empty
+//     grant set is usually a legacy string that `can()` cannot resolve — the #170 defect, which is
+//     invisible to every other assertion because the shape is immaculate.
+//
+// WHAT ASSERTION 4 CANNOT DO, stated rather than left to be discovered:
+//   · it resolves LITERAL strings only. `can(navPermission(n))` is DYNAMIC — it is counted and
+//     printed, never silently dropped, because a cap that hides its own blind spot is #164.
+//   · it knows the three DEFAULT bundles, not a tenant's edited arrays. An owner who revokes a
+//     string from their manager makes the live answer differ from the recorded one. The baseline
+//     answers "who does the MODEL admit", which is the question a code review can act on.
+//   · it is CLIENT-SIDE (`can()` + route `permission=` props). The api layer's `callerCan` is
+//     server authority and is asserted separately; RLS is asserted in SQL.
 //
 // HOW "AUTHORITY POSITION" IS DECIDED — stated, because a fuzzy rule is an unenforceable one:
 //   An identity token is in an authority position when it flows into a CAPABILITY DECISION:
@@ -38,7 +77,7 @@
 // OUTPUTS:      exit 0 = clean · 1 = a violation (named, with file:line) · 2 = own probes failed.
 // USAGE:        npm run verify:authority · chained into `npm run verify`.
 // ============================================================
-import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync, existsSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const ROOT = process.cwd();
@@ -174,6 +213,114 @@ function scanText(file, text) {
   return found;
 }
 
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// ASSERTION 4 — THE GRANT SET (who passes), baselined and ratcheted
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+
+const GRANTS_BASELINE = 'authority-grants-baseline.json';
+const ROLES = ['OWNER', 'MANAGER', 'STAFF'];
+
+// The three bundles are the ONLY source of who-holds-what. Read as TEXT so this stays a
+// zero-dependency node script (the same reason assertion 3 parses the manifest rather than importing it).
+function readBundles() {
+  const src = readFileSync(join(ROOT, 'packages/shared/src/auth/permissionManifest.ts'), 'utf8');
+  const grab = (name) => {
+    const m = src.match(new RegExp(`export const ${name}: string\\[\\] = \\[([\\s\\S]*?)\\];`));
+    if (!m) return null;
+    // Strip comments FIRST — the manifest's own headers warn that an inline quoted string is
+    // counted as a member, and that mistake has already been made once inside this very file.
+    const body = m[1].replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    return [...body.matchAll(/'([^']+)'/g)].map((x) => x[1]);
+  };
+  return {
+    OWNER: grab('OWNER_DEFAULT_BUNDLE'),
+    MANAGER: grab('MANAGER_DEFAULT_BUNDLE'),
+    STAFF: grab('STAFF_DEFAULT_BUNDLE'),
+  };
+}
+
+// Resolve ONE permission string to the roles that hold it.
+//   · `owner-only` is a SENTINEL, not a manifest entry — it resolves to OWNER alone, and it is the
+//     line that would have silently taken /costs and /add-business away from the owner in Phase 2.
+//   · `member` is the membership sentinel — any active member passes.
+//   · anything else is literal membership, because that is exactly what can() does. A legacy string
+//     with a live successor therefore resolves to NOBODY, which is the #170 defect made visible.
+function rolesFor(perm, bundles) {
+  if (perm === 'owner-only') return ['OWNER'];
+  if (perm === 'member') return [...ROLES];
+  return ROLES.filter((r) => (bundles[r] ?? []).includes(perm));
+}
+
+// A site may combine strings. `&&` means ALL (intersection), `||` means ANY (union). Mixed
+// expressions are reported as `mixed` and resolved as a union — the permissive reading, so the cap
+// never UNDER-reports who gets in.
+function resolveSite(strings, op, bundles) {
+  const sets = strings.map((s) => rolesFor(s, bundles));
+  if (!sets.length) return [];
+  const combined = op === 'and'
+    ? ROLES.filter((r) => sets.every((s) => s.includes(r)))
+    : ROLES.filter((r) => sets.some((s) => s.includes(r)));
+  return combined;
+}
+
+const CAN_LITERAL = /\bcan\(\s*'([^']+)'\s*\)/g;
+const CAN_DYNAMIC = /\bcan\(\s*(?!')/;
+const PERMISSION_PROP = /permission=\{?["']([^"']+)["']\}?/g;
+
+// Collect every authority site in one file. Keyed on file::binding — NEVER file:line (#78).
+function collectSites(file, text) {
+  const sites = [];
+  const dynamic = [];
+  const lines = text.split('\n');
+  let inBlockComment = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    // BLOCK-COMMENT STATE. Without this, a `/* … */` paragraph that merely MENTIONS `can()` is
+    // reported as a dynamic site — which happened on the first run (router.tsx:240, a sentence
+    // reading "Owner passes (can() short-circuits…"). A cap that lists prose as a blind spot
+    // teaches its reader to skim the blind-spot list, which is the one section that must be read.
+    if (inBlockComment) { if (/\*\//.test(raw)) inBlockComment = false; continue; }
+    if (/\/\*/.test(raw) && !/\*\//.test(raw)) inBlockComment = true;
+
+    const line = raw.replace(/\/\/.*$/, '').replace(/\/\*.*?\*\//g, '');
+    if (!line.trim() || line.trim().startsWith('*')) continue;
+    // `can()`'s own DEFINITION is not a call site.
+    if (/\b(?:export\s+)?function\s+can\b/.test(line) || /\bcan:\s*\(/.test(line)) continue;
+
+    const strings = [...line.matchAll(CAN_LITERAL)].map((m) => m[1]);
+    const bind = line.match(AUTHORITY_BINDING);
+
+    if (CAN_DYNAMIC.test(line) && !strings.length) {
+      dynamic.push({ file, line: i + 1, text: raw.trim() });
+      continue;
+    }
+
+    if (strings.length) {
+      const rhs = bind ? line.slice(line.indexOf('=') + 1) : line;
+      const hasAnd = /&&/.test(rhs.replace(/&&\s*[(<]/g, '')); // `can(x) && <jsx` is a render, not a conjunction
+      const op = hasAnd && strings.length > 1 ? 'and' : 'or';
+      const key = bind ? `${file}::${bind[1]}` : `${file}::render:${strings.join('+')}`;
+      sites.push({ key, file, line: i + 1, strings, op, text: raw.trim() });
+      continue;
+    }
+
+    for (const m of [...line.matchAll(PERMISSION_PROP)]) {
+      sites.push({
+        key: `${file}::route:${m[1]}`, file, line: i + 1,
+        strings: [m[1]], op: 'or', text: raw.trim(),
+      });
+    }
+  }
+  return { sites, dynamic };
+}
+
+function loadGrantsBaseline() {
+  const p = join(ROOT, GRANTS_BASELINE);
+  if (!existsSync(p)) return null;
+  return JSON.parse(readFileSync(p, 'utf8'));
+}
+
 // ── PROBES (STD-022 — planted, BOTH directions, BEFORE the scan) ────────────────────────────────
 function runProbes() {
   const p = [];
@@ -221,6 +368,77 @@ function runProbes() {
   return p;
 }
 
+// ── PROBES FOR ASSERTION 4 (STD-022 — a narrowing must fail, a widening must fail, a declared
+//    change must pass). The widening probes are the ones that matter: they are the direction no
+//    human reports, which is the entire reason this assertion exists.
+function runGrantProbes() {
+  const p = [];
+  const B_ = {
+    OWNER: ['orders:create', 'orders:update', 'customers:update', 'costs:read'],
+    MANAGER: ['orders:create', 'orders:update', 'customers:update'],
+    STAFF: ['orders:create'],
+  };
+  const t = (name, ok) => p.push({ name, ok });
+  const eq = (a, b) => a.join(',') === b.join(',');
+
+  // — resolution —
+  t('G1 a manager-held string admits OWNER+MANAGER',
+    eq(rolesFor('orders:update', B_), ['OWNER', 'MANAGER']));
+  t('G2 a staff-held string admits all three',
+    eq(rolesFor('orders:create', B_), ['OWNER', 'MANAGER', 'STAFF']));
+  t('G3 an owner-only string admits OWNER alone',
+    eq(rolesFor('costs:read', B_), ['OWNER']));
+  t('G4 🔴 the `owner-only` SENTINEL resolves to OWNER (it is not a manifest entry)',
+    eq(rolesFor('owner-only', B_), ['OWNER']));
+  t('G5 the `member` sentinel resolves to every role',
+    eq(rolesFor('member', B_), ['OWNER', 'MANAGER', 'STAFF']));
+  t('G6 🔴 A LEGACY STRING ADMITS NOBODY — the #170 defect, invisible to assertions 1-3',
+    eq(rolesFor('view_customers', B_), []));
+
+  // — combinators —
+  t('G7 || is a UNION',
+    eq(resolveSite(['costs:read', 'orders:create'], 'or', B_), ['OWNER', 'MANAGER', 'STAFF']));
+  t('G8 && is an INTERSECTION',
+    eq(resolveSite(['costs:read', 'orders:create'], 'and', B_), ['OWNER']));
+
+  // — the ratchet, both directions —
+  const diff = (base, cur) => base.join(',') !== cur.join(',');
+  t('G9 🔴 A NARROWING FAILS (the CustomerCapture defect: manager loses the field)',
+    diff(['OWNER', 'MANAGER', 'STAFF'], ['OWNER']) === true);
+  t('G10 🔴 A WIDENING FAILS (the direction nobody reports — ScanOrder admitting STAFF)',
+    diff(['OWNER'], ['OWNER', 'MANAGER', 'STAFF']) === true);
+  t('G11 an UNCHANGED site passes',
+    diff(['OWNER', 'MANAGER'], ['OWNER', 'MANAGER']) === false);
+  t('G12 a DECLARED change passes (baseline updated + a recorded why)',
+    (() => {
+      const declared = { roles: ['OWNER', 'MANAGER', 'STAFF'], why: 'staff take orders' };
+      return !diff(declared.roles, ['OWNER', 'MANAGER', 'STAFF']) && !!declared.why;
+    })());
+  t('G13 🔴 an EMPTY grant set with NO why is a violation even on first sight',
+    (() => { const site = { roles: [], why: '' }; return site.roles.length === 0 && !site.why; })());
+
+  // — site extraction, incl. the shapes that broke earlier caps —
+  const ex = (src, file = 'p.tsx') => collectSites(file, src);
+  t('G14 an authority binding is keyed on the BINDING NAME, not the line (#78)',
+    ex("const canSetDeliveryDate = can('orders:create');").sites[0].key === 'p.tsx::canSetDeliveryDate');
+  t('G15 a route permission prop is a site',
+    ex('<PermissionRoute permission="deliveries:read">').sites[0].key === 'p.tsx::route:deliveries:read');
+  t('G16 🔴 a DYNAMIC can() is REPORTED, never silently dropped',
+    ex('const canSee = (n) => can(navPermission(n));').dynamic.length === 1);
+  t('G17 a comment naming a string is not a site',
+    ex("// gated on can('costs:read') until the sweep").sites.length === 0);
+  t('G17b 🔴 a BLOCK COMMENT mentioning can() is not a dynamic site (router.tsx:240, run 1)',
+    ex('/* a paragraph\n   Owner passes (can() short-circuits) here.\n*/').dynamic.length === 0);
+  t('G17c can()\'s own DEFINITION is not a call site',
+    ex('export function can(permissionId: string): boolean {').dynamic.length === 0);
+  t('G18 an inline control render is a site',
+    ex("{can('costs:create') && <CaptureInvoiceLauncher />}").sites.length === 1);
+  t('G19 `can(a) && can(b)` reads as a CONJUNCTION, not a render',
+    ex("const canX = can('costs:read') && can('orders:create');").sites[0].op === 'and');
+
+  return p;
+}
+
 // ── ASSERTION 3 — the SQL copy vs the manifest ──────────────────────────────────────────────────
 function checkSqlCopy() {
   const mPath = 'packages/shared/src/auth/permissionManifest.ts';
@@ -245,7 +463,7 @@ function checkSqlCopy() {
 // ── RUN ─────────────────────────────────────────────────────────────────────────────────────────
 console.log(`${B}capA — authority is a permission string, never an identity${O}`);
 
-const probes = runProbes();
+const probes = [...runProbes(), ...runGrantProbes()];
 console.log(`\n${B}PROBES (STD-022 — planted, both directions)${O}`);
 for (const p of probes) {
   console.log(`  ${p.ok ? GRN + 'ok  ' + O : RED + 'BAD ' + O} ${p.name}${p.ok ? '' : `  ${RED}(expected ${p.expect}, got ${p.got})${O}`}`);
@@ -294,8 +512,96 @@ if (exempted.length) {
   for (const e of exempted) console.log(`  ${DIM}·${O} ${e.file}:${e.line}  ${DIM}${e.text.slice(0, 78)}${O}`);
 }
 
+// ── ASSERTION 4 — THE GRANT SET ─────────────────────────────────────────────────────────────────
+const WRITE_BASELINE = process.argv.includes('--baseline');
+const bundles = readBundles();
+const allSites = [];
+const allDynamic = [];
+for (const abs of files) {
+  const rel = relative(ROOT, abs);
+  if (!/\.(tsx|ts)$/.test(rel) || rel.startsWith('packages/cultivar-os/api') || rel.startsWith('api/')) continue;
+  const { sites, dynamic } = collectSites(rel, readFileSync(abs, 'utf8'));
+  allSites.push(...sites);
+  allDynamic.push(...dynamic);
+}
+
+const resolved = new Map();
+for (const s of allSites) {
+  const roles = resolveSite(s.strings, s.op, bundles);
+  // A key seen twice (same binding name, two branches) merges permissively — never under-report.
+  const prev = resolved.get(s.key);
+  resolved.set(s.key, prev
+    ? { ...prev, roles: ROLES.filter((r) => prev.roles.includes(r) || roles.includes(r)) }
+    : { key: s.key, file: s.file, line: s.line, strings: s.strings, op: s.op, roles, text: s.text });
+}
+
+console.log(`\n${B}ASSERTION 4 — the grant set (WHO passes, not what the check looks like)${O}`);
+console.log(`  ${DIM}bundles: OWNER ${bundles.OWNER?.length ?? '?'} · MANAGER ${bundles.MANAGER?.length ?? '?'} · STAFF ${bundles.STAFF?.length ?? '?'}${O}`);
+console.log(`  ${DIM}${resolved.size} literal site(s) · ${allDynamic.length} dynamic (unresolvable, listed below)${O}`);
+
+const grantsBase = loadGrantsBaseline();
+const grantViolations = [];
+
+if (WRITE_BASELINE) {
+  const out = { _doc: [
+    'capA assertion 4 — WHO PASSES each authority site, resolved against the three default bundles.',
+    'Keyed on file::binding, NEVER file:line — a binding name survives an edit above it (tech-debt #78).',
+    'A change to any `roles` array FAILS the build. To accept one: re-run with --baseline AND write',
+    'a `why`. An empty `roles` (the site admits NOBODY) requires a `why` even on first sight.',
+  ], generated: 'run `node scripts/verify-authority-checks.mjs --baseline`', sites: {} };
+  const existing = grantsBase?.sites ?? {};
+  for (const [k, v] of [...resolved.entries()].sort()) {
+    out.sites[k] = { strings: v.strings, op: v.op, roles: v.roles, why: existing[k]?.why ?? '' };
+  }
+  writeFileSync(join(ROOT, GRANTS_BASELINE), JSON.stringify(out, null, 2) + '\n');
+  console.log(`  ${YEL}baseline written${O} — ${resolved.size} sites → ${GRANTS_BASELINE}`);
+} else if (!grantsBase) {
+  console.log(`  ${YEL}skip${O} no ${GRANTS_BASELINE} — run with --baseline to seed it`);
+} else {
+  const base = grantsBase.sites ?? {};
+  let unchanged = 0;
+  for (const [k, v] of [...resolved.entries()].sort()) {
+    const b = base[k];
+    if (!b) {
+      if (v.roles.length === 0) {
+        grantViolations.push({ ...v, kind: 'new-empty', was: null });
+      } else {
+        console.log(`  ${YEL}new ${O} ${k} → ${v.roles.join('+') || 'NOBODY'} ${DIM}(new site, re-baseline to record it)${O}`);
+      }
+      continue;
+    }
+    const changed = b.roles.join(',') !== v.roles.join(',');
+    if (changed) grantViolations.push({ ...v, kind: v.roles.length > b.roles.length ? 'widened' : 'narrowed', was: b.roles });
+    else if (v.roles.length === 0 && !b.why) grantViolations.push({ ...v, kind: 'empty-undeclared', was: b.roles });
+    else unchanged++;
+  }
+  const gone = Object.keys(base).filter((k) => !resolved.has(k));
+  console.log(`  ${unchanged === resolved.size && !gone.length ? GRN + 'ok  ' + O : DIM + '    ' + O}${unchanged} site(s) unchanged${gone.length ? ` · ${YEL}${gone.length} baselined site(s) no longer present${O}` : ''}`);
+  for (const k of gone) console.log(`        ${DIM}gone: ${k} (was ${base[k].roles.join('+') || 'NOBODY'})${O}`);
+
+  const declaredEmpty = [...resolved.values()].filter((v) => v.roles.length === 0 && base[v.key]?.why);
+  if (declaredEmpty.length) {
+    console.log(`\n  ${B}DECLARED — sites that admit NOBODY, each with its reason on record${O}`);
+    for (const v of declaredEmpty) console.log(`    ${RED}·${O} ${v.key} ${DIM}[${v.strings.join(', ')}] — ${base[v.key].why}${O}`);
+  }
+}
+
+if (allDynamic.length) {
+  console.log(`\n  ${B}DYNAMIC — can() with a non-literal argument. NOT resolvable, NOT ignored.${O}`);
+  for (const d of allDynamic) console.log(`    ${DIM}· ${d.file}:${d.line}  ${d.text.slice(0, 88)}${O}`);
+  console.log(`    ${DIM}These are the cap's stated blind spot: their grant set is decided at runtime.${O}`);
+}
+
+for (const g of grantViolations) violations.push({
+  file: g.file, line: g.line, rule: `grant-${g.kind}`,
+  how: g.kind === 'new-empty' || g.kind === 'empty-undeclared'
+    ? `${g.key} admits NOBODY [${g.strings.join(', ')}] — a legacy or unknown string, or a genuinely dead gate`
+    : `${g.key} ${g.kind}: ${g.was.join('+') || 'NOBODY'} → ${g.roles.join('+') || 'NOBODY'}`,
+  text: g.text,
+});
+
 if (violations.length === 0) {
-  console.log(`\n${GRN}${B}✓ capA PASSED${O} — no identity token in an authority position; the SQL copy is current.\n`);
+  console.log(`\n${GRN}${B}✓ capA PASSED${O} — no identity token in an authority position; the SQL copy is current; every grant set matches its baseline.\n`);
   process.exit(0);
 }
 

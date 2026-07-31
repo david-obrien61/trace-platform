@@ -296,12 +296,17 @@ set the date now; customer self-scheduling comes later."* A date sets, survives 
 order appears under that day on `/deliveries`.
 **FAIL:** the step ends at Zip — the original defect, 2026-07-31 09:59.
 
-🔴 **What this card is really guarding is the STRING, not the field.** It was `deliveries:create` — a
-string the manager does not hold and, more to the point, **wrong on the merits**: this field writes
-`orders.delivery_date`, a column on `orders`, and never touches the `deliveries` table. If it ever
-fails again, read the permission name on the refusal and check it against what `submit.ts:702-713`
-actually writes, not against what the surface is called.
+**Then run it AGAIN as STAFF.** The field must be there too. That is not a nice-to-have — it is the
+ruling: **a permission gates a CAPABILITY, not a FIELD.** Staff hold `orders:create` and take orders,
+so they set the date on the order they are taking. If staff sees the form but not the date, the
+string has drifted back to `orders:update` and the person standing in the lot has lost the field.
 
-⚠️ **This gate is CLIENT-ONLY** — `submit.ts` has no authority check on `delivery_date` (tech-debt
-#84). A PASS here proves the field renders for the right person; it does **not** prove the server
-would refuse the wrong one. Do not read it as an enforcement proof.
+🔴 **What this card is really guarding is the STRING, not the field**, and it has been wrong twice:
+`deliveries:create` (Phase 2 — the manager lost it) and `orders:update` (the first correction —
+right answer, wrong reason; it happened to include Lauren). It is now **`orders:create`**. If it
+fails again, read the permission on the refusal and ask *which capability is being exercised*, not
+*which string does this person hold*.
+
+✅ **`submit.ts` has no check on `delivery_date` and that is DELIBERATE** (tech-debt #84, closed by
+ruling). "May create an order" implies "may set its fields". So a PASS here is a proof about the
+FIELD, not about enforcement — and there is no server gate owed behind it.

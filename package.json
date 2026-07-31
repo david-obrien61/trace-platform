@@ -25,6 +25,7 @@
     "verify:zero-row-writes": "node scripts/verify-zero-row-writes.mjs",
     "zero-row-writes:baseline": "node scripts/verify-zero-row-writes.mjs --update",
     "verify:authority": "node scripts/verify-authority-checks.mjs",
+    "authority:baseline": "node scripts/verify-authority-checks.mjs --baseline",
     "verify:field-lists": "node scripts/verify-field-lists.mjs",
     "field-lists:baseline": "node scripts/verify-field-lists.mjs --update",
     "verify:api-parses": "node scripts/verify-api-parses.mjs"

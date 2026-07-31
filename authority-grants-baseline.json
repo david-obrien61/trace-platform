@@ -1,0 +1,451 @@
+{
+  "_doc": [
+    "capA assertion 4 — WHO PASSES each authority site, resolved against the three default bundles.",
+    "Keyed on file::binding, NEVER file:line — a binding name survives an edit above it (tech-debt #78).",
+    "A change to any `roles` array FAILS the build. To accept one: re-run with --baseline AND write",
+    "a `why`. An empty `roles` (the site admits NOBODY) requires a `why` even on first sight."
+  ],
+  "generated": "run `node scripts/verify-authority-checks.mjs --baseline`",
+  "sites": {
+    "packages/cultivar-os/src/components/layout/AppLayout.tsx::render:owner-only": {
+      "strings": [
+        "owner-only"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/hooks/usePlant.ts::canViewCosts": {
+      "strings": [
+        "costs:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/BusinessInventory.tsx::canViewCosts": {
+      "strings": [
+        "costs:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/CartReview.tsx::canApplyTaxExempt": {
+      "strings": [
+        "tax_exempt:apply"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/CartReview.tsx::canOverride": {
+      "strings": [
+        "order_discount:apply"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/CartReview.tsx::route:tax_exempt:apply": {
+      "strings": [
+        "tax_exempt:apply"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/CostToProduce.tsx::canViewCosts": {
+      "strings": [
+        "costs:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/CustomerCapture.tsx::canSetDeliveryDate": {
+      "strings": [
+        "orders:create"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER",
+        "STAFF"
+      ],
+      "why": "SEED DECLARATION (David, 2026-07-31, ledger #173). Was deliveries:create — a string the MANAGER does not hold, and wrong on the merits: this field writes orders.delivery_date, a COLUMN ON `orders`; it never touches the `deliveries` table. Now orders:create, per the ruling A PERMISSION GATES A CAPABILITY, NOT A FIELD. STAFF is admitted DELIBERATELY: they hold orders:create and take orders, so they set the date on the order they are taking. orders:update would have handed the field to the manager and withheld it from the person standing in the lot."
+    },
+    "packages/cultivar-os/src/pages/Customers.tsx::canEditCustomer": {
+      "strings": [
+        "customers:update"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/Dashboard.tsx::canManageSettings": {
+      "strings": [
+        "settings:update"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/Dashboard.tsx::canViewCosts": {
+      "strings": [
+        "view_costs"
+      ],
+      "op": "or",
+      "roles": [],
+      "why": "🔴 KNOWN-BAD, NOT ACCEPTED — DECLARED SO IT STAYS ON SCREEN (found by this assertion's first run, 2026-07-31, ledger #173). `view_costs` is a LEGACY string: can() is literal membership with no alias resolution, so this admits NOBODY — including the OWNER. Consequence: the dashboard's inventory-value metric is dark for everyone, and the query at :160 does not even SELECT unit_cost. The #170 class, third instance. NOT FIXED HERE because `view_costs` maps to EIGHT successors and choosing which one gates this metric is David's call, not a builder's. OWED."
+    },
+    "packages/cultivar-os/src/pages/DeliveryRoute.tsx::render:costs:create": {
+      "strings": [
+        "costs:create"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/DeliveryRoute.tsx::route:costs:create": {
+      "strings": [
+        "costs:create"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/DeliverySchedule.tsx::render:costs:create": {
+      "strings": [
+        "costs:create"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/DeliverySchedule.tsx::render:customers:read": {
+      "strings": [
+        "customers:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER",
+        "STAFF"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/DeliverySchedule.tsx::render:customers:update": {
+      "strings": [
+        "customers:update"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER"
+      ],
+      "why": "SEED DECLARATION (David, 2026-07-31, ledger #173). WIDENED to MANAGER by the Phase 2 conversion (isOwner && ... -> can('customers:update')). CORRECT: the manager holds customers:update by bundle and this affordance edits a customer from the delivery row — the door now matches the vault. It is declared rather than assumed because nobody reports a widening; the person who gained the button does not file a ticket."
+    },
+    "packages/cultivar-os/src/pages/DeliverySchedule.tsx::render:deliveries:update": {
+      "strings": [
+        "deliveries:update"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER",
+        "STAFF"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/DeliverySchedule.tsx::route:costs:create": {
+      "strings": [
+        "costs:create"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/DeliverySchedule.tsx::route:customers:read": {
+      "strings": [
+        "customers:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER",
+        "STAFF"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/InventoryImport.tsx::canImportPricing": {
+      "strings": [
+        "import_pricing"
+      ],
+      "op": "or",
+      "roles": [],
+      "why": "🔴 KNOWN-BAD, NOT ACCEPTED — DECLARED SO IT STAYS ON SCREEN (found by this assertion's first run, 2026-07-31, ledger #173). `import_pricing` is a LEGACY string whose successor is inventory:import_price, so this admits NOBODY. The comment above it still reads 'Owner => can() short-circuits true' — describing the short-circuit DELETED in Phase 2. Harmless to security (the server's import_write_price is the authority) but the courtesy marker now lies to the owner, telling him his prices will not save. The #170 class, fourth instance. Successor is unambiguous; OWED."
+    },
+    "packages/cultivar-os/src/pages/OrderDetail.tsx::canManage": {
+      "strings": [
+        "orders:update"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER"
+      ],
+      "why": "SEED DECLARATION (David, 2026-07-31, ledger #173). One legacy string, TWO verbs: `manage_orders` became orders:update HERE and orders:create at ScanOrder::canInvoke. Both are defensible per site — editing an existing order is not the same act as taking a new one — and the split was invisible as a SET until this baseline listed them side by side. That visibility is the deliverable."
+    },
+    "packages/cultivar-os/src/pages/OrderDetail.tsx::route:orders:update": {
+      "strings": [
+        "orders:update"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/PMI.tsx::render:costs:read": {
+      "strings": [
+        "costs:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/ScanOrder.tsx::canInvoke": {
+      "strings": [
+        "orders:create"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER",
+        "STAFF"
+      ],
+      "why": "SEED DECLARATION (David, 2026-07-31, ledger #173). WIDENED to STAFF by the Phase 2 conversion (isOwner || can('manage_orders') -> can('orders:create')), and CORRECT per David's 2026-07-27 fulfilment ruling: a staff member reads what the work requires and takes the order. Recorded here because it was right BY ACCIDENT of the string chosen, not by a decision anybody wrote down — 'probably right and undeclared' is the state this assertion exists to end."
+    },
+    "packages/cultivar-os/src/pages/ScanOrder.tsx::canLookup": {
+      "strings": [
+        "customers:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER",
+        "STAFF"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/ScanOrder.tsx::route:customers:read": {
+      "strings": [
+        "customers:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER",
+        "STAFF"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/Settings.tsx::canManageSettings": {
+      "strings": [
+        "settings:update"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/pages/SettingsIndex.tsx::canManageSettings": {
+      "strings": [
+        "settings:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER"
+      ],
+      "why": "SEED DECLARATION (David, 2026-07-31, ledger #173). One legacy string, THREE verbs: `manage_settings` became settings:read HERE, settings:update at Dashboard::canManageSettings and Settings::canManageSettings, and team:read at MemberConsole. Note the binding NAME is identical at three sites while the string is not — read the strings, never the name. Defensible per site; recorded as a set."
+    },
+    "packages/cultivar-os/src/router.tsx::route:campaigns:read": {
+      "strings": [
+        "campaigns:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/router.tsx::route:costs:read": {
+      "strings": [
+        "costs:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/router.tsx::route:customers:read": {
+      "strings": [
+        "customers:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER",
+        "STAFF"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/router.tsx::route:deliveries.route:read": {
+      "strings": [
+        "deliveries.route:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER",
+        "STAFF"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/router.tsx::route:deliveries:read": {
+      "strings": [
+        "deliveries:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER",
+        "STAFF"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/router.tsx::route:inventory:read": {
+      "strings": [
+        "inventory:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER",
+        "STAFF"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/router.tsx::route:orders:create": {
+      "strings": [
+        "orders:create"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER",
+        "STAFF"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/router.tsx::route:owner-only": {
+      "strings": [
+        "owner-only"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/router.tsx::route:pmi:read": {
+      "strings": [
+        "pmi:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/router.tsx::route:pricing_recipe:update": {
+      "strings": [
+        "pricing_recipe:update"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/router.tsx::route:settings:read": {
+      "strings": [
+        "settings:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER",
+        "MANAGER"
+      ],
+      "why": ""
+    },
+    "packages/cultivar-os/src/router.tsx::route:team:read": {
+      "strings": [
+        "team:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": ""
+    },
+    "packages/shared/src/components/AppHeader.tsx::render:owner-only": {
+      "strings": [
+        "owner-only"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": ""
+    }
+  }
+}

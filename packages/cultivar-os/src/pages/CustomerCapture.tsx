@@ -114,30 +114,37 @@ export function CustomerCapture() {
   // granted delivery authority to STAFF, changed nothing here: the string is hardcoded authority.
   // capA assertion 2 now FAILS the build on any role-string compare in an authority position.
   //
-  // 🔴 THE STRING WAS WRONG UNTIL 2026-07-31, AND WRONG ON THE MERITS — not merely wrong for the
-  // MANAGER bundle. Phase 2 took `deliveries:create`, reasoning that "entering the date is what
-  // creates the delivery." THAT SENTENCE HAS TWO ANSWERS DEPENDING ON THE PATH, and it is kept
-  // here rather than deleted because the next reader needs to know that:
-  //   · RECEIPTKEEPER path — TRUE. api/customers/create.ts:125 INSERTs a row into `deliveries`,
-  //     and :67 gates it on `deliveries:create`. Correct there; leave it alone.
-  //   · THIS (CHECKOUT) path — FALSE. The field writes `orders.delivery_date`, a COLUMN ON
-  //     `orders` (api/orders/submit.ts:702-713). Nothing on this path touches the `deliveries`
-  //     table at all — `grep deliveries submit.ts` returns nothing.
-  // So the resource being exercised here is `orders`, and the verb is UPDATE (the row is created
-  // by the same submit; the date is a field on it). David's ruling 2026-07-31: NARROWER AND
-  // CORRECT BEATS WIDER AND CONVENIENT — granting a manager `deliveries:create` to fix a field on
-  // a different table would also hand her the ReceiptKeeper delivery INSERT she was never owed.
+  // 🔴 A PERMISSION GATES A CAPABILITY, NOT A FIELD (David's ruling 2026-07-31). If a member may
+  // perform the act, they may set the act's own data. `orders:create` grants CREATING AN ORDER; a
+  // delivery date is A FIELD ON THAT ORDER, not a separate capability. The alternative is a string
+  // per column and a model nobody can use. The genuine counter-examples are `order_discount:apply`
+  // and `tax_exempt:apply` — separate because they are MONEY and TAX acts, not because they are
+  // fields.
   //
-  // WHAT IT COST: the MANAGER holds orders:create/read/update but NOT deliveries:create, so the
-  // delivery-date field vanished for her on the demo path while the owner kept it. The conversion
-  // was LOSSY — the predicate it replaced named MANAGER explicitly — and capA cannot see that
-  // class: it asserts SHAPE (no identity token in an authority position), and this line's shape
-  // was perfect the whole time. Nothing compares who-passed-before to who-passes-after. See
-  // ledger #172.
+  // TWO WRONG STRINGS PRECEDED THIS ONE, and both are worth the lines:
+  //   1. `deliveries:create` (Phase 2). Reasoning: "entering the date is what creates the
+  //      delivery." THAT SENTENCE HAS TWO ANSWERS DEPENDING ON THE PATH — kept, not deleted,
+  //      because the next reader needs to know it:
+  //        · RECEIPTKEEPER path — TRUE. api/customers/create.ts:125 INSERTs into `deliveries`,
+  //          gated at :67 on `deliveries:create`. Correct there; leave it alone.
+  //        · THIS (CHECKOUT) path — FALSE. The field writes `orders.delivery_date`, a COLUMN ON
+  //          `orders` (api/orders/submit.ts:702-713). `grep deliveries submit.ts` returns nothing.
+  //      It was also LOSSY: MANAGER holds deliveries:read + :update and NOT :create, so the field
+  //      VANISHED for her on the demo path while the owner kept it (ledger #172).
+  //   2. `orders:update` (the first correction). Right answer, WRONG REASON — it happens to
+  //      include the manager. The rule is not "which string does Lauren hold"; it is "which
+  //      capability is being exercised." The act here is CREATING the order.
   //
-  // ⚠️ THIS CLIENT GATE IS THE ONLY GATE. submit.ts checks discount, tax_exempt, orders:update
-  // (edit) and orders:delete — NOTHING guards `delivery_date` on the create path. Tech-debt #84.
-  const canSetDeliveryDate = can('orders:update');
+  // WHY `create` AND NOT `update`: STAFF holds `orders:create` and takes orders. They set the
+  // date too. Gating on `orders:update` would have handed the field to the manager and withheld
+  // it from the person actually standing in the lot — the same defect with a different victim.
+  //
+  // ✅ submit.ts NEEDS NOTHING, AND ITS SILENCE IS A RULING, NOT AN OVERSIGHT (tech-debt #84,
+  // closed ruled-not-built). It gates the discount, the tax exemption, an order EDIT and an order
+  // DELETE — four distinct capabilities. `delivery_date` on the create path is not a fifth; it is
+  // data belonging to the act `orders:create` already authorises. Do not add a server gate here
+  // later on the theory that its absence was an omission.
+  const canSetDeliveryDate = can('orders:create');
   const showDeliveryDate   = deliveryRequired && canSetDeliveryDate;
 
   // A6 — VALIDATION LIVES WITH THE ENTITY. This was a PRIVATE 10-digit filter, the standard's own
