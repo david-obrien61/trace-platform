@@ -65,10 +65,17 @@ export function InventoryImport() {
   const { businessId, can } = useBusinessContext();
   const navigate = useNavigate();
 
-  // Bulk price import is a grantable authority (import_pricing). Owner ⇒ can() short-circuits true.
-  // A manager without it can still import quantities; price columns are shown as won't-be-saved.
-  // This is a COURTESY marker only — the server (import_write_price) is the authority.
-  const canImportPricing = can('import_pricing');
+  // Bulk price import is a grantable authority. A member without it can still import quantities;
+  // price columns are marked won't-be-saved. This is a COURTESY marker only — the server
+  // (import_write_price) is the authority.
+  //
+  // 🔴 WAS `can('import_pricing')` UNTIL 2026-07-31 — a LEGACY string renamed to
+  // `inventory:import_price`, and `can()` does no alias resolution, so it was false for EVERYONE.
+  // The old comment here also claimed "Owner ⇒ can() short-circuits true", DESCRIBING THE LINE
+  // PHASE 2 DELETED — a comment asserting behaviour that no longer exists (#164's class), which is
+  // why it is gone rather than corrected in place. Net effect: the owner was told his own prices
+  // would not save. Found by capA assertion 5 (the A7 sweep) — instance 4 of 4. Ledger #174.
+  const canImportPricing = can('inventory:import_price');
 
   const [step, setStep] = useState<Step>('upload');
   const [error, setError] = useState<string | null>(null);

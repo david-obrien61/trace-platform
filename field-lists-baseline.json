@@ -1,6 +1,6 @@
 {
   "_comment": "Hand-written column enumerations per entity as of the stamp. RATCHET baseline — the build fails on any NEW one, not on these. Shrink it; never grow it casually. Regenerate: npm run field-lists:baseline",
-  "stamped": "2026-07-30",
+  "stamped": "2026-07-31",
   "enumerations": [
     "packages/cultivar-os/api/campaigns.ts:81",
     "packages/cultivar-os/api/dashboard.ts:40",
@@ -20,8 +20,8 @@
     "packages/cultivar-os/src/hooks/useModules.ts:73",
     "packages/cultivar-os/src/pages/BusinessAssets.tsx:122",
     "packages/cultivar-os/src/pages/CostToProduce.tsx:115",
-    "packages/cultivar-os/src/pages/Dashboard.tsx:151",
-    "packages/cultivar-os/src/pages/Dashboard.tsx:227",
+    "packages/cultivar-os/src/pages/Dashboard.tsx:159",
+    "packages/cultivar-os/src/pages/Dashboard.tsx:237",
     "packages/cultivar-os/src/pages/DemoQBInvoice.tsx:88",
     "packages/cultivar-os/src/pages/InventoryReconcile.tsx:122",
     "packages/cultivar-os/src/pages/InventoryReconcile.tsx:140",

@@ -174,7 +174,7 @@ function walk(dir, out = []) {
 // required' and invented a table called `permission`.
 function decomment(line) {
   const noLine = line.replace(/\/\/.*$/, '').replace(/\/\*.*?\*\//g, '');
-  return noLine.replace(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`/g, m => "'" + ' '.repeat(Math.max(0, m.length - 2)) + "'");
+  return noLine.replace(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`/g, m => "'" + ' '.repeat(Math.max(0, m.length - 2)) + "'");
 }
 
 function scanText(file, text) {
@@ -321,6 +321,118 @@ function loadGrantsBaseline() {
   return JSON.parse(readFileSync(p, 'utf8'));
 }
 
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// ASSERTION 5 — THE A7 CLIENT-GATE SWEEP: no client string outside the current model
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+//
+// FOUR INSTANCES, FOUR DIFFERENT DISCOVERY ROUTES, NOT ONE OF THEM A CHECK LOOKING FOR THIS CLASS:
+//   · manage_orders   — David noticed nobody held it
+//   · view_customers  — David could not search a customer at checkout (#170)
+//   · view_costs      — capA assertion 4's first run, hunting something else entirely
+//   · import_pricing  — the same run, by accident
+// Every one was a CLIENT gate naming a string the model had retired, and every one narrowed to
+// zero or near-zero **while the surface looked completely fine**. Four found by accident means the
+// class is UNMEASURED, not small.
+//
+// WHY capP DID NOT COVER IT — precisely, because "add it to capP" was the obvious wrong answer:
+// capP's assertion 1 (P15) scans for `fate: 'retire'` strings in the ROUTER text and in the set of
+// strings RLS policies check. `view_costs` is `fate: 'split'` — legacy WITH a live successor, not
+// retired — and `import_pricing` is `fate: 'rename'`. Neither is in P15's set, and neither lives in
+// the router. **The client layer is a corpus capP has never read.** That is exactly why these four
+// survived every green run.
+//
+// THE ASSERTION: every literal permission string in the CLIENT source must be a current model
+// entry. Two ways to fail, and the second is the one that catches tomorrow's instance:
+//   (a) the string is a KNOWN LEGACY name (from LEGACY_PERMISSIONS) — `can()` does no alias
+//       resolution, so this gate is dead in whichever direction its successor moved.
+//   (b) the string is SHAPED like `resource:verb` but is not in PERMISSION_MANIFEST — a typo, or a
+//       string invented at a call site, or one left behind by a model change.
+// The manifest itself is excluded: it is where legacy strings are DEFINED, and a cap that flags a
+// definition for existing teaches its reader to add exclusions until the cap says nothing.
+
+const PERM_SHAPE = /^[a-z_]+(?:\.[a-z_]+)?:[a-z_]+$/;
+// Where the code is ASKING FOR A PERMISSION. Derived from the four real instances plus every
+// permission-consuming API in the client: can() · a route/component `permission=` prop ·
+// `required_permission:` in the tile registry · `managePermission` · `requirementText()` · and the
+// nav resolver's `?? 'x'` / `return 'x'` fallbacks, which is where `view_dashboard` still lives.
+// ARGUMENT-LEVEL: each alternative CAPTURES the string, so the candidate is the argument of the
+// position and never a neighbour on the same line. The line-level version reported a tile registry
+// row whose KEY is 'qr_checkout' — a tile key that merely COLLIDES with a legacy permission name —
+// because `required_permission:` appeared later on the same 200-column line.
+const PERMISSION_ARG = new RegExp([
+  /\bcan\s*\(\s*'([^']+)'/,                          // can('x')
+  /\bpermission=\{?["']([^"']+)["']/,                // permission="x" | permission={'x'}
+  /\brequired_permission\s*:\s*'([^']+)'/,           // the tile registry
+  /\bmanagePermission\s*[:=]\s*["']([^"']+)["']/,    // MemberConsole's prop + its default
+  /\brequirementText\s*\(\s*'([^']+)'/,              // the refusal-copy helper
+  /\?\?\s*'([^']+)'/,                                // navPermission's fallback…
+  /\breturn\s+'([^']+)'/,                            // …and its literal return
+].map((r) => r.source).join('|'), 'g');
+const MODEL_EXEMPT_FILES = [
+  'packages/shared/src/auth/permissionManifest.ts',   // DEFINES the legacy register
+  'packages/cultivar-os/src/auth/roles.ts',           // role vocabulary; documents the retirement in prose
+];
+
+function readModel() {
+  const src = readFileSync(join(ROOT, 'packages/shared/src/auth/permissionManifest.ts'), 'utf8');
+  // The permissions are BUILT from `RESOURCES` (permission = `${resource}:${verb}`), not written
+  // out as keys — `PERMISSION_MANIFEST` is `buildManifest()`. Parse the SEED TABLE, which is where
+  // the facts are. Reading the wrong end of a derivation is STD-021's own scar.
+  const rStart = src.indexOf('const RESOURCES: Record<string, EntrySeed> = {');
+  const rEnd = src.indexOf('function buildManifest');
+  const resourcesBody = src.slice(rStart, rEnd > rStart ? rEnd : undefined);
+  const perms = new Set();
+  for (const block of resourcesBody.split(/\n(?=\s{2}'?[a-z_])/)) {
+    const name = block.match(/^\s*'?([a-z_]+(?:\.[a-z_]+)?)'?:\s*\{/);
+    const verbs = block.match(/verbs:\s*\[([^\]]*)\]/);
+    if (!name || !verbs) continue;
+    for (const v of verbs[1].matchAll(/'([a-z_]+)'/g)) perms.add(`${name[1]}:${v[1]}`);
+  }
+  // SINGLETON entries. Not every permission is resource+verbs: `'tax_exempt:apply': { permission:
+  // 'tax_exempt:apply', ... }` declares the whole string and carries NO `verbs` array. The first
+  // draft missed them and would have reported two live, correct, ENFORCED strings as findings —
+  // caught by reading the manifest rather than trusting the parse, which is the only reason the
+  // count below is worth anything.
+  for (const m of resourcesBody.matchAll(/^\s{2}'([a-z_]+(?:\.[a-z_]+)?:[a-z_]+)'\s*:\s*\{/gm)) perms.add(m[1]);
+  if (perms.size === 0) throw new Error('capA assertion 5 — parsed ZERO permissions from RESOURCES; refusing to report a list that would flag every live string');
+  // Legacy register: every `legacy: 'x'` entry, plus the LEGACY_PERMISSION const's values.
+  const legacy = new Set([...src.matchAll(/legacy:\s*'([^']+)'/g)].map((m) => m[1]));
+  const lConst = src.indexOf('export const LEGACY_PERMISSION =');
+  if (lConst > -1) {
+    for (const m of src.slice(lConst, lConst + 4000).matchAll(/:\s*'([a-z_]+)'/g)) legacy.add(m[1]);
+  }
+  return { perms, legacy, sentinels: new Set(['owner-only', 'member']) };
+}
+
+// Every quoted literal in real code (comments and the manifest excluded). Deliberately NOT limited
+// to can() — the four instances lived in a can() binding, a route prop and a tile registry entry,
+// and limiting the corpus to the shape of the last defect is how the next one gets missed.
+function sweepFile(file, text, model) {
+  const out = [];
+  const lines = text.split('\n');
+  let inBlock = false;
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    if (inBlock) { if (/\*\//.test(raw)) inBlock = false; continue; }
+    if (/\/\*/.test(raw) && !/\*\//.test(raw)) inBlock = true;
+    const line = raw.replace(/\/\/.*$/, '').replace(/\/\*.*?\*\//g, '');
+    if (!line.trim() || line.trim().startsWith('*')) continue;
+    // POSITION-SCOPED. The first draft scanned every quoted literal and reported 49 "findings",
+    // most of them `[TRACE:*]` phase labels (`phase: 'crawl:start'`) and a tile KEY that happens to
+    // collide with a legacy permission NAME (`key: 'qr_checkout'`). A cap whose list is mostly
+    // noise does not get read, and this one was commissioned precisely to produce a COUNT that can
+    // be trusted. So a string is only a candidate where a PERMISSION is what the code expects.
+    for (const m of line.matchAll(PERMISSION_ARG)) {
+      const s = m.slice(1).find((x) => x !== undefined);
+      if (!s || s.length < 3 || s.length > 60) continue;
+      if (model.sentinels.has(s) || model.perms.has(s)) continue;
+      if (model.legacy.has(s)) out.push({ file, line: i + 1, string: s, kind: 'legacy', text: raw.trim() });
+      else if (PERM_SHAPE.test(s)) out.push({ file, line: i + 1, string: s, kind: 'not-in-model', text: raw.trim() });
+    }
+  }
+  return out;
+}
+
 // ── PROBES (STD-022 — planted, BOTH directions, BEFORE the scan) ────────────────────────────────
 function runProbes() {
   const p = [];
@@ -435,6 +547,37 @@ function runGrantProbes() {
     ex("{can('costs:create') && <CaptureInvoiceLauncher />}").sites.length === 1);
   t('G19 `can(a) && can(b)` reads as a CONJUNCTION, not a render',
     ex("const canX = can('costs:read') && can('orders:create');").sites[0].op === 'and');
+
+  // ── ASSERTION 5 probes — the A7 sweep, both directions ──
+  const M = { perms: new Set(['costs:read', 'orders:create', 'deliveries.route:read']),
+              legacy: new Set(['view_costs', 'import_pricing', 'manage_orders', 'view_customers']),
+              sentinels: new Set(['owner-only', 'member']) };
+  const sw = (src, file = 'p.tsx') => sweepFile(file, src, M);
+
+  t('S1 \u{1f534} A LEGACY STRING AT A CLIENT GATE FAILS (view_costs — instance 3)',
+    sw("const canViewCosts = can('view_costs');").length === 1);
+  t('S2 \u{1f534} the #170 string fails (view_customers — instance 2)',
+    sw("const canLookup = can('view_customers');").length === 1);
+  t('S3 \u{1f534} a legacy string in a TILE REGISTRY entry fails, not just in can()',
+    sw("{ key: 'x', required_permission: 'manage_orders' },").length === 1);
+  t('S4 \u{1f534} a legacy string in a ROUTE PROP fails',
+    sw('<PermissionRoute permission="import_pricing" />').length === 1);
+  t('S5 \u{1f534} a resource:verb string NOT in the model fails (a typo, or one invented at a call site)',
+    sw("const canX = can('orders:aprove');").length === 1);
+  t('S6 a CURRENT model string passes',
+    sw("const canX = can('costs:read');").length === 0);
+  t('S7 a DOTTED sub-resource string passes',
+    sw("const canX = can('deliveries.route:read');").length === 0);
+  t('S8 a SENTINEL passes (owner-only is not a manifest entry BY DESIGN)',
+    sw("const canX = can('owner-only');").length === 0);
+  t('S9 a legacy string in a LINE COMMENT is not a finding',
+    sw("// was can('view_costs') until the sweep").length === 0);
+  t('S10 a legacy string in a BLOCK COMMENT is not a finding',
+    sw("/* history\n   view_costs was the old name\n*/").length === 0);
+  t('S11 ordinary prose strings are not permission strings',
+    sw("const msg = 'Delivery date is required for this order';").length === 0);
+  t('S12 a colon in ordinary copy is not a resource:verb',
+    sw("const label = 'Tax: not identified';").length === 0);
 
   return p;
 }
@@ -584,6 +727,62 @@ if (WRITE_BASELINE) {
     console.log(`\n  ${B}DECLARED — sites that admit NOBODY, each with its reason on record${O}`);
     for (const v of declaredEmpty) console.log(`    ${RED}·${O} ${v.key} ${DIM}[${v.strings.join(', ')}] — ${base[v.key].why}${O}`);
   }
+}
+
+// ── ASSERTION 5 — THE A7 CLIENT-GATE SWEEP ──────────────────────────────────────────────────────
+const model = readModel();
+const CLIENT_ROOTS = ['packages/cultivar-os/src', 'packages/shared/src', 'packages/trace-app/src'];
+const sweepFindings = [];
+for (const abs of files) {
+  const rel = relative(ROOT, abs);
+  if (!CLIENT_ROOTS.some((r) => rel.startsWith(r))) continue;
+  if (MODEL_EXEMPT_FILES.includes(rel)) continue;
+  sweepFindings.push(...sweepFile(rel, readFileSync(abs, 'utf8'), model));
+}
+
+console.log(`\n${B}ASSERTION 5 — the A7 client-gate sweep (no client string outside the model)${O}`);
+console.log(`  ${DIM}model: ${model.perms.size} current permissions · ${model.legacy.size} legacy names · corpus: ${CLIENT_ROOTS.join(' ')}${O}`);
+if (sweepFindings.length === 0) {
+  console.log(`  ${GRN}ok  ${O} every literal permission string in the client resolves to a current model entry`);
+} else {
+  const byString = new Map();
+  for (const f of sweepFindings) {
+    if (!byString.has(f.string)) byString.set(f.string, { kind: f.kind, hits: [] });
+    byString.get(f.string).hits.push(f);
+  }
+  // DECLARED, exactly as assertion 4 declares an empty grant set: a string David has not yet ruled
+  // on is recorded WITH ITS REASON and PRINTS IN RED on every run, rather than failing a build he
+  // has not been asked about. What it is NOT is accepted — an undeclared one still fails, and a
+  // declaration with no reason is not a declaration. Picking a successor silently is precisely the
+  // error the 2026-07-31 method ruling forbids: a string is derived from the ACT, and deciding
+  // which act `reports:read` names is not a builder's call.
+  const a7Declared = grantsBase?.a7Declared ?? {};
+  const undeclared = [...byString.entries()].filter(([str]) => !a7Declared[str]);
+  const declared = [...byString.entries()].filter(([str]) => a7Declared[str]);
+  if (declared.length) {
+    console.log(`  ${B}DECLARED — strings outside the model, each awaiting a ruling${O}`);
+    for (const [str, v] of declared) {
+      console.log(`    ${RED}·${O} ${str} ${DIM}[${v.kind}] ${v.hits.length} site(s) — ${a7Declared[str]}${O}`);
+    }
+  }
+  if (undeclared.length === 0) {
+    console.log(`  ${GRN}ok  ${O} no UNDECLARED string outside the model (${declared.length} declared, printed above)`);
+    byString.clear();
+    for (const [k, v] of undeclared) byString.set(k, v);
+  } else {
+  console.log(`  ${RED}BAD ${O} ${undeclared.length} undeclared string(s) · ${undeclared.reduce((n, [, v]) => n + v.hits.length, 0)} site(s)`);
+  byString.clear();
+  for (const [k, v] of undeclared) byString.set(k, v);
+  }
+  for (const [str, v] of [...byString.entries()].sort((a, b) => b[1].hits.length - a[1].hits.length)) {
+    console.log(`        ${RED}${str}${O} ${DIM}[${v.kind}] — ${v.hits.length} site(s)${O}`);
+    for (const h of v.hits) console.log(`          ${DIM}· ${h.file}:${h.line}  ${h.text.slice(0, 82)}${O}`);
+  }
+  for (const [str, v] of byString) violations.push({
+    file: v.hits[0].file, line: v.hits[0].line, rule: `a7-${v.kind}`,
+    how: `'${str}' is ${v.kind === 'legacy' ? 'a LEGACY string — can() does no alias resolution, so this gate is dead' : 'shaped like a permission but is NOT in PERMISSION_MANIFEST'} (${v.hits.length} site(s))`,
+    text: v.hits[0].text,
+  });
 }
 
 if (allDynamic.length) {

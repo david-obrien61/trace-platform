@@ -88,7 +88,15 @@ export function Dashboard() {
   // Gates the profile-incomplete prompt, whose only action is a link into the settings WRITE surface.
   // Offering it to someone who cannot write there is a dead affordance (§1.6 gate 5).
   const canManageSettings = can('settings:update');
-  const canViewCosts = can('view_costs'); // gates the cost-derived inventory-value metric
+  // Gates the cost-derived inventory-value metric (qty × unit_cost — the cost basis, nothing else),
+  // which is why the string is `costs:read` and not one of `view_costs`' seven other successors.
+  //
+  // 🔴 WAS `can('view_costs')` UNTIL 2026-07-31 — a LEGACY string, and `can()` is literal array
+  // membership with no alias resolution, so it was false for EVERY session INCLUDING THE OWNER.
+  // The metric was dark for everyone and :160 did not even request `unit_cost`. Nobody reported it
+  // because a missing tile looks like a tile that was never built. Found by capA assertion 5 (the
+  // A7 client-gate sweep) — instance 3 of 4. Ledger #174.
+  const canViewCosts = can('costs:read');
   // Readout visibility is registry-driven (MB_D-012): a readout LEAKS data by rendering, so it
   // shows only if the session holds the registry's required_permission for that readout key.
   // (today_sales is now view_costs-gated — revenue is moat-class. Was ungated.)
@@ -155,8 +163,10 @@ export function Dashboard() {
 
       supabase
         .from('business_inventory')
-        // view_costs gate: a member without it never receives unit_cost (cost absent from
-        // the network response); qty is still read for the plant-count metric.
+        // `costs:read` gate: a member without it never receives unit_cost (the cost is absent from
+        // the network response, not merely hidden); qty is still read for the plant-count metric.
+        // This line was never deleted — it was gated on a flag that was false for everyone, so the
+        // column simply stopped being requested. Fixing the string above restores it.
         .select(canViewCosts ? 'qty, unit_cost' : 'qty')
         .eq('business_id', businessId!)
         .eq('status', 'available'),

@@ -12,14 +12,14 @@
 permissions rather than by being the owner, that removing `isOwner` took nothing away from him, and
 that a refused surface now SAYS SO instead of vanishing.
 
-**Board: 0 of 15.** Every card is `STATUS: owed`.
+**Board: 0 of 17.** Every card is `STATUS: owed`.
 
 **Why this exists.** `businesses.owner_id` was the authority mechanism at three layers. It is
 single-valued, so it cannot express the TWO OWNERS David ruled on 2026-07-26 — and the client's
 owner short-circuit made the client MORE PERMISSIVE THAN THE SERVER, which is how the owner came to
 read *"Tax: not identified"* on his own dashboard while his manager read the rate correctly.
 Separately, ~30 refusal surfaces were measured: 27 silent, 3 apologising after a failed write, 0
-pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (ledger #172).
+pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (#172); 16–17 prove the two LIVE defects the A7 sweep found (#174).
 
 ---
 
@@ -310,3 +310,38 @@ fails again, read the permission on the refusal and ask *which capability is bei
 ✅ **`submit.ts` has no check on `delivery_date` and that is DELIBERATE** (tech-debt #84, closed by
 ruling). "May create an order" implies "may set its fields". So a PASS here is a proof about the
 FIELD, not about enforcement — and there is no server gate owed behind it.
+
+---
+
+## SURFACE: the A7 client-gate sweep's two live fixes (added 2026-07-31, ledger #174)
+
+### CARD 16 — 🔴 THE OWNER'S INVENTORY VALUE IS A NUMBER
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #174 — `view_costs` → `costs:read` (A7 instance 3)
+
+**As the OWNER**, open `/dashboard`.
+**PASS:** the **Inventory value** readout shows a real dollar figure.
+**FAIL:** it is absent, or reads `$0` while you have stock on hand.
+
+🔴 **This is the card for the whole defect class, and it is worth knowing why it went unreported for
+so long.** The gate named `view_costs`, a string the model had retired, so `can()` returned false for
+**every session including the owner's** — and the query did not even ask for `unit_cost`. **A tile
+that is missing looks exactly like a tile that was never built.** Nobody files a ticket about a
+feature they assume is unfinished. If this reads `$0`, check the browser network tab for
+`business_inventory?select=qty,unit_cost` — if the request says `select=qty` alone, the gate is
+false again and the string has drifted.
+
+### CARD 17 — the import does not tell the owner his prices will not save
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #174 — `import_pricing` → `inventory:import_price` (A7 instance 4)
+
+**As the OWNER**, open `/inventory/import`, upload a CSV, and map a **price** column.
+**PASS:** no "won't be saved" marker on the price column; the prices import.
+**FAIL:** the marker appears — the courtesy flag is false again.
+The old string was `import_pricing`, renamed to `inventory:import_price`. This was never a security
+hole (the server's `import_write_price` RPC is the authority) — it was the app **lying to the owner
+about his own authority**, which is D-9 pointed at the person who owns the business.

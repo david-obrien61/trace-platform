@@ -1,6 +1,6 @@
 {
   "_comment": "Mutation sites that do NOT check affected rows, as of the stamp. RATCHET baseline — the build fails on any NEW one, not on these. Shrink it; never grow it casually. Regenerate: npm run zero-row-writes:baseline",
-  "stamped": "2026-07-30",
+  "stamped": "2026-07-31",
   "unchecked": [
     "packages/cultivar-os/api/campaigns.ts:169",
     "packages/cultivar-os/api/campaigns.ts:181",
@@ -32,8 +32,8 @@
     "packages/cultivar-os/src/components/inventory/inventoryEdit.ts:97",
     "packages/cultivar-os/src/pages/BusinessAssets.tsx:152",
     "packages/cultivar-os/src/pages/CampaignDetail.tsx:88",
-    "packages/cultivar-os/src/pages/Dashboard.tsx:240",
-    "packages/cultivar-os/src/pages/Dashboard.tsx:251",
+    "packages/cultivar-os/src/pages/Dashboard.tsx:250",
+    "packages/cultivar-os/src/pages/Dashboard.tsx:261",
     "packages/cultivar-os/src/pages/OnboardingWizard.tsx:585",
     "packages/cultivar-os/src/pages/OnboardingWizard.tsx:601",
     "packages/cultivar-os/src/pages/OperatingCosts.tsx:201",

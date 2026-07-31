@@ -113,11 +113,13 @@
     },
     "packages/cultivar-os/src/pages/Dashboard.tsx::canViewCosts": {
       "strings": [
-        "view_costs"
+        "costs:read"
       ],
       "op": "or",
-      "roles": [],
-      "why": "🔴 KNOWN-BAD, NOT ACCEPTED — DECLARED SO IT STAYS ON SCREEN (found by this assertion's first run, 2026-07-31, ledger #173). `view_costs` is a LEGACY string: can() is literal membership with no alias resolution, so this admits NOBODY — including the OWNER. Consequence: the dashboard's inventory-value metric is dark for everyone, and the query at :160 does not even SELECT unit_cost. The #170 class, third instance. NOT FIXED HERE because `view_costs` maps to EIGHT successors and choosing which one gates this metric is David's call, not a builder's. OWED."
+      "roles": [
+        "OWNER"
+      ],
+      "why": "FIXED 2026-07-31 (David's ruling, ledger #174): `view_costs` → `costs:read`. Was a LEGACY string admitting NOBODY INCLUDING THE OWNER — the inventory-value metric was dark for everyone and :160 did not request `unit_cost`. The metric is qty × unit_cost, the cost basis and nothing else, so of `view_costs`' eight successors only `costs:read` describes what is read. OWNER-only is correct: cost is confidential (§4), and the same string already gates /costs, /inventory and PMI."
     },
     "packages/cultivar-os/src/pages/DeliveryRoute.tsx::render:costs:create": {
       "strings": [
@@ -208,11 +210,13 @@
     },
     "packages/cultivar-os/src/pages/InventoryImport.tsx::canImportPricing": {
       "strings": [
-        "import_pricing"
+        "inventory:import_price"
       ],
       "op": "or",
-      "roles": [],
-      "why": "🔴 KNOWN-BAD, NOT ACCEPTED — DECLARED SO IT STAYS ON SCREEN (found by this assertion's first run, 2026-07-31, ledger #173). `import_pricing` is a LEGACY string whose successor is inventory:import_price, so this admits NOBODY. The comment above it still reads 'Owner => can() short-circuits true' — describing the short-circuit DELETED in Phase 2. Harmless to security (the server's import_write_price is the authority) but the courtesy marker now lies to the owner, telling him his prices will not save. The #170 class, fourth instance. Successor is unambiguous; OWED."
+      "roles": [
+        "OWNER"
+      ],
+      "why": "FIXED 2026-07-31 (David's ruling, ledger #174): `import_pricing` → `inventory:import_price`, a pure 1:1 rename with no judgement in it. Was a LEGACY string admitting NOBODY, so the owner was told his own prices would not save. OWNER-only matches the bundle: `inventory:import_price` is a BLAST-RADIUS authority (bulk CSV price write) held by the owner alone, and the server's import_write_price RPC is the real gate — this flag is the courtesy marker in front of it."
     },
     "packages/cultivar-os/src/pages/OrderDetail.tsx::canManage": {
       "strings": [
@@ -447,5 +451,9 @@
       ],
       "why": ""
     }
+  },
+  "a7Declared": {
+    "view_dashboard": "AWAITING RULING #87 — navPermission()'s fallback (tileRegistry.ts:432-433). R3 retired the string into the `member` sentinel. UNREACHABLE TODAY: 0 of 26 nav nodes hit it, because every node declares a tileKey or its own permission. A landmine, not a live defect — the next node added without either goes invisible to EVERYONE including the owner. Fallback to `member`, or delete the fallback and make the field required? David rules.",
+    "reports:read": "AWAITING RULING #88 — the `business_insights` tile (tileRegistry.ts:204). The string is in NO manifest, current or legacy. The tile is status:'planned', nav_eligible:false, so nothing is broken today; it ships invisible on the day it is built, and that will read as a build bug rather than a permission one. Mint `reports:read` in the model, or point the tile at an existing string? David rules."
   }
 }
