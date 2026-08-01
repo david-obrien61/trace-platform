@@ -12,14 +12,14 @@
 permissions rather than by being the owner, that removing `isOwner` took nothing away from him, and
 that a refused surface now SAYS SO instead of vanishing.
 
-**Board: 0 of 22.** Every card is `STATUS: owed` except card 22, which is `needs-test` with its reason stated.
+**Board: 0 of 24.** Every card is `STATUS: owed` except card 22, which is `needs-test` with its reason stated.
 
 **Why this exists.** `businesses.owner_id` was the authority mechanism at three layers. It is
 single-valued, so it cannot express the TWO OWNERS David ruled on 2026-07-26 — and the client's
 owner short-circuit made the client MORE PERMISSIVE THAN THE SERVER, which is how the owner came to
 read *"Tax: not identified"* on his own dashboard while his manager read the rate correctly.
 Separately, ~30 refusal surfaces were measured: 27 silent, 3 apologising after a failed write, 0
-pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (#172); 16–17 prove the two LIVE defects the A7 sweep found (#174); 18 proves the fourth permission status (#175); 19–20 prove its tile path (#176), and 20 is runnable ONLY as staff; 21–22 prove the uniform-tiles pass (#179) — 21 is the nine-week `campaigns.status` defect, dead.
+pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (#172); 16–17 prove the two LIVE defects the A7 sweep found (#174); 18 proves the fourth permission status (#175); 19–20 prove its tile path (#176), and 20 is runnable ONLY as staff; 21–22 prove the uniform-tiles pass (#179) — 21 is the nine-week `campaigns.status` defect, dead; 23–24 prove the tenant module seed + the trial clock (#181), and **24 is the one that must not be skipped** — it proves the repair mechanism cannot be used to renew a trial.
 
 ---
 
@@ -474,3 +474,74 @@ theatre. Recorded rather than omitted, per OP-14 clause 2: an unrecorded hole is
 **What would replace it with a real card:** the first time a tile field gains a RENDERER — the
 Admin marketplace reading `placement`, or a grouped grid reading `group` — that surface gets a card,
 and this one retires into it.
+
+---
+
+## SURFACE: tenant module seeding + the trial clock (added 2026-08-01, ledger #181 — ITEM 2)
+
+> **SCOPE NOTE, so these two cards are not mistaken for the whole proof.** The migration
+> `20260801c_module_seed_and_trial_clock.sql` carries a **ten-query V-block** that proves the SQL
+> layer — the gate (V7/V8), the malformed-batch refusal (V9), the key-spelled-once assertion (V2).
+> **Those are not repeated here.** A per-build proof is a filter, never a second document (OP-14
+> clause 4), and two docs answering one question is how a test becomes unbelievable. The V-block
+> proves the FUNCTIONS. These two cards prove the two things only the APP can be wrong about.
+
+### CARD 23 — 🔴 A NEW BUSINESS IS BORN WITH ITS MODULE ROWS, AND SIGNUP STILL COMPLETES
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #181 — `seedBusinessModules` on both creation paths
+
+**Create a NEW test business end-to-end**: `/signup` → owner info → PIN → the discovery step →
+through `/onboarding` to the "is live" screen.
+
+**PASS — all four:**
+① **signup COMPLETES and lands on the dashboard.** This is the first thing to look at, and it is not
+   a formality: a new `await` was added inside `createBusinessAndMember`, after the member INSERT.
+   If it throws, the owner loses the business he just created.
+② the dashboard renders its tile grid normally — **no tile shows an error, and none has changed
+   appearance**. Expect NO visible difference from before this build; see the ⚠️ below.
+③ in the SQL editor, `SELECT module_key, enabled, config->>'trial_started_at' FROM business_modules
+   WHERE business_id = '<the new business>' ORDER BY module_key;` returns **ELEVEN rows** —
+   `qr_checkout` and `qb_invoicing` with `enabled = t`, the seven add-ons with `enabled = f` and a
+   **non-null** timestamp, `cost_to_produce` and `inventory_intake` with `enabled = f` and **null**.
+④ `SELECT action, outcome FROM audit_log WHERE business_id='<new>' AND action IN
+   ('business_modules.seeded','module_trial.started');` → one `seeded` (success) + **seven**
+   `module_trial.started` (success).
+
+**FAIL:** signup errors or hangs · **zero rows** (the seed was denied — check the owner's member row
+carries `subscription:update`, i.e. n=54, per 20260801c pre-apply stage C) · fewer than eleven rows
+(a SHORT SEED — the console warning `MODULE SEED INCOMPLETE` names the numbers).
+
+⚠️ **EXPECT NO VISIBLE TILE CHANGE, AND THAT IS CORRECT, NOT A FAILED BUILD.** `configured` seeds
+`false` for everything including core, because nobody has set anything up yet — and `useModules`
+renders `active` only on `enabled && configured`. So a seeded QR Checkout still reads `available`.
+Stated here because "I turned it on and nothing looks different" is otherwise the natural reading of
+a working build. Whether core should read `active` from day one is a **ruling owed** (20260801c
+PART 2 step 4).
+
+### CARD 24 — 🔴 FINISHING ONBOARDING TWICE DOES NOT BUY A SECOND FREE MONTH
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #181 — the self-heal call, and the clock that refuses to restart
+
+**This is the card that matters most, and it exists because the repair mechanism and the money
+hazard are the same call.** The module seed runs on the onboarding path **deliberately outside the
+legacy-create branch**, so that a failed signup-path seed is fixed when the owner finishes
+onboarding. That same re-run must never hand the tenant a fresh thirty days.
+
+Using the business from CARD 23: **write down the seven `trial_started_at` timestamps.** Then visit
+`/onboarding?biz=<that business>` again and complete the wizard a second time.
+
+**PASS — both:**
+① re-run CARD 23's query ③ — **every one of the seven timestamps is IDENTICAL to what you wrote
+   down**, to the second;
+② `SELECT action, outcome, detail->>'restart_refused' FROM audit_log WHERE business_id='<that one>'
+   ORDER BY created_at DESC LIMIT 8;` → the newest `business_modules.seeded` reads
+   **`no_change`**, and all seven `module_trial.started` rows read **`no_change`** with
+   `restart_refused = true`.
+
+**FAIL — and treat it as a STOP, not a note:** any timestamp moved. A trial that renews itself on
+every onboarding load is a permanent free subscription, arriving through the mechanism built to
+make a failed seed recoverable.

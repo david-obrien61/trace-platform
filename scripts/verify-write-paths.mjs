@@ -85,7 +85,33 @@ const ALLOWED_DIVERGENCE = {
             'packages/cultivar-os/src/pages/importWrites.ts',
             'packages/shared/src/discovery/populate.ts'],
   },
+  // DECLARED 2026-08-01 (ledger #181) — TWO ACTS, NOT TWO WRITERS OF ONE ACT.
+  // `moduleState.ts` CHANGES an existing tenant's module state (enable / configure), gated
+  // `settings:update` + `subscription:update` by `set_business_module_state`. `seedBusinessModules.ts`
+  // CREATES the tenant's rows once, at business creation, gated `subscription:update` by
+  // `seed_business_modules` — an ON CONFLICT DO NOTHING create-if-absent that by construction cannot
+  // change a value the other one wrote. They share no column semantics: the seeder never updates,
+  // the state writer never creates a catalog.
+  // 🔴 THE MERGE WAS CONSIDERED AND REJECTED FOR A REASON, not skipped. Folding the seed into
+  // `moduleState.ts` would satisfy this cap with no declaration — and would put a create-if-absent
+  // batch behind a module whose whole contract is "one module, one state change," which is how a
+  // caller ends up reaching the seeder's clock through the state writer's argument list. The cap's
+  // own doctrine applies: declaring records a decision made.
+  'business_modules': {
+    reason: 'Two acts on one table: moduleState.ts CHANGES state (set_business_module_state), '
+          + 'seedBusinessModules.ts CREATES the tenant row set once at creation '
+          + '(seed_business_modules, ON CONFLICT DO NOTHING — it cannot overwrite the other). '
+          + 'The seeder also owns the trial clock, which the state writer deliberately cannot reach.',
+    paths: ['packages/shared/src/business-logic/moduleState.ts',
+            'packages/shared/src/business-logic/seedBusinessModules.ts'],
+  },
 };
+
+// ⚠️ `audit_log` IS NOT DECLARED HERE, DELIBERATELY. Its paths grow by one every time a gated RPC is
+// added, because EVERY gated RPC audits — that is the platform working, and a declaration listing
+// today's five would be stale on the next build and would have to be edited to stay true. The
+// BASELINE is the right instrument for it: "known today" is the honest claim, where a declaration
+// claims "correct forever." (20260801c adds `module_trial.started`/`business_modules.seeded`.)
 
 // ── ANALYZER (pure) ──────────────────────────────────────────────────────────
 const WRITE_VERBS = ['insert', 'update', 'upsert', 'delete'];

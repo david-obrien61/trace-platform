@@ -177,3 +177,7 @@ export { PRICING_RECIPE_PROTECTED_PATHS, TAX_RATE_PATH, jsonbPath } from './pric
 
 // seed a FULL pricing-config row at business creation — the missing row, not just the rate
 export { seedPricingConfig } from './seedPricingConfig';
+
+// The module seed — its sibling, one table over, and the one whose missing row is MONEY.
+export { seedBusinessModules, warnOnShortModuleSeed } from './seedBusinessModules';
+export type { ModuleSeedRow, ModuleSeedResult } from './seedBusinessModules';

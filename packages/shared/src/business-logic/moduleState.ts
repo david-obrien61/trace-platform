@@ -14,13 +14,18 @@
  * The enablement gate fires only on an ACTUAL CHANGE, so passing `enabled: true` for a module that
  * is already on is not a spend and needs no spend authority.
  *
- * ── WHY THE PRE-MIGRATION FALLBACK EXISTS, and when it dies ─────────────────────────────────────
- * 20260801/20260801b are GATED — written, not yet applied. Without a fallback, this file would
- * break every module write the moment it deploys and stay broken until David runs the SQL, and
- * Vercel deploys on push. So a missing RPC falls back to the direct upsert that works TODAY. This
- * is the same shape `financialDataAccess` already uses for the pre/post-migration pricing tables,
- * and it is DELETED in the commit that confirms both migrations are applied — it is a bridge, and a
- * bridge nobody removes becomes a second writer, which is the thing this file exists to prevent.
+ * ── THE PRE-MIGRATION FALLBACK IS GONE, AS ITS OWN HEADER PROMISED (2026-08-01, ledger #181) ────
+ * It said: *"DELETED in the commit that confirms both migrations are applied — it is a bridge, and
+ * a bridge nobody removes becomes a second writer, which is the thing this file exists to prevent."*
+ * 20260801 and 20260801b are both APPLIED AND PROVEN (member_select FOR SELECT only · a manager's
+ * direct UPDATE affects 0 rows · V3d proved the config/enablement split), so the bridge is removed
+ * in the commit that had the standing to remove it.
+ *
+ * ⚠️ IT WAS NOT DEAD CODE — it was a SECOND WRITE PATH sitting behind a condition that could still
+ * fire. `isMissingFunction` also matched the generic `does not exist`, so a transient schema-cache
+ * miss would have routed a write around the RPC and its two authority gates entirely, into an
+ * upsert that RLS now discards silently. Keeping a bridge "just in case" past its own condition is
+ * how a table ends up with two writers and one of them unaudited.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -40,20 +45,6 @@ export interface ModuleStateResult {
   error: { message: string } | null;
 }
 
-/** PostgREST's shapes for "that function isn't there" — the pre-migration signal. */
-function isMissingFunction(error: unknown): boolean {
-  if (!error) return false;
-  const e = error as { code?: string; message?: string };
-  const code = String(e.code ?? '');
-  const msg = String(e.message ?? '').toLowerCase();
-  return (
-    code === 'PGRST202' ||           // PostgREST: function not found in the schema cache
-    code === '42883' ||              // undefined_function
-    msg.includes('could not find the function') ||
-    msg.includes('does not exist')
-  );
-}
-
 export async function setBusinessModuleState(
   supabase: SupabaseClient,
   businessId: string,
@@ -70,28 +61,9 @@ export async function setBusinessModuleState(
     p_actor_user_id: actorUserId,
   });
 
-  if (error && isMissingFunction(error)) {
-    // ── PRE-MIGRATION BRIDGE (see the header). Direct upsert, the behaviour that exists today.
-    console.log('[TRACE:MODULES] RPC absent — pre-migration direct upsert', { moduleKey });
-    const row: Record<string, unknown> = { business_id: businessId, module_key: moduleKey };
-    if (patch.enabled    !== undefined) row.enabled    = patch.enabled;
-    if (patch.configured !== undefined) row.configured = patch.configured;
-    if (patch.config     !== undefined) row.config     = patch.config;
-    // 🔴 `.select()` IS LOAD-BEARING, NOT A CONVENIENCE (A8). A PostgREST write filtered out by RLS
-    // returns NO ERROR AND ZERO ROWS — so without this the bridge would report success on a write
-    // that never happened. That is the precise failure mode this bridge exists during: if the
-    // migration HAS been applied and the RPC lookup failed for some other reason, the table has no
-    // client write policy at all and the upsert is silently discarded.
-    const up = await supabase.from('business_modules')
-      .upsert(row, { onConflict: 'business_id,module_key' })
-      .select('module_key');
-    if (up.error) return { applied: false, reason: null, error: up.error };
-    if (!up.data || up.data.length === 0) {
-      return { applied: false, reason: null,
-               error: { message: 'module write affected zero rows — the write was refused, not applied' } };
-    }
-    return { applied: true, reason: null, error: null };
-  }
+  // An RPC error is now just an error. There is no other door: the table has no client write
+  // policy, so a failure here means the write did NOT happen, and reporting it as such is the
+  // whole contract.
   if (error) return { applied: false, reason: null, error };
 
   // The RPC RETURNS TABLE(...) — PostgREST hands back an array of one row.

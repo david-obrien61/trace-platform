@@ -36,6 +36,13 @@
       "packages/shared/src/components/CostToProduceSettings.tsx",
       "packages/shared/src/modules/PMI.tsx"
     ],
+    "audit_log": [
+      "packages/cultivar-os/src/components/inventory/inventoryEdit.ts",
+      "packages/shared/src/auth/roleFunnel.ts",
+      "packages/shared/src/business-logic/moduleState.ts",
+      "packages/shared/src/business-logic/seedBusinessModules.ts",
+      "packages/shared/src/pages/Settings.tsx"
+    ],
     "business_inventory_ledger": [
       "packages/cultivar-os/api/orders/submit.ts",
       "packages/cultivar-os/src/components/inventory/inventoryEdit.ts",
@@ -49,12 +56,6 @@
       "packages/cultivar-os/src/pages/Customers.tsx",
       "packages/shared/src/business-logic/customerUpsert.ts",
       "packages/shared/src/discovery/populate.ts"
-    ],
-    "audit_log": [
-      "packages/cultivar-os/src/components/inventory/inventoryEdit.ts",
-      "packages/shared/src/auth/roleFunnel.ts",
-      "packages/shared/src/business-logic/moduleState.ts",
-      "packages/shared/src/pages/Settings.tsx"
     ],
     "member_devices": [
       "packages/shared/src/auth/deviceHandoff.ts",
@@ -70,6 +71,10 @@
     "business_accounting_secrets": [
       "packages/cultivar-os/api/qbo/router.ts",
       "packages/shared/src/quickbooks/secrets.ts"
+    ],
+    "business_modules": [
+      "packages/shared/src/business-logic/moduleState.ts",
+      "packages/shared/src/business-logic/seedBusinessModules.ts"
     ],
     "business_pricing_config": [
       "packages/shared/src/business-logic/financialDataAccess.ts",
@@ -105,9 +110,6 @@
     ],
     "business_discovery_profiles": [
       "packages/shared/src/discovery/populate.ts"
-    ],
-    "business_modules": [
-      "packages/shared/src/business-logic/moduleState.ts"
     ],
     "business_pmi_schedule": [
       "packages/shared/src/modules/PMI.tsx"

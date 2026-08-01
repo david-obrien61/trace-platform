@@ -57,6 +57,7 @@
  */
 import type { ComponentType } from 'react';
 import type { LucideProps } from 'lucide-react';
+import type { ModuleSeedRow } from '@trace/shared/business-logic';
 import {
   QrCode, Truck, Calculator, HandCoins, Boxes, Camera, Receipt, Wrench, Share2,
   AlertTriangle, BarChart2, DollarSign, Sprout, TrendingUp,
@@ -294,6 +295,44 @@ export interface ModuleEntry {
 // `calculateDaysLeft` defaults to 30) carried across because a trial length was needed and inventing
 // a different one would have been worse. MASTER_BRIEF names no trial length for TRACE's own modules;
 // it notes competitors at 14 days (:736-737). **David's to rule — change the numbers here, nowhere else.**
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// 🔴 RECONCILIATION — MASTER_BRIEF'S CORE LIST vs THE 11 module_keys (David asked, 2026-08-01)
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// MASTER_BRIEF:295-300 names FIVE core items. **TWO map. THREE DO NOT, and they cannot** — no tile
+// carries a `module_key` for any of them:
+//
+//   ✅ QR Checkout                     → `qr_checkout`
+//   ✅ QuickBooks integration          → `qb_invoicing`
+//   ❌ Owner dashboard                 → NO module_key, and it should not have one. The dashboard
+//                                        is the SHELL every tile renders into; a row for it would
+//                                        be a row that can be set `enabled:false`, which turns the
+//                                        app off. Core by structure, not by billing.
+//   ❌ Basic inventory / asset tracking → NO module_key. The `inventory_manual` / `assets` tiles
+//                                        carry none. `inventory_intake` is a DIFFERENT product
+//                                        (mobile photo intake) and is `unpriced` — its own note
+//                                        already says the brief's word "basic" may not cover it.
+//   ❌ Customer records                 → NO module_key on any customer tile.
+//
+// 🔴 THE CONSEQUENCE, WHICH IS THE POINT OF REPORTING IT: David's ruling says the marketplace SHOWS
+// core as included, because *"Terry seeing what he already gets is worth more at a demo than only
+// seeing what costs extra."* **Built from this catalog, that list has TWO rows, not five.** Three
+// of the five things the brief promises a customer would be missing from the screen built to show
+// him what he is getting.
+//
+// TWO WAYS OUT, AND IT IS A RULING, NOT A BUILD DECISION:
+//   (a) MINT no-cost core module_keys for dashboard / inventory / customers. Consistent with the
+//       ruling's own logic (rows for everything; a move to core is a field change). ⚠️ BUT IT FAILS
+//       THE BUILD AS THINGS STAND: `verify-tile-fields` assertion 2 rejects a catalog entry no tile
+//       references — "a price for something nobody can reach." Taking (a) means changing that cap,
+//       and its reverse direction is load-bearing, so the change would need its own probes.
+//   (b) The marketplace renders "included in your base subscription" from a SEPARATE static list,
+//       and this catalog stays what it is — the things that have a per-tenant ROW.
+// NOT CHOSEN HERE. Choosing silently is how the tile fields drifted for nine weeks.
+//
+// THE ADD-ON SIDE, restated because it is the same shape: MASTER_BRIEF lists FOURTEEN add-ons; this
+// catalog prices SEVEN. Unmapped: Equipment Tracking · GPS Tracking · Water System · Greenhouse ·
+// PMI · EPA 608 (Conduit) · DOT Compliance (Ignition). Four are other verticals; three are Cultivar
+// products with a published price and no tile. That is the 7-of-14 finding from #179, unchanged.
 export const MODULE_CATALOG: ModuleEntry[] = [
   // ── core: included in base (MASTER_BRIEF:294-299) ──
   { module_key: 'qr_checkout',       billing: 'core',    price_monthly: 0,    trial_days: 0,  note: 'MASTER_BRIEF:296 — named in the Core list, included in the base subscription.' },
@@ -313,11 +352,72 @@ export const MODULE_CATALOG: ModuleEntry[] = [
   { module_key: 'inventory_intake',  billing: 'unpriced', price_monthly: null, trial_days: 0, note: 'NOT IN MASTER_BRIEF. The Core list says "Basic inventory / asset tracking" (:298) — mobile photo intake is arguably beyond "basic", and is named in neither list. RULING OWED.' },
 ];
 
-// NO `moduleByKey()` / `catalogModuleKeys()` SELECTORS YET, deliberately. They are two lines each
-// and obvious, which is exactly why writing them now would be wrong: nothing calls them, and an
-// exported helper with no caller is the same declaration-with-no-reader this week keeps finding
-// (`<BeingBuilt>` unmounted, `business_insights` rendering nowhere, `nav_eligible`). The tenant
-// seeder and the marketplace screen add the selector each actually needs, when they need it.
+// THE SEEDER NEEDED ONE, SO IT IS WRITTEN NOW — exactly as the note above said it would be. The
+// marketplace's own selector is still not written, for the same reason it was not written yesterday.
+
+// ════════════════════════════════════════════════════════════════════════════════
+// SEED PROJECTION — what a tenant's `business_modules` rows look like on day one.
+// ════════════════════════════════════════════════════════════════════════════════
+//
+// 🔴 ROWS FOR EVERY MODULE, INCLUDING CORE (David's ruling 2026-08-01). His reason is the deciding
+// one: **a module may MOVE to core as the platform builds out, and with a row for everything that
+// is a field change HERE rather than a migration against live tenants.** A model where core has no
+// row makes every promotion or demotion a data migration.
+//
+// ✏️ THE RULING ASKED FOR A NEW FIELD MARKING CORE VS PAID. **IT ALREADY EXISTS AND IT IS
+// `billing`** — minted in this same file yesterday (#179), typed `'core' | 'add_on' | 'unpriced'`,
+// with `verify-tile-fields` already asserting `billing ↔ price_monthly` agreement on every row.
+// Adding a second field for the same fact is STD-011 — two representations of one thing, and the
+// next reader would have to work out which one the seeder trusts. **The ruling's requirement is
+// satisfied by the field that is here; what was actually missing is the MAPPING below.** Reported
+// rather than quietly implemented either way.
+//
+// AND THE MAPPING NEEDS NO NEW FIELD AT ALL — both facts fall out of data that is already there:
+//   · `enabled`     = billing is 'core'         — core is included in the base subscription, so it
+//                                                 is on from day one and no trial applies.
+//   · `start_trial` = trial_days > 0            — which is 30 for the seven add-ons and 0 for core
+//                                                 AND for 'unpriced', so the three-value `billing`
+//                                                 collapses to one rule instead of a special case.
+//
+// 🔴 `unpriced` GETS A ROW, DISABLED, WITH NO CLOCK, and that is the honest answer rather than the
+// tidy one. A trial is a countdown to a price decision; `cost_to_produce` and `inventory_intake`
+// have no price (their `note` says RULING OWED, in both directions). Starting a thirty-day clock on
+// them would create a deadline for a question nobody has answered — a real number claiming a real
+// thing (D-9). `trial_days: 0` already encodes it, so the rule above needs no exception.
+//
+// ⚠️ `configured` IS NOT PROJECTED HERE — the seeder writes `false` for everything, core included,
+// because `configured` means "the owner has set this up" and at seed nobody has. See the migration
+// (20260801c PART 2 step 4) for the visible consequence and the ruling it leaves owed.
+
+// ⚠️ `ModuleSeedRow` IS DEFINED IN SHARED AND IMPORTED HERE, NOT REDECLARED. The two ends of this
+// payload must agree, and a second structurally-identical interface in the vertical would be a
+// duplicate that TypeScript could never catch drifting (structural typing means both compile even
+// after they disagree). The dependency direction is the only one AC-1 permits: the vertical may
+// import shared; shared may never import the vertical.
+
+/** One module's day-one row state. Exported so the mapping itself is tested, not just its output. */
+export function moduleSeedRow(entry: ModuleEntry): ModuleSeedRow {
+  return {
+    module_key:  entry.module_key,
+    enabled:     entry.billing === 'core',
+    start_trial: entry.trial_days > 0,
+  };
+}
+
+/**
+ * The whole catalog as a seed payload — the argument `seed_business_modules(…, p_modules)` takes.
+ * EVERY module, no filtering: a tenant gets a row for each, which is the ruling.
+ *
+ * VERTICAL IS DELIBERATELY NOT APPLIED. A `seasonal_module` row on a non-nursery tenant costs one
+ * row and nothing else — the tile never reaches that business's grid because `dashboardTilesForVerticals`
+ * filters the REGISTRY, not this table. Filtering here instead would mean a business that later
+ * changes `business_type` silently has no row (and so no trial) for its new vertical's modules,
+ * which is the missing-row defect this whole build exists to close, reintroduced by an optimisation
+ * that saves four rows.
+ */
+export function catalogSeedRows(): ModuleSeedRow[] {
+  return MODULE_CATALOG.map(moduleSeedRow);
+}
 
 // ════════════════════════════════════════════════════════════════════════════════
 // VERTICAL SCOPE — a business's live dashboard = its vertical's tiles + all `general` tiles.

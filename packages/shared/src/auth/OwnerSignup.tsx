@@ -6,6 +6,8 @@ import { normalizePhone } from '../utils/normalizePhone';
 import { findOrCreatePerson } from '../business-logic/personUpsert';
 import { resolveRoleDefaults } from './roleDefinitions';
 import { seedPricingConfig } from '../business-logic/seedPricingConfig';
+import { seedBusinessModules, warnOnShortModuleSeed } from '../business-logic/seedBusinessModules';
+import type { ModuleSeedRow } from '../business-logic/seedBusinessModules';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -33,6 +35,19 @@ export interface OwnerSignupConfig {
   memberTable: 'business_members' | 'shop_members';
   memberFKColumn: 'business_id' | 'shop_id';
   ownerRole: string;              // 'OWNER' | 'ADMIN' etc.
+  /**
+   * The vertical's module catalog, projected to day-one row state — `catalogSeedRows()`.
+   *
+   * 🔴 REQUIRED, NOT OPTIONAL, AND THAT IS THE POINT. Every tenant needs a `business_modules` row
+   * per module or it has no trial clock and never gets billed (see seedBusinessModules.ts). An
+   * OPTIONAL field would let a creation path be added later that silently produces an unconfigured
+   * tenant — which is the exact failure `seedPricingConfig`'s own comment describes surviving for
+   * months. Required means TypeScript fails the build on a path that forgets, instead of a customer
+   * discovering it.
+   *
+   * PASSED IN rather than imported, because shared must not know a vertical's module list (AC-1).
+   */
+  moduleCatalog: ModuleSeedRow[];
   /** @deprecated RETIRED 2026-07-27 — the owner's permissions resolve from role_definitions
    *  (the floor), never a per-vertical literal. Field kept optional only so an unmigrated
    *  vertical config still type-checks; it is IGNORED. Delete it from your config. */
@@ -90,6 +105,7 @@ export function OwnerSignup({ config, navigate }: Props) {
     memberTable,
     memberFKColumn,
     ownerRole,
+    moduleCatalog,
     signInPath,
     collectPhone  = true,
     collectAddress = true,
@@ -362,6 +378,22 @@ export function OwnerSignup({ config, navigate }: Props) {
       setErrorMsg('Could not create owner account: ' + (memberError?.message ?? 'unknown error'));
       return null;
     }
+
+    // 4. Seed the tenant's module rows — CORE enabled, paid disabled with the trial clock started
+    //    (David's ruling 2026-08-01: a row for every module, so a module MOVING to core is a
+    //    catalog field change and not a migration).
+    //
+    // 🔴 IT IS HERE, AFTER THE MEMBER INSERT, AND THAT ORDER IS THE WHOLE REASON IT WORKS.
+    //    `seed_business_modules` gates on `subscription:update`, and since 20260730c removed the
+    //    owner branch, authority lives ENTIRELY in `business_members` — `businesses.owner_id` is a
+    //    fact about ownership, not an authority mechanism. Seeded one line earlier, the owner of
+    //    the business he just created would be DENIED, quietly, into a console warning.
+    //
+    // NON-BLOCKING (§6 r6) — a seed failure must not lose a business that already exists. But never
+    // silent: `warnOnShortModuleSeed` is loud because an unseeded tenant is INDISTINGUISHABLE from
+    // a normal one in the UI, and the thing it is missing is its trial clock.
+    const seedRes = await seedBusinessModules(supabase, businessId, userId, moduleCatalog);
+    warnOnShortModuleSeed('signup', businessId, seedRes);
 
     return { businessId, memberId: memberData.id as string };
   }

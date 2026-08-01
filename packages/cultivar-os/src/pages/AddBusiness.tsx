@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { OwnerSignup } from '@trace/shared/auth';
 import type { OwnerSignupConfig } from '@trace/shared/auth';
+import { catalogSeedRows } from '../registry/tileRegistry';
 
 // Add-a-business page for already-authenticated users.
 // Uses OwnerSignup with businessType='general' and no verticalSteps
@@ -20,6 +21,10 @@ const addBusinessConfig: OwnerSignupConfig = {
   memberTable:      'business_members',
   memberFKColumn:   'business_id',
   ownerRole:        'OWNER',
+  // Same catalog on the general path. A `general` business gets a row for the cultivar-scoped
+  // modules too — see catalogSeedRows()'s own note on why filtering by vertical here would
+  // reintroduce the missing-row defect the moment a business changes business_type.
+  moduleCatalog:    catalogSeedRows(),
   signInPath:       '/login',
   collectPhone:     true,
   collectAddress:   true,

@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { resolveRoleDefaults } from '@trace/shared/auth';
-import { seedPricingConfig } from '@trace/shared/business-logic';
+import { seedPricingConfig, seedBusinessModules, warnOnShortModuleSeed } from '@trace/shared/business-logic';
+import { catalogSeedRows } from '../registry/tileRegistry';
 
 // ─── Brand ───────────────────────────────────────────────────────────────────
 const GREEN = '#27500A';
@@ -572,6 +573,28 @@ export function OnboardingWizard() {
           invite_id: null,
         });
         }
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════════════════════
+      // MODULE SEED — the SECOND creation path (David's ruling: both paths, same commit).
+      // ═══════════════════════════════════════════════════════════════════════════════════════
+      // 🔴 DELIBERATELY OUTSIDE THE LEGACY-CREATE BRANCH, WHICH IS WHERE `seedPricingConfig` SITS.
+      // That difference is the point, not an inconsistency. The RPC is idempotent by construction
+      // (`ON CONFLICT DO NOTHING`, and a clock that refuses to restart), so running it on the
+      // MODERN path too costs one no-op call and buys the only repair mechanism this build has:
+      // **a signup-path seed failure is fixed minutes later, when the owner finishes onboarding.**
+      // Without it, "non-blocking" plus "the trial clock lives in the row" means one swallowed
+      // error is a customer who is never billed, and nothing in the UI would ever say so
+      // (useModules renders a MISSING row and a disabled row identically).
+      //
+      // seedPricingConfig is not moved out here in this commit: it has its own onConflict-ignore
+      // idempotence and the same argument applies to it, but changing where an unrelated seed runs
+      // is a separate change and this one is days from a demo. NAMED, not bundled.
+      //
+      // NON-BLOCKING (§6 r6) — never blocks finalize, never blocks the "is live" screen.
+      {
+        const seedRes = await seedBusinessModules(supabase, businessId, user.id, catalogSeedRows());
+        warnOnShortModuleSeed('onboarding', businessId, seedRes);
       }
 
       // Persist the nursery address back to businesses on the NORMAL path. The wizard now

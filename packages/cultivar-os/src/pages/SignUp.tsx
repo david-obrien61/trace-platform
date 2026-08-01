@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { OwnerSignup } from '@trace/shared/auth';
 import type { OwnerSignupConfig, VerticalStep } from '@trace/shared/auth';
 import { DiscoveryGlimpse } from '@trace/shared/discovery/DiscoveryGlimpse';
+import { catalogSeedRows } from '../registry/tileRegistry';
 
 const NURSERY_SEED_INSIGHTS = [
   'Seasonal inventory patterns detected — netting and mulch show strong upsell potential',
@@ -31,6 +32,9 @@ const cultivarConfig: OwnerSignupConfig = {
   memberTable:     'business_members',
   memberFKColumn:  'business_id',
   ownerRole:       'OWNER',
+  // Every module gets a row at creation — core enabled, paid disabled with the clock started.
+  // The REGISTRY owns the list; shared owns the mechanism (AC-1).
+  moduleCatalog:   catalogSeedRows(),
   signInPath:      '/login',
   collectPhone:    true,
   collectAddress:  true,
