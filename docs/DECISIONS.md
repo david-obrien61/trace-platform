@@ -1122,6 +1122,21 @@ Implementation applies the **local-first LOGIC proven in DataBridge** — **pull
 ### D-52 · Inventory states: on-hand / committed / available — commit at checkout, decrement at fulfill — `[POINTER]`
 Adopts the unanimous industry three-state model. Checkout commits (available→committed, on-hand unchanged); fulfillment decrements on-hand; walk-in collapses both. Supersedes D-42's checkout-decrement. Oversell checks available. **Canonical home:** `docs/decisions/2026-07-21-inventory-states-onhand-committed-available-D52.md`. **Date:** 2026-07-21 · **Status:** Accepted.
 
+### D-53 · QR resolve — three jobs a URL plays; strip-and-resolve; capture/count are URL-agnostic — `[POINTER]`
+**Decision:** (1) The QR points at TRACE, **never** at the tenant's own site — a tag targeting `lawnstrees.com` is a MISMATCH TO FIX, because their site has no cart, no capture, no session. (2) The tenant's URL is **BRANDING** on the page TRACE serves — one app, skinned per tenant (AC-4). (3) An existing tag pointing at their site is handled by **STRIP-AND-RESOLVE**: strip the URL, keep the identifying part, resolve it against **tenant-scoped** inventory. Corollary: **capture and count are URL-AGNOSTIC** — operator-facing, tenant-scoped, and the customer-facing URL never enters that path.
+**Canonical home:** [`docs/decisions/2026-06-18-qr-resolve-D53.md`](decisions/2026-06-18-qr-resolve-D53.md).
+**Implements the scan half of** D-34 (the lot is the SKU). **AC-1** (the shared resolver names no vertical table; the vertical lane stays in the caller) · **AC-3** (every generic lane is `business_id`-scoped) · **AC-4** (job 2).
+🔴 **Decided 2026-06-18 · captured 2026-08-01 — six weeks, during which it resurfaced twice as an open question.** The METHOD was settled then; what was open was whether it was BUILT. **It is, and the code agrees with the design:** `scanTag.ts` strips `/plant/<tag>` and hands a bare string to a column-agnostic ladder (L1 `cultivar_plants.tag_id` → L2 `business_inventory.sku` → L4 name token-set → L5 size-picker). Recorded so it is not re-opened a seventh time.
+**Date decided:** 2026-06-18 · **Date captured:** 2026-08-01 · **Status:** Accepted (design and build AGREE). **Guard:** — (none; noted as debt).
+
+### D-54 · Gated price — the AC-4 KEY: LOCATION on the lot, REGISTRATION on the web — `[POINTER]`
+**Decision:** A price is unlocked by a **KEY**, and the key differs by context — the two are **siblings, not rivals**. **On the lot the key is LOCATION** (physical presence substitutes for contact details). **On the web the key is REGISTRATION** (name, address, ZIP before any price renders). One mechanism, per-context value — AC-4 applied to price visibility; a third context (contractor, KEY = TIER) plugs in rather than forking.
+**Canonical home:** [`docs/decisions/2026-06-03-gated-price-key-D54.md`](decisions/2026-06-03-gated-price-key-D54.md). Source: flow spec `docs/user-stories/cultivar-flows-and-contractor-program-2026-06-03.md` §5 + §6.
+**Relates:** D-35 (WHICH number is shown; D-54 is WHEN) · D-9 (a gated price is a redaction, and a redaction ANNOUNCES itself) · D-53 (sibling capture, same sweep).
+🔴 **DRIFTED — the platform honours NEITHER key today, and this is a KNOWN GAP against a decided model, not an open question.** Price renders on screen 1 of 5 (`PlantHero.tsx:88`, `PlantProfile.tsx:145`) while `CustomerCapture` is screen 3 — the REGISTRATION key's *inverse*. No geofence exists anywhere (the only `navigator.geolocation` is `RhythmLogger`, unrelated). **US-001's acceptance criteria demand unconditional price on the scan page** — the older story stayed authoritative because the newer decision never became one.
+**OPEN (David's, and the ONLY open item):** the geofence **radius and accuracy policy** — including that an accuracy-unknown read must fail CLOSED (#75's class).
+**Date decided:** 2026-06-03 · **Date captured:** 2026-08-01 · **Status:** DECIDED (model) · DRIFTED (build) · one item OPEN. **Guard:** — (a price-render-outside-a-gate cap is named, not taken).
+
 ---
 
 ## PERSONAL-FINANCIAL
