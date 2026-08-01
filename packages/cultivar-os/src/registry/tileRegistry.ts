@@ -33,10 +33,27 @@
  * for a nursery — tag → enable, not rebuild.
  *
  * ── Adjustability contract ──
- * label · group · kind · placement · nav_eligible · status · vertical are intended to be ADJUSTED
- * in-flight — edit the field, done, every surface follows. The EXCEPTION is `required_permission`:
- * it is the security gate, LOCKED to the ratified values. A wrong financial permission silently
- * leaks the cost/revenue moat — do NOT casual-adjust it.
+ * label · group · kind · placement · status · vertical are intended to be ADJUSTED in-flight —
+ * edit the field, done, every surface follows. The EXCEPTION is `required_permission`: it is the
+ * security gate, LOCKED to the ratified values. A wrong financial permission silently leaks the
+ * cost/revenue moat — do NOT casual-adjust it.
+ *
+ * ── Field validity is CAPPED (2026-08-01) ──
+ * `scripts/verify-tile-fields.mjs` asserts that EVERY row declares EVERY required field with a
+ * value from its legal set. It exists because `campaigns` carried `status:'planned'` for nine
+ * weeks after the feature shipped, and nothing could see it: a declared field with no validity
+ * check is a field that drifts silently the moment one build touches a row another build owns.
+ * Add a field to TileEntry → add it to the cap's REQUIRED table in the same commit.
+ *
+ * ── `nav_eligible` DELETED 2026-08-01 (David's ruling) ──
+ * It declared "this tile can be pinned to the optional per-business nav bar" — a nav surface that
+ * was never built. `NAV_IA` shipped instead as a hand-authored list, so MEMBERSHIP IN `NAV_IA` IS
+ * ALREADY THE FACT the flag claimed to hold. Two representations of one fact (STD-011), and they
+ * had drifted on SEVEN of thirty-three rows in BOTH directions: `add_business`, `discounts` and
+ * `cost_to_produce` declared `false` while sitting in `NAV_IA` by `tileKey`; `inventory_manual`,
+ * `inventory_intake`, `opportunities` and `followup_engine` declared `true` with no node. Nothing
+ * read it, so nothing corrected it. If a derived form is ever wanted, DERIVE it from NAV_IA —
+ * never re-declare it by hand.
  */
 import type { ComponentType } from 'react';
 import type { LucideProps } from 'lucide-react';
@@ -49,10 +66,17 @@ import {
 
 // ── kinds & axes ──────────────────────────────────────────────────────────────
 // kind: how the surface behaves —
-//   action  = tap-and-done
-//   readout = a number that LEAKS data by rendering (gate on what it exposes)
-//   context = a workspace you enter and operate inside (takes the screen)
-export type TileKind = 'action' | 'readout' | 'context';
+//   destination = you TAP IT AND GO somewhere (the whole grid except the readouts)
+//   readout     = a number that LEAKS data by rendering in place (gate on what it exposes)
+//
+// 🔴 `action` + `context` COLLAPSED → `destination` (2026-08-01, David's ruling). The pair was
+// declared in the seed and then distinguished by NOTHING, anywhere: `dashboardTiles()` filters
+// `kind !== 'readout'` and no other code has ever read the field. An unused binary does not stay
+// correct — `qr_checkout` was `action` ("tap-and-done") when it was the QR scan, and Nav C2
+// relabelled it to Orders pointing at a full `/orders` workspace WITHOUT touching `kind`. The
+// label moved and the classification did not, exactly as `campaigns.status` did. The readout
+// split is the one that is real and load-bearing, so it is the one that survives.
+export type TileKind = 'destination' | 'readout';
 // placement DEFAULTS to settings/admin; `dashboard` is the earned exception. 'TBD' = undecided.
 export type TilePlacement = 'dashboard' | 'settings' | 'admin' | 'TBD';
 export type TileStatus = 'live' | 'planned';
@@ -78,8 +102,6 @@ export interface TileEntry {
   vertical: TileVertical;
   kind: TileKind;
   placement: TilePlacement;
-  /** Can be pinned to the optional per-business nav bar (the nav surface itself is PLANNED). */
-  nav_eligible: boolean;
   /**
    * THE security gate — LOCKED to the ratified values. A permission string the role must hold,
    * OR the literal 'owner-only' (owner-exclusive). placement & permission are INDEPENDENT: a
@@ -94,7 +116,7 @@ export interface TileEntry {
   icon: ComponentType<LucideProps>;
   color: string;
   bg: string;
-  /** Navigation target for a live action/context surface. */
+  /** Navigation target for a live destination surface. */
   route?: string;
   /** business_modules.module_key for the per-tenant enablement overlay (active/available state). */
   module_key?: string;
@@ -105,35 +127,50 @@ export interface TileEntry {
 const DASH_BG = '#1e293b'; // dashboard tile icon-box background (dark slate, established look)
 
 // ════════════════════════════════════════════════════════════════════════════════
-// THE REGISTRY — ratified seed (2026-06-23). placement/kind/nav/label/status/vertical are
+// THE REGISTRY — ratified seed (2026-06-23). placement/kind/label/status/vertical are
 // adjustable fields; required_permission is the locked security gate. Every current entry is
 // `general` (the shared spine) — Cultivar/Ignition tag the thin vertical-specific layer on top.
 // ════════════════════════════════════════════════════════════════════════════════
 export const TILE_REGISTRY: TileEntry[] = [
-  // ── Dashboard — actions & contexts (live) ──────────────────────────────────────
+  // ── Dashboard — destinations (live) ────────────────────────────────────────────
   // Label 'Orders' (was 'QR Checkout') — QR is the capture METHOD, not the surface's name (Nav C2).
-  { key: 'qr_checkout',      vertical: 'general', label: 'Orders',                   group: 'checkout',  kind: 'action',  placement: 'dashboard', nav_eligible: true,  required_permission: 'orders:create',        status: 'live',    depends_on: null,
+  { key: 'qr_checkout',      vertical: 'general', label: 'Orders',                   group: 'checkout',  kind: 'destination',  placement: 'dashboard', required_permission: 'orders:create',        status: 'live',    depends_on: null,
     icon: QrCode,      color: '#34d399', bg: DASH_BG, route: '/orders',            module_key: 'qr_checkout' },
   // Delivery = ONE evolving context entry. Live capability inside it = delivery_routing.
   // `opportunities` (Regina surfacing) is a PLANNED capability inside this same context.
   // Driver-handoff mechanism = UNDECIDED (do NOT build — see note).
-  { key: 'delivery',         vertical: 'general', label: 'Delivery',                  group: 'fulfilment', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'deliveries:read',  status: 'live',    depends_on: null,
+  { key: 'delivery',         vertical: 'general', label: 'Delivery',                  group: 'fulfilment', kind: 'destination', placement: 'dashboard', required_permission: 'deliveries:read',  status: 'live',    depends_on: null,
     icon: Truck,       color: '#22d3ee', bg: DASH_BG, route: '/delivery-schedule', module_key: 'delivery_routing', note: 'driver-handoff mechanism UNDECIDED' },
-  { key: 'operating_costs',  vertical: 'general', label: 'Operating Costs',           group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'costs:read',         status: 'live',    depends_on: null,
+  { key: 'operating_costs',  vertical: 'general', label: 'Operating Costs',           group: 'financial', kind: 'destination', placement: 'dashboard', required_permission: 'costs:read',         status: 'live',    depends_on: null,
     icon: HandCoins,   color: '#fbbf24', bg: DASH_BG, route: '/operating-costs' },
-  { key: 'assets',           vertical: 'general', label: 'Assets',                    group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'costs:read',         status: 'live',    depends_on: null,
+  { key: 'assets',           vertical: 'general', label: 'Assets',                    group: 'financial', kind: 'destination', placement: 'dashboard', required_permission: 'costs:read',         status: 'live',    depends_on: null,
     icon: Building2,   color: '#a78bfa', bg: DASH_BG, route: '/assets' },
   // Inventory is TWO siblings sharing the inventory data model — NOT a collapse.
-  { key: 'inventory_manual', vertical: 'general', label: 'Inventory (manual)',        group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'inventory:read',         status: 'live',    depends_on: null,
+  { key: 'inventory_manual', vertical: 'general', label: 'Inventory (manual)',        group: 'financial', kind: 'destination', placement: 'dashboard', required_permission: 'inventory:read',         status: 'live',    depends_on: null,
     icon: Boxes,       color: '#f472b6', bg: DASH_BG, route: '/inventory' },
-  { key: 'inventory_intake', vertical: 'general', label: 'Inventory Intake (mobile)', group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'inventory:read',         status: 'live',    depends_on: null,
+  { key: 'inventory_intake', vertical: 'general', label: 'Inventory Intake (mobile)', group: 'financial', kind: 'destination', placement: 'dashboard', required_permission: 'inventory:read',         status: 'live',    depends_on: null,
     icon: Camera,      color: '#fb7185', bg: DASH_BG, route: '/inventory',         module_key: 'inventory_intake' },
-  { key: 'receipt_keeper',   vertical: 'general', label: 'Receipts',                  group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'costs:read',         status: 'live',    depends_on: null,
+  { key: 'receipt_keeper',   vertical: 'general', label: 'Receipts',                  group: 'financial', kind: 'destination', placement: 'dashboard', required_permission: 'costs:read',         status: 'live',    depends_on: null,
     icon: Receipt,     color: '#38bdf8', bg: DASH_BG, route: '/receipts' },
-  { key: 'pmi',              vertical: 'general', label: 'PMI',                       group: 'financial', kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'pmi:read',         status: 'live',    depends_on: null,
+  { key: 'pmi',              vertical: 'general', label: 'PMI',                       group: 'financial', kind: 'destination', placement: 'dashboard', required_permission: 'pmi:read',         status: 'live',    depends_on: null,
     icon: Wrench,      color: '#94a3b8', bg: DASH_BG, route: '/pmi' },
-  { key: 'social_media',     vertical: 'general', label: 'Social',                    group: 'growth',    kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'campaigns:read',   status: 'live',    depends_on: null,
+  { key: 'social_media',     vertical: 'general', label: 'Social',                    group: 'growth',    kind: 'destination', placement: 'dashboard', required_permission: 'campaigns:read',   status: 'live',    depends_on: null,
     icon: Share2,      color: '#f472b6', bg: DASH_BG, route: '/social/setup',      module_key: 'social_media' },
+  // 🔴 `status:'planned'` WAS WRONG HERE FOR NINE WEEKS, AND THIS ROW IS WHY THE FIELD CAP EXISTS.
+  // Campaign Scheduler SHIPPED 2026-05-29 (`60bd2fa`) — page, detail page, `api/campaigns.ts` (one
+  // of the 12 function slots), `20260529_campaigns.sql`, member RLS in `20260727c`, AI drafting via
+  // `generateCampaignPosts`. On 2026-06-23 the registry consolidation (`c36e562`) seeded EIGHT tiles
+  // `planned` as a BATCH and swept this shipped feature in with seven unbuilt ones. For five weeks
+  // it read as a grey square and nobody looked twice; on 2026-07-31 `planned` gained the amber SOON
+  // badge and a mute wrong field started making a claim OUT LOUD — the dashboard tile said COMING
+  // SOON while `nav_campaigns` (the SAME tile by `tileKey`, the SAME `/campaigns` route) opened the
+  // working page. The nav could not have disagreed on purpose: `navPermission()` reads
+  // `required_permission` and has NO notion of `status`. It was the only planned tile with a route
+  // — because it was the only planned tile that was actually built.
+  // MOVED here from the planned block and re-grouped 'planned' → 'growth': it is a marketing
+  // surface and it belongs beside `social_media`, which is its own `depends_on`.
+  { key: 'campaigns',        vertical: 'general', label: 'Campaign Scheduler',        group: 'growth',    kind: 'destination', placement: 'dashboard', required_permission: 'campaigns:read',   status: 'live',    depends_on: 'social_media',
+    icon: CalendarClock, color: '#f472b6', bg: DASH_BG, route: '/campaigns' },
   // Customers ROSTER (3rd DataSheet consumer). OWNER-ONLY — matches customers_business_owner RLS
   // (owner-only, FOR ALL) so the nav never opens onto an empty RLS wall for staff (Gate-3 lesson).
   // 🔴 'owner-only' → 'customers:read' (2026-07-28, ledger #167). #153 re-gated the /customers
@@ -142,69 +179,72 @@ export const TILE_REGISTRY: TileEntry[] = [
   // customers:read could reach /customers by URL while the menu never showed it. Route open,
   // table open, NAV shut: STD-020's third failure on this one capability, at the layer the
   // enforcement map had no column for. capR now asserts tile-gate == route-gate.
-  { key: 'customers',        vertical: 'general', label: 'Customers',                 group: 'crm',       kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'customers:read',     status: 'live',    depends_on: null,
+  { key: 'customers',        vertical: 'general', label: 'Customers',                 group: 'crm',       kind: 'destination', placement: 'dashboard', required_permission: 'customers:read',     status: 'live',    depends_on: null,
     icon: Users,       color: '#818cf8', bg: DASH_BG, route: '/customers' },
 
   // ── Dashboard — readouts (live). A readout LEAKS data by rendering → gate on what it exposes.
-  { key: 'leakage_alert',          vertical: 'general', label: 'Leakage alert',     group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'orders:read',    status: 'live', depends_on: null,
+  { key: 'leakage_alert',          vertical: 'general', label: 'Leakage alert',     group: 'readout', kind: 'readout', placement: 'dashboard', required_permission: 'orders:read',    status: 'live', depends_on: null,
     icon: AlertTriangle, color: '#f59e0b', bg: DASH_BG },
-  { key: 'metric_plants',          vertical: 'general', label: 'Plants tracked',    group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'member', status: 'live', depends_on: null,
+  { key: 'metric_plants',          vertical: 'general', label: 'Plants tracked',    group: 'readout', kind: 'readout', placement: 'dashboard', required_permission: 'member', status: 'live', depends_on: null,
     icon: Sprout,        color: '#4ade80', bg: DASH_BG },
-  { key: 'metric_inventory_value', vertical: 'general', label: 'Inventory value',   group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'inventory:read',     status: 'live', depends_on: null,
+  { key: 'metric_inventory_value', vertical: 'general', label: 'Inventory value',   group: 'readout', kind: 'readout', placement: 'dashboard', required_permission: 'inventory:read',     status: 'live', depends_on: null,
     icon: DollarSign,    color: '#2dd4bf', bg: DASH_BG },
   // GATED (was ungated) — revenue is moat-class; locked to view_costs.
-  { key: 'metric_today_sales',     vertical: 'general', label: "Today's sales",     group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'costs:read',     status: 'live', depends_on: null,
+  { key: 'metric_today_sales',     vertical: 'general', label: "Today's sales",     group: 'readout', kind: 'readout', placement: 'dashboard', required_permission: 'costs:read',     status: 'live', depends_on: null,
     icon: TrendingUp,    color: '#34d399', bg: DASH_BG },
-  { key: 'metric_installs',        vertical: 'general', label: 'Installs this week', group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'member', status: 'live', depends_on: null,
+  { key: 'metric_installs',        vertical: 'general', label: 'Installs this week', group: 'readout', kind: 'readout', placement: 'dashboard', required_permission: 'member', status: 'live', depends_on: null,
     icon: BarChart2,     color: '#818cf8', bg: DASH_BG },
-  { key: 'qb_status',              vertical: 'general', label: 'QuickBooks status', group: 'readout', kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'settings:read', status: 'live', depends_on: null,
+  { key: 'qb_status',              vertical: 'general', label: 'QuickBooks status', group: 'readout', kind: 'readout', placement: 'dashboard', required_permission: 'settings:read', status: 'live', depends_on: null,
     icon: BadgeCheck,    color: '#60a5fa', bg: DASH_BG },
 
   // ── Settings (config) ───────────────────────────────────────────────────────────
-  { key: 'qb_invoicing',     vertical: 'general', label: 'QuickBooks',                group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'settings:read', status: 'live',    depends_on: null,
+  { key: 'qb_invoicing',     vertical: 'general', label: 'QuickBooks',                group: 'settings', kind: 'destination',  placement: 'settings', required_permission: 'settings:read', status: 'live',    depends_on: null,
     icon: BookOpen,    color: '#60a5fa', bg: DASH_BG, route: '/settings', module_key: 'qb_invoicing' },
-  { key: 'business_profile', vertical: 'general', label: 'Business Profile',          group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'settings:read', status: 'live',    depends_on: null,
+  { key: 'business_profile', vertical: 'general', label: 'Business Profile',          group: 'settings', kind: 'destination',  placement: 'settings', required_permission: 'settings:read', status: 'live',    depends_on: null,
     icon: Building2,   color: '#94a3b8', bg: DASH_BG, route: '/settings' },
-  { key: 'tax_rate',         vertical: 'general', label: 'Tax Rate',                  group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'tax_rate:update', status: 'live',    depends_on: null,
+  { key: 'tax_rate',         vertical: 'general', label: 'Tax Rate',                  group: 'settings', kind: 'destination',  placement: 'settings', required_permission: 'tax_rate:update', status: 'live',    depends_on: null,
     icon: Percent,     color: '#fbbf24', bg: DASH_BG, route: '/settings' },
-  { key: 'cost_config',      vertical: 'general', label: 'Cost-to-Produce Settings',  group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'costs:read',      status: 'live',    depends_on: null,
+  { key: 'cost_config',      vertical: 'general', label: 'Cost-to-Produce Settings',  group: 'settings', kind: 'destination',  placement: 'settings', required_permission: 'costs:read',      status: 'live',    depends_on: null,
     icon: CostCalc,    color: '#2dd4bf', bg: DASH_BG, route: '/settings' },
-  { key: 'install_price',    vertical: 'general', label: 'Install Price',             group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'settings:read', status: 'live',    depends_on: null,
+  { key: 'install_price',    vertical: 'general', label: 'Install Price',             group: 'settings', kind: 'destination',  placement: 'settings', required_permission: 'settings:read', status: 'live',    depends_on: null,
     icon: Hammer,      color: '#fb923c', bg: DASH_BG, route: '/settings' },
-  { key: 'team_management',  vertical: 'general', label: 'Team',                      group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'team:read', status: 'live',    depends_on: null,
+  { key: 'team_management',  vertical: 'general', label: 'Team',                      group: 'settings', kind: 'destination',  placement: 'settings', required_permission: 'team:read', status: 'live',    depends_on: null,
     icon: Users,       color: '#818cf8', bg: DASH_BG, route: '/settings' },
-  { key: 'online_shop',      vertical: 'general', label: 'Online Shop',               group: 'settings', kind: 'context', placement: 'settings', nav_eligible: false, required_permission: 'settings:read', status: 'planned', depends_on: null,
-    icon: ShoppingBag, color: '#c084fc', bg: DASH_BG },
-  { key: 'contractor_tiers', vertical: 'general', label: 'Contractors',               group: 'settings', kind: 'action',  placement: 'settings', nav_eligible: false, required_permission: 'pricing_recipe:update', status: 'planned', depends_on: null,
-    icon: Users,       color: '#fb923c', bg: DASH_BG },
-  { key: 'seasonal_module',  vertical: 'general', label: 'Seasonal',                  group: 'settings', kind: 'context', placement: 'settings', nav_eligible: false, required_permission: 'settings:read', status: 'planned', depends_on: null,
-    icon: Leaf,        color: '#4ade80', bg: DASH_BG },
+  { key: 'online_shop',      vertical: 'general', label: 'Online Shop',               group: 'settings', kind: 'destination', placement: 'settings', required_permission: 'settings:read', status: 'planned', depends_on: null,
+    icon: ShoppingBag, color: '#c084fc', bg: DASH_BG, module_key: 'online_shop' },
+  { key: 'contractor_tiers', vertical: 'general', label: 'Contractors',               group: 'settings', kind: 'destination',  placement: 'settings', required_permission: 'pricing_recipe:update', status: 'planned', depends_on: null,
+    icon: Users,       color: '#fb923c', bg: DASH_BG, module_key: 'contractor_tiers' },
+  // 🔴 vertical 'general' → 'cultivar' (2026-08-01). MASTER_BRIEF:313 lists "Seasonal Module |
+  // $29/mo | Cultivar" — a nursery's seasonal perishable window is not a shared-spine capability,
+  // and declaring it `general` would surface it on an auto shop's dashboard the day Ignition
+  // reconnects. First non-`general` row in the registry; `verticalsForBusinessType` already routes
+  // it (LAWNS is business_type 'nursery' → ['general','cultivar']).
+  { key: 'seasonal_module',  vertical: 'cultivar', label: 'Seasonal',                 group: 'settings', kind: 'destination', placement: 'settings', required_permission: 'settings:read', status: 'planned', depends_on: null,
+    icon: Leaf,        color: '#4ade80', bg: DASH_BG, module_key: 'seasonal_module' },
 
   // ── Admin ─────────────────────────────────────────────────────────────────────
-  { key: 'add_business',     vertical: 'general', label: 'Add Business',              group: 'admin',    kind: 'action',  placement: 'admin',    nav_eligible: false, required_permission: 'owner-only',       status: 'live',    depends_on: null,
+  { key: 'add_business',     vertical: 'general', label: 'Add Business',              group: 'admin',    kind: 'destination',  placement: 'admin', required_permission: 'owner-only',       status: 'live',    depends_on: null,
     icon: Plus,        color: '#34d399', bg: DASH_BG, route: '/add-business' },
   // Cost-to-Produce — MOVED Dashboard→Admin + view_costs→owner-only (Nav C2 access change, ratified
   // 2026-06-24). Owner-default + delegable is a future Role-Machine concern; today the gate is
   // owner-only, so a Staff/Manager session sees it nowhere (nav AND route, see router.tsx /costs).
-  { key: 'cost_to_produce',  vertical: 'general', label: 'Cost-to-Produce',           group: 'admin',    kind: 'context', placement: 'admin',    nav_eligible: false, required_permission: 'owner-only',       status: 'live',    depends_on: null,
+  { key: 'cost_to_produce',  vertical: 'general', label: 'Cost-to-Produce',           group: 'admin',    kind: 'destination', placement: 'admin', required_permission: 'owner-only',       status: 'live',    depends_on: null,
     icon: Calculator,  color: '#2dd4bf', bg: DASH_BG, route: '/costs',             module_key: 'cost_to_produce' },
   // Discounts — customer discount types × tiers (relocated out of Cost-to-Produce Block 5, 2026-07-10).
   // manage_settings (pricing authority; owner in Cultivar today), matching the /discounts route gate.
-  { key: 'discounts',        vertical: 'general', label: 'Discounts',                 group: 'admin',    kind: 'action',  placement: 'admin',    nav_eligible: false, required_permission: 'pricing_recipe:update',  status: 'live',    depends_on: null,
+  { key: 'discounts',        vertical: 'general', label: 'Discounts',                 group: 'admin',    kind: 'destination',  placement: 'admin', required_permission: 'pricing_recipe:update',  status: 'live',    depends_on: null,
     icon: Percent,     color: '#fbbf24', bg: DASH_BG, route: '/discounts' },
 
   // ── Planned (greyed) — forward declarations. Permissions marked PROVISIONAL where the
   //    seed did not pin one (adjustable); the seed-pinned ones are locked like all others.
-  { key: 'services',         vertical: 'general', label: 'Services',                  group: 'planned',  kind: 'context', placement: 'TBD',       nav_eligible: false, required_permission: 'member',   status: 'planned', depends_on: null,
+  { key: 'services',         vertical: 'general', label: 'Services',                  group: 'planned',  kind: 'destination', placement: 'TBD', required_permission: 'member',   status: 'planned', depends_on: null,
     icon: Wrench,      color: '#94a3b8', bg: DASH_BG, note: 'EDITOR LIVE — the service_offerings CRUD (transport / add-ons incl. netting companion / other services) renders in shared Settings.tsx. NAV rewire 2026-07-07 (tech-debt #47): it now has a first-class section-isolated DESTINATION at /settings/services via the nav_services Admin IA node (peer of Business Profile / Accounting), no longer orphaned at /settings/all. This tile (status:planned/placement:TBD) refers to a future DASHBOARD tile, not the editor or its nav destination. permission PROVISIONAL.' },
-  { key: 'opportunities',    vertical: 'general', label: 'Opportunities',             group: 'planned',  kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'orders:read',     status: 'planned', depends_on: 'services',
+  { key: 'opportunities',    vertical: 'general', label: 'Opportunities',             group: 'planned',  kind: 'destination', placement: 'dashboard', required_permission: 'orders:read',     status: 'planned', depends_on: 'services',
     icon: TrendingUp,  color: '#22d3ee', bg: DASH_BG, note: 'Regina surfacing; permission PROVISIONAL' },
-  { key: 'followup_engine',  vertical: 'general', label: 'Follow-Up',                 group: 'planned',  kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'customers:update', status: 'planned', depends_on: null,
-    icon: MessageCircle, color: '#fbbf24', bg: DASH_BG },
-  { key: 'business_insights', vertical: 'general', label: 'Insights',                 group: 'planned',  kind: 'readout', placement: 'dashboard', nav_eligible: false, required_permission: 'reports:read',    status: 'planned', depends_on: null,
-    icon: BarChart2,   color: '#818cf8', bg: DASH_BG },
-  { key: 'campaigns',        vertical: 'general', label: 'Campaign Scheduler',        group: 'planned',  kind: 'context', placement: 'dashboard', nav_eligible: true,  required_permission: 'campaigns:read', status: 'planned', depends_on: 'social_media',
-    icon: CalendarClock, color: '#f472b6', bg: DASH_BG, route: '/campaigns' },
+  { key: 'followup_engine',  vertical: 'general', label: 'Follow-Up',                 group: 'planned',  kind: 'destination', placement: 'dashboard', required_permission: 'customers:update', status: 'planned', depends_on: null,
+    icon: MessageCircle, color: '#fbbf24', bg: DASH_BG, module_key: 'followup_engine' },
+  { key: 'business_insights', vertical: 'general', label: 'Insights',                 group: 'planned',  kind: 'readout', placement: 'dashboard', required_permission: 'reports:read',    status: 'planned', depends_on: null,
+    icon: BarChart2,   color: '#818cf8', bg: DASH_BG, module_key: 'business_insights' },
 ];
 
 // ════════════════════════════════════════════════════════════════════════════════

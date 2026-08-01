@@ -12,14 +12,14 @@
 permissions rather than by being the owner, that removing `isOwner` took nothing away from him, and
 that a refused surface now SAYS SO instead of vanishing.
 
-**Board: 0 of 20.** Every card is `STATUS: owed`.
+**Board: 0 of 22.** Every card is `STATUS: owed` except card 22, which is `needs-test` with its reason stated.
 
 **Why this exists.** `businesses.owner_id` was the authority mechanism at three layers. It is
 single-valued, so it cannot express the TWO OWNERS David ruled on 2026-07-26 — and the client's
 owner short-circuit made the client MORE PERMISSIVE THAN THE SERVER, which is how the owner came to
 read *"Tax: not identified"* on his own dashboard while his manager read the rate correctly.
 Separately, ~30 refusal surfaces were measured: 27 silent, 3 apologising after a failed write, 0
-pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (#172); 16–17 prove the two LIVE defects the A7 sweep found (#174); 18 proves the fourth permission status (#175); 19–20 prove its tile path (#176), and 20 is runnable ONLY as staff.
+pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (#172); 16–17 prove the two LIVE defects the A7 sweep found (#174); 18 proves the fourth permission status (#175); 19–20 prove its tile path (#176), and 20 is runnable ONLY as staff; 21–22 prove the uniform-tiles pass (#178) — 21 is the nine-week `campaigns.status` defect, dead.
 
 ---
 
@@ -398,9 +398,15 @@ COVERS: ledger #176 — the `planned` TileState + the mounted `<BeingBuilt>`
 
 **As the OWNER**, open `/dashboard`.
 **PASS — both:**
-① the planned modules (Online Shop, Contractors, Seasonal, Opportunities, Follow-Up, Campaigns)
-   render with an **amber `SOON` badge**, keep their own colour, and **do not respond to a click**;
+① the planned modules (**Opportunities, Follow-Up** — the only two on the dashboard) render with an
+   **amber `SOON` badge**, keep their own colour, and **do not respond to a click**;
 ② below the metric row there is a **"Business insights — coming soon"** panel.
+
+⚠️ **AMENDED 2026-08-01 (ledger #178) — Campaign Scheduler is NO LONGER on this list.** Its
+`status:'planned'` was wrong and has been corrected to `live`; it now renders as a normal navigable
+tile and is proven by **CARD 21**, not here. Online Shop / Contractors / Seasonal were never on the
+dashboard — they are `placement:'settings'`, which renders nowhere today — so naming them in this
+card asked David to look for four tiles that could not appear. Corrected rather than left standing.
 **FAIL:** a planned tile shows a **red lock on a grey square** — that is the OLD mapping, which said
 *"you are not allowed"* about something nobody is allowed because it does not exist · or the
 Business insights panel is absent.
@@ -426,3 +432,45 @@ string — Contractors gates on `pricing_recipe:update`, Follow-Up on `customers
 hold neither. **`planned` was reachable exactly for the people who did not need to be told the
 feature was coming.** As the owner this card passes either way, which is precisely why it must be
 run as staff.
+
+---
+
+## SURFACE: the tile grid's declared fields (added 2026-08-01, ledger #178 — the uniform-tiles pass)
+
+### CARD 21 — 🔴 THE TILE AND THE NAV ITEM AGREE ABOUT CAMPAIGN SCHEDULER
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #178 — `campaigns.status` 'planned' → 'live'
+
+**As the MANAGER**, open `/dashboard`.
+**PASS — all three:**
+① the **Campaign Scheduler** tile has a **green status dot**, no amber `SOON` badge, and is clickable;
+② clicking it opens **/campaigns** — the same page the **Campaigns** item in the nav opens;
+③ the page loads its campaign list (or the "No campaigns yet" empty state) without error.
+**FAIL:** the tile still reads `SOON` · or the tile is inert while the nav item works · or the tile
+shows an `[ENABLE]` button (that would mean a `module_key` was added to this row — it must not have
+one; there is no `business_modules` row behind it and the button would be a dead affordance).
+
+🔴 **This is the nine-week defect, and it is the reason CARD 22 exists.** Campaign Scheduler shipped
+2026-05-29; the 2026-06-23 registry consolidation seeded eight tiles `planned` as a batch and swept
+this one in with seven that genuinely were. It read as a grey square for five weeks and nobody
+looked twice — then `planned` gained the amber SOON badge on 2026-07-31 and a mute wrong field
+started making a claim out loud, **while the nav (same tile, same route) opened the working page.**
+The nav could not have disagreed on purpose: `navPermission()` has no notion of `status`.
+
+### CARD 22 — every tile declares every field with a legal value, and the build says so
+STATUS: needs-test
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #178 — `scripts/verify-tile-fields.mjs`
+
+**REASON THIS IS `needs-test` AND NOT A CARD DAVID RUNS:** the cap has **no user-facing surface**.
+It is a build-time assertion over `TILE_REGISTRY` — 15 planted probes both directions, proven
+red-first against the real registry (three planted defects → exit 1, named by key and field →
+restored → exit 0). There is nothing to look at in the app, so a screen-based card would be
+theatre. Recorded rather than omitted, per OP-14 clause 2: an unrecorded hole is a lie by omission.
+
+**What would replace it with a real card:** the first time a tile field gains a RENDERER — the
+Admin marketplace reading `placement`, or a grouped grid reading `group` — that surface gets a card,
+and this one retires into it.
