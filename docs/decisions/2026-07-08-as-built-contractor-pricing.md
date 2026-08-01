@@ -1,5 +1,11 @@
 # As-built recon — contractor / tier pricing (three layers)
 
+> **📍 NOT A DECISION HOME (banner added 2026-08-01).** This file is READ-ONLY RECON — evidence with
+> `file:line`, retained because the build delta and the `[GAP]` marks are still accurate and still
+> cited from `user_stories.md`. **The tier math lives in [`2026-07-09-tier-pricing-mechanism.md`](2026-07-09-tier-pricing-mechanism.md) = [[D-55]]**;
+> the owner-managed-tier model lives in [`2026-07-10-contractor-pricing-model.md`](2026-07-10-contractor-pricing-model.md) = **D-38**.
+> The "Decided going in" line below is a CITATION of D-55, not the decision itself.
+
 **Date:** 2026-07-08 · **Type:** READ-ONLY recon (no code, no migration, no behavior change)
 **Scope:** vertical:cultivar + platform · **Closes:** the Item-1 (D-35) AC-4 hold — "price_tier read but not applied; tier math undefined."
 

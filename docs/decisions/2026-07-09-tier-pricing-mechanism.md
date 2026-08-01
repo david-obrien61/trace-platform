@@ -1,4 +1,14 @@
-# Decision — customer price-tier → discount (D-35 addendum, AC-4 hold CLOSED)
+# D-55 · Tier discount is PERCENT-OFF-BASELINE — the SOLE home of the tier math
+
+> **🔴 NUMBERED D-55 on 2026-08-01; DECIDED 2026-07-09.** This doc previously titled itself a
+> *"D-35 addendum"* and carried no number of its own — which is exactly how the tier decision ended
+> up with **three docs and no address**, cited everywhere and findable in no register. A session
+> reading `RULINGS.md` in full per CLAUDE.md §10 step 9 could not see it.
+>
+> **THIS FILE IS THE ONE HOME OF THE TIER MATH.** The other two are not decision homes:
+> · [`2026-07-08-as-built-contractor-pricing.md`](2026-07-08-as-built-contractor-pricing.md) — READ-ONLY recon (evidence, `file:line`).
+> · [`2026-07-10-contractor-pricing-model.md`](2026-07-10-contractor-pricing-model.md) — a **DIFFERENT** decision, **D-38** (flat owner-managed tiers, no progression engine).
+> **D-38 is WHO decides a tier. D-55 is HOW the discount computes.** Register rows: `docs/DECISIONS.md`.
 
 **Date:** 2026-07-09 · **Type:** decision + build · **Closes:** the Item-1 (D-35) AC-4 hold — "price_tier read but not applied; tier math undefined."
 **Story:** contractor/tier-pricing umbrella (`user_stories.md`) · flow spec `docs/user-stories/cultivar-flows-and-contractor-program-2026-06-03.md` §3/§4 · recon `docs/decisions/2026-07-08-as-built-contractor-pricing.md`.

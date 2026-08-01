@@ -1100,6 +1100,28 @@ Implementation applies the **local-first LOGIC proven in DataBridge** — **pull
 **Companion:** [[D-34]] (the LOT is the SKU — the anchor), the AC-1 constant. **Still HELD (David):** bucket-A #3 (`price_unit` DEFAULT `'plant'`) + #5 (shared QR util).
 **Date captured:** 2026-07-09 · **Status:** DECIDED (BUILDER-COMPLETE; migration gated, owner-proof owed).
 
+<!-- 🔴 D-37 / D-38 / D-39 pointer entries ADDED 2026-08-01. All three were DECIDED on 2026-07-10,
+     all three have canonical docs, all three are cited across the codebase and in other ledger
+     entries — and this ledger jumped D-36 → D-40 for three weeks. Same failure class as D-53/D-54
+     and the tier mechanism: the decision had a home, the REGISTER did not have a row, so nothing
+     could report it as missing. Found by the 2026-08-01 capture sweep, not by review. -->
+
+### D-37 · Money boundary — TRACE charges, never processes payment — `[POINTER]`
+**Decision (2026-07-10):** TRACE originates carts/orders/invoices and hands off; it does NOT run the invoice lifecycle (numbering, void, credit-note, refund) and does NOT process payment. QBO owns the money lifecycle for LAWNS. Access terms and fees are owner-set DESCRIPTIVE config, not a platform transaction.
+**Canonical home:** [`docs/decisions/2026-07-10-money-boundary.md`](decisions/2026-07-10-money-boundary.md).
+**Date:** 2026-07-10 · **Status:** Accepted. *(Pointer row added 2026-08-01 — the decision is three weeks older than its register entry.)*
+
+### D-38 · Contractor pricing model — FLAT, owner-managed tiers; no progression engine — `[POINTER]`
+**Decision (2026-07-10):** contractor pricing is **FLAT, OWNER-SET tiers with MANUAL promote/demote.** No auto-progression, no decay, no cumulative-spend engine — **the system never assigns, promotes, or removes a discount on its own.** Explicitly rules OUT the earned/cumulative progression-ladder hypothesis so it does not re-open.
+**Canonical home:** [`docs/decisions/2026-07-10-contractor-pricing-model.md`](decisions/2026-07-10-contractor-pricing-model.md).
+**Relates:** [[D-55]] (the tier MATH — percent-off-baseline; D-38 is WHO decides a tier, D-55 is HOW the discount computes) · D-37 (money boundary) · D-35.
+**Date:** 2026-07-10 · **Status:** Accepted. *(Pointer row added 2026-08-01.)*
+
+### D-39 · Discount-line scope — the discount is an explicit LINE, not a silently netted price — `[POINTER]`
+**Decision (2026-07-10):** a tier discount renders as goods-at-retail plus an explicit discount line, on the order detail and in QBO — never as a quietly reduced unit price. The per-line kind seam that carries `taxable` rides the same structure.
+**Canonical home:** [`docs/decisions/2026-07-10-discount-line-scope.md`](decisions/2026-07-10-discount-line-scope.md). **Persisted by** [[D-43]] (`order_items` line breakdown).
+**Date:** 2026-07-10 · **Status:** Accepted. *(Pointer row added 2026-08-01.)*
+
 ---
 
 ### D-40 · Tax is a computed line on the shared money boundary (rate-sourcing · taxability seam · party exemption · audited authority)
@@ -1136,6 +1158,15 @@ Adopts the unanimous industry three-state model. Checkout commits (available→c
 🔴 **DRIFTED — the platform honours NEITHER key today, and this is a KNOWN GAP against a decided model, not an open question.** Price renders on screen 1 of 5 (`PlantHero.tsx:88`, `PlantProfile.tsx:145`) while `CustomerCapture` is screen 3 — the REGISTRATION key's *inverse*. No geofence exists anywhere (the only `navigator.geolocation` is `RhythmLogger`, unrelated). **US-001's acceptance criteria demand unconditional price on the scan page** — the older story stayed authoritative because the newer decision never became one.
 **OPEN (David's, and the ONLY open item):** the geofence **radius and accuracy policy** — including that an accuracy-unknown read must fail CLOSED (#75's class).
 **Date decided:** 2026-06-03 · **Date captured:** 2026-08-01 · **Status:** DECIDED (model) · DRIFTED (build) · one item OPEN. **Guard:** — (a price-render-outside-a-gate cap is named, not taken).
+
+### D-55 · Tier discount is PERCENT-OFF-BASELINE, owner-set per tier, default 0% — `[POINTER]`
+**Decision (2026-07-09):** `tier → discount` = **PERCENT-OFF-BASELINE.** The baseline is the stored, server-authoritative `business_inventory.sell_price` ([[D-35]] — the charge is the stored retail price, NEVER re-derived from cost). A customer tagged a tier gets that tier's `discountPercent` off each line's sell_price at checkout. `retail` = 0% (default, full price); `contractor` / `wholesale` = owner-set. DELIBERATELY separate from `MarginEngine.calculateRetail`, which derives price FROM vendor cost via markup slabs — the cultivar order path never touches cost; the reusable piece is the tier arithmetic only.
+**Canonical home:** [`docs/decisions/2026-07-09-tier-pricing-mechanism.md`](decisions/2026-07-09-tier-pricing-mechanism.md) — **the SOLE home of the tier math.**
+**The other two docs are NOT decision homes and are re-headed to say so:** [`2026-07-08-as-built-contractor-pricing.md`](decisions/2026-07-08-as-built-contractor-pricing.md) is READ-ONLY recon (evidence — the three-layer as-built with `file:line`), and [`2026-07-10-contractor-pricing-model.md`](decisions/2026-07-10-contractor-pricing-model.md) is a **DIFFERENT decision, [[D-38]]** (flat owner-managed tiers, no progression engine). **D-38 is WHO decides a tier; D-55 is HOW the discount computes.** They were conflated because neither had a register row.
+**Relates:** [[D-38]] · [[D-35]] · [[D-39]] (the discount renders as an explicit LINE) · [[D-43]] (that line is persisted).
+🔴 **NUMBERED 2026-08-01, DECIDED 2026-07-09 — and the gap is the point.** The decision was settled, correct, and cited in three docs, the close-out ledger, `built-inventory`, the bootstrap and two board stories — **and had no D-number and no RULINGS row, so a session reading RULINGS.md in full (§10 step 9) could not see it.** Its own doc titled itself a *"D-35 addendum"*, which is how a decision ends up with three homes and no address.
+**Status of the BUILD (unchanged by this numbering — do not read a number as a build):** the MECHANISM is decided and `tierPricing.test.ts` carries 138 assertions; **the AC-4 hold in `submit.ts` is still in place**, and the CONFIG surface (set the %, assign a tier) is a GAP — `customers.price_tier` is display-only.
+**Date decided:** 2026-07-09 · **Date numbered:** 2026-08-01 · **Status:** DECIDED (mechanism) · build OWED (the hold + the config surface).
 
 ---
 

@@ -1,5 +1,12 @@
 # Decision D-38 — Contractor Pricing Model (flat, owner-managed; no progression engine)
 
+> **📍 SCOPE FENCE (banner added 2026-08-01).** This is **D-38 — WHO decides a tier** (flat,
+> owner-set, manual promote/demote, no progression engine). It is **NOT** the tier math.
+> **HOW the discount computes is [[D-55]]** — percent-off-baseline —
+> [`2026-07-09-tier-pricing-mechanism.md`](2026-07-09-tier-pricing-mechanism.md).
+> The two were conflated for three weeks because neither had a row in `docs/DECISIONS.md`;
+> both now do. D-38's own register row was added the same day (this ledger jumped D-36 → D-40).
+
 **Date:** 2026-07-10 · **Type:** decision · **Rules out:** the earned/cumulative progression-ladder hypothesis.
 **Relates:** D-35 (tier math = percent-off-baseline), D-37 (money boundary), party-model recon R4/story #8.
 
