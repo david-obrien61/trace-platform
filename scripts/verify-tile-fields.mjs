@@ -88,8 +88,10 @@ function legalValues(src) {
 // containing commas, colons, parens and apostrophes-in-quotes. Any regex that splits on `,` or
 // matches `\w+:` reads the middle of a sentence as a field name. The walker tracks brace depth and
 // skips string literals, so a note is one value and never a source of phantom fields.
-function parseRows(src) {
-  const start = src.indexOf('export const TILE_REGISTRY');
+// `start` is parameterised so MODULE_CATALOG reuses this walker verbatim — the note-with-commas
+// problem is identical there (every catalog row carries a prose `note`), and a second parser would
+// be a second thing to get wrong.
+function parseRows(src, start = src.indexOf('export const TILE_REGISTRY')) {
   if (start < 0) return null;
   // 🔴 NOT `indexOf('[', start)`. The declaration reads `TILE_REGISTRY: TileEntry[] = [`, so the
   // FIRST `[` after the name is the empty pair in the TYPE annotation — depth-matching from there
@@ -188,6 +190,94 @@ export function scan(src) {
   return problems;
 }
 
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// ASSERTION 2 — TILE_REGISTRY.module_key ↔ MODULE_CATALOG, BOTH DIRECTIONS
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+//
+// WHY IT LIVES IN THIS CAP RATHER THAN ITS OWN FILE (§6 r8 — reuse, don't fork): it reads the SAME
+// file through the SAME `parseRows` walker and asserts the same class of fact — a registry
+// declaration that nothing corrects. A second script would duplicate the parser, the comment
+// stripper and the npm wiring to assert one more invariant about one more list in one more object
+// literal in the file this cap already owns.
+//
+// WHY BOTH DIRECTIONS. Forward (a tile's module_key with no catalog entry) is the one that breaks a
+// screen: the marketplace renders a module with no price. Reverse (a catalog entry no tile
+// references) is the one that rots quietly — a price for a module nobody can reach, which is how a
+// list stops being trustworthy. The whole point of splitting price onto its own object was that the
+// two lists must not be able to drift apart in silence, and one direction is not that.
+//
+// THE WITHIN-OBJECT INVARIANT IS LEGITIMATE, and it is worth naming the difference. The conditional
+// this design REMOVED was ACROSS objects ("required on a tile, but only if another field is set").
+// `billing` ↔ `price_monthly` is a three-state machine INSIDE one object, and a state machine is
+// exactly what an invariant check is for: core ⇒ 0, add_on ⇒ > 0, unpriced ⇒ null. An `unpriced`
+// module carrying a number, or an `add_on` carrying null, is the fabricated-value defect D-9 names.
+const BILLING_RULE = {
+  core:     { ok: (v) => v === '0',    how: 'billing:core means INCLUDED IN BASE, so the price must be exactly 0' },
+  add_on:   { ok: (v) => /^\d+$/.test(v) && Number(v) > 0, how: 'billing:add_on must carry a real price > 0 — 0 would read as free' },
+  unpriced: { ok: (v) => v === 'null', how: 'billing:unpriced must be null, NEVER 0 — a price we do not have must not render as a real figure (D-9)' },
+};
+
+/** Parse MODULE_CATALOG rows with the same walker used for the tiles. */
+function parseCatalog(src) {
+  const start = src.indexOf('export const MODULE_CATALOG');
+  if (start < 0) return null;
+  return parseRows(src, start);
+}
+
+function scanCatalog(src) {
+  const clean = stripComments(src);
+  const tiles = parseRows(clean);
+  const catalog = parseCatalog(clean);
+  const problems = [];
+  if (tiles === null) return [{ key: '(file)', field: 'TILE_REGISTRY', how: 'TILE_REGISTRY not found' }];
+  if (catalog === null) return [{ key: '(file)', field: 'MODULE_CATALOG', how: 'MODULE_CATALOG not found — every tile module_key would be unpriced and nothing would say so' }];
+
+  const catKeys = new Set();
+  for (const row of catalog) {
+    const key = unquote(row.module_key) || '(no module_key)';
+    if (catKeys.has(key)) problems.push({ key, field: 'module_key', how: 'two catalog entries claim the same module_key' });
+    catKeys.add(key);
+
+    for (const f of ['module_key', 'billing', 'price_monthly', 'trial_days', 'note']) {
+      if (!(f in row) || row[f] === '' || row[f] === undefined) {
+        problems.push({ key, field: f, how: `required catalog field '${f}' is MISSING — every module declares its billing facts and where they came from` });
+      }
+    }
+    if (/^['"`]\s*['"`]$/.test(row.note ?? '')) {
+      problems.push({ key, field: 'note', how: 'note is EMPTY — a price with no provenance cannot be told from an assumed one' });
+    }
+
+    const billing = unquote(row.billing ?? '');
+    const rule = BILLING_RULE[billing];
+    if (!rule) {
+      if (billing) problems.push({ key, field: 'billing', how: `'${billing}' is not a member of ModuleBilling (legal: ${Object.keys(BILLING_RULE).map((x) => `'${x}'`).join(' | ')})` });
+    } else if (!rule.ok((row.price_monthly ?? '').trim())) {
+      problems.push({ key, field: 'price_monthly', how: `${rule.how} — found '${row.price_monthly}'` });
+    }
+    if (!/^\d+$/.test((row.trial_days ?? '').trim())) {
+      problems.push({ key, field: 'trial_days', how: `trial_days must be a non-negative whole number of days — found '${row.trial_days}'` });
+    }
+  }
+
+  // ── FORWARD: every tile module_key is priced ──
+  const usedKeys = new Set();
+  for (const row of tiles) {
+    if (!('module_key' in row)) continue;
+    const mk = unquote(row.module_key);
+    usedKeys.add(mk);
+    if (!catKeys.has(mk)) {
+      problems.push({ key: unquote(row.key), field: 'module_key', how: `module_key '${mk}' has NO MODULE_CATALOG entry — the marketplace would render this module with no price` });
+    }
+  }
+  // ── REVERSE: every priced module is reachable ──
+  for (const mk of catKeys) {
+    if (!usedKeys.has(mk)) {
+      problems.push({ key: mk, field: 'module_key', how: 'MODULE_CATALOG prices a module NO TILE references — a price for something nobody can reach' });
+    }
+  }
+  return problems;
+}
+
 // ── PROBES (STD-022 — planted, BOTH directions, run BEFORE the real scan) ───────────────────────
 // A cap that has never been shown to FAIL is a green light of unknown wiring. Every probe below is
 // a whole synthetic registry file, so the derivation path (interface → required set, unions → legal
@@ -277,6 +367,48 @@ function runProbes() {
   t("T15 🔴 DERIVATION PROOF — adding 'widget' to the TileKind union makes 'widget' legal here, with no edit to this cap",
     FIXTURE(OK_ROW.replace("kind: 'destination'", "kind: 'widget'"), { kind: " | 'widget'" }), false);
 
+  // ── ASSERTION 2 probes — the tile ↔ catalog join, both directions ────────────────────────────
+  const c = (rows) => `\nexport const MODULE_CATALOG: ModuleEntry[] = [\n${rows}\n];\n`;
+  const OK_CAT = `  { module_key: 'alpha', billing: 'add_on', price_monthly: 19, trial_days: 30, note: 'MASTER_BRIEF:306 — $19/mo.' },`;
+  const TILE_WITH_MK = OK_ROW.replace(`bg: '#000' }`, `bg: '#000', module_key: 'alpha' }`);
+  const tc = (name, src, shouldFail) => {
+    const got = scanCatalog(src).length > 0;
+    p.push({ name, ok: got === shouldFail, expect: shouldFail ? 'FAIL' : 'PASS', got: got ? 'FAIL' : 'PASS' });
+  };
+
+  tc('C1 🔴 FORWARD — a tile module_key with NO catalog entry (the marketplace renders no price)',
+    FIXTURE(TILE_WITH_MK) + c(OK_CAT.replace("'alpha'", "'beta'") ) + '\n', true);
+  tc('C2 🔴 REVERSE — a catalog entry NO tile references (a price for something unreachable)',
+    FIXTURE(OK_ROW) + c(OK_CAT), true);
+  tc('C3 🔴 unpriced carrying 0 — the D-9 defect this split exists to make impossible',
+    FIXTURE(TILE_WITH_MK) + c(OK_CAT.replace("billing: 'add_on'", "billing: 'unpriced'").replace('price_monthly: 19', 'price_monthly: 0')), true);
+  tc('C4 🔴 add_on carrying 0 — a real module rendering as free',
+    FIXTURE(TILE_WITH_MK) + c(OK_CAT.replace('price_monthly: 19', 'price_monthly: 0')), true);
+  tc('C5 core carrying a price — included-in-base is not $19',
+    FIXTURE(TILE_WITH_MK) + c(OK_CAT.replace("billing: 'add_on'", "billing: 'core'")), true);
+  tc("C6 billing: 'free' — not a member of ModuleBilling",
+    FIXTURE(TILE_WITH_MK) + c(OK_CAT.replace("billing: 'add_on'", "billing: 'free'")), true);
+  tc('C7 an EMPTY note — a price with no provenance',
+    FIXTURE(TILE_WITH_MK) + c(OK_CAT.replace(/note: '[^']*'/, "note: ''")), true);
+  tc('C8 a MISSING trial_days',
+    FIXTURE(TILE_WITH_MK) + c(OK_CAT.replace('trial_days: 30, ', '')), true);
+  tc('C9 two catalog entries claiming one module_key',
+    FIXTURE(TILE_WITH_MK) + c(`${OK_CAT}\n${OK_CAT}`), true);
+  tc('C10 🔴 NO MODULE_CATALOG AT ALL is a failure, not a skip',
+    FIXTURE(TILE_WITH_MK), true);
+
+  // GOOD — the half that keeps it from being a blunt instrument
+  tc('C11 a matched pair passes', FIXTURE(TILE_WITH_MK) + c(OK_CAT), false);
+  tc('C12 unpriced with null passes — the honest unknown is legal, only the fabricated 0 is not',
+    FIXTURE(TILE_WITH_MK) + c(OK_CAT.replace("billing: 'add_on'", "billing: 'unpriced'").replace('price_monthly: 19', 'price_monthly: null').replace('trial_days: 30', 'trial_days: 0')), false);
+  tc('C13 core with 0 passes', FIXTURE(TILE_WITH_MK) + c(OK_CAT.replace("billing: 'add_on'", "billing: 'core'").replace('price_monthly: 19', 'price_monthly: 0').replace('trial_days: 30', 'trial_days: 0')), false);
+  tc('C14 TWO tiles sharing one module_key is legal (inventory_manual/intake pattern) — no reverse violation',
+    FIXTURE(`${TILE_WITH_MK}\n${TILE_WITH_MK.replace("key: 'alpha'", "key: 'gamma'")}`) + c(OK_CAT), false);
+  tc('C15 a tile with NO module_key needs no catalog entry',
+    FIXTURE(`${OK_ROW}\n${TILE_WITH_MK.replace("key: 'alpha'", "key: 'gamma'")}`) + c(OK_CAT), false);
+  tc('C16 a note full of commas, colons and an apostrophe is ONE value (the walker, reused)',
+    FIXTURE(TILE_WITH_MK) + c(OK_CAT.replace(/note: '[^']*'/, "note: 'MASTER_BRIEF:306 — Social Media + AI posts, $19/mo, all verticals; the brief\\'s label differs.'")), false);
+
   return p;
 }
 
@@ -296,11 +428,15 @@ if (!existsSync(path)) {
   process.exit(0);
 }
 
-const problems = scan(readFileSync(path, 'utf8'));
+const src = readFileSync(path, 'utf8');
+const problems = [...scan(src), ...scanCatalog(src)];
 if (problems.length === 0) {
-  const rows = parseRows(stripComments(readFileSync(path, 'utf8')));
-  const spec = requiredFields(stripComments(readFileSync(path, 'utf8')));
+  const clean = stripComments(src);
+  const rows = parseRows(clean);
+  const spec = requiredFields(clean);
+  const cat = parseCatalog(clean);
   console.log(`${GRN}✓${O} tile-fields — ${rows.length} tiles, each declaring all ${spec.req.length} required fields with a legal value; depends_on resolves; keys unique`);
+  console.log(`${GRN}✓${O} module-catalog — ${cat.length} modules priced, joined to the registry in BOTH directions; billing ↔ price agrees on every row`);
   process.exit(0);
 }
 

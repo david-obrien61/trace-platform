@@ -248,6 +248,78 @@ export const TILE_REGISTRY: TileEntry[] = [
 ];
 
 // ════════════════════════════════════════════════════════════════════════════════
+// THE MODULE CATALOG — what a module COSTS. Keyed on `module_key`, joined to the tile.
+// ════════════════════════════════════════════════════════════════════════════════
+//
+// 🔴 WHY THIS IS NOT FIELDS ON `TileEntry` (David's ruling 2026-08-01, reversing his own earlier
+// one). The first shape put `price_monthly` + `trial_days` on the tile, required for the eleven
+// rows carrying a `module_key` and meaningless for the other twenty-two. That is a CONDITIONALLY
+// REQUIRED FIELD, and `verify-tile-fields` cannot express one: it derives requiredness by splitting
+// on a single character (`field?:`), because a TypeScript interface declares FIELDS, not
+// RELATIONSHIPS BETWEEN FIELDS. The options were a hardcoded conditional inside the cap (the #73
+// shape the cap's own header cites), a discriminated union (expressible, and it complicates the
+// parser), or this.
+//
+// **THE CONDITIONAL WAS THE MODEL TELLING US THE FIELD WAS ON THE WRONG OBJECT.** A price is a fact
+// about a MODULE, not about a TILE — eleven things have one, thirty-three do not, and `module_key`
+// was already the join. Moving it here makes both fields UNCONDITIONALLY REQUIRED, because the list
+// contains only things that have them. The conditional does not get expressed; it disappears.
+//
+// `verify-tile-fields` assertion 2 reconciles the two lists in BOTH directions — a tile whose
+// module_key has no catalog entry, and a catalog entry no tile references. Neither list can drift
+// from the other in silence, which is the property the tile fields themselves lacked for nine weeks.
+//
+// PROVENANCE IS PER-ROW AND REQUIRED. `note` is not optional: every price cites where it came from,
+// so the next reader can tell a ratified number from an assumed one. That is also why there is no
+// conditional here either — a required `note` on all eleven beats "required only when unpriced".
+export type ModuleBilling =
+  | 'core'      // included in the base subscription — price 0 MEANS included, never "free add-on"
+  | 'add_on'    // separately billable, price > 0
+  | 'unpriced'; // HONESTLY UNKNOWN (D-9). Not zero, not a guess — null, with the reason in `note`.
+
+export interface ModuleEntry {
+  /** Joins to TileEntry.module_key AND to business_modules.module_key. */
+  module_key: string;
+  billing: ModuleBilling;
+  /** USD per month. 0 iff `core`; > 0 iff `add_on`; **null iff `unpriced`** — a price we do not
+   *  have must not render as $0, which is a real number claiming a real thing (D-9). */
+  price_monthly: number | null;
+  /** Free-trial length in days. 0 where a trial is meaningless (core, unpriced). */
+  trial_days: number;
+  /** REQUIRED — where this price came from, or why there isn't one. */
+  note: string;
+}
+
+// ⚠️ `trial_days: 30` IS INHERITED, NOT RATIFIED. It is Ignition's precedent (AdminSubscription's
+// `calculateDaysLeft` defaults to 30) carried across because a trial length was needed and inventing
+// a different one would have been worse. MASTER_BRIEF names no trial length for TRACE's own modules;
+// it notes competitors at 14 days (:736-737). **David's to rule — change the numbers here, nowhere else.**
+export const MODULE_CATALOG: ModuleEntry[] = [
+  // ── core: included in base (MASTER_BRIEF:294-299) ──
+  { module_key: 'qr_checkout',       billing: 'core',    price_monthly: 0,    trial_days: 0,  note: 'MASTER_BRIEF:296 — named in the Core list, included in the base subscription.' },
+  { module_key: 'qb_invoicing',      billing: 'core',    price_monthly: 0,    trial_days: 0,  note: 'MASTER_BRIEF:297 — "QuickBooks integration", Core list.' },
+
+  // ── add-ons (MASTER_BRIEF:304-321) ──
+  { module_key: 'social_media',      billing: 'add_on',  price_monthly: 19,   trial_days: 30, note: 'MASTER_BRIEF:306 — "Social Media + AI posts", $19/mo, all verticals.' },
+  { module_key: 'followup_engine',   billing: 'add_on',  price_monthly: 19,   trial_days: 30, note: 'MASTER_BRIEF:307 — "Follow-Up Engine", $19/mo, all verticals.' },
+  { module_key: 'online_shop',       billing: 'add_on',  price_monthly: 19,   trial_days: 30, note: 'MASTER_BRIEF:308 — "Online Shop", $19/mo, all verticals.' },
+  { module_key: 'business_insights', billing: 'add_on',  price_monthly: 19,   trial_days: 30, note: 'MASTER_BRIEF:309 — "Business Insights", $19/mo, all verticals.' },
+  { module_key: 'delivery_routing',  billing: 'add_on',  price_monthly: 29,   trial_days: 30, note: 'MASTER_BRIEF:311 — "Delivery Routing", $29/mo, all verticals.' },
+  { module_key: 'seasonal_module',   billing: 'add_on',  price_monthly: 29,   trial_days: 30, note: 'MASTER_BRIEF:313 — "Seasonal Module", $29/mo, Cultivar. Matches the tile\'s vertical:cultivar.' },
+  { module_key: 'contractor_tiers',  billing: 'add_on',  price_monthly: 49,   trial_days: 30, note: 'MASTER_BRIEF:317 — "Contractor Portal", $49/mo. The brief\'s label differs from the tile\'s ("Contractors"); the price line is the same product.' },
+
+  // ── unpriced: IN NEITHER LIST. Named as gaps rather than assigned a number (D-9). ──
+  { module_key: 'cost_to_produce',   billing: 'unpriced', price_monthly: null, trial_days: 0, note: 'NOT IN MASTER_BRIEF — absent from the Core list AND the add-on table. It is the cost/margin moat (D-009), an owner-only admin surface, and whether it is core or billable has never been decided. RULING OWED.' },
+  { module_key: 'inventory_intake',  billing: 'unpriced', price_monthly: null, trial_days: 0, note: 'NOT IN MASTER_BRIEF. The Core list says "Basic inventory / asset tracking" (:298) — mobile photo intake is arguably beyond "basic", and is named in neither list. RULING OWED.' },
+];
+
+// NO `moduleByKey()` / `catalogModuleKeys()` SELECTORS YET, deliberately. They are two lines each
+// and obvious, which is exactly why writing them now would be wrong: nothing calls them, and an
+// exported helper with no caller is the same declaration-with-no-reader this week keeps finding
+// (`<BeingBuilt>` unmounted, `business_insights` rendering nowhere, `nav_eligible`). The tenant
+// seeder and the marketplace screen add the selector each actually needs, when they need it.
+
+// ════════════════════════════════════════════════════════════════════════════════
 // VERTICAL SCOPE — a business's live dashboard = its vertical's tiles + all `general` tiles.
 // ════════════════════════════════════════════════════════════════════════════════
 
