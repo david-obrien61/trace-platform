@@ -11,7 +11,8 @@
 // commit implementing that rule. Knowing a rule does not make you apply it while writing the code
 // the rule is about. **A rule with no mechanical check will be broken by someone who knows it.**
 //
-// FOUR ASSERTIONS (the fourth added 2026-07-31 by David's R-GRANTDIFF ruling):
+// SIX ASSERTIONS (4 added 2026-07-31 by David's R-GRANTDIFF ruling; 5 and 6 the same week. The
+// header said "FOUR" until 2026-08-01 while six ran — a count with no reader, corrected in passing):
 //   1. NO `isOwner` IN AN AUTHORITY POSITION. `isOwner` may be READ for display (a role pill, a
 //      heading, which name to show). It may NOT decide what someone is allowed to do.
 //   2. NO ROLE-STRING COMPARE IN AN AUTHORITY POSITION. `role === 'MANAGER'` is the same defect
@@ -19,9 +20,12 @@
 //      layer, and to assertion 1. This is not hypothetical — `CustomerCapture.tsx:109` read
 //      `isOwner || role === 'MANAGER'` and would have survived a cap that only looked for isOwner.
 //      That near-miss is why there are two assertions and not one.
-//   3. THE SQL COPY OF THE OWNER SET MATCHES THE MANIFEST. `20260730a` hardcodes 52 strings because
-//      SQL cannot import TypeScript. A hand copy goes stale; this closes the loop from the other
-//      side, the same shape as capQ over the R-B2 list.
+//   3. THE SQL COPY OF THE OWNER SET MATCHES THE MANIFEST — where "the SQL copy" means THE NEWEST
+//      MIGRATION CARRYING AN $OWNER$ LITERAL, found by content, never a dated path. SQL cannot
+//      import TypeScript, so the owner's array is a hand copy and a hand copy goes stale. UN-PINNED
+//      2026-08-01: pinning it to `20260730a` froze the model at 52 strings server-side, because
+//      growing the bundle then demanded an edit to an applied migration. Same shape as capQ's R-B2
+//      direction, same cure — assert against the CURRENT materialisation. See the function.
 //   4. 🔴 THE GRANT SET OF EVERY AUTHORITY SITE IS BASELINED — WHO PASSES, not what the check looks
 //      like. Assertions 1-3 are all about SHAPE. A site can be perfectly shaped and still admit a
 //      different set of people than it did yesterday.
@@ -664,28 +668,134 @@ function runGrantProbes() {
   t('T7 a COMMENTED-OUT registry row is not a tile (the registry documents retired keys in prose)',
     tiles("// { key: 'old', required_permission: 'reports:read', status: 'live' }").length === 0);
 
+  // ── ASSERTION 3 probes — THE UN-PINNING. The load-bearing one is M1: an OLDER carrier must stop
+  //    being consulted, because that is the entire defect. A cap that still read the dated file
+  //    would pass every other probe here while the model stayed frozen.
+  const OLD = 'supabase/migrations/20260730a_owner_holds_all_backfill.sql';
+  const NEW = 'supabase/migrations/20260801_owner_array_grow.sql';
+  const carrier = (strings) => `SELECT ... $OWNER$[${strings.map((s) => `"${s}"`).join(', ')}]$OWNER$ ...`;
+
+  t('M1 \u{1f534} THE NEWEST CARRIER WINS — the older applied file is NOT consulted (the un-pinning)',
+    latestOwnerMaterialisation([
+      { name: OLD, src: carrier(['a:b']) },
+      { name: NEW, src: carrier(['a:b', 'subscription:update']) },
+    ]).file === NEW);
+  t('M2 \u{1f534} …and selection is by SORTED NAME, not by directory order (shuffled input)',
+    latestOwnerMaterialisation([
+      { name: NEW, src: carrier(['a:b']) },
+      { name: OLD, src: carrier(['c:d']) },
+    ]).file === NEW);
+  t('M3 \u{1f534} ZERO carriers is a FAILURE, not a skip — nothing would grant the owner anything',
+    latestOwnerMaterialisation([{ name: OLD, src: 'CREATE TABLE x();' }]) === null);
+  t('M4 a migration with no $OWNER$ literal cannot win by being newest',
+    latestOwnerMaterialisation([
+      { name: OLD, src: carrier(['a:b']) },
+      { name: 'supabase/migrations/20260999_unrelated.sql', src: 'ALTER TABLE x ADD COLUMN y int;' },
+    ]).file === OLD);
+  t('M5 \u{1f534} a string in the bundle but MISSING from the newest literal FAILS (the mint-without-migrating shape)',
+    compareOwnerCopy(['a:b', 'subscription:update'], ['a:b']).missing.length === 1);
+  t('M6 \u{1f534} a string in the literal but NOT in the bundle FAILS (a hand-edited migration)',
+    compareOwnerCopy(['a:b'], ['a:b', 'ghost:read']).extra.length === 1);
+  t('M7 an exact match passes in both directions',
+    (() => { const c = compareOwnerCopy(['a:b', 'c:d'], ['c:d', 'a:b']);
+             return c.missing.length === 0 && c.extra.length === 0; })());
+  t('M8 \u{1f534} a DELTA-shaped migration FAILS — the contract is the complete set, not an increment',
+    compareOwnerCopy(['a:b', 'c:d', 'subscription:update'], ['subscription:update']).missing.length === 2);
+  t('M9 the bundle parser reads the array off the manifest source',
+    (() => { const b = parseOwnerBundle("export const OWNER_DEFAULT_BUNDLE: string[] = [\n  'z:read',\n  'a:read',\n];");
+             return b.length === 2 && b[0] === 'a:read'; })());
+
   return p;
 }
 
 // ── ASSERTION 3 — the SQL copy vs the manifest ──────────────────────────────────────────────────
+//
+// 🔴 UN-PINNED 2026-08-01 (David's ruling). It read one dated file:
+//       const sPath = 'supabase/migrations/20260730a_owner_holds_all_backfill.sql';
+// and that single line FROZE THE PERMISSION MODEL AT 52 STRINGS SERVER-SIDE. The chain:
+// `has_permission_for` lost its owner branch (20260730c), so on the server an owner passes only by
+// HOLDING the string in `business_members.permissions`; that array is materialised from
+// OWNER_DEFAULT_BUNDLE; and this assertion required the bundle to equal a literal inside an APPLIED
+// migration. §6 r1 forbids editing applied migrations. So minting a new server-enforced permission
+// demanded an impossible edit — "adding a feature means adding a permission" was not buildable.
+//
+// THE GENERAL FORM, and this is the SECOND instance rather than a one-off: **A CHECK PINNED TO A
+// HISTORICAL SNAPSHOT EVENTUALLY DEMANDS AN IMPOSSIBLE EDIT.** capQ hit it on 2026-07-31 — its
+// `manifest ⊆ R-B2` direction over `20260727_rbac_resource_action_flip.sql` failed the moment a
+// string was minted AFTER that migration ran, and the direction was removed with its reasoning
+// recorded in place. capA had the same shape and had not learned it. The cure in both cases is the
+// same: **assert against the CURRENT materialisation, never a dated one.**
+//
+// HOW THE CURRENT ONE IS FOUND — BY CONTENT, NOT BY FILENAME. `qFloorViolations` picks its file by
+// sorting on a name pattern (`_align_floor`); that works, and it costs a naming convention somebody
+// has to remember. Here the `$OWNER$[…]$OWNER$` dollar-quote tag IS the marker: a migration that
+// materialises the owner array necessarily carries it, and one that doesn't, doesn't. So the newest
+// migration CARRYING THE LITERAL wins, and a future `2026NNNN_owner_array_grow.sql` is picked up by
+// existing it — no convention, no second edit, no way to forget.
+//
+// THE STANDING CONTRACT THIS IMPOSES: **every owner-array migration carries the COMPLETE set, not a
+// delta.** The comparison is full equality against the newest literal, so a delta-shaped migration
+// fails loudly rather than half-materialising the bundle. The mint path is: grow the bundle → write
+// a migration carrying the whole new set → this cap follows it automatically. History is never
+// edited, and 20260730a stays exactly as it was applied.
+const OWNER_LITERAL = /\$OWNER\$\[([\s\S]*?)\]\$OWNER\$/;
+
+/** The OWNER_DEFAULT_BUNDLE strings, sorted. PURE — probed. */
+function parseOwnerBundle(manifestSrc) {
+  const m = manifestSrc.match(/export const OWNER_DEFAULT_BUNDLE: string\[\] = \[([\s\S]*?)\];/);
+  return m ? [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]).sort() : null;
+}
+
+/**
+ * The NEWEST migration carrying an $OWNER$ literal, and its strings. PURE — probed.
+ * @param files [{ name, src }] in any order; selection is by sorted name, last wins.
+ */
+function latestOwnerMaterialisation(files) {
+  const carriers = files
+    .filter((f) => OWNER_LITERAL.test(f.src))
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  if (carriers.length === 0) return null;
+  const picked = carriers[carriers.length - 1];
+  return {
+    file: picked.name,
+    strings: [...picked.src.match(OWNER_LITERAL)[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]).sort(),
+    superseded: carriers.slice(0, -1).map((f) => f.name),
+  };
+}
+
+/** Full-equality compare, both directions. PURE — probed. */
+function compareOwnerCopy(manifest, strings) {
+  return {
+    missing: manifest.filter((x) => !strings.includes(x)),
+    extra: strings.filter((x) => !manifest.includes(x)),
+  };
+}
+
 function checkSqlCopy() {
   const mPath = 'packages/shared/src/auth/permissionManifest.ts';
-  const sPath = 'supabase/migrations/20260730a_owner_holds_all_backfill.sql';
-  if (!existsSync(mPath) || !existsSync(sPath)) return { skipped: true };
+  const mDir = 'supabase/migrations';
+  if (!existsSync(mPath) || !existsSync(join(ROOT, mDir))) return { skipped: true };
 
-  const mSrc = readFileSync(mPath, 'utf8');
-  const mMatch = mSrc.match(/export const OWNER_DEFAULT_BUNDLE: string\[\] = \[([\s\S]*?)\];/);
-  if (!mMatch) return { error: 'OWNER_DEFAULT_BUNDLE not found in the manifest' };
-  const manifest = [...mMatch[1].matchAll(/'([^']+)'/g)].map(m => m[1]).sort();
+  const manifest = parseOwnerBundle(readFileSync(mPath, 'utf8'));
+  if (!manifest) return { error: 'OWNER_DEFAULT_BUNDLE not found in the manifest' };
 
-  const sSrc = readFileSync(sPath, 'utf8');
-  const sMatch = sSrc.match(/\$OWNER\$\[([\s\S]*?)\]\$OWNER\$/);
-  if (!sMatch) return { error: 'the $OWNER$ literal was not found in 20260730a' };
-  const sql = [...sMatch[1].matchAll(/"([^"]+)"/g)].map(m => m[1]).sort();
+  const files = readdirSync(join(ROOT, mDir))
+    .filter((f) => f.endsWith('.sql'))
+    .map((f) => ({ name: `${mDir}/${f}`, src: readFileSync(join(ROOT, mDir, f), 'utf8') }));
+  const found = latestOwnerMaterialisation(files);
 
-  const missing = manifest.filter(x => !sql.includes(x));
-  const extra = sql.filter(x => !manifest.includes(x));
-  return { manifest: manifest.length, sql: sql.length, missing, extra };
+  // NOT a skip. A skip here would mean "the only thing keeping the server copy honest is absent, so
+  // everything is fine" — the quiet-blindness class this whole rewrite is about.
+  if (!found) {
+    return { error: `no migration in ${mDir} carries an $OWNER$[…]$OWNER$ literal — the owner array `
+                  + `has no materialisation, so nothing grants the owner anything server-side.` };
+  }
+
+  return {
+    file: found.file, superseded: found.superseded,
+    manifest: manifest.length, sql: found.strings.length,
+    ...compareOwnerCopy(manifest, found.strings),
+  };
 }
 
 // ── RUN ─────────────────────────────────────────────────────────────────────────────────────────
@@ -719,20 +829,27 @@ console.log(`\n${B}SCAN${O}  ${files.length} files · ${SCAN_ROOTS.length} roots
 const sqlCheck = checkSqlCopy();
 console.log(`\n${B}ASSERTION 3 — the SQL copy of the owner set${O}`);
 if (sqlCheck.skipped) {
-  console.log(`  ${YEL}skip${O} the backfill migration is not present`);
+  console.log(`  ${YEL}skip${O} the manifest or the migrations directory is not present`);
 } else if (sqlCheck.error) {
   console.log(`  ${RED}BAD ${O} ${sqlCheck.error}`);
-  violations.push({ file: 'supabase/migrations/20260730a_owner_holds_all_backfill.sql', line: 0, rule: 'sql-copy', how: sqlCheck.error, text: '' });
+  violations.push({ file: 'supabase/migrations', line: 0, rule: 'sql-copy', how: sqlCheck.error, text: '' });
 } else if (sqlCheck.missing.length || sqlCheck.extra.length) {
-  console.log(`  ${RED}BAD ${O} manifest ${sqlCheck.manifest} · sql ${sqlCheck.sql}`);
+  console.log(`  ${RED}BAD ${O} manifest ${sqlCheck.manifest} · sql ${sqlCheck.sql}  ${DIM}(${sqlCheck.file})${O}`);
   if (sqlCheck.missing.length) console.log(`        ${RED}in the manifest, MISSING from the SQL:${O} ${sqlCheck.missing.join(', ')}`);
   if (sqlCheck.extra.length) console.log(`        ${RED}in the SQL, NOT in the manifest:${O} ${sqlCheck.extra.join(', ')}`);
+  console.log(`        ${DIM}the fix is a NEW migration carrying the complete set — never an edit to an applied one (§6 r1).${O}`);
   violations.push({
-    file: 'supabase/migrations/20260730a_owner_holds_all_backfill.sql', line: 0, rule: 'sql-copy',
+    file: sqlCheck.file, line: 0, rule: 'sql-copy',
     how: `the hand copy drifted from the manifest (missing ${sqlCheck.missing.length}, extra ${sqlCheck.extra.length})`, text: '',
   });
 } else {
-  console.log(`  ${GRN}ok  ${O} the SQL literal matches OWNER_DEFAULT_BUNDLE exactly (${sqlCheck.manifest} strings)`);
+  // NAME THE FILE. The whole point of un-pinning is that WHICH file is authoritative now moves, so
+  // a green line that doesn't say which one it read is a green line nobody can act on.
+  console.log(`  ${GRN}ok  ${O} OWNER_DEFAULT_BUNDLE matches its CURRENT materialisation exactly (${sqlCheck.manifest} strings)`);
+  console.log(`        ${DIM}newest $OWNER$ carrier: ${sqlCheck.file}${O}`);
+  if (sqlCheck.superseded.length) {
+    console.log(`        ${DIM}superseded (history, not edited): ${sqlCheck.superseded.join(', ')}${O}`);
+  }
 }
 
 if (exempted.length) {
