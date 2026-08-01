@@ -19,7 +19,7 @@ single-valued, so it cannot express the TWO OWNERS David ruled on 2026-07-26 —
 owner short-circuit made the client MORE PERMISSIVE THAN THE SERVER, which is how the owner came to
 read *"Tax: not identified"* on his own dashboard while his manager read the rate correctly.
 Separately, ~30 refusal surfaces were measured: 27 silent, 3 apologising after a failed write, 0
-pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (#172); 16–17 prove the two LIVE defects the A7 sweep found (#174); 18 proves the fourth permission status (#175); 19–20 prove its tile path (#176), and 20 is runnable ONLY as staff; 21–22 prove the uniform-tiles pass (#178) — 21 is the nine-week `campaigns.status` defect, dead.
+pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (#172); 16–17 prove the two LIVE defects the A7 sweep found (#174); 18 proves the fourth permission status (#175); 19–20 prove its tile path (#176), and 20 is runnable ONLY as staff; 21–22 prove the uniform-tiles pass (#179) — 21 is the nine-week `campaigns.status` defect, dead.
 
 ---
 
@@ -402,7 +402,7 @@ COVERS: ledger #176 — the `planned` TileState + the mounted `<BeingBuilt>`
    **amber `SOON` badge**, keep their own colour, and **do not respond to a click**;
 ② below the metric row there is a **"Business insights — coming soon"** panel.
 
-⚠️ **AMENDED 2026-08-01 (ledger #178) — Campaign Scheduler is NO LONGER on this list.** Its
+⚠️ **AMENDED 2026-08-01 (ledger #179) — Campaign Scheduler is NO LONGER on this list.** Its
 `status:'planned'` was wrong and has been corrected to `live`; it now renders as a normal navigable
 tile and is proven by **CARD 21**, not here. Online Shop / Contractors / Seasonal were never on the
 dashboard — they are `placement:'settings'`, which renders nowhere today — so naming them in this
@@ -435,13 +435,13 @@ run as staff.
 
 ---
 
-## SURFACE: the tile grid's declared fields (added 2026-08-01, ledger #178 — the uniform-tiles pass)
+## SURFACE: the tile grid's declared fields (added 2026-08-01, ledger #179 — the uniform-tiles pass)
 
 ### CARD 21 — 🔴 THE TILE AND THE NAV ITEM AGREE ABOUT CAMPAIGN SCHEDULER
 STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
-COVERS: ledger #178 — `campaigns.status` 'planned' → 'live'
+COVERS: ledger #179 — `campaigns.status` 'planned' → 'live'
 
 **As the MANAGER**, open `/dashboard`.
 **PASS — all three:**
@@ -463,7 +463,7 @@ The nav could not have disagreed on purpose: `navPermission()` has no notion of 
 STATUS: needs-test
 LAST-PROVEN: never
 DEVICE: desktop
-COVERS: ledger #178 — `scripts/verify-tile-fields.mjs`
+COVERS: ledger #179 — `scripts/verify-tile-fields.mjs`
 
 **REASON THIS IS `needs-test` AND NOT A CARD DAVID RUNS:** the cap has **no user-facing surface**.
 It is a build-time assertion over `TILE_REGISTRY` — 15 planted probes both directions, proven
