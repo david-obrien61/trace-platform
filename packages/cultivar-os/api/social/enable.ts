@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { callerCan } from '../../../shared/src/auth/callerPermission';
+import { callerCan, resolveCallerUid } from '../../../shared/src/auth/callerPermission';
+import { setBusinessModuleState } from '../../../shared/src/business-logic/moduleState';
 
 function adminDb() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL!;
@@ -30,22 +31,35 @@ export default async function handler(req: any, res: any) {
 
   const db = adminDb();
 
-  const { error } = await db
-    .from('business_modules')
-    .upsert(
-      {
-        business_id,
-        module_key: 'social_media',
-        enabled:    true,
-        configured: true,
-        config:     { advert_channels, cadence: cadence ?? 'weekly' },
-      },
-      { onConflict: 'business_id,module_key' },
-    );
+  // 🔴 MOVED TO THE RPC 2026-08-01. This was NEVER BLOCKED — the service key bypasses RLS, so the
+  // 20260801 narrowing did not break it. It moves anyway so `business_modules` has ONE writer
+  // (STD-011) and so this act is AUDITED like every other one; a module turning on with no audit
+  // row while every other module change has one is a hole in the record, not a saving.
+  //
+  // THE ACTOR IS THE REAL CALLER, not a system ghost — `resolveCallerUid` off the same header the
+  // authority check above already read. `assert_movement_actor`'s forgery pin only fires when
+  // `auth.uid()` is non-NULL, and under the service key it is NULL, so this passes and the audit
+  // row names a person.
+  //
+  // ⚠️ `enabled: true` STILL PASSES, and on a tenant where Social is already on that is NOT a
+  // change, so it needs no `subscription:update` — a manager's save keeps working exactly as it
+  // did. On a NEW tenant it is a FIRST enable, a real $19/mo decision, and the RPC refuses anyone
+  // without spend authority. That refusal is surfaced as a 403 below rather than a 500: it is an
+  // authority answer, not a failure.
+  const actor = await resolveCallerUid(req.headers?.authorization);
+  const r = await setBusinessModuleState(db, business_id, 'social_media', {
+    enabled:    true,
+    configured: true,
+    config:     { advert_channels, cadence: cadence ?? 'weekly' },
+  }, actor);
 
-  if (error) {
-    console.error('[social/enable]', error.message);
-    return res.status(500).json({ error: error.message });
+  if (r.error) {
+    console.error('[social/enable]', r.error.message);
+    return res.status(500).json({ error: r.error.message });
+  }
+  if (!r.applied) {
+    console.log('[TRACE:AUTHORITY] social/enable REFUSED by set_business_module_state', { business_id, reason: r.reason });
+    return res.status(403).json({ error: r.reason ?? 'Module change refused', code: 'FORBIDDEN' });
   }
 
   return res.status(200).json({ ok: true });

@@ -1,6 +1,6 @@
 {
   "_comment": "Known write paths as of the stamp below. RATCHET baseline — the build fails on any NEW undeclared path, not on these. Shrink it; never grow it casually. Regenerate: npm run write-paths:baseline",
-  "stamped": "2026-07-29",
+  "stamped": "2026-08-01",
   "tables": {
     "business_members": [
       "packages/cultivar-os/src/pages/OnboardingWizard.tsx",
@@ -50,16 +50,17 @@
       "packages/shared/src/business-logic/customerUpsert.ts",
       "packages/shared/src/discovery/populate.ts"
     ],
+    "audit_log": [
+      "packages/cultivar-os/src/components/inventory/inventoryEdit.ts",
+      "packages/shared/src/auth/roleFunnel.ts",
+      "packages/shared/src/business-logic/moduleState.ts",
+      "packages/shared/src/pages/Settings.tsx"
+    ],
     "member_devices": [
       "packages/shared/src/auth/deviceHandoff.ts",
       "packages/shared/src/auth/devices.ts",
       "packages/shared/src/context/BusinessProvider.tsx",
       "packages/shared/src/supabase/auth.ts"
-    ],
-    "audit_log": [
-      "packages/cultivar-os/src/components/inventory/inventoryEdit.ts",
-      "packages/shared/src/auth/roleFunnel.ts",
-      "packages/shared/src/pages/Settings.tsx"
     ],
     "orders": [
       "packages/cultivar-os/api/orders/submit.ts",
@@ -69,10 +70,6 @@
     "business_accounting_secrets": [
       "packages/cultivar-os/api/qbo/router.ts",
       "packages/shared/src/quickbooks/secrets.ts"
-    ],
-    "business_modules": [
-      "packages/cultivar-os/api/social/enable.ts",
-      "packages/shared/src/business-logic/financialDataAccess.ts"
     ],
     "business_pricing_config": [
       "packages/shared/src/business-logic/financialDataAccess.ts",
@@ -108,6 +105,9 @@
     ],
     "business_discovery_profiles": [
       "packages/shared/src/discovery/populate.ts"
+    ],
+    "business_modules": [
+      "packages/shared/src/business-logic/moduleState.ts"
     ],
     "business_pmi_schedule": [
       "packages/shared/src/modules/PMI.tsx"

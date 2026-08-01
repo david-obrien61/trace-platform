@@ -950,6 +950,14 @@ const RESOURCE_GATES = {
   campaigns: 'campaigns',
   team: 'role_definitions',
   audit_log: 'audit_log',
+  // MINTED 2026-08-01. `subscription:update` is enforced INSIDE set_business_module_state()
+  // (20260801b), which the SQL scan reads as a gated string on this table. `subscription:read` is
+  // routeEnforced — the SELECT policy is membership-scoped by necessity (a tile must read its own
+  // state), so assertion 1 reports the resource. That report is CORRECT and is the same shape as
+  // settings (P18) and team (P19); it is NOT silenced by adding it to the prediction map, because
+  // "the prediction is NOT edited to match output — a difference is DAVID'S call" (see the
+  // acceptance diff). It surfaces as EXTRA:subscription until he rules.
+  subscription: 'business_modules',
 };
 
 /** Strip SQL line comments — a `has_permission(biz,'X')` inside a comment is NOT a gate. */
@@ -1350,18 +1358,55 @@ export const qListViolations = (flipSql, unwired) => {
  * either direction — a string added to the bundle and not regenerated, or edited into the SQL by
  * hand.
  */
-export const qFloorViolations = (floorSql, manifestSrc) => {
+/**
+ * 🔴 THE FLOOR FILE IS FOUND PER-ROLE, BY CONTENT, NEWEST-WINS (2026-08-01).
+ *
+ * It used to be ONE file chosen by FILENAME — the newest matching `/_align_floor/`. That is the
+ * weaker form of the defect capA's assertion 3 was un-pinned for this morning: it costs a naming
+ * convention somebody has to remember, and the very next migration to write the floor
+ * (`20260801b`, the subscription mint) did not use the word. capQ then compared a bundle grown to
+ * 54 against a July file still holding 52 and reported the two new strings as drift — a TRUE
+ * statement about the wrong file.
+ *
+ * A migration seeds a role's floor in one of two shapes, and both are live in the corpus:
+ *   · `('OWNER', '[…]'::jsonb)`   — the VALUES form used by the `_align_floor` files
+ *   · `$OWNER$[…]$OWNER$`         — the dollar-quoted UPDATE form used by 20260730a and 20260801b
+ * Each role resolves independently: today OWNER comes from 20260801b and MANAGER/STAFF still come
+ * from 20260727b, which is exactly right — a migration that touches one role must not be read as
+ * an assertion about the other two.
+ */
+const ROLE_FLOOR_SHAPES = (role) => [
+  new RegExp(`\\('${role}',\\s*'(\\[[^']*\\])'::jsonb\\)`),
+  new RegExp(`\\$${role}\\$(\\[[\\s\\S]*?\\])\\$${role}\\$`),
+];
+
+/** @param floorFiles [{name, src}] — the whole migration corpus, comments already stripped. */
+export const qLatestFloorFor = (role, floorFiles) => {
+  const sorted = [...floorFiles].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    for (const re of ROLE_FLOOR_SHAPES(role)) {
+      const m = sorted[i].src.match(re);
+      if (m) return { file: sorted[i].name, json: m[1] };
+    }
+  }
+  return null;
+};
+
+export const qFloorViolations = (floorFiles, manifestSrc) => {
   const out = [];
   for (const role of ['OWNER', 'MANAGER', 'STAFF']) {
     const bm = manifestSrc.match(new RegExp(`export const ${role}_DEFAULT_BUNDLE: string\\[\\] = \\[([\\s\\S]*?)\\];`));
     if (!bm) { out.push(`${role}_DEFAULT_BUNDLE not found — the floor has no authority to derive from.`); continue; }
     const bundle = new Set([...bm[1].matchAll(/'([a-z_.]+:[a-z_]+)'/g)].map((x) => x[1]));
-    const rm = floorSql.match(new RegExp(`\\('${role}',\\s*'(\\[[^']*\\])'::jsonb\\)`));
-    if (!rm) { out.push(`the floor migration has no seeded row for ${role} — it would keep whatever the floor already held.`); continue; }
+    const found = qLatestFloorFor(role, floorFiles);
+    const rm = found ? [null, found.json] : null;
+    if (!rm) { out.push(`NO migration in the corpus seeds a floor row for ${role} — it would keep whatever the floor already held.`); continue; }
     let seeded;
     try { seeded = new Set(JSON.parse(rm[1])); } catch { out.push(`${role} floor row is not parseable JSON.`); continue; }
-    for (const p of bundle) if (!seeded.has(p)) out.push(`${role}: '${p}' is in the bundle but NOT in the floor migration — regenerate, do not hand-edit.`);
-    for (const p of seeded) if (!bundle.has(p)) out.push(`${role}: '${p}' is in the floor migration but NOT in the bundle — the SQL has been hand-edited or the bundle shrank.`);
+    // NAME THE FILE — each role can now resolve to a different one, so a message that says only
+    // "the floor migration" sends the reader to the wrong file.
+    for (const p of bundle) if (!seeded.has(p)) out.push(`${role}: '${p}' is in the bundle but NOT in ${found.file} — write a NEW floor migration, do not hand-edit.`);
+    for (const p of seeded) if (!bundle.has(p)) out.push(`${role}: '${p}' is in ${found.file} but NOT in the bundle — the SQL has been hand-edited or the bundle shrank.`);
   }
   return out;
 };
@@ -1424,13 +1469,24 @@ const Q_PROBES = [
   ['sentinel/route',      () => qSentinelViolations({ routerSrc: '<PermissionRoute permission="member" />', manifestSrc: '', sqlAll: '' }).length > 0],
   ['sentinel/bundle',     () => qSentinelViolations({ routerSrc: '', manifestSrc: "export const X_BUNDLE: string[] = [\n  'member',\n];", sqlAll: '' }).length > 0],
   ['sentinel/policy',     () => qSentinelViolations({ routerSrc: '', manifestSrc: '', sqlAll: "has_permission(business_id, 'member')" }).length > 0],
-  ['floor/drifted-seed',  () => qFloorViolations("('OWNER', '[\"a:b\"]'::jsonb)", "export const OWNER_DEFAULT_BUNDLE: string[] = [\n  'c:d',\n];").length > 0],
-  ['floor/missing-role',  () => qFloorViolations('no rows at all', "export const OWNER_DEFAULT_BUNDLE: string[] = [\n  'a:b',\n];").length > 0],
+  ['floor/drifted-seed',  () => qFloorViolations([{ name: 'a.sql', src: "('OWNER', '[\"a:b\"]'::jsonb)" }], "export const OWNER_DEFAULT_BUNDLE: string[] = [\n  'c:d',\n];").length > 0],
+  ['floor/missing-role',  () => qFloorViolations([{ name: 'a.sql', src: 'no rows at all' }], "export const OWNER_DEFAULT_BUNDLE: string[] = [\n  'a:b',\n];").length > 0],
+  // ── the newest-wins selection, both shapes and both directions (2026-08-01) ──
+  ['floor/newest-wins',   () => qLatestFloorFor('OWNER', [
+     { name: '20260727b_align_floor.sql', src: "('OWNER', '[\"old:read\"]'::jsonb)" },
+     { name: '20260801b_mint.sql',        src: '$OWNER$["new:read"]$OWNER$' },
+   ]).file === '20260801b_mint.sql'],
+  ['floor/dollar-shape',  () => JSON.parse(qLatestFloorFor('OWNER', [{ name: 'a.sql', src: '$OWNER$["x:read"]$OWNER$' }]).json)[0] === 'x:read'],
+  ['floor/per-role',      () => qLatestFloorFor('MANAGER', [
+     { name: '20260727b_align_floor.sql', src: "('MANAGER', '[\"m:read\"]'::jsonb)" },
+     { name: '20260801b_mint.sql',        src: '$OWNER$["o:read"]$OWNER$' },
+   ]).file === '20260727b_align_floor.sql'],
+  ['floor/no-carrier',    () => qLatestFloorFor('STAFF', [{ name: 'a.sql', src: 'CREATE TABLE x();' }]) === null],
   ['exposure/missing',    () => qExposureViolations("  costs: {\n    sensitivity: 'confidential',\n  },", 'CONFIDENTIAL_EXPOSURE').length > 0],
   ['exposure/blank',      () => qExposureViolations("  costs: {\n    sensitivity: 'confidential',\n    exposure:\n      '',\n  },", 'CONFIDENTIAL_EXPOSURE').length > 0],
   ['exposure/unrendered', () => qExposureViolations("  costs: {\n    sensitivity: 'confidential',\n    exposure:\n      'x',\n  },", 'no reference here').length > 0],
   ['exposure/complete',   () => qExposureViolations("  costs: {\n    sensitivity: 'confidential',\n    exposure:\n      'the cost basis',\n  },", 'CONFIDENTIAL_EXPOSURE').length === 0],
-  ['floor/matching-seed', () => qFloorViolations("('OWNER', '[\"a:b\"]'::jsonb)", "export const OWNER_DEFAULT_BUNDLE: string[] = [\n  'a:b',\n];\nexport const MANAGER_DEFAULT_BUNDLE: string[] = [\n];\nexport const STAFF_DEFAULT_BUNDLE: string[] = [\n];").filter((g) => g.startsWith('OWNER')).length === 0],
+  ['floor/matching-seed', () => qFloorViolations([{ name: 'a.sql', src: "('OWNER', '[\"a:b\"]'::jsonb)" }], "export const OWNER_DEFAULT_BUNDLE: string[] = [\n  'a:b',\n];\nexport const MANAGER_DEFAULT_BUNDLE: string[] = [\n];\nexport const STAFF_DEFAULT_BUNDLE: string[] = [\n];").filter((g) => g.startsWith('OWNER')).length === 0],
 ];
 
 function capQ(key, v) {
@@ -1462,10 +1518,13 @@ function capQ(key, v) {
       sqlAll: concatSql(v.migrationsDir),
     }),
     ...qFloorViolations(
-      // the LATEST floor-alignment migration — applied files are never edited (§6 r1), so a
-      // re-alignment is a NEW file and this must follow it or capQ reconciles a superseded one.
-      (listTreeFiles('supabase/migrations', '.sql').filter((f) => /_align_floor/.test(f)).sort().slice(-1)
-        .map((f) => read(f) || '')[0]) || '',
+      // THE WHOLE CORPUS, comments stripped — `qLatestFloorFor` resolves the newest file that
+      // actually seeds EACH role, by content. Applied files are never edited (§6 r1), so a
+      // re-alignment is always a NEW file; selecting it by filename cost a convention and the
+      // subscription mint promptly forgot it. Prose is stripped for the reason capA learned the
+      // same morning: a migration that DOCUMENTS the marker is not a migration that carries it.
+      listTreeFiles('supabase/migrations', '.sql')
+        .map((f) => ({ name: f.replace(/^.*\//, ''), src: stripSqlComments(read(f) || '') })),
       manifestSrc,
     ),
     ...qExposureViolations(manifestSrc, read('packages/shared/src/components/team/MemberConsole.tsx') || ''),

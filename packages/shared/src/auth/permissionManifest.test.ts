@@ -36,6 +36,7 @@ import {
   OWNER_DEFAULT_BUNDLE, OWNER_LOCKED_SET, DECLARED_UNWIRED_PERMISSIONS, CATALOG_PERMISSIONS,
   PLANNED_PERMISSIONS, UNGRANTABLE_PERMISSIONS,
   splitPermission, unmetDependencies, createWithoutRead, applyPermissionDependencies,
+  permissionCategory,
 } from './permissionManifest';
 
 // ── tiny harness ─────────────────────────────────────────────────────────────────
@@ -243,6 +244,39 @@ console.log('\n(4) permission manifest — the model, the dashes, the dependenci
     OWNER_LOCKED_SET.every((p) => !DECLARED_UNWIRED_PERMISSIONS.includes(p)));
   check('the owner set is NOT the membership sentinel',
     !OWNER_LOCKED_SET.includes('member'));
+
+  // — subscription:* — the mint of 2026-08-01 (the model learns to say "may spend money") —
+  // These assert the RULING, not the implementation: each one fails if a later edit quietly
+  // widens who can change what the business pays for.
+  check('subscription:read and subscription:update BOTH exist in the model',
+    !!PERMISSION_MANIFEST['subscription:read'] && !!PERMISSION_MANIFEST['subscription:update']);
+  check('🔴 there is NO subscription:delete — a module is disabled, never deleted (its row is billing history)',
+    !PERMISSION_MANIFEST['subscription:delete']);
+  check('the owner holds both — without them the marketplace admits nobody, including its owner',
+    OWNER_LOCKED_SET.includes('subscription:read') && OWNER_LOCKED_SET.includes('subscription:update'));
+  check('🔴 the MANAGER default bundle holds NEITHER — the disqualifying evidence against settings:update',
+    !MANAGER_DEFAULT_BUNDLE.includes('subscription:read') && !MANAGER_DEFAULT_BUNDLE.includes('subscription:update'));
+  check('🔴 the STAFF default bundle holds NEITHER',
+    !STAFF_DEFAULT_BUNDLE.includes('subscription:read') && !STAFF_DEFAULT_BUNDLE.includes('subscription:update'));
+  check('settings:update is STILL a manager string — the split did not narrow what a manager configures',
+    MANAGER_DEFAULT_BUNDLE.includes('settings:update'));
+  check('subscription is categorised `admin` — it renders beside Team on the Roles page',
+    permissionCategory('subscription:update') === 'admin');
+  // 🔴 NOT A CHIP, AND THIS ASSERTION IS THE RECORD OF A TENSION IN THE RULING, NOT A PASSING NOTE.
+  // David ruled `sensitivity: 'owner-only'` AND described the string as "delegable through /roles".
+  // In this model those are INCOMPATIBLE: CATALOG_PERMISSIONS filters out every `owner-only`
+  // resource (spec §4), so the string can never render as a grantable pill — exactly like `team:*`
+  // and `audit_log:read`. The ruling's SENSITIVITY is what shipped, because that is the half that
+  // is unambiguous and the safe half: nobody but an OWNER-role member can hold it.
+  // ⚠️ IF DELEGATION IS WANTED — Lauren granted the marketplace without being made an owner — the
+  // sensitivity must become `operational` (or `confidential` with exposure copy) and this assertion
+  // flips. That is a one-word change and DAVID'S CALL; it is asserted here so the day someone wants
+  // it, the model says why it is not already true instead of looking like a bug.
+  check('subscription:* is NOT a Roles-page chip — `owner-only` sensitivity is un-delegable by design',
+    !CATALOG_PERMISSIONS.includes('subscription:update'));
+  check('subscription:* is not declared-unwired — a string nothing enforces is un-removable once granted',
+    !DECLARED_UNWIRED_PERMISSIONS.includes('subscription:update')
+      && !UNGRANTABLE_PERMISSIONS.includes('subscription:update'));
 
   // — neutrality of the dependency filter (the applyFinancialDependencies successor) —
   check('legacy behavior preserved: view_margin stripped without view_costs',

@@ -701,6 +701,15 @@ function runGrantProbes() {
              return c.missing.length === 0 && c.extra.length === 0; })());
   t('M8 \u{1f534} a DELTA-shaped migration FAILS — the contract is the complete set, not an increment',
     compareOwnerCopy(['a:b', 'c:d', 'subscription:update'], ['subscription:update']).missing.length === 2);
+  t('M10 🔴 A COMMENT NAMING THE MARKER IS NOT A CARRIER — the defect this cap hit on its own first real run',
+    latestOwnerMaterialisation([
+      { name: OLD, src: carrier(['a:b']) },
+      { name: NEW, src: '-- the newest migration carrying an $OWNER$[…]$OWNER$ literal wins\nCREATE TABLE x();' },
+    ]).file === OLD);
+  t('M11 🔴 …and a real literal in a file that ALSO documents the marker is still read correctly',
+    latestOwnerMaterialisation([
+      { name: NEW, src: `-- carries an $OWNER$[…]$OWNER$ literal, described here in prose\n${carrier(['a:b', 'subscription:update'])}` },
+    ]).strings.length === 2);
   t('M9 the bundle parser reads the array off the manifest source',
     (() => { const b = parseOwnerBundle("export const OWNER_DEFAULT_BUNDLE: string[] = [\n  'z:read',\n  'a:read',\n];");
              return b.length === 2 && b[0] === 'a:read'; })());
@@ -740,6 +749,14 @@ function runGrantProbes() {
 // edited, and 20260730a stays exactly as it was applied.
 const OWNER_LITERAL = /\$OWNER\$\[([\s\S]*?)\]\$OWNER\$/;
 
+// 🔴 STRIP SQL COMMENTS BEFORE LOOKING. Caught by this cap's own first real run: 20260801b
+// DOCUMENTS the marker in its header ("the newest migration carrying an `$OWNER$[…]$OWNER$`
+// literal"), the non-greedy match hit that PROSE first, and the cap reported `sql 0` — 54 strings
+// missing from a file that carries all 54. A cap that reads prose reports fiction; every other cap
+// in this repo has learned the same lesson on its own first run. The failure was loud and specific,
+// which is the only reason it took a minute rather than a session.
+const stripSqlComments = (t) => t.replace(/--[^\n]*/g, '');
+
 /** The OWNER_DEFAULT_BUNDLE strings, sorted. PURE — probed. */
 function parseOwnerBundle(manifestSrc) {
   const m = manifestSrc.match(/export const OWNER_DEFAULT_BUNDLE: string\[\] = \[([\s\S]*?)\];/);
@@ -752,6 +769,7 @@ function parseOwnerBundle(manifestSrc) {
  */
 function latestOwnerMaterialisation(files) {
   const carriers = files
+    .map((f) => ({ name: f.name, src: stripSqlComments(f.src) }))
     .filter((f) => OWNER_LITERAL.test(f.src))
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   if (carriers.length === 0) return null;

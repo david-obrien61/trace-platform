@@ -530,6 +530,44 @@ const RESOURCES: Record<string, EntrySeed> = {
       'direct writes are blocked by the authority-immutability trigger, so no member-held ' +
       'string authorizes them. Granting/revoking is itself an owner-only capability.',
   },
+  // ── subscription — MINTED 2026-08-01 (David's ruling) ─────────────────────────
+  // 🔴 THE MODEL HAD NO WAY TO SAY "MAY SPEND MONEY". Twenty resources, and not one of them was
+  // about money LEAVING the business — checked before minting, because the method rule is that a
+  // string is minted only when no existing one carries the capability. `settings:update` was the
+  // only near-miss and it is DISQUALIFIED ON EVIDENCE: MANAGER_DEFAULT_BUNDLE contains it, so
+  // Lauren would enable a $49/mo module on day one and the only remedy would be re-gating a live
+  // screen. **Deciding what the business PAYS FOR is not the same capability as editing an
+  // address** (A9 — a permission gates a capability), and the two must be separately delegable.
+  //
+  // NO DELETE VERB, and this is a ruling not an omission: a module is DISABLED, never deleted. The
+  // row is the tenant's billing history for that module — its trial start, its config, whether it
+  // was ever on. Deleting it would destroy the record of a thing the business was charged for.
+  // Same reasoning as `campaigns` (R2), reached independently on money rather than on history.
+  //
+  // `read` IS ROUTE-ENFORCED, DECLARED NOT INFERRED. `business_modules`'s SELECT policy is
+  // membership-scoped BY NECESSITY — every role's dashboard reads its own tile state on every load
+  // (useModules.ts:72), so gating the table read on subscription:read would blank the grid for
+  // staff. The read is enforced at the marketplace route + tile, exactly as `settings:read` and
+  // `team:read` are. capP assertion 1 reports this shape and does not yet read `routeEnforced`;
+  // see the note there. `update` is enforced in SQL by set_business_module_state().
+  subscription: {
+    category: 'admin',
+    verbs: ['read', 'update'],
+    routeEnforced: true,
+    sensitivity: 'owner-only',
+    note:
+      'business_modules enablement — WHAT THE BUSINESS PAYS FOR. read = see the marketplace ' +
+      '(every module, its state, its trial clock, its price); update = enable or disable one, ' +
+      'which changes the bill. Enforced by set_business_module_state() (20260801b); the SELECT ' +
+      'policy stays membership-scoped because a tile must read its own state. ' +
+      '⚠️ sensitivity `owner-only` means it is NOT a Roles-page chip and CANNOT be delegated — ' +
+      'CATALOG_PERMISSIONS filters owner-only out (spec §4), same as team:* and audit_log:read. ' +
+      "David's ruling said both `owner-only` AND \"delegable\"; in this model those are " +
+      'incompatible, so the SENSITIVITY shipped and the delegation did not. Making it delegable is ' +
+      'a one-word change to `operational` — his call, asserted in the test so it reads as a ' +
+      'decision rather than a bug.',
+  },
+
   audit_log: {
     category: 'admin',
     // create — : NOT a grantable user verb. System-only writer (spec §3). No entry.
@@ -1301,6 +1339,11 @@ export const OWNER_DEFAULT_BUNDLE: string[] = [
   'service_offerings:read',
   'settings:read',
   'settings:update',
+  // MINTED 2026-08-01. The bundle grows 52 → 54, and the migration that materialises it
+  // (20260801b) carries the COMPLETE set — capA assertion 3 compares full equality against the
+  // NEWEST $OWNER$ carrier, so a delta-shaped migration fails rather than half-granting.
+  'subscription:read',
+  'subscription:update',
   'tax_exempt:apply',
   'tax_rate:read',
   'tax_rate:update',

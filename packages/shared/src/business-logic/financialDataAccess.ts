@@ -24,6 +24,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { setBusinessModuleState } from './moduleState';
 
 const WAGE_COLS = ['base_wage', 'burden', 'cost_rate', 'bill_rate', 'rate', 'pass_through_expenses'] as const;
 type WageCol = (typeof WAGE_COLS)[number];
@@ -228,22 +229,28 @@ export async function writePricingConfig(
     .from('business_pricing_config')
     .upsert({ business_id: businessId, config }, { onConflict: 'business_id' });
 
+  // 🔴 `enabled: true` IS GONE FROM BOTH BRANCHES (2026-08-01). Saving a cost model SILENTLY
+  // SUBSCRIBED THE BUSINESS TO A MODULE — the pricing panel was the only thing that ever set
+  // `cost_to_produce.enabled`, and it did so as a side effect of a Save the owner pressed for a
+  // different reason. Enablement is now `subscription:update` and it belongs to the marketplace,
+  // where the owner can see what it costs. This path sets `configured` and nothing else.
+  //
+  // PROVEN SAFE BEFORE REMOVING IT, not assumed: nothing reads `cost_to_produce.enabled`. The tile
+  // is `placement:'admin'` and `useModules` maps dashboard tiles only, so no surface changes state.
+  const actor = (await supabase.auth.getUser()).data.user?.id ?? null;
+
   if (gated.error && isMissingRelation(gated.error)) {
-    // pre-migration: config lives on business_modules (with the enablement flags)
-    const { error } = await supabase.from('business_modules').upsert(
-      { business_id: businessId, module_key: 'cost_to_produce', enabled: true, configured: true, config },
-      { onConflict: 'business_id,module_key' },
-    );
-    return { error };
+    // pre-migration: config lives on business_modules (with the setup flag)
+    const r = await setBusinessModuleState(supabase, businessId, 'cost_to_produce',
+      { configured: true, config }, actor);
+    return { error: r.error ?? (r.applied ? null : { message: r.reason ?? 'module write refused' }) };
   }
   if (gated.error) return { error: gated.error };
 
-  // post-migration: config is in the gated table; keep the module enabled (config stays '{}' here)
-  const { error } = await supabase.from('business_modules').upsert(
-    { business_id: businessId, module_key: 'cost_to_produce', enabled: true, configured: true },
-    { onConflict: 'business_id,module_key' },
-  );
-  return { error };
+  // post-migration: config is in the gated table; mark the module set up (config stays '{}' here)
+  const r = await setBusinessModuleState(supabase, businessId, 'cost_to_produce',
+    { configured: true }, actor);
+  return { error: r.error ?? (r.applied ? null : { message: r.reason ?? 'module write refused' }) };
 }
 
 /**
