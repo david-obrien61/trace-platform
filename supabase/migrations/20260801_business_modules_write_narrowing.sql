@@ -2,7 +2,105 @@
 -- Target project: bgobkjcopcxusjsetfob (cultivar-os)
 -- Date: 2026-08-01 · Ledger #180 · ITEM 3 of the module-monetization build order
 --
--- ⛔ GATED — DO NOT RUN UNTIL PRE-CHECK 0 PASSES. Read it first; it can lock an owner out.
+-- ⛔ GATED — DO NOT RUN UNTIL THE ONE PRE-APPLY QUERY BELOW PASSES. It can lock an owner out.
+--
+-- ████████████████████████████████████████████████████████████████████████████████████████████████
+-- 🔴 THIS FILE IS ONE HALF OF A PAIR. APPLY ORDER IS **20260801 → 20260801b**, NEVER REVERSED.
+-- ████████████████████████████████████████████████████████████████████████████████████████████████
+--
+-- The other half is `20260801b_subscription_permission_and_enablement_split.sql`. The two were
+-- written IN THE SAME HOUR BY TWO SESSIONS THAT COULD NOT SEE EACH OTHER, which is how a pair came
+-- to exist without either author designing one. That is a workflow finding (ledger), and this block
+-- is the mitigation.
+--
+-- ── WHAT EACH FILE DOES TO `business_modules` ──────────────────────────────────────────────────
+--   20260801  (this) · CREATE OR REPLACE set_business_module_state — ONE gate, `settings:update`
+--                    · DROP POLICY business_modules_member_access   ← the only policy change
+--                    · CREATE POLICY business_modules_member_select FOR SELECT
+--   20260801b        · CREATE OR REPLACE set_business_module_state — the SAME function, gate SPLIT
+--                      (config → settings:update · ENABLEMENT → subscription:update)
+--                    · UPDATE role_definitions OWNER floor 52 → 54, + the funnel reset per business
+--                    · **TOUCHES NO POLICY AT ALL**
+--
+-- ── 🔴 THE HAZARD, AND IT IS SILENT ────────────────────────────────────────────────────────────
+-- Both files `CREATE OR REPLACE` the SAME function with a BYTE-IDENTICAL signature
+-- `(uuid, text, boolean, boolean, jsonb, uuid)`. Postgres therefore REPLACES IN PLACE and RAISES
+-- NOTHING. **Run b then a, and `a` silently overwrites the enablement split** — the policy would be
+-- correct, the owner floor would hold `subscription:update`, the Roles model would say a manager
+-- cannot spend, and the FUNCTION would let them, because it would be back to one `settings:update`
+-- gate. Nothing errors. Nothing logs. The only symptom is a permission that stops meaning anything.
+--
+-- ── DOES `b` ASSUME `a`'s STATE? ONLY ONE WAY, AND IT IS NAMED HERE ────────────────────────────
+--   · b does NOT re-derive the policy. It never mentions one. It ASSUMES `a` has already narrowed
+--     the table.
+--   · b's function definition is COMPLETE and standalone — it does not read or extend a's version.
+--     So `CREATE OR REPLACE` in b succeeds whether or not a ran.
+--   THE CONSEQUENCE, stated plainly:
+--   · **a alone**  → COHERENT and safe. Writes narrowed, everything gated on `settings:update`.
+--                    Just un-split: a manager can still enable a module. This is a fine resting
+--                    state if you stop here.
+--   · **b alone**  → 🔴 BROKEN, NOT PARTIAL. The split gate exists inside a function nobody has to
+--                    use: `business_modules_member_access` is still FOR ALL, so any active member
+--                    writes `enabled` directly from a browser and never touches the RPC. The
+--                    subscription gate would be DECORATIVE, and the owner floor would say otherwise.
+--   · **b then a** → 🔴 WORST. Silent revert of the split, as above.
+--   · **a then b** → correct.
+--
+-- ── ANY OVERLAP THAT MAKES THE SECOND FAIL OR NO-OP ON THE FIRST'S WORK? ───────────────────────
+-- ONE, and only one: the function replacement above. There is NO policy overlap (b touches none),
+-- NO table/column overlap, and b's `role_definitions` work is disjoint from everything in a.
+-- Applied in order, nothing in b un-does anything in a — b replaces a's function body ON PURPOSE,
+-- which is the entire point of b.
+--
+-- ████████████████████████████████████████████████████████████████████████████████████████████████
+-- 🔴 THE ONE PRE-APPLY QUERY — RUN THIS BEFORE EITHER FILE. IT SUPERSEDES BOTH FILES' OWN
+--    PRE-CHECKS (this file's PRE-CHECK 0 below, and 20260801b's PRE-APPLY GATE). ONE query, three
+--    stages, one place. Read every row before running anything.
+-- ████████████████████████████████████████████████████████████████████████████████████████████████
+--
+-- SELECT * FROM (
+--   -- A · WHICH OF THE PAIR HAS ALREADY RUN — read off the policy, not off memory.
+--   SELECT 1 AS ord, 'A · policy on business_modules'::text AS stage,
+--          COALESCE(string_agg(p.polname || ' [' || p.polcmd || ']', ', ' ORDER BY p.polname),
+--                   '(no policy — STOP, RLS may be off)') AS observed,
+--          'member_access [*] = NEITHER applied (expected now) · member_select [r] = a applied'::text AS how_to_read
+--     FROM pg_class c
+--     LEFT JOIN pg_policy p ON p.polrelid = c.oid
+--    WHERE c.relname = 'business_modules' AND c.relnamespace = 'public'::regnamespace
+--   UNION ALL
+--   -- B · WHICH GATE THE FUNCTION CARRIES — the silent-clobber detector. Run this AGAIN after b.
+--   SELECT 2, 'B · set_business_module_state gate',
+--          COALESCE((SELECT CASE
+--                      WHEN pg_get_functiondef(pr.oid) LIKE '%subscription:update%'
+--                        THEN 'SPLIT — b is applied'
+--                      ELSE 'settings:update ONLY — a is applied, b is not' END
+--                      FROM pg_proc pr JOIN pg_namespace n ON n.oid = pr.pronamespace
+--                     WHERE n.nspname = 'public' AND pr.proname = 'set_business_module_state'),
+--                   'ABSENT — neither applied (expected now)'),
+--          'AFTER BOTH this MUST read SPLIT. If it reads settings:update ONLY, a ran after b — re-run b.'
+--   UNION ALL
+--   -- C · THE LOCKOUT INVARIANT, per business. Authority lives ENTIRELY in business_members since
+--   --     20260730c removed the owner branch; an owner without an active OWNER row holds NOTHING.
+--   SELECT 3, 'C · owner authority · ' || b.name,
+--          CASE
+--            WHEN b.owner_id IS NULL     THEN 'no owner_id — SKIPPED by b §3 (known LAWNS gap, NOT a blocker)'
+--            WHEN m.user_id  IS NULL     THEN 'NO MEMBER ROW — STOP, do not apply'
+--            WHEN NOT m.active           THEN 'INACTIVE member row — STOP, do not apply'
+--            WHEN upper(COALESCE(m.role,'')) <> 'OWNER'
+--                                        THEN 'role=' || COALESCE(m.role,'null') || ' — STOP, do not apply'
+--            ELSE 'ok · OWNER · active · n=' || COALESCE(jsonb_array_length(m.permissions), 0)::text
+--          END,
+--          'expect n=52 BEFORE b · n=54 AFTER b. Fix a STOP with 20260730b §2, never by hand.'
+--     FROM public.businesses b
+--     LEFT JOIN public.business_members m
+--            ON m.business_id = b.id AND m.user_id = b.owner_id
+-- ) x ORDER BY ord, stage;
+--
+-- GO / NO-GO:
+--   · A reads `member_access [*]` and B reads `ABSENT`  → both files are unapplied. Proceed: a, then b.
+--   · A reads `member_select [r]` and B reads `settings:update ONLY` → a is applied. Run ONLY b.
+--   · Any C row saying STOP (other than the `no owner_id` LAWNS line) → apply NOTHING. Fix first.
+--   · Re-run B after b. It must read SPLIT.
 --
 -- NEVER EDIT APPLIED MIGRATIONS. This file appends; it edits nothing.
 --
@@ -30,7 +128,12 @@
 --               revoked at the policy layer; the only write path is `set_business_module_state`.
 --
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
--- 🔴 PRE-CHECK 0 — RUN THIS BEFORE ANYTHING ELSE. THE DEPENDENCY IS STATED, NOT ASSUMED.
+-- ⚠️ PRE-CHECK 0 — SUPERSEDED 2026-08-01 BY STAGE C OF THE ONE PRE-APPLY QUERY ABOVE.
+-- ════════════════════════════════════════════════════════════════════════════════════════════════
+-- KEPT, NOT DELETED: its REASONING is the clearest statement of the lockout in either file, and the
+-- combined query's stage C is the same assertion in the shape that also answers "which of the pair
+-- has run." **DO NOT RUN BOTH** — two pre-checks answering one question is how a reader ends up
+-- trusting the one that happens to be greener (STD-011). Run the combined query; read this for why.
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
 -- The policy is scoped to `business_members`. The OWNER is resolved by the app from
 -- `businesses.owner_id` (BusinessProvider.tsx:474), NOT from a member row. **An owner with no

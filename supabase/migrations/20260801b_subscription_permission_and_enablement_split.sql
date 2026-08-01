@@ -9,7 +9,12 @@
 --   That file created `set_business_module_state()` and narrowed the table to a SELECT-only policy,
 --   with EVERY write gated on `settings:update` — deliberately, because a narrowing must not also
 --   change who passes (#172). This file makes the second change on its own: it SPLITS that one gate
---   in two. Applying this without that one replaces a function that does not exist yet.
+--   in two.
+--   ✏️ CORRECTED 2026-08-01: this line previously said applying this file alone "replaces a function
+--   that does not exist yet", implying an error would stop you. **It would not.** `CREATE OR REPLACE`
+--   creates the function when it is absent and raises nothing, so applying b alone SUCCEEDS QUIETLY
+--   and leaves the split gate guarding a table anyone can still write around. The sentence made a
+--   dangerous order sound self-correcting. See the PAIR block below for what each order actually does.
 --
 -- WHAT THIS DOES, in one sentence: enabling a module becomes a DIFFERENT ACT from configuring one,
 -- because one of them changes the bill.
@@ -30,36 +35,27 @@
 -- business. No table, column, policy, constraint, FK or trigger changes. The SELECT-only policy
 -- from 20260801 is untouched.
 --
--- ════════════════════════════════════════════════════════════════════════════════════════════════
--- 🔴 PRE-APPLY GATE — RUN THIS **BEFORE** THE `BEGIN`, AND STOP IF IT DOES NOT PASS.
--- ════════════════════════════════════════════════════════════════════════════════════════════════
--- THE FAILURE IT PREVENTS, stated plainly: authority now lives ENTIRELY in `business_members`.
--- `has_permission_for` lost its owner branch on 2026-07-30, so an owner WITHOUT an active OWNER-role
--- member row holds nothing — they would read their module rows (SELECT is membership-scoped… which
--- also needs that row), see every module as un-enabled, press [ENABLE], and be refused by their own
--- system. **20260730b is what guarantees against it**, and this migration's §2 writes THROUGH the
--- funnel, which requires the row to exist. So the invariant is a precondition, not a nicety.
+-- ████████████████████████████████████████████████████████████████████████████████████████████████
+-- 🔴 SECOND HALF OF A PAIR. APPLY ORDER: **20260801 → THIS FILE**, NEVER REVERSED.
+-- ████████████████████████████████████████████████████████████████████████████████████████████████
 --
---   -- EVERY business, its owner, and whether the row that carries authority exists.
---   SELECT b.name,
---          b.owner_id IS NOT NULL                       AS has_owner_id,
---          m.user_id  IS NOT NULL                       AS has_member_row,
---          m.active,
---          m.role,
---          COALESCE(jsonb_array_length(m.permissions), 0) AS n_permissions
---     FROM public.businesses b
---     LEFT JOIN public.business_members m
---            ON m.business_id = b.id AND m.user_id = b.owner_id
---    ORDER BY b.name;
+-- ⛔ THE PRE-APPLY QUERY AND THE FULL APPLY-ORDER ANALYSIS LIVE AT THE TOP OF
+--    `20260801_business_modules_write_narrowing.sql` — ONE query covering BOTH files, because the
+--    thing being asked ("which half has run, and is the owner still able to act?") is one question
+--    about one surface. This file had its own PRE-APPLY GATE; it was FOLDED INTO THAT ONE and is
+--    not repeated here. Two queries answering one question is how a reader ends up trusting the
+--    greener one (STD-011).
 --
---   EXPECT, on all three tenants: has_member_row = true · active = true · role = 'OWNER' ·
---           n_permissions = 52 (the pre-this-migration count).
---   ⚠️ A row with has_owner_id = false is the KNOWN LAWNS gap (CLAUDE.md §4 — owner_id is NULL).
---      §2 SKIPS it exactly as 20260730a did; it is not a new failure, and it means that tenant's
---      owner authority is still owed. It does NOT block this apply.
---   🔴 ANY OTHER row failing → **STOP. DO NOT APPLY.** Fix the member row first (20260730b §2).
---      Applying over a missing row does not error; it silently leaves an owner locked out of the
---      module state of their own business, which is the exact defect the pre-check exists to catch.
+-- ⚠️ THE HAZARD, repeated here because it is the one that bites SILENTLY and this is the file whose
+--    work gets destroyed: both files `CREATE OR REPLACE` the same function with a BYTE-IDENTICAL
+--    signature, so **running 20260801 AFTER this file silently reverts the enablement split** with
+--    no error. Stage B of the combined query is the detector — re-run it after applying this file
+--    and it MUST read `SPLIT`.
+--
+-- ⚠️ THIS FILE ASSUMES 20260801's POLICY STATE AND DOES NOT RE-DERIVE IT. It touches NO policy. On
+--    its own the split gate is DECORATIVE: `business_modules_member_access` would still be FOR ALL,
+--    so any active member writes `enabled` directly and never reaches this function. Applying only
+--    this file is a BROKEN state, not a partial one.
 
 BEGIN;
 
