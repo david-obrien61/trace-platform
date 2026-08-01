@@ -256,7 +256,17 @@ const DUAL_TABLES = [
   ['cost_object_edges', 'cost_object_edges_member_select'],
   ['cost_object_assignments', 'cost_object_assignments_member_select'],
   ['deliveries', 'deliveries_member_select'],
-  ['business_modules', 'business_modules_member_access'],
+  // ✏️ RENAMED 2026-08-01 (ledger #180): the FOR ALL policy was split — SELECT stays
+  // membership-scoped, every WRITE moved behind `set_business_module_state`. The member policy is
+  // now `business_modules_member_select`.
+  // 🔴 AND THE EDIT ITSELF IS THE FINDING: `DUAL_TABLES` PINS A POLICY NAME BY HAND, so a
+  // legitimate rename reports the policy as MISSING — a FALSE FAILURE, not a caught defect. This
+  // cap failed on the narrowing migration for exactly that reason. It is the same class as capQ's
+  // R-B2 pin and capA assertion 3: A CHECK PINNED TO A NAME SOMEONE MUST REMEMBER TO UPDATE.
+  // The derivable form — "any policy on this table whose body calls is_active_member()" — is the
+  // right shape and is NOT taken here: rewriting a checker inside a migration pass is the drift
+  // the gate exists to catch (#73's own note). Flagged for David as a separate pass.
+  ['business_modules', 'business_modules_member_select'],
   ['cultivar_plants', 'cultivar_plants_owner_all'], // member branch fused (owner_id OR is_active_member)
 ];
 // Documented owner-only operational tables (CLAUDE migration §"NOT TOUCHED"): member-read is a
