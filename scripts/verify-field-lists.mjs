@@ -26,11 +26,15 @@
 // USAGE:        npm run verify:field-lists · npm run field-lists:baseline
 // ============================================================
 import { readdirSync, readFileSync, writeFileSync, statSync, existsSync } from 'node:fs';
+import { siteKey, assignOrdinals } from './lib/siteKey.mjs';
 import { join, relative } from 'node:path';
 
 const ROOT = process.cwd();
 const BASELINE_FILE = join(ROOT, 'field-lists-baseline.json');
 const UPDATE = process.argv.includes('--update');
+// `--dump` prints `key<TAB>tag` for every enumeration — the proof harness for a re-key. See
+// scripts/lib/siteKey.mjs: losing a site during a key change is the exact absorption #78 is about.
+const DUMP = process.argv.includes('--dump');
 
 const SCAN_ROOTS = [
   'packages/cultivar-os/src', 'packages/cultivar-os/api',
@@ -111,9 +115,21 @@ export function analyze(files) {
 
       const line = src.slice(0, m.index).split('\n').length;
       if (!byEntity.has(entity)) byEntity.set(entity, []);
-      byEntity.get(entity).push({ path, line, cols, via, tag: `${path}:${line}` });
+      // IDENTITY is `path::binding#entity.select` (tech-debt #78). `tag` keeps the line for the
+      // HUMAN reading the report; nothing keys on it. The verb is always `select` here — a field
+      // LIST is a read shape — so the entity is what distinguishes two lists in one function.
+      byEntity.get(entity).push({
+        // ⚠️ `m.index + m[0].length`, NOT `m.index`. This loop matches ON the `.from('x')` itself,
+        // so a backward window from m.index sits BEFORE the table name and resolves `?` every
+        // time. The write cap matches on `.update(` with `.from(` already behind it, which is why
+        // the same helper needs a different index here. Caught by probes F13-F15 going 0-for-3.
+        key: siteKey(path, src, m.index + m[0].length, 'select'), path, line, cols, via, tag: `${path}:${line}`,
+      });
     }
   }
+  // Ordinals are assigned over ALL sites in source order, across entities, so a repeated
+  // (binding, entity, select) triple in one file disambiguates the same way the write cap does.
+  assignOrdinals([...byEntity.values()].flat().sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line));
   return byEntity;
 }
 
@@ -129,7 +145,7 @@ export function judge(byEntity, { baseline = [], allowed = ALLOWED_DIVERGENCE } 
     const declared = allowed[entity];
     const goal = lists.length <= 1 ? 'PASS'
       : declared && lists.every(l => declared.paths.includes(l.path)) ? 'PASS' : 'FAIL';
-    const fresh = lists.filter(l => !known.has(l.tag) && !(declared?.paths.includes(l.path)));
+    const fresh = lists.filter(l => !known.has(l.key) && !(declared?.paths.includes(l.path)));
     rows.push({ entity, lists, distinct: distinct.size, goal, fresh, declared,
                 tooling: listsAll.filter(l => isTooling(l.path)) });
   }
@@ -172,10 +188,23 @@ function runProbes() {
   // RATCHET
   const two = [f('packages/a.ts', `supabase.from('t').select('id,name,sku');`),
                f('packages/b.ts', `supabase.from('t').select('id,name,qty');`)];
+  const KA = 'packages/a.ts::<module>#t.select', KB = 'packages/b.ts::<module>#t.select';
   ck('F11 a NEW enumeration not in the baseline → fails', '1',
-    String(judge(analyze(two), { baseline: ['packages/a.ts:1'] }).find(r => r.entity === 't').fresh.length));
+    String(judge(analyze(two), { baseline: [KA] }).find(r => r.entity === 't').fresh.length));
   ck('F12 both in the baseline → passes (known debt)', '0',
-    String(judge(analyze(two), { baseline: ['packages/a.ts:1', 'packages/b.ts:1'] }).find(r => r.entity === 't').fresh.length));
+    String(judge(analyze(two), { baseline: [KA, KB] }).find(r => r.entity === 't').fresh.length));
+
+  // ── TECH-DEBT #78: THE KEY SURVIVES AN EDIT ABOVE THE SITE (both directions) ──
+  const LIST = `export function loadCustomers() {\n  return supabase.from('customers').select('id,first_name,last_name,email');\n}`;
+  const KEY = ['packages/a.ts::loadCustomers#customers.select'];
+  const one = (body) => judge(analyze([f('packages/a.ts', body)]), { baseline: KEY })
+    .find(r => r.entity === 'customers')?.fresh.length ?? 0;
+  ck('F13 🔴 a COMMENT inserted above a tracked list is NOT a new violation (the #78 defect)', '0',
+    String(one(`// a new explanatory comment\n// and a second line\n${LIST}`)));
+  ck('F14 🔴 …nor are added IMPORTS or blank lines above it', '0',
+    String(one(`import x from 'y';\n\n\n${LIST}`)));
+  ck('F15 🔴 a GENUINELY NEW list still fails — the ratchet keeps its teeth', '1',
+    String(one(`${LIST}\nexport function loadAgain() {\n  return supabase.from('customers').select('id,first_name,last_name,phone');\n}`)));
   return R;
 }
 
@@ -204,8 +233,13 @@ const byEntity = analyze(files);
 const baselineDoc = existsSync(BASELINE_FILE) ? JSON.parse(readFileSync(BASELINE_FILE, 'utf8')) : null;
 const rows = judge(byEntity, { baseline: baselineDoc?.enumerations ?? [] });
 
+if (DUMP) {
+  for (const r of rows) for (const l of r.lists) console.log(`${l.key}\t${l.tag}`);
+  process.exit(0);
+}
+
 if (UPDATE) {
-  const out = { _comment: 'Hand-written column enumerations per entity as of the stamp. RATCHET baseline — the build fails on any NEW one, not on these. Shrink it; never grow it casually. Regenerate: npm run field-lists:baseline', stamped: new Date().toISOString().slice(0, 10), enumerations: rows.flatMap(r => r.lists.map(l => l.tag)).sort() };
+  const out = { _comment: 'Hand-written column enumerations per entity as of the stamp. RATCHET baseline — the build fails on any NEW one, not on these. Shrink it; never grow it casually. Regenerate: npm run field-lists:baseline', stamped: new Date().toISOString().slice(0, 10), enumerations: rows.flatMap(r => r.lists.map(l => l.key)).sort() };
   writeFileSync(BASELINE_FILE, JSON.stringify(out, null, 2) + '\n');
   console.log(`\n${GRN}${B}✓ baseline written${O} — ${out.enumerations.length} enumerations → field-lists-baseline.json\n`);
   process.exit(0);

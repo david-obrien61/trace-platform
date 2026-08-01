@@ -24,11 +24,17 @@
 // USAGE:        npm run verify:zero-row-writes · npm run zero-row-writes:baseline
 // ============================================================
 import { readdirSync, readFileSync, writeFileSync, statSync, existsSync } from 'node:fs';
+import { siteKey, assignOrdinals } from './lib/siteKey.mjs';
 import { join, relative } from 'node:path';
 
 const ROOT = process.cwd();
 const BASELINE_FILE = join(ROOT, 'zero-row-writes-baseline.json');
 const UPDATE = process.argv.includes('--update');
+// `--dump` prints every site as `key<TAB>tag`. It exists because RE-KEYING A BASELINE IS THE ONE
+// operation that can silently lose a site, and the only honest way to land one is to prove the old
+// and new key sets are the same SIZE and a 1:1 mapping. Kept permanently: the next key change gets
+// the same proof for free (tech-debt #78).
+const DUMP = process.argv.includes('--dump');
 
 const SCAN_ROOTS = [
   'packages/cultivar-os/src', 'packages/cultivar-os/api',
@@ -104,18 +110,24 @@ export function analyze(files) {
         status = 'NEEDS_CHECK';                       // selectable, not inspected
       }
       const line = src.slice(0, m.index).split('\n').length;
-      sites.push({ tag: `${path}:${line}`, path, verb: m[1], status });
+      // IDENTITY is `path::binding#table.verb` (tech-debt #78). `tag` keeps the line for the HUMAN
+      // — a report you cannot navigate from is worse than a noisy one — but nothing keys on it.
+      sites.push({ key: siteKey(path, src, m.index, m[1]), tag: `${path}:${line}`, path, line, verb: m[1], status });
     }
   }
+  assignOrdinals(sites);
   return { sites };
 }
 
 export function judge(sites, { baseline = [], allowed = ALLOWED_UNCHECKED } = {}) {
   const known = new Set(baseline);
   const app = sites.filter(s => !isTooling(s.path));
-  const bad = app.filter(s => s.status !== 'CHECKED' && !allowed[s.tag]);
-  const fresh = bad.filter(s => !known.has(s.tag));
-  const fixed = [...known].filter(k => !bad.some(b => b.tag === k));
+  // ALLOWED_UNCHECKED is still keyed by `tag` — those are hand-written declarations naming a
+  // specific line a human read; they are checked against BOTH so an existing declaration keeps
+  // working and a new one may use either form.
+  const bad = app.filter(s => s.status !== 'CHECKED' && !allowed[s.tag] && !allowed[s.key]);
+  const fresh = bad.filter(s => !known.has(s.key));
+  const fixed = [...known].filter(k => !bad.some(b => b.key === k));
   return { app, bad, fresh, fixed, tooling: sites.filter(s => isTooling(s.path)) };
 }
 
@@ -147,7 +159,21 @@ function runProbes() {
   ck('Z8 an unchecked site NOT in the baseline → fails', '1',
     String(judge(one, { baseline: [] }).fresh.length));
   ck('Z9 the SAME site IN the baseline → passes (known debt)', '0',
-    String(judge(one, { baseline: ['packages/x/a.ts:1'] }).fresh.length));
+    String(judge(one, { baseline: ['packages/x/a.ts::<module>#t.update'] }).fresh.length));
+
+  // ── TECH-DEBT #78: THE KEY SURVIVES AN EDIT ABOVE THE SITE (both directions) ──
+  const BODY = `async function saveTier(id) {\n  const { error } = await supabase.from('customers').update(p).eq('id', id);\n}`;
+  const BASE = ['packages/x/a.ts::saveTier#customers.update'];
+  ck('Z15 🔴 a COMMENT inserted above a tracked site is NOT a new violation (the #78 defect)', '0',
+    String(judge(mk(`// a new explanatory comment\n// and a second line of it\n${BODY}`), { baseline: BASE }).fresh.length));
+  ck('Z16 🔴 …nor are added IMPORTS or blank lines above it', '0',
+    String(judge(mk(`import x from 'y';\nimport z from 'w';\n\n\n${BODY}`), { baseline: BASE }).fresh.length));
+  ck('Z17 🔴 a GENUINELY NEW site still fails — the ratchet keeps its teeth', '1',
+    String(judge(mk(`${BODY}\nasync function other(id) {\n  const { error } = await supabase.from('orders').update(p).eq('id', id);\n}`), { baseline: BASE }).fresh.length));
+  ck('Z18 a second write on the SAME table in the SAME function is a DISTINCT site (@2)', '1',
+    String(judge(mk(`async function saveTier(id) {\n  const { error } = await supabase.from('customers').update(p).eq('id', id);\n  const { error: e2 } = await supabase.from('customers').update(q).eq('id', id);\n}`), { baseline: BASE }).fresh.length));
+  ck('Z19 RENAMING the enclosing function DOES re-key it — a change of identity, stated not hidden', '1',
+    String(judge(mk(BODY.replace('saveTier', 'saveCustomerTier')), { baseline: BASE }).fresh.length));
   ck('Z10 a baselined site that got FIXED is reported as a win', '1',
     String(judge(mk(`const { data } = await supabase.from('t').update(p).select('id').single();`),
       { baseline: ['packages/x/a.ts:1'] }).fixed.length));
@@ -194,8 +220,13 @@ const { sites } = analyze(files);
 const baselineDoc = existsSync(BASELINE_FILE) ? JSON.parse(readFileSync(BASELINE_FILE, 'utf8')) : null;
 const v = judge(sites, { baseline: baselineDoc?.unchecked ?? [] });
 
+if (DUMP) {
+  for (const s2 of judge(sites, { baseline: [] }).bad) console.log(`${s2.key}\t${s2.tag}`);
+  process.exit(0);
+}
+
 if (UPDATE) {
-  const out = { _comment: 'Mutation sites that do NOT check affected rows, as of the stamp. RATCHET baseline — the build fails on any NEW one, not on these. Shrink it; never grow it casually. Regenerate: npm run zero-row-writes:baseline', stamped: new Date().toISOString().slice(0, 10), unchecked: v.bad.map(s => s.tag).sort() };
+  const out = { _comment: 'Mutation sites that do NOT check affected rows, as of the stamp. RATCHET baseline — the build fails on any NEW one, not on these. Shrink it; never grow it casually. Regenerate: npm run zero-row-writes:baseline', stamped: new Date().toISOString().slice(0, 10), unchecked: v.bad.map(s => s.key).sort() };
   writeFileSync(BASELINE_FILE, JSON.stringify(out, null, 2) + '\n');
   console.log(`\n${GRN}${B}✓ baseline written${O} — ${out.unchecked.length} unchecked app sites → zero-row-writes-baseline.json\n`);
   process.exit(0);
