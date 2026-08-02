@@ -1,7 +1,17 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
--- 20260802b — THE THREE CLASSIFICATION RULINGS REACH THE ROWS ALREADY ON DISK
+-- 20260802b — THE CLASSIFICATION RULINGS REACH THE ROWS ALREADY ON DISK, AND FIVE CLOCKS STOP
 -- David's rulings, 2026-08-02: inventory_intake → CORE · cost_to_produce → $29 add_on, trialled ·
--- contractor_tiers → core_optional ($0, no trial, OFF until switched on).
+-- contractor_tiers → core_optional ($0, no trial, OFF until switched on) · AND a trial starts only
+-- when the thing being trialled can be USED, so the four `planned` add-ons lose their clocks too.
+--
+-- ✏️ AMENDED 2026-08-02 (3), BEFORE BEING APPLIED, and the §6 r1 judgement is stated rather than
+-- assumed: r1 forbids editing an existing migration because an APPLIED file and its database would
+-- then disagree. **This file has never been run** (it is GATED and David has not reported a V-block),
+-- and David ruled ONE corrective migration for all five clocks. Extending it is therefore the
+-- literal instruction and carries none of the risk r1 exists to prevent. ⚠️ **AND IT IS SAFE EVEN IF
+-- THAT JUDGEMENT IS WRONG:** every statement is idempotent and absolute, so applying this version
+-- over an already-applied earlier one converges (it would clear the four additionally and re-clear
+-- contractor_tiers as a no-op). The only re-run cost is a duplicate audit row, which V5 already names.
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
 --
 -- 🔴 WHY A MIGRATION AT ALL, restated because it is the same reason as yesterday and the day before:
@@ -20,22 +30,26 @@
 -- human remembering an order. The mechanism:
 --
 --   · 20260802 keys its UPDATE on `config->>'trial_started_at' IS NOT NULL`. This file STRIPS that
---     key from contractor_tiers, so 20260802 stops matching it — applied after, it skips the row.
+--     key from all five, so 20260802 stops matching them — applied after, it skips those rows.
 --   · This file keys ITS updates on `module_key`, never on the presence or absence of a clock, so
 --     20260802 having already run changes nothing about what it does.
 --   · Every write is an ABSOLUTE SET (`= true` / `= false`), never a toggle. Re-running converges.
 --
--- ⚠️ BOTH FILES ARE STILL REQUIRED. This one does NOT correct the other six trialling add-ons.
+-- ⚠️ BOTH FILES ARE STILL REQUIRED, and the division is now sharper: after both, **exactly TWO
+-- modules are on running clocks — `social_media` ($19) and `delivery_routing` ($29)** — because they
+-- are the only priced add-ons whose tiles are LIVE. `cost_to_produce` joins them as the third, via
+-- (1) below. 20260802 is what makes those trials real; this file is what stops the five that are not.
 --
 -- ── PRE-APPLY (run first, paste the output back) ────────────────────────────────────────────────
 --   SELECT b.name, bm.module_key, bm.enabled, bm.configured,
 --          bm.config->>'trial_started_at' AS started, bm.config->>'trial_days' AS term
 --     FROM public.business_modules bm JOIN public.businesses b ON b.id = bm.business_id
---    WHERE bm.module_key IN ('contractor_tiers','inventory_intake','cost_to_produce')
+--    WHERE bm.module_key IN ('contractor_tiers','inventory_intake','cost_to_produce',
+--                            'followup_engine','business_insights','online_shop','seasonal_module')
 --    ORDER BY b.name, bm.module_key;
 --
---   EXPECT, before this file: contractor_tiers carries a clock (enabled depends on whether 20260802
---   has run) · inventory_intake and cost_to_produce are dark with NO clock.
+--   EXPECT, before this file: contractor_tiers AND the four planned add-ons carry clocks (enabled
+--   depends on whether 20260802 has run) · inventory_intake and cost_to_produce are dark with NO clock.
 --   ⚠️ If contractor_tiers' clock is ALREADY LAPSED, say so rather than applying — a lapsed clock on
 --   a module that is being ruled free is harmless, but it means this file is landing later than
 --   anyone thought and the other six add-ons deserve a fresh look first.
@@ -123,7 +137,7 @@ UPDATE public.business_modules
                + (COALESCE((config->>'trial_days')::int, 0) || ' days')::interval;
 
 -- ────────────────────────────────────────────────────────────────────────────────────────────────
--- (3) contractor_tiers — OFF THE CLOCK, AND DARK.
+-- (3) FIVE MODULES COME OFF THE CLOCK, AND GO DARK.
 -- ────────────────────────────────────────────────────────────────────────────────────────────────
 -- 🔴 THE PLATFORM CAN START A CLOCK AND HAS NO WAY TO STOP ONE. `start_module_trial` starts and
 -- refuses to restart; nothing anywhere clears the pair. That is why this is a migration and not a
@@ -131,14 +145,36 @@ UPDATE public.business_modules
 -- owner declines a module mid-trial.
 --
 -- The keys are REMOVED, not zeroed. `trialDaysRemaining` returns null for a missing pair and 0 for a
--- lapsed one, and those are different answers by design (D-9): this module is not on a clock at all,
--- which is `null`. Writing `trial_days: 0` would have said "expired", which is a different and false
--- claim about a module that is free.
+-- lapsed one, and those are different answers by design (D-9): these modules are not on a clock at
+-- all, which is `null`. Writing `trial_days: 0` would have said "expired" — a different and false
+-- claim, and for the four below it would claim a trial had run its course when none ever started.
+--
+-- ══ WHY THESE FIVE, in two groups with two different reasons ═══════════════════════════════════
+--   · `contractor_tiers`  — RECLASSIFIED `core_optional` ($0). Free, so nothing to convert to and
+--                            nothing to expire. *"A working capability that expires in a month is
+--                            exactly what the fuzz would take away wrongly."*
+--   · the other FOUR      — PRICED, but their tiles are `status:'planned'`. **A trial is a countdown
+--                            to a price decision, and there is nothing to decide about a module
+--                            nobody can use** (David's ruling 2026-08-02 (3)). At day thirty each
+--                            would ask the owner to pay for something he has never seen.
+--
+-- ⚠️ THIS LIST IS HAND-WRITTEN AND THE CODE-SIDE RULE IS NOT — SQL cannot read `TILE_REGISTRY`.
+-- `moduleSeedRow` derives the same rule from `tile.status`, so **no FUTURE tenant can acquire one of
+-- these clocks**; this statement exists only to clean the rows that already have them. The two
+-- cannot drift in a way that matters, because the seeder is the only thing that creates clocks and
+-- it now refuses. **What IS owed is the other direction — something must START the clock when a tile
+-- goes live — and that is a named gap, not an implication.** See `RULINGS.md` OWED.
 UPDATE public.business_modules
    SET config     = (COALESCE(config, '{}'::jsonb) - 'trial_started_at') - 'trial_days',
        enabled    = false,
        configured = false
- WHERE module_key = 'contractor_tiers';
+ WHERE module_key IN (
+   'contractor_tiers',    -- core_optional: free, nothing to expire
+   'followup_engine',     -- planned tile: $19/mo counting down against nothing
+   'business_insights',   -- planned tile: $19/mo counting down against nothing
+   'online_shop',         -- planned tile: $19/mo counting down against nothing
+   'seasonal_module'      -- planned tile: $29/mo counting down against nothing
+ );
 
 -- ────────────────────────────────────────────────────────────────────────────────────────────────
 -- (4) THE RECORD — one row per business, per the 20260802 precedent.
@@ -176,16 +212,22 @@ COMMIT;
 --   SELECT b.name, bm.module_key, bm.enabled, bm.configured,
 --          bm.config->>'trial_started_at' AS started, bm.config->>'trial_days' AS term
 --     FROM public.business_modules bm JOIN public.businesses b ON b.id = bm.business_id
---    WHERE bm.module_key IN ('contractor_tiers','inventory_intake','cost_to_produce')
+--    WHERE bm.module_key IN ('contractor_tiers','inventory_intake','cost_to_produce',
+--                            'followup_engine','business_insights','online_shop','seasonal_module')
 --    ORDER BY b.name, bm.module_key;
 --
 --   EXPECT per business, exactly:
---     contractor_tiers  · enabled f · configured f · started NULL · term NULL   ← off the clock, dark
---     cost_to_produce   · enabled t · configured t · started TODAY · term 30    ← trialling, live
---     inventory_intake  · enabled t · configured t · started NULL · term NULL   ← core, live, no clock
+--     contractor_tiers   · enabled f · configured f · started NULL · term NULL  ← free, nothing to expire
+--     followup_engine    · enabled f · configured f · started NULL · term NULL  ← planned tile, no clock
+--     business_insights  · enabled f · configured f · started NULL · term NULL  ← planned tile, no clock
+--     online_shop        · enabled f · configured f · started NULL · term NULL  ← planned tile, no clock
+--     seasonal_module    · enabled f · configured f · started NULL · term NULL  ← planned tile, no clock
+--     cost_to_produce    · enabled t · configured t · started TODAY · term 30   ← trialling, live
+--     inventory_intake   · enabled t · configured t · started NULL · term NULL  ← core, live, no clock
 --
---   🔴 A NULL `started` ON contractor_tiers IS THE WHOLE POINT OF THIS FILE. If it still carries a
---   timestamp, the strip did not run and a free module is still counting down to an expiry.
+--   🔴 FIVE NULL `started` VALUES ARE THE WHOLE POINT OF THIS FILE. A timestamp surviving on any of
+--   them means the strip did not run and something free — or something nobody can even open — is
+--   still counting down to a bill.
 --
 -- V2 · NO CLOCK ANYWHERE OVER A MODULE THAT IS NOT LIVE — the 2026-08-02 invariant, in the data.
 --   SELECT b.name, bm.module_key, bm.enabled, bm.config->>'trial_started_at' AS started
@@ -193,10 +235,10 @@ COMMIT;
 --    WHERE bm.config->>'trial_started_at' IS NOT NULL AND bm.enabled IS NOT TRUE
 --    ORDER BY b.name, bm.module_key;
 --
---   EXPECT: ZERO ROWS **if 20260802 has been applied.** If it has NOT, expect the six other add-ons
---   (social_media, followup_engine, online_shop, business_insights, delivery_routing,
---   seasonal_module) — and contractor_tiers must NOT be among them, whichever way round it is.
---   That is the order-independence claim, checked rather than asserted.
+--   EXPECT: ZERO ROWS **if 20260802 has been applied.** If it has NOT, expect exactly TWO —
+--   `social_media` and `delivery_routing`, the only priced add-ons with LIVE tiles. **None of the
+--   five this file clears may appear, whichever way round the two migrations were run.** That is
+--   the order-independence claim, checked rather than asserted.
 --
 -- V3 · THE TRIAL WENT THROUGH THE RPC, so it has the RPC's audit row and not just a config blob.
 --   SELECT business_id, action, detail->>'trial_days' AS term, detail->>'row_created' AS created, created_at

@@ -501,10 +501,41 @@ export function enabledByDefault(billing: ModuleBilling): boolean {
   return billing === 'core';
 }
 
-/** One module's day-one row state. Exported so the mapping itself is tested, not just its output. */
-export function moduleSeedRow(entry: ModuleEntry): ModuleSeedRow {
+/**
+ * 🔴 A TRIAL STARTS WHEN THE THING BEING TRIALLED CAN BE USED (David's ruling 2026-08-02 (3)).
+ *
+ * The catalog's own rule is that a trial is a COUNTDOWN TO A PRICE DECISION. A module whose tile is
+ * `planned` has nothing to decide: the owner cannot use it, cannot evaluate it, and at day thirty is
+ * asked to pay for something he has never seen. **That is the same defect as a clock over a module
+ * the server refuses (2026-08-02 (1)) and a clock over a price nobody has set (`unpriced`) — three
+ * doors into one room**, and this is the rule that shuts the third.
+ *
+ * A module's SURFACE is live when its tile says `status: 'live'`. Every catalog key has exactly one
+ * tile — `verify-tile-fields` assertion 2 guarantees the join in both directions — so this lookup is
+ * total, and a key with no tile is a build failure long before it reaches here.
+ *
+ * ⚠️ DERIVED, NOT DECLARED, AND THAT IS THE POINT. Hand-setting `trial_days: 0` on the four planned
+ * add-ons would have been four edits that someone must remember to undo, one per tile, on the day it
+ * ships — and the whole finding behind this ruling is that nobody was watching the seeder's output
+ * at all. Reading `status` means the catalog keeps its OFFER (`trial_days: 30`, what the trial is
+ * worth) while the seed simply does not grant one yet.
+ */
+function moduleSurfaceIsLive(moduleKey: string): boolean {
+  return TILE_REGISTRY.some((t) => t.module_key === moduleKey && t.status === 'live');
+}
+
+/**
+ * One module's day-one row state. Exported so the mapping itself is tested, not just its output.
+ *
+ * `surfaceIsLive` is REQUIRED rather than defaulted: a default would be a decision about the most
+ * dangerous input made silently, at every call site that forgot to think about it.
+ */
+export function moduleSeedRow(entry: ModuleEntry, surfaceIsLive: boolean): ModuleSeedRow {
   const baseline   = enabledByDefault(entry.billing);
-  const startTrial = entry.trial_days > 0;
+  // 🔴 BOTH HALVES OF THE CLOCK ARE GATED ON THE SURFACE, not just the flag. If `start_trial` were
+  // suppressed and `trial_days` still travelled, the row would carry A TERM WITH NO TRIAL — which
+  // the marketplace reads as a trial that never started (B8), a third state nobody meant to create.
+  const startTrial = entry.trial_days > 0 && surfaceIsLive;
   // 🔴 LIVENESS FOLLOWS THE CLOCK, NOT THE BILLING CLASS (David's ruling 2026-08-02). A module is on
   // at seed because it is INCLUDED-AND-ON by baseline, or because it is INSIDE A RUNNING TRIAL.
   // There is no third way, and `add_on` by itself is not one — an add-on with `trial_days: 0` seeds
@@ -515,7 +546,9 @@ export function moduleSeedRow(entry: ModuleEntry): ModuleSeedRow {
     enabled:     isLive,
     configured:  isLive,
     start_trial: startTrial,
-    trial_days:  entry.trial_days,
+    // The TERM travels only with a trial that is actually being granted. `entry.trial_days` is the
+    // OFFER and stays in the catalog untouched; this is the TERM GRANTED, and there is none yet.
+    trial_days:  startTrial ? entry.trial_days : 0,
   };
 }
 
@@ -531,7 +564,12 @@ export function moduleSeedRow(entry: ModuleEntry): ModuleSeedRow {
  * that saves four rows.
  */
 export function catalogSeedRows(): ModuleSeedRow[] {
-  return MODULE_CATALOG.map(moduleSeedRow);
+  // ⚠️ NOT `.map(moduleSeedRow)`. `Array.map` passes the INDEX as the second argument, so a
+  // point-free call here would have handed `0` (falsy) to `surfaceIsLive` for the first module and a
+  // truthy number to every other — a per-position bug that reads as a typo-free line. TypeScript
+  // rejects it because the parameter is `boolean` and required, which is the second reason it is
+  // both of those things.
+  return MODULE_CATALOG.map((entry) => moduleSeedRow(entry, moduleSurfaceIsLive(entry.module_key)));
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
