@@ -12,14 +12,14 @@
 permissions rather than by being the owner, that removing `isOwner` took nothing away from him, and
 that a refused surface now SAYS SO instead of vanishing.
 
-**Board: 0 of 24.** Every card is `STATUS: owed` except card 22, which is `needs-test` with its reason stated.
+**Board: 0 of 25.** Every card is `STATUS: owed` except card 22, which is `needs-test` with its reason stated.
 
 **Why this exists.** `businesses.owner_id` was the authority mechanism at three layers. It is
 single-valued, so it cannot express the TWO OWNERS David ruled on 2026-07-26 — and the client's
 owner short-circuit made the client MORE PERMISSIVE THAN THE SERVER, which is how the owner came to
 read *"Tax: not identified"* on his own dashboard while his manager read the rate correctly.
 Separately, ~30 refusal surfaces were measured: 27 silent, 3 apologising after a failed write, 0
-pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (#172); 16–17 prove the two LIVE defects the A7 sweep found (#174); 18 proves the fourth permission status (#175); 19–20 prove its tile path (#176), and 20 is runnable ONLY as staff; 21–22 prove the uniform-tiles pass (#179) — 21 is the nine-week `campaigns.status` defect, dead; 23–24 prove the tenant module seed + the trial clock (#181), and **24 is the one that must not be skipped** — it proves the repair mechanism cannot be used to renew a trial.
+pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (#172); 16–17 prove the two LIVE defects the A7 sweep found (#174); 18 proves the fourth permission status (#175); 19–20 prove its tile path (#176), and 20 is runnable ONLY as staff; 21–22 prove the uniform-tiles pass (#179) — 21 is the nine-week `campaigns.status` defect, dead; 23–25 prove the tenant module seed + the trial clock (#181): **24 must not be skipped** (it proves the repair mechanism cannot be used to renew a trial or re-term a tenant), and **25 is standing, not one-shot** — it is the only detector of an unseeded tenant that exists.
 
 ---
 
@@ -499,12 +499,17 @@ through `/onboarding` to the "is live" screen.
 ① **signup COMPLETES and lands on the dashboard.** This is the first thing to look at, and it is not
    a formality: a new `await` was added inside `createBusinessAndMember`, after the member INSERT.
    If it throws, the owner loses the business he just created.
-② the dashboard renders its tile grid normally — **no tile shows an error, and none has changed
-   appearance**. Expect NO visible difference from before this build; see the ⚠️ below.
-③ in the SQL editor, `SELECT module_key, enabled, config->>'trial_started_at' FROM business_modules
-   WHERE business_id = '<the new business>' ORDER BY module_key;` returns **ELEVEN rows** —
-   `qr_checkout` and `qb_invoicing` with `enabled = t`, the seven add-ons with `enabled = f` and a
-   **non-null** timestamp, `cost_to_produce` and `inventory_intake` with `enabled = f` and **null**.
+② 🔴 **QR CHECKOUT AND QUICKBOOKS RENDER AS `active` — green dot, no `[ENABLE]` button.** This is
+   the visible half of the build and it is the thing to look at hardest: core is included, so
+   offering to "set up" a working feature is a dead affordance. Every other tile is unchanged.
+③ in the SQL editor, `SELECT module_key, enabled, configured, config->>'trial_started_at',
+   config->>'trial_days' FROM business_modules WHERE business_id = '<the new business>' ORDER BY
+   module_key;` returns **ELEVEN rows** — `qr_checkout` and `qb_invoicing` with **`enabled = t` AND
+   `configured = t`**, the seven add-ons with `enabled = f`, a **non-null** timestamp and
+   **`trial_days = 30`**, `cost_to_produce` and `inventory_intake` with `enabled = f` and **both
+   trial columns null**.
+   🔴 **A timestamp with a null `trial_days` is a BROKEN ROW** — expiry computes from the pair, so
+   half a pair is a trial nobody can resolve. It should be impossible; if you see one, stop.
 ④ `SELECT action, outcome FROM audit_log WHERE business_id='<new>' AND action IN
    ('business_modules.seeded','module_trial.started');` → one `seeded` (success) + **seven**
    `module_trial.started` (success).
@@ -513,12 +518,10 @@ through `/onboarding` to the "is live" screen.
 carries `subscription:update`, i.e. n=54, per 20260801c pre-apply stage C) · fewer than eleven rows
 (a SHORT SEED — the console warning `MODULE SEED INCOMPLETE` names the numbers).
 
-⚠️ **EXPECT NO VISIBLE TILE CHANGE, AND THAT IS CORRECT, NOT A FAILED BUILD.** `configured` seeds
-`false` for everything including core, because nobody has set anything up yet — and `useModules`
-renders `active` only on `enabled && configured`. So a seeded QR Checkout still reads `available`.
-Stated here because "I turned it on and nothing looks different" is otherwise the natural reading of
-a working build. Whether core should read `active` from day one is a **ruling owed** (20260801c
-PART 2 step 4).
+⚠️ **ONE THING THAT LOOKS WRONG AND IS NOT:** QuickBooks reads `active` on a tenant that has never
+connected to Intuit. The tile says *"included"*, not *"connected"* — it routes to `/settings` where
+the link is made, and the QB **connection** indicator is a separate surface reading
+`business_accounting_secrets`. Considered and recorded, not missed.
 
 ### CARD 24 — 🔴 FINISHING ONBOARDING TWICE DOES NOT BUY A SECOND FREE MONTH
 STATUS: owed
@@ -545,3 +548,51 @@ Using the business from CARD 23: **write down the seven `trial_started_at` times
 **FAIL — and treat it as a STOP, not a note:** any timestamp moved. A trial that renews itself on
 every onboarding load is a permanent free subscription, arriving through the mechanism built to
 make a failed seed recoverable.
+
+### CARD 25 — 🔴 SEED INTEGRITY: THE ONLY WAY ANYONE FINDS AN UNSEEDED TENANT IS BY ASKING
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #181 — the standing seed-integrity query (`20260801c` V6)
+
+**This card exists because David ruled the query belongs on the board rather than only in the
+migration**, and the reason is the defect's own shape: **an unseeded tenant looks identical to a
+normal tenant on every screen there is.** `useModules` renders a MISSING row and a disabled row the
+same way. Nothing errors, nothing is red, no trial runs, no bill is ever raised. A query that lives
+only inside a migration file nobody reopens is a question nobody asks — and this is a question that
+has to be asked, because nothing will ever volunteer the answer.
+
+**RUN THIS BEFORE THE DEMO, and after any signup that mattered:**
+
+```sql
+SELECT b.name,
+       COUNT(bm.module_key)                                             AS module_rows,
+       COUNT(bm.module_key) FILTER (WHERE bm.config ? 'trial_started_at') AS with_clock,
+       COUNT(bm.module_key) FILTER (WHERE bm.config ? 'trial_started_at'
+                                      AND NOT bm.config ? 'trial_days')  AS broken_pair
+  FROM public.businesses b
+  LEFT JOIN public.business_modules bm ON bm.business_id = b.id
+ GROUP BY b.id, b.name ORDER BY b.name;
+```
+
+**PASS — all three:**
+① every business created since `20260801c` shipped reads **`module_rows` = 11**;
+② **`with_clock` = 7** on those businesses;
+③ **`broken_pair` = 0 everywhere, always** — a start with no term is a trial that cannot be
+   resolved, and the function refuses a non-positive term before writing anything, so a non-zero
+   here means something wrote the row that is not `start_module_trial`.
+
+**FAIL and what it means:**
+- **0 rows** → that tenant has **no trial and no bill**, and no screen will ever say so. Re-run
+  `20260801c` V3 for it; the seed is idempotent, so re-running is always safe.
+- **1–10 rows** → a SHORT SEED. Same repair. The client logs `MODULE SEED INCOMPLETE` with the
+  numbers when it happens, but only if someone had a console open at the time.
+- **`broken_pair` > 0** → stop and investigate before doing anything else.
+
+⚠️ **LAWNS AND OTHER PRE-EXISTING TENANTS WILL NOT READ 11 UNTIL THEY ARE SEEDED ONCE.** The
+20260604 pivot moved ten rows across for LAWNS; nothing has ever seeded the rest. That is expected
+on the first run and is exactly what this card is for — **it is a backfill list, not just an alarm.**
+
+🔴 **This card retires the day the marketplace seeds-if-absent on open (ITEM 3).** At that point an
+unseeded tenant repairs itself the first time anyone opens the module screen, and the question stops
+needing to be asked by hand. Until then, this is the only detector that exists.

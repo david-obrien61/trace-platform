@@ -313,21 +313,23 @@ export interface ModuleEntry {
 //                                        already says the brief's word "basic" may not cover it.
 //   ❌ Customer records                 → NO module_key on any customer tile.
 //
-// 🔴 THE CONSEQUENCE, WHICH IS THE POINT OF REPORTING IT: David's ruling says the marketplace SHOWS
-// core as included, because *"Terry seeing what he already gets is worth more at a demo than only
-// seeing what costs extra."* **Built from this catalog, that list has TWO rows, not five.** Three
-// of the five things the brief promises a customer would be missing from the screen built to show
-// him what he is getting.
+// ✅ **RULED 2026-08-01 — RENDER "INCLUDED" FROM THIS CATALOG; DO NOT MINT NO-COST KEYS.**
+// David's reasoning, and it settles the shape rather than just the case: **a `module_key` on the
+// owner dashboard would make the shell every tile renders into a PURCHASABLE ROW** — a thing with an
+// enablement flag someone could set false — and `verify-tile-fields` assertion 2 is RIGHT to reject
+// a catalog entry no tile references. The rejected option was rejected by a cap that was correct.
 //
-// TWO WAYS OUT, AND IT IS A RULING, NOT A BUILD DECISION:
-//   (a) MINT no-cost core module_keys for dashboard / inventory / customers. Consistent with the
-//       ruling's own logic (rows for everything; a move to core is a field change). ⚠️ BUT IT FAILS
-//       THE BUILD AS THINGS STAND: `verify-tile-fields` assertion 2 rejects a catalog entry no tile
-//       references — "a price for something nobody can reach." Taking (a) means changing that cap,
-//       and its reverse direction is load-bearing, so the change would need its own probes.
-//   (b) The marketplace renders "included in your base subscription" from a SEPARATE static list,
-//       and this catalog stays what it is — the things that have a per-tenant ROW.
-// NOT CHOSEN HERE. Choosing silently is how the tile fields drifted for nine weeks.
+// **`billing:'core'` ALREADY CARRIES THE FACT.** The marketplace reads THIS catalog and renders its
+// core section from `billing === 'core'`, **whether or not a `business_modules` row exists for that
+// module**. So: **two rows seeded, five shown** — and the gap between those numbers is a RENDERING
+// concern, not a data one. A module needs a row to be BILLED and ENABLED; it does not need one to be
+// LISTED as included.
+//
+// ⚠️ WHAT THAT LEAVES FOR ITEM 3, stated so it is not rediscovered: the three unmapped core items
+// (Owner dashboard · Basic inventory/asset tracking · Customer records) have **no catalog entry at
+// all**, so "render the core section from `billing:'core'`" yields two. The marketplace will need a
+// display-only line for each — copy, not a `ModuleEntry` — sourced from MASTER_BRIEF:295-300. **That
+// is a screen concern and it belongs in the screen**, which is exactly what this ruling decided.
 //
 // THE ADD-ON SIDE, restated because it is the same shape: MASTER_BRIEF lists FOURTEEN add-ons; this
 // catalog prices SEVEN. Unmapped: Equipment Tracking · GPS Tracking · Water System · Greenhouse ·
@@ -372,12 +374,31 @@ export const MODULE_CATALOG: ModuleEntry[] = [
 // satisfied by the field that is here; what was actually missing is the MAPPING below.** Reported
 // rather than quietly implemented either way.
 //
-// AND THE MAPPING NEEDS NO NEW FIELD AT ALL — both facts fall out of data that is already there:
+// AND THE MAPPING NEEDS NO NEW FIELD AT ALL — every fact falls out of data that is already there:
 //   · `enabled`     = billing is 'core'         — core is included in the base subscription, so it
 //                                                 is on from day one and no trial applies.
+//   · `configured`  = billing is 'core'         — see the ruling below. Same predicate as `enabled`
+//                                                 AT SEED; a distinct field because they diverge
+//                                                 the moment an owner enables a paid module.
 //   · `start_trial` = trial_days > 0            — which is 30 for the seven add-ons and 0 for core
 //                                                 AND for 'unpriced', so the three-value `billing`
 //                                                 collapses to one rule instead of a special case.
+//   · `trial_days`  = the catalog's own number  — carried into the row and SNAPSHOTTED there.
+//
+// 🔴 **A SEEDED CORE MODULE READS `active` ON DAY ONE (David's ruling 2026-08-01, reversing the
+// `configured:false` draft).** `useModules.ts:104` renders `active` only on `enabled && configured`,
+// so seeding `configured:false` put an **`[ENABLE]` button on a working, already-included feature**
+// — the dead-affordance class, the same defect that kept `campaigns` off `module_key` entirely.
+// **There is nothing to configure about being included.** Second reason, and it is not cosmetic:
+// the draft made this whole build produce NO visible change, and *a build with no observable change
+// reads as a failed deploy* — which is how a real deploy failure gets waved through (OP-15).
+//
+// 🔴 **`trial_days` TRAVELS INTO THE ROW — THE TERM IS SNAPSHOTTED, NOT READ LIVE (ruling
+// 2026-08-01).** Expiry is computed from the stored `(trial_started_at, trial_days)` PAIR, never
+// from this catalog. So editing the number below governs **NEW trials only** and cannot reach a
+// tenant already mid-trial. That is what makes `trial_days: 30` safe to argue about: MASTER_BRIEF:243
+// and BD-2 say 14, `Help.tsx:524` tells a customer 30, and 30 is what the donor code assumed —
+// **a scheduling question, no longer a live hazard.** Full reasoning: `20260801c`'s header.
 //
 // 🔴 `unpriced` GETS A ROW, DISABLED, WITH NO CLOCK, and that is the honest answer rather than the
 // tidy one. A trial is a countdown to a price decision; `cost_to_produce` and `inventory_intake`
@@ -385,9 +406,11 @@ export const MODULE_CATALOG: ModuleEntry[] = [
 // them would create a deadline for a question nobody has answered — a real number claiming a real
 // thing (D-9). `trial_days: 0` already encodes it, so the rule above needs no exception.
 //
-// ⚠️ `configured` IS NOT PROJECTED HERE — the seeder writes `false` for everything, core included,
-// because `configured` means "the owner has set this up" and at seed nobody has. See the migration
-// (20260801c PART 2 step 4) for the visible consequence and the ruling it leaves owed.
+// ⚠️ ONE CASE FLAGGED RATHER THAN QUIETLY SOFTENED: `qb_invoicing` genuinely HAS configuration (the
+// QuickBooks OAuth link), so a green tile on day one says *"included"*, not *"connected"*. That is
+// not a false claim — the module IS included, the tile routes to `/settings` where the link is made,
+// and the CONNECTION indicator is a separate surface reading `business_accounting_secrets`. Recorded
+// so the next reader knows it was considered.
 
 // ⚠️ `ModuleSeedRow` IS DEFINED IN SHARED AND IMPORTED HERE, NOT REDECLARED. The two ends of this
 // payload must agree, and a second structurally-identical interface in the vertical would be a
@@ -397,10 +420,13 @@ export const MODULE_CATALOG: ModuleEntry[] = [
 
 /** One module's day-one row state. Exported so the mapping itself is tested, not just its output. */
 export function moduleSeedRow(entry: ModuleEntry): ModuleSeedRow {
+  const isCore = entry.billing === 'core';
   return {
     module_key:  entry.module_key,
-    enabled:     entry.billing === 'core',
+    enabled:     isCore,
+    configured:  isCore,
     start_trial: entry.trial_days > 0,
+    trial_days:  entry.trial_days,
   };
 }
 

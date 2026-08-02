@@ -40,11 +40,27 @@
 // would be denied quietly, into a console warning, on the one path where nobody is looking.
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-/** One module's day-one row state. Structurally what `catalogSeedRows()` produces. */
+/**
+ * One module's day-one row state. Structurally what `catalogSeedRows()` produces.
+ *
+ * 🔴 `trial_days` IS PART OF THE PAYLOAD BECAUSE THE TERM IS SNAPSHOTTED INTO THE ROW, NOT READ
+ * LIVE FROM THE CATALOG (David's ruling 2026-08-01). Expiry is computed from the stored
+ * `(trial_started_at, trial_days)` pair, so editing the catalog governs NEW trials only and cannot
+ * retroactively expire a tenant mid-trial. **A tenant's terms are what they were given.** The
+ * server refuses `start_trial: true` with a non-positive `trial_days` — there is deliberately no
+ * default, because the correct number is exactly what nobody has ratified.
+ *
+ * `configured` is separate from `enabled` even though the catalog derives both from
+ * `billing === 'core'` today: they mean different things and diverge the moment an owner enables a
+ * paid module. Core seeds `configured: true` — there is nothing to configure about being included,
+ * and seeding `false` put an `[ENABLE]` button on a working feature (the dead-affordance class).
+ */
 export interface ModuleSeedRow {
   module_key: string;
   enabled: boolean;
+  configured: boolean;
   start_trial: boolean;
+  trial_days: number;
 }
 
 export interface ModuleSeedResult {

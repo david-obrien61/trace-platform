@@ -28,20 +28,21 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
 -- WHAT THIS ADDS, AND WHY IT IS TWO FUNCTIONS
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
---   · `start_module_trial(uuid, text, uuid)`        — THE CLOCK. The ONLY writer of
---                                                     `config->'trial_started_at'`, anywhere.
---   · `seed_business_modules(uuid, uuid, jsonb)`    — one row per catalog module at tenant
---                                                     creation. Calls the clock; never spells the
---                                                     key itself.
+--   · `start_module_trial(uuid, text, integer, uuid)` — THE CLOCK. The ONLY writer of the TERMS
+--                                                       pair `config->'trial_started_at'` +
+--                                                       `config->'trial_days'`, anywhere.
+--   · `seed_business_modules(uuid, uuid, jsonb)`      — one row per catalog module at tenant
+--                                                       creation. Calls the clock; never spells
+--                                                       either key itself.
 --
 -- 🔴 WHY THE CLOCK IS NOT `set_business_module_state(p_config_patch)`. David's ruling, and
 -- 20260801:185-189 already committed to it in writing: `p_config_patch` accepts ARBITRARY KEYS and
 -- MERGES them. A caller that typed `trial_start_at` would get a successful write, a `success` audit
 -- row, and a module whose trial never ends — because the reader looks for `trial_started_at` and
 -- finds nothing, which is indistinguishable from "no trial was ever started." **A typo surface on a
--- money field is not acceptable when the alternative is a named function.** Here the key is a SQL
--- literal inside `jsonb_set`, it appears EXACTLY ONCE in this file, and no caller can spell it at
--- all — callers pass a business and a module, never a key.
+-- money field is not acceptable when the alternative is a named function.** Here both keys are SQL
+-- literals appearing EXACTLY ONCE each in this file, and no caller can spell either — callers pass
+-- a business, a module and a term, never a key.
 --
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
 -- 🔴 THE PERMISSION IS `subscription:update`, AND THE READ IS RECORDED BECAUSE THE CALL IS ARGUABLE
@@ -75,18 +76,42 @@
 -- change in two places in this file; it is David's to reverse.**
 --
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
--- 🔴 WHAT THE CLOCK STORES — ONE KEY, AND THE HAZARD THAT LEAVES BEHIND
+-- 🔴 WHAT THE CLOCK STORES — THE PAIR. **A TENANT'S TERMS ARE WHAT THEY WERE GIVEN.**
+--    (David's ruling 2026-08-01, reversing the one-key draft this file shipped with.)
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
--- `config->'trial_started_at'` — the START, and nothing else. The LENGTH (`trial_days`) stays in
--- MODULE_CATALOG and is read at render time. That is the ruling, and it is one representation of
--- one fact (STD-011).
+-- `config->'trial_started_at'` AND `config->'trial_days'`, written together, read together. Expiry
+-- is computed FROM THE PAIR — never from the catalog at render time.
 --
--- ⚠️ THE CONSEQUENCE, NAMED RATHER THAN DISCOVERED: **changing `trial_days` in the catalog moves
--- the end date of every trial already running.** The catalog's own header says `trial_days: 30` is
--- INHERITED, NOT RATIFIED — so if David rules 14, every tenant seeded more than fourteen days ago
--- has a trial that ALREADY EXPIRED, retroactively, with no event marking it. The alternative
--- (capture the term in the row at seed time, as a contract term is captured when it is offered) is
--- a SECOND key and was not ruled. **Named as a ruling owed, not silently chosen either way.**
+-- 🔴 WHY, AND IT IS THE SHAPE THAT HAS COST THE MOST THIS WEEK: **a value nobody ratified,
+-- inherited from Ignition, silently governing live tenants.** The one-key draft kept the LENGTH in
+-- MODULE_CATALOG and read it at render — which meant changing `30` to `14` tomorrow would move the
+-- end date of every trial ALREADY RUNNING, retroactively expiring every tenant seeded more than
+-- fourteen days ago, with no event marking it and nothing to appeal to. The catalog's own header
+-- says `trial_days: 30` is *INHERITED, NOT RATIFIED* — it is Ignition's `calculateDaysLeft` default,
+-- carried across because a number was needed.
+--
+-- WITH THE PAIR: **the catalog governs NEW trials only.** A running trial carries the term it was
+-- given, and no catalog edit can reach it. That also demotes a live conflict to a scheduling
+-- question — **MASTER_BRIEF:243 and BD-2 both say 14 · `Help.tsx:524` tells a customer 30 · 30 is
+-- what the donor code assumed.** Resolve the number separately; **do not resolve it by changing a
+-- live field**, which is what the one-key model would have made it.
+--
+-- ⚠️ IS THE PAIR A SECOND REPRESENTATION OF ONE FACT (STD-011)? NO, AND THE DISTINCTION IS THE
+-- POINT: `MODULE_CATALOG.trial_days` is **the offer** — what a trial started TODAY would be worth.
+-- `config->'trial_days'` is **the term granted** — what THIS tenant was actually given, on the day
+-- they were given it. They are two different facts that happen to share a number at the moment of
+-- the seed. The same relationship a stored `sell_price` has to a price list (D-35: a tier discount
+-- comes off the STORED price, never re-derived), reached again on a different table.
+--
+-- 🔴 A RUNNING CLOCK NEVER HAS ITS TERM REWRITTEN EITHER. The same short-circuit that refuses to
+-- restart the clock refuses to touch `trial_days`, so a re-seed (the repair path) cannot silently
+-- re-term a tenant — including re-terming them SHORTER.
+--
+-- WHAT IS NOT BUILT HERE, AND DELIBERATELY: **nothing reads the pair yet.** No days-left, no expiry
+-- behaviour, no blur. The reader belongs to the marketplace (ITEM 3), and writing an
+-- `expiry(started_at, days)` helper today would be an exported function with no caller — the
+-- declaration-with-no-reader this week keeps finding. The RULE is recorded here and in
+-- `RULINGS.md`; the computation is ITEM 3's, and it must read the pair, never the catalog.
 --
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
 -- 🔴 WHAT HAPPENS WHEN THE SEED FAILS — the question that has to be answered before this ships
@@ -170,21 +195,28 @@ BEGIN;
 -- DENIAL AUDITED, value validated (D-9), create-if-absent, audit row, REVOKE/GRANT.
 --
 -- ONE DELIBERATE DEPARTURE FROM THAT SHAPE, and it is the ruling. `set_business_tax_rate` does
--- `UPDATE … IF NOT FOUND → INSERT`, which would put the `{trial_started_at}` literal in BOTH
--- branches. Here the row is created FIRST (`ON CONFLICT DO NOTHING`) and the clock is then written
--- by a SINGLE `jsonb_set`. Same create-if-absent semantics, and **the key is spelled exactly once
--- in this file** — which is the whole point of the clock having its own function.
+-- `UPDATE … IF NOT FOUND → INSERT`, which would put the trial key literals in BOTH branches. Here
+-- the row is created FIRST (`ON CONFLICT DO NOTHING`) and the terms are then written by a SINGLE
+-- merge. Same create-if-absent semantics, and **each key is spelled exactly once in this file** —
+-- which is the whole point of the clock having its own function.
+--
+-- ⚠️ `||` RATHER THAN `jsonb_set`, NOW THAT THERE ARE TWO KEYS. One `jsonb_build_object` merged over
+-- the existing config sets both and preserves every other key, where two chained `jsonb_set` calls
+-- would spell each literal in its own statement and invite a future third key to be added to only
+-- one of them. **The terms are written as a UNIT because they are read as a unit.**
 CREATE OR REPLACE FUNCTION public.start_module_trial(
   p_business_id   uuid,
   p_module_key    text,
+  p_trial_days    integer,
   p_actor_user_id uuid
-) RETURNS TABLE(applied boolean, reason text, started_at timestamptz, was_already_running boolean)
+) RETURNS TABLE(applied boolean, reason text, started_at timestamptz, trial_days integer, was_already_running boolean)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
 AS $$
 DECLARE
-  v_before  timestamptz;
-  v_existed boolean;
-  v_after   timestamptz;
+  v_before      timestamptz;
+  v_before_days integer;
+  v_existed     boolean;
+  v_after       timestamptz;
 BEGIN
   -- (1) NO FORGERY — a client-direct caller may only act as themselves.
   PERFORM public.assert_movement_actor(p_business_id, p_actor_user_id);
@@ -192,7 +224,19 @@ BEGIN
   -- (2) D-9 validation AHEAD of authority, matching 20260801b's ordering and for its reason: a
   --     garbage key must not produce a denial row that reads as an authority incident.
   IF p_module_key IS NULL OR btrim(p_module_key) = '' THEN
-    RETURN QUERY SELECT false, 'module_key is required'::text, NULL::timestamptz, false;
+    RETURN QUERY SELECT false, 'module_key is required'::text, NULL::timestamptz, NULL::integer, false;
+    RETURN;
+  END IF;
+
+  -- 🔴 THE TERM IS VALIDATED LIKE MONEY, BECAUSE IT IS THE OTHER HALF OF A PRICE. A NULL or
+  -- non-positive `trial_days` would produce a trial that expires the instant it starts (or never),
+  -- and the tenant would carry that term permanently — the pair is written once and never rewritten.
+  -- Refuse it rather than store it (D-9); there is no honest default to fall back on, because the
+  -- correct number is exactly what nobody has ratified (MASTER_BRIEF:243 says 14, Help.tsx:524 says
+  -- 30). A caller that does not know the term must not be allowed to invent one.
+  IF p_trial_days IS NULL OR p_trial_days <= 0 THEN
+    RETURN QUERY SELECT false, 'trial_days must be a positive number of days'::text,
+                        NULL::timestamptz, NULL::integer, false;
     RETURN;
   END IF;
 
@@ -201,14 +245,15 @@ BEGIN
   IF NOT public.has_permission_for(p_business_id, p_actor_user_id, 'subscription:update') THEN
     INSERT INTO public.audit_log (business_id, actor_user_id, actor_role, action, target_type, target_id, detail, outcome)
     VALUES (p_business_id, p_actor_user_id, NULL, 'module_trial.start_denied', 'business_module', p_module_key,
-            jsonb_build_object('attempted_module', p_module_key), 'denied');
+            jsonb_build_object('attempted_module', p_module_key, 'attempted_trial_days', p_trial_days), 'denied');
     RETURN QUERY SELECT false,
       'subscription:update permission required — starting a trial schedules what this business will pay'::text,
-      NULL::timestamptz, false;
+      NULL::timestamptz, NULL::integer, false;
     RETURN;
   END IF;
 
-  SELECT (bm.config->>'trial_started_at')::timestamptz INTO v_before
+  SELECT (bm.config->>'trial_started_at')::timestamptz, (bm.config->>'trial_days')::integer
+    INTO v_before, v_before_days
     FROM public.business_modules bm
    WHERE bm.business_id = p_business_id AND bm.module_key = p_module_key;
   v_existed := FOUND;
@@ -220,11 +265,22 @@ BEGIN
   --     even a caller who HOLDS `subscription:update` cannot buy themselves another month.
   --     Reported as `applied:true, was_already_running:true` — the requested state HOLDS, and the
   --     caller asked for a started clock, which is what it has. That is not a failure.
+  --
+  -- 🔴 AND IT REFUSES TO REWRITE THE **TERM**, NOT ONLY THE START. This is the enforcement point of
+  --     the pair ruling: `p_trial_days` is IGNORED here, deliberately, even when it differs from
+  --     what is stored. **A tenant's terms are what they were given.** Without this clause the
+  --     repair path — a re-seed after a catalog edit — would silently re-term every running trial,
+  --     which is the retroactive-expiry hazard arriving through the mechanism built to fix failures.
+  --     The audit row records BOTH what is stored and what was passed, so a divergence is findable
+  --     rather than merely prevented.
   IF v_existed AND v_before IS NOT NULL THEN
     INSERT INTO public.audit_log (business_id, actor_user_id, actor_role, action, target_type, target_id, detail, outcome)
     VALUES (p_business_id, p_actor_user_id, NULL, 'module_trial.started', 'business_module', p_module_key,
-            jsonb_build_object('trial_started_at', v_before, 'restart_refused', true), 'no_change');
-    RETURN QUERY SELECT true, NULL::text, v_before, true;
+            jsonb_build_object('trial_started_at', v_before, 'trial_days', v_before_days,
+                               'offered_trial_days', p_trial_days,
+                               'term_rewrite_refused', v_before_days IS DISTINCT FROM p_trial_days,
+                               'restart_refused', true), 'no_change');
+    RETURN QUERY SELECT true, NULL::text, v_before, v_before_days, true;
     RETURN;
   END IF;
 
@@ -235,30 +291,36 @@ BEGIN
   VALUES (p_business_id, p_module_key, false, false, '{}'::jsonb)
   ON CONFLICT (business_id, module_key) DO NOTHING;
 
-  -- ⬇⬇ THE ONLY OCCURRENCE OF `trial_started_at` AS A WRITE TARGET IN THE ENTIRE PLATFORM. ⬇⬇
+  -- ⬇⬇ THE ONLY OCCURRENCE OF `trial_started_at` AND `trial_days` AS WRITE TARGETS, PLATFORM-WIDE.
+  --    Written as ONE object because they are ONE fact — the terms this tenant was granted.
   UPDATE public.business_modules
-     SET config = jsonb_set(COALESCE(config, '{}'::jsonb), '{trial_started_at}', to_jsonb(now()), true)
+     SET config = COALESCE(config, '{}'::jsonb)
+                  || jsonb_build_object('trial_started_at', now(), 'trial_days', p_trial_days)
    WHERE business_id = p_business_id AND module_key = p_module_key
   RETURNING (config->>'trial_started_at')::timestamptz INTO v_after;
 
   -- (6) THE RECORD. A trial starting is a money event; it gets a row with its own action name so it
-  --     is findable without diffing two jsonb blobs.
+  --     is findable without diffing two jsonb blobs. The TERM is in the row, so the answer to
+  --     "what was this tenant actually promised" survives any later catalog edit.
   INSERT INTO public.audit_log (business_id, actor_user_id, actor_role, action, target_type, target_id, detail, outcome)
   VALUES (p_business_id, p_actor_user_id, NULL, 'module_trial.started', 'business_module', p_module_key,
-          jsonb_build_object('trial_started_at', v_after, 'row_created', NOT v_existed), 'success');
+          jsonb_build_object('trial_started_at', v_after, 'trial_days', p_trial_days,
+                             'row_created', NOT v_existed), 'success');
 
-  RETURN QUERY SELECT true, NULL::text, v_after, false;
+  RETURN QUERY SELECT true, NULL::text, v_after, p_trial_days, false;
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.start_module_trial(uuid, text, uuid) FROM public, anon;
-GRANT EXECUTE ON FUNCTION public.start_module_trial(uuid, text, uuid) TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.start_module_trial(uuid, text, integer, uuid) FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.start_module_trial(uuid, text, integer, uuid) TO authenticated, service_role;
 
-COMMENT ON FUNCTION public.start_module_trial(uuid, text, uuid) IS
-  'THE PER-MODULE TRIAL CLOCK. The only writer of business_modules.config->trial_started_at, '
-  'anywhere — the key is a SQL literal here and no caller can spell it. Gated on '
-  'subscription:update: a trial is a spend with a delay, and the clock must not be writable by a '
-  'larger set than the enablement it governs. A running clock is NEVER restarted (ruling 2026-08-01).';
+COMMENT ON FUNCTION public.start_module_trial(uuid, text, integer, uuid) IS
+  'THE PER-MODULE TRIAL CLOCK. The only writer of business_modules.config->trial_started_at AND '
+  '->trial_days, anywhere — both are SQL literals here and no caller can spell either. The TERM is '
+  'SNAPSHOTTED at start and never rewritten: a tenant''s terms are what they were given, so a '
+  'catalog edit governs NEW trials only (ruling 2026-08-01). Gated on subscription:update: a trial '
+  'is a spend with a delay, and the clock must not be writable by a larger set than the enablement '
+  'it governs. A running clock is NEVER restarted.';
 
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
 -- PART 2 — THE SEED. One row per catalog module, at tenant creation. Idempotent by construction.
@@ -282,7 +344,8 @@ COMMENT ON FUNCTION public.start_module_trial(uuid, text, uuid) IS
 CREATE OR REPLACE FUNCTION public.seed_business_modules(
   p_business_id   uuid,
   p_actor_user_id uuid,
-  p_modules       jsonb   -- [{"module_key":"qr_checkout","enabled":true,"start_trial":false}, …]
+  -- [{"module_key":"qr_checkout","enabled":true,"configured":true,"start_trial":false,"trial_days":0}, …]
+  p_modules       jsonb
 ) RETURNS TABLE(applied boolean, reason text, expected int, seeded int, existing int, trials_started int)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
 AS $$
@@ -321,7 +384,16 @@ BEGIN
                -- element with no `enabled` at all would pass validation and then seed as NULL
                -- against a NOT NULL column. A missing field must fail the same way a wrong one does.
                WHEN COALESCE(jsonb_typeof(e.value->'enabled'),     '') <> 'boolean' THEN 'enabled must be a boolean'
+               WHEN COALESCE(jsonb_typeof(e.value->'configured'),  '') <> 'boolean' THEN 'configured must be a boolean'
                WHEN COALESCE(jsonb_typeof(e.value->'start_trial'), '') <> 'boolean' THEN 'start_trial must be a boolean'
+               WHEN COALESCE(jsonb_typeof(e.value->'trial_days'),  '') <> 'number'  THEN 'trial_days must be a number'
+               -- 🔴 THE CROSS-FIELD ONE, and it is the only validation here that is about MONEY
+               -- rather than about types: a module asking for a trial must carry the TERM of that
+               -- trial. `start_module_trial` would refuse it downstream, but by then the row set is
+               -- half-created — and the batch-refusal rule exists precisely so that never happens.
+               WHEN (e.value->>'start_trial')::boolean
+                AND COALESCE((e.value->>'trial_days')::numeric, 0) <= 0
+                                                                    THEN 'a module starting a trial needs a positive trial_days — the term is snapshotted, so there is no default to fall back on'
              END AS problem
         FROM jsonb_array_elements(p_modules) e
     ) x
@@ -350,29 +422,42 @@ BEGIN
   --     create-if-absent act — the same contract `seedPricingConfig` uses (`ignoreDuplicates`), and
   --     the reason is the same: the repair path and the create path must be the same call.
   INSERT INTO public.business_modules (business_id, module_key, enabled, configured, config)
-  SELECT p_business_id, m.module_key, m.enabled, false, '{}'::jsonb
-    FROM jsonb_to_recordset(p_modules) AS m(module_key text, enabled boolean, start_trial boolean)
+  SELECT p_business_id, m.module_key, m.enabled, m.configured, '{}'::jsonb
+    FROM jsonb_to_recordset(p_modules)
+      AS m(module_key text, enabled boolean, configured boolean, start_trial boolean, trial_days integer)
   ON CONFLICT (business_id, module_key) DO NOTHING;
   GET DIAGNOSTICS v_seeded = ROW_COUNT;
 
-  -- ⚠️ `configured` SEEDS FALSE FOR EVERYTHING, CORE INCLUDED, and that is honest rather than
-  -- convenient. `configured` means "the owner has set this up" and at seed nobody has set anything
-  -- up — QuickBooks has no OAuth link, Social has no channels. The visible consequence, stated so
-  -- it is not read as a bug: `useModules.ts:104` renders `active` only on `enabled && configured`,
-  -- so a seeded CORE tile still shows `available`, not `active`. If David wants QR Checkout to read
-  -- `active` from day one that is a per-module fact about whether a module HAS configuration —
-  -- a catalog field and a ruling, not something this function should invent.
+  -- 🔴 `configured` COMES FROM THE CATALOG AND CORE SEEDS **TRUE** (David's ruling 2026-08-01,
+  -- reversing the seed-false draft). `useModules.ts:104` renders `active` only on
+  -- `enabled && configured`, so the draft's blanket `false` meant a seeded QR Checkout rendered
+  -- `available` with an `[ENABLE]` button — **an invitation to set up a working feature that is
+  -- already included.** That is the DEAD-AFFORDANCE class, and it is what the ruling names:
+  -- **there is nothing to configure about being included.** It also means the seed now has a
+  -- VISIBLE effect, which matters for a different reason — a build with no observable change reads
+  -- as a failed deploy, and that is how a real deploy failure gets waved through (OP-15's whole
+  -- subject).
+  --
+  -- ⚠️ ONE CASE WHERE `configured:true` IS ARGUABLE AND IS FLAGGED RATHER THAN QUIETLY SOFTENED:
+  -- `qb_invoicing` genuinely HAS configuration — the QuickBooks OAuth link — and a green tile says
+  -- "included", not "connected". It is not a false claim (the module IS included and the tile routes
+  -- to /settings where the link is made), and the QB CONNECTION indicator is a separate surface
+  -- reading `business_accounting_secrets`, not this flag. Recorded so the next reader knows it was
+  -- considered, not missed.
 
   -- (5) THE CLOCKS. Delegated, never re-implemented: `start_module_trial` re-checks authority and
   --     writes its own audit row per module, so a trial start is findable in the log whether it
   --     came from a seed or from a click. That is deliberate volume, not noise — seven clocks
   --     starting is seven money events, and the row is the record of WHEN each one started.
   FOR r IN
-    SELECT m.module_key
-      FROM jsonb_to_recordset(p_modules) AS m(module_key text, enabled boolean, start_trial boolean)
+    SELECT m.module_key, m.trial_days
+      FROM jsonb_to_recordset(p_modules)
+        AS m(module_key text, enabled boolean, configured boolean, start_trial boolean, trial_days integer)
      WHERE m.start_trial
   LOOP
-    PERFORM * FROM public.start_module_trial(p_business_id, r.module_key, p_actor_user_id);
+    -- The TERM travels with the call. On a re-seed the clock refuses to rewrite it, so passing
+    -- today's catalog number here cannot re-term a tenant who already has one.
+    PERFORM * FROM public.start_module_trial(p_business_id, r.module_key, r.trial_days, p_actor_user_id);
     v_trials := v_trials + 1;
   END LOOP;
 
@@ -418,46 +503,56 @@ COMMIT;
 --    ORDER BY p.proname;
 --   EXPECT: 2 rows · security_definer = t on both · proconfig = {search_path=}.
 --
--- ── V2 — 🔴 THE KEY IS SPELLED ONCE, PLATFORM-WIDE. This is the ruling, asserted against the
---    CATALOG rather than against the file — a second writer added later by anyone shows up here.
---   SELECT p.proname
+-- ── V2 — 🔴 BOTH TERM KEYS ARE SPELLED ONCE, PLATFORM-WIDE. This is the ruling, asserted against
+--    the CATALOG rather than against the file — a second writer added later by anyone shows up here.
+--   SELECT p.proname,
+--          pg_get_functiondef(p.oid) LIKE '%trial_started_at%' AS names_started_at,
+--          pg_get_functiondef(p.oid) LIKE '%trial_days%'       AS names_days
 --     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
---    WHERE n.nspname='public' AND pg_get_functiondef(p.oid) LIKE '%trial_started_at%'
+--    WHERE n.nspname='public'
+--      AND (pg_get_functiondef(p.oid) LIKE '%trial_started_at%'
+--        OR pg_get_functiondef(p.oid) LIKE '%trial_days%')
 --    ORDER BY p.proname;
---   EXPECT: EXACTLY TWO rows — `start_module_trial` (which writes it) and `seed_business_modules`
---           (which only names it in a COMMENT/audit detail, never as a write target).
---   🔴 A THIRD NAME HERE IS THE DEFECT THIS DESIGN EXISTS TO PREVENT — a second clock writer.
+--   EXPECT: EXACTLY TWO rows — `start_module_trial` (the only one that WRITES either) and
+--           `seed_business_modules` (which names them in validation text and a parameter, never as
+--           a write target).
+--   🔴 A THIRD NAME HERE IS THE DEFECT THIS DESIGN EXISTS TO PREVENT — a second writer of the terms.
 --
 -- ── V3 — THE SEED, ON A REAL TENANT, AS THE OWNER. Use the 11 real catalog rows (the client sends
 --    exactly this shape; `catalogSeedRows()` builds it).
 --   SELECT * FROM public.seed_business_modules('<BIZ>', '<OWNER>', '[
---     {"module_key":"qr_checkout",      "enabled":true, "start_trial":false},
---     {"module_key":"qb_invoicing",     "enabled":true, "start_trial":false},
---     {"module_key":"social_media",     "enabled":false,"start_trial":true},
---     {"module_key":"followup_engine",  "enabled":false,"start_trial":true},
---     {"module_key":"online_shop",      "enabled":false,"start_trial":true},
---     {"module_key":"business_insights","enabled":false,"start_trial":true},
---     {"module_key":"delivery_routing", "enabled":false,"start_trial":true},
---     {"module_key":"seasonal_module",  "enabled":false,"start_trial":true},
---     {"module_key":"contractor_tiers", "enabled":false,"start_trial":true},
---     {"module_key":"cost_to_produce",  "enabled":false,"start_trial":false},
---     {"module_key":"inventory_intake", "enabled":false,"start_trial":false}]'::jsonb);
+--     {"module_key":"qr_checkout",      "enabled":true, "configured":true, "start_trial":false,"trial_days":0},
+--     {"module_key":"qb_invoicing",     "enabled":true, "configured":true, "start_trial":false,"trial_days":0},
+--     {"module_key":"social_media",     "enabled":false,"configured":false,"start_trial":true, "trial_days":30},
+--     {"module_key":"followup_engine",  "enabled":false,"configured":false,"start_trial":true, "trial_days":30},
+--     {"module_key":"online_shop",      "enabled":false,"configured":false,"start_trial":true, "trial_days":30},
+--     {"module_key":"business_insights","enabled":false,"configured":false,"start_trial":true, "trial_days":30},
+--     {"module_key":"delivery_routing", "enabled":false,"configured":false,"start_trial":true, "trial_days":30},
+--     {"module_key":"seasonal_module",  "enabled":false,"configured":false,"start_trial":true, "trial_days":30},
+--     {"module_key":"contractor_tiers", "enabled":false,"configured":false,"start_trial":true, "trial_days":30},
+--     {"module_key":"cost_to_produce",  "enabled":false,"configured":false,"start_trial":false,"trial_days":0},
+--     {"module_key":"inventory_intake", "enabled":false,"configured":false,"start_trial":false,"trial_days":0}]'::jsonb);
 --   EXPECT: applied = t · expected = 11 · seeded + existing = 11 · trials_started = 7.
 --   ⚠️ LAWNS ALREADY HAS ROWS (the 20260604 pivot moved 10 across), so `seeded` will be SMALL and
 --   `existing` LARGE on that tenant. **That is the idempotence working, not a failure.** The
 --   number that must hold is `seeded + existing = expected`.
 --
--- ── V4 — THE ROWS SAY WHAT THEY SHOULD. Core on, paid off with a clock, unpriced off with none.
---   SELECT module_key, enabled, configured, config->>'trial_started_at' AS trial_started
+-- ── V4 — THE ROWS SAY WHAT THEY SHOULD, INCLUDING THE TERM.
+--   SELECT module_key, enabled, configured,
+--          config->>'trial_started_at' AS trial_started, config->>'trial_days' AS term
 --     FROM public.business_modules WHERE business_id='<BIZ>' ORDER BY module_key;
---   EXPECT: qr_checkout + qb_invoicing → enabled = t · the seven add-ons → enabled = f AND a
---           NON-NULL trial_started · cost_to_produce + inventory_intake → enabled = f AND
---           trial_started IS NULL (a trial is a countdown to a price decision, and they have no
---           price — D-9).
---   ⚠️ Pre-existing LAWNS rows keep whatever `enabled` they already had. ON CONFLICT DO NOTHING
---   means this migration does not re-decide a configured tenant, which is the point.
+--   EXPECT: qr_checkout + qb_invoicing → **enabled = t AND configured = t** (core is included;
+--           there is nothing to configure about being included — ruling 2026-08-01) · the seven
+--           add-ons → enabled = f, configured = f, a NON-NULL trial_started AND **term = 30** ·
+--           cost_to_produce + inventory_intake → enabled = f AND trial_started IS NULL AND term IS
+--           NULL (a trial is a countdown to a price decision, and they have no price — D-9).
+--   🔴 **A NON-NULL `trial_started` WITH A NULL `term` IS A BROKEN ROW** — expiry is computed from
+--   the pair, so half a pair is a trial that cannot be resolved. It should be impossible: the
+--   function refuses a non-positive `trial_days` before it writes anything.
+--   ⚠️ Pre-existing LAWNS rows keep whatever `enabled`/`configured` they already had. ON CONFLICT
+--   DO NOTHING means this migration does not re-decide a configured tenant, which is the point.
 --
--- ── V5 — 🔴 IDEMPOTENCE AND THE NON-RESTARTING CLOCK. Run V3 AGAIN, verbatim.
+-- ── V5 — 🔴 IDEMPOTENCE, THE NON-RESTARTING CLOCK, AND THE UNREWRITABLE TERM. Run V3 AGAIN, verbatim.
 --   EXPECT: applied = t · seeded = 0 · existing = 11 · trials_started = 7 (it CALLS the clock seven
 --           times) — and then re-run V4: **every `trial_started` is the SAME TIMESTAMP as before.**
 --   🔴 A CHANGED TIMESTAMP HERE MEANS TRIALS RENEW THEMSELVES ON EVERY ONBOARDING LOAD, which
@@ -469,29 +564,48 @@ COMMIT;
 --   EXPECT on the SECOND run: `business_modules.seeded` outcome = **no_change**, and all seven
 --          `module_trial.started` rows outcome = **no_change** with `restart_refused: true`.
 --
--- ── V6 — THE DETECTION QUERY. This is the standing answer to "did a seed silently fail?" and it is
---    the thing to run before the demo. Keep it; it is referenced from the ledger.
+-- ── V5b — 🔴 THE TERM RULING, PROVEN DIRECTLY. *A tenant's terms are what they were given.*
+--    Re-run V3 with **every `trial_days` changed from 30 to 14** — simulating exactly what David
+--    editing the catalog tomorrow would send.
+--   EXPECT, from V4: **every `term` still reads 30.** Not one row re-terms.
+--   And the audit detail says so rather than staying silent about it:
+--   SELECT detail->>'trial_days' AS stored, detail->>'offered_trial_days' AS offered,
+--          detail->>'term_rewrite_refused' AS refused
+--     FROM public.audit_log WHERE business_id='<BIZ>' AND action='module_trial.started'
+--    ORDER BY created_at DESC LIMIT 7;
+--   EXPECT: stored = 30 · offered = 14 · refused = true, on all seven.
+--   🔴 IF ANY `term` READS 14, THE CATALOG IS STILL GOVERNING LIVE TENANTS and the retroactive
+--   expiry hazard is back — arriving, as it would have, through the repair path.
+--   ⚠️ Then set them back to 30 before running anything else, so V4's expectations still read true.
+--
+-- ── V6 — THE DETECTION QUERY. **ALSO LIVES ON THE OWNER-TEST BOARD AS CARD 25** (David's ruling
+--    2026-08-01: an unseeded tenant looks identical to a normal one on every screen, so the only
+--    way anyone finds it is by ASKING — and a query that lives only in a migration nobody reopens
+--    is not asked). This copy is the migration's own proof; card 25 is the standing one.
 --   SELECT b.name, COUNT(bm.module_key) AS module_rows,
---          COUNT(bm.module_key) FILTER (WHERE bm.config ? 'trial_started_at') AS with_clock
+--          COUNT(bm.module_key) FILTER (WHERE bm.config ? 'trial_started_at') AS with_clock,
+--          COUNT(bm.module_key) FILTER (WHERE bm.config ? 'trial_started_at'
+--                                         AND NOT bm.config ? 'trial_days') AS broken_pair
 --     FROM public.businesses b
 --     LEFT JOIN public.business_modules bm ON bm.business_id = b.id
 --    GROUP BY b.id, b.name ORDER BY b.name;
---   EXPECT: module_rows = 11 for every business seeded since this shipped. **A business with 0 rows
---   is a tenant with NO TRIAL AND NO BILL, and it is indistinguishable from a normal tenant in the
---   UI** — that is the whole reason this query exists. Fewer than 11 with a non-zero count is a
---   SHORT SEED; re-run V3 for that business (it is safe).
+--   EXPECT: module_rows = 11 for every business seeded since this shipped · with_clock = 7 ·
+--           **broken_pair = 0, always.** A business with 0 rows is a tenant with NO TRIAL AND NO
+--   BILL, and it is indistinguishable from a normal tenant in the UI — that is the whole reason
+--   this query exists. Fewer than 11 with a non-zero count is a SHORT SEED; re-run V3 for that
+--   business (it is safe).
 --
 -- ── V7 — 🔴 THE NEGATIVE, AND IT IS THE ONE THAT MAKES THE GATE REAL. A STAFF member is refused BY
 --    THE FUNCTION, with a reason that names the money.
---   SELECT * FROM public.seed_business_modules('<BIZ>', '<STAFF>', '[{"module_key":"social_media","enabled":false,"start_trial":true}]'::jsonb);
+--   SELECT * FROM public.seed_business_modules('<BIZ>', '<STAFF>', '[{"module_key":"social_media","enabled":false,"configured":false,"start_trial":true,"trial_days":30}]'::jsonb);
 --   EXPECT: applied = f · reason mentions `subscription:update` AND the words "trial clocks" · and
 --           an audit_log row action='business_modules.seed_denied' outcome='denied'.
---   SELECT * FROM public.start_module_trial('<BIZ>', 'social_media', '<STAFF>');
+--   SELECT * FROM public.start_module_trial('<BIZ>', 'social_media', 30, '<STAFF>');
 --   EXPECT: applied = f · reason mentions `subscription:update` · audit action='module_trial.start_denied'.
 --
 -- ── V8 — 🔴 THE MANAGER SPLIT, THE SAME SHAPE V3d PROVED FOR ENABLEMENT. A manager holds
 --    `settings:update` and NOT `subscription:update`.
---   SELECT * FROM public.start_module_trial('<BIZ>', 'social_media', '<MGR>');
+--   SELECT * FROM public.start_module_trial('<BIZ>', 'social_media', 30, '<MGR>');
 --   EXPECT: applied = f. **A manager cannot start a trial** — that is the ruling, and if this reads
 --   `t` the clock is writable by a larger set than the enablement it governs.
 --   Then, for contrast, in the SAME session:
@@ -500,11 +614,15 @@ COMMIT;
 --
 -- ── V9 — MALFORMED PAYLOAD REFUSES THE WHOLE BATCH, not the bad half.
 --   SELECT * FROM public.seed_business_modules('<BIZ>', '<OWNER>', '[
---     {"module_key":"zz_probe_ok","enabled":false,"start_trial":false},
---     {"module_key":"","enabled":false,"start_trial":false}]'::jsonb);
+--     {"module_key":"zz_probe_ok","enabled":false,"configured":false,"start_trial":false,"trial_days":0},
+--     {"module_key":"","enabled":false,"configured":false,"start_trial":false,"trial_days":0}]'::jsonb);
 --   EXPECT: applied = f · reason mentions "non-blank module_key" · **and `zz_probe_ok` was NOT
 --           created** — check: SELECT COUNT(*) FROM public.business_modules WHERE module_key='zz_probe_ok';
 --   EXPECT: 0. A partial seed is worse than none; it looks complete to every count-based check.
+--   🔴 AND THE CROSS-FIELD ONE — a trial with no term is refused BEFORE any row is written:
+--   SELECT * FROM public.seed_business_modules('<BIZ>', '<OWNER>', '[
+--     {"module_key":"zz_probe_ok","enabled":false,"configured":false,"start_trial":true,"trial_days":0}]'::jsonb);
+--   EXPECT: applied = f · reason mentions "positive trial_days" · `zz_probe_ok` still absent.
 --   Also the empty case: SELECT * FROM public.seed_business_modules('<BIZ>','<OWNER>','[]'::jsonb);
 --   EXPECT: applied = f · reason = 'module catalog is empty — nothing to seed'.
 --

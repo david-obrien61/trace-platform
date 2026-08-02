@@ -68,6 +68,26 @@ ok(moduleSeedRow(entry({ billing: 'core', trial_days: 30 })).start_trial === tru
 ok(moduleSeedRow(entry({ module_key: 'seasonal_module' })).module_key === 'seasonal_module',
    'A9 the key is carried through unchanged — it is the join to business_modules');
 
+// ── 1b. THE TWO RULINGS OF 2026-08-01 (2) ───────────────────────────────────────────────────────
+
+// 🔴 CORE READS `active` ON DAY ONE. `useModules` renders `active` only on `enabled && configured`,
+// so seeding `configured:false` put an [ENABLE] button on an already-included working feature.
+ok(moduleSeedRow(entry({ billing: 'core', trial_days: 0 })).configured === true,
+   'A10 🔴 core seeds CONFIGURED — there is nothing to configure about being included');
+ok(moduleSeedRow(entry({ billing: 'add_on' })).configured === false,
+   'A11 a paid module seeds UNCONFIGURED — the owner has genuinely not set it up');
+ok(moduleSeedRow(entry({ billing: 'unpriced', price_monthly: null, trial_days: 0 })).configured === false,
+   'A12 unpriced seeds UNCONFIGURED');
+
+// 🔴 THE TERM TRAVELS WITH THE ROW. If the catalog number were read at render instead, changing 30
+// to 14 would retroactively expire every tenant seeded more than fourteen days ago.
+ok(moduleSeedRow(entry({ trial_days: 30 })).trial_days === 30,
+   'A13 🔴 the TERM is carried into the payload — expiry computes from the stored pair, not from the catalog');
+ok(moduleSeedRow(entry({ trial_days: 14 })).trial_days === 14,
+   'A14 …and it is the catalog value verbatim, not a constant — a changed catalog governs NEW trials');
+ok(moduleSeedRow(entry({ billing: 'core', trial_days: 0 })).trial_days === 0,
+   'A15 core carries 0 — no term, because no trial');
+
 // ── 2. CATALOG INVARIANTS — these must hold for EVERY row, now and after any edit ────────────────
 
 ok(catalogSeedRows().length === MODULE_CATALOG.length,
@@ -90,6 +110,17 @@ for (const m of MODULE_CATALOG) {
      `B5 ${m.module_key}: a trial clock over a $0 price — nothing to convert to`);
   ok(!(row.enabled && m.billing !== 'core'),
      `B6 ${m.module_key}: seeded enabled without being core — the tenant gets a paid module free and nothing bills it`);
+  // 🔴 B7 — the cross-field rule the RPC enforces server-side, asserted here so a bad payload is
+  // never SENT: a module asking for a trial must carry a positive term. The server refuses the
+  // WHOLE batch on this, so one bad catalog row would block every tenant's seed.
+  ok(!(row.start_trial && !(row.trial_days > 0)),
+     `B7 ${m.module_key}: start_trial with no positive term — the server refuses the whole batch, and the term has no default because nobody has ratified one`);
+  // B8 — a module with NO trial must not carry a term either. A stray non-zero here would be read
+  // by nothing today and by the marketplace tomorrow, as a trial that never started.
+  ok(!(!row.start_trial && row.trial_days > 0),
+     `B8 ${m.module_key}: a term with no trial — the marketplace would read a trial that never started`);
+  ok(row.configured === row.enabled,
+     `B9 ${m.module_key}: at SEED, configured and enabled agree (core is both; nothing else is either). They are separate fields because they DIVERGE the moment an owner enables a paid module — this asserts the seed projection, not the model`);
 }
 
 // ── 3. THE PAYLOAD SHAPE THE RPC VALIDATES ──────────────────────────────────────────────────────
@@ -99,10 +130,13 @@ for (const m of MODULE_CATALOG) {
 for (const row of catalogSeedRows()) {
   ok(typeof row.module_key === 'string' && row.module_key.trim().length > 0,
      `C1 ${row.module_key}: non-blank module_key — the RPC refuses the batch otherwise`);
-  ok(typeof row.enabled === 'boolean' && typeof row.start_trial === 'boolean',
-     `C2 ${row.module_key}: both flags are real booleans — the RPC's jsonb_typeof check refuses anything else`);
-  ok(Object.keys(row).length === 3,
-     `C3 ${row.module_key}: exactly the three keys the RPC destructures — an extra key is silently dropped by jsonb_to_recordset, which is worse than rejected`);
+  ok(typeof row.enabled === 'boolean' && typeof row.configured === 'boolean'
+     && typeof row.start_trial === 'boolean',
+     `C2 ${row.module_key}: all three flags are real booleans — the RPC's jsonb_typeof check refuses anything else`);
+  ok(typeof row.trial_days === 'number' && Number.isInteger(row.trial_days) && row.trial_days >= 0,
+     `C4 ${row.module_key}: trial_days is a non-negative integer — the RPC destructures it as \`integer\` and a fractional day is not a term`);
+  ok(Object.keys(row).length === 5,
+     `C3 ${row.module_key}: exactly the five keys the RPC destructures — an extra key is silently dropped by jsonb_to_recordset, which is worse than rejected`);
 }
 
 // ── report ───────────────────────────────────────────────────────────────────────────────────────
