@@ -12,14 +12,14 @@
 permissions rather than by being the owner, that removing `isOwner` took nothing away from him, and
 that a refused surface now SAYS SO instead of vanishing.
 
-**Board: 0 of 25.** Every card is `STATUS: owed` except card 22, which is `needs-test` with its reason stated.
+**Board: 0 of 27.** Every card is `STATUS: owed` except cards 22 and 27, which are `needs-test` with their reasons stated.
 
 **Why this exists.** `businesses.owner_id` was the authority mechanism at three layers. It is
 single-valued, so it cannot express the TWO OWNERS David ruled on 2026-07-26 — and the client's
 owner short-circuit made the client MORE PERMISSIVE THAN THE SERVER, which is how the owner came to
 read *"Tax: not identified"* on his own dashboard while his manager read the rate correctly.
 Separately, ~30 refusal surfaces were measured: 27 silent, 3 apologising after a failed write, 0
-pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (#172); 16–17 prove the two LIVE defects the A7 sweep found (#174); 18 proves the fourth permission status (#175); 19–20 prove its tile path (#176), and 20 is runnable ONLY as staff; 21–22 prove the uniform-tiles pass (#179) — 21 is the nine-week `campaigns.status` defect, dead; 23–25 prove the tenant module seed + the trial clock (#181): **24 must not be skipped** (it proves the repair mechanism cannot be used to renew a trial or re-term a tenant), and **25 is standing, not one-shot** — it is the only detector of an unseeded tenant that exists.
+pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (#172); 16–17 prove the two LIVE defects the A7 sweep found (#174); 18 proves the fourth permission status (#175); 19–20 prove its tile path (#176), and 20 is runnable ONLY as staff; 21–22 prove the uniform-tiles pass (#179) — 21 is the nine-week `campaigns.status` defect, dead; 23–25 prove the tenant module seed + the trial clock (#181): **24 must not be skipped** (it proves the repair mechanism cannot be used to renew a trial or re-term a tenant), and **25 is standing, not one-shot** — it is the only detector of an unseeded tenant that exists. **26–27 prove the trial reversal (#182): 26 is the build** — the migration LAWNS needs before anything on his dashboard changes, and ✏️ **card 23 was AMENDED because its ② and ③ asserted the defect**, telling David to expect the seven add-ons dark. 27 is `needs-test` because the `unpriced` ruling it would test has not been made.
 
 ---
 
@@ -499,15 +499,25 @@ through `/onboarding` to the "is live" screen.
 ① **signup COMPLETES and lands on the dashboard.** This is the first thing to look at, and it is not
    a formality: a new `await` was added inside `createBusinessAndMember`, after the member INSERT.
    If it throws, the owner loses the business he just created.
-② 🔴 **QR CHECKOUT AND QUICKBOOKS RENDER AS `active` — green dot, no `[ENABLE]` button.** This is
-   the visible half of the build and it is the thing to look at hardest: core is included, so
-   offering to "set up" a working feature is a dead affordance. Every other tile is unchanged.
+✏️ **CARD AMENDED 2026-08-02 (ledger #182) — ② AND ③ ASSERTED THE DEFECT.** They told you to expect
+the seven add-ons at `enabled = f`, which is the bug David reversed: a clock running over a module
+nobody can use. A card that asks him to confirm the defect is worse than no card. Re-read both.
+
+② 🔴 **NINE TILES RENDER AS `active`, NOT TWO.** QR Checkout and QuickBooks (core, included) **plus
+   the seven trialling add-ons** — green dot, no `[ENABLE]` button, and each add-on carrying a
+   **`30d TRIAL`** countdown under its label. **The trial is the period during which the module
+   fully works**, so a tile offering to "enable" it is the same dead affordance core had. The only
+   two tiles still showing `[ENABLE]` are `cost_to_produce` and `inventory_intake` — **a KNOWN
+   OPEN RULING** (`unpriced`: no price, so no clock, so no liveness), not a defect of this build.
 ③ in the SQL editor, `SELECT module_key, enabled, configured, config->>'trial_started_at',
    config->>'trial_days' FROM business_modules WHERE business_id = '<the new business>' ORDER BY
    module_key;` returns **ELEVEN rows** — `qr_checkout` and `qb_invoicing` with **`enabled = t` AND
-   `configured = t`**, the seven add-ons with `enabled = f`, a **non-null** timestamp and
-   **`trial_days = 30`**, `cost_to_produce` and `inventory_intake` with `enabled = f` and **both
-   trial columns null**.
+   `configured = t`** and both trial columns null; the seven add-ons with **`enabled = t` AND
+   `configured = t`**, a **non-null** timestamp and **`trial_days = 30`**; `cost_to_produce` and
+   `inventory_intake` with `enabled = f` and **both trial columns null**.
+   🔴 **AN ADD-ON AT `enabled = f` WITH A NON-NULL TIMESTAMP IS THE DEFECT THIS BUILD REVERSED** —
+   if you see one on a NEW business, `moduleSeedRow` did not ship. (On LAWNS, that is expected
+   until `20260802` is applied — that is card 26.)
    🔴 **A timestamp with a null `trial_days` is a BROKEN ROW** — expiry computes from the pair, so
    half a pair is a trial nobody can resolve. It should be impossible; if you see one, stop.
 ④ `SELECT action, outcome FROM audit_log WHERE business_id='<new>' AND action IN
@@ -596,3 +606,58 @@ on the first run and is exactly what this card is for — **it is a backfill lis
 🔴 **This card retires the day the marketplace seeds-if-absent on open (ITEM 3).** At that point an
 unseeded tenant repairs itself the first time anyone opens the module screen, and the question stops
 needing to be asked by hand. Until then, this is the only detector that exists.
+
+### CARD 26 — 🔴 THE REPAIR: LAWNS' SEVEN TRIALS BECOME REAL TRIALS
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #182 — `20260802_trialling_modules_are_live.sql`
+
+🔴 **THIS CARD IS THE BUILD.** The code fix corrects every FUTURE tenant and **cannot touch LAWNS**
+— `20260801c` seeds with `ON CONFLICT DO NOTHING`, which is correct and unchanged (it is what makes
+the seeder safe to re-run as the repair path) and which means the eleven rows already on disk keep
+whatever they were given this morning. **Nothing changes on your dashboard until this migration is
+applied.**
+
+**BEFORE — run the PRE-APPLY query at the top of `20260802`.**
+**PASS:** exactly **SEVEN** rows read `🔴 WILL BE CORRECTED` (social_media, followup_engine,
+online_shop, business_insights, delivery_routing, seasonal_module, contractor_tiers) · two read
+`already live` (the core pair) · two read `no clock` (the two `unpriced`). Eleven total.
+**STOP AND SURFACE:** ANY row reading `LAPSED`. It means this is being applied after a term ran
+out, and that tenant needs a decision rather than a repair.
+
+**APPLY, then the V-block.**
+**PASS — all five:**
+① **V1 returns ZERO ROWS.** This is the invariant, asked of the data: a clock over a dark module.
+② **V2 reads 9 live / 2 dark** on LAWNS, and the `clock` column shows a real day count.
+③ 🔴 **V3 — the terms were NOT touched.** Every trialling row still reads `term = 30` and its
+   ORIGINAL `2026-08-02` start stamp. **A repair that quietly re-terms a tenant is precisely what
+   the snapshot ruling forbids** — if a start date moved, the migration did something it must not.
+④ **V4** — one audit row per business, `detail` naming seven modules.
+⑤ **V5** — the core pair untouched: `enabled = t`, `configured = t`, `trial_started_at` NULL.
+
+**THEN THE SCREEN — hard-refresh the dashboard (GATE 0 first: confirm the SHA).**
+**PASS:** 🔴 **Delivery Routing and Social Media render as WORKING TILES** — green dot, no
+`[ENABLE]` — each with **`30d TRIAL`** beneath the label. Tapping either opens its page. This is
+the exact pair you reported this morning as *"[ENABLE], identically to a module nobody has ever
+touched."*
+**FAIL:** either still shows `[ENABLE]` after the migration verified clean (then `configured` did
+not move with `enabled`, and the fix reached the data but not the screen) · a tile shows a
+countdown but is greyed · the countdown reads `0d` or a negative number.
+
+### CARD 27 — the two modules nobody can buy, and the ruling that is owed about them
+STATUS: needs-test
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #182 — the `unpriced` ruling, OPEN
+
+**`needs-test` with its reason, per OP-14 clause 2: there is no correct behaviour to test against
+yet.** `cost_to_produce` and `inventory_intake` are BUILT AND WORKING, are in neither MASTER_BRIEF
+list, and have no price — so no clock, so no liveness, so they render `[ENABLE]` on a purchase
+nobody can make. **Whether that is right is David's ruling and it is on the OWED table.**
+
+**What to LOOK at (not pass/fail):** both tiles on the owner dashboard. Cost to Produce opens and
+works. Ask the question the card exists to force: *does an owner-only internal tool belong in a
+catalog of things you buy at all?* **This card becomes a real test the day the ruling lands** —
+priced (it goes live on a clock like any other trial) or core (it goes live permanently). The
+mapping needs no change either way; only `MODULE_CATALOG` does.

@@ -20,6 +20,7 @@ import { useEffect, useState } from 'react';
 import type { ComponentType } from 'react';
 import type { LucideProps } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { trialDaysRemaining } from '../../../shared/src/business-logic/trialClock';
 import { dashboardTilesForVerticals, verticalsForBusinessType } from '../registry/tileRegistry';
 
 export type TileState = 'active' | 'available' | 'locked' | 'planned';
@@ -33,6 +34,13 @@ export interface ModuleTile {
   state: TileState;
   /** Navigation target (from the registry) — Dashboard navigates here on tap. */
   route?: string;
+  /**
+   * Days left in this module's trial, or `null` when it is not on a clock (core, unpriced, or
+   * never trialled). **`null` and `0` are different answers** — see trialClock.ts. A trialling
+   * module is `state:'active'` and carries this; it is an ANNOTATION on a working tile, not a
+   * state of its own (David's ruling 2026-08-02).
+   */
+  trialDaysLeft?: number | null;
 }
 
 interface BusinessModuleRow {
@@ -99,6 +107,19 @@ export function useModules(
           .filter((t) => t.status === 'planned' || can(t.required_permission))
           .map((t) => {
             let state: TileState;
+            // ═══════════════════════════════════════════════════════════════════════════════════
+            // 🔴 THE TRIAL TERM IS READ (2026-08-02). `config` was SELECTED and then DROPPED.
+            // ═══════════════════════════════════════════════════════════════════════════════════
+            // The pair landed in the row on 2026-08-01 and nothing read it, so a module on a live
+            // 30-day trial and a module nobody had ever touched rendered the SAME PIXEL. Note this
+            // was invisible to tsc AND to knip: `config` appears in the select string and in
+            // `BusinessModuleRow`, so it is "used" everywhere except where it matters.
+            //
+            // It is an ANNOTATION, not a state. A trialling module is ACTIVE — it works — and the
+            // countdown rides along. Computed from the STORED pair, never the catalog.
+            const trialDaysLeft = t.module_key
+              ? trialDaysRemaining(nmByKey[t.module_key]?.config)
+              : null;
             if (t.status === 'planned') {
               // 'planned', NOT 'locked'. The old mapping rendered a RED LOCK on every unbuilt
               // tile, so "not built yet" and "not allowed" were the same pixel. See Tile.tsx.
@@ -111,7 +132,7 @@ export function useModules(
               // a live surface with no enablement gate (cost/assets/etc.) — directly navigable
               state = 'active';
             }
-            return { key: t.key, label: t.label, icon: t.icon, color: t.color, bg: t.bg, state, route: t.route };
+            return { key: t.key, label: t.label, icon: t.icon, color: t.color, bg: t.bg, state, route: t.route, trialDaysLeft };
           });
 
         setModules(result);

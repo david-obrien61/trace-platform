@@ -375,18 +375,42 @@ export const MODULE_CATALOG: ModuleEntry[] = [
 // rather than quietly implemented either way.
 //
 // AND THE MAPPING NEEDS NO NEW FIELD AT ALL — every fact falls out of data that is already there:
-//   · `enabled`     = billing is 'core'         — core is included in the base subscription, so it
-//                                                 is on from day one and no trial applies.
-//   · `configured`  = billing is 'core'         — see the ruling below. Same predicate as `enabled`
-//                                                 AT SEED; a distinct field because they diverge
-//                                                 the moment an owner enables a paid module.
+//   · `enabled`     = core OR a running trial   — see THE REVERSAL below. Liveness follows the
+//                                                 CLOCK, not the billing class.
+//   · `configured`  = core OR a running trial   — same predicate AT SEED; a distinct field because
+//                                                 they diverge the moment a trial expires (access
+//                                                 goes, the owner's setup stays).
 //   · `start_trial` = trial_days > 0            — which is 30 for the seven add-ons and 0 for core
 //                                                 AND for 'unpriced', so the three-value `billing`
 //                                                 collapses to one rule instead of a special case.
 //   · `trial_days`  = the catalog's own number  — carried into the row and SNAPSHOTTED there.
 //
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// 🔴 THE REVERSAL — A TRIALLING MODULE SEEDS **LIVE** (David's ruling 2026-08-02, correcting the
+//    2026-08-01 spec that shipped one day earlier in this same file).
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// The superseded rule was `enabled = billing === 'core'`, so all seven add-ons seeded DARK **with a
+// thirty-day clock running over them.** That is not a trial. `enabled:false` is a functional gate,
+// not a label — `api/social/generate-posts.ts:52` refuses outright on `!enabled || !configured` —
+// so the clock counted down on something the member could not use, toward a conversion decision the
+// owner had no basis to make.
+//
+// **DAVID'S MODEL, stated so nobody re-derives it: the site goes live, EVERYTHING WORKS, and at the
+// end of the term the unpaid modules go behind the fuzz. The clock is what ENDS access; it is never
+// what withholds it.** A trial is the grace period during which the module is fully live.
+//
+// ⚠️ `configured` FLIPS WITH IT, and that is not a rider — it is what makes the ruling reach a
+// screen. `useModules.ts` renders `active` only on `enabled && configured`, so a trialling module
+// seeded `configured:false` would still show `[ENABLE]`: the data would be corrected and the
+// dashboard would look identical. The precedent for setting it true on a not-yet-personalised
+// module is already ruled and already shipped one paragraph down — `qb_invoicing`.
+//
+// WHAT THIS DOES **NOT** BUILD: expiry. Nothing flips a lapsed trial back to `enabled:false` yet —
+// that is the fuzz, and it is filed. Until it exists a trial that runs out keeps working, which is
+// stated here rather than discovered later.
+//
 // 🔴 **A SEEDED CORE MODULE READS `active` ON DAY ONE (David's ruling 2026-08-01, reversing the
-// `configured:false` draft).** `useModules.ts:104` renders `active` only on `enabled && configured`,
+// `configured:false` draft).** `useModules.ts` renders `active` only on `enabled && configured`,
 // so seeding `configured:false` put an **`[ENABLE]` button on a working, already-included feature**
 // — the dead-affordance class, the same defect that kept `campaigns` off `module_key` entirely.
 // **There is nothing to configure about being included.** Second reason, and it is not cosmetic:
@@ -406,6 +430,15 @@ export const MODULE_CATALOG: ModuleEntry[] = [
 // them would create a deadline for a question nobody has answered — a real number claiming a real
 // thing (D-9). `trial_days: 0` already encodes it, so the rule above needs no exception.
 //
+// ⚠️ **AND THE REVERSAL ABOVE SHARPENS THIS INTO A LIVE COST — RULING OWED, DAVID'S.** Under the new
+// model liveness follows the clock, and these two have no clock, so they seed DARK: two BUILT AND
+// WORKING modules rendering `[ENABLE]` forever, on a purchase nobody can make. That is the exact
+// dead-affordance the `configured` ruling deleted, arriving through a different door. It was NOT
+// silently fixed here — pricing them (or ruling them core) is David's call and the mapping needs no
+// change either way: give them a `trial_days` and they go live like any other trial; mark them
+// `core` and they go live permanently. **The row is disabled today because the question is open,
+// not because the answer is no.**
+//
 // ⚠️ ONE CASE FLAGGED RATHER THAN QUIETLY SOFTENED: `qb_invoicing` genuinely HAS configuration (the
 // QuickBooks OAuth link), so a green tile on day one says *"included"*, not *"connected"*. That is
 // not a false claim — the module IS included, the tile routes to `/settings` where the link is made,
@@ -420,12 +453,17 @@ export const MODULE_CATALOG: ModuleEntry[] = [
 
 /** One module's day-one row state. Exported so the mapping itself is tested, not just its output. */
 export function moduleSeedRow(entry: ModuleEntry): ModuleSeedRow {
-  const isCore = entry.billing === 'core';
+  const isCore     = entry.billing === 'core';
+  const startTrial = entry.trial_days > 0;
+  // 🔴 LIVENESS FOLLOWS THE CLOCK, NOT THE BILLING CLASS (David's ruling 2026-08-02). A module is on
+  // at seed because it is INCLUDED (core) or because it is INSIDE A RUNNING TRIAL. There is no third
+  // way to be on, and `add_on` by itself is not one — an add-on with `trial_days: 0` seeds dark.
+  const isLive     = isCore || startTrial;
   return {
     module_key:  entry.module_key,
-    enabled:     isCore,
-    configured:  isCore,
-    start_trial: entry.trial_days > 0,
+    enabled:     isLive,
+    configured:  isLive,
+    start_trial: startTrial,
     trial_days:  entry.trial_days,
   };
 }

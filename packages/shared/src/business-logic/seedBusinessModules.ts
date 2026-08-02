@@ -50,10 +50,18 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  * server refuses `start_trial: true` with a non-positive `trial_days` — there is deliberately no
  * default, because the correct number is exactly what nobody has ratified.
  *
- * `configured` is separate from `enabled` even though the catalog derives both from
- * `billing === 'core'` today: they mean different things and diverge the moment an owner enables a
- * paid module. Core seeds `configured: true` — there is nothing to configure about being included,
- * and seeding `false` put an `[ENABLE]` button on a working feature (the dead-affordance class).
+ * 🔴 `enabled` MEANS THE MODULE WORKS RIGHT NOW, AND A TRIALLING MODULE IS ENABLED (David's ruling
+ * 2026-08-02, correcting the spec this file shipped with). The superseded version seeded every
+ * add-on `enabled: false` with a clock running over it — but `enabled` is a functional gate, not a
+ * label (`api/social/generate-posts.ts` refuses on it), so the clock counted down on something
+ * nobody could use. **The trial is the grace period during which the module is fully live; the
+ * clock ENDS access rather than withholding it.** Expiry — flipping a lapsed trial back off — is
+ * NOT built, and until it is, a trial that runs out keeps working.
+ *
+ * `configured` is separate from `enabled` and seeds with it: they mean different things and diverge
+ * the moment a trial lapses (access goes, the owner's setup stays). Both are true for core and for
+ * a running trial — there is nothing to configure about being included, and seeding `false` put an
+ * `[ENABLE]` button on a working feature (the dead-affordance class).
  */
 export interface ModuleSeedRow {
   module_key: string;

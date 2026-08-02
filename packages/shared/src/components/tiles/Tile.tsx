@@ -27,6 +27,17 @@ export interface TileProps {
   onNavigate?: () => void;
   tierRequired?: string;
   count?: number;
+  /**
+   * Days left in this module's trial — an ANNOTATION on a working tile, not a state (David's
+   * ruling 2026-08-02). A trialling module IS `active`: it works, and the countdown says for how
+   * much longer. `null`/undefined = not on a clock (core, unpriced, never trialled); `0` = lapsed.
+   * The two are deliberately different and must not collapse (D-9).
+   *
+   * ⚠️ THE URGENCY THRESHOLD IS OWED (David's, filed 2026-08-02) — when a countdown should start
+   * reading alarming rather than informational. Until it is ruled this renders ONE neutral
+   * treatment at every value. Picking a number here would be answering a ruling with a constant.
+   */
+  trialDaysLeft?: number | null;
 }
 
 export function Tile({
@@ -39,6 +50,7 @@ export function Tile({
   onNavigate,
   tierRequired,
   count,
+  trialDaysLeft,
 }: TileProps) {
   const isPlanned   = state === 'planned';
   // A planned tile is INERT like a locked one — no navigate, no enable, no focus — so everything
@@ -193,6 +205,31 @@ export function Tile({
         >
           Enable
         </button>
+      )}
+
+      {/* ── Active + on a clock → trial countdown ──────────────────────────────────────────────
+          §6 r16 (industry-standard-first): the established pattern for a trial on an app tile is a
+          small SECONDARY-TEXT countdown near the title — informational, not an alarm — with the
+          alarm reserved for the final stretch. That final-stretch threshold is the OWED ruling, so
+          this ships the informational half only, at one neutral weight for every value.
+
+          🔴 `> 0` IS THE CONDITION, AND THE `0` CASE IS A KNOWN GAP STATED RATHER THAN PAINTED
+          OVER. `0` means the term has run out — but NOTHING FLIPS A LAPSED MODULE OFF yet (the
+          fuzz is filed, not built), so the module genuinely still works. Rendering "0 DAYS LEFT"
+          on a tile that opens and functions would be the surface lying in the other direction.
+          When expiry lands, a lapsed module reverts to `enabled:false` and reads `[ENABLE]` —
+          honest on its own terms: you no longer have it, here is how to get it back. */}
+      {isActive && trialDaysLeft != null && trialDaysLeft > 0 && (
+        <span style={{
+          fontSize: '0.5625rem',
+          fontWeight: 700,
+          color: '#b45309',
+          textTransform: 'uppercase',
+          letterSpacing: '0.04em',
+          lineHeight: 1.6,
+        }}>
+          {trialDaysLeft}d trial
+        </span>
       )}
 
       {/* ── Locked → tier label ── */}

@@ -706,6 +706,7 @@ export function Dashboard() {
                 onEnable={() => openTile(mod)}
                 onNavigate={() => openTile(mod)}
                 count={mod.key === 'social_media' ? socialDrafts.length : undefined}
+                trialDaysLeft={mod.trialDaysLeft}
               />
             ))}
           </TileGrid>

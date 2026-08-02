@@ -181,3 +181,9 @@ export { seedPricingConfig } from './seedPricingConfig';
 // The module seed — its sibling, one table over, and the one whose missing row is MONEY.
 export { seedBusinessModules, warnOnShortModuleSeed } from './seedBusinessModules';
 export type { ModuleSeedRow, ModuleSeedResult } from './seedBusinessModules';
+
+// The trial clock's ONE READER — days left from the STORED `(trial_started_at, trial_days)` pair,
+// never from the catalog (snapshot ruling 2026-08-01). The dashboard reads it today; the
+// marketplace reads the same function, so the two can never disagree about a customer's days.
+export { trialDaysRemaining } from './trialClock';
+export type { TrialTerms } from './trialClock';

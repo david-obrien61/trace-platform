@@ -43,10 +43,14 @@ const entry = (over: Partial<ModuleEntry>): ModuleEntry => ({
 
 ok(moduleSeedRow(entry({ billing: 'core', trial_days: 0 })).enabled === true,
    'A1 core seeds ENABLED — it is included in the base subscription');
-ok(moduleSeedRow(entry({ billing: 'add_on' })).enabled === false,
-   'A2 an add-on seeds DISABLED — the owner has not bought it');
+// 🔴 A2 REVERSED 2026-08-02 (David's ruling, correcting Lightning's 2026-08-01 seed spec). It read
+// `.enabled === false` — "an add-on seeds DISABLED, the owner has not bought it" — which put a
+// running clock on a module the member could not use. **The trial IS the grace period during which
+// the module is fully live**; the clock ENDS access, it does not withhold it. See the header.
+ok(moduleSeedRow(entry({ billing: 'add_on', trial_days: 30 })).enabled === true,
+   'A2 🔴 a TRIALLING add-on seeds ENABLED — the trial is the period during which it fully works');
 ok(moduleSeedRow(entry({ billing: 'unpriced', price_monthly: null, trial_days: 0 })).enabled === false,
-   'A3 unpriced seeds DISABLED');
+   'A3 unpriced seeds DISABLED — RULING OWED, and it is the one row this mapping does not yet answer');
 
 ok(moduleSeedRow(entry({ billing: 'add_on', trial_days: 30 })).start_trial === true,
    'A4 a priced add-on starts its clock at seed');
@@ -60,6 +64,12 @@ ok(moduleSeedRow(entry({ billing: 'unpriced', price_monthly: null, trial_days: 0
 // set to zero trial days (sold outright, no evaluation period) must NOT get a clock.
 ok(moduleSeedRow(entry({ billing: 'add_on', trial_days: 0 })).start_trial === false,
    'A7 🔴 an add_on with trial_days 0 gets NO clock — the rule reads trial_days, not billing');
+// 🔴 A7b — the same row from the ENABLEMENT side, and it is the probe that keeps the reversal
+// honest. An add-on sold outright with no evaluation period is NOT live at seed: nobody granted it
+// and no clock is running. Liveness follows the TRIAL, not the billing class — so "add-ons are now
+// enabled" is precisely the wrong summary of this ruling, and this fails if someone writes it.
+ok(moduleSeedRow(entry({ billing: 'add_on', trial_days: 0 })).enabled === false,
+   'A7b 🔴 an add_on with NO trial seeds DISABLED — liveness follows the clock, not the billing class');
 // …and its mirror: a core module someone gives a trial length to WOULD get one. That combination is
 // nonsense, which is why invariant B3 below forbids it in the catalog rather than in the mapping.
 ok(moduleSeedRow(entry({ billing: 'core', trial_days: 30 })).start_trial === true,
@@ -74,8 +84,17 @@ ok(moduleSeedRow(entry({ module_key: 'seasonal_module' })).module_key === 'seaso
 // so seeding `configured:false` put an [ENABLE] button on an already-included working feature.
 ok(moduleSeedRow(entry({ billing: 'core', trial_days: 0 })).configured === true,
    'A10 🔴 core seeds CONFIGURED — there is nothing to configure about being included');
-ok(moduleSeedRow(entry({ billing: 'add_on' })).configured === false,
-   'A11 a paid module seeds UNCONFIGURED — the owner has genuinely not set it up');
+// 🔴 A11 REVERSED with A2, and for the SAME reason one layer down: `useModules.ts:109` renders
+// `active` only on `enabled && configured`, so a trialling module seeded `configured:false` would
+// STILL show `[ENABLE]` — the ruling would have changed the data and nothing on the screen. The
+// precedent is already ruled and already shipped: `qb_invoicing` seeds `configured:true` with no
+// QuickBooks link, because a green tile says *included*, not *connected*. A trialling module says
+// *live*, not *personalised* — and tapping it goes to its setup page, which is the same tap the
+// `[ENABLE]` button performed (they are literally the same handler; see Dashboard.tsx:706-707).
+ok(moduleSeedRow(entry({ billing: 'add_on', trial_days: 30 })).configured === true,
+   'A11 🔴 a TRIALLING module seeds CONFIGURED — else it renders [ENABLE] and the ruling changes nothing on screen');
+ok(moduleSeedRow(entry({ billing: 'add_on', trial_days: 0 })).configured === false,
+   'A11b an add_on with no trial seeds UNCONFIGURED — it is not live, so there is nothing set up');
 ok(moduleSeedRow(entry({ billing: 'unpriced', price_monthly: null, trial_days: 0 })).configured === false,
    'A12 unpriced seeds UNCONFIGURED');
 
@@ -98,18 +117,31 @@ ok(new Set(catalogSeedRows().map(r => r.module_key)).size === MODULE_CATALOG.len
 
 for (const m of MODULE_CATALOG) {
   const row = moduleSeedRow(m);
-  // 🔴 B3 — the combination the mapping deliberately does not correct: an ENABLED row with a
-  // running trial clock. It would read as "included in your subscription, expiring in 30 days."
-  ok(!(row.enabled && row.start_trial),
-     `B3 ${m.module_key}: seeded ENABLED and with a trial clock — a module cannot be both included and expiring`);
+  // 🔴 B3 INVERTED 2026-08-02 — IT ASSERTED THE DEFECT. It forbade `enabled && start_trial`, on the
+  // reasoning that a module "cannot be both included and expiring." That is exactly what a trial IS:
+  // included, and expiring. The old invariant is why every add-on seeded dark with a clock running
+  // over it, and why a test suite of 138 assertions went green over the defect — **the model was
+  // wrong in the test and in the mapping identically, so nothing could disagree with anything.**
+  ok(!(row.start_trial && !row.enabled),
+     `B3 ${m.module_key}: a trial clock over a DISABLED module — the clock ends access, it does not withhold it, so nothing is being trialled`);
   // B4 — the money invariant, from the other side: anything with a clock must have a price to
   // convert TO. `verify-tile-fields` asserts billing ↔ price_monthly; this asserts trial ↔ price.
   ok(!(row.start_trial && m.price_monthly === null),
      `B4 ${m.module_key}: a trial clock over a NULL price — the countdown ends at a number nobody has decided (D-9)`);
   ok(!(row.start_trial && m.price_monthly === 0),
      `B5 ${m.module_key}: a trial clock over a $0 price — nothing to convert to`);
-  ok(!(row.enabled && m.billing !== 'core'),
-     `B6 ${m.module_key}: seeded enabled without being core — the tenant gets a paid module free and nothing bills it`);
+  // 🔴 B6 REWRITTEN, NOT DELETED — the money invariant survives the reversal in its correct form.
+  // It read `!(enabled && billing !== 'core')`: nothing may be live unless it is core. Under the
+  // ruling a trialling module IS live and IS billable, which is the whole point — so the danger is
+  // no longer "live and not core", it is **LIVE WITH NOTHING THAT EVER ENDS IT**: not core (so not
+  // included) and no clock (so no conversion date). That module is free forever and nothing bills
+  // it — the defect B6 was always aiming at, stated against the right condition.
+  ok(!(row.enabled && m.billing !== 'core' && !row.start_trial),
+     `B6 ${m.module_key}: live, not core, and NO clock — free forever with no conversion date and nothing to bill`);
+  // B6b — liveness has exactly two sources and no third. If someone later adds a way for a module
+  // to seed live that is neither "included" nor "on a clock", this is what refuses it.
+  ok(row.enabled === (m.billing === 'core' || row.start_trial),
+     `B6b ${m.module_key}: live iff included-in-base OR inside a running trial — there is no third way to be on`);
   // 🔴 B7 — the cross-field rule the RPC enforces server-side, asserted here so a bad payload is
   // never SENT: a module asking for a trial must carry a positive term. The server refuses the
   // WHOLE batch on this, so one bad catalog row would block every tenant's seed.
