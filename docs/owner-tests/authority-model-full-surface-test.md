@@ -12,7 +12,7 @@
 permissions rather than by being the owner, that removing `isOwner` took nothing away from him, and
 that a refused surface now SAYS SO instead of vanishing.
 
-**Board: 0 of 30.** Every card is `STATUS: owed` except cards **22 and 30**, which are `needs-test` with their reasons stated. *(27 and 29 were `needs-test` until 2026-08-02 (3), when the rulings they were waiting on landed.)*
+**Board: 0 of 31.** Every card is `STATUS: owed` except cards **22 and 30**, which are `needs-test` with their reasons stated. **31 is the trial badge (#185).** *(27 and 29 were `needs-test` until 2026-08-02 (3), when the rulings they were waiting on landed.)*
 
 **Why this exists.** `businesses.owner_id` was the authority mechanism at three layers. It is
 single-valued, so it cannot express the TWO OWNERS David ruled on 2026-07-26 — and the client's
@@ -737,3 +737,32 @@ a tile goes live.** The seeder now refuses one for a `planned` module — correc
 ships without its trial starting is one nobody ever pays for.** Three mechanisms are named in
 `RULINGS.md` OWED and none is chosen. It fires the first time a `planned` tile ships.
 
+### CARD 31 — 🔴 OPERATING COSTS SHOWS ITS TRIAL BADGE
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #185 — the operating_costs ↔ cost_to_produce pairing
+
+**The defect this closes, in one line:** OPERATING COSTS rendered no badge and no `[ENABLE]` while
+`cost_to_produce` sat `enabled:true, configured:true` on a live 30-day clock — **because the tile
+had no `module_key` and so did not know the module existed.** Nothing was hidden; the pairing was
+never made.
+
+**As the OWNER**, on the dashboard grid:
+
+1. **OPERATING COSTS reads `30D TRIAL`** in amber, beside DELIVERY and SOCIAL which already do.
+2. It still **opens `/operating-costs`** and works exactly as before — the pairing added a badge and
+   a state source, not a gate.
+3. **Cost-to-Produce (`/costs`) is unchanged** and still reachable from the nav. It is the same
+   module's other half (the D-14.6 SEVER: this tile WRITES recurring costs, that one TUNES margin).
+
+**FAIL if** no badge appears · or the tile now reads `[ENABLE]` (that would mean the module row is
+not `enabled && configured` — check `20260802b` V1 before touching the registry).
+
+⚠️ **A REAL CHANGE TO WATCH, not a bug:** this tile's state now FOLLOWS THE MODULE ROW. Before the
+pairing `useModules` gave it an unconditional `'active'`; now it is `enabled && configured ?
+'active' : 'available'`. When expiry ships, a lapsed Cost-to-Produce will turn OPERATING COSTS into
+`[ENABLE]` — the ruled behaviour for an unpaid add-on, and worth knowing before it surprises you.
+
+⚠️ **THE TRIAL WAS NOT RESTARTED.** It has been running since 19:29:25 on 2026-08-02 and the badge
+should read **30d** for the first day. Pairing made it visible; it was never inert.

@@ -236,9 +236,15 @@ MODULE_CATALOG.forEach((m, i) => {
   // test that reuses the code's predicate can only prove the code agrees with itself. This is the
   // requirement in its own words — NO MODULE MAY CARRY A CLOCK UNLESS ITS TILE IS LIVE — and it is
   // the assertion that would have fired on the four planned add-ons the day their clocks were set.
-  const tile = TILE_REGISTRY.find((t) => t.module_key === m.module_key);
-  ok(!(row.start_trial && tile?.status !== 'live'),
-     `B10 ${m.module_key}: a trial clock over a tile that is NOT live (status '${tile?.status}') — the owner cannot use it, cannot evaluate it, and at day thirty is asked to pay for something he has never seen`);
+  // ⚠️ `.some`, NOT `.find`. A `module_key` may legitimately sit on MORE THAN ONE tile — probe C14
+  // has always allowed it, and the 2026-08-02 (5) pairing made it real: `cost_to_produce` is on both
+  // `operating_costs` (dashboard, where the owner sees it) and `cost_to_produce` (admin, the
+  // module's own surface). `.find` would silently grade the module on WHICHEVER ROW COMES FIRST in
+  // the file, so re-ordering the registry could flip this assertion without touching a status.
+  const liveTiles = TILE_REGISTRY.filter((t) => t.module_key === m.module_key && t.status === 'live');
+  const anyTiles  = TILE_REGISTRY.filter((t) => t.module_key === m.module_key);
+  ok(!(row.start_trial && liveTiles.length === 0),
+     `B10 ${m.module_key}: a trial clock and NO live tile (statuses: ${anyTiles.map(t => t.status).join(', ') || 'none'}) — the owner cannot use it, cannot evaluate it, and at day thirty is asked to pay for something he has never seen`);
 });
 
 // ── 3. THE PAYLOAD SHAPE THE RPC VALIDATES ──────────────────────────────────────────────────────

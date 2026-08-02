@@ -230,7 +230,7 @@ function parseCatalog(src) {
   return parseRows(src, start);
 }
 
-function scanCatalog(src) {
+function scanCatalog(src, declared = UNRENDERABLE_DECLARED) {
   const clean = stripComments(src);
   const tiles = parseRows(clean);
   const catalog = parseCatalog(clean);
@@ -279,6 +279,101 @@ function scanCatalog(src) {
   for (const mk of catKeys) {
     if (!usedKeys.has(mk)) {
       problems.push({ key: mk, field: 'module_key', how: 'MODULE_CATALOG prices a module NO TILE references — a price for something nobody can reach' });
+    }
+  }
+
+  // ── ASSERTION 3 — EVERY CATALOG ENTRY HAS A TILE A RENDERER ACTUALLY DRAWS ──────────────────
+  problems.push(...scanRenderability(tiles, catKeys, declared));
+  return problems;
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// ASSERTION 3 — A MODULE WHOSE STATE NOBODY CAN SEE (2026-08-02 (5))
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+//
+// 🔴 WHY ASSERTION 2 WAS NOT ENOUGH, AND IT COST A LIVE DEFECT TO FIND OUT. Assertion 2 asks
+// whether a catalog entry HAS a tile. `cost_to_produce` had one — and it was `placement:'admin'`,
+// which **no renderer draws**, so a $29/mo module sat `enabled:true` on a running 30-day trial with
+// no badge, no `[ENABLE]`, and nothing anywhere saying so. Having a tile and being VISIBLE turned
+// out to be two different facts, and only the first was checked.
+//
+// **RENDERABLE HAS EXACTLY ONE MEANING AND IT IS DERIVED, NOT ASSUMED:** `dashboardTiles()` filters
+// `placement === 'dashboard' && kind !== 'readout'`, and it is the ONLY renderer that exists —
+// `dashboardReadouts()` and `tilesForPlacement()` both have **ZERO CALLERS** (verified, not
+// remembered). The day either gains one, this predicate is what has to change, and it is one line.
+//
+// ⚠️ `status:'planned'` IS STILL RENDERABLE and deliberately so. A planned tile DRAWS — amber SOON,
+// the owner sees it — it simply cannot carry a trial badge, which is correct because a planned
+// module has no clock (the 2026-08-02 (3) ruling guarantees it). Rejecting planned here would fail
+// the build for a state the platform is designed to have.
+// ⚠️ READ THROUGH `unquote(...).trim()`, the same way every other assertion in this file reads a
+// value. The first version compared the RAW captured text (`"'dashboard'"`) and the cap's own
+// self-test caught it instantly — eight GOOD probes went red, because a fixture that is plainly
+// `placement: 'dashboard'` was being read as unrenderable. **Fourth false-reading caught by probes
+// this week**, and the first one where the probes caught it before a single line of the real
+// registry was touched.
+const fieldOf = (t, f) => unquote((t[f] ?? '').trim());
+const RENDERABLE = (t) => fieldOf(t, 'placement') === 'dashboard' && fieldOf(t, 'kind') !== 'readout';
+
+// ⚠️ PASSED IN, NOT READ FROM MODULE SCOPE — and the cap's own self-test is why. The first version
+// closed over this object directly, so the STALE-DECLARATION check ran against every synthetic
+// fixture too: a probe's two-row catalog contains none of these five keys, so all five reported as
+// stale and EIGHT GOOD PROBES went red at once. **Third false-reading this file's probes have caught
+// before it reached the registry** (after the `TileEntry[] = [` empty-pair and the raw-vs-unquoted
+// compare). Threading it also makes the declaration logic itself testable in BOTH directions, which
+// closing over a constant never allows.
+//
+// 🔴 THE DECLARATIONS ASSERT THEMSELVES IN BOTH DIRECTIONS — that is what stops this becoming
+// `OWNER_ONLY_PENDING` (#73), a gap list that only grew until nobody read it. A declaration for an
+// entry that is NOT in the catalog, or that HAS since gained a renderable tile, is STALE and FAILS
+// THE BUILD. So the day the settings renderer ships, four of these five go red and must be deleted
+// — the list nags for its own removal instead of rotting.
+const UNRENDERABLE_DECLARED = {
+  qb_invoicing: "RULED 2026-08-02 (2) — a customer buys QuickBooks sync whether or not it has a square on the grid. Its tile is placement:'settings' and the marketplace renders it from MODULE_CATALOG, which has no notion of placement.",
+  online_shop: "placement:'settings' and status:'planned' — no settings renderer exists (tilesForPlacement has zero callers). Tracked as OWED; delete this line when the renderer ships.",
+  seasonal_module: "placement:'settings' and status:'planned' — same missing renderer as online_shop.",
+  contractor_tiers: "placement:'settings' and status:'planned' — same missing renderer. core_optional, so it carries no clock and has no badge to hide.",
+  business_insights: "kind:'readout' — dashboardReadouts() is the renderer for these and it has ZERO callers. status:'planned', so no clock and nothing hidden today.",
+};
+
+function scanRenderability(tiles, catKeys, declared) {
+  const problems = [];
+  const byKey = new Map();
+  for (const t of tiles) {
+    if (!('module_key' in t)) continue;
+    const mk = unquote(t.module_key);
+    if (!byKey.has(mk)) byKey.set(mk, []);
+    byKey.get(mk).push(t);
+  }
+
+  for (const mk of catKeys) {
+    const tilesFor = byKey.get(mk) ?? [];
+    // Assertion 2 already reports a catalog entry with no tile at all; do not double-report.
+    if (tilesFor.length === 0) continue;
+    const renderable = tilesFor.filter(RENDERABLE);
+    const isDeclared = Object.prototype.hasOwnProperty.call(declared, mk);
+
+    if (renderable.length === 0 && !isDeclared) {
+      const why = tilesFor
+        .map((t) => `${unquote(t.key)} is placement:'${fieldOf(t, 'placement')}'${fieldOf(t, 'kind') === 'readout' ? " kind:'readout'" : ''}`)
+        .join(' · ');
+      problems.push({ key: mk, field: 'module_key', how:
+        `NO RENDERABLE TILE — ${why}. Only placement:'dashboard' non-readout tiles are drawn, so this module's ` +
+        `enablement and trial state are INVISIBLE on every screen: a paid module can run a clock with no badge and ` +
+        `nothing says so. Pair it to a rendered tile, or DECLARE it in UNRENDERABLE_DECLARED with a reason.` });
+    }
+    // 🔴 THE SELF-ASSERTION: a declaration that is no longer true is a lie that passes.
+    if (renderable.length > 0 && isDeclared) {
+      problems.push({ key: mk, field: 'module_key', how:
+        `STALE DECLARATION — this module now HAS a renderable tile (${renderable.map((t) => unquote(t.key)).join(', ')}), ` +
+        `so its UNRENDERABLE_DECLARED entry is false. Delete the declaration.` });
+    }
+  }
+  // …and a declaration for something that is not in the catalog at all.
+  for (const mk of Object.keys(declared)) {
+    if (!catKeys.has(mk)) {
+      problems.push({ key: mk, field: 'module_key', how:
+        'STALE DECLARATION — UNRENDERABLE_DECLARED names a module that is not in MODULE_CATALOG. Delete it.' });
     }
   }
   return problems;
@@ -377,8 +472,8 @@ function runProbes() {
   const c = (rows) => `\nexport const MODULE_CATALOG: ModuleEntry[] = [\n${rows}\n];\n`;
   const OK_CAT = `  { module_key: 'alpha', billing: 'add_on', price_monthly: 19, trial_days: 30, note: 'MASTER_BRIEF:306 — $19/mo.' },`;
   const TILE_WITH_MK = OK_ROW.replace(`bg: '#000' }`, `bg: '#000', module_key: 'alpha' }`);
-  const tc = (name, src, shouldFail) => {
-    const got = scanCatalog(src).length > 0;
+  const tc = (name, src, shouldFail, declared = {}) => {
+    const got = scanCatalog(src, declared).length > 0;
     p.push({ name, ok: got === shouldFail, expect: shouldFail ? 'FAIL' : 'PASS', got: got ? 'FAIL' : 'PASS' });
   };
 
@@ -425,6 +520,34 @@ function runProbes() {
   // catches the survivor — but this asserts the legal one is legal, which C6 cannot.
   tc('C20 core_optional is a MEMBER, not a typo — it passes where billing:\'free\' (C6) fails',
     FIXTURE(TILE_WITH_MK) + c(asCoreOpt(OK_CAT).replace('price_monthly: 19', 'price_monthly: 0').replace('trial_days: 30', 'trial_days: 0')), false);
+
+  // ── C21–C27 — ASSERTION 3: a catalog entry needs a tile a RENDERER DRAWS (2026-08-02 (5)) ──
+  const admin   = TILE_WITH_MK.replace("placement: 'dashboard'", "placement: 'admin'");
+  const settings= TILE_WITH_MK.replace("placement: 'dashboard'", "placement: 'settings'");
+  const readout = TILE_WITH_MK.replace("kind: 'destination'", "kind: 'readout'");
+  const planned = TILE_WITH_MK.replace("status: 'live'", "status: 'planned'");
+
+  tc("C21 🔴 THE LIVE DEFECT — a catalog entry whose ONLY tile is placement:'admin' is INVISIBLE",
+    FIXTURE(admin) + c(OK_CAT), true);
+  tc("C22 …unless DECLARED with a reason — the escape hatch exists and it is explicit",
+    FIXTURE(admin) + c(OK_CAT), false, { alpha: 'declared for this probe' });
+  tc("C23 kind:'readout' is not drawn either — dashboardReadouts() has zero callers",
+    FIXTURE(readout) + c(OK_CAT), true);
+  tc("C24 🔴 A STALE DECLARATION FAILS — the entry HAS a renderable tile, so the declaration is a lie that would otherwise pass forever (this is what stops it becoming OWNER_ONLY_PENDING)",
+    FIXTURE(TILE_WITH_MK) + c(OK_CAT), true, { alpha: 'no longer true' });
+  tc('C25 a declaration for a module that is not in the catalog at all fails',
+    FIXTURE(TILE_WITH_MK) + c(OK_CAT), true, { ghost: 'names nothing' });
+  // 🔴 THE CARVE-OUT, PROVEN RATHER THAN ASSUMED. A planned tile DRAWS (amber SOON) — it just
+  // cannot carry a badge, which is correct because a planned module has no clock (ruling 08-02 (3)).
+  // Rejecting planned here would fail the build for a state the platform is designed to have.
+  tc("C26 status:'planned' on a dashboard tile is STILL RENDERABLE — it draws, it just cannot badge",
+    FIXTURE(planned) + c(OK_CAT), false);
+  // 🔴 THE SHAPE THE FIX CREATES: the key on TWO tiles, one unrenderable, one rendered. Legal — and
+  // this is the probe that proves the fix is a fix rather than a second violation (cf. C14).
+  tc('C27 🔴 TWO tiles share the key — one admin, one dashboard — and ONE RENDERED TILE IS ENOUGH',
+    FIXTURE(`${admin}\n${TILE_WITH_MK.replace("key: 'alpha'", "key: 'gamma'")}`) + c(OK_CAT), false);
+  tc("C28 …but two tiles that are BOTH unrenderable still fail — 'enough' means at least one",
+    FIXTURE(`${admin}\n${settings.replace("key: 'alpha'", "key: 'gamma'")}`) + c(OK_CAT), true);
 
   tc('C16 a note full of commas, colons and an apostrophe is ONE value (the walker, reused)',
     FIXTURE(TILE_WITH_MK) + c(OK_CAT.replace(/note: '[^']*'/, "note: 'MASTER_BRIEF:306 — Social Media + AI posts, $19/mo, all verticals; the brief\\'s label differs.'")), false);

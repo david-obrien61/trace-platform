@@ -142,8 +142,24 @@ export const TILE_REGISTRY: TileEntry[] = [
   // Driver-handoff mechanism = UNDECIDED (do NOT build — see note).
   { key: 'delivery',         vertical: 'general', label: 'Delivery',                  group: 'fulfilment', kind: 'destination', placement: 'dashboard', required_permission: 'deliveries:read',  status: 'live',    depends_on: null,
     icon: Truck,       color: '#22d3ee', bg: DASH_BG, route: '/delivery-schedule', module_key: 'delivery_routing', note: 'driver-handoff mechanism UNDECIDED' },
+  // 🔴 `module_key: 'cost_to_produce'` PAIRED HERE 2026-08-02 (5) — David's ruling. THE TILE HAD NO
+  // KEY, so it did not know the module existed: the $29 Cost-to-Produce module ran a live 30-day
+  // trial with NO badge and no [ENABLE], because the only tile carrying the key is the one below at
+  // `placement:'admin'`, which no renderer draws. **The pairing was never made — nothing was hidden,
+  // and this is NOT the 2026-08-02 (1) class where the data lied.** Same name, same capability: the
+  // D-14.6 SEVER split one product into a WRITER (`/operating-costs`, this tile) and a TUNER
+  // (`/costs`, the admin tile) — both are Cost-to-Produce, which is what David priced at $29.
+  // ⚠️ THE KEY IS ON BOTH TILES, DELIBERATELY (legal — probe C14, and now C27). The admin tile is
+  // the module's own surface and keeps its pairing for the day a settings/admin renderer exists;
+  // this one is where the owner actually sees it today.
+  // ⚠️ AND THE CONSEQUENCE IS NOT ONLY A BADGE, stated so it is not discovered later: `useModules`
+  // computes state as `enabled && configured ? 'active' : 'available'` for ANY tile with a key, but
+  // as an unconditional `'active'` for a tile without one. So this tile's state now FOLLOWS THE
+  // MODULE ROW. Today that reads `active` (the trial is live). When expiry ships, a lapsed
+  // Cost-to-Produce turns this tile into `[ENABLE]` — which is the ruled behaviour for an unpaid
+  // add-on, not a regression, but it is a real change to a surface that was previously always on.
   { key: 'operating_costs',  vertical: 'general', label: 'Operating Costs',           group: 'financial', kind: 'destination', placement: 'dashboard', required_permission: 'costs:read',         status: 'live',    depends_on: null,
-    icon: HandCoins,   color: '#fbbf24', bg: DASH_BG, route: '/operating-costs' },
+    icon: HandCoins,   color: '#fbbf24', bg: DASH_BG, route: '/operating-costs', module_key: 'cost_to_produce' },
   { key: 'assets',           vertical: 'general', label: 'Assets',                    group: 'financial', kind: 'destination', placement: 'dashboard', required_permission: 'costs:read',         status: 'live',    depends_on: null,
     icon: Building2,   color: '#a78bfa', bg: DASH_BG, route: '/assets' },
   // Inventory is TWO siblings sharing the inventory data model — NOT a collapse.
