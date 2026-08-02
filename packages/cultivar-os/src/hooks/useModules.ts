@@ -21,6 +21,8 @@ import type { ComponentType } from 'react';
 import type { LucideProps } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { trialDaysRemaining } from '../../../shared/src/business-logic/trialClock';
+import { BUSINESS_MODULE_COLUMNS } from '../../../shared/src/business-logic/moduleState';
+import type { BusinessModuleRow } from '../../../shared/src/business-logic/moduleState';
 import { dashboardTilesForVerticals, verticalsForBusinessType } from '../registry/tileRegistry';
 
 export type TileState = 'active' | 'available' | 'locked' | 'planned';
@@ -41,13 +43,6 @@ export interface ModuleTile {
    * state of its own (David's ruling 2026-08-02).
    */
   trialDaysLeft?: number | null;
-}
-
-interface BusinessModuleRow {
-  module_key: string;
-  enabled: boolean;
-  configured: boolean;
-  config: Record<string, unknown> | null;
 }
 
 /**
@@ -79,7 +74,7 @@ export function useModules(
         // tenant's enabled/configured state (used only for active-vs-available styling/badge).
         const { data: nmData } = await supabase
           .from('business_modules')
-          .select('module_key, enabled, configured, config')
+          .select(BUSINESS_MODULE_COLUMNS)
           .eq('business_id', businessId);
 
         if (cancelled) return;

@@ -29,6 +29,28 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+/**
+ * 🔴 THE READ CONTRACT, IN ONE PLACE — the columns every reader of `business_modules` selects, and
+ * the shape they come back as. Extracted 2026-08-02 (6) when the field-lists ratchet caught the
+ * marketplace hand-writing a SECOND copy of the same four columns.
+ *
+ * The cap was right and declaring it would have been the wrong answer: `config` is where the trial
+ * pair lives, and **a reader that quietly stops selecting it renders a live trial and an untouched
+ * module as the same pixel** — which is exactly the defect of 2026-08-02 (1), where `useModules`
+ * SELECTED `config` and then dropped it. Two hand-written lists is how the second reader forgets a
+ * column the first one needs. One list, imported by both.
+ */
+export const BUSINESS_MODULE_COLUMNS = 'module_key, enabled, configured, config';
+
+/** One tenant's row for one module, as `BUSINESS_MODULE_COLUMNS` returns it. */
+export interface BusinessModuleRow {
+  module_key: string;
+  enabled: boolean;
+  configured: boolean;
+  /** Holds the trial pair `(trial_started_at, trial_days)`. Read it with `trialDaysRemaining`. */
+  config: Record<string, unknown> | null;
+}
+
 export interface ModuleStatePatch {
   /** Enablement — REQUIRES `subscription:update` when it actually changes the stored value. */
   enabled?: boolean;

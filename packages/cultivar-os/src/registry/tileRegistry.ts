@@ -784,6 +784,12 @@ export const NAV_IA: NavNode[] = [
   // devices. Supersedes the old /roles page (which now redirects here). manage_settings-gated
   // (owner-default, delegable) so Staff never sees it.
   { key: 'nav_team',             section: 'admin',     parent: 'sec_admin',           label: 'Team & Roles', route: '/team', required_permission: 'team:read' },
+  // 🔴 ADMIN, NOT SETTINGS (David's ruling 2026-08-02 (6) #2). The section is chosen by what the
+  // thing IS and the gate follows — not the other way round: deciding what the business pays TRACE
+  // is an owner act, and it belongs beside Team & Roles and Cost-to-Produce. `subscription:read` is
+  // owner-only, so a MANAGER sees this item and lands on a page that SAYS what it needs — it does
+  // not vanish and it does not redirect (the six-state ruling, and this is its first new surface).
+  { key: 'nav_subscription',     section: 'admin',     parent: 'sec_admin',           label: 'Subscription & Modules', route: '/admin/subscription', matchRoute: '/admin/subscription', required_permission: 'subscription:read' },
   { key: 'nav_discounts',        section: 'admin',     parent: 'sec_admin',           tileKey: 'discounts' },
   { key: 'nav_cost_to_produce',  section: 'admin',     parent: 'sec_admin',           tileKey: 'cost_to_produce' },
 ];

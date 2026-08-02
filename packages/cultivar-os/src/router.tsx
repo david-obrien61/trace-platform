@@ -43,6 +43,7 @@ import PMI                   from './pages/PMI';
 import { TeamConsole }       from './pages/TeamConsole';
 import { Profile }            from './pages/Profile';
 import { AdminIndex }         from './pages/AdminIndex';
+import { Subscription }       from './pages/Subscription';
 import { SettingsIndex }      from './pages/SettingsIndex';
 import { AcceptInvite, ResetPin, DeviceHandoff } from '@trace/shared/auth';
 import { supabase }          from './lib/supabase';
@@ -187,6 +188,17 @@ export function AppRouter() {
           </Route>
           <Route element={<PermissionRoute permission="settings:read" />}>
             <Route path="/admin"           element={<AdminIndex />} />
+          </Route>
+
+          {/* 🔴 THE MARKETPLACE — `subscription:read`, OWNER-ONLY (ruling 2026-08-02 (6) #2).
+              It is the FIRST route gated on `subscription:*`, the resource minted precisely because
+              nothing in the model had ever been about what the business PAYS. `settings:update` was
+              disqualified on evidence: it is in MANAGER_DEFAULT_BUNDLE, so a manager could change
+              what the business pays TRACE from the string that lets her fix the business hours.
+              A manager therefore lands on PermissionRoute's NOT PERMITTED surface, which NAMES what
+              is required — it does not vanish from the nav and it does not redirect. */}
+          <Route element={<PermissionRoute permission="subscription:read" />}>
+            <Route path="/admin/subscription" element={<Subscription />} />
           </Route>
 
           {/* `view_costs` was ONE string over NINE doors across four resources. Each door now

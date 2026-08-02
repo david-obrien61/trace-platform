@@ -12,7 +12,7 @@
 permissions rather than by being the owner, that removing `isOwner` took nothing away from him, and
 that a refused surface now SAYS SO instead of vanishing.
 
-**Board: 0 of 31.** Every card is `STATUS: owed` except cards **22 and 30**, which are `needs-test` with their reasons stated. **31 is the trial badge (#185).** *(27 and 29 were `needs-test` until 2026-08-02 (3), when the rulings they were waiting on landed.)*
+**Board: 0 of 33.** Every card is `STATUS: owed` except cards **22 and 30**, which are `needs-test` with their reasons stated. **31 is the trial badge (#185); 32–33 are the marketplace (#186), and 33's Part B is the six-state model's first NEW surface.** *(27 and 29 were `needs-test` until 2026-08-02 (3), when the rulings they were waiting on landed.)*
 
 **Why this exists.** `businesses.owner_id` was the authority mechanism at three layers. It is
 single-valued, so it cannot express the TWO OWNERS David ruled on 2026-07-26 — and the client's
@@ -766,3 +766,50 @@ pairing `useModules` gave it an unconditional `'active'`; now it is `enabled && 
 
 ⚠️ **THE TRIAL WAS NOT RESTARTED.** It has been running since 19:29:25 on 2026-08-02 and the badge
 should read **30d** for the first day. Pairing made it visible; it was never inert.
+
+### CARD 32 — 🔴 THE MARKETPLACE: FOUR SECTIONS, ONE SCREEN
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #186 — the module marketplace (David's six rulings, 2026-08-02 (6))
+
+**As the OWNER**, Admin → **Subscription & Modules** (`/admin/subscription`).
+
+1. **FOUR SECTIONS IN ONE SCROLL, in order: Included · Active · Available · Coming.** No tabs —
+   what you already get sits directly above what you could add. That adjacency is the pitch.
+2. **Included lists SIX things**: QR Checkout, QuickBooks, Inventory Intake (catalog rows) **plus
+   three display-only lines** — Owner dashboard, Basic inventory & asset tracking, Customer
+   records. Those three have no catalog entry by ruling and are copy, not data.
+3. **Contractors sits in Included with a `Turn on` button**, not a price and not a countdown. It is
+   $0, optional, and nothing expires. **FAIL if it shows a price, a trial, or an `Enable` that
+   implies a purchase.**
+4. **Active shows a real countdown** — Social, Delivery and Cost-to-Produce, each with
+   `N days left in trial`. 🔴 **At 0 it must read "Trial ended — still working", NEVER "expired"**:
+   nothing switches a lapsed module off, and a page claiming otherwise is the surface lying.
+5. **Coming lists the four unbuilt modules with `I want this`.** Tap one — **your mail client opens
+   with the module name, price, business and your email pre-filled.** It is a `mailto:` by ruling:
+   no table, no endpoint. **FAIL if the card is inert** — an input surface that swallows input is
+   worse than none.
+6. 🔴 **THE FOOTER SAYS TRACE DOES NOT BILL.** Every price is a rate, not a charge.
+
+### CARD 33 — 🔴 ENABLE ACTUALLY WRITES, AND A MANAGER IS REFUSED WITH THE REASON
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #186 — ruling #6, the wired enable + the six-state menu
+
+**Part A — as the OWNER.** In **Available**, click **Enable** on a module.
+- It moves to **Active** on reload, and the notice reads *"… is on. Nothing has been billed."*
+- 🔴 **Confirm the claim is true:** no invoice, no Stripe, no charge anywhere. Enabling sets
+  `enabled:true` and bills nothing — that is the whole of it.
+
+**Part B — as the MANAGER (`df7723be`).** This is the half that cannot be proven as the owner.
+- **Admin still shows "Subscription & Modules".** It does **not** vanish from the menu.
+- Clicking it lands on a page that **SAYS what is required** — `subscription:read`, owner-only —
+  and does **not** redirect to the dashboard. **This is the first NEW surface built under the
+  six-state ruling; if it redirects, that ruling has regressed.**
+- **FAIL if** the menu item is hidden, or the click bounces to `/dashboard`.
+
+⚠️ A manager who somehow reaches the page sees `Owner only` where the button would be — the act is
+refused server-side by `set_business_module_state` regardless, which is the split `20260801b` V3d
+already proved at the database. The UI label is the courtesy, not the control.
