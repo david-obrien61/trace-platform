@@ -52,9 +52,10 @@ import { Check, Circle, Clock, Mail, Plus } from 'lucide-react';
 import { useBusinessContext } from '@trace/shared/context';
 import { supabase } from '@trace/shared/supabase/client';
 import { setBusinessModuleState, BUSINESS_MODULE_COLUMNS } from '@trace/shared/business-logic/moduleState';
+import { seedBusinessModules, warnOnShortModuleSeed } from '@trace/shared/business-logic/seedBusinessModules';
 import type { BusinessModuleRow } from '@trace/shared/business-logic/moduleState';
 import { trialDaysRemaining } from '@trace/shared/business-logic/trialClock';
-import { MODULE_CATALOG, TILE_REGISTRY } from '../registry/tileRegistry';
+import { MODULE_CATALOG, TILE_REGISTRY, catalogSeedRows } from '../registry/tileRegistry';
 import type { ModuleEntry } from '../registry/tileRegistry';
 
 const GREEN = '#27500A';
@@ -94,21 +95,60 @@ export function Subscription() {
 
   const mayEnable = can('subscription:update');
 
-  const load = useCallback(async () => {
-    if (!businessId) return;
+  const read = useCallback(async (): Promise<Record<string, BusinessModuleRow>> => {
     const { data, error } = await supabase
       .from('business_modules')
       .select(BUSINESS_MODULE_COLUMNS)
-      .eq('business_id', businessId);
+      .eq('business_id', businessId as string);
     const byKey: Record<string, BusinessModuleRow> = {};
     for (const r of (data ?? []) as BusinessModuleRow[]) byKey[r.module_key] = r;
+    if (error) console.warn('[TRACE:SUBSCRIPTION] read failed', error.message);
+    return byKey;
+  }, [businessId]);
+
+  const load = useCallback(async () => {
+    if (!businessId) return;
+    let byKey = await read();
+
+    // ════════════════════════════════════════════════════════════════════════════════════════════
+    // 🔴 SEED-IF-ABSENT — THE THIRD HOME THE 2026-08-01 RULING NAMED, AND IT IS THIS SURFACE.
+    // ════════════════════════════════════════════════════════════════════════════════════════════
+    // An owner who abandons onboarding with both seed calls failing has NO module rows — and
+    // `useModules` renders a MISSING row and a disabled row IDENTICALLY, so he is invisible on
+    // every screen. **No row means no clock, which means a customer who is never billed.**
+    //
+    // 🔴 IT IS NO LONGER MERELY SILENT — IT NOW CONTRADICTS ITSELF IN PUBLIC. This page renders a
+    // core module "Included ✓" from the CATALOG while the dashboard renders `[ENABLE]` from the
+    // ABSENT ROW: two surfaces disagreeing about the same module on the same tenant. That visible
+    // disagreement is what moved this from filed to built.
+    //
+    // ⚠️ WHY REPAIRING HERE IS SAFE: `seed_business_modules` is `ON CONFLICT DO NOTHING` and its
+    // clock refuses to restart, so **the repair path IS the create path** — running it against a
+    // healthy tenant creates nothing and re-terms nobody. It is gated on `subscription:update`,
+    // which every visitor to this page necessarily holds (`subscription:read` is owner-only), so
+    // the authority is not a new consideration.
+    //
+    // ⚠️ AND IT REPAIRS A SHORT SEED, NOT ONLY AN EMPTY ONE. `< MODULE_CATALOG.length` catches the
+    // tenant missing three rows just as it catches the tenant missing eleven — a partial seed is
+    // three modules with no clock, and it looks exactly like a healthy tenant on every screen.
+    if (Object.keys(byKey).length < MODULE_CATALOG.length) {
+      const { data: { user } } = await supabase.auth.getUser();
+      const res = await seedBusinessModules(supabase, businessId, user?.id ?? null, catalogSeedRows());
+      console.log('[TRACE:SUBSCRIPTION] seed-if-absent', {
+        businessId, had: Object.keys(byKey).length, catalog: MODULE_CATALOG.length, ...res,
+      });
+      warnOnShortModuleSeed('marketplace load', businessId, res);
+      // Re-read regardless of the reported outcome: a partial success still changed the truth, and
+      // rendering the pre-seed snapshot would show the owner a page that is already stale.
+      byKey = await read();
+    }
+
     console.log('[TRACE:SUBSCRIPTION] load', {
       businessId, rows: Object.keys(byKey).length, expected: MODULE_CATALOG.length,
-      error: error?.message ?? null,
     });
     setRows(byKey);
     setLoading(false);
-  }, [businessId]);
+  }, [businessId, read]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -144,14 +184,24 @@ export function Subscription() {
     setBusyKey(m.module_key);
     setNotice(null);
     const { data: { user } } = await supabase.auth.getUser();
+    // 🔴 THE TERM TRAVELS WITH THE ENABLE — ONE ACT (ruling 2026-08-02 (8)). The server starts the
+    // clock inside the same transaction, so there is no window in which this module is live and
+    // unclocked. **`m.trial_days` is 0 for `core` and `core_optional`, which is what keeps a free
+    // module from acquiring a countdown** — the inverse defect, decided here because the database
+    // has no catalog (AC-1).
     const res = await setBusinessModuleState(
-      supabase, businessId, m.module_key, { enabled: true }, user?.id ?? null,
+      supabase, businessId, m.module_key,
+      { enabled: true, trialDays: m.trial_days }, user?.id ?? null,
     );
     console.log('[TRACE:SUBSCRIPTION] enable', {
       module: m.module_key, applied: res.applied, reason: res.reason, error: res.error?.message ?? null,
     });
     if (res.applied) {
-      setNotice({ key: m.module_key, ok: true, text: `${labelFor(m.module_key)} is on. Nothing has been billed.` });
+      // The notice says what ACTUALLY happened, including the clock — the whole point of this pass
+      // being that the copy and the outcome must agree.
+      setNotice({ key: m.module_key, ok: true, text: res.trialStarted
+        ? `${labelFor(m.module_key)} is on and its ${m.trial_days}-day trial has started. Nothing has been billed.`
+        : `${labelFor(m.module_key)} is on. Nothing has been billed.` });
       await load();
     } else {
       // 🔴 A REFUSAL IS SURFACED, NEVER SWALLOWED. `applied:false` with a reason is the server's
@@ -389,9 +439,13 @@ export function Subscription() {
                             row this button creates. **Whether Enable should also start the clock is
                             a BEHAVIOUR ruling and is OWED — it is not a rendering fix, so it was
                             not silently taken here.** The copy now says what actually happens. */}
+                        {/* ✅ RESTORED 2026-08-02 (8), NOW THAT THE BEHAVIOUR MATCHES IT. This
+                            sentence was true, then false, and is true again — the difference is that
+                            `Enable` now starts the clock in the SAME transaction as the enable, so
+                            there is no state in which the card's promise and the row disagree. */}
                         <div style={{ fontSize: '0.8125rem', color: '#6b7280' }}>
-                          Turning this on does not charge you — there is no payment set up yet, and
-                          no trial clock starts.
+                          Turning this on does not charge you — there is no payment set up yet.
+                          {m.trial_days > 0 && ` A ${m.trial_days}-day trial starts when you enable it.`}
                         </div>
                         {notice?.key === m.module_key && (
                           <div style={{ fontSize: '0.8125rem', marginTop: 6, color: notice.ok ? GREEN : '#b91c1c' }}>

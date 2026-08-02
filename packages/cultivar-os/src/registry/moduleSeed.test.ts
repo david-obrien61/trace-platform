@@ -212,8 +212,32 @@ MODULE_CATALOG.forEach((m, i) => {
   // The money question was never "is it core", it was **"is it BILLABLE"** — and the field that says
   // so is `billing === 'add_on'`, the only class that carries a price to convert to. Stated against
   // the right condition, the invariant is unchanged in meaning and now survives a fourth value.
+  // ══════════════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 B6'S BLIND SPOT, NAMED HERE RATHER THAN ONLY IN A LEDGER ROW (David's instruction, 08-02 (8)).
+  // ══════════════════════════════════════════════════════════════════════════════════════════════
+  // **B6 ASSERTS OVER THE SEED PROJECTION, AND TWO PATHS CREATE MODULE ROWS.** `moduleSeedRow` is a
+  // pure function, so everything below is provable at build time — but a row created by a BUTTON
+  // (`set_business_module_state`) never passes through it, and on 2026-08-02 the marketplace's
+  // `Enable` produced exactly the state B6 forbids: enabled, billable, no clock, free forever.
+  // B6 was green throughout, correctly, because the seed was never wrong.
+  //
+  // **CAN A SIBLING COVER THE BUTTON PATH? NO — AND THE ANSWER IS STRUCTURAL, NOT A MISSING TEST.**
+  // The invariant is about DB STATE, and the only pure surface here is the projection. A unit test
+  // cannot see a row an RPC wrote. Three things were considered:
+  //   · a DB CHECK constraint — **not expressible**: the constraint would need `billing`, and the
+  //     database has no catalog (AC-1 — it is passed in, deliberately).
+  //   · a mirror assertion over the RPC's inputs — proves the CLIENT sends a term, not that the row
+  //     ended up with one. It would have passed on 08-02, because the client sent nothing at all.
+  //   · **making the state UNREACHABLE** — which is the route taken (ruling 2026-08-02 (8)):
+  //     `set_business_module_state` now starts the clock in the SAME transaction as the enable, so
+  //     no sequence of calls can produce enabled-and-unclocked for a priced module.
+  //
+  // So the honest guard for the button path is a **STANDING DETECTION QUERY, not an assertion** —
+  // `20260802b` V3b, which finds any enabled add-on with no clock, and it is on the owner-test board
+  // for the reason card 25 exists: *a query that lives only in a migration nobody reopens is a
+  // question nobody asks.* B6 keeps its half and no longer implies it covers the other.
   ok(!(row.enabled && m.billing === 'add_on' && !row.start_trial),
-     `B6 ${m.module_key}: a BILLABLE module live with NO clock — free forever with no conversion date and nothing to bill`);
+     `B6 ${m.module_key}: a BILLABLE module live with NO clock — free forever with no conversion date and nothing to bill (SEED PATH ONLY — see the note above; the button path is made unreachable by the RPC, not by this)`);
   // B6b — liveness has exactly two sources and no third: the BASELINE (derived from billing, one
   // field) or a RUNNING CLOCK (an override on top of it). If someone later adds a third way for a
   // module to seed live, this is what refuses it. It reads `enabledByDefault` rather than restating

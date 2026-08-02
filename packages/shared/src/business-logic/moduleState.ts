@@ -58,10 +58,26 @@ export interface ModuleStatePatch {
   configured?: boolean;
   /** MERGED over the existing config, never replacing it — requires `settings:update`. */
   config?: Record<string, unknown>;
+  /**
+   * 🔴 THE MODULE'S OFFER, FROM THE CATALOG — and passing it is what makes enabling and trialling
+   * ONE ACT (ruling 2026-08-02 (8)). The server starts the clock inside the same transaction as the
+   * enable, so a partial failure cannot leave a billable module live with nothing that ends it.
+   *
+   * **0 or omitted = NO CLOCK, which is required for `core` and `core_optional`.** Starting a
+   * countdown on a module that never expires is the inverse defect, and the client is where that is
+   * decided because the database has no idea what a module costs (AC-1 — the same reason
+   * `seed_business_modules` takes its catalog as an argument).
+   *
+   * Only an ACTUAL enablement change to `true` can start a clock; a re-enable of an already-on
+   * module touches nothing.
+   */
+  trialDays?: number;
 }
 
 export interface ModuleStateResult {
   applied: boolean;
+  /** true when THIS call started a trial clock. false for a re-enable, core, or core_optional. */
+  trialStarted: boolean;
   /** Present when the server REFUSED (authority or validation). Surface it; do not swallow it. */
   reason: string | null;
   error: { message: string } | null;
@@ -80,21 +96,23 @@ export async function setBusinessModuleState(
     p_enabled:       patch.enabled     ?? null,
     p_configured:    patch.configured  ?? null,
     p_config_patch:  patch.config      ?? null,
+    p_trial_days:    patch.trialDays    ?? null,
     p_actor_user_id: actorUserId,
   });
 
   // An RPC error is now just an error. There is no other door: the table has no client write
   // policy, so a failure here means the write did NOT happen, and reporting it as such is the
   // whole contract.
-  if (error) return { applied: false, reason: null, error };
+  if (error) return { applied: false, reason: null, trialStarted: false, error };
 
   // The RPC RETURNS TABLE(...) — PostgREST hands back an array of one row.
   const r = Array.isArray(data) ? data[0] : data;
   const applied = Boolean(r?.applied);
   const reason = (r?.reason as string | null) ?? null;
+  const trialStarted = Boolean(r?.trial_started);
   console.log('[TRACE:MODULES] set_business_module_state', {
-    moduleKey, applied, reason,
+    moduleKey, applied, reason, trialStarted,
     enabled_before: r?.enabled_before, enabled_after: r?.enabled_after, was_insert: r?.was_insert,
   });
-  return { applied, reason, error: null };
+  return { applied, reason, trialStarted, error: null };
 }

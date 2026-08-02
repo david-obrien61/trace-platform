@@ -114,6 +114,42 @@ Two consequences that are easy to miss, and that decided the ruling:
 
 ---
 
+## 5. SECTION HEADERS (a header is a claim about every row beneath it)
+
+**S1 — A SECTION HEADER'S CLAIM MUST HOLD FOR EVERY ROW THE SECTION CAN CURRENTLY CONTAIN.**
+A header is not decoration; it is an assertion the reader applies to everything under it. If one row
+contradicts it, the header is false for that row and the page has told the reader two things at once.
+
+**Both directions are the same lie, and both have now happened on one screen (2026-08-02):**
+- A header saying **"nothing to do"** above a row that HAS something to do.
+  *Included* read *"Part of TRACE. No extra cost, nothing to buy"* directly above Contractors, which
+  carried a `Turn on` button — and a green check, the glyph meaning *done*, beside it.
+- A header **telling the reader to act** when nothing is left to act on, or when they may not.
+  *Available* read *"Turn one on and it works immediately"* to a MANAGER, whose every row below read
+  `Owner only`. The inverse of the first, on the same page, found by sweeping for the first.
+
+**THEREFORE:**
+1. **Enumerate the row states a section can hold, and check the header against each.** Not against
+   the common case — against the ones the section can *currently* contain.
+2. **A header whose claim is true only sometimes is CONDITIONAL, not approximate.** *Included*'s
+   second sentence now appears only while an optional module is off; with nothing left to switch on
+   it would be telling the owner to do something already done.
+3. **Headers are permission-aware wherever they name an action**, because the same rows carry
+   different controls for different roles (the six-state ruling, applied to copy).
+4. 🔴 **A PER-ROW GLYPH MUST NOT RESTATE WHAT THE HEADER ALREADY SAID.** The header carries the
+   section's shared fact; the glyph must carry what distinguishes THIS row — otherwise it is a second
+   representation of one fact (**STD-011**), and the redundant copy is the one that goes wrong. On
+   the Contractors card the check restated *included* (which the header had said) instead of carrying
+   *on/off* (which only the row knew), and that is exactly why it could contradict the button.
+
+**WHY THIS IS A STANDARD AND NOT A BUG REPORT:** the defect is the six-state ruling's own class —
+*a control saying one thing while the state says another* — arriving in COPY rather than in a
+control, and it appeared inside the first surface built under that ruling. Reviewing controls without
+reviewing the sentences above them leaves half the surface unchecked.
+
+**Enforcement:** review-only. No cap reads prose, and one that tried would be reading intent. The
+mechanical half is the sweep: when a section gains a row state it did not have, re-read its header.
+
 ## System-managed field registry (the F2/F3 set — David to confirm)
 
 The canonical locked set in `systemManagedFields.ts`, keyed by DB field name (a grid locks the field wherever it shows it):
