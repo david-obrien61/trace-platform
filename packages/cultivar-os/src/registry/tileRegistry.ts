@@ -273,10 +273,39 @@ export const TILE_REGISTRY: TileEntry[] = [
 // PROVENANCE IS PER-ROW AND REQUIRED. `note` is not optional: every price cites where it came from,
 // so the next reader can tell a ratified number from an assumed one. That is also why there is no
 // conditional here either — a required `note` on all eleven beats "required only when unpriced".
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// 🔴 THE FOURTH VALUE — `core_optional`, minted 2026-08-02 because `contractor_tiers` AT $0 COULD
+//    NOT BE SAID. David's ruling, and his framing replaced mine: the defect was never the missing
+//    value, it was THREE FIELDS DOING ONE JOB UNDER CONTRADICTORY RULES.
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// The ruling is "price 0, no trial, SEEDS DISABLED — core-with-a-switch: it ships with the platform
+// and a nursery that gives contractor discounts turns it on. Nothing expires because there is
+// nothing to expire." **That sentence had no legal spelling in this file**, and the three ways to
+// fake it each break something real:
+//   · `core`     — `price_monthly: 0` is legal here and ONLY here, but `core` SEEDS THE MODULE ON.
+//   · `add_on`   — seeds dark correctly, and `verify-tile-fields` rejects `price_monthly: 0` on it
+//                  ("0 would read as free"). The cap is right; the module is not an add-on.
+//   · `unpriced` — seeds dark correctly, and it ASSERTS THE PRICE IS UNKNOWN when it was just
+//                  decided. That is D-9 pointed backwards: a fabricated *absence* in place of a
+//                  real value, which is the same lie as a fabricated value in place of an absence.
+//
+// 🔴 SO ONE FIELD DECIDES, AND THE OTHERS STOP VOTING. `enabledByDefault()` below is derived from
+// `billing` ALONE and is the module's BASELINE state; a running trial is an OVERRIDE on top of it,
+// never a second opinion about it. That is what makes `core_optional` a value rather than a
+// workaround: it is not "core with an exception", it is its own baseline — INCLUDED IN BASE, OFF
+// UNTIL SWITCHED ON — and it needed a name because the model already contained the concept and had
+// nowhere to put it.
 export type ModuleBilling =
-  | 'core'      // included in the base subscription — price 0 MEANS included, never "free add-on"
-  | 'add_on'    // separately billable, price > 0
-  | 'unpriced'; // HONESTLY UNKNOWN (D-9). Not zero, not a guess — null, with the reason in `note`.
+  | 'core'          // included in the base subscription, ON at seed — price 0 MEANS included
+  | 'core_optional' // included in the base subscription, OFF at seed. $0, no trial, nothing expires.
+                    // A capability the platform ships and the owner switches on if their business
+                    // works that way. NOT a free add-on and NOT a lesser core: the money is
+                    // identical to `core`, only the default differs.
+  | 'add_on'        // separately billable, price > 0
+  | 'unpriced';     // HONESTLY UNKNOWN (D-9). Not zero, not a guess — null, with the reason in `note`.
+                    // ⚠️ ZERO MEMBERS as of 2026-08-02 (both were ruled). KEPT DELIBERATELY: it is
+                    // the honest answer for the next module that arrives before its decision does,
+                    // and deleting it would mean the next such module gets a guessed number instead.
 
 export interface ModuleEntry {
   /** Joins to TileEntry.module_key AND to business_modules.module_key. */
@@ -347,11 +376,13 @@ export const MODULE_CATALOG: ModuleEntry[] = [
   { module_key: 'business_insights', billing: 'add_on',  price_monthly: 19,   trial_days: 30, note: 'MASTER_BRIEF:309 — "Business Insights", $19/mo, all verticals.' },
   { module_key: 'delivery_routing',  billing: 'add_on',  price_monthly: 29,   trial_days: 30, note: 'MASTER_BRIEF:311 — "Delivery Routing", $29/mo, all verticals.' },
   { module_key: 'seasonal_module',   billing: 'add_on',  price_monthly: 29,   trial_days: 30, note: 'MASTER_BRIEF:313 — "Seasonal Module", $29/mo, Cultivar. Matches the tile\'s vertical:cultivar.' },
-  { module_key: 'contractor_tiers',  billing: 'add_on',  price_monthly: 49,   trial_days: 30, note: 'MASTER_BRIEF:317 — "Contractor Portal", $49/mo. The brief\'s label differs from the tile\'s ("Contractors"); the price line is the same product.' },
+  { module_key: 'cost_to_produce',   billing: 'add_on',  price_monthly: 29,   trial_days: 30, note: 'RULED 2026-08-02 (David) — priced at $29/mo, trialled like the rest. ⚠️ THE NUMBER IS A PLACEHOLDER AND SAYING SO IS THE POINT: David prices the verticals from what Cost-to-Produce tells him the platform actually costs to run, so this is one field to change when that data exists. Safe to change because the term is SNAPSHOTTED at seed — a catalog edit governs NEW trials only. NOT in MASTER_BRIEF (neither list); this row is the decision, not a citation.' },
 
-  // ── unpriced: IN NEITHER LIST. Named as gaps rather than assigned a number (D-9). ──
-  { module_key: 'cost_to_produce',   billing: 'unpriced', price_monthly: null, trial_days: 0, note: 'NOT IN MASTER_BRIEF — absent from the Core list AND the add-on table. It is the cost/margin moat (D-009), an owner-only admin surface, and whether it is core or billable has never been decided. RULING OWED.' },
-  { module_key: 'inventory_intake',  billing: 'unpriced', price_monthly: null, trial_days: 0, note: 'NOT IN MASTER_BRIEF. The Core list says "Basic inventory / asset tracking" (:298) — mobile photo intake is arguably beyond "basic", and is named in neither list. RULING OWED.' },
+  // ── core_optional: INCLUDED IN BASE, OFF UNTIL SWITCHED ON. $0, no clock, nothing expires. ──
+  { module_key: 'contractor_tiers',  billing: 'core_optional', price_monthly: 0, trial_days: 0, note: 'RULED 2026-08-02 (David) — core-with-a-switch: it ships with the platform and a nursery that gives contractor discounts turns it on. Was add_on/$49/30d and ON A LIVE CLOCK — "a working capability that expires in a month is exactly what the fuzz would take away wrongly". ⚠️ MASTER_BRIEF:317 prices "Contractor Portal" at $49/mo and that line SURVIVES: the portal is a LOGIN surface that does not exist; this is the discount switch on the nursery side. Two products, and the tier itself belongs to the CUSTOMER (customers.price_tier), not to this list.' },
+
+  // ── core (continued): ruled out of `unpriced` 2026-08-02 ──
+  { module_key: 'inventory_intake',  billing: 'core',    price_monthly: 0,    trial_days: 0,  note: 'RULED 2026-08-02 (David) — CORE. "Ships on, always. It is how stock gets captured; there is nothing to buy." Was `unpriced`. NOT in MASTER_BRIEF: the Core list says "Basic inventory / asset tracking" (:298) and mobile photo intake is arguably beyond "basic" — the ruling settles it as core regardless of which brief line it maps to.' },
 ];
 
 // THE SEEDER NEEDED ONE, SO IT IS WRITTEN NOW — exactly as the note above said it would be. The
@@ -451,14 +482,34 @@ export const MODULE_CATALOG: ModuleEntry[] = [
 // after they disagree). The dependency direction is the only one AC-1 permits: the vertical may
 // import shared; shared may never import the vertical.
 
+/**
+ * A module's BASELINE state — is it on when nothing else is true? DERIVED FROM `billing` ALONE, and
+ * that is the whole point of the 2026-08-02 (2) ruling: **one field decides.**
+ *
+ * 🔴 THIS IS NOT A SECOND OPINION ABOUT LIVENESS, IT IS THE FLOOR IT STARTS FROM. A running trial is
+ * an OVERRIDE on top of this (`enabled = enabledByDefault(billing) || start_trial`), which is the
+ * 2026-08-02 (1) ruling unchanged — the clock still ENDS access rather than withholding it. What
+ * changed is that "is it included and on" stopped being spelled inline as `billing === 'core'` in
+ * the one place that happened to need it, where a fourth value could not be added without finding
+ * every such spelling. There is exactly one now, and it is here.
+ *
+ * ⚠️ `core_optional` IS FALSE HERE AND THAT IS THE ENTIRE DIFFERENCE FROM `core`. Same price, same
+ * inclusion, same absence of a clock — it simply is not on until the owner says so. Reading this
+ * function is the only way to tell them apart, which is why nothing else may re-derive it.
+ */
+export function enabledByDefault(billing: ModuleBilling): boolean {
+  return billing === 'core';
+}
+
 /** One module's day-one row state. Exported so the mapping itself is tested, not just its output. */
 export function moduleSeedRow(entry: ModuleEntry): ModuleSeedRow {
-  const isCore     = entry.billing === 'core';
+  const baseline   = enabledByDefault(entry.billing);
   const startTrial = entry.trial_days > 0;
   // 🔴 LIVENESS FOLLOWS THE CLOCK, NOT THE BILLING CLASS (David's ruling 2026-08-02). A module is on
-  // at seed because it is INCLUDED (core) or because it is INSIDE A RUNNING TRIAL. There is no third
-  // way to be on, and `add_on` by itself is not one — an add-on with `trial_days: 0` seeds dark.
-  const isLive     = isCore || startTrial;
+  // at seed because it is INCLUDED-AND-ON by baseline, or because it is INSIDE A RUNNING TRIAL.
+  // There is no third way, and `add_on` by itself is not one — an add-on with `trial_days: 0` seeds
+  // dark. `core_optional` seeds dark on BOTH counts, which is the ruling it was minted for.
+  const isLive     = baseline || startTrial;
   return {
     module_key:  entry.module_key,
     enabled:     isLive,

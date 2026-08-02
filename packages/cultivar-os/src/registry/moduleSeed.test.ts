@@ -25,7 +25,7 @@
  *     --bundle --platform=node --format=cjs | node
  */
 
-import { MODULE_CATALOG, moduleSeedRow, catalogSeedRows } from './tileRegistry';
+import { MODULE_CATALOG, moduleSeedRow, catalogSeedRows, enabledByDefault } from './tileRegistry';
 import type { ModuleEntry } from './tileRegistry';
 
 let passed = 0, failed = 0;
@@ -77,6 +77,37 @@ ok(moduleSeedRow(entry({ billing: 'core', trial_days: 30 })).start_trial === tru
 
 ok(moduleSeedRow(entry({ module_key: 'seasonal_module' })).module_key === 'seasonal_module',
    'A9 the key is carried through unchanged — it is the join to business_modules');
+
+// ── 1a-bis. THE FOURTH VALUE — `core_optional` (David's ruling 2026-08-02 (2)) ───────────────────
+// $0, no trial, SEEDS DARK. "It ships with the platform, and a nursery that gives contractor
+// discounts turns it on. Nothing expires because there is nothing to expire."
+const coreOpt = (over: Partial<ModuleEntry> = {}) =>
+  entry({ billing: 'core_optional', price_monthly: 0, trial_days: 0, ...over });
+
+ok(moduleSeedRow(coreOpt()).enabled === false,
+   'A16 🔴 core_optional seeds DARK — that is the ENTIRE difference from core, and the reason the value exists');
+ok(moduleSeedRow(coreOpt()).configured === false,
+   'A17 core_optional seeds UNCONFIGURED — it is not live, so there is nothing set up');
+ok(moduleSeedRow(coreOpt()).start_trial === false,
+   'A18 🔴 core_optional NEVER starts a clock — nothing expires because there is nothing to expire');
+ok(moduleSeedRow(coreOpt()).trial_days === 0,
+   'A19 …and it carries no term either — a term with no trial is a trial that never started (B8)');
+
+// 🔴 A20/A21 — THE DERIVATION IS ONE FUNCTION AND THESE ARE THE PROBES THAT KEEP IT ONE. `billing`
+// decides the baseline ALONE; if someone re-spells `billing === 'core'` inline anywhere, the fourth
+// value silently becomes core again at that site and nothing else in this file would notice.
+ok(enabledByDefault('core') === true && enabledByDefault('core_optional') === false
+   && enabledByDefault('add_on') === false && enabledByDefault('unpriced') === false,
+   'A20 🔴 enabledByDefault is TOTAL over ModuleBilling and only `core` is on — one field decides');
+ok(moduleSeedRow(coreOpt()).enabled === enabledByDefault('core_optional'),
+   'A21 🔴 the mapping READS the derivation rather than restating it — a second spelling of the baseline is how the fourth value gets lost');
+
+// 🔴 A22 — THE OVERRIDE STILL WORKS ON TOP OF THE NEW BASELINE. The 2026-08-02 (1) ruling is
+// untouched by the 2026-08-02 (2) ruling: a clock makes a module live regardless of its baseline.
+// This is the combination nothing in the catalog uses today, which is exactly why it needs a probe —
+// the day someone trials a core_optional module, THIS says what happens.
+ok(moduleSeedRow(coreOpt({ trial_days: 30 })).enabled === true,
+   'A22 🔴 a trial OVERRIDES a dark baseline — the clock still ends access rather than withholding it');
 
 // ── 1b. THE TWO RULINGS OF 2026-08-01 (2) ───────────────────────────────────────────────────────
 
@@ -130,18 +161,25 @@ for (const m of MODULE_CATALOG) {
      `B4 ${m.module_key}: a trial clock over a NULL price — the countdown ends at a number nobody has decided (D-9)`);
   ok(!(row.start_trial && m.price_monthly === 0),
      `B5 ${m.module_key}: a trial clock over a $0 price — nothing to convert to`);
-  // 🔴 B6 REWRITTEN, NOT DELETED — the money invariant survives the reversal in its correct form.
-  // It read `!(enabled && billing !== 'core')`: nothing may be live unless it is core. Under the
-  // ruling a trialling module IS live and IS billable, which is the whole point — so the danger is
-  // no longer "live and not core", it is **LIVE WITH NOTHING THAT EVER ENDS IT**: not core (so not
-  // included) and no clock (so no conversion date). That module is free forever and nothing bills
-  // it — the defect B6 was always aiming at, stated against the right condition.
-  ok(!(row.enabled && m.billing !== 'core' && !row.start_trial),
-     `B6 ${m.module_key}: live, not core, and NO clock — free forever with no conversion date and nothing to bill`);
-  // B6b — liveness has exactly two sources and no third. If someone later adds a way for a module
-  // to seed live that is neither "included" nor "on a clock", this is what refuses it.
-  ok(row.enabled === (m.billing === 'core' || row.start_trial),
-     `B6b ${m.module_key}: live iff included-in-base OR inside a running trial — there is no third way to be on`);
+  // 🔴 B6 REWRITTEN A SECOND TIME (2026-08-02 (2)) — AND ADDING `core_optional` IS WHAT EXPOSED THE
+  // BUG IN THE FIRST REWRITE. It read `!(row.enabled && m.billing !== 'core' && !row.start_trial)`:
+  // "live, not core, no clock = free forever with nothing to bill." That was CORRECT while `core`
+  // was the only free value. **`core_optional` is also free — by ruling — so `!== 'core'` now
+  // catches a module that is legitimately free forever, which is its entire design.** The invariant
+  // would have fired on the first core_optional module anyone ever switched on and called it a
+  // billing defect.
+  //
+  // The money question was never "is it core", it was **"is it BILLABLE"** — and the field that says
+  // so is `billing === 'add_on'`, the only class that carries a price to convert to. Stated against
+  // the right condition, the invariant is unchanged in meaning and now survives a fourth value.
+  ok(!(row.enabled && m.billing === 'add_on' && !row.start_trial),
+     `B6 ${m.module_key}: a BILLABLE module live with NO clock — free forever with no conversion date and nothing to bill`);
+  // B6b — liveness has exactly two sources and no third: the BASELINE (derived from billing, one
+  // field) or a RUNNING CLOCK (an override on top of it). If someone later adds a third way for a
+  // module to seed live, this is what refuses it. It reads `enabledByDefault` rather than restating
+  // `=== 'core'`, so a fifth billing value is enforced here the moment it is added, with no edit.
+  ok(row.enabled === (enabledByDefault(m.billing) || row.start_trial),
+     `B6b ${m.module_key}: live iff its baseline is on OR a clock is running — there is no third way to be on`);
   // 🔴 B7 — the cross-field rule the RPC enforces server-side, asserted here so a bad payload is
   // never SENT: a module asking for a trial must carry a positive term. The server refuses the
   // WHOLE batch on this, so one bad catalog row would block every tenant's seed.

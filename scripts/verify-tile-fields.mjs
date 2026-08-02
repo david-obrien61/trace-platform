@@ -211,10 +211,16 @@ export function scan(src) {
 // `billing` ↔ `price_monthly` is a three-state machine INSIDE one object, and a state machine is
 // exactly what an invariant check is for: core ⇒ 0, add_on ⇒ > 0, unpriced ⇒ null. An `unpriced`
 // module carrying a number, or an `add_on` carrying null, is the fabricated-value defect D-9 names.
+//
+// 🔴 `core_optional` ADDED 2026-08-02 AND ITS PRICE RULE IS IDENTICAL TO `core`'s, WHICH IS THE
+// POINT. The two differ in exactly one thing — the default-on state, read by `enabledByDefault()`
+// and by nothing here. This cap asserts MONEY; it has no opinion about enablement, and it must not
+// grow one, or the rule "one field decides" acquires a second decider in a checker.
 const BILLING_RULE = {
-  core:     { ok: (v) => v === '0',    how: 'billing:core means INCLUDED IN BASE, so the price must be exactly 0' },
-  add_on:   { ok: (v) => /^\d+$/.test(v) && Number(v) > 0, how: 'billing:add_on must carry a real price > 0 — 0 would read as free' },
-  unpriced: { ok: (v) => v === 'null', how: 'billing:unpriced must be null, NEVER 0 — a price we do not have must not render as a real figure (D-9)' },
+  core:          { ok: (v) => v === '0',    how: 'billing:core means INCLUDED IN BASE, so the price must be exactly 0' },
+  core_optional: { ok: (v) => v === '0',    how: 'billing:core_optional means INCLUDED IN BASE BUT OFF UNTIL SWITCHED ON — same money as core, so the price must be exactly 0' },
+  add_on:        { ok: (v) => /^\d+$/.test(v) && Number(v) > 0, how: 'billing:add_on must carry a real price > 0 — 0 would read as free' },
+  unpriced:      { ok: (v) => v === 'null', how: 'billing:unpriced must be null, NEVER 0 — a price we do not have must not render as a real figure (D-9)' },
 };
 
 /** Parse MODULE_CATALOG rows with the same walker used for the tiles. */
@@ -406,6 +412,20 @@ function runProbes() {
     FIXTURE(`${TILE_WITH_MK}\n${TILE_WITH_MK.replace("key: 'alpha'", "key: 'gamma'")}`) + c(OK_CAT), false);
   tc('C15 a tile with NO module_key needs no catalog entry',
     FIXTURE(`${OK_ROW}\n${TILE_WITH_MK.replace("key: 'alpha'", "key: 'gamma'")}`) + c(OK_CAT), false);
+  // ── C17–C20 — the FOURTH VALUE (2026-08-02). `core_optional` is legal at 0 and ONLY at 0. ──
+  const asCoreOpt = (cat) => cat.replace("billing: 'add_on'", "billing: 'core_optional'");
+  tc('C17 🔴 core_optional at 0 PASSES — the spelling `contractor_tiers` had no way to say before today',
+    FIXTURE(TILE_WITH_MK) + c(asCoreOpt(OK_CAT).replace('price_monthly: 19', 'price_monthly: 0').replace('trial_days: 30', 'trial_days: 0')), false);
+  tc('C18 🔴 core_optional carrying a PRICE fails — included-in-base is not $19, whatever its default',
+    FIXTURE(TILE_WITH_MK) + c(asCoreOpt(OK_CAT)), true);
+  tc('C19 🔴 core_optional carrying NULL fails — the price is DECIDED ($0), not unknown. Using `unpriced` for a decided zero is D-9 pointed backwards, and this is the probe that refuses it',
+    FIXTURE(TILE_WITH_MK) + c(asCoreOpt(OK_CAT).replace('price_monthly: 19', 'price_monthly: null')), true);
+  // The negative control for the pair: `core` and `core_optional` are DIFFERENT VALUES, not aliases.
+  // If someone "simplifies" by folding one into the other, the union loses a member and C6's shape
+  // catches the survivor — but this asserts the legal one is legal, which C6 cannot.
+  tc('C20 core_optional is a MEMBER, not a typo — it passes where billing:\'free\' (C6) fails',
+    FIXTURE(TILE_WITH_MK) + c(asCoreOpt(OK_CAT).replace('price_monthly: 19', 'price_monthly: 0').replace('trial_days: 30', 'trial_days: 0')), false);
+
   tc('C16 a note full of commas, colons and an apostrophe is ONE value (the walker, reused)',
     FIXTURE(TILE_WITH_MK) + c(OK_CAT.replace(/note: '[^']*'/, "note: 'MASTER_BRIEF:306 — Social Media + AI posts, $19/mo, all verticals; the brief\\'s label differs.'")), false);
 
