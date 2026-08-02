@@ -780,9 +780,16 @@ COVERS: ledger #186 — the module marketplace (David's six rulings, 2026-08-02 
 2. **Included lists SIX things**: QR Checkout, QuickBooks, Inventory Intake (catalog rows) **plus
    three display-only lines** — Owner dashboard, Basic inventory & asset tracking, Customer
    records. Those three have no catalog entry by ruling and are copy, not data.
-3. **Contractors sits in Included with a `Turn on` button**, not a price and not a countdown. It is
-   $0, optional, and nothing expires. **FAIL if it shows a price, a trial, or an `Enable` that
-   implies a purchase.**
+3. 🔴 **CONTRACTORS CARRIES A GREY CIRCLE, NOT A GREEN CHECK** — it is included but NOT switched on,
+   and the check is the glyph for *on*. Its copy leads with the state: *"Not turned on. Free to use
+   — switch it on if you give contractor discounts, and nothing expires."* Beside it, `Turn on`.
+   **FAIL if it shows a green check next to a `Turn on` button** — that is the card asserting two
+   contradictory states at once, and it is what this card was rewritten for. **FAIL also if** it
+   shows a price or a countdown.
+   ⚠️ **And the section header changes with it:** with Contractors off it reads *"…A few are
+   optional — switch them on if you need them."* Turn Contractors on and the header must revert to
+   *"…nothing to buy"* — the second sentence is conditional, because with nothing left to switch on
+   it would be telling you to do something already done.
 4. **Active shows a real countdown** — Social, Delivery and Cost-to-Produce, each with
    `N days left in trial`. 🔴 **At 0 it must read "Trial ended — still working", NEVER "expired"**:
    nothing switches a lapsed module off, and a page claiming otherwise is the surface lying.
@@ -791,6 +798,10 @@ COVERS: ledger #186 — the module marketplace (David's six rulings, 2026-08-02 
    no table, no endpoint. **FAIL if the card is inert** — an input surface that swallows input is
    worse than none.
 6. 🔴 **THE FOOTER SAYS TRACE DOES NOT BILL.** Every price is a rate, not a charge.
+7. 🔴 **AVAILABLE CARDS SAY NO CLOCK STARTS.** *"Turning this on does not charge you — there is no
+   payment set up yet, and no trial clock starts."* **FAIL if any card claims a trial begins on
+   enable** — it does not, and it said so falsely until 2026-08-02 (7). Whether it SHOULD start one
+   is a ruling on David's table.
 
 ### CARD 33 — 🔴 ENABLE ACTUALLY WRITES, AND A MANAGER IS REFUSED WITH THE REASON
 STATUS: owed

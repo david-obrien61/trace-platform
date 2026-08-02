@@ -39,9 +39,16 @@
  * no payment rail in the platform. The copy on every Available card says so, because *"the business
  * is now paying $29/mo"* is a claim TRACE cannot make yet, and a button that implies it would be the
  * fake-affordance class one layer up from the one this page was built to remove.
+ *
+ * 🔴 AND IT DOES NOT START A TRIAL EITHER — RULING OWED (2026-08-02 (7)). `Enable` calls
+ * `setBusinessModuleState({enabled:true})`; the clock's only writer is `start_module_trial`, a
+ * separate RPC this page never calls. **So enabling a priced add-on here produces a BILLABLE MODULE
+ * THAT IS LIVE WITH NOTHING THAT EVER ENDS IT** — invariant B6's defect, and B6 asserts over the
+ * SEED PROJECTION only, so it structurally cannot see a row this button creates. The copy says what
+ * actually happens; whether the button should ALSO start the clock is David's, and it is filed.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, Clock, Mail, Plus } from 'lucide-react';
+import { Check, Circle, Clock, Mail, Plus } from 'lucide-react';
 import { useBusinessContext } from '@trace/shared/context';
 import { supabase } from '@trace/shared/supabase/client';
 import { setBusinessModuleState, BUSINESS_MODULE_COLUMNS } from '@trace/shared/business-logic/moduleState';
@@ -202,24 +209,56 @@ export function Subscription() {
         ) : (
           <>
             {/* ── INCLUDED ─────────────────────────────────────────────────────────────────── */}
-            <SectionHead title="Included" blurb="Part of TRACE. No extra cost, nothing to buy." />
+            {/* ═══════════════════════════════════════════════════════════════════════════════════
+                🔴 "INCLUDED" IS TWO STATES, NOT ONE — INCLUDED AND ON, and INCLUDED BUT NOT
+                SWITCHED ON (David's finding, 2026-08-02 (7)).
+                ═══════════════════════════════════════════════════════════════════════════════════
+                The first version gave every row in this section a green CHECK. On Contractors that
+                put a check — the same glyph Orders and QuickBooks carry, meaning *done, nothing to
+                do* — on the one card with a [Turn on] button beside it. **The card asserted two
+                contradictory states at once**, which is the six-state ruling's own class arriving
+                inside the first surface built under it.
+
+                THE CUT: **the SECTION HEADER already asserts the billing fact for every row in it,
+                so the per-row glyph must not repeat it.** A glyph saying "included" is a second
+                representation of what the header just said (STD-011) — and it was the copy that
+                happened to be wrong. The glyph now carries the only other fact a row has: WHETHER
+                IT IS ON. Check = on. Circle = off, and off is a legitimate resting state here, not
+                a defect — so it is muted rather than alarming. */}
+            <SectionHead
+              title="Included"
+              blurb={sections.included.some((m) => m.billing === 'core_optional' && rows[m.module_key]?.enabled !== true)
+                // The second sentence is CONDITIONAL. With nothing to switch on it would tell the
+                // owner to do something already done — a small lie, and the exact shape of the one
+                // this section just had.
+                ? 'Part of TRACE at no extra cost. A few are optional — switch them on if you need them.'
+                : 'Part of TRACE. No extra cost, nothing to buy.'}
+            />
             {sections.included.map((m) => {
               const row = rows[m.module_key];
               const on  = row?.enabled === true;
               const isSwitchable = m.billing === 'core_optional';
+              const isOff = isSwitchable && !on;
               return (
                 <div key={m.module_key} style={{ marginBottom: 8 }}>
                   <Card>
-                    <Check size={18} color={GREEN} style={{ flexShrink: 0, marginTop: 2 }} />
+                    {isOff
+                      ? <Circle size={18} color="#9ca3af" style={{ flexShrink: 0, marginTop: 2 }} />
+                      : <Check  size={18} color={GREEN}   style={{ flexShrink: 0, marginTop: 2 }} />}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 600, fontSize: '0.9375rem' }}>{labelFor(m.module_key)}</div>
                       <div style={{ fontSize: '0.8125rem', color: '#6b7280' }}>
+                        {/* COPY LEADS WITH THE CHOICE, NOT THE INCLUSION. "Included at no charge —
+                            turn it on…" opened on the fact the section header had already stated,
+                            and buried the only fact the row adds. State what IS, then what to do.
+                            ⚠️ AND IT IS PERMISSION-AWARE: telling a manager to turn something on
+                            when `mayEnable` is false is the Available-header defect one card over. */}
                         {isSwitchable
-                          // core_optional: free, optional, and NOTHING EXPIRES. Saying "included"
-                          // alone would not explain why it is off; saying "$0" alone reads as a
-                          // free trial. Both facts, or the card lies by omission.
-                          ? (on ? 'Included — turned on. No charge, and nothing expires.'
-                                : 'Included at no charge — turn it on if you give contractor discounts. Nothing expires.')
+                          ? (on
+                              ? 'Turned on. No charge, and nothing expires.'
+                              : mayEnable
+                                ? 'Not turned on. Free to use — switch it on if you give contractor discounts, and nothing expires.'
+                                : 'Not turned on. Free to use — the owner can switch it on. Nothing expires.')
                           : 'Included in your subscription.'}
                       </div>
                       {notice?.key === m.module_key && (
@@ -314,7 +353,16 @@ export function Subscription() {
             {/* ── AVAILABLE ────────────────────────────────────────────────────────────────── */}
             {sections.available.length > 0 && (
               <>
-                <SectionHead title="Available" blurb="Built and ready. Turn one on and it works immediately." />
+                {/* ⚠️ THE HEADER IS PERMISSION-AWARE, same sweep as the Contractors card. "Turn one
+                    on and it works immediately" told a MANAGER to perform an act whose control on
+                    every row below reads `Owner only` — a header asserting an action the row
+                    contradicts, which is the defect this whole pass is about. */}
+                <SectionHead
+                  title="Available"
+                  blurb={mayEnable
+                    ? 'Built and ready. Turn one on and it works immediately.'
+                    : 'Built and ready. The owner can turn these on.'}
+                />
                 {sections.available.map((m) => (
                   <div key={m.module_key} style={{ marginBottom: 8 }}>
                     <Card>
@@ -326,9 +374,24 @@ export function Subscription() {
                         </div>
                         {/* 🔴 NO PAYMENT RAIL EXISTS. Enabling turns the module ON and bills nothing.
                             Saying otherwise would be the exact claim ruling #6 forbids. */}
+                        {/* ═════════════════════════════════════════════════════════════════════
+                            🔴 THE SENTENCE THAT WAS HERE WAS FALSE, AND I WROTE IT. It read
+                            "A {trial_days}-day trial starts when it is enabled." **NOTHING STARTS
+                            A TRIAL.** `Enable` calls `setBusinessModuleState({enabled:true})`; the
+                            only writer of the clock is `start_module_trial`, a DIFFERENT RPC this
+                            page never calls. The card described an outcome the button does not
+                            produce — the exact class David's sweep was asking about, one card over
+                            from the one that prompted it.
+                            🔴 AND THE CONSEQUENCE IS NOT COSMETIC: enabling a priced add-on with no
+                            clock creates a BILLABLE MODULE THAT IS LIVE WITH NOTHING THAT EVER ENDS
+                            IT — free forever, no conversion date. That is invariant **B6**, and B6
+                            asserts over the SEED PROJECTION only, so it structurally cannot see a
+                            row this button creates. **Whether Enable should also start the clock is
+                            a BEHAVIOUR ruling and is OWED — it is not a rendering fix, so it was
+                            not silently taken here.** The copy now says what actually happens. */}
                         <div style={{ fontSize: '0.8125rem', color: '#6b7280' }}>
-                          Turning this on does not charge you — there is no payment set up yet.
-                          {m.trial_days > 0 && ` A ${m.trial_days}-day trial starts when it is enabled.`}
+                          Turning this on does not charge you — there is no payment set up yet, and
+                          no trial clock starts.
                         </div>
                         {notice?.key === m.module_key && (
                           <div style={{ fontSize: '0.8125rem', marginTop: 6, color: notice.ok ? GREEN : '#b91c1c' }}>
