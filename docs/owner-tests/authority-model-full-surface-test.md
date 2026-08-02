@@ -645,19 +645,67 @@ touched."*
 not move with `enabled`, and the fix reached the data but not the screen) · a tile shows a
 countdown but is greyed · the countdown reads `0d` or a negative number.
 
-### CARD 27 — the two modules nobody can buy, and the ruling that is owed about them
+### CARD 27 — 🔴 AMENDED: the ruling LANDED, so this is now a real test
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #183 — David's rulings 1 + 2, after `20260802b`
+
+✏️ **AMENDED 2026-08-02 (2). It was `needs-test` "because there is no correct behaviour to test
+against yet" — David ruled, so there is one now.** The card is rewritten rather than replaced,
+per OP-14 clause 4: two cards answering one question drift.
+
+**Do this AFTER applying `20260802b`.** Owner session, owner dashboard.
+
+1. **Inventory Intake (mobile)** — green dot, opens, works. **NO trial countdown anywhere on it.**
+   It is CORE: included, on, nothing expiring. A countdown here would be the defect.
+2. **Cost-to-Produce** (admin surface, `/costs`) — reachable and working, and its module row is
+   LIVE **with a 30-day countdown**, because it is now a $29/mo add-on inside its trial.
+3. 🔴 **NEITHER shows `[ENABLE]`.** That button on a working, already-included feature is the
+   dead-affordance class, and it is the whole symptom these two rulings delete.
+
+**FAIL if** either still reads `[ENABLE]` · Inventory Intake shows a countdown · Cost-to-Produce
+shows none. ⚠️ **The $29 is a PLACEHOLDER by David's own statement** — do not treat the number as
+under test. What is under test is that the module is LIVE and CLOCKED, not what it costs.
+
+### CARD 28 — 🔴 A FREE MODULE MUST NOT BE COUNTING DOWN TO ANYTHING
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #183 — David's ruling 3, after `20260802b`
+
+**The single most important observation of this build**, because it is the one a screen can show
+and a query cannot: `contractor_tiers` was on a **live 30-day clock**, and it is free.
+
+1. Run **V1** in `20260802b`. `contractor_tiers` must read `enabled f · configured f ·
+   started NULL · term NULL`. 🔴 **A NULL `started` IS THE POINT.** A timestamp still there means
+   the strip did not run and a free capability is still counting down to an expiry.
+2. On the **Contractors** surface (it is `placement:'settings'`, so reach it via the nav, not the
+   grid — see card 29's note): it is **OFF, and offers to be turned on.** It must not say TRIAL,
+   must not show days remaining, and must not warn about anything ending.
+3. **Order-independence, checked rather than asserted.** Whether or not `20260802` has been applied,
+   the answer to (1) is identical. Run **V2**: contractor_tiers must NOT appear in it either way.
+
+**FAIL if** any countdown, expiry warning, or trial badge appears on Contractors · or V1 shows a
+`started` timestamp. ⚠️ Note the tile's own `status` is `planned` — the SWITCH is what is ruled
+here, not the feature behind it.
+
+### CARD 29 — the four modules counting down to nothing, and the ruling that is owed about them
 STATUS: needs-test
 LAST-PROVEN: never
 DEVICE: desktop
-COVERS: ledger #182 — the `unpriced` ruling, OPEN
+COVERS: ledger #183 — the four-COMING-clocks ruling, OPEN
 
-**`needs-test` with its reason, per OP-14 clause 2: there is no correct behaviour to test against
-yet.** `cost_to_produce` and `inventory_intake` are BUILT AND WORKING, are in neither MASTER_BRIEF
-list, and have no price — so no clock, so no liveness, so they render `[ENABLE]` on a purchase
-nobody can make. **Whether that is right is David's ruling and it is on the OWED table.**
+**`needs-test` with its reason, per OP-14 clause 2 — and it is card 27's old shape, deliberately
+reused for the question that is now the open one.** `followup_engine` · `business_insights` ·
+`online_shop` · `seasonal_module` are on **running 30-day clocks with no feature behind them**
+(all four `status:'planned'`). There is no correct behaviour to test until David rules.
 
-**What to LOOK at (not pass/fail):** both tiles on the owner dashboard. Cost to Produce opens and
-works. Ask the question the card exists to force: *does an owner-only internal tool belong in a
-catalog of things you buy at all?* **This card becomes a real test the day the ruling lands** —
-priced (it goes live on a clock like any other trial) or core (it goes live permanently). The
-mapping needs no change either way; only `MODULE_CATALOG` does.
+**What to LOOK at (not pass/fail):** the four tiles read **SOON** in amber and cannot be tapped —
+that part is right and already ruled. Then ask what the card exists to force: *in ~30 days, what
+does the platform ask an owner to pay for?* At that point each expires into a conversion decision
+about something he has never seen. **Thunder's recommendation, on the OWED table: `trial_days: 0`
+now, clock starts when the tile ships.** ⚠️ Also note while you are here: **Online Shop and
+Seasonal are `placement:'settings'` and Contractors is too — none of the three renders on the
+dashboard grid at all**, because `tilesForPlacement()` has no callers. That is a separate owed
+question and it is why this card says to look at four tiles but you will only find two.
