@@ -1,3 +1,47 @@
+-- ════════════════════════════════════════════════════════════════════════════════════════════════
+-- 🔴 SUPERSEDED BY `20260802b` — INERT ON THIS DATABASE. NOT A TRAP, BUT READ THIS BEFORE RUNNING.
+--    Marked 2026-08-02 (7), after David applied `20260802b` and its V-block passed.
+-- ════════════════════════════════════════════════════════════════════════════════════════════════
+--
+-- WHAT THIS FILE DOES: enable any module that has a RUNNING (unexpired) clock and is currently
+-- disabled. Its WHERE is `trial_started_at IS NOT NULL AND enabled IS NOT TRUE AND not lapsed`.
+--
+-- WHY IT NOW MATCHES ZERO ROWS. After `20260802b`, every catalog module fails at least one clause:
+--   · contractor_tiers · followup_engine · business_insights · online_shop · seasonal_module
+--       → §3 STRIPPED their clock, so `trial_started_at IS NULL`.
+--   · social_media · delivery_routing · cost_to_produce
+--       → §1 guarantees each a clock and §2 sets `enabled = true`, so `enabled IS NOT TRUE` is false.
+--   · qr_checkout · qb_invoicing · inventory_intake
+--       → core, `trial_days: 0`, never clocked.
+-- **`20260802b` is a strict superset of this file for every module in MODULE_CATALOG.**
+--
+-- 🔴 AND THE REASON IT WAS OBSOLETE BEFORE IT WAS EVER APPLIED IS THE FINDING WORTH KEEPING:
+-- this file was written to repair rows seeded under the SUPERSEDED spec (`enabled = billing ===
+-- 'core'`, so add-ons dark with a clock over them). **David's rows were never in that state.** His
+-- pre-apply query found the five add-ons `enabled:true` WITH live clocks — which is what the
+-- CORRECTED code produces — because the tenant was seeded by the app AFTER the #182 code fix
+-- deployed. **The application reached the rows before the migration could.** So this file found
+-- nothing to do, and `20260802b` was sufficient on its own.
+--
+-- ⚠️ IT IS SAFE TO RUN AND SAFE NOT TO RUN. It is left in place rather than deleted because
+-- (a) §6 r1 is append-only, and (b) a replay against an OLD snapshot — one seeded under the
+-- superseded spec — still needs it, and running it before `20260802b` converges either way.
+--
+-- ⚠️ THE ONE CONDITION UNDER WHICH IT IS *NOT* FULLY SUPERSEDED, named because it is checkable
+-- rather than assumed: a `business_modules` row whose `module_key` is NOT in MODULE_CATALOG (a
+-- legacy key), carrying a clock, and disabled. `20260802b` touches only the nine keys it names;
+-- this file's WHERE is key-agnostic and would catch such a row. One query settles it:
+--
+--   SELECT business_id, module_key, enabled, config->>'trial_started_at' AS started
+--     FROM public.business_modules
+--    WHERE module_key NOT IN ('qr_checkout','qb_invoicing','social_media','followup_engine',
+--                             'online_shop','business_insights','delivery_routing',
+--                             'seasonal_module','contractor_tiers','cost_to_produce',
+--                             'inventory_intake');
+--
+--   EXPECT: ZERO ROWS. Anything here is a module the catalog does not price and no tile renders —
+--   a finding in its own right, independent of this file.
+--
 -- Migration: A RUNNING TRIAL MEANS THE MODULE IS LIVE — correcting the rows 20260801c seeded
 -- Target project: bgobkjcopcxusjsetfob (cultivar-os)
 -- Date: 2026-08-02 · Ledger #182 · David's ruling, correcting the 2026-08-01 seed spec
