@@ -114,8 +114,19 @@ WITH corrected AS (
 -- The module list travels in `detail` so the act is still reconstructable module-by-module.
 INSERT INTO public.audit_log
   (business_id, actor_user_id, actor_role, action, target_type, target_id, detail, outcome)
+-- 🔴 `NULL::uuid`, NOT A BARE `NULL` — BECAUSE OF THE `GROUP BY` AT THE FOOT OF THIS STATEMENT.
+-- ✏️ FIXED 2026-08-02 (4), BEFORE THIS FILE WAS EVER APPLIED. Its sibling in `20260802b` failed to
+-- compile with `42804: column "actor_user_id" is of type uuid but expression is of type text`, and
+-- this block is the same shape, so it would have failed identically on the next line David ran.
+-- In an ordinary `INSERT … SELECT` an untyped `NULL` stays `unknown` and is coerced to the TARGET
+-- COLUMN's type — which is why `20260720_inventory_movement_ledger.sql:374` writes a bare `NULL`
+-- into this very column and applied fine. **`GROUP BY` (like `DISTINCT`) forces every output
+-- column's type to resolve BEFORE the insert targets are applied**, and an unresolved `unknown`
+-- resolves to `text`; `text → uuid` has no implicit cast.
+-- ⚠️ A parse error is not row-dependent: this fails at ANALYZE time even when `corrected` is empty
+-- and the statement would have inserted nothing.
 SELECT c.business_id,
-       NULL,
+       NULL::uuid,
        'system',
        'business_modules.trial_access_corrected',
        'business',

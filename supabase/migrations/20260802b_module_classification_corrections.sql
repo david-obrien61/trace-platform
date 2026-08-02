@@ -57,7 +57,7 @@
 BEGIN;
 
 -- ────────────────────────────────────────────────────────────────────────────────────────────────
--- (1) cost_to_produce — START ITS CLOCK. Through the RPC, never by writing the key here.
+-- (1) THE THREE PRICED-AND-LIVE MODULES — START ANY CLOCK THAT IS MISSING. Through the RPC.
 -- ────────────────────────────────────────────────────────────────────────────────────────────────
 -- 🔴 `start_module_trial` IS THE ONLY WRITER OF `trial_started_at` AND `trial_days`, PLATFORM-WIDE
 -- (ruling 2026-08-01, and 20260801c V2 asserts the spelling is unique against `pg_proc`). A hand-
@@ -70,8 +70,37 @@ BEGIN;
 -- ⚠️ NO ELIGIBLE ACTOR RAISES — it does not skip. A tenant silently left without the trial is the
 -- missing-row defect this whole sequence exists to close, and a NOTICE in a migration log is not a
 -- surfaced error (#158's class).
+--
+-- ⚠️ AND THE COST OF THAT CHOICE, STATED SO IT IS NOT A SURPRISE: this whole file is ONE
+-- transaction, so if the RAISE fires for ANY business, **§3 does not run either** — the five clocks
+-- stay live until the membership is fixed. That coupling is deliberate (a half-applied money
+-- migration is worse than a late one), but the demo-critical half is §3, so if this fires, fix the
+-- membership and re-run rather than reaching for a workaround. The message names both candidates.
+--
+-- ════════════════════════════════════════════════════════════════════════════════════════════════
+-- 🔴 GENERALISED 2026-08-02 (4) FROM `cost_to_produce` ALONE TO ALL THREE, AND DAVID'S PRE-APPLY
+--    QUERY IS WHY. It found `cost_to_produce` **enabled with NO clock — a $29 add-on running free**.
+-- ════════════════════════════════════════════════════════════════════════════════════════════════
+-- That row is not a defect and it is not a third case: it is a row created by the FEATURE
+-- (`20260614_cost_to_produce_trace_seed.sql` and `CostToProduceSettings.tsx` both write it) LONG
+-- BEFORE the seeder existed, and `seed_business_modules`'s `ON CONFLICT DO NOTHING` correctly
+-- refused to overwrite it. **The seed spec never reached it — so no version of the spec, right or
+-- wrong, was ever applied to that row.** *"A state nobody chose"* is exactly right.
+--
+-- 🔴 AND THE SHAPE IS GENERAL, WHICH IS WHY THIS LOOP IS NO LONGER ABOUT ONE MODULE. Any module
+-- whose row was minted by its own feature is invisible to the seeder, and `social_media` is written
+-- the same way by `SocialSetup`. A priced add-on that is ENABLED WITH NO CLOCK is **free forever
+-- with no conversion date** — invariant B6's exact defect, sitting in the data instead of the
+-- catalog, where no test can see it. So this starts a clock for every priced add-on whose tile is
+-- LIVE, and the RPC's refuse-to-restart makes that safe: a module already on a clock is untouched,
+-- its TERM is not rewritten (the snapshot ruling), and it audits `restart_refused`.
+--
+-- ⚠️ THE CLOCK STARTS TODAY, NOT BACKDATED, AND THAT IS DELIBERATE. `cost_to_produce` has been in
+-- use for weeks; dating its trial from first use would expire it retroactively, which is precisely
+-- what the 2026-08-01 snapshot ruling forbids. The owner gets thirty days from apply.
 DO $$
 DECLARE
+  v_module    text;
   v_business  uuid;
   v_actor     uuid;
   v_applied   boolean;
@@ -97,41 +126,50 @@ BEGIN
 
     IF v_actor IS NULL THEN
       RAISE EXCEPTION
-        'business % has NO active member holding subscription:update — cannot start the cost_to_produce trial. '
+        'business % has NO active member holding subscription:update — cannot start the module trials. '
         'This is 20260801b not being applied, or an owner with no business_members row (20260730b). '
         'Fix that first; do NOT work around it by writing the trial key directly.', v_business;
     END IF;
 
-    SELECT t.applied, t.reason, t.was_already_running
-      INTO v_applied, v_reason, v_already
-      FROM public.start_module_trial(v_business, 'cost_to_produce', 30, v_actor) t;
+    -- The three priced add-ons whose tiles are `status:'live'`. Every OTHER priced module has a
+    -- `planned` tile and must NOT get a clock — that is the 2026-08-02 (3) ruling, and §3 below is
+    -- what removes the ones they already have.
+    FOREACH v_module IN ARRAY ARRAY['social_media', 'delivery_routing', 'cost_to_produce']
+    LOOP
+      SELECT t.applied, t.reason, t.was_already_running
+        INTO v_applied, v_reason, v_already
+        FROM public.start_module_trial(v_business, v_module, 30, v_actor) t;
 
-    IF NOT v_applied THEN
-      RAISE EXCEPTION 'start_module_trial refused for business %: %', v_business, v_reason;
-    END IF;
+      IF NOT v_applied THEN
+        RAISE EXCEPTION 'start_module_trial refused for business % / module %: %',
+                        v_business, v_module, v_reason;
+      END IF;
 
-    RAISE NOTICE 'cost_to_produce trial for business %: already_running=%', v_business, v_already;
+      RAISE NOTICE 'trial for business % / module %: already_running=%',
+                   v_business, v_module, v_already;
+    END LOOP;
   END LOOP;
 END $$;
 
 -- ────────────────────────────────────────────────────────────────────────────────────────────────
--- (2) cost_to_produce + inventory_intake — MAKE THEM LIVE.
+-- (2) THE THREE TRIALLING MODULES + inventory_intake — MAKE THEM LIVE.
 -- ────────────────────────────────────────────────────────────────────────────────────────────────
 -- `configured` moves WITH `enabled` and that is not a rider (ruling 2026-08-01): `useModules`
 -- renders `active` only on both, so correcting `enabled` alone fixes the data and leaves `[ENABLE]`
 -- on the screen — the customer-visible symptom surviving its own fix.
 --
 -- inventory_intake is CORE: on because it is included, with no clock and nothing to expire.
--- cost_to_produce is a TRIALLING add-on: on because a clock is now running over it, and the lapse
--- guard is kept even though (1) just started the clock — a guard that is true by construction today
--- is still the guard that holds if this file is ever re-run months from now.
+-- The other three are TRIALLING add-ons: on because a clock is running over them. The lapse guard is
+-- kept even though (1) has just guaranteed a clock — a guard that is true by construction today is
+-- still the guard that holds if this file is re-run months from now, and it is what stops this
+-- statement from silently re-enabling a trial that has genuinely expired.
 UPDATE public.business_modules
    SET enabled = true, configured = true
  WHERE module_key = 'inventory_intake';
 
 UPDATE public.business_modules
    SET enabled = true, configured = true
- WHERE module_key = 'cost_to_produce'
+ WHERE module_key IN ('social_media', 'delivery_routing', 'cost_to_produce')
    AND config->>'trial_started_at' IS NOT NULL
    AND now() < (config->>'trial_started_at')::timestamptz
                + (COALESCE((config->>'trial_days')::int, 0) || ' days')::interval;
@@ -184,8 +222,18 @@ UPDATE public.business_modules
 -- CLASSIFICATION decision, which is the thing that has no other home.
 INSERT INTO public.audit_log
   (business_id, actor_user_id, actor_role, action, target_type, target_id, detail, outcome)
+-- 🔴 `NULL::uuid`, NOT A BARE `NULL` — AND THE REASON IS THE `DISTINCT` ON THE LINE ABOVE.
+-- In an ordinary `INSERT … SELECT`, an untyped `NULL` stays type `unknown` and Postgres coerces it
+-- to the TARGET COLUMN's type. That is why `20260720_inventory_movement_ledger.sql:374` writes a
+-- bare `NULL` into this same `actor_user_id` column and applied without complaint.
+-- **`DISTINCT` (and `GROUP BY`, which is what bites the sibling in `20260802`) forces the planner to
+-- resolve every output column's type BEFORE the insert target types are applied** — because it must
+-- know how to compare them — and an unresolved `unknown` resolves to `text`. The INSERT then sees a
+-- genuine `text`, and `text → uuid` has no implicit cast: `42804`.
+-- So the hazard is not "a bare NULL"; it is **a bare NULL in a SELECT that also sorts, groups, or
+-- de-duplicates.** Recorded here because the next person to copy this block will copy the DISTINCT.
 SELECT DISTINCT bm.business_id,
-       NULL,
+       NULL::uuid,
        'system',
        'business_modules.classification_corrected',
        'business',
@@ -224,6 +272,11 @@ COMMIT;
 --     seasonal_module    · enabled f · configured f · started NULL · term NULL  ← planned tile, no clock
 --     cost_to_produce    · enabled t · configured t · started TODAY · term 30   ← trialling, live
 --     inventory_intake   · enabled t · configured t · started NULL · term NULL  ← core, live, no clock
+--   …and (not in the WHERE above — add them if you want the whole picture):
+--     social_media       · enabled t · configured t · started ? · term 30       ← clock now guaranteed
+--     delivery_routing   · enabled t · configured t · started ? · term 30       ← clock now guaranteed
+--   ⚠️ `started` for those two is TODAY only if they had no clock before; if they already had one it
+--   is UNCHANGED and the term is NOT rewritten. That is the snapshot ruling, and V3 shows which.
 --
 --   🔴 FIVE NULL `started` VALUES ARE THE WHOLE POINT OF THIS FILE. A timestamp surviving on any of
 --   them means the strip did not run and something free — or something nobody can even open — is
@@ -240,14 +293,36 @@ COMMIT;
 --   five this file clears may appear, whichever way round the two migrations were run.** That is
 --   the order-independence claim, checked rather than asserted.
 --
--- V3 · THE TRIAL WENT THROUGH THE RPC, so it has the RPC's audit row and not just a config blob.
---   SELECT business_id, action, detail->>'trial_days' AS term, detail->>'row_created' AS created, created_at
+-- V3 · THE TRIALS WENT THROUGH THE RPC, so they have the RPC's audit rows and not just config blobs.
+--   SELECT business_id, target_id AS module, action,
+--          detail->>'trial_days' AS term, detail->>'restart_refused' AS refused, created_at
 --     FROM public.audit_log
---    WHERE action = 'module_trial.started' AND target_id = 'cost_to_produce'
+--    WHERE target_id IN ('social_media','delivery_routing','cost_to_produce')
+--      AND action IN ('module_trial.started', 'module_trial.start_refused')
 --    ORDER BY created_at DESC;
 --
---   EXPECT: one row per business, term 30. ⚠️ ZERO ROWS means the clock was written some other way,
---   which would mean a second writer of the pair exists — stop and find it.
+--   EXPECT: three rows per business. `cost_to_produce` MUST be a genuine `module_trial.started` with
+--   term 30 — that is the free-running $29 add-on being put on a clock. The other two are `started`
+--   if they had no clock, or a refusal carrying `restart_refused` if they already did. **Both are
+--   correct outcomes; what matters is that all three now HAVE a clock.**
+--   ⚠️ ZERO ROWS for cost_to_produce means the clock was written some other way, which would mean a
+--   second writer of the pair exists — stop and find it.
+--
+-- V3b · 🔴 THE STATE DAVID'S PRE-APPLY QUERY FOUND MUST NO LONGER EXIST ANYWHERE.
+--   A priced add-on that is ENABLED WITH NO CLOCK is free forever with no conversion date — B6's
+--   defect, sitting in the data where no test can reach it. This is the query that says so.
+--
+--   SELECT b.name, bm.module_key, bm.enabled, bm.config->>'trial_started_at' AS started
+--     FROM public.business_modules bm JOIN public.businesses b ON b.id = bm.business_id
+--    WHERE bm.enabled IS TRUE
+--      AND bm.config->>'trial_started_at' IS NULL
+--      AND bm.module_key IN ('social_media','delivery_routing','cost_to_produce','followup_engine',
+--                            'business_insights','online_shop','seasonal_module')
+--    ORDER BY b.name, bm.module_key;
+--
+--   EXPECT: **ZERO ROWS.** Anything here is a paid module running free. ⚠️ The core and
+--   core_optional modules are deliberately excluded — being enabled with no clock is their whole
+--   definition, and including them would make this query cry wolf every time it is run.
 --
 -- V4 · THE CLASSIFICATION RECORD.
 --   SELECT business_id, detail->'rulings' AS rulings, detail->>'clock_cleared' AS cleared, created_at
