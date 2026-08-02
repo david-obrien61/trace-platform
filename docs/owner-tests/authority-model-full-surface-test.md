@@ -12,14 +12,14 @@
 permissions rather than by being the owner, that removing `isOwner` took nothing away from him, and
 that a refused surface now SAYS SO instead of vanishing.
 
-**Board: 0 of 27.** Every card is `STATUS: owed` except cards 22 and 27, which are `needs-test` with their reasons stated.
+**Board: 0 of 30.** Every card is `STATUS: owed` except cards **22 and 30**, which are `needs-test` with their reasons stated. *(27 and 29 were `needs-test` until 2026-08-02 (3), when the rulings they were waiting on landed.)*
 
 **Why this exists.** `businesses.owner_id` was the authority mechanism at three layers. It is
 single-valued, so it cannot express the TWO OWNERS David ruled on 2026-07-26 — and the client's
 owner short-circuit made the client MORE PERMISSIVE THAN THE SERVER, which is how the owner came to
 read *"Tax: not identified"* on his own dashboard while his manager read the rate correctly.
 Separately, ~30 refusal surfaces were measured: 27 silent, 3 apologising after a failed write, 0
-pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (#172); 16–17 prove the two LIVE defects the A7 sweep found (#174); 18 proves the fourth permission status (#175); 19–20 prove its tile path (#176), and 20 is runnable ONLY as staff; 21–22 prove the uniform-tiles pass (#179) — 21 is the nine-week `campaigns.status` defect, dead; 23–25 prove the tenant module seed + the trial clock (#181): **24 must not be skipped** (it proves the repair mechanism cannot be used to renew a trial or re-term a tenant), and **25 is standing, not one-shot** — it is the only detector of an unseeded tenant that exists. **26–27 prove the trial reversal (#182): 26 is the build** — the migration LAWNS needs before anything on his dashboard changes, and ✏️ **card 23 was AMENDED because its ② and ③ asserted the defect**, telling David to expect the seven add-ons dark. 27 is `needs-test` because the `unpriced` ruling it would test has not been made.
+pre-emptive. Cards 1–6 prove the authority change; 7–14 prove the surfaces; 15 proves the one conversion that came out LOSSY (#172); 16–17 prove the two LIVE defects the A7 sweep found (#174); 18 proves the fourth permission status (#175); 19–20 prove its tile path (#176), and 20 is runnable ONLY as staff; 21–22 prove the uniform-tiles pass (#179) — 21 is the nine-week `campaigns.status` defect, dead; 23–25 prove the tenant module seed + the trial clock (#181): **24 must not be skipped** (it proves the repair mechanism cannot be used to renew a trial or re-term a tenant), and **25 is standing, not one-shot** — it is the only detector of an unseeded tenant that exists. **26–27 prove the trial reversal (#182): 26 is the build** — the migration LAWNS needs before anything on his dashboard changes, and ✏️ **card 23 was AMENDED because its ② and ③ asserted the defect**, telling David to expect the seven add-ons dark. 27 is `needs-test` because the `unpriced` ruling it would test has not been made. **28–30 prove the classification rulings and the clock rule (#183, #184):** 28 is the free module that must not be counting down; ✏️ **27 and 29 were both AMENDED when their rulings landed** — each had been `needs-test` *because there was no correct behaviour to test against*, and David ruled, so there is one. **30 is `needs-test` and its reason IS the finding: the surface it would test does not exist.** The seeder's output has never been rendered anywhere, which is why five modules sat seeded as live billable rows behind tiles reading SOON and nothing could put the two facts side by side.
 
 ---
 
@@ -690,22 +690,50 @@ and a query cannot: `contractor_tiers` was on a **live 30-day clock**, and it is
 `started` timestamp. ⚠️ Note the tile's own `status` is `planned` — the SWITCH is what is ruled
 here, not the feature behind it.
 
-### CARD 29 — the four modules counting down to nothing, and the ruling that is owed about them
+### CARD 29 — 🔴 AMENDED: the ruling landed. FIVE clocks must be gone, not four.
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #184 — David's ruling, after `20260802b`
+
+✏️ **AMENDED 2026-08-02 (3).** It was `needs-test` because there was no correct behaviour to test
+against. David ruled: **the four COMING modules come off their clocks alongside `contractor_tiers`.**
+
+**Do this AFTER applying `20260802b`.**
+
+1. Run **V1**. **FIVE rows must read `started NULL · term NULL`** — `contractor_tiers`,
+   `followup_engine`, `business_insights`, `online_shop`, `seasonal_module`. 🔴 **A surviving
+   timestamp on any of them means something free, or something nobody can open, is still counting
+   down to a bill.**
+2. Run **V2**. **Exactly TWO modules may still be clocked: `social_media` and `delivery_routing`**
+   — the only priced add-ons whose tiles are LIVE. `cost_to_produce` makes a third via card 27.
+3. On the dashboard: **Follow-Up and Insights read amber `SOON` and cannot be tapped, with NO
+   countdown and no trial badge anywhere on them.** ⚠️ Online Shop and Seasonal are
+   `placement:'settings'` and render on no grid at all — that is card 30's subject, not a failure here.
+
+**FAIL if** any of the five carries a clock · or any `SOON` tile shows days remaining.
+
+### CARD 30 — the seeder's output has never been visible anywhere
 STATUS: needs-test
 LAST-PROVEN: never
 DEVICE: desktop
-COVERS: ledger #183 — the four-COMING-clocks ruling, OPEN
+COVERS: ledger #184 — the `available` finding, and the named gap
 
-**`needs-test` with its reason, per OP-14 clause 2 — and it is card 27's old shape, deliberately
-reused for the question that is now the open one.** `followup_engine` · `business_insights` ·
-`online_shop` · `seasonal_module` are on **running 30-day clocks with no feature behind them**
-(all four `status:'planned'`). There is no correct behaviour to test until David rules.
+**`needs-test` with its reason, per OP-14 clause 2: THE SURFACE THIS CARD WOULD TEST DOES NOT EXIST.
+That is the finding, not an excuse.** Five modules were seeded as live, billable rows behind tiles
+that said SOON, and **no screen anywhere renders what the seeder decided**, so the two facts could
+never be shown together. *A state nothing renders cannot be contradicted* — the same sentence
+`campaigns.status` produced nine weeks after that value went wrong.
 
-**What to LOOK at (not pass/fail):** the four tiles read **SOON** in amber and cannot be tapped —
-that part is right and already ruled. Then ask what the card exists to force: *in ~30 days, what
-does the platform ask an owner to pay for?* At that point each expires into a conversion decision
-about something he has never seen. **Thunder's recommendation, on the OWED table: `trial_days: 0`
-now, clock starts when the tile ships.** ⚠️ Also note while you are here: **Online Shop and
-Seasonal are `placement:'settings'` and Contractors is too — none of the three renders on the
-dashboard grid at all**, because `tilesForPlacement()` has no callers. That is a separate owed
-question and it is why this card says to look at four tiles but you will only find two.
+**What to LOOK at (not pass/fail):** open the dashboard and try to answer, from the screen alone,
+*"is this module on a trial, and when does it end?"* for any tile. Today the countdown annotation is
+the only answer that exists, and it appears only on an `active` tile — so a module that is dark, or
+`planned`, or missing its row entirely, tells you nothing and looks identical to the other two.
+**This card closes when the marketplace ships**, because that is the first surface that renders the
+seeder's decision rather than its side effects.
+
+⚠️ **While you are here, the gap that has no card of its own yet: something must START a clock when
+a tile goes live.** The seeder now refuses one for a `planned` module — correct — so **a module that
+ships without its trial starting is one nobody ever pays for.** Three mechanisms are named in
+`RULINGS.md` OWED and none is chosen. It fires the first time a `planned` tile ships.
+
