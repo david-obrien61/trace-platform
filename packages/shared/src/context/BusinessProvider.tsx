@@ -121,7 +121,13 @@ export interface Business {
   email: string | null;
   website: string | null;
   logo_url: string | null;
-  tax_rate: number;
+  // ⚠️ NO `tax_rate` HERE, AND THAT IS DELIBERATE (2026-08-21, ledger #190). The column was DROPPED
+  // by 20260727e_drop_businesses_tax_rate.sql:45 (David's ruling: config wins) and the rate's home
+  // is business_pricing_config.config->'taxRate', read through the narrow get_business_tax_rate RPC
+  // via the shared fetchTaxRate seam. This interface declared `tax_rate: number` — NON-NULLABLE —
+  // for weeks after the DROP. It was a PHANTOM: declared, never populated, and INVISIBLE TO tsc
+  // precisely because the loader below uses select('*'), so the field simply never arrived and no
+  // type error could ever fire. Re-adding it would re-promise a number that cannot exist.
   business_type: string;
   accounting_type: string | null;
   accounting_needs_reconnect: boolean;

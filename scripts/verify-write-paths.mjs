@@ -105,6 +105,64 @@ const ALLOWED_DIVERGENCE = {
     paths: ['packages/shared/src/business-logic/moduleState.ts',
             'packages/shared/src/business-logic/seedBusinessModules.ts'],
   },
+  // DECLARED 2026-08-21 (ledger #190) — THREE DISJOINT ACTS ON THE RLS ANCHOR, NOT SEVEN COPIES OF ONE.
+  //
+  // 🔴 THE RECON DISPROVED THE PREMISE IT WAS COMMISSIONED ON, AND THE COLUMN MATRIX IS WHY
+  // (docs/audits/businesses-write-paths-recon-2026-08-21.md, Q2). "Seven undeclared paths" on the
+  // table AC-2 scopes to reads like seven competing writers of one record. It is not. Read by column
+  // block, the seven files partition CLEANLY, with ZERO overlap in either direction:
+  //   CREATION   id · owner_id · business_type · trial_started_at   → OwnerSignup, OnboardingWizard
+  //   IDENTITY   name · address · phone · email · website           → Settings(RPC), Onboarding, Glimpse
+  //   ACCOUNTING accounting_*                                       → qbo/router, refresh, secrets
+  // No CREATION column is reachable from any IDENTITY or ACCOUNTING site, and vice versa. Merging a
+  // signup INSERT, a settings form and an OAuth callback because a file-counting cap said "7" would
+  // be the WRONG BUILD. Per ledger #168 the honest floor for `customers` was THREE; `businesses`
+  // reached the same floor independently, from a different table and a different question.
+  //
+  // ACCOUNTING is the same concern as the already-declared `business_accounting_secrets` entry above
+  // ("two disjoint concerns on one table… no column overlap") — one table over. It is a MACHINE act:
+  // the OAuth callback and the token refresher write columns no human ever types into a form.
+  //
+  // 🔴 TWO SITES ARE DECLARED AS SECOND IDENTITY WRITERS RATHER THAN REPOINTED, AND THE REASON IS
+  // STRUCTURAL, NOT A DEFERRAL. Both were slated to route through `set_business_profile`; both were
+  // stopped by a hazard check BEFORE any code was written, and the blocker is the same for each:
+  // `set_business_profile` SETs all five identity columns UNCONDITIONALLY (20260727_rbac_flip_
+  // corrections.sql:59-64 — no COALESCE, no field mask). IT IS NOT A PATCH API. A subset writer
+  // cannot call a full-record writer without inventing the values it does not hold.
+  //   · OnboardingWizard.tsx:608 writes ONLY `address`. Its state is {name, address} (:439) and every
+  //     business SELECT it makes is `select('id, name, address')` (:457, :476) — it NEVER reads phone,
+  //     email or website. Routing it would send p_email=null and WIPE the email OwnerSignup.tsx:277
+  //     inserts unconditionally at signup. A signup that silently erases the owner's business email is
+  //     strictly worse than the duplication it would remove.
+  //   · DiscoveryGlimpse.tsx:183 writes ONE owner-chosen column at a time (WRITABLE_COLUMN, :10-15).
+  //     It selects `website` only (:69) and Discrepancy carries just field/entered/site for fields that
+  //     DIFFER (compare.ts:55-61) — it holds none of the other four. Routing it means a fresh 5-column
+  //     read immediately before every write: a 1-column owner-chosen act widened into a read-modify-
+  //     write with a clobber window. "Narrower and correct beats wider and convenient" (2026-07-31).
+  // PERMISSION WAS NOT THE BLOCKER AND WAS CHECKED FIRST: has_permission_for is owner-inclusive by
+  // owner_id (20260726_permission_alias_layer.sql:312-314), both sites run after their member row
+  // exists, so both would have PASSED the gate. Declared visibly here, not folded in quietly.
+  //
+  // ⚠️ SEVEN IS A FLOOR, NOT A TOTAL. Q9 found exactly one function writing this table and no
+  // triggers, by reading `supabase/migrations/*.sql`. A function created outside the migration path
+  // is invisible (§6 r17) and the schema-snapshot checker that would see it is OWED and NOT BUILT.
+  'businesses': {
+    reason: 'THREE disjoint acts on the RLS anchor, zero column overlap: CREATION (id/owner_id/'
+          + 'business_type/trial_started_at — OwnerSignup + OnboardingWizard insert), IDENTITY '
+          + '(name/address/phone/email/website — set_business_profile via Settings.tsx is the gated, '
+          + 'audited, column-bounded writer), ACCOUNTING (accounting_* — OAuth callback + token '
+          + 'refresh, a machine act, same concern as the business_accounting_secrets entry). '
+          + 'OnboardingWizard:608 and DiscoveryGlimpse:183 stay DIRECT and are declared, not merged: '
+          + 'set_business_profile SETs all five identity columns unconditionally and is not a patch '
+          + 'API, so routing a subset writer through it would null-clobber columns neither site reads.',
+    paths: ['packages/cultivar-os/api/qbo/router.ts',
+            'packages/cultivar-os/src/pages/OnboardingWizard.tsx',
+            'packages/shared/src/auth/OwnerSignup.tsx',
+            'packages/shared/src/discovery/DiscoveryGlimpse.tsx',
+            'packages/shared/src/pages/Settings.tsx',
+            'packages/shared/src/quickbooks/refresh.ts',
+            'packages/shared/src/quickbooks/secrets.ts'],
+  },
 };
 
 // ⚠️ `audit_log` IS NOT DECLARED HERE, DELIBERATELY. Its paths grow by one every time a gated RPC is

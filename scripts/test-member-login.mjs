@@ -145,6 +145,13 @@ async function main() {
         owner_id: ownerUserId,
         name: `Test Nursery ${TEST_TAG}`,
         business_type: 'nursery',
+        // ⚠️ `businesses.tax_rate` NO LONGER EXISTS — DROPPED by 20260727e_drop_businesses_tax_rate.sql:45
+        // (David's ruling: config wins). The rate's home is business_pricing_config.config->'taxRate'.
+        // THE LINE BELOW IS LEFT IN PLACE DELIBERATELY (2026-08-21, ledger #190). This file declares
+        // itself "THE RECORD OF WHAT RAN, NOT A THING TO RUN" (header) and refuseRetired() aborts at
+        // IMPORT — before step 1, so this INSERT can never fire and there is nothing to make safe.
+        // Deleting the field would make the record lie about what it did when it ran. Do NOT copy it
+        // into a new script: against the applied 27e this INSERT is 42703.
         tax_rate: 0.0825,
       })
       .select('id')
