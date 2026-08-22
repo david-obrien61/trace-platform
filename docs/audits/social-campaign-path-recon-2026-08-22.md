@@ -1,9 +1,117 @@
 # RECON — THE SOCIAL / CAMPAIGN PLATFORM PATH
 
 **Date:** 2026-08-22 · **Branch:** `main` · **HEAD at recon:** `4b3b346`
+**CORRECTED:** 2026-08-22 (2), after the catalog answered — see **§ CORRECTION** below.
 **Type:** LOOK-ONLY. No app code, no schema, no migration, no policy, no cap.
 **Gate:** `npm run verify` exit 0 — tsc 5 · eslint 247 · knip 10/12/15 · 27/27 files, 1050 assertions. api/ **12/12**.
 **GATE 0:** NOT APPLICABLE — no app code ships.
+
+---
+
+## ▶ THE ONE QUERY THAT CLOSES THIS — RUN IT FIRST
+
+**If `advert_channels` contains `tiktok` and `twitter` with `enabled: true`, the WRITE has
+been working the whole time and THE READ IS THE ENTIRE DEFECT.**
+
+```sql
+-- LAWNS: f7ec5d67-a9ef-4cb0-b807-438d67687d1b
+SELECT module_key,
+       enabled,
+       configured,
+       config->>'cadence'                    AS cadence,
+       jsonb_pretty(config->'advert_channels') AS advert_channels,
+       config ? 'trial_started_at'           AS has_clock
+  FROM business_modules
+ WHERE business_id = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b'
+   AND module_key  = 'social_media';
+```
+
+**How to read the result — the three outcomes are genuinely different builds:**
+
+| Result | Meaning |
+|---|---|
+| **5 entries, `tiktok`/`twitter` `enabled:true`** | 🔴 **THE READ IS THE WHOLE DEFECT.** The write works, the store is correct, and `SocialSetup` has been rendering `defaultChannels()` over live data. **Fix is the read; the generator needs nothing.** |
+| **instagram-only** | The store agrees with the screen, and **the generator really did ignore config at 14:22** — which the code at `generate-posts.ts:61-67` says it cannot do. That would mean a second writer of `social_drafts` exists, and the sweep for one is the next task. |
+| **no row at all** | The tenant was never seeded — the SEED-IF-ABSENT residual already OWED in `RULINGS.md`, arriving through this surface. |
+
+⚠️ **Also worth one line of the same paste, because it decides whether a Save ever landed:**
+
+```sql
+SELECT created_at, action, outcome, metadata
+  FROM audit_log
+ WHERE business_id = 'f7ec5d67-a9ef-4cb0-b807-438d67687d1b'
+   AND action = 'business_module.state_changed'
+ ORDER BY created_at DESC LIMIT 10;
+```
+
+`config_keys_patched` in the metadata names exactly which keys each Save wrote. **A row
+containing `advert_channels` is a Save that landed; no such row is a Save that was never
+made** — which distinguishes "the read is broken" from "the read is broken AND David
+overwrote the config by saving the default."
+
+---
+
+## 🔴 CORRECTION — 2026-08-22 (2): THE HEADLINE FINDING BELOW WAS WRONG, AND THE METHOD IS THE LESSON
+
+**WHAT WAS CLAIMED (§ L1, preserved verbatim below):** that `20260802c` was unapplied, so
+the live `set_business_module_state` had six arguments, so the seven-argument call in
+`moduleState.ts:93-101` could not resolve — **a platform-wide write outage.**
+
+**WHAT DISPROVED IT — `pg_catalog`, queried by David:**
+
+```
+set_business_module_state(uuid, text, boolean, boolean, jsonb, uuid, integer)
+proargnames: p_business_id, p_module_key, p_enabled, p_configured,
+             p_config_patch, p_actor_user_id, p_trial_days
+        OUT: applied, reason, was_insert, enabled_before, enabled_after, trial_started
+```
+
+**SEVEN arguments. The names match `moduleState.ts:93-101` exactly. PostgREST resolves.**
+Corroborated live in the browser console the same day — `moduleState.ts:113`'s own emit:
+
+```
+[TRACE:MODULES] set_business_module_state {moduleKey:'contractor_tiers',
+  applied:true, reason:null, enabled_before:false, enabled_after:true}
+```
+
+**`20260802c` IS APPLIED. THERE IS NO WRITE OUTAGE. The write works, is audited, and
+returns `applied:true`.**
+
+### 🔴 THE METHOD FAILURE, WHICH IS THE PART WORTH KEEPING
+
+**The recon named this exact fork and then took the other branch.** § L1 closed with:
+*"six args → L1 is live. Seven → `20260802c` was applied and never recorded, which is the
+#22 class again, on the same evening, one table over."* **The catalog says seven. The
+branch the recon itself named as the alternative is the one that holds** — and it is the
+same class the recon had just finished filing against `social_drafts`.
+
+**The error was not the reasoning; the PostgREST argument-name-set reasoning is correct and
+still is. The error was the PREMISE, and specifically WHERE IT WAS READ FROM:**
+`CLOSE-OUT-LEDGER.md:22` said *"GATED AND UNAPPLIED,"* and that sentence was treated as a
+fact about the database. **It is a fact about a document.** The recon's own STD-021 blind
+spot #3 said so in writing — *"Applied-state of every migration is a DOC read, not a
+fact"* — and the headline was published on it anyway. **Naming a limit does not discharge
+it.**
+
+**THE RULE THIS EARNS, stated so the next recon does not repeat it:** 🔴 **A CLAIM ABOUT
+THE DATABASE IS SOURCED FROM THE CATALOG OR IT IS SOURCED FROM NOTHING.** Where there is
+no catalog access, the honest artifact is **the query and the branch table** — which is
+what now sits at the top of this document — and **never a 🔴 headline resting on a doc
+read.** The recon should have LED with the query it closed with.
+
+**WHAT THIS CORRECTION DOES NOT CHANGE** — checked, not assumed:
+
+| Finding | Status after the catalog |
+|---|---|
+| **C-1** `campaign_posts_platform_check` is in version control, declared INLINE | ✅ **STANDS** — a repo fact, independent of the database |
+| **C-2** the config store exists at `business_modules.config.advert_channels` | ✅ **STANDS** — repo fact |
+| **Q1** two disagreeing CHECKs, non-subset both ways; nine enumerations | ✅ **STANDS** — repo fact, and it is now the ONLY confirmed live defect on this path |
+| **Q5** no transaction spans `campaigns`+`campaign_posts`; the posts insert is one atomic batch | ✅ **STANDS** — and the two orphans are its evidence |
+| **Q6** the app layer passes the DB message through; `.json()` before `.ok` swallows platform errors | ✅ **STANDS** |
+| **Q7** the list does not filter on `status` | ✅ **STANDS** |
+| **tech-debt #22** applied-but-recorded-as-pending | ✅ **STANDS — and is now INSTANCE 1 OF TWO** (see #92) |
+| **§ L1** the write outage | 🔴 **DISPROVEN. Rewritten in place, not deleted.** |
+| **Q2 / Q4** | ⚠️ **RE-OPENED against a working RPC — see § Q2 (REOPENED) and § Q4 (REOPENED)** |
 
 ---
 
@@ -59,12 +167,23 @@ social block is on a different row of a different table. **Q8's option (c) — "
 
 ---
 
-## 🔴 LIVE DEFECT FOUND OUTSIDE THE EIGHT QUESTIONS — NOT FIXED, PER STEP 3
+## ~~🔴 LIVE DEFECT FOUND OUTSIDE THE EIGHT QUESTIONS~~ — **DISPROVEN 2026-08-22 (2)**
 
-### L1 — THE ONE WRITER OF `business_modules` CANNOT REACH THE DATABASE
+### ~~L1 — THE ONE WRITER OF `business_modules` CANNOT REACH THE DATABASE~~ 🔴 **WRONG. KEPT, NOT DELETED.**
 
-**This is not a social-media defect. It is a platform-wide write outage on a table three
-features depend on, and it answers Q2, Q3 and Q4 simultaneously.**
+> 🔴 **THIS FINDING IS DISPROVEN.** The live function has **SEVEN** arguments; `20260802c`
+> **IS APPLIED**; the RPC resolves and returns `applied:true`. See **§ CORRECTION** above
+> for the catalog output and the console corroboration.
+>
+> **It is preserved verbatim because a finding that was wrong and got quietly deleted
+> teaches nobody, while one that carries its own refutation is the artifact.** The
+> reasoning below about PostgREST argument-name resolution is **correct and unchanged** —
+> what failed was the PREMISE, read from `CLOSE-OUT-LEDGER.md:22` instead of from
+> `pg_proc`. **Read the section as: this is what a doc-sourced claim about a database
+> looks like when it is wrong, and it looks exactly like a right one.**
+
+**~~This is not a social-media defect. It is a platform-wide write outage on a table three
+features depend on, and it answers Q2, Q3 and Q4 simultaneously.~~**
 
 The client sends **seven** named arguments
 ([`moduleState.ts:93-101`](../../packages/shared/src/business-logic/moduleState.ts#L93-L101)):
@@ -203,8 +322,38 @@ is replaced WHOLESALE, not deep-merged.** An unticked channel really does become
 documents `p_config_patch` as existing to carry *"the two config shapes that already exist
 (`advert_channels`/`cadence`; the pricing keys)"*.
 
-🔴 **AND IT STILL CANNOT SAVE, FOR THE REASON IN L1** — step 5 cannot resolve. The handler
-is not broken; the call it makes has no function to land on.
+### 🔴 Q2 — **REOPENED 2026-08-22 (2) AGAINST A WORKING RPC**
+
+~~AND IT STILL CANNOT SAVE, FOR THE REASON IN L1~~ — **withdrawn; L1 is disproven.**
+
+**THE CORRECTED ANSWER: the Save handler is CORRECT END TO END AND THERE IS NO KNOWN
+DEFECT IN IT.** All six steps above stand, the RPC resolves, the merge semantics are
+right, the authority gate is right, and `moduleState.ts:113` emits `applied:true` on a
+live call. **Q2's honest answer is now "it works" — which is a smaller finding than the
+one it replaces and is the truthful one.**
+
+🔴 **AND THE COMBINATION IS WHAT MATTERS, BECAUSE A WORKING WRITE MAKES THE BROKEN READ
+DANGEROUS RATHER THAN MERELY WRONG.** Q3 establishes that `SocialSetup` renders
+`defaultChannels()` — **instagram-only** — whenever its read returns nothing, **and cannot
+tell that from a real instagram-only selection.** Pair that with a Save that genuinely
+persists:
+
+> **The page presents a DEFAULT as a SELECTION, and `Save Settings` writes that default
+> over the real configuration.** The write is not a delta — `SocialSetup.tsx:100` sends
+> the **whole array** — and `20260801:241`'s top-level `||` merge replaces
+> `advert_channels` **wholesale.** So one click of a button that looks like a no-op
+> silently destroys four enabled channels.
+
+**A broken read is a display bug. A broken read feeding a working write is DATA LOSS**, and
+it is one click away on a screen whose Save button is always enabled. **This is the
+sharpest finding on the path and it only became visible once the write was known to
+work** — the disproven L1 was concealing it.
+
+⚠️ **NOT YET TESTED, AND THE `audit_log` QUERY AT THE TOP OF THIS DOCUMENT IS THE TEST:**
+a `business_module.state_changed` row whose `config_keys_patched` contains
+`advert_channels` is a Save that landed. **If one exists at or after 14:15 on 2026-08-22,
+the overwrite already happened.** If none exists, the store is intact and the read is the
+only thing to fix.
 
 ### Q3 — WHERE DOES THE SETUP PAGE READ ITS INITIAL STATE?
 
@@ -261,6 +410,37 @@ stored state diverge with nothing said.
 
 **Answer for this path: the config write already answers E5 correctly; the draft-review
 writes do not.**
+
+### 🔴 Q4 — **REOPENED 2026-08-22 (2) AGAINST A WORKING RPC**
+
+**The E5-clean verdict was written while believing the RPC could not resolve. It has to be
+re-checked, because "clean by construction" is worth nothing if the construction was never
+exercised. IT SURVIVES, AND NOW IT IS PROVEN RATHER THAN INFERRED.**
+
+David's console shows the contract actually running:
+`{applied:true, reason:null, enabled_before:false, enabled_after:true}` — the RPC returns
+its four-field verdict, `moduleState.ts:110-112` binds all of it, and
+`enable.ts:60-63` branches on it. **A zero-row or refused outcome cannot be reported as
+success on this path, and that is now an observed fact rather than a reading of the
+source.**
+
+🔴 **BUT THE REOPEN FOUND SOMETHING THE FIRST PASS MISSED, AND IT IS THE INVERSE
+ASYMMETRY.** `enable.ts` correctly surfaces a **refusal** (403) and an **error** (500) —
+**and `SocialSetup.tsx:103-109` treats `res.ok` as the only question.** On success it
+navigates away to `/dashboard` **without re-reading**, so:
+
+> **The one surface that could contradict a bad write never looks.** The page writes,
+> leaves, and the next visit re-runs the broken read and shows instagram-only again —
+> **which the owner reads as "it didn't save," when in fact it saved exactly what it
+> displayed.** The failure and the success render identically, in both directions.
+
+**That is the six-state ruling's class arriving through a REDIRECT rather than a label**,
+and it is why the Q2 data-loss risk is invisible to the person committing it.
+
+**Revised answer for this path: the config write answers E5 correctly and is now
+observed doing so; the three draft-review writes still do not; and the config write's
+CONFIRMATION SURFACE is missing, which is a distinct third thing neither E5 nor the first
+pass named.**
 
 ### Q5 — WHAT IS THE CAMPAIGN CREATE SEQUENCE?
 
@@ -450,9 +630,99 @@ this changes where the wrong value is stored, not whether it is wrong.
 
 ---
 
+---
+
+## 🔴 DRAFT RULE — **A READ WHOSE ERROR PATH RETURNS A VALUE MUST KEEP "FAILED" DISTINGUISHABLE FROM "EMPTY"**
+
+**DRAFT. DAVID RULES. Written before any code that would need it, deliberately.**
+
+> **A9 says ABSENT IS NOT EMPTY. This is A9 on the READ SIDE, where it was never carried.**
+> We enforced it for what the platform *displays* and never for what the platform
+> *believes*. A read that fails and returns a fallback has not merely lost a value — it has
+> **manufactured a fact**, and every consumer downstream treats that fact as observed.
+
+**THE MINIMAL FORM, and this is what makes it cheap enough to be real: it does NOT require
+knowing the correct value. It requires only that information is not DESTROYED.** A read may
+legitimately fail; it may legitimately return a default; **what it may not do is emit the
+same output for "loaded and narrow," "absent," and "errored."**
+
+The two founding instances take **three distinct inputs and emit one output**:
+
+| Site | loaded-and-narrow | absent | errored | emitted |
+|---|---|---|---|---|
+| [`SocialSetup.tsx:67-74`](../../packages/cultivar-os/src/pages/SocialSetup.tsx#L67-L74) | instagram-only config | no row | PostgREST error (`.catch` cannot see it) | **`defaultChannels()` — instagram-only** |
+| [`Campaigns.tsx:50-56`](../../packages/cultivar-os/src/pages/Campaigns.tsx#L50-L56) | tenant has no campaigns | RLS returned nothing | query errored | **`[]` → "No campaigns yet"** |
+
+**Why it is a RULE and not two fixes:** the count below says it is not two.
+
+---
+
+## 📏 THE COUNT — **MEASUREMENT ONLY. NOTHING FIXED.**
+
+Per **#174** (*two found by accident is an unmeasured class, not a small one*) — **the
+count is what decides whether this is two call sites or a shared helper**, and nobody had
+it.
+
+**Scope:** `packages/cultivar-os/src`, `packages/shared/src`, `packages/cultivar-os/api`.
+`ignition-os` excluded (frozen donor code, §2).
+
+**Method — four greps, recorded so the number is reproducible by anyone:**
+
+```bash
+A: grep -rnE "const \{ *data *\} *= *await "                    # error not bound        → 27
+B: grep -rnE "const \{ *data *: *[A-Za-z_]+ *\} *= *await "     # aliased, error not bound → 61
+C: grep -rnE "\.then\(\( *\{ *data"                             # error not destructured →  9
+D: grep -rnE "\.catch\(\(\) *=>"                                # error path emits a value → 22
+```
+
+### THE NUMBER: **30 CONFIRMED, AND 30 IS A FLOOR — THE CEILING IS 91**
+
+**30 individually read and confirmed** as the strict class (error discarded **and** the
+result coalesced or null-checked, so failure is indistinguishable from empty):
+
+| Group | n | Sites |
+|---|---|---|
+| 🔴 **`readPricingConfig` consumers** | **7** | `Discounts:88` · `Customers:150` · `DeliverySchedule:109` · `ScanOrder:158` · `CustomerDetail:113` · `CartReview:47` · `shared/Settings:237` |
+| Page/component reads | 6 | `Campaigns:50` · `CustomerCapture:207` · `Profile:493` · `DiscoveryGlimpse:67` · `shared/Settings:322` · `ai/execute:37` |
+| Shared write-path helpers | 7 | `customerUpsert:161,171,186,192,205` · `personUpsert:94,102` |
+| Server-side (`api/`) | 4 | `orders/submit:75` · `qbo/router:305` · `qbo/invoice/cultivar:127` · `receipts/ocr:169` |
+| `.then(({ data }))` | 5 | `useNursery:16` · `useBusiness:16` · `cultivar/Settings:67` · `SocialSetup:67` · `PMI:229` |
+| `.catch` emitting a value | 1 | `SocialSetup:74` |
+
+🔴 **THE SINGLE MOST TELLING RESULT — AND IT IS AN ARGUMENT FOR THE RULE, NOT FOR A HELPER:
+`readPricingConfig` ALREADY DOES THIS CORRECTLY.**
+[`financialDataAccess.ts:172-175`](../../packages/shared/src/business-logic/financialDataAccess.ts#L172-L175)
+returns `{ data, error }` — **it preserves the distinction faithfully** — **and all SEVEN
+of its callers destructure only `data` and throw the error away**, then coalesce
+`data?.config ?? {}`. **The shared function did the right thing and every call site undid
+it.** A helper cannot fix this class, because the helper was never the problem.
+
+**Not individually classified — the honest gap:** **group B's 61 sites** match the same
+shape and were **not** read one by one in this pass. **So the confirmed floor is 30 and the
+upper bound is 91.** Stating 91 as the answer would be the false-precision this measurement
+exists to avoid; stating 30 without the 61 would understate a class by two thirds.
+
+**Two ADJACENT sub-classes, counted separately because they may warrant different answers:**
+
+- **AUTH reads — 7** (`callerPermission:148` · `authHeaders:22` · `OrderDetail:176` · `AssetCapture:56` · `InventoryReconcile:105` · `configureAuth:65` · `OwnerSignup:188`). 🔴 **`callerPermission.ts:148` is a SECURITY path** — a failed `auth.getUser()` is indistinguishable from "no user," and **#75 is already an open ruling about a check whose error path is "allow."** Same question, second location.
+- **HTTP-body parses — 9** (`res.json().catch(() => ({}))` at `OrderDetail:187` · `ReceiptKeeper:535` · `useSubmitOrder:118` · `SocialSetup:104` · `useQboConnect:78` · `useQboConnect`/`AIEngine:142` · `DiscoveryGlimpse:107,159` · `ocr.ts:240`). **This is exactly Q6's second error surface**, and it is nine sites rather than one.
+
+### WHAT THE COUNT DECIDES
+
+**It is not two call sites.** At a floor of 30 — with a shared helper already proving the
+correct shape and seven callers discarding it — **the answer is a RULE plus a lint, not a
+refactor.** The shape is mechanically detectable (that is how it was counted), which means
+**this class is capable of being a cap**, in the way #174's class was.
+
+⚠️ **NO CAP WAS BUILT, DELIBERATELY** — minting one before David rules answers a ruling with
+a constant, which is the #188 precedent and the reason that measurement was not a cap
+either.
+
+---
+
 ## CLOSING — the four that decide the fix's shape
 
 - **Q1:** *Two different lists and seven copies across them* — `social_drafts` accepts 5, `campaign_posts` accepts a **non-overlapping** 4 with an `email` nothing produces; neither generator hardcodes its selection, so every one of the nine literals is a type, a constraint, or a display map.
-- **Q2:** *It calls `/api/social/enable` → the one-writer RPC → a top-level jsonb merge that correctly replaces the whole array — and on today's database the call cannot resolve at all, because the client sends `p_trial_days` and `20260802c` is unapplied.*
-- **Q4:** *The config write is E5-clean by construction — the RPC returns `applied`/`reason` and `enable.ts:60-63` surfaces it as a 403 — while three draft-review writes on the same feature check nothing at all.*
+- **Q2 (CORRECTED):** *It calls `/api/social/enable` → the one-writer RPC → a top-level jsonb merge that correctly replaces the whole array, and **it works** — `20260802c` is applied and the RPC returns `applied:true`. **The finding is now the COMBINATION: a working write behind a broken read means `Save Settings` persists the instagram-only DEFAULT over the real config. A display bug becomes DATA LOSS.*** ~~on today's database the call cannot resolve~~ — **disproven, see § CORRECTION.**
+- **Q4 (CORRECTED):** *The config write is E5-clean and is now **observed** clean rather than inferred — while three draft-review writes check nothing at all, **and the reopen found a third thing: the write has NO CONFIRMATION SURFACE.** `SocialSetup.tsx:109` navigates away on `res.ok` without re-reading, so the one screen that could contradict a bad write never looks.*
 - **Q5:** *Confirmed, not corrected — `campaigns` commits at `:103`, `campaign_posts` inserts at `:129`, no transaction spans them, the posts insert is a single atomic batch so one bad channel kills all of them, and the catch never deletes the row it just created.*

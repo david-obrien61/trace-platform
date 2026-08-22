@@ -150,6 +150,52 @@ reviewing the sentences above them leaves half the surface unchecked.
 **Enforcement:** review-only. No cap reads prose, and one that tried would be reading intent. The
 mechanical half is the sweep: when a section gains a row state it did not have, re-read its header.
 
+## 6. DATA READS (a failed read must not be indistinguishable from an empty one)
+
+🔴 **DRAFT — 2026-08-22. DAVID RULES. Written before any code that would need it.**
+
+**R1 — A READ WHOSE ERROR PATH RETURNS A VALUE MUST KEEP "FAILED" DISTINGUISHABLE FROM "EMPTY."**
+
+A9 says *absent is not empty*. This is **A9 on the READ side**, where the platform never carried it:
+the rule was enforced for what a surface DISPLAYS and never for what the code BELIEVES. A read that
+fails and returns a fallback has not merely lost a value — **it has manufactured a fact**, and every
+consumer downstream treats that fact as observed.
+
+**The minimal form, and this is what makes it cheap enough to be real: it does NOT require knowing
+the correct value. It requires only that information is not DESTROYED.** A read may legitimately
+fail; it may legitimately return a default. **What it may not do is emit the same output for
+"loaded and narrow," "absent," and "errored."**
+
+**The two founding instances each take THREE distinct inputs and emit ONE output:**
+
+| Site | loaded-and-narrow | absent | errored | emitted |
+|---|---|---|---|---|
+| `SocialSetup.tsx:67-74` | instagram-only config | no row | PostgREST error (`.catch` cannot see it) | `defaultChannels()` — instagram-only |
+| `Campaigns.tsx:50-56` | tenant has no campaigns | RLS returned nothing | query errored | `[]` → "No campaigns yet" |
+
+🔴 **WHY IT IS A RULE AND NOT TWO FIXES — the class was COUNTED, per #174: 30 confirmed instances,
+a floor rather than a total (61 further sites match the shape and were not individually read).**
+And the decisive result: **`readPricingConfig` ALREADY RETURNS `{ data, error }` CORRECTLY, and all
+SEVEN of its callers destructure only `data` and throw the error away.** **The shared helper did the
+right thing and every call site undid it — so a helper cannot fix this class, because the helper was
+never the problem.**
+
+**R2 — the same discipline applies to an HTTP body, and it is where the second error surface hides.**
+`await res.json().catch(() => ({}))` **before** an `res.ok` check converts a platform-level failure
+into an empty object, so the handler's own error and a Vercel timeout become one screen. **Nine
+sites.**
+
+**⚠️ AUTH READS ARE THE SHARP EDGE AND MAY WARRANT A DIFFERENT ANSWER — 7 sites, and
+`callerPermission.ts:148` is a SECURITY path:** a failed `auth.getUser()` is indistinguishable from
+*no user*. **That is #75's open ruling — a check whose error path is "allow" is not a check —
+arriving at a second location.** Rule these together or rule them apart, but do not let one answer
+be assumed for both.
+
+**Enforcement:** review-only today. 🔴 **Unlike §5, this class IS mechanically detectable — the count
+above was produced by four greps — so it is capable of being a cap.** None was built: minting one
+before David rules answers a ruling with a constant (the #188 precedent). Full measurement, method,
+and per-site listing: `docs/audits/social-campaign-path-recon-2026-08-22.md` → **THE COUNT**.
+
 ## System-managed field registry (the F2/F3 set — David to confirm)
 
 The canonical locked set in `systemManagedFields.ts`, keyed by DB field name (a grid locks the field wherever it shows it):
