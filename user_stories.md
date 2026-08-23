@@ -743,6 +743,119 @@ draft and published IS her voice, captured without asking her to fill in a form.
 what LEFT TRACE, not what was published. She copies a caption into Instagram and may edit it
 there. This is not a record of publication and must never be labelled as one.
 
+### The growing ladder — potted, waiting, ready, and up a size
+STATUS: needs-input
+SCOPE: vertical:cultivar, platform
+BUILD: active
+MAPS-TO: —
+PIECES: growth_ladder_config, rotation_date, under_production_state, uppot_schedule
+NEEDS: Joel to supply the numbers — the container sizes in order, which are never sold, and maturation plus hold per rung (per variety where he knows it). David to rule whether UNDER PRODUCTION is a new value in the lot-status vocabulary or a derived state, and whether up-potting is modelled as a transformation or as a movement out and in.
+Lauren corrected David on this, and the correction is the whole model. He had them
+repotting every six months. She said: *"I had that backwards. We don't repot them every six
+months. It takes six to eight months to grow into their pots, and then they can live in
+their pots for say a year."*
+
+So a block of trees goes round a loop, not down a pipeline. It is potted into a size, spends
+six to eight months **under production** — her word — rooting into that pot and not for sale
+at any price. Then it is sellable, and holds at that size about a year. Then it has to move
+up a pot whether or not anyone bought it, and the loop starts again one size bigger. Fifteen
+gallon to thirty to forty-five to sixty-five to ninety-five. Eighteen to twenty months a
+rung, several years to the top.
+
+**Everything derives from one date and two numbers per size.** Joel says when a block went
+into its pots; the rung's maturation says when it can be sold; the hold says when it must
+move up. Nobody types a ready-for-purchase date — it is arithmetic, and a typed one would
+just be a second answer that can disagree with the first.
+
+**A blank interval means UNKNOWN and stops the schedule.** Lauren said plainly *"I don't know
+the actual numbers or how fast they."* Joel knows some varieties and not others. A variety
+with no interval says so rather than quietly assuming six months, exactly as an unknown cost
+is never counted as zero.
+
+**The tool prompts a look; it never declares a tree ready.** Lauren's real trigger is her
+eyes — *"we look at things and we're like, oh, those need to be repotted."* The system knows
+when to send someone down the row. Joel decides what he finds there.
+
+Two things fall out of it. The counting unit is the **block** — variety by size, the physical
+row — because that is how the yard is laid out and how anyone would count it. And the
+scheduling leverage is real: pot up in August, in the dead heat when nobody is buying, and
+the block comes sellable in March when everybody is. Pot up in January and it lands in July,
+into the deadest month of the year. Same work, same crew, months of difference in when the
+money shows up.
+
+**Today the platform would call an under-production block available**, because anything on
+hand and uncommitted computes as sellable. Forty trees that cannot leave for six months would
+be offered for sale.
+
+### What's in it when it sells — cost that accumulates over years
+STATUS: needs-input
+SCOPE: vertical:cultivar, platform
+BUILD: active
+MAPS-TO: —
+PIECES: rung_cost_inputs, batch_labour, block_origin, cost_accumulation
+NEEDS: David to rule whether ORIGIN (grown / bought in) is a field on the lot or derived from whether an acquisition cost exists, and how per-tree accumulated cost relates to the existing cost_objects model. Lauren and Joel to supply real numbers for one batch.
+David, to Lauren: *"you have seeds, you buy seeds, you have containers, you have labour. You
+have a thousand seeds, you have so much dirt, three employees, it took four hours, the
+employees were paid this much — so you have this much sunk into your seeds. Now you water it.
+You have a well, you have electricity."*
+
+Cost here does not arrive as an invoice. It **accumulates**, over years, one rung at a time,
+and by the time a ninety-five gallon oak is sellable it has been through the loop four times.
+
+Two shapes, and the difference is where the block came from. **Bought in** is one line on a
+vendor invoice and joins the ladder partway up — David captured exactly such an invoice on
+2026-08-22. **Grown from seed** starts at the bottom and picks up cost at every rung: pot and
+soil per tree, the crew's hours spread across the batch, water and power for every month it
+sits there. Same tree at the same size, two completely different cost shapes.
+
+**Labour is per batch; materials are per tree.** Three people for four hours across a thousand
+seeds is a fraction of a cent each. Across two hundred it is not. The batch size is what makes
+the labour number mean anything, so it is not optional.
+
+**Kit bought once and reused is not in this.** The timer, the happy pipe, the weed mat, the
+well — David named them as sunk cost and he is right that they should not divide into a
+per-tree number. That is capital, and Cost-to-Produce already says so on its own screen:
+one-time capital is shown separately and never inflates the per-unit figure.
+
+**And some of it is genuinely unknowable.** David said it himself: *"I don't know if we'll know
+if you had to go to the store to get the seed."* We won't. So a cost with an empty box is a
+FLOOR and the surface says so — the real number is higher. Never a guess, never a zero. That
+is the honest answer to a business that currently estimates cost from what a vendor charged
+them, and it is the same discipline the 117-unquantified-costs banner already applies.
+
+The payoff is a sentence Terry has never had: **this forty-five gallon Shumard has this much
+of you in it, it took three years to get there, and you sell it for that.**
+
+### Tell me before I run out — reorder from what I actually use
+STATUS: needs-input
+SCOPE: platform, vertical:cultivar
+BUILD: active
+MAPS-TO: —
+PIECES: consumable_tracking, consumption_forecast, draft_purchase_order
+NEEDS: David to rule whether a drafted order is ever sent by TRACE or only ever prepared for the owner to send, and where consumables live — a kind of inventory row, or their own thing. Lauren to name which consumables actually run out on her.
+David, to Lauren: *"you run through labels for your QR and your printer, and we can say
+you've printed so many QR labels that you're running out. It's time to reorder based on your
+past history."*
+
+Lauren runs out of things and finds out at the worst moment — standing at the printer with a
+block of trees waiting to be tagged. Pots, soil, labels, fertiliser. Nobody counts them until
+they are gone.
+
+TRACE already knows the consumption, because it knows the work. **Every QR label printed is a
+label used. Every up-pot is a pot used.** The schedule from the growing ladder says forty
+blocks come due in October, which says how many pots and how many labels October needs —
+before October. That is a forecast from her own operation, not from a burn rate somebody
+guessed.
+
+So the surface warns while there is still time to order, and then goes one step further: it
+**drafts the order** from what she has bought before and puts it in a queue. She opens it,
+adjusts what is wrong, and sends it. **TRACE prepares; Lauren sends.** Nothing leaves the
+building on its own.
+
+This is the business-intelligence layer doing the least glamorous and most useful thing it
+can do: noticing something ordinary before it becomes a problem, and having the paperwork
+ready.
+
 ---
 
 ## PLATFORM STANDARD CAPABILITIES
