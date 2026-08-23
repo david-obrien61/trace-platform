@@ -1055,7 +1055,7 @@ STATUS: scoped-out
 SCOPE: platform
 MAPS-TO: —
 PIECES: —
-**Reason:** The connector / gap-filler tile + integration-registry model is DECIDED (2026-05-23); `business_modules` is the partial impl and QBO-connect works — that's enough for the demo. A full connector-management console is **post-demo**, not a gap.
+**Reason:** The connector / gap-filler tile + integration-registry model is DECIDED (2026-05-23); `business_modules` is the partial impl and QBO-connect works — that's enough for the demo. A full connector-management console is **post-demo**, not a gap. 🔴 **WHAT THIS ROW DOES *NOT* COVER (amended 2026-08-23, ledger #203 — the row STANDS, its boundary is now stated):** this is about a CONSOLE — connection health, credentials, per-module configuration. **It was never about a module's ON/OFF SWITCH, and that switch is IN SCOPE.** It is the unfinished half of David's own 2026-08-02 `core_optional` ruling — *"core-with-a-switch: it ships with the platform and a nursery that gives contractor discounts turns it on"* (`docs/RULINGS.md`) — and `docs/built-inventory.md` states `core_optional` means *"OFF until the owner switches it"*. ⚠️ **The DATABASE already documents a feature the PRODUCT lacks: the RPC's own refusal string at `20260802c:127` reads *"enabling **or disabling** a module changes what this business pays"*, while #201 found ZERO callers pass `false` and no off affordance exists anywhere.** **So a build of the off switch does NOT contradict this row and does not need it flipped.** Rulings R-1 … R-4 (2026-08-23) govern that switch: core cannot be switched off · the disabled tile is the fuzz · the route renders the fuzz rather than blocking · marketplace scope is a set.
 
 ### Multi-currency (SCOPED-OUT)
 STATUS: scoped-out

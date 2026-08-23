@@ -5,6 +5,119 @@
 > NOT loaded at session start — exists for reference only.
 > Entries are in reverse-chronological order (newest first within this archive).
 
+<!-- Archived 2026-08-23 (12) by OP-13 §3 retention (N=3) — moved VERBATIM from CLAUDE.md §3 at close-out of ledger #203. -->
+### 2026-08-23 (9) — THUNDER **RECON: THE COST WALL (#81). THE LEAK IS BIGGER AND CHEAPER THAN THE DEBT ROW SAYS — THREE UNGATED READS THAT NEED NO DEVTOOLS, AND THE ONE THAT MATTERS MOST NEVER USES THE VALUE IT RECEIVES.** #81 records the defect as *"a member with devtools reads cost."* True, and incomplete: 🔴 **`usePlant.ts:138` and `ScanOrder.tsx:269`/`:303` pass `STOCK_LINE_COLUMNS` — which names `unit_cost` (`stockLineResolver.ts:62`) — UNCONDITIONALLY**, so opening a plant or scanning a tag puts the cost basis in the response with nobody trying. **`ScanOrder` is gated on `orders:create`, which STAFF hold** — the narrowest role on the platform. 🔴 **`usePlant` is HALF-FIXED and that is the shape of the miss: the specimen read at `:102-105` IS gated on `canViewCosts`; the stock-line fallback 33 lines below is not — and the fallback is the D-34 path every discovery-seeded and CSV-imported lot takes, i.e. LAWNS's actual catalog.** ✅ **The cheap half, checked not assumed: `grep unit_cost ScanOrder.tsx` returns NOTHING — the page never reads the value.** **RECON ONLY. NOTHING BUILT** — no app code, no schema, no migration, no policy, no cap. ONE document: `docs/audits/cost-wall-81-recon-2026-08-23.md` (548 lines). `npm run verify` exit 0 ZERO NET-NEW (5 / 247 / 10 / 12 / 15) · api/ **12/12** · **zero diff under `packages/`/`api/`/`supabase/`** · GATE 0 **NOT APPLICABLE** (nothing ships) · all `[TRACE:*]` ON.
+
+**Type:** Recon + estimate + close-out. Docs: ledger **#200** · `RULINGS.md` (**FIVE NEW OWED rows C-A…C-E**) · ⚡ ACTIVE STATUS · `built-inventory.md` · DECISIONS-INDEX drift · this §3 + line 3. **§3 RETENTION: 1 archived verbatim (2026-08-23 (6) #197), 1 written — entries-in == entries-out, §3 back to 3** (archive 230 → 231). ✏️ **CLAUDE.md read IN FULL and `docs/RULINGS.md` read IN FULL (154 lines, four chunks incl. the whole OWED table).**
+
+**🔴 THE DIAGNOSIS THAT SIZES EVERYTHING, AND IT IS NOT "WE FORGOT A WALL."** Q2's table sorts every cost-bearing table by whether row-level RLS actually protects it, and the split is total: **`cost_objects`, `receipts`, `labor_resource_wages`, `business_pricing_config` are all correctly walled — because in each case the whole ROW is confidential.** **`business_inventory` and `business_service_log` are the only two where a CONFIDENTIAL COLUMN sits on an OPERATIONAL row — and they are exactly the two that leak.** Row-level RLS cannot express that case; nobody enumerated which rows were mixed. **Q1 = 25 cost-read sites, but only 11 touch `business_inventory` and only 3 of those are ungated** — the number that sizes the build is 3, not 25.
+
+**🔴 Q11 IS THE FINDING THAT CHANGES THE SCOPE: `unit_cost` IS NOT THE CLASS, AND #83 AS WRITTEN WOULD SHIP A WALL AND BE DEFEATED BY THE SAME WEEK'S WORK.** **(a)** `business_service_log.cost` (`20260612…:231` — what the business PAID for a repair) is admitted by **`pmi:read`, which MANAGER holds by default** (`permissionManifest.ts:1241`), read by `PMI.tsx:225` with **`select('*')`**. 🔴 **The module's own header states the premise and does not act on it** — `PMI.tsx:73-80` says *"a manager can legitimately hold pmi:read and NOT costs:read"* and redacts **the asset list only**. Second table, same class, on no board. **(b)** The CSV importer writes a grower's **`Wholesale` column VERBATIM into `business_inventory.attributes`** (`columnMap.ts:147-148`, whose comment already reads *"🔴 the Wholesale case"*; `importPlan.ts:121-124, 314-315`) — one column from `unit_cost`, same `inventory:read` policy, **and #83's scope does not mention it.** ⚠️ **Not hypothetical, and the timing is the point: the owner-test fixture IS a grower price list with a Wholesale column, and the website person — who holds `inventory:import_price` — is the person who runs that import next week.**
+
+**🔴 Q4 FOUND A CONSTRAINT ON THE BUILD ITSELF: WALLING COST RE-CREATES THE DIVERGENCE STD-012 EXISTS TO PREVENT.** `CartReview.tsx:182` feeds `unitCost` into `computeOrderPricing`; `tierPricing.ts:228-233` degrades a null cost NEUTRAL to `sell_price` — correct alone. Add a wall and an **`at_cost`** order shows **RETAIL** on Review while `submit.ts:394` (service key, RLS-bypassed) charges **COST**. **`tierPricing.ts:239-243` names that exact hazard two lines above the function** — *"Review and submit both call THIS one pure function over the same inputs, the two surfaces cannot diverge"* — and a wall breaks the premise by removing an input from one caller. ⚠️ Scope stated rather than alarmed: `at_cost` tiers only, ungated sessions only, failing toward charging LESS than shown. **Filed as ruling C-A, not patched.**
+
+**⚠️ THE PROMPT'S SECOND-HALF PREMISE WAS FALSE AGAINST THE TREE, AND IT IS CORRECTED RATHER THAN BUILT ON.** Three checks, all negative: `InventoryImport.tsx:147` selects `STOCK_LINE_IMPORT_COLUMNS`, which **has no `unit_cost`**; `:78` reads the **current** string `inventory:import_price`; and a grep for `KNOWN-BAD` across the whole of `authority-grants-baseline.json` returns **ZERO** — both #85 and #86 are declared **FIXED 2026-07-31** at `:122` and `:219`. ✏️ **Where it came from is worth naming: CLAUDE.md's debt string carries `#85/#86 ✅ resolved` AND `#85/#86-original (NEW … KNOWN-BAD, NOT ACCEPTED)` adjacent in one paragraph, and the superseded row reads exactly like a live one.** **Tech-debt #22's class — a debt log with false rows is one people stop reading.** Recorded, not fixed: editing the debt log was outside the scope bar.
+
+**FLAGGED FOR DAVID:** **(a)** 🔴 **FIVE RULINGS OWED (C-A…C-E), and C-C is the gate that fires: `user_stories.md:292` is `STATUS: gap` — its `NEEDS:` already names the exact deliverable (*"who sees costs, who can't, why"*) — so per §9 a story is CREATED before any spec. It also asserts *"BUILT"*, which #81 disproves for the cost half.** **(b)** ✅ **Q7 answered from the code AND the fixture, and it settles the website-person question in her favour: `SpineField` is a closed set of five (`columnMap.ts:37`) and `unit_cost` is not one of them — `inventory:import_price` imports the RETAIL price the nursery CHARGES, never the vendor cost it PAYS. The string does not need splitting.** **(c)** ⚠️ **Q3 CORRECTION — the `6/0` gate is NOT reusable: `verify-financial-wall.mjs` is not in `npm run verify` (the chain at `package.json:14` has eleven caps and this is not one), it is a one-shot post-apply catalog run, and its six checks name the wage tables specifically. Reusing the precedent means reusing the MIGRATION SHAPE; the guard must be written.** **(d)** 🔴 **Q10 — no cap can see this class, and the proof is empirical rather than argued: `usePlant.ts::canViewCosts` IS baselined (`authority-grants-baseline.json:20-28`) and capA runs GREEN, while the ungated leak sits 33 lines below it in the same file. capA reads gates; the defect lives in selects.** ✅ **The cap wanted is a JOIN of two we already own** — `verify-field-lists` extracts select strings, capA resolves grant sets. **(e)** ⚠️ **CATALOG NOT REACHED — `.env.local` denied by the sandbox, so every RLS claim is a labelled HYPOTHESIS and Q8 hands over five read-only queries unrun (STD-021). Sharpened by #39: five of the tables in question have no `CREATE TABLE` migration at all.** **(f)** ✅ **`git log`/`git status` re-run at write-up per STEP 0 — HEAD still `c0276d8`, tree clean; last session's stale-snapshot catch did not recur, and I checked rather than assumed.** **(g)** 🔴 **Q12 — for Wednesday's ACTUAL risk there is a ~2-prompt version with ZERO migrations and ZERO rulings** (narrow the three resolver callers), **and its limit is stated rather than buried: the console leak survives, N-7 stays RED, and #81 does not close.** MINIMUM stops Joel and the website person seeing cost **by accident**; only COHERENT stops them seeing it **on purpose** — and which is enough is David's call, not a technical one. **(h)** **CLAUDE.md is 715 lines against its own ~600 budget.**
+
+<!-- Archived 2026-08-23 (11) by OP-13 §4 compression (ledger #203) — moved VERBATIM from CLAUDE.md.
+     Nothing here was deleted; CLAUDE.md now carries a POINTER to this block. -->
+
+## §2 Registered Domains — MOVED FROM CLAUDE.md 2026-08-23 (ledger #203, OP-13 compression)
+
+### Registered Domains (as of 2026-05-26)
+
+All domains registered at GoDaddy under David's account.
+
+| Domain | Protection | Status / Use |
+|---|---|---|
+| trace-enterprises.com | None | Parent company domain |
+| builtwithcai.com | Full Protection | Methodology brand; hosts discovery.builtwithcai.com (planned subdomain) |
+| cultivar-os.com | None | Cultivar OS (nursery vertical) — currently forwards to cultivar-os.app |
+| cultivar-os.app | None | Cultivar OS production app (live) |
+| ignition-os.com | Full Protection | Ignition OS (diesel/auto vertical) |
+| ignition-os.app | None | Ignition OS (alternate TLD) |
+| conduit-os.com | None | Conduit OS (HVAC/electrical vertical) |
+| conduit-os.app | None | Conduit OS (alternate TLD) |
+| kinna-os.com | None | KINNA-OS (faith-based and direct-service nonprofit vertical) |
+| kinna-os.app | None | KINNA-OS (alternate TLD) |
+
+**WHOIS privacy status:** Domains marked "None" do NOT have WHOIS privacy enabled, meaning David's registration address is publicly queryable. Plan: defer privacy upgrades to the Cloudflare transfer window opening July 1-2, 2026, which provides free WHOIS privacy as a benefit of the transfer. Current annual cost of GoDaddy WHOIS privacy across the unprotected domains would be approximately $13/yr each.
+
+**Open: which domain hosts the KINNA-OS production app when Phase 1 ships.** Options include kinna-os.app (matches Cultivar's pattern), kinna-os.com (matches Ignition's pattern), or a subdomain of builtwithcai.com (matches the discovery surface pattern). Decision deferred to pre-build.
+
+---
+
+---
+
+## §2 Desktop Folder → GitHub Repo Map — MOVED FROM CLAUDE.md 2026-08-23 (ledger #203, OP-13 compression)
+
+### Desktop Folder → GitHub Repo Map (verified 2026-05-28)
+
+> Before starting any build session, confirm which desktop folder maps to the target vertical.
+> Do not edit a folder that is not linked to the active GitHub repo.
+
+| Desktop Folder | GitHub Repo | Deployed Vertical | Status |
+|---|---|---|---|
+| `~/Desktop/trace-platform/` | `david-obrien61/trace-platform` | Cultivar OS (active) · ignition-os (planned) | **Active — primary monorepo** |
+| `~/Desktop/CAI-archive/` | `david-obrien61/CAI` | Ignition OS (original) | **Archive — RENAMED from `CAI` (archived, NOT deleted; a search for `CAI/` returns nothing because of the rename).** Reference-only: the historical original to consult **only if** the live donor below is missing something. **The LIVE Ignition donor is `trace-platform/packages/ignition-os/`** (files already copied + rewritten there — web-ported inline styles + instrumentation; confirmed a superset of the archive, e.g. PMI/`PredictiveKey.jsx` 710 vs 537 lines). Use the shared package as the donor; treat `CAI-archive` as historical original + `ai_router.py` reference until Railway is decommissioned. |
+| `~/Desktop/CoolRunning/` | `david-obrien61/CoolRunning` | CoolRunnings (home automation) | Active — separate vertical, separate repo |
+| `~/Desktop/IgnitionMobile/` | `david-obrien61/ignition` *(archived)* | Ignition OS mobile prototype | **Archive** — GitHub repo is archived. Rename desktop folder to `IgnitionMobile-archive`. Keep for migration reference until ignition-os web build is complete. |
+| `~/Desktop/Cultivar-os/` | *(none — no git)* | — | **Empty folder** — safe to delete. Real Cultivar OS is in `trace-platform/packages/cultivar-os/`. |
+| `~/Desktop/trace-assessment-app/` | *(none — no git)* | CoolRunnings assessment tool | Standalone app, no git. Contains `src/lib/AIEngine.js` (Claude Vision, device identification — different from Ignition AIEngine). |
+| `~/Desktop/CoolRunning/` | `david-obrien61/CoolRunning` | CoolRunnings | See above. |
+
+**Rule:** `trace-platform/` is the only folder that deploys to Vercel. All Cultivar OS work goes here. All Ignition OS work goes here — migration is complete as of 2026-05-28. **Ignition is donor-reference-only, not a peer system to maintain.** Live work is trace-platform / Cultivar (Supabase `bgobkjcopcxusjsetfob`). Live Ignition **donor code** = `packages/ignition-os/`. Live Ignition **data** (if ever needed) = Ignition Supabase project `ufsgqckbxdtwviqjjtos` (anon-key only locally; temp service key on request). `CAI-archive/` (renamed from `CAI`, not deleted) is the historical original, reference-only.
+
+---
+
+---
+
+## §5 WHAT'S BUILT — SHARED MODULES — MOVED FROM CLAUDE.md 2026-08-23 (ledger #203, OP-13 compression)
+
+> 🔴 **ARCHIVED BECAUSE IT WAS STALE AND ANSWERING A LOAD-BEARING QUESTION WRONGLY.** CORE MANDATE rule 1 says
+> *"Before writing ANY new module, check `packages/shared/src/` first."* This listing named **9 directories; the tree
+> has 25** — it omitted `inventory/`, `business-logic/`, `discovery/`, `import/`, `context/`, `design-system/`, `sync/`,
+> `campaigns/`, `modules/`, `ai/`, `assets/`, `debug/`, `devtools/`, `onboarding/`, `pages/`, `rhythm/`, `social/`.
+> Anyone trusting it would have concluded `stockLineResolver` did not exist. Kept verbatim for history; the live answer
+> is `ls packages/shared/src/` and `docs/built-inventory.md`.
+
+## 5. WHAT'S BUILT — SHARED MODULES
+
+```
+packages/shared/src/
+  auth/
+    configureAuth.tsx    ✅ factory — email + PIN strategies
+    index.ts             ✅
+  components/
+    Button.tsx           ✅
+    Card.tsx             ✅
+    Badge.tsx            ✅
+    LockedOverlay.tsx    ✅
+    tiles/
+      TileGrid.tsx       ✅ extracted from CAI
+      Tile.tsx           ✅ 3 states
+  notifications/
+    send.ts              ✅
+    queue.ts             ✅ sendSilently
+    templates/
+      cultivar.ts        ✅ order_confirmation
+  qr/
+    generate.ts          ✅
+    print.ts             ✅
+  supabase/
+    client.ts            ✅
+    auth.ts              ✅ (PIN — ignition-os)
+    types.ts             ✅
+  quickbooks/
+    oauth.ts             ✅ (known: IGNITION_OS_DATA hardcoded — browser-side only)
+    refresh.ts           ✅ refreshQBToken() — server-side, proactive token refresh
+    invoice.ts           ✅
+    customer.ts          ✅
+```
+
+---
+
 <!-- Archived 2026-08-23 (11) by OP-13 §3 retention (N=3) — moved VERBATIM from CLAUDE.md §3 at close-out of ledger #202. -->
 ### 2026-08-23 (8) — THUNDER **RECON: CAN A TEST TENANT BE DELETED WITHOUT TOUCHING THE OTHERS? NO — AND THE REASON IS NOT A MISSING FEATURE, IT IS TWO TRIGGERS THAT WILL PHYSICALLY REFUSE.** 🔴 **`audit_log` AND `business_inventory_ledger` BOTH CASCADE FROM `businesses` AND BOTH CARRY `BEFORE UPDATE OR DELETE ... FOR EACH ROW` APPEND-ONLY GUARDS THAT RAISE** (`20260623:151-167`, `20260720:196-212`) — **a FK cascade IS a DELETE**, so the cascade reaches the guarded table, the guard fires, and the **entire transaction aborts. Nothing is deleted.** `audit_log` takes a row on essentially every role/module act, so a tenant that has been touched at all almost certainly cannot be removed. **Second, independent fuse:** five core tables carry `business_id` with **NO `ON DELETE`** — `orders`·`customers`·`plant_events`·`addons`·`social_drafts` (`20260529_c:36-40`) — which is `NO ACTION`, and **blocks**. 🔴 **THE DELETE IS FAIL-CLOSED IN BOTH DIRECTIONS, WHICH MEANS DAVID'S FEAR IS THE INVERSE OF THE REAL RISK:** one-FK-too-wide cannot happen; what can happen is someone meeting the refusal and reaching for the tool that got past it last time. **RECON ONLY. NOTHING BUILT, NOTHING DELETED** — no app code, no schema, no migration, no cap, no SQL run. ONE document: `docs/audits/tenant-delete-blast-radius-recon-2026-08-23.md`. `npm run verify` exit 0 ZERO NET-NEW (5 / 247 / 10 / 12 / 15) · api/ **12/12** · **zero diff under `packages/`/`api/`/`supabase/`** · GATE 0 **NOT APPLICABLE** (nothing ships) · all `[TRACE:*]` ON.
 
