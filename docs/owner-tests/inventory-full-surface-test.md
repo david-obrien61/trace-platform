@@ -445,16 +445,91 @@ LAST-PROVEN: never
 
 ---
 
-## SURFACE: offline
-_The SyncEngine — back-acre dead zones (ledger #54)._
+## SURFACE: offline — store-and-forward
+_The SyncEngine (`packages/shared/src/sync/`) — back-acre dead zones (ledger #54, #143).
+**PROVEN BY DAVID 2026-08-23 by an airplane-mode test, and UNRECORDED until now** — which is why it
+was re-questioned the same evening and cost a recon to re-establish. These cards exist so it is
+never re-established from memory again. Mechanism located: `docs/audits/offline-store-and-forward-recon-2026-08-23.md`._
 
-### A count taken offline survives and syncs on reconnect
+> **Coverage, established from code (recon 2026-08-23):** the queue is wired into **exactly TWO**
+> surfaces — this count loop (`InventoryCount.tsx:194`) and asset capture (`AssetCapture.tsx:62`).
+> Checkout, the QR profile, the delivery route and the desk reconcile have **no queue**.
+> 🔴 **And on THIS covered surface the WRITES are queued while the READ in front of them is not** —
+> see card 2, which is expected to fail.
+
+### 1. A count taken offline survives and syncs on reconnect  (COVERED SURFACE)
+STATUS: owed
+DEVICE: phone
+COVERS: #54 · #143 · recon 2026-08-23
+LAST-PROVEN: never
+- Start a count **ONLINE** — it refuses to start offline by design (`InventoryCount.tsx:222`).
+  Resolve ONE item and leave the review sheet **OPEN**. Airplane mode **ON**.
+- **EXPECT** the banner: *"Offline — counts are saved on this phone and will sync when you're back in signal."* Save the qty.
+- **EXPECT** *"N waiting to sync"* to APPEAR and the number to be RIGHT. Save two more.
+- Airplane mode **OFF**. **EXPECT** the counter to fall to 0 **without pressing anything**.
+- Open `/inventory`. **EXPECT** every counted qty to be there.
+- **FAIL:** the Save errors · the counter never appears · the counter does not fall on reconnect · a qty is missing or wrong.
+- **NO CONSOLE.** Every check above is on-screen.
+
+### 2. 🔴 Scanning offline says the tag is not recognized  (THE RECON'S HEADLINE — EXPECTED TO FAIL)
 STATUS: needs-test
 DEVICE: phone
-COVERS: #54
+COVERS: recon 2026-08-23 · `stockLineResolver.ts:223,236,266`
 LAST-PROVEN: never
-- **NO TEST WRITTEN.** Airplane-mode mid-count → counts still save locally → a "waiting to sync" indicator appears → reconnect → they drain and land in `business_inventory`. **A save must never fail in a dead zone.**
-- **Why it's flagged:** the lot has dead zones. This is a **shipped, load-bearing, never-proven** path.
+- Airplane mode **ON**. On `/checkout/scan`, scan a tag you **know** is in inventory.
+- **EXPECTED TODAY (the defect):** *"Didn't recognize this — Scanned &lt;TAG&gt; — it didn't match a stock line. Check the tag."* **The tag is fine.** A dead zone is being reported as a missing item.
+- Repeat on the count screen: **EXPECT** the scan to miss and drop to typed entry, then **EXPECT** *"You're offline — &lt;name&gt; is a new size…"* — an honest refusal for the **wrong reason**.
+- **This card is EXPECTED TO FAIL** until the resolver gains a third `unavailable` state. It is written so the failure is RECORDED rather than rediscovered.
+
+### 3. Submitting an order offline  (UNCOVERED SURFACE)
+STATUS: needs-test
+DEVICE: phone
+COVERS: recon 2026-08-23 · `useSubmitOrder.ts:108` · `CartReview.tsx:628`
+LAST-PROVEN: never
+- Build a cart **ONLINE**. Airplane mode **ON**. Press *"I'll pay at the office"*.
+- **EXPECTED TODAY:** a red box reading **`Load failed`** (or `Failed to fetch`) — the browser's own string. Nothing says offline; nothing offers a retry.
+- Airplane mode **OFF**, press again: **EXPECT** it to go through, cart intact.
+- **FAIL (worse than expected):** the order submits twice · nothing appears at all · the cart empties.
+
+### 4. 🔴 The cart does NOT survive a reload  (UNCOVERED — EXPECTED TO FAIL)
+STATUS: needs-test
+DEVICE: phone
+COVERS: recon 2026-08-23 · `useCart.ts` (zustand, no `persist`)
+LAST-PROVEN: never
+- Scan 3 items into a cart. Pull-to-refresh (or background the tab long enough for iOS to discard it) and return.
+- **EXPECTED TODAY:** the cart is **EMPTY**. Lines, customer, tier, transport — all gone, no warning.
+- Record **how long** backgrounding takes to lose it on the actual demo phone. That number is the real input to whether cart persistence is worth building.
+
+### 5. 🔴 A day's counts in a PRIVATE tab  (THE STORE'S DURABILITY — ties to the logout-loop hunt)
+STATUS: needs-test
+DEVICE: phone
+COVERS: recon 2026-08-23 · `store.ts:55-58`
+LAST-PROVEN: never
+- Open the app in a Safari **PRIVATE** tab. Start a count online, airplane mode, save 3 items.
+- **EXPECT** *"3 waiting to sync"*. If it says 0 or never appears, the store write was **SWALLOWED** and the app is claiming a save it did not make — **STOP and report**.
+- **CLOSE** the private tab. Reopen private, return to `/inventory`.
+- **EXPECT (the hazard):** the three counts are **GONE**. Private-tab `localStorage` dies with the tab.
+- Run this on the **same device/browser as the logout-loop repro** — same storage, plausibly the same cause.
+
+### 6. Photos captured offline  (COVERED SURFACE — the second consumer)
+STATUS: needs-test
+DEVICE: phone
+COVERS: recon 2026-08-23 · `AssetCapture.tsx:62` · `assetBlobStore.ts`
+LAST-PROVEN: never
+- Airplane mode **ON**. On `/asset-capture`, take 2 photos.
+- **EXPECT** the *Offline* chip and a **held** count of 2. **Reload the page STILL OFFLINE.**
+- **EXPECT** the held count to still be 2 — these live in **IndexedDB**, so unlike a cart they survive a reload.
+- Airplane mode **OFF**. **EXPECT** them to drain and appear as assets.
+- **FAIL:** the held count is wrong · a photo is lost on reload · they never drain.
+
+### 7. A stuck queue says nothing  (THE DRAIN'S OWN FAILURE — hard to stage, recorded anyway)
+STATUS: needs-test
+DEVICE: phone
+COVERS: recon 2026-08-23 · `syncEngine.ts:176,180` · `forget()` has 2 call sites
+LAST-PROVEN: never
+- If an op is ever **REFUSED** on drain (RLS, a constraint, an RPC returning `applied:false`), the FIFO stops at it and everything behind it is stuck — **permanently, with no UI to clear it**.
+- **EXPECTED TODAY:** *"N waiting to sync"* stays put; **Sync now** appears to do nothing; the only evidence is a console line — which this `DEVICE: phone` card cannot use.
+- Staging this needs a deliberate refusal, so it is recorded as a **KNOWN HOLE** rather than a runnable check. **Do NOT mark this covered by inference from card 1 passing.**
 
 ---
 
@@ -675,7 +750,14 @@ SIGNAL: V6 returns 0
 | grid | Count noun agrees with trace | ⬜ PASS ⬜ FAIL | |
 | grid | Inline edits persist | ⬜ PASS ⬜ FAIL | |
 
-**Not run (no test written — OP-14 debt):** delete soft/hard · frozen column · **order-picker read** · offline sync.
+**Not run (no test written — OP-14 debt):** delete soft/hard · frozen column · **order-picker read**.
+
+**Offline / store-and-forward — NO LONGER IN THIS LIST, and the correction is worth stating:** it was
+`offline sync` here because **no test was written**, never because the mechanism was missing. The
+mechanism was located from code on 2026-08-23 and **seven cards now exist** — card 1 `owed` (written,
+awaiting David's airplane-mode run) and cards 2–7 `needs-test`, **two of which are EXPECTED TO FAIL**
+(the offline scan reporting a real tag as unrecognized; the cart not surviving a reload). A card that
+predicts its own failure is still a card — the hole is now recorded rather than rediscovered.
 
 ---
 
