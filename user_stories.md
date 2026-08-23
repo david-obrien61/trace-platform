@@ -703,6 +703,46 @@ This is platform, not Cultivar. Every vertical has crew — the nursery has plan
 auto shop has technicians, the kitchen has staff. The owner reads English and the work does
 not care.
 
+### Truth in advertising — suggest facts, never censor, keep the record
+STATUS: needs-input
+SCOPE: platform, vertical:cultivar, vertical:kinna
+BUILD: active
+MAPS-TO: —
+PIECES: claim_check, claim_verdict_surface, copy_suggestion_audit
+NEEDS: David to rule retention — how long the suggestion/edit record is kept — and whether the check runs on every generation or only when the owner supplies a factual claim. Confirm the audit record reuses the `receipts.accept_vs_edit` pattern rather than inventing a second mechanism.
+Lauren types into the campaign box: *"electricity is up 12%, and we're in a water
+restriction area."* One of those is her market knowledge. The other is a number, and a
+number in her Instagram feed is a claim she is making to her customers.
+
+**TRACE never originates an unverified factual claim.** Not as a setting, not as an option.
+If the tool writes "shade trees cut cooling costs 13%" out of nowhere, that is the platform
+putting a fabricated number in her mouth, on her own feed, under her name.
+
+**And TRACE never censors her.** She knows her market and she may know things a search does
+not. The check flags; it does not refuse. Surface, don't decide.
+
+Three verdicts, not two — because the middle one is where the value is. ✅ **verified**,
+with the source attached. ⚠️ **couldn't substantiate — and here is the nearest thing that
+does check out.** ❌ **contradicted**, with what says otherwise. The electricity claim above
+fails as stated, and underneath it sits a true and better one: the regulated delivery charge
+rose about 9% on 1 June and no customer can shop around it. A binary pass/fail throws that
+away. The same discipline as CONFIRMED / DERIVED / UNKNOWN on cost — unverified is never
+silently false, exactly as unknown is never silently zero.
+
+**A verdict with no source is just a second opinion with more confidence.** Every check
+shows its work, so she can disagree with it — and sometimes she should. A search can be
+stale, ambiguous, or wrong about a local market.
+
+**The record is hers and it is visible.** What was suggested, what she published, and the
+delta between them. Not a hidden log and never a scorecard — *"here's what changed"*, never
+*"here's what you overrode."* If she feels her corrections are being graded she will stop
+correcting, and the corrections are the most valuable thing in the system: the delta between
+draft and published IS her voice, captured without asking her to fill in a form.
+
+**One honest limit, stated in the design rather than discovered later:** the record captures
+what LEFT TRACE, not what was published. She copies a caption into Instagram and may edit it
+there. This is not a record of publication and must never be labelled as one.
+
 ---
 
 ## PLATFORM STANDARD CAPABILITIES
