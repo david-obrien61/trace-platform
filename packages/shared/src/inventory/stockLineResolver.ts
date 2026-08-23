@@ -61,6 +61,50 @@ export const STOCK_LINE_IDENTITY_COLUMNS = 'id, name, sku, qty, size, variant_gr
 export const STOCK_LINE_COLUMNS =
   'id, name, sku, qty, size, variant_group, sell_price, unit_cost, status, received_at, description';
 
+// ── THE CONFIDENTIAL SET (#81) ────────────────────────────────────────────────────────────────
+// The cost basis is what the business PAID, never what it charges. `sell_price` is deliberately
+// NOT here: it is the customer-facing retail figure (D-35), and the platform is consistent about
+// that on every renderer.
+//
+// 🔴 NAMED EXACTLY ONCE, HERE. The narrow list below is DERIVED from the wide one by subtracting
+// this set — it is never a second hand-typed list. A hand-typed copy minus unit_cost is a second
+// enumeration that silently diverges the first time a column is added to the entity, which is the
+// six-parallel-enumerations disease `customers` paid for (#168, A4). Add a column to
+// STOCK_LINE_COLUMNS and it reaches BOTH shapes with no second edit.
+export const STOCK_LINE_CONFIDENTIAL_COLUMNS: readonly string[] = ['unit_cost'];
+
+/** Subtract a column set from a select string. Pure, order-preserving, whitespace-tolerant. */
+function withoutColumns(list: string, drop: readonly string[]): string {
+  const dropSet = new Set(drop);
+  return list
+    .split(',')
+    .map((c) => c.trim())
+    .filter((c) => c.length > 0 && !dropSet.has(c))
+    .join(', ');
+}
+
+// DERIVED — the extended SELECT minus the confidential set. Not a second list.
+export const STOCK_LINE_COLUMNS_NO_COST = withoutColumns(STOCK_LINE_COLUMNS, STOCK_LINE_CONFIDENTIAL_COLUMNS);
+
+/**
+ * THE ONE THING A CALLER ASKS (#81 · 2026-08-23). A purchase-path caller passes whether the
+ * SESSION may see the cost basis, and gets the right column shape back.
+ *
+ * 🔴 THE POINT IS THE PAYLOAD, NOT THE UI. RLS on `business_inventory` is ROW-level and has no
+ * opinion about COLUMNS, so a member holding `inventory:read` is served `unit_cost` by the
+ * database whenever a query names it. Hiding the value in a component would leave it sitting in
+ * the network response — the inverse of a real wall. This removes the column from the REQUEST,
+ * which is the only place a client can remove it from.
+ *
+ * ⚠️ WHAT THIS IS NOT: it is not the cost wall. The base table still grants the column to any
+ * session that asks for it directly (a devtools one-liner still reads it — #81 stays OPEN, and
+ * `scripts/rls/inventory-read-model.rls.mjs` card N-7 stays RED). This closes the ACCIDENTAL
+ * exposure — the cost arriving on an ordinary screen for someone who never asked.
+ */
+export function stockLineColumnsFor(canViewCosts: boolean): string {
+  return canViewCosts ? STOCK_LINE_COLUMNS : STOCK_LINE_COLUMNS_NO_COST;
+}
+
 // The import SELECT — identity + the pricing/attribute fields the CSV importer reconciles a row
 // against (so an UPDATE merges into an existing attribute bag rather than clobbering it). Requires
 // the 20260723 columns (price_basis, attributes) applied.

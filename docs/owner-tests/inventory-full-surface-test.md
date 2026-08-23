@@ -1268,3 +1268,69 @@ LAST-PROVEN: —
 - **FAIL:** a duplicate lot appears because the size format differed, or card 9 never fires because the `45 gal` row CREATEd instead of matching.
 - **Note:** the fold is COMPARISON-ONLY — your stored `45` stays `45` on its row (D-23, faithful-before-connected); it is never rewritten to `45 Gallon`.
 - **⚠️ Blast-radius (probe, do not assume):** if any ONE variety already holds two rows that are the same size in different spellings (e.g. a `15` row AND a `15 gal` row under one variant_group), the size-picker now reads them as a duplicate and that variety needs those two rows merged — a read-only check (`SELECT variant_group, size FROM business_inventory` grouped) is worth a glance during this prove. This is tech-debt #56's deferred merge half; the comparison fix here does not itself merge existing rows.
+
+---
+
+## COST-BASIS COLUMN WITHHOLDING (#81 MINIMUM · ledger #202 · 2026-08-23)
+
+> **What this build did, in one sentence:** the plant-profile stock-line fallback and the checkout
+> scan loop asked `business_inventory` for `unit_cost` on **every** read regardless of who was
+> logged in; they now ask for it only when the session holds `costs:read`.
+>
+> 🔴 **WHAT IT DID *NOT* DO, and these cards must not be read as proving it: #81 IS STILL OPEN.**
+> RLS on `business_inventory` is ROW-level and grants every column to any session holding
+> `inventory:read`, so **a devtools one-liner still returns the cost** and
+> `scripts/rls/inventory-read-model.rls.mjs` **card N-7 stays RED**. This closes the *accidental*
+> exposure — cost arriving on an ordinary screen for someone who never asked for it. The wall
+> itself is the COHERENT scope and is not built.
+>
+> **Cards 22–24 are REGRESSION checks** (the paths the change could break); **card 25 is the only
+> one that proves the fix.** Card 25 needs a console **by design** — it is the one place the
+> withheld column is observable — and it is `DEVICE: desktop` for exactly that reason.
+
+### 22 — An OWNER scans a plant tag: the size picker still resolves and the order still builds
+STATUS: owed
+DEVICE: either
+COVERS: #202
+LAST-PROVEN: —
+SIGNAL: `[TRACE:RESOLVE] usePlant — stock-line columns: cost-bearing (costs:read)`
+- **Why this card exists:** the fix changes the SELECT the resolver sends. The resolver's own ladder (SKU → name token-equality → size-picker) reads `name` / `sku` / `size` / `variant_group` — none of which moved — but a column-list change is exactly the kind of edit that silently drops a field a downstream branch depends on.
+- **Do:** as the OWNER, scan (or open) a plant tag that lands on the size picker, choose a size, and put it in the cart.
+- **PASS:** the picker offers the same sizes as before, the chosen lot resolves, name/size/price render, and the cart line is correct. The TRACE line says **cost-bearing** — the owner holds `costs:read`, so the owner's payload is byte-for-byte what it was before this build.
+- **FAIL:** the picker is empty or missing a size, the plant resolves with a blank name or size, or the price disappears.
+
+### 23 — 🔴 A discovery-seeded / CSV-imported lot (the D-34 fallback) still resolves — the path this fix touches most directly
+STATUS: owed
+DEVICE: either
+COVERS: #202
+LAST-PROVEN: —
+SIGNAL: `[TRACE:RESOLVE] usePlant — cultivar_plants MISS → business_inventory … (stock line)`
+- **Why this card exists:** this is the lane the fix actually changed. A lot with **no `cultivar_plants` row** falls to the stock-line resolver — and that is not an edge case, it is **LAWNS's real catalog**: every discovery-scraped and every CSV-imported row takes it. The 2026-07-30 pass narrowed the *specimen* read 33 lines above and left this one wide; a mistake here breaks the majority path while the demo path looks fine.
+- **Do:** open a lot you know has no specimen row (a `DISC-` scraped variety, or anything from the grower price-list import). Do it once as OWNER and once as a MANAGER or STAFF session.
+- **PASS:** it resolves and renders identically in both sessions — name, size, available count, and **retail price** all present. `sell_price` is NOT confidential (D-35) and must still appear for everyone.
+- **FAIL:** the lot resolves for the owner and not for the manager/staff, or the retail price vanishes for the non-owner, or the plant renders with a missing size/count.
+- **⚠️ Note:** if the retail price disappears for a non-owner, the subtraction took the wrong column — that is a build defect, not a permission working as intended.
+
+### 24 — Build and submit an order end to end; the total is unchanged
+STATUS: owed
+DEVICE: either
+COVERS: #202
+LAST-PROVEN: —
+- **Why this card exists:** `synthesizePlant` copies the resolved row onto the cart line, and `CartReview` prices from it. Withholding a column from the resolver therefore reaches the money path, which is the one place a "harmless" read change is not harmless.
+- **Do:** as the OWNER, build a multi-item order (at least one stock-line lot), review it, and submit. Compare the total against the same order before this build.
+- **PASS:** subtotal, discount, tax and total are identical, and the QuickBooks invoice matches the Review screen.
+- **FAIL:** any figure moves.
+- **🔴 KNOWN AND UNRULED — read this before running the card as a MANAGER or STAFF (ruling C-A, OWED):** if a customer is on an **`at_cost`** tier, a session **without** `costs:read` no longer receives the cost, so `applyTierPrice` **degrades neutral to retail** and the Review screen shows RETAIL while `submit.ts` — which re-reads the true cost server-side with the service key — **charges COST**. It fails toward charging the customer *less* than Review displayed. **This is inherent to any cost wall, not to this build**, it fires on `at_cost` tiers only, and **David has not ruled it.** Do not file it as a defect of this build; it is ruling **C-A**. The OWNER path is unaffected (the owner holds `costs:read`).
+
+### 25 — 🔴 THE ONE THAT PROVES THE FIX: `unit_cost` is ABSENT from the scan/plant response
+STATUS: owed
+DEVICE: desktop
+COVERS: #202
+LAST-PROVEN: —
+SIGNAL: `[TRACE:CART] scan columns: NO-COST (unit_cost withheld)`
+- **Why this card needs a console, stated rather than hidden:** the whole point is that **nothing on screen changes** — the value was never rendered, it was merely delivered. There is no visible symptom to check, so the network response is the only honest evidence. Every OTHER card on this board avoids the console; this one cannot.
+- **Do:** log in as a **MANAGER or STAFF** session (one holding `inventory:read` / `orders:create` and **not** `costs:read`). Open devtools → Network. Go to `/scan` (checkout) and scan or look up a lot. Find the `business_inventory` request.
+- **PASS:** the request URL's `select=` **does not contain `unit_cost`**, and no returned row has a `unit_cost` key. The console shows **`NO-COST (unit_cost withheld)`**. Repeat by opening a discovery-seeded plant profile — same result.
+- **FAIL:** `unit_cost` appears in the `select=` parameter or in any returned row, or the TRACE line says `cost-bearing` for a session that does not hold `costs:read`.
+- **Then confirm the other direction (this is half the card — a wall that withholds from everyone is not a wall, it is a break):** repeat as the OWNER. `unit_cost` **must** be present and the TRACE line must say **`cost-bearing (costs:read)`**.
+- **⚠️ AND THE HONEST LIMIT, which is the point of card 25 existing at all:** in that same console, as the manager, run `await supabase.from('business_inventory').select('id,name,unit_cost')` — **it still returns the costs.** That is #81, it is still open, and this card must never be read as proving otherwise.

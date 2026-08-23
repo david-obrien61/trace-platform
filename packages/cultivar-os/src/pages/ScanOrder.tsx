@@ -25,7 +25,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Minus, Plus, ScanLine, UserPlus, UserCheck, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
-import { resolveStockLine, searchStockLines, STOCK_LINE_COLUMNS } from '@trace/shared/inventory';
+import { resolveStockLine, searchStockLines, stockLineColumnsFor } from '@trace/shared/inventory';
 import { fetchCommittedByLot, checkSellable, availabilityLabel, type CommittedByLot } from '../lib/inventoryStates';
 import type { StockLineRow } from '@trace/shared/inventory';
 import {
@@ -147,6 +147,12 @@ export function ScanOrder() {
   // Checkout CREATES an order — `orders:create`, which is also what the route itself is gated on
   // (router.tsx:136). The old manage_orders read demanded UPDATE+DELETE authority to place a sale.
   const canInvoke = can('orders:create');
+  // #81 (2026-08-23): the checkout scan loop asked for the cost basis on EVERY scan and every
+  // manual lookup, and this page is gated on `orders:create` — which STAFF hold. So the narrowest
+  // role on the platform was served the owner's cost basis by opening the till.
+  // 🔴 This does NOT gate a control and it hides nothing on screen: it decides which COLUMNS the
+  // query asks for, because RLS is row-level and will hand over any column a query names.
+  const canViewCosts = can('costs:read');
 
   const plantCount = totalPlantCount(items);
   const customerOpen = customerView !== null;
@@ -266,7 +272,9 @@ export function ScanOrder() {
   async function handleScan(raw: string) {
     if (!businessId) return;
     const tag = extractTag(raw);
-    const resolution = await resolveStockLine(supabase, businessId, tag, { columns: STOCK_LINE_COLUMNS });
+    const columns = stockLineColumnsFor(canViewCosts);
+    if (TRACE_CART) console.log('[TRACE:CART] scan columns:', canViewCosts ? 'cost-bearing (costs:read)' : 'NO-COST (unit_cost withheld)');
+    const resolution = await resolveStockLine(supabase, businessId, tag, { columns });
 
     if (resolution.kind === 'resolved') {
       const plant = synthesizePlant(resolution.row, businessId, tag);
@@ -300,7 +308,7 @@ export function ScanOrder() {
   // resolve; >1 → the same pick list the size collision uses. No exact-tag requirement.
   async function handleLookup(term: string) {
     if (!businessId) return;
-    const results = await searchStockLines(supabase, businessId, term, { columns: STOCK_LINE_COLUMNS });
+    const results = await searchStockLines(supabase, businessId, term, { columns: stockLineColumnsFor(canViewCosts) });
     if (TRACE_CART) console.log('[TRACE:RESOLVE] manual search', { term, matchCount: results.length });
 
     if (results.length === 0) {

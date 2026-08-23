@@ -274,6 +274,16 @@
       ],
       "why": ""
     },
+    "packages/cultivar-os/src/pages/ScanOrder.tsx::canViewCosts": {
+      "strings": [
+        "costs:read"
+      ],
+      "op": "or",
+      "roles": [
+        "OWNER"
+      ],
+      "why": "ADDED 2026-08-23 (#81 MINIMUM, ledger #202). NOT a control gate and it hides nothing on screen: it selects the COLUMN SHAPE the checkout scan loop requests (stockLineColumnsFor). ScanOrder is gated on `orders:create`, which STAFF hold, and both reads passed STOCK_LINE_COLUMNS -- which names unit_cost -- unconditionally, so the narrowest role on the platform was served the owner's cost basis by opening the till. OWNER-only is correct and intended: `costs:read` is the cost-basis string and only the owner holds it today. NOTE the asymmetry this records -- a STAFF session still PASSES the page's own canInvoke gate and takes the order; it simply no longer receives the cost column."
+    },
     "packages/cultivar-os/src/pages/ScanOrder.tsx::route:customers:read": {
       "strings": [
         "customers:read"

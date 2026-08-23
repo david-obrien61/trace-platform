@@ -4,6 +4,7 @@ export {
   detectSizeCollision,
   STOCK_LINE_COLUMNS,
   STOCK_LINE_IDENTITY_COLUMNS,
+  stockLineColumnsFor,
 } from './stockLineResolver';
 export type { StockLineRow, StockLineResolution } from './stockLineResolver';
 export { variantGroupSlug, skuSizeSuffix, deriveSiblingSku, baseSkuOf, suggestSiblingSku } from './variantGroup';

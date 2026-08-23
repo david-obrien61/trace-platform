@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
-import { resolveStockLine, STOCK_LINE_COLUMNS } from '@trace/shared/inventory';
+import { resolveStockLine, stockLineColumnsFor } from '@trace/shared/inventory';
 import type { StockLineRow } from '@trace/shared/inventory';
 import type { Plant, PlantEvent } from '../types/plant';
 import { synthesizePlant } from '../lib/stockLinePlant';
@@ -135,7 +135,15 @@ export function usePlant(tagId: string | undefined): UsePlantResult {
       // session (business_inventory has owner/member RLS, no anon read) — an anon scan
       // with no session simply falls through to "not found", as before.
       if (businessId) {
-        const resolution = await resolveStockLine(supabase, businessId, tagId!, { columns: STOCK_LINE_COLUMNS });
+        // #81 (2026-08-23): the SIBLING of the gated specimen read 33 lines above. That read was
+        // narrowed on 2026-07-30 and THIS ONE WAS NOT — and this is the D-34 lane every
+        // discovery-seeded and CSV-imported lot takes, i.e. LAWNS's actual catalog. So the fix
+        // that closed the specimen path left the path most rows actually use wide open.
+        // The column shape follows the SESSION, exactly as :102-105 does — same predicate, same
+        // hook, no second rule.
+        const columns = stockLineColumnsFor(canViewCosts);
+        if (TRACE_RESOLVE) console.log('[TRACE:RESOLVE] usePlant — stock-line columns:', canViewCosts ? 'cost-bearing (costs:read)' : 'NO-COST (unit_cost withheld)');
+        const resolution = await resolveStockLine(supabase, businessId, tagId!, { columns });
 
         if (resolution.kind === 'resolved') {
           if (cancelled) return;
