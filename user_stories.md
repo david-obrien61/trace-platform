@@ -589,6 +589,62 @@ PIECES: ambient_signal, drill_in_modal, operational_reasons, margin_target_setti
 NEEDS: three open dependencies to flag (none block the floor case): (1) PER-UNIT OVERHEAD ALLOCATION — the [[D-14]] carve-out / [[D-16]] Model B (cost-to-serve ÷ N) / cost_objects model, still OPEN platform-wide; gates the FULL traffic-light (true green/yellow/red vs landed cost). Partial signal (margin-vs-unit_cost, pre-overhead) works without it. (2) MARGIN-TARGET SETTING — the owner sets a desired margin %; where the green/yellow threshold lives (likely rides business_pricing_config.config jsonb, no migration — David sets the surface + granularity). (3) CONFIRM Layer-3 data coverage — plant_events is per-cultivar_plants specimen, but the dominant anchor is now the stock-line business_inventory lot ([[D-34]]/[[D-36]]) which may have no specimen events, so "plants dying on this line" may be sparse; age (created_at/received_at) is solid.
 Point-of-entry pricing intelligence with graceful degradation — a 3-layer interaction tying pricing health to OPERATIONAL health, right where the owner types a `sell_price`. **The price field IS the dashboard**, advisory-only (never blocks the save — Surface Honesty + owner-authority). **Layer 1 — ambient signal:** the field's BACKGROUND COLOR is the traffic light — 🟢 above margin target / 🟡 below target (thin) / 🔴 below cost+overhead (losing money) / ⚪ neutral when there's no cost basis to judge. Glanceable, always on, no interaction. **Layer 2 — drill-in:** a clickable icon → a modal with the math, state-dependent — GREEN shows % margin + profit-per-item ("42% margin · $53 each"), YELLOW adds a suggested price to reach green ("18% — suggest $145"), RED shows negative margin + recovery price + the Layer-3 reasons. **Layer 3 — the operational WHY (the differentiator):** red/yellow isn't just margin math — it connects price to operational health, surfacing reasons from operational data: too long in stock (aging → carrying cost, from inventory created_at/received_at), plants dying/declining (reuse plant_events decline tracking), great losses/shrinkage on the line (plant_events 'lost'), extensible. "This plant is bad business + here's why," not just "you priced it wrong." **Graceful degradation (mirrors cost_confidence + fidelity tiers):** no cost+overhead → NEUTRAL, accept the owner's price on trust, form fully works; unit_cost known → partial signal (vs cost, pre-overhead); + overhead → full traffic-light; + operational data → Layer 3 reasons light up. Intelligence appears as data arrives, NEVER blocks the floor case. **Reuse:** the shared MarginEngine for margin/suggested-price math (NOT its slab model — cultivar stores an explicit sell_price, so extract the small margin helpers, don't force the whole engine); existing plant_events + inventory timestamps for Layer 3. Full design: `docs/concepts/margin-aware-pricing-intelligence.md`. _Grounded: business_inventory.unit_cost/sell_price/created_at ([[D-35]]); plant_events (packages/cultivar-os/src/types/plant.ts); MarginEngine.ts; cost_confidence seam; open overhead model [[D-14]]/[[D-16]]._
 
+### Arbor Day — plan the season once, change it when Terry changes his mind
+STATUS: needs-input
+SCOPE: platform, vertical:cultivar, vertical:kinna
+BUILD: active
+MAPS-TO: —
+PIECES: campaign_create, campaign_edit, campaign_cancel, campaign_generate_more, campaign_list_honest_read
+NEEDS: David to rule what EDIT does to drafts that already exist (regenerate / orphan / refuse-once-posts-exist), and to confirm CANCEL keeps the row visible rather than removing it. Lauren to confirm the scene Wednesday.
+It is early September and Lauren has forty minutes. July and August were dead — heat,
+vacations, back to school — and fall is when people actually plant. **Texas Arbor Day is
+the first Friday in November** (Nov 6 in 2026), and it exists on that date precisely
+because a tree planted in April has no chance against a Texas summer. For a nursery it
+is not a symbolic holiday. It is the opening of the selling season.
+
+She names a campaign — *Arbor Day 2026* — sets it seasonal, runs it through the first
+week of November, and points it at the varieties that are actually sellable. TRACE drafts
+posts for the channels she's enabled, written off her real sales, and she edits them to
+sound like her before she copies and posts. The winterization, the fertilizing, the
+courtesy tree inspection — the services nobody knows they offer — ride along in the copy.
+
+Then Terry wakes up and decides something different. A variety sells out. The weather
+turns. **She changes the campaign** — dates, focus — and the plan follows her. Halfway
+through she wants a few more posts, so she asks for more posts *for this campaign* and
+gets them, in the campaign she already made. A campaign that gets shelved she **cancels**,
+and it stays on the list, marked, because next September the first thing she opens is
+what she ran last year and what she didn't.
+
+A campaign never features stock that cannot leave. **Under production is not for sale** —
+a block potted up in August is six to eight months from being sellable, and promoting it
+sells a tree that can't go on a truck.
+
+### Generating "more posts for this campaign" creates a second campaign, silently (fix owed)
+STATUS: needs-input
+SCOPE: platform, vertical:cultivar
+BUILD: active
+MAPS-TO: —
+PIECES: campaign_generate_more
+NEEDS: David to rule whether generate-more appends to the open campaign or is removed until it can.
+The button on a campaign's own page reads *"✦ Generate more posts for this campaign."*
+It takes the CREATE branch, mints a **second** campaign, and navigates onto it — with no
+error surface at all. David produced two identical "arbor day" rows three hours apart
+this way and neither appeared in the list, because that screen renders a zero-post
+campaign as "All posts published ✓". A missing lifecycle does not stay missing; it gets
+impersonated by the path that exists. This is the story-shaped half of that finding.
+
+### Deleting a campaign — deliberately not built
+STATUS: scoped-out
+SCOPE: platform, vertical:cultivar
+MAPS-TO: —
+PIECES: —
+Reason: a deleted campaign destroys its own history, and the history is the product.
+Arbor Day recurs every November — the value of the 2026 campaign, **including a cancelled
+one**, is that it tells Lauren what to do in 2027. CANCEL is the verb; the row stays and
+carries its state. Ruled by David twice and enforced in the build: `verify-universals`
+fails on the literal `campaigns:delete`. The owner can still remove a row at the database
+as `postgres` — that is an operator act, not a product capability.
+
 ---
 
 ## PLATFORM STANDARD CAPABILITIES
