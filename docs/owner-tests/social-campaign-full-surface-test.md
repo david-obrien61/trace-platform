@@ -53,9 +53,10 @@ David runs it, the fix is a claim.
 > the TREE not the COMMIT. If the SHA under test is not live, every observation below is fiction.
 
 - [ ] **① SHA is live** — the `?debug=1` DebugPanel stamp matches `git log -1 --format=%h`
-      (this build: **`__SHA_PENDING__`**). ⚠️ **This value is filled from the real commit at
-      close-out, never guessed** — if you are reading `__SHA_PENDING__` here, the deploy proof did
-      not complete and GATE 0 is NOT satisfied. Confirm the stamp still reads that before you begin.
+      (this build: **`c020560`**). ✅ **ALREADY PROVEN ONCE MECHANICALLY AT CLOSE-OUT, FROM THE DEPLOYED
+      BUNDLE RATHER THAN THE VERCEL DASHBOARD:** the live bundle moved `index-Nn14LRrJ.js` → **`index-B4pdsrLq.js`**,
+      and that new bundle **CONTAINS the string `c020560`** (fetched from `cultivar-os.vercel.app`, not
+      read off a deployment list). Confirm the `?debug=1` stamp still reads `c020560` before you begin.
 - [ ] **② NO MIGRATION NEEDED** — this build is one line of system prompt plus docs. **Nothing to
       apply.** No schema change, no policy change, no new permission string.
 - [ ] **③ 🔴 THE PROMPT CHANGE IS SERVER-SIDE, SO A HARD-REFRESH IS NOT ENOUGH ON ITS OWN.** The
