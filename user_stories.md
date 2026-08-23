@@ -594,8 +594,8 @@ STATUS: needs-input
 SCOPE: platform, vertical:cultivar, vertical:kinna
 BUILD: active
 MAPS-TO: —
-PIECES: campaign_create, campaign_edit, campaign_cancel, campaign_generate_more, campaign_list_honest_read
-NEEDS: David to rule what EDIT does to drafts that already exist (regenerate / orphan / refuse-once-posts-exist), and to confirm CANCEL keeps the row visible rather than removing it. Lauren to confirm the scene Wednesday.
+PIECES: campaign_create, campaign_call_to_action, campaign_edit, campaign_cancel, campaign_generate_more, campaign_list_honest_read
+NEEDS: David to rule EDIT is limited to dates and focus BEFORE publication, and that a published campaign which lands badly is ANSWERED AND RESTARTED rather than silently rewritten (Regina's bad-press scenario, 2026-08-23 — "my bad, we didn't give you all the details, thank you for bringing that to our attention"). Lauren to confirm the scene and the ask Wednesday.
 It is early September and Lauren has forty minutes. July and August were dead — heat,
 vacations, back to school — and fall is when people actually plant. **Texas Arbor Day is
 the first Friday in November** (Nov 6 in 2026), and it exists on that date precisely
@@ -607,6 +607,17 @@ week of November, and points it at the varieties that are actually sellable. TRA
 posts for the channels she's enabled, written off her real sales, and she edits them to
 sound like her before she copies and posts. The winterization, the fertilizing, the
 courtesy tree inspection — the services nobody knows they offer — ride along in the copy.
+
+**A campaign is not a run of posts. It is an ASK, and the posts carry it.** Lauren's ask
+writes itself from her own trees: the west wall cooking the house through a Texas
+afternoon, the fast-growing shade varieties she has in sellable sizes right now, and a
+percentage off until Arbor Day. She states it once and every post carries it. Without the
+ask it is decoration.
+
+**Generated copy carries no invented facts.** TRACE writes captions from her real sales. It
+does not write statistics. Any number in a post is one she supplied or one from her own
+data — a fabricated energy-saving percentage in her Instagram feed is her liability, not
+ours.
 
 Then Terry wakes up and decides something different. A variety sells out. The weather
 turns. **She changes the campaign** — dates, focus — and the plan follows her. Halfway
@@ -644,6 +655,53 @@ one**, is that it tells Lauren what to do in 2027. CANCEL is the verb; the row s
 carries its state. Ruled by David twice and enforced in the build: `verify-universals`
 fails on the literal `campaigns:delete`. The owner can still remove a row at the database
 as `postgres` — that is an operator act, not a product capability.
+
+### Which channel actually brought them — a code per channel
+STATUS: needs-input
+SCOPE: platform, vertical:cultivar, vertical:kinna
+BUILD: active
+MAPS-TO: —
+PIECES: campaign_channel_codes, campaign_code_redeem, campaign_attribution_readout
+NEEDS: David to rule where a campaign code lives against the existing discount model (`discountTypes` in business_pricing_config, `order_discount:apply`) — a new discount kind, or an existing one carrying a source. And whether a code is per-channel-per-campaign or per-campaign only.
+Regina, on the campaign she ran: *"a special code for Instagram, a special code for
+Facebook, a special code for X — then you can say your code came from Facebook. I've got
+85% of my people came from Facebook, that's the area I really need to concentrate on. I
+didn't get anything from Twitter."*
+
+The campaign issues a **different code per channel**. A customer redeems one at checkout,
+and the order carries where it came from. After a season Lauren opens one readout and sees
+which channels produced customers and which produced nothing — and stops spending evenings
+on the ones that produce nothing.
+
+It settles a live disagreement rather than a theoretical one. Regina watched four customers
+walk into LAWNS in one day: **all older, all with money, no thirty-to-forty-year-olds except
+ones accompanying their parents.** TikTok and Instagram skew young. Today that is two
+opinions about who her buyer is. With codes it is arithmetic.
+
+This is the first thing on the board that closes the loop **campaign → post → code → order**
+— the point where marketing effort becomes a number instead of a feeling.
+
+### Give it to me in my language — Spanish for the people doing the work
+STATUS: needs-input
+SCOPE: platform
+BUILD: active
+MAPS-TO: —
+PIECES: i18n_locale_switch, i18n_crew_surfaces
+NEEDS: David to rule scope — crew-facing surfaces only, or the whole app — and whether locale is a per-user setting or a per-device one. Someone to confirm which surfaces the LAWNS crew actually touches.
+A man has worked at LAWNS for ten years and does not speak English at home. He is one of
+the people who would be walking the rows with a phone — counting a block, marking a
+rotation date, working a delivery route. Terry gives him instructions in person and it
+works. **An app is not a person, and it does not adapt.**
+
+Regina named it plainly: *"you need to make sure he has the capability of it in English and
+translate to his language so he can move on."* And she named the timing, which is the part
+that matters: **"if you don't put it in there, you can't really easily [add it later]."**
+She is right. A locale switch designed in at the start is small. Retrofitted across every
+surface after the fact, it is a rewrite.
+
+This is platform, not Cultivar. Every vertical has crew — the nursery has planters, the
+auto shop has technicians, the kitchen has staff. The owner reads English and the work does
+not care.
 
 ---
 
