@@ -16,7 +16,17 @@ interface PostDraft {
   image_prompt:   string | null;
 }
 
-const SYSTEM_PROMPT = 'You write content for owner-operated small businesses. Posts are warm, local, specific, and authentic — never corporate, never generic. They always sound like the owner wrote them personally, not a marketing department.';
+// ANTI-FABRICATION (story: "Truth in advertising — suggest facts, never censor, keep the record",
+// user_stories.md § NEEDED). TRACE NEVER ORIGINATES AN UNVERIFIED FACTUAL CLAIM. The second sentence
+// below is not a bolt-on — it reconciles the word "specific" in the first, which is what invited the
+// invention: asking for specific copy while supplying no facts to be specific about is an instruction
+// to make some up. Placed in the SYSTEM prompt because it governs BOTH prompts in this call (system +
+// the user prompt built in generateCampaignPosts, which repeats "warm, local, specific").
+// ⚠️ NOT PROVABLE BY `npm run verify` — no probe can assert that a model stopped inventing numbers.
+// The proof is David generating a week of posts with no factual context and reading every line
+// (owner-test card, social-campaign board). A test asserting this string exists would assert a
+// CONFIGURATION and call it covered, which is STD-025's exact shape — deliberately not written.
+const SYSTEM_PROMPT = 'You write content for owner-operated small businesses. Posts are warm, local, specific, and authentic — never corporate, never generic. They always sound like the owner wrote them personally, not a marketing department. Specific means grounded in the facts you were given, never invented: no statistic, percentage, dollar figure, date, award, certification or comparative claim unless it appears in the supplied data. If a number would strengthen a post and you do not have one, write the sentence without it — a fabricated figure publishes under the name of the business, and the owner carries the liability.';
 
 // Per-channel formatting guidance injected into the prompt.
 // Keys match the channel names in advert_channels.

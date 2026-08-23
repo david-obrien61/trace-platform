@@ -747,6 +747,7 @@ there. This is not a record of publication and must never be labelled as one.
 STATUS: needs-input
 SCOPE: vertical:cultivar, platform
 BUILD: active
+ARC: asset-inventory-pmi
 MAPS-TO: —
 PIECES: growth_ladder_config, rotation_date, under_production_state, uppot_schedule
 NEEDS: Joel to supply the numbers — the container sizes in order, which are never sold, and maturation plus hold per rung (per variety where he knows it). David to rule whether UNDER PRODUCTION is a new value in the lot-status vocabulary or a derived state, and whether up-potting is modelled as a transformation or as a movement out and in.
@@ -791,6 +792,7 @@ be offered for sale.
 STATUS: needs-input
 SCOPE: vertical:cultivar, platform
 BUILD: active
+ARC: cost-to-produce
 MAPS-TO: —
 PIECES: rung_cost_inputs, batch_labour, block_origin, cost_accumulation
 NEEDS: David to rule whether ORIGIN (grown / bought in) is a field on the lot or derived from whether an acquisition cost exists, and how per-tree accumulated cost relates to the existing cost_objects model. Lauren and Joel to supply real numbers for one batch.
@@ -830,6 +832,7 @@ of you in it, it took three years to get there, and you sell it for that.**
 STATUS: needs-input
 SCOPE: platform, vertical:cultivar
 BUILD: active
+ARC: suggestion
 MAPS-TO: —
 PIECES: consumable_tracking, consumption_forecast, draft_purchase_order
 NEEDS: David to rule whether a drafted order is ever sent by TRACE or only ever prepared for the owner to send, and where consumables live — a kind of inventory row, or their own thing. Lauren to name which consumables actually run out on her.
