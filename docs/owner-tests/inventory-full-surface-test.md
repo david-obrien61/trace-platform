@@ -462,6 +462,7 @@ STATUS: owed
 DEVICE: phone
 COVERS: #54 · #143 · recon 2026-08-23
 LAST-PROVEN: never
+MEASURED: 2026-08-24 — **RUN, AND REPORTED PASS — BUT NOT A CLEAN ONE, AND THE CARD SAYS SO RATHER THAN THE TESTER.** **MEASURED 2026-08-24 by David — SHA `1c60964`, iPhone Safari, normal tab, airplane mode ON with wifi manually OFF.** 🔴 **ONE CLAUSE OF THIS CARD IS CONTRADICTED BY A MEASUREMENT TAKEN IN THE SAME SESSION: *"Airplane mode OFF. EXPECT the counter to fall to 0 without pressing anything"* — it does NOT. Signal returns, the pending banner stays, and the queue drains only after a manual page refresh** (tech-debt **#95**). ⚠️ **STATUS THEREFORE STAYS `owed`, NOT `covered`** — and it would stay `owed` even if Thunder were allowed to flip it (OP-14 says only David's live run does), because **a card whose own pass condition was measured failing is not proven by the rest of it passing.** Re-run this card when #95 is scoped and resolved; the storage-banner and counter-accuracy clauses added by ledger #207 held.
 - Start a count **ONLINE** — it refuses to start offline by design (`InventoryCount.tsx:222`).
   Resolve ONE item and leave the review sheet **OPEN**. Airplane mode **ON**.
 - **EXPECT** the banner: *"Offline — counts are saved on this phone and will sync when you're back in signal."* Save the qty.
@@ -478,6 +479,7 @@ STATUS: owed
 DEVICE: phone
 COVERS: recon 2026-08-23 · ledger #206 · `stockLineResolver.ts` · R-11
 LAST-PROVEN: never
+MEASURED: 2026-08-24 — **RUN, AND REPORTED PASS.** **MEASURED 2026-08-24 by David — SHA `1c60964`, iPhone Safari, normal tab, airplane mode ON with wifi manually OFF.** The offline scan named the SERVER, not the tag. ⚠️ **`STATUS` STAYS `owed` AND THAT IS NOT A CLERICAL LAG: Thunder may never write `covered` (OP-14), and this line is Thunder RELAYING a result, not David recording one.** It flips on David's own entry with a `LAST-PROVEN` date. 🔴 **AND THE RESULT DOES NOT YET SAY WHICH ORIGIN IT WAS MEASURED ON** — per tech-debt **#96** the offline stores are per-origin, `cultivar-os.app` and `cultivar-os.vercel.app` are different origins, and **no card on this board names an origin**, so a pass here is evidence about ONE host and the record cannot say which.
 - Airplane mode **ON**. On `/checkout/scan`, scan a tag you **know** is in inventory.
 - **EXPECT** the sheet to read **"Couldn't reach the server"**, and its body: *"You're offline — we couldn't reach the server to look this up. Try again once you have a signal. We didn't check &lt;TAG&gt; against your inventory, so this says nothing about the tag."* The button says **Try again**.
 - 🔴 **THE CHECK THAT MATTERS — READ THE WHOLE SHEET: the words "check the tag" must NOT appear anywhere on it, and neither must "didn't recognize" or "didn't match a stock line."** That copy sent a person to inspect a tag that was fine.
@@ -497,6 +499,7 @@ STATUS: needs-test
 DEVICE: phone
 COVERS: recon 2026-08-23 · `useSubmitOrder.ts:108` · `CartReview.tsx:628`
 LAST-PROVEN: never
+MEASURED: 2026-08-24 — **RUN, AND REPORTED CONDITIONAL.** **MEASURED 2026-08-24 by David — SHA `1c60964`, iPhone Safari, normal tab, airplane mode ON with wifi manually OFF.** ⚠️ **RECORDED AS RELAYED, WITH ITS AMBIGUITY INTACT RATHER THAN RESOLVED BY GUESS:** the conditional was reported against *"the finding"* — the reconnect-does-not-self-heal measurement now filed as tech-debt **#95** — but **#95's mechanism is the count queue, and this card is the checkout submit path, which the recon established has NO queue at all.** Thunder did **not** reassign the finding to make the two fit. 🔴 **WHAT IS OWED HERE IS ONE SENTENCE FROM DAVID: which clause of this card was conditional, and on what.** Until then this card is neither passed nor failed, and `STATUS` stays `needs-test` — the honest state for a surface with no written expectation beyond *"expected today."*
 - Build a cart **ONLINE**. Airplane mode **ON**. Press *"I'll pay at the office"*.
 - **EXPECTED TODAY:** a red box reading **`Load failed`** (or `Failed to fetch`) — the browser's own string. Nothing says offline; nothing offers a retry.
 - Airplane mode **OFF**, press again: **EXPECT** it to go through, cart intact.
@@ -507,6 +510,7 @@ STATUS: needs-test
 DEVICE: phone
 COVERS: recon 2026-08-23 · `useCart.ts` (zustand, no `persist`)
 LAST-PROVEN: never
+MEASURED: 2026-08-24 — **NOT RUN.** The 2026-08-24 airplane-mode session covered cards 1, 2 and 3 only. **This card is untouched and its `EXPECTED TODAY: the cart is EMPTY` still stands unmeasured** — including the one number it asks for and nobody has, *how long backgrounding takes to lose the cart on the actual demo phone.*
 - Scan 3 items into a cart. Pull-to-refresh (or background the tab long enough for iOS to discard it) and return.
 - **EXPECTED TODAY:** the cart is **EMPTY**. Lines, customer, tier, transport — all gone, no warning.
 - Record **how long** backgrounding takes to lose it on the actual demo phone. That number is the real input to whether cart persistence is worth building.
@@ -516,6 +520,7 @@ STATUS: owed
 DEVICE: phone
 COVERS: recon 2026-08-23 · ledger #207 · `store.ts` · `syncEngine.submit`
 LAST-PROVEN: never
+MEASURED: 2026-08-24 — **NOT RUN.** The 2026-08-24 session was a NORMAL tab; this card requires a **Safari PRIVATE tab** and was not attempted. 🔴 **IT IS THE HIGHEST-VALUE UNRUN CARD ON THIS SURFACE AND THE REASON IS ON THE CARD ITSELF:** it must be run on the same device and browser as the logout-loop repro, so one trip may answer two questions. **Nothing measured on 2026-08-24 bears on it** — a normal tab exercises the healthy path, which is the path card 1 covers.
 - 🔴 **RUN THIS ON THE SAME DEVICE AND BROWSER AS THE LOGOUT-LOOP REPRO.** The store holding a day's counts is the same mechanism suspected in the logout loop, so this card may inform both — that is why it is worth the trip even though the count half is now fixed.
 - Open the app in a Safari **PRIVATE** tab and go to `/inventory/count`.
 - 🔴 **BEFORE STARTING — EXPECT A RED WARNING ON THE START CARD**, reading: *"This phone isn't letting the app store anything — that usually means a Private browsing tab, or site data turned off. Counts will go straight to the server while you have signal, but NOTHING can be held on the phone: lose signal and that count is gone. Open the app in a normal tab before you walk the lot."*
