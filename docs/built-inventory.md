@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-08-24 (**#207 — 🔧 A LOCAL WRITE THAT DID NOT PERSIST STOPS REPORTING SUCCESS. ONE net-new body entry, ONE amended.** `store.ts` swallowed a quota/disabled-storage exception, so a write that stored nothing reported success under a banner saying *"counts are saved on this phone."* 🔴 **And the online half was worse and was NOT in the recon: it returned `applied` — its strongest claim — with the database called ZERO times.** ✅ **`save()` still never throws; the exception is RETURNED** (`StoreWriteResult`, R-11's union discipline on the write side), and **a write-then-read-back probe warns BEFORE the walk.** ⚠️ **The IndexedDB move is OWED (S-A) with its data answer written down.**)
+# Last updated: 2026-08-24 (**#212 — 🔨 THE MODULE OFF SWITCH. ONE net-new body entry, ONE amended.** A non-core module can now be turned OFF from the marketplace; the write PROVES it wrote (`enabledAfter`, R-12) and the round trip is pinned by a test that counts DB calls and rows. **R-1 lands: core renders no switch at all — absent, not greyed — derived from `billing` via `!enabledByDefault`.** ⚠️ **The FUZZ does not exist and was not faked** — a disabled tile still reads `available` and its route still works (tech-debt #100/#101); R-2/R-3 stay OPEN.)
 
 
 > 📐 **CAMPAIGN LIFECYCLE — SCOPING + ESTIMATE (2026-08-23, ledger #192/#192b).** NOT a capability entry: **nothing was built.** A scoping document answering David's *"I can add but not edit or cancel or delete"* with nine questions, ten site keys, a proven F1/F2/F3 dependency order, three scopes (**MINIMUM ~2–3 · COHERENT ~5–7 · COMPLETE ~11–14 Thunder prompts; MINIMUM and COHERENT need ZERO migrations**) and eight rulings owed. Read it before ANY campaign build — it is the answer to "has this been scoped?" and its first finding is that the EDIT FORM ALREADY EXISTS as the create form (`Campaigns.tsx:120-198`). → [`docs/audits/campaign-lifecycle-scoping-2026-08-23.md`](audits/campaign-lifecycle-scoping-2026-08-23.md) · predecessor [`social-campaign-path-recon-2026-08-22.md`](audits/social-campaign-path-recon-2026-08-22.md)
@@ -531,6 +531,17 @@ Each test computes what a buggy build would output and asserts the real one diff
 **Where the clock lives:** `business_modules.config`, one row per (business, module), as the PAIR
 `trial_started_at` + `trial_days`. **Expiry computes from the PAIR, never from the catalog at render.**
 
+✏️ **AMENDED 2026-08-24 (ledger #212) — THE CLOCK NOW HAS A SECOND PATH PAST IT, AND IT SURVIVES BY
+CONSTRUCTION RATHER THAN BY CARE.** The module OFF switch shipped, so a running trial can now be
+interrupted by the owner. **R-8 rules that a term is a term, not a meter — the clock does NOT pause
+and does NOT reset** — and the RPC already enforces that without a line being added: its trial block
+is guarded `v_touches_enablement AND p_enabled IS TRUE AND trial_days > 0`, so **a disable cannot
+reach it at all**, and a re-enable of a module that already has a `trial_started_at` starts nothing
+(`start_module_trial` refuses a restart, and the enablement change is the only trigger). Turning a
+module off at day 12 of 14 still leaves two days. **Pinned by `moduleRoundTrip.test.ts` RT12 (the
+pair is byte-identical across a disable), RT16/RT17 (the re-enable does not re-clock) and D5 (a
+disable carrying `trialDays` still starts no clock).**
+
 🔴 **THE TERM IS SNAPSHOTTED AT SEED (David's ruling 2026-08-01).** `MODULE_CATALOG.trial_days` is the
 OFFER — what a trial started today would be worth. `config->'trial_days'` is the TERM GRANTED. So a
 catalog edit governs **NEW trials only** and cannot retroactively expire a tenant mid-trial, which
@@ -637,6 +648,57 @@ references. Two rows seeded, five shown; the difference is a rendering concern. 
 display-only line for the three unmapped core items (copy, not a `ModuleEntry`).
 
 ---
+
+## Module Off Switch — the enable/disable round trip
+
+**What:** The owner can turn a non-core module OFF from the marketplace and back ON, with the data
+intact. Built 2026-08-24 (ledger #212) against **R-1** (core cannot be switched off), **R-12** (a
+write must prove it wrote) and **R-8** (a trial term is a term, not a meter).
+**Status:** 🔨 BUILDER-COMPLETE — owner-proof OWED (cards 34–36)
+**Vertical:** cultivar (surface) · platform (writer + derivation) | **Type:** capability
+
+**Location:**
+- `packages/cultivar-os/src/pages/Subscription.tsx` — `disable()` + the `Turn off` controls in
+  **Included** and **Active** (Active also gained a notice slot it never had).
+- `packages/cultivar-os/src/registry/tileRegistry.ts:541` — `mayBeSwitchedOff(billing)`.
+- `packages/shared/src/business-logic/moduleState.ts` — `enabledBefore` / `enabledAfter` on
+  `ModuleStateResult`.
+- `packages/shared/src/business-logic/moduleRoundTrip.test.ts` — 26 probes (NEW).
+
+🔴 **ALMOST NOTHING BEHIND THE BUTTON IS NEW — THE PLATFORM DOCUMENTED AN OFF PATH NOBODY COULD
+REACH.** `set_business_module_state` has accepted `p_enabled=false` since it was written and its own
+refusal string reads *"enabling **or disabling** a module changes what this business pays"*
+(`20260802c:127`), while every one of the three call sites passed `true` or omitted it. **Disable is
+ONE UPDATE; there is no DELETE anywhere in the function**, and the config merge is `config || '{}'`
+when no patch is sent, so the trial pair and every other stored key survive untouched.
+
+🔴 **R-1 IS DERIVED, NOT RE-SPELLED.** `mayBeSwitchedOff` is `!enabledByDefault(billing)` — the
+NEGATION of the one decider, which is the ruling's own wording (*"no new field, no second opinion
+about liveness"*). A `core` row renders **no control at all — absent, not greyed**: a greyed switch
+claims *not allowed*, when the truth is *there is nothing to do*.
+
+🔴 **R-12 — `applied` WAS NEVER THE CLAIM WE NEEDED.** The RPC always returned `enabled_before` /
+`enabled_after`; `moduleState.ts` read them, logged them and threw them away. `applied:true` is also
+what a no-op (`outcome:'no_change'`) and a NULL `p_enabled` return, so a caller reading it alone
+cannot tell "turned off" from "did nothing". They are now returned as a **TRISTATE, never coerced**
+(`Boolean(undefined)` is `false`, and `false` here MEANS off), and `disable()` asserts
+`applied && enabledAfter === false`.
+
+⚠️ **THE CLOCK IS UNTOUCHED BY CONSTRUCTION (R-8).** The RPC's trial block is guarded on
+`p_enabled IS TRUE`, so a disable cannot start, stop, extend or reset a countdown — off at day 12 of
+14 still leaves two days, and a re-enable does not buy a fresh trial.
+
+🔴 **WHAT THIS DOES *NOT* DO — THE FUZZ DOES NOT EXIST, AND IT WAS NOT FAKED.** R-2 rules a disabled
+tile stays visible showing **fuzzy data** computed **server-side as one aggregate**; a repo-wide
+search for `fuzz` returns **twelve hits, all prose**. So `useModules.ts:122` still maps a disabled
+row to `'available'` — the same pixel as never-enabled and as a missing row — and the module's route
+still works in full (`router.tsx` reads no enablement at all). **A fifth flat `TileState` is the one
+direction R-2 explicitly closes, and a CSS blur is refused by that ruling BY NAME** (*"#81 with a
+filter on it"*). Filed as **tech-debt #100 / #101**, not half-answered in code.
+
+⚠️ **THE HONEST LIMIT: only ONE module has any functional gate on `enabled` platform-wide** —
+`api/social/generate-posts.ts:52`. For ten of eleven catalog entries, "off" today means "off on the
+marketplace page."
 
 ## DataBridge
 

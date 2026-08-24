@@ -5,8 +5,11 @@
  *               `set_business_module_state()`. The table has no client write policy at all after
  *               20260801 (SELECT-only), so this is not a convention — it is the only door.
  * DEPENDENCIES: the `set_business_module_state` RPC (20260801 + 20260801b).
- * OUTPUTS:      { applied, reason, error } — `applied:false` with a `reason` is an AUTHORITY
- *               REFUSAL, not a crash, and the caller must surface it rather than swallow it.
+ * OUTPUTS:      { applied, reason, error, enabledBefore, enabledAfter } — `applied:false` with a
+ *               `reason` is an AUTHORITY REFUSAL, not a crash, and the caller must surface it
+ *               rather than swallow it. **`enabledBefore`/`enabledAfter` are the write's proof
+ *               that it wrote (R-12)**: a caller changing enablement asserts the OUTCOME, never
+ *               the acknowledgement — see the field docs on `ModuleStateResult`.
  *
  * ── TWO GATES, BECAUSE THEY ARE TWO ACTS (ruling 2026-08-01) ────────────────────────────────────
  *   · `config` / `configured`  → `settings:update`     — the manager configures.
@@ -81,6 +84,25 @@ export interface ModuleStateResult {
   /** Present when the server REFUSED (authority or validation). Surface it; do not swallow it. */
   reason: string | null;
   error: { message: string } | null;
+  /**
+   * 🔴 THE WRITE'S OWN PROOF THAT IT WROTE (ruling R-12, 2026-08-23) — the RPC's returned
+   * representation, which is this stack's `RETURNING`.
+   *
+   * `set_business_module_state` has ALWAYS returned `enabled_before` / `enabled_after`
+   * (`20260802c:68-69`); this file read them, LOGGED them, and threw them away, so every caller
+   * had exactly one thing to check — `applied` — and **`applied` is not the same claim.** It says
+   * *the server accepted the call*, not *the stored value is now what you asked for*: the RPC
+   * returns `applied:true` for a no-op (`outcome:'no_change'`), for an already-on re-enable, and
+   * for a write whose `p_enabled` arrived NULL. A caller that reads `applied` alone therefore
+   * cannot distinguish "turned off" from "did nothing", which on a DISABLE is the worst version of
+   * the class: **the owner believes a module is off and it is not.**
+   *
+   * So a caller that CHANGES enablement asserts the outcome, never the acknowledgement:
+   * `res.applied && res.enabledAfter === false`. `null` means the server did not report a value —
+   * which is itself a failure to prove, never an implied success (A9 / D-9: absent is not empty).
+   */
+  enabledBefore: boolean | null;
+  enabledAfter: boolean | null;
 }
 
 export async function setBusinessModuleState(
@@ -103,16 +125,22 @@ export async function setBusinessModuleState(
   // An RPC error is now just an error. There is no other door: the table has no client write
   // policy, so a failure here means the write did NOT happen, and reporting it as such is the
   // whole contract.
-  if (error) return { applied: false, reason: null, trialStarted: false, error };
+  if (error) return { applied: false, reason: null, trialStarted: false, error, enabledBefore: null, enabledAfter: null };
 
   // The RPC RETURNS TABLE(...) — PostgREST hands back an array of one row.
   const r = Array.isArray(data) ? data[0] : data;
   const applied = Boolean(r?.applied);
   const reason = (r?.reason as string | null) ?? null;
   const trialStarted = Boolean(r?.trial_started);
+  // Read as a TRISTATE, not coerced. `Boolean(undefined)` is `false`, and a `false` here means
+  // "the module is off" — so coercing an ABSENT field would manufacture the exact proof this
+  // returns, and a disable that never reached the database would read as a successful one.
+  const asTriState = (v: unknown): boolean | null => (typeof v === 'boolean' ? v : null);
+  const enabledBefore = asTriState(r?.enabled_before);
+  const enabledAfter  = asTriState(r?.enabled_after);
   console.log('[TRACE:MODULES] set_business_module_state', {
     moduleKey, applied, reason, trialStarted,
-    enabled_before: r?.enabled_before, enabled_after: r?.enabled_after, was_insert: r?.was_insert,
+    enabled_before: enabledBefore, enabled_after: enabledAfter, was_insert: r?.was_insert,
   });
-  return { applied, reason, trialStarted, error: null };
+  return { applied, reason, trialStarted, error: null, enabledBefore, enabledAfter };
 }

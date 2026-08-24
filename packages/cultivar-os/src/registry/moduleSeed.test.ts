@@ -25,7 +25,7 @@
  *     --bundle --platform=node --format=cjs | node
  */
 
-import { MODULE_CATALOG, TILE_REGISTRY, moduleSeedRow, catalogSeedRows, enabledByDefault } from './tileRegistry';
+import { MODULE_CATALOG, TILE_REGISTRY, moduleSeedRow, catalogSeedRows, enabledByDefault, mayBeSwitchedOff } from './tileRegistry';
 import type { ModuleEntry } from './tileRegistry';
 
 let passed = 0, failed = 0;
@@ -110,6 +110,35 @@ ok(enabledByDefault('core') === true && enabledByDefault('core_optional') === fa
    'A20 🔴 enabledByDefault is TOTAL over ModuleBilling and only `core` is on — one field decides');
 ok(seedRow(coreOpt()).enabled === enabledByDefault('core_optional'),
    'A21 🔴 the mapping READS the derivation rather than restating it — a second spelling of the baseline is how the fourth value gets lost');
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// A21b–A21f — R-1: CORE CANNOT BE SWITCHED OFF. The OFF-SWITCH AFFORDANCE, asserted as a rule.
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// David's ruling, 2026-08-23: *"Core cannot be switched off. Only what is not included in core
+// carries an on/off switch — if it is core, it is on."* The affordance is DERIVED from `billing`,
+// **the same one decider**, so these probes exist to keep it derived rather than re-spelled.
+ok(mayBeSwitchedOff('core') === false,
+   'A21b 🔴 R-1 — a `core` module carries NO off switch. This is the ruling, stated as a test.');
+ok(mayBeSwitchedOff('core_optional') === true,
+   'A21c 🔴 `core_optional` DOES carry one — it is core-with-a-switch, and the switch is the whole difference');
+ok(mayBeSwitchedOff('add_on') === true && mayBeSwitchedOff('unpriced') === true,
+   'A21d mayBeSwitchedOff is TOTAL over ModuleBilling — every non-core value carries a switch');
+
+// 🔴 A21e — THE TWO PREDICATES ARE ONE DECIDER, NOT TWO THAT HAPPEN TO AGREE. If someone re-spells
+// `mayBeSwitchedOff` as its own `billing === 'core'` test, this still passes — but the day a fifth
+// billing value lands, the two answers diverge and THIS is what fails. Asserted over the union
+// rather than over a list of literals, so a new member is covered with no second edit (#179).
+const ALL_BILLING = ['core', 'core_optional', 'add_on', 'unpriced'] as const;
+ok(ALL_BILLING.every((b) => mayBeSwitchedOff(b) === !enabledByDefault(b)),
+   'A21e 🔴 switchability is exactly the NEGATION of the baseline across the whole union — one field decides both');
+
+// 🔴 A21f — THE CATALOG ITSELF, not just the type. Every `core` row in the LIVE catalog must be
+// unswitchable, and at least one row must be switchable — a predicate returning false for
+// everything would pass A21b alone and ship a marketplace with no off switch at all.
+ok(MODULE_CATALOG.filter((m) => m.billing === 'core').every((m) => !mayBeSwitchedOff(m.billing)),
+   'A21f every `core` entry in the live catalog is unswitchable');
+ok(MODULE_CATALOG.some((m) => mayBeSwitchedOff(m.billing)),
+   'A21g 🔴 …and at least one live entry IS switchable — the negative control that catches an always-false predicate');
 
 // 🔴 A22 — THE OVERRIDE STILL WORKS ON TOP OF THE NEW BASELINE. The 2026-08-02 (1) ruling is
 // untouched by the 2026-08-02 (2) ruling: a clock makes a module live regardless of its baseline.

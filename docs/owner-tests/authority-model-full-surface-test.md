@@ -770,6 +770,9 @@ should read **30d** for the first day. Pairing made it visible; it was never ine
 ### CARD 32 — 🔴 THE MARKETPLACE: FOUR SECTIONS, ONE SCREEN
 STATUS: owed
 LAST-PROVEN: never
+AMENDED: 2026-08-24 (ledger #212) — **Included and Active now render a `Turn off` control** on every
+switchable row. The four sections and their order are unchanged; what changed is what sits inside two
+of them. Card stays `owed` (it was never proven), and the off switch has its own cards 34–35.
 DEVICE: desktop
 COVERS: ledger #186 — the module marketplace (David's six rulings, 2026-08-02 (6))
 
@@ -824,3 +827,86 @@ COVERS: ledger #186 — ruling #6, the wired enable + the six-state menu
 ⚠️ A manager who somehow reaches the page sees `Owner only` where the button would be — the act is
 refused server-side by `set_business_module_state` regardless, which is the split `20260801b` V3d
 already proved at the database. The UI label is the courtesy, not the control.
+
+## SURFACE: the module OFF switch (added 2026-08-24, ledger #212 — R-1 · R-12)
+
+> ⚠️ **READ CARD 36 FIRST IF THE POINT IS TO TEST "OFF".** The switch writes the stored state and
+> the marketplace re-renders. **It does not yet change the dashboard tile or block the route** — the
+> fuzz (R-2/R-3) is not built (tech-debt #100/#101). These cards prove the MECHANISM, not the fuzz.
+
+### CARD 34 — 🔴 THE ROUND TRIP: OFF, AND THE DATA IS STILL THERE ON THE WAY BACK IN
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #212 — the enable/disable round trip (R-1, R-12)
+
+**As the OWNER**, Admin → **Subscription & Modules** (`/admin/subscription`).
+
+1. Pick a module in **Active** that has data you can recognise — **Social Media** is the best choice
+   because it is the ONE module with a real functional gate (`generate-posts.ts:52`), so "off"
+   genuinely means something there. Note what it holds first (posts, drafts, settings).
+2. Click **Turn off**.
+   - The notice reads *"… is off. Your data is kept, and the current period runs out as normal —
+     switch it back on any time."*
+   - On reload the row has moved from **Active** to **Available**.
+   - 🔴 **If the notice instead reads *"The server accepted the change but … is still on"*, STOP and
+     report it.** That sentence exists to catch a disable that silently no-ops, and it means the
+     write did not land. It is not a cosmetic failure.
+3. **Now the actual claim.** Click **Enable** on it again.
+   - It returns to **Active**.
+   - 🔴 **Everything it held is still there** — same posts, same settings, nothing recreated.
+   - 🔴 **The trial badge, if it had one, shows the ORIGINAL countdown continuing** — NOT a fresh
+     30 days. A round trip is not a new trial (R-8: a term is a term, not a meter).
+4. **FAIL if** anything the module held is missing after the round trip, or if the trial clock reset.
+
+⚠️ **What this card does NOT check, deliberately:** whether the dashboard tile changed. It will not —
+see card 36.
+
+### CARD 35 — 🔴 CORE HAS NO OFF SWITCH AT ALL — NOT A GREYED ONE, AN ABSENT ONE
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #212 — R-1 (*core cannot be switched off*)
+
+**As the OWNER**, on the same page, look at the **Included** section.
+
+1. **QR Checkout, QuickBooks and Inventory Intake have NO button of any kind.** Not a disabled
+   button, not a greyed one — **nothing there.** They are core; there is nothing to switch.
+2. **Contractors** (`core_optional`) is the one Included row that DOES carry a control:
+   - If it is off → **Turn on**. If it is on → **Turn off**.
+   - Turning it off says *"… is off. Your settings are kept — switch it back on any time."*
+     🔴 **Note what it does NOT say: nothing about billing periods.** It is free; there is no term
+     to run out, and claiming one would be inventing a consequence.
+3. **FAIL if** any core row shows a switch — even a disabled-looking one. A greyed control claims
+   *you are not allowed*, when the truth is *there is nothing here to do*, and those are different
+   sentences (the six-state ruling's distinction).
+
+**As the MANAGER (`df7723be`)** — this half cannot be proven as the owner:
+- The page still says what is required and does not redirect (unchanged from card 33).
+- 🔴 **No `Turn off` button renders for anyone without `subscription:update`** — and if one somehow
+  did, the server refuses it: the RPC's own message names *"enabling or disabling"*.
+
+### CARD 36 — ⚠️ WHAT THE OFF SWITCH DOES **NOT** DO YET — READ BEFORE FILING A BUG
+STATUS: needs-test
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #212 — the declared scope boundary (tech-debt #100, #101)
+
+**`needs-test` is the honest answer here, and the reason is recorded rather than left blank: there is
+no built behaviour to test.** The fuzz does not exist, so there is nothing on the dashboard or the
+route for a check to observe. This card exists so the absence is RECORDED and not rediscovered as a
+bug (OP-14 clause 2).
+
+After turning a module off, **all of the following are EXPECTED and are not defects today**:
+1. **The dashboard tile still looks normal** — full colour, clickable. `useModules.ts:122` maps a
+   disabled row to `'available'`, the same state as never-enabled. R-2 rules it should show **fuzzy
+   data**; the fuzz is a server-side aggregate and it is **not built** (tech-debt #100).
+2. **The module's route still works in full.** Turn off Delivery Routing and `/delivery-schedule`
+   opens and functions — it is gated on the `deliveries:read` PERMISSION, not on enablement
+   (tech-debt #101). R-3 rules the route should RENDER the fuzz, **never block**, so the fix is the
+   overlay and not a guard.
+3. **Only Social Media actually stops doing anything** — it is the one module whose server checks
+   `enabled` (`generate-posts.ts:52`).
+
+🔴 **This card flips to a real check when #100/#101 land. Until then, a "the tile didn't change"
+observation is this card working, not the switch failing.**

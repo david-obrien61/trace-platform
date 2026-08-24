@@ -518,6 +518,31 @@ export function enabledByDefault(billing: ModuleBilling): boolean {
 }
 
 /**
+ * 🔴 MAY THIS MODULE BE SWITCHED OFF? — R-1, 2026-08-23: **CORE CANNOT BE SWITCHED OFF. ONLY WHAT
+ * IS NOT INCLUDED IN CORE CARRIES AN ON/OFF SWITCH — IF IT IS CORE, IT IS ON.**
+ *
+ * 🔴 IT IS THE NEGATION OF `enabledByDefault`, AND THAT IS DELIBERATE RATHER THAN CONVENIENT. The
+ * ruling names the derivation in its own words — *"the affordance is DERIVED from `billing`, the
+ * field that already decides `enabledByDefault` … **no new field, no second opinion about
+ * liveness** — the same one decider, read one more place."* Spelling this as its own
+ * `billing === 'core'` test would be that second opinion: two predicates that agree today and
+ * drift the first time a fifth `ModuleBilling` value arrives, which is precisely how
+ * `core_optional` found three fields voting on one question in the first place.
+ *
+ * So the shape is load-bearing: a new union member gets its baseline from ONE edit, and its
+ * switchability follows automatically instead of waiting for someone to remember this file.
+ *
+ * ⚠️ IT ANSWERS "IS THERE A SWITCH", NOT "IS IT ON". `core_optional` and `add_on` both return true
+ * — both carry a switch — while their CURRENT position lives in the tenant's `business_modules`
+ * row, never here. And per R-1 the control must be **ABSENT** for a core module, not rendered
+ * disabled: a greyed-out switch says *you may not do this*, which is a permission claim, when the
+ * truth is *there is nothing here to do* (the six-state ruling's distinction).
+ */
+export function mayBeSwitchedOff(billing: ModuleBilling): boolean {
+  return !enabledByDefault(billing);
+}
+
+/**
  * 🔴 A TRIAL STARTS WHEN THE THING BEING TRIALLED CAN BE USED (David's ruling 2026-08-02 (3)).
  *
  * The catalog's own rule is that a trial is a COUNTDOWN TO A PRICE DECISION. A module whose tile is

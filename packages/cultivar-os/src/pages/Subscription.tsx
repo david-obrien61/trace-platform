@@ -10,7 +10,8 @@
  *               display labels · business_modules rows (read) · trialDaysRemaining (the ONE reader
  *               of the stored trial pair) · setBusinessModuleState (the ONE WRITER of the table) ·
  *               useBusinessContext.can().
- * OUTPUTS:      A rendered marketplace. The ENABLE action writes `enabled:true` through the RPC.
+ * OUTPUTS:      A rendered marketplace. ENABLE writes `enabled:true` through the RPC; **TURN OFF
+ *               writes `enabled:false` through the same one writer** and asserts the outcome.
  * INSTRUMENTATION (STD-003): [TRACE:SUBSCRIPTION] — ON by default (standing owner instruction).
  *
  * ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -40,12 +41,32 @@
  * is now paying $29/mo"* is a claim TRACE cannot make yet, and a button that implies it would be the
  * fake-affordance class one layer up from the one this page was built to remove.
  *
- * 🔴 AND IT DOES NOT START A TRIAL EITHER — RULING OWED (2026-08-02 (7)). `Enable` calls
- * `setBusinessModuleState({enabled:true})`; the clock's only writer is `start_module_trial`, a
- * separate RPC this page never calls. **So enabling a priced add-on here produces a BILLABLE MODULE
- * THAT IS LIVE WITH NOTHING THAT EVER ENDS IT** — invariant B6's defect, and B6 asserts over the
- * SEED PROJECTION only, so it structurally cannot see a row this button creates. The copy says what
- * actually happens; whether the button should ALSO start the clock is David's, and it is filed.
+ * ✅ IT DOES START THE TRIAL, AND THIS PARAGRAPH USED TO SAY THE OPPOSITE — corrected 2026-08-24
+ * rather than left standing, because it had become a header describing a defect the code no longer
+ * has. It read *"it does not start a trial either — RULING OWED"*; David RULED it on 2026-08-02 (8)
+ * — **enabling a priced add-on IS starting its trial, ONE CALL not two** — and `enable()` below has
+ * passed `trialDays: m.trial_days` ever since, with the server starting the clock inside the same
+ * transaction. A stale claim in a header is the class R-14 names: nothing mechanical reads a
+ * comment, so it survives its own correction and teaches the next reader the old defect.
+ *
+ * ══════════════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 THE OFF SWITCH — ADDED 2026-08-24. WHAT IS NEW HERE IS THE BUTTON, NOT THE MECHANISM.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════
+ * `set_business_module_state` has always accepted `p_enabled=false`; #201 found ZERO callers ever
+ * passed it, so the platform documented an off path (the RPC's own refusal string names *"enabling
+ * or disabling"*) that no human could reach. Disable is ONE UPDATE, there is no DELETE in the
+ * function, and the config merge preserves the trial pair — **turning a module off does not destroy
+ * anything.**
+ *
+ * ⚠️ WHAT THIS BUILD DOES **NOT** DO, stated because the gap is the interesting part: **the fuzz
+ * does not exist.** R-2 rules that a disabled tile stays VISIBLE showing fuzzy data and that the
+ * fuzz is a SERVER-SIDE AGGREGATE — the detail never reaching the browser — and R-3 rules that the
+ * route RENDERS that fuzz rather than blocking. Neither is built (a repo-wide search for `fuzz`
+ * returns twelve hits, every one of them prose saying it is filed). So a switched-off module still
+ * renders `available` on the dashboard and its route still works: **the switch changes the stored
+ * state and this page, and today it changes nothing else.** Faking it with a CSS blur was explicitly
+ * refused — R-2 calls that *"#81 with a filter on it"*, since the payload would still be in the
+ * response. See `docs/tech-debt-log.md` #100.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, Circle, Clock, Mail, Plus } from 'lucide-react';
@@ -55,7 +76,7 @@ import { setBusinessModuleState, BUSINESS_MODULE_COLUMNS } from '@trace/shared/b
 import { seedBusinessModules, warnOnShortModuleSeed } from '@trace/shared/business-logic/seedBusinessModules';
 import type { BusinessModuleRow } from '@trace/shared/business-logic/moduleState';
 import { trialDaysRemaining } from '@trace/shared/business-logic/trialClock';
-import { MODULE_CATALOG, TILE_REGISTRY, catalogSeedRows } from '../registry/tileRegistry';
+import { MODULE_CATALOG, TILE_REGISTRY, catalogSeedRows, mayBeSwitchedOff } from '../registry/tileRegistry';
 import type { ModuleEntry } from '../registry/tileRegistry';
 
 const GREEN = '#27500A';
@@ -212,6 +233,68 @@ export function Subscription() {
     setBusyKey(null);
   }
 
+  // ══════════════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 THE OFF SWITCH — R-1/R-12, and the half the product has never had (#201).
+  // ══════════════════════════════════════════════════════════════════════════════════════════════
+  // Nothing behind this button is new. `set_business_module_state` has accepted `p_enabled=false`
+  // since it was written, its refusal string has said *"enabling **or disabling** a module changes
+  // what this business pays"* (`20260802c:127`) the whole time, and the disable is ONE UPDATE —
+  // `SET enabled = COALESCE(p_enabled, enabled)`. **There is no DELETE anywhere in the function**,
+  // and the `config` merge is `config || '{}'` when no patch is sent, so the trial pair and every
+  // other stored key survive untouched. The data is not reached; it is not destroyed.
+  //
+  // 🔴 THE CLOCK IS NOT TOUCHED, BY CONSTRUCTION RATHER THAN BY CARE (R-8: a term is a term, not a
+  // meter). The RPC's trial block is guarded on `p_enabled IS TRUE`, so a disable cannot start,
+  // stop, extend or reset a countdown — turning a module off at day 12 of 14 still leaves two days.
+  // We pass no `trialDays` at all: there is nothing to offer on the way out.
+  async function disable(m: ModuleEntry) {
+    if (!businessId) return;
+    // R-1 belt to the render's braces. The control is ABSENT for a core module, so this is
+    // unreachable through the UI — which is exactly why it is here: an off path that depends on a
+    // button not being drawn is one refactor away from being no path at all.
+    if (!mayBeSwitchedOff(m.billing)) return;
+    setBusyKey(m.module_key);
+    setNotice(null);
+    const { data: { user } } = await supabase.auth.getUser();
+    const res = await setBusinessModuleState(
+      supabase, businessId, m.module_key, { enabled: false }, user?.id ?? null,
+    );
+    console.log('[TRACE:SUBSCRIPTION] disable', {
+      module: m.module_key, applied: res.applied, enabledBefore: res.enabledBefore,
+      enabledAfter: res.enabledAfter, reason: res.reason, error: res.error?.message ?? null,
+    });
+
+    // ════════════════════════════════════════════════════════════════════════════════════════════
+    // 🔴 THE WRITE PROVES IT WROTE — `applied` IS NOT THE CLAIM WE NEED (R-12).
+    // ════════════════════════════════════════════════════════════════════════════════════════════
+    // `applied:true` says the server accepted the call. It is ALSO what a no-op returns
+    // (`outcome:'no_change'`), and what a call whose `p_enabled` arrived NULL returns. Only
+    // `enabled_after` says the stored value is now false. Reading the acknowledgement instead of
+    // the outcome is how a disable silently no-ops — and a module the owner believes is off while
+    // it is on is the worst outcome this control has, worse than a refusal he can see.
+    const off = res.applied && res.enabledAfter === false;
+    if (off) {
+      setNotice({ key: m.module_key, ok: true, text: m.billing === 'core_optional'
+        // 🔴 THE TWO SENTENCES DIFFER BECAUSE THE TWO FACTS DIFFER — and neither claims a refund.
+        // A $0 `core_optional` has no term to run out, so telling its owner about billing periods
+        // would be an invented consequence. F-A (what a switched-off `core_optional` does when it
+        // is SELECTED again) is DEFERRED BY DAVID and is deliberately not answered here.
+        ? `${labelFor(m.module_key)} is off. Your settings are kept — switch it back on any time.`
+        : `${labelFor(m.module_key)} is off. Your data is kept, and the current period runs out as normal — switch it back on any time.` });
+      await load();
+    } else if (res.applied) {
+      // Accepted, but the stored value is not what we asked for. Say exactly that rather than
+      // reporting the success the flag alone would have reported.
+      setNotice({ key: m.module_key, ok: false,
+        text: `The server accepted the change but ${labelFor(m.module_key)} is still on. Nothing was turned off — please try again.` });
+      await load();
+    } else {
+      setNotice({ key: m.module_key, ok: false,
+        text: res.reason ?? res.error?.message ?? 'The server refused and gave no reason.' });
+    }
+    setBusyKey(null);
+  }
+
   function interestMailto(m: ModuleEntry): string {
     const name = labelFor(m.module_key);
     const subject = `TRACE — interested in ${name}`;
@@ -287,7 +370,11 @@ export function Subscription() {
             {sections.included.map((m) => {
               const row = rows[m.module_key];
               const on  = row?.enabled === true;
-              const isSwitchable = m.billing === 'core_optional';
+              // 🔴 DERIVED, NOT RE-SPELLED (R-1). This read `m.billing === 'core_optional'` — a
+              // second opinion about switchability sitting one import away from the field that
+              // already decides it. Equivalent today and divergent the moment a fifth billing
+              // value lands, which is the drift `enabledByDefault` was extracted to end.
+              const isSwitchable = mayBeSwitchedOff(m.billing);
               const isOff = isSwitchable && !on;
               return (
                 <div key={m.module_key} style={{ marginBottom: 8 }}>
@@ -325,6 +412,21 @@ export function Subscription() {
                           fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer',
                         }}>
                         {busyKey === m.module_key ? 'Turning on…' : 'Turn on'}
+                      </button>
+                    )}
+                    {/* 🔴 THE RETURN LEG. `isSwitchable` is `mayBeSwitchedOff(billing)`, so this is
+                        ABSENT — not greyed — on every `core` row (R-1): a disabled-looking switch
+                        would claim the owner is not ALLOWED, when the truth is there is nothing to
+                        switch. Muted rather than red: turning off something free is a normal
+                        choice, not a destructive one, and the copy below says the data is kept. */}
+                    {isSwitchable && on && mayEnable && (
+                      <button onClick={() => void disable(m)} disabled={busyKey === m.module_key}
+                        style={{
+                          flexShrink: 0, minHeight: 40, padding: '0 14px', borderRadius: 8,
+                          border: '1px solid #d1d5db', background: '#fff', color: '#6b7280',
+                          fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer',
+                        }}>
+                        {busyKey === m.module_key ? 'Turning off…' : 'Turn off'}
                       </button>
                     )}
                   </Card>
@@ -392,7 +494,29 @@ export function Subscription() {
                               On — not on a trial clock.
                             </div>
                           )}
+                          {/* THE NOTICE HAD NO SLOT IN THIS SECTION — Included rendered one and
+                              Active did not, because until now nothing in Active could act. A
+                              refusal with nowhere to land is a swallowed refusal. */}
+                          {notice?.key === m.module_key && (
+                            <div style={{ fontSize: '0.8125rem', marginTop: 6, color: notice.ok ? GREEN : '#b91c1c' }}>
+                              {notice.text}
+                            </div>
+                          )}
                         </div>
+                        {/* 🔴 R-1 — DERIVED FROM `billing`, ABSENT ON CORE. Nothing core reaches
+                            this section today (core and core_optional both render under Included),
+                            so the guard is belt to that braces: it keeps the affordance keyed to
+                            the ruling rather than to which section a row happens to land in. */}
+                        {mayBeSwitchedOff(m.billing) && mayEnable && (
+                          <button onClick={() => void disable(m)} disabled={busyKey === m.module_key}
+                            style={{
+                              flexShrink: 0, minHeight: 40, padding: '0 14px', borderRadius: 8,
+                              border: '1px solid #d1d5db', background: '#fff', color: '#6b7280',
+                              fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer',
+                            }}>
+                            {busyKey === m.module_key ? 'Turning off…' : 'Turn off'}
+                          </button>
+                        )}
                       </Card>
                     </div>
                   );
