@@ -468,7 +468,9 @@ LAST-PROVEN: never
 - **EXPECT** *"N waiting to sync"* to APPEAR and the number to be RIGHT. Save two more.
 - Airplane mode **OFF**. **EXPECT** the counter to fall to 0 **without pressing anything**.
 - Open `/inventory`. **EXPECT** every counted qty to be there.
-- **FAIL:** the Save errors · the counter never appears · the counter does not fall on reconnect · a qty is missing or wrong.
+- 🔴 **ADDED ledger #207 — THE COUNTER MUST BE ACCURATE, NOT MERELY PRESENT.** Save a known number of items (say four) and check the badge reads **exactly** that. A badge that lags or sticks is the visible symptom of a queue write that did not land, and it is the one signal available in a lot with no console.
+- 🔴 **AND THE WARNING FROM CARD 5 MUST *NOT* APPEAR HERE.** In a normal tab the red storage banner must be absent and the offline note must read *"counts are saved on this phone…"* — the healthy wording. If the red banner shows up in a normal tab, the probe is over-firing and **STOP and report**.
+- **FAIL:** the Save errors · the counter never appears · the counter is wrong · the counter does not fall on reconnect · a qty is missing or wrong · the storage warning appears in a normal tab.
 - **NO CONSOLE.** Every check above is on-screen.
 
 ### 2. 🔴 Scanning offline names the SERVER, never the tag  (THE RECON'S HEADLINE — NOW EXPECTED TO PASS)
@@ -510,15 +512,26 @@ LAST-PROVEN: never
 - Record **how long** backgrounding takes to lose it on the actual demo phone. That number is the real input to whether cart persistence is worth building.
 
 ### 5. 🔴 A day's counts in a PRIVATE tab  (THE STORE'S DURABILITY — ties to the logout-loop hunt)
-STATUS: needs-test
+STATUS: owed
 DEVICE: phone
-COVERS: recon 2026-08-23 · `store.ts:55-58`
+COVERS: recon 2026-08-23 · ledger #207 · `store.ts` · `syncEngine.submit`
 LAST-PROVEN: never
-- Open the app in a Safari **PRIVATE** tab. Start a count online, airplane mode, save 3 items.
-- **EXPECT** *"3 waiting to sync"*. If it says 0 or never appears, the store write was **SWALLOWED** and the app is claiming a save it did not make — **STOP and report**.
-- **CLOSE** the private tab. Reopen private, return to `/inventory`.
-- **EXPECT (the hazard):** the three counts are **GONE**. Private-tab `localStorage` dies with the tab.
-- Run this on the **same device/browser as the logout-loop repro** — same storage, plausibly the same cause.
+- 🔴 **RUN THIS ON THE SAME DEVICE AND BROWSER AS THE LOGOUT-LOOP REPRO.** The store holding a day's counts is the same mechanism suspected in the logout loop, so this card may inform both — that is why it is worth the trip even though the count half is now fixed.
+- Open the app in a Safari **PRIVATE** tab and go to `/inventory/count`.
+- 🔴 **BEFORE STARTING — EXPECT A RED WARNING ON THE START CARD**, reading: *"This phone isn't letting the app store anything — that usually means a Private browsing tab, or site data turned off. Counts will go straight to the server while you have signal, but NOTHING can be held on the phone: lose signal and that count is gone. Open the app in a normal tab before you walk the lot."*
+- **If that warning is ABSENT, STOP and report** — the probe did not fire, and everything below is untestable.
+- Start the count anyway (this is allowed on purpose — see below) and, **still online**, save one item. **EXPECT it to save normally** and appear in the tally.
+- Now **airplane mode ON** and try to save another. 🔴 **EXPECT A REFUSAL that names STORAGE, not the network:** *"This phone isn't letting the app store anything … We could NOT save that. Open the app in a normal tab and count there."*
+- 🔴 **THE CHECK THAT MATTERS: it must NOT say "N waiting to sync", and it must NOT say "counts are saved on this phone."** Those were the words over lost work. If you see either, **STOP and report.**
+- **CLOSE** the private tab, reopen private, return to `/inventory`. The item saved **while online** should be there; the one refused offline should not — and you were told so at the time.
+- **FAIL:** no warning before the walk · an offline save that reports success · a pending counter that climbs in a Private tab · a message blaming the network.
+- **NO CONSOLE.** Every check is on-screen.
+
+> ✏️ **WHY THE APP DOES NOT SIMPLY BLOCK COUNTING HERE, stated so it is not filed as a bug:**
+> with signal, a Private tab works — the engine writes straight to the server when the queue
+> cannot persist, and that write is real (proven by call count, not by status). What is lost is
+> the **dead-zone promise**, and that is precisely what the warning names. Blocking would remove
+> a capability that genuinely works; saying nothing was what cost the work.
 
 ### 6. Photos captured offline  (COVERED SURFACE — the second consumer)
 STATUS: needs-test
@@ -810,8 +823,10 @@ SIGNAL: V6 returns 0
 
 **Offline / store-and-forward — NO LONGER IN THIS LIST, and the correction is worth stating:** it was
 `offline sync` here because **no test was written**, never because the mechanism was missing. The
-mechanism was located from code on 2026-08-23 and cards now exist. **TEN as of ledger #206** — cards
-1, 2, 8, 9, 10 `owed` (written, awaiting David's run) and 3–7 `needs-test`.
+mechanism was located from code on 2026-08-23 and cards now exist. **TEN, of which SIX are now
+`owed` (ledger #207)** — cards 1, 2, 5, 8, 9, 10 written and awaiting David's run; 3, 4, 6, 7
+`needs-test`. **Card 5 flipped `needs-test` → `owed` when the swallowed-storage defect was fixed**
+and is the one to run on the logout-loop device: same storage, plausibly the same cause.
 🔴 **CARD 2 WAS WRITTEN THE SAME DAY AS *EXPECTED TO FAIL* AND HAS BEEN REWRITTEN TO ITS PASSING
 FORM — the resolver's third state landed in ledger #206**, so the offline scan now names the server
 instead of the tag. **CARD 4 IS STILL EXPECTED TO FAIL** (the cart does not survive a reload) and is
