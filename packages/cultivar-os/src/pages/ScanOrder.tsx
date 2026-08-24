@@ -25,7 +25,8 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Minus, Plus, ScanLine, UserPlus, UserCheck, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
-import { resolveStockLine, searchStockLines, stockLineColumnsFor } from '@trace/shared/inventory';
+import { resolveStockLine, searchStockLines, stockLineColumnsFor, readFailureMessage } from '@trace/shared/inventory';
+import type { ReadFailure } from '@trace/shared/inventory';
 import { fetchCommittedByLot, checkSellable, availabilityLabel, type CommittedByLot } from '../lib/inventoryStates';
 import type { StockLineRow } from '@trace/shared/inventory';
 import {
@@ -42,7 +43,11 @@ import { NotPermitted } from '@trace/shared/components/SurfaceState';
 
 const TRACE_CART = true; // [TRACE:CART] STD-003 — on until OWNER-PROVEN
 
-type Phase = 'scanning' | 'reviewing' | 'picker' | 'unknown';
+// 🔴 'unreachable' IS A SEPARATE PHASE FROM 'unknown', AND THAT SEPARATION IS THE FIX
+// (R-11 · recon 2026-08-23). They were one state: a dead-zone read collapsed into `miss`, so
+// the app showed the "Didn't recognize this — check the tag" sheet for a network failure. One
+// state cannot carry two facts honestly; the second state is what lets the copy tell the truth.
+type Phase = 'scanning' | 'reviewing' | 'picker' | 'unknown' | 'unreachable';
 
 // A pick-list choice — used by BOTH the size-collision picker (a scanned multi-size variety)
 // and the manual-search picker (a partial-term lookup that matched >1 lot). One shape, one UI.
@@ -120,6 +125,7 @@ export function ScanOrder() {
   const [pickerTitle, setPickerTitle] = useState('');
   const [pickerHint, setPickerHint]   = useState('');
   const [unknownTag, setUnknownTag] = useState('');
+  const [readFailure, setReadFailure] = useState<ReadFailure | null>(null);
 
   // ── Customer-first attach (ways 1 & 4) ──────────────────────────────────────
   const [customerView, setCustomerView] = useState<null | 'lookup' | 'create'>(null);
@@ -274,7 +280,19 @@ export function ScanOrder() {
     const tag = extractTag(raw);
     const columns = stockLineColumnsFor(canViewCosts);
     if (TRACE_CART) console.log('[TRACE:CART] scan columns:', canViewCosts ? 'cost-bearing (costs:read)' : 'NO-COST (unit_cost withheld)');
-    const resolution = await resolveStockLine(supabase, businessId, tag, { columns });
+    const read = await resolveStockLine(supabase, businessId, tag, { columns });
+
+    // 🔴 THE FAILURE BRANCH FIRST — `tsc` refuses to let it be skipped (R-11). Everything below
+    // this line is a statement about the CATALOG, and none of it is true if the catalog was
+    // never read.
+    if (!read.ok) {
+      if (TRACE_CART) console.warn('[TRACE:CART] scan read FAILED (' + read.error.kind + ') —', read.error.message);
+      setUnknownTag(tag);
+      setReadFailure(read.error);
+      setPhase('unreachable');
+      return;
+    }
+    const resolution = read.value;
 
     if (resolution.kind === 'resolved') {
       const plant = synthesizePlant(resolution.row, businessId, tag);
@@ -308,7 +326,18 @@ export function ScanOrder() {
   // resolve; >1 → the same pick list the size collision uses. No exact-tag requirement.
   async function handleLookup(term: string) {
     if (!businessId) return;
-    const results = await searchStockLines(supabase, businessId, term, { columns: stockLineColumnsFor(canViewCosts) });
+    const read = await searchStockLines(supabase, businessId, term, { columns: stockLineColumnsFor(canViewCosts) });
+
+    // A failed search is NOT "0 matches". "0 matches" is a claim about the tenant's catalog;
+    // this read made no such claim, because it never got one.
+    if (!read.ok) {
+      if (TRACE_CART) console.warn('[TRACE:RESOLVE] manual search read FAILED (' + read.error.kind + ') —', read.error.message);
+      setUnknownTag(term);
+      setReadFailure(read.error);
+      setPhase('unreachable');
+      return;
+    }
+    const results = read.value;
     if (TRACE_CART) console.log('[TRACE:RESOLVE] manual search', { term, matchCount: results.length });
 
     if (results.length === 0) {
@@ -526,6 +555,23 @@ export function ScanOrder() {
                 {c.sub && <span style={S.pickQty}>{c.sub}</span>}
               </button>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* UNREACHABLE sheet — the look-up never happened. NOT a statement about the tag.
+          🔴 THE COPY IS THE FIX: "check the tag" must never appear on a connectivity failure.
+          She is standing next to a tree holding a tag that is fine; sending her to inspect it
+          is worse than saying nothing, because it is work that cannot possibly help. */}
+      {phase === 'unreachable' && (
+        <div style={S.modal} onClick={e => { if (e.target === e.currentTarget) setPhase('scanning'); }}>
+          <div style={S.sheet}>
+            <div style={S.sheetHeader}>
+              <h2 style={S.sheetTitle}>Couldn't reach the server</h2>
+              <button style={S.iconBtn} onClick={() => setPhase('scanning')} aria-label="Close"><X size={20} color="#6b7280" /></button>
+            </div>
+            <p style={S.subtle}>{readFailure ? readFailureMessage(readFailure) : "We couldn't reach the server to look this up."} We didn't check <code style={S.code}>{unknownTag}</code> against your inventory, so this says nothing about the tag.</p>
+            <button style={S.btnPrimary} onClick={() => setPhase('scanning')}>Try again</button>
           </div>
         </div>
       )}

@@ -17,6 +17,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { NamespacedStore } from './store';
 import { OfflineQueue } from './offlineQueue';
 import type { OfflineOp, UpdatePayload, RpcPayload, WriteResult, DrainResult } from './types';
+import { isConnectivityError } from '../utils/supabaseError';
 
 const TRACE_SYNC = true; // [TRACE:SYNC] STD-003 — on until OWNER-PROVEN
 
@@ -30,13 +31,9 @@ function newId(): string {
 // or a hard reject (genuine error — surface it, keep the op for a deliberate retry).
 type StepResult = 'applied' | 'retry' | { failed: true; error: string };
 
-// supabase-js surfaces connectivity failures as a thrown TypeError or an error
-// object with NO postgres/PostgREST code and a fetch/network-shaped message.
-function isConnectivityError(err: { code?: string; message?: string } | null): boolean {
-  if (!err) return false;
-  if (err.code) return false; // a coded error is a real DB response, not a dead zone
-  return /fetch|network|timeout|connection|offline|load failed/i.test(err.message ?? '');
-}
+// The dead-zone-vs-real-refusal predicate MOVED to @trace/shared/utils/supabaseError on
+// 2026-08-23 so the stock-line resolver could share it instead of growing a second copy
+// (§6 r8). Behaviour unchanged — this is the same function, imported rather than declared.
 
 export interface SyncEngineOptions {
   supabase:    SupabaseClient;

@@ -13,9 +13,23 @@
 //               only the shared business_-prefixed catalog.
 // DEPENDENCIES: business_inventory (business_id-scoped read — AC-3), and the canonical
 //               token-set key (@trace/shared/utils/canonicalName). No vertical coupling.
-// OUTPUTS:      resolveStockLine → a discriminated result (resolved | collision | miss).
+// OUTPUTS:      resolveStockLine → ReadResult<StockLineResolution>. The READ either succeeded
+//               (and then resolved | collision | miss) or it FAILED, and the two are different
+//               facts a caller cannot conflate — see the R-11 block below.
+//               searchStockLines → ReadResult<StockLineRow[]>, same reason.
 //               detectSizeCollision → the L5 NEED_CLARIFICATION discriminator (moved here
 //               from InventoryCount so both callers share one definition, not a drifted copy).
+//
+// 🔴 THE THREE READS RETURN ReadResult BECAUSE THEY USED TO LIE (recon 2026-08-23 · R-11).
+// All three discarded the Supabase `error` and substituted an empty result — `(rows ?? [])` —
+// so a DEAD ZONE produced `{ kind:'miss', reason:'no_match' }`: the IDENTICAL value a tag that
+// genuinely is not in the catalog produces. There was no third state. Lauren scanned a real
+// tree and the app told her, by name, in a modal, to GO CHECK THE TAG. A failure rendering as
+// a different, false, ACTIONABLE fact costs more than one rendering as nothing, because it
+// sends the person to do work that cannot help.
+// The fix is a TYPE, not a discipline: `.value` is unreachable without handling `ok === false`,
+// so `tsc` refuses a caller that forgets — which is exactly what `readPricingConfig`'s seven
+// error-discarding callers prove a merely-returnable error does not achieve.
 //
 // LADDER (most-specific → least, mirrors the grower-resolve design 2026-06-26):
 //   L2  business_inventory.sku exact (ilike)
@@ -29,6 +43,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { nameTokenSet, tokenSetsEqual } from '../utils/canonicalName';
 import { normalizeSize } from '../utils/sizeLabel';
+import { readOk, readFailed, type ReadResult } from '../utils/readResult';
 
 // A resolved business_inventory row. The core identity fields are always selected; the
 // pricing/status fields are present only when the caller requests the extended column set
@@ -213,31 +228,39 @@ export async function resolveStockLine(
   businessId: string,
   identifier: string,
   opts?: { columns?: string },
-): Promise<StockLineResolution> {
+): Promise<ReadResult<StockLineResolution>> {
   const columns = opts?.columns ?? STOCK_LINE_IDENTITY_COLUMNS;
   const id = identifier.trim();
-  if (!id) return { kind: 'miss', reason: 'no_match' };
+  // An empty identifier is a genuine, answered "nothing to look up" — the read SUCCEEDED and
+  // found nothing. That is a miss, not a failure, and keeping them apart is the whole point.
+  if (!id) return readOk({ kind: 'miss', reason: 'no_match' });
 
   // L2 — SKU exact as a TARGETED query, unchanged: preserves the count flow's proven query shape
   // (#72 no-regress) and returns without fetching the whole tenant on a SKU hit.
-  const { data: lot } = await supabase
+  const { data: lot, error: lotErr } = await supabase
     .from('business_inventory')
     .select(columns)
     .eq('business_id', businessId)
     .ilike('sku', id)
     .maybeSingle();
-  if (lot) return { kind: 'resolved', via: 'sku', row: lot as unknown as StockLineRow };
+  // A failed L2 must NOT fall through to L4: in a dead zone L4 fails too, and the ladder would
+  // arrive at "no_match" having never read a single row.
+  if (lotErr) return readFailed(lotErr);
+  if (lot) return readOk({ kind: 'resolved', via: 'sku', row: lot as unknown as StockLineRow });
 
   // L4/L5 — fetch the tenant's rows and delegate the token-equality + size-collision decision to
   // the ONE pure ladder (STD-011). The ladder re-runs an in-memory SKU pass which necessarily
   // misses here (the targeted query above already missed), so the result is identical to the
   // former inline logic — with the sole marginal difference that a SKU differing only in
   // whitespace, which .ilike would miss, now matches; that is a strict improvement, not a regress.
-  const { data: rows } = await supabase
+  const { data: rows, error: rowsErr } = await supabase
     .from('business_inventory')
     .select(columns)
     .eq('business_id', businessId);
-  return resolveAgainstCatalog((rows ?? []) as unknown as StockLineRow[], id);
+  // 🔴 THE ORIGINAL LIE, IN ONE LINE: `(rows ?? [])` handed the pure ladder an EMPTY CATALOG on
+  // a wire failure, and an empty catalog matches nothing. It reported "not recognized".
+  if (rowsErr) return readFailed(rowsErr);
+  return readOk(resolveAgainstCatalog((rows ?? []) as unknown as StockLineRow[], id));
 }
 
 /**
@@ -257,16 +280,19 @@ export async function searchStockLines(
   businessId: string,
   term: string,
   opts?: { columns?: string; limit?: number },
-): Promise<StockLineRow[]> {
+): Promise<ReadResult<StockLineRow[]>> {
   const columns = opts?.columns ?? STOCK_LINE_IDENTITY_COLUMNS;
   const limit   = opts?.limit ?? 25;
   const t = term.trim().toLowerCase();
-  if (!t) return [];
+  if (!t) return readOk([]);   // an empty term genuinely has zero results — answered, not failed
 
-  const { data: rows } = await supabase
+  const { data: rows, error: rowsErr } = await supabase
     .from('business_inventory')
     .select(columns)
     .eq('business_id', businessId);
+  // The same defect as L4 above, and worse on this surface: "0 matches" reads to a person as a
+  // statement ABOUT THEIR CATALOG, when nothing was ever read.
+  if (rowsErr) return readFailed(rowsErr);
 
   const termTokens = nameTokenSet(t);
   const matches = ((rows ?? []) as unknown as StockLineRow[]).filter((row) => {
@@ -279,7 +305,7 @@ export async function searchStockLines(
     return true;
   });
 
-  return matches
+  return readOk(matches
     .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', undefined, { numeric: true }))
-    .slice(0, limit);
+    .slice(0, limit));
 }

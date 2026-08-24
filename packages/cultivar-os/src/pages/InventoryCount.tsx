@@ -73,7 +73,7 @@ import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { SyncEngine } from '@trace/shared/sync';
 import {
-  resolveStockLine, variantGroupSlug, resolveCountTarget, sameSizeLabel, SIZE_REQUIRED_MESSAGE,
+  resolveStockLine, variantGroupSlug, resolveCountTarget, sameSizeLabel, SIZE_REQUIRED_MESSAGE, readFailureMessage,
   type StockLineResolution, type CountSibling,
 } from '@trace/shared/inventory';
 import { errBorder, FieldError } from '@trace/shared/components/FieldError';
@@ -167,6 +167,10 @@ export function InventoryCount() {
   const [resolved, setResolved]   = useState<Ctx | null>(null);
   const [sizeInput, setSizeInput] = useState('');   // WHICH size the counter is counting
   const [qtyInput, setQtyInput]   = useState('');
+  // 🔴 SET WHEN THE RESOLVER COULD NOT READ THE CATALOG (R-11 · recon 2026-08-23). The unknown
+  // sheet is SHARED between "we looked and this is new" and "we could not look", so it must know
+  // which one it is: the heading and the lead sentence change, and the typed entry stays open.
+  const [resolveFailure, setResolveFailure] = useState<string | null>(null);
   const [unknownRaw, setUnknownRaw]   = useState('');
   const [unknownTag, setUnknownTag]   = useState('');
   const [unknownName, setUnknownName] = useState(''); // typed variety (no QR)
@@ -287,7 +291,30 @@ export function InventoryCount() {
     }
 
     // (L2→L5) SHARED business_inventory resolver — SKU → name token-set equality → size collision.
-    const resolution = await resolveStockLine(supabase, businessId, tag);
+    const read = await resolveStockLine(supabase, businessId, tag);
+
+    // 🔴 THE READ FAILED — and this is the surface where it mattered most, because it sits in
+    // FRONT of the one write path the offline queue DOES cover. Before 2026-08-23 a dead-zone
+    // scan arrived here as `miss`, so every scan on the walk fell to typed entry and the loop
+    // the queue was built for could not be driven from a scan at all.
+    //
+    // The typed-entry sheet still OPENS (Skip & flag records a count with a queued, durable
+    // write, and that keeps working out here) — what changes is that it stops claiming the tag
+    // was unrecognised.
+    if (!read.ok) {
+      if (TRACE_RESOLVE) console.warn('[TRACE:RESOLVE] resolve read FAILED (' + read.error.kind + ') —', read.error.message);
+      if (TRACE_COUNT) console.warn('[TRACE:COUNT] resolve UNREACHABLE — tag:', tag);
+      setResolveFailure(readFailureMessage(read.error));
+      setUnknownRaw(raw);
+      setUnknownTag(tag);
+      setUnknownName('');
+      setUnknownSize('');
+      setQtyInput('');
+      setFieldErrors({});
+      setPhase('unknown');
+      return;
+    }
+    const resolution = read.value;
     const ctx = ctxFromResolution(resolution, tag, raw);
     if (ctx) {
       if (TRACE_RESOLVE) {
@@ -326,6 +353,7 @@ export function InventoryCount() {
       }
     }
     if (TRACE_COUNT) console.log('[TRACE:COUNT] resolve UNKNOWN — tag:', tag);
+    setResolveFailure(null);   // a REAL miss — the read succeeded and this tag genuinely is new
     setUnknownRaw(raw);
     setUnknownTag(tag);
     setUnknownName('');
@@ -627,7 +655,25 @@ export function InventoryCount() {
     // (Boundary, honest: EQUALITY handles case/word-order/punctuation/separator variance; extra
     // words + plural stemming — "Big Boy" vs "Big Boy Tomato" vs "tomatoes" — are the deferred
     // L5-subset/L6-stemming layers and still mint a distinct variety.)
-    const resolution = await resolveStockLine(supabase, businessId, name);
+    const read = await resolveStockLine(supabase, businessId, name);
+
+    // 🔴 A FAILED RESOLVE HERE MUST REFUSE, NOT FALL THROUGH — and this guard is LOAD-BEARING,
+    // not belt-and-braces. Below, a resolution that is neither `resolved` nor `collision` falls
+    // into the "genuine NEW variety" branch and MINTS A NEW GROUP. Before 2026-08-23 a failed
+    // read produced exactly that shape, so an unreadable catalog looked identical to an empty
+    // one and the answer was "create it" — the D-49/#135 duplicate-variety family, arriving
+    // through a wire failure instead of a spelling.
+    // The offline refusal 120 lines below (`!engine.isOnline()`) does NOT cover this: a
+    // NON-connectivity failure (an RLS refusal, a bad column) leaves `isOnline()` TRUE, so the
+    // create would proceed and split the variety. This is the only thing standing in front of it.
+    if (!read.ok) {
+      if (TRACE_INV) console.warn('[TRACE:INVENTORY] typed resolve-before-create read FAILED (' + read.error.kind + ') —', read.error.message);
+      setResolveFailure(readFailureMessage(read.error));
+      setError(`${readFailureMessage(read.error)} We can't check whether "${name}" is already in your inventory, and adding it without checking would split one variety into two. Use Skip & flag to record the count now.`);
+      setBusy(false);
+      return;
+    }
+    const resolution = read.value;
 
     if (resolution.kind === 'miss' && resolution.reason === 'ambiguous') {
       // >1 ungrouped same-name rows — can't safely pick or create (would risk a 3rd orphan).
@@ -655,6 +701,7 @@ export function InventoryCount() {
   function resetUnknown() {
     setUnknownName(''); setUnknownSize(''); setUnknownTag(''); setUnknownRaw(''); setQtyInput('');
     setFieldErrors({});
+    setResolveFailure(null);
   }
 
   // Shared insert into inventory_counts + session item_count bump (routed through sync;
@@ -857,10 +904,15 @@ export function InventoryCount() {
         <div style={S.modal}>
           <div style={S.sheet}>
             <div style={S.sheetHeader}>
-              <h2 style={S.sheetTitle}>Didn't recognize this</h2>
+              {/* 🔴 ONE SHEET, TWO FACTS — SO THE HEADING SAYS WHICH ONE (§6 r18: a header is a
+                  claim, and it must hold for every row the section can contain). "Didn't
+                  recognize this" is TRUE only when the catalog was actually read. */}
+              <h2 style={S.sheetTitle}>{resolveFailure ? "Couldn't reach the server" : "Didn't recognize this"}</h2>
               <button style={S.iconBtn} onClick={() => setPhase('scanning')} aria-label="Cancel"><X size={20} color="#6b7280" /></button>
             </div>
-            <p style={S.subtle}>Scanned: <code style={S.code}>{unknownTag}</code></p>
+            {resolveFailure
+              ? <p style={S.subtle}>{resolveFailure} We didn't check <code style={S.code}>{unknownTag}</code> against your inventory, so this says nothing about the tag. You can still record what you counted with <b>Skip &amp; flag</b> — it saves on this phone and syncs when you're back in range.</p>
+              : <p style={S.subtle}>Scanned: <code style={S.code}>{unknownTag}</code></p>}
             {error && <div style={S.error}>{error}</div>}
             <label style={S.label}>Variety *</label>
             <input style={{ ...S.input, ...errBorder(!!fieldErrors.unknownName) }} value={unknownName}

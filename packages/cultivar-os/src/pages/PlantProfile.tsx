@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useBusinessContext } from '@trace/shared/context';
 import { checkSellable } from '../lib/inventoryStates';
 import { usePlant } from '../hooks/usePlant';
+import { readFailureMessage } from '@trace/shared/inventory';
 import { useCart } from '../hooks/useCart';
 import { PlantHero } from '../components/plant/PlantHero';
 import { PlantTimeline } from '../components/plant/PlantTimeline';
@@ -11,7 +12,7 @@ import { QtySelector } from '../components/checkout/QtySelector';
 export function PlantProfile() {
   const { tagId } = useParams<{ tagId: string }>();
   const navigate   = useNavigate();
-  const { plant, events, availableCount, loading, error, sizeChoices, chooseSize } = usePlant(tagId);
+  const { plant, events, availableCount, loading, error, readFailure, sizeChoices, chooseSize } = usePlant(tagId);
   const { business } = useBusinessContext();
   const setItem    = useCart((s) => s.setItem);
   const [qty, setQty] = useState(1);
@@ -57,6 +58,25 @@ export function PlantProfile() {
               </button>
             ))}
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 🔴 THE READ FAILED — SAY SO, AND SAY NOTHING ABOUT THE TAG (R-11 · recon 2026-08-23).
+  // This branch is FIRST, above "not found", because before 2026-08-23 it did not exist: a dead
+  // zone fell into the block below and told a person holding a real tag, in a real lot, that it
+  // "didn't match any plant in the nursery" and to go CHECK THE TAG. The app had read nothing.
+  // A failed look-up knows nothing about the tag, so this copy claims nothing about it.
+  if (readFailure) {
+    return (
+      <div className="page">
+        <div className="error-state">
+          <h2>Couldn't reach the server</h2>
+          <p>{readFailureMessage(readFailure)}</p>
+          <p style={{ marginTop: 8, fontSize: '0.875rem' }}>
+            Nothing is wrong with the tag — we just couldn't look it up.
+          </p>
         </div>
       </div>
     );

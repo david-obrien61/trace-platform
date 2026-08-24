@@ -471,15 +471,24 @@ LAST-PROVEN: never
 - **FAIL:** the Save errors · the counter never appears · the counter does not fall on reconnect · a qty is missing or wrong.
 - **NO CONSOLE.** Every check above is on-screen.
 
-### 2. 🔴 Scanning offline says the tag is not recognized  (THE RECON'S HEADLINE — EXPECTED TO FAIL)
-STATUS: needs-test
+### 2. 🔴 Scanning offline names the SERVER, never the tag  (THE RECON'S HEADLINE — NOW EXPECTED TO PASS)
+STATUS: owed
 DEVICE: phone
-COVERS: recon 2026-08-23 · `stockLineResolver.ts:223,236,266`
+COVERS: recon 2026-08-23 · ledger #206 · `stockLineResolver.ts` · R-11
 LAST-PROVEN: never
 - Airplane mode **ON**. On `/checkout/scan`, scan a tag you **know** is in inventory.
-- **EXPECTED TODAY (the defect):** *"Didn't recognize this — Scanned &lt;TAG&gt; — it didn't match a stock line. Check the tag."* **The tag is fine.** A dead zone is being reported as a missing item.
-- Repeat on the count screen: **EXPECT** the scan to miss and drop to typed entry, then **EXPECT** *"You're offline — &lt;name&gt; is a new size…"* — an honest refusal for the **wrong reason**.
-- **This card is EXPECTED TO FAIL** until the resolver gains a third `unavailable` state. It is written so the failure is RECORDED rather than rediscovered.
+- **EXPECT** the sheet to read **"Couldn't reach the server"**, and its body: *"You're offline — we couldn't reach the server to look this up. Try again once you have a signal. We didn't check &lt;TAG&gt; against your inventory, so this says nothing about the tag."* The button says **Try again**.
+- 🔴 **THE CHECK THAT MATTERS — READ THE WHOLE SHEET: the words "check the tag" must NOT appear anywhere on it, and neither must "didn't recognize" or "didn't match a stock line."** That copy sent a person to inspect a tag that was fine.
+- Now use the manual **Look up** field (still offline), type `vitex`. **EXPECT the same "Couldn't reach the server" sheet — NOT "0 matches"**, which is a claim about your catalog that nothing read.
+- Airplane mode **OFF**, scan the same tag again. **EXPECT** it to resolve into the cart normally.
+- **FAIL:** any mention of the tag being wrong · a "not recognized" heading · a silent nothing · the item added anyway.
+- **NO CONSOLE.** Every check is on-screen.
+
+> ✏️ **This card was written on 2026-08-23 as EXPECTED TO FAIL, and the build it was written against
+> landed the same day (ledger #206).** It is rewritten to its passing form rather than replaced —
+> the failing text is preserved in the recon and in the handoff, so the record still shows what was
+> wrong. **`STATUS: needs-test` → `owed`, because a test now exists but nobody has run it. Thunder
+> does not mark it covered (OP-14).**
 
 ### 3. Submitting an order offline  (UNCOVERED SURFACE)
 STATUS: needs-test
@@ -532,6 +541,53 @@ LAST-PROVEN: never
 - Staging this needs a deliberate refusal, so it is recorded as a **KNOWN HOLE** rather than a runnable check. **Do NOT mark this covered by inference from card 1 passing.**
 
 ---
+
+### 8. The count loop's offline scan is honest AND still lets you type  (COVERED SURFACE — the read in front of it)
+STATUS: owed
+DEVICE: phone
+COVERS: recon 2026-08-23 · ledger #206 · `InventoryCount.tsx:290` · R-11
+LAST-PROVEN: never
+- Start a count **ONLINE** (it refuses to start offline by design). Airplane mode **ON**. Scan a tag you **know** is in inventory.
+- **EXPECT** the sheet heading to read **"Couldn't reach the server"** — *not* "Didn't recognize this" — and the body to end with *"You can still record what you counted with **Skip & flag** — it saves on this phone and syncs when you're back in range."*
+- 🔴 **AND THE HALF THIS CARD EXISTS FOR: the typed-entry fields are STILL THERE and still usable.** The honest failure must not lock her out of the sheet; the walk still has to be recordable in a dead zone.
+- Press **Skip & flag**. **EXPECT** the count to record and *"N waiting to sync"* to go **up**.
+- Now type a **variety name and size** into the same sheet and press the save/count button instead. **EXPECT** a refusal reading *"…We can't check whether "&lt;name&gt;" is already in your inventory, and adding it without checking would split one variety into two. Use Skip & flag to record the count now."*
+- 🔴 **That refusal is the point: it must NOT create a new variety.** Airplane mode **OFF**, open `/inventory`, and **EXPECT NO new row** for that name.
+- **FAIL:** the heading still says "Didn't recognize this" · the typed fields are gone · a new variety row appears · the sheet mentions checking the tag.
+- **NO CONSOLE.**
+
+### 9. Online, a tag that genuinely does NOT exist still reads as a miss  (THE MIRRORED-DEFECT GUARD)
+STATUS: owed
+DEVICE: phone
+COVERS: recon 2026-08-23 · ledger #206
+LAST-PROVEN: never
+- 🔴 **WHY THIS CARD EXISTS: a fix that turned every miss into "network error" would be the same defect pointed the other way, and just as wrong in the lot.** Cards 2 and 8 only prove half of it.
+- **ONLINE**, with signal confirmed. On `/checkout/scan`, scan (or type into Look up) something that is definitely not in inventory — e.g. `ZZZ-NOT-A-REAL-TAG`.
+- **EXPECT** the ORIGINAL sheet: **"Didn't recognize this"** — *"Scanned `ZZZ-NOT-A-REAL-TAG` — it didn't match a stock line. Check the tag, or keep scanning."* **Here that copy is TRUE and must still appear.**
+- Repeat on the count screen. **EXPECT** the typed-entry sheet headed **"Didn't recognize this"**, with *"Scanned: `ZZZ-…`"* — not the server message.
+- Type a genuinely new variety + size and save. **EXPECT** it to create normally, as it always did.
+- **FAIL:** a real miss now claims the server was unreachable · a real new variety can no longer be added while online.
+- **NO CONSOLE.**
+
+### 10. The QR plant profile offline blames the server, not the tag  (UNCOVERED SURFACE — a CUSTOMER may be holding it)
+STATUS: owed
+DEVICE: phone
+COVERS: recon 2026-08-23 · ledger #206 · `usePlant.ts` · `PlantProfile.tsx`
+LAST-PROVEN: never
+- 🔴 **Clear the site's storage first, or use a tag you have NOT opened in the last 24 hours** — otherwise the undocumented 24-hour read cache (`usePlant.ts`, declared at the site as of ledger #206) will serve the page from disk and you will prove nothing. **If the plant renders, the cache answered — pick a different tag.**
+- Airplane mode **ON**. Open `/plant/<a real tag>`.
+- **EXPECT** the page to read **"Couldn't reach the server"** — *"You're offline — we couldn't reach the server to look this up. Try again once you have a signal."* followed by **"Nothing is wrong with the tag — we just couldn't look it up."**
+- 🔴 **The words "Plant not found" and "didn't match any plant in the nursery" must NOT appear**, and neither must "Check the tag and try scanning again."
+- Airplane mode **OFF**, reload. **EXPECT** the plant to render normally.
+- Now open `/plant/ZZZ-NOT-A-REAL-TAG` **ONLINE**. **EXPECT** the original **"Plant not found"** page — *that* copy is true there and must survive.
+- **FAIL:** a raw `TypeError: Failed to fetch` · a "not found" claim while offline · a "couldn't reach the server" claim while online.
+- **NO CONSOLE.**
+
+> ⚠️ **NOT CLOSED BY THIS BUILD, AND NAMED SO IT IS NOT ASSUMED:** on a **cache HIT** the profile still
+> renders **silently stale** — up to 24h old qty, price and status, with nothing on screen saying so.
+> The cache is now DECLARED at its site and in `built-inventory.md`; the staleness SIGNAL is a
+> PlantProfile render change with a real design question in it (customer-facing vs operator-facing)
+> and was deliberately not invented here.
 
 ## SURFACE: movement-ledger (DB layer — D-50 Layer 1)
 _The append-only ledger under everything above: `business_inventory_ledger` + the 6 movement RPCs + the `audit_log` first writer. Migration `20260720_inventory_movement_ledger.sql` (SHA `2caeac7`), ledger #140._
@@ -754,10 +810,15 @@ SIGNAL: V6 returns 0
 
 **Offline / store-and-forward — NO LONGER IN THIS LIST, and the correction is worth stating:** it was
 `offline sync` here because **no test was written**, never because the mechanism was missing. The
-mechanism was located from code on 2026-08-23 and **seven cards now exist** — card 1 `owed` (written,
-awaiting David's airplane-mode run) and cards 2–7 `needs-test`, **two of which are EXPECTED TO FAIL**
-(the offline scan reporting a real tag as unrecognized; the cart not surviving a reload). A card that
-predicts its own failure is still a card — the hole is now recorded rather than rediscovered.
+mechanism was located from code on 2026-08-23 and cards now exist. **TEN as of ledger #206** — cards
+1, 2, 8, 9, 10 `owed` (written, awaiting David's run) and 3–7 `needs-test`.
+🔴 **CARD 2 WAS WRITTEN THE SAME DAY AS *EXPECTED TO FAIL* AND HAS BEEN REWRITTEN TO ITS PASSING
+FORM — the resolver's third state landed in ledger #206**, so the offline scan now names the server
+instead of the tag. **CARD 4 IS STILL EXPECTED TO FAIL** (the cart does not survive a reload) and is
+deliberately left that way: cart persistence was NOT in this build's scope.
+Cards 8/9/10 came with that fix — the count loop's honest-but-still-usable sheet, the mirrored-defect
+guard (**a real miss must STILL read as a miss**), and the QR profile. A card that predicts its own
+failure is still a card — the hole is recorded rather than rediscovered.
 
 ---
 
