@@ -332,6 +332,257 @@ function discountLine(description: string, amount: number): Record<string, unkno
  * Returns `{ status, body }` instead of writing to `res` — the 8 former `return res.*` sites map
  * one-for-one, so the HTTP contract of the endpoint is unchanged for its remaining caller.
  */
+/**
+ * buildQboInvoiceLines — assemble the QuickBooks invoice Line[] for one Cultivar order.
+ *
+ * PURPOSE:      the payload half of pushQboInvoice, as a PURE function of already-fetched rows,
+ *               so the LINES CAN BE ASSERTED WITHOUT QUICKBOOKS. Extracted 2026-08-24 with the
+ *               #104 fix: a test that asserts a 200 from QBO inherits whatever the payload says,
+ *               and this is the file that put an unvalidated internal string on a customer's
+ *               invoice (txnId=436). The payload is the thing that has to be proven.
+ * DEPENDENCIES: orderItemName / orderItemAnchor (shared line-name resolver), discountLine,
+ *               taxExemptionLabel (shared D-40 presenter). NO db, NO fetch, NO clock.
+ * OUTPUTS:      Line[] — SalesItemLine objects, in invoice order: goods → tier discount →
+ *               services (or legacy addons) → tax. The caller reconciles the sum and pushes.
+ *
+ * ⚠️ MOVED VERBATIM out of pushQboInvoice — every branch, comment and TRACE emit is byte-identical
+ *    to what shipped, except the single #104 description change. Proven by diff at extraction time,
+ *    deliberately NOT rewritten: this is the path QBO error 6070 already scarred once, days before
+ *    the LAWNS demo, so it was made TESTABLE without being made DIFFERENT.
+ */
+export function buildQboInvoiceLines(args: {
+  order:             any;
+  business:          any;
+  orderItems:        any[] | null;
+  serviceSelections: any[] | null;
+  orderAddons:       any[] | null;
+  useNewModel:       boolean;
+  order_id:          string;
+}): unknown[] {
+  const { order, business, orderItems, serviceSelections, orderAddons, useNewModel, order_id } = args;
+  const lines: unknown[] = [];
+
+  // D-43: read the STORED per-line breakdown (retail_unit/discount_pct/discount_amt — via select('*'))
+  // so the pushed invoice SHOWS the discount as its OWN line (goods at retail → an explicit discount
+  // line), never a silently-net rate. GATED on a discount actually applying: a non-discounted (retail)
+  // order pushes goods at net EXACTLY as before → zero regression; only a discounted order carries the
+  // retail-goods + negative-discount representation. Historical rows (null retail_unit) → net lines, no
+  // discount line (omit-not-fake, D-9). The invoice total is unchanged (retail − discount === net).
+  const goodsRows = (orderItems || []) as any[];
+  const qbHasBreakdown = goodsRows.length > 0 && goodsRows.every((it: any) => it.retail_unit != null);
+  const qbDiscountTotal = qbHasBreakdown
+    ? Math.round(goodsRows.reduce((s: number, it: any) => s + Number(it.discount_amt ?? 0), 0) * 100) / 100 : 0;
+  const qbShowDiscount = qbHasBreakdown && qbDiscountTotal > 0;
+  const qbDiscPct = goodsRows.find((it: any) => Number(it.discount_amt ?? 0) > 0)?.discount_pct ?? 0;
+
+  for (const item of goodsRows) {
+    // Name via the shared resolver (the stock line's name — the lot IS the variety).
+    const name      = orderItemName(item as any);
+    const container = item.business_inventory?.size ?? null;
+    const anchor    = orderItemAnchor(item as any);
+    console.log('[TRACE:QBO] invoice line — dual anchor', { anchor, name, container });
+    // Goods at RETAIL when a discount applies (the discount line below shows the tier came off), else net.
+    const lineAmount = qbShowDiscount
+      ? Math.round(Number(item.retail_unit) * Number(item.quantity) * 100) / 100
+      : Number(item.subtotal);
+    const lineUnit = qbShowDiscount ? Number(item.retail_unit) : Number(item.unit_price);
+    lines.push({
+      Description: container ? `${name} — ${container}` : name,
+      Amount: lineAmount,
+      DetailType: 'SalesItemLineDetail',
+      SalesItemLineDetail: {
+        UnitPrice: lineUnit,
+        Qty: item.quantity,
+        ItemRef: { value: '1', name: 'Services' },
+      },
+    });
+  }
+
+  // ONE explicit discount line (negative SalesItemLine — consistent with this invoice's own
+  // all-SalesItemLine convention, incl. its manual tax line) so the 10% shows on the invoice, not
+  // baked into a net rate. Reads the STORED discount total; never recomputes.
+  if (qbShowDiscount) {
+    lines.push(discountLine(`Discount${qbDiscPct > 0 ? ` (${qbDiscPct}% off)` : ''}`, qbDiscountTotal));
+    console.log('[TRACE:QBO] invoice discount line from stored breakdown', { discountTotal: qbDiscountTotal, pct: qbDiscPct });
+  }
+
+  if (useNewModel) {
+    // ── New model: service_offerings lines ────────────────────────────────
+    for (const sel of serviceSelections || []) {
+      const offering = sel.service_offerings;
+      if (!offering) continue;
+
+      const isNetting  = offering.trigger_transport_mode === 'self' && offering.category === 'addon';
+      const isTransport = offering.category === 'transport';
+
+      // ── D-48: an owner price-override pushes as RETAIL + an explicit adjustment line ─────────
+      // THE SCAR: this branch used to push Amount = subtotal (the overridden $1000) alongside
+      // UnitPrice 225 × Qty 7, and QuickBooks REJECTED the whole invoice — 6070 "Amount is not
+      // equal to UnitPrice * Qty. Supplied value:1,000". QBO was the first thing in the chain that
+      // multiplied rate × qty; TRACE never checked that a line was internally consistent.
+      // Now the override IS the line's discount, so the service line multiplies correctly
+      // (225 × 7 = 1575) and the $575 rides the SAME negative-Amount mechanism as the tier
+      // discount above. GATED on an override actually applying: a normal order pushes byte-
+      // identical to before (unit_price_at_time × quantity === subtotal holds for every
+      // non-overridden row — flat services store qty 1) → zero regression, same discipline as D-43.
+      const svcQty    = Number(sel.quantity) || 0;
+      const svcUnit   = Number(sel.unit_price_at_time) || 0;
+      const svcNet    = Number(sel.subtotal) || 0;
+      const svcRetail = Math.round(svcUnit * svcQty * 100) / 100;
+      const svcAdj    = Math.round((svcRetail - svcNet) * 100) / 100;   // >0 giveaway · <0 surcharge
+      const svcOverridden = sel.is_manual_override === true && Math.abs(svcAdj) >= 0.005;
+      // Historical override rows predate the required-reason rule → omit rather than invent (D-9).
+      const svcReason = (sel.override_reason ?? '').trim();
+
+      if (isNetting && order.netting_declined) {
+        lines.push({
+          Description: 'Protective travel netting — DECLINED by customer (TX TCC Ch.725 waiver signed)',
+          Amount: 0,
+          DetailType: 'SalesItemLineDetail',
+          SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
+        });
+      } else if (svcOverridden) {
+        // The service at its RETAIL baseline — internally consistent, so QBO accepts it.
+        lines.push({
+          Description: `${offering.name} × ${svcQty}`,
+          Amount: svcRetail,
+          DetailType: 'SalesItemLineDetail',
+          SalesItemLineDetail: { UnitPrice: svcUnit, Qty: svcQty, ItemRef: { value: '1', name: 'Services' } },
+        });
+        // …and the concession as its own line, naming WHAT — but NOT WHY. Neutral "price adjusted"
+        // wording reads correctly in BOTH directions (a surcharge pushes a positive Amount).
+        //
+        // 🔴 #104 (2026-08-24): THE REASON DOES NOT GO TO QUICKBOOKS. It used to be interpolated
+        // here — `(reason: ${svcReason})` — and QB invoice txnId=436 (order 2661dbe4, 07/16/2026,
+        // status "Opened" = SENT AND VIEWED) carried "price adjusted (reason: must be filled if
+        // discount applied cannot be EMPTY)" to a customer. `override_reason` is an INTERNAL
+        // attribution field (R-7: "the platform records WHO DID WHAT AND WHEN"); nothing ever
+        // decided it was customer copy, and its CONTENT is validated nowhere — three gates check
+        // only that it is non-empty (tech-debt #105), so any string a seller types reaches the
+        // invoice. The concession is still fully visible here as a NAMED, SIGNED amount; only the
+        // free text is withheld. The reason is NOT lost: it stays on the row, on the internal
+        // order screen, and in the [TRACE:QBO] line immediately below.
+        lines.push(discountLine(
+          `${offering.name} — price adjusted`,
+          svcAdj,
+        ));
+        console.log('[TRACE:QBO] service price-override line (D-48) — retail + adjustment, not a bare net', {
+          offering: offering.name, unitPrice: svcUnit, qty: svcQty, retail: svcRetail,
+          adjustment: svcAdj, charged: svcNet, reason: svcReason || null,
+          reconciles: Math.abs((svcRetail - svcAdj) - svcNet) <= 0.005,
+        });
+      } else if (isTransport && Number(sel.subtotal) === 0) {
+        if (offering.transport_mode !== 'self') {
+          lines.push({
+            Description: `${business.name} — ${offering.name}`,
+            Amount: 0,
+            DetailType: 'SalesItemLineDetail',
+            SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
+          });
+        }
+        // self-transport with $0 price → no line item needed
+      } else if (Number(sel.subtotal) > 0) {
+        lines.push({
+          Description: `${offering.name} × ${sel.quantity}`,
+          Amount: Number(sel.subtotal),
+          DetailType: 'SalesItemLineDetail',
+          SalesItemLineDetail: {
+            UnitPrice: Number(sel.unit_price_at_time),
+            Qty: sel.quantity,
+            ItemRef: { value: '1', name: 'Services' },
+          },
+        });
+      }
+    }
+  } else {
+    // ── Legacy model: order_addons fallback ───────────────────────────────
+    for (const oa of orderAddons || []) {
+      const addon     = oa.addons;
+      const isNetting = addon.trigger_rule === 'transport=self';
+      const declined  = isNetting && order.netting_declined;
+
+      if (declined) {
+        lines.push({
+          Description: 'Protective travel netting — DECLINED by customer (TX TCC Ch.725 waiver signed)',
+          Amount: 0,
+          DetailType: 'SalesItemLineDetail',
+          SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
+        });
+      } else {
+        lines.push({
+          Description: `${addon.name} × ${oa.quantity}`,
+          Amount: Number(oa.subtotal),
+          DetailType: 'SalesItemLineDetail',
+          SalesItemLineDetail: {
+            UnitPrice: Number(oa.unit_price),
+            Qty: oa.quantity,
+            ItemRef: { value: '1', name: 'Services' },
+          },
+        });
+      }
+    }
+
+    // Legacy transport line
+    const hasNettingAddon = (orderAddons || []).some((oa: any) => oa.addons?.trigger_rule === 'transport=self');
+    if (!hasNettingAddon && order.transport_method !== 'self') {
+      if (order.transport_method === 'install') {
+        // install_price removed from cultivar_plants (stock fact — moved to service_offerings).
+        // Legacy install line defaults to 0 until service_offerings pricing is wired.
+        const installUnitPrice = 0;
+        const installQty       = (orderItems || [])[0]?.quantity ?? 1;
+        lines.push({
+          Description: `Installation service · ${installQty} plant${installQty > 1 ? 's' : ''}`,
+          Amount: installUnitPrice * installQty,
+          DetailType: 'SalesItemLineDetail',
+          SalesItemLineDetail: {
+            UnitPrice: installUnitPrice,
+            Qty: installQty,
+            ItemRef: { value: '1', name: 'Services' },
+          },
+        });
+      } else {
+        lines.push({
+          Description: `${business.name} staff transport`,
+          Amount: 0,
+          DetailType: 'SalesItemLineDetail',
+          SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
+        });
+      }
+    }
+  }
+
+  // Tax line (D-40) — render the order's PERSISTED tax state; NO hardcoded 8.25%:
+  //   • exempt order      → a $0 "Tax exempt — <reason>[· cert]" line (documents the exemption);
+  //   • taxed order       → the tax with the % DERIVED from amount/subtotal (never a fabricated rate);
+  //   • not-identified    → no tax was charged → no tax line (the redline lives pre-invoice, in the app).
+  const taxAmount = Number(order.tax_amount);
+  if (order.tax_exempt_applied === true) {
+    const cert = String(order.tax_exempt_cert_ref ?? '').trim();
+    lines.push({
+      Description: `Tax exempt — ${taxExemptionLabel(order.tax_exempt_reason)}${cert ? ` · cert ${cert}` : ''}`,
+      Amount: 0,
+      DetailType: 'SalesItemLineDetail',
+      SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
+    });
+    console.log('[TRACE:TAX] QBO invoice — tax-exempt line', { order_id, reason: order.tax_exempt_reason, cert });
+  } else if (taxAmount > 0) {
+    const sub = Number(order.subtotal) || 0;
+    const taxPct = sub > 0 ? Math.round((taxAmount / sub) * 10000) / 100 : 0;
+    lines.push({
+      Description: `Sales Tax (${taxPct}%)`,
+      Amount: taxAmount,
+      DetailType: 'SalesItemLineDetail',
+      SalesItemLineDetail: {
+        UnitPrice: taxAmount,
+        Qty: 1,
+        ItemRef: { value: '1', name: 'Services' },
+      },
+    });
+  }
+
+  return lines;
+}
+
 export async function pushQboInvoice(
   order_id: string,
   business_id: string,
@@ -406,214 +657,11 @@ export async function pushQboInvoice(
     }
 
     // Build QB line items
-    const lines: unknown[] = [];
-
-    // D-43: read the STORED per-line breakdown (retail_unit/discount_pct/discount_amt — via select('*'))
-    // so the pushed invoice SHOWS the discount as its OWN line (goods at retail → an explicit discount
-    // line), never a silently-net rate. GATED on a discount actually applying: a non-discounted (retail)
-    // order pushes goods at net EXACTLY as before → zero regression; only a discounted order carries the
-    // retail-goods + negative-discount representation. Historical rows (null retail_unit) → net lines, no
-    // discount line (omit-not-fake, D-9). The invoice total is unchanged (retail − discount === net).
-    const goodsRows = (orderItems || []) as any[];
-    const qbHasBreakdown = goodsRows.length > 0 && goodsRows.every((it: any) => it.retail_unit != null);
-    const qbDiscountTotal = qbHasBreakdown
-      ? Math.round(goodsRows.reduce((s: number, it: any) => s + Number(it.discount_amt ?? 0), 0) * 100) / 100 : 0;
-    const qbShowDiscount = qbHasBreakdown && qbDiscountTotal > 0;
-    const qbDiscPct = goodsRows.find((it: any) => Number(it.discount_amt ?? 0) > 0)?.discount_pct ?? 0;
-
-    for (const item of goodsRows) {
-      // Name via the shared resolver (the stock line's name — the lot IS the variety).
-      const name      = orderItemName(item as any);
-      const container = item.business_inventory?.size ?? null;
-      const anchor    = orderItemAnchor(item as any);
-      console.log('[TRACE:QBO] invoice line — dual anchor', { anchor, name, container });
-      // Goods at RETAIL when a discount applies (the discount line below shows the tier came off), else net.
-      const lineAmount = qbShowDiscount
-        ? Math.round(Number(item.retail_unit) * Number(item.quantity) * 100) / 100
-        : Number(item.subtotal);
-      const lineUnit = qbShowDiscount ? Number(item.retail_unit) : Number(item.unit_price);
-      lines.push({
-        Description: container ? `${name} — ${container}` : name,
-        Amount: lineAmount,
-        DetailType: 'SalesItemLineDetail',
-        SalesItemLineDetail: {
-          UnitPrice: lineUnit,
-          Qty: item.quantity,
-          ItemRef: { value: '1', name: 'Services' },
-        },
-      });
-    }
-
-    // ONE explicit discount line (negative SalesItemLine — consistent with this invoice's own
-    // all-SalesItemLine convention, incl. its manual tax line) so the 10% shows on the invoice, not
-    // baked into a net rate. Reads the STORED discount total; never recomputes.
-    if (qbShowDiscount) {
-      lines.push(discountLine(`Discount${qbDiscPct > 0 ? ` (${qbDiscPct}% off)` : ''}`, qbDiscountTotal));
-      console.log('[TRACE:QBO] invoice discount line from stored breakdown', { discountTotal: qbDiscountTotal, pct: qbDiscPct });
-    }
-
-    if (useNewModel) {
-      // ── New model: service_offerings lines ────────────────────────────────
-      for (const sel of serviceSelections || []) {
-        const offering = sel.service_offerings;
-        if (!offering) continue;
-
-        const isNetting  = offering.trigger_transport_mode === 'self' && offering.category === 'addon';
-        const isTransport = offering.category === 'transport';
-
-        // ── D-48: an owner price-override pushes as RETAIL + an explicit adjustment line ─────────
-        // THE SCAR: this branch used to push Amount = subtotal (the overridden $1000) alongside
-        // UnitPrice 225 × Qty 7, and QuickBooks REJECTED the whole invoice — 6070 "Amount is not
-        // equal to UnitPrice * Qty. Supplied value:1,000". QBO was the first thing in the chain that
-        // multiplied rate × qty; TRACE never checked that a line was internally consistent.
-        // Now the override IS the line's discount, so the service line multiplies correctly
-        // (225 × 7 = 1575) and the $575 rides the SAME negative-Amount mechanism as the tier
-        // discount above. GATED on an override actually applying: a normal order pushes byte-
-        // identical to before (unit_price_at_time × quantity === subtotal holds for every
-        // non-overridden row — flat services store qty 1) → zero regression, same discipline as D-43.
-        const svcQty    = Number(sel.quantity) || 0;
-        const svcUnit   = Number(sel.unit_price_at_time) || 0;
-        const svcNet    = Number(sel.subtotal) || 0;
-        const svcRetail = Math.round(svcUnit * svcQty * 100) / 100;
-        const svcAdj    = Math.round((svcRetail - svcNet) * 100) / 100;   // >0 giveaway · <0 surcharge
-        const svcOverridden = sel.is_manual_override === true && Math.abs(svcAdj) >= 0.005;
-        // Historical override rows predate the required-reason rule → omit rather than invent (D-9).
-        const svcReason = (sel.override_reason ?? '').trim();
-
-        if (isNetting && order.netting_declined) {
-          lines.push({
-            Description: 'Protective travel netting — DECLINED by customer (TX TCC Ch.725 waiver signed)',
-            Amount: 0,
-            DetailType: 'SalesItemLineDetail',
-            SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
-          });
-        } else if (svcOverridden) {
-          // The service at its RETAIL baseline — internally consistent, so QBO accepts it.
-          lines.push({
-            Description: `${offering.name} × ${svcQty}`,
-            Amount: svcRetail,
-            DetailType: 'SalesItemLineDetail',
-            SalesItemLineDetail: { UnitPrice: svcUnit, Qty: svcQty, ItemRef: { value: '1', name: 'Services' } },
-          });
-          // …and the concession as its own line, naming WHAT and WHY. Neutral "price adjusted"
-          // wording reads correctly in BOTH directions (a surcharge pushes a positive Amount).
-          lines.push(discountLine(
-            `${offering.name} — price adjusted${svcReason ? ` (reason: ${svcReason})` : ''}`,
-            svcAdj,
-          ));
-          console.log('[TRACE:QBO] service price-override line (D-48) — retail + adjustment, not a bare net', {
-            offering: offering.name, unitPrice: svcUnit, qty: svcQty, retail: svcRetail,
-            adjustment: svcAdj, charged: svcNet, reason: svcReason || null,
-            reconciles: Math.abs((svcRetail - svcAdj) - svcNet) <= 0.005,
-          });
-        } else if (isTransport && Number(sel.subtotal) === 0) {
-          if (offering.transport_mode !== 'self') {
-            lines.push({
-              Description: `${business.name} — ${offering.name}`,
-              Amount: 0,
-              DetailType: 'SalesItemLineDetail',
-              SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
-            });
-          }
-          // self-transport with $0 price → no line item needed
-        } else if (Number(sel.subtotal) > 0) {
-          lines.push({
-            Description: `${offering.name} × ${sel.quantity}`,
-            Amount: Number(sel.subtotal),
-            DetailType: 'SalesItemLineDetail',
-            SalesItemLineDetail: {
-              UnitPrice: Number(sel.unit_price_at_time),
-              Qty: sel.quantity,
-              ItemRef: { value: '1', name: 'Services' },
-            },
-          });
-        }
-      }
-    } else {
-      // ── Legacy model: order_addons fallback ───────────────────────────────
-      for (const oa of orderAddons || []) {
-        const addon     = oa.addons;
-        const isNetting = addon.trigger_rule === 'transport=self';
-        const declined  = isNetting && order.netting_declined;
-
-        if (declined) {
-          lines.push({
-            Description: 'Protective travel netting — DECLINED by customer (TX TCC Ch.725 waiver signed)',
-            Amount: 0,
-            DetailType: 'SalesItemLineDetail',
-            SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
-          });
-        } else {
-          lines.push({
-            Description: `${addon.name} × ${oa.quantity}`,
-            Amount: Number(oa.subtotal),
-            DetailType: 'SalesItemLineDetail',
-            SalesItemLineDetail: {
-              UnitPrice: Number(oa.unit_price),
-              Qty: oa.quantity,
-              ItemRef: { value: '1', name: 'Services' },
-            },
-          });
-        }
-      }
-
-      // Legacy transport line
-      const hasNettingAddon = (orderAddons || []).some((oa: any) => oa.addons?.trigger_rule === 'transport=self');
-      if (!hasNettingAddon && order.transport_method !== 'self') {
-        if (order.transport_method === 'install') {
-          // install_price removed from cultivar_plants (stock fact — moved to service_offerings).
-          // Legacy install line defaults to 0 until service_offerings pricing is wired.
-          const installUnitPrice = 0;
-          const installQty       = (orderItems || [])[0]?.quantity ?? 1;
-          lines.push({
-            Description: `Installation service · ${installQty} plant${installQty > 1 ? 's' : ''}`,
-            Amount: installUnitPrice * installQty,
-            DetailType: 'SalesItemLineDetail',
-            SalesItemLineDetail: {
-              UnitPrice: installUnitPrice,
-              Qty: installQty,
-              ItemRef: { value: '1', name: 'Services' },
-            },
-          });
-        } else {
-          lines.push({
-            Description: `${business.name} staff transport`,
-            Amount: 0,
-            DetailType: 'SalesItemLineDetail',
-            SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
-          });
-        }
-      }
-    }
-
-    // Tax line (D-40) — render the order's PERSISTED tax state; NO hardcoded 8.25%:
-    //   • exempt order      → a $0 "Tax exempt — <reason>[· cert]" line (documents the exemption);
-    //   • taxed order       → the tax with the % DERIVED from amount/subtotal (never a fabricated rate);
-    //   • not-identified    → no tax was charged → no tax line (the redline lives pre-invoice, in the app).
-    const taxAmount = Number(order.tax_amount);
-    if (order.tax_exempt_applied === true) {
-      const cert = String(order.tax_exempt_cert_ref ?? '').trim();
-      lines.push({
-        Description: `Tax exempt — ${taxExemptionLabel(order.tax_exempt_reason)}${cert ? ` · cert ${cert}` : ''}`,
-        Amount: 0,
-        DetailType: 'SalesItemLineDetail',
-        SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
-      });
-      console.log('[TRACE:TAX] QBO invoice — tax-exempt line', { order_id, reason: order.tax_exempt_reason, cert });
-    } else if (taxAmount > 0) {
-      const sub = Number(order.subtotal) || 0;
-      const taxPct = sub > 0 ? Math.round((taxAmount / sub) * 10000) / 100 : 0;
-      lines.push({
-        Description: `Sales Tax (${taxPct}%)`,
-        Amount: taxAmount,
-        DetailType: 'SalesItemLineDetail',
-        SalesItemLineDetail: {
-          UnitPrice: taxAmount,
-          Qty: 1,
-          ItemRef: { value: '1', name: 'Services' },
-        },
-      });
-    }
+    // #104 / testability: the lines are assembled by the pure buildQboInvoiceLines seam above, so
+    // the PAYLOAD is assertable without QuickBooks (qboInvoiceLines.test.ts). Behaviour unchanged.
+    const lines = buildQboInvoiceLines({
+      order, business, orderItems, serviceSelections, orderAddons, useNewModel, order_id,
+    });
 
     // ── RECONCILE the assembled invoice against what TRACE actually charged (D-48) ───────────────
     // Every line is now internally consistent (Amount === UnitPrice × Qty), which is what QBO

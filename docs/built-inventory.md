@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-08-24 (**#212 — 🔨 THE MODULE OFF SWITCH. ONE net-new body entry, ONE amended.** A non-core module can now be turned OFF from the marketplace; the write PROVES it wrote (`enabledAfter`, R-12) and the round trip is pinned by a test that counts DB calls and rows. **R-1 lands: core renders no switch at all — absent, not greyed — derived from `billing` via `!enabledByDefault`.** ⚠️ **The FUZZ does not exist and was not faked** — a disabled tile still reads `available` and its route still works (tech-debt #100/#101); R-2/R-3 stay OPEN.)
+# Last updated: 2026-08-24 (**#215 — 🔨 THE QB INVOICE STOPS PRINTING THE OVERRIDE REASON. ONE net-new body entry.** The adjusted line now reads `<Service> — price adjusted`; the concession stays visible as a named signed amount and the reason stays INTERNAL. **The payload is asserted by a test for the first time — 27 probes against invoice 436 reconstructed** — because a 200 from QuickBooks means accepted, not correct. ⚠️ **FIX 2 STOPPED AT ITS GATE: `'1'` is the only QB item id we hold anywhere; every line still books as `Services` (#106).**)
 
 
 > 📐 **CAMPAIGN LIFECYCLE — SCOPING + ESTIMATE (2026-08-23, ledger #192/#192b).** NOT a capability entry: **nothing was built.** A scoping document answering David's *"I can add but not edit or cancel or delete"* with nine questions, ten site keys, a proven F1/F2/F3 dependency order, three scopes (**MINIMUM ~2–3 · COHERENT ~5–7 · COMPLETE ~11–14 Thunder prompts; MINIMUM and COHERENT need ZERO migrations**) and eight rulings owed. Read it before ANY campaign build — it is the answer to "has this been scoped?" and its first finding is that the EDIT FORM ALREADY EXISTS as the create form (`Campaigns.tsx:120-198`). → [`docs/audits/campaign-lifecycle-scoping-2026-08-23.md`](audits/campaign-lifecycle-scoping-2026-08-23.md) · predecessor [`social-campaign-path-recon-2026-08-22.md`](audits/social-campaign-path-recon-2026-08-22.md)
@@ -894,6 +894,41 @@ marketplace page."
 **Consumed by:** `packages/cultivar-os/src/App.tsx` (`<BusinessProvider businessType="nursery">`), all Cultivar pages via `useBusinessContext()`.
 
 **Security note (fixed 2026-06-04, commit 8792c71):** Member path filters by `business_type` after fetching — `memberBiz?.business_type === businessType` must match before the member resolution is accepted. This prevents cross-vertical data exposure (audit finding #13). If a user is a member of multiple businesses in the same vertical, `.single()` will fail — acceptable for v1.
+
+---
+
+## QBO Invoice Payload — what the customer actually receives — added 2026-08-24
+
+**What:** The QuickBooks invoice `Line[]` for one Cultivar order, and **the first test anywhere that
+asserts what we SEND rather than what QuickBooks REPLIED.** Built because QB invoice **txnId=436**
+(order `2661dbe4`, 07/16/2026, status "Opened" = sent AND viewed) printed an internal attribution
+field to a customer: *"Placement Service — price adjusted (reason: must be filled if discount applied
+cannot be EMPTY)"*. QuickBooks returned **200** — because 200 means accepted, not correct.
+**Status:** 🟡 BUILDER-COMPLETE — owner-proof owed (ledger #215) | **Vertical:** cultivar | **Type:** correctness / integration
+**Location:** `packages/cultivar-os/api/qbo/invoice/cultivar.ts` → **`buildQboInvoiceLines()`** (the pure
+payload seam, extracted 2026-08-24 — no db, no fetch, no clock) · test
+`packages/cultivar-os/api/qbo/invoice/qboInvoiceLines.test.ts` (**27 probes**, fixture = invoice 436
+reconstructed from the rendered document).
+
+**The change (#104):** `override_reason` is **no longer interpolated into the QB line description.**
+The adjusted line reads `<Service> — price adjusted` and the concession stays fully visible as a
+**named, signed amount**. ✅ **The reason is NOT lost** — it stays on the row, on the internal
+order-detail screen, and in the `[TRACE:QBO]` emit (R-7 attribution is internal by design).
+
+**⚠️ WHAT IS DELIBERATELY UNCHANGED, so absence is not read as coverage:**
+- **The Confirmation receipt still shows the reason** — `OrderTotals.tsx:97`, a component shared with
+  the internal order screen; **one component, two audiences.** Scoped out by David for this pass.
+- **Every line still books to hardcoded QB item `1` / "Services"** (#106) — **FIX 2 STOPPED AT ITS
+  GATE:** `'1'` is the only QuickBooks item id the platform holds anywhere (no config, no env var, no
+  column, no lookup) and there is **no code path that can read a QB item list.** Needs a product item
+  id from David. **A push that fails is worse than a push that mis-categorizes.**
+- The tax line, the deploy-window strip and the edit path (#105) — untouched.
+
+**Owner test:** `docs/owner-tests/quickbooks-invoice-full-surface-test.md` (**NEW** — this capability
+had no standing test at all until now, which is why the invoice went out). **Nothing marked covered.**
+
+**Tech debt:** #104 (invoice half closed, receipt half open) · #105 · #106 (gate-blocked) · #107.
+**Recon:** `docs/decisions/2026-08-24-quickbooks-invoice-push-recon.md`.
 
 ---
 
