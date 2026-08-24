@@ -71,7 +71,8 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, X, ScanLine, CloudOff, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
-import { SyncEngine } from '@trace/shared/sync';
+import { SyncEngine, storageWarning } from '@trace/shared/sync';
+import type { StoreWriteResult } from '@trace/shared/sync';
 import {
   resolveStockLine, variantGroupSlug, resolveCountTarget, sameSizeLabel, SIZE_REQUIRED_MESSAGE, readFailureMessage,
   type StockLineResolution, type CountSibling,
@@ -191,6 +192,10 @@ export function InventoryCount() {
   // Connectivity — reactive, for the start-guard + the offline indicator.
   const [online, setOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
   const [pending, setPending] = useState(0); // ops waiting to sync
+  // 🔴 CAN THIS PHONE HOLD ANYTHING AT ALL? Probed ONCE at session start (2026-08-24), not
+  // discovered at the first failed save. A Safari Private tab and a phone with site data turned
+  // off both look completely normal until a write is attempted — and by then a row is walked.
+  const [storageIssue, setStorageIssue] = useState<Extract<StoreWriteResult, { ok: false }> | null>(null);
 
   // ── SYNC ENGINE ───────────────────────────────────────────
   const engine = useMemo(
@@ -204,6 +209,11 @@ export function InventoryCount() {
     if (!engine) return;
     engine.start();
     setPending(engine.pendingCount());
+    // Ask the store one question before she walks. A write-then-read-back on a sentinel key —
+    // cheap, and it catches the accept-but-do-not-persist case a write-only probe would miss.
+    const st = engine.storageStatus();
+    setStorageIssue(st.ok ? null : st);
+    if (TRACE_COUNT) console.log('[TRACE:COUNT] storage probe —', st.ok ? 'usable' : `UNUSABLE (${st.reason}): ${st.message}`);
     return () => engine.stop();
   }, [engine]);
 
@@ -772,9 +782,19 @@ export function InventoryCount() {
         {counting && <span style={S.tally}>{counted.length} counted</span>}
       </div>
 
+      {/* 🔴 STORAGE UNUSABLE — ranked ABOVE the offline note deliberately. Both can be true at
+          once, and this one is the worse fact: offline means "held on the phone"; this means
+          "nothing can be held at all", which is the assumption the offline note depends on. */}
+      {counting && storageIssue && (
+        <div style={S.storageWarn}>
+          <CloudOff size={15} /> {storageWarning(storageIssue)}
+        </div>
+      )}
       {counting && !online && (
         <div style={S.offlineNote}>
-          <CloudOff size={15} /> Offline — counts are saved on this phone and will sync when you're back in signal.
+          <CloudOff size={15} /> {storageIssue
+            ? "Offline — and this phone can't store anything, so counts CANNOT be saved right now."
+            : "Offline — counts are saved on this phone and will sync when you're back in signal."}
         </div>
       )}
       {counting && pending > 0 && (
@@ -792,6 +812,7 @@ export function InventoryCount() {
         <div style={S.card}>
           <ScanLine size={40} color="#27500A" style={{ marginBottom: 12 }} />
           <p style={S.lead}>Walk the lot and scan each plant tag. Pick which size you're counting, enter how many, save, and move to the next. Hit Complete when you're done.</p>
+          {storageIssue && <div style={S.error}>{storageWarning(storageIssue)}</div>}
           {!online && <div style={S.warn}>You're offline — connect to start. Once a count is going, dead zones are fine.</div>}
           {error && <div style={S.error}>{error}</div>}
           <button style={(busy || !online || !userId) ? S.btnDisabled : S.btnPrimary} disabled={busy || !online || !userId} onClick={() => void startCount()}>
@@ -974,6 +995,7 @@ const S = {
   backBtn:    { background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' } as React.CSSProperties,
   title:      { fontSize: '1.25rem', fontWeight: 700, color: '#1a2e0a', margin: 0 } as React.CSSProperties,
   tally:      { background: '#27500A', color: '#fff', borderRadius: 20, padding: '3px 12px', fontSize: '0.82rem', fontWeight: 700 } as React.CSSProperties,
+  storageWarn:{ display: 'flex', alignItems: 'center', gap: 8, background: '#fef2f2', color: '#991b1b', border: '1px solid #A32D2D', borderRadius: 10, padding: '0.55rem 0.85rem', fontSize: '0.82rem', marginBottom: 10, fontWeight: 600 } as React.CSSProperties,
   offlineNote:{ display: 'flex', alignItems: 'center', gap: 8, background: '#e5e7eb', color: '#374151', borderRadius: 10, padding: '0.55rem 0.85rem', fontSize: '0.82rem', marginBottom: 10 } as React.CSSProperties,
   syncBtn:    { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', minHeight: 40, background: '#fff', color: '#27500A', border: '1.5px solid #27500A', borderRadius: 10, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', marginBottom: 10 } as React.CSSProperties,
   warn:       { background: '#fef3c7', color: '#92400e', borderRadius: 10, padding: '0.6rem 0.875rem', fontSize: '0.82rem', marginBottom: 12 } as React.CSSProperties,

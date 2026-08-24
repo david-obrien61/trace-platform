@@ -10,7 +10,7 @@
 
 export { SyncEngine } from './syncEngine';
 export type { SyncEngineOptions, InsertArgs, UpdateArgs, RpcArgs } from './syncEngine';
-export { NamespacedStore } from './store';
-export type { StorageAdapter } from './store';
+export { NamespacedStore, storageError, storageWarning } from './store';
+export type { StorageAdapter, StoreWriteResult, StoreFailureReason } from './store';
 export { OfflineQueue } from './offlineQueue';
 export type { OfflineOp, OpKind, UpdatePayload, RpcPayload, WriteStatus, WriteResult, DrainResult } from './types';

@@ -14,7 +14,8 @@
 // ============================================================
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { NamespacedStore } from './store';
+import { NamespacedStore, storageError } from './store';
+import type { StoreWriteResult } from './store';
 import { OfflineQueue } from './offlineQueue';
 import type { OfflineOp, UpdatePayload, RpcPayload, WriteResult, DrainResult } from './types';
 import { isConnectivityError } from '../utils/supabaseError';
@@ -72,6 +73,16 @@ export class SyncEngine {
   }
 
   pendingCount(): number { return this.queue.size(); }
+
+  /**
+   * 🔴 IS LOCAL STORAGE USABLE AT ALL? Ask BEFORE the walk, not at the first failed save.
+   *
+   * A count surface should say *"this device can't hold your counts"* before Lauren walks a row,
+   * because the alternative is discovering it after twenty lots — the difference between losing
+   * one entry and losing an afternoon. Cheap (one sentinel key, written and read back) and it
+   * answers the Safari-Private / storage-disabled case up front.
+   */
+  storageStatus(): StoreWriteResult { return this.queue.probe(); }
 
   // Client-generate an id so an insert's PK is known BEFORE the round-trip — the
   // session id can be referenced by its children while offline, and replay is
@@ -138,9 +149,40 @@ export class SyncEngine {
   // 'queued' (Save never fails in a dead zone). Online → 'applied' when it lands,
   // 'queued' if connectivity dropped mid-drain, 'failed' on a genuine reject.
   private async submit(op: OfflineOp): Promise<WriteResult> {
-    this.queue.enqueue(op);
+    const persisted = this.queue.enqueue(op);
     this.onChange?.(this.pendingCount());
-    if (TRACE_SYNC) console.log('[TRACE:SYNC] enqueue —', op.kind, op.table, 'clientId:', op.clientId, 'online:', this.isOnline(), 'by:', op.userId);
+    if (TRACE_SYNC) console.log('[TRACE:SYNC] enqueue —', op.kind, op.table, 'clientId:', op.clientId, 'online:', this.isOnline(), 'stored:', persisted.ok, 'by:', op.userId);
+
+    // ── THE LOCAL WRITE DID NOT PERSIST ──────────────────────────────────────────────────────
+    // 🔴 THIS BRANCH IS THE 2026-08-24 FIX, AND THE ONLINE HALF WAS WORSE THAN THE OFFLINE ONE.
+    // Before it existed, a store whose `setItem` throws (quota, Safari Private, site data
+    // blocked) produced:
+    //   OFFLINE → `queued`, under a banner reading "counts are saved on this phone" — nothing was.
+    //   ONLINE  → `applied`, with a drain of `applied:0 failed:0 remaining:0`. The op was never
+    //             persisted, so `queue.list()` was empty, the drain loop never ran, `stillQueued`
+    //             was false — and the code below concluded "not in the queue, so it landed."
+    // **`applied` is the strongest claim the engine can make, and it was being made over a
+    // database that had not been touched.** That is `submit` inferring success from an ABSENCE:
+    // A9 / D-9 (*absent is not empty*) on the write path, and R-12's class (*a write must prove
+    // it wrote*) arriving on the client side of the wire.
+    if (!persisted.ok) {
+      if (TRACE_SYNC) console.warn('[TRACE:SYNC] local queue write FAILED —', persisted.reason, persisted.message);
+      // OFFLINE: the queue was the only place this work could live, and it has nowhere to go.
+      // Say so. Never `queued` — that word promises a replay that cannot happen.
+      if (!this.isOnline()) {
+        return { status: 'failed', clientId: op.clientId, error: storageError(persisted) };
+      }
+      // ONLINE: the network is fine, so try the write DIRECTLY rather than removing a capability
+      // that still works. The drain cannot carry it (the op is not in the queue to be found), so
+      // this is the only path that reaches the database — and its REAL outcome is reported.
+      // On success this returns `applied` truthfully, where before it said `applied` falsely.
+      const res = await this.execute(op);
+      if (res === 'applied') return { status: 'applied', clientId: op.clientId };
+      const why = res === 'retry'
+        ? 'the connection dropped'
+        : (res as { failed: true; error: string }).error;
+      return { status: 'failed', clientId: op.clientId, error: `${storageError(persisted)} We tried to send it straight to the server instead and that did not work either (${why}).` };
+    }
 
     if (!this.isOnline()) return { status: 'queued', clientId: op.clientId };
 

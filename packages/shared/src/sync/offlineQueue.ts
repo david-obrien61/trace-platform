@@ -6,10 +6,16 @@
 //           drained (recon §4 — write-only queue, no consumer); the drain lives
 //           in syncEngine.
 // DEPENDENCIES: NamespacedStore (persistence), OfflineOp (envelope).
-// OUTPUTS:  OfflineQueue { list, enqueue, remove, size }.
+// OUTPUTS:  OfflineQueue { list, enqueue, remove, size, probe }.
+//
+// 🔴 ENQUEUE RETURNS WHETHER IT PERSISTED (2026-08-24). The queue's whole promise is DURABILITY
+// — an op survives a reload — and that promise is only kept if the underlying write landed. When
+// `store.save()` swallowed its failure, `enqueue()` returned normally over a queue that had not
+// grown, and every caller above it reported success. The outcome now travels up.
 // ============================================================
 
 import { NamespacedStore } from './store';
+import type { StoreWriteResult } from './store';
 import type { OfflineOp } from './types';
 
 const QUEUE_KEY = 'queue';
@@ -20,19 +26,26 @@ export class OfflineQueue {
 
   list(): OfflineOp[] { return this.store.load<OfflineOp[]>(QUEUE_KEY, []); }
 
-  private write(ops: OfflineOp[]): void { this.store.save(QUEUE_KEY, ops); }
+  private write(ops: OfflineOp[]): StoreWriteResult { return this.store.save(QUEUE_KEY, ops); }
 
-  // Idempotent enqueue — a clientId already present is a no-op (re-submit guard).
-  enqueue(op: OfflineOp): void {
+  /**
+   * Idempotent enqueue — a clientId already present is a no-op (re-submit guard).
+   * Returns whether the queue actually PERSISTED; an already-present op is `ok` because the
+   * durable state the caller wanted is already on disk.
+   */
+  enqueue(op: OfflineOp): StoreWriteResult {
     const ops = this.list();
-    if (ops.some(o => o.clientId === op.clientId)) return;
+    if (ops.some(o => o.clientId === op.clientId)) return { ok: true };
     ops.push(op);
-    this.write(ops);
+    return this.write(ops);
   }
 
-  remove(clientId: string): void {
-    this.write(this.list().filter(o => o.clientId !== clientId));
+  remove(clientId: string): StoreWriteResult {
+    return this.write(this.list().filter(o => o.clientId !== clientId));
   }
 
   size(): number { return this.list().length; }
+
+  /** Is the backing store usable at all? Delegates to the one probe (§6 r8, no second copy). */
+  probe(): StoreWriteResult { return this.store.probe(); }
 }
