@@ -142,6 +142,15 @@ David runs a batch of real receipts through and learns three things from the [TR
 
 ---
 
+### The email the register types is the email the business holds
+STATUS: gap
+SCOPE: platform
+ARC: ocr-doc-routing
+MAPS-TO: 3.7
+PIECES: checkout_customer_capture, customer_upsert_fill_rules, person_spine_contact_fields
+NEEDS: David to promote this off `gap` — it is written AS-BUILT from the 2026-08-25 defect and prompt, not dictated. The open question inside it is the one the build had to answer without a story: **is email SUPPLIED-WINS (a typed value replaces the stored one) or FILL-ONLY (it only ever fills a blank)?** Shipped as supplied-wins, on the reasoning below; a different ruling is a one-line change.
+A repeat customer is rung up at the counter. The cashier looks them up, sees the form, and types or corrects the email — and **the invoice is sent to that address**. So the business must afterwards HOLD that address: the next campaign, the next statement, the next receipt has to reach the same inbox the customer just gave. Before 2026-08-25 it did not — the shared find-or-create built its UPDATE payload from a list of offered fields and `email` was not one of them, so a NEW customer got their email (the INSERT carried it separately) and **a REPEAT customer's typed email was silently discarded**, invoice already sent. _Measured: customer `0ee368fe` — `email` `''`, `updated_at` the same second as the order, billing address from the same payload persisted correctly._ **The rule that makes this safe rather than destructive: an email left BLANK must never blank a stored one** — absent is not empty (A9), and a checkout that simply did not collect one must leave a curated address alone. Email is deliberately the ONE field on this path that a supplied value REPLACES rather than fills, because the register is where a customer corrects it; every other field stays fill-never-clobber. _Distinct from the `Owner-configurable form fields + missing-data flag` story, which is about email being ABSENT AT THE SOURCE on OCR'd invoices — this one is about a typed email failing to persist._ _Grounded: ledger #217; `packages/shared/src/business-logic/customerUpsert.ts`; owner-test cards 9–11; tech-debt #112 (the `people.email` divergence this leaves open)._
+
 ## ARC: cost-to-produce
 
 _Recurring/operating costs → labor → margin → compute → (forward-run) suggestion engine._

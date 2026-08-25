@@ -8,7 +8,15 @@
 > `/customers` roster's inline cells. A per-build proof is a FILTER (`COVERS: #NNN`), never a second doc.
 
 **Purpose:** prove the customer form actually WRITES what it says it writes. Every card below is a
-`STATUS: owed` — the whole board is 0 of 8.
+`STATUS: owed` — the whole board is **0 of 11**.
+
+**Scope note (2026-08-25, ledger #217):** cards 1–8 cover the customer EDIT surfaces
+(`CustomerPartyEditor` / `customerEdit.ts` / the roster cells). **Cards 9–11 cover a different
+writer on the same table** — `customerUpsert.ts`, the shared find-or-create the CHECKOUT and the OCR
+door both call. They live here because the artifact the owner reads is the same one (the customer
+row on `/customers`), and a second document answering "did the customer record save?" would drift
+(STD-011). ⚠️ **Card 7 was NOT flipped by #217** — it tests `customerEdit.ts`, which that build did
+not touch.
 
 **Why this exists (the defect these cards defend against):** `CustomerPartyEditor` compared each
 edited field against `draft` — the ON-SCREEN working copy that `input()` had already updated on every
@@ -181,6 +189,80 @@ MANAGER `df7723be` (who DOES hold `customers:update`). Both must save silently a
 *A refusal message that also fires for the permitted user is a new defect, not a fix.*
 
 ---
+
+---
+
+### CARD 9 — THE CHECKOUT EMAIL LANDS IN THE ROW (the defect, head-on)
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #217 · R-12
+SIGNAL: `[TRACE:PERSON] fill: writing only fields blank on the stored row` — **and `email` must appear in its `filled` array**
+
+🔴 **READ THE ROW, NOT THE SCREEN. "The confirmation screen showed the email" IS THE DEFECT, not the
+proof** — the typed value lives in client state and renders correctly whether or not anything was
+written. Diane Foster's invoice was SENT to an address the database never held.
+
+1. **GATE 0 first** (top of this file): the SHA on screen == `git log -1`, Vercel READY for THAT SHA.
+2. Pick a customer whose stored email is BLANK. The measured one is **Diane Foster
+   `0ee368fe-5b2f-4458-a75d-d4498024a605`**; `/customers` → their Email cell is empty.
+3. Ring up an order for them through checkout and **type an email** at the Customer step.
+4. Complete the order.
+5. Go to `/customers`, open that same customer, **read the Email field.**
+
+**PASS:** the email you typed is stored on the row.
+**FAIL:** the field is still blank — or holds a different address than you typed.
+⚠️ **Also check no SECOND customer row was created** (search the name; there must be exactly one).
+
+---
+
+### CARD 10 — 🔴 NEGATIVE: A BLANK EMAIL AT CHECKOUT MUST NOT BLANK A STORED ONE
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #217 · A9 (absent is not empty)
+SIGNAL: the `filled` array in `[TRACE:PERSON] fill:` **must NOT contain `email`**
+
+**THE CARD THAT PROTECTS YOU, AND THE MORE IMPORTANT OF THE PAIR.** A fix that persists a typed
+email but wipes a stored one on the next silent checkout is WORSE than the defect it replaced — it
+destroys a curated value instead of failing to capture a new one.
+
+1. Pick a customer who **already HAS an email** (Card 9's customer, after Card 9 passes, is ideal).
+2. Ring up a second order for them.
+3. At the Customer step, **leave the email box EMPTY** (or reach them by a path that does not ask).
+4. Complete the order.
+5. Read the row on `/customers`.
+
+**PASS:** their stored email is **UNCHANGED**.
+**FAIL:** the field is now blank, or holds an empty string.
+
+---
+
+### CARD 11 — AN EDITED EMAIL REPLACES THE STORED ONE (supplied-wins, and it is deliberate)
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #217 · §6 r10 (a stated divergence)
+SIGNAL: `filled` contains `email`; the row afterwards holds the NEW address
+
+⚠️ **THIS IS THE ONE FIELD ON THE CHECKOUT WRITE PATH THAT DOES NOT FOLLOW FILL-NEVER-CLOBBER, and
+that is a decision, not an accident.** Every other field (phone, address, city…) fills a blank and
+REFUSES to overwrite a curated value. Email replaces, because the register is where a customer says
+"that one's old" — and the invoice is sent to whatever was typed. If you decide that is wrong, the
+change is one line: move `'email'` out of `SUPPLIED_WINS` and into `FILLABLE`.
+
+1. Pick a customer with a stored email.
+2. Ring up an order and type a **DIFFERENT** email.
+3. Complete it, then read the row.
+
+**PASS:** the row holds the NEW email.
+**FAIL:** it still holds the old one (the fix landed as fill-only), **or** a second customer row was
+created (the person spine failed to match — that is #112's territory, not this card's).
+
+⚠️ **KNOWN AND FILED, so do not re-file it as a bug:** after this card, `customers.email` and
+`people.email` may disagree — the spine never backfills an email onto a person it matched by phone
+(**tech-debt #112**).
+
 
 ## WHAT THIS BOARD DOES NOT COVER (stated, not silent)
 

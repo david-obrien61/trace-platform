@@ -17,6 +17,12 @@
 //               UNCHECKABLE  no `.select()` at all  → cannot check, silent success guaranteed
 //               NEEDS_CHECK  `.select()` but no length/single check → selectable, not inspected
 //               CHECKED      `.select()` + `.single()` (errors on 0 rows) or an explicit length check
+//               🔴 THE EXACT-COUNT FORM COUNTS (added 2026-08-25). R-12 asks for "check the COUNT",
+//               and `length !== 1` is STRICTLY STRONGER than the `length === 0` this recognised: it
+//               refuses a zero-row write AND a write that hit more rows than it named. The regex
+//               knew only the weaker form, so a site upgraded to the ruling's own shape was
+//               reclassified NEEDS_CHECK and failed the ratchet — the cap punishing the fix. Found
+//               by `customerUpsert.ts` adopting `!== 1`; probes Z3b/Z3c/Z3d hold both directions.
 // SCOPE:        `scripts/` is TOOLING — reported, never asserted (a seed that no-ops is not a lie to
 //               a user). Stated rather than silently narrowed.
 // DEPENDENCIES: none (node stdlib only).
@@ -104,7 +110,7 @@ export function analyze(files) {
         status = 'UNCHECKABLE';                       // no select → the row count never comes back
       } else if (/\.single\(\)/.test(win)) {
         status = 'CHECKED';                           // single() errors (PGRST116) on zero rows
-      } else if (/\.length\s*===\s*0|\.length\s*<\s*1|!\s*\w+\?\.\s*length|!\w+\.length|\.length\s*>\s*0|length\s*===\s*0/.test(after)) {
+      } else if (/\.length\s*===\s*0|\.length\s*<\s*1|!\s*\w+\?\.\s*length|!\w+\.length|\.length\s*>\s*0|length\s*===\s*0|\.length\s*!==?\s*\d+/.test(after)) {
         status = 'CHECKED';                           // explicit affected-row inspection
       } else {
         status = 'NEEDS_CHECK';                       // selectable, not inspected
@@ -144,6 +150,12 @@ function runProbes() {
     st([f('a.ts', `const { data } = await supabase.from('t').update(p).eq('id', id).select('id').single();`)]));
   ck('Z3 .select() with a length check after → CHECKED', 'CHECKED',
     st([f('a.ts', `const { data } = await supabase.from('t').update(p).eq('id', id).select('id');\nif (!data?.length) return fail();`)]));
+  ck('Z3b 🔴 .select() with an EXACT-COUNT check (!== 1) → CHECKED — R-12\'s own shape, stronger than === 0', 'CHECKED',
+    st([f('a.ts', `const { data } = await supabase.from('t').update(p).eq('id', id).select('id');\nif (data?.length !== 1) throw new Error('not one row');`)]));
+  ck('Z3c .select() with a loose exact-count check (!= 1) → CHECKED', 'CHECKED',
+    st([f('a.ts', `const { data } = await supabase.from('t').update(p).eq('id', id).select('id');\nif (data?.length != 1) throw new Error('not one row');`)]));
+  ck('Z3d NEGATIVE CONTROL for Z3b — the widening must not make MERE USE of data read as a check', 'NEEDS_CHECK',
+    st([f('a.ts', `const { data } = await supabase.from('t').update(p).eq('id', id).select('id');\nreturn data.map(r => r.id);`)]));
   ck('Z4 🔴 .select() with NO length check → NEEDS_CHECK (selectable, not inspected)', 'NEEDS_CHECK',
     st([f('a.ts', `const { data } = await supabase.from('t').update(p).eq('id', id).select('id');\nreturn ok();`)]));
   ck('Z5 a plain .delete() with no select → UNCHECKABLE', 'UNCHECKABLE',

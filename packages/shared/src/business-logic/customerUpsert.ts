@@ -115,6 +115,8 @@ export async function findOrCreateCustomer(
   //   (b) FILL, NEVER CLOBBER — on UPDATE a supplied value lands only where the stored one is blank.
   //       A counter checkout capturing a phone for a customer who has none SHOULD save it; that is
   //       the capture path earning its keep. Overwriting a curated value is the failure.
+  //       EXCEPTION, ONE FIELD, BY NAME (2026-08-25): `email` is SUPPLIED-WINS — see SUPPLIED_WINS
+  //       below. A blank email still cannot clobber, because a blank never reaches the payload.
   //   (c) CANONICAL + MIRROR — billing_* is the home; the legacy four are written alongside it,
   //       exactly as the party editor does, so the two column sets cannot diverge at the source.
   // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -135,6 +137,13 @@ export async function findOrCreateCustomer(
   };
   offer('first_name', customer.first_name);
   offer('last_name',  customer.last_name);
+  // 🔴 2026-08-25 — THE FIELD THAT WAS NEVER OFFERED. `email` was absent from this list, so it
+  // never entered `supplied`, never entered `fields`, and therefore could not enter the UPDATE
+  // patch below. A NEW customer got their email (the INSERT carries it as its own literal); an
+  // EXISTING one never did. Measured: customer 0ee368fe (Diane Foster) — email '' after a checkout
+  // that typed one and SENT the invoice to it, `updated_at` stamped the same second as the order,
+  // `billing_*` filled correctly. The row was written; this one field was not in the payload.
+  offer('email',      customer.email);
   offer('phone',      customer.phone);
   offer('address_line1', customer.address_line1);
   offer('city',  customer.city);
@@ -200,6 +209,19 @@ export async function findOrCreateCustomer(
     // A customer curated on /customers is never overwritten by a later counter checkout.
     const FILLABLE = ['first_name', 'last_name', 'phone', 'address_line1', 'city', 'state', 'zip',
                       'billing_line1', 'billing_city', 'billing_state', 'billing_zip', 'marketing_opt_in'];
+    // 🔴 SUPPLIED WINS — the ONE deliberate divergence from rule (b), and it is NAMED rather than
+    // achieved by omission. `email` is not in FILLABLE, and under the `!FILLABLE.includes(col)`
+    // fall-through it would already be written unconditionally — but that would be a behaviour
+    // resting on a field's ABSENCE from a list, which the next person to extend FILLABLE would
+    // silently revert. So the intent is stated here and checked FIRST.
+    // WHY EMAIL AND NOT THE REST: fill-never-clobber protects a CURATED value from a hurried
+    // counter capture. Email is the opposite case — the register is where a customer says "that
+    // address is old, use this one", and the invoice is SENT to whatever was typed. A stored email
+    // the system will not update is a customer who never receives their invoice again.
+    // ⚠️ THE SAFETY THIS DEPENDS ON IS `offer()`, NOT THIS LINE: a blank/whitespace email fails
+    // `given()` and never reaches `fields`, so "supplied wins" can only ever be reached by a value
+    // someone actually typed. EMPTY INPUT CANNOT BLANK A STORED EMAIL — omission, not a null write.
+    const SUPPLIED_WINS = ['email'];
     let stored: Record<string, unknown> = {};
     {
       const { data } = await db.from('customers').select(FILLABLE.join(',')).eq('id', existingId).maybeSingle();
@@ -208,6 +230,7 @@ export async function findOrCreateCustomer(
     const patch: Record<string, unknown> = {};
     for (const [col, v] of Object.entries(fields)) {
       if (col === 'customer_type' || col === 'person_id') { patch[col] = v; continue; } // derived/link — always current
+      if (SUPPLIED_WINS.includes(col)) { patch[col] = v; continue; }                     // typed → replaces stored
       if (!FILLABLE.includes(col)) { patch[col] = v; continue; }
       if (!given(stored[col])) patch[col] = v;                                          // blank → fill
     }
@@ -218,19 +241,24 @@ export async function findOrCreateCustomer(
     const filled = Object.keys(patch).filter(k => k !== 'customer_type' && k !== 'person_id');
     if (filled.length) console.log('[TRACE:PERSON] fill: writing only fields blank on the stored row', { customerId: existingId, filled });
 
-    // A8 — a write that affects zero rows is a failure and says so. This path runs under the
-    // SERVICE KEY (checkout + OCR ingest), so a zero-row result is not an RLS refusal here — it
-    // means the row vanished between the dedup read and this write. Either way it must not be
-    // reported as a fill that happened.
+    // R-12 (2026-08-23) — A WRITE MUST PROVE IT WROTE, AND THE PROOF IS THE COUNT. A PostgREST
+    // update matching ZERO rows returns SUCCESS WITH NO ERROR, so `!error` proves nothing. This
+    // path runs under the SERVICE KEY (checkout + OCR ingest), so a zero-row result is not an RLS
+    // refusal here — it means the row vanished between the dedup read and this write. Either way
+    // it must not be reported as a fill that happened.
+    // 🔴 ASSERTED AS `!== 1`, NOT `=== 0` — the count check is what the ruling asks for, and a
+    // check that only refuses zero would report success over an update that hit more rows than the
+    // single row it named. `.eq('id')` on a primary key should make that impossible; a guard that
+    // is only correct while a neighbouring assumption holds is the assumption, not the guard.
     let { data: updRows, error: updErr } = await db.from('customers').update(patch).eq('id', existingId).select('id');
     if (updErr && isMissingCustomerTypeColumn(updErr)) {
       console.warn('[TRACE:PERSON] customer_type column absent — retrying update without it (apply 20260702_customers_customer_type.sql)');
       const noType = { ...patch }; delete noType.customer_type;
       ({ data: updRows, error: updErr } = await db.from('customers').update(noType).eq('id', existingId).select('id'));
-      if (!updErr && updRows?.length === 0) throw new Error(`Customer: the row being filled no longer exists (${existingId}).`);
+      if (!updErr && updRows?.length !== 1) throw new Error(`Customer: the fill did not affect exactly one row (${existingId}, matched ${updRows?.length ?? 0}).`);
     }
-    if (!updErr && (!updRows || updRows.length === 0)) {
-      throw new Error(`Customer: the row being filled no longer exists (${existingId}).`);
+    if (!updErr && updRows?.length !== 1) {
+      throw new Error(`Customer: the fill did not affect exactly one row (${existingId}, matched ${updRows?.length ?? 0}).`);
     }
     console.log('[TRACE:PERSON] link: customer resolved to existing row', {
       customerId: existingId, personId, businessId, source, isOrg,

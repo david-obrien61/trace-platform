@@ -1,6 +1,6 @@
 {
   "_comment": "Mutation sites that do NOT check affected rows, as of the stamp. RATCHET baseline — the build fails on any NEW one, not on these. Shrink it; never grow it casually. Regenerate: npm run zero-row-writes:baseline",
-  "stamped": "2026-08-01",
+  "stamped": "2026-08-25",
   "unchecked": [
     "packages/cultivar-os/api/campaigns.ts::wasEdited#campaign_posts.update",
     "packages/cultivar-os/api/campaigns.ts::wasEdited#campaign_posts.update@2",
@@ -80,9 +80,6 @@
     "packages/shared/src/quickbooks/secrets.ts::writeQBSecrets#businesses.update",
     "packages/shared/src/supabase/auth.ts::label#member_devices.update",
     "packages/shared/src/sync/syncEngine.ts::p#?.update",
-    "scripts/lib/memberSession.mjs::customerId#customers.delete",
-    "scripts/lib/memberSession.mjs::setPermissions#business_members.delete",
-    "scripts/lib/memberSession.mjs::setPermissions#business_members.update",
     "scripts/rls/customer-write-permission.rls.mjs::res2#customers.update"
   ]
 }

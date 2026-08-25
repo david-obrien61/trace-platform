@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-08-25 (**#216 — 🔨 CHECKOUT WRITES A SCHEDULED DELIVERY. ONE net-new body entry.** `orders` and `deliveries` had never been connected: every stop on `/delivery-schedule` arrived through the OCR-invoice door, so an order rung up today appeared on neither delivery screen. A delivery/install checkout now writes ONE stop — non-blocking by construction, and count-proven per R-12. ⚠️ **Two knowns shipped by decision: no natural key (#108) and a third write path on `deliveries` (#109).**)
+# Last updated: 2026-08-25 (**#217 — 🔨 CHECKOUT PERSISTS THE EMAIL IT USES. ONE net-new body entry.** The shared find-or-create built its UPDATE payload from a list of offered fields and `email` was not one of them — so a NEW customer got their email (the INSERT carries it separately) and a REPEAT customer's typed email was silently discarded, invoice already sent. `email` is now offered, and is the ONE field on that path where a supplied value REPLACES rather than fills; a blank one still cannot reach the payload. ⚠️ **Two reported-not-fixed (#110 `lifetime_value` has no writer by design · #111 `original_price` holds a line total) and one divergence filed (#112 `people.email`).**)
 
 
 > 📐 **CAMPAIGN LIFECYCLE — SCOPING + ESTIMATE (2026-08-23, ledger #192/#192b).** NOT a capability entry: **nothing was built.** A scoping document answering David's *"I can add but not edit or cancel or delete"* with nine questions, ten site keys, a proven F1/F2/F3 dependency order, three scopes (**MINIMUM ~2–3 · COHERENT ~5–7 · COMPLETE ~11–14 Thunder prompts; MINIMUM and COHERENT need ZERO migrations**) and eight rulings owed. Read it before ANY campaign build — it is the answer to "has this been scoped?" and its first finding is that the EDIT FORM ALREADY EXISTS as the create form (`Campaigns.tsx:120-198`). → [`docs/audits/campaign-lifecycle-scoping-2026-08-23.md`](audits/campaign-lifecycle-scoping-2026-08-23.md) · predecessor [`social-campaign-path-recon-2026-08-22.md`](audits/social-campaign-path-recon-2026-08-22.md)
@@ -942,6 +942,69 @@ had no standing test at all until now, which is why the invoice went out). **Not
 **Recon:** `docs/decisions/2026-08-24-quickbooks-invoice-push-recon.md`.
 
 ---
+
+## Checkout customer email persistence — the shared upsert's UPDATE payload (#217) — added 2026-08-25
+
+**PURPOSE** — an email typed at the register is the address the invoice is SENT to, so the business must
+afterwards HOLD it. Board 3.7. Story: `user_stories.md` → *The email the register types is the email the
+business holds* (`STATUS: gap`, as-built).
+
+🔴 **THE DEFECT, AND THE MECHANISM WAS AN OMISSION — NOT A FILTER, NOT AN OVERWRITE.**
+`packages/shared/src/business-logic/customerUpsert.ts` builds its UPDATE payload from a list of `offer()`
+calls (`:136-144`). **Eight fields were offered — `first_name` · `last_name` · `phone` · `address_line1` ·
+`city` · `state` · `zip` · `marketing_opt_in` — and `email` was not one of them**, so it never entered
+`supplied`, never entered `fields`, and could not enter the patch. 🔴 **The branch is why it stayed
+invisible: the INSERT carries `email` as its OWN literal (`:241`), so a NEW customer always got theirs and
+only a REPEAT customer lost it** — the path that fires on the second visit. _Measured on customer
+`0ee368fe` (Diane Foster): `email` `''` after a checkout that typed one and sent the invoice to it;
+`updated_at` the same second as the order; `billing_line1/city/zip` filled from the SAME payload (offered);
+`address_line1` correctly NOT clobbered (offered, stored non-blank — rule (b) working)._
+
+✅ **THE FIX — one `offer()` line plus a NAMED divergence.** `offer('email', customer.email)` puts email
+through the same trim-and-omit-if-blank gate as every other field. A new **`SUPPLIED_WINS = ['email']`**
+branch in the patch loop makes a typed email REPLACE the stored one. ⚠️ **THE NO-BLANKING GUARANTEE RESTS ON
+`offer()`, NOT ON THAT BRANCH:** a blank/whitespace/null email fails `given()` and never reaches `fields`,
+so "supplied wins" can only ever be reached by a value someone actually typed — **omission, never a null
+write** (A9). The constant is NAMED rather than achieved by email's absence from `FILLABLE` (which would
+already have produced the behaviour, and which the next person to extend that list would have silently
+reverted).
+
+⚠️ **A STATED DIVERGENCE (§6 r10): `email` is the ONE field here that does not follow fill-never-clobber.**
+Rule (b) protects a curated value from a hurried counter capture; email is the opposite case — the register
+is where a customer corrects it. **`phone` is NOT the same defect and never was** — it was already offered
+and IS in `FILLABLE`, so it fills a blank and refuses to overwrite a curated value. Both rules are asserted
+on the SAME payload (probes C1/C2/C2b).
+
+✅ **R-12 — the write proves it wrote:** the fill-update's count check went `updRows?.length === 0` →
+**`!== 1`**, refusing the zero-row PostgREST shape (what an RLS refusal looks like) AND a write that hit more
+rows than the single row it named. 🔴 **The cap did not recognise the ruling's own shape and FAILED the
+build for adopting it** — `scripts/verify-zero-row-writes.mjs`'s CHECKED regex knew `length === 0` / `< 1` /
+`!x?.length` / `> 0` and not `!== 1`. Widened to the exact-count form + probes **Z3b/Z3c/Z3d** (the third a
+negative control). ✏️ **That blind spot had been manufacturing false debt: the widening moved THREE
+`scripts/lib/memberSession.mjs` sites OUT of the unchecked baseline (82 → 79, zero added) — all three already
+written as `(data ?? []).length !== 1` before R-12 existed.**
+
+**PROOF** — `customerUpsert.test.ts` (NEW, 34 probes). **Every probe reads `db.rows.customers[0]`, never the
+return value**: the function reports WHICH ROW, never WHAT LANDED IN IT, so a build that dropped the field
+again would return an identical and entirely truthful result. Four promised cases (new email stored · edited
+email replaces · blank leaves the stored value untouched, in all four absent shapes · no email either side,
+no crash) plus the insert half, the org branch, trimming, and R-12 both directions with a negative control.
+**Red-first ×4 against the real source (STD-024)** — offer line deleted (5 fail) · email demoted to FILLABLE
+(2 fail: the *edited* case a fill-only fix would have passed) · count check weakened to `=== 0` (1 fail: the
+two-row probe) · blank email admitted to the payload (5 fail: the fix becoming a worse defect). Source
+`diff`-restored identical after each.
+
+**BAR: BUILDER-COMPLETE.** `npm run verify` exit 0, ZERO NET-NEW (5 / 247 / 10 / 12 / 15) · 33/33 test files ·
+1240 assertions · api/ **12/12** · **NO schema, NO migration, NO policy, NO new permission string, NO new
+api/ fn.** **OWNER-PROOF OWED** — owner-test cards 9 · 10 · 11 (`docs/owner-tests/customer-edit-surface-full-surface-test.md`),
+all `owed`; **card 10 is the one that protects the fix** (a blank email must not blank a stored one).
+`[TRACE:PERSON]` ON.
+
+⚠️ **KNOWN AND FILED, NOT FIXED:** `customers.email` and `people.email` can now disagree — the spine never
+backfills an email onto a person it matched by phone (`personUpsert.ts:87-99` only READS by email).
+**tech-debt #112.** The OCR customer-creation path, all matching/dedup logic, and the `billing_*` vs
+`address_*` split were scoped OUT and are untouched.
+
 
 ## QBO Customer Identity Resolution — the three-way rule (D-47) — added 2026-07-16
 
