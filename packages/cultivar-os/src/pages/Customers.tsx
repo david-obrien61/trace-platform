@@ -35,7 +35,7 @@ import {
   type DataSheetColumn,
 } from '../components/datasheet/DataSheet';
 import { CustomerPartyEditor, BLANK_PARTY_CUSTOMER, type PartyCustomer } from '../components/customers/CustomerPartyEditor';
-import { CUSTOMER_SELECT_CORE, CUSTOMER_SELECT_FULL } from '../components/customers/customerFieldRegistry';
+import { CUSTOMER_SELECT_CORE, CUSTOMER_SELECT_FULL, CUSTOMER_SEARCH_FIELDS, customerSearchHaystack } from '../components/customers/customerFieldRegistry';
 import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME, taxExemptionLabel, type DiscountType } from '@trace/shared/business-logic';
 import { requirementText } from '@trace/shared/components/SurfaceState';
 
@@ -132,7 +132,14 @@ export function Customers() {
       ({ data, error } = await run(CORE));
     }
     if (error) { console.error('[TRACE:customers] loadCustomers error', error.message); setListError(error.message); setListLoading(false); return; }
-    console.log('[TRACE:customers] loadCustomers ok', { count: data?.length ?? 0 });
+    // `searchableFields` is on this emit deliberately: the roster's search covering fewer fields
+    // than it displays was invisible from every screen and every log. Now the trail says what a
+    // customer can be FOUND BY, next to how many were loaded.
+    console.log('[TRACE:customers] loadCustomers ok', {
+      count: data?.length ?? 0,
+      searchableFields: CUSTOMER_SEARCH_FIELDS.length,
+      searchable: CUSTOMER_SEARCH_FIELDS.join(','),
+    });
     setCustomers((data ?? []) as unknown as CustomerRow[]);
     setListLoading(false);
   }, [businessId]);
@@ -206,6 +213,13 @@ export function Customers() {
       ? (r.organization_name?.trim() || r.first_name)
       : `${r.first_name} ${r.last_name}`.trim() || r.first_name;
 
+  // 🔴 THE SEARCH READS THE SAME LIST THE RECORD DECLARES (`searchText` on <DataSheet> below).
+  // It WAS a hand-written eight-field array inline in that prop, and it omitted `organization_name`
+  // — the field `displayName` above RENDERS for an organization — so an org customer printed its own
+  // name on this roster and could not be found by typing it (recon f666dbb A1; two `Diane Foster`
+  // rows, "foster" returned one). The list is now DERIVED from `CUSTOMER_SEARCH_FIELDS` in the field
+  // registry, which is the one place it lives and the place a new field joins the search for free.
+  //
   // ── Column config — the LEAN at-a-glance roster (name/type/tier/tax/status/added + Edit).
   //    The full field set lives in CustomerPartyEditor (opened via the name or the Edit button). ──
   const columns: DataSheetColumn<CustomerRow>[] = [
@@ -260,7 +274,7 @@ export function Customers() {
         columns={columns}
         rowActions={rowActions}
         rowActionsWidth={78}
-        searchText={r => [r.first_name, r.last_name, r.phone, r.email, r.address_line1, r.city, r.state, r.zip].filter(Boolean).join(' ')}
+        searchText={customerSearchHaystack}
         searchPlaceholder="Search name, phone, email, city…"
         statusFilter={{ label: 'sources', options: ['qr-scan', 'ocr-invoice', 'manual'], get: r => r.source ?? '' }}
         defaultSortKey="created_at"

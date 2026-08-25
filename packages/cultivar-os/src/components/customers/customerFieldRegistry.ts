@@ -142,3 +142,58 @@ export const CUSTOMER_SEARCH_COLS = [
 /** CORE + the gated 2026-07-13 columns. Was the `FULL` select string. The roster tries FULL and
  *  falls back to CORE on a missing-column error, so a pre-migration read never breaks the page. */
 export const CUSTOMER_SELECT_FULL = CUSTOMER_FIELDS.map(f => f.key).join(',');
+
+/** 🔴 THE FIELDS A CUSTOMER CAN BE **FOUND BY** — the seventh parallel enumeration this file exists
+ *  to kill, and the one that was still hand-written inside a JSX prop.
+ *
+ *  THE DEFECT (recon `f666dbb`, Part A1): the `/customers` roster passed `DataSheet` a literal
+ *  eight-field array at `Customers.tsx:263` — `first_name · last_name · phone · email ·
+ *  address_line1 · city · state · zip` — while its Name cell RENDERS `organization_name`
+ *  (`Customers.tsx:204-207`, the `customer_type === 'organization'` branch). **So the roster
+ *  searched a narrower set than it displayed: a row could print its own name and be unreachable by
+ *  typing that name into the box directly above it.** Measured live — two `Diane Foster` rows,
+ *  searching "foster" returned one, the other reachable only by direct URL.
+ *
+ *  ⚠️ **OVER-SEARCHING IS NOT THE DEFECT; UNDER-SEARCHING IS.** `phone`/`email` and the four legacy
+ *  address columns are NOT rendered as roster columns and are kept anyway — a cashier looking someone
+ *  up by phone is the case `CustomerSearch` was built for, and removing them would narrow a search
+ *  nobody complained about.
+ *
+ *  ⚠️ **`billing_*` IS DELIBERATELY NOT HERE, and the reason is recorded rather than left to be
+ *  rediscovered:** the roster renders no address at all, so B1's bar ("search what it displays")
+ *  does not reach it, and the D-41 mirror (`customerEdit.ts:170-172`, `customerUpsert`'s `offer`)
+ *  writes `billing_city` and legacy `city` TOGETHER — so today the two are the same value and adding
+ *  it would buy nothing. **It stops being equivalent on a row whose two column sets have diverged**
+ *  (tech-debt #115's subject, and Diane Foster is one). Named, not taken.
+ *
+ *  🔴 **NO `.filter(k => CUSTOMER_FIELDS.some(…))` GUARD HERE, UNLIKE `CUSTOMER_SEARCH_COLS` ABOVE
+ *  — DELIBERATELY, because that guard would reproduce the very defect this list fixes:** a mistyped
+ *  or removed key would be silently dropped and the search would quietly narrow again, with nothing
+ *  saying so. The integrity check lives in `customerSearchFields.test.ts` instead, where a name that
+ *  is not a real registry field is a RED BUILD rather than a silent absence. */
+export const CUSTOMER_SEARCH_FIELDS: readonly string[] = [
+  // identity — every field the roster's Name cell can render, plus the name the customer sees on
+  // their invoice (`display_name`), which `CustomerSearch.tsx:97` also matches on.
+  'first_name', 'last_name', 'organization_name', 'display_name',
+  // contact + the legacy address — over-searched on purpose (see above).
+  'phone', 'email', 'address_line1', 'city', 'state', 'zip',
+];
+
+/** The roster's search haystack for ONE row — the string `DataSheet` runs `.includes()` against.
+ *
+ *  🔴 A9 (absent is not empty): a field that is null, undefined, blank or non-string contributes
+ *  NOTHING. It must never contribute the literal `"undefined"` or `"null"`, which would make a
+ *  search for "null" match every row that is MISSING a value — an absence rendered as a fact.
+ *
+ *  Takes `object` rather than a named row type on purpose: the roster's `CustomerRow`, the editor's
+ *  `PartyCustomer` and a raw PostgREST row are three shapes of one record, and the haystack cares
+ *  only about the keys. */
+export function customerSearchHaystack(row: object): string {
+  const r = row as Record<string, unknown>;
+  const parts: string[] = [];
+  for (const key of CUSTOMER_SEARCH_FIELDS) {
+    const v = r[key];
+    if (typeof v === 'string' && v.trim() !== '') parts.push(v);
+  }
+  return parts.join(' ');
+}

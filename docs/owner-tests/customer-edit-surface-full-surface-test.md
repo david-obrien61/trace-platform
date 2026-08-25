@@ -4,11 +4,12 @@
 > no data of its own). Sibling of `stories.html` / `status.html`.
 >
 > **This file is the ONLY source of truth for the customer edit-surface owner-tests.** It is STANDING —
-> run it after any change to `CustomerPartyEditor`, `CustomerEditModal`, `customerEdit.ts`, or the
-> `/customers` roster's inline cells. A per-build proof is a FILTER (`COVERS: #NNN`), never a second doc.
+> run it after any change to `CustomerPartyEditor`, `CustomerEditModal`, `customerEdit.ts`, the
+> `/customers` roster's inline cells, or **the roster's SEARCH** (cards 12–13). A per-build proof is a
+> FILTER (`COVERS: #NNN`), never a second doc.
 
 **Purpose:** prove the customer form actually WRITES what it says it writes. Every card below is a
-`STATUS: owed` — the whole board is **0 of 11**.
+`STATUS: owed` — the whole board is **0 of 13**.
 
 **Scope note (2026-08-25, ledger #217):** cards 1–8 cover the customer EDIT surfaces
 (`CustomerPartyEditor` / `customerEdit.ts` / the roster cells). **Cards 9–11 cover a different
@@ -17,6 +18,12 @@ door both call. They live here because the artifact the owner reads is the same 
 row on `/customers`), and a second document answering "did the customer record save?" would drift
 (STD-011). ⚠️ **Card 7 was NOT flipped by #217** — it tests `customerEdit.ts`, which that build did
 not touch.
+
+**Scope note (2026-08-25, ledger #218):** **cards 12–13 are the first READ cards on this board** — every
+other card asks *"did it save?"*, these ask *"can I find them?"*. They live here rather than in a new file
+because the surface is the same screen (`/customers`) and a second document about that screen would drift
+(STD-011). **Nothing about the list QUERY changed** — #218 changed only which fields the search reads, so no
+existing card moved and none was flipped.
 
 **Why this exists (the defect these cards defend against):** `CustomerPartyEditor` compared each
 edited field against `draft` — the ON-SCREEN working copy that `input()` had already updated on every
@@ -264,6 +271,59 @@ created (the person spine failed to match — that is #112's territory, not this
 (**tech-debt #112**).
 
 
+### CARD 12 — AN ORGANIZATION CUSTOMER CAN BE FOUND BY THE NAME THE LIST SHOWS
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #218
+SIGNAL: `[TRACE:customers] loadCustomers ok` — its `searchable` field now lists **10** fields and must include `organization_name`
+
+🔴 **THE DEFECT WAS THAT THE ROW WAS VISIBLE AND UNFINDABLE.** It printed its own name on the roster
+and typing that name into the box directly above it returned nothing. So the proof is not "a search
+works" — it is *"the thing I can see, I can search for."*
+
+1. **GATE 0 first** (top of this file): the SHA on screen == `git log -1`, Vercel READY for THAT SHA.
+2. Open `/customers`. Find any customer whose **Type** column reads **Organization**. Note the exact
+   name shown in the Name column.
+3. Type a word from that name — one that is NOT the contact's first or last name — into the search box.
+
+**PASS:** that customer appears.
+**FAIL:** the list goes empty, or the count pill reads `0 of N shown`.
+⚠️ If no organization customer exists on this tenant, add one first (Add Customer → Type:
+Organization) — otherwise this card proves nothing and should be reported as **not run**, not as pass.
+
+---
+
+### CARD 13 — 🔴 NEGATIVE: A SEARCH THAT MATCHES TWO CUSTOMERS RETURNS TWO
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #218
+SIGNAL: the DataSheet **count pill** — `2 of N shown` — is the whole assertion; read the number, not the rows
+
+🔴 **THIS IS THE CARD THAT PROTECTS YOU, AND IT IS NOT ABOUT THE BUG THAT WAS FIXED.** It fails the
+day anyone adds a dedup, a DISTINCT, or a collapse-by-name to this list. **What a duplicate customer
+IS remains your ruling — this card only guarantees the roster stops deciding it for you.**
+
+1. **GATE 0 first.**
+2. Open `/customers`. Search **`foster`**.
+3. **Read the count pill**, not the rows.
+
+**PASS:** the pill reads **`2 of N shown`** and **both** Diane Foster rows are listed, with different
+records behind them (click each name — the two detail pages must have different URLs).
+**FAIL:** the pill reads `1 of N shown`. That is either the original defect or a new dedup.
+
+4. Now **clear the search box.**
+
+**PASS:** the pill reads **`N customers`** where N is every customer this business has — the roster
+loads the whole table unfiltered.
+**FAIL:** N is smaller than the table's row count.
+
+⚠️ **`foster` is the measured term on the current test tenant.** On a tenant without it, use any term
+you know matches exactly two customers and assert that number instead.
+
+---
+
 ## WHAT THIS BOARD DOES NOT COVER (stated, not silent)
 
 - **`CustomerEditModal`** (the 8-field editor mounted from `DeliverySchedule`) is a SECOND edit
@@ -273,6 +333,11 @@ created (the person spine failed to match — that is #112's territory, not this
   through `persistCustomerField`, so it inherits the fix, but its own error surfacing is unproven.
   Cards arrive when the merge does.
 - **The roster inline cells** now carry the A8 check (card 7's second half); no other card.
+- **The roster's SORT, its column show/hide, and its `sources` quick-filter** were NOT touched by #218
+  and have **no cards**. ⚠️ **The eleven OTHER lists that narrow silently** — `/delivery-schedule`,
+  `/deliveries`, the dashboard's revenue read and eight more — are **tech-debt #114** and are NOT covered
+  here; the roster is the one surface that already states `N of M shown`, which is why it is the only one
+  with a card that can read a count.
 - **Create mode** ("Add Customer") buffers to one INSERT and was not the defect; no card.
 - **The other 80 unchecked mutation sites platform-wide** are held by
   `zero-row-writes-baseline.json` and are NOT covered here — they are rows on the architecture
