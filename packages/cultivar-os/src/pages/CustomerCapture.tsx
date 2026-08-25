@@ -4,6 +4,7 @@ import { useCart } from '../hooks/useCart';
 import { useBusinessContext } from '@trace/shared/context';
 import { supabase } from '../lib/supabase';
 import { CustomerSearch, type CustomerSearchHit } from '../components/customers/CustomerSearch';
+import { customerOrderFill } from '../components/customers/customerFieldRegistry';
 import { phoneMatchKey } from '@trace/shared/utils/normalizePhone';
 import type { CustomerInput } from '../types/customer';
 
@@ -165,12 +166,54 @@ export function CustomerCapture() {
 
   // Chose an EXISTING customer. Populate from the hit and go straight on — the whole point is that a
   // repeat customer is two taps, not a re-typed form.
+  //
+  // 🔴 R-19 · ONE COPY, AND IT COPIES EVERYTHING THE FORM HOLDS (2026-08-25).
+  // THIS FUNCTION WAS THE FOURTH INSTANCE IN ONE WEEK OF A HAND-MAINTAINED FIELD LIST OMITTING
+  // FIELDS IT SHOULD HOLD. It set FOUR of the form's nine values — first, last, email, phone — and
+  // said nothing about address, city, state, zip or the marketing consent. David's measurement on
+  // `f1c26ef`: selecting `john smith` filled four boxes and left City and ZIP blank.
+  //
+  // ✏️ AND THE PREMISE CORRECTION THAT MATTERS FOR ANYONE READING THIS LATER: the "wrong address"
+  // in that report — `123 Oak Creek Dr` — was never data. It is the PLACEHOLDER attribute on the
+  // address input twenty lines below (`:377`, its only occurrence in the whole repo). The field was
+  // EMPTY and rendering grey placeholder text. So nothing wrong ever reached an invoice or a
+  // delivery row, and the defect was the BLANK, not a stale value. **A plausible placeholder in an
+  // empty required field reads as a filled one, which is its own §6 r18 problem** — recorded here
+  // rather than silently "fixed", because changing it is a copy decision that is David's.
+  //
+  // 🔴 B3 — EVERY FIELD IS SET, INCLUDING TO EMPTY. `customerOrderFill` always returns every key,
+  // so there is no branch on which a previous customer's value survives. Select A, then B, and none
+  // of A's values remain — because the clear is a WRITE, not a skipped write.
   function onSelectExisting(h: CustomerSearchHit) {
-    console.log('[TRACE:customers] checkout selected existing', { id: h.id, tier: h.price_tier, exempt: !!h.tax_exempt });
-    setFirstName(h.first_name ?? '');
-    setLastName(h.last_name ?? '');
-    setEmail(h.email ?? '');
-    setPhone(h.phone ?? '');
+    const f = customerOrderFill(h);
+    console.log('[TRACE:customers] checkout selected existing', {
+      id: h.id, tier: h.price_tier, exempt: !!h.tax_exempt,
+      // Which of the address fields actually arrived — the one thing GATE 0 needs to read here.
+      addressFilled: { line1: !!f.address_line1, city: !!f.city, state: !!f.state, zip: !!f.zip },
+      addressSource: h.billing_line1 ? 'billing_*' : (h.address_line1 ? 'legacy' : '(none on file)'),
+      optIn: f.marketing_opt_in,
+    });
+    setFirstName(f.first_name);
+    setLastName(f.last_name);
+    setEmail(f.email);
+    setPhone(f.phone);
+    // 🔴 THE FOUR THAT WERE NEVER COPIED. Billing-first, the SAME rule `submit.ts:264-274` uses to
+    // write the delivery row and `qbo/invoice/cultivar.ts:101-106` uses to push the invoice — so
+    // what the cashier confirms on this screen is what the truck and the invoice get.
+    setAddress(f.address_line1);
+    setCity(f.city);
+    // ⚠️ DELIBERATE: this sets the customer's OWN state, even when that is ''. The blank form
+    // defaults to 'TX' for a NEW customer, which is a sensible guess about someone being typed in
+    // from scratch; asserting 'TX' about a customer we have ON FILE with no state recorded is
+    // inventing a fact about them (A9). B3's rule is literal — if it cannot be filled from the
+    // selected customer, it renders empty. The 'TX' fallback at the PAYLOAD site (:232) is
+    // untouched, so nothing downstream changed.
+    setState(f.state);
+    setZip(f.zip);
+    // 🔴 CONSENT. Never `?? true` — see the registry note on `marketing_opt_in`. A customer who
+    // opted out was silently re-opted-in by every selection, because this box was not in the copy.
+    setOptIn(f.marketing_opt_in);
+    setTouched(false); // a fresh record: do not show validation errors the operator has not earned
     setStep({ kind: 'add' }); // same form, now pre-filled — the operator confirms and continues
   }
 

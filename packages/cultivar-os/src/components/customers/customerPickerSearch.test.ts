@@ -39,6 +39,27 @@
  */
 
 import { readFileSync } from 'node:fs';
+
+/** 🔴 SOURCE WITH COMMENTS REMOVED. Sections E/F/G assert what the CODE does, and a probe a comment
+ *  can satisfy is not a probe — proven on 2026-08-25 when commenting out one line in a sibling file
+ *  left an entire suite green over the build's headline defect. Prose claims use `readFileSync`
+ *  directly; behaviour claims use this. */
+function codeOf(rel: string): string {
+  // 🔴 TWO PASSES, IN THIS ORDER, AND BOTH HALVES WERE LEARNED FROM A PROBE THAT WENT WRONG:
+  //  ① LINE comments (`//`) first — because a line comment can legally CONTAIN `/*`.
+  //    `CustomerSearch.tsx:3` reads "the customer step of /checkout/* opens on a SEARCH", and a
+  //    block-comment regex run first reads that as an OPENER and swallows the imports with it.
+  //  ② BLOCK comments second, which removes each `/** … */` whole, body and all.
+  // ⚠️ AND NOT a "drop lines starting with *" rule, which looks equivalent and is not: it deletes
+  //    a JSDoc's CLOSING ` */` line, leaving the opener dangling and eating the code below it.
+  //    Measured on this very file — 13 openers, 8 closers. Blocks are removed as blocks.
+  // Each block is replaced by its own newline count so reported positions do not shift.
+  return readFileSync(rel, 'utf8')
+    .split('\n')
+    .map(l => (l.trimStart().startsWith('//') ? '' : l))
+    .join('\n')
+    .replace(/\/\*[\s\S]*?\*\//g, m => '\n'.repeat((m.match(/\n/g) ?? []).length));
+}
 import {
   CUSTOMER_SEARCH_FIELDS,
   CUSTOMER_SELECT_FULL,
@@ -52,9 +73,13 @@ function ok(cond: boolean, msg: string): void {
 }
 
 // ══ THE HARNESS ══════════════════════════════════════════════════════════════════════════════
-// CustomerSearch.tsx:102 — verbatim. The ONLY sanitisation the query gets.
-//     const like = `%${q.replace(/[%,]/g, ' ')}%`;
-function likeOf(q: string): string { return `%${q.replace(/[%,]/g, ' ')}%`; }
+// CustomerSearch.tsx — verbatim. The ONLY sanitisation the query gets.
+//     const safe = q.replace(/[,%()]/g, ' ');
+// 🔴 UPDATED 2026-08-25 (R-19): this quoted `[%,]` — TWO characters — until the two order-door
+// searches were unified onto this component and the SAFER of the two regexes won. §E asserts the
+// source still matches, because a harness quoting a rule the code no longer has is the worst kind
+// of green: every escaping probe below would keep passing while describing something that is gone.
+function likeOf(q: string): string { return `%${q.replace(/[,%()]/g, ' ')}%`; }
 
 // CustomerSearch.tsx:107 + :121 — verbatim. This is the line this build changed.
 //     const parts = CUSTOMER_SEARCH_FIELDS.map(f => `${f}.ilike.${like}`);
@@ -220,12 +245,16 @@ const ids = (rs: Row[]) => rs.map(r => r.id).sort().join('|');
   ok(likeOf('a,b') === '%a b%' && likeOf('a%b') === '%a b%',
      'B4 the sanitiser replaces both reserved characters with a SPACE (it does not delete them, which would join two words)');
 
-  // ⚠️ PINNED, NOT FIXED: parentheses are NOT stripped, and `(512) 555-0101` is a query a cashier
-  // will paste. `ScanOrder.tsx` strips `[,%()]`; this file strips `[%,]`. The asymmetry is real,
-  // PRE-EXISTING, and out of this build's scope bar (it changes what the search DOES). Recorded here
-  // so a future change to that regex is deliberate — and so the divergence is a measurement, not a memory.
-  ok(likeOf('(512) 555-0101') === '%(512) 555-0101%',
-     'B5 ⚠️ PINNED PRE-EXISTING: parentheses survive into the filter value (ScanOrder strips them; this does not) — tech-debt #117');
+  // ✅ RESOLVED 2026-08-25 (tech-debt #117). This probe used to PIN the opposite — that parentheses
+  // survived into the filter value here while `ScanOrder` stripped them — and it named the reason it
+  // was pinned rather than fixed: it changes what the search DOES, which was outside that build's
+  // scope bar. R-19 unified the two searches, so one regex had to win, and it had to be the SAFER
+  // one: `(` and `)` are PostgREST's own grouping syntax inside `.or(...)`, so a pasted
+  // `(512) 555-0101` closed the group early and the WHOLE filter failed to parse.
+  ok(likeOf('(512) 555-0101') === '% 512  555-0101%',
+     'B5 ✅ RESOLVED (#117): parentheses are stripped to spaces — a pasted phone cannot break the .or() parse');
+  ok(!likeOf('(a)').includes('(') && !likeOf('(a)').includes(')'),
+     'B5b 🔴 …and NEITHER paren can reach the filter value, in either position — the property the parse depends on');
   ok(pickerOrString('a b').includes('first_name.ilike.%a b%'),
      'B6 a space inside the query is preserved — it is not a separator');
 }
@@ -377,7 +406,7 @@ const ids = (rs: Row[]) => rs.map(r => r.id).sort().join('|');
 {
   const PICKER = 'packages/cultivar-os/src/components/customers/CustomerSearch.tsx';
   let src = '', readErr = '';
-  try { src = readFileSync(PICKER, 'utf8'); } catch (e) { readErr = (e as Error).message; }
+  try { src = codeOf(PICKER); } catch (e) { readErr = (e as Error).message; }
 
   ok(src.length > 0, `E1 the picker source is readable — ${readErr || 'ok'}`);
   ok(/import\s*\{[^}]*CUSTOMER_SEARCH_FIELDS[^}]*\}\s*from\s*'\.\/customerFieldRegistry'/.test(src),
@@ -391,27 +420,124 @@ const ids = (rs: Row[]) => rs.map(r => r.id).sort().join('|');
      'E5 🔴 …nor any other hand-written per-field term — the list lives in ONE file');
   ok(/\.or\(parts\.join\(','\)\)/.test(src),
      'E6 the composed parts are what is actually sent as the .or() filter');
-  ok(/\.limit\(25\)/.test(src),
-     'E7 the limit is UNCHANGED at 25 — this build did not touch limits, ordering or paging (D8 depends on it)');
+  // The VALUE is unchanged at 25; it is now named ONCE (`const PAGE = 25`) because B4's notice and
+  // the query must not be able to disagree about it. Assert BOTH, so "the limit is 25" stays a fact
+  // about the code rather than about a literal that happened to sit on one line.
+  ok(/const PAGE = 25;/.test(src) && /\.limit\(PAGE\)/.test(src),
+     'E7 the page size is UNCHANGED at 25 and is named once — the query and B4\'s notice read the same constant (D8 depends on the value)');
+  ok(/replace\(\/\[,%\(\)\]\/g, ' '\)/.test(src),
+     'E9 🔴 the source sanitiser is EXACTLY what `likeOf` above quotes — without this, every §B escaping probe is green over a rule the code no longer has');
+  // Anchored on the SEARCH's composition, not on the substring — the RLS permission probe in the
+  // same file also carries `count: 'exact'`, and red-first proved a bare substring cannot tell them
+  // apart (it stayed green over a deleted count).
+  ok(/\.select\(cols, \{ count: 'exact' \}\)/.test(src),
+     'E10 🔴 B4: the SEARCH query asks the server for the exact match count, so "25 of 34" is measured rather than inferred');
   ok(/searchable: CUSTOMER_SEARCH_FIELDS\.join\(','\)/.test(src),
      'E8 STD-003: the [TRACE:customers] emit reports the field set it actually searched, so GATE 0 is readable from the console');
 }
 
-// ══ F · THE THIRD SEARCH IS NAMED, NOT SILENTLY LEFT ═════════════════════════════════════════
-// 🔴 `ScanOrder.tsx`'s customer-attach strip is a THIRD customer search and was scoped OUT of this
-// build. It is recorded HERE, as an assertion over its source, so "we knew" is provable and so the
-// day someone repoints it the STALE half of this probe fails and forces the note to be updated —
-// the self-clearing property #73 taught (a note nothing reads is a note that rots).
+// ══ F · THE THIRD SEARCH IS GONE — THE PROBE THAT PREDICTED ITS OWN OBSOLESCENCE ═════════════
+// 🔴 THIS SECTION IS THE SELF-CLEARING PROPERTY ACTUALLY PAYING OUT, so it is rewritten rather than
+// deleted. On 2026-08-25 (4) F2/F3 asserted that `ScanOrder.tsx` STILL had a two-field search of its
+// own (tech-debt #116) and said in their own message: *"when that stops being true, F2 fails and the
+// registry note must be corrected."* R-19's build repointed that door, both probes went RED exactly
+// as written, and the note was corrected in the same pass. **A note nothing reads is a note that
+// rots (#73); this one failed the build instead — which is the whole argument for writing the
+// KNOWN-AND-UNFIXED state as an assertion rather than as a comment.**
+// The probes now assert the NEW state, in the same both-directions shape: the old search must be
+// ABSENT, and the shared component must be PRESENT.
 {
   const SCAN = 'packages/cultivar-os/src/pages/ScanOrder.tsx';
   let src = '', readErr = '';
-  try { src = readFileSync(SCAN, 'utf8'); } catch (e) { readErr = (e as Error).message; }
+  try { src = codeOf(SCAN); } catch (e) { readErr = (e as Error).message; }
 
-  ok(src.length > 0, `F1 the third search's source is readable — ${readErr || 'ok'}`);
-  ok(/first_name\.ilike\.\$\{like\},last_name\.ilike\.\$\{like\}/.test(src),
-     'F2 🔴 KNOWN + UNFIXED: ScanOrder\'s attach strip still matches on first_name/last_name ONLY — tech-debt #116');
-  ok(!/CUSTOMER_SEARCH_FIELDS/.test(src),
-     'F3 …and does NOT read the registry list. When that stops being true, F2 fails and the registry note must be corrected');
+  ok(src.length > 0, `F1 the scan door's source is readable — ${readErr || 'ok'}`);
+  ok(!/first_name\.ilike\./.test(src) && !/last_name\.ilike\./.test(src),
+     'F2 ✅ RESOLVED (tech-debt #116): ScanOrder has NO customer .ilike of its own. Re-inlining one is a RED BUILD');
+  ok(/<CustomerSearch\b/.test(src),
+     'F3 ✅ …because it MOUNTS the shared component instead — one search, both order doors');
+  ok(!/'id,first_name,last_name,phone,email,address_line1/.test(src),
+     'F4 ✅ and its hand-written 14-column select literal is gone with it (A4/E6)');
+  // #117 — the sanitiser split — is resolved by that same mount, toward the SAFER regex.
+  ok(!/replace\(\/\[,%\(\)\]\/g/.test(src),
+     'F5 ✅ RESOLVED (tech-debt #117): the scan door no longer has a sanitiser of its own; the surviving one strips , % ( ) — see B5');
+}
+
+// ══ G · THE PASTED PHONE — THE CASE THE OLD CODE NAMED AS A LIMITATION AND NOW FINDS ═════════
+// 🔴 THE SCENE: a cashier copies `(512) 555-0101` off an email and pastes it into the box. Before
+// R-19 that failed TWICE OVER — the parens broke the `.or()` parse outright, and even with them
+// stripped the sanitised ` 512  555-0101` does not `ilike`-match the stored `(512) 555-0101`,
+// because the separators differ. The old code KNEW: its comment said the digit re-match "cannot
+// FIND a differently-formatted number the ilike missed", and filed it. Naming a limitation is not
+// discharging it.
+//
+// THE FIX, quoted from CustomerSearch.tsx and re-expressed here the same way `pickerOrString` is:
+//     parts.push(`phone.ilike.%${d.slice(0,3)}%${d.slice(3,6)}%${d.slice(6)}%`)
+// The separators become WILDCARDS. This is the one place a `%` is legitimately a wildcard, because
+// it is built from digits we extracted, never from anything the user typed — §B still holds.
+{
+  /** `phoneMatchKey` VERBATIM (`packages/shared/src/utils/normalizePhone.ts:30-34`): under 7 digits
+   *  is an ABSENT key, never a loose one; otherwise the LAST TEN, so a leading 1/+1 country code
+   *  drops off. Re-expressed rather than imported for the same reason the rest of this harness is —
+   *  and G10 asserts the SOURCE still calls the real function, so the two cannot drift. */
+  const digitsOf = (q: string): string | null => {
+    const d = q.replace(/\D/g, '');
+    return d.length < 7 ? null : d.slice(-10);
+  };
+  const phoneTerm = (q: string): string | null => {
+    const d = digitsOf(q);
+    return d && d.length === 10 ? `phone.ilike.%${d.slice(0, 3)}%${d.slice(3, 6)}%${d.slice(6)}%` : null;
+  };
+  /** Evaluate ONE ilike term against one stored value (the same semantics parseOr/ilike use). */
+  const termMatches = (term: string, stored: string | null): boolean => {
+    const pattern = term.slice(term.indexOf('.ilike.') + 7);
+    const rx = new RegExp('^' + pattern.split('%').map(seg =>
+      seg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$', 'i');
+    return typeof stored === 'string' && rx.test(stored);
+  };
+
+  const t = phoneTerm('(512) 555-0101');
+  ok(t === 'phone.ilike.%512%555%0101%',
+     `G1 🔴 a pasted phone composes ONE separator-wildcard term — got ${t}`);
+  ok(t !== null && !t.includes('(') && !t.includes(')') && t.split(',').length === 1,
+     'G2 🔴 …and that term contains no paren and no comma, so it cannot break the .or() parse or invent a second term');
+
+  // THE ACCEPTANCE CASE: the same human number, stored five different ways, all found.
+  for (const stored of ['(512) 555-0101', '512-555-0101', '512.555.0101', '5125550101', '512 555 0101']) {
+    ok(t !== null && termMatches(t, stored),
+       `G3 🔴 the pasted "(512) 555-0101" FINDS a customer whose phone is stored as "${stored}" — the cross-format gap is closed, not merely logged`);
+  }
+  // …and the reverse direction, which is how a cashier reads a number off a caller ID.
+  const t2 = phoneTerm('5125550101');
+  ok(t2 !== null && termMatches(t2, '(512) 555-0101'),
+     'G4 typing the bare digits finds the formatted stored value — the case the old phoneMatchKey block was written for and could not serve');
+
+  // NEGATIVE CONTROLS — a wildcard term that matches everything would be worse than no term.
+  ok(t !== null && !termMatches(t, '(512) 555-0199'),
+     'G5 🔴 NEGATIVE CONTROL: a DIFFERENT number is NOT matched — the wildcards sit between the digit groups, they do not replace them');
+  ok(t !== null && !termMatches(t, ''),
+     'G6 …and an empty stored phone is not matched');
+  ok(phoneTerm('cedar') === null && phoneTerm('512') === null,
+     'G7 🔴 a NON-phone query adds NO extra term — the widening is scoped to phone-shaped input, so it cannot broaden a name search');
+  // 🔴 G8 IS A LIMIT, NOT A WIN, AND IT IS WRITTEN AS ONE. `phoneMatchKey` takes the LAST TEN
+  // digits, so an EXTENSION shifts the window and the term stops describing the main number:
+  // "(512) 555-0101 x22" -> digits 512555010122 -> last ten 2555010122 -> %255%501%0122%, which
+  // does NOT find "(512) 555-0101". That is the shared normalizer's rule, inherited deliberately
+  // rather than forked here (§6 r8), and it is PINNED so the behaviour is a measurement instead of
+  // a surprise at the counter. The name/email/address terms still search the row, so a typed
+  // extension makes the search NARROWER, never broken.
+  ok(digitsOf('(512) 555-0101 x22') === '2555010122',
+     `G8a the last-10 rule shifts when an extension is typed — got ${digitsOf('(512) 555-0101 x22')}`);
+  const ext = phoneTerm('(512) 555-0101 x22');
+  ok(ext !== null && !termMatches(ext, '(512) 555-0101'),
+     'G8b ⚠️ PINNED LIMIT: a phone typed WITH an extension does not match the stored number via the phone term — inherited from phoneMatchKey, not introduced here')
+
+  // The production source must still carry the expression this section re-expresses.
+  const srcP = codeOf('packages/cultivar-os/src/components/customers/CustomerSearch.tsx');
+  ok(/parts\.push\(`phone\.ilike\.%\$\{digits\.slice\(0, 3\)\}%\$\{digits\.slice\(3, 6\)\}%\$\{digits\.slice\(6\)\}%`\)/.test(srcP),
+     'G9 🔴 the source composes EXACTLY the term this section proves — otherwise G1–G8 describe a function nobody calls');
+  ok(/const digits = phoneMatchKey\(q\);/.test(srcP),
+     'G10 …and the digits come from the shared phoneMatchKey, so the search and the storage normalizer agree on what a phone is');
 }
 
 console.log(`\ncustomerPickerSearch: ${passed} passed, ${failed} failed`);

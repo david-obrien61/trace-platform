@@ -10,7 +10,7 @@
 > second doc.
 
 **Purpose:** prove the customer form actually WRITES what it says it writes. Every card below is a
-`STATUS: owed` — the whole board is **0 of 15**.
+`STATUS: owed` — the whole board is **0 of 19**.
 
 **Scope note (2026-08-25, ledger #217):** cards 1–8 cover the customer EDIT surfaces
 (`CustomerPartyEditor` / `customerEdit.ts` / the roster cells). **Cards 9–11 cover a different
@@ -405,12 +405,118 @@ are, and they are recorded so you do not report them as bugs:**
   `/deliveries`, the dashboard's revenue read and eight more — are **tech-debt #114** and are NOT covered
   here; the roster is the one surface that already states `N of M shown`, which is why it is the only one
   with a card that can read a count.
-- 🔴 **THE THIRD CUSTOMER SEARCH HAS NO CARD AND IS STILL NARROW.** `ScanOrder.tsx`'s
-  customer-attach strip — the one on the scan-loop front door, not the checkout customer step —
-  matches on **`first_name` and `last_name` only** and was scoped OUT of #219. **Cards 14–15 do not
-  reach it**, so if you attach a customer from the scan screen rather than the checkout step, none of
-  this applies. Tech-debt **#116**; a card arrives with the fix.
+- ✅ **THE THIRD CUSTOMER SEARCH NOW HAS A CARD AND IS NO LONGER NARROW — CARD 19.** `ScanOrder.tsx`'s
+  customer-attach strip used to match on **`first_name` and `last_name` only** (tech-debt #116) and was
+  scoped OUT of #219. #220 replaced it with the SAME component the register uses, so cards 14–15 now
+  reach it too. **The card promised here has arrived, as promised.**
 - **Create mode** ("Add Customer") buffers to one INSERT and was not the defect; no card.
 - **The other 80 unchecked mutation sites platform-wide** are held by
   `zero-row-writes-baseline.json` and are NOT covered here — they are rows on the architecture
   backlog, not customer-surface tests.
+
+---
+
+### CARD 16 — 🔴 THE ADDRESS ARRIVES WITH THE CUSTOMER (R-19's headline)
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #220
+SIGNAL: City and ZIP are FILLED after you pick someone — the boxes that were blank on `f1c26ef`
+
+⚠️ **READ THIS FIRST, because the last report described it wrongly and the correction changes what
+you are looking for.** `123 Oak Creek Dr` was **never data**. It is the grey PLACEHOLDER text on the
+empty address box (`CustomerCapture.tsx:377`, its only occurrence in the entire repo). The field was
+**blank**, not wrong — nothing incorrect ever reached an invoice or a delivery row. **So what you are
+checking is that the boxes are now FILLED, not that a wrong value is gone.**
+
+1. **GATE 0 first** — the SHA on screen matches `git log -1`, and Vercel is READY for THAT SHA.
+2. Pick a customer on `/customers` who **has an address**. Note their street, city, state and ZIP.
+3. Start an order, reach the customer step, search for them, and select them.
+
+**PASS:** First name, Last name, Email, Phone, **Delivery address, City, State and ZIP** are all
+filled, and the address matches what `/customers` shows.
+**FAIL:** any of the four address boxes is empty (grey placeholder text = empty) while the customer
+has that value on `/customers`.
+
+⚠️ **If the customer has NO address on file, the boxes SHOULD be empty** — that is correct, not a
+failure. Pick someone with an address, or the card proves nothing.
+
+---
+
+### CARD 17 — 🔴 SELECT A, THEN B — NOTHING OF A SURVIVES
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #220
+SIGNAL: after switching customers, no box holds the previous customer's value
+
+🔴 **THIS IS THE ONE THAT WOULD PUT THE WRONG ADDRESS ON A REAL INVOICE.** A leftover value is worse
+than a blank one, because a plausible address is never looked at twice.
+
+1. **GATE 0 first.**
+2. Reach the customer step and select **customer A — one WITH a full address.** Note every box.
+3. Go **Back**, then forward again to the customer step, and select **customer B — one with NO
+   address, or a different one.**
+
+**PASS:** every box shows **B's** values. Any field B does not have is **EMPTY**.
+**FAIL:** any of A's values is still on screen — especially City, State or ZIP.
+
+⚠️ **State is included deliberately.** A blank form defaults to `TX` for a customer being typed in
+from scratch; selecting a customer we HAVE ON FILE shows **their** state, even when that is blank.
+Asserting `TX` about a customer whose state we never recorded is inventing a fact about them.
+
+---
+
+### CARD 18 — 🔴 THE REGISTER SAYS WHEN IT IS ONLY SHOWING YOU SOME
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #220
+SIGNAL: an amber banner ABOVE the results reading "Showing 25 of N matches"
+
+🔴 **THIS IS THE ONE DAVID NAMED AS THE WORRY, AND IT IS ABOUT THE PHONE CALL AFTER YOU LEAVE.** With
+~1,900 customers a cashier searches `smith`, sees a full-looking list, decides the person is not
+there, and creates a duplicate. The register now says so instead.
+
+1. **GATE 0 first.**
+2. At the register's customer step, search a term that matches **more than 25** customers — a single
+   common letter or a very common surname will do.
+
+**PASS:** an amber notice appears **above** the list reading *"Showing 25 of N matches"* with a real
+N, and telling you to add a last name, phone or address to narrow it.
+**FAIL:** exactly 25 rows and no notice.
+
+⚠️ **If nothing you can type matches more than 25 customers, this card is NOT RUN — say so, do not
+pass it.** ⚠️ **And the notice must NOT appear when the result is complete** (search something that
+matches 2 or 3 people — no banner).
+
+---
+
+### CARD 19 — 🔴 THE SCAN DOOR AND THE REGISTER ARE NOW THE SAME SEARCH
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #220
+SIGNAL: the scan screen's attach panel looks like the register's customer step — same box, same
+result rows, same "Add a new customer" fallback
+
+🔴 **THIS CARD REPLACES THE "NOT COVERED" NOTE THAT USED TO SIT AT THE BOTTOM OF THIS BOARD.** The
+scan door used to match on first and last name ONLY — `hoa` found Cedar Park HOA there and Cedar Park
+HOA **plus Diane Foster** on the roster.
+
+1. **GATE 0 first.**
+2. Open the **scan** screen and tap to attach a customer.
+3. Search a term that appears in a customer's **CITY or ADDRESS and in no part of their name.**
+4. Search the same term on `/customers`.
+
+**PASS:** the same customers come back on both.
+**FAIL:** the scan screen returns fewer.
+
+5. **Then paste a phone number WITH parentheses** — `(512) 555-0101` — into the scan screen's search.
+   **PASS:** it finds that customer. **FAIL:** an error, or nothing.
+6. **Then attach a customer and check the strip:** for an ORGANIZATION customer it must show the
+   **organization's** name, not the contact's.
+
+⚠️ **PRESERVED AND WORTH CONFIRMING WHILE YOU ARE THERE:** the **"+ Add a new customer"** form on
+that sheet, and its **"Discount for this order"** dropdown, must both still be there and still work.
+The discount is order-scoped and must NOT appear at the register's customer step.

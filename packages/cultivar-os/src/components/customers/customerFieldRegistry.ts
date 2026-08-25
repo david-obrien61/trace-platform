@@ -100,6 +100,16 @@ const CUSTOMER_FIELDS: readonly CustomerFieldDef[] = [
   // status
   { key: 'status',          label: 'Account status',       group: 'status',     kind: 'select', gated: true },
   { key: 'notes',           label: 'Notes (internal)',     group: 'status',     kind: 'textarea', gated: true, createText: true },
+
+  // 🔴 ADDED 2026-08-25 (R-19's first instance) — A REAL COLUMN THIS "ONE LIST" DID NOT LIST.
+  // `marketing_opt_in` is written by `customerUpsert.ts:152` and read back through `FILLABLE`
+  // (`:211`, a live `.select()` that would 42703 if the column were absent — which is why it is
+  // recorded as UNGATED from CODE BEHAVIOUR rather than from a catalog claim this machine cannot
+  // source). The checkout form has always HELD it (`CustomerCapture.tsx:96` / `:234`, the opt-in
+  // checkbox) while it sat in NO registry-derived list — so selecting a customer who had opted OUT
+  // left the box CHECKED. That is A9 (absent is not empty) on the one field where the absence is a
+  // CONSENT: a stored `false` rendered as a granted `true`. Found by R-19's own coverage check.
+  { key: 'marketing_opt_in', label: 'Marketing opt-in',    group: 'status',     kind: 'bool' },
 ] as const;
 
 // ── DERIVATIONS — each one replaces a list that used to be maintained by hand ─
@@ -129,15 +139,66 @@ export const CUSTOMER_BILLING_MIRROR: Record<string, string> = Object.fromEntrie
 /** Guaranteed-live columns (everything pre-2026-07-13). Was the `CORE` select string. */
 export const CUSTOMER_SELECT_CORE = by(f => !f.gated).join(',');
 
-/** The checkout customer-SEARCH projection — the facts a cashier identifies a customer BY, plus the
- *  three that must be correct on the invoice (tier, tax, exemption reason) so the result row can show
- *  them before selection. DERIVED, not a literal: A4's cap counts hand-written column strings, and a
- *  new read path added with a literal would fail it. Kept narrow deliberately — a search result is a
- *  projection, not the record. */
-export const CUSTOMER_SEARCH_COLS = [
+/** 🔴 R-19 · **THE ONE LIST THE ORDER PATH READS.** Every column a search result must CARRY so that
+ *  (a) the picker row can be rendered and (b) SELECTING it fills the order form COMPLETELY.
+ *
+ *  THE DEFECT THIS REPLACES (2026-08-25, David's measurement on `f1c26ef`): selecting `john smith`
+ *  at `/checkout/customer` filled first name, last name, email and phone — and City and ZIP rendered
+ *  EMPTY, because **the address columns were never in the projection to begin with.** The old list
+ *  was eleven hand-written strings and held NO address at all, so `onSelectExisting` could not have
+ *  copied an address however carefully it had been written. **The copy list and the column list are
+ *  the same defect seen twice**, which is why they are now one list with two derivations.
+ *
+ *  ⚠️ **`billing_line2` IS DELIBERATELY ABSENT and that is DECLARED, not omitted** — see
+ *  `CUSTOMER_ORDER_EXCLUSIONS`. The order form has no second address line, so carrying it would put
+ *  a value on the wire that no surface can show or save. Every other registry field is accounted for
+ *  there with its reason, and `customerFieldCoverage.test.ts` FAILS if any field is in neither. */
+export const CUSTOMER_ORDER_FIELDS: readonly string[] = [
+  // who they are — what the picker row prints
   'id', 'first_name', 'last_name', 'organization_name', 'display_name', 'customer_type',
-  'phone', 'email', 'price_tier', 'tax_exempt', 'tax_exempt_reason',
-].filter(k => CUSTOMER_FIELDS.some(f => f.key === k)).join(',');
+  // how to reach them
+  'email', 'phone',
+  // 🔴 THE ADDRESS, BOTH COLUMN SETS. Canonical AND legacy are carried because the resolution is
+  // BILLING-FIRST-WITH-FALLBACK (D-41) and a fallback needs both halves present to fall back TO.
+  // Carrying only `billing_*` would blank the address of every customer written before the 07-13
+  // migration; carrying only the legacy four would disagree with `submit.ts:271-274`.
+  'billing_line1', 'billing_city', 'billing_state', 'billing_zip',
+  'address_line1', 'city', 'state', 'zip',
+  // what the money depends on (D-39 / D-40) — resolved for the Review preview, re-read server-side
+  'price_tier', 'tax_exempt', 'tax_exempt_reason', 'tax_exempt_cert_ref',
+  // the consent the form holds — see the registry note on `marketing_opt_in`
+  'marketing_opt_in',
+];
+
+/** 🔴 R-19 · WHY EACH REGISTRY FIELD THE ORDER PATH DOES **NOT** CARRY IS ABSENT.
+ *  A declaration, not a silence — and it ASSERTS ITSELF IN BOTH DIRECTIONS (#11's lesson): the
+ *  coverage test fails on a registry field that is in neither this map nor the list above, AND on an
+ *  entry here naming a field the registry no longer has. So it cannot rot into unread noise. */
+export const CUSTOMER_ORDER_EXCLUSIONS: Readonly<Record<string, string>> = {
+  created_at:              'system-managed; the order form neither shows nor writes it (§6 r13).',
+  source:                  'system-managed provenance; set by the writer, never by the cashier.',
+  qb_customer_id:          'system-managed link; §6 r13 locks it, and the order path never edits it.',
+  billing_line2:           'the order form has no second address line — carrying it would ship a value no surface can show or save.',
+  tax_id:                  'sensitive, and NOT an order input: exemption is applied via tax_exempt* — the certificate number is the party record\'s business.',
+  tax_exempt_expires:      'the exemption DECISION is re-read server-side at submit; an expiry date on the cart would be a second opinion about it.',
+  payment_terms:           'a billing-arrangement attribute of the party, not a field of this sale; curated on /customers.',
+  credit_limit:            'sensitive financial ceiling; nothing on the checkout path reads or enforces it today.',
+  status:                  'account lifecycle, curated on /customers — a cashier does not set it while ringing a sale.',
+  notes:                   'internal free text on the party record; not carried onto an order.',
+};
+
+/** The order projection as a select string. DERIVED — A4's cap counts hand-written column strings,
+ *  and this replaced one. */
+export const CUSTOMER_ORDER_COLS = CUSTOMER_ORDER_FIELDS.join(',');
+
+/** The UNGATED subset — the deploy-window fallback. `billing_*`, `organization_name`,
+ *  `display_name` and `tax_exempt*` arrived in the 2026-07-13 migrations, so a database that has
+ *  not had them applied answers the full projection with 42703. Retrying with this subset keeps the
+ *  search WORKING (narrower, honestly) instead of failing the whole customer step — which is what
+ *  `ScanOrder`'s strip-and-retry did for the two exemption columns before it was retired into this
+ *  component, and it would have been a regression to drop it. DERIVED from `gated`, never typed. */
+export const CUSTOMER_ORDER_COLS_CORE = CUSTOMER_ORDER_FIELDS
+  .filter(k => !CUSTOMER_FIELDS.some(f => f.key === k && f.gated)).join(',');
 
 /** CORE + the gated 2026-07-13 columns. Was the `FULL` select string. The roster tries FULL and
  *  falls back to CORE on a missing-column error, so a pre-migration read never breaks the page. */
@@ -184,13 +245,13 @@ export const CUSTOMER_SELECT_FULL = CUSTOMER_FIELDS.map(f => f.key).join(',');
  *  divergence, not the duplication: "cedar" returned TWO rows on the roster and ONE in checkout,
  *  the missed row matching on its CITY — a customer the owner can SEE and the cashier cannot FIND.
  *
- *  🔴 **A THIRD SEARCH STILL HAS ITS OWN LIST AND IS DELIBERATELY NOT REPOINTED HERE:**
- *  `ScanOrder.tsx`'s customer-attach strip (`runCustomerSearch`) matches on **`first_name` and
- *  `last_name` ONLY** — the narrowest of the three — and carries its own hand-written select string
- *  besides. It is **tech-debt #116**, named rather than fixed: repointing it changes a surface that
- *  was outside this build's scope bar, and its own select literal is a separate (A4/E6) fix that
- *  wants the same pass. **So the consolidation is 2 of 3, not done** — stated here so the next
- *  reader does not believe one list now governs every customer search in the app. */
+ *  ✅ **3 OF 3 — UPDATED 2026-08-25 (R-19's first instance). THE HOLDOUT IS GONE.** `ScanOrder.tsx`'s
+ *  customer-attach strip used to be a THIRD search matching `first_name`/`last_name` ONLY, with its
+ *  own 14-column select literal beside it (tech-debt #116 · #117). It no longer has a search of its
+ *  own: the scan door now MOUNTS `<CustomerSearch>`, so there is exactly ONE customer-search
+ *  implementation on the two order doors and ONE more on the roster, and **all three read this
+ *  list.** `customerFieldCoverage.test.ts` §D asserts that from SOURCE — a re-inlined `.ilike.` pair
+ *  anywhere in `ScanOrder.tsx` is a RED BUILD, so the claim in this paragraph cannot rot. */
 export const CUSTOMER_SEARCH_FIELDS: readonly string[] = [
   // identity — every field the roster's Name cell can render, plus the name the customer sees on
   // their invoice (`display_name`), which the checkout picker has always matched on.
@@ -216,4 +277,108 @@ export function customerSearchHaystack(row: object): string {
     if (typeof v === 'string' && v.trim() !== '') parts.push(v);
   }
   return parts.join(' ');
+}
+
+// ── R-19 · ONE COPY ──────────────────────────────────────────────────────────────────────────
+// Putting a customer on an order used to copy a HAND-WRITTEN FOUR (`CustomerCapture.tsx:168-175`:
+// first/last/email/phone) on one door and a HAND-WRITTEN TWELVE (`ScanOrder.tsx:88-104`) on the
+// other — and the two disagreed about the address rule: `ScanOrder` was billing-first on
+// `address_line1` and LEGACY-ONLY on city/state/zip, so a customer whose billing city differed from
+// their legacy city got a line-1 from one column set and a city from the other. **One row, one
+// address, assembled from two rules.** These two functions are the whole copy, for both doors.
+
+/** The address, resolved BILLING-FIRST with a legacy fallback (D-41).
+ *  🔴 THE RULE IS NOT CHOSEN HERE — IT IS THE ONE `api/orders/submit.ts:264-274` ALREADY APPLIES
+ *  when it writes the delivery row, and `api/qbo/invoice/cultivar.ts:101-106` when it pushes the
+ *  invoice. The form must fill from the SAME rule or the cashier confirms one address while the
+ *  truck and the invoice get another. Blank/whitespace on the canonical column falls through to the
+ *  legacy one; both blank yields '' — never a stale value, never an invented one (A9). */
+function pickAddress(row: Record<string, unknown>, canonical: string, legacy: string): string {
+  for (const key of [canonical, legacy]) {
+    const v = row[key];
+    if (typeof v === 'string' && v.trim() !== '') return v.trim();
+  }
+  return '';
+}
+
+/** Every field the checkout customer FORM holds, resolved from a chosen customer row.
+ *
+ *  🔴 B3 — NO STALE VALUE, EVER. Every key is ALWAYS present in the result, so a caller that spreads
+ *  it over form state CANNOT leave a previous customer's value standing. A field this customer does
+ *  not have comes back as '' (or the stored boolean), never as `undefined` — because `undefined` is
+ *  what a `setX(hit.x)` skips, and a skipped set is exactly how customer A's ZIP survived onto
+ *  customer B's order. **The absence has to be a VALUE for the clear to happen.** */
+// NOT exported — nothing imports the shape, only the function that returns it, and this file's own
+// header rule is that "an export with no consumer is a claim that a consolidation happened when it
+// has not". Export it the day a consumer needs to name it.
+interface CustomerOrderFill {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  address_line1: string;
+  city: string;
+  state: string;
+  zip: string;
+  marketing_opt_in: boolean;
+  price_tier: string | null;
+  tax_exempt: boolean | null;
+  tax_exempt_reason: string | null;
+  tax_exempt_cert_ref: string | null;
+}
+
+const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+
+/** 🔴 THE ONE COPY. Both order doors call this and nothing else. */
+export function customerOrderFill(row: object): CustomerOrderFill {
+  const r = row as Record<string, unknown>;
+  return {
+    first_name: str(r.first_name),
+    last_name:  str(r.last_name),
+    email:      str(r.email),
+    phone:      str(r.phone),
+    // billing-first, exactly as submit.ts and the invoice resolve it
+    address_line1: pickAddress(r, 'billing_line1', 'address_line1'),
+    city:          pickAddress(r, 'billing_city',  'city'),
+    state:         pickAddress(r, 'billing_state', 'state'),
+    zip:           pickAddress(r, 'billing_zip',   'zip'),
+    // 🔴 CONSENT IS NOT DEFAULTED. `?? true` here would re-grant an opt-out on every selection —
+    // the defect this field's registry note describes. Only a genuinely ABSENT column (a
+    // pre-migration read) falls back, and it falls back to the same `true` the blank form uses.
+    marketing_opt_in: typeof r.marketing_opt_in === 'boolean' ? r.marketing_opt_in : true,
+    price_tier:          typeof r.price_tier === 'string' ? r.price_tier : null,
+    tax_exempt:          typeof r.tax_exempt === 'boolean' ? r.tax_exempt : null,
+    tax_exempt_reason:   typeof r.tax_exempt_reason === 'string' ? r.tax_exempt_reason : null,
+    tax_exempt_cert_ref: typeof r.tax_exempt_cert_ref === 'string' ? r.tax_exempt_cert_ref : null,
+  };
+}
+
+/** The same copy, shaped as the cart's `CustomerInput`. Structurally derived from
+ *  `customerOrderFill` — NOT a second hand-written mapping — so the two doors cannot drift.
+ *  `CustomerInput` treats an absent optional as "not supplied" (`customerUpsert`'s rule (a):
+ *  absent ≠ empty, and an omitted field is never written as null), so a blank string is converted
+ *  back to `undefined` HERE, at the one boundary where that distinction is the contract. */
+export function customerOrderInput(row: object): {
+  first_name: string; last_name: string; email: string;
+  phone?: string; address_line1?: string; city?: string; state?: string; zip?: string;
+  marketing_opt_in?: boolean; price_tier?: string | null;
+  tax_exempt?: boolean | null; tax_exempt_reason?: string | null; tax_exempt_cert_ref?: string | null;
+} {
+  const f = customerOrderFill(row);
+  const opt = (v: string) => (v === '' ? undefined : v);
+  return {
+    first_name: f.first_name,
+    last_name:  f.last_name,
+    email:      f.email,
+    phone:         opt(f.phone),
+    address_line1: opt(f.address_line1),
+    city:          opt(f.city),
+    state:         opt(f.state),
+    zip:           opt(f.zip),
+    marketing_opt_in:    f.marketing_opt_in,
+    price_tier:          f.price_tier,
+    tax_exempt:          f.tax_exempt,
+    tax_exempt_reason:   f.tax_exempt_reason,
+    tax_exempt_cert_ref: f.tax_exempt_cert_ref,
+  };
 }

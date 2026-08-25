@@ -33,6 +33,8 @@ import {
   readPricingConfig, normalizeDiscountTypes, resolveTier, RETAIL_TIER_NAME, type DiscountType,
 } from '@trace/shared/business-logic';
 import { QrScanner } from '../components/inventory/QrScanner';
+import { CustomerSearch, customerDisplayName, type CustomerSearchHit } from '../components/customers/CustomerSearch';
+import { customerOrderInput } from '../components/customers/customerFieldRegistry';
 import { useCart } from '../hooks/useCart';
 import { synthesizePlant, anchorKey } from '../lib/stockLinePlant';
 import { extractTag } from '../lib/scanTag';
@@ -53,17 +55,14 @@ type Phase = 'scanning' | 'reviewing' | 'picker' | 'unknown' | 'unreachable';
 // and the manual-search picker (a partial-term lookup that matched >1 lot). One shape, one UI.
 interface PickChoice { inventoryId: string; title: string; sub: string; row: StockLineRow }
 
-// A customer row for the attach lookup (way 1). Read via the customers_member RLS (20260710) —
-// an owner reads via the owner policy, a manager holding customers:read via the member policy.
-interface CustomerHit {
-  id: string; first_name: string; last_name: string | null;
-  phone: string | null; email: string | null;
-  address_line1: string | null; city: string | null; state: string | null; zip: string | null;
-  billing_line1?: string | null; billing_city?: string | null; billing_state?: string | null; billing_zip?: string | null;
-  price_tier: string | null;
-  // D-40 (optional — gated cols 20260713): the persistent exemption, carried so Review reflects it.
-  tax_exempt?: boolean | null; tax_exempt_reason?: string | null; tax_exempt_cert_ref?: string | null;
-}
+// 🔴 R-19 (2026-08-25) — THE LOCAL `CustomerHit` IS GONE, AND SO IS THE SEARCH THAT NEEDED IT.
+// This file used to declare its own customer row shape, its own 14-column select literal and its
+// own two-field `.ilike` search. That made it the THIRD customer search in the app and the
+// NARROWEST: "hoa" found Cedar Park HOA here while the roster also found Diane Foster, because this
+// one matched `first_name`/`last_name` and nothing else. The attach sheet now mounts
+// `<CustomerSearch>` — the same component `/checkout/customer` mounts — so the two doors onto ONE
+// act cannot disagree about who exists. `CustomerSearchHit` is that component's row shape.
+// Retires tech-debt #116 (the two-field search) and #117 (the sanitiser split).
 
 // Human label of a tier for the "visible moment" badge — the pricing agreement the manager sees
 // BEFORE submit (the authoritative price is always recomputed server-side). Uses the shared
@@ -84,21 +83,16 @@ function buildTierOptions(types: DiscountType[]): { value: string; label: string
   return opts;
 }
 
-function customerToInput(r: CustomerHit): CustomerInput {
-  return {
-    first_name:    r.first_name,
-    last_name:     r.last_name ?? '',
-    email:         r.email ?? '', // CustomerInput.email is required; CustomerCapture requires a valid one before submit
-    phone:         r.phone ?? undefined,
-    address_line1: r.billing_line1 ?? r.address_line1 ?? undefined,
-    city:          r.city ?? undefined,
-    state:         r.state ?? undefined,
-    zip:           r.zip ?? undefined,
-    price_tier:    r.price_tier ?? null, // D-39: carry the stored tier so Review resolves the same discount submit charges
-    tax_exempt:          r.tax_exempt ?? null,          // D-40: carry the persistent exemption to the Review preview
-    tax_exempt_reason:   r.tax_exempt_reason ?? null,
-    tax_exempt_cert_ref: r.tax_exempt_cert_ref ?? null,
-  };
+// 🔴 R-19 · ONE COPY. This was a hand-written twelve-field mapping and it carried a REAL BUG that
+// only shows up beside its sibling: it resolved `address_line1` BILLING-FIRST (`r.billing_line1 ??
+// r.address_line1`) and city/state/zip LEGACY-ONLY. So a customer whose billing city differed from
+// their legacy city got a line-1 from one column set and a city from the other — one row, one
+// address, assembled under two rules, and disagreeing with `submit.ts:264-274`, which is
+// billing-first on all four when it writes the delivery stop. `customerOrderInput` applies the ONE
+// rule to all four, so the cart, the invoice and the truck now read the same address.
+// `CustomerInput.email` is required; CustomerCapture still requires a valid one before submit.
+function customerToInput(r: CustomerSearchHit): CustomerInput {
+  return customerOrderInput(r) as CustomerInput;
 }
 
 
@@ -130,10 +124,7 @@ export function ScanOrder() {
   // ── Customer-first attach (ways 1 & 4) ──────────────────────────────────────
   const [customerView, setCustomerView] = useState<null | 'lookup' | 'create'>(null);
   const [discountTypes, setDiscountTypes] = useState<DiscountType[]>([]);
-  const [searchTerm, setSearchTerm]   = useState('');
-  const [searchHits, setSearchHits]   = useState<CustomerHit[]>([]);
-  const [searching, setSearching]     = useState(false);
-  const [searched, setSearched]       = useState(false);
+  // (the search's own state is gone with the search — `<CustomerSearch>` owns it)
   // way-4 new-customer mini-form (rest is confirmed at CustomerCapture)
   const [nf, setNf] = useState({ first: '', last: '', email: '', phone: '' });
   const [nfTier, setNfTier] = useState(RETAIL_TIER_NAME);
@@ -172,46 +163,25 @@ export function ScanOrder() {
     })();
   }, [businessId]);
 
-  async function runCustomerSearch() {
-    if (!businessId) return;
-    const safe = searchTerm.trim().replace(/[,%()]/g, ' ').trim();
-    if (!safe) { setSearchHits([]); setSearched(false); return; }
-    setSearching(true);
-    const like = `%${safe}%`;
-    const runSearch = (cols: string) => supabase
-      .from('customers')
-      .select(cols)
-      .eq('business_id', businessId)
-      .or(`first_name.ilike.${like},last_name.ilike.${like}`)
-      .order('first_name')
-      .limit(10);
-    // D-40 gated cols (20260713) — deploy-window-safe: try with the exemption cols; on a missing-column
-    // error retry WITHOUT them so customer search never breaks before the migration applies.
-    // D-41: canonical billing_* first, legacy as fallback (see the invoice's billAddrFrom).
-    const BASE = 'id,first_name,last_name,phone,email,address_line1,city,state,zip,price_tier,billing_line1,billing_city,billing_state,billing_zip';
-    let { data, error } = await runSearch(`${BASE},tax_exempt,tax_exempt_reason,tax_exempt_cert_ref`);
-    if (error && (error.code === '42703' || error.code === 'PGRST204')) {
-      console.log('[TRACE:TAX] customer exemption cols absent — search retrying without them (migration pending)', { code: error.code });
-      ({ data, error } = await runSearch(BASE));
-    }
-    if (error) console.log('[TRACE:lookup] search error', { error: error.message });
-    console.log('[TRACE:lookup] customer search', { term: safe, count: data?.length ?? 0 });
-    setSearchHits((data ?? []) as unknown as CustomerHit[]);
-    setSearched(true);
-    setSearching(false);
-  }
+  // 🔴 `runCustomerSearch` IS DELETED (R-19). Its whole body — a two-field `.or()`, a hand-written
+  // 14-column select literal, a `[,%()]` sanitiser and a strip-and-retry — now lives ONCE, inside
+  // `<CustomerSearch>`. Nothing of it was dropped: the field set WIDENED from 2 to 10, the retry
+  // survives as `CUSTOMER_ORDER_COLS_CORE`, and the four-character sanitiser is the one that won
+  // when the two regexes were unified, so the paste-a-phone case this door handled still works.
 
   // WAY 1 — attach an existing customer: use their stored tier (no invoke).
-  function attachExisting(r: CustomerHit) {
+  function attachExisting(r: CustomerSearchHit) {
     attachCustomer({
       customerId:  r.id,
-      name:        `${r.first_name} ${r.last_name ?? ''}`.trim(),
+      // The SAME name the picker row printed — an organization attaches as its organization, not as
+      // whoever happens to sit in `first_name` (R-19).
+      name:        customerDisplayName(r),
       customer:    customerToInput(r),
       invokedTier: null,
-      tierLabel:   tierLabelFor(r.price_tier, discountTypes),
+      tierLabel:   tierLabelFor(r.price_tier ?? null, discountTypes),
       // Resolve the customer's STORED tier once here (config is loaded) → carried into the cart so
       // CartReview shows the SAME discount submit charges (D-39). submit re-resolves authoritatively.
-      resolvedTier: resolveTier(r.price_tier, discountTypes),
+      resolvedTier: resolveTier(r.price_tier ?? null, discountTypes),
     });
     closeCustomer();
   }
@@ -245,7 +215,9 @@ export function ScanOrder() {
   }
 
   function openCustomer() {
-    setSearchTerm(''); setSearchHits([]); setSearched(false);
+    // `<CustomerSearch>` is REMOUNTED each time the sheet opens (it renders only while
+    // `customerView === 'lookup'`), so its query and results reset with it — B3's rule applied to
+    // the sheet as well as to the form: a previous customer's search must not be sitting there.
     setNf({ first: '', last: '', email: '', phone: '' }); setNfTier(RETAIL_TIER_NAME); setNfError('');
     setCustomerView(canLookup ? 'lookup' : 'create');
   }
@@ -599,32 +571,32 @@ export function ScanOrder() {
               <button style={S.iconBtn} onClick={closeCustomer} aria-label="Close"><X size={20} color="#6b7280" /></button>
             </div>
 
-            {customerView === 'lookup' && (
+            {/* 🔴 R-19 · ONE SEARCH. The same component `/checkout/customer` mounts, so a cashier
+                finds the SAME people by the SAME terms whichever door they came through, and gets
+                the same "showing N of M" notice when the result is capped.
+
+                ⚠️ WHAT IS DELIBERATELY *NOT* INSIDE IT — the separation is the point:
+                  · the CREATE form below is this sheet's own, and stays this sheet's own. It is a
+                    four-field mini-form whose purpose is to stage a customer for THIS order; the
+                    checkout door's add-step is a different, fuller form.
+                  · the ORDER-SCOPED DISCOUNT SELECT is bound to the CART, not to the customer, and
+                    it lives in the `create` branch below — where it always has. It was never in the
+                    lookup view, so mounting a component here does not touch it. Pushing it INTO
+                    `CustomerSearch` would put a cart control on `/checkout/customer`, where it has
+                    no business existing.
+                `onAddNew` hands over to that create form; the searched term is not seeded into it
+                because this mini-form's first field is a FIRST NAME and the term may well have been
+                a phone number or a street — seeding it would put a street in a name box. */}
+            {customerView === 'lookup' && businessId && (
               <>
-                <div style={S.searchRow}>
-                  <input
-                    style={S.searchInput}
-                    value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') void runCustomerSearch(); }}
-                    placeholder="Search by name…"
-                    autoFocus
-                  />
-                  <button style={S.searchBtn} onClick={() => void runCustomerSearch()} disabled={searching}>
-                    {searching ? '…' : 'Search'}
-                  </button>
-                </div>
-                {searched && searchHits.length === 0 && (
-                  <p style={S.subtle}>No customer found. Add them as a new customer below.</p>
-                )}
-                {searchHits.map(h => (
-                  <button key={h.id} style={S.pickBtn} onClick={() => attachExisting(h)}>
-                    <span style={S.pickSize}>{h.first_name} {h.last_name ?? ''}</span>
-                    <span style={S.pickQty}>
-                      {[h.phone, h.email, tierLabelFor(h.price_tier, discountTypes)].filter(Boolean).join(' · ')}
-                    </span>
-                  </button>
-                ))}
+                <CustomerSearch
+                  businessId={businessId}
+                  onSelect={attachExisting}
+                  onAddNew={({ query }) => {
+                    console.log('[TRACE:lookup] scan attach — add-new from no-match', { query });
+                    setCustomerView('create');
+                  }}
+                />
                 <button style={S.btnGhost} onClick={() => setCustomerView('create')}>+ Add a new customer</button>
               </>
             )}
@@ -710,9 +682,7 @@ const S = {
   tierBadge:  { display: 'inline-block', marginTop: 3, background: '#eef2ff', color: '#3730a3', fontWeight: 700, fontSize: '0.72rem', borderRadius: 6, padding: '2px 8px' } as React.CSSProperties,
   custChange: { background: 'none', border: 'none', color: '#27500A', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', flexShrink: 0 } as React.CSSProperties,
   custAttachBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 46, background: '#fff', border: '1.5px dashed #27500A', borderRadius: 12, color: '#27500A', fontSize: '0.92rem', fontWeight: 700, cursor: 'pointer', marginBottom: 14 } as React.CSSProperties,
-  searchRow:  { display: 'flex', gap: 8, marginBottom: 12 } as React.CSSProperties,
-  searchInput:{ flex: 1, minHeight: 46, border: '1.5px solid #d1d5db', borderRadius: 9, padding: '0 12px', fontSize: '0.95rem', boxSizing: 'border-box' } as React.CSSProperties,
-  searchBtn:  { minHeight: 46, background: '#27500A', color: '#fff', border: 'none', borderRadius: 9, padding: '0 16px', fontSize: '0.9rem', fontWeight: 700, cursor: 'pointer' } as React.CSSProperties,
+  // (searchRow / searchInput / searchBtn removed with the search they styled — R-19)
   formRow:    { display: 'flex', gap: 8, marginBottom: 10 } as React.CSSProperties,
   formInput:  { flex: 1, minWidth: 0, minHeight: 44, border: '1.5px solid #d1d5db', borderRadius: 9, padding: '0 12px', fontSize: '0.95rem', boxSizing: 'border-box', background: '#fff', color: '#111827' } as React.CSSProperties,
   formLabel:  { display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 } as React.CSSProperties,
