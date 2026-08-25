@@ -218,6 +218,16 @@ Lauren walks the lot with one order open. She scans a tree — Add. Scans the ne
 
 _Schedule → day-group → select stops → bookend (business→stops→business) → Google Maps handoff._
 
+### The order I just rang up is on Thursday's truck
+STATUS: gap
+SCOPE: vertical:cultivar
+BUILD: in-build
+ARC: delivery
+MAPS-TO: 2.1, 3.4, 3.5
+PIECES: checkout_delivery_row, service_type_from_transport, order_to_stop_traceability
+NEEDS: 🔴 **WRITTEN BY THUNDER 2026-08-25 AS THE AS-BUILT / GAP CASE — DAVID OWNS PROMOTING IT OFF `gap`.** The §9 story gate found NO MATCH: every delivery story on this board sources its stops from the OCR-invoice door, and none said a checkout order becomes a scheduled delivery. The behaviour below is exactly what David's build prompt dictated, written down so the build is not a re-derivation. **Two things are genuinely owed and are NOT decided here: (a) the no-natural-key question** — `deliveries` has no `order_id`, so an edited or re-submitted order can mint a second stop (tech-debt #108); **(b) whether the ship-to should ever differ from the customer's billing address at checkout** — today it cannot, and the "conditional-address-on-delivery" sub-story owed by the In-store purchase workflow story is the same question from the other side.
+Lauren rings up a customer at the counter for delivery next Thursday. The order is taken, the invoice pushes, the customer drives off — and **the stop is already on Thursday's schedule**, without anyone re-typing an address or waiting for a piece of paper to be photographed. A delivery-and-planting job shows as a planting job; a plain drop-off shows as a drop-off; a customer hauling it themselves creates no stop at all, because no truck goes out. The stop carries the invoice number, so anyone looking at Thursday's route can trace a load back to the order that made it. _Grounded: the delivery day view and the route map already exist and are OWNER-PROVEN (archived "Route the day's deliveries"); the ONLY missing piece was that `orders` and `deliveries` were unconnected — every stop arrived through `api/customers/create.ts` (the OCR door), so an order placed today appeared on neither screen. Built 2026-08-25, BUILDER-COMPLETE, owner-proof owed — `api/orders/submit.ts` `scheduleCheckoutDelivery`, ZERO migrations (`deliveries` already carried every column). Permission-gate deliberately ABSENT per the 2026-07-31 capability-not-a-field ruling, which named `deliveries:create` as the wrong string for this exact line._
+
 ### Offer delivery slots that actually work
 STATUS: needs-input
 SCOPE: vertical:cultivar

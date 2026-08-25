@@ -86,6 +86,7 @@
     ],
     "deliveries": [
       "packages/cultivar-os/api/customers/create.ts",
+      "packages/cultivar-os/api/orders/submit.ts",
       "packages/cultivar-os/src/pages/DeliverySchedule.tsx"
     ],
     "invitations": [

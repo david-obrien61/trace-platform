@@ -176,6 +176,153 @@ function buildTransportNote(transportMode: string, nettingDeclined: boolean, net
   return 'Customer self-transport — netting declined, Texas TCC Ch.725 waiver acknowledged';
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// CHECKOUT → A SCHEDULED DELIVERY (2026-08-25)
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// THE GAP THIS CLOSES: `orders` and `deliveries` were UNCONNECTED. Every stop on
+// `/delivery-schedule` and `/deliveries` arrived through the OCR-invoice door
+// (`api/customers/create.ts`), so an order rung up at the counter for delivery next Thursday
+// appeared on NEITHER screen — the truck's day was assembled from captured paper only, and the
+// orders the business actually took were invisible to the person planning the route.
+//
+// 🔴 THE ROW IS A CONSEQUENCE OF THE ORDER, AND IT CARRIES NO NEW AUTHORITY GATE — DELIBERATELY.
+// Ruled 2026-07-31 (RULINGS.md, "A PERMISSION GATES A CAPABILITY, NOT A FIELD"): `orders:create`
+// grants creating an order, and where the order goes is that order's own data. That ruling was
+// made ABOUT THIS EXACT LINE and it named `deliveries:create` as the WRONG string for it —
+// granting it here "would also hand her the ReceiptKeeper delivery INSERT she was never owed."
+// Tech-debt #84 closed ruled-not-built on the same reasoning: submit.ts needs nothing, and its
+// silence is a RULING. Practical corroboration: the anon QR checkout path carries NO token at
+// all, so a permission gate here would not narrow the act — it would delete it.
+//
+// 🔴 NO NATURAL KEY — KNOWN, ACCEPTED, AND NOT SOLVED HERE. `deliveries` has no `order_id`
+// column and this build adds none (zero migrations). So editing or re-submitting an order can
+// mint a SECOND row for the same load. `notes` carries the invoice number so a human can trace a
+// stop back to its order; that is a breadcrumb, not a key. Recorded as owed, not hidden.
+//
+// ⚠️ SECOND WRITE PATH TO `deliveries`, DECLARED RATHER THAN MERGED — see the close-out. The
+// column mapping below is a near-twin of `api/customers/create.ts:103-114`, which is the fork
+// §6 r8 exists to prevent. The durable form is ONE shared writer both doors call; that refactor
+// touches the OCR path, which this build was explicitly scoped out of. Flagged, not silent.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+/** What the scheduling write did. Never thrown — the ORDER must not be able to die of this. */
+export type CheckoutDeliveryOutcome =
+  | { scheduled: true;  deliveryId: string }
+  | { scheduled: false; reason: 'self_transport' }
+  | { scheduled: false; reason: 'write_failed' | 'zero_rows'; error: string };
+
+/**
+ * `transport_method` → the `deliveries.service_type` vocabulary the OCR door already established
+ * (`ReceiptKeeper.tsx:64-67`, rendered by `DeliverySchedule.tsx:66`). TWO words exist and no third
+ * is invented here. `null` = our truck does not go out, so there is no stop to schedule.
+ */
+export function deliveryServiceType(transportMethod: string): 'planting' | 'delivery_only' | null {
+  if (transportMethod === 'install')  return 'planting';       // delivery + planting — an install job
+  if (transportMethod === 'delivery') return 'delivery_only';  // a drop-off
+  return null;                                                 // 'self' — the customer hauls it
+}
+
+/**
+ * Write ONE `deliveries` row for an order whose goods leave on our truck.
+ *
+ * 🔴 R-12 (2026-08-23) — A WRITE MUST PROVE IT WROTE. A PostgREST insert that matches zero rows
+ * returns SUCCESS WITH NO ERROR, so `!error` is not evidence. This asks for the row back
+ * (`.select('id')`) and asserts the COUNT IS EXACTLY ONE. Zero rows and one row are different
+ * facts and are reported as different outcomes.
+ *
+ * 🔴 IT CANNOT THROW. Every failure path returns an outcome object. A checkout that dies because
+ * a scheduling row failed is far worse than a missing stop (§6 r6 — an integration failure never
+ * blocks an order; the same reasoning applied to an internal one).
+ */
+export async function scheduleCheckoutDelivery(
+  db: any,
+  args: {
+    businessId: string;
+    customerId: string;
+    transportMethod: string;
+    deliveryDate: string | null;
+    invoiceNumber: string;
+    customerRow: Record<string, any> | null;
+  },
+): Promise<CheckoutDeliveryOutcome> {
+  const serviceType = deliveryServiceType(args.transportMethod);
+  if (!serviceType) {
+    console.log('[TRACE:DELIVERY] checkout — self-transport, NO delivery row written (correct)', {
+      transportMethod: args.transportMethod, invoiceNumber: args.invoiceNumber,
+    });
+    return { scheduled: false, reason: 'self_transport' };
+  }
+
+  // D-41: `billing_*` is the CANONICAL home of a customer's address and the unprefixed four are
+  // its legacy MIRROR (`customerUpsert.ts:123-135` writes both, always together). Read canonical
+  // first, fall back to the mirror, and leave a genuinely absent field NULL — an address the
+  // platform does not hold must not be invented (A9: absent is not empty).
+  const c = args.customerRow ?? {};
+  const pick = (canonical: unknown, legacy: unknown): string | null => {
+    for (const v of [canonical, legacy]) if (typeof v === 'string' && v.trim()) return v.trim();
+    return null;
+  };
+
+  const row: Record<string, unknown> = {
+    business_id:   args.businessId,
+    customer_id:   args.customerId,
+    delivery_date: args.deliveryDate,                        // null = undated; the day view buckets it last
+    address_line1: pick(c.billing_line1, c.address_line1),
+    city:          pick(c.billing_city,  c.city),
+    state:         pick(c.billing_state, c.state),
+    zip:           pick(c.billing_zip,   c.zip),
+    status:        'scheduled',
+    source:        'checkout',                               // distinguishable from 'ocr-invoice'
+    service_type:  serviceType,
+    notes:         args.invoiceNumber,                       // the breadcrumb back to the order
+  };
+
+  console.log('[TRACE:DELIVERY] checkout — scheduling a stop', {
+    businessId: args.businessId, customerId: args.customerId, transportMethod: args.transportMethod,
+    serviceType, deliveryDate: row.delivery_date ?? '(undated)', invoiceNumber: args.invoiceNumber,
+    addressPresent: !!row.address_line1,
+  });
+
+  try {
+    // service_type is NOT strip-and-retried here, unlike the OCR door. Stated rather than
+    // assumed: `DeliverySchedule.tsx:122` already selects the column in a bare list, so a live
+    // screen depends on its presence. A row landed WITHOUT it would be a silently degraded stop
+    // (no badge, no planting/drop distinction) — worse than a loud, non-blocking failure.
+    const { data, error } = await db.from('deliveries').insert(row).select('id');
+
+    if (error) {
+      console.error('[TRACE:DELIVERY] 🔴 checkout delivery NOT scheduled — the order is unaffected', {
+        invoiceNumber: args.invoiceNumber, code: (error as any)?.code ?? null, error: error.message,
+      });
+      return { scheduled: false, reason: 'write_failed', error: error.message };
+    }
+
+    // R-12: the COUNT is the proof. `data` is an array; anything other than exactly one row means
+    // the insert did not do what it claimed, including the RLS-refused zero-row case.
+    const rows: any[] = Array.isArray(data) ? data : (data ? [data] : []);
+    if (rows.length !== 1 || !rows[0]?.id) {
+      const detail = `insert reported success but returned ${rows.length} row(s)`;
+      console.error('[TRACE:DELIVERY] 🔴 checkout delivery write returned NO ROW — the order is unaffected', {
+        invoiceNumber: args.invoiceNumber, rowsReturned: rows.length,
+      });
+      return { scheduled: false, reason: 'zero_rows', error: detail };
+    }
+
+    console.log('[TRACE:DELIVERY] checkout delivery SCHEDULED — proven by the returned row', {
+      deliveryId: rows[0].id, rowsReturned: rows.length, serviceType,
+      deliveryDate: row.delivery_date ?? '(undated)', invoiceNumber: args.invoiceNumber,
+    });
+    return { scheduled: true, deliveryId: rows[0].id };
+  } catch (err: any) {
+    const message = err?.message ?? String(err);
+    console.error('[TRACE:DELIVERY] 🔴 checkout delivery THREW — caught; the order is unaffected', {
+      invoiceNumber: args.invoiceNumber, error: message,
+    });
+    return { scheduled: false, reason: 'write_failed', error: message };
+  }
+}
+
 // ── DISPATCH ────────────────────────────────────────────────────────────────
 // One endpoint, multiple actions (12-fn ceiling — CLAUDE.md §6 rule 11). action absent/'create'
 // = the ORIGINAL checkout write (unchanged, anon-createable). 'update'/'delete'/'status' = the
@@ -971,6 +1118,26 @@ async function handleCreate(req: any, res: any) {
         }).catch((err: any) => console.error('[leakage-alert]', err.message));
       }
     }
+
+    // ── 12b. SCHEDULE THE DELIVERY (2026-08-25) ─────────────────────────────
+    // Placed HERE, after every order write has already committed and BEFORE the QBO push, on the
+    // push's own reasoning: there is no wrapping transaction, so if the invocation is killed
+    // mid-QuickBooks the order is whole — and the stop should be whole with it. A delivery/install
+    // order now appears on /delivery-schedule and /deliveries without anyone re-typing it.
+    //
+    // 🔴 NON-BLOCKING BY CONSTRUCTION: `scheduleCheckoutDelivery` returns an outcome and never
+    // throws, so no failure it can produce reaches the catch below. The order completes, the
+    // invoice pushes, the customer is confirmed — and the failure is LOUD in [TRACE:DELIVERY].
+    // Nothing about the response shape changes; the client is not asked to render this.
+    const deliveryOutcome = await scheduleCheckoutDelivery(db, {
+      businessId,
+      customerId,
+      transportMethod,
+      deliveryDate: deliveryDateVal,
+      invoiceNumber,
+      customerRow: (custRow as Record<string, any> | null) ?? null,
+    });
+    console.log('[TRACE:DELIVERY] checkout scheduling outcome', { orderId, invoiceNumber, ...deliveryOutcome });
 
     // D-39: return the AUTHORITATIVE per-line breakdown so the Confirmation receipt renders the
     // server's numbers (not the client Review preview) — Confirmation === QBO by construction, and
