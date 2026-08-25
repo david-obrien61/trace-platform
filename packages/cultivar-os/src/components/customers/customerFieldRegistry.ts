@@ -157,7 +157,9 @@ export const CUSTOMER_SELECT_FULL = CUSTOMER_FIELDS.map(f => f.key).join(',');
  *  ⚠️ **OVER-SEARCHING IS NOT THE DEFECT; UNDER-SEARCHING IS.** `phone`/`email` and the four legacy
  *  address columns are NOT rendered as roster columns and are kept anyway — a cashier looking someone
  *  up by phone is the case `CustomerSearch` was built for, and removing them would narrow a search
- *  nobody complained about.
+ *  nobody complained about. ✅ **All four legacy address columns are UNGATED** (`gated` is set only on
+ *  the 2026-07-13 additions), so a consumer reading this list against a pre-migration database is no
+ *  more exposed than it already was through `organization_name`/`display_name`, which ARE gated.
  *
  *  ⚠️ **`billing_*` IS DELIBERATELY NOT HERE, and the reason is recorded rather than left to be
  *  rediscovered:** the roster renders no address at all, so B1's bar ("search what it displays")
@@ -170,10 +172,28 @@ export const CUSTOMER_SELECT_FULL = CUSTOMER_FIELDS.map(f => f.key).join(',');
  *  — DELIBERATELY, because that guard would reproduce the very defect this list fixes:** a mistyped
  *  or removed key would be silently dropped and the search would quietly narrow again, with nothing
  *  saying so. The integrity check lives in `customerSearchFields.test.ts` instead, where a name that
- *  is not a real registry field is a RED BUILD rather than a silent absence. */
+ *  is not a real registry field is a RED BUILD rather than a silent absence.
+ *
+ *  —— WHO READS IT — UPDATED 2026-08-25 (ledger #219), because the previous note said HALF and that
+ *  half has now landed ——
+ *  ✅ **TWO consumers, ONE list.** The `/customers` roster (`Customers.tsx`, client-side haystack via
+ *  `customerSearchHaystack`) AND the checkout customer picker (`CustomerSearch.tsx`, a server-side
+ *  PostgREST `.or()` of `<field>.ilike.<pattern>`). **Only the FIELD SET is shared — the two
+ *  IMPLEMENTATIONS are deliberately NOT unified**, because one filters rows already in the browser
+ *  and the other composes a filter string the database runs. The defect that forced this was the
+ *  divergence, not the duplication: "cedar" returned TWO rows on the roster and ONE in checkout,
+ *  the missed row matching on its CITY — a customer the owner can SEE and the cashier cannot FIND.
+ *
+ *  🔴 **A THIRD SEARCH STILL HAS ITS OWN LIST AND IS DELIBERATELY NOT REPOINTED HERE:**
+ *  `ScanOrder.tsx`'s customer-attach strip (`runCustomerSearch`) matches on **`first_name` and
+ *  `last_name` ONLY** — the narrowest of the three — and carries its own hand-written select string
+ *  besides. It is **tech-debt #116**, named rather than fixed: repointing it changes a surface that
+ *  was outside this build's scope bar, and its own select literal is a separate (A4/E6) fix that
+ *  wants the same pass. **So the consolidation is 2 of 3, not done** — stated here so the next
+ *  reader does not believe one list now governs every customer search in the app. */
 export const CUSTOMER_SEARCH_FIELDS: readonly string[] = [
   // identity — every field the roster's Name cell can render, plus the name the customer sees on
-  // their invoice (`display_name`), which `CustomerSearch.tsx:97` also matches on.
+  // their invoice (`display_name`), which the checkout picker has always matched on.
   'first_name', 'last_name', 'organization_name', 'display_name',
   // contact + the legacy address — over-searched on purpose (see above).
   'phone', 'email', 'address_line1', 'city', 'state', 'zip',

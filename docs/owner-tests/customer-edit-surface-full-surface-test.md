@@ -5,11 +5,12 @@
 >
 > **This file is the ONLY source of truth for the customer edit-surface owner-tests.** It is STANDING —
 > run it after any change to `CustomerPartyEditor`, `CustomerEditModal`, `customerEdit.ts`, the
-> `/customers` roster's inline cells, or **the roster's SEARCH** (cards 12–13). A per-build proof is a
-> FILTER (`COVERS: #NNN`), never a second doc.
+> `/customers` roster's inline cells, **the roster's SEARCH** (cards 12–13), or **the checkout
+> customer picker's search** (cards 14–15). A per-build proof is a FILTER (`COVERS: #NNN`), never a
+> second doc.
 
 **Purpose:** prove the customer form actually WRITES what it says it writes. Every card below is a
-`STATUS: owed` — the whole board is **0 of 13**.
+`STATUS: owed` — the whole board is **0 of 15**.
 
 **Scope note (2026-08-25, ledger #217):** cards 1–8 cover the customer EDIT surfaces
 (`CustomerPartyEditor` / `customerEdit.ts` / the roster cells). **Cards 9–11 cover a different
@@ -18,6 +19,14 @@ door both call. They live here because the artifact the owner reads is the same 
 row on `/customers`), and a second document answering "did the customer record save?" would drift
 (STD-011). ⚠️ **Card 7 was NOT flipped by #217** — it tests `customerEdit.ts`, which that build did
 not touch.
+
+**Scope note (2026-08-25, ledger #219):** **cards 14–15 leave `/customers` entirely** — they are run at
+the register, on the checkout customer picker (`CustomerSearch.tsx`, the customer step of `/checkout/*`).
+They live on this board anyway because **card 15 is a COMPARISON between the two screens and cannot be
+run from only one of them**, and because a second document answering *"can I find this customer?"* would
+drift from cards 12–13 (STD-011). ⚠️ **#219 changed ONLY which fields the picker searches** — not its
+columns, its `.limit(25)`, its ordering, its three-state permission handling, or what selecting a
+customer does — so no existing card moved and none was flipped.
 
 **Scope note (2026-08-25, ledger #218):** **cards 12–13 are the first READ cards on this board** — every
 other card asks *"did it save?"*, these ask *"can I find them?"*. They live here rather than in a new file
@@ -324,6 +333,64 @@ you know matches exactly two customers and assert that number instead.
 
 ---
 
+### CARD 14 — THE REGISTER FINDS THE CUSTOMER THE ROSTER SHOWS
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #219
+SIGNAL: `[TRACE:customers] search` — its `searchableFields` must now read **10** (it read 6 before this build)
+
+🔴 **THE DEFECT WAS A DISAGREEMENT BETWEEN TWO SCREENS ABOUT WHO EXISTS.** Measured on `8b26348`:
+the roster returned TWO rows for `cedar` and the register returned ONE. The row the register could
+not see matched on its **city** — so the cashier's honest next move is to create a customer who is
+already there, which is the duplicate `CustomerSearch` exists to prevent.
+
+1. **GATE 0 first** (top of this file): the SHA on screen == `git log -1`, Vercel READY for THAT SHA.
+2. Open `/customers` and search **`cedar`**. Note **every** name returned and the count pill.
+3. Now start an order and reach the customer step (scan or `/checkout/*` → the customer screen).
+4. Search **`cedar`** there.
+
+**PASS:** the register returns **the same customers, by name**, as the roster did in step 2 — in
+particular the one whose *address* is in Cedar Park, not just the one with Cedar in its name.
+**FAIL:** the register returns fewer.
+⚠️ **If `cedar` is not a live term on this tenant**, use any term you can see in the **City** or
+**Address** column of a customer on `/customers` and that appears in NO part of their name. A term
+that is also in the name proves nothing — the old six-field list already matched names.
+
+---
+
+### CARD 15 — 🔴 THE RULE: THE SAME TERM, THE SAME CUSTOMERS, ON BOTH SCREENS
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #219
+SIGNAL: the roster's count pill vs the register's result list — the assertion is that they AGREE
+
+🔴 **THIS IS THE CARD THAT PROTECTS YOU, AND IT IS NOT A TEST OF THE FIX.** It fails the day anyone
+adds a field to one search and not the other — which is the state that existed for the whole of the
+last two builds and was invisible until you typed the same word into two boxes.
+
+1. **GATE 0 first.**
+2. Pick **three** terms from `/customers`: one from a **name**, one from a **city or address**, one
+   from a **phone or email**.
+3. Search each on `/customers`. Write down the names returned.
+4. Search each at the register's customer step.
+
+**PASS:** all three terms return **the same customers** on both screens.
+**FAIL:** any term returns a customer on one screen and not the other.
+
+⚠️ **THREE KNOWN EXCEPTIONS — these are NOT failures, they are what the two mechanisms genuinely
+are, and they are recorded so you do not report them as bugs:**
+- **A term with a SPACE that spans two fields** (typing `diane foster`, where `Diane` is the first
+  name and `Foster` the last) matches on the ROSTER and not at the register. The roster joins the
+  fields into one string; the register asks the database about one column at a time. **Use
+  single-word terms for this card.**
+- **More than 25 matches.** The register stops at 25; the roster does not. Use a term that matches a
+  handful of customers.
+- **A term containing `%` or `,`.** The two clean it up differently.
+
+---
+
 ## WHAT THIS BOARD DOES NOT COVER (stated, not silent)
 
 - **`CustomerEditModal`** (the 8-field editor mounted from `DeliverySchedule`) is a SECOND edit
@@ -338,6 +405,11 @@ you know matches exactly two customers and assert that number instead.
   `/deliveries`, the dashboard's revenue read and eight more — are **tech-debt #114** and are NOT covered
   here; the roster is the one surface that already states `N of M shown`, which is why it is the only one
   with a card that can read a count.
+- 🔴 **THE THIRD CUSTOMER SEARCH HAS NO CARD AND IS STILL NARROW.** `ScanOrder.tsx`'s
+  customer-attach strip — the one on the scan-loop front door, not the checkout customer step —
+  matches on **`first_name` and `last_name` only** and was scoped OUT of #219. **Cards 14–15 do not
+  reach it**, so if you attach a customer from the scan screen rather than the checkout step, none of
+  this applies. Tech-debt **#116**; a card arrives with the fix.
 - **Create mode** ("Add Customer") buffers to one INSERT and was not the defect; no card.
 - **The other 80 unchecked mutation sites platform-wide** are held by
   `zero-row-writes-baseline.json` and are NOT covered here — they are rows on the architecture

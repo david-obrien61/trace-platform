@@ -17,11 +17,21 @@
 //                               that as "no such customer", and would create the duplicate.
 //               NO MATCH      → "No customer found" + Add new.
 //               EMPTY QUERY   → a prompt; neither of the above.
-// MATCHES ON:   name (first / last / organization / display) OR email OR phone. Phone is the
-//               strongest identity signal a cashier has and the customer is standing there to say
-//               it. Phone uses `phoneMatchKey` (digits, last 10) — NOT `normalizePhone`, which is a
-//               STORAGE normalizer that preserves the human format and would miss
+// MATCHES ON:   🔴 `CUSTOMER_SEARCH_FIELDS` — the registry's list, NOT this file's. It WAS a
+//               hand-written SIX-field array here (first/last/organization/display/email/phone)
+//               while the `/customers` roster searched TEN, so the two surfaces disagreed about
+//               who exists: measured live, "cedar" returned TWO rows on the roster and ONE in
+//               checkout, because the missed row matched on its CITY. The four the picker lacked
+//               are the legacy address columns (address_line1 · city · state · zip); all four are
+//               UNGATED, so widening to the registry list adds no deploy-window risk.
+//               Phone additionally uses `phoneMatchKey` (digits, last 10) — NOT `normalizePhone`,
+//               which is a STORAGE normalizer that preserves the human format and would miss
 //               "(512) 456-3632" vs "5124563632", the exact case this search exists to catch.
+// ⚠️ NOT SHARED:  the IMPLEMENTATION. This composes a PostgREST `.or()` filter the SERVER runs; the
+//               roster filters a client-side haystack over already-fetched rows. Different layer,
+//               different output type — the FIELD SET is shared and nothing else is. Consequence,
+//               stated rather than discovered: a MULTI-WORD term spanning two columns ("foster 512")
+//               matches the roster's joined haystack and CANNOT match any single `ilike` here.
 // COLUMNS:      `CUSTOMER_SEARCH_COLS` — DERIVED from the field registry (A4/E6). A new read path
 //               written with a literal column string would fail `verify:field-lists`.
 // DEPENDENCIES: supabase (customers, business_id-scoped, RLS-gated), the field registry,
@@ -32,7 +42,7 @@ import { useState } from 'react';
 import { Search, UserPlus, Lock } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { phoneMatchKey } from '@trace/shared/utils/normalizePhone';
-import { CUSTOMER_SEARCH_COLS } from './customerFieldRegistry';
+import { CUSTOMER_SEARCH_COLS, CUSTOMER_SEARCH_FIELDS } from './customerFieldRegistry';
 
 export interface CustomerSearchHit {
   id: string;
@@ -90,15 +100,16 @@ export function CustomerSearch({ businessId, onSelect, onAddNew }: Props) {
     setState({ kind: 'searching' });
 
     const like = `%${q.replace(/[%,]/g, ' ')}%`;
-    const parts = [
-      `first_name.ilike.${like}`,
-      `last_name.ilike.${like}`,
-      `organization_name.ilike.${like}`,
-      `display_name.ilike.${like}`,
-      `email.ilike.${like}`,
-      `phone.ilike.${like}`,
-    ];
-    console.log('[TRACE:customers] search', { businessId, q });
+    // 🔴 ONE FIELD LIST, TWO SEARCHES. This was a SIX-field literal while the roster searched
+    // TEN — so a customer visible on `/customers` could be unfindable at the register, and the
+    // cashier's honest next move is to create the duplicate `CustomerSearch` exists to prevent.
+    // DERIVED, never re-typed: a field added to `CUSTOMER_SEARCH_FIELDS` joins BOTH searches at once.
+    const parts = CUSTOMER_SEARCH_FIELDS.map(f => `${f}.ilike.${like}`);
+    console.log('[TRACE:customers] search', {
+      businessId, q,
+      searchableFields: CUSTOMER_SEARCH_FIELDS.length,
+      searchable: CUSTOMER_SEARCH_FIELDS.join(','),
+    });
 
     const { data, error } = await supabase
       .from('customers')
