@@ -23,7 +23,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   buildHistoryOrder, decodeCapturedDocument, historyOrderLines,
-  transportMethodForService, HISTORY_ORDER_KIND, HISTORY_ORDER_STATUS,
+  transportMethodForService, HISTORY_ORDER_KIND, historyOrderStatus, isDeliveryComplete,
 } from './historyOrder';
 
 let passed = 0, failed = 0;
@@ -57,15 +57,37 @@ const build = (over: any = {}) => buildHistoryOrder({
 // ══ §A THE TWO INVARIANTS — the silent-failure guards ════════════════════════
 {
   const d = build();
-  ok(d.order.status === 'fulfilled',
-    'INVARIANT 2: status is fulfilled — the ONLY non-cancelled status the committed-stock derivation excludes. Any other value makes the order hold a commitment against stock it never touched');
-  ok(HISTORY_ORDER_STATUS === 'fulfilled', 'the constant itself is fulfilled');
+  ok(d.order.status === 'confirmed',
+    '🔴 THE 2026-08-27 DEFECT: a history order whose delivery is still SCHEDULED reads `confirmed`, NOT `fulfilled`. Eight orders shipped claiming fulfilment while their own delivery rows said scheduled — four for a Saturday that had not happened');
   ok(d.order.status !== 'invoiced',
     'and it is NOT "invoiced" — that status is absent from ORDER_STATUSES, so it looks safe today and starts counting as OPEN the day the enum is ratified');
+  ok(build({ deliveryStatus: 'delivered' }).order.status === 'fulfilled',
+    'a COMPLETE delivery does yield fulfilled — the rule follows the delivery in both directions, it is not a blanket downgrade');
   ok(d.items.length === 2 && d.items.every(l => l.businessInventoryId === null),
     'INVARIANT 1: every line carries a NULL business_inventory_id — a lot id here silently reduces available-to-sell with no decrement and nothing to reverse');
   ok(d.order.order_kind === 'history' && HISTORY_ORDER_KIND === 'history',
     'the discriminator is set — it is what the QuickBooks re-push gate keys on');
+}
+
+// ══ §A2 STATUS FOLLOWS THE DELIVERY ═════════════════════════════════════════
+{
+  ok(historyOrderStatus('scheduled') === 'confirmed', 'scheduled → confirmed');
+  ok(historyOrderStatus('pending')   === 'confirmed', 'any not-yet-gone state → confirmed');
+  ok(historyOrderStatus(null)        === 'confirmed',
+    'NO DELIVERY AT ALL → confirmed, deliberately: a capture with no delivery row is PROBABLY a walk-in already gone, but "probably" is not knowledge and `fulfilled` is the stronger claim of the two (A9)');
+  ok(historyOrderStatus('complete')  === 'fulfilled', 'complete → fulfilled');
+  ok(historyOrderStatus('delivered') === 'fulfilled', 'delivered → fulfilled');
+  ok(historyOrderStatus('DELIVERED') === 'fulfilled', 'case-insensitive — a status written by a future UI must not miss on capitalisation');
+  ok(historyOrderStatus(' delivered ') === 'fulfilled', 'and whitespace-tolerant');
+  ok(isDeliveryComplete('scheduled') === false && isDeliveryComplete('') === false && isDeliveryComplete(undefined) === false,
+    'and nothing else counts as gone — an unknown status is NOT treated as delivered');
+
+  // 🔴 THE SAFETY NOTE THIS PAIR EXISTS TO PIN. `confirmed` HOLDS a commitment in the D-52
+  // derivation (holdsCommitment excludes only fulfilled/cancelled), so moving these orders off
+  // `fulfilled` makes the NULL lot id the only thing keeping them out of available-to-sell.
+  const conf = build({ deliveryStatus: 'scheduled' });
+  ok(conf.order.status === 'confirmed' && conf.items.every(l => l.businessInventoryId === null),
+    '🔴 a `confirmed` history order carries NO lot id on ANY line — that invariant is now load-bearing ALONE, not as a second line of defence');
 }
 
 // ══ §B THE MONEY — the document is the authority ═════════════════════════════
@@ -229,6 +251,10 @@ const build = (over: any = {}) => buildHistoryOrder({
   // is the import at the top of the file, which would make this assertion meaningless.
   ok(src.indexOf('customer.first_name') < src.indexOf('buildHistoryOrder({'),
     'and that refusal comes FIRST — a vendor receipt cannot reach the order write');
+  ok(/deliveryStatus:/.test(src),
+    '🔴 THE CAPTURE PATH THREADS deliveryStatus — without it every future scan inherits the fulfilled defect, writing "already delivered" at the moment of scanning');
+  ok(!/status:\s*'fulfilled'/.test(src),
+    'and it does not hand-write a status of its own — the rule lives in ONE place');
 }
 
 console.log(`\n  historyOrder: ${passed} passed, ${failed} failed`);

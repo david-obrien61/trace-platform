@@ -51,7 +51,7 @@ export function Orders() {
         leakage_flag, notes, status,
         customers ( first_name, last_name, email ),
         order_items (
-          quantity, business_inventory_id,
+          quantity, business_inventory_id, description, sku,
           business_inventory ( name, size, sku )
         )
       `)
@@ -128,7 +128,10 @@ export function Orders() {
           const item      = order.order_items?.[0];
           const qty       = item?.quantity ?? 1;
           const tagId     = item ? orderItemTag(item) : '—';
-          const plantName = item ? orderItemName(item) : 'Unknown plant';
+          // An order with NO order_items row at all is a different thing from a line we could not
+          // name, and it must not borrow the other one's words. "Unknown plant" here claimed a plant
+          // existed and was unidentified; "No items" states the row's actual condition.
+          const plantName = item ? orderItemName(item) : 'No items';
           const st        = ORDER_STATUS_META[order.status] ?? { label: order.status, color: '#6b7280', bg: '#f3f4f6' };
 
           return (

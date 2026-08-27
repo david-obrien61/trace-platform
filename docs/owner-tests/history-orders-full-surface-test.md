@@ -2,7 +2,7 @@
 
 **Capability:** 2.3 (OCR doc routing) · 3.5 (delivery) · dashboard readouts
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 7 covered.**
+**Board: 0 of 10 covered.**
 
 ---
 
@@ -16,6 +16,40 @@ A failed Vercel build is **SILENT** — the last-good bundle keeps serving — a
 4. Hard-refresh.
 
 If ①–③ do not agree, **STOP**. Do not record a pass or a fail.
+
+---
+
+## SURFACE: the order roster and detail
+
+### CARD 8 — every line names itself; nothing reads "Unknown plant"
+STATUS: owed · LAST-PROVEN: — · DEVICE: desktop · COVERS: #224
+
+Open `/orders`. Open **Paul Christ's** order.
+
+- The line reads **"Mexican Sycamore - 45 gallon"** and shows **MS45**.
+- **No line anywhere on the screen reads "Unknown plant".**
+- Check the roster, the order detail, the customer's order history on `/customers/…`, and the delivery route list — all four resolve the same way.
+
+🔴 **What shipped in `2626e25`:** all eight orders rendered every line as *"Unknown plant"* while `description` sat unread on the same row. A history line carries **no** `business_inventory_id` by invariant — the stock left before this platform existed — so the lot-only resolver got null and printed a confident label over data it had never looked at. **The fix made the line self-describing; it did NOT fake a lot.**
+
+### CARD 9 — statuses agree with their deliveries
+STATUS: owed · LAST-PROVEN: — · DEVICE: desktop · COVERS: #224
+
+On `/orders`, all eight history orders read **`Confirmed`**, not `Fulfilled`.
+
+🔴 **Saturday 2026-08-29 has not happened.** Five of these orders are for that day, one is for 09-12, and every delivery row still reads `scheduled`. `fulfilled` was chosen for a mechanical reason — it is one of only two statuses the committed-stock derivation excludes — and nobody checked whether it was true.
+
+⚠️ **Lauren Frazier's 08-26 is `confirmed` too, and that is the rule being followed rather than a miss.** Her delivery row reads `scheduled`; nothing has ever marked a delivery complete in this system. If that install did happen, marking the delivery complete is what should flip the order — not editing the order.
+
+### CARD 10 — a new capture lands `confirmed`, not `fulfilled`
+STATUS: owed · LAST-PROVEN: — · DEVICE: phone · COVERS: #224
+
+Scan a customer invoice for a **future** delivery date and schedule it.
+
+- The new order reads **`Confirmed`**.
+- Its line shows the description off the document, not "Unknown plant".
+
+🔴 Before this fix the capture path wrote `fulfilled` at the moment of scanning — asserting that trees scheduled for a future Saturday had already left the property. **Ariel Thiry and Sherry Cooper are live proof it happened**: both were captured through the OCR door after `2626e25` shipped and both landed `fulfilled`.
 
 ---
 

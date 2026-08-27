@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { orderItemName } from '../lib/orderItemName';
 import {
   Truck, MapPin, Navigation, Copy, Send,
   CheckSquare, Square, Plus, X, Phone,
@@ -23,7 +24,9 @@ interface DeliveryOrder {
     state: string | null;
     zip: string | null;
   } | null;
-  order_items: { business_inventory: { name: string | null } | null }[];
+  // description/sku carried so a line with no lot can still name itself (a history order has no
+  // lot on any line, by invariant). Shape kept compatible with OrderItemAnchorFields.
+  order_items: { description?: string | null; sku?: string | null; business_inventory: { name: string | null } | null }[];
 }
 
 const GREEN = '#27500A';
@@ -430,7 +433,7 @@ export function DeliveryRoute() {
       .select(`
         id, created_at, notes,
         customers ( first_name, last_name, phone, address_line1, city, state, zip, billing_line1, billing_city, billing_state, billing_zip ),
-        order_items ( business_inventory ( name ) )
+        order_items ( description, sku, business_inventory ( name ) )
       `)
       .eq('business_id', businessId!)
       .eq('transport_method', 'delivery')
@@ -577,8 +580,12 @@ export function DeliveryRoute() {
                 const isSelected = selected.has(order.id);
                 const addr = getAddress(order);
                 const hasAddr = addr.length > 0;
-                const p = order.order_items?.[0]?.business_inventory;
-              const plant = p?.name ?? 'Plant';
+                // Routed through the ONE shared resolver (§6 r8) rather than reading the lot
+                // directly. The old `p?.name ?? 'Plant'` printed the generic word "Plant" for every
+                // history-order line — not a false claim like "Unknown plant", but still a screen
+                // discarding "Mexican Sycamore - 45 gallon" that was sitting on the same row.
+                const firstItem = order.order_items?.[0];
+                const plant = firstItem ? orderItemName(firstItem) : 'No items';
                 const custName = order.customers
                   ? `${order.customers.first_name} ${order.customers.last_name}`
                   : 'Unknown customer';

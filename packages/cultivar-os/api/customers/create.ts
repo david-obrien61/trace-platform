@@ -200,6 +200,12 @@ export default async function handler(req: any, res: any) {
         decoded: decodeCapturedDocument(receipt.ocr_raw),
         deliveryDate: delivery?.deliveryDate || null,
         serviceType:  delivery?.serviceType  || null,
+        // 🔴 THE STATUS OF THE ORDER FOLLOWS THIS. At capture the delivery has just been inserted
+        // as 'scheduled', so a captured invoice lands 'confirmed' — a real, paid sale that has not
+        // been delivered yet — NOT 'fulfilled'. Before this was threaded through, every capture
+        // wrote 'fulfilled' at the moment of scanning, asserting that trees scheduled for a future
+        // Saturday had already left the property.
+        deliveryStatus: deliveryId ? 'scheduled' : null,
       });
 
       if (TRACE_HISTORY) console.log('[TRACE:HISTORY] building history order — receipt:', receipt.id,

@@ -88,7 +88,7 @@ export function CustomerDetail() {
       .from('orders')
       .select(`
         id, created_at, total_amount, status, notes, transport_method, leakage_flag,
-        order_items ( quantity, business_inventory_id, business_inventory ( name, size, sku ) )
+        order_items ( quantity, business_inventory_id, description, sku, business_inventory ( name, size, sku ) )
       `)
       .eq('business_id', businessId)
       .eq('customer_id', id)

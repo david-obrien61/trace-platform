@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { orderItemName, orderItemTag } from '../lib/orderItemName';
+import { orderItemName, orderItemTag, orderItemAnchor } from '../lib/orderItemName';
 import { describeTaxLine, type TaxStatus } from '@trace/shared/business-logic';
 
 interface PreviewLine { description: string; qty: number; rate: number; amount: number; }
@@ -67,7 +67,7 @@ function QBInvoicePreview() {
       // STORED per-line breakdown (retail_unit/discount_pct/discount_amt) so the invoice SHOWS the
       // discount as its own line (goods at retail → discount line), never a silently-net rate. The
       // breakdown cols are gated (20260713); fall back to the net-only select on a missing-column error.
-      const ITEM_CORE = 'quantity, unit_price, subtotal, business_inventory_id, business_inventory ( name, size, sku )';
+      const ITEM_CORE = 'quantity, unit_price, subtotal, business_inventory_id, description, sku, business_inventory ( name, size, sku )';
       let itemsRaw: any = null; let itemsErr: any = null;
       ({ data: itemsRaw, error: itemsErr } = await supabase
         .from('order_items')
@@ -106,7 +106,14 @@ function QBInvoicePreview() {
         const name      = orderItemName(it);
         const container = it.business_inventory?.size ?? null;
         const tag       = orderItemTag(it);
-        const label     = container ? `${name} — ${container}` : (name === 'Unknown plant' && tag !== '—' ? tag : name);
+        // 🔴 THIS BRANCH USED TO COMPARE AGAINST THE LITERAL STRING 'Unknown plant'. Deleting that
+        // string from the resolver would have left the comparison silently FALSE forever — a dead
+        // fallback that still looks alive, which is worse than no fallback at all. Found by grepping
+        // for the literal before removing it, not by review. It now asks the resolver WHICH anchor
+        // named the line, which is the question it was really asking: when nothing named it, fall
+        // back to whatever identifier we do have rather than printing the not-found text.
+        const named     = orderItemAnchor(it) !== 'unknown';
+        const label     = container ? `${name} — ${container}` : (!named && tag !== '—' ? tag : name);
         const rate   = showDiscount ? Number(it.retail_unit) : Number(it.unit_price ?? 0);
         const amount = showDiscount
           ? Math.round(Number(it.retail_unit) * Number(it.quantity ?? 1) * 100) / 100

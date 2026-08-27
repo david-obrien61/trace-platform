@@ -93,6 +93,7 @@ const SELECT_COLS = `
 // the detail never breaks before 20260713_order_items_line_breakdown applies (deploy-window safe).
 const ITEM_COLS_CORE = `
   id, quantity, unit_price, subtotal, business_inventory_id,
+  description, sku,
   business_inventory ( name, size, sku )`;
 const ITEM_COLS_FULL = `${ITEM_COLS_CORE}, retail_unit, discount_pct, discount_amt`;
 

@@ -6,7 +6,7 @@
 //               sale this platform made. Used by BOTH writers: the backfill script (existing
 //               documents) and the OCR door (every document from now on).
 // DEPENDENCIES: none — pure. No db handle, no network, no env. Both callers own their transport.
-// OUTPUTS:      HISTORY_ORDER_KIND · HISTORY_ORDER_STATUS · decodeCapturedDocument ·
+// OUTPUTS:      HISTORY_ORDER_KIND · historyOrderStatus / isDeliveryComplete · decodeCapturedDocument ·
 //               transportMethodForService · buildHistoryOrder.
 // ============================================================
 //
@@ -27,8 +27,12 @@
 //        the business can sell — no decrement, no ledger row, nothing to reverse and nothing to
 //        notice (inventoryStates.ts:82-109; the loop skips a null lot at :99).
 //
-//    (2) STATUS IS 'fulfilled'. `holdsCommitment()` is false only for 'fulfilled' and
-//        'cancelled', and 'fulfilled' is the semantically true one: the plants left.
+//    (2) STATUS FOLLOWS THE DELIVERY — 'fulfilled' once it is complete, 'confirmed' until then.
+//        ⚠️ CORRECTED 2026-08-27: this used to say "status IS 'fulfilled'", chosen because
+//        `holdsCommitment()` excludes only 'fulfilled' and 'cancelled'. That was a mechanical
+//        reason, not a true one, and it put eight orders in a state their own delivery rows
+//        contradicted. `confirmed` DOES hold a commitment, so invariant (1) is now load-bearing
+//        ALONE rather than as a second line of defence. See historyOrderStatus below.
 //        ⚠️ Do NOT substitute 'invoiced' as a third escape. It is live on real rows, is written
 //        ONLY by the QuickBooks push, and is ABSENT from ORDER_STATUSES — it begins counting as
 //        an open status the day that enum is ratified (R-STATUS, orderStatus.ts:7-8).
@@ -38,8 +42,60 @@
 /** The discriminator value. NULL on an ordinary checkout order; this on a transcribed one. */
 export const HISTORY_ORDER_KIND = 'history';
 
-/** See invariant (2) above. Not a default — a requirement. */
-export const HISTORY_ORDER_STATUS = 'fulfilled';
+/**
+ * 🔴 STATUS FOLLOWS THE DELIVERY. IT IS NOT A CONSTANT, AND IT USED TO BE — THAT WAS THE DEFECT.
+ *
+ * The first version of this module hardcoded `'fulfilled'` for every history order, and the reason
+ * was MECHANICAL rather than true: `holdsCommitment()` excludes exactly two statuses, `fulfilled`
+ * and `cancelled`, so `fulfilled` was picked to keep the order out of the committed-stock join.
+ * Nobody checked whether it was a true statement about the world. It was not. Eight orders shipped
+ * reading `fulfilled` while their own delivery rows read `scheduled` — four of them for a Saturday
+ * that had not happened yet, one for a date three weeks out. **The data contradicted itself, and
+ * the contradiction was visible on one screen.**
+ *
+ * The rule now:
+ *   delivery complete            → 'fulfilled'   (the plants actually left)
+ *   delivery scheduled / pending → 'confirmed'   (a real, paid sale that has not been delivered)
+ *   no delivery row at all       → 'confirmed'   (see the note below — we cannot assert delivery)
+ *
+ * 🔴 AND THE THING TO BE CAREFUL ABOUT, STATED WHERE THE CHANGE IS: `confirmed` DOES HOLD A
+ * COMMITMENT in the D-52 derivation. It is safe here for exactly ONE reason — `business_inventory_id`
+ * is null on every history line — which means that invariant has stopped being belt-and-braces and
+ * is now the ONLY thing holding the line. It is typed as the literal `null` on HistoryOrderLine so
+ * that setting a lot id is a COMPILE error, and `historyOrder.test.ts` §A asserts it from both
+ * directions. Do not weaken either without re-proving available-to-sell across every lot.
+ */
+export const HISTORY_ORDER_STATUS_DELIVERED = 'fulfilled';
+export const HISTORY_ORDER_STATUS_PENDING   = 'confirmed';
+
+/**
+ * Which delivery states mean the goods have actually gone.
+ *
+ * ⚠️ MEASURED, NOT ASSUMED: as of 2026-08-27 `deliveries.status` has exactly ONE value across every
+ * tenant — `'scheduled'` — and NO code path anywhere writes another (the column is `NOT NULL DEFAULT
+ * 'scheduled'` with no CHECK, and the only writes are the two INSERTs). So there is no way, today,
+ * to mark a delivery complete, and this list is currently unreachable. It is written anyway, with
+ * the likely vocabulary, so that the day a "mark delivered" control ships the order status follows
+ * automatically instead of needing this rule rediscovered.
+ */
+const DELIVERY_COMPLETE = ['complete', 'completed', 'delivered', 'fulfilled', 'done'];
+
+export function isDeliveryComplete(deliveryStatus: string | null | undefined): boolean {
+  return !!deliveryStatus && DELIVERY_COMPLETE.includes(String(deliveryStatus).trim().toLowerCase());
+}
+
+/**
+ * The status a history order should carry, given its delivery.
+ *
+ * `null`/absent delivery → 'confirmed', deliberately. A captured invoice with no delivery row is
+ * most likely a walk-in whose customer already drove away — but "most likely" is not knowledge, and
+ * 'fulfilled' is the STRONGER claim of the two. We record the weaker one rather than assert a
+ * departure nobody witnessed (A9). Flagged for David: if a no-delivery capture should read
+ * 'fulfilled', that is a one-line change here and it belongs to him, not to this file.
+ */
+export function historyOrderStatus(deliveryStatus: string | null | undefined): string {
+  return isDeliveryComplete(deliveryStatus) ? HISTORY_ORDER_STATUS_DELIVERED : HISTORY_ORDER_STATUS_PENDING;
+}
 
 /** What a decoded source document yields. Every field is optional because OCR is not a schema. */
 export interface CapturedDocument {
@@ -125,6 +181,8 @@ export interface HistoryOrderInput {
   decoded: CapturedDocument | null;
   deliveryDate?: string | null;
   serviceType?: string | null;
+  /** The delivery row's own status. Drives the order status — see historyOrderStatus. */
+  deliveryStatus?: string | null;
 }
 
 export interface HistoryOrderDraft {
@@ -164,6 +222,9 @@ export interface HistoryOrderDraft {
  * corrected: on a captured document the DOCUMENT is the authority, so a document that does not
  * balance is a fact to surface, not an error to repair.
  *
+ * STATUS comes from `historyOrderStatus(deliveryStatus)`, never from a constant — see the note on
+ * that function for why, and for what invariant (1) is now carrying alone.
+ *
  * `leakage_flag` is false because the column is NOT NULL boolean and false is its default — but
  * read that as UNEVALUATED, not as "no leakage". Leakage is computed at checkout from resolved
  * catalog lines and container sizes (submit.ts:796), neither of which a transcribed line has.
@@ -186,7 +247,7 @@ export function buildHistoryOrder(input: HistoryOrderInput): HistoryOrderDraft {
       business_id: input.businessId,
       customer_id: input.customerId,
       transport_method: transportMethodForService(input.serviceType),
-      status: HISTORY_ORDER_STATUS,
+      status: historyOrderStatus(input.deliveryStatus),
       order_kind: HISTORY_ORDER_KIND,
       source_document_number: input.decoded?.sourceDocumentNumber ?? null,
       sale_date: input.documentDate ?? null,
