@@ -1,6 +1,6 @@
 {
-  "_comment": "Hand-written column enumerations per entity as of the stamp. RATCHET baseline — the build fails on any NEW one, not on these. Shrink it; never grow it casually. Regenerate: npm run field-lists:baseline",
-  "stamped": "2026-08-01",
+  "_comment": "Hand-written column enumerations per entity as of the stamp. RATCHET baseline \u2014 the build fails on any NEW one, not on these. Shrink it; never grow it casually. Regenerate: npm run field-lists:baseline",
+  "stamped": "2026-08-27",
   "enumerations": [
     "packages/cultivar-os/api/campaigns.ts::advertChannels#business_voice_samples.select",
     "packages/cultivar-os/api/dashboard.ts::todayStr#business_inventory.select",
@@ -17,11 +17,10 @@
     "packages/cultivar-os/api/qbo/router.ts::db#businesses.select",
     "packages/cultivar-os/api/social/generate-posts.ts::db#business_modules.select",
     "packages/cultivar-os/src/components/ProjectCostTree.tsx::load#cost_objects.select",
-    "packages/cultivar-os/src/hooks/useModules.ts::load#business_modules.select",
     "packages/cultivar-os/src/pages/BusinessAssets.tsx::loadAssets#cost_objects.select",
     "packages/cultivar-os/src/pages/CostToProduce.tsx::objRes#cost_objects.select",
     "packages/cultivar-os/src/pages/Dashboard.tsx::loadSocialDrafts#social_drafts.select",
-    "packages/cultivar-os/src/pages/Dashboard.tsx::week#businesses.select",
+    "packages/cultivar-os/src/pages/Dashboard.tsx::weekD#businesses.select",
     "packages/cultivar-os/src/pages/DemoQBInvoice.tsx::itemsErr#businesses.select",
     "packages/cultivar-os/src/pages/InventoryReconcile.tsx::byLot#business_inventory_ledger.select",
     "packages/cultivar-os/src/pages/InventoryReconcile.tsx::load#business_inventory.select",

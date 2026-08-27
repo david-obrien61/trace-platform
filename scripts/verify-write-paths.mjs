@@ -85,6 +85,45 @@ const ALLOWED_DIVERGENCE = {
             'packages/cultivar-os/src/pages/importWrites.ts',
             'packages/shared/src/discovery/populate.ts'],
   },
+  // ⚠️ DECLARED 2026-08-27 (ledger #223) — PENDING DAVID'S RATIFICATION. Thunder wrote this
+  // entry and Thunder is not entitled to grant it; the header of this file is explicit that every
+  // declaration is a decision DAVID made. It is recorded rather than left red because the fact is
+  // real and belongs on the board — but if David rules the other way, the fix is a merge, not a
+  // deletion of this note.
+  //
+  // TWO KINDS OF SALE, NOT TWO WRITERS OF ONE SALE.
+  // `orders/submit.ts` writes a sale THIS PLATFORM MADE: it resolves catalog lines, prices them
+  // server-authoritatively, commits stock, and pushes an invoice to QuickBooks.
+  // `customers/create.ts` writes a HISTORY ORDER — a sale transcribed off a document the seller
+  // already invoiced and the customer already paid. It is priced by the document, never reserves
+  // or moves stock (business_inventory_id is NULL on every line; status is 'fulfilled'), and must
+  // NEVER reach QuickBooks. The two share no column semantics beyond the shape of the row.
+  //
+  // 🔴 THE MERGE WAS CONSIDERED AND REJECTED, AND THE REASON IS THAT MERGING IS THE DANGEROUS
+  // OPTION. Routing a history order through submit.ts means threading a bypass branch through the
+  // pricing resolver, the commit block and the inline QBO push — roughly 800 lines whose whole
+  // purpose is to do things a history order must not do. One mis-scoped condition in that branch
+  // and a settled invoice is pushed to a real customer's real QuickBooks a second time, or stock
+  // that left months ago is committed against. A separate, small, single-purpose writer that
+  // physically cannot reach the push is the safer shape, not the lazier one.
+  // The invariants both writers depend on live in ONE place — shared/business-logic/historyOrder.ts
+  // — so this is a second WRITER, not a second DEFINITION (§6 r8).
+  'orders': {
+    reason: 'Two kinds of sale: submit.ts writes a platform-made sale (priced, committed, pushed '
+          + 'to QuickBooks); customers/create.ts writes a HISTORY order transcribed from a captured '
+          + 'document (priced by the document, never committed, never pushed). Merging would put a '
+          + 'bypass branch through the pricing/commit/QBO path a history order must not touch. '
+          + 'Shared invariants live in shared/business-logic/historyOrder.ts.',
+    paths: ['packages/cultivar-os/api/orders/submit.ts',
+            'packages/cultivar-os/api/customers/create.ts'],
+  },
+  'order_items': {
+    reason: 'Same two acts as `orders`. A history line carries a transcribed description/sku and a '
+          + 'NULL business_inventory_id by invariant — it is deliberately NOT a catalog-resolved '
+          + 'line, which is exactly what submit.ts exists to produce.',
+    paths: ['packages/cultivar-os/api/orders/submit.ts',
+            'packages/cultivar-os/api/customers/create.ts'],
+  },
   // DECLARED 2026-08-01 (ledger #181) — TWO ACTS, NOT TWO WRITERS OF ONE ACT.
   // `moduleState.ts` CHANGES an existing tenant's module state (enable / configure), gated
   // `settings:update` + `subscription:update` by `set_business_module_state`. `seedBusinessModules.ts`

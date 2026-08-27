@@ -8,6 +8,7 @@ import { auth } from '../lib/auth';
 import { useBusinessContext } from '@trace/shared/context';
 import { useQboConnect } from '@trace/shared/quickbooks/useQboConnect';
 import { useModules } from '../hooks/useModules';
+import { dayWindow, weekWindow, addOnBannerState } from '../lib/dashboardWindows';
 import { fetchCommittedByLot, availableFrom } from '../lib/inventoryStates';
 import { requiredPermissionFor, tileByKey } from '../registry/tileRegistry';
 import { TileGrid } from '@trace/shared/components/tiles/TileGrid';
@@ -34,13 +35,27 @@ function weekStart(): string {
   return d.toISOString();
 }
 
+// The date-only windows live in `lib/dashboardWindows` — pure, and tested there. `sale_date` and
+// `delivery_date` are DATE columns, so they window on 'YYYY-MM-DD' rather than on the ISO
+// timestamps above, and both windows are HALF-OPEN so nothing is counted twice or missed.
+
 function fmt$(n: number): string {
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
 // ── Components ────────────────────────────────────────────────────────────────
 
-function MetricCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+// 🔴 EMPTY IS NOT THE SAME AS COULDN'T-READ, AND THIS CARD USED TO SAY THEY WERE.
+// Every metric below was dereferenced as `res.data ?? []`, so an RLS refusal, a dropped network
+// request and a genuinely empty table all rendered as a confident "0". A zero is a CLAIM about
+// the business — "you sold nothing today" — and making it on the back of a failed read is the
+// D-9 failure in its purest form: absent data displayed as present data (A9).
+//
+// `error` therefore replaces the value outright rather than decorating it. It does NOT show a
+// number and a warning: a number the card cannot stand behind must not be on screen at all.
+// The platform already had this pattern — DataSheet.tsx:296's count pill — and none of these
+// four inherited it.
+function MetricCard({ label, value, sub, error }: { label: string; value: string; sub?: string; error?: string | null }) {
   return (
     <Card className="card" padding="none">
       <div style={{ padding: '18px 16px' }}>
@@ -50,11 +65,24 @@ function MetricCard({ label, value, sub }: { label: string; value: string; sub?:
         }}>
           {label}
         </p>
-        <p style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--gray-800)', lineHeight: 1.2 }}>
-          {value}
-        </p>
-        {sub && (
-          <p style={{ fontSize: '0.8125rem', color: 'var(--gray-400)', marginTop: 4 }}>{sub}</p>
+        {error ? (
+          <>
+            <p style={{ fontSize: '1.125rem', fontWeight: 700, color: '#b45309', lineHeight: 1.2 }}>
+              Couldn&rsquo;t read
+            </p>
+            <p style={{ fontSize: '0.75rem', color: '#b45309', marginTop: 4 }}>
+              This number is unavailable right now — it is not zero. {error}
+            </p>
+          </>
+        ) : (
+          <>
+            <p style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--gray-800)', lineHeight: 1.2 }}>
+              {value}
+            </p>
+            {sub && (
+              <p style={{ fontSize: '0.8125rem', color: 'var(--gray-400)', marginTop: 4 }}>{sub}</p>
+            )}
+          </>
         )}
       </div>
     </Card>
@@ -122,6 +150,14 @@ export function Dashboard() {
   const [todayRevenue, setTodayRevenue]       = useState(0);
   const [installsThisWeek, setInstalls]       = useState(0);
   const [leakageCount, setLeakageCount]       = useState(0);
+  // The add-on banner needs to tell three situations apart, so it needs more than a leakage count:
+  // how many sales fell in the window at all, and how many of those could be ASSESSED for add-ons.
+  const [weekSalesCount, setWeekSalesCount]       = useState(0);
+  const [assessableSales, setAssessableSales]     = useState(0);
+  // EMPTY vs ERROR, per surface. null = the read succeeded.
+  const [salesError, setSalesError]           = useState<string | null>(null);
+  const [installsError, setInstallsError]     = useState<string | null>(null);
+  const [leakageError, setLeakageError]       = useState<string | null>(null);
   const [loading, setLoading]                 = useState(true);
 
   interface SocialDraft {
@@ -163,6 +199,11 @@ export function Dashboard() {
     setLoading(true);
     const today = todayStart();
     const week  = weekStart();
+    // date-column windows (sale_date / delivery_date are DATE, not timestamptz)
+    const day  = dayWindow();
+    const wk   = weekWindow();
+    const todayD = day.startDate, tomorrowD = day.endDate, tomorrowT = day.endIso;
+    const weekD  = wk.startDate,  weekEndD  = wk.endDate,  weekEndT  = wk.endIso;
 
     const [businessRes, plantsRes, todayRes, installsRes, leakageRes] = await Promise.all([
       supabase
@@ -181,26 +222,50 @@ export function Dashboard() {
         .eq('business_id', businessId!)
         .eq('status', 'available'),
 
+      // ── TODAY'S SALES — keyed on WHEN THE SALE HAPPENED, not when the row was written ──
+      // 🔴 This tile used to filter on `created_at`, which is the moment a row was INSERTED. That
+      // was harmless only while every order was born at its own checkout. It stopped being
+      // harmless the moment captured invoices became orders: six sales made across five earlier
+      // days, backfilled in one afternoon, reported $14,370.21 as TODAY'S revenue. A confidently
+      // wrong number is worse than a zero, because nobody goes looking for it.
+      //
+      // `sale_date` is the document's own date. The fallback to `created_at` is for an ordinary
+      // checkout order, where the two genuinely coincide and nothing writes sale_date.
       supabase
         .from('orders')
         .select('id, total_amount')
         .eq('business_id', businessId!)
         .neq('status', 'cancelled')
-        .gte('created_at', today),
+        .or(`and(sale_date.gte.${todayD},sale_date.lt.${tomorrowD}),and(sale_date.is.null,created_at.gte.${today},created_at.lt.${tomorrowT})`),
 
+      // ── INSTALLS THIS WEEK — counted off DELIVERIES, not orders ──────────────────────
+      // 🔴 An install is a PHYSICAL EVENT, and it lives in `deliveries` whichever door created
+      // it. Counting orders left this tile structurally blind to the OCR door: a captured invoice
+      // scheduled a real planting and the tile could never see it, so five real installs read 0.
+      // Counting the physical record fixes that for every door, including ones not built yet.
+      //
+      // 🔴 AND IT NOW HAS AN END BOUND. The old query was `gte(week)` with no upper limit, so a
+      // delivery booked for September counted as an install done this week.
       supabase
-        .from('orders')
+        .from('deliveries')
         .select('id')
         .eq('business_id', businessId!)
-        .eq('transport_method', 'install')
-        .gte('created_at', week),
+        .eq('service_type', 'planting')
+        .gte('delivery_date', weekD)
+        .lt('delivery_date', weekEndD),
 
+      // ── ADD-ON LEAKAGE — the same when-it-happened window, and only ASSESSABLE sales ──
+      // `order_kind=is.null` excludes history orders. That is not a filter for tidiness: leakage
+      // is computed at checkout from resolved catalog lines and container sizes (submit.ts:796),
+      // and a transcribed document line has neither. A history order's `leakage_flag` is false
+      // because the column is NOT NULL — false meaning UNEVALUATED, not "no leakage found".
+      // Counting it as clean would let six unassessed sales prove a universal positive.
       supabase
         .from('orders')
-        .select('id')
+        .select('id, leakage_flag, order_kind')
         .eq('business_id', businessId!)
-        .eq('leakage_flag', true)
-        .gte('created_at', week),
+        .neq('status', 'cancelled')
+        .or(`and(sale_date.gte.${weekD},sale_date.lt.${weekEndD}),and(sale_date.is.null,created_at.gte.${week},created_at.lt.${weekEndT})`),
     ]);
 
     if (businessRes.data) {
@@ -229,12 +294,53 @@ export function Dashboard() {
     // inventory value is cost-derived — only computed when the session holds view_costs
     setInventoryValue(canViewCosts ? inventoryLots.reduce((sum: number, l: any) => sum + (Number(l.qty) * Number(l.unit_cost ?? 0)), 0) : 0);
 
-    const todayOrders = todayRes.data ?? [];
-    setTodayOrderCount(todayOrders.length);
-    setTodayRevenue(todayOrders.reduce((sum, o) => sum + ((o as any).total_amount ?? 0), 0));
+    // ── EMPTY vs ERROR ────────────────────────────────────────────────────────────────
+    // 🔴 Every one of these used to be `res.data ?? []`, which collapses THREE different worlds
+    // into one screen: a genuinely empty week, an RLS policy refusing the read, and a request
+    // that never completed. All three rendered an identical, confident "0". This was found in
+    // the 2026-05-27 investigation and it was still true today.
+    //
+    // The error is now carried to the card, which stops showing a number entirely. Note what is
+    // NOT done here: no fallback to a cached value, no "0 (retrying)". A metric the page cannot
+    // stand behind is not displayed as a metric.
+    if (todayRes.error) {
+      setSalesError(todayRes.error.message);
+      console.error('[TRACE:DASHBOARD] today-sales read FAILED — tile shows unavailable, NOT zero:', todayRes.error.message);
+    } else {
+      setSalesError(null);
+      const todayOrders = todayRes.data ?? [];
+      setTodayOrderCount(todayOrders.length);
+      setTodayRevenue(todayOrders.reduce((sum, o) => sum + ((o as any).total_amount ?? 0), 0));
+    }
 
-    setInstalls((installsRes.data ?? []).length);
-    setLeakageCount((leakageRes.data ?? []).length);
+    if (installsRes.error) {
+      setInstallsError(installsRes.error.message);
+      console.error('[TRACE:DASHBOARD] installs read FAILED — tile shows unavailable, NOT zero:', installsRes.error.message);
+    } else {
+      setInstallsError(null);
+      setInstalls((installsRes.data ?? []).length);
+    }
+
+    if (leakageRes.error) {
+      setLeakageError(leakageRes.error.message);
+      console.error('[TRACE:DASHBOARD] add-on read FAILED — banner shows unavailable, NOT a clean bill:', leakageRes.error.message);
+    } else {
+      setLeakageError(null);
+      // One read now answers all three of the banner's questions, so its three states can never
+      // disagree with each other the way three separate counts eventually would (STD-011).
+      const weekOrders = (leakageRes.data ?? []) as any[];
+      const assessable = weekOrders.filter(o => o.order_kind !== 'history');
+      setWeekSalesCount(weekOrders.length);
+      setAssessableSales(assessable.length);
+      setLeakageCount(assessable.filter(o => o.leakage_flag === true).length);
+      console.log('[TRACE:DASHBOARD] add-on window —', 'sales:', weekOrders.length,
+        'assessable:', assessable.length, 'leaking:', assessable.filter(o => o.leakage_flag === true).length);
+    }
+
+    console.log('[TRACE:DASHBOARD] metrics —',
+      'todaySales:', todayRes.error ? 'ERROR' : (todayRes.data ?? []).length,
+      'installsThisWeek:', installsRes.error ? 'ERROR' : (installsRes.data ?? []).length,
+      'window today:', todayD, '→', tomorrowD, '| week:', weekD, '→', weekEndD);
 
     setLoading(false);
   }
@@ -589,7 +695,8 @@ export function Dashboard() {
                   <MetricCard
                     label="Today's sales"
                     value={String(todayOrderCount)}
-                    sub={todayOrderCount > 0 ? `${fmt$(todayRevenue)} revenue` : 'No orders yet today'}
+                    sub={todayOrderCount > 0 ? `${fmt$(todayRevenue)} revenue` : 'No sales dated today'}
+                    error={salesError}
                   />
                 </div>
               )}
@@ -598,7 +705,8 @@ export function Dashboard() {
                   <MetricCard
                     label="Installs this week"
                     value={String(installsThisWeek)}
-                    sub={installsThisWeek === 1 ? '1 scheduled' : `${installsThisWeek} scheduled`}
+                    sub={installsThisWeek === 1 ? '1 planting' : `${installsThisWeek} plantings`}
+                    error={installsError}
                   />
                 </div>
               )}
@@ -617,7 +725,68 @@ export function Dashboard() {
             )}
 
             {/* ── Leakage alert tile (readout: leakage_alert → view_orders) ── */}
-            {canSeeReadout('leakage_alert') && (leakageCount > 0 ? (
+            {/* ══════════════════════════════════════════════════════════════════════════════
+                🔴 THE ADD-ON BANNER HAD TWO STATES AND NEEDED FOUR — §6 r18.
+                ══════════════════════════════════════════════════════════════════════════════
+                A section header is a CLAIM the reader applies to everything beneath it, and this
+                one made the strongest claim on the page — "Every large-container sale included an
+                add-on" — as the `else` of a single condition, `leakageCount > 0`. So a week with
+                ZERO SALES rendered a green check certifying a universal positive over an empty
+                set, and after captured invoices became orders it would have certified six real
+                sales whose add-ons were never assessed at all.
+                Both are the same lie in opposite directions: a claim asserted where nothing was
+                measured. The states below are ordered most-specific first, and each says exactly
+                what it knows and nothing more (D-9 / A9). */}
+            {canSeeReadout('leakage_alert') && (() => {
+              // The BRANCH ORDER is decided by the tested function, not by the shape of a ternary
+              // chain in JSX — so "which situation is this?" and "what does that situation look
+              // like?" can never drift apart (§6 r18 / STD-011).
+              const bannerState = addOnBannerState({
+                readFailed: !!leakageError,
+                salesInWindow: weekSalesCount,
+                assessableSales,
+                leakingSales: leakageCount,
+              });
+              return bannerState === 'error' ? (
+              <div style={{
+                background: '#fffbeb', border: '1.5px solid #fcd34d',
+                borderRadius: 12, padding: '16px',
+              }}>
+                <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: '#92400e' }}>
+                  Add-on check unavailable
+                </p>
+                <p style={{ fontSize: '0.8125rem', color: '#b45309', marginTop: 2 }}>
+                  This week&rsquo;s sales could not be read, so nothing can be said about missed
+                  add-ons either way. This is not a clean bill of health. {leakageError}
+                </p>
+              </div>
+            ) : bannerState === 'no-sales' ? (
+              <div style={{
+                background: 'var(--gray-50, #f9fafb)', border: '1.5px solid var(--gray-200, #e5e7eb)',
+                borderRadius: 12, padding: '16px',
+              }}>
+                <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--gray-600, #4b5563)' }}>
+                  Nothing to report yet this week
+                </p>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--gray-400)', marginTop: 2 }}>
+                  No sales are dated this week, so there are no add-ons to have missed.
+                </p>
+              </div>
+            ) : bannerState === 'none-assessable' ? (
+              <div style={{
+                background: 'var(--gray-50, #f9fafb)', border: '1.5px solid var(--gray-200, #e5e7eb)',
+                borderRadius: 12, padding: '16px',
+              }}>
+                <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--gray-600, #4b5563)' }}>
+                  {weekSalesCount} sale{weekSalesCount !== 1 ? 's' : ''} this week — add-ons not assessed
+                </p>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--gray-400)', marginTop: 2 }}>
+                  {weekSalesCount === 1 ? 'It was' : 'They were'} captured from an existing invoice,
+                  so there is no record of what was offered at the time. Sales rung up here are
+                  checked automatically.
+                </p>
+              </div>
+            ) : bannerState === 'leaking' ? (
               <div style={{
                 background: 'var(--amber-bg)',
                 border: '1.5px solid var(--amber-border)',
@@ -656,11 +825,20 @@ export function Dashboard() {
                     No missed add-ons this week
                   </p>
                   <p style={{ fontSize: '0.8125rem', color: '#16a34a', marginTop: 2 }}>
-                    Every large-container sale included an add-on.
+                    {/* The claim now names its own denominator. "Every sale" was true only of the
+                        sales this page can actually assess, and saying so is the difference
+                        between a proven statement and a flattering one. */}
+                    {assessableSales === 1
+                      ? 'The 1 sale checked included an add-on.'
+                      : `All ${assessableSales} sales checked included an add-on.`}
+                    {weekSalesCount > assessableSales
+                      ? ` ${weekSalesCount - assessableSales} captured from existing invoices were not assessed.`
+                      : ''}
                   </p>
                 </div>
               </div>
-            ))}
+            );
+            })()}
           </>
         )}
 

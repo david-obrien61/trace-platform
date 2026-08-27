@@ -491,6 +491,10 @@ export function ReceiptKeeper() {
       const custBody: any = {
         businessId,
         source: 'ocr-invoice',
+        // The captured document becomes a HISTORY ORDER server-side. Only the ID travels: the
+        // server re-reads the receipt row it just wrote and derives the money from there, because
+        // totals posted in a request body are totals a caller can edit (§1.6 item 10).
+        receiptId: data?.id ?? receiptId,
         customer: {
           first_name,
           last_name,

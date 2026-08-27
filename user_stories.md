@@ -130,6 +130,28 @@ _The owner photographs a receipt, TRACE reads it — and then the cost stops the
 
 **CARRY THE INVERSION — it will be missed otherwise.** Today the image is **LOAD-BEARING**: a storage failure aborts the receipt row entirely (`ReceiptKeeper.tsx:403-408`). Once QBO is the record that **inverts** — the TRANSACTION must not fail, and the image becomes droppable after it lands. Same shape as the order/QBO ordering settled at `a3439a6`: **the durable fact commits first, the integration follows and can fail without taking anything with it.** A deliberate change, not a side effect. _Grounded: the 2026-07-29 corpus report (`packages/shared/src/quickbooks/`, `packages/cultivar-os/api/qbo/**`, `api/**`, `supabase/migrations/*.sql`); Intuit Attachable API reference._
 
+### A captured invoice is a sale that happened — and the dashboard says so
+STATUS: written
+SCOPE: vertical:cultivar, platform
+BUILD: in-build
+ARC: ocr-doc-routing
+MAPS-TO: 2.3, 3.5
+PIECES: ocr_fanout, history_order, dashboard_when_it_happened, addon_banner_states
+NEEDS: —
+_Written AS-BUILT on 2026-08-27 (§9 story-reconciliation gate: in code, not on the board). The build shipped under David's direct spec; this captures it so the behaviour is not re-derived later._
+
+LAWNS went live 26 Aug 2026 and scanned six real customer invoices. Each produced a customer and a delivery and **NO ORDER** — their tenant held zero rows in `orders`. So on the morning after their first real week the dashboard told them they had made **0 installs against five real ones**, **$0 of sales against $14,370.21** they had actually invoiced, and showed a **green check certifying "every large-container sale included an add-on" over a set of zero sales**. Every number on the page was wrong, and the page looked confident.
+
+**A captured sale is a HISTORY ORDER — a distinct KIND, and the distinction is the whole story.** It is already paid, already in the seller's own QuickBooks, and its stock left the property before Cultivar existed. So it must be a first-class sale record for reporting while tripping **none** of the machinery a real checkout trips: **it never pushes to QuickBooks** (that would create a second invoice for a settled sale, in the customer's real accounting, under the seller's real name) and **it never moves inventory**.
+
+🔴 **The inventory half is subtler than "don't decrement," and this is the part that will be missed.** Committed stock is **DERIVED, not stored** (D-52): `available = on-hand − committed`, where committed is a live join over open orders. So a history order needs no decrement to do damage — merely existing in an open status with a lot id on its lines silently reduces what the business can sell, with no ledger row and nothing on any screen. **Two independent escapes, both taken:** `business_inventory_id` stays NULL on every line (it is also the honest value — these are SKUs transcribed off paper, not lots we ever held), and status is `fulfilled`. The proof is arithmetic, not assertion: available-to-sell is snapshotted across every lot before and after the write and must be identical.
+
+🔴 **And the sale must be dated when it HAPPENED, not when it was typed.** Both dashboard tiles keyed on `created_at`. That is harmless only while every order is born at its own checkout; the moment captured invoices become orders, six sales made across five earlier days and backfilled in one afternoon report as **that afternoon's revenue**. A confidently wrong number is worse than a zero because nobody goes looking for it. Sales key on `sale_date` (the document's own date, falling back to `created_at` where absent); **installs key on `delivery_date` and are counted off `deliveries`, not orders** — an install is a physical event and lives in the delivery record whichever door created it, so counting orders left the tile structurally blind to the OCR door forever.
+
+**The add-on banner had two states and needed four.** `leakageCount > 0 ? amber : green` meant every unenumerated situation fell into the green branch, so an empty week certified a universal positive over an empty set (§6 r18 — a header is a claim that must hold for every row beneath it). Leakage is computed at checkout from resolved catalog lines and container sizes; a transcribed document line has neither, so a history order's `leakage_flag` of `false` means **unevaluated**, not **clean**. The banner now distinguishes: read failed · no sales this week · sales exist but none assessable · genuine miss · clean — and the clean branch names its own denominator.
+
+**A document with NO customer produces NO order.** A vendor receipt for hose, oil or emitters is a real captured document and a real cost, but it is nobody's sale. _Grounded: ledger #223; migration `20260827_history_orders.sql`; `packages/shared/src/business-logic/historyOrder.ts` (+ its 45 probes); `packages/cultivar-os/src/lib/dashboardWindows.ts` (+ 23); `scripts/backfill-history-orders.mjs`._
+
 ### The receipt-cost meter — what it costs, and is the OCR good enough
 STATUS: needs-input
 SCOPE: vertical:cultivar, platform

@@ -64,6 +64,34 @@ const ALLOWED_DIVERGENCE = {
     paths: ['packages/cultivar-os/api/qbo/invoice/cultivar.ts',
             'packages/shared/src/business-logic/customerUpsert.ts'],
   },
+  // DECLARED 2026-08-27 (ledger #223) — ⚠️ PENDING DAVID'S RATIFICATION, same standing as the
+  // `orders` entry in verify-write-paths.mjs. Thunder wrote it; the rule says these are David's.
+  //
+  // BOTH ARE 3-COLUMN QUESTION-ANSWERING PROJECTIONS, NOT RECORD SHAPES — the same distinction the
+  // `customers` entry above draws, and for the same reason.
+  //   · Dashboard.tsx reads `id, leakage_flag, order_kind` to answer ONE question: "what may the
+  //     add-on banner claim about this week?" It needs the flag and the kind precisely BECAUSE a
+  //     history order's leakage_flag means unevaluated rather than clean. Selecting the order
+  //     RECORD to render a banner would be the worse code.
+  //   · customers/create.ts reads `id, business_id, date, amount, ocr_raw, line_items_original`
+  //     to build a history order from the receipt row it just wrote. It is deliberately narrow:
+  //     the money must come from the ROW rather than the request body (a caller can edit a body),
+  //     and nothing else on `receipts` belongs in an order.
+  // 🔴 THE REAL FIX IS A RECEIPTS FIELD REGISTRY, and it is named rather than quietly skipped.
+  // `receipts` has no registry (customers is the only entity that does), and minting one inside an
+  // unrelated build is exactly the drift these caps exist to catch. Tech-debt #120.
+  orders: {
+    reason: '3-column projection answering one question (what may the add-on banner claim), not the '
+          + 'order record shape. order_kind is read because a history order\'s leakage_flag means '
+          + 'UNEVALUATED, not clean.',
+    paths: ['packages/cultivar-os/src/pages/Dashboard.tsx'],
+  },
+  receipts: {
+    reason: 'The narrow projection the OCR door needs to build a history order from the receipt row '
+          + 'it just wrote — read from the ROW, not the request body, because posted money is money '
+          + 'a caller can edit. `receipts` has no field registry yet (tech-debt #120).',
+    paths: ['packages/cultivar-os/api/customers/create.ts'],
+  },
 };
 
 function stripComments(src) {

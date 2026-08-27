@@ -9,6 +9,7 @@ import {
   type QboCustomerCandidate,
 } from '../../../../shared/src/quickbooks/customerIdentity';
 import { orderItemName, orderItemAnchor } from '../../../src/lib/orderItemName';
+import { HISTORY_ORDER_KIND } from '../../../../shared/src/business-logic/historyOrder';
 
 const QBO_ENVIRONMENT = process.env.QBO_ENVIRONMENT || 'sandbox';
 const QBO_API_BASE =
@@ -622,6 +623,41 @@ export async function pushQboInvoice(
       .single();
 
     if (!order) return { status: 404, body: { error: 'Order not found' } };
+
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // 🔴 A HISTORY ORDER NEVER REACHES QUICKBOOKS. REFUSED HERE, LOUDLY.
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // A history order is a sale transcribed off a document the seller ALREADY invoiced through
+    // their own QuickBooks and the customer has ALREADY paid. Pushing it would create a SECOND
+    // invoice for a settled sale — in the customer's real accounting, under the seller's real
+    // name. That is the most expensive mistake this endpoint could make, and it is not
+    // hypothetical: this handler takes an arbitrary `order_id` and has no UI caller policing it.
+    //
+    // WHY THE CHECK IS HERE AND NOT ONLY A CONVENTION. "History orders don't push" was true by
+    // accident — the push happens at the end of checkout, and checkout never creates one. But
+    // an uncalled endpoint that WOULD push if called is not a guarantee, it is an unfired gun.
+    // The discriminator exists precisely so the refusal can be structural.
+    //
+    // FAILED INTENT, LOGGED. This is a refusal to complete an action someone asked for, so it is
+    // recorded as such rather than dropped: what was asked, for which order, and why it was
+    // refused. 422 (not 403): the caller is authorised, the REQUEST IS INCOHERENT — this order is
+    // not the kind of thing that can be invoiced. A 403 would send someone hunting a permission
+    // that would never have helped.
+    if (order.order_kind === HISTORY_ORDER_KIND) {
+      console.log('[TRACE:QBO] REFUSED — history order must never push to QuickBooks (failed intent)', {
+        order_id, business_id, order_kind: order.order_kind,
+        source_document_number: order.source_document_number ?? null,
+        sale_date: order.sale_date ?? null,
+        reason: 'already invoiced by the seller and already paid; a push would duplicate a settled invoice',
+      });
+      return { status: 422, body: {
+        error: order.source_document_number
+          ? `This sale was captured from an existing invoice (#${order.source_document_number}) that is already in QuickBooks. Pushing it would create a duplicate.`
+          : 'This sale was captured from an existing invoice that is already in QuickBooks. Pushing it would create a duplicate.',
+        code: 'HISTORY_ORDER_NOT_PUSHABLE',
+      } };
+    }
+
     const customer = order.customers;
     const invoiceNumber: string = order.notes || `CLV-${order_id.slice(0, 8)}`;
 
@@ -710,10 +746,18 @@ export async function pushQboInvoice(
     const qbDocNumber: string = qbInvoice?.DocNumber;
     const qbInvoiceUrl = `${QB_INVOICE_VIEW_BASE}${qbInvoiceId}`;
 
-    // Write QB invoice ID back to Supabase order
+    // Write the QuickBooks result back to the order.
+    // `qb_doc_number` is new here, and it fixes a small honest gap rather than adding a feature:
+    // DocNumber — the invoice number QuickBooks assigns and the number the CUSTOMER sees on their
+    // invoice — has always been captured two lines above, returned in the response, rendered once
+    // on the confirmation screen, and then lost. `qb_invoice_id` is NOT a substitute: it is QB's
+    // internal transaction id (the ?txnId= in the URL) and it is not a number anyone can quote
+    // over the phone. Now that a second numbering scheme lives in this table, the one number that
+    // reconciles our record to theirs is worth keeping.
     await db.from('orders').update({
       qb_invoice_id: qbInvoiceId,
       qb_invoice_url: qbInvoiceUrl,
+      qb_doc_number: qbDocNumber ?? null,
       status: 'invoiced',
     }).eq('id', order_id);
 
