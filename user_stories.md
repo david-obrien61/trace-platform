@@ -1102,7 +1102,15 @@ STATUS: demo-operational
 SCOPE: platform, vertical:cultivar
 MAPS-TO: 2.1
 PIECES: order_status, status_transitions
-Must WORK IF POKED: an order's status (Pending → Confirmed → Fulfilled → Cancelled) is visible on the roster/detail and settable by owner/manager, with cancel releasing reserved stock. _Built path: order CRUD (ledger #100) + [[D-42]] restore-on-cancel._
+Must WORK IF POKED: an order's status (Pending → Invoiced → Fulfilled → Cancelled) is visible on the roster/detail and settable by owner/manager, with cancel releasing reserved stock. ⚠️ **VOCABULARY CORRECTED 2026-08-28 (R-STATUS ratified, David): `Confirmed` → `Invoiced`.** This story read `Confirmed` and would have sent a reader to a status that no longer exists — the §9 story gate's CONFLICT case, resolved by the ruling that supersedes it rather than by a build choice. The four now match QuickBooks; out of `pending` an order goes to `invoiced` and onto the schedule, and scheduling lives on the DELIVERY row rather than in a fifth status. _Built path: order CRUD (ledger #100) + [[D-42]] restore-on-cancel + ledger #225 (rename + data migration)._
+
+### Filter the orders roster by status
+STATUS: written
+SCOPE: platform, vertical:cultivar
+ARC: delivery
+MAPS-TO: 2.1
+PIECES: order_roster, status_filter_chips, roster_count_sentence
+Lauren works the orders screen daily and it shows every order, always — she created an estimate on it with a customer standing in front of her. She needs to narrow it: one chip per status, multi-select, and one tap back to all. The default is EVERY order (David's ruling — her habit is the unfiltered screen, and a default that hides rows on day one is how someone concludes an order vanished); the chips are the discovery. Whenever a filter is on the screen SAYS what it is hiding — "showing N of M" — and it names the 50-row page cap rather than reporting a ceiling as a total. **The chip set is DERIVED from ORDER_STATUSES unioned with the statuses actually present in the data, never typed**, so no order can exist that no chip selects: that is the `needs-build` defect (2026-08-27) prevented rather than repeated. A filtered list that fails to load renders as "couldn't load orders", never as "no orders match" — the two sentences say opposite things. Shipped WITH the R-STATUS vocabulary rename, deliberately: filtering against the old words would have meant building it twice and leaving an in-between state whose chips did not match its data. _Grounded: ledger #225; orderRosterFilter.ts + orderRosterFilter.test.ts (30 probes, proven red-first), Orders.tsx; owner test docs/owner-tests/orders-roster-full-surface-test.md._
 
 ### Discount shows as a line on order-detail + QBO (DEMO-OPERATIONAL)
 STATUS: demo-operational

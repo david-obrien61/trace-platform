@@ -27,15 +27,20 @@
 //        the business can sell — no decrement, no ledger row, nothing to reverse and nothing to
 //        notice (inventoryStates.ts:82-109; the loop skips a null lot at :99).
 //
-//    (2) STATUS FOLLOWS THE DELIVERY — 'fulfilled' once it is complete, 'confirmed' until then.
+//    (2) STATUS FOLLOWS THE DELIVERY — 'fulfilled' once it is complete, 'invoiced' until then.
 //        ⚠️ CORRECTED 2026-08-27: this used to say "status IS 'fulfilled'", chosen because
 //        `holdsCommitment()` excludes only 'fulfilled' and 'cancelled'. That was a mechanical
 //        reason, not a true one, and it put eight orders in a state their own delivery rows
-//        contradicted. `confirmed` DOES hold a commitment, so invariant (1) is now load-bearing
-//        ALONE rather than as a second line of defence. See historyOrderStatus below.
-//        ⚠️ Do NOT substitute 'invoiced' as a third escape. It is live on real rows, is written
-//        ONLY by the QuickBooks push, and is ABSENT from ORDER_STATUSES — it begins counting as
-//        an open status the day that enum is ratified (R-STATUS, orderStatus.ts:7-8).
+//        contradicted.
+//        ⚠️ RENAMED 2026-08-28 (R-STATUS RATIFIED): the not-yet-delivered value was 'confirmed'
+//        and is now 'invoiced'. This is a VOCABULARY change, not a behavioural one — 'confirmed'
+//        held a commitment and 'invoiced' holds a commitment, so nothing about reserved stock
+//        moves. The old header warned "do not substitute 'invoiced', it is absent from
+//        ORDER_STATUSES and begins counting as open the day that enum is ratified." That day is
+//        today, and the warning has been answered rather than ignored: 'invoiced' is now IN the
+//        enum, it counts as open, and that is correct for a sale awaiting delivery. What has NOT
+//        changed is the danger it named — invariant (1) is still load-bearing ALONE, because an
+//        open status plus a lot id would silently reduce what the business can sell.
 //
 //    Both, not either. Belt and braces, because each alone is one edit away from failing.
 
@@ -55,18 +60,20 @@ export const HISTORY_ORDER_KIND = 'history';
  *
  * The rule now:
  *   delivery complete            → 'fulfilled'   (the plants actually left)
- *   delivery scheduled / pending → 'confirmed'   (a real, paid sale that has not been delivered)
- *   no delivery row at all       → 'confirmed'   (see the note below — we cannot assert delivery)
+ *   delivery scheduled / pending → 'invoiced'    (a real, paid sale that has not been delivered)
+ *   no delivery row at all       → 'invoiced'    (see the note below — we cannot assert delivery)
  *
- * 🔴 AND THE THING TO BE CAREFUL ABOUT, STATED WHERE THE CHANGE IS: `confirmed` DOES HOLD A
- * COMMITMENT in the D-52 derivation. It is safe here for exactly ONE reason — `business_inventory_id`
- * is null on every history line — which means that invariant has stopped being belt-and-braces and
- * is now the ONLY thing holding the line. It is typed as the literal `null` on HistoryOrderLine so
- * that setting a lot id is a COMPILE error, and `historyOrder.test.ts` §A asserts it from both
- * directions. Do not weaken either without re-proving available-to-sell across every lot.
+ * 🔴 AND THE THING TO BE CAREFUL ABOUT, STATED WHERE THE CHANGE IS: `invoiced` DOES HOLD A
+ * COMMITMENT in the D-52 derivation — exactly as its predecessor `confirmed` did, which is why the
+ * 2026-08-28 vocabulary change moved no stock. It is safe here for exactly ONE reason —
+ * `business_inventory_id` is null on every history line — which means that invariant has stopped
+ * being belt-and-braces and is now the ONLY thing holding the line. It is typed as the literal
+ * `null` on HistoryOrderLine so that setting a lot id is a COMPILE error, and
+ * `historyOrder.test.ts` §A asserts it from both directions. Do not weaken either without
+ * re-proving available-to-sell across every lot.
  */
 export const HISTORY_ORDER_STATUS_DELIVERED = 'fulfilled';
-export const HISTORY_ORDER_STATUS_PENDING   = 'confirmed';
+export const HISTORY_ORDER_STATUS_PENDING   = 'invoiced';
 
 /**
  * Which delivery states mean the goods have actually gone.
@@ -87,7 +94,7 @@ export function isDeliveryComplete(deliveryStatus: string | null | undefined): b
 /**
  * The status a history order should carry, given its delivery.
  *
- * `null`/absent delivery → 'confirmed', deliberately. A captured invoice with no delivery row is
+ * `null`/absent delivery → 'invoiced', deliberately. A captured invoice with no delivery row is
  * most likely a walk-in whose customer already drove away — but "most likely" is not knowledge, and
  * 'fulfilled' is the STRONGER claim of the two. We record the weaker one rather than assert a
  * departure nobody witnessed (A9). Flagged for David: if a no-delivery capture should read

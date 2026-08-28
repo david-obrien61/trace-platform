@@ -57,10 +57,10 @@ const build = (over: any = {}) => buildHistoryOrder({
 // ══ §A THE TWO INVARIANTS — the silent-failure guards ════════════════════════
 {
   const d = build();
-  ok(d.order.status === 'confirmed',
-    '🔴 THE 2026-08-27 DEFECT: a history order whose delivery is still SCHEDULED reads `confirmed`, NOT `fulfilled`. Eight orders shipped claiming fulfilment while their own delivery rows said scheduled — four for a Saturday that had not happened');
-  ok(d.order.status !== 'invoiced',
-    'and it is NOT "invoiced" — that status is absent from ORDER_STATUSES, so it looks safe today and starts counting as OPEN the day the enum is ratified');
+  ok(d.order.status === 'invoiced',
+    '🔴 THE 2026-08-27 DEFECT: a history order whose delivery is still SCHEDULED does NOT read `fulfilled`. Eight orders shipped claiming fulfilment while their own delivery rows said scheduled — four for a Saturday that had not happened');
+  ok(d.order.status !== 'confirmed',
+    '🔴 AND THE 2026-08-28 RATIFICATION: the not-yet-delivered value is `invoiced`, never the retired `confirmed`. The old assertion here was the INVERSE of this one — it asserted NOT-invoiced, on the reasoning that the status was absent from ORDER_STATUSES and would start counting as open the day the enum was ratified. This is that day: it IS in the enum, it DOES count as open, and that is correct for a paid sale awaiting delivery');
   ok(build({ deliveryStatus: 'delivered' }).order.status === 'fulfilled',
     'a COMPLETE delivery does yield fulfilled — the rule follows the delivery in both directions, it is not a blanket downgrade');
   ok(d.items.length === 2 && d.items.every(l => l.businessInventoryId === null),
@@ -71,10 +71,10 @@ const build = (over: any = {}) => buildHistoryOrder({
 
 // ══ §A2 STATUS FOLLOWS THE DELIVERY ═════════════════════════════════════════
 {
-  ok(historyOrderStatus('scheduled') === 'confirmed', 'scheduled → confirmed');
-  ok(historyOrderStatus('pending')   === 'confirmed', 'any not-yet-gone state → confirmed');
-  ok(historyOrderStatus(null)        === 'confirmed',
-    'NO DELIVERY AT ALL → confirmed, deliberately: a capture with no delivery row is PROBABLY a walk-in already gone, but "probably" is not knowledge and `fulfilled` is the stronger claim of the two (A9)');
+  ok(historyOrderStatus('scheduled') === 'invoiced', 'scheduled → invoiced');
+  ok(historyOrderStatus('pending')   === 'invoiced', 'any not-yet-gone state → invoiced');
+  ok(historyOrderStatus(null)        === 'invoiced',
+    'NO DELIVERY AT ALL → invoiced, deliberately: a capture with no delivery row is PROBABLY a walk-in already gone, but "probably" is not knowledge and `fulfilled` is the stronger claim of the two (A9)');
   ok(historyOrderStatus('complete')  === 'fulfilled', 'complete → fulfilled');
   ok(historyOrderStatus('delivered') === 'fulfilled', 'delivered → fulfilled');
   ok(historyOrderStatus('DELIVERED') === 'fulfilled', 'case-insensitive — a status written by a future UI must not miss on capitalisation');
@@ -82,12 +82,13 @@ const build = (over: any = {}) => buildHistoryOrder({
   ok(isDeliveryComplete('scheduled') === false && isDeliveryComplete('') === false && isDeliveryComplete(undefined) === false,
     'and nothing else counts as gone — an unknown status is NOT treated as delivered');
 
-  // 🔴 THE SAFETY NOTE THIS PAIR EXISTS TO PIN. `confirmed` HOLDS a commitment in the D-52
-  // derivation (holdsCommitment excludes only fulfilled/cancelled), so moving these orders off
-  // `fulfilled` makes the NULL lot id the only thing keeping them out of available-to-sell.
+  // 🔴 THE SAFETY NOTE THIS PAIR EXISTS TO PIN. `invoiced` HOLDS a commitment in the D-52
+  // derivation (holdsCommitment excludes only fulfilled/cancelled — unchanged by the 2026-08-28
+  // rename), so an undelivered history order rests entirely on the NULL lot id to stay out of
+  // available-to-sell. The rename moved the WORD, not the danger.
   const conf = build({ deliveryStatus: 'scheduled' });
-  ok(conf.order.status === 'confirmed' && conf.items.every(l => l.businessInventoryId === null),
-    '🔴 a `confirmed` history order carries NO lot id on ANY line — that invariant is now load-bearing ALONE, not as a second line of defence');
+  ok(conf.order.status === 'invoiced' && conf.items.every(l => l.businessInventoryId === null),
+    '🔴 an `invoiced` history order carries NO lot id on ANY line — that invariant is load-bearing ALONE, not as a second line of defence');
 }
 
 // ══ §B THE MONEY — the document is the authority ═════════════════════════════

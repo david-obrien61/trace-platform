@@ -16,7 +16,7 @@ import { ArrowLeft, Trash2, Save, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { orderItemName, orderItemAnchor, type OrderItemAnchorFields } from '../lib/orderItemName';
-import { ORDER_STATUSES, ORDER_STATUS_META } from '../lib/orderStatus';
+import { ORDER_STATUSES, ORDER_STATUS_META, orderStatusMeta } from '../lib/orderStatus';
 import { OrderTotals } from '../components/checkout/OrderTotals';
 import type { TaxStatus } from '@trace/shared/business-logic';
 import { NotPermitted } from '@trace/shared/components/SurfaceState';
@@ -223,7 +223,7 @@ export function OrderDetail() {
     setBusy(true); setError(null); setNotice(null);
     try {
       await post({ action: 'status', status: next });
-      setNotice(`Status set to ${ORDER_STATUS_META[next]?.label ?? next}.`);
+      setNotice(`Status set to ${orderStatusMeta(next).label}.`);
       await load();
     } catch (e: any) { setError(e.message); setStatusEdit(order?.status ?? ''); }
     finally { setBusy(false); }
@@ -242,7 +242,7 @@ export function OrderDetail() {
   if (error && !order) return <Shell><p style={{ textAlign: 'center', color: '#A32D2D', paddingTop: 40 }}>{error}</p></Shell>;
   if (!order) return null;
 
-  const st = ORDER_STATUS_META[order.status] ?? { label: order.status, color: '#6b7280', bg: '#f3f4f6' };
+  const st = orderStatusMeta(order.status);
   const cust = order.customers;
 
   // D-43: render the STORED per-line breakdown (frozen-at-charge) — NO computeOrderPricing here, no

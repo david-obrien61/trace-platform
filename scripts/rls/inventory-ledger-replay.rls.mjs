@@ -116,8 +116,15 @@ try {
       // ════ 2. D-52 — COMMITMENT DOES NOT MOVE ON-HAND. ════
       // Checkout/commit/cancel are lifecycle events; the physical movement rides `sale`.
       // Asserted as a RULE over whatever rows exist, not as a count of them.
+      // 🔴 `order_confirmed` STAYS, AND `order_invoiced` IS ADDED — BOTH, not a swap.
+      // R-STATUS was ratified 2026-08-28 (`confirmed` → `invoiced`), so every event written from
+      // that day forward is `order_invoiced`. But the ledger is APPEND-ONLY and is not rewritten:
+      // one historical `order_confirmed` row is live and stays live. Replacing the string instead
+      // of adding to it would make that row unrecognised — and an unrecognised lifecycle row is
+      // one this invariant stops checking, which is the silent direction of failure.
       const COMMITMENT_KINDS = ['order_created', 'order_committed', 'order_confirmed',
-                                'order_cancelled', 'order_deleted', 'order_fulfilled'];
+                                'order_invoiced', 'order_cancelled', 'order_deleted',
+                                'order_fulfilled'];
       const commitment = (rows ?? []).filter((r) => COMMITMENT_KINDS.includes(r.kind));
       const nonZero = commitment.filter((r) => r.delta !== 0);
       ok(nonZero.length === 0,

@@ -10,6 +10,7 @@ import {
 } from '../../../../shared/src/quickbooks/customerIdentity';
 import { orderItemName, orderItemAnchor } from '../../../src/lib/orderItemName';
 import { HISTORY_ORDER_KIND } from '../../../../shared/src/business-logic/historyOrder';
+import { movesOnHand } from '../../../src/lib/inventoryStates';
 
 const QBO_ENVIRONMENT = process.env.QBO_ENVIRONMENT || 'sandbox';
 const QBO_API_BASE =
@@ -754,12 +755,72 @@ export async function pushQboInvoice(
     // internal transaction id (the ?txnId= in the URL) and it is not a number anyone can quote
     // over the phone. Now that a second numbering scheme lives in this table, the one number that
     // reconciles our record to theirs is worth keeping.
-    await db.from('orders').update({
+    // ── 🔴 THE STATUS WRITE, AND WHY IT IS NOW CONDITIONAL (2026-08-28, R-STATUS) ────────────
+    // `invoiced` used to be a SYNC SIDE-EFFECT: a value outside ORDER_STATUSES that recorded
+    // "QuickBooks has this." Ratification made it a LIFECYCLE state that HOLDS A COMMITMENT —
+    // pushing the invoice IS the commitment. That promotion turned an unconditional write here
+    // into a stock defect, and the four rows it already produced are in the 2026-08-28 audit:
+    //
+    //   A WALK-IN IS BORN `fulfilled` AND ITS ON-HAND IS DECREMENTED AT CHECKOUT
+    //   (submit.ts:824 + :1059 — the customer drove away with the trees). The inline push then
+    //   ran and overwrote that status with `invoiced`. Before ratification this was invisible:
+    //   `invoiced` was not in the enum, so the committed-stock allow-list could not see the row.
+    //   After ratification the same row is OPEN — so its units are subtracted once physically
+    //   (qty already dropped) and once logically (committed). The same double-count D-52 exists
+    //   to prevent, arriving through the integration path instead of the checkout path.
+    //
+    // So the push NEVER MOVES AN ORDER BACKWARDS OUT OF A TERMINAL STATE. `movesOnHand(status)`
+    // is the same predicate the rest of the order path keys off — one answer to "did this
+    // order's stock physically move?" (§6 r8) — rather than a second hand-rolled list here.
+    // `cancelled` is excluded for the same reason from the other side: a cancelled order that
+    // somehow reaches a push must not be resurrected as live by a QuickBooks round-trip.
+    //
+    // The QuickBooks columns are written EITHER WAY. They record a fact that is true regardless
+    // of lifecycle — the invoice exists over there — and suppressing them would lose the only
+    // number that reconciles our record to theirs (see qb_doc_number below).
+    const { data: preStatusRow } = await db
+      .from('orders').select('status').eq('id', order_id).maybeSingle();
+    const priorStatus = (preStatusRow as { status?: string } | null)?.status ?? null;
+    const statusIsTerminal = movesOnHand(priorStatus) || priorStatus === 'cancelled';
+
+    // `qb_doc_number` fixes a small honest gap rather than adding a feature: DocNumber — the
+    // invoice number QuickBooks assigns and the number the CUSTOMER sees — has always been
+    // captured two lines above, returned in the response, rendered once on the confirmation
+    // screen, and then lost. `qb_invoice_id` is NOT a substitute: it is QB's internal transaction
+    // id (the ?txnId= in the URL) and it is not a number anyone can quote over the phone.
+    const qbWriteBack: Record<string, unknown> = {
       qb_invoice_id: qbInvoiceId,
       qb_invoice_url: qbInvoiceUrl,
       qb_doc_number: qbDocNumber ?? null,
-      status: 'invoiced',
-    }).eq('id', order_id);
+    };
+    if (!statusIsTerminal) qbWriteBack.status = 'invoiced';
+
+    // A8 — the write REPORTS whether it landed. A write-back that silently matched zero rows
+    // means the invoice exists in QuickBooks and this order has no link to it: the customer has
+    // an invoice we cannot reconcile, and the manual re-push path would duplicate it. It is
+    // SURFACED, never thrown — §6 r6 (integration failure never blocks an order) applies in the
+    // other direction here too. The push already SUCCEEDED; throwing now would turn a completed
+    // invoice into a 500 and lose the id in the response.
+    const { data: wroteBack, error: wbErr } = await db
+      .from('orders').update(qbWriteBack).eq('id', order_id).select('id');
+
+    const matchedNoRows = !wroteBack?.length;
+    const landed = !wbErr && !matchedNoRows;
+    console.log('[TRACE:QBO] invoice write-back — status', {
+      order_id, priorStatus,
+      wroteStatus: statusIsTerminal ? null : 'invoiced',
+      heldTerminal: statusIsTerminal,
+      rowsWritten: wroteBack?.length ?? 0,
+      why: statusIsTerminal
+        ? 'terminal status preserved — the stock already moved (or was released); marking it open would double-count it'
+        : 'open order — the push IS the commitment (R-STATUS 2026-08-28)',
+    });
+    if (!landed) {
+      console.error('[TRACE:QBO] 🔴 WRITE-BACK MATCHED ZERO ROWS — the QuickBooks invoice exists '
+        + 'and this order carries no link to it. Reconcile by hand; do NOT re-push (it would duplicate).', {
+        order_id, qbInvoiceId, qbDocNumber, code: wbErr?.code, error: wbErr?.message,
+      });
+    }
 
     return { status: 200, body: {
       success: true,

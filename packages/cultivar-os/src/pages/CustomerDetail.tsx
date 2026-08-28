@@ -14,7 +14,7 @@
 //               page does NOT re-implement the edit form. One canonical customer edit surface.
 // DEPENDENCIES: supabase (customer + orders, business_id-scoped, owner-only RLS), useBusinessContext,
 //               CustomerPartyEditor (+ PartyCustomer), orderItemName (roster line summary),
-//               orderStatus (ORDER_STATUS_META), readPricingConfig/normalizeDiscountTypes (tierOptions
+//               orderStatus (orderStatusMeta), readPricingConfig/normalizeDiscountTypes (tierOptions
 //               for the editor), taxExemptionLabel. NO migration, NO new dep, NO endpoint.
 // GATE:         OWNER-ONLY — /customers/:id sits in the owner-only PermissionRoute group beside
 //               /customers, matching customers_business_owner + orders_business_owner (both owner-only).
@@ -27,7 +27,7 @@ import { ArrowLeft, ChevronRight, Package, Pencil, ShoppingBag, DollarSign, Tren
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { orderItemName, orderItemTag, type OrderItemAnchorFields } from '../lib/orderItemName';
-import { ORDER_STATUS_META } from '../lib/orderStatus';
+import { orderStatusMeta } from '../lib/orderStatus';
 import { CustomerPartyEditor, type PartyCustomer } from '../components/customers/CustomerPartyEditor';
 import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME, taxExemptionLabel, type DiscountType } from '@trace/shared/business-logic';
 
@@ -195,7 +195,7 @@ export function CustomerDetail() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {orders.map(o => {
-              const st = ORDER_STATUS_META[o.status] ?? { label: o.status, color: '#6b7280', bg: '#f3f4f6' };
+              const st = orderStatusMeta(o.status);
               const first = o.order_items?.[0];
               const summary = first
                 ? `${first.quantity}× ${orderItemName(first)}${o.order_items.length > 1 ? ` +${o.order_items.length - 1} more` : ''}`

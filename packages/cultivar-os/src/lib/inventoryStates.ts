@@ -25,16 +25,22 @@ export type CommittedByLot = Map<string, number>;
 /**
  * Does an order in this status HOLD a commitment against stock?
  *
- * TRUE for the open states (`pending`, `confirmed`): the units are spoken for but still on the
+ * TRUE for the open states (`pending`, `invoiced`): the units are spoken for but still on the
  * property. FALSE for `fulfilled` (the units physically LEFT — they are out of on-hand entirely,
  * so counting them as committed would subtract them twice) and for `cancelled` (the commitment
  * was released; on-hand never moved).
  *
+ * ⚠️ THE EXCLUDED SET DID NOT MOVE ON 2026-08-28, AND THAT WAS THE POINT. R-STATUS was ratified
+ * (`confirmed` → `invoiced`) and this function is byte-identical across it: `confirmed` held a
+ * commitment, `invoiced` holds a commitment, and exactly `fulfilled` and `cancelled` are still
+ * excluded. What DID change is the SET THIS FILTERS — see the note on openStatuses below, because
+ * that distinction is the whole risk surface of that rename.
+ *
  * Derived by EXCLUSION from ORDER_STATUSES rather than an allow-list, and that direction is
- * deliberate: R-STATUS is an OPEN decision (David ratifies the set — orderStatus.ts:7-8). A new
- * open state (`packed`, `ready`, …) is far more likely than a new terminal one, so exclusion makes
- * the safe assumption automatically — a new status defaults to HOLDING its commitment (stock
- * protected) rather than silently releasing it (stock oversold). Fail toward not overselling.
+ * deliberate. A new open state (`packed`, `ready`, …) is far more likely than a new terminal one,
+ * so exclusion makes the safe assumption automatically — a new status defaults to HOLDING its
+ * commitment (stock protected) rather than silently releasing it (stock oversold). Fail toward not
+ * overselling.
  */
 // NOT exported: nothing outside this module needs to ask the question directly — callers want
 // COMMITTED (the number), which fetchCommittedByLot already derives using this. Exporting it
@@ -80,6 +86,13 @@ export async function fetchCommittedByLot(
   db: any, businessId: string,
 ): Promise<CommittedByLot> {
   const committed: CommittedByLot = new Map();
+  // 🔴 THIS IS AN ALLOW-LIST BUILT FROM THE ENUM, AND THAT IS THE SUBTLE PART OF D-52.
+  // A status that is LIVE IN THE DATA but ABSENT from ORDER_STATUSES contributes ZERO commitment
+  // — it is not "open" or "closed", it is invisible to this query. That is exactly what happened
+  // to `invoiced` between the QuickBooks push starting to write it and R-STATUS being ratified on
+  // 2026-08-28: twelve real orders held no commitment because of an enum they were not in. Adding
+  // a value here CHANGES AVAILABLE-TO-SELL on every existing row carrying it, with no migration
+  // and no code touching inventory. Ratifying a status is an inventory operation. Treat it as one.
   const openStatuses = (ORDER_STATUSES as readonly string[]).filter(holdsCommitment);
 
   const { data, error } = await db

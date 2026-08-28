@@ -35,18 +35,20 @@ Open `/orders`. Open **Paul Christ's** order.
 ### CARD 9 — statuses agree with their deliveries
 STATUS: owed · LAST-PROVEN: — · DEVICE: desktop · COVERS: #224
 
-On `/orders`, all eight history orders read **`Confirmed`**, not `Fulfilled`.
+On `/orders`, all eight history orders read **`Invoiced`**, not `Fulfilled`.
+
+⚠️ **The word changed on 2026-08-28 and the rule did not.** R-STATUS was ratified — the vocabulary is now `pending · invoiced · fulfilled · cancelled`, matching QuickBooks — so the not-yet-delivered value that read `Confirmed` when #224 shipped now reads `Invoiced`. Same orders, same rule, same commitment against stock. **If you see `Confirmed` anywhere, the data migration did not run.**
 
 🔴 **Saturday 2026-08-29 has not happened.** Five of these orders are for that day, one is for 09-12, and every delivery row still reads `scheduled`. `fulfilled` was chosen for a mechanical reason — it is one of only two statuses the committed-stock derivation excludes — and nobody checked whether it was true.
 
-⚠️ **Lauren Frazier's 08-26 is `confirmed` too, and that is the rule being followed rather than a miss.** Her delivery row reads `scheduled`; nothing has ever marked a delivery complete in this system. If that install did happen, marking the delivery complete is what should flip the order — not editing the order.
+⚠️ **Lauren Frazier's 08-26 is `invoiced` too, and that is the rule being followed rather than a miss.** Her delivery row reads `scheduled`; nothing has ever marked a delivery complete in this system. If that install did happen, marking the delivery complete is what should flip the order — not editing the order.
 
-### CARD 10 — a new capture lands `confirmed`, not `fulfilled`
+### CARD 10 — a new capture lands `invoiced`, not `fulfilled`
 STATUS: owed · LAST-PROVEN: — · DEVICE: phone · COVERS: #224
 
 Scan a customer invoice for a **future** delivery date and schedule it.
 
-- The new order reads **`Confirmed`**.
+- The new order reads **`Invoiced`**.
 - Its line shows the description off the document, not "Unknown plant".
 
 🔴 Before this fix the capture path wrote `fulfilled` at the moment of scanning — asserting that trees scheduled for a future Saturday had already left the property. **Ariel Thiry and Sherry Cooper are live proof it happened**: both were captured through the OCR door after `2626e25` shipped and both landed `fulfilled`.

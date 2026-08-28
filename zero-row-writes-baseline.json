@@ -1,6 +1,6 @@
 {
   "_comment": "Mutation sites that do NOT check affected rows, as of the stamp. RATCHET baseline — the build fails on any NEW one, not on these. Shrink it; never grow it casually. Regenerate: npm run zero-row-writes:baseline",
-  "stamped": "2026-08-25",
+  "stamped": "2026-08-28",
   "unchecked": [
     "packages/cultivar-os/api/campaigns.ts::wasEdited#campaign_posts.update",
     "packages/cultivar-os/api/campaigns.ts::wasEdited#campaign_posts.update@2",
@@ -17,7 +17,6 @@
     "packages/cultivar-os/api/orders/submit.ts::updErr#orders.update@2",
     "packages/cultivar-os/api/qbo/invoice/cultivar.ts::qbId#customers.update",
     "packages/cultivar-os/api/qbo/invoice/cultivar.ts::qbId#customers.update@2",
-    "packages/cultivar-os/api/qbo/invoice/cultivar.ts::qbInvoiceUrl#orders.update",
     "packages/cultivar-os/api/qbo/router.ts::db#business_accounting_secrets.upsert",
     "packages/cultivar-os/api/qbo/router.ts::db#businesses.update",
     "packages/cultivar-os/src/components/ProjectCostTree.tsx::parent_id#cost_objects.update",

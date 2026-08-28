@@ -56,7 +56,13 @@ const db = createClient(url, key, { auth: { persistSession: false } });
 // The states that hold a commitment (mirrors inventoryStates.holdsCommitment — kept in sync by
 // hand here because a .mjs script cannot import the TS module without a build step; the list is
 // two values and is asserted against the live data below rather than trusted).
-const OPEN_STATUSES = ['pending', 'confirmed'];
+//
+// ⚠️ UPDATED 2026-08-28 FOR R-STATUS (`confirmed` → `invoiced`). This line went stale the instant
+// the vocabulary was ratified, and a stale open-set here is not a cosmetic problem: this script
+// decides which orders are double-counted, so reading the wrong set means remediating the wrong
+// rows. It is a HAND-KEPT MIRROR of a definition that lives elsewhere (STD-011) — the reason it
+// survives is the build-step constraint above, not a judgement that duplication is fine here.
+const OPEN_STATUSES = ['pending', 'invoiced'];
 
 const { data: orders, error: oErr } = await db
   .from('orders')

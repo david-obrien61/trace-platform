@@ -1336,7 +1336,7 @@ async function handleUpdate(req: any, res: any) {
     // ── Re-adjust inventory qty for the edit (D-42 → D-52) ─────────────────────────
     // D-52 SPLIT this by whether the order's stock has physically left.
     //
-    // OPEN order (pending/confirmed — the common edit): on-hand was NEVER decremented, so an edit
+    // OPEN order (pending/invoiced — the common edit): on-hand was NEVER decremented, so an edit
     // must NOT touch it. Editing quantities changes the COMMITMENT, and commitment is DERIVED from
     // these very line rows — rewriting order_items below IS the adjustment. No stock write at all.
     // Under D-42 this block adjusted on-hand by (oldQty − newQty) and was correct, because create
@@ -1466,7 +1466,7 @@ async function handleDelete(req: any, res: any) {
     const items = (itemsRaw ?? []) as Array<{ quantity: number; business_inventory_id: string | null }>;
 
     // RESTORE on-hand — but ONLY for an order that actually took stock off the property.
-    // D-52: that is exactly a FULFILLED order (movesOnHand). Deleting a pending/confirmed order
+    // D-52: that is exactly a FULFILLED order (movesOnHand). Deleting a pending/invoiced order
     // returns nothing to the lot, because nothing left it — the units were committed, and the
     // commitment evaporates on its own when the order rows disappear (committed is DERIVED from
     // open orders, so deleting the order releases it with no write at all). The prior guard was
@@ -1532,7 +1532,7 @@ async function handleStatus(req: any, res: any) {
 
     const prevStatus = (order as any).status ?? null;
     // A no-op re-submit of the SAME status writes no event. An event log records things that
-    // HAPPENED; emitting 'order_confirmed' when the order was already confirmed would manufacture
+    // HAPPENED; emitting 'order_invoiced' when the order was already invoiced would manufacture
     // a transition nobody performed — the same falsehood OP-14 forbids on a test card.
     if (prevStatus === status) {
       console.log('[TRACE:ROSTER] status unchanged — no event written', { orderId, status });
@@ -1591,7 +1591,7 @@ async function handleStatus(req: any, res: any) {
         });
       }
     } else if (status === 'cancelled') {
-      // The common cancel: an open (pending/confirmed) order. Its commitment simply stops being
+      // The common cancel: an open (pending/invoiced) order. Its commitment simply stops being
       // derived — available rises the moment the status lands. No stock movement, so no ledger row:
       // recording a movement here would assert a physical event that did not occur.
       console.log('[TRACE:INVENTORY] D-52 cancelled while open — commitment released, on-hand untouched (nothing was taken)', {

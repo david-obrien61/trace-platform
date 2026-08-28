@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-08-27 (3) (**#224 — 🔧 FIX: history orders said two things that were not true.** Every order line read *"Unknown plant"* while `description` held the real name on the same row, and every order read `fulfilled` while its delivery read `scheduled`. One root: **things that assume a lot always exists.** The line is now SELF-DESCRIBING (no lot was faked), and order status FOLLOWS THE DELIVERY. Sweep found **six** reader sites. Available-to-sell re-proved identical across 447 lots.)
+# Last updated: 2026-08-28 (**#225 — 🔨 BUILD: the order status vocabulary matches QuickBooks, and the roster gets filters that read it.** `confirmed` → `invoiced` in code AND data (R-20, closing R-STATUS); four multi-select chips DERIVED from the vocabulary unioned with the data, so zero orders are unreachable; the count says what it hides. 🔴 The rename was an INVENTORY operation — `invoiced` was live on 12 rows outside the enum, holding no commitment because of an enum they were not in. LAWNS unmoved; four settled walk-ins → `fulfilled`; 32 units correctly committed.)
 
 
 > 📐 **CAMPAIGN LIFECYCLE — SCOPING + ESTIMATE (2026-08-23, ledger #192/#192b).** NOT a capability entry: **nothing was built.** A scoping document answering David's *"I can add but not edit or cancel or delete"* with nine questions, ten site keys, a proven F1/F2/F3 dependency order, three scopes (**MINIMUM ~2–3 · COHERENT ~5–7 · COMPLETE ~11–14 Thunder prompts; MINIMUM and COHERENT need ZERO migrations**) and eight rulings owed. Read it before ANY campaign build — it is the answer to "has this been scoped?" and its first finding is that the EDIT FORM ALREADY EXISTS as the create form (`Campaigns.tsx:120-198`). → [`docs/audits/campaign-lifecycle-scoping-2026-08-23.md`](audits/campaign-lifecycle-scoping-2026-08-23.md) · predecessor [`social-campaign-path-recon-2026-08-22.md`](audits/social-campaign-path-recon-2026-08-22.md)
@@ -1366,13 +1366,17 @@ While creation is private/invite-only (David + family), guards may stay OFF — 
 
 ## Orders Page (Cultivar OS)
 
-**What:** Last 50 orders with leakage highlighting. Shows transport icon, customer name, amount, leakage flag.  
-**Status:** ✅ Built — TypeScript  
+**What:** Last 50 orders with leakage highlighting and a **multi-select status filter**. Shows transport icon, customer name, amount, leakage flag, status badge.  
+**Status:** ✅ Built — TypeScript · 🟡 filter + status vocabulary BUILDER-COMPLETE 2026-08-28 (#225), owner-proof owed (board 0 of 8)  
 **Vertical:** cultivar | **Type:** capability  
-**Location:** `packages/cultivar-os/src/pages/Orders.tsx`  
+**Location:** `packages/cultivar-os/src/pages/Orders.tsx` · `src/lib/orderStatus.ts` · `src/lib/orderRosterFilter.ts` (+ `.test.ts`, 30 probes)  
 **Route:** `/orders` (private)
 
 **Features:** Green border = no leakage, red border = leakage flagged. Transport icons: 🚗 self / 🚚 delivery / 🌿 install. Queries `orders` joined with `customers`.
+
+**STATUS FILTER (2026-08-28, #225 — R-20):** four chips, **multi-select**, plus `All`. **DEFAULT IS ALL** (David's ruling — the chips are the discovery, not a gate). **The chip set is DERIVED from `ORDER_STATUSES` unioned with the statuses actually present in the loaded rows**, never typed, so no order can exist that no chip selects; an unrecognised value gets its own italic ⚠️ chip under its raw name rather than falling through every filter. Whenever a filter is on the header reads **`showing N of M`**, and at the 50-row page cap it says so (`of 50+`) rather than reporting a ceiling as a total — the old copy read *"N recent checkouts"*, which at the cap asserted a count nobody had. **EMPTY and ERROR are distinct surfaces**: *"No orders match these filters"* (with a Show-all button) vs *"Couldn't load orders"* (with Try again) — a filtered list that fails to load must never render as a filter result.
+
+**STATUS VOCABULARY (2026-08-28, R-20 — closes R-STATUS):** `pending · invoiced · fulfilled · cancelled`, matching QuickBooks. **`confirmed` is retired in code AND data, all tenants.** 🔴 The rename was an **inventory operation**: `invoiced` was already live on 12 rows (QuickBooks push only) and absent from `ORDER_STATUSES`, so `fetchCommittedByLot` — an allow-list built from that enum — could not see them. Four were walk-ins whose stock had already left (settled to `fulfilled` by id, each re-verified against its own ledger delta); eight were genuinely open (their 32 units entering the derivation is the correction). **`holdsCommitment()` is unchanged — still excludes exactly `fulfilled` and `cancelled`.** The QBO write-back no longer downgrades a terminal status, so the class cannot recur. Data migration: `scripts/migrate-order-status-vocabulary.mjs` (dry-run by default, guards G1–G5, refuses rather than warns).
 
 ---
 
