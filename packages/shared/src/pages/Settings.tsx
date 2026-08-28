@@ -11,6 +11,9 @@ import {
 import { readPricingConfig, mergePricingConfig, resolveTaxRate, TX_COMPTROLLER_RATE_LOCATOR_URL } from '../business-logic';
 // The FIX 5 required-field pattern — ONE home, every form inherits it (STD-011, §6 r8).
 import { errBorder, FieldError } from '../components/FieldError';
+// A8/R-12 — the ONE place that decides whether a service write failed and what the owner is
+// told. All four write sites below route through it, so they cannot drift apart in wording.
+import { serviceWriteFailure } from './serviceWriteFailure';
 
 const GREEN = '#27500A';
 const SAGE  = '#EAF3DE';
@@ -45,6 +48,21 @@ function validateServiceForm(f: {
   // Category-scoped: a transport service must say who transports (self / staff).
   if (f.category === 'transport' && !f.transportMode) errs.transportMode = 'Transport mode is required for a transport service.';
   return errs;
+}
+
+// The on-screen home of a refused write. Red, plain-language, role="alert" so a screen reader
+// announces it — and rendered where the click happened, never as a toast that vanishes before the
+// owner has read it. ONE definition; the row, the editor and the add form all use it.
+function WriteFailure({ text }: { text: string }) {
+  return (
+    <p role="alert" style={{
+      margin: '8px 0 0', padding: '8px 10px', borderRadius: 7,
+      background: '#fef2f2', border: `1px solid ${RED}`, color: RED,
+      fontSize: '0.8125rem', fontWeight: 600, lineHeight: 1.45,
+    }}>
+      {text}
+    </p>
+  );
 }
 
 // Small captioned wrapper for a form control — a tiny uppercase label over its input, so the
@@ -296,6 +314,11 @@ export function Settings({
   });
   const [savingOffering, setSavingOffering] = useState(false);
   const [editErrors, setEditErrors]         = useState<Record<string, string>>({});
+  // A REFUSED WRITE MUST REACH THE SCREEN. `id` is the offering the failure belongs to, so the
+  // sentence renders AT THE ROW the owner just clicked rather than in a banner they may have
+  // scrolled past; id === null means the add-new form. Deliberately NOT also shown as a page-top
+  // banner — one fact, one place on screen (STD-011).
+  const [serviceError, setServiceError]     = useState<{ id: string | null; text: string } | null>(null);
 
   // Add-new form
   const [showAddForm, setShowAddForm]     = useState(false);
@@ -329,16 +352,32 @@ export function Settings({
   }
 
   async function toggleOffering(id: string, current: boolean) {
+    if (!businessId) return;
+    const action = current ? 'deactivate' as const : 'activate' as const;
     // [TRACE:SERVICE] write scoped to the ACTIVE business_id (rows loaded .eq('business_id', businessId)
     // + RLS owner-fence). ON by default (STD-003) until owner-proven.
-    console.log('[TRACE:SERVICE] save', { businessId, serviceId: id, action: current ? 'deactivate' : 'activate' });
-    await supabase.from('service_offerings').update({ is_active: !current }).eq('id', id);
+    console.log('[TRACE:SERVICE] save', { businessId, serviceId: id, action });
+    setServiceError(null);
+    // A8 — `.select('id')` asks for EVIDENCE IT LANDED. Without it an RLS refusal comes back as
+    // zero rows and NO error, i.e. indistinguishable from success.
+    const { data: hit, error } = await supabase
+      .from('service_offerings')
+      .update({ is_active: !current })
+      .eq('id', id)
+      .eq('business_id', businessId)
+      .select('id');
+    console.log('[TRACE:SERVICE] save result', { serviceId: id, action, rows: hit?.length ?? 0, error: error?.message ?? null });
+    // A8 — zero rows and NO error is what an RLS refusal looks like, so `!error` is NOT success.
+    if (error || !hit?.length) { setServiceError({ id, text: serviceWriteFailure(action, error) }); return; }
+    // Local state moves ONLY after the write is proven — the screen never shows a change the
+    // database refused.
     setOfferings(prev => prev.map(o => o.id === id ? { ...o, is_active: !current } : o));
   }
 
   function startEdit(o: ServiceOffering) {
     setEditingId(o.id);
     setEditErrors({});
+    setServiceError(null);
     setEditForm({
       name:              o.name,
       description:       o.description       ?? '',
@@ -384,7 +423,12 @@ export function Settings({
       category: editForm.category, price_type: editForm.price_type, price_unit: editForm.price_unit,
       transport_mode, trigger_transport_mode, requires_address,
     });
-    await supabase.from('service_offerings').update({
+    setServiceError(null);
+    // The payload is hoisted out of the call DELIBERATELY: it keeps the write statement and its
+    // row-count check next to each other, so a reader (and verify-zero-row-writes, which reads a
+    // ~400-char window per statement) can see in one glance that this write is checked. Inline,
+    // the 13-line object pushed the check out of sight of both.
+    const patch = {
       name:             editForm.name.trim(),
       description:      editForm.description.trim()      || null,
       price,
@@ -397,7 +441,25 @@ export function Settings({
       compliance_title: editForm.compliance_title.trim() || null,
       compliance_body:  editForm.compliance_body.trim()  || null,
       service_note:     editForm.service_note.trim()     || null,
-    }).eq('id', editingId);
+    };
+    // A8 — evidence it landed. `.select('id')` turns a zero-row RLS refusal into something the
+    // caller can see; without it the refusal is silent and this function used to close the editor
+    // and repaint the row as if it had saved.
+    const { data: hit, error } = await supabase
+      .from('service_offerings')
+      .update(patch)
+      .eq('id', editingId)
+      .eq('business_id', businessId!)
+      .select('id');
+    console.log('[TRACE:SERVICE] save result', { serviceId: editingId, action: 'edit', rows: hit?.length ?? 0, error: error?.message ?? null });
+    // A8 — zero rows and NO error is what an RLS refusal looks like, so `!error` is NOT success.
+    if (error || !hit?.length) {
+      // The editor STAYS OPEN on failure — closing it would throw away what the owner typed and
+      // leave them re-entering it blind. Their edits are still on screen to retry or copy.
+      setServiceError({ id: editingId, text: serviceWriteFailure('edit', error) });
+      setSavingOffering(false);
+      return;
+    }
     setOfferings(prev => prev.map(o =>
       o.id === editingId
         ? {
@@ -413,8 +475,20 @@ export function Settings({
   }
 
   async function deleteOffering(id: string) {
+    if (!businessId) return;
     console.log('[TRACE:SERVICE] save', { businessId, serviceId: id, action: 'delete' });
-    await supabase.from('service_offerings').delete().eq('id', id);
+    setServiceError(null);
+    // A8 — a DELETE refused by RLS also returns zero rows and no error. Removing the row from the
+    // list on that basis would hide a service that is still live at checkout.
+    const { data: hit, error } = await supabase
+      .from('service_offerings')
+      .delete()
+      .eq('id', id)
+      .eq('business_id', businessId)
+      .select('id');
+    console.log('[TRACE:SERVICE] save result', { serviceId: id, action: 'delete', rows: hit?.length ?? 0, error: error?.message ?? null });
+    // A8 — zero rows and NO error is what an RLS refusal looks like, so `!error` is NOT success.
+    if (error || !hit?.length) { setServiceError({ id, text: serviceWriteFailure('delete', error) }); return; }
     setOfferings(prev => prev.filter(o => o.id !== id));
   }
 
@@ -463,14 +537,25 @@ export function Settings({
       sort_order:   offerings.length + 10,
     }).select('*').single();
 
-    if (!error && data) {
-      setOfferings(prev => [...prev, data as ServiceOffering]);
-      setNewName(''); setNewDesc(''); setNewPrice('');
-      setNewCategory('addon'); setNewTiming('at_checkout');
-      setNewPriceType('per_unit'); setNewPriceUnit('plant');
-      setNewTransportMode('staff'); setNewRequiresAddress(false); setNewTriggerMode('');
-      setShowAddForm(false);
+    console.log('[TRACE:SERVICE] save result', { action: 'add', rows: data ? 1 : 0, error: error?.message ?? null });
+    // This site already HAD the error in hand and threw it away — the form simply sat there with
+    // the owner's typing still in it and no explanation, which reads as a click that did nothing.
+    // (`.single()` raises on zero rows, so the row count is belt-and-braces here rather than the
+    // primary signal it is on the update/delete paths.)
+    if (error || !data) {
+      // The form STAYS OPEN and still holds what they typed — nothing is cleared until the row
+      // is known to exist.
+      setServiceError({ id: null, text: serviceWriteFailure('add', error) });
+      setAddingOffering(false);
+      return;
     }
+    setServiceError(null);
+    setOfferings(prev => [...prev, data as ServiceOffering]);
+    setNewName(''); setNewDesc(''); setNewPrice('');
+    setNewCategory('addon'); setNewTiming('at_checkout');
+    setNewPriceType('per_unit'); setNewPriceUnit('plant');
+    setNewTransportMode('staff'); setNewRequiresAddress(false); setNewTriggerMode('');
+    setShowAddForm(false);
     setAddingOffering(false);
   }
 
@@ -675,9 +760,11 @@ export function Settings({
                   onToggle={toggleOffering}
                   onEdit={startEdit}
                   onSaveEdit={saveEdit}
-                  onCancelEdit={() => setEditingId(null)}
+                  onCancelEdit={() => { setEditingId(null); setServiceError(null); }}
                   onDelete={null}
                   onFindCustomers={null}
+                  errorForId={serviceError?.id ?? null}
+                  errorText={serviceError?.text ?? null}
                 />
               )}
 
@@ -694,9 +781,11 @@ export function Settings({
                   onToggle={toggleOffering}
                   onEdit={startEdit}
                   onSaveEdit={saveEdit}
-                  onCancelEdit={() => setEditingId(null)}
+                  onCancelEdit={() => { setEditingId(null); setServiceError(null); }}
                   onDelete={deleteOffering}
                   onFindCustomers={findCustomers}
+                  errorForId={serviceError?.id ?? null}
+                  errorText={serviceError?.text ?? null}
                 />
               )}
 
@@ -713,9 +802,11 @@ export function Settings({
                   onToggle={toggleOffering}
                   onEdit={startEdit}
                   onSaveEdit={saveEdit}
-                  onCancelEdit={() => setEditingId(null)}
+                  onCancelEdit={() => { setEditingId(null); setServiceError(null); }}
                   onDelete={deleteOffering}
                   onFindCustomers={findCustomers}
+                  errorForId={serviceError?.id ?? null}
+                  errorText={serviceError?.text ?? null}
                 />
               )}
 
@@ -800,12 +891,13 @@ export function Settings({
                       {addingOffering ? 'Adding…' : 'Add Service'}
                     </button>
                     <button
-                      onClick={() => { setShowAddForm(false); setAddErrors({}); setNewName(''); setNewDesc(''); setNewPrice(''); }}
+                      onClick={() => { setShowAddForm(false); setAddErrors({}); setServiceError(null); setNewName(''); setNewDesc(''); setNewPrice(''); }}
                       style={{ padding: '11px 16px', borderRadius: 9, border: '1px solid #e5e7eb', cursor: 'pointer', background: '#fff', color: GRAY, fontWeight: 600, fontSize: '0.875rem' }}
                     >
                       Cancel
                     </button>
                   </div>
+                  {serviceError && serviceError.id === null && <WriteFailure text={serviceError.text} />}
                 </div>
               ) : (
                 <button
@@ -945,11 +1037,15 @@ interface OfferingGroupProps {
   onCancelEdit: () => void;
   onDelete: ((id: string) => void) | null;
   onFindCustomers: ((o: ServiceOffering) => void) | null;
+  /** The offering whose last write was refused, and what to tell the owner about it. */
+  errorForId: string | null;
+  errorText: string | null;
 }
 
 function OfferingGroup({
   label, offerings, editingId, editForm, setEditForm, editErrors, savingOffering,
   onToggle, onEdit, onSaveEdit, onCancelEdit, onDelete, onFindCustomers,
+  errorForId, errorText,
 }: OfferingGroupProps) {
   return (
     <div style={{ marginBottom: 16 }}>
@@ -1067,6 +1163,7 @@ function OfferingGroup({
                     Cancel
                   </button>
                 </div>
+                {errorForId === o.id && errorText && <WriteFailure text={errorText} />}
               </div>
             ) : (
               /* View mode */
@@ -1111,6 +1208,7 @@ function OfferingGroup({
                     ✦ Find customers who might want this
                   </button>
                 )}
+                {errorForId === o.id && errorText && <WriteFailure text={errorText} />}
               </div>
             )}
           </div>
