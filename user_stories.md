@@ -955,6 +955,36 @@ NEEDS: 🔴 **THIS STORY CONTRADICTS [[D-54]] AND THE *Remote browse* STORY ABOV
 🔴 **TRACE DOES NOT ACCEPT, HOLD, PROCESS OR RECONCILE PAYMENT — [[D-37]] HOLDS UNCHANGED.** The confirmed order creates a **QuickBooks invoice, which already carries a pay-online link** (Apple Pay, cards, bank). **Intuit takes the card. Intuit holds the money. Intuit handles the chargeback.** The customer's experience is identical to any online store, and the liability is neither TRACE's nor the nursery's software problem. **It is also the better commercial answer** — *"payments run through your QuickBooks, where your money already lives"* reads to an owner as safer, not as a limitation.
 
 ⚠️ **If asked before it exists:** *"It's on the roadmap as a switchable module — nineteen a month if you want it, nothing if you don't. Payment would run through your QuickBooks, so the money goes where it already goes. And nothing gets held for an online shopper — if it leaves the yard, it's sold."* A complete answer that promises nothing unbuilt. _Grounded: REQ-online-shop.md (David, ruled 2026-08-25 and 2026-08-26) · [[D-37]] money boundary · [[D-52]] on-hand/committed/available · `tileRegistry.ts:230,391` · MASTER_BRIEF:308._
+
+### Will-call — a customer orders online and collects it themselves
+STATUS: needs-input
+SCOPE: vertical:cultivar, platform
+BUILD: active
+MAPS-TO: 5.6, 2.1, 5.1, 3.5
+PIECES: will_call_fulfilment_choice, hold_on_purchase, fulfilment_action_no_delivery_row, arrival_identify_and_load
+NEEDS: 🔴 **NOTHING IN THIS STORY IS OWED BY DAVID — the will-call rule itself is SETTLED by [[R-21]] and the four questions below are answered and closed. What is owed is everything it stands on:** the **online shop** that originates the order (`online_shop` is `status:'planned'`, and its own story is `needs-input`); the **price-gate ruling**, still OPEN — browse with prices like Lowes, or identify first per [[D-54]] — the live fork the online-shop story names; and **customer identity for a registering guest**, the same customer-matching ruling the OCR import and the 1,927-row customer import both wait on. ⚠️ **The one piece that is this story's own and not inherited: the fulfilment action must work with NO delivery row, and it must be the SAME action used at a delivery stop and at the register — a spec that names three is the thing to stop.**
+
+**A guest registers on the online shop, orders, and chooses pickup rather than delivery. The order is paid and lands at `invoiced`. It holds the stock. It creates no delivery row, because LAWNS are not taking it anywhere. When the customer arrives, someone identifies the stock, loads it, and marks the order collected — and that is fulfilment.**
+
+David, verbatim: *"will call is an online order for pickup which is what they want customer (guest) who registers, orders online and says i will pickup the customer arrives the stock is identified, loaded and customer departs (will call) fullfilled"*.
+
+**What it needs:**
+- 🔴 **No new order status.** `pending` → `invoiced` → `fulfilled` already covers it ([[R-20]]) — **will-call simply WAITS at `invoiced`**. A fifth status would be scheduling state leaking into the lifecycle, which is exactly what R-20 pushed onto the delivery row.
+- 🔴 **The order carries a lot id, per [[R-21]]** — so available-to-sell drops **the moment it is paid**, not when it is collected. This is the half of R-21 that has no guard yet, and it is what stops the same tree being sold at the register while it sits paid-for in the yard.
+- 🔴 **A fulfilment action that works with NO delivery row.** ⚠️ **This is the SAME action the crew takes at a stop and the same one a walk-in takes at the register — one fulfilment action, three contexts. DO NOT BUILD THREE.** (§6 r8, and the live reason it matters: nothing in the platform can mark a delivery complete today — tech-debt #121 — so the stop-context half of this action does not exist either.)
+
+**Answered by David — RECORDED, DO NOT RE-ASK:**
+- ✅ **A specific plant is NOT set aside. A QUANTITY is held against the lot**; the physical tree is chosen at pickup.
+- ⚠️ **Individual-tree selection is REAL at LAWNS but happens a different way** — a customer who walks the lot sometimes picks an exact tree and **IT IS MARKED WITH A RIBBON**. Inventory is **lot-level with a quantity and has no per-plant concept**. 🔴 **Recorded as CONTEXT ONLY: it is NOT in scope and nothing is to be built for it.**
+- ✅ **A paid will-call nobody collects is a CUSTOMER-SERVICE ISSUE FOR LAUREN, not a system problem. No expiry, no automatic release.** Closed by David — **do not raise it as an open question.**
+- ✅ **The hold does not contradict *"no reservation, first purchase wins"*** — that rule governs **browsing and carting**; the hold begins **at purchase**, and a will-call order is a completed purchase ([[R-21]] corollary).
+
+**Dependencies — NAME them, do not build them:**
+- **The online shop itself** — `online_shop`, `status:'planned'`, `$19/mo` non-core (`tileRegistry.ts:230,391`); story *Online shop — a stranger buys trees, and the money never touches TRACE*.
+- **The price-gate ruling, still OPEN** — browse with prices, or identify first ([[D-54]]).
+- **Customer identity for a registering guest** — David's model is already ruled: **not identified, no discount; identified, the account they choose decides the terms.**
+
+_Grounded: David 2026-08-28 (verbatim above) · [[R-21]] origin decides the hold · [[R-20]] the four-word status vocabulary · [[D-52]] on-hand / committed / available · [[D-37]] money boundary · the *Online shop* story's fulfilment-choice piece (`orders.transport_method` = `self`)._
 ---
 
 ## PLATFORM STANDARD CAPABILITIES
