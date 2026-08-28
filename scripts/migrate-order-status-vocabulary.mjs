@@ -78,11 +78,11 @@ const LAWNS = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74';
 /** available-to-sell for every lot, under a given open-status set. The shape mirrors
  *  inventoryStates.fetchCommittedByLot exactly: sum open order-line quantities per lot, floor at
  *  0 is NOT applied here — a negative is a data fact we want to SEE, not a number to tidy away. */
-const availableSql = (openSet) => `
+const availableSql = (openWhere) => `
   with c as (
     select oi.business_inventory_id lot, sum(oi.quantity)::int q
     from order_items oi join orders o on o.id = oi.order_id
-    where o.status in (${openSet}) and oi.business_inventory_id is not null
+    where (${openWhere}) and oi.business_inventory_id is not null
     group by 1)
   select li.business_id, li.id as lot_id, li.name, li.size, li.qty as on_hand,
          coalesce(c.q,0) as committed, (li.qty - coalesce(c.q,0)) as available
@@ -102,8 +102,33 @@ P(`\n══ R-STATUS DATA MIGRATION ${APPLY ? '· APPLY' : '· DRY RUN (writes n
 
 // ── BEFORE ───────────────────────────────────────────────────────────────────────────────────
 const before      = await sql(statusCountsSql);
-const availBefore = await sql(availableSql(`'pending','confirmed'`));
-const availAfterProjected = await sql(availableSql(`'pending','invoiced'`));
+
+// 🔴 THE PROJECTION HAS TO MODEL THE MIGRATED WORLD, NOT APPLY THE NEW ENUM TO THE OLD DATA.
+// The first version read  o.status in ('pending','invoiced')  against UNMIGRATED rows, which
+// silently DROPPED every current `confirmed` order from the "after" side — they had not been
+// renamed yet. It disagreed with the truth on FOUR of five lots and, worst of all, showed Shoal
+// Creek Vitex 30 IMPROVING from -12 to -11 when it actually goes to -16. A dry run exists so a
+// human can decide from it; one that prints a state that will never exist is worse than none.
+//
+// The post-migration open set is: pending, PLUS everything that will be invoiced (today's
+// `confirmed` ∪ today's `invoiced`), MINUS the four walk-ins that Write 1 sends to `fulfilled`.
+const notWalkIn = SETTLED_WALK_INS.map((w) => `left(o.id::text,8) <> '${w.id}'`).join(' and ');
+const OPEN_NOW   = `o.status in ('pending','confirmed')`;
+const OPEN_AFTER = `o.status in ('pending','confirmed','invoiced') and ${notWalkIn}`;
+
+// 🔴 THE ORDERS THAT ACTUALLY *BECOME* OPEN — captured BY ID from the PRE state, because after
+// Write 2 they are indistinguishable by status from the renamed `confirmed` rows. Attribution has
+// to name the CAUSE of a move, not every order that happens to touch the lot: the first version
+// listed 16 orders totalling 61 units to explain a 4-unit change on Shoal Creek Vitex 30, which
+// is a list, not an explanation. A `confirmed` row was already open and contributes nothing new.
+const newlyOpen = (await sql(`
+  select o.id from orders o
+  where o.status = 'invoiced' and ${notWalkIn}`)).map((r) => r.id);
+const newlyOpenSql = newlyOpen.length
+  ? newlyOpen.map((i) => `'${i}'`).join(',') : `'00000000-0000-0000-0000-000000000000'`;
+
+const availBefore = await sql(availableSql(OPEN_NOW));
+const availAfterProjected = await sql(availableSql(OPEN_AFTER));
 
 P('── BEFORE · orders per tenant per status ──');
 for (const r of before) P(`   ${r.tenant.padEnd(24)} ${String(r.status).padEnd(11)} ${r.n}`);
@@ -123,8 +148,19 @@ P('\n✅ G2 — zero history lines carry a lot id; captured invoices cannot reac
 const walkIns = await sql(`
   select o.id, o.business_id, o.status, o.transport_method, o.total_amount,
          coalesce(sum(oi.quantity) filter (where oi.business_inventory_id is not null),0)::int as units,
+         -- 🔴 THE PHYSICAL MOVEMENT IS AN *INVENTORY* AGGREGATE, KEYED BY source_id.
+         -- The first version of this query read aggregate_id = o.id AND aggregate_type = 'ORDER'
+         -- and refused all four walk-ins. That was not the world moving -- it was the query asking
+         -- the wrong rows: an ORDER-aggregate row carries delta 0 BY DESIGN (D-52 -- commitment
+         -- never moves on-hand; inventory-ledger-replay.rls.mjs asserts exactly that over
+         -- COMMITMENT_KINDS). Summing them can only ever produce 0, so the guard was UNPASSABLE --
+         -- which is the tell that it was measuring nothing rather than measuring strictly.
+         -- The sale rides aggregate_type='INVENTORY', kind='sale', source_id = the order.
+         -- SUM, not a single row: c9b192e3's five units span TWO lots, so a per-row check would
+         -- read -3 against 5 and refuse a correct order.
          coalesce((select sum(l.delta)::int from business_inventory_ledger l
-                   where l.aggregate_id = o.id and l.aggregate_type = 'ORDER'),0) as ledger_delta
+                   where l.source_id = o.id and l.aggregate_type = 'INVENTORY'
+                     and l.kind = 'sale'),0) as ledger_delta
   from orders o left join order_items oi on oi.order_id = o.id
   where o.status = 'invoiced' and o.transport_method = 'self'
   group by o.id, o.business_id, o.status, o.transport_method, o.total_amount
@@ -156,12 +192,12 @@ const movers = availAfterProjected
   .filter((a) => Number(a.available) !== Number(byLot.get(a.lot_id)?.available ?? a.available))
   .map((a) => ({ ...a, before: Number(byLot.get(a.lot_id).available) }));
 
-P('\n── PROJECTED · lots whose available-to-sell moves (before Write 1) ──');
+P('\n── PROJECTED POST-MIGRATION · lots whose available-to-sell moves (both writes modelled) ──');
 for (const m of movers) {
   const orders = await sql(`
     select o.id, o.status, o.transport_method, oi.quantity
     from order_items oi join orders o on o.id = oi.order_id
-    where oi.business_inventory_id = '${m.lot_id}' and o.status = 'invoiced'`);
+    where oi.business_inventory_id = '${m.lot_id}' and o.id in (${newlyOpenSql})`);
   P(`   ${String(m.name).slice(0, 30).padEnd(31)} ${String(m.size).padEnd(8)} ${String(m.before).padStart(4)} → ${String(m.available).padStart(4)}`);
   for (const o of orders) P(`      ← ${o.id.slice(0, 8)}  ${o.transport_method}  ${o.quantity} units`);
 }
@@ -188,7 +224,7 @@ P(`✅ WRITE 2 — every 'confirmed' → 'invoiced'.`);
 
 // ── AFTER + THE GUARDS THAT MATTER ───────────────────────────────────────────────────────────
 const after     = await sql(statusCountsSql);
-const availPost = await sql(availableSql(`'pending','invoiced'`));
+const availPost = await sql(availableSql(`o.status in ('pending','invoiced')`));
 
 P('\n── AFTER · orders per tenant per status ──');
 for (const r of after) P(`   ${r.tenant.padEnd(24)} ${String(r.status).padEnd(11)} ${r.n}`);
@@ -220,7 +256,7 @@ for (const m of postMovers) {
   const orders = await sql(`
     select o.id, o.status, o.transport_method, oi.quantity
     from order_items oi join orders o on o.id = oi.order_id
-    where oi.business_inventory_id = '${m.lot_id}' and o.status in ('pending','invoiced')`);
+    where oi.business_inventory_id = '${m.lot_id}' and o.id in (${newlyOpenSql})`);
   const delta = m.before - Number(m.available);
   attributed += delta;
   P(`   ${String(m.name).slice(0, 30).padEnd(31)} ${String(m.size).padEnd(8)} ${String(m.before).padStart(4)} → ${String(m.available).padStart(4)}  (−${delta})`);

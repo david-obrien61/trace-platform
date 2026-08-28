@@ -19,7 +19,7 @@ If ①–③ do not agree, **STOP**. Do not record a pass or a fail.
 
 ---
 
-## ⛔ GATE 0b — THE DATA MIGRATION RAN
+## ✅ GATE 0b — THE DATA MIGRATION HAS RUN (2026-08-28)
 
 This build is the one case where code and data had to ship together. **Run the dry run first and read it**, then apply:
 
@@ -29,6 +29,18 @@ node scripts/migrate-order-status-vocabulary.mjs --apply
 ```
 
 It **refuses to write** if the world has moved since the 2026-08-28 audit — the four settled walk-ins are re-verified by id against their own ledger rows, and a history line carrying a lot id aborts the run outright. A refusal is the script working, not a failure to route around.
+
+✅ **APPLIED 2026-08-28. Result, for checking the cards below against:**
+
+| tenant | after |
+|---|---|
+| LAWNS Tree Farm | `fulfilled` 1 · `invoiced` 8 |
+| Test Dave's Tree Nest | `cancelled` 1 · `fulfilled` 5 · `invoiced` 10 · `pending` 17 |
+| Test David's new Business | `pending` 1 |
+
+**G5** zero rows read `confirmed` · **G3** LAWNS unchanged across all **447** lots · **G4** exactly **32** units newly committed across **4** lots, each attributed to one of the eight open orders.
+
+⚠️ **G1 refused on its first run and it was the SCRIPT that was wrong, not the data** — it summed `aggregate_type='ORDER'` ledger rows, which carry **delta 0 by design** (D-52), making the guard unpassable. The sale rides `aggregate_type='INVENTORY'`, `kind='sale'`, `source_id = the order`. Fixed, re-verified: −2 · −2 · −4 · −5 against 2 · 2 · 4 · 5 units.
 
 ---
 
@@ -68,18 +80,19 @@ On the **f7ec5d67** test tenant, find orders `fdf522bd` · `dbf88429` · `1885f3
 ### CARD 4 — the eight open sales now hold their stock
 STATUS: owed · LAST-PROVEN: — · DEVICE: desktop · COVERS: #225
 
-On **f7ec5d67**, five lots move and **that is correct**:
+On **f7ec5d67**, **four** lots move and **that is correct** — these are the numbers the applied migration actually produced:
 
-| lot | available before → after |
-|---|---|
-| 'Sierra' Mexican Red Oak 15 | 22 → 13 |
-| Alley Cat Redbud Espalier 15 | 39 → 33 |
-| Live Oak 30 gal | 11 → 5 |
-| Shoal Creek Vitex 45 | 38 → 18 |
-| Shoal Creek Vitex 30 | −12 → −16 |
+| lot | available before → after | the order(s) responsible |
+|---|---|---|
+| Shoal Creek Vitex 30 | −12 → **−16** | `2661dbe4` install 4 |
+| Live Oak 30 gal | 11 → **8** | `9a3cbc8b` install 3 |
+| 'Sierra' Mexican Red Oak 15 | 22 → **15** | `2661dbe4` install 3 · `2f8846c4` install 4 |
+| Shoal Creek Vitex 45 | 38 → **20** | `8792c641` 4 · `b8b546ec` 2 · `d38e27e1` 2 · `82faef45` 3 · `9a3cbc8b` 4 · `6b18c043` 3 |
 
-- The total newly committed is **32 units** and the migration names every order responsible.
+- 4 + 3 + 7 + 18 = **32 units**, every one tied to an order id.
 - **Any other lot moving is a defect** — guard G4 prints each mover with its order ids so this is checkable, not trusted.
+
+⚠️ **FIVE lots were predicted and only FOUR moved. Alley Cat Redbud Espalier 15 stays 39 → 39**, because its only open contributors were two of the walk-ins that Write 1 sent to `fulfilled`. The earlier five-lot table described the state with all twelve `invoiced` rows open — the rename applied but the walk-ins not yet settled — which is a real intermediate moment and not the destination. Corrected here against the applied result rather than left to be discovered on the screen.
 
 ⚠️ **Shoal Creek Vitex 30 already read −12 before any of this.** Pre-existing, on a test tenant, **reported and deliberately not fixed**. Do **not** run `d52-remediate-committed-stock.mjs` against it casually.
 
