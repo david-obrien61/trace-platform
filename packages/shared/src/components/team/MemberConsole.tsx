@@ -26,6 +26,8 @@ import {
   saveRolePermissions, assignMemberRole, diffPermissions, CONFIDENTIAL_EXPOSURE,
   OWNER_LOCKED_SET,
   listDevicesByBusiness, setDeviceActive, deleteDevice, armPinReset,
+  // The three roster writes still fenced on businesses.owner_id — see rosterAuthority.ts.
+  rosterActionLock,
 } from '../../auth';
 import type { Member, Invitation, Device, ResolvedRole, RoleDefinitionRow, RoleSaveOp } from '../../auth';
 import { generateQR } from '../../qr/generate';
@@ -194,7 +196,7 @@ export function MemberConsole(props: MemberConsoleProps) {
 
         {tab === 'users' && (
           <UsersTab
-            T={T} supabase={supabase} businessId={businessId}
+            T={T} supabase={supabase} businessId={businessId} isOwner={isOwner}
             members={members} pending={pending} resolved={resolved} devices={devices}
             inviteRoleOptions={inviteRoleOptions}
             inviteBaseUrl={inviteBaseUrl} invitePath={invitePath} showDevices={showDevices}
@@ -227,12 +229,16 @@ type InvitePhase = 'list' | 'form' | 'link';
 
 function UsersTab(p: {
   T: MemberConsoleTheme; supabase: SupabaseClient; businessId: string;
+  // `isOwner` is the FACT of being businesses.owner_id, not a permission (ruling 2026-07-30). It
+  // is threaded here for exactly one purpose: three roster writes are still fenced on it, and a
+  // control the database will refuse must not be offered as if it works.
+  isOwner: boolean;
   members: Member[]; pending: Invitation[]; resolved: ResolvedRole[]; devices: Device[];
   inviteRoleOptions: InviteRoleOption[];
   inviteBaseUrl: string; invitePath: string; showDevices: boolean;
   busy: boolean; setBusy: (b: boolean) => void; reload: () => Promise<void>; setLoadError: (s: string) => void;
 }) {
-  const { T, supabase, businessId, members, pending, resolved, devices, inviteRoleOptions, inviteBaseUrl, invitePath, showDevices, busy, setBusy, reload, setLoadError } = p;
+  const { T, supabase, businessId, isOwner, members, pending, resolved, devices, inviteRoleOptions, inviteBaseUrl, invitePath, showDevices, busy, setBusy, reload, setLoadError } = p;
   const [phase, setPhase] = useState<InvitePhase>('list');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -288,17 +294,18 @@ function UsersTab(p: {
     if (!name.trim()) { setInviteError('Name is required.'); return; }
     setBusy(true); setInviteError('');
     try {
-      // Mint defaults READ THE RESOLVED FLOOR (David's ruling 2026-07-23 — DEFAULT_PERMISSIONS
-      // retired). `resolved` is the floor+override chain already loaded for this tab, so the
-      // invite seeds the member row from the SAME source the Roles tab renders and the funnel
-      // writes — no fourth stale copy (STD-011). An owner still tunes the member via the funnel.
-      const invitePerms = resolved.find((r) => r.role_key === role)?.permissions ?? [];
-      const { inviteLink } = await createInvitation(
+      // 🔴 THE PERMISSION ARRAY NO LONGER TRAVELS FROM THIS BROWSER (2026-08-28). It used to be
+      // read out of `resolved` here and POSTed; `create_invitation` now resolves it server-side
+      // from the same floor+override chain, so the mint still reads the resolved floor (David's
+      // ruling 2026-07-23) but the client cannot influence what it reads. What comes BACK is what
+      // was actually seeded — trace it, so the invite says what it granted rather than what this
+      // tab hoped it would.
+      const { inviteLink, permissions: seeded } = await createInvitation(
         supabase,
-        { businessId, name: name.trim(), email: email.trim() || undefined, role, permissions: invitePerms },
+        { businessId, name: name.trim(), email: email.trim() || undefined, role },
         inviteBaseUrl, invitePath,
       );
-      console.log('[TRACE:MEMBERCONSOLE] invite created', { role });
+      console.log('[TRACE:MEMBERCONSOLE] invite created', { role, seededPermissions: seeded.length, source: 'create_invitation (server-resolved)' });
       setLink(inviteLink); setPhase('link'); await reload();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to create invite';
@@ -375,7 +382,7 @@ function UsersTab(p: {
   if (selected) {
     return (
       <MemberDetail
-        T={T} supabase={supabase}
+        T={T} supabase={supabase} isOwner={isOwner}
         member={selected} devices={devices} pendingInvite={selectedPendingInvite}
         resolved={resolved} roleOptions={roleOptions} assignRole={assignRole}
         inviteBaseUrl={inviteBaseUrl} invitePath={invitePath} showDevices={showDevices}
@@ -458,8 +465,21 @@ function QrImage({ content, T, caption }: { content: string; T: MemberConsoleThe
 // deactivate · remove). Re-composition: reuses assignMemberRole/setDeviceActive/deleteDevice/
 // createInvitation/generateQR/armPinReset/setMemberActive/removeMember — no new backend.
 // ══════════════════════════════════════════════════════════════════════════════════════
+/**
+ * The explanation beside a locked roster control. NOT a tooltip: a tooltip is invisible on the
+ * phone the roster is read on, and an unexplained grey control is the mystery-lock §6 r13 forbids.
+ * `role="note"` rather than `alert` — nothing has failed; something is simply not this person's.
+ */
+function LockNote({ text, T }: { text: string; T: MemberConsoleTheme }) {
+  return (
+    <p role="note" style={{ margin: '8px 0 0', fontSize: 12, color: T.sub, lineHeight: 1.45 }}>
+      🔒 {text}
+    </p>
+  );
+}
+
 function MemberDetail(p: {
-  T: MemberConsoleTheme; supabase: SupabaseClient;
+  T: MemberConsoleTheme; supabase: SupabaseClient; isOwner: boolean;
   member: Member; devices: Device[]; pendingInvite: Invitation | null;
   resolved: ResolvedRole[]; roleOptions: (role: string | null) => string[];
   assignRole: (m: Member, roleKey: string) => Promise<void>;
@@ -467,7 +487,7 @@ function MemberDetail(p: {
   busy: boolean; setBusy: (b: boolean) => void; reload: () => Promise<void>; setLoadError: (s: string) => void;
   onRemove: (id: string) => Promise<void>; onBack: () => void;
 }) {
-  const { T, supabase, member, devices, pendingInvite, resolved, roleOptions, assignRole,
+  const { T, supabase, isOwner, member, devices, pendingInvite, resolved, roleOptions, assignRole,
     inviteBaseUrl, invitePath, showDevices, busy, setBusy, reload, setLoadError, onRemove, onBack } = p;
   const [working, setWorking] = useState<string | null>(null);
   const [resetLink, setResetLink] = useState('');
@@ -479,6 +499,15 @@ function MemberDetail(p: {
 
   const myDevices = useMemo(() => devices.filter((d) => d.member_id === member.id), [devices, member.id]);
   const isOwnerRow = (member.role ?? '').toUpperCase() === 'OWNER';
+
+  // 🔴 THREE ROSTER WRITES ARE STILL FENCED ON `businesses.owner_id` (bm_owner_all), and the
+  // 2026-08-28 access pass widened only the roster READ. Without these locks, an OWNER-ROLE member
+  // who is not the account holder would now SEE the whole team and be refused by three of its
+  // buttons — a fix that ships three visible failures, which is the dead-affordance class §1.6
+  // item 5 forbids. Locked WITH AN EXPLANATION (§6 r13 applied to an action), never a silent grey.
+  const lockRemove    = rosterActionLock('remove',     { isAccountHolder: isOwner });
+  const lockSetActive = rosterActionLock('set_active', { isAccountHolder: isOwner });
+  const lockSetPhone  = rosterActionLock('set_phone',  { isAccountHolder: isOwner });
   const inviteLink = pendingInvite ? `${inviteBaseUrl}${invitePath}?token=${pendingInvite.token}` : '';
 
   const card: React.CSSProperties = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 18 };
@@ -563,7 +592,9 @@ function MemberDetail(p: {
             <p style={{ ...sectionLabel, margin: 0 }}>Phone</p>
             {!editingPhone && (
               <button onClick={() => { setPhoneDraft(member.phone ?? ''); setEditingPhone(true); }}
-                style={{ background: 'none', border: 'none', color: T.primary, fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
+                disabled={!lockSetPhone.allowed}
+                title={lockSetPhone.reason ?? undefined}
+                style={{ background: 'none', border: 'none', color: lockSetPhone.allowed ? T.primary : T.sub, fontSize: 13, fontWeight: 700, cursor: lockSetPhone.allowed ? 'pointer' : 'not-allowed', padding: 0 }}>
                 {member.phone ? 'Edit' : 'Add'}
               </button>
             )}
@@ -582,6 +613,7 @@ function MemberDetail(p: {
           ) : (
             <p style={{ margin: '4px 0 0', fontSize: 14, color: member.phone ? T.ink : T.sub }}>{member.phone || 'No phone on file'}</p>
           )}
+          {lockSetPhone.reason && !editingPhone && <LockNote text={lockSetPhone.reason} T={T} />}
         </div>
         <div style={{ marginTop: 14 }}>
           <p style={sectionLabel}>Role</p>
@@ -664,13 +696,20 @@ function MemberDetail(p: {
         <div style={{ ...card, borderColor: '#f3d0d0' }}>
           <p style={sectionLabel}>Danger zone</p>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button onClick={() => { void toggleActive(); }} disabled={busy} style={{ background: 'none', border: `1px solid ${T.border}`, color: member.active ? T.sub : T.primary, fontWeight: 700, padding: '9px 16px', borderRadius: 9, fontSize: 13, cursor: 'pointer' }}>
+            <button onClick={() => { void toggleActive(); }} disabled={busy || !lockSetActive.allowed}
+              title={lockSetActive.reason ?? undefined}
+              style={{ background: 'none', border: `1px solid ${T.border}`, color: !lockSetActive.allowed ? T.sub : (member.active ? T.sub : T.primary), fontWeight: 700, padding: '9px 16px', borderRadius: 9, fontSize: 13, cursor: lockSetActive.allowed ? 'pointer' : 'not-allowed', opacity: lockSetActive.allowed ? 1 : 0.6 }}>
               {member.active ? 'Deactivate' : 'Reactivate'}
             </button>
-            <button onClick={() => { void remove(); }} disabled={busy} style={{ background: '#fef2f2', border: `1px solid ${T.danger}`, color: T.danger, fontWeight: 800, padding: '9px 16px', borderRadius: 9, fontSize: 13, cursor: 'pointer' }}>
+            <button onClick={() => { void remove(); }} disabled={busy || !lockRemove.allowed}
+              title={lockRemove.reason ?? undefined}
+              style={{ background: lockRemove.allowed ? '#fef2f2' : 'none', border: `1px solid ${lockRemove.allowed ? T.danger : T.border}`, color: lockRemove.allowed ? T.danger : T.sub, fontWeight: 800, padding: '9px 16px', borderRadius: 9, fontSize: 13, cursor: lockRemove.allowed ? 'pointer' : 'not-allowed', opacity: lockRemove.allowed ? 1 : 0.6 }}>
               Remove member
             </button>
           </div>
+          {/* ONE note for the pair — both locks have the same cause, and §6 r18 forbids a per-row
+              glyph restating what a shared statement already said. */}
+          {lockRemove.reason && <LockNote text={lockRemove.reason} T={T} />}
         </div>
       )}
     </div>

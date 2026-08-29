@@ -1310,7 +1310,7 @@ export const qBundleViolations = (manifestSrc, unwired) => {
   }
   return out;
 };
-export const qListViolations = (flipSql, unwired) => {
+export const qListViolations = (flipSql, unwired, declared = new Set()) => {
   const out = [];
   const notIn = flipSql.match(/a\.from_perm NOT IN \(([^)]*)\)/);
   if (!notIn) return ['the R-B2 `NOT IN (…)` output filter is missing or unparseable in the flip migration §5 — the floor rewrite would seed declared-unwired strings.'];
@@ -1342,8 +1342,41 @@ export const qListViolations = (flipSql, unwired) => {
   // THE RETAINED DIRECTION IS THE ONE WITH TEETH: a string the migration STRIPPED must still be
   // un-grantable. If someone wires one without flipping its status, the model and the migration
   // disagree about a string that was taken away from real members, and this fails.
-  for (const q of inSql) if (!unwired.has(q)) out.push(`migration R-B2 excludes '${q}' but the manifest does not mark it declared-unwired — the list has rotted, or the status is wrong.`);
+  //
+  // ⚠️ AND IT HAS ONE ESCAPE, ADDED 2026-08-28, BECAUSE THE SNAPSHOT CAN BE LEFT LEGITIMATELY.
+  // `20260727_rbac_resource_action_flip.sql` is APPLIED and §6 r1 forbids editing it, so its list
+  // is a record of what was stripped THAT DAY. A string can be WIRED afterwards, by ruling — and
+  // when three of the eight were (2026-08-28, the OWNER-role-carries-authority pass) this cap
+  // offered only two moves, both wrong: edit an applied migration, or never wire any of them
+  // again. That is tech-debt #90's exact blocker, hit from the other side.
+  //
+  // The escape is a DECLARATION, not a widening: `r-b2-wired-since-declarations.json`, one entry
+  // per string naming the ruling that wired it and the policy or RPC that enforces it. The teeth
+  // are unchanged for the five undeclared strings, and the declaration list PRUNES ITSELF in two
+  // directions below — a declaration that has gone untrue fails the build exactly like the thing
+  // it was written to permit. A list that cannot rot is the only kind worth having (#73).
+  for (const q of inSql) {
+    if (unwired.has(q) || declared.has(q)) continue;
+    out.push(`migration R-B2 excludes '${q}' but the manifest does not mark it declared-unwired — the list has rotted, or the status is wrong.`);
+  }
+  // SELF-PRUNE 1 — a declared string that is STILL un-grantable. The wiring was reverted, or the
+  // entry was written ahead of it; either way the file now claims something untrue.
+  for (const d of declared) {
+    if (unwired.has(d)) out.push(`r-b2-wired-since declares '${d}' as WIRED SINCE, but the manifest still marks it declared-unwired or planned — the declaration is STALE. Remove the entry, or flip the status it claims.`);
+  }
+  // SELF-PRUNE 2 — a declared string the snapshot never held. It exempts nothing from an assertion
+  // that was never going to fire, which is how a declaration file quietly becomes decoration.
+  for (const d of declared) {
+    if (!inSql.has(d)) out.push(`r-b2-wired-since declares '${d}', but the 20260727 R-B2 snapshot never excluded it — the declaration is MEANINGLESS and should be removed.`);
+  }
   return out;
+};
+
+/** The wired-since declaration set. PURE — probed. Absent file = no declarations, not a pass. */
+export const qParseWiredSince = (jsonSrc) => {
+  if (!jsonSrc) return new Set();
+  try { return new Set(Object.keys(JSON.parse(jsonSrc).declarations ?? {})); }
+  catch { return null; }   // null = unparseable, which the caller must treat as a FAILURE
 };
 /**
  * (d) THE FLOOR IS THE BUNDLE'S MATERIALISATION — assert the derivation, do not trust it.
@@ -1466,6 +1499,24 @@ const Q_PROBES = [
   ['bundles/planned',      () => qBundleViolations("export const MANAGER_DEFAULT_BUNDLE: string[] = [\n  'reports:read',\n];", new Set(['reports:read'])).length > 0],
   ['r-b2/rotted-entry',   () => qListViolations("AND a.from_perm NOT IN ('planted:bad')", new Set()).length > 0],
   ['r-b2/unparseable',    () => qListViolations('no filter here at all', new Set()).length > 0],
+  // ── THE WIRED-SINCE DECLARATION, ALL THREE DIRECTIONS (2026-08-28, STD-022) ──
+  // The escape must WORK, and it must not become a way to silence the cap forever.
+  ['r-b2/declared-wired-passes', () =>
+    qListViolations("AND a.from_perm NOT IN ('team:create')", new Set(), new Set(['team:create'])).length === 0],
+  ['r-b2/declared-but-still-unwired-FAILS', () =>
+    qListViolations("AND a.from_perm NOT IN ('team:create')", new Set(['team:create']), new Set(['team:create']))
+      .some((g) => /STALE/.test(g))],
+  ['r-b2/declared-but-not-in-snapshot-FAILS', () =>
+    qListViolations("AND a.from_perm NOT IN ('team:create')", new Set(), new Set(['ghost:read']))
+      .some((g) => /MEANINGLESS/.test(g))],
+  ['r-b2/undeclared-still-fails', () =>
+    qListViolations("AND a.from_perm NOT IN ('planted:bad')", new Set(), new Set(['team:create'])).length > 0],
+  ['r-b2/parse-declarations', () =>
+    qParseWiredSince('{"declarations":{"a:b":"why"}}').has('a:b')],
+  ['r-b2/parse-declarations-absent', () =>
+    qParseWiredSince('').size === 0],
+  ['r-b2/parse-declarations-broken-is-null', () =>
+    qParseWiredSince('{not json') === null],
   ['sentinel/route',      () => qSentinelViolations({ routerSrc: '<PermissionRoute permission="member" />', manifestSrc: '', sqlAll: '' }).length > 0],
   ['sentinel/bundle',     () => qSentinelViolations({ routerSrc: '', manifestSrc: "export const X_BUNDLE: string[] = [\n  'member',\n];", sqlAll: '' }).length > 0],
   ['sentinel/policy',     () => qSentinelViolations({ routerSrc: '', manifestSrc: '', sqlAll: "has_permission(business_id, 'member')" }).length > 0],
@@ -1509,9 +1560,16 @@ function capQ(key, v) {
   if (!flipSql) return FAIL('20260727_rbac_resource_action_flip.sql not found — the R-B2 list cannot be reconciled.');
 
   const unwired = qParseUnwired(manifestSrc);
+  // An UNPARSEABLE declaration file is a FAILURE, never an empty set. Falling back to "no
+  // declarations" on a syntax error would turn a typo into three build breaks that look like real
+  // violations, and the reader would go edit the manifest. Say what actually happened instead.
+  const wiredSince = qParseWiredSince(read('r-b2-wired-since-declarations.json') || '');
+  if (wiredSince === null) {
+    return FAIL('r-b2-wired-since-declarations.json is present but not valid JSON — the R-B2 reconciliation cannot run, and its result would be a guess.');
+  }
   const gaps = [
     ...qBundleViolations(manifestSrc, unwired),
-    ...qListViolations(flipSql, unwired),
+    ...qListViolations(flipSql, unwired, wiredSince),
     ...qSentinelViolations({
       routerSrc: read('packages/cultivar-os/src/router.tsx') || '',
       manifestSrc,
@@ -1533,7 +1591,8 @@ function capQ(key, v) {
   if (gaps.length) return FAIL(`declared-unwired invariant BROKEN — ${gaps.length} violation(s).`, gaps);
   return PASS(
     `declared-unwired invariant holds — ${unwired.size} string(s) [${[...unwired].sort().join(', ')}] absent from both bundles ` +
-    `and reconciled with the migration's R-B2 list; \`member\` sentinel confined to tileRegistry. ` +
+    `and reconciled with the migration's R-B2 list (${wiredSince.size} wired-since declaration(s), each self-pruning); ` +
+    `\`member\` sentinel confined to tileRegistry. ` +
     `${Q_PROBES.length}/${Q_PROBES.length} planted-bad probes REJECTED — the detectors are demonstrably running.`,
   );
 }

@@ -9,10 +9,10 @@ import { supabase } from '../lib/supabase';
 import {
   getMembersByBusiness,
   removeMember,
+  rosterActionLock,
   createInvitation,
   getPendingInvitations,
   revokeInvitation,
-  resolveRoleDefaults,
 } from '@trace/shared/auth';
 import type { Member, Invitation } from '@trace/shared/auth';
 import {
@@ -163,6 +163,14 @@ function TeamSection({ businessId }: { businessId: string }) {
   const [revoking, setRevoking]       = useState<string | null>(null);
   const [removing, setRemoving]       = useState<string | null>(null);
 
+  // 🔴 `removeMember` is a DIRECT client write fenced on `businesses.owner_id` (bm_owner_all), and
+  // the 2026-08-28 access pass widened only the roster READ. This second team surface reads the
+  // roster through the same `getMembersByBusiness`, so it inherits the same hazard: an OWNER-ROLE
+  // member who is not the account holder would now see every row and be refused by every × on it.
+  // One shared decision (`rosterActionLock`), not a second spelling of it — §6 r8.
+  const { isOwner } = useBusinessContext();
+  const lockRemove = rosterActionLock('remove', { isAccountHolder: isOwner });
+
   async function load() {
     setLoading(true);
     setLoadError('');
@@ -193,16 +201,17 @@ function TeamSection({ businessId }: { businessId: string }) {
     setInviteError('');
     try {
       const baseUrl = window.location.origin;
+      // 🔴 THE PERMISSION ARRAY NO LONGER TRAVELS FROM THIS BROWSER (2026-08-28). It was resolved
+      // here and POSTed; `create_invitation` now resolves it server-side from the SAME floor this
+      // call used to read, so the mint still reads the resolved floor (ruling 2026-07-23) and the
+      // client can no longer influence what it reads.
       const { inviteLink: link } = await createInvitation(
         supabase,
         {
           businessId,
-          name:        inviteName.trim(),
-          email:       inviteEmail.trim() || undefined,
-          role:        inviteRole,
-          // Mint defaults READ THE RESOLVED FLOOR (DEFAULT_PERMISSIONS retired 2026-07-23) — the
-          // ONE source the Roles tab renders and the funnel writes (STD-011).
-          permissions: await resolveRoleDefaults(supabase, businessId, inviteRole),
+          name:  inviteName.trim(),
+          email: inviteEmail.trim() || undefined,
+          role:  inviteRole,
         },
         baseUrl,
         '/join',
@@ -355,9 +364,9 @@ function TeamSection({ businessId }: { businessId: string }) {
                     {m.role !== 'OWNER' && (
                       <button
                         onClick={() => handleRemove(m.id)}
-                        disabled={removing === m.id}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#d1d5db', fontSize: '1rem', lineHeight: 1, padding: '2px 4px' }}
-                        title="Remove member"
+                        disabled={removing === m.id || !lockRemove.allowed}
+                        title={lockRemove.reason ?? 'Remove member'}
+                        style={{ background: 'none', border: 'none', cursor: lockRemove.allowed ? 'pointer' : 'not-allowed', color: '#d1d5db', fontSize: '1rem', lineHeight: 1, padding: '2px 4px', opacity: lockRemove.allowed ? 1 : 0.5 }}
                       >
                         {removing === m.id ? '…' : '×'}
                       </button>

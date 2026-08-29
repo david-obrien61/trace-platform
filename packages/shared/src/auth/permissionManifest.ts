@@ -307,12 +307,23 @@ const RESOURCES: Record<string, EntrySeed> = {
     category: 'checkout',
     verbs: ['read', 'create', 'update'],
     sensitivity: 'operational',
-    status: { read: 'enforced', create: 'declared-unwired', update: 'declared-unwired' },
+    // FLIPPED 2026-08-28 (ruling: the OWNER role carries full authority). create/update were
+    // `declared-unwired` because the only write policy was `service_offerings_owner` — a FOR ALL
+    // with `with_check` NULL, so its `owner_id = auth.uid()` USING clause governed writes too, and
+    // an OWNER-ROLE member who is not `businesses.owner_id` could read the sell-side menu and not
+    // write it. `service_offerings_member_insert` / `_member_update` (20260828) now enforce these
+    // two strings, so they gate something a member can hold.
+    status: { read: 'enforced', create: 'enforced', update: 'enforced' },
     note:
       'read is the membership-gated sell-side catalog (map Note B — printed to the ' +
-      'customer, carries no cost/margin column). Writes are owner-only today, so ' +
-      'create/update gate nothing a member can hold. R2: no delete verb — retire-by-flag ' +
-      'is the likely eventual shape.',
+      'customer, carries no cost/margin column). create/update are enforced by ' +
+      'service_offerings_member_insert / service_offerings_member_update (20260828). ' +
+      '🔴 R2 STANDS — NO DELETE VERB, and 2026-08-28 found the reason had teeth: the hard ' +
+      'delete it would have gated was broken in both directions, because ' +
+      'order_service_selections.service_offering_id is NOT NULL REFERENCES with no ON DELETE ' +
+      'clause, so deleting a sold offering raised 23503 and deleting an unsold one destroyed ' +
+      'it. RETIRE-BY-FLAG (is_active) is the shape, it already existed, and the hard delete ' +
+      'was removed rather than gated.',
   },
 
   // ── inventory — the big split, and the ONE real tombstone ────────────────────
@@ -517,18 +528,35 @@ const RESOURCES: Record<string, EntrySeed> = {
   team: {
     category: 'admin',
     verbs: ['read', 'create', 'update', 'delete'],
-    // ROUTE-ENFORCED, NOT TABLE-ENFORCED, and that is correct (David's ruling 2026-07-27).
-    // `rd_read` is USING(business_id IS NULL OR is_active_member(...)) — membership-only BY
-    // NECESSITY: it is the role CATALOG the Roles page renders for everyone. team:read is
-    // enforced at the /team route; team:create/update/delete are declared-unwired because the
-    // funnel is the only writer.
-    routeEnforced: true,
+    // ✏️ `routeEnforced` FLIPPED TRUE → FALSE 2026-08-28, AND THE CORRECTION IS THE POINT.
+    // It said "team:read is enforced at the /team route", which was true of `role_definitions`
+    // (rd_read is USING(business_id IS NULL OR is_active_member(...)) — membership-only BY
+    // NECESSITY, because it is the role CATALOG the Roles page renders for everyone). It stopped
+    // being the whole truth the moment `bm_member_select` (20260828) put `team:read` in a policy
+    // ON `business_members`: the roster read is now TABLE-enforced, and a member without the
+    // string sees only their own row via bm_self_select. Leaving the field at `true` would be a
+    // declared field describing a layer the code no longer uses — the same defect class as the
+    // two-materialisations problem the 2026-08-28 pass exists to fix, committed knowingly.
+    //
+    // `create` FLIPPED declared-unwired → enforced in the same commit: `create_invitation`
+    // (SECURITY DEFINER, 20260828) authorises on it, and invitations_member_select /
+    // invitations_member_update gate listing and withdrawing on it.
+    // `update`/`delete` STAY declared-unwired — role assignment is `assign_member_role`, whose
+    // actor gate is Stage 2's business, and tech-debt #90 proposes removing them outright.
+    routeEnforced: false,
     sensitivity: 'owner-only',
-    status: { read: 'enforced', create: 'declared-unwired', update: 'declared-unwired', delete: 'declared-unwired' },
+    status: { read: 'enforced', create: 'enforced', update: 'declared-unwired', delete: 'declared-unwired' },
+    server: ['create'],
     note:
-      'business_members + role_definitions. WRITE is the permission FUNNEL ONLY (#152) — ' +
-      'direct writes are blocked by the authority-immutability trigger, so no member-held ' +
-      'string authorizes them. Granting/revoking is itself an owner-only capability.',
+      'business_members + role_definitions. `read` is enforced BOTH at the /team route and, ' +
+      'since 20260828, by bm_member_select on business_members — a member without it sees only ' +
+      'their own row. `create` is enforced inside create_invitation (the invite funnel, which ' +
+      'resolves the permission array server-side from the role floor) and by the two invitations ' +
+      'member policies. update/delete remain the permission FUNNEL ONLY (#152) — direct writes ' +
+      'are blocked by the authority-immutability trigger, so no member-held string authorizes ' +
+      'them. ⚠️ sensitivity `owner-only` means team:* is filtered out of CATALOG_PERMISSIONS and ' +
+      'cannot be delegated to a MANAGER — it is held by holding the OWNER role, which is exactly ' +
+      "David's 2026-08-28 ruling.",
   },
   // ── subscription — MINTED 2026-08-01 (David's ruling) ─────────────────────────
   // 🔴 THE MODEL HAD NO WAY TO SAY "MAY SPEND MONEY". Twenty resources, and not one of them was
@@ -1284,7 +1312,7 @@ export const STAFF_DEFAULT_BUNDLE: string[] = [
  * can assign is a role the source must define.
  *
  * CONTENT IS NOT A JUDGEMENT CALL: it is every permission in PERMISSION_MANIFEST whose status is
- * not `declared-unwired` — **52 of 60 today**. Materialised as a literal so capQ can reconcile it
+ * not `declared-unwired` — **55 of 60 today** (52 until 2026-08-01, 54 until 2026-08-28). Materialised as a literal so capQ can reconcile it
  * against the floor-seeding migration the same way it reconciles the R-B2 list.
  *
  * 🔧 TWO CORRECTIONS (2026-07-30, found while building the owner ruling — both in this paragraph):
@@ -1336,17 +1364,30 @@ export const OWNER_DEFAULT_BUNDLE: string[] = [
   'pmi:update',
   'pricing_recipe:read',
   'pricing_recipe:update',
+  // GROWN 54 → 57 on 2026-08-28 (ruling: the OWNER role carries full authority). The migration
+  // that materialises it (20260828_owner_role_carries_authority) carries the COMPLETE set —
+  // capA assertion 3 compares full equality against the NEWEST $OWNER$ carrier, so a delta-shaped
+  // migration fails rather than half-granting.
+  // ⚠️ NO APOSTROPHES AND NO QUOTED STRINGS INSIDE THIS ARRAY, INCLUDING IN COMMENTS. capA parses
+  // it with a bare quoted-string regex over the array body, so a possessive or a quoted example
+  // becomes a PHANTOM 58th permission and fails assertion 3 naming a string that does not exist.
+  // Proven by stepping on it 2026-08-28; the parser now strips comments, and P-C1/P-C2 probe both
+  // directions — this note stays because the array is still the wrong place to be clever.
+  'service_offerings:create',
   'service_offerings:read',
+  'service_offerings:update',
   'settings:read',
   'settings:update',
-  // MINTED 2026-08-01. The bundle grows 52 → 54, and the migration that materialises it
-  // (20260801b) carries the COMPLETE set — capA assertion 3 compares full equality against the
+  // MINTED 2026-08-01. The bundle grew 52 → 54 here; 2026-08-28 took it to 57 (the two
+  // service_offerings write strings above, and the team create string below). Each growth carries
+  // the COMPLETE set in its own migration — capA assertion 3 compares full equality against the
   // NEWEST $OWNER$ carrier, so a delta-shaped migration fails rather than half-granting.
   'subscription:read',
   'subscription:update',
   'tax_exempt:apply',
   'tax_rate:read',
   'tax_rate:update',
+  'team:create',
   'team:read',
   'wages:create',
   'wages:delete',

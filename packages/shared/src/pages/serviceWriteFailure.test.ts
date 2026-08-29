@@ -35,7 +35,10 @@ function ok(cond: boolean, msg: string): void {
   if (cond) passed++; else { failed++; failures.push(msg); console.error('   ✗ ' + msg); }
 }
 
-const ACTIONS = ['activate', 'deactivate', 'edit', 'delete', 'add'] as const;
+// 'delete' LEFT THIS LIST 2026-08-28 with the site that used it. Keeping a sentence for an act
+// the platform can no longer perform would be a message describing a capability that does not
+// exist — the fake-pill class, one layer down in the copy.
+const ACTIONS = ['activate', 'deactivate', 'edit', 'add'] as const;
 
 // ── §A — the refusal sentence (no error: the zero-row case) ────────────────────────
 {
@@ -101,7 +104,8 @@ const ACTIONS = ['activate', 'deactivate', 'edit', 'delete', 'add'] as const;
     return nextFn < 0 ? rest : rest.slice(0, nextFn);
   }
 
-  const SITES = ['toggleOffering', 'saveEdit', 'deleteOffering', 'addOffering'] as const;
+  // deleteOffering REMOVED from this list 2026-08-28 because the SITE was removed — see §D.
+  const SITES = ['toggleOffering', 'saveEdit', 'addOffering'] as const;
 
   for (const fn of SITES) {
     const b = body(fn);
@@ -121,7 +125,7 @@ const ACTIONS = ['activate', 'deactivate', 'edit', 'delete', 'add'] as const;
   // 🔴 THE A8 PROBE. The three mutation sites that can be refused with zero rows and NO error
   // must ask for evidence AND inspect it. addOffering is excluded by design: it uses `.single()`,
   // which raises on zero rows, so its check is `!data`.
-  for (const fn of ['toggleOffering', 'saveEdit', 'deleteOffering'] as const) {
+  for (const fn of ['toggleOffering', 'saveEdit'] as const) {
     const b = body(fn);
     ok(/\.select\('id'\)/.test(b),
       `§C ${fn}: 🔴 asks for EVIDENCE IT LANDED (.select('id')) — A8 / the DeliverySchedule pattern`);
@@ -163,8 +167,27 @@ const ACTIONS = ['activate', 'deactivate', 'edit', 'delete', 'add'] as const;
   // The old shape must not survive anywhere in this file.
   ok(!/await supabase\.from\('service_offerings'\)\.update\(\{ is_active/.test(src),
     '§C the bare-await toggle is gone');
-  ok(!/await supabase\.from\('service_offerings'\)\.delete\(\)\.eq\('id', id\);/.test(src),
-    '§C the bare-await delete is gone');
+}
+
+// ── §D — THE HARD DELETE IS GONE, AND IT MUST STAY GONE ────────────────────────────
+// R2 stands (no delete verb; retire-by-flag is the shape), and the delete this replaced was broken
+// in both directions: 23503 on any offering ever sold, permanent destruction of one that was not.
+// These probes are the guard on a RULING, which is the only kind of guard a ruling gets here — no
+// cap reads prose. They are written as NEGATIVES on purpose: the way this regresses is somebody
+// re-adding a convenience delete, not somebody editing what is left.
+{
+  const src = readFileSync(join(process.cwd(), 'packages/shared/src/pages/Settings.tsx'), 'utf8');
+
+  ok(!/\.from\('service_offerings'\)\s*\n?\s*\.delete\(\)/.test(src),
+    '§D 🔴 NO hard delete of a service_offering exists in Settings.tsx (R2 — retire by flag)');
+  ok(!/async function deleteOffering/.test(src),
+    '§D the deleteOffering site is removed, not merely unwired');
+  ok(!/onDelete/.test(src),
+    '§D and the ✕ affordance that fired it is removed with it — no dead prop left behind');
+  ok(/async function toggleOffering/.test(src),
+    '§D the retire path R2 names still exists: toggleOffering flips is_active');
+  ok(/serviceWriteFailure\('delete'/.test(src) === false,
+    '§D nothing still asks for a "not deleted" sentence');
 }
 
 console.log(`\n  serviceWriteFailure: ${passed} passed, ${failed} failed`);

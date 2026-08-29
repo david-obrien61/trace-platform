@@ -150,8 +150,26 @@ console.log('\n(4) permission manifest — the model, the dashes, the dependenci
     PERMISSION_MANIFEST['deliveries.route:update'].status === 'planned');
   check('campaigns:create STAYS declared-unwired — the next verb being obvious is not a scoped build',
     PERMISSION_MANIFEST['campaigns:create'].status === 'declared-unwired');
-  check('team:create/update/delete STAY declared-unwired — a deliberate architectural NO, not a roadmap',
-    ['team:create', 'team:update', 'team:delete'].every((p) => PERMISSION_MANIFEST[p].status === 'declared-unwired'));
+  // ✏️ SPLIT 2026-08-28, AND IT IS AN OVERTURNING RATHER THAN A FIX — said plainly because the
+  // assertion it replaces was CORRECT when written. It read "team:create/update/delete STAY
+  // declared-unwired — a deliberate architectural NO, not a roadmap", and the NO rested on a fact
+  // that was true on 2026-07-27: `invitations` carried exactly one policy, `inv_owner_all`, so no
+  // member-held string could authorize an invite and wiring one would have minted a fake pill.
+  // David's 2026-08-28 ruling — the OWNER ROLE CARRIES FULL AUTHORITY INCLUDING ASSIGNING ALL
+  // ROLES — changes the fact, and `create_invitation` (20260828 §4) plus the two invitations
+  // member policies now enforce the string. So `create` moves and the other two do not.
+  check('team:create is ENFORCED — the invite funnel authorises on it (ruling 2026-08-28)',
+    PERMISSION_MANIFEST['team:create'].status === 'enforced');
+  check('team:update/delete STAY declared-unwired — role assignment is the funnel, and tech-debt #90 proposes removing both verbs outright',
+    ['team:update', 'team:delete'].every((p) => PERMISSION_MANIFEST[p].status === 'declared-unwired'));
+  // The three strings this pass wired are ALL enforced together or none of them are — a half-flip
+  // would put a string in OWNER_LOCKED_SET that no policy backs, which is the fake-pill shape the
+  // status field exists to prevent.
+  check('service_offerings create/update are ENFORCED alongside it — the member write policies exist (20260828 §1)',
+    ['service_offerings:create', 'service_offerings:update']
+      .every((p) => PERMISSION_MANIFEST[p].status === 'enforced'));
+  check('…and service_offerings still has NO delete verb (R2 stands — retire-by-flag via is_active)',
+    PERMISSION_MANIFEST['service_offerings:delete'] === undefined);
   // THE INVARIANT THE FOURTH STATUS MUST NOT WEAKEN: planned renders, but nobody holds it.
   check('no `planned` string appears in ANY default bundle (un-grantable, same as declared-unwired)',
     PLANNED_PERMISSIONS.every((p) => ![...OWNER_DEFAULT_BUNDLE, ...MANAGER_DEFAULT_BUNDLE, ...STAFF_DEFAULT_BUNDLE].includes(p)));

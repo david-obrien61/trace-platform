@@ -474,23 +474,25 @@ export function Settings({
     setSavingOffering(false);
   }
 
-  async function deleteOffering(id: string) {
-    if (!businessId) return;
-    console.log('[TRACE:SERVICE] save', { businessId, serviceId: id, action: 'delete' });
-    setServiceError(null);
-    // A8 — a DELETE refused by RLS also returns zero rows and no error. Removing the row from the
-    // list on that basis would hide a service that is still live at checkout.
-    const { data: hit, error } = await supabase
-      .from('service_offerings')
-      .delete()
-      .eq('id', id)
-      .eq('business_id', businessId)
-      .select('id');
-    console.log('[TRACE:SERVICE] save result', { serviceId: id, action: 'delete', rows: hit?.length ?? 0, error: error?.message ?? null });
-    // A8 — zero rows and NO error is what an RLS refusal looks like, so `!error` is NOT success.
-    if (error || !hit?.length) { setServiceError({ id, text: serviceWriteFailure('delete', error) }); return; }
-    setOfferings(prev => prev.filter(o => o.id !== id));
-  }
+  // 🔴 `deleteOffering` IS DELETED, NOT GATED (David 2026-08-28, confirming R2). It was a HARD
+  // `.delete()` on service_offerings, wired to the ✕ on add-on and other-service rows, and it was
+  // broken in BOTH directions before anyone asked who should hold it:
+  //   · `order_service_selections.service_offering_id` is `NOT NULL REFERENCES service_offerings(id)`
+  //     with NO `ON DELETE` clause (20260529_businesses_f_service_offerings.sql:69) — i.e. NO
+  //     ACTION — so deleting an offering THAT HAS EVER BEEN SOLD raises 23503 and the owner sees a
+  //     generic write failure for a thing that can never work;
+  //   · and deleting one that has NOT been sold destroys its definition permanently, with no
+  //     tombstone, no ledger row and no audit row — nothing like the bar `inventory:delete` had to
+  //     clear (soft_delete_inventory) before it earned its verb.
+  // R2 already named the shape — "no delete verb; retire-by-flag is the likely eventual shape" —
+  // and retire-by-flag ALREADY EXISTS as `toggleOffering` (is_active). So the fix is not a second
+  // control doing the same thing under a different glyph; it is one control (§6 r8). A service is
+  // turned Off; it is not destroyed.
+  //
+  // ⚠️ WHAT THIS COSTS, STATED RATHER THAN GLOSSED: there is now no way to remove a service typed
+  // by mistake — it goes Off and stays in the list. Making that possible is a real build (a
+  // tombstone matching the inventory pattern, plus the delete verb R2 currently withholds), and it
+  // is DAVID''S call, not a gap to fill quietly.
 
   async function addOffering() {
     if (!businessId) return;
@@ -761,7 +763,6 @@ export function Settings({
                   onEdit={startEdit}
                   onSaveEdit={saveEdit}
                   onCancelEdit={() => { setEditingId(null); setServiceError(null); }}
-                  onDelete={null}
                   onFindCustomers={null}
                   errorForId={serviceError?.id ?? null}
                   errorText={serviceError?.text ?? null}
@@ -782,7 +783,6 @@ export function Settings({
                   onEdit={startEdit}
                   onSaveEdit={saveEdit}
                   onCancelEdit={() => { setEditingId(null); setServiceError(null); }}
-                  onDelete={deleteOffering}
                   onFindCustomers={findCustomers}
                   errorForId={serviceError?.id ?? null}
                   errorText={serviceError?.text ?? null}
@@ -803,7 +803,6 @@ export function Settings({
                   onEdit={startEdit}
                   onSaveEdit={saveEdit}
                   onCancelEdit={() => { setEditingId(null); setServiceError(null); }}
-                  onDelete={deleteOffering}
                   onFindCustomers={findCustomers}
                   errorForId={serviceError?.id ?? null}
                   errorText={serviceError?.text ?? null}
@@ -1035,7 +1034,6 @@ interface OfferingGroupProps {
   onEdit: (o: ServiceOffering) => void;
   onSaveEdit: () => void;
   onCancelEdit: () => void;
-  onDelete: ((id: string) => void) | null;
   onFindCustomers: ((o: ServiceOffering) => void) | null;
   /** The offering whose last write was refused, and what to tell the owner about it. */
   errorForId: string | null;
@@ -1044,7 +1042,7 @@ interface OfferingGroupProps {
 
 function OfferingGroup({
   label, offerings, editingId, editForm, setEditForm, editErrors, savingOffering,
-  onToggle, onEdit, onSaveEdit, onCancelEdit, onDelete, onFindCustomers,
+  onToggle, onEdit, onSaveEdit, onCancelEdit, onFindCustomers,
   errorForId, errorText,
 }: OfferingGroupProps) {
   return (
@@ -1190,14 +1188,9 @@ function OfferingGroup({
                     >
                       Edit
                     </button>
-                    {onDelete && (
-                      <button
-                        onClick={() => onDelete(o.id)}
-                        style={{ padding: '4px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, border: 'none', cursor: 'pointer', background: '#fef2f2', color: RED }}
-                      >
-                        ✕
-                      </button>
-                    )}
+                    {/* NO ✕. The hard delete it fired is gone (see deleteOffering's headstone
+                        above); On/Off IS the retire path, and a second control doing one thing is
+                        the drift §6 r8 exists to stop. */}
                   </div>
                 </div>
                 {onFindCustomers && o.is_active && (

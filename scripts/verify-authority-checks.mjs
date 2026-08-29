@@ -713,6 +713,24 @@ function runGrantProbes() {
   t('M9 the bundle parser reads the array off the manifest source',
     (() => { const b = parseOwnerBundle("export const OWNER_DEFAULT_BUNDLE: string[] = [\n  'z:read',\n  'a:read',\n];");
              return b.length === 2 && b[0] === 'a:read'; })());
+  // ── P-C1/P-C2 — THE COMMENT LANDMINE, BOTH DIRECTIONS (added 2026-08-28 after it fired).
+  t('P-C1 \u{1f534} an APOSTROPHE PAIR IN A COMMENT is not a permission — the phantom-entry defect',
+    (() => { const b = parseOwnerBundle(
+               "export const OWNER_DEFAULT_BUNDLE: string[] = [\n"
+             + "  // capA's parser once read this possessive as a string\n"
+             + "  'a:read',\n];");
+             return b.length === 1 && b[0] === 'a:read'; })());
+  t('P-C2 \u{1f534} a QUOTED EXAMPLE in a comment is not a permission either (the /* */ form too)',
+    (() => { const b = parseOwnerBundle(
+               "export const OWNER_DEFAULT_BUNDLE: string[] = [\n"
+             + "  /* grew by 'ghost:read' — described, not granted */\n"
+             + "  // and also by 'phantom:read'\n"
+             + "  'a:read',\n];");
+             return b.length === 1 && b[0] === 'a:read'; })());
+  t('P-C3 a REAL string on a line that also carries a trailing comment still counts',
+    (() => { const b = parseOwnerBundle(
+               "export const OWNER_DEFAULT_BUNDLE: string[] = [\n  'a:read', // the real one\n];");
+             return b.length === 1 && b[0] === 'a:read'; })());
 
   return p;
 }
@@ -757,10 +775,27 @@ const OWNER_LITERAL = /\$OWNER\$\[([\s\S]*?)\]\$OWNER\$/;
 // which is the only reason it took a minute rather than a session.
 const stripSqlComments = (t) => t.replace(/--[^\n]*/g, '');
 
-/** The OWNER_DEFAULT_BUNDLE strings, sorted. PURE — probed. */
+/**
+ * The OWNER_DEFAULT_BUNDLE strings, sorted. PURE — probed.
+ *
+ * 🔴 COMMENTS ARE STRIPPED BEFORE THE QUOTED-STRING SCAN, AND THE OMISSION WAS A REAL LANDMINE
+ * FOUND BY STEPPING ON IT (2026-08-28, growing the bundle 54 → 57). The array body is read with a
+ * bare `'([^']+)'` regex, so ANY apostrophe pair inside it — an ordinary possessive in a `//`
+ * comment, or a quoted example permission — became a PHANTOM entry. The failure mode is the worst
+ * kind: assertion 3 reports the SQL copy as missing a string, and NAMES A STRING THAT DOES NOT
+ * EXIST, sending the reader to edit a migration to grant nothing. The pre-2026-08-28 comments in
+ * that array happened to contain no apostrophes, which is why it had never fired.
+ *
+ * The SQL side already did this (`stripSqlComments` in latestOwnerMaterialisation, added after the
+ * M10 defect — a comment naming the marker was read as a carrier). This is the same defect on the
+ * TypeScript side, and it went unfixed for as long as it did because the two halves of one
+ * comparison were hardened separately. Probed both directions: P-C1 / P-C2.
+ */
 function parseOwnerBundle(manifestSrc) {
   const m = manifestSrc.match(/export const OWNER_DEFAULT_BUNDLE: string\[\] = \[([\s\S]*?)\];/);
-  return m ? [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]).sort() : null;
+  if (!m) return null;
+  const body = m[1].replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  return [...body.matchAll(/'([^']+)'/g)].map((x) => x[1]).sort();
 }
 
 /**

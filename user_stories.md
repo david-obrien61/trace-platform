@@ -361,6 +361,27 @@ PIECES: shop_tables_rls, business_id_scoping, ignition_onto_shared_auth
 NEEDS: David to set timing (undecided). A recon is owed to scope it table-by-table. Likely trigger: **before Ignition adopts the spine OR before any paying customer touches the platform DB, whichever comes first.**
 Under [[D-31]] (platform DB + spine-first), Ignition retires onto the shared spine and drops its own `DataBridge.authenticate` login; its `shop_` (Ignition-specific, the 20%) tables move into the platform DB. **This is a SECURITY EVENT, not a lift-and-shift:** the `shop_` tables currently **LACK RLS**, so migrating them into a multi-tenant DB that enforces tenant isolation on everything else means **adding `business_id` scoping + owner/member RLS to EVERY `shop_` table AS IT LANDS** ([[AC-2]]/[[AC-3]]) — or an unsecured hole is imported into the shared DB. A serious, careful build — **OP-12 territory**: once a reference environment exists, it goes through reference first, with the reference-proven migration promoted byte-identical to live. Grounds: [[D-31]], AC-2/AC-3, the Auth Architecture Locked Rule.
 
+### Hand over the keys — the owner role outlives the person who opened the account
+STATUS: written
+SCOPE: platform
+BUILD: in-build
+ARC: identity-roles-sec
+MAPS-TO: —
+PIECES: owner_role_access, invite_funnel, roster_read, owner_role_authority, owner_id_protected
+NEEDS: nothing from David — ruled 2026-08-28 in full. Stage 1 (ACCESS) is BUILDER-COMPLETE and owner-proof is OWED; Stage 2 (AUTHORITY — an OWNER-role actor may assign roles) is a separate commit and not yet built.
+
+David is the account holder at LAWNS and he is not going to be the one running it. **Lauren is.** She is the manager who feels the pain, she holds the OWNER role, and until 2026-08-28 that role was a badge: the client computed her full permission set and the database refused her on three surfaces, because the fences were on `businesses.owner_id` — **a single column that names ONE person and cannot describe a business with two owners, a departure, or a succession.** She could read the sell-side menu and not change a price on it. She could not invite anybody. And the team page told her the business had **one member** — herself — so an invitation already sitting there was invisible to her, and she had no way to know it.
+
+David, ruling: _"Currently I'm the owner. Lauren needs all perms and authority to act. So changing a role from manager to owner is a decision the owner makes, then the new 'owner' can administer the system and assign all roles. Once the 'owner' leaves a new 'owner' can be promoted. If the original owner_id departs someone has to take that place. So the perms need allow the role to assume the perms within that role."_
+
+**So `owner_id` stops being an authority mechanism and becomes what it should always have been: the account holder of last resort.** Authority travels with the ROLE. What that has to survive is the ordinary thing that happens to every small business — the founder steps back, someone else runs it, and nobody wants to phone the vendor to get a password changed. This is the same ruling as [[2026-07-30]] (_permissions are always checked; the owner holds every enforced permission, computed, locked_) followed one step further: **that one made the owner pass the check like everyone else; this one lets the check reach everything the role is supposed to hold.**
+
+Two stages, deliberately split — ACCESS before AUTHORITY, so that every act which CREATES an owner goes through one audited door rather than arriving early through an invite:
+- **① ACCESS (built 2026-08-28).** Member policies for the three refused surfaces: `service_offerings` INSERT/UPDATE, `invitations` SELECT/UPDATE, `business_members` SELECT. `team:create` and `service_offerings:create/update` flip from declared-unwired to enforced — **and the flip is only half the change**, because `has_permission()` reads a STORED array while the client computes from the manifest, so the same migration re-materialises every OWNER-role member through the funnel (54 → 57 strings). Invitations move behind `create_invitation`, a SECURITY DEFINER RPC that resolves the invitee's permission array server-side instead of accepting one from the browser.
+- **② AUTHORITY (not yet built).** `save_role_permissions` and `assign_member_role` accept an actor who holds the OWNER ROLE, not only `businesses.owner_id`. **One guard: no actor may change the role of the `owner_id` holder** — without it the delegate can demote the account holder and lock the vendor out of a live customer's tenant.
+
+**Three roster controls stay with the account holder and say so on screen** — Remove, Deactivate, Set-phone are direct writes fenced on `owner_id`, and shipping the roster READ without locking them would have handed Lauren a full team list with three buttons that refuse ([[§1.6 item 5]]). They render disabled with the reason, not greyed in silence. _David, 2026-08-28: `removeMember` and `setMemberActive` are ACCESS CONTROL, not data edits — they belong in the funnel beside `assign_member_role`. That is the next move, not this one._
+
 ---
 
 ## ARC: asset-inventory-pmi
@@ -1068,8 +1089,10 @@ STATUS: gap
 SCOPE: platform
 MAPS-TO: —
 PIECES: manager_perms_apply, role_reapply
-NEEDS: existing MANAGER member rows need a role re-save (or `seed-role-floor` re-run + re-apply) to hold newly-declared perms like `manage_orders`; owners unaffected (gated by `owner_id`), so the owner path proves today but a manager doesn't inherit a new perm until re-applied. Open item #3 (carried from ledger #100).
-_Coverage placeholder, not a fabricated scenario._ A perm declared after a manager's role was created does not take effect for that manager until their role is re-applied. Honest-debt: fails closed/safe (a manager without the perm is refused, never wrongly granted), but the capability isn't complete until re-application is automatic.
+NEEDS: existing member rows need a role re-save (or `seed-role-floor` re-run + re-apply) to hold newly-declared perms. Open item #3 (carried from ledger #100).
+_Coverage placeholder, not a fabricated scenario._ A perm declared after a role was materialised does not take effect for its members until that role is re-applied. Honest-debt: fails closed/safe (a member without the perm is refused, never wrongly granted), but the capability isn't complete until re-application is automatic.
+
+✏️ **CORRECTED 2026-08-28 — this card carried a sentence that had been FALSE for four weeks, and the correction is left visible rather than quietly overwritten.** It read _"owners unaffected (gated by `owner_id`), so the owner path proves today"_. The [[2026-07-30]] ruling **removed the owner branch from both permission functions**: an owner passes because their stored array contains the string, exactly like everyone else, which means **the owner is affected by this gap in precisely the same way a manager is** — and that is not a hypothetical, it is why the 2026-08-28 pass had to ship a funnel re-materialisation alongside its manifest flip rather than the flip alone. The card was the one place on the board still describing owners as exempt; it was found by the pass that would have been broken by believing it. See [[Hand over the keys — the owner role outlives the person who opened the account]].
 
 ### Placement / service-line increment edit persists (GAP)
 STATUS: gap

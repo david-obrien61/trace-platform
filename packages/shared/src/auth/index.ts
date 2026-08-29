@@ -174,6 +174,12 @@ export type {
 } from './permissionManifest';
 
 // Abuse guards for business creation — shipped OFF, genuine kill-switches
+// ROSTER WRITE AUTHORITY — the three member-roster controls still fenced on businesses.owner_id
+// (Remove · Deactivate · Set phone). A DISPLAY decision, never the boundary: the boundary is
+// bm_owner_all. Added 2026-08-28 so widening the roster READ did not ship three visible failures.
+export { rosterActionLock, ROSTER_WRITE_ACTIONS } from './rosterAuthority';
+export type { RosterWriteAction, RosterActorContext, RosterActionLock } from './rosterAuthority';
+
 export { runBusinessCreationGuards } from './businessGuards';
 export type { GuardResult } from './businessGuards';
 

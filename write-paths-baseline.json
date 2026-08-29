@@ -1,6 +1,6 @@
 {
   "_comment": "Known write paths as of the stamp below. RATCHET baseline — the build fails on any NEW undeclared path, not on these. Shrink it; never grow it casually. Regenerate: npm run write-paths:baseline",
-  "stamped": "2026-08-01",
+  "stamped": "2026-08-28",
   "tables": {
     "business_members": [
       "packages/cultivar-os/src/pages/OnboardingWizard.tsx",
@@ -38,6 +38,7 @@
     ],
     "audit_log": [
       "packages/cultivar-os/src/components/inventory/inventoryEdit.ts",
+      "packages/shared/src/auth/invitations.ts",
       "packages/shared/src/auth/roleFunnel.ts",
       "packages/shared/src/business-logic/moduleState.ts",
       "packages/shared/src/business-logic/seedBusinessModules.ts",

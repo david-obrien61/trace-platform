@@ -28,14 +28,17 @@
 // OUTPUTS:      one sentence, always non-empty.
 // ============================================================
 
-export type ServiceWriteAction = 'activate' | 'deactivate' | 'edit' | 'delete' | 'add';
+// 'delete' RETIRED 2026-08-28 with its only caller. R2 stands (no delete verb for
+// service_offerings; retire-by-flag is the shape), the hard delete it apologised for is removed,
+// and a sentence for an act the platform cannot perform is a claim about a capability that does
+// not exist — the same class as a fake pill, arriving in the copy layer.
+export type ServiceWriteAction = 'activate' | 'deactivate' | 'edit' | 'add';
 
 // The LEAD names what the owner just tried to do, in their words — "turned on", not "updated".
 const LEAD: Record<ServiceWriteAction, string> = {
   activate:   'That service was not turned on',
   deactivate: 'That service was not turned off',
   edit:       'Your changes to that service were not saved',
-  delete:     'That service was not deleted',
   add:        'That service was not added',
 };
 
