@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { callerCan } from '../../../../shared/src/auth/callerPermission';
 import { refreshQBToken } from '../../../../shared/src/quickbooks/refresh';
 import { readQBSecrets } from '../../../../shared/src/quickbooks/secrets';
+import { isPushHeld, pushHoldReason, QBO_PUSH_HOLD_ENV } from '../../../../shared/src/quickbooks/pushHold';
 import { taxExemptionLabel } from '../../../../shared/src/business-logic/taxExemption';
 import { personNamesMatch } from '../../../../shared/src/utils/personName';
 import {
@@ -589,6 +590,29 @@ export async function pushQboInvoice(
   order_id: string,
   business_id: string,
 ): Promise<{ status: number; body: Record<string, unknown> }> {
+
+  // ══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 THE HOLD — CHECKED BEFORE ANYTHING ELSE, AND HERE RATHER THAN AT THE CALL SITE.
+  // ══════════════════════════════════════════════════════════════════════════════════════
+  // `pushQboInvoice` has TWO callers: the inline push at the end of checkout
+  // (`api/orders/submit.ts:1190`) and the manual re-push endpoint at the bottom of this file.
+  // A guard at the checkout call site alone would leave the second door open — an owner
+  // looking at an order could push the very invoice the hold exists to prevent. ONE guard on
+  // the shared seam closes both (§6 r8), which is why this is not where the instruction said
+  // to put it.
+  //
+  // WHY IT EXISTS: the push carries twelve hardcoded `ItemRef: {value:'1', name:'Services'}`
+  // literals, so the first completed checkout on a live company books every line — trees
+  // included — as generic "Services". The push is inline and unconditional, so there is no
+  // step a person can decline. This is that step.
+  //
+  // 🔴 IT RETURNS 409, NOT 503. 503 is `not_connected`, and QuickBooks IS connected — telling
+  // an owner to reconnect it would send them to fix a thing that is not broken, which is
+  // precisely the defect D-48 ended (see Confirmation.tsx:110). A held push is its own state.
+  if (isPushHeld(process.env[QBO_PUSH_HOLD_ENV], business_id)) {
+    console.log('[TRACE:QBO] push HELD — deliberate, no invoice created', { order_id, business_id });
+    return { status: 409, body: { error: pushHoldReason(), code: 'PUSH_HELD', held: true } };
+  }
 
   const db = supabase();
 
