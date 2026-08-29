@@ -17,9 +17,7 @@
  *   node_modules/.bin/esbuild packages/shared/src/quickbooks/itemList.test.ts \
  *     --bundle --platform=node --format=cjs | node
  */
-import {
-  QBO_ITEM_QUERY, parseItemList, rawCaptureFileName, classifyFailure,
-} from './itemList';
+import { parseItemList, summariseItems } from './itemList';
 
 let passed = 0, failed = 0;
 const failures: string[] = [];
@@ -102,43 +100,50 @@ const REAL_BODY = JSON.stringify({
   ok(numericId.items[0].id === '42', 'a numeric Id survives as a string — ItemRef.value is a string in every payload we send');
 }
 
-// ══ §D THE QUERY ════════════════════════════════════════════════════════════
+// ══ §D THE BREAKDOWN — the answer the mapping pass needs ═══════════════════
+//
+// 🔴 THE QUERY, THE CAPTURE FILENAME AND THE 401/403 CLASSIFICATION MOVED to ./qboRead and are
+// asserted in qboRead.test.ts §A/§F/§G — across BOTH entities and every page position, which is
+// a stronger assertion than the single-string one that used to live here. R-23's guard cell was
+// updated in the same commit rather than left pointing at a symbol that no longer exists.
 {
-  ok(QBO_ITEM_QUERY === 'select * from Item', 'the query is the approved one, verbatim');
-  ok(!/insert|update|delete|into/i.test(QBO_ITEM_QUERY),
-    '🔴 READ-ONLY. This pass may not write to Intuit under any circumstance, and the query is asserted rather than trusted');
-}
+  const items = parseItemList(JSON.stringify({ QueryResponse: { Item: [
+    { Id: '1',  Name: 'Services',      Type: 'Service',      Active: true,  IncomeAccountRef: { name: 'Services' } },
+    { Id: '14', Name: 'Nursery Stock', Type: 'NonInventory', Active: true,  IncomeAccountRef: { name: 'Sales of Nursery Stock' } },
+    { Id: '15', Name: 'Trees',         Type: 'Category',     Active: true },
+    { Id: '16', Name: 'Shrubs',        Type: 'category',     Active: true },
+    { Id: '17', Name: 'Old netting',   Type: 'Service',      Active: false, IncomeAccountRef: { name: 'Services' } },
+  ] } })).items;
+  const b = summariseItems(items);
 
-// ══ §E THE CAPTURE FILENAME — attributable, and safe as a filename ══════════
-{
-  const at = new Date('2026-08-29T19:04:05.678Z');
-  const n = rawCaptureFileName('9341455307850000', at);
-  ok(n.startsWith('qbo-items-9341455307850000-'), 'the realm is in the name — a capture found later says which company it came from');
-  ok(n.endsWith('.json'), 'and it is .json');
-  ok(!n.includes(':') && !/[/\\]/.test(n),
-    'no colons and no separators — a colon breaks the filename on some filesystems and a slash would let a realm value steer the write somewhere else');
-  ok(rawCaptureFileName('a/../../etc', at).indexOf('..') === -1,
-    '🔴 path segments are stripped from the realm: this value reaches a file name, so it is sanitised rather than trusted');
-  ok(rawCaptureFileName('', at).includes('unknown-realm'),
-    'an empty realm still produces a named file — the capture must happen even when the attribution is unknown, and it says it is unknown');
-  ok(n !== rawCaptureFileName('9341455307850000', new Date('2026-08-29T19:04:06.678Z')),
-    'two reads a second apart do not collide — the second capture must never overwrite the first');
-}
+  ok(b.total === 5, 'the breakdown counts every row');
+  ok(b.categories === 2,
+    "🔴 CASE-INSENSITIVE: 'Category' and 'category' are the same thing. A Category is a FOLDER in QuickBooks and cannot be an invoice line's ItemRef, so miscounting them overstates what is actually mappable");
+  ok(b.sellable === 3, 'and sellable is everything an ItemRef could legally point at');
+  ok(b.sellable + b.categories === b.total, 'the two partition the list — no row is in both and none is in neither');
+  ok(b.inactive === 1, 'inactive items are counted — an inactive item is a bad ItemRef target and the operator must see which is which');
 
-// ══ §F 401 AND 403 ARE DIFFERENT PROBLEMS ═══════════════════════════════════
-{
-  ok(classifyFailure(401).points_at === 'G3-token-refresh', 'a 401 points at the token-refresh path (G3)');
-  ok(classifyFailure(403).points_at === 'G2-scope', 'a 403 points at the granted scope (G2)');
-  ok(classifyFailure(401).points_at !== classifyFailure(403).points_at,
-    '🔴 and they are NOT collapsed into one message — Stage 0 named both in advance precisely so the failure would name its own next step');
-  ok(classifyFailure(500).points_at === 'unclassified',
-    'an unrecognised status says so rather than being forced into one of the two known buckets');
-  ok(classifyFailure(500).headline.includes('500'), 'and it quotes the status it actually got');
-  ok(/capture file/i.test(classifyFailure(500).headline),
-    'the unclassified case points at the file holding the verbatim body — the body is not in the headline');
-  for (const s of [401, 403, 500, 429]) {
-    ok(classifyFailure(s).headline.length > 0, `status ${s} produces a non-empty headline`);
-  }
+  ok(b.itemId1 !== null && b.itemId1.name === 'Services',
+    "🔴 THE HEADLINE ANSWER: the twelve hardcoded literals assert ItemRef.value === '1', and this reports whether that id EXISTS in the company — from the complete list, not from a page somebody scrolled");
+  ok(b.byIncomeAccount[0].account === 'Services' && b.byIncomeAccount[0].count === 2,
+    'the income-account split is tallied biggest-first — this is the Nursery-Stock-vs-Services split the twelve literals currently collapse');
+  ok(b.byIncomeAccount.some(a => a.account === null && a.count === 2),
+    '🔴 items with NO income account are their own bucket, reported as null. Folding them into a named account would fabricate the exact fact this read exists to establish');
+
+  const absent = summariseItems(parseItemList(JSON.stringify({ QueryResponse: { Item: [{ Id: '2', Name: 'Other' }] } })).items);
+  ok(absent.itemId1 === null,
+    "🔴 AND THE OTHER DIRECTION: no item with Id '1' reports NULL, not a guess. Against a list proven complete that means all twelve literals point at an item that does not exist — QuickBooks would REJECT the push rather than mis-file it, which is a different and louder defect");
+
+  const collide = summariseItems(parseItemList(JSON.stringify({ QueryResponse: { Item: [
+    { Id: '3', Name: 'A', IncomeAccountRef: { name: 'not set' } },
+    { Id: '4', Name: 'B' },
+  ] } })).items);
+  ok(collide.byIncomeAccount.length === 2,
+    'an account literally NAMED "not set" does not merge with the rows that genuinely have none — the tally key is namespaced, because those are different facts and the display spells them the same');
+
+  const none = summariseItems([]);
+  ok(none.total === 0 && none.itemId1 === null && none.byIncomeAccount.length === 0,
+    'an empty list breaks down to zeros without dividing by anything or claiming id 1 is present');
 }
 
 console.log(`\nitemList: ${passed} passed, ${failed} failed`);

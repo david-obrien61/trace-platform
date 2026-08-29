@@ -1,11 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// PURPOSE: the PURE half of the QuickBooks item-list read — the query string, the shape of
-//   one item row, the parse of Intuit's response body, the deterministic raw-capture
-//   filename, and the failure classification. No network, no secrets, no storage: this
-//   module is what `api/qbo/router.ts` (_route=items) and the Accounting card both read so
-//   the endpoint and the screen cannot describe the same response differently (§6 r8).
-// DEPENDENCIES: none.
-// OUTPUTS: QBO_ITEM_QUERY, QboItemRow, parseItemList, rawCaptureFileName, classifyFailure.
+// PURPOSE: the ITEM-SPECIFIC half of the QuickBooks read — the shape of one item row, the
+//   interpretation of Intuit's fields, and the breakdown that answers the mapping question
+//   (is there an item with Id '1'? how many are Categories rather than sellable things? what
+//   is the full split by income account?). The entity-agnostic machinery — query building,
+//   counting, paging, completeness, capture naming, failure classification — lives in
+//   ./qboRead and is SHARED with the customer read (§6 r8).
+// DEPENDENCIES: ./qboRead (parseRows).
+// OUTPUTS: QboItemRow · ParsedItemList · parseItemList · ItemBreakdown · summariseItems.
 //
 // 🔴 WHY THIS EXISTS AT ALL — THE ARMED LANDMINE. The invoice push carries TWELVE hardcoded
 //   `ItemRef: { value: '1', name: 'Services' }` literals (`api/qbo/invoice/cultivar.ts`).
@@ -14,26 +15,20 @@
 //   "Services", corrupting the Sales of Nursery Stock vs Services split the cost model rests
 //   on. Reading their actual item list is what tells us the real ids. THIS PASS READS ONLY.
 //
-// 🔴 NOTHING HERE PERSISTS AND NOTHING HERE LOGS A BODY. The response is a customer's live
-//   chart of items. It goes to the screen and to a file the operator's browser saves OUTSIDE
-//   this repo; it is never written to a table, and never passed to console.log. Storing their
-//   chart of items is a later decision with its own ruling (user_stories.md — "QuickBooks
-//   read-back"), and this module is deliberately not the place it gets made by accident.
+// 🔴 THE TWELVE LITERALS ASSERT `Id = '1'` TWELVE TIMES AND THE FIRST HUNDRED ROWS DID NOT
+//   CONTAIN IT. That is not proof it is absent — the first hundred was a TRUNCATED page — and
+//   it is exactly why `summariseItems` answers the question against the COMPLETE list rather
+//   than leaving a human to scan a table for one id.
+//
+// 🔴 NOTHING HERE PERSISTS AND NOTHING HERE LOGS A BODY (R-23 clauses b and c).
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * The read. `Item` is the QuickBooks entity behind every invoice line's `ItemRef` — a Service
- * or Inventory record carrying the income account that decides which revenue bucket a line
- * lands in. One page is enough to answer the question; pagination (STARTPOSITION) is a later
- * concern and is deliberately absent rather than half-written.
- */
-export const QBO_ITEM_QUERY = 'select * from Item';
+import { parseRows } from './qboRead';
 
 /** One item, reduced to the five fields that answer "what should a tree map to?". */
 export interface QboItemRow {
   id: string;
   name: string;
-  /** 'Service' | 'Inventory' | 'NonInventory' | … — Intuit's own vocabulary, not ours. */
+  /** 'Service' | 'Inventory' | 'NonInventory' | 'Category' | … — Intuit's vocabulary, not ours. */
   type: string | null;
   /** The revenue bucket. This is the field that makes the Nursery-Stock/Services split real. */
   incomeAccount: string | null;
@@ -54,7 +49,7 @@ function str(v: unknown): string | null {
 }
 
 /**
- * Parse Intuit's `{ QueryResponse: { Item: [...] } }` body.
+ * Parse ONE page of Intuit's `{ QueryResponse: { Item: [...] } }` body.
  *
  * 🔴 AN EMPTY ITEM LIST AND A FAILED PARSE ARE DIFFERENT FACTS AND MUST NOT RENDER THE SAME
  * (D-9 / A9 — absent is not empty). A QuickBooks company with no items returns
@@ -64,26 +59,11 @@ function str(v: unknown): string | null {
  * more time, in the one place whose whole job is reading someone else's books.
  */
 export function parseItemList(rawBody: string): ParsedItemList {
-  let body: unknown;
-  try {
-    body = JSON.parse(rawBody);
-  } catch {
-    return { ok: false, items: [], parseError: 'Response was not JSON' };
-  }
-  const qr = (body as { QueryResponse?: unknown } | null)?.QueryResponse;
-  if (qr === null || qr === undefined || typeof qr !== 'object') {
-    return { ok: false, items: [], parseError: 'Response carried no QueryResponse' };
-  }
-  const raw = (qr as { Item?: unknown }).Item;
-  // No `Item` key = a real, empty answer (see above). A non-array `Item` is a shape we do not
-  // understand, and saying "0 items" about it would be a claim we cannot support.
-  if (raw === undefined) return { ok: true, items: [], parseError: null };
-  if (!Array.isArray(raw)) {
-    return { ok: false, items: [], parseError: 'QueryResponse.Item was not a list' };
-  }
+  const page = parseRows(rawBody, 'Item');
+  if (!page.ok) return { ok: false, items: [], parseError: page.parseError };
 
   const items: QboItemRow[] = [];
-  for (const it of raw as Record<string, unknown>[]) {
+  for (const it of page.rows) {
     const id = str(it?.Id);
     // An item with no Id cannot be an ItemRef target — which is the ONLY thing we want these
     // for — so it is dropped rather than rendered as a row that looks usable.
@@ -100,48 +80,64 @@ export function parseItemList(rawBody: string): ParsedItemList {
   return { ok: true, items, parseError: null };
 }
 
+export interface IncomeAccountTally {
+  /** `null` renders as "Not set" — an item with no income account is a real, reportable state. */
+  account: string | null;
+  count: number;
+}
+
+export interface ItemBreakdown {
+  total: number;
+  /** A Category is a FOLDER in QuickBooks. It cannot be an invoice line's ItemRef. */
+  categories: number;
+  /** Everything that is not a Category — i.e. everything an ItemRef could legally point at. */
+  sellable: number;
+  inactive: number;
+  /** 🔴 The twelve literals assert this id exists. This is the answer, from the whole list. */
+  itemId1: QboItemRow | null;
+  /** Every income account with its count, biggest first, ties broken by name for stability. */
+  byIncomeAccount: IncomeAccountTally[];
+}
+
 /**
- * The name of the raw-capture file. Deterministic and self-describing so a file found six
- * months from now says which company it came from and when — a bare `items.json` in a
- * downloads folder is an unattributable copy of a customer's accounting data.
+ * The breakdown the mapping pass needs, computed once so the screen and any later consumer
+ * cannot describe the same list differently.
  *
- * `.json` regardless of what came back: on failure the file holds Intuit's verbatim error
- * body, which is the artifact worth keeping (a 401 names the refresh path, a 403 names the
- * scope) and is JSON too.
+ * 🔴 `itemId1` IS THE HEADLINE. Twelve invoice lines assert `ItemRef.value === '1'`. If this
+ * comes back `null` against a list proven complete, every one of those twelve is pointing at
+ * an item that does not exist in this company — which is a different and worse defect than
+ * "they all point at the wrong item", because Intuit rejects the push outright rather than
+ * mis-filing it. If it comes back with a row, its NAME and INCOME ACCOUNT say what the push
+ * has been about to do.
  */
-export function rawCaptureFileName(realmId: string, at: Date): string {
-  const stamp = at.toISOString().replace(/[:.]/g, '-');
-  const realm = String(realmId || 'unknown-realm').replace(/[^A-Za-z0-9_-]/g, '');
-  return `qbo-items-${realm || 'unknown-realm'}-${stamp}.json`;
-}
+export function summariseItems(items: QboItemRow[]): ItemBreakdown {
+  const tally = new Map<string, { account: string | null; count: number }>();
+  let categories = 0, inactive = 0;
+  let itemId1: QboItemRow | null = null;
 
-export interface FailureNote {
-  /** What the operator is told. Never contains the body — the body goes to the file. */
-  headline: string;
-  /** Which Stage-0 finding this status points at, so the next step is not a guess. */
-  points_at: 'G3-token-refresh' | 'G2-scope' | 'connection' | 'unclassified';
-}
+  for (const it of items) {
+    // Case-insensitive: 'Category' is Intuit's spelling today, and a vocabulary comparison
+    // that depends on their casing is the class of bug `normalizeSize` was written for.
+    if ((it.type ?? '').toLowerCase() === 'category') categories++;
+    if (it.active === false) inactive++;
+    if (it.id === '1' && itemId1 === null) itemId1 = it;
 
-/**
- * Turn an HTTP status into the next action, because 401 and 403 are DIFFERENT PROBLEMS and a
- * generic "the read failed" sends someone hunting the wrong one. Stage 0 named both in
- * advance; this is that naming, mechanised.
- */
-export function classifyFailure(status: number): FailureNote {
-  if (status === 401) {
-    return {
-      headline: 'QuickBooks rejected the token (401). The access token is expired or was revoked — this is the token-refresh path (Stage 0 G3), not a permissions problem.',
-      points_at: 'G3-token-refresh',
-    };
+    // The key is namespaced so an item whose income account is literally named "not set"
+    // cannot merge with the rows that genuinely have none.
+    const key = it.incomeAccount === null ? 'null:' : `set:${it.incomeAccount}`;
+    const row = tally.get(key);
+    if (row) row.count++;
+    else tally.set(key, { account: it.incomeAccount, count: 1 });
   }
-  if (status === 403) {
-    return {
-      headline: 'QuickBooks refused the read (403). The granted scope does not permit it — Stage 0 G2 read com.intuit.quickbooks.accounting from the code, and a 403 means that reading was wrong.',
-      points_at: 'G2-scope',
-    };
-  }
-  return {
-    headline: `QuickBooks returned ${status}. The verbatim response body is in the capture file — read it before acting.`,
-    points_at: 'unclassified',
-  };
+
+  // Biggest first; on a tie a NAMED account beats the "Not set" residual, then alphabetical.
+  // The nulls-last clause is deliberate: `(a.account ?? '')` alone sorts the empty string FIRST,
+  // so a tie floated "Not set" to the top of a breakdown whose whole job is naming real buckets.
+  const byIncomeAccount = [...tally.values()].sort((a, b) =>
+    b.count - a.count
+    || (a.account === null ? 1 : 0) - (b.account === null ? 1 : 0)
+    || (a.account ?? '').localeCompare(b.account ?? ''),
+  );
+
+  return { total: items.length, categories, sellable: items.length - categories, inactive, itemId1, byIncomeAccount };
 }

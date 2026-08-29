@@ -1,0 +1,408 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// PURPOSE: the operator-facing half of the QuickBooks reads. Two buttons — ITEMS and
+//   CUSTOMERS — each: GET the COMPLETE list → SAVE THE VERBATIM BODIES TO A FILE → then render
+//   a summary. Read-only against Intuit; stores nothing on our side.
+// DEPENDENCIES: `/api/qbo/items` and `/api/qbo/customers` (api/qbo/router.ts) · authHeaders() ·
+//   the pure helpers in ../quickbooks/qboRead, ../quickbooks/itemList, ../quickbooks/customerList.
+// OUTPUTS: <QboBooksReader businessId /> — mounted in the Accounting card once connected.
+//
+// 🔴 WHY THE ITEM READ EXISTS. The invoice push carries TWELVE hardcoded
+//   `ItemRef: { value: '1', name: 'Services' }` literals. Nothing has pushed to the live
+//   company yet; the next completed checkout is the first real push, and it would land every
+//   line — the trees included — as generic "Services", collapsing the Sales-of-Nursery-Stock
+//   vs Services split the cost model rests on. This screen reads the REAL ids so the next pass
+//   can map to them instead of assuming. It changes none of the twelve.
+//
+// 🔴 WHY IT NOW PAGINATES, AND WHY COMPLETENESS IS RED. The first version asked for one page.
+//   Intuit's silent default returned exactly 100 rows carrying ids past 1127 — a TRUNCATED
+//   list that looked like a whole one, caught only because a human read the ids. The endpoint
+//   now counts first and refuses a shortfall, and this screen shows EXPECTED vs RETRIEVED on
+//   every successful read: the number is on screen even when it agrees, because a completeness
+//   claim nobody can see is a completeness claim nobody checks.
+//
+// 🔴 THE FILE IS NOT A CONVENIENCE, IT IS THE POINT — AND IT SAVES ITSELF. Every response is
+//   written to disk the moment it arrives, BEFORE anything is rendered, success or failure.
+//   Two reasons, and the second is the load-bearing one: (1) re-reading a customer's books
+//   must never require re-querying a customer's books; (2) the download lands in the browser's
+//   own folder, which is OUTSIDE this repository — so a copy of live accounting data can never
+//   be swept into a commit. That is the same class of hazard as the service_role JWT that sat
+//   in a settings file: the fix is not to redact it, it is to keep it somewhere git cannot see.
+//   ⚠️ A summary on screen is ON TOP OF the file, never instead of it. (R-23.)
+//
+// ══════════════════════════════════════════════════════════════════════════════
+// 🔴 THE CUSTOMER READ IS NOT THE ITEM READ AND THIS SCREEN TREATS IT DIFFERENTLY. The item
+//   list is a product catalogue and is shown in full — finding one id in it is the job. The
+//   customer list is roughly 1,900 REAL PEOPLE with addresses, phones and email, belonging to
+//   a customer's customers. It is NEVER rendered in full: the screen shows the count, the
+//   field coverage, the duplicate sizing and FIVE example rows. The complete data exists in
+//   the downloaded file and nowhere else — the endpoint does not even send the parsed records.
+// ══════════════════════════════════════════════════════════════════════════════
+import React, { useState } from 'react';
+import { authHeaders } from '../auth/authHeaders';
+import { rawCaptureFileName, type QboEntity } from '../quickbooks/qboRead';
+import type { QboItemRow, ItemBreakdown } from '../quickbooks/itemList';
+import type { QboCustomerRow, CustomerBreakdown } from '../quickbooks/customerList';
+
+const GREEN = '#27500A';
+const GRAY  = '#6b7280';
+const RED   = '#A32D2D';
+const DARK  = '#111827';
+const AMBER = '#92400e';
+
+interface ReadResponse {
+  ok?: boolean;
+  entity?: QboEntity;
+  realm_id?: string;
+  queried_at?: string;
+  expected_total?: number | null;
+  retrieved_total?: number;
+  complete?: boolean;
+  pages_fetched?: number;
+  items?: QboItemRow[];
+  breakdown?: ItemBreakdown | CustomerBreakdown;
+  preview?: QboCustomerRow[];
+  headline?: string;
+  points_at?: string;
+  error?: string;
+  detail?: string;
+  code?: string;
+  /** The verbatim page bodies. Written to the file; never rendered. */
+  capture?: unknown;
+}
+
+/**
+ * Write `text` to a file in the viewer's own download folder. Returns the file name so the
+ * screen can NAME what it saved — an unnamed save is indistinguishable from no save.
+ *
+ * Deliberately a plain object-URL download rather than anything server-side: this data must
+ * not touch our storage, and a browser download is the one path that puts it on the operator's
+ * disk without it passing through a table, a bucket, or a log line.
+ */
+function saveRawToFile(text: string, fileName: string): boolean {
+  try {
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Revoke on the next tick — revoking synchronously can cancel the download in some browsers.
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const cell: React.CSSProperties = { padding: '9px 11px', color: DARK };
+const head: React.CSSProperties = {
+  position: 'sticky', top: 0, background: '#f9fafb', textAlign: 'left', padding: '9px 11px',
+  fontWeight: 700, color: DARK, whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb',
+};
+
+function Stat({ label, value, of }: { label: string; value: number; of?: number }) {
+  return (
+    <div style={{ padding: '8px 12px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, minWidth: 120 }}>
+      <div style={{ fontSize: '1.125rem', fontWeight: 800, color: DARK }}>
+        {value.toLocaleString()}
+        {of !== undefined && of > 0 && (
+          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: GRAY }}> · {Math.round((value / of) * 100)}%</span>
+        )}
+      </div>
+      <div style={{ fontSize: '0.75rem', color: GRAY }}>{label}</div>
+    </div>
+  );
+}
+
+interface ReadState {
+  entity: QboEntity;
+  body: ReadResponse;
+  savedAs: string | null;
+  saveFailed: boolean;
+  error: string | null;
+  note: string | null;
+}
+
+export function QboBooksReader({ businessId }: { businessId: string | null | undefined }) {
+  const [loading, setLoading] = useState<QboEntity | null>(null);
+  const [state, setState] = useState<ReadState | null>(null);
+
+  async function read(entity: QboEntity) {
+    if (!businessId || loading) return;
+    setLoading(entity);
+    setState(null);
+    const route = entity === 'Customer' ? 'customers' : 'items';
+    try {
+      const res = await fetch(`/api/qbo/${route}?business_id=${encodeURIComponent(businessId)}`, {
+        headers: await authHeaders(),
+      });
+      const body = (await res.json()) as ReadResponse;
+
+      // ── THE FILE FIRST, ALWAYS, BEFORE ANY RENDERING DECISION ──────────────
+      // Including on failure: Intuit's verbatim Fault body is exactly what distinguishes a 401
+      // (the token-refresh path) from a 403 (the granted scope), and losing it means running
+      // the query against the customer's books a second time to find out. It also holds every
+      // page retrieved before a mid-walk failure, which is the part that is expensive to redo.
+      let savedAs: string | null = null;
+      let saveFailed = false;
+      if (body.capture !== undefined && body.capture !== null) {
+        const name = rawCaptureFileName(entity, body.realm_id ?? 'unknown-realm', new Date());
+        if (saveRawToFile(JSON.stringify(body.capture, null, 2), name)) savedAs = name; else saveFailed = true;
+      }
+
+      const failed = !res.ok || body.ok === false;
+      setState({
+        entity, body, savedAs, saveFailed,
+        // Every refusal names ITSELF. A generic "the read failed" would send someone hunting
+        // the wrong problem, which is the whole reason the server classifies 401 vs 403 and
+        // separates INCOMPLETE from UNREADABLE_PAGE.
+        error: failed ? (body.headline || body.detail || body.error || `The read failed (HTTP ${res.status}).`) : null,
+        note: body.points_at ? `Points at: ${body.points_at}` : null,
+      });
+    } catch (e: any) {
+      setState({ entity, body: {}, savedAs: null, saveFailed: false,
+        error: `The read could not complete: ${String(e?.message ?? e)}`, note: null });
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  const btn: React.CSSProperties = {
+    flex: 1, minHeight: 48, padding: '13px 16px',
+    background: loading || !businessId ? '#e5e7eb' : GREEN,
+    color: loading || !businessId ? GRAY : '#fff',
+    fontWeight: 700, fontSize: '0.9375rem', borderRadius: 10, border: 'none',
+    cursor: loading || !businessId ? 'default' : 'pointer',
+  };
+
+  const b = state?.body;
+  const itemBreak = state?.entity === 'Item' ? (b?.breakdown as ItemBreakdown | undefined) : undefined;
+  const custBreak = state?.entity === 'Customer' ? (b?.breakdown as CustomerBreakdown | undefined) : undefined;
+
+  return (
+    <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #e5e7eb' }}>
+      <p style={{ fontSize: '0.875rem', color: DARK, fontWeight: 700, margin: '0 0 4px' }}>
+        Read from QuickBooks
+      </p>
+      <p style={{ fontSize: '0.8125rem', color: GRAY, margin: '0 0 12px', lineHeight: 1.5 }}>
+        Reads the complete list of products &amp; services, or of customers, from your QuickBooks
+        company. Nothing is changed in QuickBooks and nothing is saved here — the full response
+        downloads to this device.
+      </p>
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <button onClick={() => void read('Item')} disabled={!!loading || !businessId} style={btn}>
+          {loading === 'Item' ? 'Reading items…' : 'Read item list'}
+        </button>
+        <button onClick={() => void read('Customer')} disabled={!!loading || !businessId} style={btn}>
+          {loading === 'Customer' ? 'Reading customers…' : 'Read customer list'}
+        </button>
+      </div>
+
+      {state?.savedAs && (
+        <p style={{ fontSize: '0.8125rem', color: GREEN, margin: '10px 0 0', wordBreak: 'break-all' }}>
+          ↓ Full response saved to your downloads folder as <strong>{state.savedAs}</strong>
+          {state.entity === 'Customer' && (
+            <span style={{ color: AMBER, display: 'block', marginTop: 4 }}>
+              ⚠ That file holds your customers&apos; names, addresses, phone numbers and email. It is
+              outside this application and outside the code repository — keep it that way.
+            </span>
+          )}
+        </p>
+      )}
+      {state?.saveFailed && (
+        // Surfaced, never silent: if the file did not save, the operator must know BEFORE they
+        // close the tab and assume they have a copy.
+        <p style={{ fontSize: '0.8125rem', color: RED, margin: '10px 0 0' }}>
+          ⚠ The response could not be saved to a file — it is not on disk. Run the read again.
+        </p>
+      )}
+
+      {state?.error && (
+        <div style={{ marginTop: 12, padding: 12, background: '#fef2f2', border: `1px solid ${RED}`, borderRadius: 9 }}>
+          <p style={{ fontSize: '0.8125rem', color: RED, margin: 0, lineHeight: 1.5, fontWeight: 600 }}>{state.error}</p>
+          {state.note && <p style={{ fontSize: '0.75rem', color: GRAY, margin: '6px 0 0' }}>{state.note}</p>}
+          {b?.expected_total !== undefined && b?.expected_total !== null && (
+            <p style={{ fontSize: '0.75rem', color: GRAY, margin: '6px 0 0' }}>
+              QuickBooks reported {b.expected_total.toLocaleString()} · {(b.retrieved_total ?? 0).toLocaleString()} retrieved before it stopped.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ── COMPLETENESS, SHOWN EVEN WHEN IT AGREES ─────────────────────────────
+          The number is on screen on every successful read, not only on a mismatch. A
+          completeness claim nobody can see is a completeness claim nobody checks — which is
+          precisely how 100 rows passed for the whole list. */}
+      {b?.ok && (
+        <div style={{ marginTop: 12, padding: '10px 12px', background: '#f0fdf4', border: `1px solid ${GREEN}`, borderRadius: 9 }}>
+          <p style={{ fontSize: '0.8125rem', color: GREEN, margin: 0, fontWeight: 700 }}>
+            Complete — QuickBooks reports {(b.expected_total ?? 0).toLocaleString()} and{' '}
+            {(b.retrieved_total ?? 0).toLocaleString()} were retrieved
+            {b.pages_fetched ? ` across ${b.pages_fetched} page${b.pages_fetched === 1 ? '' : 's'}` : ''}.
+          </p>
+        </div>
+      )}
+
+      {/* ── ITEMS: the breakdown, then the full table ─────────────────────────── */}
+      {itemBreak && (
+        <div style={{ marginTop: 12 }}>
+          {/* 🔴 THE HEADLINE ANSWER. Twelve invoice lines assert ItemRef.value === '1'. */}
+          <div style={{
+            padding: '10px 12px', borderRadius: 9, marginBottom: 12,
+            background: itemBreak.itemId1 ? '#f9fafb' : '#fffbeb',
+            border: `1px solid ${itemBreak.itemId1 ? '#e5e7eb' : AMBER}`,
+          }}>
+            <p style={{ fontSize: '0.8125rem', color: itemBreak.itemId1 ? DARK : AMBER, margin: 0, lineHeight: 1.5 }}>
+              {itemBreak.itemId1 ? (
+                <>
+                  <strong>Item Id 1 exists</strong> — “{itemBreak.itemId1.name}”, type{' '}
+                  {itemBreak.itemId1.type ?? 'Not set'}, income account{' '}
+                  {itemBreak.itemId1.incomeAccount ?? 'Not set'}. Every invoice line the push writes
+                  currently lands here.
+                </>
+              ) : (
+                <>
+                  <strong>There is no item with Id 1 in this company.</strong> The invoice push asserts
+                  it twelve times, so a push today would be rejected by QuickBooks rather than
+                  mis-filed.
+                </>
+              )}
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            <Stat label="items" value={itemBreak.total} />
+            <Stat label="sellable" value={itemBreak.sellable} of={itemBreak.total} />
+            <Stat label="categories (folders)" value={itemBreak.categories} of={itemBreak.total} />
+            <Stat label="inactive" value={itemBreak.inactive} of={itemBreak.total} />
+          </div>
+
+          <p style={{ fontSize: '0.8125rem', color: DARK, fontWeight: 700, margin: '0 0 6px' }}>By income account</p>
+          <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 9, marginBottom: 14 }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.8125rem' }}>
+              <thead><tr style={{ background: '#f9fafb' }}><th style={head}>Income account</th><th style={head}>Items</th></tr></thead>
+              <tbody>
+                {itemBreak.byIncomeAccount.map(a => (
+                  <tr key={a.account ?? '__not_set__'} style={{ borderTop: '1px solid #f3f4f6' }}>
+                    {/* An account QuickBooks did not send reads "Not set" — never a blank cell
+                        that looks like a rendering bug, and never a plausible guess (D-9 / A9). */}
+                    <td style={{ ...cell, color: a.account ? DARK : '#9ca3af' }}>{a.account ?? 'Not set'}</td>
+                    <td style={cell}>{a.count.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {state?.entity === 'Item' && b?.ok && (b.items?.length ?? 0) === 0 && (
+        // EMPTY is its own surface and it says which of the two empties it is: the read
+        // succeeded and the company has no items. It is never the rendering of a failed read.
+        <p style={{ fontSize: '0.8125rem', color: GRAY, marginTop: 12 }}>
+          The read succeeded and this QuickBooks company has no items on it.
+        </p>
+      )}
+
+      {state?.entity === 'Item' && b?.items && b.items.length > 0 && (
+        // Bounded scroll box so both scrollbars live on the box, not the page (§6 r14).
+        <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 360, border: '1px solid #e5e7eb', borderRadius: 9 }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.8125rem' }}>
+            <thead>
+              <tr style={{ background: '#f9fafb' }}>
+                {['Id', 'Name', 'Type', 'Income account', 'Active'].map(h => <th key={h} style={head}>{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {b.items.map(it => (
+                <tr key={it.id} style={{ borderTop: '1px solid #f3f4f6' }}>
+                  <td style={{ ...cell, fontFamily: 'monospace' }}>{it.id}</td>
+                  <td style={cell}>{it.name}</td>
+                  <td style={{ ...cell, color: it.type ? DARK : '#9ca3af' }}>{it.type ?? 'Not set'}</td>
+                  <td style={{ ...cell, color: it.incomeAccount ? DARK : '#9ca3af' }}>{it.incomeAccount ?? 'Not set'}</td>
+                  <td style={{ ...cell, color: it.active === null ? '#9ca3af' : DARK }}>
+                    {it.active === null ? 'Not set' : it.active ? 'Yes' : 'No'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── CUSTOMERS: counts, coverage, duplicate sizing, five example rows. NEVER a list. ── */}
+      {custBreak && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            <Stat label="customers" value={custBreak.total} />
+            <Stat label="with email" value={custBreak.withEmail} of={custBreak.total} />
+            <Stat label="with phone" value={custBreak.withPhone} of={custBreak.total} />
+            <Stat label="with address" value={custBreak.withAddress} of={custBreak.total} />
+            <Stat label="with company name" value={custBreak.withCompanyName} of={custBreak.total} />
+            <Stat label="no email/phone/address" value={custBreak.withNoContactAtAll} of={custBreak.total} />
+            <Stat label="inactive" value={custBreak.inactive} of={custBreak.total} />
+          </div>
+
+          {/* The duplicate problem, SIZED before anyone designs a resolver for it. */}
+          <div style={{ padding: '10px 12px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 9, marginBottom: 12 }}>
+            <p style={{ fontSize: '0.8125rem', color: DARK, fontWeight: 700, margin: '0 0 6px' }}>Records sharing a contact detail</p>
+            <p style={{ fontSize: '0.8125rem', color: GRAY, margin: 0, lineHeight: 1.6 }}>
+              <strong style={{ color: DARK }}>Email:</strong> {custBreak.byEmail.recordsInvolved.toLocaleString()} record
+              {custBreak.byEmail.recordsInvolved === 1 ? '' : 's'} across {custBreak.byEmail.sharedValues.toLocaleString()} shared
+              address{custBreak.byEmail.sharedValues === 1 ? '' : 'es'} · largest group {custBreak.byEmail.largestCluster}
+              <br />
+              <strong style={{ color: DARK }}>Phone:</strong> {custBreak.byPhone.recordsInvolved.toLocaleString()} record
+              {custBreak.byPhone.recordsInvolved === 1 ? '' : 's'} across {custBreak.byPhone.sharedValues.toLocaleString()} shared
+              number{custBreak.byPhone.sharedValues === 1 ? '' : 's'} · largest group {custBreak.byPhone.largestCluster}
+            </p>
+            <p style={{ fontSize: '0.75rem', color: GRAY, margin: '8px 0 0', lineHeight: 1.5 }}>
+              Compared case-insensitively on email and on the last 10 digits of a phone. A shared
+              detail is not proof of a duplicate — a household or a company can legitimately share
+              one — it is the size of the pile somebody would have to look through.
+            </p>
+          </div>
+
+          {b?.preview && b.preview.length > 0 && (
+            <>
+              <p style={{ fontSize: '0.8125rem', color: DARK, fontWeight: 700, margin: '0 0 4px' }}>
+                What a record looks like
+              </p>
+              <p style={{ fontSize: '0.75rem', color: GRAY, margin: '0 0 6px' }}>
+                The first {b.preview.length} of {custBreak.total.toLocaleString()}. The full list is in
+                the downloaded file and is deliberately not shown here.
+              </p>
+              <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 9 }}>
+                <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.8125rem' }}>
+                  <thead>
+                    <tr style={{ background: '#f9fafb' }}>
+                      {['Id', 'Display name', 'Email', 'Phone', 'Address'].map(h => <th key={h} style={head}>{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {b.preview.map(c => (
+                      <tr key={c.id} style={{ borderTop: '1px solid #f3f4f6' }}>
+                        <td style={{ ...cell, fontFamily: 'monospace' }}>{c.id}</td>
+                        <td style={cell}>{c.displayName}</td>
+                        <td style={{ ...cell, color: c.email ? DARK : '#9ca3af' }}>{c.email ?? 'Not set'}</td>
+                        <td style={{ ...cell, color: c.phone ? DARK : '#9ca3af' }}>{c.phone ?? 'Not set'}</td>
+                        <td style={{ ...cell, color: c.address ? DARK : '#9ca3af' }}>{c.address ?? 'Not set'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {custBreak.total === 0 && (
+            <p style={{ fontSize: '0.8125rem', color: GRAY, marginTop: 12 }}>
+              The read succeeded and this QuickBooks company has no customers on it.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

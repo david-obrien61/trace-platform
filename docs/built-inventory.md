@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-08-29 (**#229 — 🔎 READ: the QuickBooks item list.** `GET /api/qbo/items` — one read-only `select * from Item` against the live company, gated on `settings:read`, **storing nothing**; the raw body saves itself to a file outside the repo before a parsed Id/Name/Type/Income-account/Active table renders. 🔴 Built because the push carries **twelve hardcoded `ItemRef {value:'1'}` literals** and had never pushed to LAWNS — the next checkout would book every tree as "Services". ⚠️ It also CORRECTED the #215 entry's *"no code path can read a QB item list"* and a story premise false for six weeks. **The mapping is the next pass.**) ⚡ **ALSO 2026-08-29 — #228 RECONCILED ON DAVID'S REPORT:** R-22 Stage 1's migration is **APPLIED**, the OWNER floor **VERIFIED at 57 across all four OWNER-role members**, GATE 0b **CLOSED**. Its entry read *"MIGRATION WRITTEN, NOT APPLIED"* and now reads what is true. **The eight UI cards stay OWED** — a verified floor is an array agreeing with a manifest, not a member reaching a surface.
+# Last updated: 2026-08-29 (**#230 — 🔎 READ, COMPLETE: the item list PAGINATES and the CUSTOMER list joins it.** #229's own flag fired — one page returned `maxResults: 100` with ids past 1127, **truncated and silent about it**. Both reads now **count first** and **REFUSE a shortfall**; `GET /api/qbo/customers` rides the same router and gate, **zero new Vercel functions**. 🔴 The customer read is ~1,900 real people and is **summarised, never listed** — counts, coverage, duplicate sizing, five example rows, nothing personal in a log. **R-24 filed. Read-only; the mapping is still the next pass.**)
 
 
 > 📐 **CAMPAIGN LIFECYCLE — SCOPING + ESTIMATE (2026-08-23, ledger #192/#192b).** NOT a capability entry: **nothing was built.** A scoping document answering David's *"I can add but not edit or cancel or delete"* with nine questions, ten site keys, a proven F1/F2/F3 dependency order, three scopes (**MINIMUM ~2–3 · COHERENT ~5–7 · COMPLETE ~11–14 Thunder prompts; MINIMUM and COHERENT need ZERO migrations**) and eight rulings owed. Read it before ANY campaign build — it is the answer to "has this been scoped?" and its first finding is that the EDIT FORM ALREADY EXISTS as the create form (`Campaigns.tsx:120-198`). → [`docs/audits/campaign-lifecycle-scoping-2026-08-23.md`](audits/campaign-lifecycle-scoping-2026-08-23.md) · predecessor [`social-campaign-path-recon-2026-08-22.md`](audits/social-campaign-path-recon-2026-08-22.md)
@@ -995,8 +995,10 @@ caller from the **Bearer token, never the body**. Not owner-only: David passes a
 member holding `settings:read` passes too.
 
 **⚠️ DELIBERATELY NOT BUILT, so absence is not read as coverage:**
-- **Pagination** — one page. `STARTPOSITION` is absent rather than half-written, so **a truncated
-  list would not announce itself.**
+- ~~**Pagination**~~ ✅ **SUPERSEDED 2026-08-29 (#230) — AND THE FLAG WAS RIGHT.** The one page came
+  back `maxResults: 100, startPosition: 1` with ids past 1127: truncated, silent, caught only
+  because David read the ids. Both reads now count first and refuse a shortfall — see the #230
+  entry below.
 - **Storage** — persisting a customer's chart of items is its own ruling and has not been made.
 - **The mapping** — the twelve literals are untouched; that is the next pass.
 
@@ -2074,3 +2076,72 @@ Entries where the correct Vertical or Type tag is ambiguous. Best guess noted.
 **STATUS.** `HISTORY_ORDER_STATUS` (a constant) is replaced by `historyOrderStatus(deliveryStatus)`: complete → `fulfilled`, otherwise → `confirmed`. The capture path threads the delivery's status. ⚠️ `confirmed` HOLDS a commitment in the D-52 derivation — safe only because `business_inventory_id` is NULL on every history line, an invariant now load-bearing ALONE.
 **KNOWN GAP.** Nothing can mark a delivery complete (`scheduled` is the only value in existence), so the `fulfilled` branch is unreachable today — tech-debt #121.
 **STATE.** BUILDER-COMPLETE, owner-proof owed → cards 8–10 (board 0 of 10).
+
+---
+
+### 4.1 · QUICKBOOKS READS — COMPLETE, PAGINATED, AND TWO ENTITIES (2026-08-29, ledger #230, R-24)
+
+**WHAT SHIPPED.** `GET /api/qbo/items` and **NEW `GET /api/qbo/customers`** — both read-only against
+Intuit, both gated on `settings:read`, both storing nothing, both riding the existing QBO router.
+**api/ stays at 12 of 12; no Vercel function was minted.**
+
+**🔴 WHY, AND THE FINDING IS THE #229 ENTRY'S OWN FLAG FIRING.** #229 shipped one page and flagged
+that a truncated list would not announce itself. It came back **`maxResults: 100, startPosition: 1`,
+exactly 100 rows, with ids running past 1127** — truncated, and the only reason anybody knew is that
+David read the ids. This is the confident-label-over-unread-data defect wearing a pagination costume,
+and the fix is not "ask for a bigger page": it is that a read now carries **the number it was
+supposed to reach** and refuses when it does not reach it.
+
+**THE SHAPE — one implementation, two entities (§6 r8).** `packages/shared/src/quickbooks/qboRead.ts`
+holds everything entity-agnostic: `qboCountQuery` · `qboPageQuery` (STARTPOSITION 1-based, MAXRESULTS
+clamped to 1000) · `parseCount` · `parseRows` · `pageIsLast` · **`completeness`** ·
+`rawCaptureFileName` · `classifyFailure`. `itemList.ts` and `customerList.ts` hold only the
+per-entity field interpretation. `router.ts` walks once for both (`readAllPages`).
+
+**🔴 COMPLETENESS IS A REFUSAL, NOT A NOTE (R-24a).** `select count(*)` runs BEFORE the loop.
+Retrieved ≠ expected returns `ok:false` / `INCOMPLETE` naming both numbers and the gap — in **both**
+directions, because an overshoot means rows moved under the walk. **An UNREADABLE count is also
+not-complete** (`parseCount` returns `null`, never `0` — a `0` would make every later check pass
+trivially). The green agreeing line is shown on every successful read too: *a completeness claim
+nobody can see is a completeness claim nobody checks.*
+
+**🔴 THE CUSTOMER READ IS NOT THE ITEM READ, AND THE DIFFERENCE IS STRUCTURAL (R-24b/c).** An item is
+a product; a customer is one of ~1,900 real people with an address, a phone and an email, belonging
+to a customer's customers. So:
+- **The endpoint does not send the parsed records at all** — only `breakdown` (counts) and a
+  five-row `preview`. The complete data reaches the browser exactly once, as the verbatim page
+  bodies inside `capture`, which are written straight to a file.
+- **The preview cap is enforced inside `previewCustomers`, not at the call site.** A limit that lives
+  in the caller is a limit one future caller forgets, and the failure mode is 1,900 people on a
+  screen. A caller can narrow it and cannot widen it.
+- **Nothing personal is logged.** `[TRACE:QBO]` carries counts, page numbers, status and realm —
+  never a name, an email, a phone, an address or a body.
+- The screen carries an **amber warning** naming what the downloaded file holds.
+
+**WHAT THE SUMMARIES ANSWER.** Items: does **Id `1`** exist (the twelve literals assert it twelve
+times, and this is the first check against a *complete* list), Category-vs-sellable, inactive count,
+and the full split **by income account** — the split the mapping pass needs. Customers: coverage
+(email / phone / address / company name / none-of-the-three / inactive) and **duplicate sizing** —
+how many *records* share how many *values*, and the largest cluster, for email (case-insensitive) and
+phone (last 10 digits, ≥7 required so extensions do not fake a match).
+
+**CAPTURE FILES.** `qbo-items-<realm>-<ts>.json` and `qbo-customers-<realm>-<ts>.json` — the entity is
+in the name because *a person who finds one must be able to tell which they are holding*. Each is an
+envelope: `expected_total`, `retrieved_total`, and one entry per page carrying Intuit's **verbatim**
+body. Written before anything renders, on failure too.
+
+**PROOF.** `qboRead.test.ts` (63 probes) · `customerList.test.ts` (41) · `itemList.test.ts` (33).
+**7 mutants MEASURED, all caught — 6 · 2 · 2 · 1 · 1 · 3 · 1**, including M1 (the #229 defect itself:
+a query with neither STARTPOSITION nor MAXRESULTS) and M7 (a full page ending the loop).
+
+**⚠️ DELIBERATELY NOT BUILT, so absence is not read as coverage:**
+- **Storage** — still nothing persisted. Whether TRACE may hold a customer's chart of items *or their
+  customer list* is its own ruling and has not been made. The customer half raises that question
+  considerably higher than the item half did.
+- **The mapping** — the twelve literals are untouched. This read unblocks that pass; it is not it.
+- **A cap on "no personal field in a console.log"** — held by review and owner-test CARD 10, not by a
+  check.
+
+**STATE.** BUILDER-COMPLETE, owner-proof owed → CARDS 5·6 (re-worded, flipped `owed`) + 9·10·11 (new)
+on `quickbooks-invoice-full-surface-test.md`, board **0 of 11**.
+

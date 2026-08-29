@@ -162,26 +162,36 @@ two disagree, the app is wrong and that is worth knowing.
 STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
-COVERS: ledger #229 · the CARD 4 / tech-debt #106 unblock · Stage 0 G1+G2+G5
-SIGNAL: `[TRACE:QBO] items — read OK { http_status: 200, parsed_ok: true, item_count: N }` — secondary; every PASS below is readable without a console.
+COVERS: ledger #229 · #230 · the CARD 4 / tech-debt #106 unblock · Stage 0 G1+G2+G5
+SIGNAL: `[TRACE:QBO] items — read COMPLETE { expected: N, retrieved: N, has_item_id_1: … }` — secondary; every PASS below is readable without a console.
+
+⚠️ **THIS CARD'S SURFACE MOVED IN #230 AND THE CARD IS RE-WORDED TO MATCH.** The section is now
+headed **Read from QuickBooks** and holds TWO buttons; the read paginates and states its own
+completeness. A card describing the old one-page surface would have asserted a proof nobody
+performed.
 
 **As the OWNER (or a member holding `settings:read`)**, go to **Settings → Accounting**. Under the
-green "QuickBooks connected" row there is a section headed **QuickBooks item list**. Press
+green "QuickBooks connected" row there is a section headed **Read from QuickBooks**. Press
 **Read item list**.
 
-🔴 **THIS IS READ-ONLY AGAINST INTUIT AND IT IS SAFE TO PRESS ON THE LIVE COMPANY.** It sends one
-`select * from Item` query. It writes nothing to QuickBooks, creates no invoice, consumes no invoice
-number, and stores nothing on our side.
+🔴 **THIS IS READ-ONLY AGAINST INTUIT AND IT IS SAFE TO PRESS ON THE LIVE COMPANY.** It sends a
+`select count(*) from Item` and then `select * from Item` pages. It writes nothing to QuickBooks,
+creates no invoice, consumes no invoice number, and stores nothing on our side.
 
-- **PASS — all four:**
-  1. a table appears with columns **Id · Name · Type · Income account · Active**;
-  2. the rows are **LAWNS's real products and services** — names you recognise from their books;
-  3. 🔴 **you can answer CARD 4 from it:** is there an item a **tree** should map to, and what is its
-     **income account**? Write down the **id + exact name**;
-  4. 🔴 **and check the claim the push has been making all along: is id `1` really named `Services`
-     in their company?** The twelve hardcoded literals assert it. This is the first time anything
-     has checked.
-- **FAIL:** an error box (→ CARD 7), or a table whose names are not LAWNS's.
+- **PASS — all five:**
+  1. 🔴 **a GREEN completeness line appears above the table** reading *"Complete — QuickBooks reports
+     N and N were retrieved across P page(s)"* — **the two numbers must be EQUAL.** If it is a red
+     box saying INCOMPLETE, that is a FAIL and it is the whole point of this build (→ CARD 9);
+  2. 🔴 **an answer box states whether item Id 1 exists**, and if it does, its name and income
+     account. This is the first time the claim the push makes twelve times has been checked;
+  3. a **stat row** reads items / sellable / categories / inactive, and a **By income account**
+     table lists every account with its count;
+  4. the full table appears with columns **Id · Name · Type · Income account · Active**, and the rows
+     are **LAWNS's real products and services**;
+  5. 🔴 **you can answer CARD 4 from it:** is there an item a **tree** should map to, and what is its
+     **income account**? Write down the **id + exact name**.
+- **FAIL:** an error box (→ CARD 7), a red INCOMPLETE box (→ CARD 9), or a table whose names are not
+  LAWNS's.
 
 ⚠️ **Change nothing in QuickBooks as a result of this card.** Reading is this pass's whole scope;
 the mapping is the next build.
@@ -192,8 +202,12 @@ the mapping is the next build.
 STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
-COVERS: ledger #229 · the no-re-query rule · the "no live customer data where a commit can sweep it up" rule
+COVERS: ledger #229 · #230 · the no-re-query rule · the "no live customer data where a commit can sweep it up" rule
 SIGNAL: —
+
+⚠️ **RE-WORDED IN #230:** the file now holds an ENVELOPE — every page's verbatim body plus the
+expected/retrieved totals — rather than one body, and the customer read writes its own file under a
+`qbo-customers-…` name. Same rule, more pages.
 
 **On the same press as CARD 5**, before reading the table at all, look for the green line under the
 button:
@@ -277,12 +291,96 @@ different `business_id` gets you nothing, and that is worth trying once if you w
   attribution entirely. Out of scope this pass; no card written.
 - **The tier-discount line** — prints a percentage and no type, because the tier NAME is never
   persisted on the order (tech-debt #107).
-- **PAGINATION of the item list** — CARDS 5–8 read ONE page. A company with more items than one page
-  returns a partial list and **nothing on screen says so**. Deliberately not built this pass
-  (`STARTPOSITION` is absent rather than half-written); if LAWNS's list looks truncated, say so
-  rather than assuming it is complete.
+- ~~**PAGINATION of the item list**~~ ✅ **BUILT 2026-08-29 (#230) — and the flag that predicted it
+  FIRED.** The one-page read came back `maxResults: 100, startPosition: 1` with ids past 1127. The
+  read now counts first, pages at MAXRESULTS 1000, and REFUSES a shortfall. → CARDS 5 and 9.
 - **STORING the item list** — nothing is persisted, by decision. Whether TRACE should hold a
   customer's chart of items is its own ruling and has not been made (`user_stories.md` — *QuickBooks
   read-back*).
 - **THE MAPPING ITSELF** — reading the ids does not change the twelve literals. CARD 4 stays
   `needs-test` until that build lands.
+
+---
+
+### CARD 9 — 🔴 THE LIST PROVES IT IS THE WHOLE LIST, OR IT REFUSES
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #230 · R-24 clause (a) · the #229 truncation
+SIGNAL: `[TRACE:QBO] count OK { expected: N }` then `[TRACE:QBO] page OK { page, rows_in_page, retrieved, expected }` per page — secondary.
+
+🔴 **THIS IS THE CARD THE WHOLE BUILD EXISTS FOR.** #229's read returned exactly 100 rows carrying
+ids past 1127 — a truncated list rendered as a complete one — and the ONLY reason anybody knew is
+that you read the ids. Completeness is now a claim the screen makes out loud on every read.
+
+**On the same press as CARD 5, and again on CARD 10's customer read**, read the line above the
+results.
+
+- **PASS:** a **green** line, *"Complete — QuickBooks reports N and N were retrieved across P
+  page(s)"*, with **the two numbers equal**. For items, N should be well above 100 — if it reads
+  exactly 100, the pagination did not take.
+- **PASS (the other direction, and it is still a pass for this card):** a **red** box reading
+  *"INCOMPLETE — QuickBooks reports N but M were retrieved"*. That is the guard WORKING. Report the
+  two numbers; do not treat the partial list as the list.
+- **FAIL:** results with **no completeness line at all**, or a green line whose two numbers differ.
+  Either means the claim is decorative.
+
+⚠️ **A third state exists and it is honest:** *"QuickBooks did not give a readable total, so this
+list of N CANNOT be proven complete."* That is not the data being wrong — it is the count query
+having failed. Report it; do not use the list as complete.
+
+---
+
+### CARD 10 — 🔴 THE CUSTOMER LIST COMES BACK AS A SUMMARY, AND ~1,900 PEOPLE ARE NOT ON THE SCREEN
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #230 · R-24 clauses (b) and (c) · R-23 clauses (a)(b)(c)
+SIGNAL: `[TRACE:QBO] customers — read COMPLETE { expected, retrieved, with_email, with_phone, … }` — 🔴 **counts only. If you see a NAME, an EMAIL, a PHONE or an ADDRESS in a trace line, that is a FAIL and it is the serious kind.**
+
+**As the OWNER**, in the same **Read from QuickBooks** section, press **Read customer list**.
+
+🔴 **READ-ONLY, AND IT STORES NOTHING** — same rule as the item read, against a file of real people.
+
+- **PASS — all six:**
+  1. the green **completeness** line (→ CARD 9), roughly **1,900** and equal both sides;
+  2. a **stat row**: customers · with email · with phone · with address · with company name · no
+     email/phone/address · inactive — each with a percentage;
+  3. a **Records sharing a contact detail** block giving, for email and for phone, how many
+     **records** sit on how many **shared values**, and the **largest group**. 🔴 **This is the
+     duplicate problem sized before anyone designs a resolver for it** — write the numbers down;
+  4. 🔴 **a "What a record looks like" table of exactly FIVE rows**, captioned *"The first 5 of
+     1,9xx"*;
+  5. 🔴 **NOWHERE ON THE SCREEN IS THERE A LIST OF ALL THE CUSTOMERS.** Scroll the whole card. If you
+     can find a sixth customer row, that is a **FAIL**;
+  6. an **amber warning** under the saved-file line stating the file holds names, addresses, phones
+     and email.
+- **FAIL:** more than five customer rows rendered; a missing completeness line; or any customer
+  detail in the console.
+
+---
+
+### CARD 11 — 🔴 THE CUSTOMER FILE IS ON DISK, AND IT IS NOT IN THE REPOSITORY
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #230 · R-23 clause (c) · R-24 clause (c)
+SIGNAL: —
+
+**On the same press as CARD 10.**
+
+- **PASS — all four:**
+  1. a green line names the saved file: **`qbo-customers-9341455222430707-<timestamp>.json`** —
+     note the **`customers`**, distinct from the item file's `items`;
+  2. the file is in your **downloads folder** (`~/Downloads` unless you have changed the browser's
+     default). Open it: it holds an envelope with `expected_total`, `retrieved_total`, and one entry
+     per page carrying Intuit's **verbatim** body;
+  3. 🔴 **run `git status --short` in `~/Desktop/trace-platform`. The file MUST NOT appear.** A
+     serverless function cannot write to your disk, so this check is the part that could not be made
+     structural;
+  4. the amber warning from CARD 10 point 6 is present.
+- **FAIL:** no file saved (a red line says so — re-run rather than assuming); the file inside the
+  repo; or a file named `qbo-items-…` for a customer read.
+
+🔴 **AFTERWARDS: that file is ~1,900 real people belonging to LAWNS.** Keep it out of the repo, off
+shared drives, and delete it when the mapping pass is done with it.

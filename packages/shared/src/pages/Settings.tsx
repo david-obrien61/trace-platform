@@ -16,7 +16,7 @@ import { errBorder, FieldError } from '../components/FieldError';
 import { serviceWriteFailure } from './serviceWriteFailure';
 // The QuickBooks item-list read (read-only against Intuit, stores nothing). Mounted inside the
 // Accounting card once a connection exists — it has nothing to read before then.
-import { QboItemListReader } from '../components/QboItemListReader';
+import { QboBooksReader } from '../components/QboBooksReader';
 
 const GREEN = '#27500A';
 const SAGE  = '#EAF3DE';
@@ -711,7 +711,7 @@ export function Settings({
                 </a>
               )}
               </div>
-              <QboItemListReader businessId={businessId} />
+              <QboBooksReader businessId={businessId} />
             </div>
           ) : (
             <div>
