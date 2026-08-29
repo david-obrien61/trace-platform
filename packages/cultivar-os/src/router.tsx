@@ -21,7 +21,7 @@ import { Orders }            from './pages/Orders';
 import { OrderDetail }       from './pages/OrderDetail';
 import { OnboardingWizard } from './pages/OnboardingWizard';
 import { DeliveryRoute }    from './pages/DeliveryRoute';
-import { DeliverySchedule } from './pages/DeliverySchedule';
+import { OperationsCalendar } from './pages/OperationsCalendar';
 import { Settings }          from './pages/Settings';
 import { Campaigns }         from './pages/Campaigns';
 import { CampaignDetail }    from './pages/CampaignDetail';
@@ -147,7 +147,11 @@ export function AppRouter() {
               than declared-unwired: route + tile are real enforcement layers under STD-020. Its
               sibling `deliveries.route:update` stays declared-unwired — nothing persists a route. */}
           <Route element={<PermissionRoute permission="deliveries:read" />}>
-            <Route path="/delivery-schedule" element={<DeliverySchedule />} />
+            {/* REPLACED 2026-08-28 — the four-week operations calendar IS this route now, and the
+                day-grouped list it used to render is its drill-in for a selected day. One route,
+                one tile, one delivery list (David's ONE DELIVERY LIST ruling); the permission
+                gate is unchanged, so nobody gains or loses access in the swap. */}
+            <Route path="/delivery-schedule" element={<OperationsCalendar />} />
           </Route>
           <Route element={<PermissionRoute permission="deliveries.route:read" />}>
             <Route path="/deliveries"        element={<DeliveryRoute />} />

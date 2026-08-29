@@ -34,6 +34,7 @@ import { CUSTOMER_SELECT_FULL, CUSTOMER_SELECT_CORE } from '../components/custom
 import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME } from '@trace/shared/business-logic';
 import { CaptureInvoiceLauncher } from '../components/CaptureInvoiceLauncher';
 import { NotPermitted, WithheldData, requirementText } from '@trace/shared/components/SurfaceState';
+import { parseYmd } from '../lib/operationsCalendar';
 
 const TRACE_DELIVERY = true; // [TRACE:DELIVERY] STD-003 — ON until David owner-proves
 
@@ -70,18 +71,26 @@ function fullAddress(d: DeliveryRow): string {
   return [d.address_line1, d.city, d.state, d.zip].filter(Boolean).join(', ');
 }
 
-// delivery_date comes back as 'YYYY-MM-DD' (a DATE column). Parse as LOCAL midnight so
-// the day label never slips a day across the timezone boundary.
+// delivery_date comes back as 'YYYY-MM-DD' (a DATE column). Parsed as LOCAL midnight so the
+// day label never slips a day across the timezone boundary. The parse itself is now the ONE
+// shared `parseYmd` (§6 r8 — the same operation was inline here and needed again by the
+// calendar; a second copy is the one that drifts).
 function formatDay(dateStr: string | null): string {
   if (!dateStr) return 'No date set';
-  const [y, m, d] = dateStr.split('-').map(Number);
-  if (!y || !m || !d) return dateStr;
-  return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+  const d = parseYmd(dateStr);
+  if (!d) return dateStr;
+  return d.toLocaleDateString('en-US', {
     weekday: 'long', month: 'short', day: 'numeric', year: 'numeric',
   });
 }
 
-export function DeliverySchedule() {
+/**
+ * `filterDate` — when the operations calendar has a day selected, this list shows THAT DAY
+ * only. It is the same list, filtered; it is NOT a second delivery list (David's ONE
+ * DELIVERY LIST ruling). Undefined/null = every scheduled day, which is what this route
+ * rendered before the calendar was put above it.
+ */
+export function DeliverySchedule({ filterDate }: { filterDate?: string | null } = {}) {
   const navigate = useNavigate();
   const { businessId, can } = useBusinessContext();
 
@@ -178,7 +187,11 @@ export function DeliverySchedule() {
 
   // Group by delivery_date, soonest day forward (undated grouped last).
   const groups: { date: string | null; items: DeliveryRow[] }[] = [];
-  for (const r of rows) {
+  // The filter is applied to the SOURCE of the grouping, so the count in the header below
+  // counts what is actually on screen. A header counting rows the list does not show is the
+  // §6 r18 lie in its plainest form.
+  const visible = filterDate ? rows.filter(r => r.delivery_date === filterDate) : rows;
+  for (const r of visible) {
     const key = r.delivery_date;
     let g = groups.find(x => x.date === key);
     if (!g) { g = { date: key, items: [] }; groups.push(g); }
@@ -192,12 +205,17 @@ export function DeliverySchedule() {
   });
 
   return (
-    <div style={{ minHeight: '100vh', background: SAGE, paddingBottom: 40 }}>
+    <div style={{ minHeight: filterDate ? 0 : '100vh', background: SAGE, paddingBottom: 40 }}>
       <div style={{ background: GREEN, padding: '20px 16px', color: '#fff', display: 'flex', alignItems: 'center', gap: 12 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>Scheduled Deliveries</h1>
+          <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>
+            {filterDate ? formatDay(filterDate) : 'Scheduled Deliveries'}
+          </h1>
           <p style={{ margin: 0, fontSize: '0.75rem', color: '#a8c890' }}>
-            {loading ? 'Loading…' : `${rows.length} scheduled deliver${rows.length !== 1 ? 'ies' : 'y'}`}
+            {loading ? 'Loading…'
+              : filterDate
+                ? `${visible.length} stop${visible.length !== 1 ? 's' : ''} on this day · ${rows.length} scheduled in total`
+                : `${rows.length} scheduled deliver${rows.length !== 1 ? 'ies' : 'y'}`}
           </p>
         </div>
         {/* Second door into the invoice OCR→infer→route flow (owner action, matches "Edit customer" gating). */}
@@ -212,7 +230,20 @@ export function DeliverySchedule() {
         {loading && <p style={{ textAlign: 'center', color: GRAY, paddingTop: 40 }}>Loading…</p>}
         {error  && <p style={{ textAlign: 'center', color: '#A32D2D', paddingTop: 40 }}>{error}</p>}
 
-        {!loading && !error && rows.length === 0 && (
+        {/* A SELECTED DAY WITH NOTHING ON IT IS A DIFFERENT FACT from a business with nothing
+            scheduled anywhere, and it must not borrow the other's words (the "Unknown plant"
+            lesson, #224). The "Snap an invoice" prompt belongs only to the second. */}
+        {!loading && !error && filterDate && visible.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: GRAY }}>
+            <Truck size={32} color="#d1d5db" style={{ marginBottom: 10 }} />
+            <p style={{ margin: 0, fontWeight: 600 }}>Nothing scheduled on this day</p>
+            <p style={{ margin: '4px 0 0', fontSize: '0.8125rem' }}>
+              {rows.length} deliver{rows.length !== 1 ? 'ies are' : 'y is'} scheduled on other days.
+            </p>
+          </div>
+        )}
+
+        {!loading && !error && !filterDate && rows.length === 0 && (
           <div style={{ textAlign: 'center', paddingTop: 60, color: GRAY }}>
             <Truck size={40} color="#d1d5db" style={{ marginBottom: 12 }} />
             <p style={{ margin: 0, fontWeight: 600 }}>No scheduled deliveries</p>
