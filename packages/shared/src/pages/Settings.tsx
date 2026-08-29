@@ -14,6 +14,9 @@ import { errBorder, FieldError } from '../components/FieldError';
 // A8/R-12 — the ONE place that decides whether a service write failed and what the owner is
 // told. All four write sites below route through it, so they cannot drift apart in wording.
 import { serviceWriteFailure } from './serviceWriteFailure';
+// The QuickBooks item-list read (read-only against Intuit, stores nothing). Mounted inside the
+// Accounting card once a connection exists — it has nothing to read before then.
+import { QboItemListReader } from '../components/QboItemListReader';
 
 const GREEN = '#27500A';
 const SAGE  = '#EAF3DE';
@@ -681,7 +684,8 @@ export function Settings({
         {(section === 'accounting' || (full && !accountingHasOwnDestination)) && (
         <SectionCard title="Accounting">
           {accountingConnected ? (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ width: 24, height: 24, borderRadius: '50%', background: GREEN, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.75rem', flexShrink: 0 }}>✓</span>
                 <div>
@@ -706,6 +710,8 @@ export function Settings({
                   Reconnect
                 </a>
               )}
+              </div>
+              <QboItemListReader businessId={businessId} />
             </div>
           ) : (
             <div>

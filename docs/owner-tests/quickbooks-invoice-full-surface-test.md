@@ -54,8 +54,12 @@ David's live run flips it, with a date. **Changing a surface flips its card back
       App: `________` Intended: `________` — **they must MATCH.**
 - [ ] **② The Vercel deploy for THAT SHA reads READY** — not a different push's Ready. A failed
       build is SILENT; Vercel keeps serving last-good, and **Vercel deploys the TREE, not the COMMIT.**
-- [ ] **③ The new-code signal:** this build's signal is the ABSENCE of `(reason: …)` on an adjusted
-      line. **If you still see a reason in parentheses, you are on old code — STOP.**
+- [ ] **③ The new-code signal — WHICHEVER BUILD YOU ARE PROVING:**
+      · **CARDS 1–4 (the #215 invoice build):** the signal is the ABSENCE of `(reason: …)` on an
+        adjusted line. **If you still see a reason in parentheses, you are on old code — STOP.**
+      · **CARDS 5–8 (the #229 item read):** the signal is that **Settings → Accounting shows a
+        "QuickBooks item list" section with a `Read item list` button.** **If that section is not
+        there, you are on old code — STOP**, and do not read a missing button as a failed read.
 
 ---
 
@@ -139,17 +143,129 @@ no column, no lookup, and **no code path that can read your QuickBooks item list
 second id would push an invoice QuickBooks rejects, and **a push that fails is worse than a push
 that mis-categorizes.**
 
-**WHAT UNBLOCKS IT — DAVID, IN QUICKBOOKS, and it is a read not a build:**
-1. In QuickBooks: **Sales → Products and services.**
-2. Find (or create, your call) an item for **plants/nursery stock** — the *Product* kind, not *Service*.
-3. Open it and read its **id** — it is the number in the browser URL when the item is open
-   (`…/app/service?id=NN` or similar). **That number is the missing input.**
-4. Hand back **the id and the exact item name.** Then FIX 2 is a one-seam change.
+**WHAT UNBLOCKS IT — and as of 2026-08-29 THERE IS AN IN-APP PATH, so this no longer needs a
+manual hunt through the QuickBooks UI.** ➡️ **See CARDS 5–8 below: `Settings → Accounting → Read
+item list`** returns every item with its **Id, Name, Type and INCOME ACCOUNT**, which is more than
+the browser-URL method gives — the income account is the field that actually decides the
+Nursery-Stock-vs-Services split. Read it, then hand back **the id and the exact item name** for the
+item a tree should map to. Then FIX 2 is a one-seam change.
+
+**The manual route still works and is a fine cross-check:** QuickBooks → **Sales → Products and
+services** → open the plants/nursery-stock item → the id is the number in the browser URL. If the
+two disagree, the app is wrong and that is worth knowing.
 
 ⚠️ **Do not change item `1` itself.** Everything already invoiced points at it.
 
 ---
 
+### CARD 5 — 🔴 THE ITEM LIST COMES BACK, AND IT ANSWERS THE CARD-4 QUESTION
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #229 · the CARD 4 / tech-debt #106 unblock · Stage 0 G1+G2+G5
+SIGNAL: `[TRACE:QBO] items — read OK { http_status: 200, parsed_ok: true, item_count: N }` — secondary; every PASS below is readable without a console.
+
+**As the OWNER (or a member holding `settings:read`)**, go to **Settings → Accounting**. Under the
+green "QuickBooks connected" row there is a section headed **QuickBooks item list**. Press
+**Read item list**.
+
+🔴 **THIS IS READ-ONLY AGAINST INTUIT AND IT IS SAFE TO PRESS ON THE LIVE COMPANY.** It sends one
+`select * from Item` query. It writes nothing to QuickBooks, creates no invoice, consumes no invoice
+number, and stores nothing on our side.
+
+- **PASS — all four:**
+  1. a table appears with columns **Id · Name · Type · Income account · Active**;
+  2. the rows are **LAWNS's real products and services** — names you recognise from their books;
+  3. 🔴 **you can answer CARD 4 from it:** is there an item a **tree** should map to, and what is its
+     **income account**? Write down the **id + exact name**;
+  4. 🔴 **and check the claim the push has been making all along: is id `1` really named `Services`
+     in their company?** The twelve hardcoded literals assert it. This is the first time anything
+     has checked.
+- **FAIL:** an error box (→ CARD 7), or a table whose names are not LAWNS's.
+
+⚠️ **Change nothing in QuickBooks as a result of this card.** Reading is this pass's whole scope;
+the mapping is the next build.
+
+---
+
+### CARD 6 — 🔴 THE FULL RESPONSE LANDED IN A FILE, AND THE FILE IS OUTSIDE THE REPO
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #229 · the no-re-query rule · the "no live customer data where a commit can sweep it up" rule
+SIGNAL: —
+
+**On the same press as CARD 5**, before reading the table at all, look for the green line under the
+button:
+
+> ↓ Full response saved to your downloads folder as **`qbo-items-<realm>-<timestamp>.json`**
+
+- **PASS — all three:**
+  1. the line appears **and names a file**;
+  2. the file is **in your Downloads folder** — open it and confirm it is the full JSON QuickBooks
+     returned, not the trimmed table;
+  3. 🔴 **it is NOT anywhere inside `~/Desktop/trace-platform`.** Confirm with
+     `git status --short` in the repo — **the capture must not appear.**
+- **FAIL:** no line at all, or the red *"could not be saved to a file"* warning, or the file lands
+  inside the repo.
+
+🔴 **WHY THIS CARD IS NOT A NICETY.** Re-reading a customer's books must never mean re-querying a
+customer's books, so the response is written to disk **before** anything renders. And it goes to
+your downloads folder specifically because that is **outside version control** — the same class of
+hazard as the `service_role` JWT that sat in a settings file: the fix is not to redact it, it is to
+keep it where git cannot reach it.
+
+---
+
+### CARD 7 — 🔴 A FAILED READ NAMES ITS OWN CAUSE — 401 AND 403 ARE DIFFERENT PROBLEMS
+STATUS: needs-test
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: Stage 0 G2 (scope) · Stage 0 G3 (token refresh) · ledger #229
+SIGNAL: `[TRACE:QBO] items — Intuit refused the read { http_status, points_at }`
+
+**`needs-test` WITH ITS REASON, and the reason is the honest one: this cannot be provoked on
+demand without either breaking the live connection or waiting for it to lapse.** Recording the
+hole beats leaving it unrecorded (OP-14 clause 2).
+
+**IF a read ever fails, this is what to check** — and the message is built to tell you which
+problem you have rather than making you guess:
+
+- **401 →** *"the access token is expired or was revoked — this is the token-refresh path (G3), not
+  a permissions problem."* **Reconnect QuickBooks from this same card.**
+- **403 →** *"the granted scope does not permit it (G2)."* That would mean the recon's reading of
+  `com.intuit.quickbooks.accounting` was wrong, and it is a **different** fix entirely.
+- **anything else →** the message quotes the status and points at the capture file.
+
+🔴 **THE CAPTURE FILE IS STILL WRITTEN ON FAILURE** — with Intuit's verbatim error body, which is
+the artifact worth keeping. **Check for it before pressing the button a second time**, because a
+retry against a customer's books is a thing to do deliberately, not reflexively.
+
+---
+
+### CARD 8 — 🔴 SOMEONE WITHOUT `settings:read` CANNOT READ THE COMPANY'S BOOKS
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: MB_D-015 · Stage 0 G6 · ledger #229
+SIGNAL: `[TRACE:QBO] items REFUSED — caller lacks settings:read/owner { businessId }`
+
+🔴 **THE GATE IS THE ONLY THING PROTECTING THIS.** The endpoint reads under the **service key**,
+which bypasses RLS entirely — so `bas_owner_all` never runs on this path and no policy is standing
+behind the check. It is worth one real test.
+
+**Sign in as a STAFF member** (or any member without `settings:read`) on the same tenant and try to
+reach **Settings → Accounting**.
+
+- **PASS:** you never reach the card at all — `/settings` is already gated — **and** if the endpoint
+  is called directly, it returns **403 `Not authorized to read QuickBooks items for this business`**.
+- **FAIL:** a staff session can see the item list, or a 403 does not appear when the endpoint is
+  called with a staff token.
+
+⚠️ **The authority is resolved from the BEARER TOKEN, never the request body** — so naming a
+different `business_id` gets you nothing, and that is worth trying once if you want to prove it.
+
+---
 ## WHAT THIS BOARD DOES NOT COVER (said out loud, so absence is not read as coverage)
 
 - **The tax line** — pushed as a computed `Sales Tax (x%)` line on the same `Services` item, because
@@ -161,3 +277,12 @@ that mis-categorizes.**
   attribution entirely. Out of scope this pass; no card written.
 - **The tier-discount line** — prints a percentage and no type, because the tier NAME is never
   persisted on the order (tech-debt #107).
+- **PAGINATION of the item list** — CARDS 5–8 read ONE page. A company with more items than one page
+  returns a partial list and **nothing on screen says so**. Deliberately not built this pass
+  (`STARTPOSITION` is absent rather than half-written); if LAWNS's list looks truncated, say so
+  rather than assuming it is complete.
+- **STORING the item list** — nothing is persisted, by decision. Whether TRACE should hold a
+  customer's chart of items is its own ruling and has not been made (`user_stories.md` — *QuickBooks
+  read-back*).
+- **THE MAPPING ITSELF** — reading the ids does not change the twelve literals. CARD 4 stays
+  `needs-test` until that build lands.

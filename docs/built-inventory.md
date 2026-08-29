@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-08-28 (**#228 — 🔨 BUILD: the OWNER role can reach what the OWNER role holds (Pass 2, Stage 1 — ACCESS).** Five member policies (`service_offerings` INSERT/UPDATE · `invitations` SELECT/UPDATE · `business_members` SELECT), the `create_invitation` funnel RPC, and the OWNER floor re-materialised **54 → 57** through `save_role_permissions('reset')`. 🔴 The finding above the build: a manifest flip ALONE changes nothing, because `has_permission()` reads a STORED array while the client COMPUTES from the manifest — two materialisations of one authority, moved by different means. The services hard delete is REMOVED rather than gated (R2 stands; it raised 23503 on any offering ever sold). **Migration WRITTEN, NOT APPLIED.** Stage 2 (AUTHORITY) is a separate commit.)
+# Last updated: 2026-08-29 (**#229 — 🔎 READ: the QuickBooks item list.** `GET /api/qbo/items` — one read-only `select * from Item` against the live company, gated on `settings:read`, **storing nothing**; the raw body saves itself to a file outside the repo before a parsed Id/Name/Type/Income-account/Active table renders. 🔴 Built because the push carries **twelve hardcoded `ItemRef {value:'1'}` literals** and had never pushed to LAWNS — the next checkout would book every tree as "Services". ⚠️ It also CORRECTED the #215 entry's *"no code path can read a QB item list"* and a story premise false for six weeks. **The mapping is the next pass.**)
 
 
 > 📐 **CAMPAIGN LIFECYCLE — SCOPING + ESTIMATE (2026-08-23, ledger #192/#192b).** NOT a capability entry: **nothing was built.** A scoping document answering David's *"I can add but not edit or cancel or delete"* with nine questions, ten site keys, a proven F1/F2/F3 dependency order, three scopes (**MINIMUM ~2–3 · COHERENT ~5–7 · COMPLETE ~11–14 Thunder prompts; MINIMUM and COHERENT need ZERO migrations**) and eight rulings owed. Read it before ANY campaign build — it is the answer to "has this been scoped?" and its first finding is that the EDIT FORM ALREADY EXISTS as the create form (`Campaigns.tsx:120-198`). → [`docs/audits/campaign-lifecycle-scoping-2026-08-23.md`](audits/campaign-lifecycle-scoping-2026-08-23.md) · predecessor [`social-campaign-path-recon-2026-08-22.md`](audits/social-campaign-path-recon-2026-08-22.md)
@@ -929,10 +929,13 @@ order-detail screen, and in the `[TRACE:QBO]` emit (R-7 attribution is internal 
 **⚠️ WHAT IS DELIBERATELY UNCHANGED, so absence is not read as coverage:**
 - **The Confirmation receipt still shows the reason** — `OrderTotals.tsx:97`, a component shared with
   the internal order screen; **one component, two audiences.** Scoped out by David for this pass.
-- **Every line still books to hardcoded QB item `1` / "Services"** (#106) — **FIX 2 STOPPED AT ITS
-  GATE:** `'1'` is the only QuickBooks item id the platform holds anywhere (no config, no env var, no
-  column, no lookup) and there is **no code path that can read a QB item list.** Needs a product item
-  id from David. **A push that fails is worse than a push that mis-categorizes.**
+- **Every line still books to hardcoded QB item `1` / "Services"** (#106) — **FIX 2 IS STILL NOT
+  DONE, but its GATE MOVED on 2026-08-29.** `'1'` is still the only QuickBooks item id the platform
+  holds anywhere (no config, no env var, no column, no lookup, and the twelve literals are unchanged).
+  ⚠️ **CORRECTED IN PLACE:** this entry read *"there is no code path that can read a QB item list"* —
+  **as of ledger #229 there is one**: `GET /api/qbo/items` (see the entry below). So the missing input
+  is no longer unreachable; it is unread. **A push that fails is still worse than a push that
+  mis-categorizes**, and the mapping remains its own build.
 - The tax line, the deploy-window strip and the edit path (#105) — untouched.
 
 **Owner test:** `docs/owner-tests/quickbooks-invoice-full-surface-test.md` (**NEW** — this capability
@@ -940,6 +943,68 @@ had no standing test at all until now, which is why the invoice went out). **Not
 
 **Tech debt:** #104 (invoice half closed, receipt half open) · #105 · #106 (gate-blocked) · #107.
 **Recon:** `docs/decisions/2026-08-24-quickbooks-invoice-push-recon.md`.
+
+---
+
+## QBO Item List Read — the first read of a customer's chart of items — added 2026-08-29
+
+**What:** `GET /api/qbo/items` — **one read-only `select * from Item`** against the connected
+QuickBooks company, returned to the operator's screen. **Nothing is written to Intuit and nothing is
+stored on our side.**
+**Status:** 🟡 BUILDER-COMPLETE — owner-proof owed (ledger #229) | **Vertical:** cultivar (shared surface) | **Type:** integration / read
+**Location:** `packages/cultivar-os/api/qbo/router.ts` → **`handleItems`** (`_route=items`) ·
+`packages/shared/src/quickbooks/itemList.ts` (the pure half) + `itemList.test.ts` (**40 probes**) ·
+`packages/shared/src/components/QboItemListReader.tsx` (mounted in the shared Accounting card) ·
+`vercel.json` rewrite. **No new Vercel function — it rides the existing QBO router** (§6 r11).
+
+**🔴 WHY IT WAS URGENT.** The invoice push carries **TWELVE hardcoded
+`ItemRef: { value: '1', name: 'Services' }` literals**. Nothing had pushed to the live LAWNS company
+yet — their books were clean only because Lauren's write permissions blocked it — so **the next
+completed checkout is the first real push**, and it would book every line, the trees included, as
+generic "Services": 100% service revenue, zero product sales, no COGS against inventory. This read
+is what makes the real item ids knowable. **It changes none of the twelve.**
+
+**What it returns per item:** `Id · Name · Type · IncomeAccountRef.name · Active`. The **income
+account** is the field that actually decides the Sales-of-Nursery-Stock vs Services split — more
+than the manual browser-URL method gives.
+
+**🔴 THE RAW BODY IS SAVED TO A FILE, OUTSIDE THE REPO, BEFORE ANYTHING RENDERS.** Every response —
+success or failure — is written to the operator's browser download folder as
+`qbo-items-<realm>-<timestamp>.json`. Two reasons: **(1)** re-reading a customer's books must never
+require re-querying a customer's books; **(2)** the download folder is outside version control, so a
+copy of live accounting data cannot be swept into a commit — the same class of hazard as the
+`service_role` JWT that sat in a settings file. A parsed table is shown **on top of** the file, never
+instead of it.
+
+**Honesty properties, each with a probe behind it:**
+- **An empty item list and an unreadable response are DIFFERENT surfaces.** A company genuinely can
+  have no items (`QueryResponse` with no `Item` key) — that is a true answer. A body we could not
+  parse says so. Rendering the second as the first is this platform's oldest defect and §A of the
+  test exists for it alone.
+- **A missing field is `null`, rendered "Not set"** — never a plausible guess. Defaulting an absent
+  `IncomeAccountRef` would fabricate the exact fact the read exists to establish.
+- **401 and 403 name different next steps** (`classifyFailure`): a 401 is the token-refresh path, a
+  403 is the granted scope. A generic failure message would send someone hunting the wrong one.
+- **The body is never logged.** `[TRACE:QBO]` carries status, realm and a COUNT — never a name, never
+  a body, never the token.
+
+**Authority:** `callerCan(auth, business_id, 'settings:read')` — the same string `/api/qbo/status`
+takes. 🔴 **The handler reads under the SERVICE KEY, which bypasses RLS entirely**, so
+`bas_owner_all` never runs on this path and this gate is the only thing behind it. It resolves the
+caller from the **Bearer token, never the body**. Not owner-only: David passes as `owner_id`, and any
+member holding `settings:read` passes too.
+
+**⚠️ DELIBERATELY NOT BUILT, so absence is not read as coverage:**
+- **Pagination** — one page. `STARTPOSITION` is absent rather than half-written, so **a truncated
+  list would not announce itself.**
+- **Storage** — persisting a customer's chart of items is its own ruling and has not been made.
+- **The mapping** — the twelve literals are untouched; that is the next pass.
+
+**Owner test:** `docs/owner-tests/quickbooks-invoice-full-surface-test.md` **CARDS 5–8** (added to the
+existing board, not a second document — STD-011). **Nothing marked covered.**
+**Story:** `user_stories.md` — *QuickBooks read-back + customer de-dup* (**its premise was corrected
+in this same commit**: it claimed the integration was create-only, and D-47 read-back had shipped
+2026-07-16).
 
 ---
 

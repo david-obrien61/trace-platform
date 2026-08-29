@@ -20,6 +20,19 @@
 //   businesses.accounting_token / accounting_refresh_token (the SELECT/UPDATE on those
 //   columns will error once they no longer exist).
 
+/**
+ * The `businesses` projection that answers "what is this business's QuickBooks connection
+ * state?" — the realm to call, when the access token expires, and the display name.
+ *
+ * ONE list, IMPORTED by every reader (§6 r8 / A4), because it is one question asked in more
+ * than one place: `/api/qbo/status` asks it to report the connection, and `/api/qbo/items`
+ * asks it to make a call. Two hand-written copies of one projection is how the two drift —
+ * and the field-list cap refused the second copy the moment it was written, which is the cap
+ * working. Note what is NOT here: the bearer secrets live in `business_accounting_secrets`
+ * and are read through readQBSecrets below, never off this row.
+ */
+export const QBO_CONNECTION_COLUMNS = 'accounting_company_id, name, accounting_token_expires_at';
+
 export interface QBSecrets {
   accounting_token: string | null;
   accounting_refresh_token: string | null;

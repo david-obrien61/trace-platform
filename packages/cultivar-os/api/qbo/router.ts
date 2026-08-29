@@ -8,13 +8,17 @@
  *   GET  /api/qbo/auth-url → _route=auth-url
  *   GET  /api/qbo/callback → _route=callback  (registered with Intuit — must not change)
  *   GET  /api/qbo/status   → _route=status
+ *   GET  /api/qbo/items    → _route=items
  */
 
 import crypto from 'crypto';
 import { callerCan } from '../../../shared/src/auth/callerPermission';
 import { createClient } from '@supabase/supabase-js';
 import { refreshQBToken } from '../../../shared/src/quickbooks/refresh';
-import { readQBSecrets, writeQBSecrets } from '../../../shared/src/quickbooks/secrets';
+import { readQBSecrets, writeQBSecrets, QBO_CONNECTION_COLUMNS } from '../../../shared/src/quickbooks/secrets';
+import {
+  QBO_ITEM_QUERY, parseItemList, classifyFailure,
+} from '../../../shared/src/quickbooks/itemList';
 
 // ─── shared constants ────────────────────────────────────────────────────────
 
@@ -304,7 +308,7 @@ async function handleStatus(req: any, res: any) {
     const db = supabase();
     const { data } = await db
       .from('businesses')
-      .select('accounting_company_id, name, accounting_token_expires_at')
+      .select(QBO_CONNECTION_COLUMNS)
       .eq('id', businessId)
       .single();
 
@@ -339,6 +343,126 @@ async function handleStatus(req: any, res: any) {
   }
 }
 
+// ─── items (READ-ONLY) ────────────────────────────────────────────────────────
+//
+// PURPOSE: read the connected company's QuickBooks Item list — `select * from Item` — and
+//   return it to the caller's screen. NOTHING IS STORED. This exists to answer one urgent
+//   question with real ids instead of an assumption: the invoice push carries TWELVE
+//   hardcoded `ItemRef: { value: '1', name: 'Services' }` literals, nothing has pushed to
+//   LAWNS yet, and the next completed checkout would land every line — trees included — in
+//   their books as generic "Services", collapsing the Sales-of-Nursery-Stock vs Services
+//   split. This read is what tells us the real ids before that happens.
+//
+// 🔴 READ-ONLY AGAINST INTUIT, AND STRUCTURALLY SO. One GET, one query, `QBO_ITEM_QUERY`
+//   asserted read-only by its own test. A QuickBooks invoice deleted still consumes its
+//   number and leaves a trail the customer's accountant sees; there is no second real
+//   company to practise on. No write belongs on this route, ever.
+//
+// 🔴 NOTHING IS PERSISTED. Their chart of items is a customer's live accounting data.
+//   Storing it is a later decision with its own ruling (user_stories.md — "QuickBooks
+//   read-back + customer de-dup"); this pass proves the pipe and holds nothing.
+//
+// 🔴 THE BODY IS NEVER LOGGED. The [TRACE:QBO] lines below carry the status, the realm and a
+//   COUNT — never a name, never a body, and never the token. A serverless log is a place
+//   customer data can persist for a long time without anyone deciding it should.
+//
+// WHY IT RIDES THIS ROUTER RATHER THAN THE INVOICE ENDPOINT: this is a COMPANY-level read
+// with no order. The invoice endpoint is POST-only and its every path assumes an order_id
+// exists. This file already holds the company-level `companyinfo` GET against the same base
+// URL, already dispatches on _route, and already runs the settings:* gates. No new Vercel
+// function is minted — the ceiling is lifted, but the reason still has to exist (§6 r11).
+async function handleItems(req: any, res: any) {
+  const businessId = (req.query.business_id as string) || '';
+  if (!businessId) return res.status(400).json({ error: 'business_id required' });
+
+  // 🔴 CALLER AUTHORITY — MB_D-015. This route reads a customer's live accounting data under
+  // the SERVICE KEY, which bypasses RLS entirely, so `bas_owner_all` never runs here and this
+  // gate is the only thing standing between the request and another tenant's books.
+  // `settings:read` — the same string /api/qbo/status takes, because this is the same class of
+  // fact: the state of the business's accounting connection. It resolves the caller from the
+  // BEARER TOKEN, never the body, so naming someone else's business_id gets you nothing.
+  if (!(await callerCan(req.headers?.authorization, businessId, 'settings:read'))) {
+    console.log('[TRACE:QBO] items REFUSED — caller lacks settings:read/owner', { businessId });
+    return res.status(403).json({ error: 'Not authorized to read QuickBooks items for this business', code: 'FORBIDDEN' });
+  }
+
+  const db = supabase();
+  const { data: business } = await db
+    .from('businesses')
+    .select(QBO_CONNECTION_COLUMNS)
+    .eq('id', businessId)
+    .maybeSingle();
+
+  if (!business?.accounting_company_id) {
+    console.log('[TRACE:QBO] items — no QuickBooks connection on this business', { businessId });
+    return res.status(409).json({ error: 'QuickBooks is not connected for this business — connect it first.', code: 'NOT_CONNECTED' });
+  }
+  const realmId: string = business.accounting_company_id;
+
+  const secrets = await readQBSecrets(db, businessId);
+  const token = await refreshQBToken(businessId, {
+    accounting_token:            secrets.accounting_token,
+    accounting_refresh_token:    secrets.accounting_refresh_token,
+    accounting_token_expires_at: business.accounting_token_expires_at,
+  });
+  if (!token) {
+    // The refresh path itself failed — Stage 0 G3. Reported as its own state rather than as a
+    // generic read failure, because reconnecting is the fix and no amount of retrying is.
+    console.log('[TRACE:QBO] items — token refresh returned null, reconnect required', { businessId, realmId });
+    return res.status(503).json({ error: 'qb_token_expired', code: 'RECONNECT_REQUIRED',
+      detail: 'The QuickBooks token could not be refreshed. Reconnect QuickBooks from Settings, then try again.' });
+  }
+
+  const queriedAt = new Date().toISOString();
+  let resp: Response;
+  try {
+    resp = await fetch(
+      `${QBO_API_BASE}/${realmId}/query?query=${encodeURIComponent(QBO_ITEM_QUERY)}&minorversion=65`,
+      { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } },
+    );
+  } catch (e: any) {
+    console.log('[TRACE:QBO] items — request to Intuit did not complete', { businessId, realmId, message: e?.message });
+    return res.status(502).json({ error: 'The request to QuickBooks did not complete.', code: 'UPSTREAM_UNREACHABLE',
+      detail: String(e?.message ?? 'network error') });
+  }
+
+  // VERBATIM, ALWAYS, BOTH DIRECTIONS. Read as text before anything else looks at it: on
+  // failure this body IS the artifact worth keeping (Intuit's Fault block names the real
+  // cause), and on success it is the customer's own data, which must be re-readable without
+  // re-querying their books. The caller writes it to a file; we never re-shape it first.
+  const raw = await resp.text();
+
+  if (!resp.ok) {
+    const note = classifyFailure(resp.status);
+    console.log('[TRACE:QBO] items — Intuit refused the read', {
+      businessId, realmId, http_status: resp.status, points_at: note.points_at, raw_bytes: raw.length,
+    });
+    return res.status(502).json({
+      ok: false, code: 'UPSTREAM_ERROR', realm_id: realmId, queried_at: queriedAt,
+      http_status: resp.status, headline: note.headline, points_at: note.points_at,
+      raw,   // ← the operator saves this; a 401 and a 403 are different problems and the body says which
+    });
+  }
+
+  const parsed = parseItemList(raw);
+  console.log('[TRACE:QBO] items — read OK', {
+    businessId, realmId, http_status: resp.status,
+    parsed_ok: parsed.ok, item_count: parsed.items.length, raw_bytes: raw.length,
+  });
+
+  // `parsed.ok:false` on a 200 is a real outcome, not a swallowed one: the read SUCCEEDED and
+  // the body was not the shape we expected. It is returned as such — with the raw body — rather
+  // than as an empty item list, because "no items in QuickBooks" and "we could not read the
+  // answer" are different facts and rendering them the same is this platform's oldest defect.
+  return res.status(200).json({
+    ok: parsed.ok, realm_id: realmId, queried_at: queriedAt, http_status: resp.status,
+    query: QBO_ITEM_QUERY,
+    item_count: parsed.items.length, items: parsed.items, parse_error: parsed.parseError,
+    stored: false,   // stated in the payload so no consumer has to assume it (nothing is persisted)
+    raw,
+  });
+}
+
 // ─── router (AC-5 dispatch) ───────────────────────────────────────────────────
 
 export default async function handler(req: any, res: any) {
@@ -347,6 +471,7 @@ export default async function handler(req: any, res: any) {
     case 'auth-url': return handleAuthUrl(req, res);
     case 'callback': return handleCallback(req, res);
     case 'status':   return handleStatus(req, res);
+    case 'items':    return handleItems(req, res);
     default:
       return res.status(400).json({ error: `Unknown QBO route: ${route || '(none)'}` });
   }
