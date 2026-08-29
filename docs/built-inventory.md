@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-08-29 (**#230 — 🔎 READ, COMPLETE: the item list PAGINATES and the CUSTOMER list joins it.** #229's own flag fired — one page returned `maxResults: 100` with ids past 1127, **truncated and silent about it**. Both reads now **count first** and **REFUSE a shortfall**; `GET /api/qbo/customers` rides the same router and gate, **zero new Vercel functions**. 🔴 The customer read is ~1,900 real people and is **summarised, never listed** — counts, coverage, duplicate sizing, five example rows, nothing personal in a log. **R-24 filed. Read-only; the mapping is still the next pass.**)
+# Last updated: 2026-08-29 (**#231 — 🔎 READ: THE INVOICE HISTORY — the third entity, and the one the other two were a detour around.** An item row says a thing exists and a customer row says a person exists; **neither says what was SOLD.** `GET /api/qbo/invoices` rides the same router, gate, client and walk — **zero new Vercel functions.** 🔴 **The DATE RANGE is reported first, above every other number** — how far back their history actually goes. 🔴 **Not one invoice record reaches the screen and there is no preview**: the buyer's name is dropped at the PARSE, not withheld at the render. 🔴 **Whether placement is discounted is MEASURED from their own history rather than chosen** (R-25a), and a history above 10,000 invoices is a **refusal**, not a slow read (R-25b). **R-25 filed. Read-only; the mapping is still the next pass.**)
 
 
 > 📐 **CAMPAIGN LIFECYCLE — SCOPING + ESTIMATE (2026-08-23, ledger #192/#192b).** NOT a capability entry: **nothing was built.** A scoping document answering David's *"I can add but not edit or cancel or delete"* with nine questions, ten site keys, a proven F1/F2/F3 dependency order, three scopes (**MINIMUM ~2–3 · COHERENT ~5–7 · COMPLETE ~11–14 Thunder prompts; MINIMUM and COHERENT need ZERO migrations**) and eight rulings owed. Read it before ANY campaign build — it is the answer to "has this been scoped?" and its first finding is that the EDIT FORM ALREADY EXISTS as the create form (`Campaigns.tsx:120-198`). → [`docs/audits/campaign-lifecycle-scoping-2026-08-23.md`](audits/campaign-lifecycle-scoping-2026-08-23.md) · predecessor [`social-campaign-path-recon-2026-08-22.md`](audits/social-campaign-path-recon-2026-08-22.md)
@@ -2079,6 +2079,100 @@ Entries where the correct Vertical or Type tag is ambiguous. Best guess noted.
 
 ---
 
+### 4.1b · QUICKBOOKS INVOICE HISTORY — WHAT ACTUALLY SOLD, AND HOW FAR BACK (2026-08-29, ledger #231, R-25)
+
+**WHAT SHIPPED.** **NEW `GET /api/qbo/invoices`** — read-only against Intuit, gated on
+`settings:read`, storing nothing, riding the SAME router, gate, client, walk and completeness
+refusal as the item and customer reads. **api/ stays at 12 of 12; no Vercel function was minted.**
+
+**🔴 WHY THIS IS THE ONE THAT MATTERED.** An item row says a thing EXISTS. A customer row says a
+person EXISTS. **Neither says what was SOLD.** An invoice carries the items, the quantities, the
+prices and the buyer on ONE record, which makes it the only place in the customer's books that can
+answer *"how many trees did we plant last year"* — a question Terry has never been able to ask his
+own system. The item and customer reads were the detour; this is the objective.
+
+**🔴 THE DATE RANGE IS REPORTED FIRST, ABOVE EVERY OTHER NUMBER, AND THAT IS A DESIGN RULE NOT A
+LAYOUT CHOICE.** Every figure below it is meaningless without the span it covers — *"412 Shumard
+oaks"* is a different fact over ten years than over eight months. The screen leads with min/max
+`TxnDate`, the months spanned, the count by year, and a **per-month curve that emits the EMPTY
+months as zeros**: a month with no sales is the seasonality answer, and omitting it draws a flat
+line through the off-season. Dates are computed by **slicing the date STRING, never via `new
+Date()`** — `new Date('2025-01-01').getMonth()` is December 2024 west of Greenwich, which moves
+every first-of-month invoice back a month and looks entirely plausible.
+
+**🔴 NOT ONE INVOICE RECORD REACHES THE SCREEN, AND THERE IS NO PREVIEW EITHER (R-24b/c).** The
+customer read withholds its records; this read **cannot produce them**: `QboInvoiceRow` has
+`customerId` and **no customer-name field at all**, and free-text line descriptions are not carried
+(a line note on a real invoice routinely holds a name, an address, or a remark about someone's
+property). So the buyer's name is dropped **at the parse**, not withheld at the render — there is no
+path by which it can reach the summary, the screen or a log line even if a future caller tries.
+`invoiceList.test.ts` §G asserts it the only way that means anything: a name and a street address go
+INTO the fixture, and the **entire serialised output** of both the parse and the summary is searched
+for them.
+
+**WHAT THE SUMMARY ANSWERS.**
+- **The span** — earliest/latest `TxnDate`, months covered, by year, by month (zeros included),
+  and invoices carrying **no readable date** counted separately rather than dropped or dated.
+- **What sold** — top items by quantity with lines and money, plus the **distinct** item count so a
+  capped table cannot be read as the whole catalog. 🔴 **Discount lines are EXCLUDED**: on these
+  books a discount line's `Qty` is the DOLLAR BASE, so leaving them in puts `CD10%` at the top of
+  "what sold" with a quantity in the thousands — a units column silently holding dollars.
+- **The mapping inputs** — total lines, how many carry an `ItemRef`, and **how many book against
+  item `1`** (the twelve literals' target).
+- **The hidden installation revenue** — `DIW` / `FDIW` line counts, **with `$0` vs carrying-money
+  counted separately**, because *"the $0 bundle items"* is a claim about their books and a bundle
+  line carrying money is a different finding.
+- **Every line type** — a `byDetailType` tally that adds to the total, so a QuickBooks line type
+  this read does not interpret is VISIBLE under its own name instead of missing from the totals.
+
+**🔴 THE DISCOUNT ANSWER IS MEASURED, NOT CHOSEN (R-25a).** For each of David's seven discount items
+the summary reports how many bases **equalled** the invoice subtotal, how many fell **below** it —
+**and names the item whose amount accounts for the gap.** That is *is placement inside the discounted
+base?* answered from LAWNS's own history instead of us picking a default and shipping it as
+behaviour. Money is compared **in cents** (a float compare reports a mismatch on an invoice that
+agrees to the penny) and Intuit's `SubTotalLineDetail` line is excluded from the subtotal (counting
+it doubles the invoice). ⚠️ **The seven names are a hand-kept list and the build does not assume it
+is complete**: a discount-SHAPED line outside it — Intuit's own discount line type, a negative
+amount, or "discount" in the name — is reported as its own **amber row**, so the list reports its own
+under-coverage rather than counting a discount as a sale (R-19's class).
+
+**🔴 VOLUME IS A REFUSAL, NOT A SLOW READ (R-25b).** `QBO_WALK_CEILING.Invoice = 10_000`. The count
+is already in hand before the walk, so a larger history **stops before a single page is pulled** and
+reports the real number (`413` / `TOO_MANY`). And because a ceiling can only refuse a number it was
+given, `maxPagesFor` **bounds the loop independently** — 10 pages of 1000 — so the cap holds when the
+count came back unreadable. The two reads that already shipped keep the page bound they had; this
+constant does not quietly narrow a live behaviour.
+
+**TWO DEFECTS FIXED IN PASSING, BOTH THE SAME SHAPE.** Adding a third entity exposed **two copies of
+one ternary** — `entity === 'Customer' ? 'customers' : 'items'` — in the capture file name and again
+in the client's URL builder. Under them an invoice read would have (1) filed a customer's billing
+history as `qbo-items-…` and (2) **fetched the ITEM endpoint**, painting an item list under an
+invoice heading. Both now read from **one exported `QBO_ROUTE` map keyed on the union**, so omitting
+an entity is a compile error and the file word and the route word cannot disagree (STD-011). The
+read-only write-verb sweep now **derives** its entity list from `QBO_ENTITIES` rather than a
+hand-typed array.
+
+**CAPTURE FILE.** `qbo-invoices-<realm>-<ts>.json`, same envelope, written before anything renders,
+on failure too. ⚠️ **The raw bodies DO carry customer names** — the screen never does, but the file
+is Intuit's verbatim response, so the amber file warning fires for this read as well as the customer
+one. The warning follows the DATA, not the button.
+
+**PROOF.** `invoiceList.test.ts` (**83 probes**) · `qboRead.test.ts` (82, +19). **13 mutants MEASURED,
+all caught — 2 · 1 · 3 · 3 · 1 · 1 · 3 · 1 · 5 · 2 · 3 · 1 · 2**, including the `new Date()` month
+shift, the dollars-not-cents compare, the double-counted SubTotal line, the dropped gap months, and a
+mutant that puts `CustomerRef.name` back on the row.
+
+**⚠️ DELIBERATELY NOT BUILT, so absence is not read as coverage:**
+- **Storage** — nothing persisted, still. The open ruling now also covers a customer's invoice
+  history, which is a larger question than their item list was.
+- **The mapping** — the twelve literals are untouched. This read is their last missing input.
+- **A cap on the ceiling NUMBER** — 10,000 is a human judgement, recorded, not checked.
+
+**STATE.** BUILDER-COMPLETE, owner-proof owed → CARDS 12·13·14 (new) on
+`quickbooks-invoice-full-surface-test.md`, board **0 of 14**.
+
+---
+
 ### 4.1 · QUICKBOOKS READS — COMPLETE, PAGINATED, AND TWO ENTITIES (2026-08-29, ledger #230, R-24)
 
 **WHAT SHIPPED.** `GET /api/qbo/items` and **NEW `GET /api/qbo/customers`** — both read-only against
@@ -2144,4 +2238,11 @@ a query with neither STARTPOSITION nor MAXRESULTS) and M7 (a full page ending th
 
 **STATE.** BUILDER-COMPLETE, owner-proof owed → CARDS 5·6 (re-worded, flipped `owed`) + 9·10·11 (new)
 on `quickbooks-invoice-full-surface-test.md`, board **0 of 11**.
+
+⚠️ **SUPERSEDED IN SCOPE 2026-08-29 (#231), not in substance: this entry says TWO ENTITIES and there
+are now THREE.** The walk, the gate, the client, the completeness refusal and the capture envelope
+described above are unchanged and are what the invoice read rides — see **§4.1b**. Two details here
+did move: the write-verb sweep now DERIVES its entity list rather than reading a hand-typed one, and
+`rawCaptureFileName`'s entity ternary became an exhaustive map (under the ternary, an invoice
+capture would have been named `qbo-items-…`).
 

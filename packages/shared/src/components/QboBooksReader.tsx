@@ -1,9 +1,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// PURPOSE: the operator-facing half of the QuickBooks reads. Two buttons — ITEMS and
-//   CUSTOMERS — each: GET the COMPLETE list → SAVE THE VERBATIM BODIES TO A FILE → then render
-//   a summary. Read-only against Intuit; stores nothing on our side.
-// DEPENDENCIES: `/api/qbo/items` and `/api/qbo/customers` (api/qbo/router.ts) · authHeaders() ·
-//   the pure helpers in ../quickbooks/qboRead, ../quickbooks/itemList, ../quickbooks/customerList.
+// PURPOSE: the operator-facing half of the QuickBooks reads. Three buttons — ITEMS, CUSTOMERS
+//   and INVOICE HISTORY — each: GET the COMPLETE list → SAVE THE VERBATIM BODIES TO A FILE →
+//   then render a summary. Read-only against Intuit; stores nothing on our side.
+// DEPENDENCIES: `/api/qbo/items`, `/api/qbo/customers`, `/api/qbo/invoices` (api/qbo/router.ts —
+//   ONE Vercel function, three routes) · authHeaders() · the pure helpers in
+//   ../quickbooks/qboRead, ../quickbooks/itemList, ../quickbooks/customerList, ../quickbooks/invoiceList.
 // OUTPUTS: <QboBooksReader businessId /> — mounted in the Accounting card once connected.
 //
 // 🔴 WHY THE ITEM READ EXISTS. The invoice push carries TWELVE hardcoded
@@ -30,18 +31,34 @@
 //   ⚠️ A summary on screen is ON TOP OF the file, never instead of it. (R-23.)
 //
 // ══════════════════════════════════════════════════════════════════════════════
-// 🔴 THE CUSTOMER READ IS NOT THE ITEM READ AND THIS SCREEN TREATS IT DIFFERENTLY. The item
-//   list is a product catalogue and is shown in full — finding one id in it is the job. The
-//   customer list is roughly 1,900 REAL PEOPLE with addresses, phones and email, belonging to
-//   a customer's customers. It is NEVER rendered in full: the screen shows the count, the
-//   field coverage, the duplicate sizing and FIVE example rows. The complete data exists in
-//   the downloaded file and nowhere else — the endpoint does not even send the parsed records.
+// 🔴 THE THREE READS ARE NOT THE SAME KIND OF THING AND THIS SCREEN TREATS THEM DIFFERENTLY.
+//   · ITEMS — a product catalogue, shown IN FULL, because finding one id in it is the job.
+//   · CUSTOMERS — roughly 1,900 REAL PEOPLE with addresses, phones and email, belonging to a
+//     customer's customers. NEVER rendered in full: count, field coverage, duplicate sizing and
+//     FIVE example rows. The endpoint does not even send the parsed records.
+//   · INVOICES — what those people bought and what they paid. NOT ONE RECORD IS RENDERED, and
+//     there is no preview either: only the date range, the seasonality curve, what sold in what
+//     quantity, and what the discounts were computed on. The complete data exists in the
+//     downloaded file and nowhere else.
+//
+// 🔴 WHY THE INVOICE READ IS THE ONE THAT MATTERED. An item row says a thing exists and a
+//   customer row says a person exists; neither says what was SOLD. An invoice carries the items,
+//   the quantities, the prices and the buyer on ONE record — so it is the only place in these
+//   books that can answer *"how many trees did we plant last year"*, which Terry has never been
+//   able to ask his own system. THE DATE RANGE IS REPORTED FIRST, ABOVE EVERY OTHER NUMBER,
+//   because every figure below it is meaningless without the span it covers.
 // ══════════════════════════════════════════════════════════════════════════════
 import React, { useState } from 'react';
 import { authHeaders } from '../auth/authHeaders';
-import { rawCaptureFileName, type QboEntity } from '../quickbooks/qboRead';
+import { rawCaptureFileName, QBO_ROUTE, type QboEntity } from '../quickbooks/qboRead';
 import type { QboItemRow, ItemBreakdown } from '../quickbooks/itemList';
 import type { QboCustomerRow, CustomerBreakdown } from '../quickbooks/customerList';
+import { BUNDLE_ITEM_NAMES, type InvoiceBreakdown } from '../quickbooks/invoiceList';
+
+// The bundle items are NAMED BY THE MODULE THAT COUNTS THEM. A second list typed into this
+// screen is a second representation of one fact (STD-011), and it is the copy that drifts — a
+// heading naming three items above a table counting two.
+const BUNDLE_LABEL = BUNDLE_ITEM_NAMES.join(' / ');
 
 const GREEN = '#27500A';
 const GRAY  = '#6b7280';
@@ -59,13 +76,15 @@ interface ReadResponse {
   complete?: boolean;
   pages_fetched?: number;
   items?: QboItemRow[];
-  breakdown?: ItemBreakdown | CustomerBreakdown;
+  breakdown?: ItemBreakdown | CustomerBreakdown | InvoiceBreakdown;
   preview?: QboCustomerRow[];
   headline?: string;
   points_at?: string;
   error?: string;
   detail?: string;
   code?: string;
+  /** Set only on a TOO_MANY refusal — the size we will pull in one go. */
+  ceiling?: number;
   /** The verbatim page bodies. Written to the file; never rendered. */
   capture?: unknown;
 }
@@ -132,7 +151,12 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
     if (!businessId || loading) return;
     setLoading(entity);
     setState(null);
-    const route = entity === 'Customer' ? 'customers' : 'items';
+    // 🔴 THE ROUTE COMES FROM THE SHARED MAP, NOT A TERNARY. This line used to read
+    // `entity === 'Customer' ? 'customers' : 'items'`, under which the invoice read would have
+    // fetched the ITEM endpoint and painted an item list under an invoice heading — a screen
+    // confidently answering a question nobody asked. Same defect as the capture file name had,
+    // in a second copy of the same fact.
+    const route = QBO_ROUTE[entity];
     try {
       const res = await fetch(`/api/qbo/${route}?business_id=${encodeURIComponent(businessId)}`, {
         headers: await authHeaders(),
@@ -179,6 +203,8 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
   const b = state?.body;
   const itemBreak = state?.entity === 'Item' ? (b?.breakdown as ItemBreakdown | undefined) : undefined;
   const custBreak = state?.entity === 'Customer' ? (b?.breakdown as CustomerBreakdown | undefined) : undefined;
+  const invBreak  = state?.entity === 'Invoice' ? (b?.breakdown as InvoiceBreakdown | undefined) : undefined;
+  const peakMonth = invBreak ? Math.max(1, ...invBreak.byMonth.map(m => m.invoices)) : 1;
 
   return (
     <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #e5e7eb' }}>
@@ -186,9 +212,9 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
         Read from QuickBooks
       </p>
       <p style={{ fontSize: '0.8125rem', color: GRAY, margin: '0 0 12px', lineHeight: 1.5 }}>
-        Reads the complete list of products &amp; services, or of customers, from your QuickBooks
-        company. Nothing is changed in QuickBooks and nothing is saved here — the full response
-        downloads to this device.
+        Reads the complete list of products &amp; services, of customers, or of past invoices from
+        your QuickBooks company. Nothing is changed in QuickBooks and nothing is saved here — the
+        full response downloads to this device.
       </p>
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -198,15 +224,22 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
         <button onClick={() => void read('Customer')} disabled={!!loading || !businessId} style={btn}>
           {loading === 'Customer' ? 'Reading customers…' : 'Read customer list'}
         </button>
+        <button onClick={() => void read('Invoice')} disabled={!!loading || !businessId} style={btn}>
+          {loading === 'Invoice' ? 'Reading invoice history…' : 'Read invoice history'}
+        </button>
       </div>
 
       {state?.savedAs && (
         <p style={{ fontSize: '0.8125rem', color: GREEN, margin: '10px 0 0', wordBreak: 'break-all' }}>
           ↓ Full response saved to your downloads folder as <strong>{state.savedAs}</strong>
-          {state.entity === 'Customer' && (
+          {/* 🔴 The warning follows the DATA, not the button. The invoice file holds Intuit's
+              verbatim bodies, and a raw invoice names the person who bought it — so the capture
+              is as personal as the customer one even though the screen above it never is. */}
+          {state.entity !== 'Item' && (
             <span style={{ color: AMBER, display: 'block', marginTop: 4 }}>
-              ⚠ That file holds your customers&apos; names, addresses, phone numbers and email. It is
-              outside this application and outside the code repository — keep it that way.
+              ⚠ That file holds your customers&apos; names
+              {state.entity === 'Invoice' ? ', what each of them bought and what they paid' : ', addresses, phone numbers and email'}.
+              It is outside this application and outside the code repository — keep it that way.
             </span>
           )}
         </p>
@@ -225,7 +258,12 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
           {state.note && <p style={{ fontSize: '0.75rem', color: GRAY, margin: '6px 0 0' }}>{state.note}</p>}
           {b?.expected_total !== undefined && b?.expected_total !== null && (
             <p style={{ fontSize: '0.75rem', color: GRAY, margin: '6px 0 0' }}>
-              QuickBooks reported {b.expected_total.toLocaleString()} · {(b.retrieved_total ?? 0).toLocaleString()} retrieved before it stopped.
+              {/* A DELIBERATE stop and a walk that BROKE are different events, and "retrieved
+                  before it stopped" describes only the second. Saying it of a refusal that never
+                  started reads as a failure mid-read and sends someone hunting a fault. */}
+              {b.code === 'TOO_MANY'
+                ? `QuickBooks reports ${b.expected_total.toLocaleString()} records. Nothing was downloaded — this read stops above ${(b.ceiling ?? 0).toLocaleString()}.`
+                : `QuickBooks reported ${b.expected_total.toLocaleString()} · ${(b.retrieved_total ?? 0).toLocaleString()} retrieved before it stopped.`}
             </p>
           )}
         </div>
@@ -402,6 +440,204 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
             </p>
           )}
         </div>
+      )}
+
+      {/* ══ INVOICES: the date range FIRST, then what sold. NEVER a record. ══════ */}
+      {invBreak && invBreak.invoices > 0 && (
+        <div style={{ marginTop: 12 }}>
+          {/* 🔴 THE DATE RANGE IS THE HEADLINE AND IT IS DELIBERATELY ABOVE EVERY OTHER NUMBER.
+              Every figure below is meaningless without the span it covers — "412 Shumard oaks"
+              is a different fact over ten years than over eight months. */}
+          <div style={{ padding: '12px 14px', background: '#f0fdf4', border: `1px solid ${GREEN}`, borderRadius: 9, marginBottom: 12 }}>
+            <p style={{ fontSize: '0.75rem', color: GREEN, fontWeight: 700, margin: '0 0 4px', letterSpacing: '0.04em' }}>
+              HOW FAR BACK THE HISTORY GOES
+            </p>
+            <p style={{ fontSize: '1rem', color: DARK, fontWeight: 800, margin: 0 }}>
+              {invBreak.dateRange.earliest ?? 'no dated invoice'} → {invBreak.dateRange.latest ?? 'no dated invoice'}
+            </p>
+            <p style={{ fontSize: '0.8125rem', color: GRAY, margin: '4px 0 0', lineHeight: 1.5 }}>
+              {invBreak.invoices.toLocaleString()} invoice{invBreak.invoices === 1 ? '' : 's'} across{' '}
+              {invBreak.dateRange.monthsSpanned} month{invBreak.dateRange.monthsSpanned === 1 ? '' : 's'}
+              {invBreak.dateRange.undated > 0 && (
+                // Reported, never folded into the range — an invoice with no readable date is
+                // outside every month below, and a total that quietly includes it lies twice.
+                <span style={{ color: AMBER }}>
+                  {' '}· {invBreak.dateRange.undated.toLocaleString()} carried no readable date and are in none of the months below
+                </span>
+              )}
+            </p>
+          </div>
+
+          <p style={{ fontSize: '0.8125rem', color: DARK, fontWeight: 700, margin: '0 0 6px' }}>Invoices by year</p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            {invBreak.byYear.map(y => <Stat key={y.year} label={y.year} value={y.invoices} />)}
+          </div>
+
+          <p style={{ fontSize: '0.8125rem', color: DARK, fontWeight: 700, margin: '0 0 2px' }}>Invoices by month</p>
+          <p style={{ fontSize: '0.75rem', color: GRAY, margin: '0 0 6px' }}>
+            Every month in the span, including the ones with none — the empty months are the seasonality answer.
+          </p>
+          <div style={{ overflowY: 'auto', maxHeight: 300, border: '1px solid #e5e7eb', borderRadius: 9, padding: '8px 10px', marginBottom: 14 }}>
+            {invBreak.byMonth.map(m => (
+              <div key={m.month} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0' }}>
+                <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: GRAY, width: 62, flexShrink: 0 }}>{m.month}</span>
+                <span style={{ background: m.invoices ? GREEN : 'transparent', height: 10, borderRadius: 3,
+                  width: `${(m.invoices / peakMonth) * 100}%`, minWidth: m.invoices ? 3 : 0, flexShrink: 0 }} />
+                <span style={{ fontSize: '0.75rem', color: m.invoices ? DARK : '#9ca3af' }}>{m.invoices}</span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            <Stat label="lines" value={invBreak.linesTotal} />
+            <Stat label="lines with an item" value={invBreak.linesWithItemRef} of={invBreak.linesTotal} />
+            <Stat label="lines on item 1 (generic)" value={invBreak.linesOnItemId1} of={invBreak.linesTotal} />
+            <Stat label="distinct items sold" value={invBreak.distinctItemsSold} />
+            <Stat label="total quantity sold" value={invBreak.totalQtySold} />
+            <Stat label="distinct customers" value={invBreak.distinctCustomers} />
+          </div>
+
+          {/* 🔴 TERRY'S QUESTION. "How many trees did we plant last year" — first answerable here. */}
+          <p style={{ fontSize: '0.8125rem', color: DARK, fontWeight: 700, margin: '0 0 2px' }}>
+            Top items by quantity sold
+          </p>
+          <p style={{ fontSize: '0.75rem', color: GRAY, margin: '0 0 6px' }}>
+            The {invBreak.topItemsByQty.length} largest of {invBreak.distinctItemsSold.toLocaleString()} distinct items.
+            Discount lines are excluded — their quantity is a dollar base, not a count.
+          </p>
+          <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 320, border: '1px solid #e5e7eb', borderRadius: 9, marginBottom: 14 }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.8125rem' }}>
+              <thead><tr style={{ background: '#f9fafb' }}>
+                {['Item', 'Id', 'Qty', 'Lines', 'Amount'].map(h => <th key={h} style={head}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {invBreak.topItemsByQty.map(i => (
+                  <tr key={`${i.itemId ?? '-'}::${i.itemName}`} style={{ borderTop: '1px solid #f3f4f6' }}>
+                    <td style={cell}>{i.itemName}</td>
+                    <td style={{ ...cell, fontFamily: 'monospace', color: i.itemId ? DARK : '#9ca3af' }}>{i.itemId ?? 'Not set'}</td>
+                    <td style={{ ...cell, fontWeight: 700 }}>{i.qty.toLocaleString()}</td>
+                    <td style={cell}>{i.lines.toLocaleString()}</td>
+                    <td style={cell}>${Math.round(i.amount).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* The $0 bundle items — how much installation is hidden inside a tree sale. */}
+          <p style={{ fontSize: '0.8125rem', color: DARK, fontWeight: 700, margin: '0 0 6px' }}>
+            Bundle lines ({BUNDLE_LABEL})
+          </p>
+          {invBreak.bundleItems.length === 0 ? (
+            <p style={{ fontSize: '0.8125rem', color: GRAY, margin: '0 0 14px' }}>
+              No {BUNDLE_LABEL} lines in this history. That is an answer, not an empty table — the
+              installation-inside-the-tree-price question does not arise on these invoices.
+            </p>
+          ) : (
+            <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 9, marginBottom: 14 }}>
+              <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.8125rem' }}>
+                <thead><tr style={{ background: '#f9fafb' }}>
+                  {['Item', 'Lines', 'At $0', 'Carrying money', 'Qty', 'Amount'].map(h => <th key={h} style={head}>{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {invBreak.bundleItems.map(bi => (
+                    <tr key={bi.itemName} style={{ borderTop: '1px solid #f3f4f6' }}>
+                      <td style={cell}>{bi.itemName}</td>
+                      <td style={cell}>{bi.lines.toLocaleString()}</td>
+                      <td style={cell}>{bi.zeroAmount.toLocaleString()}</td>
+                      {/* Counted, not assumed: "the $0 bundle items" is a claim about their
+                          books, and a bundle line carrying money is a different finding. */}
+                      <td style={{ ...cell, color: bi.nonZeroAmount ? AMBER : GRAY, fontWeight: bi.nonZeroAmount ? 700 : 400 }}>
+                        {bi.nonZeroAmount.toLocaleString()}
+                      </td>
+                      <td style={cell}>{bi.qtyTotal.toLocaleString()}</td>
+                      <td style={cell}>${Math.round(bi.amountTotal).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* 🔴 WHAT THE DISCOUNT LINES WERE COMPUTED ON — answered from their history. */}
+          <p style={{ fontSize: '0.8125rem', color: DARK, fontWeight: 700, margin: '0 0 2px' }}>
+            What each discount was calculated on
+          </p>
+          <p style={{ fontSize: '0.75rem', color: GRAY, margin: '0 0 6px', lineHeight: 1.5 }}>
+            The <strong>base</strong> is the Qty carried on the discount line. Compared against the
+            invoice&apos;s own subtotal: <strong>equal</strong> means the discount covered everything on
+            that invoice, <strong>below</strong> means something was left out — and the last column
+            names what.
+          </p>
+          {invBreak.discounts.byName.length === 0 ? (
+            <p style={{ fontSize: '0.8125rem', color: GRAY, margin: '0 0 10px' }}>
+              No discount lines in this history.
+            </p>
+          ) : (
+            <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 9, marginBottom: 10 }}>
+              <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.8125rem' }}>
+                <thead><tr style={{ background: '#f9fafb' }}>
+                  {['Discount', 'Lines', 'Base = subtotal', 'Base below', 'Base above', 'No base', 'Excluded from the base'].map(h => <th key={h} style={head}>{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {invBreak.discounts.byName.map(d => (
+                    <tr key={d.itemName} style={{ borderTop: '1px solid #f3f4f6' }}>
+                      <td style={cell}>{d.itemName}</td>
+                      <td style={cell}>{d.lines.toLocaleString()}</td>
+                      <td style={{ ...cell, fontWeight: 700 }}>{d.verdicts.equalsSubtotal.toLocaleString()}</td>
+                      <td style={{ ...cell, fontWeight: 700, color: d.verdicts.belowSubtotal ? AMBER : DARK }}>{d.verdicts.belowSubtotal.toLocaleString()}</td>
+                      <td style={cell}>{d.verdicts.aboveSubtotal.toLocaleString()}</td>
+                      <td style={{ ...cell, color: d.verdicts.noBase ? AMBER : GRAY }}>{d.verdicts.noBase.toLocaleString()}</td>
+                      <td style={{ ...cell, color: d.excludedFromBase.length ? DARK : '#9ca3af' }}>
+                        {d.excludedFromBase.length === 0
+                          ? '—'
+                          : d.excludedFromBase.slice(0, 3).map(e => `${e.itemName} (${e.times})`).join(', ')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* 🔴 The seven names are a hand-kept list. This row is how it reports its own gaps. */}
+          {invBreak.discounts.unnamedDiscountLines.length > 0 && (
+            <div style={{ padding: '10px 12px', background: '#fffbeb', border: `1px solid ${AMBER}`, borderRadius: 9, marginBottom: 12 }}>
+              <p style={{ fontSize: '0.8125rem', color: AMBER, margin: 0, lineHeight: 1.5 }}>
+                <strong>Discount-shaped lines that are not on the named list:</strong>{' '}
+                {invBreak.discounts.unnamedDiscountLines.map(u => `${u.itemName} (${u.lines})`).join(', ')}.
+                These were kept out of the sales figures but are not analysed above — the seven
+                names came from a list, and this is the list reporting what it missed.
+              </p>
+            </div>
+          )}
+
+          <p style={{ fontSize: '0.8125rem', color: DARK, fontWeight: 700, margin: '0 0 6px' }}>Every line type in the history</p>
+          <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 9 }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.8125rem' }}>
+              <thead><tr style={{ background: '#f9fafb' }}><th style={head}>QuickBooks line type</th><th style={head}>Lines</th></tr></thead>
+              <tbody>
+                {invBreak.byDetailType.map(d => (
+                  <tr key={d.detailType} style={{ borderTop: '1px solid #f3f4f6' }}>
+                    <td style={cell}>{d.detailType}</td>
+                    <td style={cell}>{d.lines.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p style={{ fontSize: '0.75rem', color: GRAY, margin: '6px 0 0', lineHeight: 1.5 }}>
+            This table adds to {invBreak.linesTotal.toLocaleString()} — every line is in it. A line
+            type this read does not interpret appears here under its own name rather than going
+            missing from the totals.
+          </p>
+        </div>
+      )}
+
+      {state?.entity === 'Invoice' && b?.ok && invBreak?.invoices === 0 && (
+        <p style={{ fontSize: '0.8125rem', color: GRAY, marginTop: 12 }}>
+          The read succeeded and this QuickBooks company has no invoices on it.
+        </p>
       )}
     </div>
   );

@@ -60,6 +60,9 @@ David's live run flips it, with a date. **Changing a surface flips its card back
       · **CARDS 5–8 (the #229 item read):** the signal is that **Settings → Accounting shows a
         "QuickBooks item list" section with a `Read item list` button.** **If that section is not
         there, you are on old code — STOP**, and do not read a missing button as a failed read.
+      · **CARDS 12–14 (the #231 invoice read):** the signal is a **THIRD button** in the
+        **Read from QuickBooks** section, reading **`Read invoice history`**. Two buttons means you
+        are on #230's code — **STOP.** A missing button is not an empty invoice history.
 
 ---
 
@@ -298,7 +301,15 @@ different `business_id` gets you nothing, and that is worth trying once if you w
   customer's chart of items is its own ruling and has not been made (`user_stories.md` — *QuickBooks
   read-back*).
 - **THE MAPPING ITSELF** — reading the ids does not change the twelve literals. CARD 4 stays
-  `needs-test` until that build lands.
+  `needs-test` until that build lands. ⚠️ **As of #231 the mapping's LAST MISSING INPUT is in hand:**
+  the invoice history says which items the trees actually sold as, and what the discount lines were
+  computed on. The build is still not done — this only removes the reason to defer it.
+- **THE INVOICE HISTORY'S OWN CONTENT** — this board proves the read is complete, honest and
+  private. **It does not audit whether LAWNS's own invoices are correct.** If the item names or
+  quantities in their books are wrong, that is a fact about their bookkeeping, and no card here
+  catches it.
+- **THE VOLUME CEILING'S NUMBER** — 10,000 is a human judgement. A cap proves the refusal FIRES; no
+  cap proves 10,000 is the right place for it.
 
 ---
 
@@ -384,3 +395,105 @@ SIGNAL: —
 
 🔴 **AFTERWARDS: that file is ~1,900 real people belonging to LAWNS.** Keep it out of the repo, off
 shared drives, and delete it when the mapping pass is done with it.
+
+---
+
+### CARD 12 — 🔴 HOW FAR BACK DOES THEIR HISTORY GO? SAY THE TWO DATES OUT LOUD
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #231 · the reason this read exists
+SIGNAL: `[TRACE:QBO] invoices — read COMPLETE { earliest, latest, months_spanned, undated, … }` — 🔴 **counts and dates only. A NAME, EMAIL, PHONE or ADDRESS in a trace line is a FAIL, and it is the serious kind.**
+
+🔴 **THIS IS THE ANSWER THE WHOLE BUILD EXISTS FOR, AND IT IS THE FIRST THING ON THE SCREEN.** Every
+other number on this card is meaningless without it — *"412 Shumard oaks"* is a different fact over
+ten years than over eight months.
+
+**As the OWNER**, Settings → Accounting → **Read from QuickBooks** → **Read invoice history**.
+
+- **PASS — all five:**
+  1. the green **completeness** line (→ CARD 9), with the two numbers **equal**;
+  2. 🔴 a green block headed **HOW FAR BACK THE HISTORY GOES** showing **`earliest → latest`** and
+     the number of months. **Write both dates down and say which it is:** does the history start at
+     or near **2025-08-23** — the day 1,163 of their 1,936 customers were created in one bulk
+     migration — or does it genuinely run further back? **Either answer is fine. Not knowing is not.**
+  3. **Invoices by year**, and an **Invoices by month** list covering *every* month in the span
+     **including the ones reading 0** — the empty months are the seasonality curve;
+  4. if any invoice carried no readable date, an **amber clause** saying how many and that they are
+     in none of the months;
+  5. a stat row: lines · lines with an item · **lines on item 1 (generic)** · distinct items ·
+     **total quantity sold** · distinct customers.
+- **FAIL:** no date block; a month list that skips months; a date range that disagrees with what
+  QuickBooks itself shows under Sales → Invoices.
+
+🔴 **THEN THE ONE TERRY HAS NEVER BEEN ABLE TO ASK: scroll to `Top items by quantity sold`.** That
+column is *how many of each thing left the yard over the span above*. Read the top five out loud.
+
+---
+
+### CARD 13 — 🔴 WHAT WERE THE DISCOUNTS ACTUALLY CALCULATED ON?
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #231 · R-25 clause (a)
+SIGNAL: — (the whole card is on screen; no console needed)
+
+🔴 **THIS CARD DECIDES A BUILD, AND IT DECIDES IT FROM LAWNS'S OWN HISTORY RATHER THAN FROM OUR
+GUESS.** *Is placement discounted?* was about to be an assumption in code.
+
+**On the same press as CARD 12**, find **What each discount was calculated on**.
+
+- **PASS — all four:**
+  1. a row per discount item found (`CD10%`, `CD15%`, `MD10`, `Military Discount`,
+     `Military Discount 5`, `Customer Discount`, `FD10`);
+  2. for each, **Base = subtotal** vs **Base below** — 🔴 **this is the answer.** *Base = subtotal*
+     means the discount covered the whole invoice, placement included. *Base below* means something
+     was left out;
+  3. 🔴 the **Excluded from the base** column **NAMES the item** that accounts for the gap. If it
+     says a placement/installation item, **placement is not discounted in their practice** — write
+     down what it says;
+  4. the **Bundle lines (DIW / FDIW)** table above it, with **At $0** and **Carrying money** as
+     separate columns. If *Carrying money* is anything but 0, say so — the premise that these are
+     $0 documentation lines is a claim about their books, and this is where it gets checked.
+- **PASS (and REPORT IT):** an **amber box** listing *discount-shaped lines that are not on the named
+  list*. That is not a bug — it is the seven-name list reporting its own gaps. **Read out any names
+  in it**; they may be discounts nobody remembered.
+- **FAIL:** a table with no rows while QuickBooks plainly shows discounted invoices in that span; or
+  a `CD10%`-style row appearing in **Top items by quantity sold** (its Qty is a dollar base, not a
+  count — if it is up there, the units column is holding dollars).
+
+---
+
+### CARD 14 — 🔴 THE INVOICE FILE IS ON DISK, IT IS NOT IN THE REPO, AND NOBODY'S NAME IS ON THE SCREEN
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #231 · R-23 clause (c) · R-24 clauses (b) and (c) · R-25 clause (b)
+SIGNAL: —
+
+**On the same press as CARD 12.**
+
+- **PASS — all five:**
+  1. a green line naming **`qbo-invoices-9341455222430707-<timestamp>.json`** — note the
+     **`invoices`**, distinct from `items` and `customers`;
+  2. an **amber warning** stating the file holds your customers' names, what they bought and what
+     they paid. 🔴 **That warning is correct and it matters:** the SCREEN carries no names, but the
+     FILE is Intuit's verbatim response and it does;
+  3. 🔴 **run `git status --short` in `~/Desktop/trace-platform`. The file MUST NOT appear.** A
+     serverless function cannot write to your disk, so this is the part that could not be made
+     structural;
+  4. 🔴 **scroll the entire results card. There must be NO invoice record anywhere** — no invoice
+     number list, no customer names, no addresses, no line-item table of individual sales. Only
+     dates, counts, item totals and discount verdicts. **A single customer name on this screen is a
+     FAIL**;
+  5. open the browser console: `[TRACE:QBO]` lines carry **counts and dates only**.
+- **FAIL:** any customer name, address, email or phone on screen or in the console; the file inside
+  the repo; a file named `qbo-items-…` or `qbo-customers-…` for an invoice read; or no file at all
+  (a red line says so — re-run rather than assuming).
+
+⚠️ **THE VOLUME STOP IS PROBABLY NOT REACHABLE ON LAWNS AND THAT IS FINE.** Above 10,000 invoices the
+read refuses before pulling anything and says *"STOPPED BEFORE READING: QuickBooks reports N …"*. If
+you ever see that box, **it is the guard working** — report the number, do not retry.
+
+🔴 **AFTERWARDS: that file is LAWNS's complete billing history.** Keep it out of the repo, off shared
+drives, and delete it when the mapping pass is done with it.

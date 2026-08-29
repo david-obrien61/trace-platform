@@ -10,6 +10,7 @@
  *   GET  /api/qbo/status   → _route=status
  *   GET  /api/qbo/items     → _route=items      (READ-ONLY, paginated, complete)
  *   GET  /api/qbo/customers → _route=customers  (READ-ONLY, paginated, complete)
+ *   GET  /api/qbo/invoices  → _route=invoices   (READ-ONLY, paginated, complete, ceiling-capped)
  */
 
 import crypto from 'crypto';
@@ -18,11 +19,12 @@ import { createClient } from '@supabase/supabase-js';
 import { refreshQBToken } from '../../../shared/src/quickbooks/refresh';
 import { readQBSecrets, writeQBSecrets, QBO_CONNECTION_COLUMNS } from '../../../shared/src/quickbooks/secrets';
 import {
-  type QboEntity, QBO_PAGE_SIZE, QBO_MAX_PAGES,
+  type QboEntity, QBO_PAGE_SIZE, maxPagesFor, ceilingCheck,
   qboCountQuery, qboPageQuery, parseCount, pageIsLast, completeness, classifyFailure,
 } from '../../../shared/src/quickbooks/qboRead';
 import { parseItemList, summariseItems } from '../../../shared/src/quickbooks/itemList';
 import { parseCustomerList, summariseCustomers, previewCustomers } from '../../../shared/src/quickbooks/customerList';
+import { parseInvoiceList, summariseInvoices } from '../../../shared/src/quickbooks/invoiceList';
 import { isPushHeld, QBO_PUSH_HOLD_ENV } from '../../../shared/src/quickbooks/pushHold';
 
 // ─── shared constants ────────────────────────────────────────────────────────
@@ -516,13 +518,33 @@ async function readAllPages(
   const expected = counted.total;
   console.log('[TRACE:QBO] count OK', { entity, realmId, expected, count_readable: counted.ok });
 
+  // ── ①b THE VOLUME CEILING — A STOP, TAKEN BEFORE A SINGLE PAGE IS PULLED ──
+  // 🔴 The count is already in hand here, which is the whole reason this can be a refusal rather
+  // than a regret. An Invoice carries a nested Line[], so an unexpectedly large history is not
+  // "a slower read", it is a download nobody chose. The number is reported so the decision goes
+  // back to the operator instead of being made by a loop.
+  const ceiling = ceilingCheck(entity, expected);
+  if (!ceiling.allowed) {
+    console.log('[TRACE:QBO] STOPPED — above the walk ceiling, nothing pulled', { entity, realmId, expected, ceiling: ceiling.ceiling });
+    res.status(413).json({
+      ok: false, code: 'TOO_MANY', entity, realm_id: realmId, queried_at: queriedAt,
+      expected_total: expected, retrieved_total: 0, ceiling: ceiling.ceiling,
+      headline: ceiling.headline, stored: false,
+      capture: { entity, realm_id: realmId, queried_at: queriedAt, expected_total: expected, retrieved_total: 0, pages },
+    });
+    return null;
+  }
+
   // ── ② THE LOOP ────────────────────────────────────────────────────────────
-  // Bounded two ways: by the SHORT PAGE (the real stop), and by an absolute page ceiling so a
-  // server that keeps answering full pages can never spin this forever.
+  // Bounded two ways: by the SHORT PAGE (the real stop), and by a page ceiling so a server that
+  // keeps answering full pages can never spin this forever. The page ceiling is PER-ENTITY, so
+  // the volume cap above still holds when the count came back unreadable and there was no number
+  // to refuse.
+  const pageCeiling = maxPagesFor(entity);
   const rows: string[] = [];
   let retrieved = 0;
   let start = 1;
-  for (let page = 1; page <= QBO_MAX_PAGES; page++) {
+  for (let page = 1; page <= pageCeiling; page++) {
     const q = qboPageQuery(entity, start);
     const resp = await qboQuery(realmId, token, q);
     if ('networkError' in resp) {
@@ -659,6 +681,45 @@ async function handleCustomers(req: any, res: any) {
   });
 }
 
+// 🔴 THE INVOICE RESPONSE IS SHAPED LIKE THE CUSTOMER ONE, NOT THE ITEM ONE, AND FOR A STRONGER
+// REASON. An invoice names the human who bought and says what they paid, so the parsed records
+// NEVER leave this function: the payload carries only the breakdown — dates, counts, quantities,
+// discount verdicts. There is not even a preview, because there is no shape here worth showing
+// that a summary does not already carry. The complete data reaches the operator exactly once, as
+// the verbatim bodies inside `capture`, which the browser writes straight to a file (R-23/R-24).
+async function handleInvoices(req: any, res: any) {
+  const walked = await readAllPages(req, res, 'Invoice', raw => {
+    const p = parseInvoiceList(raw);
+    return { ok: p.ok, count: p.invoices.length, parseError: p.parseError };
+  });
+  if (!walked) return;
+
+  const invoices = walked.rows.flatMap(raw => parseInvoiceList(raw).invoices);
+  const done = completenessOrRefuse(res, 'Invoice', walked.realmId, walked.queriedAt, walked.expected, invoices.length, walked.pages);
+  if (!done) return;
+
+  const breakdown = summariseInvoices(invoices);
+  // Counts and dates only. `QboInvoiceRow` has no customer NAME field at all, so nothing
+  // personal can reach this line even by accident (R-24 clause c).
+  console.log('[TRACE:QBO] invoices — read COMPLETE', {
+    expected: walked.expected, retrieved: invoices.length,
+    earliest: breakdown.dateRange.earliest, latest: breakdown.dateRange.latest,
+    months_spanned: breakdown.dateRange.monthsSpanned, undated: breakdown.dateRange.undated,
+    lines: breakdown.linesTotal, lines_with_item: breakdown.linesWithItemRef,
+    lines_on_item_1: breakdown.linesOnItemId1, distinct_items: breakdown.distinctItemsSold,
+    total_qty: breakdown.totalQtySold, distinct_customers: breakdown.distinctCustomers,
+  });
+
+  return res.status(200).json({
+    ok: true, entity: 'Invoice', realm_id: walked.realmId, queried_at: walked.queriedAt,
+    expected_total: walked.expected, retrieved_total: invoices.length, complete: true,
+    pages_fetched: walked.pages.length - 1,
+    breakdown,
+    stored: false,
+    capture: done.capture,
+  });
+}
+
 // ─── router (AC-5 dispatch) ───────────────────────────────────────────────────
 
 export default async function handler(req: any, res: any) {
@@ -669,6 +730,7 @@ export default async function handler(req: any, res: any) {
     case 'status':    return handleStatus(req, res);
     case 'items':     return handleItems(req, res);
     case 'customers': return handleCustomers(req, res);
+    case 'invoices':  return handleInvoices(req, res);
     default:
       return res.status(400).json({ error: `Unknown QBO route: ${route || '(none)'}` });
   }

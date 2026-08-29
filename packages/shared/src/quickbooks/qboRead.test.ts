@@ -20,8 +20,9 @@
  *     --bundle --platform=node --format=cjs | node
  */
 import {
-  QBO_PAGE_SIZE, QBO_MAX_PAGES, qboCountQuery, qboPageQuery, parseCount, parseRows,
-  pageIsLast, completeness, rawCaptureFileName, classifyFailure, type QboEntity,
+  QBO_ENTITIES, QBO_ROUTE, QBO_PAGE_SIZE, QBO_MAX_PAGES, QBO_WALK_CEILING, maxPagesFor, ceilingCheck,
+  qboCountQuery, qboPageQuery, parseCount, parseRows,
+  pageIsLast, completeness, rawCaptureFileName, classifyFailure,
 } from './qboRead';
 
 let passed = 0, failed = 0;
@@ -30,7 +31,13 @@ function ok(cond: boolean, msg: string): void {
   if (cond) passed++; else { failed++; failures.push(msg); console.error('   ✗ ' + msg); }
 }
 
-const ENTITIES: QboEntity[] = ['Item', 'Customer'];
+/**
+ * 🔴 DERIVED FROM THE MODULE, NEVER HAND-LISTED. This array used to be typed out here, so the
+ * read-only sweep below covered exactly the entities somebody had remembered to add to it. A
+ * fourth entity is now swept the moment it is declared — a coverage list maintained by hand is
+ * a coverage list that eventually under-covers, silently (R-19).
+ */
+const ENTITIES = QBO_ENTITIES;
 
 // ══ §A THE QUERIES — READ-ONLY, BOTH ENTITIES, EVERY PAGE POSITION ═══════════
 {
@@ -51,6 +58,11 @@ const ENTITIES: QboEntity[] = ['Item', 'Customer'];
     }
   }
   ok(clean, '🔴 READ-ONLY (R-23 clause a): no query this module can generate — either entity, any page position — contains a write verb');
+
+  ok(ENTITIES.includes('Invoice'), 'the invoice entity is declared — the read the item and customer reads were a detour around');
+  ok(qboCountQuery('Invoice') === 'select count(*) from Invoice', 'the invoice count query is exact');
+  ok(qboPageQuery('Invoice', 1001) === 'select * from Invoice startposition 1001 maxresults 1000',
+    'and the invoice walk is the SAME walk with one word changed — one implementation, three entities (§6 r8)');
 
   ok(qboPageQuery('Item', 0).includes('startposition 1'), 'a startposition below 1 is clamped to 1 rather than sent as 0, which Intuit rejects');
   ok(qboPageQuery('Item', -5).includes('startposition 1'), 'and a negative one is too');
@@ -148,16 +160,54 @@ const ENTITIES: QboEntity[] = ['Item', 'Customer'];
   ok(pageIsLast(127, 1000) === true, "the tail page of a 1127-row list ends the loop");
 }
 
+// ══ §E2 THE WALK CEILING — HOW BIG A LIST WE WILL PULL IN ONE GO ════════════
+{
+  ok(QBO_WALK_CEILING.Invoice === 10_000,
+    'the invoice walk stops above 10,000 records — an invoice carries a nested Line[], so a year of a busy nursery is a materially bigger object than a year of its customers');
+  ok(ceilingCheck('Invoice', 1_800).allowed === true, 'a normal history walks');
+  ok(ceilingCheck('Invoice', 10_000).allowed === true, 'exactly at the ceiling still walks — the ceiling is a limit, not an exclusive bound');
+
+  const tooMany = ceilingCheck('Invoice', 42_000);
+  ok(tooMany.allowed === false,
+    '🔴 A LIST ABOVE THE CEILING IS REFUSED BEFORE THE WALK, NOT WARNED ABOUT AFTER IT. The count is already in hand at that point, so nothing is downloaded to find out');
+  ok(/42,000/.test(tooMany.headline ?? ''),
+    'and the refusal QUOTES THE REAL NUMBER — "too many" without the number leaves the operator unable to decide, which is the decision the stop exists to hand back');
+  ok(/10,000/.test(tooMany.headline ?? ''), 'and the ceiling it exceeded');
+
+  ok(ceilingCheck('Invoice', null).allowed === true,
+    'an UNREADABLE count is allowed past this check — refusing here would report "too many" for a company that might hold three');
+  ok(maxPagesFor('Invoice') === 10,
+    '🔴 AND THAT IS NOT A HOLE, BECAUSE THE LOOP IS BOUNDED TOO: 10 pages of 1000 holds the invoice ceiling even when no count arrived to compare against');
+  ok(maxPagesFor('Item') === QBO_MAX_PAGES && maxPagesFor('Customer') === QBO_MAX_PAGES,
+    'the two reads that already shipped keep the page bound they had — this constant does not quietly narrow a live behaviour');
+  for (const e of ENTITIES) {
+    ok(maxPagesFor(e) >= 1 && maxPagesFor(e) <= QBO_MAX_PAGES, `${e} walks at least one page and never more than the absolute stop`);
+  }
+}
+
 // ══ §F THE CAPTURE FILENAME — attributable, entity-labelled, safe ═══════════
 {
   const at = new Date('2026-08-29T19:04:05.678Z');
   const items = rawCaptureFileName('Item', '9341455222430707', at);
   const custs = rawCaptureFileName('Customer', '9341455222430707', at);
+  const invs  = rawCaptureFileName('Invoice', '9341455222430707', at);
 
   ok(items.startsWith('qbo-items-9341455222430707-'), 'the realm is in the item file name — a capture found later says which company it came from');
   ok(custs.startsWith('qbo-customers-9341455222430707-'), 'and the customer file is named for its entity');
+  ok(invs.startsWith('qbo-invoices-9341455222430707-'),
+    '🔴 and the invoice file says INVOICES. The name used to be a ternary defaulting to "items", under which this file would have filed a customer\'s billing history as a product catalogue — in a downloads folder, where nobody would look at it twice');
+  ok(new Set(ENTITIES.map(e => rawCaptureFileName(e, 'r', at))).size === ENTITIES.length,
+    '🔴 EVERY entity produces a DISTINCT file name — swept over the declared list, so a fourth entity cannot silently reuse a third\'s name');
+  // 🔴 ONE MAP, TWO CONSUMERS. The client builds `/api/qbo/<route>` from this same constant,
+  // because it used to hold its own ternary copy and an invoice read would have hit the ITEM
+  // endpoint. If the file word and the route word ever disagree, one of them is a wrong answer.
+  ok(ENTITIES.every(e => rawCaptureFileName(e, 'r', at).startsWith(`qbo-${QBO_ROUTE[e]}-`)),
+    '🔴 the capture file name IS the route word for every entity — one fact, one map, so adding an entity forces both at once in the compiler (STD-011)');
+  ok(new Set(ENTITIES.map(e => QBO_ROUTE[e])).size === ENTITIES.length,
+    'and every entity has a DISTINCT route, so no two reads can address the same endpoint');
+
   ok(items !== custs,
-    '🔴 THE TWO FILES CANNOT COLLIDE OR BE CONFUSED. One is a product catalogue; the other is ~1,900 real people. A person who finds one must be able to tell which they are holding');
+    '🔴 THE FILES CANNOT COLLIDE OR BE CONFUSED. One is a product catalogue; one is ~1,900 real people; one is what those people bought. A person who finds one must be able to tell which they are holding');
   ok(items.endsWith('.json') && custs.endsWith('.json'), 'both are .json — on failure the file holds Intuit\'s verbatim error body, which is JSON too');
   ok(!items.includes(':') && !/[/\\]/.test(items),
     'no colons and no separators — a colon breaks the filename on some filesystems and a slash would let a realm value steer the write somewhere else');
