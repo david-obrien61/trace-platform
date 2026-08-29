@@ -164,6 +164,26 @@ export function Confirmation() {
           />
         ))}
 
+        {/* HELD — a DELIBERATE pause, and the only one of the four non-success states where
+            nothing is wrong and there is no owner action. It gets its own copy because the
+            other two both point at a problem: `not_connected` says reconnect (false — it IS
+            connected), `failed` says fix it (false — nothing failed). The order completed. */}
+        {qbState === 'held' && (ownerView ? (
+          <StatusBadge
+            icon="⏸"
+            color="amber"
+            title="Order saved — invoice NOT sent to QuickBooks (sending is paused)"
+            detail={qbError || 'Sending invoices to QuickBooks is paused for this business. The order is saved and correct. David can lift the pause.'}
+          />
+        ) : (
+          <StatusBadge
+            icon="✓"
+            color="green"
+            title="Order confirmed — invoice to follow"
+            detail={`Your order is saved. ${businessName ?? 'The nursery'} will send your invoice.`}
+          />
+        ))}
+
         {/* FAILED — a real error. Say so. Give the owner the reason and the next action; give the
             customer a true, neutral state with no accounting internals and no owner instruction. */}
         {qbState === 'failed' && (ownerView ? (

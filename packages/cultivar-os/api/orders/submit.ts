@@ -1184,7 +1184,7 @@ async function handleCreate(req: any, res: any) {
     let qbInvoiceId: string | undefined;
     let qbInvoiceNumber: string | undefined;
     let qbInvoiceUrl: string | undefined;
-    let qbStatus: 'success' | 'failed' | 'not_connected' = 'failed';
+    let qbStatus: 'success' | 'failed' | 'not_connected' | 'held' = 'failed';
     let qbError: string | undefined;
     try {
       const qb = await pushQboInvoice(orderId, businessId);
@@ -1194,6 +1194,13 @@ async function handleCreate(req: any, res: any) {
         qbInvoiceNumber = qbBody.qb_invoice_number;
         qbInvoiceUrl    = qbBody.qb_invoice_url;
         qbStatus        = 'success';
+      } else if (qb.status === 409 && qbBody.code === 'PUSH_HELD') {
+        // A DELIBERATE PAUSE, NOT A FAILURE — and it must not render as either of the other
+        // two. `not_connected` would tell the owner to reconnect an already-connected
+        // QuickBooks; `failed` would send them hunting a problem that does not exist. The
+        // order below is complete and correct; only the push was skipped.
+        qbStatus = 'held';
+        qbError  = String(qbBody.error ?? 'Sending invoices to QuickBooks is paused for this business.');
       } else if (qb.status === 503) {
         qbStatus = 'not_connected';
         qbError  = String(qbBody.error ?? 'QuickBooks not connected');

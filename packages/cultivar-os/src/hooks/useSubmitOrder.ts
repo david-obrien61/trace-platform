@@ -18,8 +18,17 @@ import { nettedQuantity, lineSubtotal, totalPlantCount, isNettingOffering } from
  *   • 'success'       — the invoice exists in QBO.
  *   • 'not_connected' — QBO isn't connected / the token expired (503) → connect, then re-push.
  *   • 'failed'        — QBO rejected it or the call failed → the owner sees the reason and fixes it.
+ *   • 'held'          — the push is deliberately PAUSED for this business (409 PUSH_HELD) → the
+ *                       order is complete and correct and NOTHING is wrong; there is no owner
+ *                       action, and the copy says who can lift it.
+ *
+ * 🔴 'held' IS A FOURTH STATE RATHER THAN A REUSE OF 'not_connected', and the reason is the
+ * same one that created these three: `not_connected` renders "QuickBooks isn't connected —
+ * connect it from the owner dashboard", which on a held push is FALSE TWICE (it IS connected,
+ * and reconnecting changes nothing). That is the exact shape of the defect D-48 ended. A
+ * deliberate pause reported as a connection problem is a lie with a call to action attached.
  */
-export type QbSyncStatus = 'success' | 'not_connected' | 'failed';
+export type QbSyncStatus = 'success' | 'not_connected' | 'failed' | 'held';
 
 export interface OrderBreakdown {
   lines:               PricedLine[];
