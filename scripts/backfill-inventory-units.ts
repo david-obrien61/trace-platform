@@ -7,8 +7,16 @@
  *               touches `size`.
  *
  * RUN:
- *   node_modules/.bin/esbuild scripts/backfill-inventory-units.ts --bundle --platform=node \
- *     --format=cjs --external:@supabase/supabase-js | node -- [--verify] [--business=<uuid>]
+ *   npm run units:backfill                    # READ, then WRITE the projection where it is missing
+ *   npm run units:backfill -- --verify        # READ ONLY — re-derives everything, writes NOTHING
+ *   npm run units:backfill -- --business=<uuid>
+ *
+ * 🔴 THE npm SCRIPT BUILDS TO A FILE AND RUNS THE FILE — it does NOT pipe into `node`, and that is
+ *    not a style choice. When node reads a script from STDIN, `process.argv` holds only `['node']`:
+ *    every flag below would be silently invisible, and `-- --verify` lands on the node BINARY
+ *    (`node: bad option: --verify`). Shipped that way on 2026-08-30 and caught the first time a flag
+ *    was actually needed — a documented invocation that could never have worked. Do not "simplify"
+ *    it back to a pipe.
  *
  *   (no flag)          READ, then WRITE the projection onto rows that need it. Idempotent.
  *   --verify           READ ONLY. Re-derives every row and reports any disagreement with what is
@@ -40,6 +48,7 @@
  */
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
 import {
   unitColumnsFor, summariseUnits, UNIT_COLUMNS,
   type UnitColumns,
@@ -56,14 +65,38 @@ const VERIFY_ONLY = flag('verify');
 const ONE_TENANT  = arg('business');
 
 // ── credential ────────────────────────────────────────────────────────────────────────────────
+// 🔴 RESOLVED FROM cwd, WALKING UP — NOT from `import.meta.url`, and the reason is a defect this
+// script shipped with on 2026-08-30. esbuild bundles this to `node_modules/.cache/`, so an
+// `import.meta.url`-relative path resolved to `node_modules/packages/cultivar-os/.env.local` and the
+// script reported NO CREDENTIAL while a perfectly good service key sat on disk. **A path that
+// depends on where the bundler happened to put the output is not a path.**
+// It also PRINTS the file it read (R-26 — a claim names what was opened to produce it), so
+// "MISSING" can never again mean "I looked somewhere you didn't."
 let env: Record<string, string> = {};
-try {
-  const txt = readFileSync(new URL('../packages/cultivar-os/.env.local', import.meta.url), 'utf8');
-  env = Object.fromEntries(
-    txt.split('\n').filter(l => l.includes('=') && !l.trim().startsWith('#'))
-      .map(l => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, '')]; }),
-  );
-} catch { /* reported below — an absent file is the same answer as an absent key */ }
+let envPath = '(none found)';
+{
+  const candidates: string[] = [];
+  let dir = process.cwd();
+  for (let i = 0; i < 6; i++) {
+    candidates.push(join(dir, 'packages/cultivar-os/.env.local'), join(dir, '.env.local'));
+    const up = dirname(dir);
+    if (up === dir) break;
+    dir = up;
+  }
+  for (const c of candidates) {
+    try {
+      const txt = readFileSync(c, 'utf8');
+      const parsed = Object.fromEntries(
+        txt.split('\n').filter(l => l.includes('=') && !l.trim().startsWith('#'))
+          .map(l => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, '')]; }),
+      ) as Record<string, string>;
+      // the FIRST file that actually carries a service key wins — an empty .env.local at the repo
+      // root must not shadow a populated one inside the package (it did, on the first attempt).
+      if (parsed.SUPABASE_SERVICE_KEY) { env = parsed; envPath = c; break; }
+      if (envPath === '(none found)') { env = parsed; envPath = c; }
+    } catch { /* try the next candidate */ }
+  }
+}
 
 const URL_ = env.SUPABASE_URL || env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const KEY  = env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_KEY || '';
@@ -73,6 +106,7 @@ if (!URL_ || !KEY) {
   console.error(`\n${RED}✗ NO SERVICE CREDENTIAL — nothing was read and nothing was written.${O}`);
   console.error(`  SUPABASE_URL         ${URL_ ? GRN + 'present' + O : RED + 'MISSING' + O}`);
   console.error(`  SUPABASE_SERVICE_KEY ${KEY  ? GRN + 'present' + O : RED + 'MISSING' + O}`);
+  console.error(`  ${DIM}read from: ${envPath}${O}`);
   console.error(`\n${DIM}  Set both in packages/cultivar-os/.env.local (or the environment) and re-run.`);
   console.error(`  The anon key cannot do this: RLS scopes it to the signed-in member, and this walks every tenant.${O}\n`);
   process.exit(2);
@@ -99,7 +133,7 @@ const same = (a: UnitColumns, b: UnitColumns) => UNIT_COLUMNS.every(c => {
 
 async function main() {
   console.log(`\n${BLD}UNIT PROJECTION — ${VERIFY_ONLY ? 'VERIFY (read-only)' : 'BACKFILL'}${O} ${DIM}${new Date().toISOString()}${O}`);
-  console.log(`[TRACE:UNITS] start`, JSON.stringify({ mode: VERIFY_ONLY ? 'verify' : 'backfill', tenant: ONE_TENANT ?? 'ALL' }));
+  console.log(`[TRACE:UNITS] start`, JSON.stringify({ mode: VERIFY_ONLY ? 'verify' : 'backfill', tenant: ONE_TENANT ?? 'ALL', env: envPath }));
 
   // ── page the whole table; PostgREST caps a response, and a silent truncation here would produce
   //    a confident wrong number — R-24: a list that cannot prove it is the whole list is a failure.

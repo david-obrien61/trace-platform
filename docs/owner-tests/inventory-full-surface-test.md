@@ -789,43 +789,43 @@ SIGNAL: V6 returns 0
 
 ## SURFACE: unit-of-measure (ledger #234 — what a quantity actually MEANS)
 
-> **Five NEW cards.** ⛔ **CARDS U1–U4 are `blocked` until `supabase/migrations/20260830_inventory_unit_of_measure.sql`
-> is applied in the SQL editor** (§6 r17 — the SQL editor, **not** the table editor). U5 is runnable today.
+> **Five cards.** ✅ **UNBLOCKED 2026-08-30 — `20260830_inventory_unit_of_measure.sql` is APPLIED and catalog-verified (A)–(G), and the
+> backfill has RUN: 478 rows written across 3 tenants, zero disagreements.** U1 is **covered** on David's own (F) run. U2–U4 are `owed`:
+> Thunder ran the script and the output is recorded below, but **Thunder never sets `covered`** (OP-14) — a re-run by David closes them.
 > **The whole point of this build is that NOTHING ELSE ON THIS BOARD SHOULD CHANGE** — if any other
 > inventory card behaves differently after this ships, that is the finding, and it outranks all five.
 
 ### U1 · The guard lets go — a size change never leaves a stale unit
-STATUS: blocked
+STATUS: covered
 DEVICE: desktop
 COVERS: #234
-LAST-PROVEN: never
+LAST-PROVEN: 2026-08-30 — **David ran verify block (F) himself and reported the result.** `size` moved to `'1 Yard Scoop'` and `unit_kind`, `unit_value` and `unit_parsed_from` ALL WENT NULL: the projection let go rather than continuing to claim the row was a 45-gallon container. Rolled back. **(A)–(G) all pass**: 5 columns correct + nullable · both NAMED CHECKs with the definitions as written and **nothing referencing `size`** · the trigger live BEFORE INSERT OR UPDATE beside the pre-existing `updated_at` one · 578 rows, 0 parsed, nothing rewritten or lost · 5 policies identical to before apply.
 SIGNAL: none needed — this is the transaction in the migration's own VERIFY block (F).
-BLOCKED-BY: migration 20260830 not applied.
 - **Do:** in the Supabase **SQL editor**, run verify block **(F)** at the foot of `20260830_inventory_unit_of_measure.sql` verbatim. It is wrapped in `BEGIN … ROLLBACK` and writes nothing permanent.
 - **PASS:** the INSERT returns `container | 45 | 45 gal` — a consistent projection survives. The UPDATE to `'1 Yard Scoop'` returns `unit_kind NULL`, `unit_value NULL`, `unit_parsed_from NULL`.
 - **FAIL:** the UPDATE returns `container | 45` still — **the projection is now LYING about the row**, and every number derived from it downstream is wrong. Or the UPDATE ERRORS on a check violation — the trigger is missing and the count screen will break the same way.
 - **Why:** this is the single behaviour that makes the unit columns a projection instead of a parallel truth. Everything else in this build assumes it.
 
 ### U2 · The backfill reports per tenant, and LISTS what it could not read
-STATUS: blocked
+STATUS: owed
 DEVICE: desktop
 COVERS: #234
-LAST-PROVEN: never
+LAST-PROVEN: never — **but RUN by Thunder 2026-08-30 and the output is recorded here.** Thunder never sets `covered` (OP-14); a re-run by David closes it.
 SIGNAL: `[TRACE:UNITS] tenant {...}` — one line per business_id, with parsed / refused / notYetParsed / disagreements.
-BLOCKED-BY: migration 20260830 not applied, AND a `SUPABASE_SERVICE_KEY` in `packages/cultivar-os/.env.local` (it is EMPTY today).
+RECORDED RUN (2026-08-30, after apply): **578 rows / 3 tenants.** LAWNS `ed2e5933` **447 rows · 447 parsed · 0 refused · 0 no-size · 447 written**. Test Dave's `f7ec5d67` **130 rows · 31 parsed · 0 refused · 99 no-size · 31 written**. Third `06065fe7` **1 row · 0 parsed · 1 no-size · 0 written**. **478 written, 0 failed, 0 disagreements.** Confirming `--verify` re-run: needing-a-write **0** on every tenant. The three per-tenant totals match David's own pre-backfill catalog counts exactly (447 / 130-of-which-31 / 1), which is an independent cross-check that the script read the whole table and not a page of it.
 - **Do:** `npm run units:backfill -- --verify` first (**read-only, writes nothing**). Read the output. Then, if it looks right, `npm run units:backfill` to write.
 - **PASS:** one block per tenant, LAWNS labelled. `parsed + refused + no size` equals the tenant's row count exactly. Every unparsed value is **printed as a string**, not just counted. `disagreements` is **0**.
 - **FAIL:** any tenant's three buckets do not sum to its row count *(a row fell through the classification)* · `disagreements > 0` *(the guard from U1 is not applied — stop and fix that first)* · the script reports numbers while the migration is unapplied *(it should refuse; a zero here would be a lie)*.
 - **⚠️ EXPECTED, NOT A FAILURE:** `notYetParsed` climbing again on later runs. The count screen and the import CREATE path write `size` through RPCs that know nothing about units — deliberately out of scope — so they mint unparsed rows. Re-run; it is idempotent.
 - **Why:** *"how many parsed"* is a claim. *"here are the ones I could not read"* is evidence, and it is the only form that lets Lauren or Joel actually answer.
 
-### U3 · The three trade codes come back UNREAD, and someone names them
-STATUS: blocked
+### U3 · The unparsed list — and on LAWNS it came back EMPTY
+STATUS: owed
 DEVICE: desktop
 COVERS: #234
-LAST-PROVEN: never
+LAST-PROVEN: never — RUN by Thunder 2026-08-30; result below. David's re-run closes it.
 SIGNAL: the `unparsed size values` list in U2's output.
-BLOCKED-BY: U2.
+🔴 **RESULT, AND IT IS NOT THE EXPECTED ONE: LAWNS REFUSED NOTHING. 447 of 447 parsed, and all 447 are `unit_kind = container`.** The three trade codes this card was written to catch — `3GP`, `1DP`, `2DP` — **are not in `business_inventory.size` at all** (checked directly, all three absent). They came from LAWNS's QuickBooks item descriptions and vendor invoices, which is where the Stage 0 corpus was drawn from; they have never been in this table. ⚠️ **So a 0 here is REAL, not a false green — and the reason it is real is the finding: the 447 rows are exclusively container gallons.** Every other unit family in the corpus (yard scoops, weight bags, bottles, by-the-roll, T-post kits) is in QuickBooks and NOT in the platform. **The refusals will arrive with the 685-item import, not before it** — which is precisely when this card starts earning its keep. Re-run it then.
 - **Do:** read U2's unparsed list for LAWNS. Take it to Lauren or Joel.
 - **PASS:** the list contains **`3GP`, `1DP`, `2DP`** (and whatever else live data holds), each with a count. Nothing in the catalogue silently became a gallon.
 - **FAIL:** the list is empty while rows carry sizes like `3GP` — **the parser guessed**, which is the one thing it must never do.
@@ -833,12 +833,12 @@ BLOCKED-BY: U2.
 - **Why:** §1.6 item 3 — an honest "unknown", never a fabricated value.
 
 ### U4 · Fertile Compost Mix flags as ONE product in TWO kinds of unit
-STATUS: blocked
+STATUS: owed
 DEVICE: desktop
 COVERS: #234
-LAST-PROVEN: never
+LAST-PROVEN: never — RUN by Thunder 2026-08-30; result below.
 SIGNAL: `⚑ MULTI-UNIT FAMILIES` in U2's output.
-BLOCKED-BY: U2 — **and additionally on the five compost SKUs existing in `business_inventory` with a shared `variant_group`.** They are QuickBooks items today; if the import has not run, this card cannot fire and that is not a defect.
+🔴 **RESULT: NO FAMILY FLAGGED ON ANY TENANT, AND THAT IS CORRECT RATHER THAN A FAILURE — now MEASURED, where before it was predicted.** All 447 LAWNS rows and all 31 sized Test Dave's rows are `unit_kind = container`; **a flag needs two KINDS in one `variant_group` and there is only one kind in the whole database.** The five compost SKUs are QuickBooks items and have never been `business_inventory` rows. **This card cannot fire until the import runs, and the day it does is the day it matters.** The detection itself is proven over a fixture in `npm run verify` (the five real compost SKUs, `container + volume`, all five named).
 - **Do:** look for the `⚑ MULTI-UNIT FAMILIES` block in U2's output.
 - **PASS:** the compost family is named, reported as `container + volume`, and **all five rows are listed by name** — FCMB15/30/45 and SFCM1/SFCM2.
 - **FAIL:** the family is silently merged, converted, or offered as a picker. **None of those should exist.** This pass REPORTS; it does not reconcile.
