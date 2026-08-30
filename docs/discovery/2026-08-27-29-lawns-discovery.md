@@ -179,6 +179,24 @@ Background (nobody waiting): `member_devices` last-seen/insert, `refresh.ts:49/:
 
 ## 4.3 🔴 The twelve literals — bigger and differently shaped than first described
 
+> ⚠️ **CORRECTED AFTER FILING (2026-08-30, ledger #237 + #239) — READ THIS BEFORE THE TABLE BELOW.**
+> **(a) EVERY LINE NUMBER IN THIS SECTION IS NOW WRONG, AND THE TABLE IS KEPT ONLY AS A RECORD OF WHAT
+> WAS FOUND.** #237 rewrote `buildQboInvoiceLines` and moved every one of them; #238 removed one
+> outright. Cite the CONSTRUCT, not the number — that is now ruling **[[R-29]]**, and this section is
+> the evidence for it.
+> **(b) THE TWELVE LITERALS ARE GONE** (#237): one rule replaced them — a $0 line is a
+> `DescriptionOnly` note, a line carrying money must resolve an Intuit **Id** or the push **refuses**.
+> **(c) `:542`, THE LEGACY INSTALLATION LINE, WAS DELETED** (#239) rather than mapped. It was backed by
+> no row, unreachable from checkout by construction, refused on history orders, and — measured across
+> all **1,469** captured invoices / 5,371 lines — **it had never once fired.**
+> **(d) 🔴 AND THE CORRECTED INSTALLATION NUMBERS, WHICH MATTER FOR HOW LAWNS ACTUALLY BILL:** an earlier
+> reading that *"only 29 invoices carry any installation line"* **could not be reproduced under four
+> definitions** and is withdrawn. Measured against the capture: **624 invoices bake installation into
+> the plant's own line** (`Live Oak - 200 gallon (Install & Warranty)`), and **4 invoices / 5 lines** use
+> a real priced item, **`137 · Installation`** ($200–$4,500, qty 1–2, **never $0**). Neither way is a $0
+> line, which is what settled (c).
+> **(e)** Item `1` is named **"Sales"**, not "Services" — "Services" is a *different* item, `172`.
+
 All in `cultivar.ts`. **Only about five actually want an item id.**
 
 **① Revenue lines that need a real Item id**
@@ -200,9 +218,9 @@ All in `cultivar.ts`. **Only about five actually want an item id.**
 - `:320` `discountLine()` — a negative SalesItemLine against a service item. QBO's construct is `DiscountLineDetail`.
 - 🔴 `:580` **SALES TAX pushed as a SalesItemLine against item '1'.** QBO's construct is `TxnTaxDetail`. **This inflates revenue by the tax amount** and is arguably worse than the goods line — their P&L already carries $85,281 of sales tax.
 
-**Dormant, named so a future grep does not rediscover them as live:** `shared/quickbooks/invoice.ts:90` (dead — calls an endpoint in neither `api/` nor `vercel.json`) · `packages/ignition-os/ExternalBridge.js:212` (frozen donor).
+**Dormant, named so a future grep does not rediscover them as live:** ~~`shared/quickbooks/invoice.ts:90`~~ ✅ **DELETED 2026-08-30 (#239) — it was the THIRTEENTH `ItemRef:{value:'1'}` literal, and #237's "twelve → zero" was true of ONE FILE rather than of the platform.** Zero callers on all six of its exports, but exported through the shared barrel (so knip, which treats `shared` as an all-entry library, could never flag it), and its `push` POSTed a payload shape the endpoint rejects. The file and its `index.ts` export are gone; the `/api/qbo/invoices` READ capability is untouched and lives in `api/qbo/router.ts` + `QboBooksReader.tsx`, which never went through it. · `packages/ignition-os/ExternalBridge.js:212` (frozen donor, still dormant).
 
-⚠️ **Line numbers are as of `78bf37f` and will drift.** Re-grep `ItemRef` before the mapping pass rather than trusting this table.
+⚠️ **Line numbers are as of `78bf37f` and HAVE NOW DRIFTED — every one of them.** This warning was right and it under-sold itself: #237 rewrote the function and #239 deleted a line outright, so the numbers above are a historical record, not a locator. **This paragraph is the origin of ruling [[R-29]] — cite the CONSTRUCT, use the line number only as a hint.** Grep `resolveQboItemRef` / `pushRevenueLine` in `buildQboInvoiceLines`; there is no `ItemRef` literal left to find.
 
 ## 4.4 Approved and shipped
 

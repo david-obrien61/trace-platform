@@ -374,21 +374,30 @@ function zeroLinesAreNotes(): void {
   ok(find(legacy, 'staff transport')?.DetailType === 'DescriptionOnly',
      'E4 the legacy staff-transport line is a note too');
 
-  // 🔴 E5 — THE LEGACY INSTALLATION LINE. $0 by construction today (install pricing moved to
-  // service_offerings and was never re-wired), so it lands as a note and needs no id — which is
-  // exactly why it is FLAGGED AS ITS OWN DECISION rather than folded in with the mapped four: it
-  // is backed by NO ROW, so there is nothing that could ever carry an id for it.
+  // 🔴 E5 — THE LEGACY INSTALLATION LINE IS GONE, AND THIS IS THE REGRESSION GUARD (#239).
+  // It used to assert the opposite: that `Installation service · N plant(s)` rendered as a $0 note.
+  // It was removed on measurement, not preference — unreachable from checkout by construction
+  // (submit.ts:799's `{transport_mode:'self'}` fallback forces a service-selection row onto every
+  // 'install' order, so useNewModel is true and this branch is never entered), refused outright on
+  // history orders, and ZERO occurrences across LAWNS's 1,469 captured invoices / 5,371 lines.
+  // A $0 revenue line backed by NO ROW is a path that looks live to the next reader; this assertion
+  // is what stops it being re-added by someone reading `transport_method === 'install'` and
+  // assuming a line is owed.
   const install = linesOf(build({
     useNewModel: false, serviceSelections: [], orderItems: MAPPED_ITEMS, orderAddons: [],
     order: { ...ORDER, transport_method: 'install' },
   }));
-  const installLine = find(install, 'Installation service');
-  ok(installLine?.DetailType === 'DescriptionOnly',
-     `E5 the $0 legacy install line is a note — got "${installLine?.DetailType}"`);
+  ok(find(install, 'Installation service') === undefined,
+     'E5 🔴 an install order emits NO installation line at all — the branch is gone, not re-shaped');
+  ok(find(install, 'staff transport')?.DetailType === 'DescriptionOnly',
+     'E5b it takes the staff-transport note instead — the weaker TRUE claim, never a fabricated sale');
+  ok(install.every(l => l.DetailType !== 'SalesItemLineDetail' || Number(l.Amount) !== 0),
+     'E5c and no $0 revenue line survives anywhere on that order');
 
-  // 🔴 E6 — AND THE DAY IT ACQUIRES A PRICE IT BECOMES REVENUE AND REFUSES, naming `source:'none'`
-  // so the refusal says "this line is backed by nothing" rather than "fix a row" that does not
-  // exist. This is the flag made mechanical instead of a comment.
+  // 🔴 E6 — THE LEGACY ADDON PATH (which STAYS — see tech-debt #128): a PRICED legacy line becomes
+  // revenue and REFUSES, naming `addons` as the table that owes the mapping. `order_addons` holds
+  // zero rows platform-wide today, so this path is dead by DATA rather than by code — a weaker
+  // guarantee than E5's, which is exactly why the code is still asserted and still here.
   const pricedInstall = build({
     useNewModel: false, serviceSelections: [], orderItems: MAPPED_ITEMS, orderAddons: [
       { quantity: 1, unit_price: 250, subtotal: 250, addons: { name: 'Installation', trigger_rule: null } },

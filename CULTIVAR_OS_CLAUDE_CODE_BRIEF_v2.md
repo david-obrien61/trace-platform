@@ -42,7 +42,7 @@ This project inherits a fully-built shared module from Ignition OS. The rule is 
 | Auth / login / session | ❌ Do not write Login.tsx from scratch | ✅ Import from `packages/shared/src/supabase/auth.ts` |
 | Supabase client | ❌ Do not initialize a new client | ✅ Import from `packages/shared/src/supabase/client.ts` |
 | QB OAuth flow | ❌ Do not write new OAuth | ✅ Import from `packages/shared/src/quickbooks/oauth.ts` |
-| QB invoice creation | ❌ Do not write new invoice logic | ✅ Import from `packages/shared/src/quickbooks/invoice.ts` |
+| QB invoice creation | ❌ Do not write new invoice logic | ⚠️ **`shared/quickbooks/invoice.ts` was DELETED 2026-08-30 (#239) — dead, zero callers.** The live invoice push is `packages/cultivar-os/api/qbo/invoice/cultivar.ts` (`pushQboInvoice`); line SHAPES are `shared/src/quickbooks/invoiceLineShapes.ts` |
 | QB customer lookup | ❌ Do not write new customer logic | ✅ Import from `packages/shared/src/quickbooks/customer.ts` |
 | QR code generation | ❌ Do not add qrcode.js directly | ✅ Import from `packages/shared/src/qr/generate.ts` |
 | ZPL label printing | ❌ Do not write new ZPL logic | ✅ Import from `packages/shared/src/qr/print.ts` |
@@ -741,7 +741,7 @@ Goal: Invoice appears in QB when order is created.
 
 SHARED MODULE CHECK:
 - QB OAuth → import handle_connect, handle_callback from packages/shared/quickbooks/oauth.ts
-- QB invoice → import create_invoice from packages/shared/quickbooks/invoice.ts
+- QB invoice → ⚠️ **STALE: `packages/shared/quickbooks/invoice.ts` was DELETED 2026-08-30 (#239); `create_invoice` never existed on it.** Use `pushQboInvoice` from `packages/cultivar-os/api/qbo/invoice/cultivar.ts`
 - QB customer → import find_or_create_customer from packages/shared/quickbooks/customer.ts
 - Do NOT write new QB OAuth or invoice logic — wire the shared modules only
 

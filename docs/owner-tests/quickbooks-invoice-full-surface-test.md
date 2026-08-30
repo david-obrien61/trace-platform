@@ -623,3 +623,45 @@ confirm it without completing a real order against Terry's books.
 - **PASS:** LAWNS is held. **FAIL:** LAWNS is not held.
 - 🔴 **THE HOLD COMES OFF WHEN DAVID HAS WATCHED ONE INVOICE LAND CORRECTLY IN REAL BOOKS** — not
   when a build says it should work, and not when CARDS 15–17 pass on Test Dave's.
+
+
+---
+
+### CARD 19 — 🔴 THE INSTALLATION LINE IS GONE, AND NOTHING PRINTS IN ITS PLACE
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #239 · the removed `transport_method === 'install'` branch
+SIGNAL: a legacy install order's invoice carries **no line mentioning installation at all.**
+⚠️ **BLOCKED-ON: pass ② (the item mapping)**, exactly like CARDS 15–17 — until a revenue line can
+resolve an id, no invoice reaches QuickBooks, so there is nothing to look at. Run it with those.
+
+🔴 **WHAT THIS IS ABOUT, AND WHY IT IS A CARD RATHER THAN JUST A DELETION.** The push used to build
+a REVENUE line — `Installation service · N plant(s)` — from a hardcoded `0`, backed by **no row at
+all**. It was born with a real source (`plants.install_price`, $225) and lost it on 2026-06-13 when
+that column was dropped; it then sat backed by nothing for 78 days. It is now **removed**, not
+re-shaped.
+
+✅ **YOUR OWN BOOKS ARE WHY.** Across all **1,469** captured invoices / 5,371 lines the shape it
+emitted appears **ZERO** times. LAWNS bill installation two ways and **neither is a $0 line**: baked
+into the plant's own line (`Live Oak - 200 gallon (Install & Warranty)` — **624 invoices**) or as a
+real priced item, **`137 · Installation`**, $200–$4,500 (**4 invoices, 5 lines**). We were not
+preserving a path you use; we were preserving one you have never used.
+
+**HOW TO RUN:** complete an order on **Test Dave's, never LAWNS** where the business delivers and
+plants, then open the invoice in QuickBooks.
+- **PASS:** there is **no `Installation service` line**, and no $0 line with an empty description
+  where one used to be. Delivery/placement still appear as their own service lines with real money
+  on them, and the invoice total is unchanged from what TRACE charged.
+- **FAIL:** an installation line appears (the branch came back) · a stray $0 line appears · **the
+  total changed** — that last one would mean the removed line had been carrying money, which the
+  measurement says it never did; **report the invoice and stop.**
+
+⚠️ **A LEGACY `install` ORDER NOW PRINTS THE `staff transport` NOTE INSTEAD.** That is deliberate
+and it is the weaker of two true claims — staff did carry it. The order's own `transport_method`
+still records that it was an install; a $0 invoice line was never where that fact lived.
+
+✅ **ALREADY PROVEN IN CODE, WHICH IS WHY THIS CARD IS ABOUT THE BOOKS AND NOT THE LOGIC:** the
+payload suite asserts an install order emits no installation line, takes the staff-transport note,
+and carries no $0 revenue line anywhere (E5/E5b/E5c) — and the guard was **mutation-tested**: with
+the branch restored, 2 of 2 assertions fail.

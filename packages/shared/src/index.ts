@@ -9,7 +9,6 @@ export * from './auth';
 // QuickBooks
 export * from './quickbooks/oauth';
 export * from './quickbooks/customer';
-export * from './quickbooks/invoice';
 export * from './quickbooks/customerIdentity';
 
 // AI Engine

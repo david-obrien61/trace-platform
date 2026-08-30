@@ -399,9 +399,11 @@ export function buildQboInvoiceLines(args: {
    * refusal — there is no third outcome and no default.
    *
    * A $0 amount is routed to a documentation line instead, which is what makes the rule uniform:
-   * the legacy installation line is $0 only because install pricing moved to `service_offerings`
-   * and was never re-wired, and the day it acquires a price it becomes revenue here rather than
-   * quietly keeping whatever id it last held.
+   * a declined add-on and an included transport are both facts worth PRINTING and neither is a sale,
+   * so the amount decides the construct and nothing else does. The day such a line acquires a price
+   * it becomes revenue here and must resolve an Id, rather than quietly keeping whatever id it last
+   * held. (The legacy installation line used to be this docstring's example; it was removed in #238
+   * once measurement showed it had never fired — see the note at the legacy transport line below.)
    */
   function pushRevenueLine(spec: {
     description: string;
@@ -599,33 +601,44 @@ export function buildQboInvoiceLines(args: {
       }
     }
 
-    // Legacy transport line
+    // Legacy transport line — ONE note, no longer a fork.
+    //
+    // 🔴 THE `transport_method === 'install'` BRANCH WAS REMOVED 2026-08-30 (#239). What stood here:
+    //    a REVENUE line, `Installation service · N plant(s)`, built from `const installUnitPrice = 0`
+    //    and backed by NO ROW — the only revenue line in this function with no source that could ever
+    //    carry an Intuit Id. It was born with a real source (`plants.install_price`, $225, ffa2938
+    //    2026-05-23) and LOST it at d6febf8 (2026-06-13), which dropped the column as a stock fact
+    //    and left the literal 0 behind with "until service_offerings pricing is wired". It was never
+    //    wired. It sat backed by nothing for 78 days.
+    //
+    //    IT WAS REMOVED ON EVIDENCE, NOT ON TIDINESS — three independent proofs, all measured:
+    //    (1) UNREACHABLE FROM CHECKOUT BY CONSTRUCTION. `submit.ts:799` passes a
+    //        `{ transport_mode: 'self' }` fallback when no transport is selected, so BOTH 'install'
+    //        branches of `deriveTransportMethod` require a non-null `selectedTransport`, which
+    //        unconditionally writes an `order_service_selections` row (`submit.ts:937`) → useNewModel
+    //        is TRUE → this legacy `else` is never entered. Mutual exclusion, in place since 1056b31.
+    //    (2) REFUSED ON HISTORY ORDERS at :773 (422), before this builder is ever called.
+    //    (3) IT HAS NEVER FIRED. Across LAWNS's 1,469 captured invoices / 5,371 lines, the shape it
+    //        emits appears ZERO times — no `Installation service`, and not one line carrying its
+    //        signature middot. LAWNS bill installation two ways and NEITHER is a $0 line: baked into
+    //        the plant's own line (`Live Oak - 200 gallon (Install & Warranty)`, 624 invoices), or a
+    //        REAL priced item, `137 · Installation`, $200–$4,500, never $0.
+    //        We were not preserving a path they use. We were preserving one they have never used.
+    //
+    //    The only caller that could still reach it was the manual re-push endpoint (no UI button) on
+    //    four pre-existing Test Dave's orders. Those rows are LEFT ALONE deliberately — deleting data
+    //    to make code unreachable is the wrong order of operations, and with the branch gone they
+    //    cannot emit it anyway.
+    //
+    //    ⚠️ BEHAVIOUR CHANGE, STATED: a legacy order with `transport_method = 'install'` now takes
+    //    the note below. `staff transport` is the WEAKER of the two true claims (staff did carry it),
+    //    which is the same choice `transportMethodForService` already makes in the other direction.
+    //    The order's own `transport_method` still records that it was an install; a $0 invoice line
+    //    was never where that fact lived. When install pricing is genuinely re-wired it comes back as
+    //    a service_offerings row like every other service — with a row that can carry an Id.
     const hasNettingAddon = (orderAddons || []).some((oa: any) => oa.addons?.trigger_rule === 'transport=self');
     if (!hasNettingAddon && order.transport_method !== 'self') {
-      if (order.transport_method === 'install') {
-        // install_price removed from cultivar_plants (stock fact — moved to service_offerings).
-        // Legacy install line defaults to 0 until service_offerings pricing is wired.
-        //
-        // ⚠️ THIS LINE IS BACKED BY NO ROW AT ALL, WHICH MAKES IT A DIFFERENT PROBLEM FROM THE
-        //    OTHER FOUR REVENUE LINES AND IT IS FLAGGED AS ITS OWN DECISION, NOT FOLDED IN. A row
-        //    can be given a `qbo_item_id`; a hardcoded line has nothing to carry one. It is $0 by
-        //    construction TODAY, so it lands as a documentation note and no id is needed — but the
-        //    day install pricing is re-wired it becomes revenue with `source: 'none'`, and the
-        //    refusal will say so in as many words rather than defaulting. It either gets a source
-        //    or it stops being pushed; that is David's call, not this build's.
-        const installUnitPrice = 0;
-        const installQty       = (orderItems || [])[0]?.quantity ?? 1;
-        pushRevenueLine({
-          description: `Installation service · ${installQty} plant${installQty > 1 ? 's' : ''}`,
-          amount:      installUnitPrice * installQty,
-          unitPrice:   installUnitPrice,
-          qty:         installQty,
-          backingRow:  null,
-          source:      'none',
-        });
-      } else {
-        lines.push(descriptionOnlyLine(`${business.name} staff transport`));
-      }
+      lines.push(descriptionOnlyLine(`${business.name} staff transport`));
     }
   }
 
