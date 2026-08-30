@@ -21,6 +21,7 @@
 //               ON by default (standing owner instruction).
 // ============================================================
 import { supabase } from '../../lib/supabase';
+import { withUnitColumns, UNIT_COLUMNS } from '@trace/shared/inventory';
 
 // (ARCHIVED_STATUS removed in D-50 Layer 2A — the archive status is no longer set from the
 // client; `soft_delete_inventory` owns the tombstone, status and all, inside its transaction.)
@@ -29,12 +30,21 @@ import { supabase } from '../../lib/supabase';
 // GATED). A write carrying one of these degrades gracefully: on a missing-column error we strip
 // the gated keys and retry, so the rest of the write still lands (the established deploy-window
 // pattern — same shape #119 / D-40 / D-41 used).
-const DEPLOY_GATED_COLUMNS = ['reorder_point'];
+// 🔴 `unit_*` JOINS THIS LIST FOR THE SAME REASON `reorder_point` IS ON IT: 20260830 is written
+// and NOT YET APPLIED. Without the gate, the first inventory edit after this deploy would fail on
+// an unknown column and the grid would look broken. With it, the write lands MINUS the projection
+// and the row reads "not yet parsed" — which the re-runnable backfill then fills. Absent, never wrong.
+const DEPLOY_GATED_COLUMNS = ['reorder_point', ...UNIT_COLUMNS];
+
+// DERIVED from the gated list, never re-spelled: a column added to DEPLOY_GATED_COLUMNS is
+// recognised by the detector automatically. Two hand-typed lists of one fact is how the retry
+// silently stops covering the newest column (STD-011).
+const GATED_COLUMN_RE = new RegExp(`column .* does not exist|${DEPLOY_GATED_COLUMNS.join('|')}`, 'i');
 
 function isMissingColumnError(err: { code?: string; message?: string } | null): boolean {
   if (!err) return false;
   return err.code === '42703' || err.code === 'PGRST204' ||
-    /column .* does not exist|reorder_point/i.test(err.message ?? '');
+    GATED_COLUMN_RE.test(err.message ?? '');
 }
 function stripGated(values: Record<string, unknown>): Record<string, unknown> {
   const out = { ...values };
@@ -52,7 +62,12 @@ export async function persistInventoryPatch(params: {
   businessId: string;
   patch: Record<string, unknown>;
 }): Promise<{ error: string | null }> {
-  const { id, businessId, patch } = params;
+  const { id, businessId } = params;
+  // ── UNIT PROJECTION (20260830) — a patch that moves `size` carries its derived unit columns in
+  // the SAME statement, so the row is never briefly describing the old label. `size` itself is
+  // untouched (D-23); nothing else in the patch is read or rewritten. A patch without `size` is
+  // returned unchanged by withUnitColumns.
+  const patch = withUnitColumns(params.patch);
 
   // ── D-50 LAYER 2A — QTY IS SPLIT OFF THE PATCH AND ROUTED THROUGH THE RPC ──────────
   // A quantity change is a MOVEMENT and must carry a ledger row; every other field on this
@@ -125,7 +140,9 @@ export async function insertInventory(params: {
   // the ONE remaining direct `.insert()` on business_inventory, and the end-of-build grep
   // reports it rather than pretending the funnel is already airtight.
   const requestedQty = Number(values.qty ?? 0) || 0;
-  const row = { business_id: businessId, ...values, qty: 0 };
+  // UNIT PROJECTION (20260830) — a create that supplies `size` is born with its units already
+  // derived, so a new size-sibling never has to wait for a backfill to mean something.
+  const row = withUnitColumns({ business_id: businessId, ...values, qty: 0 });
   console.log('[TRACE:INVENTORY] insert', { businessId, fields: Object.keys(values), bornAtQty: 0, requestedQty });
   let res = await supabase.from('business_inventory').insert(row).select('id').single();
   if (res.error && isMissingColumnError(res.error) && hasGated(row)) {

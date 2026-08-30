@@ -55,6 +55,12 @@ import type { WebsiteContent } from './adapters/website';
 // Data-quality dup-size detection lives in a zero-dep leaf so client surfaces can reuse it
 // without pulling populate.ts's transitive @anthropic-ai/sdk import (ledger #74 CASE-5).
 import { findDuplicateSizeGroups, type DupSizeGroup } from './dupSize';
+import { unitColumnsFor, UNIT_COLUMNS } from '../inventory/unitOfMeasure';
+import type { UnitColumns } from '../inventory/unitOfMeasure';
+
+// The deploy-window collapse below recognises "these columns are not applied yet" from ONE derived
+// list — the size pair plus whatever UNIT_COLUMNS currently names. Never a second hand-typed copy.
+const VARIANT_COLUMN_RE = new RegExp(`\\b(size|variant_group|${UNIT_COLUMNS.join('|')})\\b`, 'i');
 
 const DISC_SKU_PREFIX = 'DISC-';
 const DISC_NOTE_TAG   = '[DISCOVERY]';
@@ -131,7 +137,7 @@ export function catalogItemToInventoryRow(
     business_id: string; sku: string; name: string; description: string | null;
     qty: number; unit_cost: null; cost_confidence: string; status: string; notes: string;
     size?: string | null; variant_group?: string | null;
-  } = {
+  } & Partial<UnitColumns> = {
     business_id:     businessId,
     sku:             `${DISC_SKU_PREFIX}${String(1001 + index)}`,
     name:            item.variety,
@@ -146,6 +152,11 @@ export function catalogItemToInventoryRow(
   // a pre-migration insert) carries no size/variant_group keys at all.
   if (size !== undefined)         row.size = size;
   if (variantGroup !== undefined) row.variant_group = variantGroup;
+  // UNIT PROJECTION (20260830) — attached ONLY alongside `size`, for the same reason the size
+  // columns themselves are conditional: a parent row carries no size, so it has no unit to project,
+  // and a pre-migration insert must carry no unit_* keys at all (the deploy-window collapse below
+  // strips them together with size/variant_group when the columns are not applied yet).
+  if (size !== undefined) Object.assign(row, unitColumnsFor(size));
   return row;
 }
 
@@ -271,7 +282,7 @@ export async function populateCatalog(
   // fails on the unknown column → collapse to ONE parent row per variety (no size cols)
   // so populate still succeeds before the migration lands (mirrors the deliveries pattern).
   let degradedNoSizes = false;
-  if (insErr && (insErr.code === 'PGRST204' || /\b(size|variant_group)\b|column/i.test(insErr.message))) {
+  if (insErr && (insErr.code === 'PGRST204' || VARIANT_COLUMN_RE.test(insErr.message) || /column/i.test(insErr.message))) {
     degradedNoSizes = true;
     console.log(JSON.stringify({ tag: '[TRACE:POPULATE]', phase: 'variants:columns-absent', note: 'size/variant_group not applied yet — writing parent rows only', error: insErr.message }));
     const parentRows = extract.items.map((item, i) => catalogItemToInventoryRow(item, businessId, i));

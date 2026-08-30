@@ -14,3 +14,8 @@ export type { ReadResult, ReadFailure } from '../utils/readResult';
 export { variantGroupSlug, skuSizeSuffix, deriveSiblingSku, baseSkuOf, suggestSiblingSku } from './variantGroup';
 export { isVarietyStub, sameSizeLabel, resolveCountTarget, SIZE_REQUIRED_MESSAGE } from './countPromote';
 export type { StubCandidate, CountSibling, CountTarget } from './countPromote';
+export {
+  parseUnitOfMeasure, unitColumnsFor, withUnitColumns, findMultiUnitGroups, summariseUnits,
+  UNIT_COLUMNS, UNIT_KINDS,
+} from './unitOfMeasure';
+export type { UnitKind, UnitParse, UnitColumns, MultiUnitGroup, MultiUnitCandidate, UnitSummary, UnitSummaryRow } from './unitOfMeasure';

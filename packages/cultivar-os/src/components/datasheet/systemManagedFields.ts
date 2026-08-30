@@ -52,6 +52,32 @@ const SYSTEM_MANAGED_FIELDS: Record<string, SystemFieldInfo> = {
     reason: 'Set automatically when this record syncs to QuickBooks. It holds the QuickBooks id and is managed by the sync, not edited here.',
   },
 
+  // ── The UNIT PROJECTION (20260830) — DERIVED FROM `size`, never typed ──
+  // 🔴 These five are not "read-only for now". They are a PARSE of the `size` the owner typed, and
+  // the way to change them is to change `size`. Registered here BEFORE any grid shows one, so the
+  // day a column is added it locks with this explanation instead of appearing as a mystery-greyed
+  // cell — and so `verify-unit-projection.mjs` probe B2 can assert the declaration exists.
+  unit_kind: {
+    label: 'Unit kind',
+    reason: 'Worked out automatically from the Size you typed — whether this is a container, a volume, a weight, a length or a count of things. To change it, change the Size.',
+  },
+  unit_value: {
+    label: 'Unit amount',
+    reason: 'Read automatically out of the Size you typed (the 15 in "15 gallon", the 1/2 in "1/2 Yard Scoop"). To change it, change the Size.',
+  },
+  unit_value_max: {
+    label: 'Unit amount (top of range)',
+    reason: 'Set automatically when a Size names a range rather than one size ("10/15 gallon" is 10 to 15). Both ends are kept. To change it, change the Size.',
+  },
+  unit_name: {
+    label: 'Unit',
+    reason: 'The unit read out of the Size you typed — gallon, yard, lb, and so on. Blank means the Size could not be read, and nothing was guessed. To change it, change the Size.',
+  },
+  unit_parsed_from: {
+    label: 'Unit read from',
+    reason: 'Records the exact Size text the unit above was worked out from, so the two can be checked against each other. Set by the system on every save.',
+  },
+
   // ── Identity / tenant scope (assigned by the platform) ──
   id: {
     label: 'ID',

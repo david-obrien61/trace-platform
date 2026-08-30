@@ -36,6 +36,7 @@
 // ============================================================
 import { supabase } from '../lib/supabase';
 import { persistInventoryPatch } from '../components/inventory/inventoryEdit';
+import { unitColumnsFor } from '@trace/shared/inventory';
 
 /** A CREATE: mint a lot (born empty) + patch its fields + move its stock in + regroup the parent. */
 export interface ExecCreate {
@@ -169,7 +170,11 @@ export async function applyImportPlan(
         console.log('[TRACE:IMPORT] create', { rowIndex: w.rowIndex, id: newId, name: w.name, size: w.size });
 
         // 2 — its fields (attributes/size via the patch path; price via the gated RPC).
-        const { error: pErr, priceHeld } = await writeFields(newId, businessId, actorId, w.patch);
+        //     UNIT PROJECTION (20260830): `count_promote_create_inventory` sets `size` and knows
+        //     nothing about units, so the derive is merged in here — from `w.size`, the same string
+        //     the RPC just wrote, which is what keeps `unit_parsed_from = size` true on the new row.
+        const { error: pErr, priceHeld } = await writeFields(
+          newId, businessId, actorId, { ...w.patch, ...unitColumnsFor(w.size) });
         if (pErr) { stop(`created the lot, but its details didn't save: ${pErr}`); continue; }
 
         // 3 — its opening stock as an import movement.

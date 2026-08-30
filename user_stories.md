@@ -420,6 +420,26 @@ PIECES: inventory_count, inventory_count_offline
 NEEDS: David to expand into full day-in-the-life prose.
 _Placeholder (David to expand into full day-in-the-life prose)._ The manager walks the lot with a phone, scanning each plant's QR tag, entering the on-hand count, saving, and moving straight to the next — until the lot is counted and a session summary closes it out. The loop must never dead-end: an unreadable tag falls back to manual entry, an unrecognized scan is handled gracefully (quick entry or skip-and-flag) rather than stalling. Counting in a field with no signal must still work (offline). _Grounded in ledger #54 — the scan→resolve→qty→save→next→complete loop is BUILDER-COMPLETE; the offline piece is still ahead._
 
+### A quantity that means something — the unit of measure behind `size`
+STATUS: written
+BUILD: in-build
+SCOPE: vertical:cultivar, platform
+ARC: asset-inventory-pmi
+MAPS-TO: 2.3
+PIECES: unit_taxonomy, unit_parse, unit_projection_guard, unit_backfill, multi_unit_family_flag
+NEEDS: Lauren to answer whether compost is STOCKED in yards or in buckets — that fact, and only that fact, unlocks conversion. Joel/Lauren to resolve the trade codes the parser refuses (`3GP`, `1DP`, `2DP`). David to rule whether LAWNS's 447 existing rows are REPLACED by the QuickBooks catalogue or reconciled with it (the backfill is re-runnable either way).
+As a grower, when I record 300 of something, I want the system to know whether that is 300 buckets, 300 yards or 300 bags — so a count means something, a price can be computed, and selling a yard of compost does not leave the bucket count untouched.
+
+**WHY NOW.** LAWNS's real catalogue carries at least six unit families — container gallons, yard scoops, weight bags, liquid bottles, by the roll, and kits of N. `business_inventory.size` is free text built for exactly one of them (container gallons; its own migration says so). The QuickBooks import is about to write 685 items and would put every one of them into that field, where each would then have to be redone.
+
+**THE CASE THAT DEFINES IT.** Fertile Compost Mix sells as a 15, 30 and 45 gallon bucket AND as a half-yard and a full-yard scoop — `FCMB15` / `FCMB30` / `FCMB45` / `SFCM1` / `SFCM2`. One pile of compost, five sale units, and a yard is roughly thirteen 15-gallon buckets of it. Regular Compost Mix is the same five. This story RECORDS the units and FLAGS the family. It does NOT reconcile them: reconciling needs a fact nobody has — whether compost is stocked in yards or in buckets — and that is Lauren's to answer, not ours to default.
+
+**THE RULE THAT MAKES IT SAFE.** The unit columns are a PARSE OF `size`, never a parallel truth. `size` remains the stored value (D-23 — never rewrite what the grower stored). The unit columns are DERIVED from it on every write, are never independently editable by anyone, and `unit_parsed_from` records the exact string they were computed from so the projection can prove itself. Change `size` without a fresh derive and the projection NULLs itself rather than describing a string that is no longer there.
+
+**NOT THIS STORY** — named so they are not folded in by accident: conversion between units of one product · product grouping so five compost SKUs are one thing · stock held in a base unit with sale units deriving from it. The first of those is the per-size unit-multiplier hook already named in *Count promotes size + qty into inventory* below, and it is still owed there.
+
+_Neighbours, cross-referenced deliberately and NOT folded into: **Count promotes size + qty into inventory** (below) carries the per-size unit-multiplier hook — the WANT half of this; and **The growing ladder — potted, waiting, ready, and up a size** (`needs-input`) is waiting on Joel for the container sizes in order, which a closed container taxonomy feeds. Grounded: Stage 0 recon 2026-08-30 — 25 production readers of `size` across 22 files, 12 of them deciders; ledger #234._
+
 ### Count promotes size + qty into inventory (the count IS the catalog)
 STATUS: written
 BUILD: in-build

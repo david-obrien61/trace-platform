@@ -787,6 +787,78 @@ SIGNAL: V6 returns 0
 
 ---
 
+## SURFACE: unit-of-measure (ledger #234 — what a quantity actually MEANS)
+
+> **Five NEW cards.** ⛔ **CARDS U1–U4 are `blocked` until `supabase/migrations/20260830_inventory_unit_of_measure.sql`
+> is applied in the SQL editor** (§6 r17 — the SQL editor, **not** the table editor). U5 is runnable today.
+> **The whole point of this build is that NOTHING ELSE ON THIS BOARD SHOULD CHANGE** — if any other
+> inventory card behaves differently after this ships, that is the finding, and it outranks all five.
+
+### U1 · The guard lets go — a size change never leaves a stale unit
+STATUS: blocked
+DEVICE: desktop
+COVERS: #234
+LAST-PROVEN: never
+SIGNAL: none needed — this is the transaction in the migration's own VERIFY block (F).
+BLOCKED-BY: migration 20260830 not applied.
+- **Do:** in the Supabase **SQL editor**, run verify block **(F)** at the foot of `20260830_inventory_unit_of_measure.sql` verbatim. It is wrapped in `BEGIN … ROLLBACK` and writes nothing permanent.
+- **PASS:** the INSERT returns `container | 45 | 45 gal` — a consistent projection survives. The UPDATE to `'1 Yard Scoop'` returns `unit_kind NULL`, `unit_value NULL`, `unit_parsed_from NULL`.
+- **FAIL:** the UPDATE returns `container | 45` still — **the projection is now LYING about the row**, and every number derived from it downstream is wrong. Or the UPDATE ERRORS on a check violation — the trigger is missing and the count screen will break the same way.
+- **Why:** this is the single behaviour that makes the unit columns a projection instead of a parallel truth. Everything else in this build assumes it.
+
+### U2 · The backfill reports per tenant, and LISTS what it could not read
+STATUS: blocked
+DEVICE: desktop
+COVERS: #234
+LAST-PROVEN: never
+SIGNAL: `[TRACE:UNITS] tenant {...}` — one line per business_id, with parsed / refused / notYetParsed / disagreements.
+BLOCKED-BY: migration 20260830 not applied, AND a `SUPABASE_SERVICE_KEY` in `packages/cultivar-os/.env.local` (it is EMPTY today).
+- **Do:** `npm run units:backfill -- --verify` first (**read-only, writes nothing**). Read the output. Then, if it looks right, `npm run units:backfill` to write.
+- **PASS:** one block per tenant, LAWNS labelled. `parsed + refused + no size` equals the tenant's row count exactly. Every unparsed value is **printed as a string**, not just counted. `disagreements` is **0**.
+- **FAIL:** any tenant's three buckets do not sum to its row count *(a row fell through the classification)* · `disagreements > 0` *(the guard from U1 is not applied — stop and fix that first)* · the script reports numbers while the migration is unapplied *(it should refuse; a zero here would be a lie)*.
+- **⚠️ EXPECTED, NOT A FAILURE:** `notYetParsed` climbing again on later runs. The count screen and the import CREATE path write `size` through RPCs that know nothing about units — deliberately out of scope — so they mint unparsed rows. Re-run; it is idempotent.
+- **Why:** *"how many parsed"* is a claim. *"here are the ones I could not read"* is evidence, and it is the only form that lets Lauren or Joel actually answer.
+
+### U3 · The three trade codes come back UNREAD, and someone names them
+STATUS: blocked
+DEVICE: desktop
+COVERS: #234
+LAST-PROVEN: never
+SIGNAL: the `unparsed size values` list in U2's output.
+BLOCKED-BY: U2.
+- **Do:** read U2's unparsed list for LAWNS. Take it to Lauren or Joel.
+- **PASS:** the list contains **`3GP`, `1DP`, `2DP`** (and whatever else live data holds), each with a count. Nothing in the catalogue silently became a gallon.
+- **FAIL:** the list is empty while rows carry sizes like `3GP` — **the parser guessed**, which is the one thing it must never do.
+- **🔴 THE ANSWER IS NOT OURS:** these are LAWNS's own liner/pot codes. Ask what `GP` and `DP` mean and whether the number is gallons. **Do not add them to the parser on a guess** — one sentence from Joel turns three refusals into three correct rows.
+- **Why:** §1.6 item 3 — an honest "unknown", never a fabricated value.
+
+### U4 · Fertile Compost Mix flags as ONE product in TWO kinds of unit
+STATUS: blocked
+DEVICE: desktop
+COVERS: #234
+LAST-PROVEN: never
+SIGNAL: `⚑ MULTI-UNIT FAMILIES` in U2's output.
+BLOCKED-BY: U2 — **and additionally on the five compost SKUs existing in `business_inventory` with a shared `variant_group`.** They are QuickBooks items today; if the import has not run, this card cannot fire and that is not a defect.
+- **Do:** look for the `⚑ MULTI-UNIT FAMILIES` block in U2's output.
+- **PASS:** the compost family is named, reported as `container + volume`, and **all five rows are listed by name** — FCMB15/30/45 and SFCM1/SFCM2.
+- **FAIL:** the family is silently merged, converted, or offered as a picker. **None of those should exist.** This pass REPORTS; it does not reconcile.
+- **🔴 WHAT THIS CARD IS ACTUALLY FOR — the question for Lauren:** *is compost STOCKED in yards, or in buckets?* One yard is roughly thirteen 15-gallon buckets of the same pile, and until she says which is the real stock unit, nothing can convert between them without inventing a number. **Her answer is the input to the next pass.**
+- **Why:** the flag makes a real ambiguity visible instead of letting five SKUs quietly count five different things.
+
+### U5 · Nothing about `size` behaves differently — the headline card
+STATUS: owed
+DEVICE: phone
+COVERS: #234
+LAST-PROVEN: never
+SIGNAL: `[TRACE:INVENTORY] patch { fields: [...] }` — the field list now includes the `unit_*` keys on a size edit. That is the ONLY visible change.
+- **Do:** run the ordinary size surfaces you already know, and watch for anything different. (1) On `/inventory`, **edit a Size cell** on a grouped row. (2) **Scan a multi-size variety** on the count screen and confirm the size picker still offers its sizes. (3) **Scan the same variety in an order** and confirm the customer-facing size chooser still appears. (4) Check the dup-size amber flag still shows on whatever rows it showed on yesterday.
+- **PASS:** all four behave **exactly as before**. The size picker offers the same sizes in the same order; the dup-size flag count is unchanged; the grid's Size column edits and saves as it always did.
+- **FAIL:** the size picker offers a different set, refuses where it used to fire, or fires where it used to refuse · the dup-size flag count changes · a size edit no longer saves · **any `unit_` column appears anywhere on any screen**.
+- **🔴 WHY THIS IS THE CARD THAT MATTERS MOST:** the build's whole promise is *"no existing reader of `size` changes behaviour"*, and 24 of the 24 reader/decider files were proven unchanged by diff. **This card is the human half of that proof** — a diff shows nothing was edited; only a walk shows nothing broke.
+- **⚠️ If the migration is NOT yet applied when you run this, that is fine and the card still means something:** the write path degrades and drops the unit keys, so this is the case that proves the deploy-window gate works.
+
+---
+
 ## RESULTS — fill this in
 
 **Row count before:** `______` **Row count after:** `______` **Commit under test:** `__________`
