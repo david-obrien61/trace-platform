@@ -2,7 +2,7 @@
 
 **Capability:** 3.4 (scheduling) · 3.5 (delivery / routing)
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 11 covered.**
+**Board: 0 of 11 covered** (10 `owed` · **1 `needs-test` — CARD 4, whose precondition closed unrun when the migration was applied 2026-08-30**).
 **DEVICE: desktop** — declared per the 2026-08-23 tile-capability ruling, using this board's own `DEVICE:` vocabulary. The `TileEntry.capability` field that ruling calls for is still **OPEN** (a 33-tile backfill); this build did not mint it.
 
 ---
@@ -30,7 +30,9 @@ If ①–③ do not agree, **STOP**. Do not record a pass or a fail.
 
 ⚠️ **AND THE REASON THIS CLAUSE ORIGINALLY GAVE FOR "UNRUNNABLE" WAS WRONG.** It cited `TRACE-SESSION-BOOTSTRAP.md:54` — *"No per-branch previews"* — as the deploy model. **Measured 2026-08-30: previews are not absent, they are behind Vercel Deployment Protection.** A non-production hostname returns **302 → `vercel.com/sso-api`**; a hostname that does not exist returns **404 `DEPLOYMENT_NOT_FOUND`**; production returns **200 with no SSO**. Nothing in `vercel.json` disables previews. So a future build of this shape **could** have been proven before merging, and this gate said it could not. Left standing rather than rewritten, because the fix is a project setting only David can make — **correct this clause and line 54 together, once Deployment Protection is set to *Only Production*.**
 
-**(b) `20260828_business_operating_days.sql` IS GATED / UNAPPLIED.** Apply it in the Supabase SQL editor — **not the table editor** (§6 r17: the table editor's `supabase_admin` default ACL grants TRUNCATE + REFERENCES to `anon`, and RLS cannot filter TRUNCATE). Then run the catalog verification at the foot of the migration: 8 columns, 5 policies, `relrowsecurity = t`, and no TRUNCATE/REFERENCES for `anon`.
+✅ **(b) APPLIED 2026-08-30 — THIS CLAUSE IS CLOSED TOO.** David ran it in the SQL editor and verified from the catalog: **8 columns · RLS on · 5 policies with the shapes as written · both CHECKs plus the FK · and grants IDENTICAL to `business_inventory` with NO TRUNCATE and NO REFERENCES for `anon`** — §6 r17's hazard confirmed absent by comparing two tables in one query rather than by reading one in isolation. **Seed run the same day on LAWNS** (`ed2e5933-45dc-4b9b-a331-ddfd125e7a74`): seven pattern rows, Monday `service` · Tue/Wed `delivery_only` · Thu–Sun `delivery_placement`.
+
+⚠️ **A FOLLOW-UP MIGRATION IS NOW PENDING AND IS *NOT* APPLIED:** `20260830b_business_operating_days_check_and_comments.sql` adds the NAMED `day_type` CHECK and the eleven table/column comments (ledger #235). It is additive and it has a pre-flight query in its own header. **Nothing on this board depends on it.**
 
 ⚠️ **CARDS 1–4 and 9–11 are runnable WITHOUT the migration** and are worth running first — the calendar is honest about the table being absent, and card 4 is the check that it is.
 
@@ -64,9 +66,15 @@ DevTools → Network → block requests to `/rest/v1/deliveries`, reload.
 - It does **not** show "Nothing scheduled". These are different facts and must not share words.
 
 ## CARD 4 — Before the migration, the calendar says day types aren't available — it does not say the week is clean
-STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
+STATUS: needs-test · DEVICE: desktop · LAST-PROVEN: —
 
-**Run this BEFORE applying the migration.** This is the state the build ships in.
+🔴 **ITS WINDOW CLOSED UNRUN, AND THAT IS RECORDED RATHER THAN QUIETLY DROPPED (OP-14 clause 2).** This card tests the state the build SHIPPED in — the table absent, the calendar saying so. The migration was applied 2026-08-30 **before anyone ran it**, and `business_operating_days` is a shared table, so the precondition no longer exists on any tenant. It is not reachable again without dropping the table, which nobody should do to reach a test.
+
+⚠️ **WHAT WAS PROVEN INSTEAD, and it is weaker on purpose — it is the DATA half, never the SCREEN half:** the migration's own pre-write verify was executed 2026-08-30 against the live database using the public anon key, and returned `business_operating_days` → **404 `PGRST205`, ABSENT**, exactly as the migration predicted, with `businesses`/`deliveries`/`business_pmi_schedule` → 200 as controls. That confirms the state existed. **It does not confirm the screen rendered honestly in it**, which is what this card was for.
+
+**Kept, not deleted.** The `unavailable` branch is live code (`OperationsCalendar.tsx`, `TABLE_ABSENT`) and the next tenant provisioned against a database without this migration will hit it. Re-run this card there.
+
+_Original steps, retained:_
 
 - The **Day types** panel header reads **"not available yet"**.
 - The panel says the rules **haven't been applied to the database**, and that the calendar can still show every scheduled day but **can't tell you which are the wrong kind of day**.
@@ -76,7 +84,9 @@ STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
 ## CARD 5 — Lauren's weekly pattern saves and renders
 STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
 
-**Migration applied.** As **Lauren (OWNER)** or **Joel (MANAGER)** on LAWNS, open **Day types** and set:
+🔴 **THE SEED DOES NOT COVER THIS CARD, AND THAT IS THE WHOLE POINT OF IT.** LAWNS's seven rows were written 2026-08-30 **in the SQL editor as `postgres`, which bypasses RLS entirely** — so the `settings:update` INSERT/UPDATE policy has never been exercised, not once. **This card is covered only when a day is changed THROUGH THE UI as a member who is not the `owner_id` account.** The rows being present on screen proves the READ policy and nothing else.
+
+**Migration applied.** As **Joel (MANAGER)** — or Lauren if her membership is not the `owner_id` row — on LAWNS, open **Day types** and change one day, then change it back:
 
 | Monday | Tue | Wed | Thu | Fri | Sat | Sun |
 |---|---|---|---|---|---|---|
@@ -89,7 +99,9 @@ STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
 ## CARD 6 — 🔴 THE MISMATCH. A conflict must be CREATED; there is none to observe
 STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
 
-🔴 **Do this on Test Dave's Tree Nest. NEVER on LAWNS — LAWNS has installs and this card moves a delivery.**
+🔴 **Do this on Test Dave's Tree Nest (`f7ec5d67-a9ef-4cb0-b807-438d67687d1b`). NEVER on LAWNS (`ed2e5933-45dc-4b9b-a331-ddfd125e7a74`) — LAWNS has installs and this card moves a delivery.** ⚠️ **Those two UUIDs were contradicted by two other documents until 2026-08-30** — one of them labelled Test Dave's id as *LAWNS* (R-26 instance 12, ledger #235). Trust this line; both are confirmed from live data.
+
+⚠️ **EXPECT NO FLAG ON LAWNS, AND THAT IS CORRECT BEHAVIOUR RATHER THAN A FAILURE.** With the seed applied, Saturday 2026-08-29's seven stops all sit on a `delivery_placement` day and the whole four-week window is conflict-free. **There is nothing on LAWNS for the flag to fire on — the mismatch must be CREATED on Test Dave's to be seen at all.** A clean LAWNS calendar is the flag not firing on correct work, which is card 5's assertion, not a defect.
 
 There is **no naturally occurring conflict in the current four weeks on any tenant** — measured 2026-08-28. Test Dave's three real maintenance-Monday conflicts (2026-06-29, 07-13, 07-20) are all in the past and outside the window. So the flag has to be given something to fire on:
 

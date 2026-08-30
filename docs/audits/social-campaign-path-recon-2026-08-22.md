@@ -14,7 +14,13 @@
 been working the whole time and THE READ IS THE ENTIRE DEFECT.**
 
 ```sql
--- LAWNS: f7ec5d67-a9ef-4cb0-b807-438d67687d1b
+-- ⚠️ CORRECTED 2026-08-30 (ledger #235, R-26 instance 12): this line said `LAWNS` and the UUID
+--    below is TEST DAVE'S TREE NEST. LAWNS Tree Farm, LLC is ed2e5933-45dc-4b9b-a331-ddfd125e7a74,
+--    confirmed from live data three ways (member emails on @lawnstrees.com · Saturday's seven real
+--    stops · QuickBooks realm 9341455222430707). The original is left visible, not overwritten,
+--    because the whole point of the correction is that the wrong id was ACTED ON.
+-- WAS:  -- LAWNS: f7ec5d67-a9ef-4cb0-b807-438d67687d1b   ← that is Test Dave's Tree Nest
+-- LAWNS Tree Farm, LLC: ed2e5933-45dc-4b9b-a331-ddfd125e7a74
 SELECT module_key,
        enabled,
        configured,
