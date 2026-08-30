@@ -1238,12 +1238,24 @@ export function permissionLabel(permission: string): string {
 // ════════════════════════════════════════════════════════════════════════════════
 //
 // 🔴 R-A: THESE ARE NOT BACKFILL INPUTS. They seed a FRESH role. The live tenant is
-// backfilled RENAME-ONLY from what each member's array actually holds. Live STAFF holds
-// no inventory:read; MANAGER_DEFAULT_BUNDLE/STAFF_DEFAULT_BUNDLE contain strings no live
-// member holds, and seeding them into an existing tenant would GRANT those strings — and
-// reopen the alias widening documented on ALIAS_PAIRS. Any divergence between a live
-// array and a bundle is a SEPARATE owner act through the funnel, AFTER Contract, with its
-// own audit row. Backfill never silently means re-permission.
+// backfilled RENAME-ONLY from what each member's array actually holds. A bundle may contain
+// strings a given live member does not hold, and seeding one into an existing tenant would
+// GRANT those strings — and reopen the alias widening documented on ALIAS_PAIRS. Any
+// divergence between a live array and a bundle is a SEPARATE owner act through the funnel,
+// AFTER Contract, with its own audit row. Backfill never silently means re-permission.
+//
+// ✏️ CORRECTED 2026-08-30 (#238). This note used to assert, flatly, "Live STAFF holds no
+// inventory:read." 🔴 IT IS FALSE, AND IT WAS MEASURED FALSE: live STAFF at Test Dave's
+// (`user.obrien`) holds `inventory:read` plus nine other strings — the STAFF_DEFAULT_BUNDLE
+// set below. The sentence was true when written, the live arrays moved afterwards, and
+// nothing re-read it. **It very nearly sent a build down the wrong road**: it was the
+// evidence for "a staff member cannot reach /inventory/count", which is not true either —
+// that route has gated on `inventory:read` since the RBAC app flip (45bcfcd). R-26, and the
+// general rule it exists for: A DECLARATION ABOUT LIVE DATA IS A MEASUREMENT WITH AN EXPIRY
+// DATE. The surviving sentences above are about the MECHANISM (rename-only backfill, the
+// funnel, the audit row), which is a property of the code and does not expire; the deleted
+// one was a snapshot of a table, stated in the present tense, in a file nobody re-measures.
+// Do not restore it — re-read `business_members.permissions` instead.
 
 /**
  * MANAGER — on by default (spec §5). A starting grant, changeable verb-by-verb.

@@ -437,6 +437,43 @@ export function InventoryCount() {
     setBusy(true); setError(null);
 
     const key = ctx.groupKey;
+
+    // ── ONE GROUPING OPERATION, TWO CALLERS (§6 r8) ──────────────────────────────
+    // The update/fill path keys the row it just counted; the create path keys the family's other
+    // rows. Same act, so it lives in one place and cannot drift between them.
+    //
+    // 🔴 IT USED TO BE A PLAIN UPDATE ON `business_inventory`, AND FOR A STAFF MEMBER THAT WAS A
+    // SILENT NO-OP. `20260727_rbac_resource_action_flip.sql:72-74` gates that table's UPDATE on
+    // `inventory:update`; STAFF holds `inventory:read` and not that. A PostgREST update RLS
+    // refuses matches ZERO ROWS AND RETURNS NO ERROR, and `syncEngine.ts:258-259` decides success
+    // from `error` alone — so the refusal came back `'applied'`, the walk carried on, and the
+    // family was never grouped. The cost lands on the NEXT scan, which sees a mixed-group family
+    // and resolves UNKNOWN. That is R-12 / E5 ("a write must prove it wrote") live on this line.
+    //
+    // The fix is server-side and narrow, NOT a wider policy: `count_group_variant_sizes`
+    // (20260830c) is membership-gated by `assert_movement_actor` exactly like the qty RPC below,
+    // sets `variant_group` and NOTHING else, and reports the rows it actually wrote. Widening
+    // `business_inventory` instead would hand a yard hand price/qty/status in order to let them
+    // group two pot sizes — and it is the first name on tech-debt #124's over-wide list.
+    //
+    // Returns null when it landed, or the message to show. Offline it queues like every other
+    // write, and a domain-level refusal (`applied:false` + reason) is the convention syncEngine
+    // already surfaces rather than dropping.
+    const groupSizes = async (ids: string[], groupKey: string): Promise<string | null> => {
+      const rg = await engine.rpc({
+        table: 'business_inventory',
+        fn:    'count_group_variant_sizes',
+        args:  {
+          p_business_id:   businessId,
+          p_actor_user_id: userId,
+          p_variant_group: groupKey,
+          p_row_ids:       ids,
+        },
+      });
+      if (rg.status === 'failed') return `Couldn't group this variety's sizes: ${rg.error}`;
+      if (TRACE_INV) console.log('[TRACE:INVENTORY] promote — grouped sizes', { rows: ids, variant_group: groupKey, status: rg.status });
+      return null;
+    };
     // The DECISION is the shared pure fn (D-49) — update | fill | create | record-only. This
     // screen only performs the IO it returns. The invariant it enforces: any path that mints a
     // sibling leaves the family picker-ready by construction (group on EVERY row, distinct
@@ -488,16 +525,13 @@ export function InventoryCount() {
       });
       if (res.status === 'failed') { setError(`Couldn't update on-hand: ${res.error}`); setBusy(false); return; }
 
-      // variant_group is IDENTITY, not quantity — it stays a plain update (the RPC is the
-      // funnel for qty, and only qty). Backfilling it is what makes the size-picker fire next
-      // time (D-45/D-46); without it the family goes UNKNOWN on the next scan.
+      // variant_group is IDENTITY, not quantity — the qty RPC above is the funnel for quantity
+      // and only quantity, so identity travels separately. Backfilling it is what makes the
+      // size-picker fire next time (D-45/D-46); without it the family goes UNKNOWN on the next
+      // scan. It is a SEPARATE narrow RPC now rather than a plain update — see groupSizes above.
       if (target.variantGroup) {
-        const rg = await engine.update({
-          table: 'business_inventory',
-          set:   { variant_group: target.variantGroup },
-          match: { id: target.rowId, business_id: businessId },
-        });
-        if (rg.status === 'failed') { setError(`Couldn't group this variety's sizes: ${rg.error}`); setBusy(false); return; }
+        const failure = await groupSizes([target.rowId], target.variantGroup);
+        if (failure) { setError(failure); setBusy(false); return; }
       }
       targetId = target.rowId; outcome = target.action === 'fill' ? 'filled' : 'updated';
 
@@ -507,14 +541,16 @@ export function InventoryCount() {
       //       share ONE group (D-46's rule, #126, applied to the path that skipped it). Without
       //       it the next scan sees a mixed-group family and goes UNKNOWN.
       //   (b) SKU lineage — parent SKU + size suffix via the SHARED deriveSiblingSku (STD-011).
-      for (const id of target.regroup) {
-        const rg = await engine.update({
-          table: 'business_inventory',
-          set:   { variant_group: target.variantGroup },
-          match: { id, business_id: businessId },
-        });
-        if (rg.status === 'failed') { setError(`Couldn't group this variety's sizes: ${rg.error}`); setBusy(false); return; }
-        if (TRACE_INV) console.log('[TRACE:INVENTORY] promote — auto-grouped parent', { rowId: id, variant_group: target.variantGroup });
+      //
+      // (a) IS ONE CALL, NOT A LOOP OF PLAIN UPDATES (see groupSizes above). Two things follow
+      // from that and both are deliberate: the family is keyed in ONE statement, so it can no
+      // longer be left half-keyed by a walk that stopped between rows; and a partial grouping is
+      // reported as a REFUSAL, because a half-keyed family IS the mixed-group state this
+      // invariant exists to prevent. The old per-row `status === 'failed'` check could never fire
+      // for the member it was written to protect — RLS refused it silently.
+      if (target.regroup.length > 0) {
+        const failure = await groupSizes(target.regroup, target.variantGroup);
+        if (failure) { setError(failure); setBusy(false); return; }
       }
 
       // SKU uniqueness — a derived SKU may never collide with an existing row (two rows sharing a

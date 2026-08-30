@@ -205,7 +205,8 @@ SIGNAL: `[TRACE:INVENTORY] promote — REFUSED at the sheet: size-required`
 - **✅ PROVEN 2026-07-17 (David, live) — FIXTURE: Lacey Oak, a VIRGIN STUB (no sizes, no chips at all).** Size left EMPTY, qty 5, Save → *"Which size? Pick one above or type it — a count has to say which size it counted."* Blocked, nothing written, re-scan still resolves. **The fixture is STRONGER than the card asked for:** Bur Oak has an existing size and would have nudged onto the MATCH branch; Lacey Oak has nothing to compare against — **the unconditional case, exactly where a "required only when the family has sizes" fix would have leaked, and did not.**
 
 ### A counted STUB fills in place — the row count does NOT move
-STATUS: covered
+STATUS: owed
+⚠️ FLIPPED covered → owed 2026-08-30 (#238): the fill path's `variant_group` write moved from a plain UPDATE to `count_group_variant_sizes`. The proof below is unchanged; nobody has run it since the surface moved.
 DEVICE: phone
 COVERS: #133, D-49, D-34
 LAST-PROVEN: 2026-07-16
@@ -216,7 +217,8 @@ SIGNAL: `[TRACE:INVENTORY] promote — filled` (**not** `created`)
 - **Then:** re-scan it. **PASS:** resolves. **FAIL:** UNKNOWN.
 
 ### A new size creates a sibling, SKU derived from the family BASE
-STATUS: covered
+STATUS: owed
+⚠️ FLIPPED covered → owed 2026-08-30 (#238): the create path's regroup loop became ONE RPC call. The proof below is unchanged; nobody has run it since the surface moved.
 DEVICE: phone
 COVERS: #133, #135, D-46
 LAST-PROVEN: 2026-07-16
@@ -856,6 +858,82 @@ SIGNAL: `[TRACE:INVENTORY] patch { fields: [...] }` — the field list now inclu
 - **FAIL:** the size picker offers a different set, refuses where it used to fire, or fires where it used to refuse · the dup-size flag count changes · a size edit no longer saves · **any `unit_` column appears anywhere on any screen**.
 - **🔴 WHY THIS IS THE CARD THAT MATTERS MOST:** the build's whole promise is *"no existing reader of `size` changes behaviour"*, and 24 of the 24 reader/decider files were proven unchanged by diff. **This card is the human half of that proof** — a diff shows nothing was edited; only a walk shows nothing broke.
 - **⚠️ If the migration is NOT yet applied when you run this, that is fine and the card still means something:** the write path degrades and drops the unit keys, so this is the case that proves the deploy-window gate works.
+
+---
+
+## SURFACE: staff-can-count (ledger #238 — a yard hand's walk actually finishes)
+
+> **Four cards, and C1 is the whole build.** 🔴 **THE DEFECT WAS SILENT, WHICH IS WHY IT WAS NEVER
+> REPORTED.** `business_inventory` gates UPDATE on `inventory:update`; a STAFF member holds
+> `inventory:read` and not that. The count screen finished each scan with a plain UPDATE writing
+> `variant_group` — and **a PostgREST update RLS refuses matches zero rows and returns NO ERROR**,
+> which `syncEngine.ts:258-259` reads as success. So the walk never died and nobody was told
+> anything: **the count landed, the grouping did not, and the bill arrived on the NEXT scan**, when
+> the family resolved UNKNOWN. On the D-45/D-46 multi-size path, which at LAWNS is the common case.
+>
+> ⚠️ **SO "THE WALK COMPLETED" IS NOT THE PASS.** It completed before this build too. The pass is
+> that **the grouping is actually there afterwards** — which is why every card below re-scans.
+>
+> **RUN AS STAFF ON TEST DAVE'S (`f7ec5d67-a9ef-4cb0-b807-438d67687d1b`) — NEVER LAWNS.**
+> `user.obrien@outlook.com` is a real STAFF member there. Requires `20260830c` APPLIED.
+
+### C1 · 🔴 A STAFF MEMBER COUNTS A MULTI-SIZE VARIETY AND THE FAMILY IS ACTUALLY GROUPED
+STATUS: owed
+DEVICE: phone
+COVERS: #238, D-45, D-46, R-12
+LAST-PROVEN: never
+SIGNAL: `[TRACE:INVENTORY] promote — grouped sizes` (secondary — the PASS below needs no console)
+- **Do:** signed in as **STAFF**, open `/inventory` → **Start count**. Scan a variety that has more
+  than one size. Enter a count for one of them. Save.
+- **Then — THIS IS THE ACTUAL TEST — scan the SAME tag again.**
+- **PASS:** the **size picker fires**, listing that variety's sizes. The walk finished AND the
+  grouping landed.
+- **FAIL:** the second scan resolves **UNKNOWN** and falls through to typed entry. That is the
+  defect: the count saved, the grouping did not, and nothing said so.
+- **ALSO FAIL:** an error on save that stops the walk. The fix is meant to let the walk finish, not
+  to make it fail loudly instead of quietly.
+
+### C2 · A count of a size the variety does NOT have still lands, and the family stays whole
+STATUS: owed
+DEVICE: phone
+COVERS: #238, D-46
+LAST-PROVEN: never
+- **Do:** as **STAFF**, count a size the variety doesn't have yet (e.g. `20 gal`) on a family whose
+  rows are not all grouped.
+- **PASS:** the new row appears AND re-scanning shows the picker with **every** size — parent and
+  new sibling together.
+- **FAIL:** the picker shows only some sizes, or resolves UNKNOWN. A half-keyed family is the
+  mixed-group state this card exists to catch.
+
+### C3 · 🔴 NOTHING WAS WIDENED — STAFF still cannot edit the inventory grid
+STATUS: owed
+DEVICE: desktop
+COVERS: #238, tech-debt #124
+LAST-PROVEN: never
+- **Why it is here:** the easy way to "fix" C1 is to grant STAFF `inventory:update`. That would
+  widen the first name on tech-debt #124's over-wide list and hand a yard hand price and qty in
+  order to let them group two pot sizes. This card is the assertion that we did not do that.
+- **Do:** as **STAFF**, open `/inventory` and try to change a quantity or a price in the grid.
+- **PASS:** it is refused — and the refusal is **visible**, not a cell that appears to accept the
+  edit and reverts.
+- **FAIL:** the edit lands. The wall moved when only the narrow act was supposed to.
+
+### C4 · MANAGER and OWNER behave exactly as they did before
+STATUS: owed
+DEVICE: either
+COVERS: #238
+LAST-PROVEN: never
+- **Do:** repeat C1 as **MANAGER** (`test.obrien@outlook.com`, who is NOT `owner_id`) and as OWNER.
+- **PASS:** identical to before this build, in both directions — the count completes, the picker
+  fires on re-scan, and the inventory grid is still editable for them.
+- **FAIL:** any difference at all. This build was supposed to be invisible to everyone who already
+  held `inventory:update`.
+
+> **A MACHINE PROOF EXISTS FOR THE POLICY HALF, AND IT IS NOT A SUBSTITUTE FOR THESE CARDS.**
+> `npm run verify:rls -- count-group` runs `scripts/rls/count-group-variant-sizes.rls.mjs`, which
+> signs in as a real ephemeral STAFF member and asserts the silent refusal, the RPC fix, the column
+> boundary, the shortfall report, no-forgery, AC-3, and that no policy moved. It proves **the
+> policy and the function**. These cards prove **the screen**. Only David's run closes them (OP-14).
 
 ---
 
