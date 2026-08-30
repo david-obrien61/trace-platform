@@ -12,6 +12,19 @@ import {
 import { orderItemName, orderItemAnchor } from '../../../src/lib/orderItemName';
 import { HISTORY_ORDER_KIND } from '../../../../shared/src/business-logic/historyOrder';
 import { movesOnHand } from '../../../src/lib/inventoryStates';
+import {
+  QBO_DETAIL_TYPE,
+  isDocumentationAmount,
+  descriptionOnlyLine,
+  discountLine,
+  salesItemLine,
+  txnTaxDetail,
+  signedLineAmount,
+  qboItemMappingOf,
+  resolveQboItemRef,
+  type QboLine,
+  type QboUnmappedLine,
+} from '../../../../shared/src/quickbooks/invoiceLineShapes';
 
 const QBO_ENVIRONMENT = process.env.QBO_ENVIRONMENT || 'sandbox';
 const QBO_API_BASE =
@@ -303,24 +316,6 @@ async function verifyStoredQbLink(
   });
 }
 
-/**
- * THE ONE reduction-line construction on this invoice (STD-011) — a negative-Amount SalesItemLine,
- * consistent with this invoice's own all-SalesItemLine convention (incl. its manual tax line).
- * Both callers use it: the goods TIER discount (D-43) and a service PRICE OVERRIDE (D-48). One
- * operation, one place — a second hand-rolled discount path is exactly how the two would drift.
- *
- * `amount` is the reduction as a POSITIVE number (575 → a −575 line). A NEGATIVE amount is a
- * surcharge (an owner override ABOVE baseline) and correctly pushes a POSITIVE line — the same
- * arithmetic, no branch, no second concept.
- */
-function discountLine(description: string, amount: number): Record<string, unknown> {
-  return {
-    Description: description,
-    Amount: -amount,
-    DetailType: 'SalesItemLineDetail',
-    SalesItemLineDetail: { UnitPrice: -amount, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
-  };
-}
 
 /**
  * THE QBO INVOICE PUSH, AS A CALLABLE — extracted from the handler 2026-07-27.
@@ -336,23 +331,52 @@ function discountLine(description: string, amount: number): Record<string, unkno
  * one-for-one, so the HTTP contract of the endpoint is unchanged for its remaining caller.
  */
 /**
- * buildQboInvoiceLines — assemble the QuickBooks invoice Line[] for one Cultivar order.
+ * buildQboInvoiceLines — assemble the QuickBooks invoice payload for one Cultivar order.
  *
  * PURPOSE:      the payload half of pushQboInvoice, as a PURE function of already-fetched rows,
  *               so the LINES CAN BE ASSERTED WITHOUT QUICKBOOKS. Extracted 2026-08-24 with the
  *               #104 fix: a test that asserts a 200 from QBO inherits whatever the payload says,
  *               and this is the file that put an unvalidated internal string on a customer's
  *               invoice (txnId=436). The payload is the thing that has to be proven.
- * DEPENDENCIES: orderItemName / orderItemAnchor (shared line-name resolver), discountLine,
- *               taxExemptionLabel (shared D-40 presenter). NO db, NO fetch, NO clock.
- * OUTPUTS:      Line[] — SalesItemLine objects, in invoice order: goods → tier discount →
- *               services (or legacy addons) → tax. The caller reconciles the sum and pushes.
+ * DEPENDENCIES: orderItemName / orderItemAnchor (shared line-name resolver), taxExemptionLabel
+ *               (shared D-40 presenter), and `shared/quickbooks/invoiceLineShapes` — which owns
+ *               the QuickBooks construct vocabulary and the ItemRef resolution. NO db, NO fetch,
+ *               NO clock.
+ * OUTPUTS:      a discriminated union — either the assembled `lines` plus the invoice-level
+ *               `txnTaxDetail`, or a REFUSAL naming every revenue line that has no Intuit Item
+ *               Id behind it.
  *
- * ⚠️ MOVED VERBATIM out of pushQboInvoice — every branch, comment and TRACE emit is byte-identical
- *    to what shipped, except the single #104 description change. Proven by diff at extraction time,
- *    deliberately NOT rewritten: this is the path QBO error 6070 already scarred once, days before
- *    the LAWNS demo, so it was made TESTABLE without being made DIFFERENT.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 THE TWELVE LITERALS ARE GONE, AND THEY WERE NEVER TWELVE ITEM-ID PROBLEMS.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════
+ * Until 2026-08-30 this function wrote `ItemRef: { value: '1', name: 'Services' }` twelve times.
+ * The read of the customer's own books settled what that meant: item `1` EXISTS, is named
+ * **"Sales"** rather than "Services", and books to their GENERIC INCOME ACCOUNT. So the push
+ * would not have failed loudly — it would have SUCCEEDED and silently misfiled every line into a
+ * bucket already holding $41,667 on their P&L beside $1.52m of nursery stock. And item 1 is in
+ * live use (33 lines, $49,419), so it would have fed an existing bad habit rather than standing
+ * out as ours.
+ *
+ * ONE RULE REPLACES ALL TWELVE (see `invoiceLineShapes.ts`):
+ *   **a $0 line is a DOCUMENTATION line and carries no ItemRef; a line carrying money is REVENUE
+ *   and must resolve a real Intuit Item Id, or the push refuses.**
+ *
+ * and two of the twelve were the wrong SHAPE rather than the wrong id — the discount is now
+ * QuickBooks' native `DiscountLineDetail`, and SALES TAX has left the line list entirely for
+ * `TxnTaxDetail`, because booking tax as a revenue line INFLATES THE BUSINESS'S REVENUE BY THE
+ * TAX AMOUNT. ✅ Both match LAWNS's own practice rather than imposing ours: their history carries
+ * 194 `DescriptionOnly` lines and 66 native discount lines worth $31,985 — three times more than
+ * their discount ITEMS (21).
+ *
+ * ⚠️ TODAY EVERY REVENUE LINE REFUSES, AND THAT IS THE HONEST STATE, NOT A BUG. No table carries
+ *    `qbo_item_id` yet — the mapping pass owns that column. This function CONSUMES a mapping it
+ *    does not create, and until one exists it says so instead of guessing. A default is exactly
+ *    how `'1'` happened.
  */
+export type QboInvoicePayload =
+  | { ok: true;  lines: QboLine[]; txnTaxDetail: { TotalTax: number } | null }
+  | { ok: false; unmapped: QboUnmappedLine[] };
+
 export function buildQboInvoiceLines(args: {
   order:             any;
   business:          any;
@@ -361,15 +385,64 @@ export function buildQboInvoiceLines(args: {
   orderAddons:       any[] | null;
   useNewModel:       boolean;
   order_id:          string;
-}): unknown[] {
+}): QboInvoicePayload {
   const { order, business, orderItems, serviceSelections, orderAddons, useNewModel, order_id } = args;
-  const lines: unknown[] = [];
+  const lines: QboLine[] = [];
+
+  // Every revenue line that could not name an Intuit item. Collected rather than thrown, so the
+  // owner is told about ALL of them at once — being sent back four times to fix one row each is
+  // its own defect.
+  const unmapped: QboUnmappedLine[] = [];
+
+  /**
+   * Push ONE line that carries money. Resolves the ItemRef off the backing row or records a
+   * refusal — there is no third outcome and no default.
+   *
+   * A $0 amount is routed to a documentation line instead, which is what makes the rule uniform:
+   * the legacy installation line is $0 only because install pricing moved to `service_offerings`
+   * and was never re-wired, and the day it acquires a price it becomes revenue here rather than
+   * quietly keeping whatever id it last held.
+   */
+  function pushRevenueLine(spec: {
+    description: string;
+    amount: number;
+    unitPrice: number;
+    qty: number;
+    backingRow: unknown;
+    source: QboUnmappedLine['source'];
+  }): void {
+    if (isDocumentationAmount(spec.amount)) {
+      lines.push(descriptionOnlyLine(spec.description));
+      return;
+    }
+    const resolved = resolveQboItemRef({
+      label:   spec.description,
+      source:  spec.source,
+      amount:  spec.amount,
+      mapping: qboItemMappingOf(spec.backingRow),
+    });
+    if (!resolved.ok) {
+      console.log('[TRACE:QBO] ⚠ REVENUE LINE HAS NO INTUIT ITEM — refusing rather than defaulting', {
+        order_id, label: resolved.unmapped.label, source: resolved.unmapped.source,
+        amount: resolved.unmapped.amount,
+      });
+      unmapped.push(resolved.unmapped);
+      return;
+    }
+    lines.push(salesItemLine({
+      description: spec.description,
+      amount:      spec.amount,
+      unitPrice:   spec.unitPrice,
+      qty:         spec.qty,
+      itemRef:     resolved.itemRef,
+    }));
+  }
 
   // D-43: read the STORED per-line breakdown (retail_unit/discount_pct/discount_amt — via select('*'))
   // so the pushed invoice SHOWS the discount as its OWN line (goods at retail → an explicit discount
   // line), never a silently-net rate. GATED on a discount actually applying: a non-discounted (retail)
   // order pushes goods at net EXACTLY as before → zero regression; only a discounted order carries the
-  // retail-goods + negative-discount representation. Historical rows (null retail_unit) → net lines, no
+  // retail-goods + discount representation. Historical rows (null retail_unit) → net lines, no
   // discount line (omit-not-fake, D-9). The invoice total is unchanged (retail − discount === net).
   const goodsRows = (orderItems || []) as any[];
   const qbHasBreakdown = goodsRows.length > 0 && goodsRows.every((it: any) => it.retail_unit != null);
@@ -389,21 +462,20 @@ export function buildQboInvoiceLines(args: {
       ? Math.round(Number(item.retail_unit) * Number(item.quantity) * 100) / 100
       : Number(item.subtotal);
     const lineUnit = qbShowDiscount ? Number(item.retail_unit) : Number(item.unit_price);
-    lines.push({
-      Description: container ? `${name} — ${container}` : name,
-      Amount: lineAmount,
-      DetailType: 'SalesItemLineDetail',
-      SalesItemLineDetail: {
-        UnitPrice: lineUnit,
-        Qty: item.quantity,
-        ItemRef: { value: '1', name: 'Services' },
-      },
+    // 🔴 THE TREE. This is the line the whole mapping pass exists for — the one that decides
+    // whether the customer's books can tell Sales of Nursery Stock from Services at all.
+    pushRevenueLine({
+      description: container ? `${name} — ${container}` : name,
+      amount:      lineAmount,
+      unitPrice:   lineUnit,
+      qty:         item.quantity,
+      backingRow:  item.business_inventory,
+      source:      'business_inventory',
     });
   }
 
-  // ONE explicit discount line (negative SalesItemLine — consistent with this invoice's own
-  // all-SalesItemLine convention, incl. its manual tax line) so the 10% shows on the invoice, not
-  // baked into a net rate. Reads the STORED discount total; never recomputes.
+  // ONE explicit discount line — now QuickBooks' NATIVE construct — so the 10% shows on the
+  // invoice rather than baked into a net rate. Reads the STORED discount total; never recomputes.
   if (qbShowDiscount) {
     lines.push(discountLine(`Discount${qbDiscPct > 0 ? ` (${qbDiscPct}% off)` : ''}`, qbDiscountTotal));
     console.log('[TRACE:QBO] invoice discount line from stored breakdown', { discountTotal: qbDiscountTotal, pct: qbDiscPct });
@@ -424,10 +496,8 @@ export function buildQboInvoiceLines(args: {
       // equal to UnitPrice * Qty. Supplied value:1,000". QBO was the first thing in the chain that
       // multiplied rate × qty; TRACE never checked that a line was internally consistent.
       // Now the override IS the line's discount, so the service line multiplies correctly
-      // (225 × 7 = 1575) and the $575 rides the SAME negative-Amount mechanism as the tier
-      // discount above. GATED on an override actually applying: a normal order pushes byte-
-      // identical to before (unit_price_at_time × quantity === subtotal holds for every
-      // non-overridden row — flat services store qty 1) → zero regression, same discipline as D-43.
+      // (225 × 7 = 1575) and the $575 rides the discount mechanism above. GATED on an override
+      // actually applying: a normal order pushes as before.
       const svcQty    = Number(sel.quantity) || 0;
       const svcUnit   = Number(sel.unit_price_at_time) || 0;
       const svcNet    = Number(sel.subtotal) || 0;
@@ -438,62 +508,71 @@ export function buildQboInvoiceLines(args: {
       const svcReason = (sel.override_reason ?? '').trim();
 
       if (isNetting && order.netting_declined) {
-        lines.push({
-          Description: 'Protective travel netting — DECLINED by customer (TX TCC Ch.725 waiver signed)',
-          Amount: 0,
-          DetailType: 'SalesItemLineDetail',
-          SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
-        });
+        // A DECLINED add-on is a NOTE, not a $0 sale. Under the old shape this booked against a
+        // revenue item, so the customer's books recorded a service they explicitly refused.
+        lines.push(descriptionOnlyLine(
+          'Protective travel netting — DECLINED by customer (TX TCC Ch.725 waiver signed)',
+        ));
       } else if (svcOverridden) {
         // The service at its RETAIL baseline — internally consistent, so QBO accepts it.
-        lines.push({
-          Description: `${offering.name} × ${svcQty}`,
-          Amount: svcRetail,
-          DetailType: 'SalesItemLineDetail',
-          SalesItemLineDetail: { UnitPrice: svcUnit, Qty: svcQty, ItemRef: { value: '1', name: 'Services' } },
+        pushRevenueLine({
+          description: `${offering.name} × ${svcQty}`,
+          amount:      svcRetail,
+          unitPrice:   svcUnit,
+          qty:         svcQty,
+          backingRow:  offering,
+          source:      'service_offerings',
         });
         // …and the concession as its own line, naming WHAT — but NOT WHY. Neutral "price adjusted"
-        // wording reads correctly in BOTH directions (a surcharge pushes a positive Amount).
+        // wording reads correctly in BOTH directions.
         //
         // 🔴 #104 (2026-08-24): THE REASON DOES NOT GO TO QUICKBOOKS. It used to be interpolated
         // here — `(reason: ${svcReason})` — and QB invoice txnId=436 (order 2661dbe4, 07/16/2026,
         // status "Opened" = SENT AND VIEWED) carried "price adjusted (reason: must be filled if
         // discount applied cannot be EMPTY)" to a customer. `override_reason` is an INTERNAL
-        // attribution field (R-7: "the platform records WHO DID WHAT AND WHEN"); nothing ever
-        // decided it was customer copy, and its CONTENT is validated nowhere — three gates check
-        // only that it is non-empty (tech-debt #105), so any string a seller types reaches the
-        // invoice. The concession is still fully visible here as a NAMED, SIGNED amount; only the
-        // free text is withheld. The reason is NOT lost: it stays on the row, on the internal
-        // order screen, and in the [TRACE:QBO] line immediately below.
-        lines.push(discountLine(
-          `${offering.name} — price adjusted`,
-          svcAdj,
-        ));
+        // attribution field (R-7), its CONTENT is validated nowhere (tech-debt #105), and nothing
+        // ever decided it was customer copy. The concession stays fully visible as a NAMED, SIGNED
+        // amount; only the free text is withheld, and it is NOT lost — it stays on the row, on the
+        // internal order screen, and in the [TRACE:QBO] line below.
+        //
+        // 🔴 A SURCHARGE IS NOT A DISCOUNT, AND THIS IS WHERE THE NATIVE CONSTRUCT FORCES THE
+        // DISTINCTION THE OLD SHAPE LET US BLUR. A negative-Amount SalesItemLine could express
+        // "the owner charged MORE than baseline" by flipping a sign; QuickBooks has no negative
+        // discount. An upcharge IS revenue, so it goes through the revenue path and refuses
+        // without a mapped item exactly like every other sale — which is the correct accounting
+        // shape, not a compromise forced by the construct.
+        if (svcAdj > 0) {
+          lines.push(discountLine(`${offering.name} — price adjusted`, svcAdj));
+        } else {
+          pushRevenueLine({
+            description: `${offering.name} — price adjusted`,
+            amount:      Math.abs(svcAdj),
+            unitPrice:   Math.abs(svcAdj),
+            qty:         1,
+            backingRow:  offering,
+            source:      'service_offerings',
+          });
+        }
         console.log('[TRACE:QBO] service price-override line (D-48) — retail + adjustment, not a bare net', {
           offering: offering.name, unitPrice: svcUnit, qty: svcQty, retail: svcRetail,
           adjustment: svcAdj, charged: svcNet, reason: svcReason || null,
+          direction: svcAdj > 0 ? 'discount' : 'surcharge',
           reconciles: Math.abs((svcRetail - svcAdj) - svcNet) <= 0.005,
         });
       } else if (isTransport && Number(sel.subtotal) === 0) {
         if (offering.transport_mode !== 'self') {
-          lines.push({
-            Description: `${business.name} — ${offering.name}`,
-            Amount: 0,
-            DetailType: 'SalesItemLineDetail',
-            SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
-          });
+          // $0 transport is a note that it was included, not a $0 sale of transport.
+          lines.push(descriptionOnlyLine(`${business.name} — ${offering.name}`));
         }
         // self-transport with $0 price → no line item needed
       } else if (Number(sel.subtotal) > 0) {
-        lines.push({
-          Description: `${offering.name} × ${sel.quantity}`,
-          Amount: Number(sel.subtotal),
-          DetailType: 'SalesItemLineDetail',
-          SalesItemLineDetail: {
-            UnitPrice: Number(sel.unit_price_at_time),
-            Qty: sel.quantity,
-            ItemRef: { value: '1', name: 'Services' },
-          },
+        pushRevenueLine({
+          description: `${offering.name} × ${sel.quantity}`,
+          amount:      Number(sel.subtotal),
+          unitPrice:   Number(sel.unit_price_at_time),
+          qty:         sel.quantity,
+          backingRow:  offering,
+          source:      'service_offerings',
         });
       }
     }
@@ -505,22 +584,17 @@ export function buildQboInvoiceLines(args: {
       const declined  = isNetting && order.netting_declined;
 
       if (declined) {
-        lines.push({
-          Description: 'Protective travel netting — DECLINED by customer (TX TCC Ch.725 waiver signed)',
-          Amount: 0,
-          DetailType: 'SalesItemLineDetail',
-          SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
-        });
+        lines.push(descriptionOnlyLine(
+          'Protective travel netting — DECLINED by customer (TX TCC Ch.725 waiver signed)',
+        ));
       } else {
-        lines.push({
-          Description: `${addon.name} × ${oa.quantity}`,
-          Amount: Number(oa.subtotal),
-          DetailType: 'SalesItemLineDetail',
-          SalesItemLineDetail: {
-            UnitPrice: Number(oa.unit_price),
-            Qty: oa.quantity,
-            ItemRef: { value: '1', name: 'Services' },
-          },
+        pushRevenueLine({
+          description: `${addon.name} × ${oa.quantity}`,
+          amount:      Number(oa.subtotal),
+          unitPrice:   Number(oa.unit_price),
+          qty:         oa.quantity,
+          backingRow:  addon,
+          source:      'addons',
         });
       }
     }
@@ -531,59 +605,79 @@ export function buildQboInvoiceLines(args: {
       if (order.transport_method === 'install') {
         // install_price removed from cultivar_plants (stock fact — moved to service_offerings).
         // Legacy install line defaults to 0 until service_offerings pricing is wired.
+        //
+        // ⚠️ THIS LINE IS BACKED BY NO ROW AT ALL, WHICH MAKES IT A DIFFERENT PROBLEM FROM THE
+        //    OTHER FOUR REVENUE LINES AND IT IS FLAGGED AS ITS OWN DECISION, NOT FOLDED IN. A row
+        //    can be given a `qbo_item_id`; a hardcoded line has nothing to carry one. It is $0 by
+        //    construction TODAY, so it lands as a documentation note and no id is needed — but the
+        //    day install pricing is re-wired it becomes revenue with `source: 'none'`, and the
+        //    refusal will say so in as many words rather than defaulting. It either gets a source
+        //    or it stops being pushed; that is David's call, not this build's.
         const installUnitPrice = 0;
         const installQty       = (orderItems || [])[0]?.quantity ?? 1;
-        lines.push({
-          Description: `Installation service · ${installQty} plant${installQty > 1 ? 's' : ''}`,
-          Amount: installUnitPrice * installQty,
-          DetailType: 'SalesItemLineDetail',
-          SalesItemLineDetail: {
-            UnitPrice: installUnitPrice,
-            Qty: installQty,
-            ItemRef: { value: '1', name: 'Services' },
-          },
+        pushRevenueLine({
+          description: `Installation service · ${installQty} plant${installQty > 1 ? 's' : ''}`,
+          amount:      installUnitPrice * installQty,
+          unitPrice:   installUnitPrice,
+          qty:         installQty,
+          backingRow:  null,
+          source:      'none',
         });
       } else {
-        lines.push({
-          Description: `${business.name} staff transport`,
-          Amount: 0,
-          DetailType: 'SalesItemLineDetail',
-          SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
-        });
+        lines.push(descriptionOnlyLine(`${business.name} staff transport`));
       }
     }
   }
 
-  // Tax line (D-40) — render the order's PERSISTED tax state; NO hardcoded 8.25%:
-  //   • exempt order      → a $0 "Tax exempt — <reason>[· cert]" line (documents the exemption);
-  //   • taxed order       → the tax with the % DERIVED from amount/subtotal (never a fabricated rate);
-  //   • not-identified    → no tax was charged → no tax line (the redline lives pre-invoice, in the app).
+  // Tax (D-40) — render the order's PERSISTED tax state; NO hardcoded 8.25%:
+  //   • exempt order      → a $0 DescriptionOnly note documenting the exemption;
+  //   • taxed order       → QuickBooks' OWN `TxnTaxDetail`, NOT a revenue line;
+  //   • not-identified    → no tax at all (the redline lives pre-invoice, in the app).
+  //
+  // 🔴 THE TAXED CASE IS THE BIGGEST SINGLE CORRECTION IN THIS FUNCTION. Tax used to push as a
+  // SalesItemLine against the same generic item as everything else, which BOOKS TAX AS REVENUE —
+  // money held for the state, recorded as the business's own income. The goods line misfiled
+  // revenue; this one invented it.
   const taxAmount = Number(order.tax_amount);
+  const tax = txnTaxDetail(taxAmount);
   if (order.tax_exempt_applied === true) {
     const cert = String(order.tax_exempt_cert_ref ?? '').trim();
-    lines.push({
-      Description: `Tax exempt — ${taxExemptionLabel(order.tax_exempt_reason)}${cert ? ` · cert ${cert}` : ''}`,
-      Amount: 0,
-      DetailType: 'SalesItemLineDetail',
-      SalesItemLineDetail: { UnitPrice: 0, Qty: 1, ItemRef: { value: '1', name: 'Services' } },
+    lines.push(descriptionOnlyLine(
+      `Tax exempt — ${taxExemptionLabel(order.tax_exempt_reason)}${cert ? ` · cert ${cert}` : ''}`,
+    ));
+    console.log('[TRACE:TAX] QBO invoice — tax-exempt note (DescriptionOnly, no ItemRef)', {
+      order_id, reason: order.tax_exempt_reason, cert,
     });
-    console.log('[TRACE:TAX] QBO invoice — tax-exempt line', { order_id, reason: order.tax_exempt_reason, cert });
-  } else if (taxAmount > 0) {
+  } else if (tax) {
     const sub = Number(order.subtotal) || 0;
     const taxPct = sub > 0 ? Math.round((taxAmount / sub) * 10000) / 100 : 0;
-    lines.push({
-      Description: `Sales Tax (${taxPct}%)`,
-      Amount: taxAmount,
-      DetailType: 'SalesItemLineDetail',
-      SalesItemLineDetail: {
-        UnitPrice: taxAmount,
-        Qty: 1,
-        ItemRef: { value: '1', name: 'Services' },
-      },
+    console.log('[TRACE:TAX] QBO invoice — tax as TxnTaxDetail, NOT a revenue line', {
+      order_id, totalTax: tax.TotalTax, derivedPct: taxPct,
     });
   }
 
-  return lines;
+  if (unmapped.length > 0) {
+    console.log('[TRACE:QBO] ⚠ PUSH REFUSED — revenue lines with no Intuit item behind them', {
+      order_id, count: unmapped.length, lines: unmapped,
+    });
+    return { ok: false, unmapped };
+  }
+
+  // ⚠️ FLAGGED, NOT GUARDED: QuickBooks documents `DiscountLine` as a TRANSACTION-level construct
+  //    and its own UI offers exactly one. This function can emit more than one (a tier discount
+  //    plus a per-service concession), and whether Intuit ACCEPTS that is UNMEASURED — it cannot
+  //    be measured from this repo, and re-reading the customer's books is a separate pass under
+  //    R-23. It is not guarded here because refusing a legitimate order over an unmeasured API
+  //    constraint is worse than letting the first (HELD) push surface it. This emit is what makes
+  //    it surface rather than being diagnosed from a 400 body.
+  const discountLineCount = lines.filter(l => l.DetailType === QBO_DETAIL_TYPE.discount).length;
+  if (discountLineCount > 1) {
+    console.log('[TRACE:QBO] ⚠ MORE THAN ONE NATIVE DISCOUNT LINE — unmeasured against Intuit', {
+      order_id, discountLineCount,
+    });
+  }
+
+  return { ok: true, lines, txnTaxDetail: tax };
 }
 
 export async function pushQboInvoice(
@@ -601,10 +695,18 @@ export async function pushQboInvoice(
   // the shared seam closes both (§6 r8), which is why this is not where the instruction said
   // to put it.
   //
-  // WHY IT EXISTS: the push carries twelve hardcoded `ItemRef: {value:'1', name:'Services'}`
-  // literals, so the first completed checkout on a live company books every line — trees
-  // included — as generic "Services". The push is inline and unconditional, so there is no
-  // step a person can decline. This is that step.
+  // WHY IT EXISTED (2026-08-29, and the sentence is kept because it was TRUE when written):
+  // "the push carries twelve hardcoded `ItemRef: {value:'1', name:'Services'}` literals, so the
+  // first completed checkout on a live company books every line — trees included — as generic
+  // 'Services'." ⚠️ THAT CAUSE IS GONE as of 2026-08-30 — the literals are removed and an
+  // unmapped revenue line now REFUSES (422 `QBO_ITEM_UNMAPPED`) rather than defaulting.
+  //
+  // 🔴 THE HOLD STAYS ON ANYWAY, AND NOT OUT OF INERTIA. Three of this endpoint's constructs are
+  // NEW and NONE of them has been seen by Intuit: the native `DiscountLineDetail`, the
+  // `DescriptionOnly` notes, and `TxnTaxDetail`. A malformed line 400s the WHOLE invoice, and the
+  // push is inline and unconditional, so there is no step a person can decline. This is that
+  // step — and it comes off when David has watched ONE invoice land correctly in real books,
+  // not when a build says it should work.
   //
   // 🔴 IT RETURNS 409, NOT 503. 503 is `not_connected`, and QuickBooks IS connected — telling
   // an owner to reconnect it would send them to fix a thing that is not broken, which is
@@ -717,31 +819,80 @@ export async function pushQboInvoice(
       qbCustomerId = await findOrCreateQBCustomer(realm, token, customer, business_id, db);
     }
 
-    // Build QB line items
-    // #104 / testability: the lines are assembled by the pure buildQboInvoiceLines seam above, so
-    // the PAYLOAD is assertable without QuickBooks (qboInvoiceLines.test.ts). Behaviour unchanged.
-    const lines = buildQboInvoiceLines({
+    // Build the QB payload
+    // #104 / testability: the payload is assembled by the pure buildQboInvoiceLines seam above, so
+    // it is assertable without QuickBooks (qboInvoiceLines.test.ts).
+    const built = buildQboInvoiceLines({
       order, business, orderItems, serviceSelections, orderAddons, useNewModel, order_id,
     });
 
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // 🔴 NO ROW, NO ID — THE PUSH REFUSES, AND IT SAYS WHICH LINES AND WHY.
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // A revenue line with no Intuit Item Id behind it used to book against a hardcoded `'1'`.
+    // The read of the customer's own books settled what that cost: item 1 is named "Sales" and
+    // books to their generic income account, so the push would have SUCCEEDED and silently
+    // misfiled every tree into a bucket already holding $41,667 — beside $1.52m of nursery
+    // stock it should have joined. A silent success is worse than a refusal, which is the whole
+    // reason this branch exists rather than a fallback.
+    //
+    // 422, matching the history-order refusal below the same reasoning: the caller is
+    // AUTHORISED and the request is INCOHERENT — this order cannot be represented in the
+    // customer's books yet. A 403 would send someone hunting a permission that never helps.
+    //
+    // FAILED INTENT, LOGGED (R-18): what was asked, for which order, and why it was refused.
+    if (!built.ok) {
+      const owed = built.unmapped;
+      const money = Math.round(owed.reduce((s, u) => s + u.amount, 0) * 100) / 100;
+      console.log('[TRACE:QBO] REFUSED — revenue lines with no QuickBooks item (failed intent)', {
+        order_id, business_id, count: owed.length, amountAtStake: money, lines: owed,
+        reason: 'no qbo_item_id on the backing row; defaulting is how every tree booked as "Services"',
+      });
+      return { status: 422, body: {
+        error:
+          `This order cannot be invoiced yet: ${owed.length} line${owed.length > 1 ? 's' : ''} `
+          + `(${owed.map(u => `"${u.label}"`).join(', ')}) `
+          + `${owed.length > 1 ? 'have' : 'has'} no QuickBooks item behind ${owed.length > 1 ? 'them' : 'it'}, `
+          + `so TRACE cannot say which account the $${money.toFixed(2)} belongs in. `
+          + `Link ${owed.length > 1 ? 'these' : 'this'} to a QuickBooks item, then push again. `
+          + `TRACE will not pick one — that is how every tree came to book as generic income.`,
+        code: 'QBO_ITEM_UNMAPPED',
+        unmapped: owed,
+      } };
+    }
+
+    const lines = built.lines;
+
     // ── RECONCILE the assembled invoice against what TRACE actually charged (D-48) ───────────────
-    // Every line is now internally consistent (Amount === UnitPrice × Qty), which is what QBO
-    // validates. This checks the OTHER half: that the lines SUM to the order's total — so a
-    // discount line can never double-count against an already-netted line (the failure mode of
+    // Every line is internally consistent (Amount === UnitPrice × Qty), which is what QBO
+    // validates. This checks the OTHER half: that the lines net to what the order charged — so a
+    // discount can never double-count against an already-netted line (the failure mode of
     // representing one concession twice). SURFACED, never silent: a mismatch means the invoice and
     // the order disagree about money, and the owner must see that rather than have QBO carry a
     // number TRACE never charged. This is a check TRACE never had — QBO's 6070 was doing this job.
-    const qbLineSum   = Math.round(lines.reduce((s: number, l: any) => s + Number(l.Amount ?? 0), 0) * 100) / 100;
+    //
+    // 🔴 TWO THINGS CHANGED HERE WITH THE CONSTRUCTS, AND BOTH WOULD HAVE FAILED SILENTLY IN THE
+    // DIRECTION THAT SAYS "RECONCILES".
+    //   (1) A native discount line carries a POSITIVE Amount that QuickBooks SUBTRACTS, where the
+    //       old negative SalesItemLine carried it signed. A naive sum is now wrong by TWICE the
+    //       discount — so the sum is signed by construct (`signedLineAmount`), not by field.
+    //   (2) Tax has LEFT the line list for `TxnTaxDetail`, so the lines no longer reach the order
+    //       TOTAL — they reach the total LESS tax. Comparing against the total would now fail
+    //       every taxed order.
+    const qbLineSum    = Math.round(lines.reduce((s: number, l) => s + signedLineAmount(l), 0) * 100) / 100;
+    const qbTax        = built.txnTaxDetail?.TotalTax ?? 0;
     const qbOrderTotal = Math.round(Number(order.total_amount) * 100) / 100;
-    const qbReconciles = Math.abs(qbLineSum - qbOrderTotal) <= 0.005;
-    console.log('[TRACE:QBO] invoice reconcile — lines sum vs the order total', {
-      order_id, lineSum: qbLineSum, orderTotal: qbOrderTotal, reconciles: qbReconciles,
-      lines: lines.map((l: any) => ({ desc: l.Description, amount: l.Amount })),
+    const qbExpected   = Math.round((qbOrderTotal - qbTax) * 100) / 100;
+    const qbReconciles = Math.abs(qbLineSum - qbExpected) <= 0.005;
+    console.log('[TRACE:QBO] invoice reconcile — lines net vs the order total less tax', {
+      order_id, lineSum: qbLineSum, tax: qbTax, orderTotal: qbOrderTotal, expected: qbExpected,
+      reconciles: qbReconciles,
+      lines: lines.map((l) => ({ desc: l.Description, amount: l.Amount, type: l.DetailType })),
     });
     if (!qbReconciles) {
       throw new Error(
-        `Invoice does not reconcile: the QuickBooks lines sum to $${qbLineSum.toFixed(2)} but this order charged `
-        + `$${qbOrderTotal.toFixed(2)}. TRACE will not push an invoice for an amount it did not charge. `
+        `Invoice does not reconcile: the QuickBooks lines net to $${qbLineSum.toFixed(2)} but this order charged `
+        + `$${qbExpected.toFixed(2)} before tax. TRACE will not push an invoice for an amount it did not charge. `
         + `(Order ${invoiceNumber}.)`,
       );
     }
@@ -749,6 +900,9 @@ export async function pushQboInvoice(
     const today = new Date().toISOString().slice(0, 10);
     const invoicePayload = {
       Line: lines,
+      // Sales tax as QuickBooks' own object rather than a revenue line. Omitted entirely when the
+      // order carries no tax — D-9, omit rather than send an explicit zero.
+      ...(built.txnTaxDetail ? { TxnTaxDetail: built.txnTaxDetail } : {}),
       CustomerRef: { value: qbCustomerId },
       TxnDate: today,
       DueDate: today,

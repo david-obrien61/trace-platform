@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-08-30 (**#236 — 🔨 THE UNIT BACKFILL RAN.** `20260830` APPLIED + (A)–(G) verified — **(F) proved the projection lets go**; **478 rows written across 3 tenants, 0 disagreements.** 🔴 LAWNS's unparsed list is EMPTY *and that is real* — all 447 rows are container gallons; the other five unit families live in QuickBooks, not the platform. 🔴 But LAWNS spells **15 sizes 46 ways**, **six of 198 families cannot be scanned**, and one is invisible to the dup-size flag → **tech-debt #126**; **#125 escalated to live**. Also: `business_operating_days` APPLIED + SEEDED. See the inventory block + §3.4.)
+# Last updated: 2026-08-30 (**#237 — 🔨 THE ItemRef IS DISARMED.** Twelve hardcoded `ItemRef:{value:'1'}` literals → **ONE rule**: a $0 line is a `DescriptionOnly` note; a line carrying money must resolve an Intuit **Id** off its row **or the push REFUSES** (422). Discount → native `DiscountLineDetail`, **sales tax → `TxnTaxDetail`** (as a revenue line it inflated their income). ⚠️ **Every revenue line refuses TODAY — `qbo_item_id` does not exist yet; that is pass ②, now specced.** Zero schema, zero new functions, 14/14 mutants caught. See the QBO push entry + §3.4.)
 
 
 > 📐 **CAMPAIGN LIFECYCLE — SCOPING + ESTIMATE (2026-08-23, ledger #192/#192b).** NOT a capability entry: **nothing was built.** A scoping document answering David's *"I can add but not edit or cancel or delete"* with nine questions, ten site keys, a proven F1/F2/F3 dependency order, three scopes (**MINIMUM ~2–3 · COHERENT ~5–7 · COMPLETE ~11–14 Thunder prompts; MINIMUM and COHERENT need ZERO migrations**) and eight rulings owed. Read it before ANY campaign build — it is the answer to "has this been scoped?" and its first finding is that the EDIT FORM ALREADY EXISTS as the create form (`Campaigns.tsx:120-198`). → [`docs/audits/campaign-lifecycle-scoping-2026-08-23.md`](audits/campaign-lifecycle-scoping-2026-08-23.md) · predecessor [`social-campaign-path-recon-2026-08-22.md`](audits/social-campaign-path-recon-2026-08-22.md)
@@ -953,6 +953,50 @@ had no standing test at all until now, which is why the invoice went out). **Not
 **What:** `GET /api/qbo/items` — **one read-only `select * from Item`** against the connected
 QuickBooks company, returned to the operator's screen. **Nothing is written to Intuit and nothing is
 stored on our side.**
+
+---
+
+### THE QUICKBOOKS INVOICE PUSH — THE ItemRef IS DISARMED (cap 4.1 · ledger #237, 2026-08-30)
+
+**Status:** 🟡 BUILDER-COMPLETE — owner-proof owed (CARDS 4 · 15–18) | **Vertical:** cultivar (shared surface) | **Type:** integration / write
+**Location:** `packages/shared/src/quickbooks/invoiceLineShapes.ts` (**NEW** — the construct vocabulary +
+the ItemRef resolution) + `invoiceLineShapes.test.ts` (**50 assertions**) ·
+`packages/cultivar-os/api/qbo/invoice/cultivar.ts` (`buildQboInvoiceLines` + `pushQboInvoice`) ·
+`qboInvoiceLines.test.ts` (**61 assertions**) · `invoiceList.ts` repointed at the shared constant.
+**ZERO new Vercel functions (12/12) · ZERO schema · ZERO migration.**
+
+🔴 **ONE RULE REPLACES TWELVE HARDCODED LITERALS:** *a $0 line is a **`DescriptionOnly` NOTE** carrying
+no ItemRef; a line carrying money is **REVENUE** and must resolve an **Intuit `Item.Id`** off its
+backing row, or **the push REFUSES** (422 `QBO_ITEM_UNMAPPED`).* There is **no fallback branch** — a
+default is how every tree came to book against a generic income item. The refusal names **every**
+unmapped line at once with the money at stake, and **a partially-mapped order refuses the WHOLE
+push**: an invoice three-quarters right is silently wrong on the fourth line.
+
+**The twelve were never twelve item-id problems** — five were **$0 documentation lines** booking as $0
+SALES of things the customer had DECLINED, one was the discount, one was sales tax.
+- ✅ **`DescriptionOnly` and native `DiscountLineDetail` MATCH LAWNS's OWN PRACTICE** — their history
+  carries **194** description-only lines and **66** native discount lines worth **$31,985**, three
+  times more than their discount ITEMS (21).
+- 🔴 **SALES TAX LEFT THE LINE LIST FOR `TxnTaxDetail`.** As a revenue line it **inflated the
+  business's income by the tax amount** — money held for the state, recorded as theirs.
+- **`PercentBased: false`** is load-bearing: the percent form would discount the SERVICE lines, which
+  D-39 forbids. **No `DiscountAccountRef` and no `TaxRateRef` are fabricated** — we hold neither id.
+- 🔴 **A SURCHARGE IS NOT A DISCOUNT.** An owner override ABOVE baseline used to flip a sign on a
+  "discount"; QuickBooks has no negative discount, so an upcharge now takes the **revenue** path and
+  refuses without a mapped id like any other sale.
+
+⚠️ **EVERY REVENUE LINE REFUSES TODAY, AND THAT IS THE HONEST STATE.** No table carries `qbo_item_id`
+— that is pass ②, specced at `docs/decisions/2026-08-30-qbo-item-mapping-spec.md` (**three tables, not
+one**; it stores the **Id**, never the Sku). The consumer is proven correct *before* the producer
+exists: the test's `mapped` fixture is invoice 436 with ids on its rows and produces exactly the
+payload ② will make live.
+
+⚠️ **THE HOLD STAYS ON.** Its original cause is gone; it stays because three constructs here have
+never been seen by Intuit and a malformed line 400s the WHOLE invoice.
+
+---
+
+### THE QUICKBOOKS ITEM LIST — READ-ONLY (cap 4.1 · ledger #229)
 **Status:** 🟡 BUILDER-COMPLETE — owner-proof owed (ledger #229) | **Vertical:** cultivar (shared surface) | **Type:** integration / read
 **Location:** `packages/cultivar-os/api/qbo/router.ts` → **`handleItems`** (`_route=items`) ·
 `packages/shared/src/quickbooks/itemList.ts` (the pure half) + `itemList.test.ts` (**40 probes**) ·
@@ -964,7 +1008,7 @@ stored on our side.**
 yet — their books were clean only because Lauren's write permissions blocked it — so **the next
 completed checkout is the first real push**, and it would book every line, the trees included, as
 generic "Services": 100% service revenue, zero product sales, no COGS against inventory. This read
-is what makes the real item ids knowable. **It changes none of the twelve.**
+is what makes the real item ids knowable. **It changes none of the twelve.** ⚠️ **SUPERSEDED 2026-08-30 (#237) — kept because it was true when written: the twelve are now GONE, and what the read settled is that the fix could not have been "a better id". Item `1` EXISTS, is named "Sales" not "Services", and books to their generic income account — so the push would have SUCCEEDED and silently misfiled, not failed. See the ItemRef-disarm entry below.**
 
 **What it returns per item:** `Id · Name · Type · IncomeAccountRef.name · Active`. The **income
 account** is the field that actually decides the Sales-of-Nursery-Stock vs Services split — more

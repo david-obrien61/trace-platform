@@ -63,6 +63,10 @@ David's live run flips it, with a date. **Changing a surface flips its card back
       · **CARDS 12–14 (the #231 invoice read):** the signal is a **THIRD button** in the
         **Read from QuickBooks** section, reading **`Read invoice history`**. Two buttons means you
         are on #230's code — **STOP.** A missing button is not an empty invoice history.
+      · **CARDS 4, 15–17 (the #237 push disarm):** the signal is that a completed order returns
+        **`QBO_ITEM_UNMAPPED`** instead of creating an invoice. 🔴 **If an invoice IS created, you
+        are on old code and it has just booked against item `1` — STOP, and check QuickBooks.**
+        That is the one card on this board whose old-code path writes to a customer's books.
 
 ---
 
@@ -129,33 +133,44 @@ pass on purpose.**
 
 ---
 
-### CARD 4 — ⚠️ EVERY LINE STILL BOOKS AS "Services" — KNOWN, AND THE FIX IS BLOCKED ON YOU
-STATUS: needs-test
+### CARD 4 — 🔴 THE TWELVE LITERALS ARE GONE — AND WITH NO MAPPING, THE PUSH REFUSES
+STATUS: owed
 LAST-PROVEN: never
 DEVICE: desktop
-COVERS: tech-debt #106 · the FIX 2 gate, STOPPED 2026-08-24
-SIGNAL: —
+COVERS: tech-debt #106 (RESOLVED) · ledger #237 · the ③ disarm
+SIGNAL: a completed order returns **`QBO_ITEM_UNMAPPED`** and names the lines — NOT a QuickBooks invoice.
 
-🔴 **RECORDED SO IT IS NOT DISCOVERED IN FRONT OF AN ACCOUNTANT.** On any pushed invoice, the
-**SERVICE / PRODUCT column reads `Services` on every row — including the plants.** Booked this way
-your QuickBooks shows **100% service revenue, zero product sales, and no COGS against inventory.**
+⚠️ **THIS CARD WAS REWRITTEN 2026-08-30 AND THE OLD TEXT IS GONE ON PURPOSE — the surface it
+described no longer exists.** It previously read *"every line still books as Services — KNOWN, and
+the fix is blocked on you"* and was `needs-test`, pinning the defect. **The defect is fixed; a card
+still describing it would assert a state the code cannot produce.** What it asserted is preserved
+in ledger #215 and in the git history of this file.
 
-**FIX 2 was STOPPED AT ITS GATE this build and nothing was changed.** The reason is on the ledger:
-**`value: '1'` is the only QuickBooks item id this platform holds anywhere** — no config, no env var,
-no column, no lookup, and **no code path that can read your QuickBooks item list.** Inventing a
-second id would push an invoice QuickBooks rejects, and **a push that fails is worse than a push
-that mis-categorizes.**
+🔴 **WHAT CHANGED, AND WHY THE ANSWER IS A REFUSAL RATHER THAN A BETTER GUESS.** The twelve
+hardcoded `ItemRef: { value: '1', name: 'Services' }` literals are removed. The item read settled
+what they would have cost: **item `1` exists, is named "Sales" — not "Services" — and books to the
+generic income account** already holding $41,667 on your P&L beside $1.52m of nursery stock. So the
+push would **not** have failed; it would have **succeeded and silently misfiled every tree.** A
+default is how that happens, so there is no default: **no row, no id, no push.**
 
-**WHAT UNBLOCKS IT — and as of 2026-08-29 THERE IS AN IN-APP PATH, so this no longer needs a
-manual hunt through the QuickBooks UI.** ➡️ **See CARDS 5–8 below: `Settings → Accounting → Read
-item list`** returns every item with its **Id, Name, Type and INCOME ACCOUNT**, which is more than
-the browser-URL method gives — the income account is the field that actually decides the
-Nursery-Stock-vs-Services split. Read it, then hand back **the id and the exact item name** for the
-item a tree should map to. Then FIX 2 is a one-seam change.
+⚠️ **THE MAPPING DOES NOT EXIST YET (that is pass ②), SO TODAY EVERY REVENUE LINE REFUSES. THAT IS
+THE PASS CONDITION OF THIS CARD, not a failure.**
 
-**The manual route still works and is a fine cross-check:** QuickBooks → **Sales → Products and
-services** → open the plants/nursery-stock item → the id is the number in the browser URL. If the
-two disagree, the app is wrong and that is worth knowing.
+**HOW TO RUN (Test Dave's — NEVER LAWNS):**
+1. Make sure `QBO_PUSH_HOLD` does **not** cover Test Dave's for this one test, so the push actually
+   runs and can refuse. ⚠️ **Leave the LAWNS hold ON.**
+2. Complete an ordinary order with at least one plant and one priced service.
+3. **PASS:** the order COMPLETES and is correct in TRACE, and the QuickBooks step comes back with
+   **`QBO_ITEM_UNMAPPED`** and a message naming **each** unmapped line, the money at stake, and
+   *"TRACE will not pick one — that is how every tree came to book as generic income."*
+4. **Open QuickBooks and confirm NO invoice was created.** This is the half that matters: a refusal
+   that still writes is not a refusal.
+5. Console: `[TRACE:QBO] ⚠ REVENUE LINE HAS NO INTUIT ITEM` once per line, then
+   `[TRACE:QBO] REFUSED — revenue lines with no QuickBooks item (failed intent)` with the count.
+
+- **FAIL:** an invoice appears in QuickBooks · any line books against item `1` or an item named
+  "Services" · the message names only the first bad line · the order itself fails or is left in a
+  broken state (the ORDER must be fine — only the push is refused).
 
 ⚠️ **Do not change item `1` itself.** Everything already invoiced points at it.
 
@@ -497,3 +512,114 @@ you ever see that box, **it is the guard working** — report the number, do not
 
 🔴 **AFTERWARDS: that file is LAWNS's complete billing history.** Keep it out of the repo, off shared
 drives, and delete it when the mapping pass is done with it.
+
+---
+
+### CARD 15 — 🔴 A $0 NOTE IS A NOTE, NOT A $0 SALE
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #237 · the five DescriptionOnly lines
+SIGNAL: the declined-netting line shows in QuickBooks with **no item in the PRODUCT/SERVICE column.**
+⚠️ **BLOCKED-ON: pass ② (the item mapping).** Until a revenue line can resolve an id, no invoice
+reaches QuickBooks at all, so there is nothing to look at. Run this the first time a push lands.
+
+🔴 **WHAT THIS IS ABOUT.** Five lines on this invoice are $0 documentation: netting **declined**,
+$0 transport, legacy netting declined, staff transport, and the tax-exemption note. Every one of
+them used to book against a revenue item — so **your books recorded a $0 SALE of a service the
+customer explicitly REFUSED.** They are now `DescriptionOnly`, which carries no item at all.
+
+✅ **THIS MATCHES YOUR OWN PRACTICE RATHER THAN IMPOSING OURS — LAWNS's history already carries 194
+`DescriptionOnly` lines.**
+
+**HOW TO RUN:** complete an order on Test Dave's where the customer **declines netting**, then open
+the invoice in QuickBooks.
+- **PASS:** the "Protective travel netting — DECLINED by customer (TX TCC Ch.725 waiver signed)"
+  line is present, reads $0, and its **PRODUCT/SERVICE column is EMPTY**. The waiver language is
+  intact — this line is the legal record and must not be dropped.
+- **FAIL:** the line carries an item name · the line is missing entirely · QuickBooks rejects the
+  invoice (a 400 mentioning `DescriptionOnly` means the shape is wrong — **report the verbatim
+  error body**, it is the artifact that says which field Intuit disliked).
+
+---
+
+### CARD 16 — 🔴 THE DISCOUNT IS QUICKBOOKS' OWN DISCOUNT, AND THE TOTAL IS UNCHANGED
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #237 · D-43/D-48 re-represented · tech-debt trail on `discountLine`
+SIGNAL: the concession appears as QuickBooks' **Discount**, not as a negative line item.
+⚠️ **BLOCKED-ON: pass ② (the item mapping).**
+
+🔴 **THE NUMBER TO WATCH IS THE TOTAL, NOT THE DISCOUNT.** A native discount line carries a
+**POSITIVE** amount that QuickBooks SUBTRACTS, where the old shape carried a negative one it added.
+Get the construct right and the sign wrong and **the invoice is off by twice the discount** — so the
+only assertion that matters is that the QuickBooks total equals what TRACE charged.
+
+✅ **YOUR OWN PRACTICE: LAWNS use the native discount 66 times for $31,985 — three times more than
+their discount ITEMS (21).**
+
+**HOW TO RUN:** on Test Dave's, complete (a) a contractor-tier order so a **tier discount** applies,
+and (b) an order where you **override a service price downward**. Both use the same construct.
+- **PASS:** each concession shows as a discount, the amount matches TRACE's, and **the QuickBooks
+  BALANCE DUE equals the TRACE total to the penny.**
+- 🔴 **THE ONE UNMEASURED RISK, AND IT IS ON THIS CARD BECAUSE ONLY A LIVE PUSH CAN SETTLE IT:** an
+  order with **BOTH** a tier discount and a service override emits **TWO** discount lines.
+  **QuickBooks documents `DiscountLine` as transaction-level and its own UI offers exactly one.**
+  Whether Intuit accepts two is **not known and cannot be measured from the repo.** Run that
+  combination deliberately. If it 400s, **report the verbatim error body** — the fix is to combine
+  them, and we should not guess at that before it is proven necessary.
+- **FAIL:** the total disagrees with TRACE by any amount · a discount appears as a line ITEM · the
+  services get discounted too (that would mean `PercentBased` came back).
+
+---
+
+### CARD 17 — 🔴 SALES TAX IS NOT REVENUE
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #237 · the `:580` literal — arguably the worst of the twelve
+SIGNAL: the invoice has **no "Sales Tax" line item**; tax shows in QuickBooks' own tax field.
+⚠️ **BLOCKED-ON: pass ② (the item mapping).**
+
+🔴 **WHY THIS ONE IS WORSE THAN THE TREE.** Tax used to push as a revenue line against the same
+generic item as everything else, which **books tax as INCOME.** The goods line misfiled revenue you
+really earned; this one **invented revenue you never earned** — money you are holding for the state,
+recorded as yours. Your P&L already carries $85,281 of sales tax.
+
+**HOW TO RUN:** complete a taxed order on Test Dave's and open the invoice.
+- **PASS:** there is **no line item named "Sales Tax"**; the tax appears in QuickBooks' tax field;
+  the BALANCE DUE matches TRACE; and — the real check — **your Income accounts do not move by the
+  tax amount.**
+- Then a **tax-exempt** order: a $0 `Tax exempt — <reason> · cert <ref>` note is present, and there
+  is **no tax figure at all** (not a zero).
+- 🔴 **THE UNMEASURED HALF, STATED PLAINLY:** we send `TxnTaxDetail.TotalTax` and **no `TaxRateRef`**
+  — we hold no tax-rate id and this build does not fabricate ids. **If the company runs Automated
+  Sales Tax, QuickBooks may RECOMPUTE the tax rather than accept our figure.** So compare the two
+  numbers: if QuickBooks' tax differs from TRACE's, that is not a bug in this card, it is the answer
+  to a question we could not ask from here — **report both numbers.**
+- **FAIL:** a "Sales Tax" line item still exists · the tax lands in an income account · a tax-exempt
+  order shows a $0.00 tax figure instead of no tax.
+
+---
+
+### CARD 18 — ⚠️ THE HOLD IS STILL ON, AND IT COMES OFF ONLY AFTER YOU HAVE WATCHED ONE LAND
+STATUS: needs-test
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: ledger #237 · [[R-23]]'s restraint applied to the WRITE side
+SIGNAL: `/api/qbo/status` reports `push_held: true` for LAWNS.
+
+🔴 **THE HOLD'S ORIGINAL CAUSE IS GONE AND THE HOLD STAYS ON ANYWAY — SAY WHY OUT LOUD, BECAUSE
+"the reason expired" is exactly how a safety gets removed by accident.** It was put on because of
+the twelve literals. Those are fixed. **But three constructs on this invoice are NEW and none has
+ever been seen by Intuit** — the native discount, the `DescriptionOnly` notes, and `TxnTaxDetail` —
+and **a malformed line 400s the WHOLE invoice.**
+
+**HOW TO RUN:** hit `/api/qbo/status` and confirm `push_held: true` for the LAWNS business id.
+⚠️ An env change needs a **Vercel redeploy** to take effect, and this endpoint is the only way to
+confirm it without completing a real order against Terry's books.
+
+- **PASS:** LAWNS is held. **FAIL:** LAWNS is not held.
+- 🔴 **THE HOLD COMES OFF WHEN DAVID HAS WATCHED ONE INVOICE LAND CORRECTLY IN REAL BOOKS** — not
+  when a build says it should work, and not when CARDS 15–17 pass on Test Dave's.

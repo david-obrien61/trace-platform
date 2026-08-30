@@ -35,6 +35,7 @@
 // 🔴 NOTHING HERE PERSISTS AND NOTHING HERE LOGS A BODY (R-23 clauses b and c).
 // ─────────────────────────────────────────────────────────────────────────────
 import { parseRows } from './qboRead';
+import { QBO_DETAIL_TYPE } from './invoiceLineShapes';
 
 /**
  * One line of one invoice, reduced to what the questions need.
@@ -127,7 +128,10 @@ function isNamedDiscount(line: QboInvoiceLine): boolean {
  * row and a false negative costs a silent under-count.
  */
 function isDiscountShaped(line: QboInvoiceLine): boolean {
-  if ((line.detailType ?? '') === 'DiscountLineDetail') return true;
+  // The literal lives in ONE place (`invoiceLineShapes.QBO_DETAIL_TYPE`) because this module
+  // READS the construct the push WRITES. Two spellings of one Intuit string is STD-011, and
+  // the copy that drifts is never the one you are looking at.
+  if ((line.detailType ?? '') === QBO_DETAIL_TYPE.discount) return true;
   if ((line.amount ?? 0) < 0) return true;
   return /discount/i.test(line.itemName ?? '');
 }
