@@ -666,7 +666,8 @@ A measurable regression on the inventory grid (thousands of rows) is the failure
    written **literally in the policy**, not via the alias table. Cruder and more verbose, but it has no
    moving parts and no shared resolver to reason about — the residual window antigravity identifies
    cannot exist in a disjunction evaluated inline. The literals are removed at Phase 7 CONTRACT.
-3. **Single-tenant reality check.** There is exactly one live tenant (LAWNS, `f7ec5d67`) with a handful
+3. **Single-tenant reality check.** There is exactly one live tenant (LAWNS, `ed2e5933-45dc-4b9b-a331-ddfd125e7a74`) with a handful
+   ⚠️ **CORRECTED 2026-08-30 (R-26 instance 12, ledger #235): this read `f7ec5d67`, which is TEST DAVE'S TREE NEST, not LAWNS.**
    of members. If antigravity's residual window is narrow and the exposure is bounded, a **scheduled
    maintenance cutover** — announced, minutes long, with a proven rollback — is a legitimate and much
    simpler answer than either mechanism. **This option only exists before the first paying customer;

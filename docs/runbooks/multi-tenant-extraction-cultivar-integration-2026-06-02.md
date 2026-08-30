@@ -62,7 +62,10 @@ The insert is non-fatal. If the migration hasn't been applied, the insert fails 
 ```sql
 INSERT INTO business_members (business_id, user_id, name, email, role, permissions, active)
 VALUES (
-  'a1b2c3d4-0000-0000-0000-000000000001',  -- LAWNS business ID
+  'ed2e5933-45dc-4b9b-a331-ddfd125e7a74',  -- LAWNS business ID
+  -- ⚠️ CORRECTED 2026-08-30: this read 'a1b2c3d4-0000-0000-0000-000000000001', a PLACEHOLDER that was
+  --    never a real tenant. Running it as written inserts a membership against a business that does not
+  --    exist. R-26 instance 12, ledger #235.
   auth.uid(),                               -- David's UID
   'David O''Brien',
   'david_obrien2016@outlook.com',
