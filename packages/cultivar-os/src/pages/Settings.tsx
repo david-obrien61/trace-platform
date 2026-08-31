@@ -5,6 +5,8 @@ import { CostToProduceSettings } from '@trace/shared/components/CostToProduceSet
 import { useBusinessContext } from '@trace/shared/context';
 import { useQboConnect } from '@trace/shared/quickbooks/useQboConnect';
 import { generateQR } from '@trace/shared/qr/generate';
+import { BUSINESS_MODULE_COLUMNS, setBusinessModuleState, type BusinessModuleRow } from '@trace/shared/business-logic/moduleState';
+import { readReviewAskConfig, reviewCopyProblems, isUsableReviewUrl, DEFAULT_REVIEW_GUIDANCE } from '../lib/deliveryFulfilment';
 import { supabase } from '../lib/supabase';
 import {
   getMembersByBusiness,
@@ -128,6 +130,144 @@ function NurserySection({ businessId }: { businessId: string }) {
         }}
       >
         {saving ? 'Saving…' : 'Save Nursery Settings'}
+      </button>
+      {saveMsg && (
+        <p style={{ fontSize: '0.875rem', color: saveMsg.startsWith('Error') ? RED : GREEN, marginTop: 8, textAlign: 'center' }}>
+          {saveMsg}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Review ask (follow-up module) ──────────────────────────────────────────────
+//
+// The ENTIRE new input this capability needs: the business's own Google review link, copied once
+// from their Google Business Profile. Stored in `business_modules.config` for `followup_engine`
+// — NOT a new column — which also makes the module's `configured` flag mean something real.
+//
+// 🔴 THE GUIDANCE LINE IS VALIDATED, NOT TRUSTED, and the refusal is the feature. Google's Rating
+// Manipulation policy prohibits incentives, sentiment screening, and requesting that specific
+// content be included (including content identifying a staff member). An owner typing "mention the
+// crew by name and get 10% off" is not being difficult — it is the obvious thing to write. The
+// field says no, in words, with the reason, BEFORE it is saved.
+function ReviewAskSection({ businessId }: { businessId: string }) {
+  const [url, setUrl]           = useState('');
+  const [guidance, setGuidance] = useState('');
+  const [enabled, setEnabled]   = useState<boolean | null>(null);
+  const [saving, setSaving]     = useState(false);
+  const [saveMsg, setSaveMsg]   = useState('');
+
+  useEffect(() => {
+    supabase
+      .from('business_modules')
+      .select(BUSINESS_MODULE_COLUMNS)
+      .eq('business_id', businessId)
+      .eq('module_key', 'followup_engine')
+      .maybeSingle()
+      .then(({ data }) => {
+        const row = (data ?? null) as BusinessModuleRow | null;
+        setEnabled(!!row?.enabled);
+        const cfg = readReviewAskConfig(row?.config ?? null);
+        setUrl(cfg.reviewUrl ?? '');
+        setGuidance(cfg.guidance ?? '');
+      });
+  }, [businessId]);
+
+  const problems = reviewCopyProblems(guidance);
+  const urlBad   = url.trim().length > 0 && !isUsableReviewUrl(url);
+
+  async function save() {
+    if (problems.length > 0 || urlBad) return;   // refused, not warned
+    setSaving(true); setSaveMsg('');
+    // Same actor resolution the cost-to-produce writer uses — the RPC records who changed it.
+    const actor = (await supabase.auth.getUser()).data.user?.id ?? null;
+    const res = await setBusinessModuleState(supabase, businessId, 'followup_engine', {
+      configured: !!url.trim(),
+      config: { review_url: url.trim() || null, review_guidance: guidance.trim() || null },
+    }, actor);
+    setSaveMsg(res.applied && !res.error ? 'Saved' : 'Error: ' + (res.reason ?? res.error?.message ?? 'not saved'));
+    if (res.applied && !res.error) setTimeout(() => setSaveMsg(''), 2000);
+    setSaving(false);
+  }
+
+  return (
+    <div style={{ background: '#fff', borderRadius: 14, padding: '18px 16px', border: '1px solid #e5e7eb' }}>
+      <p style={{
+        fontSize: '0.6875rem', fontWeight: 700, color: GRAY,
+        textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4,
+      }}>
+        Asking for reviews
+      </p>
+      {/* The header is a CLAIM (§6 r18): it must hold for every row beneath it, including the
+          case where the business does not have the module at all. */}
+      <p style={{ fontSize: '0.75rem', color: '#9ca3af', marginBottom: 14 }}>
+        {enabled === null ? 'Loading…'
+          : enabled
+            ? 'After a crew marks a stop done, they can show the customer a code that opens your review page.'
+            : 'Your plan doesn’t include the Follow-Up module, so nothing is shown to a crew or a customer. These settings are saved for when it’s turned on.'}
+      </p>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12 }}>
+        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: GRAY, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Your Google review link
+        </label>
+        <input
+          type="url"
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          placeholder="https://g.page/r/…/review"
+          style={inputStyle}
+          onFocus={e => (e.currentTarget.style.borderColor = GREEN)}
+          onBlur={e => (e.currentTarget.style.borderColor = '#d1d5db')}
+        />
+        <p style={{ fontSize: '0.75rem', color: urlBad ? RED : '#9ca3af', marginTop: 2 }}>
+          {urlBad
+            ? 'That doesn’t look like a web address — it should start with https://'
+            : 'From your Google Business Profile → Ask for reviews. Nothing is shown until this is set.'}
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12 }}>
+        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: GRAY, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          What the customer reads
+        </label>
+        <input
+          type="text"
+          value={guidance}
+          onChange={e => setGuidance(e.target.value)}
+          placeholder={DEFAULT_REVIEW_GUIDANCE}
+          style={inputStyle}
+          onFocus={e => (e.currentTarget.style.borderColor = GREEN)}
+          onBlur={e => (e.currentTarget.style.borderColor = '#d1d5db')}
+        />
+        {problems.length > 0 ? (
+          <div style={{ fontSize: '0.75rem', color: RED, marginTop: 2 }}>
+            <p style={{ margin: 0, fontWeight: 700 }}>Google’s review policy doesn’t allow this line:</p>
+            <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+              {problems.map((why, i) => <li key={i}>{why}</li>)}
+            </ul>
+          </div>
+        ) : (
+          <p style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: 2 }}>
+            Leave blank to use: “{DEFAULT_REVIEW_GUIDANCE}” · You can’t offer anything in return for a
+            review, ask only happy customers, or tell people what to write — Google prohibits all three.
+          </p>
+        )}
+      </div>
+
+      <button
+        onClick={() => { void save(); }}
+        disabled={saving || problems.length > 0 || urlBad}
+        style={{
+          width: '100%', padding: '13px 20px',
+          background: saving || problems.length > 0 || urlBad ? '#e5e7eb' : GREEN,
+          color: saving || problems.length > 0 || urlBad ? GRAY : '#fff',
+          fontWeight: 700, fontSize: '0.9375rem', borderRadius: 10, border: 'none',
+          cursor: saving || problems.length > 0 || urlBad ? 'default' : 'pointer',
+        }}
+      >
+        {saving ? 'Saving…' : 'Save review settings'}
       </button>
       {saveMsg && (
         <p style={{ fontSize: '0.875rem', color: saveMsg.startsWith('Error') ? RED : GREEN, marginTop: 8, textAlign: 'center' }}>
@@ -625,6 +765,7 @@ export function Settings() {
     <>
       <CostToProduceSettings />
       <NurserySection businessId={businessId} />
+      <ReviewAskSection businessId={businessId} />
       <TeamSection businessId={businessId} />
     </>
   ) : undefined;
