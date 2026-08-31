@@ -19,16 +19,20 @@ A failed Vercel build is **SILENT** — the last-good bundle keeps serving — a
 
 If ①–③ do not agree, **STOP**. Do not record a pass or a fail.
 
+🔴 **THE SHA UNDER TEST IS `3bb36ff`** — the merge of `thunder/position-builder` to `main`, pushed 2026-08-31. Testing the BRANCH would test code Vercel never built; `main` is what deploys.
+
 ---
 
-## ⛔ GATE 0b — THE MIGRATION IS WRITTEN AND NOT APPLIED
+## ⛔ GATE 0b — ✅ APPLIED AND VERIFIED. THIS GATE IS CLOSED.
 
-🔴 **`supabase/migrations/20260831_business_positions.sql` has NOT been run.** Until it is, all three tables are absent and **every card below fails at the first read** — the page will report a failed read rather than an empty one, which is itself correct behaviour but is not what these cards are testing.
+✅ **`20260831_business_positions.sql` was applied by David on 2026-08-31 and verified FROM THE CATALOG, not from the builder's memory.** Every card below is runnable.
 
-Apply it in the **SQL editor** (§6 r17 — never the table editor), then run its own verification blocks. **V3 and V5 are the two that matter:**
-
-- **V3** — every write policy names `settings:update`. Fewer than 3 rows means a write policy is over-wide (tech-debt #124's class). **STOP if so.**
-- **V5** — the OWNER floor still reads **57**. This build must not have touched the authority model, and V5 is the assertion rather than the claim.
+- **RLS ON** for all three tables — `business_context` · `business_positions` · `business_position_responsibilities`.
+- **SIX POLICIES** — one member `SELECT` and one `settings:update` write per table.
+- 🔴 **V3 PASSES — exactly three write policies, and all three name `settings:update`.** Not fewer, so **no over-wide policy slipped in** (tech-debt #124's class). This is the one that mattered most.
+- ✅ **V4 RETURNS NO ROWS** — no `anon` TRUNCATE/REFERENCES. The §6 r17 table-editor fingerprint is absent, checked rather than assumed.
+- 🔴 **V5 PASSES — the role floor is UNTOUCHED: OWNER 57 · MANAGER 25 · STAFF 10.** *The scope bar held as an assertion rather than as a claim* — this build created no role and granted nothing, and the catalog says so.
+- **One trigger, `set_updated_at_generic`** — the standard one. Neither table minted its own.
 
 ---
 
