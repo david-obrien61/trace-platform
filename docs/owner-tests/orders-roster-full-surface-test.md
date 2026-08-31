@@ -3,8 +3,10 @@
 > 🔴 **BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha>`.**
 > If it is not the SHA you mean to test, **stop.** Nothing below this line is evidence, and a
 > failed or unmerged build looks *completely normal* — the app just serves the old bundle.
-> One glance, no dashboard, no `git log`. *(GATE 0 · OP-15 · paid for on 2026-08-31: a whole
-> session was spent hunting a defect in code that was never deployed.)*
+> One glance. Match it to `git log --oneline origin/main -1` — **not to a SHA written in this
+> file**, because Vercel deploys the TREE and *any* push to `main`, docs included, moves the
+> stamp. *(GATE 0 · OP-15 · paid for twice on 2026-08-31: once hunting a defect in code that
+> was never deployed, once by a pinned SHA going stale on the very next commit.)*
 
 **Capability:** 2.1 (orders / checkout) · 5.1 (inventory — available-to-sell)
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**

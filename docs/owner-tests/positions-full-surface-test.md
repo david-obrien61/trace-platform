@@ -3,8 +3,10 @@
 > 🔴 **BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha>`.**
 > If it is not the SHA you mean to test, **stop.** Nothing below this line is evidence, and a
 > failed or unmerged build looks *completely normal* — the app just serves the old bundle.
-> One glance, no dashboard, no `git log`. *(GATE 0 · OP-15 · paid for on 2026-08-31: a whole
-> session was spent hunting a defect in code that was never deployed.)*
+> One glance. Match it to `git log --oneline origin/main -1` — **not to a SHA written in this
+> file**, because Vercel deploys the TREE and *any* push to `main`, docs included, moves the
+> stamp. *(GATE 0 · OP-15 · paid for twice on 2026-08-31: once hunting a defect in code that
+> was never deployed, once by a pinned SHA going stale on the very next commit.)*
 
 **Capability:** — (no 24-board capability exists for this surface yet; that is DERIVED, not omitted)
 **Story:** `user_stories.md` → *Know what my job is — a position gets a description before a person gets the job*
@@ -28,7 +30,11 @@ A failed Vercel build is **SILENT** — the last-good bundle keeps serving — a
 
 If the stamp is not the SHA you mean to test, **STOP**. Do not record a pass or a fail.
 
-✅ **THE SHA UNDER TEST IS `ce09942`** — #241 + #242, merged to `main` and **verified live on 2026-08-31: `cultivar-os.app` is serving it** (bundle `/assets/index-Cu2Ia3V_.js`; `14ea7d0` gone). **The stamp at the foot of your screen must read `ce09942`.**
+✅ **THE CODE FOR EVERY CARD BELOW LANDED AT `ce09942`** — #241 + #242, merged to `main` on 2026-08-31 and **verified live from the artefact**: `cultivar-os.app` served bundle `/assets/index-Cu2Ia3V_.js` containing `ce09942`, with `14ea7d0` gone.
+
+🔴 **BUT DO NOT MATCH THE STAMP TO `ce09942` — MATCH IT TO `origin/main`, AND HERE IS WHY, BECAUSE IT BIT WITHIN THE HOUR.** **Vercel deploys the TREE, not the COMMIT**, so *every* push to `main` rebuilds the bundle — **including a docs-only push that changes no code at all.** The close-out commit for this very build moved the stamp off `ce09942` minutes after it was verified. ✏️ **So a board that pins an exact SHA rots on the next commit of any kind, and a tester matching against a rotted pin would "fail" GATE 0 on a perfectly good build** — which is the same false-negative that wasted 2026-08-31, wearing the opposite costume.
+
+**THE CHECK THAT DOES NOT ROT:** run `git log --oneline origin/main -1` and confirm **the stamp matches THAT**, and that `ce09942` is an ancestor of it (`git merge-base --is-ancestor ce09942 origin/main && echo carries-the-feature`). **If the stamp reads `14ea7d0` or `3bb36ff`, you are on #240 and no card below CARD 8 can pass.**
 
 ⚠️ **THIS GATE HAS ALREADY BEEN PAID FOR ONCE ON THIS BOARD.** On 2026-08-31 CARD 9 was run and reported *"the chooser never appears"* — **because the branch had never been merged and `main` did not contain `positionStartingPoints.ts` at all.** Everything observed was #240 behaving exactly as #240 behaves, and the evidence offered that the build WAS deployed — *"About the business is populated"* — **was #240's placeholder rendering in an empty field, i.e. a second symptom of the same absence.** 🔴 **A defect was used as proof there was no defect, and one glance at the stamp would have ended it.** This is OP-15 / #60 in its purest form: a branch push deploys nothing, and the app looks completely normal while serving the old code.
 
