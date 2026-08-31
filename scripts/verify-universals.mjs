@@ -727,6 +727,8 @@ function capR(key, v) {
     '/assets/capture',        // sub-flow reached from /assets
     '/inventory/count',       // sub-flow reached from /inventory
     '/inventory/import',       // sub-flow reached from /inventory ("Import CSV" on the grid); VIEW_COSTS gate (import_pricing gates bulk price writes server-side)
+    '/admin/positions/:positionId',              // drill-in: the responsibility picker, reached by clicking a position on /admin/positions
+    '/admin/positions/:positionId/description',  // drill-in: the printable description, reached from the picker
   ]);
 
   const orphans  = routerPaths.filter((p) => !EXCEPTIONS.has(p) && !navReachable(p));

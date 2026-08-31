@@ -387,6 +387,33 @@ PIECES: shop_tables_rls, business_id_scoping, ignition_onto_shared_auth
 NEEDS: David to set timing (undecided). A recon is owed to scope it table-by-table. Likely trigger: **before Ignition adopts the spine OR before any paying customer touches the platform DB, whichever comes first.**
 Under [[D-31]] (platform DB + spine-first), Ignition retires onto the shared spine and drops its own `DataBridge.authenticate` login; its `shop_` (Ignition-specific, the 20%) tables move into the platform DB. **This is a SECURITY EVENT, not a lift-and-shift:** the `shop_` tables currently **LACK RLS**, so migrating them into a multi-tenant DB that enforces tenant isolation on everything else means **adding `business_id` scoping + owner/member RLS to EVERY `shop_` table AS IT LANDS** ([[AC-2]]/[[AC-3]]) — or an unsecured hole is imported into the shared DB. A serious, careful build — **OP-12 territory**: once a reference environment exists, it goes through reference first, with the reference-proven migration promoted byte-identical to live. Grounds: [[D-31]], AC-2/AC-3, the Auth Architecture Locked Rule.
 
+### Know what my job is — a position gets a description before a person gets the job
+STATUS: needs-input
+SCOPE: platform, vertical:cultivar
+BUILD: in-build
+ARC: identity-roles-sec
+MAPS-TO: —
+PIECES: responsibility_catalogue, position_picker, position_description_doc, business_context
+NEEDS: Lauren's corrections to David's four hand-written descriptions — **her reaction to that paper is the specification**, and until it comes back the acceptance bar is asserted rather than met. Also owed: whether `settings:update` is the right write gate (Thunder's derivation, flagged for overrule).
+
+⚠️ **FILED WITH `STATUS: needs-build`, WHICH IS NOT IN THIS BOARD'S VOCABULARY — corrected to `needs-input` at filing, and the recurrence is recorded rather than the instance.** `needs-build` is **[[R-26]] instance 1**: three stories carried it, it was absent from the documented six values and from the renderer's filter, and all three went unreachable on the owed view. It was written again on 2026-08-31, by the same person, ten weeks later. **A vocabulary that is documented in prose and enforced by nothing gets retyped** — the mechanisable fix R-26 already names (derive the filter from the data unioned with the declared enum) is unbuilt for this board.
+
+🔴 **THE PROBLEM IS NOT A PERMISSIONS PROBLEM, AND THAT IS THE WHOLE INSIGHT.** LAWNS has **no written position descriptions at all**. Joel arrives as operations manager with nothing to hand him; Tyler arrives as external sales the same way. And when the system asked who should be able to do what, **everyone became an owner** — not from laziness, but because **configuring permissions asks a harder question than the one they could not answer.**
+
+**THE INVERSION: ask what a person DOES.** Every owner can answer that. Lauren ticks what a position is responsible for and how often, gives it a title, and gets a description she can hand to the person — **so they know what their job is.**
+
+⚠️ **RULED CORE, not a paid tile** (David, 2026-08-31). If role configuration sits behind a paywall, unpaid tenants have bad permissions — which is exactly how LAWNS ended up with everyone an owner. The printable description and the later gap analysis may be packaged separately; **the picker and the derived permissions may not.**
+
+**What the platform must NOT ask for, because it already knows:** days closed lives in `business_operating_days` and is READ onto every description; headcount is counted from `business_members`; name, address, phone and website are on `businesses`. The context form is **three boxes**, and the subtraction is the feature — asking an owner to retype what they already told us is the labour inversion TRACE exists to end, aimed at TRACE.
+
+**The bar is not "it renders".** It is: *would Lauren hand this to Joel on Monday?* A generated document that reads as filler teaches the person the feature is decoration, and that is harder to undo than not shipping it. Two things carry that weight and only this business can supply them: the operating rhythm, and **the owner's own sentence about what doing the job well looks like here**, quoted verbatim and never rewritten.
+
+**Built 2026-08-31 (#240) — BUILDER-COMPLETE, owner-proof OWED:** the 93-row catalogue (ten areas, 77 core / 16 nursery), the three marks derived from the manifest (SENSITIVE · CANNOT BE DELEGATED · NO CAPABILITY YET, all in consequences and never in permission strings), the picker at `/admin/positions`, and the printed description. **It creates no role and grants nothing.**
+
+🔴 **NOT BUILT, AND EACH IS OUT OF SCOPE FOR A NAMED REASON, NOT AN OVERSIGHT:** the permission PREVIEW (R-22 Stage 2 is OPEN, so no role can be created by anyone but the account holder anyway) · the *"what nobody holds"* gap analysis (it needs two positions to say anything, and there were none) · any website scrape (`AIEngine` is dark with no `api/ai/*` route behind it).
+
+---
+
 ### Hand over the keys — the owner role outlives the person who opened the account
 STATUS: written
 SCOPE: platform
