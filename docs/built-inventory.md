@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-08-31 (**#246 — QB DELIVERY INGEST: Lauren's scheduled deliveries read out of `Invoice.ShipDate`; a ONE-TIME SEED, never a sync — it creates what does not exist and NEVER updates what does. See the QUICKBOOKS DELIVERY INGEST entry.**) · Prior: (**#245 — 🔴 BOTH FLAGGED QUESTIONS ANSWERED, AND ONE MISSING ROW WAS THREE MISSING POSITIONS.** `INV-01` stays OUT of the crew (the crew set is DRIVERS; walking the lot to count is a YARD job — **the gap is a missing POSITION, and no count check could have seen it**), `MON-10` goes INTO the bookkeeper (*no set at all cannot be true*; the workbook conflated a position TEMPLATE with a LAWNS SNAPSHOT, and the observation survives the row). **THREE positions declared missing: yard hand · on-site maintenance (CUTO, who does not speak English) · whatever customer two turns out to have** — evidence about the SETS, not a defect in them. **DO NOT ASSUME ONE LANGUAGE PER TENANT.** Also merged: **#243** the workbook reconciliation and **#244** the calendar window/day-view fix. See the POSITIONS and OPERATIONS CALENDAR entries.) · Prior: #244 · #243 · #242 · #241.
+# Last updated: 2026-08-31 (**#246 — ✅ **LIVE AND WORKING: `0 customers created · 19 linked · 19 written`.** It failed all 19 rows first — a PARTIAL unique index PostgREST's `onConflict` can never infer — and the finding above the fix is that **87 green assertions could not have caught it** ([[R-33]] · §6 r19 · #138). **[[R-32]]: Cultivar owns the schedule and never writes back — this was the LAST read of a schedule out of QuickBooks.**) · Prior: (**#246 — QB DELIVERY INGEST: Lauren's scheduled deliveries read out of `Invoice.ShipDate`; a ONE-TIME SEED, never a sync — it creates what does not exist and NEVER updates what does. See the QUICKBOOKS DELIVERY INGEST entry.**) · Prior: (**#245 — 🔴 BOTH FLAGGED QUESTIONS ANSWERED, AND ONE MISSING ROW WAS THREE MISSING POSITIONS.** `INV-01` stays OUT of the crew (the crew set is DRIVERS; walking the lot to count is a YARD job — **the gap is a missing POSITION, and no count check could have seen it**), `MON-10` goes INTO the bookkeeper (*no set at all cannot be true*; the workbook conflated a position TEMPLATE with a LAWNS SNAPSHOT, and the observation survives the row). **THREE positions declared missing: yard hand · on-site maintenance (CUTO, who does not speak English) · whatever customer two turns out to have** — evidence about the SETS, not a defect in them. **DO NOT ASSUME ONE LANGUAGE PER TENANT.** Also merged: **#243** the workbook reconciliation and **#244** the calendar window/day-view fix. See the POSITIONS and OPERATIONS CALENDAR entries.) · Prior: #244 · #243 · #242 · #241.
 
 
 > 📐 **CAMPAIGN LIFECYCLE — SCOPING + ESTIMATE (2026-08-23, ledger #192/#192b).** NOT a capability entry: **nothing was built.** A scoping document answering David's *"I can add but not edit or cancel or delete"* with nine questions, ten site keys, a proven F1/F2/F3 dependency order, three scopes (**MINIMUM ~2–3 · COHERENT ~5–7 · COMPLETE ~11–14 Thunder prompts; MINIMUM and COHERENT need ZERO migrations**) and eight rulings owed. Read it before ANY campaign build — it is the answer to "has this been scoped?" and its first finding is that the EDIT FORM ALREADY EXISTS as the create form (`Campaigns.tsx:120-198`). → [`docs/audits/campaign-lifecycle-scoping-2026-08-23.md`](audits/campaign-lifecycle-scoping-2026-08-23.md) · predecessor [`social-campaign-path-recon-2026-08-22.md`](audits/social-campaign-path-recon-2026-08-22.md)
@@ -2400,6 +2400,28 @@ stated one.
 `qb_customer_id` as its FIRST dedup key — the only key QuickBooks guarantees. Two rows on one id, or
 two customers of one name, are SURFACED and never merged (#53's scar).
 
-**Owed:** the migration (David applies) · the whole owner-test board · and **the write-back ruling**
-— because Cultivar now owns the date, their invoices go stale whenever Lauren moves a stop. That is
-a write to their books (D-37) and is deliberately not built.
+**Status 2026-08-31: LIVE AND PROVEN ON REAL DATA.** `0 customers created · 19 linked · 19 written`.
+
+🔴 **IT FAILED ON ALL 19 ROWS FIRST, AND THAT IS THE ENTRY WORTH READING.** `20260831` created the
+unique index **PARTIAL** (`WHERE qb_invoice_id IS NOT NULL`). Postgres infers a partial index only
+when `ON CONFLICT` repeats the predicate, and **PostgREST's `onConflict` is a column list that
+cannot express a WHERE** — so the index was uninferable by its only caller, by construction.
+`20260831b` drops the predicate; nothing is lost because `NULLS DISTINCT` is the default (proven
+live: one NULL bucket, **count 9**, every hand-entered delivery coexisting).
+
+🔴 **THE FINDING ABOVE THE FIX — 87 GREEN ASSERTIONS COULD NOT HAVE CAUGHT IT.** The test double
+stamped ANY `onConflict` string, so it was strictly more forgiving than Postgres. Fixed: the stub
+models the index as data and refuses as Postgres does; `§K` reproduces the live failure by flipping
+one flag with a negative control; `§L` reads the real migration corpus and fails if the predicate
+returns. **Filed as a CLASS, not an instance** — [[R-33]] · CLAUDE.md §6 r19 · tech-debt #138.
+
+✅ **[[R-32]] — CULTIVAR OWNS THE SCHEDULE AND NEVER WRITES IT BACK**, on industry evidence (Jobber
+syncs eight entity types one-way and the schedule is not among them). A `ShipDate` on an old invoice
+is a historical record, not a stale value. **Tech-debt #136 is CLOSED, and the write-back is
+retired rather than scheduled. This ingest was the last read of a schedule out of QuickBooks.**
+
+**Owner-proof: 4 of 10 cards.** Still owed and NOT covered by the clean run — **CARD 3** (no
+refusals appeared, so the refusal path is unexercised), **CARD 6** (the retry was a recovery, not a
+repeat), **CARD 8** (`/orders` and available-to-sell unchecked). **CARD 10** was added after the
+fact for the recovery, because a board holding only the tests somebody thought of in advance never
+learns.

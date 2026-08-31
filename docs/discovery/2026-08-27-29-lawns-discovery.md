@@ -179,6 +179,16 @@ Background (nobody waiting): `member_devices` last-seen/insert, `refresh.ts:49/:
 
 ## 4.3 🔴 The twelve literals — bigger and differently shaped than first described
 
+> 🔴 **ADDED 2026-08-31 (ledger #246) — READ BEFORE ANY ItemRef MAPPING WORK.** Jobber warns that
+> **sub-items, categorised items, and items on an income account other than `Sales`** break its
+> QuickBooks sync, and tells users to flatten their books. **LAWNS is exactly that shape — 557 of
+> 685 items are sub-items across 38 categories on five income accounts.** We are absorbing that
+> complexity in the mapping instead of asking Terry to destroy a structure he finds useful, and
+> that is a DELIBERATE choice, not an oversight. Jobber's invoices also **sync once** — later edits
+> are manual in both systems, a lower bar than we build to. Full note:
+> `docs/owner-tests/quickbooks-invoice-full-surface-test.md` → *FOR THE ItemRef MAPPING BUILD*.
+
+
 > ⚠️ **CORRECTED AFTER FILING (2026-08-30, ledger #237 + #239) — READ THIS BEFORE THE TABLE BELOW.**
 > **(a) EVERY LINE NUMBER IN THIS SECTION IS NOW WRONG, AND THE TABLE IS KEPT ONLY AS A RECORD OF WHAT
 > WAS FOUND.** #237 rewrote `buildQboInvoiceLines` and moved every one of them; #238 removed one

@@ -673,3 +673,30 @@ still records that it was an install; a $0 invoice line was never where that fac
 payload suite asserts an install order emits no installation line, takes the staff-transport note,
 and carries no $0 revenue line anywhere (E5/E5b/E5c) — and the guard was **mutation-tested**: with
 the branch restored, 2 of 2 assertions fail.
+
+---
+
+## 🔴 FOR THE ItemRef MAPPING BUILD — TWO WARNINGS FROM A MATURE PRODUCT IN THIS SPACE
+*Filed 2026-08-31 alongside the delivery ingest (ledger #246). Not that build's work; placed here
+because this is the board that build will open first.*
+
+**① JOBBER WARNS THAT THE EXACT SHAPE OF LAWNS' CATALOGUE BREAKS ITS SYNC — AND ITS ADVICE IS TO
+FLATTEN THE CUSTOMER'S BOOKS.** Items that are **sub-items**, **categorised**, or sit on an
+**income account other than `Sales`** cause sync errors, and the remedy Jobber offers its users is
+to restructure QuickBooks until the errors stop.
+
+🔴 **LAWNS IS precisely that shape: 557 of 685 items are sub-items, across 38 categories, on five
+income accounts.** So the shipping product in this market would tell Terry to destroy the structure
+he built.
+
+⚠️ **WE ARE TAKING THE HARDER ROAD DELIBERATELY, AND THIS IS THE RECORD OF THAT CHOICE.** Their
+hierarchy is genuinely useful — it is how they think about their own inventory — and asking a
+customer to flatten their books so our integration is easier is asking them to pay for our
+convenience. **The mapping absorbs the complexity; the customer keeps their structure.** When that
+build gets hard, this note is why, and *"Jobber makes them flatten it"* is not an argument for
+doing the same.
+
+**② JOBBER'S INVOICES SYNC ONCE.** After the first push, an edit must be made in **both** systems
+by hand. **That is a LOWER bar than we are building to** — R-28 already refuses a line that cannot
+resolve a real item rather than pushing a wrong one. Worth knowing before over-engineering the
+re-sync story: the mature product in this space ships one-way-once, and its users accept it.

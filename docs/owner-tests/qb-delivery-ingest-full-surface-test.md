@@ -40,8 +40,9 @@ below that looks pedantic is guarding that.
 
 ---
 
-## CARD 1 — Eighteen stops, and the denominator is on screen
-STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
+## CARD 1 — The stops, and the denominator is on screen
+STATUS: covered · DEVICE: desktop · LAST-PROVEN: 2026-08-31
+**Proven:** the preview read **22 of 1,477** — the books had moved since the 29th (18 of 1,469), and *both* numbers being on screen is the only reason that was visible rather than a silent drift. Addresses parsed, phones captured, no refusals.
 
 Settings → Accounting → **Preview scheduled deliveries**.
 
@@ -55,6 +56,7 @@ Settings → Accounting → **Preview scheduled deliveries**.
 
 ## CARD 2 — Before the migration, it refuses and NAMES the blocker
 STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
+⚠️ **NOT covered by the 2026-08-31 run, and it cannot be re-run casually.** The migration was applied before any preview, so the missing-column refusal was never seen. Re-testing it means dropping the column. **Left owed rather than quietly retired** — it is the guard that stops an ingest writing rows it could never recognise again.
 
 Run the preview **before** applying the migration.
 
@@ -66,6 +68,7 @@ Run the preview **before** applying the migration.
 
 ## CARD 3 — 🔴 THE REFUSALS ARE ABOVE THE STOPS, AND THEY SHOW THEIR WORKING
 STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
+🔴 **STILL OWED, AND THE 2026-08-31 RUN IS NOT EVIDENCE FOR IT. Every one of the 22 addresses parsed, so ZERO refusals appeared — which means the refusal path was never exercised.** David's own instruction, and it is the right one: *do not mark a card covered because the run went well.* A clean run proves the parser handled 22 real addresses; it proves nothing whatever about what it does with one it cannot read. **This closes only on a deliberately malformed ship-to** — edit one in QuickBooks, or wait for a real one.
 
 If any invoice's address could not be read, its row appears **first**, in red, with the **raw
 QuickBooks lines** printed underneath.
@@ -77,8 +80,9 @@ QuickBooks lines** printed underneath.
 
 ---
 
-## CARD 4 — 🔴 ARIEL THIRY. Your correction survives, and no second stop appears
-STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
+## CARD 4 — 🔴 A CORRECTION SURVIVES, AND NO SECOND STOP APPEARS
+STATUS: covered · DEVICE: desktop · LAST-PROVEN: 2026-08-31
+**Proven — by LAUREN FRAZIER rather than by Ariel Thiry, and the distinction is recorded rather than smoothed over.** Three stops were already on the calendar and all three were left untouched; Frazier sat at **2026-08-26** against a stale **2026-09-02** invoice, which is exactly the conflict shape this card describes — app date kept, invoice date reported as stale, nothing rewritten, no duplicate created. Thiry was the case that *motivated* the guard; Frazier is the case that *exercised* it.
 
 **This is the card this build was rewritten for.** You moved Thiry to **19 September** in Cultivar;
 invoice **3648.622** still reads **2 September**. Her row was entered by hand, so it carries no
@@ -97,7 +101,8 @@ Cultivar owns the delivery date, QuickBooks owns the money.**
 ---
 
 ## CARD 5 — Ingest, then look at the calendar
-STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
+STATUS: covered · DEVICE: desktop · LAST-PROVEN: 2026-08-31
+**Proven:** the ingest ran clean and the stops are in the app. ⚠️ **The October rows outside the four-week window were not separately confirmed on `/deliveries`** — they are in the database by the write count, but nobody looked at them on a screen. That is a smaller residual than a card, and it is stated rather than assumed.
 
 Press **Ingest**. Then open the operations calendar.
 
@@ -112,6 +117,7 @@ Press **Ingest**. Then open the operations calendar.
 
 ## CARD 6 — 🔴 RUN IT TWICE
 STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
+⚠️ **STILL OWED — AND IT WOULD BE EASY TO MISREAD THE 2026-08-31 RUN AS COVERING IT.** That day did run the ingest twice, but the first attempt wrote **zero** stops (the ON CONFLICT failure), so the second was a **RECOVERY**, not a repeat. Idempotency is the claim that a run over stops *that already exist* writes nothing — and no run has yet started from 19 existing stops. **One more press of Ingest closes this**, and the expected reading is `0 written`, every row *already scheduled*.
 
 Press **Preview**, then **Ingest**, a second time.
 
@@ -124,6 +130,7 @@ Press **Preview**, then **Ingest**, a second time.
 
 ## CARD 7 — The phone came across, and it did not overwrite one you had
 STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
+⚠️ **Phones were seen in the PREVIEW on 2026-08-31; no customer record was opened on `/customers` afterwards.** The preview proves the parse found them, not that the fill-never-clobber rule held on the write. Different claim, different card.
 
 Open two customers created by the ingest on `/customers`.
 
@@ -136,6 +143,7 @@ Open two customers created by the ingest on `/customers`.
 
 ## CARD 8 — 🔴 NOTHING ELSE MOVED
 STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
+🔴 **STILL OWED, AND IT IS THE MOST IMPORTANT UNPROVEN CARD ON THIS BOARD.** `/orders` was not checked and available-to-sell was not compared after the run. The argument is strong — no order is created, and a recording-client test asserts the written table set is exactly `{customers, deliveries}` — **but an argument is not an observation**, and this board does not record arguments as passes. Two minutes: `/orders` count, and one lot's available-to-sell.
 
 The acceptance criterion that matters most, and the one you can check in a minute.
 
@@ -163,3 +171,23 @@ record arguments as passes.
   time Lauren moves a stop. Thiry is already an instance. That fix is a **write to their books** —
   D-37 territory — and it **needs David's ruling before it is built.** It is not in this build.
 - **A re-sync.** There is deliberately none, and `ShipDate` is not read again after this seed.
+
+---
+
+## CARD 10 — 🔴 RECOVERY AFTER A PARTIALLY-APPLIED RUN: the retry MATCHES, it does not mint
+STATUS: covered · DEVICE: desktop · LAST-PROVEN: 2026-08-31
+
+**This card did not exist when the board was written. It was added because the failure happened and
+the recovery is now the most load-bearing behaviour in the capability** — a board that only holds
+the tests somebody thought of in advance is a board that never learns.
+
+The first live ingest failed on all 19 rows (the partial-index defect) **after** creating all 19
+customers, leaving the tenant holding 19 customers and 0 stops. The question that mattered was
+whether the retry would match those 19 or mint a second set.
+
+**Proven on 2026-08-31: `0 customers created · 19 linked · 19 written`.** Matched on `qb_customer_id` —
+the id QuickBooks itself assigned, so the match is not an inference. No second set.
+
+**To re-run this card** you would have to recreate the stranded state deliberately. `§J` of
+`deliveryIngestWriter.test.ts` asserts it from exactly that shape, so the regression is held by a
+test; this card records that it was also **observed once, live, on real data**.
