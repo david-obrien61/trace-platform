@@ -25,7 +25,7 @@ import type { Responsibility } from './responsibilityCatalogue';
 import { marksFor } from './responsibilityMarks';
 import { buildPositionDocument, describeOperatingDays } from './positionDescription';
 import {
-  POSITION_STARTING_POINTS, startingPointIds, unknownStartingPointIds,
+  POSITION_STARTING_POINTS, startingPointIds, unknownStartingPointIds, UNDELEGABLE_SUGGESTIONS,
 } from './positionStartingPoints';
 import { proposedContextFor, hostOf } from './contextProposals';
 import { ALL_MODEL_PERMISSIONS, PERMISSION_MANIFEST } from '../auth/permissionManifest';
@@ -273,13 +273,35 @@ ok(unknownStartingPointIds().length === 0,
 ok(new Set(POSITION_STARTING_POINTS.map((s) => s.key)).size === POSITION_STARTING_POINTS.length,
    'F2 every starting-point key is unique');
 
-// 🔴 F3 — DERIVED FROM `marksFor`, NEVER FROM A SECOND LIST. A starting point is a suggestion the
-// PLATFORM makes; suggesting a row `CATALOG_PERMISSIONS` filters out of the grantable catalog
-// entirely would be the platform contradicting itself. The owner may still tick one by hand.
-const suggestedUndelegable = sets.flatMap((sp) =>
-  sp.responsibilityIds.filter((id) => { const r = responsibilityById(id); return r ? !marksFor(r).delegable : false; }));
-ok(suggestedUndelegable.length === 0,
-   `F3 no starting point suggests an undelegable row (${[...new Set(suggestedUndelegable)].join(', ')})`);
+// 🔴 F3 — AN UNDELEGABLE ROW IN A NON-OWNER SET MUST BE DECLARED WITH A REASON. Not banned: the
+// workbook puts `MON-07` in the bookkeeper's set because at LAWNS the bookkeeper does that job,
+// and R-30 says the document states the JOB, not what the app covers. Suppressing it would hide a
+// real mismatch on the one screen built to surface it. But an UNDECLARED one is how `team:update`
+// quietly lands in "Sales manager", so it fails the build until someone writes down why.
+// Membership is DERIVED from `marksFor`, never from a second hand-kept list.
+const undeclared = sets.flatMap((sp) =>
+  sp.responsibilityIds
+    .filter((id) => { const r = responsibilityById(id); return r ? !marksFor(r).delegable : false; })
+    .filter((id) => !UNDELEGABLE_SUGGESTIONS.some((d) => d.setKey === sp.key && d.responsibilityId === id))
+    .map((id) => `${sp.key}:${id}`));
+ok(undeclared.length === 0,
+   `F3 every undelegable row a set suggests is declared (undeclared: ${undeclared.join(', ')})`);
+
+// 🔴 F3b — AND THE DECLARATION ASSERTS ITSELF IN THE OTHER DIRECTION, so it cannot rot into the
+// unread noise `OWNER_ONLY_PENDING` became (#73). A declaration is STALE — and fails — if its set
+// is gone, its row is gone, its row has LEFT that set, or its row is no longer undelegable at all.
+const stale = UNDELEGABLE_SUGGESTIONS.filter((d) => {
+  const sp = POSITION_STARTING_POINTS.find((x) => x.key === d.setKey);
+  const r  = responsibilityById(d.responsibilityId);
+  if (!sp || !r) return true;
+  if (!sp.responsibilityIds.includes(d.responsibilityId)) return true;
+  return marksFor(r).delegable;                       // no longer undelegable → the note is moot
+}).map((d) => `${d.setKey}:${d.responsibilityId}`);
+ok(stale.length === 0, `F3b no declaration is stale (${stale.join(', ')})`);
+
+// F3c — a declaration without a real reason is a rubber stamp, so the reason has to say something.
+ok(UNDELEGABLE_SUGGESTIONS.every((d) => d.reason.trim().length > 40),
+   'F3c every undelegable declaration carries a substantive reason, not a rubber stamp');
 
 // F4 — the owner set is DERIVED, never enumerated: a hand-typed list of all 93 would be a second
 // copy of the catalogue and would go stale the day a row is added (STD-011).
@@ -312,10 +334,14 @@ ok(sets.every((sp) => new Set(sp.responsibilityIds).size === sp.responsibilityId
 ok(POSITION_STARTING_POINTS.filter((s) => s.kind === 'blank').length === 1,
    'F10 "start blank" exists, so starting from nothing is a stated choice');
 
-// ⚠️ F11 — THE COUNTS ARE DAVID'S MEASUREMENT; THE MEMBERSHIP IS NOT. The workbook is not in this
-// repository, so the sets were derived from the catalogue and TUNED until each hit its stated
-// count. This probe pins the counts so a later edit cannot drift them silently — it is NOT
-// evidence that the membership matches the workbook, and it must never be read as such.
+// ✅ F11 — THE COUNTS AND THE MEMBERSHIP ARE NOW BOTH THE WORKBOOK'S (reconciled 2026-08-31, and
+// tech-debt #133 closed by reconciliation rather than by asking Lauren). The probe stays, and it
+// stopped being ceremonial the moment the membership landed: **transcribing the workbook I dropped
+// `SEL-03` from the sales manager and wrote a comment asserting the workbook excluded it — R-26's
+// exact shape — and F11 went red on the count within seconds.** A pinned count is a cheap check
+// that cannot be talked out of noticing.
+// ⚠️ It still is NOT proof the sets are RIGHT: the workbook calls itself a draft from watching one
+// business, and that caveat travels with the data.
 const COUNTS: Record<string, number> = {
   production_manager: 34, sales_manager: 27, external_sales: 9, crew_driver: 8, bookkeeper: 10,
 };
@@ -332,6 +358,14 @@ const ownerUndelegable = owner ? startingPointIds(owner, rows).filter((id) => {
 }) : [];
 ok(ownerUndelegable.length > 0,
    `F12 undelegable rows exist and the owner set carries them — F3 has a real subject (${ownerUndelegable.length})`);
+
+// 🔴 F12b — NEGATIVE CONTROL FOR F3 ITSELF. Prove the declaration is load-bearing: exactly one
+// non-owner set suggests an undelegable row today, so if the declaration list were emptied F3
+// would go red. A rule with no live subject is a rule nobody is testing.
+const declaredLive = sets.flatMap((sp) =>
+  sp.responsibilityIds.filter((id) => { const r = responsibilityById(id); return r ? !marksFor(r).delegable : false; }));
+ok(declaredLive.length === UNDELEGABLE_SUGGESTIONS.length && declaredLive.length > 0,
+   `F12b the declaration list has a live subject and no spare entries (${declaredLive.length} vs ${UNDELEGABLE_SUGGESTIONS.length})`);
 
 // ── G — CONTEXT PROPOSALS: OFFERED, SOURCED, AND NEVER ANOTHER BUSINESS'S ───────────────────
 ok(hostOf('https://www.LawnsTrees.com/about/') === 'lawnstrees.com', 'G1 a host is normalised — protocol, www, path and case');
