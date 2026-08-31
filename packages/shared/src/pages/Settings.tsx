@@ -17,6 +17,7 @@ import { serviceWriteFailure } from './serviceWriteFailure';
 // The QuickBooks item-list read (read-only against Intuit, stores nothing). Mounted inside the
 // Accounting card once a connection exists — it has nothing to read before then.
 import { QboBooksReader } from '../components/QboBooksReader';
+import { QboDeliveryIngest } from '../components/QboDeliveryIngest';
 
 const GREEN = '#27500A';
 const SAGE  = '#EAF3DE';
@@ -712,6 +713,7 @@ export function Settings({
               )}
               </div>
               <QboBooksReader businessId={businessId} />
+              <QboDeliveryIngest businessId={businessId} />
             </div>
           ) : (
             <div>

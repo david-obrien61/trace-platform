@@ -62,7 +62,15 @@ const ALLOWED_DIVERGENCE = {
           + '(name + billing address). A4 targets a restated RECORD field set; the record shape '
           + 'is derived in customerFieldRegistry.ts.',
     paths: ['packages/cultivar-os/api/qbo/invoice/cultivar.ts',
-            'packages/shared/src/business-logic/customerUpsert.ts'],
+            'packages/shared/src/business-logic/customerUpsert.ts',
+            // ADDED 2026-08-31 (the QuickBooks ShipDate delivery ingest) — ⚠️ PENDING DAVID'S
+            // RATIFICATION, same standing as the two entries below. `SELECT_EXISTING` is a
+            // 4-column CANDIDATE-SET projection answering one question: "is this QuickBooks
+            // customer already one of ours?" It is `id, qb_customer_id, first_name, last_name`
+            // and it is deliberately NOT the record — reading the customer RECORD to answer a
+            // dedup question would pull every address and phone of every customer in the tenant
+            // into memory to compare four fields. Narrower is both correct and safer here.
+            'packages/shared/src/quickbooks/deliveryIngestWriter.ts'],
   },
   // DECLARED 2026-08-27 (ledger #223) — ⚠️ PENDING DAVID'S RATIFICATION, same standing as the
   // `orders` entry in verify-write-paths.mjs. Thunder wrote it; the rule says these are David's.
@@ -85,6 +93,23 @@ const ALLOWED_DIVERGENCE = {
           + 'order record shape. order_kind is read because a history order\'s leakage_flag means '
           + 'UNEVALUATED, not clean.',
     paths: ['packages/cultivar-os/src/pages/Dashboard.tsx'],
+  },
+  // DECLARED 2026-08-31 (the QuickBooks ShipDate delivery ingest) — ⚠️ PENDING DAVID'S RATIFICATION.
+  // The SAME distinction as `customers` above: a 4-column projection answering one question, not a
+  // restated record shape. The question is *"which stops are already on this calendar, and whose
+  // are they?"* — `id, customer_id, delivery_date, qb_invoice_id`. It is read for ONE purpose, to
+  // decide NOT to write: an existing stop is never duplicated and never updated (Lauren's ruling —
+  // Cultivar owns the delivery date, QuickBooks owns the money). Selecting the delivery RECORD to
+  // answer "does one exist?" would be the worse code.
+  // 🔴 AND THE HONEST RESIDUAL, NAMED RATHER THAN SKIPPED: `deliveries` has no field registry
+  // either — `customers` is still the only entity that does. Minting one inside a delivery-ingest
+  // build is the drift these caps exist to catch, so it is filed, not done here. Tech-debt #120's
+  // class, the second entity to hit it.
+  deliveries: {
+    reason: '4-column projection answering one question — which stops already exist and whose are '
+          + 'they — read solely to decide NOT to write. Never the delivery record shape. '
+          + 'deliveries has no field registry (tech-debt #120 class).',
+    paths: ['packages/shared/src/quickbooks/deliveryIngestWriter.ts'],
   },
   receipts: {
     reason: 'The narrow projection the OCR door needs to build a history order from the receipt row '

@@ -59,6 +59,25 @@ const isTooling = p => p.startsWith('scripts/');
 // known multi-path tables are held by the BASELINE, not by declarations — the baseline says
 // "known today", a declaration says "correct forever". They are different claims.
 const ALLOWED_DIVERGENCE = {
+  // DECLARED 2026-08-31 (the QuickBooks ShipDate delivery ingest). `deliveries` already carried
+  // three approved writers; this is a FOURTH, and it is declared rather than folded because the
+  // three that exist all write a delivery ATTACHED TO AN ORDER (checkout, OCR invoice, the
+  // schedule screen). This one deliberately writes a delivery with NO order at all — a calendar
+  // stop read out of a QuickBooks invoice's ShipDate — so there is no existing writer whose
+  // shape it could ride without teaching that writer to make order-less rows.
+  // 🔴 THE COLUMN SETS DO NOT COMPETE: this path is the ONLY writer of `qb_invoice_id`, and it
+  // is the only one that sets `source='qbo-shipdate'`. It never writes `order_id`,
+  // `business_inventory_id` or `service_type` — asserted, not asserted-in-a-comment, by
+  // `deliveryIngestWriter.test.ts` §C and §E.
+  'deliveries': {
+    reason: 'The three existing writers all create a delivery attached to an ORDER. The QuickBooks '
+          + 'ShipDate ingest creates an order-less calendar stop and owns two columns nothing else '
+          + 'writes (qb_invoice_id, source=qbo-shipdate). No column overlap with the order paths.',
+    paths: ['packages/cultivar-os/api/customers/create.ts',
+            'packages/cultivar-os/api/orders/submit.ts',
+            'packages/cultivar-os/src/pages/DeliverySchedule.tsx',
+            'packages/shared/src/quickbooks/deliveryIngestWriter.ts'],
+  },
   // APPROVED 2026-07-29 (David) after inspection: no column overlap, and the state upsert was
   // proven non-clobbering (PostgREST builds ON CONFLICT DO UPDATE SET from the supplied columns
   // only, so minting a state on a row holding live tokens leaves the tokens untouched).

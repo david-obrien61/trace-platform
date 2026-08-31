@@ -11,6 +11,8 @@
  *   GET  /api/qbo/items     → _route=items      (READ-ONLY, paginated, complete)
  *   GET  /api/qbo/customers → _route=customers  (READ-ONLY, paginated, complete)
  *   GET  /api/qbo/invoices  → _route=invoices   (READ-ONLY, paginated, complete, ceiling-capped)
+ *   GET  /api/qbo/deliveries/preview → _route=deliveries-preview (READ-ONLY — plans, writes nothing)
+ *   POST /api/qbo/deliveries/ingest  → _route=deliveries-ingest  (WRITES customers + deliveries ONLY)
  */
 
 import crypto from 'crypto';
@@ -25,6 +27,8 @@ import {
 import { parseItemList, summariseItems } from '../../../shared/src/quickbooks/itemList';
 import { parseCustomerList, summariseCustomers, previewCustomers } from '../../../shared/src/quickbooks/customerList';
 import { parseInvoiceList, summariseInvoices } from '../../../shared/src/quickbooks/invoiceList';
+import { parseShipmentList } from '../../../shared/src/quickbooks/shipmentIngest';
+import { previewDeliveryIngest, commitDeliveryIngest } from '../../../shared/src/quickbooks/deliveryIngestWriter';
 import { isPushHeld, QBO_PUSH_HOLD_ENV } from '../../../shared/src/quickbooks/pushHold';
 
 // ─── shared constants ────────────────────────────────────────────────────────
@@ -720,6 +724,90 @@ async function handleInvoices(req: any, res: any) {
   });
 }
 
+// ─── ShipDate → deliveries ────────────────────────────────────────────────────
+//
+// 🔴 WHY THESE TWO RIDE THIS ROUTER. `api/` is at 12 OF 12 (§6 r11) and function #13 does not
+// error — it makes the whole deploy fail SILENTLY while Vercel keeps serving the last-good
+// bundle. This file already holds the paginated Invoice walk, the token refresh and the
+// `settings:*` gates, so both branches are additions to an existing function and the count is
+// unchanged. Nothing was minted and nothing needed to be.
+//
+// 🔴 AND WHY THE INVOICE WALK IS REUSED RATHER THAN NARROWED. `ShipDate` is not a filterable
+// field on Intuit's Invoice query, so "just ask for the future ones" is not available; the
+// honest alternative is the COMPLETE walk that already counts-then-pages and refuses a shortfall
+// (R-24), then a filter we can prove. That is what makes "18 of 1,469" a measurement rather than
+// a hope — the denominator is on the screen beside the numerator.
+
+/** The operator's own local date, `YYYY-MM-DD`. Falls back to UTC when absent or malformed. */
+function todayFor(req: any): string {
+  const given = String(req.query?.today ?? '');
+  // Validated, never trusted: this string decides which invoices count as future, so a junk
+  // value must fall back rather than silently select nothing.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(given)) return given;
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** The complete invoice walk, parsed for SHIPPING rather than for analysis. Shared by both. */
+async function walkShipments(req: any, res: any) {
+  const walked = await readAllPages(req, res, 'Invoice', raw => {
+    const p = parseShipmentList(raw);
+    return { ok: p.ok, count: p.shipments.length, parseError: p.parseError };
+  });
+  if (!walked) return null;
+  const shipments = walked.rows.flatMap(raw => parseShipmentList(raw).shipments);
+  const done = completenessOrRefuse(res, 'Invoice', walked.realmId, walked.queriedAt, walked.expected, shipments.length, walked.pages);
+  if (!done) return null;
+  return { shipments, realmId: walked.realmId, queriedAt: walked.queriedAt };
+}
+
+// PREVIEW — reads Intuit, reads our own tables, decides everything, WRITES NOTHING.
+// Gated by `openQboRead`'s `settings:read` (inside walkShipments) plus `deliveries:read`: this
+// response carries real customer names, streets and phone numbers, which the analytical invoice
+// read deliberately never does. Whoever sees it must be someone allowed to see the schedule.
+async function handleDeliveriesPreview(req: any, res: any) {
+  const businessId = (req.query.business_id as string) || '';
+  if (!businessId) return res.status(400).json({ error: 'business_id required' });
+  if (!(await callerCan(req.headers?.authorization, businessId, 'deliveries:read'))) {
+    console.log('[TRACE:QBDELIVERY] preview REFUSED — caller lacks deliveries:read', { businessId });
+    return res.status(403).json({ error: 'Not authorized to read this business\'s delivery schedule', code: 'FORBIDDEN' });
+  }
+  const walked = await walkShipments(req, res);
+  if (!walked) return;
+  try {
+    const report = await previewDeliveryIngest(supabase(), businessId, walked.shipments, todayFor(req));
+    return res.status(200).json({ ...report, realm_id: walked.realmId, queried_at: walked.queriedAt, committed: false });
+  } catch (e: any) {
+    console.log('[TRACE:QBDELIVERY] preview failed', { businessId, message: e?.message });
+    return res.status(500).json({ error: `Could not plan the delivery ingest: ${e?.message ?? 'unknown error'}` });
+  }
+}
+
+// INGEST — the same plan, then the write. Two verbs are required and BOTH are enforced verbs
+// (`status: enforced` in the manifest, not declared-unwired — R-31), because this genuinely does
+// both things: it creates customers and it creates deliveries.
+async function handleDeliveriesIngest(req: any, res: any) {
+  const businessId = (req.query.business_id as string) || '';
+  if (!businessId) return res.status(400).json({ error: 'business_id required' });
+  const auth = req.headers?.authorization;
+  if (!(await callerCan(auth, businessId, 'deliveries:create'))) {
+    console.log('[TRACE:QBDELIVERY] ingest REFUSED — caller lacks deliveries:create', { businessId });
+    return res.status(403).json({ error: 'Not authorized to schedule deliveries for this business', code: 'FORBIDDEN' });
+  }
+  if (!(await callerCan(auth, businessId, 'customers:create'))) {
+    console.log('[TRACE:QBDELIVERY] ingest REFUSED — caller lacks customers:create', { businessId });
+    return res.status(403).json({ error: 'This ingest creates customer records, which you are not authorized to do', code: 'FORBIDDEN' });
+  }
+  const walked = await walkShipments(req, res);
+  if (!walked) return;
+  try {
+    const report = await commitDeliveryIngest(supabase(), businessId, walked.shipments, todayFor(req));
+    return res.status(report.ok ? 200 : 409).json({ ...report, realm_id: walked.realmId, queried_at: walked.queriedAt, committed: report.ok });
+  } catch (e: any) {
+    console.log('[TRACE:QBDELIVERY] ingest failed', { businessId, message: e?.message });
+    return res.status(500).json({ error: `The delivery ingest failed: ${e?.message ?? 'unknown error'}` });
+  }
+}
+
 // ─── router (AC-5 dispatch) ───────────────────────────────────────────────────
 
 export default async function handler(req: any, res: any) {
@@ -731,6 +819,8 @@ export default async function handler(req: any, res: any) {
     case 'items':     return handleItems(req, res);
     case 'customers': return handleCustomers(req, res);
     case 'invoices':  return handleInvoices(req, res);
+    case 'deliveries-preview': return handleDeliveriesPreview(req, res);
+    case 'deliveries-ingest':  return handleDeliveriesIngest(req, res);
     default:
       return res.status(400).json({ error: `Unknown QBO route: ${route || '(none)'}` });
   }

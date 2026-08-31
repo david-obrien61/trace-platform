@@ -6,6 +6,8 @@
     { "source": "/api/qbo/items",     "destination": "/api/qbo-connector?_route=items" },
     { "source": "/api/qbo/customers", "destination": "/api/qbo-connector?_route=customers" },
     { "source": "/api/qbo/invoices",  "destination": "/api/qbo-connector?_route=invoices" },
+    { "source": "/api/qbo/deliveries/preview", "destination": "/api/qbo-connector?_route=deliveries-preview" },
+    { "source": "/api/qbo/deliveries/ingest",  "destination": "/api/qbo-connector?_route=deliveries-ingest" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

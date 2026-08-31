@@ -41,6 +41,13 @@ export interface CustomerInput {
   state?: string | null;
   zip?: string | null;
   marketing_opt_in?: boolean | null;
+  /**
+   * The id QuickBooks itself assigned to this customer. ADDED 2026-08-31 for the ShipDate
+   * delivery ingest. It is the ONLY dedup key here that is not an inference — QuickBooks
+   * guarantees it, so a match on it cannot be the #53 cross-billing scar. It is therefore
+   * tried FIRST, ahead of the person spine.
+   */
+  qb_customer_id?: string | null;
 }
 
 export interface CustomerUpsertResult {
@@ -71,11 +78,32 @@ function normalizeMatchKey(s: string | null | undefined): string {
     .trim();
 }
 
+/**
+ * 🔴 THE CALLER-RESOLVED ESCAPE HATCH, ADDED 2026-08-31 AND DELIBERATELY NARROW.
+ *
+ * The ShipDate delivery ingest resolves its customer against a key this function does not
+ * know about (a UNIQUE name hit among the tenant's own rows, checked for collisions first —
+ * `shipmentIngest.resolveIngestCustomer`). Without this, the ingest would have to write the
+ * customer itself, and `customers` would gain a SECOND write path — the exact thing the
+ * 2026-07-29 ruling fails the build over, and the thing that lets fill-never-clobber,
+ * the count-checked update and the person link drift apart in a copy.
+ *
+ * So the caller supplies the ANSWER and this file still does all the WRITING. When
+ * `resolvedCustomerId` is set the dedup search is skipped and that row is filled; everything
+ * downstream — FILLABLE, SUPPLIED_WINS, the `!== 1` count assertion — is unchanged.
+ * ⚠️ It is the caller's job to have proven the id belongs to `businessId`; the ingest reads
+ * its candidate set business-scoped, which is where that proof comes from.
+ */
+export interface UpsertOptions {
+  resolvedCustomerId?: string | null;
+}
+
 export async function findOrCreateCustomer(
   db: any,
   businessId: string,
   customer: CustomerInput,
   source: string,
+  options: UpsertOptions = {},
 ): Promise<CustomerUpsertResult> {
   // An organization is NOT a person — skip the people spine entirely (an HOA has no
   // first/last name and must never create a `people` row). Persons keep the current path.
@@ -149,6 +177,7 @@ export async function findOrCreateCustomer(
   offer('city',  customer.city);
   offer('state', customer.state);
   offer('zip',   customer.zip);
+  offer('qb_customer_id', customer.qb_customer_id);
   if (customer.marketing_opt_in !== undefined) supplied.marketing_opt_in = customer.marketing_opt_in;
   if (personId) supplied.person_id = personId;
 
@@ -165,13 +194,37 @@ export async function findOrCreateCustomer(
   //      An org with no email had NO dedup key before this branch → the same contractor invoiced
   //      per job site created a new row each time (Dave's Tree Svs → 3 duplicates). Match on
   //      normalized name + billing FIRST, then email as a secondary key. Never on ship-to.
-  let existingId: string | null = null;
-  if (personId) {
+  let existingId: string | null = options.resolvedCustomerId ?? null;
+  if (existingId) {
+    console.log('[TRACE:PERSON] resolve: caller supplied the customer id — dedup skipped', {
+      customerId: existingId, businessId, source,
+    });
+  } else if (customer.qb_customer_id) {
+    // 🔴 FIRST, AND AHEAD OF THE PERSON SPINE. QuickBooks guarantees this id; the spine's keys
+    // (email, then phone) are ones an external system permits to collide, and matching on a
+    // collidable field is precisely what cross-billed nine real invoices to the wrong Andrew.
+    // A single hit LINKS. More than one hit is a real ambiguity and must NOT resolve here —
+    // it falls through to the spine rather than picking a row, and the ingest's own
+    // `resolveIngestCustomer` refuses it before this function is ever reached.
+    const { data } = await db
+      .from('customers').select('id')
+      .eq('business_id', businessId).eq('qb_customer_id', customer.qb_customer_id).limit(2);
+    if (data && data.length === 1) {
+      existingId = data[0].id;
+      console.log('[TRACE:PERSON] resolve: matched on qb_customer_id', {
+        customerId: existingId, businessId, source, qbCustomerId: customer.qb_customer_id,
+      });
+    }
+  }
+  // Each remaining key is guarded on `!existingId` rather than nested under one `if`, so a
+  // resolution above simply makes every branch false — the chain below is untouched from the
+  // day it was written, which is what makes this addition reviewable as an addition.
+  if (!existingId && personId) {
     const { data } = await db
       .from('customers').select('id')
       .eq('business_id', businessId).eq('person_id', personId).limit(1);
     if (data && data.length > 0) existingId = data[0].id;
-  } else if (isOrg) {
+  } else if (!existingId && isOrg) {
     const nameKey = normalizeMatchKey(customer.first_name);       // org name lives in first_name
     const billKey = normalizeMatchKey(customer.address_line1);    // BILLING address
     if (nameKey && billKey) {
@@ -197,7 +250,7 @@ export async function findOrCreateCustomer(
         .eq('business_id', businessId).eq('email', customer.email).limit(1);
       if (data && data.length > 0) existingId = data[0].id;
     }
-  } else if (customer.email) {
+  } else if (!existingId && customer.email) {
     const { data } = await db
       .from('customers').select('id')
       .eq('business_id', businessId).eq('email', customer.email).limit(1);
@@ -208,7 +261,11 @@ export async function findOrCreateCustomer(
     // (b) FILL, NEVER CLOBBER — read the stored row and keep only the fields that are blank there.
     // A customer curated on /customers is never overwritten by a later counter checkout.
     const FILLABLE = ['first_name', 'last_name', 'phone', 'address_line1', 'city', 'state', 'zip',
-                      'billing_line1', 'billing_city', 'billing_state', 'billing_zip', 'marketing_opt_in'];
+                      'billing_line1', 'billing_city', 'billing_state', 'billing_zip', 'marketing_opt_in',
+                      // FILL, NEVER CLOBBER applies to the QuickBooks link too: a customer already
+                      // bound to a QBO id keeps that binding. Re-pointing an existing customer at a
+                      // different QuickBooks record is how invoices start reaching the wrong person.
+                      'qb_customer_id'];
     // 🔴 SUPPLIED WINS — the ONE deliberate divergence from rule (b), and it is NAMED rather than
     // achieved by omission. `email` is not in FILLABLE, and under the `!FILLABLE.includes(col)`
     // fall-through it would already be written unconditionally — but that would be a behaviour
