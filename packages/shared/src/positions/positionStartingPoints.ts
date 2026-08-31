@@ -62,10 +62,28 @@
 // `PUR-07` allocate freight, given to whoever receives the load. **None of those are derivable
 // from a title. You only get them by watching.**
 //
-// ⚠️ Two differences are flagged to David rather than settled here, because they are questions
-// about the business and not about the code: the workbook does NOT give the crew `INV-01` (walk
-// the lot and count stock), which sits oddly beside the staff-count-walk work of #238/#67; and
-// `MON-10` (pay a contractor or vendor) ends up in no set at all.
+// ✅ TWO DIFFERENCES WERE FLAGGED TO DAVID AND BOTH CAME BACK ANSWERED (2026-08-31, ledger #245),
+// and the answers are recorded here because each turned a question about the CODE into a fact
+// about the BUSINESS that the code had no way to reach on its own.
+//
+// 🔴 **`INV-01` STAYS OUT OF THE CREW, AND THE REASON REFRAMES THE WHOLE QUESTION.** I read the
+// workbook withholding *walk the lot and count stock* from the crew as odd beside the
+// staff-count-walk work of #238/#67 — a yard hand counting stock is precisely what that build
+// exists for. David: **the crew set is DRIVERS; walking the lot to count is a YARD job.** So the
+// two facts never conflicted. ✏️ **THE GAP IS A MISSING POSITION, NOT A MISSING ROW** — the
+// yard-hand set is a sixth starting point and nobody has written it. Adding `INV-01` to the
+// drivers would have papered over a missing position with a wrong one, which is worse than the
+// blank, and it is exactly the shape a count-based check cannot see: every set would still have
+// held its stated number. Filed in `MISSING_STARTING_POINTS` below.
+//
+// 🔴 **`MON-10` GOES INTO THE BOOKKEEPER — AND THE WORKBOOK CONFLATED TWO DOCUMENTS.** I reported
+// that it landed in no set at all; David's ruling is that *no set at all* cannot be true, because
+// **somebody pays vendors in every business.** The workbook was doing two jobs at once: a position
+// TEMPLATE (what this job is, anywhere) and a LAWNS SNAPSHOT (who actually does it here, where the
+// answer is *only the owner*). ✏️ **The row is added to the template AND the observation survives
+// it** — it is on the workbook's own "Only the owner" tab with the consequence beside it, and
+// nothing here erases that. A starting point is a suggestion about the JOB (R-30); who currently
+// holds it at one nursery is a different fact and does not get to delete the row.
 //
 // ── 🔴 AN UNDELEGABLE ROW IN A NON-OWNER SET IS DECLARED, NOT BANNED ────────────────────────
 // The first draft of this file BANNED it outright: eleven rows are undelegable (`marksFor().
@@ -105,6 +123,82 @@ export const UNDELEGABLE_SUGGESTIONS: readonly UndelegableSuggestion[] = [
       'are true — and R-30 says the description states the job, not the app. Ticking it surfaces ' +
       'the mismatch (the owner still has to press the button); hiding it would conceal the gap on ' +
       'the one screen built to show it. The "Cannot be delegated" mark explains it at tick time.',
+  },
+];
+
+// ── 🔴 THE SETS ARE A SAMPLE, AND THIS IS THE FIRST MEASUREMENT OF WHAT THE SAMPLE MISSED ───
+//
+// The header already says these five sets are a draft drawn from watching ONE business. What it
+// could not say — until 2026-08-31 — is *which* people that sample contained. **It contained the
+// people David met.** Three positions at LAWNS were not among them, and all three surfaced within
+// hours of each other, which is evidence about the SETS rather than a defect in them:
+//
+//   · **the yard hand** — walks the lot and counts stock (`INV-01`), waters and irrigates. Found
+//     by asking why the crew set withheld a row the staff-count-walk build (#238/#67) is built
+//     for. The answer was that the crew are DRIVERS and this is a different job.
+//   · **on-site maintenance — CUTO.** He lives on site, does the maintenance and the handy work,
+//     **and does not speak English.** He is not crew and he is not the production manager, and
+//     there is no set that describes him.
+//   · **customer two's positions, whatever they turn out to be.** Named as unknown rather than
+//     guessed at: a second business is the only thing that can distinguish *this is how nurseries
+//     work* from *this is how LAWNS works*, and until one exists that distinction is unmeasured.
+//
+// ✏️ **A count-based check could never have found any of these.** Every set still held its stated
+// number; nothing drifted; F11 was green throughout. **A missing POSITION is invisible to a probe
+// that asks whether the positions we have are right** — which is the same blind spot as a gap list
+// that only grows, in a different costume.
+//
+// ⚠️ **AND A CONSTRAINT THE NEXT BUILD MUST NOT BREAK, recorded here because here is where it
+// would be broken: DO NOT ASSUME ONE LANGUAGE PER TENANT.** Cuto is the proof — one business, and
+// the person reading the document does not read the language the person writing it writes. Two
+// stories are being filed against this (a Spanish-language interface with the choice made **by the
+// person**, on the invitation screen; and the on-site maintenance position). ✅ **Measured today,
+// so the next reader does not have to: nothing in this repo assumes it.** There is no language or
+// locale column on any business table, and the ONLY hardcoded locale in the positions feature is
+// `positionDescription.ts`'s `toLocaleDateString('en-US', …)` — which sits at the DOCUMENT layer,
+// i.e. exactly where a per-person choice will need to reach it. A tenant-level language setting
+// would be the wrong shape and would have to be undone.
+//
+// 🔴 **THIS DECLARATION SELF-PRUNES, in the pattern `UNDELEGABLE_SUGGESTIONS` already uses.** An
+// entry whose `key` has since been BUILT as a real starting point is STALE and FAILS the build
+// (probe F13) — so it cannot rot into the unread noise `OWNER_ONLY_PENDING` became (#73), and
+// building the yard-hand set forces whoever builds it to come back here and strike the line.
+export interface MissingStartingPoint {
+  /** The `key` it will take in POSITION_STARTING_POINTS when it is built. */
+  readonly key: string;
+  readonly label: string;
+  /** What is known about the job, and how we came to know it. Never a guess dressed as a fact. */
+  readonly evidence: string;
+}
+
+export const MISSING_STARTING_POINTS: readonly MissingStartingPoint[] = [
+  {
+    key: 'yard_hand',
+    label: 'Yard hand',
+    evidence:
+      'RULED 2026-08-31 (ledger #245). The crew set is DRIVERS; walking the lot to count stock ' +
+      '(INV-01) and watering (GRO-06) are YARD work. The workbook withheld INV-01 from the crew ' +
+      'and the withholding was correct — the gap is this missing position, not a missing row. ' +
+      'It is the position the staff-count-walk build (#238 / tech-debt #67) exists to serve.',
+  },
+  {
+    key: 'onsite_maintenance',
+    label: 'On-site maintenance',
+    evidence:
+      'REPORTED 2026-08-31 by David (ledger #245): Cuto lives on site at LAWNS, does the ' +
+      'maintenance and the handy work, and does not speak English. Not crew, not the production ' +
+      'manager. Two stories are being filed against this — the position itself, and a ' +
+      'Spanish-language interface whose choice is made BY THE PERSON on the invitation screen. ' +
+      'DO NOT assume one language per tenant; he is the counter-example, inside one business.',
+  },
+  {
+    key: 'customer_two',
+    label: 'Whatever customer two turns out to have',
+    evidence:
+      'NAMED AS UNKNOWN, not guessed at (2026-08-31). These five sets came from the people David ' +
+      'met at one nursery. A second business is the only thing that can separate "this is how ' +
+      'nurseries work" from "this is how LAWNS works", and until one exists that is unmeasured. ' +
+      'Strike this entry only when a real second-business set replaces it — never by inventing one.',
   },
 ];
 
@@ -201,9 +295,11 @@ export const POSITION_STARTING_POINTS: readonly PositionStartingPoint[] = [
       'SEL-13',               // 🔴 Ask a customer for a review. The person standing in front of
                               //    them after the install is the one who asks — not the office.
                               //    Nobody derives this from a job title.
-      // ⚠️ NOT INV-01 (walk the lot and count stock) and NOT GRO-06 (water and irrigate) — I had
-      // both here; the workbook keeps them with the production manager. INV-01 is FLAGGED to
-      // David: it sits oddly beside the staff-count-walk work of #238/#67.
+      // 🔴 NOT INV-01 (walk the lot and count stock) and NOT GRO-06 (water and irrigate) — I had
+      // both here; the workbook keeps them with the production manager. ✅ RULED 2026-08-31:
+      // **this set is DRIVERS, and walking the lot to count is a YARD job.** The staff-count-walk
+      // of #238/#67 belongs to a position that does not exist here yet — see the `yard_hand` entry
+      // in MISSING_STARTING_POINTS. Do not "fix" this by adding INV-01 to the drivers.
     ],
   },
   {
@@ -220,10 +316,17 @@ export const POSITION_STARTING_POINTS: readonly PositionStartingPoint[] = [
       'MON-09',               // Approve and run payroll. I excluded it reasoning "approval is
                               //    authority"; the workbook watched them do it.
       'MON-11',               // Review margin. Shared with the sales manager.
+      'MON-10',               // 🔴 Pay a contractor or vendor. ADDED 2026-08-31 on David's ruling
+                              //    (ledger #245) after the workbook left it in NO set: *no set at
+                              //    all cannot be true — somebody pays vendors in every business.*
+                              //    The workbook conflated a position TEMPLATE with a LAWNS
+                              //    SNAPSHOT; at LAWNS only the owner does it, and that observation
+                              //    lives on the workbook's "Only the owner" tab with its
+                              //    consequence and is NOT erased by this row. R-30: the document
+                              //    states the JOB, not who currently holds it.
       'PUR-03', 'PUR-04',
       // ⚠️ NOT MON-03 (take a payment — the counter does) and NOT SEL-08 (merge duplicate
-      // customers — the workbook gives it to sales). MON-10 (pay a contractor or vendor) ends
-      // up in NO set at all, which is FLAGGED to David rather than quietly assigned.
+      // customers — the workbook gives it to sales).
     ],
   },
   {

@@ -112,9 +112,14 @@ ok(missing.length === 0, `K3 every starting point is on the screen (missing: ${m
 // "Production manager, 34 to start" precisely so an owner can see how much each commits them to.
 ok(html.includes('Production manager') && html.includes('34 to start'),
    'K4 the production-manager button carries its count — 34 to start');
+// 🔴 `Bookkeeper` MOVED 10 → 11 on 2026-08-31 (ledger #245): David added `MON-10` (pay a
+// contractor or vendor) after the workbook left it in no set at all. ✅ **AND THIS PROBE IS WHY
+// THE NUMBER IS RIGHT ON THE SCREEN RATHER THAN ONLY IN THE DATA** — it went red on the count the
+// moment the set changed, which is exactly the seam #242 was built to close: the set list and what
+// the button PRINTS are different facts, and before #242 nothing could see the second one.
 const COUNTS: Record<string, number> = {
   'Production manager': 34, 'Sales manager': 27, 'External sales': 9,
-  'Crew member / driver': 8, 'Bookkeeper': 10, 'Owner': 93,
+  'Crew member / driver': 8, 'Bookkeeper': 11, 'Owner': 93,
 };
 const wrongCount = Object.entries(COUNTS).filter(([, n]) => !html.includes(`${n} to start`));
 ok(wrongCount.length === 0,

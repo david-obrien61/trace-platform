@@ -26,6 +26,7 @@ import { marksFor } from './responsibilityMarks';
 import { buildPositionDocument, describeOperatingDays } from './positionDescription';
 import {
   POSITION_STARTING_POINTS, startingPointIds, unknownStartingPointIds, UNDELEGABLE_SUGGESTIONS,
+  MISSING_STARTING_POINTS,
 } from './positionStartingPoints';
 import { proposedContextFor, hostOf } from './contextProposals';
 import { ALL_MODEL_PERMISSIONS, PERMISSION_MANIFEST } from '../auth/permissionManifest';
@@ -342,8 +343,14 @@ ok(POSITION_STARTING_POINTS.filter((s) => s.kind === 'blank').length === 1,
 // that cannot be talked out of noticing.
 // ⚠️ It still is NOT proof the sets are RIGHT: the workbook calls itself a draft from watching one
 // business, and that caveat travels with the data.
+// 🔴 `bookkeeper` MOVED 10 → 11 on 2026-08-31 (ledger #245) and the number is the record of a
+// RULING, not a drift: David added `MON-10` (pay a contractor or vendor) after the workbook left
+// it in no set at all — *no set at all cannot be true, somebody pays vendors in every business.*
+// The workbook was conflating a position TEMPLATE with a LAWNS SNAPSHOT. **The observation it came
+// from survives**: at LAWNS only the owner does it, which is on the workbook's own "Only the
+// owner" tab, and adding the row to the template does not erase it.
 const COUNTS: Record<string, number> = {
-  production_manager: 34, sales_manager: 27, external_sales: 9, crew_driver: 8, bookkeeper: 10,
+  production_manager: 34, sales_manager: 27, external_sales: 9, crew_driver: 8, bookkeeper: 11,
 };
 const wrong = Object.entries(COUNTS).filter(([k, n]) => {
   const sp = POSITION_STARTING_POINTS.find((s) => s.key === k);
@@ -366,6 +373,42 @@ const declaredLive = sets.flatMap((sp) =>
   sp.responsibilityIds.filter((id) => { const r = responsibilityById(id); return r ? !marksFor(r).delegable : false; }));
 ok(declaredLive.length === UNDELEGABLE_SUGGESTIONS.length && declaredLive.length > 0,
    `F12b the declaration list has a live subject and no spare entries (${declaredLive.length} vs ${UNDELEGABLE_SUGGESTIONS.length})`);
+
+// 🔴 F13 — THE MISSING POSITIONS ARE DECLARED, AND THE DECLARATION SELF-PRUNES. Three positions
+// at LAWNS are not in any set — the yard hand (the job `INV-01` actually belongs to), on-site
+// maintenance (Cuto), and whatever customer two turns out to have. ✏️ **A count-based check could
+// never find any of them: every set still held its stated number, and F11 was green throughout.**
+// A missing POSITION is invisible to a probe asking whether the positions we have are right. So it
+// is declared — and an entry whose key has since been BUILT is STALE and fails, which forces
+// whoever builds the yard-hand set to come back and strike the line rather than leaving a gap list
+// that only grows (#73's disease, the pattern UNDELEGABLE_SUGGESTIONS already uses).
+const builtButStillDeclaredMissing = MISSING_STARTING_POINTS
+  .filter((m) => POSITION_STARTING_POINTS.some((sp) => sp.key === m.key))
+  .map((m) => m.key);
+ok(builtButStillDeclaredMissing.length === 0,
+   `F13 no missing-position entry names a set that now exists (stale: ${builtButStillDeclaredMissing.join(', ')})`);
+ok(MISSING_STARTING_POINTS.every((m) => m.evidence.length > 80),
+   'F13b every missing position states how we came to know it — never a guess dressed as a fact');
+ok(new Set(MISSING_STARTING_POINTS.map((m) => m.key)).size === MISSING_STARTING_POINTS.length,
+   'F13c each missing position is named once');
+
+// 🔴 F14 — INV-01 IS NOT IN THE CREW SET, AND THIS PROBE EXISTS BECAUSE THE WRONG FIX IS
+// TEMPTING. The crew set is DRIVERS; walking the lot to count stock is a YARD job, and the
+// staff-count-walk build (#238 / tech-debt #67) serves a position that does not exist yet. A
+// future reader connecting "#238 lets staff count" to "the crew set has no counting row" will
+// want to add it here. That would paper over a missing position with a wrong one — and no count
+// check would notice, because the set would simply hold nine instead of eight.
+const crew = POSITION_STARTING_POINTS.find((sp) => sp.key === 'crew_driver');
+ok(!!crew && !crew.responsibilityIds.includes('INV-01'),
+   'F14 the crew/driver set does not walk the lot — that is the yard hand, who is declared missing');
+ok(MISSING_STARTING_POINTS.some((m) => m.key === 'yard_hand' && m.evidence.includes('INV-01')),
+   'F14b …and the declaration that replaces it names the row it is owed, so the two cannot drift apart');
+
+// 🔴 F15 — MON-10 IS SOMEBODY'S JOB. "No set at all" was the workbook's answer and David overruled
+// it: somebody pays vendors in every business. The probe pins the ruling rather than the count.
+const bk = POSITION_STARTING_POINTS.find((sp) => sp.key === 'bookkeeper');
+ok(!!bk && bk.responsibilityIds.includes('MON-10'),
+   'F15 paying a contractor or vendor belongs to a position — it is not in no set at all');
 
 // ── G — CONTEXT PROPOSALS: OFFERED, SOURCED, AND NEVER ANOTHER BUSINESS'S ───────────────────
 ok(hostOf('https://www.LawnsTrees.com/about/') === 'lawnstrees.com', 'G1 a host is normalised — protocol, www, path and case');
