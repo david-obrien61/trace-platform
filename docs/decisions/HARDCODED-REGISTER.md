@@ -23,7 +23,7 @@ placeholder carrying a tenant literal.
 [2026-07-08-receipt-qb-leakage-recon.md](2026-07-08-receipt-qb-leakage-recon.md) — this register
 tracks the literals; that recon tracks the builds. Do not duplicate the fix detail here.
 
-**Last updated:** 2026-07-13 (D-40 tax build — the 3 sales-tax-rate literals T1–T3 CLEARED; rate is now per-tenant config data. Prior same day: H12–H17 CLEARED — the shared cultivar NOTIFICATION TEMPLATES (`cultivar.ts`) were fully LAWNS-hardcoded on a customer-facing surface; genericized to a `NotifyBusiness` active-business token, omit-not-fake. Register gap closed: notification templates were missed by the #97 checkout sweep and are now IN SCOPE. Prior: 2026-07-08 — ALL 8 tile-2.1 items CLEARED; 2.1 QR Checkout restored to GREEN.).
+**Last updated:** 2026-08-31 (**P1 FILED — the first OPEN item on this register in seven weeks, and it was filed by the build that created it rather than found by a sweep.** The LAWNS business-context PROPOSAL in `positions/contextProposals.ts` is one tenant's facts in platform code. It is `OPEN` and it caps the positions capability at amber, which costs nothing today — the capability is amber already at 0 of 12 owner-tests covered — and the exit is NAMED and already half-built. See the **positions** section at the foot.) · Prior: 2026-07-13 (D-40 tax build — the 3 sales-tax-rate literals T1–T3 CLEARED; rate is now per-tenant config data. Prior same day: H12–H17 CLEARED — the shared cultivar NOTIFICATION TEMPLATES (`cultivar.ts`) were fully LAWNS-hardcoded on a customer-facing surface; genericized to a `NotifyBusiness` active-business token, omit-not-fake. Register gap closed: notification templates were missed by the #97 checkout sweep and are now IN SCOPE. Prior: 2026-07-08 — ALL 8 tile-2.1 items CLEARED; 2.1 QR Checkout restored to GREEN.).
 
 ---
 
@@ -111,3 +111,35 @@ _Note: `owner_leakage_alert` (internal owner SMS — owner knows their own busin
 - **Tiles that stay green** (their items are DOC — generic defaults / demo-only, not tenant leaks): 2.2, 3.7.
 - H9 (front-door signup example placeholder) remains OPEN but its owning caps 1.1–1.5 are already 🟡 for other reasons, so it drops no green tile.
 - **Register scope note (2026-07-13):** customer-facing NOTIFICATION TEMPLATES (`packages/shared/src/notifications/templates/*`) are now tracked here — the #97 sweep only covered UI surfaces. Any future tenant literal in an email/SMS template is register debt.
+
+---
+
+## Owning capability: **positions** — the business-context proposal (🟡 1 OPEN)
+
+③ of the 2026-08-31 starting-points build: *"About the business" should not be a blank page either.*
+An owner correcting three proposed sentences is a far easier act than composing three from nothing,
+and the proposal is what makes the field non-blank. For LAWNS the facts are on their own public site
+and needed no crawl — which is exactly what puts one tenant's facts into shared code.
+
+⚠️ **Filed by the build that introduced it, in the same commit, per §1.6 gate item 2.** A literal
+flagged by a later sweep is a literal that shipped; this one is registered before it deploys.
+
+| id | file:line | what it is | why it is debt | now | sev | status |
+|---|---|---|---|---|---|---|
+| P1 | [`positions/contextProposals.ts`](../../packages/shared/src/positions/contextProposals.ts) `PROPOSALS['lawnstrees.com']` | LAWNS's own facts — founded 1985, forty-plus varieties, who they sell to, the eleven-town service area — as a TypeScript constant | one tenant's identity in platform code is AC-1's definition of a leak: a second nursery adding itself would find LAWNS in the file | keyed on **bare host** from `businesses.website`, not on a tenant uuid — so the shape the crawl will produce is the shape that is here, and the swap is a substitution rather than a rewrite. **It is never written to the database:** a proposal is offered beside an empty field, "Use this" fills the box, and the owner still presses Save | MED | 🟡 **OPEN** |
+
+🔴 **THE EXIT IS NAMED, AND IT IS SMALLER THAN THE 2026-08-29 NOTE CLAIMED.** That note said a
+website read *"needs AI and is its own build."* **Measured 2026-08-31: `runIdentity`
+(`shared/src/discovery/engine.ts`) ALREADY EXTRACTS these fields from a live site** — `businessName`,
+`location`, `yearsInBusiness`, `staffSize`, `servicesFound`, `tone` — through the shared AI gateway,
+and it is **already wired and live** at `api/discovery/ingest.ts:176`. `runAnalysis` adds
+`certifications`, `strengths` and `socialPresence` on top. What does not exist is the **mapping from
+a `BusinessIdentity` to these three owner-facing sentences, and somewhere to keep it**. When that
+lands, **P1 is DELETED rather than extended**, and this row clears.
+
+⚠️ **AND THE OTHER HALF OF THAT CORRECTION: `business_discovery_profiles` IS NOT THE PLACE, and the
+2026-08-29 note was right about that.** Its `raw_extract` holds the product CATALOGUE
+(`{ items, counts }`, written by `discovery/populate.ts:328`) and its `UNIQUE (business_id,
+source_url)` is per-site. Identity is not a catalogue. Whether it earns a column, its own row shape,
+or simply feeds `business_context` as a proposal is the open design question — **not** whether a
+crawl exists.
