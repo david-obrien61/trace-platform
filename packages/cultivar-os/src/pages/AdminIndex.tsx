@@ -15,7 +15,7 @@
  * INSTRUMENTATION (STD-003): [TRACE:NAV] admin-index — ON by default (standing owner instruction).
  */
 import { useNavigate } from 'react-router-dom';
-import { Building2, FileText, Landmark, Shield, Calculator, PlusCircle, Wrench, CreditCard } from 'lucide-react';
+import { Building2, FileText, Landmark, Shield, Calculator, PlusCircle, Wrench, CreditCard, ClipboardList } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useBusinessContext } from '@trace/shared/context';
 import { navChildrenOf, navRoute, navPermission, navLabel } from '../registry/tileRegistry';
@@ -32,6 +32,7 @@ const CARD_META: Record<string, { icon: LucideIcon; description: string }> = {
   nav_team:             { icon: Shield,     description: 'Invite people, set roles, and manage their devices.' },
   nav_cost_to_produce:  { icon: Calculator, description: 'Your cost-to-produce model and pricing.' },
   nav_subscription:     { icon: CreditCard, description: 'What you get, what you could add, and what is coming.' },
+  nav_positions:        { icon: ClipboardList, description: 'Describe what a job is responsible for, then hand it to the person doing it.' },
 };
 
 export function AdminIndex() {

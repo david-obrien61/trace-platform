@@ -809,6 +809,12 @@ export const NAV_IA: NavNode[] = [
   // devices. Supersedes the old /roles page (which now redirects here). manage_settings-gated
   // (owner-default, delegable) so Staff never sees it.
   { key: 'nav_team',             section: 'admin',     parent: 'sec_admin',           label: 'Team & Roles', route: '/team', required_permission: 'team:read' },
+  // POSITIONS — beside Team & Roles because it is the question ASKED FIRST: what does this job DO.
+  // 🔴 Its gate is `settings:read`, NOT `team:read`, and the difference is the whole feature: a
+  // position DESCRIBES work and grants nothing, while `team:*` is owner-only authority over
+  // people. Gating them the same way would put the easy question behind the hard one — which is
+  // how LAWNS ended up with every person an owner.
+  { key: 'nav_positions',        section: 'admin',     parent: 'sec_admin',           label: 'Positions', route: '/admin/positions', matchRoute: '/admin/positions', required_permission: 'settings:read' },
   // 🔴 ADMIN, NOT SETTINGS (David's ruling 2026-08-02 (6) #2). The section is chosen by what the
   // thing IS and the gate follows — not the other way round: deciding what the business pays TRACE
   // is an owner act, and it belongs beside Team & Roles and Cost-to-Produce. `subscription:read` is

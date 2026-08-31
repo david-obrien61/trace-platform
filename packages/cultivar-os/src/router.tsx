@@ -44,6 +44,9 @@ import { TeamConsole }       from './pages/TeamConsole';
 import { Profile }            from './pages/Profile';
 import { AdminIndex }         from './pages/AdminIndex';
 import { Subscription }       from './pages/Subscription';
+import { Positions }          from './pages/Positions';
+import { PositionBuilder }    from './pages/PositionBuilder';
+import { PositionDescription } from './pages/PositionDescription';
 import { SettingsIndex }      from './pages/SettingsIndex';
 import { AcceptInvite, ResetPin, DeviceHandoff } from '@trace/shared/auth';
 import { supabase }          from './lib/supabase';
@@ -203,6 +206,21 @@ export function AppRouter() {
               is required — it does not vanish from the nav and it does not redirect. */}
           <Route element={<PermissionRoute permission="subscription:read" />}>
             <Route path="/admin/subscription" element={<Subscription />} />
+          </Route>
+
+          {/* POSITIONS — describe a job before you fill one. `settings:read` to reach it, and the
+              write gate is `settings:update`, enforced SERVER-SIDE by the three RLS policies in
+              20260831 (the route gate is not the authority; the policy is).
+              🔴 THE STRING WAS DERIVED FROM THE ACT (2026-07-31 ruling), not from who needs to
+              pass: describing what a job is responsible for CREATES NO ROLE AND GRANTS NOTHING,
+              so it is business configuration. `team:update` was rejected deliberately — gating a
+              job DESCRIPTION behind the authority to change who holds POWER is exactly the
+              conflation this feature exists to break, and `team:*` is owner-only so it would put
+              the surface out of reach of the manager the story is written about. */}
+          <Route element={<PermissionRoute permission="settings:read" />}>
+            <Route path="/admin/positions"                          element={<Positions />} />
+            <Route path="/admin/positions/:positionId"              element={<PositionBuilder />} />
+            <Route path="/admin/positions/:positionId/description"  element={<PositionDescription />} />
           </Route>
 
           {/* `view_costs` was ONE string over NINE doors across four resources. Each door now
