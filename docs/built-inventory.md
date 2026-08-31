@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-08-31 (**#242 — 🔴 CARD 9 FAILED AGAINST A BUNDLE THAT DID NOT CONTAIN THE FEATURE, AND THE ASSERTION GAP IT EXPOSED IS THE REAL ITEM.** `origin/main` never had `positionStartingPoints.ts` — **a branch push deploys nothing** (OP-15 / #60). Separately and genuinely mine: #241's 25 assertions **never once put the chooser on a screen**, because the render guard and the JSX both lived where the esbuild→node runner cannot reach. Fixed with a pure `shouldOfferStartingPoints()` + a context-free `StartingPointChooser` rendered by **`react-dom/server` in the existing runner, no new dependency** — 20 assertions, **10/10 mutants**. Covers **the reopen path** (a saved position at zero ticks). **`P2` cleared:** *forty acres* was #240's PLACEHOLDER, read as data. See the POSITIONS entry.) · Prior: #241 (starting points) · #240 (the catalogue and tables).
+# Last updated: 2026-08-31 (**QB DELIVERY INGEST — Lauren's scheduled deliveries read out of `Invoice.ShipDate`; a ONE-TIME SEED, never a sync. See the QUICKBOOKS DELIVERY INGEST entry.**) · Prior: (**#242 — 🔴 CARD 9 FAILED AGAINST A BUNDLE THAT DID NOT CONTAIN THE FEATURE, AND THE ASSERTION GAP IT EXPOSED IS THE REAL ITEM.** `origin/main` never had `positionStartingPoints.ts` — **a branch push deploys nothing** (OP-15 / #60). Separately and genuinely mine: #241's 25 assertions **never once put the chooser on a screen**, because the render guard and the JSX both lived where the esbuild→node runner cannot reach. Fixed with a pure `shouldOfferStartingPoints()` + a context-free `StartingPointChooser` rendered by **`react-dom/server` in the existing runner, no new dependency** — 20 assertions, **10/10 mutants**. Covers **the reopen path** (a saved position at zero ticks). **`P2` cleared:** *forty acres* was #240's PLACEHOLDER, read as data. See the POSITIONS entry.) · Prior: #241 (starting points) · #240 (the catalogue and tables).
 
 
 > 📐 **CAMPAIGN LIFECYCLE — SCOPING + ESTIMATE (2026-08-23, ledger #192/#192b).** NOT a capability entry: **nothing was built.** A scoping document answering David's *"I can add but not edit or cancel or delete"* with nine questions, ten site keys, a proven F1/F2/F3 dependency order, three scopes (**MINIMUM ~2–3 · COHERENT ~5–7 · COMPLETE ~11–14 Thunder prompts; MINIMUM and COHERENT need ZERO migrations**) and eight rulings owed. Read it before ANY campaign build — it is the answer to "has this been scoped?" and its first finding is that the EDIT FORM ALREADY EXISTS as the create form (`Campaigns.tsx:120-198`). → [`docs/audits/campaign-lifecycle-scoping-2026-08-23.md`](audits/campaign-lifecycle-scoping-2026-08-23.md) · predecessor [`social-campaign-path-recon-2026-08-22.md`](audits/social-campaign-path-recon-2026-08-22.md)
@@ -2339,3 +2339,52 @@ did move: the write-verb sweep now DERIVES its entity list rather than reading a
 `rawCaptureFileName`'s entity ternary became an exhaustive map (under the ternary, an invoice
 capture would have been named `qbo-items-…`).
 
+---
+
+## QUICKBOOKS DELIVERY INGEST — `Invoice.ShipDate` → a scheduled delivery
+**Last updated:** 2026-08-31 · **Bar: BUILDER-COMPLETE** (on `thunder/qb-deliveries`, not merged) · **Owner-test:** `docs/owner-tests/qb-delivery-ingest-full-surface-test.md`
+
+**What it is.** `Invoice.ShipDate` is Lauren's delivery date and it was already in QuickBooks —
+present on 588 invoices and DIFFERENT from `TxnDate` on 553 of them, so it is a field she fills in
+rather than the invoice date leaking through. Eighteen invoices carry a future one; her calendar
+showed one stop. This reads them, parses the ship-to address, resolves or creates the customer, and
+writes a `deliveries` row — after showing her every row it is about to write.
+
+**Where it lives.**
+- `packages/shared/src/quickbooks/shipmentIngest.ts` — PURE. The parse, the classification, the
+  plan, the customer verdict. No DB, no fetch: every decision is reachable from a test.
+- `packages/shared/src/quickbooks/deliveryIngestWriter.ts` — the IO half. The ONLY new writer.
+- `packages/shared/src/components/QboDeliveryIngest.tsx` — preview → ingest, in Settings → Accounting.
+- `api/qbo/router.ts` → `_route=deliveries-preview` (GET, `settings:read` + `deliveries:read`) and
+  `_route=deliveries-ingest` (POST, `deliveries:create` + `customers:create`). **api/ stays 12/12 —
+  nothing minted** (§6 r11).
+- `supabase/migrations/20260831_deliveries_qb_invoice_id.sql` — ⚠️ **WRITTEN, NOT APPLIED.**
+
+**🔴 A ONE-TIME SEED, NOT A SYNC** (Lauren, 2026-08-31): *Cultivar owns the delivery date;
+QuickBooks owns the money.* It creates what does not exist and **never updates a delivery that
+does**, including where the dates differ. There is no UPDATE verb against `deliveries` anywhere in
+the ingest and a test asserts it. Existing stops are REPORTED with both dates, never reconciled.
+
+**🔴 WHAT IT WRITES, EXHAUSTIVELY: `customers` and `deliveries`.** No orders, no order_items, no
+inventory, and **no `business_inventory_id`** — committed stock is derived from open orders, so a
+future-dated row pointing at a lot would silently reduce what LAWNS can sell (D-52). Asserted
+against a recording client (`deliveryIngestWriter.test.ts` §E), not merely stated here.
+
+**Idempotency** is `deliveries.qb_invoice_id` + a per-business partial unique index. The ingest
+REFUSES to write until the migration is applied and names it — without the key a second run is
+thirty-six stops. It is also re-runnable forever: a later invoice is picked up, a failed row is
+retried, and an existing stop is skipped.
+
+**Refusals, not approximations.** ShipAddr lines are classified by SHAPE, never position. No street
+line, two street-shaped lines, a self-contradicting ZIP, or a nameless invoice all refuse and are
+reported with the raw lines. Precedence for city/state/zip is ship-structured → ship-line →
+**bill-structured LAST**: a billing town is a fallback for a MISSING town, never a correction to a
+stated one.
+
+**Customer resolution** goes through the one shared path, `customerUpsert.ts`, which gained
+`qb_customer_id` as its FIRST dedup key — the only key QuickBooks guarantees. Two rows on one id, or
+two customers of one name, are SURFACED and never merged (#53's scar).
+
+**Owed:** the migration (David applies) · the whole owner-test board · and **the write-back ruling**
+— because Cultivar now owns the date, their invoices go stale whenever Lauren moves a stop. That is
+a write to their books (D-37) and is deliberately not built.
