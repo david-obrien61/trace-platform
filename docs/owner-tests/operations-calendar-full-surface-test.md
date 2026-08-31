@@ -1,5 +1,11 @@
 # OWNER TEST — OPERATIONS CALENDAR (four weeks, day types, and the mismatch)
 
+> 🔴 **BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha>`.**
+> If it is not the SHA you mean to test, **stop.** Nothing below this line is evidence, and a
+> failed or unmerged build looks *completely normal* — the app just serves the old bundle.
+> One glance, no dashboard, no `git log`. *(GATE 0 · OP-15 · paid for on 2026-08-31: a whole
+> session was spent hunting a defect in code that was never deployed.)*
+
 **Capability:** 3.4 (scheduling) · 3.5 (delivery / routing)
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
 **Board: 0 of 11 covered** (10 `owed` · **1 `needs-test` — CARD 4, whose precondition closed unrun when the migration was applied 2026-08-30**).

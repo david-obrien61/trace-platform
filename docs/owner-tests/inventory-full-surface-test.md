@@ -1,5 +1,11 @@
 # INVENTORY — FULL-SURFACE OWNER TEST
 
+> 🔴 **BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha>`.**
+> If it is not the SHA you mean to test, **stop.** Nothing below this line is evidence, and a
+> failed or unmerged build looks *completely normal* — the app just serves the old bundle.
+> One glance, no dashboard, no `git log`. *(GATE 0 · OP-15 · paid for on 2026-08-31: a whole
+> session was spent hunting a defect in code that was never deployed.)*
+
 > **Rendered board:** open `owner-tests.html` (a PURE renderer — it parses this file live and holds
 > no data of its own). Sibling of `stories.html` / `status.html`.
 >

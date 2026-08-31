@@ -1,5 +1,11 @@
 # OWNER TEST — POSITIONS (know what my job is)
 
+> 🔴 **BEFORE ANYTHING: READ THE STAMP AT THE FOOT OF THE SCREEN — `built <time> · <sha>`.**
+> If it is not the SHA you mean to test, **stop.** Nothing below this line is evidence, and a
+> failed or unmerged build looks *completely normal* — the app just serves the old bundle.
+> One glance, no dashboard, no `git log`. *(GATE 0 · OP-15 · paid for on 2026-08-31: a whole
+> session was spent hunting a defect in code that was never deployed.)*
+
 **Capability:** — (no 24-board capability exists for this surface yet; that is DERIVED, not omitted)
 **Story:** `user_stories.md` → *Know what my job is — a position gets a description before a person gets the job*
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
@@ -14,16 +20,17 @@
 
 A failed Vercel build is **SILENT** — the last-good bundle keeps serving — and **Vercel deploys the TREE, not the COMMIT**. If the SHA under test is not live, every observation below is fiction.
 
-1. `git log -1 --format=%h` on the branch under test.
-2. Vercel dashboard: the deployment for **that exact SHA** reads **READY** (not a *different* push's Ready).
-3. Confirm the always-visible build stamp at the bottom of the screen shows the same 7-char SHA.
-4. Hard-refresh.
+1. 🔴 **READ THE STAMP AT THE FOOT OF THE SCREEN** — `built <time> · <sha>`. **That is what is actually running in your browser.** One glance. It answers the question on its own in the overwhelming majority of cases, and it is the only step that reads the ARTEFACT rather than a record about the artefact.
+2. Hard-refresh, and read it again — if it changed, you were on a cached bundle.
+3. **Only if the stamp is not what you expect:** `git log -1 --format=%h`, and check the Vercel deployment for *that exact SHA* reads READY (not a different push's Ready). 🔴 **Check the branch is MERGED — `git log --oneline origin/main -1`.** Vercel deploys `main`; a branch push deploys nothing at all.
 
-If ①–③ do not agree, **STOP**. Do not record a pass or a fail.
+⚠️ **THE ORDER IS THE POINT AND IT WAS WRONG HERE UNTIL 2026-08-31.** This gate used to open with `git log` and a dashboard round-trip and put the stamp THIRD — so the cheapest, most direct check sat behind two slower ones that answer a *different* question (*"what did I intend?"* rather than *"what am I looking at?"*). **David had the stamp on every PDF he printed that week and never used it.** A check nobody reaches is not a check.
 
-🔴 **THE SHA UNDER TEST IS THE MERGE OF `thunder/position-starters` TO `main`** — the starting-points build, 2026-08-31. Testing the BRANCH would test code Vercel never built; `main` is what deploys. *(The previous SHA on this board, `3bb36ff`, was #240's merge; every card below has moved since.)*
+If the stamp is not the SHA you mean to test, **STOP**. Do not record a pass or a fail.
 
-⚠️ **THIS GATE HAS ALREADY BEEN PAID FOR ONCE ON THIS BOARD, SO STEP ③ IS NOT OPTIONAL.** On 2026-08-31 CARD 9 was run and failed with *"the chooser never appears"* — **because the branch had never been merged and `main` did not contain `positionStartingPoints.ts` at all.** Everything observed was #240 behaving exactly as #240 behaves. 🔴 **ONE GLANCE SETTLES IT: the `VersionStamp` at the bottom of the screen reads `built <time> · <sha>`. If that SHA is `14ea7d0` or `3bb36ff`, you are on #240 and no card on this board below CARD 8 can pass.** This is OP-15 / #60 in its purest form — a branch push deploys nothing, and the app looks completely normal while it serves the old code.
+✅ **THE SHA UNDER TEST IS `ce09942`** — #241 + #242, merged to `main` and **verified live on 2026-08-31: `cultivar-os.app` is serving it** (bundle `/assets/index-Cu2Ia3V_.js`; `14ea7d0` gone). **The stamp at the foot of your screen must read `ce09942`.**
+
+⚠️ **THIS GATE HAS ALREADY BEEN PAID FOR ONCE ON THIS BOARD.** On 2026-08-31 CARD 9 was run and reported *"the chooser never appears"* — **because the branch had never been merged and `main` did not contain `positionStartingPoints.ts` at all.** Everything observed was #240 behaving exactly as #240 behaves, and the evidence offered that the build WAS deployed — *"About the business is populated"* — **was #240's placeholder rendering in an empty field, i.e. a second symptom of the same absence.** 🔴 **A defect was used as proof there was no defect, and one glance at the stamp would have ended it.** This is OP-15 / #60 in its purest form: a branch push deploys nothing, and the app looks completely normal while serving the old code.
 
 ---
 
