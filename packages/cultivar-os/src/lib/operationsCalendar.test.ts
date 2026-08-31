@@ -16,6 +16,7 @@
 import {
   parseYmd, weekdayOf, fourWeekGrid, resolveDayType, conflictsFor, buildCalendarModel,
   dayTypeMeta, DAY_TYPE_CATALOG, ACTIVITY_SOURCES,
+  WINDOW_STEP_WEEKS, weekLabel, windowHeading, cellSummary,
   type OperatingDayRule, type ActivityItem,
 } from './operationsCalendar';
 
@@ -327,6 +328,147 @@ const delivery = (id: string, date: string, serviceType: string | null = 'planti
     'every catalog entry knows its own key — the key and the value cannot drift apart');
   ok(Object.values(DAY_TYPE_CATALOG).every((v) => v.purpose.length > 0),
     'every type states what the day IS for, so a header can make a checkable claim (§6 r18)');
+}
+
+// ══ §G THE WINDOW MOVES — AND THE DAY THAT COULD NOT BE REACHED ═════════════════
+//
+// 🔴 THE DEFECT, STATED AS A DATE. Standing on Monday 2026-08-31, the home window is
+//    Aug 30 → Sep 26. Saturday 2026-08-29 — SEVEN stops, six made, one rescheduled, the day
+//    David spent a week trying to reconstruct — is ONE DAY before it, and before this pass
+//    there was no way back at all. These probes fail if that ever becomes true again.
+{
+  const NOW = at(2026, 8, 31);                       // the Monday the defect was reported
+
+  const home = buildCalendarModel({ now: NOW, rules: [], activities: [] });
+  ok(home.windowStart === '2026-08-30', 'home starts Sunday 2026-08-30 — the window as it shipped');
+  ok(home.weeks[3].endDate === '2026-09-26', 'and ends Sat 2026-09-26 — "this week and the three ahead"');
+  ok(!('2026-08-29' >= home.windowStart && '2026-08-29' < home.windowEnd),
+    '🔴 Saturday 2026-08-29 is NOT in the home window — this is the defect, asserted rather than remembered');
+
+  const back = buildCalendarModel({ now: NOW, offsetWeeks: -WINDOW_STEP_WEEKS, rules: [], activities: [] });
+  ok(back.windowStart === '2026-08-02', 'one press back moves a WHOLE window — Aug 2');
+  ok(back.weeks[3].endDate === '2026-08-29',
+    '🔴 AND SATURDAY 2026-08-29 IS ITS LAST DAY — "move back four weeks and open Saturday 29 August" is reachable in one press');
+  ok('2026-08-29' >= back.windowStart && '2026-08-29' < back.windowEnd,
+    'the day sits inside the half-open bounds the query uses, not merely on the drawn grid');
+
+  const oneBack = buildCalendarModel({ now: NOW, offsetWeeks: -1, rules: [], activities: [] });
+  ok(oneBack.windowStart === '2026-08-23' && oneBack.weeks[3].endDate === '2026-09-19',
+    'a one-week step also works — the step size is the control, not the mechanism');
+
+  const fwd = buildCalendarModel({ now: NOW, offsetWeeks: WINDOW_STEP_WEEKS, rules: [], activities: [] });
+  ok(fwd.windowStart === '2026-09-27', 'forward past Sep 26 — the other wall, gone');
+  ok(fwd.windowEnd === '2026-10-25', 'and its exclusive end is the day after its last day, as everywhere else');
+
+  ok(home.windowEnd === fwd.windowStart,
+    "consecutive windows abut: home's exclusive end IS the next window's first day — nothing skipped, nothing shown twice");
+  ok(back.windowEnd === home.windowStart,
+    'and the same going back — the previous window ends exactly where home begins');
+}
+{
+  // Windows are ADJACENT and non-overlapping across a long walk, which is what makes a step
+  // of four safe: a reader pressing back six times sees every day exactly once.
+  const NOW = at(2026, 8, 31);
+  let overlaps = 0, gaps = 0;
+  for (let i = -6; i < 6; i++) {
+    const a = buildCalendarModel({ now: NOW, offsetWeeks: i * WINDOW_STEP_WEEKS, rules: [], activities: [] });
+    const b = buildCalendarModel({ now: NOW, offsetWeeks: (i + 1) * WINDOW_STEP_WEEKS, rules: [], activities: [] });
+    if (a.windowEnd > b.windowStart) overlaps++;
+    if (a.windowEnd < b.windowStart) gaps++;
+  }
+  ok(overlaps === 0 && gaps === 0, 'twelve consecutive windows tile the year with no overlap and no gap');
+  ok(WINDOW_STEP_WEEKS === 4, 'the step is a whole window — a partial step would show the same week twice');
+}
+{
+  // TODAY stays anchored to today wherever the window is. A past window is entirely past and
+  // says so; it must never mint a second "TODAY".
+  const NOW = at(2026, 8, 31);
+  const back = fourWeekGrid(NOW, -WINDOW_STEP_WEEKS);
+  const home = fourWeekGrid(NOW, 0);
+  const all = (ws: ReturnType<typeof fourWeekGrid>) => ws.flatMap((w) => w.days);
+  ok(all(back).every((d) => !d.isToday), 'no day in a past window is marked TODAY');
+  ok(all(back).every((d) => d.isPast), 'and every one of its days is past — the dimming is honest, not decorative');
+  ok(all(home).filter((d) => d.isToday).length === 1, 'exactly one day is TODAY in the home window');
+  ok(all(fourWeekGrid(NOW, WINDOW_STEP_WEEKS)).every((d) => !d.isPast && !d.isToday),
+    'a future window holds no past day and no today');
+}
+
+// ══ §H THE WEEK LABEL AND THE HEADER'S CLAIM (§6 r18) ═══════════════════════════
+{
+  const NOW = at(2026, 8, 31);
+  const back = fourWeekGrid(NOW, -WINDOW_STEP_WEEKS);
+  ok(back.map((w) => w.relativeIndex).join(',') === '-4,-3,-2,-1',
+    '🔴 a week knows how far it is from TODAY, not where it sits in the grid — the row-index label called a four-weeks-ago week "This week"');
+  ok(fourWeekGrid(NOW, 0).map((w) => w.relativeIndex).join(',') === '0,1,2,3', 'and the home window is unchanged');
+
+  ok(weekLabel(0) === 'This week', 'week 0 is This week');
+  ok(weekLabel(1) === 'Next week' && weekLabel(-1) === 'Last week',
+    'one either way is said the way a person says it, not as "In 1 week"');
+  ok(weekLabel(3) === 'In 3 weeks' && weekLabel(-3) === '3 weeks ago', 'further out reads forward and back');
+  ok(weekLabel(-4) !== weekLabel(4), 'back and ahead are never the same words');
+}
+{
+  ok(windowHeading(0) === 'This week and the three ahead',
+    'at home the heading is the sentence the screen already shipped — nothing regresses');
+  ok(!windowHeading(-4).includes('This week'),
+    '🔴 §6 r18 — "this week and the three ahead" is TRUE of exactly one window and must not be printed over any other');
+  ok(windowHeading(-4) === 'Four weeks · 4 weeks back', 'away from home the heading states the distance');
+  ok(windowHeading(4) === 'Four weeks · 4 weeks ahead', 'and its direction');
+  ok(windowHeading(-1) === 'Four weeks · 1 week back', 'singular is singular');
+  ok(buildCalendarModel({ rules: [], activities: [] }).isCurrentWindow,
+    'the model states whether it is the window the home heading describes');
+  ok(!buildCalendarModel({ offsetWeeks: -4, rules: [], activities: [] }).isCurrentWindow,
+    'and says so when it is not');
+  ok(buildCalendarModel({ offsetWeeks: -4, rules: [], activities: [] }).offsetWeeks === -4,
+    'the offset is carried on the model, so nothing has to re-derive where the window sits');
+}
+
+// ══ §I WHAT A CELL PRINTS — THE COUNT, NOT THREE ELLIPSES ═══════════════════════
+{
+  const s0 = cellSummary([]);
+  ok(s0.only === null && s0.text === null, 'an empty day prints nothing — the cell is empty, not "0 stops"');
+
+  const one = delivery('a', '2026-09-12', null);
+  const s1 = cellSummary([one]);
+  ok(s1.only === one && s1.text === null,
+    'ONE stop still prints its name — a single label fits, and who is on an otherwise empty day is the glance');
+
+  const s3 = cellSummary([
+    delivery('a', '2026-08-29', null), delivery('b', '2026-08-29', null), delivery('c', '2026-08-29', null)]);
+  ok(s3.only === null && s3.text === '3 stops',
+    '🔴 three stops say "3 stops" — "Josh Ph…" three times identified nobody and read as a rendering fault');
+  ok(!/…/.test(s3.text ?? ''), 'and it carries no ellipsis at all');
+
+  const mixed = cellSummary([
+    delivery('a', '2026-08-29', null), delivery('b', '2026-08-29', 'planting'), delivery('c', '2026-08-29', null)]);
+  ok(mixed.text === '3 stops · 1 planting',
+    'the planting sub-count survives, because it is the axis the day-type flag is about to use');
+  ok(mixed.hasPlanting, 'and the cell can pick its icon from the mix rather than from the first row');
+
+  const allPlanting = cellSummary([delivery('a', '2026-08-29'), delivery('b', '2026-08-29')]);
+  ok(allPlanting.text === '2 stops · all planting',
+    'all of them is said as "all", not as "2 stops · 2 planting" — the reader should not have to do the division');
+
+  const seven = cellSummary(Array.from({ length: 7 }, (_, i) => delivery(`s${i}`, '2026-08-29', null)));
+  ok(seven.text === '7 stops', "🔴 Saturday 2026-08-29's seven stops read as SEVEN, in a cell that can hold the word");
+
+  const withPmi = cellSummary([
+    delivery('a', '2026-08-29', null),
+    { id: 'p', kind: 'pmi', date: '2026-08-29', label: 'Trailer brakes', serviceType: null },
+  ]);
+  ok(withPmi.text === '1 delivery and 1 maintenance job',
+    'a mixed-KIND day falls through to the same phrasing the conflict flag uses (§6 r8) — the cell and the flag cannot disagree');
+}
+{
+  // The counts a cell prints are the counts the model placed there — one source, not two.
+  const items = [delivery('a', '2026-08-29', null), delivery('b', '2026-08-29', 'planting')];
+  const m = buildCalendarModel({ now: at(2026, 8, 31), offsetWeeks: -WINDOW_STEP_WEEKS, rules: LAUREN, activities: items });
+  ok(m.byDate['2026-08-29']?.length === 2, 'both stops land on the day inside the moved window');
+  ok(cellSummary(m.byDate['2026-08-29']).text === '2 stops · 1 planting', 'and the cell counts exactly those');
+  ok(m.shownCount === 2 && m.outsideWindowCount === 0,
+    'nothing is counted as outside a window that now contains it — the count follows the window');
+  ok(buildCalendarModel({ now: at(2026, 8, 31), rules: LAUREN, activities: items }).outsideWindowCount === 2,
+    '🔴 and in the HOME window both are outside it — counted, never silently dropped');
 }
 
 console.log(`\n  operationsCalendar: ${passed} passed, ${failed} failed`);
