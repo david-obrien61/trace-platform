@@ -180,6 +180,51 @@ export function startingPointIds(
   return sp.responsibilityIds.filter((id) => seen.has(id));
 }
 
+// ── 🔴 THE DECISION TO OFFER IS A PURE FUNCTION, AND IT IS PURE *BECAUSE OF WHAT SHIPPED* ───
+// #241 shipped 25 assertions about starting points and **not one of them asked whether the
+// chooser reaches the screen.** Every probe tested `startingPointIds` — the SETS — and the sets
+// were never the risk. The render decision lived as an inline boolean inside a .tsx component,
+// and this repository has no way to assert an inline boolean: the runner bundles `*.test.ts`
+// with esbuild and runs it in node, so anything that only exists inside JSX is unreachable by a
+// check. **A condition that cannot be asserted is a condition that will not be.**
+//
+// So the decision moves HERE, where a test can hold it, and the component calls it. The `reason`
+// is not decoration: a guard returning the right answer for the wrong reason is the next defect,
+// and it also gives `[TRACE:POSITIONS]` something to say when an owner reports "I never saw it".
+export interface ChooserState {
+  /** `can('settings:update')` — a reader who cannot save is never offered an edit affordance. */
+  readonly mayEdit: boolean;
+  /** The workspace read is still in flight. */
+  readonly loading: boolean;
+  /** The position row resolved. False = the id is gone, and the screen says so instead. */
+  readonly positionLoaded: boolean;
+  /** How many responsibilities are ticked RIGHT NOW — not how many were saved. */
+  readonly tickCount: number;
+  /** The owner chose "start blank". A choice, once made, has to stick. */
+  readonly blankChosen: boolean;
+}
+
+/**
+ * Offer the starting points?
+ *
+ * 🔴 THE ONLY POSITIVE CASE IS "NOTHING IS TICKED", AND THAT DELIBERATELY COVERS TWO PATHS THE
+ * FIRST BUILD TREATED AS ONE: a position created seconds ago, AND **a saved position someone
+ * abandoned at zero**. The second is the one that most needs the offer — it is where every
+ * abandoned position lands — and nothing in #241 asserted it.
+ *
+ * ⚠️ It is withheld once anything is ticked because applying a set REPLACES the ticks, and
+ * offering that beside real work is one tap from destroying it. That is a safety property, not a
+ * tidiness preference, and `reason` names it so nobody "fixes" it back.
+ */
+export function shouldOfferStartingPoints(s: ChooserState): { offer: boolean; reason: string } {
+  if (s.loading)         return { offer: false, reason: 'loading' };
+  if (!s.positionLoaded) return { offer: false, reason: 'no-position' };
+  if (!s.mayEdit)        return { offer: false, reason: 'read-only' };
+  if (s.blankChosen)     return { offer: false, reason: 'blank-chosen' };
+  if (s.tickCount > 0)   return { offer: false, reason: 'already-ticked' };
+  return { offer: true, reason: 'nothing-ticked' };
+}
+
 /** Every id any `set` starting point names. Used by the test; also the honest answer to
  *  "what does the platform suggest at all?" without walking six arrays at the call site. */
 export const SUGGESTED_RESPONSIBILITY_IDS: readonly string[] = [

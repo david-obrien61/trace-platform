@@ -29,6 +29,16 @@
  * nothing. So there is no stored guess that could later be mistaken for the owner's own sentence.
  * ⚠️ The proposal is offered only while the field is EMPTY. Once there is a value, the proposal
  * has been used or rejected, and continuing to show it would be arguing with them.
+ *
+ * 🔴 AND THE PLACEHOLDERS SAY "FOR EXAMPLE:" BECAUSE AN OWNER READ ONE AS HIS OWN DATA.
+ * #240 shipped `placeholder="grows and sells shade trees on forty acres in Leander"` — a sentence
+ * shaped exactly like LAWNS, in LAWNS's own field, carrying a number (**forty acres**; everything
+ * measured says **twenty**) that was never anybody's data. **David reported it as a wrong value on
+ * screen**, and he was reading grey example text in an empty box. A placeholder is only ever
+ * visible when the field is EMPTY, so a placeholder that reads like a value tells an owner their
+ * blank field is filled — which is A9/D-9 (absent is not empty) inverted, and it defeats the
+ * proposal card sitting right beneath it. The prefix makes the category unmistakable; the tenant
+ * identity and the wrong number are gone. See HARDCODED-REGISTER `P2`.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -253,7 +263,7 @@ export function Positions() {
               <div style={{ marginBottom: 14 }}>
                 <label style={LABEL} htmlFor="what-we-do">What the business does</label>
                 <textarea id="what-we-do" rows={2} style={INPUT} disabled={!mayEdit}
-                  placeholder="grows and sells shade trees on forty acres in Leander"
+                  placeholder="For example: grows and sells shade trees just outside town"
                   value={ctx.whatWeDo} onChange={(e) => setCtx({ ...ctx, whatWeDo: e.target.value })} />
                 {proposal?.whatWeDo && !ctx.whatWeDo.trim() && (
                   <Proposed field={proposal.whatWeDo} disabled={!mayEdit}
@@ -263,7 +273,7 @@ export function Positions() {
               <div style={{ marginBottom: 14 }}>
                 <label style={LABEL} htmlFor="who-we-serve">Who it sells to</label>
                 <input id="who-we-serve" style={INPUT} disabled={!mayEdit}
-                  placeholder="landscapers, builders and homeowners"
+                  placeholder="For example: landscapers, builders and homeowners"
                   value={ctx.whoWeServe} onChange={(e) => setCtx({ ...ctx, whoWeServe: e.target.value })} />
                 {proposal?.whoWeServe && !ctx.whoWeServe.trim() && (
                   <Proposed field={proposal.whoWeServe} disabled={!mayEdit}
@@ -273,7 +283,7 @@ export function Positions() {
               <div style={{ marginBottom: 14 }}>
                 <label style={LABEL} htmlFor="known-for">What it is known for</label>
                 <input id="known-for" style={INPUT} disabled={!mayEdit}
-                  placeholder="big trees, dug and delivered the same week"
+                  placeholder="For example: big trees, dug and delivered the same week"
                   value={ctx.knownFor} onChange={(e) => setCtx({ ...ctx, knownFor: e.target.value })} />
                 {proposal?.knownFor && !ctx.knownFor.trim() && (
                   <Proposed field={proposal.knownFor} disabled={!mayEdit}

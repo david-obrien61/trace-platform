@@ -54,7 +54,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft, Lock, Eye, Wrench, Printer, Trash2, AlertCircle, ChevronDown, ChevronRight, Sparkles,
+  ArrowLeft, Lock, Eye, Wrench, Printer, Trash2, AlertCircle, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { useBusinessContext } from '@trace/shared/context';
 import { supabase } from '@trace/shared/supabase/client';
@@ -68,8 +68,9 @@ import {
   type ResponsibilityFrequency,
 } from '@trace/shared/positions/responsibilityCatalogue';
 import {
-  POSITION_STARTING_POINTS, startingPointIds, type PositionStartingPoint,
+  startingPointIds, shouldOfferStartingPoints, type PositionStartingPoint,
 } from '@trace/shared/positions/positionStartingPoints';
+import { StartingPointChooser } from '../components/positions/StartingPointChooser';
 import { marksFor } from '@trace/shared/positions/responsibilityMarks';
 import { readFailureMessage } from '@trace/shared/utils/readResult';
 import { verticalsForBusinessType } from '../registry/tileRegistry';
@@ -133,9 +134,16 @@ export function PositionBuilder() {
     // Open exactly the areas this position already touches — the same rule a starting point uses,
     // so returning to a saved position and applying a set land in the same place.
     setOpenAreas(new Set(mine.map((r) => areaOf.get(r.responsibility_id)).filter((a): a is string => !!a)));
-    console.log('[TRACE:POSITIONS] builder-loaded', { positionId, found: !!p, visibleRows: visible.length, picks: mine.length });
+    // 🔴 `chooser` is logged as the REASON, not a boolean, because the whole defect report was
+    // "the chooser never appears" and a `false` would not have said which of five reasons it was.
+    console.log('[TRACE:POSITIONS] builder-loaded', {
+      positionId, found: !!p, visibleRows: visible.length, picks: mine.length,
+      chooser: shouldOfferStartingPoints({
+        mayEdit, loading: false, positionLoaded: !!p, tickCount: mine.length, blankChosen: false,
+      }).reason,
+    });
     setLoading(false);
-  }, [businessId, positionId, visible.length, areaOf]);
+  }, [businessId, positionId, visible.length, areaOf, mayEdit]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -206,7 +214,17 @@ export function PositionBuilder() {
 
   if (!can('settings:read')) return <NotPermitted permission="settings:read" what="position descriptions" />;
 
-  const showChooser = mayEdit && picks.size === 0 && !blankChosen;
+  // 🔴 THE DECISION IS A PURE FUNCTION IN `positionStartingPoints`, NOT AN INLINE BOOLEAN HERE.
+  // #241 shipped this as `mayEdit && picks.size === 0 && !blankChosen` on this line, and the
+  // repository had NO WAY TO ASSERT IT: the test runner bundles `*.test.ts` and runs it in node,
+  // so a boolean living inside a page component that needs context, Supabase and a router is
+  // unreachable by any check. 25 assertions were written about starting points and not one of
+  // them asked whether the chooser reaches the screen. **A condition that cannot be asserted is a
+  // condition that will not be** — so it moved somewhere a test can hold it.
+  const chooser = shouldOfferStartingPoints({
+    mayEdit, loading, positionLoaded: position !== null,
+    tickCount: picks.size, blankChosen,
+  });
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--sage-bg)' }}>
@@ -244,46 +262,21 @@ export function PositionBuilder() {
               writes a job description, which is worse than an extra tap. Nothing below reads
               `title`.
             */}
-            {showChooser && (
-              <div style={{ ...CARD, background: '#f7faf3', borderColor: '#dbe8cd' }}>
-                <h2 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 2px', color: '#111827', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Sparkles size={17} color={GREEN} /> Start from a set
-                </h2>
-                <p style={{ fontSize: '0.8125rem', color: '#4b5563', margin: '0 0 14px' }}>
-                  Pick the job this is closest to and we will tick a starting set. Then change
-                  whatever is wrong — every tick and untick from there is yours.
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {POSITION_STARTING_POINTS.map((sp) => {
-                    // ⚠️ The count is `.length` of what this business can SEE, never a number typed
-                    // beside the label — a typed count is the copy that drifts (STD-011).
-                    const n = startingPointIds(sp, visible).length;
-                    return (
-                      <button key={sp.key} onClick={() => applyStartingPoint(sp)}
-                        style={{
-                          display: 'flex', width: '100%', minHeight: 48, alignItems: 'center', gap: 12,
-                          padding: '12px 14px', background: '#fff', cursor: 'pointer',
-                          border: '1px solid #dbe8cd', borderRadius: 8, textAlign: 'left',
-                        }}>
-                        <span style={{ flex: 1 }}>
-                          <span style={{ display: 'block', fontSize: '0.9375rem', fontWeight: 600, color: '#111827' }}>
-                            {sp.label}
-                            {sp.kind !== 'blank' && (
-                              <span style={{ fontWeight: 500, color: '#4b5563' }}>{`, ${n} to start`}</span>
-                            )}
-                          </span>
-                          <span style={{ display: 'block', fontSize: '0.8125rem', color: '#6b7280' }}>{sp.blurb}</span>
-                        </span>
-                        <ChevronRight size={16} color="#9ca3af" style={{ flexShrink: 0 }} />
-                      </button>
-                    );
-                  })}
-                </div>
-                <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '12px 0 0' }}>
-                  A starting point is a suggestion, not a rule, and it is not saved until you press
-                  Save. It creates no role and gives nobody access to anything.
-                </p>
-              </div>
+            {/*
+              ── ① START FROM A SET, NOT FROM NOTHING ──
+              🔴 THE CHOICE IS OFFERED AND NEVER INFERRED FROM THE TITLE. "Production Manager",
+              "Operations Manager", "Yard Manager" and "Nursery Manager" are the same job, and a
+              string match would be right sometimes and WRONG SILENTLY. A wrong inference here
+              writes a job description, which is worse than an extra tap. Nothing below reads
+              `title`.
+
+              ⚠️ THE CHOOSER IS ITS OWN COMPONENT AND THE SEAM IS DELIBERATE — do not inline it
+              back for tidiness. Context-free, it can be rendered to HTML by `react-dom/server` in
+              the repo's own runner, which is how `startingPointChooser.test.ts` asserts the six
+              starting points and their counts actually reach the screen. Inline, nothing could.
+            */}
+            {chooser.offer && (
+              <StartingPointChooser visible={visible} onPick={applyStartingPoint} />
             )}
 
             {/*

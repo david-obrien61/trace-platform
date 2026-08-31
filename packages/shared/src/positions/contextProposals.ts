@@ -65,10 +65,13 @@ const PROPOSALS: Record<string, ProposedContext> = {
   // schema.org Organization block says `"foundingDate":"1984-01-01"` (measured in the captured
   // page at `discovery/__fixtures__/lawns-vitex-real.html:46`). One edit by Lauren settles it —
   // which is the mechanism working, not a defect in it. Do NOT "fix" this by picking one.
+  // ⚠️ "more than forty VARIETIES OF TREE" — the noun is load-bearing and was made explicit after
+  // #240's placeholder ("forty ACRES in Leander", a number nothing measured supports) was read as
+  // real data on screen. Two different forties next to each other in one card is how that happens.
   'lawnstrees.com': {
     sourceLabel: 'lawnstrees.com',
     whatWeDo: {
-      value: 'has grown trees in Leander since 1985 — we start them from acorns, seeds or seedlings, and grow more than forty varieties on site',
+      value: 'has grown trees in Leander since 1985 — we start them from acorns, seeds or seedlings, and grow more than forty varieties of tree on site',
       source: `${SITE} — About`,
     },
     whoWeServe: {
