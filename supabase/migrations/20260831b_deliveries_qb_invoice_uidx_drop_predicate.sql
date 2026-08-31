@@ -1,0 +1,73 @@
+-- ============================================================
+-- Migration: deliveries_business_qb_invoice_uidx — DROP THE PARTIAL PREDICATE
+-- Project: bgobkjcopcxusjsetfob (Cultivar OS / shared layer)
+-- Date: 2026-08-31 (verified via `date` — clock not drifted)
+--
+-- 🔴 CORRECTIVE. `20260831_deliveries_qb_invoice_id.sql` created this index PARTIAL:
+--        ... ON deliveries (business_id, qb_invoice_id) WHERE (qb_invoice_id IS NOT NULL)
+--    and the first live run failed on ALL 19 rows with
+--        "there is no unique or exclusion constraint matching the ON CONFLICT specification".
+--
+--    WHY, EXACTLY: Postgres can only INFER a partial unique index for `ON CONFLICT (cols)` when
+--    the clause REPEATS the index predicate — `ON CONFLICT (business_id, qb_invoice_id)
+--    WHERE qb_invoice_id IS NOT NULL`. The write here is **PostgREST**, whose `onConflict`
+--    option takes a COMMA-SEPARATED COLUMN LIST and cannot express a WHERE at all. So the
+--    predicate made the index UNINFERABLE FROM THE ONLY CALLER THAT USES IT. It was not a
+--    tuning choice that turned out costly; it was unusable by construction.
+--
+-- 🔴 AND DROPPING IT LOSES NOTHING, WHICH IS THE PART WORTH CHECKING RATHER THAN ASSUMING.
+--    A multi-column UNIQUE index in Postgres treats a row as distinct from every other row when
+--    ANY indexed column is NULL (the default, `NULLS DISTINCT`; `NULLS NOT DISTINCT` is opt-in
+--    and is NOT used here). Every hand-entered delivery carries `qb_invoice_id IS NULL`, so all
+--    of them continue to coexist exactly as they do today — including several rows for one
+--    business. The predicate was therefore buying only a smaller index, and it cost the run.
+--    ⚠️ ACCEPTED COST, STATED: the index now covers every `deliveries` row rather than only the
+--    ingested ones. At this table's size that is noise, and it is the correct trade for an
+--    index the writer can actually name.
+--
+-- ⚠️ THE UNIQUENESS GUARANTEE IS UNCHANGED where it matters: one QuickBooks invoice still
+--    yields at most ONE delivery per business, forever. Only the NULL rows change status, and
+--    for them "unique" was never being enforced in either version.
+--
+-- AC-1/2/3/4: unchanged. No policy is added, altered or dropped. No column changes. No row is
+--    rewritten. This migration touches an INDEX and nothing else.
+--
+-- ⚠️  APPLY MANUALLY in the Supabase **SQL editor** (not the table editor — §6 r17).
+--     GATED / UNAPPLIED until David runs it.
+--     🔴 THE INGEST CANNOT WRITE A SINGLE ROW UNTIL THIS IS APPLIED.
+--
+-- APPEND-ONLY: `20260831_deliveries_qb_invoice_id.sql` is NOT edited (§6 r1). It has been
+--     applied; this is the correction that follows it, and the pair reads as the history it is.
+-- ============================================================
+-- Pre-write verify (expected results in comments):
+--   SELECT indexdef FROM pg_indexes WHERE schemaname='public'
+--     AND tablename='deliveries' AND indexname='deliveries_business_qb_invoice_uidx';
+--   Expected BEFORE: one row, ENDING IN "WHERE (qb_invoice_id IS NOT NULL)".
+--
+--   SELECT count(*) FROM deliveries WHERE qb_invoice_id IS NOT NULL;
+--   Expected BEFORE: 0  — the failed run wrote no stops, so nothing can violate the new index.
+--   ⚠️ IF THIS IS NOT 0, STOP: some stops DID land, and the CREATE below would fail on a real
+--      duplicate rather than succeed. That would itself be the finding.
+-- ============================================================
+
+DROP INDEX IF EXISTS deliveries_business_qb_invoice_uidx;
+
+-- Same name, same columns, NO predicate — so `ON CONFLICT (business_id, qb_invoice_id)` can
+-- infer it, which is the entire point of the change.
+CREATE UNIQUE INDEX deliveries_business_qb_invoice_uidx
+  ON deliveries (business_id, qb_invoice_id);
+
+-- ============================================================
+-- END OF MIGRATION
+-- Verify after applying (catalog gate):
+--   SELECT indexdef FROM pg_indexes WHERE schemaname='public'
+--     AND tablename='deliveries' AND indexname='deliveries_business_qb_invoice_uidx';
+--   Expected AFTER: "CREATE UNIQUE INDEX ... ON public.deliveries USING btree (business_id, qb_invoice_id)"
+--   🔴 with NO trailing WHERE clause. The absence of the predicate IS the fix.
+--
+--   -- and prove the NULL rows still coexist, rather than trusting the paragraph above:
+--   SELECT qb_invoice_id, count(*) FROM deliveries
+--   WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74'
+--   GROUP BY qb_invoice_id ORDER BY count(*) DESC LIMIT 5;
+--   Expected: the NULL bucket may hold MANY rows — that is correct and is what NULLS DISTINCT means.
+-- ============================================================

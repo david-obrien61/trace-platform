@@ -209,9 +209,14 @@ export async function previewDeliveryIngest(
   db: any, businessId: string, shipments: QboShipmentRow[], today: string,
 ): Promise<IngestReport> {
   const hasColumn = await qbInvoiceIdColumnExists(db);
-  const state = hasColumn
-    ? await readIngestState(db, businessId)
-    : { ...(await readIngestState(db, businessId).catch(() => ({ customers: [] as ExistingCustomer[], ingestedInvoiceIds: new Set<string>() }))), ingestedInvoiceIds: new Set<string>() };
+  // ONE shape, always — the earlier ternary produced a UNION whose second arm was missing
+  // `deliveries`, so the Thiry guard below type-checked only by accident of which branch ran.
+  // Without the column there is nothing to read back, so the sets are simply empty and the plan
+  // reports every stop as new, which is the honest picture on a database that cannot store the key.
+  const state: { customers: ExistingCustomer[]; ingestedInvoiceIds: Set<string>; deliveries: ExistingDelivery[] } =
+    hasColumn
+      ? await readIngestState(db, businessId)
+      : { customers: [], ingestedInvoiceIds: new Set<string>(), deliveries: [] };
 
   const plan = buildDeliveryPlan(shipments, today, state.ingestedInvoiceIds);
   const stops: PreviewStop[] = [];
