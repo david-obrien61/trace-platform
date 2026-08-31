@@ -4,6 +4,7 @@
 **Story:** `user_stories.md` → *Know what my job is — a position gets a description before a person gets the job*
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
 **Board: 0 of 12 covered** (11 `owed` · **1 `needs-test`** — CARD 8, and it names why).
+⚠️ **CARD 9 was RUN on 2026-08-31 and is recorded as NOT RUN rather than failed** — the SHA under test did not contain the feature (see GATE 0). An observation against the wrong bundle is not a fail, it is fiction; recording it as a fail would have sent the next session hunting a defect that was not there.
 ⚠️ **No card was flipped `covered` → `owed` by the 2026-08-31 starting-points build, and that is arithmetic rather than luck: none of the twelve was covered to begin with.** CARDS 1, 2 and 7 were REWRITTEN because their surfaces moved; CARDS 9–12 are new.
 **DEVICE: desktop** — the picker is a long tick-list and the description is a printed page. Neither is lot work.
 
@@ -21,6 +22,8 @@ A failed Vercel build is **SILENT** — the last-good bundle keeps serving — a
 If ①–③ do not agree, **STOP**. Do not record a pass or a fail.
 
 🔴 **THE SHA UNDER TEST IS THE MERGE OF `thunder/position-starters` TO `main`** — the starting-points build, 2026-08-31. Testing the BRANCH would test code Vercel never built; `main` is what deploys. *(The previous SHA on this board, `3bb36ff`, was #240's merge; every card below has moved since.)*
+
+⚠️ **THIS GATE HAS ALREADY BEEN PAID FOR ONCE ON THIS BOARD, SO STEP ③ IS NOT OPTIONAL.** On 2026-08-31 CARD 9 was run and failed with *"the chooser never appears"* — **because the branch had never been merged and `main` did not contain `positionStartingPoints.ts` at all.** Everything observed was #240 behaving exactly as #240 behaves. 🔴 **ONE GLANCE SETTLES IT: the `VersionStamp` at the bottom of the screen reads `built <time> · <sha>`. If that SHA is `14ea7d0` or `3bb36ff`, you are on #240 and no card on this board below CARD 8 can pass.** This is OP-15 / #60 in its purest form — a branch push deploys nothing, and the app looks completely normal while it serves the old code.
 
 ---
 
@@ -46,6 +49,8 @@ Open `/admin/positions` as **David (OWNER) on Test Dave's Tree Nest** — 🔴 *
 - 🔴 **There is NO field anywhere on the page asking what days you are closed, and none asking how many people you have.** That absence is the card. If either appears, the build has asked an owner to retype what the platform already stores.
 - The form has exactly three boxes: what the business does · who it sells to · what it is known for.
 - Fill all three, Save. It reports **Saved.** Reload — the values are still there.
+
+⚠️ **Read the grey text in the empty boxes.** Each begins **"For example: …"**. 🔴 **None of them may describe YOUR business.** #240 shipped `"grows and sells shade trees on forty acres in Leander"` here and David read it as a value on screen — it was grey placeholder text in an empty box, carrying a number nothing measured supports. A placeholder only renders when the field is EMPTY, so one that reads like a value says a blank field is filled.
 
 ⚠️ **Test Dave's has no proposal on file, so all three boxes start EMPTY with no proposed card. That is the pass** — a business we have read nothing about must never be shown another business's facts. CARD 11 is where the proposal itself is tested, and it needs LAWNS.
 
@@ -157,6 +162,10 @@ As **OWNER on Test Dave's**, create a position and stop before ticking anything.
 - 🔴 **Each one carries its own count on the button** — "Production manager, 34 to start". ⚠️ **If Test Dave's is NOT a nursery the numbers are SMALLER** (production manager drops to 19, because the growing and plant-health rows do not exist for that tenant). **Note which you saw** — a set that showed 34 on a non-nursery would mean the vertical filter is not being applied to the sets.
 - Press **Production manager**. The list fills. The running total reads the same number the button did.
 - 🔴 **Now the part that is easy to skip: change something.** Untick two rows, tick one the set missed. **Save.** Reload. Your edit survived — the set is a starting point, not a template that reasserts itself.
+
+⚠️ **IF THE CHOOSER IS NOT THERE, DO NOT GUESS — THE APP NOW TELLS YOU WHY.** Open the console and read `[TRACE:POSITIONS] builder-loaded`; its `chooser` field carries one of **five reasons**: `loading` · `no-position` · `read-only` (you are not `settings:update`) · `blank-chosen` (you pressed Start blank) · `already-ticked`. **`nothing-ticked` means it decided to SHOW it** — if you see that and no chooser is on screen, that is a genuine render defect and it is the one thing no test can reach. Anything else names the state, and `read-only` on an OWNER session means the business context has not resolved.
+
+🔴 **THE REOPEN PATH IS PART OF THIS CARD, and #241 never considered it separately.** Leave a position saved at ZERO ticks, navigate away, and come back to it. **The chooser must be offered again.** A saved position sitting at zero is where every abandoned position lands, and it is the state that most needs the offer.
 
 🔴 **AND THE NEGATIVE, WHICH IS THE DESIGN DECISION:** with something already ticked, go back into the position. **The chooser is GONE.** That is deliberate — applying a set REPLACES the ticks, and offering that beside work already done is one tap from destroying it. If the chooser is still offered over a position that has ticks, **fail the card**.
 
