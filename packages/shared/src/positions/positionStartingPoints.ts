@@ -18,36 +18,96 @@
 // writes a job description — a document an owner hands to a person — which is worse than an extra
 // click. Nothing in this file reads the position's title, and the picker never passes it one.
 //
-// ── ⚠️ THE PROVENANCE OF THESE SETS, STATED PLAINLY BECAUSE IT IS NOT WHAT IT LOOKS LIKE ────
-// 🔴 THE COUNTS ARE DAVID'S MEASUREMENT (34 / 27 / 9 / 8 / 10 / all). **THE MEMBERSHIP IS NOT.**
-// The workbook the catalogue came from is not in this repository — nothing under `docs/discovery/`
-// or anywhere else carries a per-role responsibility list — so the rows below were DERIVED here
-// from the catalogue itself and TUNED until each set hit the stated count.
+// ── ⚠️ THE PROVENANCE OF THESE SETS, AND WHAT IT IS NOT ────────────────────────────────────
+// 🔴 THE MEMBERSHIP IS THE 2026-08-29 RESPONSIBILITY WORKBOOK'S, RECONCILED 2026-08-31.
+// It is NOT a derivation any more, and it is NOT a measurement either. The workbook says so in
+// its own words: *"hand-marked by Lightning from three days of observation at LAWNS. It is a
+// DRAFT drawn from watching one business, not a measurement. Reconcile against it; do not treat
+// agreement with it as proof."* That sentence travels WITH the data, because a draft that loses
+// its own caveat becomes a fact somewhere down the line — which is R-26's whole family.
 //
-// 🔴 THEREFORE THE MATCHING COUNTS ARE NOT EVIDENCE THAT THE MEMBERSHIP MATCHES THE WORKBOOK.
-// Five sets landing exactly on five stated numbers looks like corroboration and is not: the
-// numbers were the target, so agreement was constructed rather than observed. Saying so is the
-// whole point — R-26's thirteen instances are declarations that were false when written, and
-// *"measured, not invented"* written over a derivation would have been the fourteenth.
-// **These sets are a PROPOSAL. Lauren's corrections are the specification** — the same status as
-// the four hand-written descriptions #240 is still waiting on.
+// ✅ Counts: 34 / 27 / 9 / 8 / 10 / all. The workbook's arrays hit its own stated counts exactly,
+// checked rather than assumed.
 //
-// The cost of being wrong here is ONE CLICK: a starting point is adjustable by construction, it
-// grants nothing, and the owner sees every row it ticked. That is why this ships as a proposal
-// rather than blocking on a spreadsheet.
+// ── 🔴 WHAT THE RECONCILIATION FOUND, BECAUSE IT IS WORTH MORE THAN THE AGREEMENT ───────────
+// 75 of 88 rows agreed. **13 differed in each direction, and they are not randomly distributed.**
 //
-// ── 🔴 A NON-OWNER SET NEVER PRE-TICKS AN UNDELEGABLE ROW, AND THAT IS DERIVED, NOT TYPED ───
-// Eleven rows are undelegable — `marksFor().delegable === false`, because they cite an
-// `owner-only` string that `CATALOG_PERMISSIONS` filters out of the grantable catalog entirely
-// (MON-07, PHC-08, PPL-01..04, PPL-10, SYS-03, SYS-05..07). A starting point is a SUGGESTION THE
-// PLATFORM MAKES, and suggesting work the platform itself refuses to delegate is the platform
-// contradicting itself.
-// ⚠️ This does NOT contradict R-30 — a `none`-capability row IS tickable and several are ticked
-// below, because the description says what the JOB is, not what the app covers. The distinction:
-// `capability: 'none'` means nobody is blocked, the software simply cannot help; UNDELEGABLE
-// means the software will actively refuse THIS person. The owner may still tick one by hand and
-// the mark explains why — nothing is hidden. Only the SUGGESTION is held to the stricter bar.
-// `positions.test.ts` F-block asserts it over every set, so a future edit cannot quietly break it.
+// **EVERY ONE OF MY FOUR WORST ERRORS WAS AUTHORITY I INVENTED AND THE BUSINESS DOES NOT GRANT.**
+// I gave the SALES MANAGER `SEL-05` (set the discount tiers) and `SEL-15` (decide what the
+// business sells and at what price); I gave the EXTERNAL REP `SEL-03` (quote outside the price
+// list) and `SEL-04` (apply a discount). ✏️ That is *"configuring permissions asks a harder
+// question than the one they could not answer"* — the failure this entire capability exists to
+// prevent — **reproduced inside the fix for it, by reasoning about what a job title OUGHT to
+// carry.** A derivation over-grants, because a plausible-sounding title absorbs whatever sounds
+// adjacent.
+//
+// 🔴 AND THE LINE THE WORKBOOK ACTUALLY DRAWS IS SHARPER THAN "LESS AUTHORITY", which I only saw
+// after a transcription slip of my own was caught by the count check (below). The sales manager
+// KEEPS `SEL-03` and `SEL-04` — they quote off-list and discount within the tiers — and is denied
+// `SEL-05` and `SEL-15`. **They OPERATE the pricing policy; they do not SET it.** The external
+// rep is denied `SEL-03` and `SEL-04` too, so they carry no price discretion at all. Three tiers
+// of pricing trust, observed rather than reasoned, and none of it derivable from a job title.
+//
+// ✅ **THE COUNT CHECK EARNED ITS KEEP IMMEDIATELY.** Transcribing the workbook I dropped `SEL-03`
+// from the sales manager and wrote a comment asserting the workbook excluded it — **a declaration
+// false at the moment it was written, R-26's exact shape, by the person who has been counting
+// them.** `F11` went red on the count within seconds. A pinned count is a cheap check that cannot
+// be talked out of noticing.
+//
+// **WHAT THE WORKBOOK ADDED WAS THE OPPOSITE SHAPE: real work with no software glamour.**
+// `PPL-09` train new staff (`not_software`, and I had it in NO set at all — R-30's own headline
+// example, missed by the person who wrote R-30 into this file) · `SEL-13` ask a customer for a
+// review, given to the CREW because the person standing in front of the customer after the
+// install is the one who asks · `INV-03` record a loss, given to the driver who sees the damage ·
+// `PUR-07` allocate freight, given to whoever receives the load. **None of those are derivable
+// from a title. You only get them by watching.**
+//
+// ⚠️ Two differences are flagged to David rather than settled here, because they are questions
+// about the business and not about the code: the workbook does NOT give the crew `INV-01` (walk
+// the lot and count stock), which sits oddly beside the staff-count-walk work of #238/#67; and
+// `MON-10` (pay a contractor or vendor) ends up in no set at all.
+//
+// ── 🔴 AN UNDELEGABLE ROW IN A NON-OWNER SET IS DECLARED, NOT BANNED ────────────────────────
+// The first draft of this file BANNED it outright: eleven rows are undelegable (`marksFor().
+// delegable === false`, because they cite an `owner-only` string that `CATALOG_PERMISSIONS`
+// filters out of the grantable catalog entirely), and I reasoned that *a suggestion the platform
+// makes must not propose work the platform will then refuse.*
+//
+// 🔴 THE WORKBOOK DISAGREED ON EXACTLY ONE ROW, AND THE WORKBOOK IS RIGHT. It puts `MON-07`
+// (connect or manage the accounting system) in the BOOKKEEPER's set, because at LAWNS the
+// bookkeeper does that job. **Both facts are true at once** — they do it, and the platform will
+// not grant it to them — and [[R-30]] already decided which one the document describes: *the
+// description says what the JOB is, not what the app covers.* ✏️ **Suppressing the row would
+// hide a real mismatch between how the business runs and what the software permits, on the one
+// screen built to surface exactly that.** And nothing is concealed by including it: the picker
+// marks it **"Cannot be delegated"** with the reason, at the moment of ticking.
+//
+// So the rule became narrower and better founded: an undelegable row may be suggested, but it
+// must be **DECLARED with a reason** — the pattern this repo already uses for
+// `select-policy-declarations.json` and `r-b2-wired-since-declarations.json`. A future edit
+// dropping `team:update` into "Sales manager" still fails the build; `MON-07` in "Bookkeeper"
+// passes because someone wrote down why. **And the declaration asserts itself in both directions:
+// a declaration for a row that has since left the set, or that is no longer undelegable, is STALE
+// and FAILS** — so it cannot rot into the unread noise `OWNER_ONLY_PENDING` became (#73).
+export interface UndelegableSuggestion {
+  readonly setKey: string;
+  readonly responsibilityId: string;
+  readonly reason: string;
+}
+
+export const UNDELEGABLE_SUGGESTIONS: readonly UndelegableSuggestion[] = [
+  {
+    setKey: 'bookkeeper',
+    responsibilityId: 'MON-07',
+    reason:
+      'The 2026-08-29 workbook puts it here from observation: at LAWNS the bookkeeper manages the ' +
+      'QuickBooks connection. The platform reserves the permission to the account holder, so BOTH ' +
+      'are true — and R-30 says the description states the job, not the app. Ticking it surfaces ' +
+      'the mismatch (the owner still has to press the button); hiding it would conceal the gap on ' +
+      'the one screen built to show it. The "Cannot be delegated" mark explains it at tick time.',
+  },
+];
+
 // ============================================================
 import { RESPONSIBILITY_CATALOGUE, type Responsibility } from './responsibilityCatalogue';
 
@@ -77,19 +137,21 @@ export const POSITION_STARTING_POINTS: readonly PositionStartingPoint[] = [
     blurb: 'Runs the yard — grows it, protects it, counts it, and directs the crew.',
     kind: 'set',
     responsibilityIds: [
-      // Growing, whole. This is the half of the job the software cannot represent yet, and it is
-      // ticked anyway (R-30) — it is most of what the person actually does all week.
+      // Growing and plant health, whole — most of what the person actually does all week, and
+      // the half the software cannot represent yet. Ticked anyway (R-30).
       'GRO-01', 'GRO-02', 'GRO-03', 'GRO-04', 'GRO-05', 'GRO-06', 'GRO-07', 'GRO-08',
-      // Plant health. PHC-08 (respond to a regulator) is UNDELEGABLE and deliberately absent.
-      'PHC-01', 'PHC-02', 'PHC-03', 'PHC-04', 'PHC-05', 'PHC-06', 'PHC-07',
-      // Stock: counts, losses, what exists, what is committed, where it is. NOT its price —
-      // INV-05/INV-06 are pricing authority and sit with sales.
-      'INV-01', 'INV-02', 'INV-03', 'INV-04', 'INV-07', 'INV-08', 'INV-09', 'INV-10',
+      'PHC-01', 'PHC-02', 'PHC-03', 'PHC-04', 'PHC-05', 'PHC-07',
+      // ⚠️ NOT PHC-06 (hold the applicator licence) — I had put it here by derivation; the
+      // workbook does not. A licence is a person's credential, not a post's duty.
+      'INV-01', 'INV-02', 'INV-03', 'INV-04', 'INV-07', 'INV-09', 'INV-10',
+      // ⚠️ NOT INV-08 (reserve or commit stock) — the workbook treats committing stock as a
+      // SALES act, against an order, and gives it to sales and to the external rep instead.
+      'PUR-02', 'PUR-07',     // Receive the load, and allocate its freight. PUR-07 I had missed.
       'EQP-01', 'EQP-02', 'EQP-03', 'EQP-04', 'EQP-05', 'EQP-06',
-      'PPL-07',            // Direct the yard crew day to day.
-      'PUR-02',            // Receive a delivery and check it against the order.
-      'DEL-03', 'DEL-04',  // Assign crews, load against the day sheet. Not routing, not driving.
-      'SYS-02',            // Review the schedule and what is coming.
+      'DEL-03', 'DEL-04',     // Assign crews, load against the day sheet. Not routing, not driving.
+      'PPL-07',               // Direct the yard crew day to day.
+      'PPL-09',               // 🔴 Train new staff — `not_software`, and I had it in NO set at all.
+      'SYS-02',
     ],
   },
   {
@@ -98,12 +160,17 @@ export const POSITION_STARTING_POINTS: readonly PositionStartingPoint[] = [
     blurb: 'Owns the selling motion end to end, including price and what we promise.',
     kind: 'set',
     responsibilityIds: [
-      'SEL-01', 'SEL-02', 'SEL-03', 'SEL-04', 'SEL-05', 'SEL-06', 'SEL-07', 'SEL-08',
-      'SEL-09', 'SEL-10', 'SEL-11', 'SEL-12', 'SEL-13', 'SEL-14', 'SEL-15',
-      'MON-01', 'MON-02', 'MON-03', 'MON-04', 'MON-05',  // Order → invoice → paid → put right.
-      'MON-11',            // Review margin. Marked SENSITIVE at tick time, and that is the point.
-      'INV-08', 'INV-10',  // What is committed, and what is short before a customer finds out.
-      'DEL-01', 'DEL-10',  // The delivery promise and what it costs.
+      'SEL-01', 'SEL-02', 'SEL-03', 'SEL-04', 'SEL-06', 'SEL-07', 'SEL-08', 'SEL-09',
+      'SEL-10', 'SEL-12', 'SEL-13', 'SEL-14',
+      // 🔴 NOT SEL-05 (set the discount tiers) and NOT SEL-15 (decide what the business sells and
+      // at what price). The line the workbook draws is sharp and I had smudged it: the sales
+      // manager OPERATES the pricing policy — quotes off-list (SEL-03), discounts within the
+      // tiers (SEL-04) — and does not SET it. Authority over the policy stays with the owner.
+      // ⚠️ NOT SEL-11 (visit a site and scope a job) — the workbook gives that to external sales.
+      'MON-01', 'MON-02', 'MON-03', 'MON-04', 'MON-05', 'MON-06',
+      'MON-11',               // Review margin. Marked SENSITIVE at tick time, and that is the point.
+      'INV-08', 'INV-10',     // What is committed, and what is short before a customer finds out.
+      'DEL-01', 'DEL-02', 'DEL-03', 'DEL-10',   // The promise, the route, the crew, and the price.
       'SYS-01', 'SYS-02',
     ],
   },
@@ -113,8 +180,13 @@ export const POSITION_STARTING_POINTS: readonly PositionStartingPoint[] = [
     blurb: 'Sells away from the lot — site visits, estimates, and following them up.',
     kind: 'set',
     responsibilityIds: [
-      'SEL-02', 'SEL-03', 'SEL-04', 'SEL-07', 'SEL-09', 'SEL-10', 'SEL-11', 'SEL-12',
-      'MON-01',            // The motion has to end in an order or it is not a sales job.
+      'SEL-02', 'SEL-07', 'SEL-09', 'SEL-10', 'SEL-11', 'SEL-12',
+      // 🔴 NOT SEL-03 / SEL-04 — the workbook gives the rep NO discretion over price: no
+      // quoting off-list and no applying a discount. I had given them both.
+      // ⚠️ NOT MON-01 — order creation stays with the office; the rep estimates and follows up.
+      'INV-08',               // They commit the stock they sell.
+      'DEL-10',               // They quote the delivery.
+      'SYS-01',               // They review their own numbers.
     ],
   },
   {
@@ -124,9 +196,14 @@ export const POSITION_STARTING_POINTS: readonly PositionStartingPoint[] = [
     kind: 'set',
     responsibilityIds: [
       'DEL-04', 'DEL-05', 'DEL-06', 'DEL-07', 'DEL-08',
-      'EQP-05',            // Report a fault or damage — the person holding it is the one who sees it.
-      'INV-01',            // Walk the lot and count stock.
-      'GRO-06',            // Water and irrigate.
+      'EQP-05',               // Report a fault — the person holding it is the one who sees it.
+      'INV-03',               // Record a loss. The driver sees the damage.
+      'SEL-13',               // 🔴 Ask a customer for a review. The person standing in front of
+                              //    them after the install is the one who asks — not the office.
+                              //    Nobody derives this from a job title.
+      // ⚠️ NOT INV-01 (walk the lot and count stock) and NOT GRO-06 (water and irrigate) — I had
+      // both here; the workbook keeps them with the production manager. INV-01 is FLAGGED to
+      // David: it sits oddly beside the staff-count-walk work of #238/#67.
     ],
   },
   {
@@ -135,12 +212,18 @@ export const POSITION_STARTING_POINTS: readonly PositionStartingPoint[] = [
     blurb: 'Money in, money out, and the books agreeing with the business.',
     kind: 'set',
     responsibilityIds: [
-      'MON-02', 'MON-03', 'MON-04', 'MON-05', 'MON-06', 'MON-08', 'MON-10',
+      'MON-02', 'MON-04', 'MON-05', 'MON-06', 'MON-08',
+      'MON-07',               // 🔴 UNDELEGABLE, and DECLARED in UNDELEGABLE_SUGGESTIONS above.
+                              //    At LAWNS the bookkeeper manages the accounting connection;
+                              //    the platform reserves the permission to the account holder.
+                              //    Both true — R-30 says the document states the JOB.
+      'MON-09',               // Approve and run payroll. I excluded it reasoning "approval is
+                              //    authority"; the workbook watched them do it.
+      'MON-11',               // Review margin. Shared with the sales manager.
       'PUR-03', 'PUR-04',
-      'SEL-08',            // Merge or correct duplicate customer records — an AR job in practice.
-      // ⚠️ MON-07 (connect or manage the accounting system) is the row a bookkeeper most obviously
-      // does and it is UNDELEGABLE, so it is not suggested. MON-09 (approve and run payroll)
-      // bundles approval, which is authority; tick it by hand if that is how this business runs.
+      // ⚠️ NOT MON-03 (take a payment — the counter does) and NOT SEL-08 (merge duplicate
+      // customers — the workbook gives it to sales). MON-10 (pay a contractor or vendor) ends
+      // up in NO set at all, which is FLAGGED to David rather than quietly assigned.
     ],
   },
   {
