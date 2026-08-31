@@ -8,7 +8,19 @@
 //               math already proven by 23 probes; NOT re-derived here, §6 r8).
 //               Otherwise pure — `now` is an argument so a test can stand anywhere in time.
 // OUTPUTS:      parseYmd · WEEKDAY_NAMES · DAY_TYPE_CATALOG · dayTypeMeta · resolveDayType
-//               · fourWeekGrid · conflictsFor · buildCalendarModel · ACTIVITY_SOURCES.
+//               · fourWeekGrid · conflictsFor · buildCalendarModel · ACTIVITY_SOURCES
+//               · WINDOW_STEP_WEEKS · weekLabel · windowHeading · cellSummary.
+//
+// 🔴 THE WINDOW MOVES, AND THAT IS A CORRECTION RATHER THAN A FEATURE. The first build fixed
+//    the grid at "this week and the three ahead" with no way forward past the fourth week and
+//    NO WAY BACK AT ALL — so Saturday 2026-08-29, seven stops, six made, one rescheduled, sat
+//    ONE DAY outside the window and could not be opened. Nine deliveries existed and the
+//    drill-in said so in its own words ("1 stop on this day · 9 scheduled in total") while
+//    eight of them were unreachable. A window that cannot move does not merely inconvenience
+//    a reader; it HIDES REAL WORK while counting it. `offsetWeeks` is that fix, and it is
+//    carried in the MODEL rather than in the page so the week labels and the header claim
+//    move with it (§6 r18 — a header is a claim, and "this week and the three ahead" is FALSE
+//    of every window but one).
 //
 // 🔴 THE POINT OF THE DAY TYPES IS THE MISMATCH, NOT THE COLOUR. A calendar that renders
 //    "Monday — maintenance" as a label and stays silent while four deliveries sit on that
@@ -269,6 +281,60 @@ function countPhrase(items: ActivityItem[]): string {
   return parts.join(' and ');
 }
 
+// ════════════════════════════════════════════════════════════════════════════════
+// WHAT A CELL PRINTS — the count, not the names
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * ⚠️ NOT EXPORTED, matching this module's standing call on `ActivityItem`'s neighbours and
+ * `dashboardWindows`' `Window`: the one consumer reads the returned value and never names the
+ * type, and an exported type nobody names invites a hand-rolled copy at a call site. Promote
+ * it the day a second consumer needs to name it. (Caught by knip as a net-new unused export
+ * before it shipped, which is the gate working rather than a note being remembered.)
+ */
+interface CellSummary {
+  /** Exactly one item on the day → the cell prints its name, which fits. Otherwise null. */
+  only: ActivityItem | null;
+  /** More than one → the cell prints THIS instead of a stack of truncated names. */
+  text: string | null;
+  /** Any planting / install job on the day, so the cell's icon tells the truth about the mix. */
+  hasPlanting: boolean;
+}
+
+/**
+ * 🔴 A CELL 90px WIDE CANNOT HOLD SIX NAMES AND SHOULD NOT TRY. The first build printed every
+ * item's label, so a day with three stops rendered "Josh Ph…", "Mark & Van…", "Andrea & …" —
+ * three ellipses identifying nobody, and it read as a rendering fault rather than as a busy
+ * day. **"3 stops" is strictly more information than three truncated names**, and the day view
+ * below the grid carries the detail. One name still prints: a single label fits, and knowing
+ * *who* is on an otherwise empty day is exactly what the glance is for.
+ *
+ * ⚠️ THE PLANTING SUB-COUNT IS NOT DECORATION — it is the day-type check's own axis. A
+ * delivery-only day with three stops is fine; a delivery-only day with three stops of which
+ * one is a planting job is the conflict this calendar exists to surface, and a bare "3 stops"
+ * would flatten the distinction the flag beneath it is about to make.
+ *
+ * Non-delivery kinds fall through to `countPhrase`, the SAME phrasing the conflict text uses
+ * (§6 r8) — when PMI or graduations land, the cell and the flag will not disagree about how
+ * to say "2 maintenance jobs".
+ */
+export function cellSummary(items: ActivityItem[]): CellSummary {
+  const hasPlanting = items.some((i) => i.serviceType === 'planting');
+  if (items.length === 0) return { only: null, text: null, hasPlanting: false };
+  if (items.length === 1) return { only: items[0], text: null, hasPlanting };
+
+  const allDeliveries = items.every((i) => i.kind === 'delivery');
+  if (!allDeliveries) return { only: null, text: countPhrase(items), hasPlanting };
+
+  const planting = items.filter((i) => i.serviceType === 'planting').length;
+  const stops = `${items.length} stops`;
+  // "all planting" is said as such rather than as "3 stops · 3 planting", which invites the
+  // reader to work out that 3 of 3 is all of them.
+  if (planting === items.length) return { only: null, text: `${stops} · all planting`, hasPlanting };
+  if (planting > 0) return { only: null, text: `${stops} · ${planting} planting`, hasPlanting };
+  return { only: null, text: stops, hasPlanting };
+}
+
 /**
  * Where does this day's work contradict the kind of day it is?
  *
@@ -336,13 +402,37 @@ export interface CalendarWeek {
   startDate: string;
   /** Inclusive last day, for the week's own label. The MODEL window stays half-open. */
   endDate: string;
+  /**
+   * Weeks from the CURRENT week — 0 is the week containing today, -1 last week, +1 next.
+   *
+   * 🔴 NOT the row's index in the grid, and the difference is the whole point. The first build
+   * labelled rows by position (`wi === 0 ? 'This week' : 'In N weeks'`), which is correct for
+   * exactly one window and silently wrong for every other: scrolled back four weeks, the top
+   * row would have called itself "This week". A label anchored to the grid describes the grid;
+   * a label anchored to TODAY describes the calendar.
+   */
+  relativeIndex: number;
   days: CalendarDay[];
 }
 
-/** Four weeks — the current one first (Sunday-based, matching `weekWindow`), then three ahead. */
-export function fourWeekGrid(now: Date = new Date()): CalendarWeek[] {
+/**
+ * How far one press of back / forward moves the window. FOUR — a whole window, so nothing is
+ * skipped and nothing is shown twice, and the reader's next screen is the next four weeks
+ * rather than an overlapping smear of them.
+ */
+export const WINDOW_STEP_WEEKS = 4;
+
+/**
+ * Four weeks, Sunday-based, starting `offsetWeeks` weeks from the week containing `now`.
+ *
+ * `offsetWeeks === 0` is the original behaviour, unchanged: this week and the three ahead.
+ * Negative goes back. `isToday` / `isPast` stay anchored to the REAL today no matter where the
+ * window sits — a window scrolled into the past is entirely past, and it says so.
+ */
+export function fourWeekGrid(now: Date = new Date(), offsetWeeks = 0): CalendarWeek[] {
   const first = weekWindow(now).startDate;
   const start = parseYmd(first)!;
+  start.setDate(start.getDate() + offsetWeeks * 7);
   const today = ymd(now);
   const weeks: CalendarWeek[] = [];
   for (let w = 0; w < 4; w++) {
@@ -353,9 +443,39 @@ export function fourWeekGrid(now: Date = new Date()): CalendarWeek[] {
       const date = ymd(cur);
       days.push({ date, weekday: cur.getDay(), isToday: date === today, isPast: date < today });
     }
-    weeks.push({ startDate: days[0].date, endDate: days[6].date, days });
+    weeks.push({ startDate: days[0].date, endDate: days[6].date, relativeIndex: offsetWeeks + w, days });
   }
   return weeks;
+}
+
+/**
+ * What to call a week that is `rel` weeks from this one. "This week" · "Next week" ·
+ * "Last week" · "In 3 weeks" · "3 weeks ago".
+ *
+ * ⚠️ `Next week` and `Last week` are spelled out rather than rendered as "In 1 week" / "1 week
+ * ago" because that is what a person says, and this is the label Joel reads at 6am.
+ */
+export function weekLabel(rel: number): string {
+  if (rel === 0) return 'This week';
+  if (rel === 1) return 'Next week';
+  if (rel === -1) return 'Last week';
+  if (rel > 1) return `In ${rel} weeks`;
+  return `${-rel} weeks ago`;
+}
+
+/**
+ * The window's own claim, checked against the window it describes (§6 r18).
+ *
+ * 🔴 "This week and the three ahead" is TRUE of exactly one window. Printed over any other it
+ * is a header asserting something the grid beneath it contradicts — the plainest form of the
+ * rule. Away from home the heading states the distance instead, and the date range beside it
+ * (which the caller renders) carries the specifics.
+ */
+export function windowHeading(offsetWeeks: number): string {
+  if (offsetWeeks === 0) return 'This week and the three ahead';
+  const n = Math.abs(offsetWeeks);
+  const unit = n === 1 ? 'week' : 'weeks';
+  return `Four weeks · ${n} ${unit} ${offsetWeeks < 0 ? 'back' : 'ahead'}`;
 }
 
 export interface CalendarModel {
@@ -372,14 +492,21 @@ export interface CalendarModel {
   outsideWindowCount: number;
   /** True when the whole four weeks hold nothing. EMPTY is a state, not an error. */
   isEmpty: boolean;
+  /** Where this window sits relative to the week containing today. 0 = home. */
+  offsetWeeks: number;
+  /** The window is the current one — the only window "this week and the three ahead" describes. */
+  isCurrentWindow: boolean;
 }
 
 export function buildCalendarModel(input: {
   now?: Date;
+  /** Weeks from the current week. Omitted = 0 = the original window, unchanged. */
+  offsetWeeks?: number;
   rules: OperatingDayRule[];
   activities: ActivityItem[];
 }): CalendarModel {
-  const weeks = fourWeekGrid(input.now ?? new Date());
+  const offsetWeeks = input.offsetWeeks ?? 0;
+  const weeks = fourWeekGrid(input.now ?? new Date(), offsetWeeks);
   const windowStart = weeks[0].days[0].date;
   const lastDay = weeks[3].days[6].date;
   const endEx = parseYmd(lastDay)!;
@@ -412,5 +539,6 @@ export function buildCalendarModel(input: {
   return {
     weeks, windowStart, windowEnd, byDate, resolutions, conflicts,
     shownCount, outsideWindowCount, isEmpty: shownCount === 0,
+    offsetWeeks, isCurrentWindow: offsetWeeks === 0,
   };
 }

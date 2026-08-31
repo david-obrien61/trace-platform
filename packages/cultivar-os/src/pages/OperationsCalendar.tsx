@@ -25,6 +25,22 @@
  *    birthdays. This is the OPERATIONS calendar — it imports nothing, syncs nothing, and
  *    owns none of her week.
  *
+ * 🔴 THE SELECTED DAY IS THE SUBJECT, NOT A FOOTNOTE. The first build rendered the drill-in
+ *    at the very bottom of the page, BELOW the sources footnote — so clicking a day produced
+ *    a correct and complete day view that nobody could see, and the truncated name in the
+ *    cell read as the whole answer. Two changes, both display: the day section is moved
+ *    directly under the grid, and selecting a day BRINGS IT INTO VIEW. The drill-in itself is
+ *    untouched — its green header ("Saturday, Aug 29, 2026 · 7 stops on this day") already
+ *    reads as the subject of the page; it was in the wrong place, not the wrong shape.
+ *
+ * 🔴 AND THE WINDOW MOVES. Fixed at four weeks forward, the grid could not reach Saturday
+ *    2026-08-29 — seven stops, ONE DAY before the window — while the drill-in beneath it
+ *    counted "9 scheduled in total" and offered one. Back and forward a whole window at a
+ *    time, plus one press home. ⚠️ THE CONTROL IS PLACED BY DEVICE, David's call and not a
+ *    default: the desktop gets a dropdown (it already navigates by dropdown and does not need
+ *    arrows), the phone and the tablet in the yard get arrows, where they are the whole
+ *    interface. ONE mechanism (`offsetWeeks` in the model), two placements.
+ *
  * ⚠️ SCOPE OF THE COUNT, STATED ON THE SCREEN AND NOT ONLY HERE: this reads `deliveries`
  *    ONLY. `orders.delivery_date` is a SECOND record of the same fact with no reliable key
  *    joining the two (tech-debt #108), so checkout-scheduled work that never produced a
@@ -35,8 +51,8 @@
  *    board's `DEVICE:` vocabulary — the `TileEntry.capability` field that ruling calls for
  *    is still OPEN (a 33-tile backfill), and minting it inside a calendar build is not that.
  */
-import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, AlertTriangle, Truck, Sprout, Settings2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CalendarDays, AlertTriangle, Truck, Sprout, Settings2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import { NotPermitted, requirementText } from '@trace/shared/components/SurfaceState';
@@ -44,7 +60,7 @@ import { DeliverySchedule } from './DeliverySchedule';
 import {
   buildCalendarModel, parseYmd, WEEKDAY_NAMES, WEEKDAY_SHORT,
   DAY_TYPE_CATALOG, ACTIVITY_SOURCES,
-  OPERATING_DAY_SELECT,
+  OPERATING_DAY_SELECT, WINDOW_STEP_WEEKS, weekLabel, windowHeading, cellSummary,
   type ActivityItem, type StoredOperatingDayRule, type CalendarModel,
 } from '../lib/operationsCalendar';
 
@@ -81,6 +97,53 @@ function monthDay(date: string): string {
   return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : date;
 }
 
+/**
+ * Is the viewport narrow enough that a dropdown is the wrong control?
+ *
+ * ⚠️ DELIBERATELY NOT `ReceiptKeeper.useIsMobile`, and the reason is that they answer
+ * DIFFERENT QUESTIONS. That one asks "can this device take a photo" — pointer coarseness and
+ * user-agent, because a camera-first capture screen turns on the hardware. This asks "is there
+ * room for a select", which is a width question and nothing else. Reusing it would have made a
+ * desktop browser with a touchscreen navigate by arrows. §6 r8 extracts the same OPERATION in
+ * two places; these are two operations that happen to both call `matchMedia`, and this is the
+ * SECOND — the rule-of-three extraction is not yet earned and is named here so the third one
+ * takes it rather than adding a fourth copy.
+ *
+ * 768px is the platform's existing desktop/tablet line (§6 r7, the tile grid).
+ */
+const NARROW_QUERY = '(max-width: 767px)';
+function useIsNarrow(): boolean {
+  const [narrow, setNarrow] = useState<boolean>(
+    () => (typeof window === 'undefined' ? false : window.matchMedia?.(NARROW_QUERY)?.matches ?? false));
+  useEffect(() => {
+    const mq = window.matchMedia?.(NARROW_QUERY);
+    if (!mq) return;
+    const recompute = () => setNarrow(mq.matches);
+    mq.addEventListener?.('change', recompute);
+    return () => mq.removeEventListener?.('change', recompute);
+  }, []);
+  return narrow;
+}
+
+/**
+ * The window `offsetWeeks` steps from home, as bare bounds. Half-open [start, end).
+ *
+ * Built from `buildCalendarModel` with no rules and no activities rather than from a second
+ * copy of the date arithmetic — the bounds the query uses and the bounds the grid draws are
+ * then the SAME bounds by construction, which is the property the first build already relied
+ * on and the one a hand-rolled `+28 days` would quietly break.
+ */
+function windowFor(offsetWeeks: number): { start: string; end: string; lastDay: string } {
+  const probe = buildCalendarModel({ offsetWeeks, rules: [], activities: [] });
+  // `end` is EXCLUSIVE (the query's bound); `lastDay` is the inclusive last day (a label's).
+  // Both come from the probe rather than one being derived from the other by hand — an
+  // off-by-one between the bound and the label is the oldest bug in this file's family.
+  return { start: probe.windowStart, end: probe.windowEnd, lastDay: probe.weeks[3].endDate };
+}
+
+/** How far the dropdown reaches either way: six windows back, six forward — about a year. */
+const WINDOW_CHOICES = Array.from({ length: 13 }, (_, i) => (i - 6) * WINDOW_STEP_WEEKS);
+
 export function OperationsCalendar() {
   const { businessId, can } = useBusinessContext();
   const canWriteRules = can('settings:update');
@@ -92,20 +155,64 @@ export function OperationsCalendar() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [writeError, setWriteError] = useState<string | null>(null);
+  const [offsetWeeks, setOffsetWeeks] = useState(0);
+
+  const isNarrow = useIsNarrow();
+  const dayRef = useRef<HTMLDivElement | null>(null);
 
   // The model is rebuilt from whatever we actually have. Rules that failed to load are an
   // EMPTY rule set, not a fabricated one — an unreadable rule must never become a claim.
   const model: CalendarModel = useMemo(() => buildCalendarModel({
+    offsetWeeks,
     rules: ruleState.kind === 'ready' ? ruleState.rules : [],
     activities: activities ?? [],
-  }), [ruleState, activities]);
+  }), [ruleState, activities, offsetWeeks]);
+
+  // The query's bounds, derived from the offset ALONE so they do not depend on the model and
+  // cannot loop through it. Same function the model uses.
+  const bounds = useMemo(() => windowFor(offsetWeeks), [offsetWeeks]);
 
   useEffect(() => {
     if (!businessId) return;
     void loadRules();
-    void loadActivities();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId]);
+
+  // 🔴 THE READ FOLLOWS THE WINDOW. The first build read once, bounded by a window that could
+  // never move; moving the grid without re-reading would have drawn empty weeks over real work
+  // — a calendar lying by omission, which is worse than the window that could not move.
+  useEffect(() => {
+    if (!businessId) return;
+    void loadActivities(bounds.start, bounds.end);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessId, bounds.start, bounds.end]);
+
+  /**
+   * Bring the selected day into view. THE WHOLE OF DEFECT ①: the day view always rendered
+   * correctly and completely — it was simply below four weeks of grid, so clicking a day
+   * appeared to do nothing but highlight a cell, and the truncated name in that cell read as
+   * the entire answer. The grid stays where it is; the day becomes what you are looking at.
+   */
+  useEffect(() => {
+    if (!selected) return;
+    dayRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    if (TRACE_CALENDAR) console.log('[TRACE:CALENDAR] day selected — scrolled into view', selected);
+  }, [selected]);
+
+  /**
+   * Move the window by whole windows. A selected day that the new window cannot show is
+   * CLEARED rather than left below the grid: a day view whose day is nowhere on the calendar
+   * above it is the kind of orphan that makes a reader distrust both.
+   */
+  function moveWindow(next: number) {
+    const w = windowFor(next);
+    setOffsetWeeks(next);
+    if (selected && !(selected >= w.start && selected < w.end)) {
+      setSelected(null);
+      if (TRACE_CALENDAR) console.log('[TRACE:CALENDAR] selection cleared — outside the new window', { selected, ...w });
+    }
+    if (TRACE_CALENDAR) console.log('[TRACE:CALENDAR] window moved', { offsetWeeks: next, ...w });
+  }
 
   async function loadRules() {
     setRuleState({ kind: 'loading' });
@@ -128,18 +235,20 @@ export function OperationsCalendar() {
     if (TRACE_CALENDAR) console.log('[TRACE:CALENDAR] rules loaded —', rules.length, 'rule(s)');
   }
 
-  async function loadActivities() {
+  async function loadActivities(windowStart: string, windowEnd: string) {
     setActivityError(null);
+    // A window change is a RE-READ, and until it lands the page says "Loading…" rather than
+    // holding the previous window's stops under the new window's dates.
+    setActivities(null);
     // Bounded on BOTH sides. An unbounded `gte` is the defect the dashboard shipped: work
     // booked in September counted as this week's. The window is the model's own.
-    const probe = buildCalendarModel({ rules: [], activities: [] });
     const { data, error } = await supabase
       .from('deliveries')
       .select('id, delivery_date, service_type, notes, address_line1, city, customers ( first_name, last_name )')
       .eq('business_id', businessId!)
       .neq('status', 'cancelled')
-      .gte('delivery_date', probe.windowStart)
-      .lt('delivery_date', probe.windowEnd)
+      .gte('delivery_date', windowStart)
+      .lt('delivery_date', windowEnd)
       .order('delivery_date', { ascending: true });
     if (error) {
       setActivities(null);
@@ -162,7 +271,7 @@ export function OperationsCalendar() {
       }));
     setActivities(items);
     if (TRACE_CALENDAR) console.log('[TRACE:CALENDAR] activities loaded —', items.length, 'delivery item(s) in window',
-      probe.windowStart, '→', probe.windowEnd, '(exclusive)');
+      windowStart, '→', windowEnd, '(exclusive)');
   }
 
   /**
@@ -237,12 +346,72 @@ export function OperationsCalendar() {
   return (
     <div style={{ background: SAGE, minHeight: '100vh', paddingBottom: 48 }}>
       <div style={{ background: GREEN, color: '#fff', padding: '18px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <CalendarDays size={22} />
           <h1 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 700 }}>Operations calendar</h1>
+
+          {/* ── MOVING THE WINDOW ──────────────────────────────────────────────
+              ⚠️ ONE MECHANISM, TWO PLACEMENTS — David's call. Arrows are the whole
+              interface on a phone or the tablet in the yard; on the desktop, which
+              already navigates by dropdown, they would be a third way to do what a
+              select does better across a year. Both drive the same `moveWindow`.  */}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+            {isNarrow ? (
+              <>
+                <button
+                  onClick={() => moveWindow(offsetWeeks - WINDOW_STEP_WEEKS)}
+                  aria-label={`Back ${WINDOW_STEP_WEEKS} weeks`}
+                  style={navBtn}
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <button
+                  onClick={() => moveWindow(offsetWeeks + WINDOW_STEP_WEEKS)}
+                  aria-label={`Forward ${WINDOW_STEP_WEEKS} weeks`}
+                  style={navBtn}
+                >
+                  <ChevronRight size={20} />
+                </button>
+              </>
+            ) : (
+              <select
+                value={offsetWeeks}
+                onChange={(e) => moveWindow(Number(e.target.value))}
+                aria-label="Which four weeks"
+                style={{ ...select, minHeight: 38, fontWeight: 600 }}
+              >
+                {WINDOW_CHOICES.map((off) => {
+                  const w = windowFor(off);
+                  return (
+                    <option key={off} value={off}>
+                      {monthDay(w.start)} – {monthDay(w.lastDay)}
+                      {off === 0 ? ' · this week' : ''}
+                    </option>
+                  );
+                })}
+                {/* A window reached by arrows on a phone, then resized to desktop, would
+                    otherwise have no option to sit on and the select would silently show
+                    the wrong one. It stays selectable, named for what it is. */}
+                {!WINDOW_CHOICES.includes(offsetWeeks) && (
+                  <option value={offsetWeeks}>
+                    {monthDay(model.windowStart)} – {monthDay(model.weeks[3].endDate)}
+                  </option>
+                )}
+              </select>
+            )}
+
+            {/* 🔴 THE WAY HOME, and it is one press from anywhere — a reader four months out
+                should not have to count their way back. Shown only when there is somewhere
+                to come home from (§6 r18: a control that would do nothing says nothing). */}
+            {offsetWeeks !== 0 && (
+              <button onClick={() => moveWindow(0)} style={{ ...navBtn, width: 'auto', padding: '0 12px', fontWeight: 700 }}>
+                This week
+              </button>
+            )}
+          </div>
         </div>
         <p style={{ margin: '4px 0 0', fontSize: '0.8125rem', opacity: 0.85 }}>
-          This week and the three ahead — {monthDay(model.windowStart)} to {monthDay(model.weeks[3].endDate)}
+          {windowHeading(offsetWeeks)} — {monthDay(model.windowStart)} to {monthDay(model.weeks[3].endDate)}
         </p>
       </div>
 
@@ -354,10 +523,10 @@ export function OperationsCalendar() {
               </span>
             </div>
 
-            {model.weeks.map((week, wi) => (
+            {model.weeks.map((week) => (
               <div key={week.startDate} style={{ marginBottom: 14 }}>
                 <div style={{ fontSize: '0.75rem', color: GRAY, fontWeight: 700, padding: '0 2px 6px' }}>
-                  {wi === 0 ? 'This week' : `In ${wi} week${wi === 1 ? '' : 's'}`}
+                  {weekLabel(week.relativeIndex)}
                   {' · '}{monthDay(week.startDate)} – {monthDay(week.endDate)}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 8 }}>
@@ -366,6 +535,10 @@ export function OperationsCalendar() {
                     const items = model.byDate[day.date] ?? [];
                     const conflict = model.conflicts[day.date];
                     const isSel = selected === day.date;
+                    // 🔴 DEFECT ①'s other half. A 90px cell printing three names printed
+                    // three ellipses and identified nobody; the count is strictly more
+                    // information, and the day view below carries the detail.
+                    const summary = cellSummary(items);
                     return (
                       <button
                         key={day.date}
@@ -403,19 +576,22 @@ export function OperationsCalendar() {
                           {res.source === 'exception' ? ' ·  override' : ''}
                         </span>
 
-                        {items.map((it) => (
-                          <span key={it.id} style={{
-                            display: 'flex', alignItems: 'center', gap: 4,
-                            fontSize: '0.6875rem', color: DARK,
-                            borderLeft: `3px solid ${it.serviceType === 'planting' ? GREEN : '#22d3ee'}`,
-                            paddingLeft: 5, lineHeight: 1.3,
-                          }}>
-                            {it.serviceType === 'planting' ? <Sprout size={11} color={GREEN} /> : <Truck size={11} color="#22d3ee" />}
+                        {summary.only && (
+                          <span style={cellLine(summary.only.serviceType === 'planting')}>
+                            {summary.only.serviceType === 'planting'
+                              ? <Sprout size={11} color={GREEN} /> : <Truck size={11} color="#22d3ee" />}
                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {it.label}
+                              {summary.only.label}
                             </span>
                           </span>
-                        ))}
+                        )}
+                        {summary.text && (
+                          <span style={cellLine(summary.hasPlanting)}>
+                            {summary.hasPlanting
+                              ? <Sprout size={11} color={GREEN} /> : <Truck size={11} color="#22d3ee" />}
+                            <span style={{ fontWeight: 700 }}>{summary.text}</span>
+                          </span>
+                        )}
 
                         {/* 🔴 THE MISMATCH — and it says WHAT the conflict is, never just that
                             there is one. It never blocks and it never hides a stop. */}
@@ -434,41 +610,70 @@ export function OperationsCalendar() {
                 </div>
               </div>
             ))}
-
-            {/* ── THE SELECTED DAY, and its exception control ─────────────────── */}
-            {selected && (
-              <div style={{ ...card, padding: 14, marginTop: 4 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <strong style={{ color: DARK }}>
-                    {WEEKDAY_NAMES[parseYmd(selected)?.getDay() ?? 0]} {monthDay(selected)}
-                  </strong>
-                  {ruleState.kind === 'ready' && (
-                    <>
-                      <span style={{ fontSize: '0.8125rem', color: GRAY }}>this day is:</span>
-                      <select
-                        value={ruleState.rules.find((r) => r.on_date === selected)?.day_type ?? ''}
-                        disabled={!canWriteRules || savingKey === `d${selected}`}
-                        onChange={(e) => { void setRule({ onDate: selected }, e.target.value || null); }}
-                        style={select}
-                      >
-                        <option value="">Follow the weekly pattern</option>
-                        {Object.values(DAY_TYPE_CATALOG).map((m) => (
-                          <option key={m.key} value={m.key}>{m.label}</option>
-                        ))}
-                      </select>
-                    </>
-                  )}
-                </div>
-                {model.conflicts[selected] && (
-                  <p style={{ margin: '8px 0 0', fontSize: '0.8125rem', color: RED }}>
-                    {model.conflicts[selected].reasons.map((r) => r.text).join(' · ')} — nothing is blocked;
-                    change the day’s type above, or move the work below.
-                  </p>
-                )}
-              </div>
-            )}
           </>
         )}
+
+        {/* ── THE SELECTED DAY — the subject, directly under the grid ──────────
+            🔴 THE MOVE IS THE FIX. This block and the drill-in beneath it were correct and
+            complete before this pass; they simply rendered at the BOTTOM of the page, below
+            the sources footnote, so clicking a day scrolled nothing, appeared to do nothing,
+            and left the truncated name in the cell reading as the whole answer. `dayRef` is
+            what selecting a day scrolls to.
+            ⚠️ IT MOUNTS OUTSIDE THE GRID'S LOADING BRANCH, DELIBERATELY. The drill-in reads
+            `deliveries` for ITSELF and is unaffected by the calendar's own read — putting it
+            inside would unmount and re-fetch the whole list on every window move, and would
+            remove the delivery list entirely when the CALENDAR's read failed, which is a
+            second failure invented out of the first (CARD 3).
+            ⚠️ The date appears here as the day-type control's LABEL and again in the
+            drill-in's green header one line below. Accepted deliberately rather than deduped:
+            that header is CARD 9's proven text ("Saturday, Aug 29, 2026 · 7 stops on this
+            day"), it is the heading that reads as the subject of the page, and rewriting it
+            to remove a repeated date would break a standing card and touch the drill-in this
+            pass is not allowed to touch. */}
+        <div ref={dayRef} style={{ scrollMarginTop: 8 }}>
+          {selected && !activityError && (
+            <div style={{ ...card, padding: 14, marginTop: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <strong style={{ color: DARK }}>
+                  {WEEKDAY_NAMES[parseYmd(selected)?.getDay() ?? 0]} {monthDay(selected)}
+                </strong>
+                {ruleState.kind === 'ready' && (
+                  <>
+                    <span style={{ fontSize: '0.8125rem', color: GRAY }}>this day is:</span>
+                    <select
+                      value={ruleState.rules.find((r) => r.on_date === selected)?.day_type ?? ''}
+                      disabled={!canWriteRules || savingKey === `d${selected}`}
+                      onChange={(e) => { void setRule({ onDate: selected }, e.target.value || null); }}
+                      style={select}
+                    >
+                      <option value="">Follow the weekly pattern</option>
+                      {Object.values(DAY_TYPE_CATALOG).map((m) => (
+                        <option key={m.key} value={m.key}>{m.label}</option>
+                      ))}
+                    </select>
+                  </>
+                )}
+              </div>
+              {model.conflicts[selected] && (
+                <p style={{ margin: '8px 0 0', fontSize: '0.8125rem', color: RED }}>
+                  {model.conflicts[selected].reasons.map((r) => r.text).join(' · ')} — nothing is blocked;
+                  change the day’s type above, or move the work below.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ── THE DAY DRILL-IN — the SAME list, filtered. Not a second delivery list. ──
+              UNCHANGED except for where it sits. Every affordance CARD 9 audited — inline
+              date edit, Edit customer, Route this day, Capture an invoice, both route
+              buttons — is gated on `can(...)` alone and none of them is touched here.
+              The negative side margin cancels this container's 16px padding so the drill-in's
+              own green header bar stays FULL-BLEED, exactly as it rendered at the foot of the
+              page: the section moved, its shape did not (§6 r14's trick, same reason). */}
+          <div style={{ margin: '0 -16px' }}>
+            <DeliverySchedule filterDate={selected} />
+          </div>
+        </div>
 
         {/* ── WHAT THIS SCREEN CAN AND CANNOT SEE ────────────────────────────── */}
         <div style={{ ...card, padding: 14, marginTop: 14 }}>
@@ -492,8 +697,6 @@ export function OperationsCalendar() {
         </div>
       </div>
 
-      {/* ── THE DAY DRILL-IN — the SAME list, filtered. Not a second delivery list. ── */}
-      <DeliverySchedule filterDate={selected} />
     </div>
   );
 }
@@ -507,6 +710,28 @@ const rowBtn: React.CSSProperties = {
 };
 const note: React.CSSProperties = {
   margin: 0, padding: '0 14px 14px', fontSize: '0.8125rem', color: GRAY, lineHeight: 1.45,
+};
+/** One line of work inside a day cell — a name when there is one, a count when there are more. */
+function cellLine(planting: boolean): React.CSSProperties {
+  return {
+    display: 'flex', alignItems: 'center', gap: 4,
+    fontSize: '0.6875rem', color: DARK,
+    borderLeft: `3px solid ${planting ? GREEN : '#22d3ee'}`,
+    paddingLeft: 5, lineHeight: 1.3,
+  };
+}
+
+/**
+ * Arrows and the way home. 48px BOTH WAYS — §6 r3's touch target, and not negotiable here:
+ * on the phone and the tablet in the yard these arrows ARE the navigation, pressed with a
+ * glove on. The first draft had them at 40 and the comment said 48, which is the smaller
+ * defect of the two and the one that would have survived review.
+ */
+const navBtn: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  minHeight: 48, minWidth: 48, borderRadius: 8, cursor: 'pointer',
+  background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.45)',
+  color: '#fff', fontSize: '0.8125rem',
 };
 const select: React.CSSProperties = {
   minHeight: 34, borderRadius: 8, border: '1px solid #d1d5db', padding: '4px 8px',

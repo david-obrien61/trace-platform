@@ -10,7 +10,8 @@
 
 **Capability:** 3.4 (scheduling) · 3.5 (delivery / routing)
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 11 covered** (10 `owed` · **1 `needs-test` — CARD 4, whose precondition closed unrun when the migration was applied 2026-08-30**).
+**Board: 0 of 15 covered** (14 `owed` · **1 `needs-test` — CARD 4, whose precondition closed unrun when the migration was applied 2026-08-30**).
+🔴 **CARDS 1 AND 9 WERE REWRITTEN 2026-08-31 AND THE REASON IS THE FINDING, NOT THE EDIT.** Both were written on 2026-08-28 against the window as it stood that day, and both had since become **impossible to run as written** — they asked the reader to look at Saturday 08-29 in a window that, three days later, starts on 08-30. **True when written, false by the passage of time, and nothing watched them.** That is [[R-26]]'s shape and [[R-29]]'s half-life: a card that names a DATE is a claim with an expiry, exactly like a line number. The dates below are now given **relative to the window**, and the absolute ones are marked with what makes them reachable.
 **DEVICE: desktop** — declared per the 2026-08-23 tile-capability ruling, using this board's own `DEVICE:` vocabulary. The `TileEntry.capability` field that ruling calls for is still **OPEN** (a 33-tile backfill); this build did not mint it.
 
 ---
@@ -46,16 +47,19 @@ If ①–③ do not agree, **STOP**. Do not record a pass or a fail.
 
 ---
 
-## CARD 1 — The four weeks render, and Saturday shows every stop
+## CARD 1 — The four weeks render, and every week says how far away it is
 STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
+
+⚠️ **REWRITTEN 2026-08-31.** The original asked for seven stops on Saturday 08-29 and a header count of 9 — both **correct on 2026-08-28 and impossible from 2026-08-30 onward**, when the home window rolled past that Saturday. The stops did not move; the window did. Saturday 08-29 is now **CARD 14's** job.
 
 Open `/delivery-schedule` as **David (OWNER) on LAWNS**.
 
-- Four week rows: **This week**, **In 1 week**, **In 2 weeks**, **In 3 weeks**. Days named Sun→Sat.
-- Today is marked **TODAY** and only one day is.
-- 🔴 **Saturday 2026-08-29 shows SEVEN stops.** Measured live 2026-08-28: Paul Christ · Mark & Vanessa Ashcraft · Andrea & Angel Navarrette · Humberto Garza · Ariel Thiry · Sherry Cooper · Leroy & Lila Ludemann. **If you see a number other than 7, that is the finding — say what it is before judging anything else on this page.**
-- Wednesday 08-26 shows one stop; Saturday 09-12 shows one.
-- The header count reads **9 scheduled items** and the words **"deliveries only"** beside it.
+- Four week rows: **This week**, **Next week**, **In 2 weeks**, **In 3 weeks**. Days named Sun→Sat.
+  ⚠️ The second row says **"Next week"**, not "In 1 week" — one either way is said the way a person says it.
+- Today is marked **TODAY** and **only one day is**.
+- The green subtitle reads **"This week and the three ahead — <first day> to <last day>"**.
+- 🔴 **The header count counts what is ON THIS WINDOW, and only that.** Standing in the week of 2026-08-30 that is **1 scheduled item** (Saturday 09-12) with the words **"deliveries only"** beside it. **LAWNS has nine deliveries and eight of them are behind you** — that is not a defect, it is the window, and CARD 14 is how you reach them.
+- Days before today are dimmed; days after are not.
 
 ## CARD 2 — An empty week reads as empty, not as a blank screen
 STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
@@ -147,10 +151,13 @@ Sign in as the **real STAFF member on Test Dave's** (`39691f0b`, 10 permissions 
 ## CARD 9 — The day drill-in is the same list, filtered — not a second delivery list
 STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
 
-- Click Saturday 08-29 on LAWNS. Below the grid the delivery list header reads **"Saturday, Aug 29, 2026"** and **"7 stops on this day · 9 scheduled in total"**.
-- Every affordance Lauren already uses is present and unmoved: **inline date edit**, **Edit customer**, **Route this day**, **Capture an invoice**.
+⚠️ **REWRITTEN 2026-08-31 for the same reason as CARD 1** — it named Saturday 08-29, which the home window no longer reaches. Run it on **Saturday 09-12** (in the home window, one stop); its seven-stop form is **CARD 14**.
+
+- Click **Saturday 2026-09-12** on LAWNS. **Directly below the grid** the delivery list header reads **"Saturday, Sep 12, 2026"** and **"1 stop on this day · 9 scheduled in total"**.
+- Every affordance Lauren already uses is present and unmoved: **inline date edit**, **Edit customer**, **Route this day**, **Capture an invoice**, and both route buttons.
 - Click the same day again to deselect: the list returns to all scheduled days and the header returns to **"Scheduled Deliveries"**.
 - Click a day with nothing on it: the list reads **"Nothing scheduled on this day"** and says how many are scheduled on other days. 🔴 It must **not** show "No scheduled deliveries" or the "Snap an invoice" prompt — that is a different fact and borrowing its words is the #224 defect.
+- 🔴 **The green header bar is FULL WIDTH**, edge to edge, exactly as it rendered before it moved. If it is inset by ~16px on both sides, the negative margin that cancels the container's padding did not apply.
 
 ## CARD 10 — The screen states what it cannot see
 STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
@@ -168,6 +175,69 @@ STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
 - Day types set on one tenant appear on **no other** tenant. Set Monday = Closed on Test Dave's and confirm LAWNS still reads Service / maintenance (or "no day type" if unset).
 - LAWNS' nine deliveries are **unchanged in number, date and status** after every card above.
 
+## CARD 12 — 🔴 CLICK A DAY AND THE DAY IS WHAT YOU ARE LOOKING AT
+STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
+
+🔴 **THIS IS THE CARD FOR DEFECT ①, AND IT IS NOT "the day view renders" — it always did.** The day view was correct and complete on 2026-08-31 and it was **at the bottom of the page, under four weeks of grid and the sources footnote**, so clicking a day appeared to do nothing but outline a cell. What is being proven is that you can **see** it.
+
+On LAWNS, scroll to the **top** of `/delivery-schedule` so the grid fills the screen. Then click **Saturday 2026-09-12**.
+
+- 🔴 **The page moves, and the day view is on screen without you scrolling.** If you have to scroll to find it, this card fails, and the fix did not land.
+- The grid is still where it was — it did not collapse, jump or re-order. You scrolled *to* the day, the calendar did not rearrange itself around you.
+- The order down the page is: the grid · the day's type control (**"Saturday Aug 30 · this day is: …"**, or whichever day) · the day's delivery list · **then** "What this calendar shows". 🔴 **The sources footnote is BELOW the day, not above it** — that inversion is the whole defect.
+- Click a **different** day. The page moves again, to that day.
+- Click the **same** day to deselect. The list returns to all scheduled days; nothing scrolls, because there is no longer a day to look at.
+
+## CARD 13 — A busy cell says how busy it is, and does not print three ellipses
+STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
+
+🔴 **The reported symptom was a cell reading "Josh Ph…" and the conclusion drawn from it was that the DAY VIEW was too small. It was the cell.** A ~90px cell cannot hold six names and should not try; three truncated names identify nobody, and the count is strictly more information.
+
+Needs a day with more than one stop — **CARD 14 gets you to Saturday 2026-08-29, which has seven.**
+
+- A day with **one** stop still prints **the customer's name**. One label fits, and knowing *who* is on an otherwise empty day is the point of the glance.
+- 🔴 **Saturday 2026-08-29's cell reads "7 stops"** — a count, in a cell wide enough for the words. **Not seven ellipses, and not one name standing in for seven.**
+- If some of that day's stops are planting / install jobs, the cell says so: **"7 stops · 2 planting"**, or **"7 stops · all planting"** when every one of them is. ⚠️ That sub-count is not decoration — it is the exact axis the day-type flag is about to use, and a bare "7 stops" would flatten the distinction the amber flag underneath is making.
+- The icon matches the mix (sprout when any stop is a planting job, truck otherwise), and the count line is **never** truncated.
+- The day view below still lists **every one of the seven by name**. The cell summarises; nothing is hidden.
+
+## CARD 14 — 🔴 THE TEST. MOVE BACK FOUR WEEKS AND OPEN SATURDAY 29 AUGUST
+STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
+
+🔴 **THIS IS THE CARD THE WHOLE BUILD EXISTS FOR, AND THE NUMBER IS THE ASSERTION.** Saturday 2026-08-29 — seven stops, six made, one rescheduled, the day David spent a week trying to reconstruct — sat **one day** outside a window that could not move, while the drill-in beneath it said *"9 scheduled in total"* and offered one of them. **Nine deliveries existed and eight were unreachable.**
+
+On **LAWNS**, at the top of `/delivery-schedule`:
+
+1. In the green header, the **window dropdown** (desktop) sits to the right of the title. Open it. It lists windows by date range, six back and six forward, with **"· this week"** marking the one you are on.
+2. Choose the window **four weeks back** — the one ending **Aug 29**. (On a phone or tablet: press **◀** once.)
+3. ✅ **The grid redraws to Aug 2 – Aug 29.** The four week rows now read **"4 weeks ago" · "3 weeks ago" · "2 weeks ago" · "Last week"**. 🔴 **None of them says "This week"** — if the top row calls itself This week, the label is anchored to the grid instead of to today, and that is a lie about where you are.
+4. The green subtitle reads **"Four weeks · 4 weeks back — Aug 2 to Aug 29"**. 🔴 **It must NOT read "This week and the three ahead"** — that sentence is true of exactly one window (§6 r18).
+5. Every day is dimmed and **nothing is marked TODAY** — the whole window is in the past and says so.
+6. 🔴 **Saturday 2026-08-29 is the last cell in the last row, and it reads "7 stops."**
+7. **Click it.** The day view comes into view (CARD 12) and its header reads **"Saturday, Aug 29, 2026"** and **"7 stops on this day · 9 scheduled in total"**.
+8. 🔴 **ALL SEVEN ARE LISTED BY NAME.** Measured live 2026-08-28: Paul Christ · Mark & Vanessa Ashcraft · Andrea & Angel Navarrette · Humberto Garza · Ariel Thiry · Sherry Cooper · Leroy & Lila Ludemann. **If you see a number other than 7, say what it is before judging anything else on this page.**
+9. Every affordance still works on this past day: inline date edit, Edit customer, Route this day, Capture an invoice, both route buttons. **A past day is not a read-only day** — a stop entered on the wrong date still needs moving.
+
+Then the other wall:
+
+10. Move **forward** past Sep 26 (dropdown, or **▶** twice from here). The grid reaches October. The week rows read **"In 4 weeks"** and up. Nothing errors and nothing is empty-with-no-explanation — an empty future window still says **"Nothing scheduled in the next four weeks."**
+
+## CARD 15 — One press home, and the control is where the device needs it
+STATUS: owed · DEVICE: desktop + phone · LAST-PROVEN: —
+
+⚠️ **THE ONLY CARD ON THIS BOARD THAT NEEDS A PHONE**, and it is deliberate: the placement decision was David's, not a default — *"the desktop already has dropdown navigation and does not need arrows. Arrows are for the phone and the tablet in the yard, where they are the whole interface."* One mechanism, two placements; this is the card that proves both got built.
+
+**On the desktop:**
+- Move four or more windows away in either direction. A **"This week"** button appears beside the dropdown. Press it once — you are back at Aug 30 – Sep 26, the subtitle reads **"This week and the three ahead"**, and TODAY is marked again. 🔴 **One press, from anywhere.** A reader four months out should not have to count their way back.
+- At home, the **"This week" button is not shown at all** — a control that would do nothing says nothing (§6 r18).
+- 🔴 **There are NO arrows on the desktop.**
+
+**On a phone (or narrow the browser under 768px):**
+- 🔴 **The dropdown is replaced by ◀ ▶ arrows** — and they are at least **48px** square, pressable with a glove on. If they are small enough to need aim, that is the finding.
+- ◀ moves back a whole window, ▶ forward. Four weeks a press, no overlap and no gap: press ◀ then ▶ and you are exactly where you started.
+- The **"This week"** button appears beside them when you are away from home, same rule.
+- ⚠️ **Resize a desktop browser narrow and back.** The control swaps between dropdown and arrows **without losing your place** — the window you were on stays the window you are on, and the dropdown still has an option to sit on.
+
 ---
 
 ## WHAT THIS TEST DELIBERATELY DOES NOT COVER
@@ -177,7 +247,9 @@ Named rather than silently absent (OP-14 clause 2):
 - **PMI on the calendar** — `STATUS: needs-test`, and the reason is that there is nothing to test: no tenant has a derivable PMI due date (`last_service_at` is null on all three schedule rows; `business_service_log` is empty platform-wide). A card asserting an empty panel would prove nothing. It is owed the day the first service is logged.
 - **Graduations / uppotting and spray** — no data and no build. The seam is declared and card 10 checks the declaration; there is no behaviour to prove.
 - **Recurring obligations (payroll, sales tax), crew and equipment assignment** — explicitly out of this build.
-- **Phone rendering** — `DEVICE: desktop`, declared and moved on.
+- **Phone rendering of the GRID** — `DEVICE: desktop`, declared and moved on. ⚠️ **CARD 15 is the one exception and it is narrow on purpose:** it proves the window ARROWS exist and are pressable on a phone, because that placement was a deliberate ruling. It does **not** claim the four-week grid reads well at 380px; nobody has checked, and this build did not change it.
+- **That the day actually SCROLLS INTO VIEW, asserted by a machine** — `STATUS: needs-test`, and the reason is [[tech-debt #134]] verbatim: the scroll is a `useEffect` on a `ref` inside a `.tsx` component needing router, context and Supabase, and `scripts/run-tests.mjs` is esbuild → node with no DOM by design. **44 assertions were added and not one of them can see a scroll.** CARD 12 is the only proof that exists, which is exactly the gap #134 names. Stated rather than implied.
+- **The placement swap at the 768px line, asserted by a machine** — same reason: `useIsNarrow` reads `matchMedia`. CARD 15's resize step is the whole check.
 
 ---
 
