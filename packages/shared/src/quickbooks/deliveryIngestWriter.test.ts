@@ -129,13 +129,21 @@ async function main() {
 
 // ══ §B RUN IT TWICE ════════════════════════════════════════════════════════
 {
-  const { db, store } = makeDb();
+  const { db, store, touched } = makeDb();
   const first = await commitDeliveryIngest(db, BIZ, THREE, TODAY);
   ok(first.written === 3, 'the first run writes three stops');
   ok(store.deliveries.length === 3, 'and three rows exist');
   ok(first.customersCreated === 3, 'with three new customers');
 
+  // 🔴 THE SECOND RUN MUST NOT EVEN TRY. Found by a mutant: with the `alreadyIngested` skip
+  // deleted, `written` was STILL 0 — because the unique index caught every duplicate. The
+  // guarantee held, but the TEST could not tell the code from the index, and the index does not
+  // exist until David applies the migration. So the attempt itself is what gets asserted.
+  const beforeSecond = touched.filter(t => t.table === 'deliveries' && t.verb === 'upsert').length;
   const second = await commitDeliveryIngest(db, BIZ, THREE, TODAY);
+  const afterSecond = touched.filter(t => t.table === 'deliveries' && t.verb === 'upsert').length;
+  ok(afterSecond === beforeSecond,
+     '🔴 THE SECOND RUN ISSUES NO WRITE AT ALL — not one refused by the index, but none attempted. The code must carry this on its own, because the index does not exist until the migration is applied');
   ok(second.written === 0,
      '🔴 THE SECOND RUN WRITES NOTHING. Without this Lauren has thirty-six stops for eighteen invoices');
   ok(store.deliveries.length === 3, 'the row count is unchanged — this is the acceptance criterion, measured');
