@@ -22,10 +22,17 @@
  *   · HOW MANY PEOPLE → counted from `business_members`. Shown back, never asked.
  * Name, address, phone and website are on `businesses` and are likewise not re-asked. What is left
  * is genuinely only ours to ask, and it is three boxes.
+ *
+ * 🔴 AND THOSE THREE BOXES ARE NOT BLANK EITHER. Where we have read the business's own site, each
+ * empty box carries a PROPOSAL with its source shown beside it — and a proposal is never written:
+ * "Use this" fills the box, the owner still presses Save, and until then `business_context` holds
+ * nothing. So there is no stored guess that could later be mistaken for the owner's own sentence.
+ * ⚠️ The proposal is offered only while the field is EMPTY. Once there is a value, the proposal
+ * has been used or rejected, and continuing to show it would be arguing with them.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Users, CalendarDays, FileText, AlertCircle } from 'lucide-react';
+import { Plus, Users, CalendarDays, FileText, AlertCircle, Globe } from 'lucide-react';
 import { useBusinessContext } from '@trace/shared/context';
 import { supabase } from '@trace/shared/supabase/client';
 import { NotPermitted } from '@trace/shared/components/SurfaceState';
@@ -34,6 +41,7 @@ import {
   type PositionWorkspace,
 } from '@trace/shared/positions/positionStore';
 import { describeOperatingDays } from '@trace/shared/positions/positionDescription';
+import { proposedContextFor, type ProposedField } from '@trace/shared/positions/contextProposals';
 import { readFailureMessage } from '@trace/shared/utils/readResult';
 import { dayTypeMeta } from '../lib/operationsCalendar';
 
@@ -53,9 +61,49 @@ const BTN: React.CSSProperties = {
   borderRadius: 8, fontSize: '0.9375rem', fontWeight: 600, cursor: 'pointer',
 };
 
+/**
+ * One proposed value, offered beside an EMPTY field.
+ *
+ * 🔴 PROPOSED UNTIL CONFIRMED, AND THE PROVENANCE IS SHOWN BESIDE THE VALUE — never underneath a
+ * heading somewhere else, never implied. A fact we found is not a fact they have agreed to, and
+ * an owner handing this document to a person has to be able to see which sentences they wrote.
+ * It renders ONLY while the field is empty: once there is a value in the box the proposal has
+ * either been used or been rejected, and continuing to show it would be arguing with them.
+ */
+function Proposed({ field, onUse, disabled }: {
+  field: ProposedField; onUse: (value: string) => void; disabled: boolean;
+}) {
+  return (
+    <div style={{
+      marginTop: 8, padding: '10px 12px', background: '#fffdf5',
+      border: '1px dashed #e0cfa0', borderRadius: 8,
+    }}>
+      <p style={{ margin: 0, fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#8a6d1f' }}>
+        Proposed — not saved
+      </p>
+      <p style={{ margin: '6px 0', fontSize: '0.875rem', color: '#374151' }}>{field.value}</p>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: '0.75rem', color: '#6b7280', flex: 1 }}>
+          <Globe size={12} style={{ flexShrink: 0 }} /> Read from {field.source}
+        </span>
+        {!disabled && (
+          <button onClick={() => onUse(field.value)}
+            style={{
+              minHeight: 40, padding: '0 14px', background: '#fff', color: GREEN,
+              border: `1px solid ${GREEN}`, borderRadius: 8, fontSize: '0.8125rem',
+              fontWeight: 600, cursor: 'pointer',
+            }}>
+            Use this
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function Positions() {
   const navigate = useNavigate();
-  const { businessId, can } = useBusinessContext();
+  const { businessId, business, can } = useBusinessContext();
   const mayEdit = can('settings:update');
 
   const [ws, setWs] = useState<PositionWorkspace | null>(null);
@@ -86,9 +134,10 @@ export function Positions() {
       operatingDays: res.value.operatingDays.length,
       members: res.value.memberCount,
       hasContext: res.value.context !== null,
+      proposalOffered: proposedContextFor(business?.website) !== null,
     });
     setLoading(false);
-  }, [businessId]);
+  }, [businessId, business?.website]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -101,6 +150,12 @@ export function Positions() {
         .map((d) => ({ weekday: d.weekday, dayTypeLabel: dayTypeMeta(d.day_type)?.label ?? d.day_type }))
     );
   }, [ws]);
+
+  // ── ③ "About the business" should not be a blank page either. ──
+  // 🔴 A PROPOSAL IS NOT A VALUE. Nothing below is written anywhere until the owner reads it,
+  // presses "Use this", and then presses Save — so `business_context` holds nothing at all until
+  // they have agreed, and there is no stored guess that could be mistaken for their own words.
+  const proposal = useMemo(() => proposedContextFor(business?.website), [business?.website]);
 
   const pickCount = useCallback(
     (positionId: string) => (ws?.responsibilities ?? []).filter((r) => r.position_id === positionId).length,
@@ -193,24 +248,37 @@ export function Positions() {
               <h2 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 4px', color: '#111827' }}>About the business</h2>
               <p style={{ fontSize: '0.8125rem', color: '#6b7280', margin: '0 0 14px' }}>
                 Asked once. Every position description reuses it.
+                {proposal && ` We read ${proposal.sourceLabel} and have proposed some of it below — check it, change it, and it is yours.`}
               </p>
               <div style={{ marginBottom: 14 }}>
                 <label style={LABEL} htmlFor="what-we-do">What the business does</label>
                 <textarea id="what-we-do" rows={2} style={INPUT} disabled={!mayEdit}
                   placeholder="grows and sells shade trees on forty acres in Leander"
                   value={ctx.whatWeDo} onChange={(e) => setCtx({ ...ctx, whatWeDo: e.target.value })} />
+                {proposal?.whatWeDo && !ctx.whatWeDo.trim() && (
+                  <Proposed field={proposal.whatWeDo} disabled={!mayEdit}
+                    onUse={(v) => setCtx({ ...ctx, whatWeDo: v })} />
+                )}
               </div>
               <div style={{ marginBottom: 14 }}>
                 <label style={LABEL} htmlFor="who-we-serve">Who it sells to</label>
                 <input id="who-we-serve" style={INPUT} disabled={!mayEdit}
                   placeholder="landscapers, builders and homeowners"
                   value={ctx.whoWeServe} onChange={(e) => setCtx({ ...ctx, whoWeServe: e.target.value })} />
+                {proposal?.whoWeServe && !ctx.whoWeServe.trim() && (
+                  <Proposed field={proposal.whoWeServe} disabled={!mayEdit}
+                    onUse={(v) => setCtx({ ...ctx, whoWeServe: v })} />
+                )}
               </div>
               <div style={{ marginBottom: 14 }}>
                 <label style={LABEL} htmlFor="known-for">What it is known for</label>
                 <input id="known-for" style={INPUT} disabled={!mayEdit}
                   placeholder="big trees, dug and delivered the same week"
                   value={ctx.knownFor} onChange={(e) => setCtx({ ...ctx, knownFor: e.target.value })} />
+                {proposal?.knownFor && !ctx.knownFor.trim() && (
+                  <Proposed field={proposal.knownFor} disabled={!mayEdit}
+                    onUse={(v) => setCtx({ ...ctx, knownFor: v })} />
+                )}
               </div>
               {mayEdit
                 ? <button onClick={() => void handleSaveContext()} disabled={saving} style={BTN}>{saving ? 'Saving…' : 'Save'}</button>

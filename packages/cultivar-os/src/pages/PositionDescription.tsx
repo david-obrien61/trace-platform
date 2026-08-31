@@ -25,10 +25,23 @@
  * 🔴 NO SOFTWARE VOCABULARY APPEARS BELOW. No permission, no "not built yet", no capability mark.
  * A responsibility TRACE cannot represent prints exactly like one it can, because to the person
  * doing the job they are the same work. `positions.test.ts` D5 asserts it over the whole document.
+ *
+ * ══════════════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 A DESCRIPTION WITH NOTHING ON IT DOES NOT OFFER ITSELF AS A DOCUMENT.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════
+ * The first live run produced a printable page reading *"Nothing has been ticked for this position
+ * yet · 0 responsibilities."* — a header, a subtitle and a blank, TRUTHFUL AND USELESS. A sheet
+ * that renders like a document invites being printed like one, and a blank job description handed
+ * to a person is worse than no page at all. So at zero responsibilities this route renders WHAT TO
+ * DO NEXT and no sheet, and Print is disabled WITH ITS REASON BESIDE IT rather than quietly
+ * removed (D-9 applied to a control: locked-with-explanation, never mystery-absent).
+ * ⚠️ This is the ONLY state that suppresses the sheet. A short description still prints — the
+ * amber banner below says it is thin and lets the owner decide, because "surface, don't decide"
+ * and a genuinely brief job is a real answer.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Printer, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Printer, AlertCircle, ListChecks } from 'lucide-react';
 import { useBusinessContext } from '@trace/shared/context';
 import { supabase } from '@trace/shared/supabase/client';
 import { NotPermitted } from '@trace/shared/components/SurfaceState';
@@ -95,11 +108,18 @@ export function PositionDescription() {
     console.log('[TRACE:POSITIONS] description', {
       positionId, responsibilities: built.responsibilityCount,
       areas: built.areas.length, contextComplete: built.contextComplete, missing: built.missing,
+      // 🔴 `printable:false` is the ④ state — the route rendered instructions, not a sheet.
+      printable: built.responsibilityCount > 0,
     });
     setLoading(false);
   }, [businessId, positionId, business?.name]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // 🔴 ZERO RESPONSIBILITIES IS NOT A THIN DOCUMENT, IT IS NOT A DOCUMENT. `responsibilityCount`
+  // is the document's own resolved count (a pick whose catalogue row is gone is already dropped),
+  // so this asks what would actually PRINT rather than how many rows were stored.
+  const empty = doc !== null && doc.responsibilityCount === 0;
 
   if (!can('settings:read')) return <NotPermitted permission="settings:read" what="position descriptions" />;
 
@@ -113,8 +133,14 @@ export function PositionDescription() {
           <ArrowLeft size={14} /> Back to the position
         </button>
         <span style={{ flex: 1 }} />
-        <button onClick={() => window.print()}
-          style={{ minHeight: 48, padding: '0 18px', background: '#fff', color: GREEN, border: 'none', borderRadius: 8, fontSize: '0.9375rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+        {empty && (
+          <span style={{ fontSize: '0.8125rem', color: '#d7e8c8' }}>
+            Nothing to print yet — tick what this job is responsible for first.
+          </span>
+        )}
+        <button onClick={() => window.print()} disabled={empty}
+          title={empty ? 'This position has no responsibilities ticked yet.' : undefined}
+          style={{ minHeight: 48, padding: '0 18px', background: '#fff', color: GREEN, border: 'none', borderRadius: 8, fontSize: '0.9375rem', fontWeight: 600, cursor: empty ? 'not-allowed' : 'pointer', opacity: empty ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: 8 }}>
           <Printer size={16} /> Print or save as PDF
         </button>
       </div>
@@ -132,7 +158,7 @@ export function PositionDescription() {
         short honest description is useful today, and this banner is what stops a thin one going
         out by accident. It is `.no-print`, so it never reaches the person receiving the document.
       */}
-      {doc && !doc.contextComplete && (
+      {doc && !empty && !doc.contextComplete && (
         <div className="no-print" style={{ margin: '16px auto 0', maxWidth: 720, padding: 14, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, display: 'flex', gap: 10 }}>
           <AlertCircle size={18} color="#b45309" style={{ flexShrink: 0, marginTop: 1 }} />
           <span style={{ fontSize: '0.875rem', color: '#78350f' }}>
@@ -141,7 +167,34 @@ export function PositionDescription() {
         </div>
       )}
 
-      {doc && (
+      {/*
+        ④ WHAT TO DO NEXT, IN PLACE OF A BLANK SHEET. It names both routes out — the starting
+        points on the builder, and ticking by hand — because the whole finding was that arriving
+        here with nothing is a FLOW problem, and a page that only says "this is empty" restates
+        the problem instead of ending it.
+      */}
+      {empty && (
+        <div className="no-print" style={{
+          maxWidth: 720, margin: '20px auto 60px', background: '#fff', padding: '32px 28px',
+          border: '1px solid #e5e7eb', borderRadius: 10,
+        }}>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 8px', fontSize: '1.125rem', fontWeight: 700, color: '#111827' }}>
+            <ListChecks size={20} color={GREEN} /> {doc?.title} has nothing on it yet
+          </h2>
+          <p style={{ margin: '0 0 18px', fontSize: '0.9375rem', color: '#4b5563', lineHeight: 1.55 }}>
+            A description is the list of what this person is responsible for, so there is nothing
+            to hand over until something is ticked. Open the position and either pick a starting
+            point — production manager, sales manager, crew member and so on, each of which ticks
+            a set you then adjust — or tick what this job covers yourself.
+          </p>
+          <button onClick={() => navigate(`/admin/positions/${positionId}`)}
+            style={{ minHeight: 48, padding: '0 18px', background: GREEN, color: '#fff', border: 'none', borderRadius: 8, fontSize: '0.9375rem', fontWeight: 600, cursor: 'pointer' }}>
+            Pick a starting point
+          </button>
+        </div>
+      )}
+
+      {doc && !empty && (
         <div className="doc-sheet" style={{
           maxWidth: 720, margin: '20px auto 60px', background: '#fff', padding: '48px 56px',
           boxShadow: '0 1px 3px rgba(0,0,0,0.12)', borderRadius: 4,
@@ -162,13 +215,6 @@ export function PositionDescription() {
           <h2 style={{ fontSize: '0.8125rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#6b7280', margin: '0 0 16px', fontFamily: 'system-ui, sans-serif' }}>
             What this job is responsible for
           </h2>
-
-          {doc.areas.length === 0 && (
-            /* Empty is a fact, and it is stated rather than left as a blank page. */
-            <p style={{ fontSize: '1rem', color: '#6b7280', fontStyle: 'italic', margin: '0 0 24px' }}>
-              Nothing has been ticked for this position yet.
-            </p>
-          )}
 
           {doc.areas.map((area) => (
             <section className="doc-area" key={area.area} style={{ marginBottom: 22 }}>

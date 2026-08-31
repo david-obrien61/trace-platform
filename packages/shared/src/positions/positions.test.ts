@@ -11,6 +11,11 @@
  *   D — the document. No blank ever prints; no software vocabulary reaches the page.
  *   E — negative controls. Each of C and D is proven to FAIL when the mechanism is removed —
  *       a green suite over a stub is the shape D-49's own tests had.
+ *   F — 🔴 the starting points. A set never SUGGESTS an undelegable row (derived, not typed), the
+ *       owner set is never enumerated, and the vertical filter cuts a set rather than inventing.
+ *   G — 🔴 the context proposals. An unknown site proposes NOTHING; no proposal carries marketing
+ *       prose; every proposed value names its source.
+ *   H — the ④ empty-document state the description route keys on.
  *
  * Run: node_modules/.bin/esbuild packages/shared/src/positions/positions.test.ts \
  *        --bundle --platform=node --format=cjs | node
@@ -19,6 +24,10 @@ import { RESPONSIBILITY_CATALOGUE, RESPONSIBILITY_AREAS, FREQUENCY_ORDER, FREQUE
 import type { Responsibility } from './responsibilityCatalogue';
 import { marksFor } from './responsibilityMarks';
 import { buildPositionDocument, describeOperatingDays } from './positionDescription';
+import {
+  POSITION_STARTING_POINTS, startingPointIds, unknownStartingPointIds,
+} from './positionStartingPoints';
+import { proposedContextFor, hostOf } from './contextProposals';
 import { ALL_MODEL_PERMISSIONS, PERMISSION_MANIFEST } from '../auth/permissionManifest';
 
 let passed = 0, failed = 0;
@@ -250,6 +259,135 @@ ok(/cannot represent/i.test(leaked), 'E3 D5\'s regex actually matches capability
 // E4 — D8 must have something to catch: an assembler that emitted labelled blanks would fail.
 const naive = ['We do: .', 'We sell to .'];
 ok(naive.some((s) => /:\s*\.$|to\s+\.$/.test(s)), 'E4 D8\'s subject — a labelled blank — is a real shape');
+
+
+// ── F — STARTING POINTS: NEVER START FROM NOTHING, NEVER SUGGEST WHAT WE REFUSE ─────────────
+// The first live run met 93 rows with nothing selected, ticked nothing, and produced a truthful
+// useless document. These probes guard the fix, and F2 guards it against the fix's own worst
+// failure mode: suggesting work the platform will then refuse to let that person do.
+const sets = POSITION_STARTING_POINTS.filter((s) => s.kind === 'set');
+
+ok(unknownStartingPointIds().length === 0,
+   `F1 every id a starting point names exists in the catalogue (unknown: ${unknownStartingPointIds().join(', ')})`);
+
+ok(new Set(POSITION_STARTING_POINTS.map((s) => s.key)).size === POSITION_STARTING_POINTS.length,
+   'F2 every starting-point key is unique');
+
+// 🔴 F3 — DERIVED FROM `marksFor`, NEVER FROM A SECOND LIST. A starting point is a suggestion the
+// PLATFORM makes; suggesting a row `CATALOG_PERMISSIONS` filters out of the grantable catalog
+// entirely would be the platform contradicting itself. The owner may still tick one by hand.
+const suggestedUndelegable = sets.flatMap((sp) =>
+  sp.responsibilityIds.filter((id) => { const r = responsibilityById(id); return r ? !marksFor(r).delegable : false; }));
+ok(suggestedUndelegable.length === 0,
+   `F3 no starting point suggests an undelegable row (${[...new Set(suggestedUndelegable)].join(', ')})`);
+
+// F4 — the owner set is DERIVED, never enumerated: a hand-typed list of all 93 would be a second
+// copy of the catalogue and would go stale the day a row is added (STD-011).
+const owner = POSITION_STARTING_POINTS.find((s) => s.key === 'owner');
+ok(!!owner && owner.kind === 'all' && owner.responsibilityIds.length === 0,
+   'F4 the owner starting point enumerates nothing — it is derived from what is visible');
+ok(!!owner && startingPointIds(owner, rows).length === rows.length,
+   'F5 the owner starting point resolves to every visible row');
+// 🔴 F5b — and to every visible row ONLY. F5 alone cannot catch an `all` that ignores its
+// argument and returns the whole catalogue, because at a nursery those two sets are identical.
+// A mutant doing exactly that survived F5 until this probe was added (measured, 2026-08-31).
+const ownerCore = owner ? startingPointIds(owner, rows.filter((r) => r.vertical === null)) : [];
+ok(ownerCore.length > 0 && ownerCore.length < rows.length && ownerCore.every((id) => responsibilityById(id)?.vertical === null),
+   `F5b the owner set is cut by the vertical filter too, not just the others (got ${ownerCore.length} of ${rows.length})`);
+
+// 🔴 F6 — the VERTICAL filter CUTS a set; it never invents a tick. A production manager at a
+// business with no growing ladder starts from fewer rows, and the button count says so.
+const coreOnly = rows.filter((r) => r.vertical === null);
+const prod = POSITION_STARTING_POINTS.find((s) => s.key === 'production_manager');
+const prodCore = prod ? startingPointIds(prod, coreOnly) : [];
+ok(!!prod && prodCore.length < startingPointIds(prod, rows).length,
+   'F6 a vertical-gated set is smaller for a business that cannot see the gated rows');
+ok(prodCore.every((id) => responsibilityById(id)?.vertical === null),
+   'F7 a filtered set contains only rows the business can actually see');
+
+// F8 — every set is non-empty and duplicate-free; `blank` is the only empty one, deliberately.
+ok(sets.every((sp) => sp.responsibilityIds.length > 0), 'F8 no `set` starting point is empty');
+ok(sets.every((sp) => new Set(sp.responsibilityIds).size === sp.responsibilityIds.length),
+   'F9 no starting point names the same responsibility twice');
+ok(POSITION_STARTING_POINTS.filter((s) => s.kind === 'blank').length === 1,
+   'F10 "start blank" exists, so starting from nothing is a stated choice');
+
+// ⚠️ F11 — THE COUNTS ARE DAVID'S MEASUREMENT; THE MEMBERSHIP IS NOT. The workbook is not in this
+// repository, so the sets were derived from the catalogue and TUNED until each hit its stated
+// count. This probe pins the counts so a later edit cannot drift them silently — it is NOT
+// evidence that the membership matches the workbook, and it must never be read as such.
+const COUNTS: Record<string, number> = {
+  production_manager: 34, sales_manager: 27, external_sales: 9, crew_driver: 8, bookkeeper: 10,
+};
+const wrong = Object.entries(COUNTS).filter(([k, n]) => {
+  const sp = POSITION_STARTING_POINTS.find((s) => s.key === k);
+  return !sp || startingPointIds(sp, rows).length !== n;
+}).map(([k]) => k);
+ok(wrong.length === 0, `F11 each set still holds its stated count (drifted: ${wrong.join(', ')})`);
+
+// 🔴 F12 — NEGATIVE CONTROL. F3 must have something to catch: undelegable rows exist, and the
+// OWNER set does include them, so F3 cannot be passing because the subject is empty.
+const ownerUndelegable = owner ? startingPointIds(owner, rows).filter((id) => {
+  const r = responsibilityById(id); return r ? !marksFor(r).delegable : false;
+}) : [];
+ok(ownerUndelegable.length > 0,
+   `F12 undelegable rows exist and the owner set carries them — F3 has a real subject (${ownerUndelegable.length})`);
+
+// ── G — CONTEXT PROPOSALS: OFFERED, SOURCED, AND NEVER ANOTHER BUSINESS'S ───────────────────
+ok(hostOf('https://www.LawnsTrees.com/about/') === 'lawnstrees.com', 'G1 a host is normalised — protocol, www, path and case');
+ok(hostOf('lawnstrees.com') === 'lawnstrees.com', 'G2 a bare host resolves');
+ok(hostOf('') === null && hostOf(null) === null && hostOf('not a url') === null,
+   'G3 junk resolves to null — never a partial match');
+
+// 🔴 G4 — THE DANGEROUS FAILURE IS PROPOSING ONE BUSINESS'S FACTS ON ANOTHER'S PAGE. An unknown
+// site proposes NOTHING and gets three empty boxes, which is the correct and common case.
+ok(proposedContextFor('https://some-other-nursery.example') === null,
+   'G4 an unknown site proposes nothing — never another tenant\'s facts');
+ok(proposedContextFor(null) === null, 'G5 a business with no website on file proposes nothing');
+
+const prop = proposedContextFor('https://lawnstrees.com/');
+ok(prop !== null, 'G6 a site we have read produces a proposal');
+const fields = prop ? [prop.whatWeDo, prop.whoWeServe, prop.knownFor].filter((f) => f !== null) : [];
+ok(fields.length > 0 && fields.every((f) => f!.source.trim().length > 0),
+   'G7 every proposed value names where it came from — provenance is shown beside the value');
+ok(fields.every((f) => f!.value.trim().length > 0),
+   'G8 a proposal is never an empty string dressed as a value');
+
+// 🔴 G9 — NEVER FEED THE PAGE TO A GENERATOR. Real operating facts sit beside marketing prose on
+// the same site; prose in means prose out on a document handed to a new employee. Both of
+// lawnstrees.com's taglines are named here so a future edit that pastes copy goes red.
+const MARKETING = [/quality counts/i, /rooted in austin/i, /growing with you/i, /count on us/i];
+const sloganed = fields.filter((f) => MARKETING.some((re) => re.test(f!.value)));
+ok(sloganed.length === 0, `G10 no proposal carries marketing prose (${sloganed.map((f) => f!.value).join(' | ')})`);
+
+// G11 — a proposal, once used, must read as English through the document assembler: no doubled
+// full stop, no "Acme has grown trees.." — the shapes introSentences fixes.
+const used = buildPositionDocument({
+  title: 'Production Manager', businessName: 'LAWNS Tree Farm, LLC',
+  context: {
+    whatWeDo: prop?.whatWeDo?.value ?? null,
+    whoWeServe: prop?.whoWeServe?.value ?? null,
+    knownFor: prop?.knownFor?.value ?? null,
+  },
+  operatingDays: [], picks: [{ responsibilityId: 'INV-01', frequency: null }],
+  excellence: null, today: TODAY,
+});
+ok(used.intro.length === 3 && used.intro.every((line) => !/\.\./.test(line) && /\.$/.test(line)),
+   `G11 a used proposal reads as whole sentences (${JSON.stringify(used.intro)})`);
+
+// ── H — ④ THE EMPTY DOCUMENT DOES NOT OFFER ITSELF AS A DOCUMENT ───────────────────────────
+// The route suppresses the sheet and disables Print on exactly this condition, so the condition
+// is pinned here rather than left to a reader of the JSX.
+const nothingTicked = buildPositionDocument({
+  title: 'Production Manager', businessName: 'LAWNS Tree Farm, LLC',
+  context: { whatWeDo: null, whoWeServe: null, knownFor: null },
+  operatingDays: [], picks: [], excellence: null, today: TODAY,
+});
+ok(nothingTicked.responsibilityCount === 0 && nothingTicked.areas.length === 0,
+   'H1 a position with nothing ticked resolves to zero responsibilities and no areas');
+// H2 — negative control: one pick flips it, so H1 is not asserting a constant.
+ok(used.responsibilityCount === 1, 'H2 one pick makes it a document — H1 has a real subject');
+
 
 console.log(`\npositions.test.ts — ${passed} passed, ${failed} failed`);
 if (failed) { failures.forEach((f) => console.log('  FAIL ' + f)); process.exit(1); }
