@@ -434,6 +434,27 @@ function cents(v: number | null | undefined): number | null {
   return Number.isFinite(n) ? Math.round(n * 100) : null;
 }
 
+/**
+ * How many of David's three fields must POSITIVELY agree before a document-number match is called
+ * the same sale.
+ *
+ * 🔴 THE DOCUMENT NUMBER IS NOT AN IDENTITY, and that is measured rather than assumed: LAWNS's own
+ * books (raw capture 2026-08-29, 1469 of 1469, `complete: true`) contain 22 DocNumbers used by TWO
+ * DIFFERENT INVOICES EACH — 44 invoices, every pair a different customer and a different amount.
+ * #3274 is Dyan Bourne at $811.88 and Jeffrey Gyurkovic at $4,717.50. FOUR of those pairs
+ * (#5120 #5121 #5124 #5125) are inside the 564-invoice history-import set.
+ *
+ * TWO is not a new number — it is the bar §② already applies when there is no document number to
+ * anchor on (`agreed.length >= 2`). Reusing it means one standard for one question rather than a
+ * second one invented here. The document number then sits ON TOP of that bar as the anchor, which
+ * is what separates §① from §②.
+ *
+ * The asymmetry is deliberate and it is the whole design: a false STOP costs one line on a screen
+ * David reads; a false SAME-SALE writes a permanent key onto the wrong order, where the ordinary
+ * idempotency key will skip it forever and nobody will ever look again.
+ */
+const DOC_MATCH_MIN_CORROBORATION = 2;
+
 /** Which of David's three fields agree, which differ, and which could not be compared.
  *  🔴 A NULL ON EITHER SIDE IS `unknown`, NEVER `agrees` — an absent field must not corroborate
  *  anything (A9: absent is not empty). Two orders that both lack a sale_date have not matched
@@ -487,11 +508,24 @@ export function matchPriorHistoryOrder(
     if (byDoc.length === 1) {
       const p = byDoc[0];
       const c = corroborate(p, invoice);
-      if (c.differed.length === 0) {
+      if (c.differed.length === 0 && c.agreed.length >= DOC_MATCH_MIN_CORROBORATION) {
         return {
           kind: 'same-invoice',
           orderId: p.id,
           rule: 'document number matches, and customer, date and amount corroborate → SAME SALE',
+          evidence: describe(p, c),
+        };
+      }
+      // 🔴 NOTHING DISAGREED, AND THAT IS NOT THE SAME AS SOMETHING AGREEING. An order whose
+      // customer, date and money were never recorded disagrees with nothing on earth, and the
+      // earlier verdict tested only `differed.length === 0` — so it read a row full of nulls as
+      // proof and wrote a permanent key onto it. `unknown` was sorted, then never consulted.
+      // ([[R-33]]: the distinction existed and the decision could not see it.)
+      if (c.differed.length === 0) {
+        return {
+          kind: 'probable',
+          orderId: p.id,
+          rule: `document number matches but too little corroborates it — ${c.agreed.length} of ${DOC_MATCH_MIN_CORROBORATION} fields needed → REPORT`,
           evidence: describe(p, c),
         };
       }
@@ -529,6 +563,60 @@ export function matchPriorHistoryOrder(
     };
   }
   return { kind: 'none' };
+}
+
+/**
+ * ── refuseCompetingPriorClaims ─────────────────────────────────────────────────────────────────
+ * PURPOSE:      refuse every claim on an existing order that TWO OR MORE invoices both reached
+ *               for, so the winner is never decided by loop order.
+ * DEPENDENCIES: none — a pure function over the planner's own findings. No db, no clock, no config.
+ * OUTPUTS:      the same findings, with every contested claim demoted to `ambiguous` and its
+ *               `orderId` cleared, each naming the other invoices it lost to.
+ *
+ * 🔴 WHY THIS EXISTS, AND WHY IT IS SEPARATE FROM RULE ③. Rule ③ inside `matchPriorHistoryOrder`
+ * refuses when ONE invoice finds TWO priors. This is the mirror image — TWO invoices finding ONE
+ * prior — and the matcher structurally cannot see it, because it is called once per invoice and is
+ * handed only that invoice's facts. Nothing checked the other direction.
+ *
+ * What that cost, concretely, before this existed: two invoices sharing a DocNumber each returned
+ * `same-invoice` naming the SAME orderId. The commit's id-recording pass wrote the id for whichever
+ * the loop reached first; the second was refused by its own `qb_invoice_id IS NULL` guard and
+ * logged as *"the existing order already carried an invoice id — nothing recorded"*, which reads
+ * like a benign race. It was not benign. The loop order decided which of two real sales the
+ * existing order was declared to be — and the loser, having been consumed by the guard, was never
+ * planned, so ITS order was never created. A sale disappeared, silently, and the wrong link was
+ * frozen where the key would skip it forever.
+ *
+ * Demoting BOTH is the only honest outcome: the evidence genuinely does not say which is which,
+ * and this file's standing rule is that it never picks (§③, L7, L13).
+ */
+export function refuseCompetingPriorClaims(findings: PriorOrderFinding[]): PriorOrderFinding[] {
+  // Keyed on orderId → the DISTINCT invoices reaching for it. Distinct matters: one invoice split
+  // across two stops is one sale in two loads, not a competition (N10), and counting findings
+  // instead of invoices would refuse a case this ingest is built to handle.
+  const claimants = new Map<string, Set<string>>();
+  for (const f of findings) {
+    if (!f.orderId) continue;   // an already-ambiguous finding names no order and contests nothing
+    const seen = claimants.get(f.orderId) ?? new Set<string>();
+    seen.add(f.invoiceId);
+    claimants.set(f.orderId, seen);
+  }
+
+  return findings.map((f) => {
+    if (!f.orderId) return f;
+    const seen = claimants.get(f.orderId);
+    if (!seen || seen.size < 2) return f;
+    const others = [...seen].filter((i) => i !== f.invoiceId);
+    return {
+      ...f,
+      kind: 'ambiguous' as const,
+      // 🔴 CLEARED, NOT MERELY RELABELLED. The id-recording pass keys off `kind` AND `orderId`;
+      // leaving the id behind would leave a loaded gun for the next reader of this struct.
+      orderId: null,
+      rule: `this existing order is claimed by ${seen.size} invoices → REPORT, never pick`,
+      evidence: `${f.evidence} — but ${others.length === 1 ? 'invoice' : 'invoices'} ${others.join(', ')} ${others.length === 1 ? 'reaches' : 'reach'} for the SAME existing order. Their document numbers collide, which their own books permit: TRACE will not decide which sale that order records.`,
+    };
+  });
 }
 
 /**
@@ -617,6 +705,15 @@ export async function previewOrderIngest(
     planned.push(outcome.planned);
   }
 
+  // 🔴 THE CROSS-INVOICE PASS, RUN BEFORE ANYTHING IS COUNTED OR REPORTED. Every verdict above was
+  // reached in ignorance of the other invoices in the same run; this is the only place that sees
+  // them together, so it is the only place that can catch two of them reaching for one order.
+  const settledPriors = refuseCompetingPriorClaims(priorOrders);
+  const contested = settledPriors.filter((p, i) => p.kind !== priorOrders[i].kind).length;
+  if (contested > 0) {
+    console.log('[TRACE:QBORDERS] competing claims REFUSED — two or more invoices reached for one existing order', { businessId, contested });
+  }
+
   console.log('[TRACE:QBORDERS] preview', {
     businessId, hasColumn,
     invoicesInHand: shipments.length,
@@ -630,9 +727,10 @@ export async function previewOrderIngest(
     linesCarryingLot,
     // 🔴 The three the key could not see, counted separately — a run that quietly created nine
     // duplicate sales would look identical to a clean one without these.
-    priorSameInvoice: priorOrders.filter(p => p.kind === 'same-invoice').length,
-    priorProbable:    priorOrders.filter(p => p.kind === 'probable').length,
-    priorAmbiguous:   priorOrders.filter(p => p.kind === 'ambiguous').length,
+    priorSameInvoice: settledPriors.filter(p => p.kind === 'same-invoice').length,
+    priorProbable:    settledPriors.filter(p => p.kind === 'probable').length,
+    priorAmbiguous:   settledPriors.filter(p => p.kind === 'ambiguous').length,
+    priorContested:   contested,
     priorsConsidered: state.priors.length,
   });
 
@@ -641,7 +739,7 @@ export async function previewOrderIngest(
     blocker: hasColumn ? null
       : `The migration ${ORDER_UIDX_MIGRATION} has not been applied yet. Until it is, this pass cannot recognise an invoice that already has an order, and running it twice would give every stop a second one. Apply it in the Supabase SQL editor, then run this again.`,
     qbStops: state.stops.length,
-    alreadyOrdered, planned, refusals, priorOrders,
+    alreadyOrdered, planned, refusals, priorOrders: settledPriors,
     ordersWritten: 0, idsRecorded: 0, lineItemsWritten: 0, deliveriesLinked: 0, errors: [],
     availabilityBefore: null, availabilityAfter: null, availabilityUnchanged: null,
     linesCarryingLot,
@@ -690,8 +788,13 @@ export async function commitOrderIngest(
   // and nothing else: not the money, not the status, not the dates, not a single line. The
   // existing order is the record of that sale and stays exactly as it was captured.
   //
-  // Only a `same-invoice` verdict reaches here: their own document number matched AND customer,
-  // date and amount all corroborated. `probable` and `ambiguous` write NOTHING and are reported.
+  // Only a `same-invoice` verdict reaches here: their own document number matched AND at least
+  // DOC_MATCH_MIN_CORROBORATION of customer/date/amount POSITIVELY agreed, with none disagreeing.
+  // ✏️ THIS SENTENCE USED TO SAY "and customer, date and amount all corroborated" AND IT WAS FALSE:
+  // the verdict tested only that nothing DIFFERED, so an order whose three fields were all null
+  // corroborated nothing and reached this write anyway. The comment described the intent; the code
+  // implemented something weaker. Corrected in both places, and §N1 is the probe that holds it.
+  // `probable` and `ambiguous` write NOTHING and are reported.
   //
   // ⚠️ WHAT THIS ACHIEVES IS PERMANENCE. Once the id is on the row, the ordinary key sees it and
   // every future run skips this invoice for the right reason instead of re-deriving the match.

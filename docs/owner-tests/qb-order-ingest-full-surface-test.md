@@ -122,9 +122,16 @@ On the preview, above everything else, there is a panel: **"N of these sales are
 here — no second copy was created."**
 
 - Every row names **their own invoice number**, what TRACE found, and what it will do.
-- A row reading **"will match, not duplicate"** was matched on the invoice number **and** corroborated
-  by customer, date and amount. Recording writes **only the invoice number** onto the order that
-  already exists — never its money, its status or its lines — and joins the stop to it.
+- A row reading **"will match, not duplicate"** was matched on the invoice number **and** POSITIVELY
+  corroborated by **at least two of** customer, date and amount, with none of the three disagreeing.
+  Recording writes **only the invoice number** onto the order that already exists — never its money,
+  its status or its lines — and joins the stop to it.
+  - ✏️ **THE BAR TIGHTENED 2026-09-01 AND THIS SENTENCE USED TO BE WRONG.** It said "corroborated by
+    customer, date and amount", which is what the code *intended*; what the code *did* was accept
+    any row where nothing DISAGREED — so an existing order whose customer, date and money were all
+    blank corroborated nothing and was written to anyway. **If fewer of your nine now read "will
+    match" than you expect, that is this change, and each one says which fields it could not
+    compare.** Settle those by hand; do not read a smaller number as a failure.
 - 🔴 **A row reading "left for you" is the one to look at.** Either the numbers disagree, or there
   was no invoice number to match on and only customer/date/amount line up. **Nothing at all is
   written for those** — no order, and no id on the existing one.
@@ -134,6 +141,37 @@ here — no second copy was created."**
 **Then check CARD 4's arithmetic against this panel:** the orders created should be
 `(stops from QuickBooks) − (already have one) − (already recorded as a captured sale) − (refusals)`.
 If the number is higher than that, stop.
+
+---
+
+## CARD 4c — 🔴 TWO INVOICES MAY NOT BOTH CLAIM ONE EXISTING ORDER
+STATUS: needs-test · DEVICE: desktop · LAST-PROVEN: —
+
+**Why this card is `needs-test` rather than a step you can run today, stated plainly: it needs a
+state your tenant may not be in, and pretending otherwise would be a green check on an unperformed
+proof.** It fires only when TWO QuickBooks invoices share one document number **and** one of your
+existing orders carries that same number.
+
+🔴 **This is not hypothetical, it is counted.** LAWNS's own books contain **22 document numbers used
+by two different invoices each — 44 invoices**, every pair a different customer and a different
+amount (`#3274` is Dyan Bourne at $811.88 **and** Jeffrey Gyurkovic at $4,717.50). **Zero of them
+are among the nineteen future-dated stops**, which is why this cannot be provoked on today's ingest
+— and **four of them (#5120, #5121, #5124, #5125) sit inside the 564-invoice history import**, which
+is why it had to be fixed before that import runs.
+
+**What must happen when it does fire:** both rows read **"left for you"**, naming each other. Neither
+writes an id. Neither creates an order.
+
+**What must NOT happen — and what happened before 2026-09-01:** the first invoice the run reached
+wrote its id onto that order permanently, the second was silently discarded as an "already recorded"
+race, and **the second sale got no order at all.** Which of two real sales the existing order was
+declared to be came down to loop order.
+
+**How to provoke it deliberately, if you want to see it work:** in the SQL editor set one existing
+order's `source_document_number` to a number two of your invoices share, run the preview (**it writes
+nothing**), confirm both rows say "left for you" and name each other, then set it back.
+
+⚠️ **A run where this panel is empty proves nothing about this card** — an empty set is not a pass.
 
 ---
 
