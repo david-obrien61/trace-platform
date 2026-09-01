@@ -42,11 +42,21 @@ export type CommittedByLot = Map<string, number>;
  * commitment (stock protected) rather than silently releasing it (stock oversold). Fail toward not
  * overselling.
  */
-// NOT exported: nothing outside this module needs to ask the question directly — callers want
-// COMMITTED (the number), which fetchCommittedByLot already derives using this. Exporting it
-// anyway would invite a second, hand-rolled definition of "open" at a call site, which is the
-// drift this file exists to prevent. Promote it to an export when a real consumer appears.
-function holdsCommitment(status: string | null | undefined): boolean {
+// ⚠️ EXPORTED 2026-09-01, ON THIS COMMENT'S OWN INSTRUCTION. It previously read: "NOT exported:
+// nothing outside this module needs to ask the question directly — callers want COMMITTED (the
+// number), which fetchCommittedByLot already derives using this. Exporting it anyway would invite
+// a second, hand-rolled definition of 'open' at a call site, which is the drift this file exists
+// to prevent. Promote it to an export when a real consumer appears."
+//
+// A REAL CONSUMER APPEARED: `deliveryFulfilment.openOrderNotice` must ask whether the order linked
+// to a just-completed stop is still open, to tell the crew that stock has not moved yet. It needs
+// the QUESTION, not the number — fetchCommittedByLot cannot answer it, because a history order's
+// lines carry a NULL lot and so contribute nothing to the map while still being open.
+//
+// The export is the point: the alternative was `!movesOnHand(s) && s !== 'cancelled'` written out
+// at the call site, which is precisely the second hand-rolled definition of "open" the old comment
+// forbade. One definition, two readers.
+export function holdsCommitment(status: string | null | undefined): boolean {
   return status !== 'fulfilled' && status !== 'cancelled';
 }
 

@@ -13,12 +13,15 @@
 //               pure function rather than as an inline `.update({...})` at a call site — the fifth
 //               consumer must not need this reshaped. §6 r8.
 //
-// DEPENDENCIES: none. Pure — no React, no Supabase, no DOM, no clock of its own (every entry point
-//               takes `now`). This is deliberate: a render condition inside a `.tsx` cannot be
-//               asserted (tech-debt #134), so every DECISION lives here where a test can reach it.
+// DEPENDENCIES: `./inventoryStates` (holdsCommitment — ONE definition of "an open order", shared
+//               with the commitment derivation so the two cannot disagree). Otherwise pure — no
+//               React, no Supabase, no DOM, no clock of its own (every entry point takes `now`).
+//               This is deliberate: a render condition inside a `.tsx` cannot be asserted
+//               (tech-debt #134), so every DECISION lives here where a test can reach it.
 //
 // OUTPUTS:      DELIVERY_STATUSES · isDeliveryFulfilled · fulfilmentPatch · crewStopModel
-//               readReviewAskConfig · reviewAskDecision · reviewAskPatch · askRateFor
+//               openOrderNotice · readReviewAskConfig · reviewAskDecision · reviewAskPatch
+//               askRateFor
 //
 // ── AC-1: no vertical noun anywhere in this file. A "stop" is a stop for a nursery, a pantry or a
 //    workshop; nothing here knows what was delivered.
@@ -68,6 +71,8 @@
 //
 // The reader who adds the next value: add it here, and check `isDeliveryFulfilled` still means what
 // it says. Do not add a CHECK without reading the two migrations named above.
+
+import { holdsCommitment } from './inventoryStates';
 
 export const DELIVERY_STATUS_SCHEDULED = 'scheduled';
 export const DELIVERY_STATUS_FULFILLED = 'fulfilled';
@@ -159,6 +164,51 @@ export function stopMinutes(t: DeliveryTimes | null): number | null {
   const a = Date.parse(t.started_at), b = Date.parse(t.completed_at);
   if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return null;
   return Math.round((b - a) / 60000);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// §2b THE STOP IS DONE AND THE STOCK HAS NOT MOVED — SAY SO
+// ════════════════════════════════════════════════════════════════════════════════════════════
+//
+// 🔴 THIS IS A NOTICE, NOT A FIX, AND IT IS DELIBERATE. David's ruling, 2026-09-01: the tap stays
+// inventory-inert — *"a control that cannot corrupt stock while being proven is worth more than one
+// that does the whole job on day one"* — and the decrement gets its own build. Until that build
+// lands, the divergence must be VISIBLE rather than discovered.
+//
+// WHAT THE DIVERGENCE IS. `deliveries.status` and `orders.status` are two independent columns with
+// no code path between them. Marking a stop done writes the first and never reads the second. So
+// for a stop whose linked order came from Cultivar checkout and carries real lot ids on its lines:
+//
+//   · the delivery says  fulfilled   — the trees are gone
+//   · the order still says invoiced  — so it is OPEN, so it still HOLDS its commitment (D-52)
+//   · business_inventory.qty is unchanged — nothing decremented, because nothing flipped the order
+//
+// AVAILABLE is understated (holding stock that has left) and ON-HAND is overstated (counting stock
+// that has left) AT THE SAME TIME. Wrong in both directions at once, invisibly, is the exact shape
+// this fortnight's rulings are about — so a sentence costs nothing and is owed now.
+//
+// ⚠️ IT DOES NOT FIRE FOR THE NINETEEN, AND THAT IS CORRECT RATHER THAN A MISS. An order with no
+// linked row, or one already fulfilled or cancelled, gets nothing. A history order DOES get the
+// notice if it is still open — which is honest: the order is open, and a reader who goes looking
+// will find lines with NULL lots and learn the real reason nothing moved. Suppressing it for
+// history orders would require this function to know about lot linkage, which is the decrement
+// build's business, not this one's.
+//
+// "open" is NOT re-derived here. `holdsCommitment` is imported from inventoryStates — the same
+// predicate `fetchCommittedByLot` filters on — so this notice and the commitment it describes
+// cannot disagree about what "open" means (SS6 r8 / STD-011).
+
+/** The sentence a completed stop shows when its linked order has not moved. `null` = say nothing. */
+export function openOrderNotice(
+  x: { deliveryStatus: string | null | undefined; orderId: string | null | undefined; orderStatus: string | null | undefined },
+): string | null {
+  if (!isDeliveryFulfilled(x.deliveryStatus)) return null;   // not done → nothing to say
+  if (!x.orderId) return null;                               // no linked order → nothing to be open
+  if (!x.orderStatus) return null;                           // linked but unread → D-9: say nothing
+                                                             //   rather than assert a state we
+                                                             //   did not observe
+  if (!holdsCommitment(x.orderStatus)) return null;          // already fulfilled/cancelled → moved
+  return 'Marked done. The order is still open — stock has not been taken out yet.';
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════

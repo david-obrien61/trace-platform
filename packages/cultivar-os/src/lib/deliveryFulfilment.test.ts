@@ -24,12 +24,13 @@ const SELF = join(process.cwd(), 'packages/cultivar-os/src/lib/deliveryFulfilmen
 import {
   DELIVERY_STATUSES, DELIVERY_STATUS_FULFILLED, DELIVERY_STATUS_SCHEDULED,
   deliveryStatusMeta, isDeliveryFulfilled,
-  fulfilmentPatch, startPatch, stopMinutes, crewStopModel,
+  fulfilmentPatch, startPatch, stopMinutes, crewStopModel, openOrderNotice,
   readReviewAskConfig, isUsableReviewUrl, reviewCopyProblems, reviewAskDecision,
   reviewAskPatch, askRateFor,
   DEFAULT_REVIEW_GUIDANCE, REVIEW_ASK_WINDOW_DAYS, REVIEW_ASK_SHOWN, REVIEW_ASK_SKIPPED,
   type ReviewAskInput,
 } from './deliveryFulfilment';
+import { ORDER_STATUSES } from './orderStatus';
 
 let passed = 0, failed = 0;
 const failures: string[] = [];
@@ -328,6 +329,68 @@ const base: ReviewAskInput = {
   // H8 — the ruling that the rule is the construction, not the topic.
   ok(/whatever follows it/i.test(src),
     'H8: David\'s construction ruling is stated at the code');
+}
+
+// ══ §I THE OPEN-ORDER NOTICE — the divergence is NAMED, not discovered ══════════
+// The tap writes `deliveries.status`; nothing writes `orders.status` from it. So a completed stop
+// can sit against an OPEN order: trees gone, commitment still held, on-hand never decremented —
+// wrong in BOTH directions at once. Ruled 2026-09-01: the tap stays inventory-inert and the
+// decrement is its own build, so until then the notice is the whole mitigation. These probes are
+// what stop it going quiet.
+{
+  const src = readFileSync(SELF, 'utf8');
+  const N = (deliveryStatus: string | null, orderId: string | null, orderStatus: string | null) =>
+    openOrderNotice({ deliveryStatus, orderId, orderStatus });
+
+  // I1 — the case the notice exists for: done, linked, order still open.
+  ok(N('fulfilled', 'ord-1', 'invoiced') !== null,
+    '🔴 I1: a DONE stop against an INVOICED order gets the notice — this is the whole point');
+  ok(N('fulfilled', 'ord-1', 'pending') !== null,
+    'I1b: pending is open too');
+
+  // I2 — the sentence is the ruled wording, not a paraphrase. David dictated it; a drifted
+  // rewording is the copy drifting away from the ruling that authorised it.
+  ok(N('fulfilled', 'ord-1', 'invoiced') ===
+      'Marked done. The order is still open — stock has not been taken out yet.',
+    '🔴 I2: the notice is David\'s exact wording, not a paraphrase');
+
+  // I3 — silence where silence is correct.
+  ok(N('scheduled', 'ord-1', 'invoiced') === null,
+    'I3: a stop that is NOT done says nothing — there is no divergence yet');
+  ok(N('fulfilled', null, null) === null,
+    '🔴 I3b: a stop with NO linked order says nothing — the nineteen ingested stops are this case');
+  // I3b-iso — I3b ALONE could not fail: with no id the caller also passes no status, so the
+  // NEXT guard returns first and the orderId guard is never exercised. Measured, not assumed —
+  // mutating the guard away left I3b green (R-33: a check that cannot disagree is not a check).
+  // This probe passes a status WITHOUT an id, so only the orderId guard can produce the null.
+  ok(N('fulfilled', null, 'invoiced') === null,
+    '🔴 I3b-iso: no linked order means silence even if a status is handed in — the guard stands on its own');
+  ok(N('fulfilled', 'ord-1', 'fulfilled') === null,
+    'I3c: an order already fulfilled has moved its stock — nothing to warn about');
+  ok(N('fulfilled', 'ord-1', 'cancelled') === null,
+    'I3d: a cancelled order holds no commitment — nothing to warn about');
+
+  // I4 — D-9: an UNREAD order status is not an open one. The page degrades to silence on a failed
+  // read, and this is the probe that keeps that from becoming a confident false claim.
+  ok(N('fulfilled', 'ord-1', null) === null,
+    '🔴 I4: linked but UNREAD yields silence, never an asserted "still open" (D-9)');
+
+  // I5 — "open" is the SHARED definition. If someone re-derives it here, or ORDER_STATUSES gains
+  // an open state this notice does not follow, that is the drift inventoryStates exists to stop.
+  ok(/holdsCommitment/.test(src) && /from '.\/inventoryStates'/.test(src),
+    '🔴 I5: "open" is IMPORTED from inventoryStates, never re-derived at this call site (SS6 r8)');
+
+  // I6 — every non-terminal status in the platform vocabulary produces the notice. Derived from
+  // ORDER_STATUSES rather than a hand-written pair, so a future open state is covered on the day
+  // it is ratified rather than the day someone remembers this file.
+  const open = (ORDER_STATUSES as readonly string[]).filter(s2 => s2 !== 'fulfilled' && s2 !== 'cancelled');
+  ok(open.length > 0 && open.every(s2 => N('fulfilled', 'ord-1', s2) !== null),
+    `🔴 I6: EVERY open status in ORDER_STATUSES triggers the notice (checked ${open.join(', ')})`);
+
+  // I7 — the ruling and its reason are recorded at the code, not only in a ledger row that will
+  // scroll out of SS3 at N=3. R-26's family: a decision that lives only in prose gets re-derived.
+  ok(/inventory-inert/i.test(src) && /both directions/i.test(src),
+    'I7: the ruling and the two-directional error are stated beside the code');
 }
 
 console.log(`\ndeliveryFulfilment: ${passed} passed, ${failed} failed`);

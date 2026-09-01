@@ -10,8 +10,8 @@
 **Capability:** 3.4 (scheduling) · 3.5 (delivery / routing) · the first capability behind `followup_engine`
 **Story:** `user_stories.md` → *The stop is done — one tap, and a moved stop says where it went* (PIECES `fulfilment_tap`, `delivery_complete_state`) · *Ask for a review at the door* (new this build)
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 11 covered** (10 `owed` · 1 `needs-test`).
-**DEVICE:** CARDS 1–7 are **`DEVICE: phone`** — this is a crew surface in a customer's garden, and every one of them is provable **without a console**. CARDS 8–10 are `DEVICE: desktop` (the owner's settings). CARD 11 is `needs-test`.
+**Board: 0 of 12 covered** (11 `owed` · 1 `needs-test`).
+**DEVICE:** CARDS 1–7 and CARD 12 are **`DEVICE: phone`** — this is a crew surface in a customer's garden, and every one of them is provable **without a console**. CARDS 8–10 are `DEVICE: desktop` (the owner's settings). CARD 11 is `needs-test`.
 
 ---
 
@@ -20,7 +20,7 @@
 🔴 **`supabase/migrations/20260831d_deliveries_fulfilment_and_review_ask.sql` is GATED and UNAPPLIED.** Four nullable columns on `deliveries`. Until you run it in the **SQL editor** (§6 r17 — *not* the table editor, whose default ACL hands `anon` TRUNCATE and REFERENCES, a privilege RLS cannot filter):
 
 - the delivery list still loads — it falls back to the pre-migration column set rather than blanking, which is deliberate;
-- and every stop card reads **"Marking stops done isn't available yet — the database update (20260831c) hasn't been applied."**
+- and every stop card reads **"Marking stops done isn't available yet — the database update (20260831d) hasn't been applied."**
 
 ✅ **That sentence is itself CARD 1.** If you see the buttons before running the migration, something is wrong with the fallback, not with the migration.
 
@@ -30,10 +30,10 @@ The migration carries its own pre-write and post-apply verification queries, inc
 
 ## CARD 1 — the pre-migration state is honest, not silently missing
 **STATUS:** owed · **DEVICE:** phone · **LAST-PROVEN:** —
-1. **Before** applying `20260831c`, open `/delivery-schedule`.
+1. **Before** applying `20260831d`, open `/delivery-schedule`.
 2. The stops still list — names, addresses, dates, "Route this day" all as before.
 
-**PASS:** the list is intact AND each card says marking stops done isn't available yet, naming `20260831c`.
+**PASS:** the list is intact AND each card says marking stops done isn't available yet, naming `20260831d`.
 **FAIL:** the list is empty or errors (the fallback did not fire) — or the card silently shows no control at all, which is the dishonest version of the same state.
 
 ---
@@ -142,8 +142,25 @@ On Test Dave's, find a customer with **two** stops (or schedule a second one for
 
 ---
 
+## CARD 12 — 🔴 a completed stop SAYS that the stock has not moved yet
+**STATUS:** owed · **DEVICE:** phone · **LAST-PROVEN:** —
+
+**Why this card exists.** `deliveries.status` and `orders.status` are two columns with no code path between them. Marking a stop done writes the first and never reads the second, so a completed stop can sit against an order that is still **open** — which under D-52 still **holds its commitment**. For a stop whose order came from Cultivar checkout and carries real lot ids, that is wrong in **both directions at once**: available understated (holding stock that has left) and on-hand overstated (counting stock that has left). **David ruled 2026-09-01 that the tap stays inventory-inert and the decrement gets its own build — so until that build lands, this sentence is the entire mitigation.** Wrong in both directions, invisibly, is what this fortnight's rulings are about.
+
+1. Mark a stop done whose card is linked to an order that is still Pending or Invoiced.
+2. Read the card.
+
+**PASS:** an amber block appears under the status chip reading **exactly** *"Marked done. The order is still open — stock has not been taken out yet."*
+
+**ALSO PASS (the silences, and they matter as much):** a stop with **no linked order** shows **nothing** — no amber block, no empty box. A stop whose order already reads Fulfilled or Cancelled shows **nothing**.
+
+**FAIL:** the notice appears on a stop that is not done · the notice appears where there is no linked order · a completed stop against an open order shows nothing · the wording differs from the sentence above (it is David's, verbatim, and `deliveryFulfilment.test.ts` I2 pins it).
+
+---
+
 ## What this test deliberately does NOT cover
 
+- 🔴 **THE INVENTORY COMPOSITION ITSELF — AND NO GREEN RUN OF CARD 12 STANDS IN FOR IT.** CARD 12 proves the *sentence* appears. It does **not** prove the divergence it describes, and **it cannot be proven with any data that exists today.** The two-directional error only occurs for an order whose lines carry a real `business_inventory_id`, and **there is no such delivery order in the tenant**: the nineteen QuickBooks-ingested stops and Saturday 2026-08-29's six receipt-captured stops **all carry NULL lots on every line**, so they commit nothing going in and decrement nothing coming out — they are invisible to inventory in both directions. Proving the composition needs a **real Cultivar checkout delivery order** (transport ≠ walk-in, a lot-anchored line), taken through checkout → crew tap → order status, watching `business_inventory.qty` and available-to-sell at each step. **Until such an order exists, this is UNPROVEN, and a card covered by data that cannot exercise it is a false green in its third variety.** Stated here rather than left to be assumed.
 - **The reschedule half of the story.** *A reschedule is not a deletion* — a moved stop must say where it went and why — and the `why` vocabulary is **owed by David** (free text, or a closed set: weather · customer · crew · truck · stock-not-ready). Not built, not tested.
 - **The other three consumers of the tap** — contractor pay, material consumption, and the day-actuals readout. All hang off this same write; none is built.
 - **Saturday 2026-08-29's six real LAWNS stops.** They happened and Lauren will want to mark them. **That is David's to run, not a builder's.**

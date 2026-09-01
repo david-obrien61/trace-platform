@@ -38,7 +38,8 @@ import { parseYmd } from '../lib/operationsCalendar';
 import { BUSINESS_MODULE_COLUMNS, type BusinessModuleRow } from '@trace/shared/business-logic/moduleState';
 import {
   crewStopModel, fulfilmentPatch, startPatch, reviewAskDecision, reviewAskPatch,
-  REVIEW_ASK_SHOWN, REVIEW_ASK_SKIPPED, DELIVERY_STATUS_FULFILLED, type ReviewAskOffer,
+  REVIEW_ASK_SHOWN, REVIEW_ASK_SKIPPED, DELIVERY_STATUS_FULFILLED, openOrderNotice,
+  type ReviewAskOffer,
 } from '../lib/deliveryFulfilment';
 import { ReviewAskSheet } from '../components/delivery/ReviewAskSheet';
 
@@ -60,7 +61,12 @@ interface DeliveryRow {
   status: string | null;
   service_type: string | null;
   notes: string | null;
-  // Added by 20260831c. NULL on every row until a stop is actually worked.
+  // The FK to the order this stop belongs to, set by the receipt-capture path and by the
+  // QuickBooks order ingest. Live-only (tech-debt #39 — no migration adds it), but demonstrably
+  // present: `customers/create.ts` has written it since the capture build. Read here ONLY to ask
+  // whether that order is still open — this page never writes it.
+  order_id: string | null;
+  // Added by 20260831d. NULL on every row until a stop is actually worked.
   started_at: string | null;
   completed_at: string | null;
   review_asked_at: string | null;
@@ -119,9 +125,13 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
   // asked for. Null until loaded, and a null row means OFF (absent is not enabled).
   const [followUp, setFollowUp] = useState<BusinessModuleRow | null>(null);
   const [businessName, setBusinessName] = useState<string | null>(null);
+  // order_id -> that order's status. Populated only for stops that HAVE a linked order; a stop
+  // missing from this map is a stop with no order, which is a different fact from an order we
+  // failed to read, and `openOrderNotice` distinguishes them (D-9).
+  const [orderStatusById, setOrderStatusById] = useState<Map<string, string>>(new Map());
   // The stop whose prompt is open, and the offer to render. `offer: null` renders NOTHING.
   const [asking, setAsking] = useState<{ id: string; offer: ReviewAskOffer | null } | null>(null);
-  // 🔴 DEPLOY-WINDOW HONESTY. 20260831c is GATED — David applies it by hand — so this code can be
+  // 🔴 DEPLOY-WINDOW HONESTY. 20260831d is GATED — David applies it by hand — so this code can be
   // live for a while against a table that does not yet have the four columns. PostgREST answers a
   // select for a missing column with 42703/PGRST204 and returns NO ROWS, which would blank the
   // whole delivery list. So the read falls back to the pre-migration column set and the fulfilment
@@ -147,15 +157,15 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
     })();
   }, [businessId]);
 
-  // The two column lists, in one place. CORE is what the table held before 20260831c; FULL adds the
+  // The two column lists, in one place. CORE is what the table held before 20260831d; FULL adds the
   // four fulfilment/ask columns. A second hand-written copy of either is how the next reader forgets
   // a column the first one needs (STD-011).
   const DELIVERY_CUSTOMER_JOIN =
     'customers ( first_name, last_name, phone, email, address_line1, city, state, zip, billing_line1, billing_city, billing_state, billing_zip )';
   const DELIVERY_SELECT_CORE =
-    `id, customer_id, delivery_date, address_line1, city, state, zip, status, service_type, notes, ${DELIVERY_CUSTOMER_JOIN}`;
+    `id, customer_id, delivery_date, address_line1, city, state, zip, status, service_type, notes, order_id, ${DELIVERY_CUSTOMER_JOIN}`;
   const DELIVERY_SELECT_FULL =
-    `id, customer_id, delivery_date, address_line1, city, state, zip, status, service_type, notes, started_at, completed_at, review_asked_at, review_ask_outcome, ${DELIVERY_CUSTOMER_JOIN}`;
+    `id, customer_id, delivery_date, address_line1, city, state, zip, status, service_type, notes, order_id, started_at, completed_at, review_asked_at, review_ask_outcome, ${DELIVERY_CUSTOMER_JOIN}`;
 
   async function load() {
     setLoading(true);
@@ -169,7 +179,7 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
 
     let { data, error: err } = await q(DELIVERY_SELECT_FULL);
     let ready = true;
-    // 42703 = undefined_column, PGRST204 = column not found in schema cache. Either means 20260831c
+    // 42703 = undefined_column, PGRST204 = column not found in schema cache. Either means 20260831d
     // has not been applied yet. Fall back rather than blank the screen — and REMEMBER that we did,
     // so the controls can say why they are missing instead of just not being there.
     if (err && ((err as { code?: string }).code === '42703' || (err as { code?: string }).code === 'PGRST204')) {
@@ -181,8 +191,33 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
     if (err) { setError(err.message); setLoading(false); return; }
     const list = (data ?? []) as unknown as DeliveryRow[];
     setRows(list);
+
+    // The linked orders' statuses, in ONE query for the page rather than one per stop — the same
+    // shape `fetchCommittedByLot` uses and for the same reason. This feeds `openOrderNotice`: a
+    // stop marked done whose order is still open must SAY that stock has not moved yet, because
+    // nothing between the two columns moves it (see deliveryFulfilment SS2b).
+    const orderIds = [...new Set(list.map(r => r.order_id).filter((x): x is string => !!x))];
+    if (orderIds.length) {
+      const { data: ords, error: oErr } = await supabase
+        .from('orders').select('id, status').eq('business_id', businessId!).in('id', orderIds);
+      if (oErr) {
+        // Degrade to SILENCE, not to a guess. An unread order status yields no notice at all,
+        // which is honest; asserting "still open" on a read we did not get would be the fabricated
+        // value D-9 forbids. Surfaced in the trail rather than swallowed.
+        if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] linked-order status read FAILED — notice suppressed, not guessed', { code: (oErr as { code?: string }).code, message: oErr.message });
+        setOrderStatusById(new Map());
+      } else {
+        const m = new Map<string, string>();
+        for (const o of (ords ?? []) as { id: string; status: string | null }[]) if (o.status) m.set(o.id, o.status);
+        setOrderStatusById(m);
+        if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] linked orders read —', m.size, 'of', orderIds.length, 'stops carry an order');
+      }
+    } else {
+      setOrderStatusById(new Map());
+    }
+
     setLoading(false);
-    if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] day view loaded —', list.length, 'stops · fulfilment columns', ready ? 'present' : 'ABSENT (20260831c not applied)');
+    if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] day view loaded —', list.length, 'stops · fulfilment columns', ready ? 'present' : 'ABSENT (20260831d not applied)');
   }
 
   // The follow-up module row + the business's own name (the customer screen greets with it).
@@ -490,7 +525,7 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
                           // Honest about WHY the control is absent, rather than absent (D-9).
                           return (
                             <div style={{ marginTop: 10, fontSize: '0.75rem', color: GRAY }}>
-                              Marking stops done isn’t available yet — the database update (20260831c) hasn’t been applied.
+                              Marking stops done isn’t available yet — the database update (20260831d) hasn’t been applied.
                             </div>
                           );
                         }
@@ -536,6 +571,33 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
                                 )}
                               </div>
                             )}
+
+                            {/* 🔴 THE STOP IS DONE AND THE STOCK HAS NOT MOVED — SAY SO.
+                                David's ruling 2026-09-01: the tap stays inventory-inert and the
+                                decrement gets its own build, but until that lands the divergence
+                                must be VISIBLE rather than discovered. `deliveries.status` and
+                                `orders.status` are two columns with no path between them, so a
+                                completed stop can sit against an OPEN order whose lines still hold
+                                their commitment while the trees are gone — available understated
+                                and on-hand overstated at the same time. The DECISION is in
+                                `openOrderNotice` (deliveryFulfilment §2b), not here, because a
+                                render condition in a .tsx cannot be asserted (tech-debt #134). */}
+                            {(() => {
+                              const notice = openOrderNotice({
+                                deliveryStatus: d.status,
+                                orderId: d.order_id,
+                                orderStatus: d.order_id ? orderStatusById.get(d.order_id) ?? null : null,
+                              });
+                              return notice ? (
+                                <div style={{
+                                  marginTop: 8, padding: '8px 10px', borderRadius: 8,
+                                  background: '#FEF3C7', border: '1px solid #FDE68A',
+                                  fontSize: '0.75rem', color: '#92600A', lineHeight: 1.45,
+                                }}>
+                                  {notice}
+                                </div>
+                              ) : null;
+                            })()}
                           </div>
                         );
                       })()}
