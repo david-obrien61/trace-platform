@@ -28,6 +28,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Truck, MapPin, Navigation, Phone, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { deliveryQueryBounds } from '../lib/deliveryWindow';
 import { useBusinessContext } from '@trace/shared/context';
 import { CustomerPartyEditor, type PartyCustomer } from '../components/customers/CustomerPartyEditor';
 import { CUSTOMER_SELECT_FULL, CUSTOMER_SELECT_CORE } from '../components/customers/customerFieldRegistry';
@@ -143,7 +144,11 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
   useEffect(() => {
     if (!businessId) return;
     void load(); // pre-existing floating promise, fixed in passing (§1.6 fix-all-in-one-pass)
-  }, [businessId]);
+    // 🔴 `filterDate` IS A DEPENDENCY NOW AND WAS NOT BEFORE. While the day was filtered in
+    // memory this effect could correctly ignore it; now that it reaches the query, omitting it
+    // would leave the previous day's rows on screen under the new day's heading.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessId, filterDate]);
 
   // The editor prices from the configured tiers, same source the roster uses.
   useEffect(() => {
@@ -169,13 +174,30 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
 
   async function load() {
     setLoading(true);
-    const q = (cols: string) => supabase
-      .from('deliveries')
-      .select(cols)
-      .eq('business_id', businessId!)
-      .neq('status', 'cancelled')
-      .order('delivery_date', { ascending: true, nullsFirst: false })
-      .limit(200);
+    // 🔴 THE DATE BOUND REACHES THE QUERY. It did not before: this read had NO date bound and the
+    // selected day was filtered CLIENT-SIDE from whatever the first 200 rows happened to be. With
+    // 564 imported past stops that filter can only ever return nothing for a day outside them —
+    // the drill-in would report "Nothing scheduled on this day" for a day that HAS stops. The
+    // decision itself lives in `deliveryWindow.ts` because a bound computed inline in a `.tsx`
+    // cannot be asserted (tech-debt #134).
+    const bounds = deliveryQueryBounds(filterDate, new Date());
+    if (TRACE_DELIVERY) console.log('[TRACE:DELIVERY] list bound —', bounds);
+    const q = (cols: string) => {
+      const base = supabase
+        .from('deliveries')
+        .select(cols)
+        .eq('business_id', businessId!)
+        .neq('status', 'cancelled');
+      const bounded = bounds.kind === 'day'
+        ? base.eq('delivery_date', bounds.date)
+        // ⚠️ `.or(is null, gte)` rather than a bare `.gte`. `delivery_date` is nullable and this
+        // list deliberately groups undated stops LAST — a bare floor would silently drop a state
+        // the UI already handles, which is the same shape of defect as the one being fixed.
+        : base.or(`delivery_date.is.null,delivery_date.gte.${bounds.from}`);
+      return bounded
+        .order('delivery_date', { ascending: true, nullsFirst: false })
+        .limit(200);
+    };
 
     let { data, error: err } = await q(DELIVERY_SELECT_FULL);
     let ready = true;
@@ -397,10 +419,15 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
             {filterDate ? formatDay(filterDate) : 'Scheduled Deliveries'}
           </h1>
           <p style={{ margin: 0, fontSize: '0.75rem', color: '#a8c890' }}>
+            {/* 🔴 THE HEADER MAY ONLY CLAIM WHAT THE READ ESTABLISHED (§6 r18). `rows` used to be
+                every delivery this business has, so "scheduled in total" was true; it is now the
+                selected DAY, or a bounded window. The total is no longer known here and is NOT
+                fabricated — the calendar one line above already carries per-day counts across its
+                whole window, so nothing is lost by not asserting it. */}
             {loading ? 'Loading…'
               : filterDate
-                ? `${visible.length} stop${visible.length !== 1 ? 's' : ''} on this day · ${rows.length} scheduled in total`
-                : `${rows.length} scheduled deliver${rows.length !== 1 ? 'ies' : 'y'}`}
+                ? `${visible.length} stop${visible.length !== 1 ? 's' : ''} on this day`
+                : `${rows.length} deliver${rows.length !== 1 ? 'ies' : 'y'} — the last 30 days and everything ahead`}
           </p>
         </div>
         {/* Second door into the invoice OCR→infer→route flow (owner action, matches "Edit customer" gating). */}
@@ -422,8 +449,13 @@ export function DeliverySchedule({ filterDate }: { filterDate?: string | null } 
           <div style={{ textAlign: 'center', padding: '40px 0', color: GRAY }}>
             <Truck size={32} color="#d1d5db" style={{ marginBottom: 10 }} />
             <p style={{ margin: 0, fontWeight: 600 }}>Nothing scheduled on this day</p>
+            {/* The old copy read "{rows.length} deliveries are scheduled on other days" — which was
+                true while this list held every delivery and became FALSE the moment the read was
+                bounded to one day, where that count is by definition the day itself. Removed
+                rather than recomputed: the calendar above already shows every other day's count,
+                and a second copy of that fact is the one that would drift (STD-011). */}
             <p style={{ margin: '4px 0 0', fontSize: '0.8125rem' }}>
-              {rows.length} deliver{rows.length !== 1 ? 'ies are' : 'y is'} scheduled on other days.
+              Pick another day on the calendar above to see its stops.
             </p>
           </div>
         )}
