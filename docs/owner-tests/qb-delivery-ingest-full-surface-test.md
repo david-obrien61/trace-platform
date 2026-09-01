@@ -12,6 +12,11 @@
 > **This file is the ONLY source of truth for delivery-ingest owner-tests.** It is STANDING, not
 > dated — run it after any change to `shipmentIngest.ts`, `deliveryIngestWriter.ts`, or the two
 > `deliveries-*` branches of `api/qbo/router.ts`.
+>
+> ⚠️ **SIBLING BOARD, added 2026-08-31:** `qb-order-ingest-full-surface-test.md` covers the
+> SECOND pass — what is ON each stop. The two run in order (a stop must exist before it can have
+> a load) and they are separate boards because they are separate acts with separate permissions.
+> `shipmentIngest.ts` is shared by both: a change there means running BOTH.
 
 **DEVICE: desktop** — the ingest is a reconcile-shaped act performed at a desk, per
 `capture=mobile / reconcile=desktop`. It reads eighteen rows of addresses; it is not a lot task.
@@ -145,11 +150,15 @@ Open two customers created by the ingest on `/customers`.
 STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
 🔴 **STILL OWED, AND IT IS THE MOST IMPORTANT UNPROVEN CARD ON THIS BOARD.** `/orders` was not checked and available-to-sell was not compared after the run. The argument is strong — no order is created, and a recording-client test asserts the written table set is exactly `{customers, deliveries}` — **but an argument is not an observation**, and this board does not record arguments as passes. Two minutes: `/orders` count, and one lot's available-to-sell.
 
+⚠️ **REWRITTEN 2026-08-31 (the load pass), AND THE PART THAT CHANGED IS THE `/orders` CLAUSE.** This card used to say *"no new orders — none"* full stop, and that was true of the world it was written in. **A SEPARATE pass now deliberately creates one order per ingested stop**, so a reader running this card after that pass would find nineteen new orders and could not tell a correct outcome from a defect. The claim is therefore narrowed to what it was always really about: **THIS BUTTON creates no order.** The order count belongs to the order board's CARD 4 (`qb-order-ingest-full-surface-test.md`), and the availability half is CARD 5 there. **Neither card is retired and neither is weakened** — they now name which button they are about, which is the fact that changed.
+
 The acceptance criterion that matters most, and the one you can check in a minute.
 
-- `/orders` — **no new orders.** None. This ingest creates calendar stops and nothing else.
+- `/orders` — **pressing INGEST on the delivery panel creates no order.** Count before, count
+  after, same number. (If you have already run the *load* pass, its orders are expected and are
+  CARD 4 of the order board — this card is only about what THIS button does.)
 - Inventory — **available-to-sell is identical to before the run.** Committed stock is derived
-  from open orders; no order was created, so nothing can have moved.
+  from open orders; this button creates no order, so nothing can have moved.
 - 🔴 **If any lot's available-to-sell changed, stop.** That is the D-52 landmine and it would mean
   a future-dated delivery is holding stock LAWNS could otherwise sell.
 

@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-08-31 (**#246 — ✅ **LIVE AND WORKING: `0 customers created · 19 linked · 19 written`.** It failed all 19 rows first — a PARTIAL unique index PostgREST's `onConflict` can never infer — and the finding above the fix is that **87 green assertions could not have caught it** ([[R-33]] · §6 r19 · #138). **[[R-32]]: Cultivar owns the schedule and never writes back — this was the LAST read of a schedule out of QuickBooks.**) · Prior: (**#246 — QB DELIVERY INGEST: Lauren's scheduled deliveries read out of `Invoice.ShipDate`; a ONE-TIME SEED, never a sync — it creates what does not exist and NEVER updates what does. See the QUICKBOOKS DELIVERY INGEST entry.**) · Prior: (**#245 — 🔴 BOTH FLAGGED QUESTIONS ANSWERED, AND ONE MISSING ROW WAS THREE MISSING POSITIONS.** `INV-01` stays OUT of the crew (the crew set is DRIVERS; walking the lot to count is a YARD job — **the gap is a missing POSITION, and no count check could have seen it**), `MON-10` goes INTO the bookkeeper (*no set at all cannot be true*; the workbook conflated a position TEMPLATE with a LAWNS SNAPSHOT, and the observation survives the row). **THREE positions declared missing: yard hand · on-site maintenance (CUTO, who does not speak English) · whatever customer two turns out to have** — evidence about the SETS, not a defect in them. **DO NOT ASSUME ONE LANGUAGE PER TENANT.** Also merged: **#243** the workbook reconciliation and **#244** the calendar window/day-view fix. See the POSITIONS and OPERATIONS CALENDAR entries.) · Prior: #244 · #243 · #242 · #241.
+# Last updated: 2026-08-31 (**#247 — THE NINETEEN STOPS GET THEIR LINES.** `Invoice.Line[]` → a history order on each stop, through a THIRD door and the same `buildHistoryOrder`; the same read one level deeper, no new Intuit surface, api/ still 12/12. 🔴 **The finding: a `$0` line is NOT automatically a note** — invoice #3648.563 totals $0.00 and carries two real warranty-replacement trees, so the discriminator is `DetailType`. Migration `20260831c` **OWED**. See the QUICKBOOKS ORDER INGEST entry.) · Prior: #246 · #245 · #244 · #243 · #242.
 
 
 > 📐 **CAMPAIGN LIFECYCLE — SCOPING + ESTIMATE (2026-08-23, ledger #192/#192b).** NOT a capability entry: **nothing was built.** A scoping document answering David's *"I can add but not edit or cancel or delete"* with nine questions, ten site keys, a proven F1/F2/F3 dependency order, three scopes (**MINIMUM ~2–3 · COHERENT ~5–7 · COMPLETE ~11–14 Thunder prompts; MINIMUM and COHERENT need ZERO migrations**) and eight rulings owed. Read it before ANY campaign build — it is the answer to "has this been scoped?" and its first finding is that the EDIT FORM ALREADY EXISTS as the create form (`Campaigns.tsx:120-198`). → [`docs/audits/campaign-lifecycle-scoping-2026-08-23.md`](audits/campaign-lifecycle-scoping-2026-08-23.md) · predecessor [`social-campaign-path-recon-2026-08-22.md`](audits/social-campaign-path-recon-2026-08-22.md)
@@ -2355,6 +2355,57 @@ did move: the write-verb sweep now DERIVES its entity list rather than reading a
 capture would have been named `qbo-items-…`).
 
 ---
+
+## QUICKBOOKS ORDER INGEST (THE LOAD) — `Invoice.Line[]` → a history order on each stop
+**Last updated:** 2026-08-31 · **Bar: BUILDER-COMPLETE** (on `thunder/history-order-lines`, not merged) · **Owner-test:** `docs/owner-tests/qb-order-ingest-full-surface-test.md`
+
+**What it is.** The delivery ingest below put nineteen stops on the calendar and **none of them
+says what is on the truck.** This reads the `Line[]` of the SAME invoices those stops came from and
+writes one `orders` row plus its `order_items` per stop, joined by `deliveries.order_id`. The orders
+are **history orders** — already paid, already in the seller's own QuickBooks — so they never push
+back and never hold stock.
+
+🔴 **THE SAME READ, ONE LEVEL DEEPER — no new Intuit surface.** `ShipDate` is not filterable on
+Intuit's Invoice query, so the delivery ingest already walks every invoice and already holds each
+one's nested lines; it simply discarded them. `QboShipmentRow` now carries `lines` and `totalTax`.
+**No new endpoint, no second token, no extra call, and api/ stays 12/12.**
+
+🔴 **THE CLASSIFIER IS STRUCTURAL, AND THE TEMPTING RULE IS WRONG ON THEIR BOOKS.** `DetailType`
+decides, never the amount:
+- `SubTotalLineDetail` → the running total. **NEVER a line** — exactly one per invoice, 1,469 of
+  1,469 measured, and counting it doubles the order.
+- `DescriptionOnly` with no money → a **note**. It lands in `orders.notes` (*"1st Stop"*,
+  *"Morning"*), never as a row with a quantity beside it. One carrying money is kept as a LINE and
+  counted, because dropping money is the failure nobody notices.
+- `DiscountLineDetail` or any negative amount → a discount, and still a line.
+- everything else → **goods, INCLUDING at $0.** Invoice #3648.563 totals $0.00 and carries two real
+  warranty-replacement trees; a `$0`-means-note rule sends a crew out with an empty trailer.
+
+🔴 **`business_inventory_id` IS NULL ON EVERY LINE — three guards, all taken.** The TYPE (the
+literal `null` on `HistoryOrderLine`, so setting one is a compile error), the PAYLOAD (the commit
+refuses the whole run before its first write if any planned line carries one), and the ARITHMETIC
+(an availability fingerprint over every lot, taken before the first write and after the last, and
+rendered on the screen in the operator's own words). [[R-21]] · [[D-52]].
+
+**Where it lives.**
+- `packages/shared/src/quickbooks/invoiceOrderLines.ts` — PURE. The line parse, the role
+  classification, the money. No DB, no fetch. 45 probes.
+- `packages/shared/src/quickbooks/historyOrderWriter.ts` — the IO half and the ONLY new writer.
+  73 probes, incl. the table-set assertion and the fingerprint's negative control.
+- `packages/shared/src/business-logic/historyOrder.ts` — **UNCHANGED IN SUBSTANCE, EXTENDED FOR A
+  THIRD DOOR.** `receiptId` is now nullable (there is no photograph) and pre-built `lines` may be
+  supplied. Both invariants are untouched; the whole point is that they are not re-derived.
+- `packages/shared/src/components/QboOrderIngest.tsx` — preview → record, in Settings → Accounting,
+  BELOW the delivery panel. A separate component because the two acts have separate permissions.
+- `api/qbo/router.ts` → `_route=orders-preview` (GET, `orders:read`) and `_route=orders-ingest`
+  (POST, `orders:create`). **api/ stays 12/12 — nothing minted** (§6 r11).
+- `supabase/migrations/20260831c_orders_qb_invoice_uidx.sql` — 🔴 **OWED, NOT APPLIED.** A UNIQUE
+  index on `orders (business_id, qb_invoice_id)` **with NO predicate**, which is #246's one-day-old
+  lesson applied before it could repeat. Without it the pass REFUSES and names the file.
+
+**What it does NOT do.** No inventory, no lot, no cost, no ledger row, nothing to Intuit. It updates
+exactly ONE column on a delivery — `order_id`, and only where it is NULL. `service_type` stays NULL
+(tech-debt #140) and nothing distinguishes a tree from a trip charge yet (tech-debt #139).
 
 ## QUICKBOOKS DELIVERY INGEST — `Invoice.ShipDate` → a scheduled delivery
 **Last updated:** 2026-08-31 · **Bar: BUILDER-COMPLETE** (on `thunder/qb-deliveries`, not merged) · **Owner-test:** `docs/owner-tests/qb-delivery-ingest-full-surface-test.md`

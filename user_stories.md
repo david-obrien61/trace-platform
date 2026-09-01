@@ -152,6 +152,26 @@ LAWNS went live 26 Aug 2026 and scanned six real customer invoices. Each produce
 
 **A document with NO customer produces NO order.** A vendor receipt for hose, oil or emitters is a real captured document and a real cost, but it is nobody's sale. _Grounded: ledger #223; migration `20260827_history_orders.sql`; `packages/shared/src/business-logic/historyOrder.ts` (+ its 45 probes); `packages/cultivar-os/src/lib/dashboardWindows.ts` (+ 23); `scripts/backfill-history-orders.mjs`._
 
+### A stop with no load is a place a truck goes with nothing on it
+STATUS: written
+SCOPE: vertical:cultivar, platform
+BUILD: in-build
+ARC: ocr-doc-routing
+MAPS-TO: 2.3, 3.4, 3.5
+PIECES: invoice_line_read, line_role_classification, history_order_third_door, order_delivery_join, availability_fingerprint
+NEEDS: 🔴 **Two things are OWED BY DAVID and neither is a default to pick.** (1) **`service_type`** — see tech-debt #140: the *"(Install & Warranty)"* signal covers 4 of 18 invoices parenthesised, 7 in any form, and 10 carry none, so a derivation would be a partial one that must be labelled as such on screen. Left NULL. (2) **What a DAY SHEET shows** — tech-debt #139: a trip charge is a line on the sale and is not a thing to load, and the distinction lives in the customer's own item catalogue (`Item.Type`), which we have already read. Neither is built and neither should be guessed.
+_Written 2026-08-31 alongside the build (§9 story-reconciliation gate). The governing precedent is the story below — **"A captured invoice is a sale that happened"** — and this is that story's `history_order` piece arriving through a THIRD DOOR: the seller's own QuickBooks invoice read over the API, with no photograph in between. It is filed separately because the door, the permissions and the failure modes are different, and because what it unlocks is not a dashboard number._
+
+The delivery ingest put nineteen stops on Lauren's calendar and **not one of them says what is on the truck.** Saturday 5 September shows six stops and nothing on the screen says whether that is a full day or a light one — which is the question a day sheet exists to answer. **Deliveries-only was the right call for speed, and this is its bill.**
+
+**The lines were already in the read.** `ShipDate` is not a filterable field on Intuit's Invoice query, so the delivery ingest already walks every invoice and already holds each one's nested `Line[]` — it simply threw them away. So this is the same 1,469 rows read one level deeper: no new Intuit surface, no new endpoint, and no new Vercel function against a `api/` directory sitting at 12 of 12.
+
+🔴 **The finding is that the tempting classifier is wrong on their real books, and it is wrong in the direction that empties a trailer.** The obvious rule is *"a $0 line is a note"* — [[R-28]]'s own words, on the WRITE side. Read back the other way it is false: invoice **#3648.563** totals **$0.00**, carries a real ship date and a real address, and holds **two real trees**, warranty replacements the customer already paid for once. They are $0 precisely because they were already bought. **So the discriminator is `DetailType`, not the amount** — `DescriptionOnly` is the note (194 across 1,469 invoices, not one carrying a non-zero Amount), `SubTotalLineDetail` is Intuit's running total and is never a line (exactly one per invoice, 1,469 of 1,469 — counting it doubles every order), and a `SalesItemLineDetail` at $0 is a thing that was given away. **A note that DOES carry money is kept as a line and reported**, because dropping money is the failure nobody notices.
+
+🔴 **And the invariant is the same one, carried across a new door rather than re-derived.** These are **history orders** — already paid, already in the seller's own QuickBooks — so [[R-21]] holds: `business_inventory_id` is `null` on every line, typed as the literal `null` so setting one is a compile error. That is load-bearing rather than merely honest: committed stock is DERIVED from open orders ([[D-52]]), so a future-dated line pointing at a lot silently reduces what LAWNS can sell with no ledger row and nothing to reverse. **Three guards, all taken** — the type, a payload check that refuses the whole run before the first write, and an availability FINGERPRINT taken before and after, on the screen, in the operator's own words.
+
+**WHAT THIS UNLOCKS, and none of it is this story:** the **day sheet's load** (what is actually on the truck), the **material list** (mix, mulch and staking are all computed from CONTAINER SIZE, which lives in the line description this now stores) and the **capacity flag** (one minute per gallon needs gallons, and gallons come from the line). All three were blocked without it; each is its own build. _Grounded: `packages/shared/src/quickbooks/invoiceOrderLines.ts` (+45 probes) · `historyOrderWriter.ts` (+73) · `supabase/migrations/20260831c_orders_qb_invoice_uidx.sql` · `docs/owner-tests/qb-order-ingest-full-surface-test.md` · measured against the 2026-08-29 raw invoice capture (1,469 invoices, complete)._
+
 ### The receipt-cost meter — what it costs, and is the OCR good enough
 STATUS: needs-input
 SCOPE: vertical:cultivar, platform
