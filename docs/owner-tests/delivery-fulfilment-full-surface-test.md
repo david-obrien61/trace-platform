@@ -17,7 +17,7 @@
 
 ## ⛔ GATE 0b — THE MIGRATION IS NOT APPLIED, AND THE SCREEN WILL TELL YOU SO
 
-🔴 **`supabase/migrations/20260831c_deliveries_fulfilment_and_review_ask.sql` is GATED and UNAPPLIED.** Four nullable columns on `deliveries`. Until you run it in the **SQL editor** (§6 r17 — *not* the table editor, whose default ACL hands `anon` TRUNCATE and REFERENCES, a privilege RLS cannot filter):
+🔴 **`supabase/migrations/20260831d_deliveries_fulfilment_and_review_ask.sql` is GATED and UNAPPLIED.** Four nullable columns on `deliveries`. Until you run it in the **SQL editor** (§6 r17 — *not* the table editor, whose default ACL hands `anon` TRUNCATE and REFERENCES, a privilege RLS cannot filter):
 
 - the delivery list still loads — it falls back to the pre-migration column set rather than blanking, which is deliberate;
 - and every stop card reads **"Marking stops done isn't available yet — the database update (20260831c) hasn't been applied."**

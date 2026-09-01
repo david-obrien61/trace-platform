@@ -2378,7 +2378,7 @@ capture would have been named `qbo-items-…`).
 
 **THE ONE NEW INPUT.** The business's own Google review link, entered once by the owner at `/settings/all` → *Asking for reviews*. Stored in `business_modules.config` for `followup_engine` — **no new column** — which also gives the module's `configured` flag real meaning.
 
-**SCHEMA.** `20260831c_deliveries_fulfilment_and_review_ask.sql` — 🔴 **GATED, UNAPPLIED.** Four nullable columns on `deliveries` (`started_at`, `completed_at`, `review_asked_at`, `review_ask_outcome`), append-only, no backfill, no policy touched. Until applied, the delivery list **falls back to the pre-migration column set** and each card says the control is unavailable rather than blanking the screen or showing buttons that cannot write.
+**SCHEMA.** `20260831d_deliveries_fulfilment_and_review_ask.sql` — 🔴 **GATED, UNAPPLIED.** Four nullable columns on `deliveries` (`started_at`, `completed_at`, `review_asked_at`, `review_ask_outcome`), append-only, no backfill, no policy touched. Until applied, the delivery list **falls back to the pre-migration column set** and each card says the control is unavailable rather than blanking the screen or showing buttons that cannot write.
 
 **FILES.** `packages/cultivar-os/src/lib/deliveryFulfilment.ts` (the pure core — all decisions live here because a render condition inside a `.tsx` cannot be asserted, tech-debt #134) · `deliveryFulfilment.test.ts` (70 assertions, **9/9 mutants caught**) · `components/delivery/ReviewAskSheet.tsx` · `pages/DeliverySchedule.tsx` · `pages/Settings.tsx`.
 
