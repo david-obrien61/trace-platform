@@ -136,6 +136,25 @@ export interface AlreadyOrdered {
   linkRepaired: boolean;
 }
 
+/**
+ * 🔴 AN ORDER THIS BUSINESS ALREADY HOLDS FOR THIS INVOICE, WHICH THE KEY COULD NOT SEE.
+ * Reported ALWAYS — on the preview before anything is written and in the commit's own result —
+ * because the one thing that must never happen here is a quiet reconciliation.
+ */
+export interface PriorOrderFinding {
+  deliveryId: string;
+  invoiceId: string;
+  docNumber: string | null;
+  deliveryDate: string | null;
+  /** `same-invoice` is the only one that writes anything, and all it writes is the id. */
+  kind: 'same-invoice' | 'probable' | 'ambiguous';
+  orderId: string | null;
+  rule: string;
+  evidence: string;
+  /** Commit only: did the id actually land on the existing order? */
+  idRecorded?: boolean;
+}
+
 /** Per-lot `(on-hand, every order line summed)`. See the header — deliberately unfiltered. */
 export type AvailabilityFingerprint = string;
 
@@ -149,8 +168,12 @@ export interface OrderIngestReport {
   alreadyOrdered: AlreadyOrdered[];
   planned: PlannedOrder[];
   refusals: OrderRefusal[];
+  /** 🔴 Invoices this business already has an order for, under a different name. NEVER silent. */
+  priorOrders: PriorOrderFinding[];
   /** Commit only. */
   ordersWritten: number;
+  /** Commit only: existing orders that had this invoice's id RECORDED on them. Never more. */
+  idsRecorded: number;
   lineItemsWritten: number;
   deliveriesLinked: number;
   errors: { deliveryId: string; invoiceId: string | null; step: string; message: string }[];
@@ -218,6 +241,8 @@ export async function availabilityFingerprint(db: any, businessId: string): Prom
 export async function readOrderIngestState(db: any, businessId: string): Promise<{
   stops: StopNeedingOrder[];
   orderIdByInvoice: Map<string, string>;
+  /** Orders carrying NO `qb_invoice_id` — invisible to the key, and the duplication hazard. */
+  priors: PriorOrder[];
 }> {
   const { data: delRows, error: delErr } = await db
     .from('deliveries')
@@ -226,16 +251,28 @@ export async function readOrderIngestState(db: any, businessId: string): Promise
     .not('qb_invoice_id', 'is', null);
   if (delErr) throw new Error(`Could not read this business's QuickBooks stops: ${delErr.message}`);
 
+  // 🔴 EVERY ORDER, NOT ONLY THE ONES CARRYING AN INVOICE ID — because the ones WITHOUT one are
+  // exactly the ones the idempotency key is blind to, and they are the ones that would be
+  // duplicated. One read, both purposes: the ids build the key's map, the rest become the
+  // candidate set for the prior-order guard.
   const { data: ordRows, error: ordErr } = await db
-    .from('orders').select('id, qb_invoice_id')
-    .eq('business_id', businessId).not('qb_invoice_id', 'is', null);
-  if (ordErr) throw new Error(`Could not read the orders already linked to a QuickBooks invoice: ${ordErr.message}`);
+    .from('orders')
+    .select('id, qb_invoice_id, customer_id, sale_date, total_amount, source_document_number, order_kind')
+    .eq('business_id', businessId);
+  if (ordErr) throw new Error(`Could not read this business's existing orders: ${ordErr.message}`);
 
   const orderIdByInvoice = new Map<string, string>();
-  for (const o of (ordRows ?? []) as { id: string; qb_invoice_id: string | null }[]) {
-    if (o.qb_invoice_id) orderIdByInvoice.set(String(o.qb_invoice_id), o.id);
+  const priors: PriorOrder[] = [];
+  type OrderRow = PriorOrder & { qb_invoice_id: string | null };
+  for (const o of (ordRows ?? []) as OrderRow[]) {
+    if (o.qb_invoice_id) { orderIdByInvoice.set(String(o.qb_invoice_id), o.id); continue; }
+    priors.push({
+      id: o.id, customer_id: o.customer_id, sale_date: o.sale_date,
+      total_amount: o.total_amount, source_document_number: o.source_document_number,
+      order_kind: o.order_kind,
+    });
   }
-  return { stops: (delRows ?? []) as StopNeedingOrder[], orderIdByInvoice };
+  return { stops: (delRows ?? []) as StopNeedingOrder[], orderIdByInvoice, priors };
 }
 
 /**
@@ -323,6 +360,177 @@ export function planOrderForStop(
   };
 }
 
+
+// ─── 🔴 THE PRIOR-ORDER GUARD — the key is BLIND to the orders that matter most ──────────
+//
+// 🔴 THE NINE OCR HISTORY ORDERS AT LAWNS CARRY NO `qb_invoice_id`. They were transcribed from
+//   PHOTOGRAPHS of paper invoices, so nothing in that path ever held an Intuit id. The
+//   idempotency key therefore CANNOT SEE THEM, and an ingest keyed only on that column would
+//   create a SECOND order for every sale that was already captured — a duplicate sale in the
+//   seller's own revenue reporting, silent and permanent.
+//
+//   ⚠️ THIS IS THE THIRY SHAPE AT NINE TIMES THE SIZE. The delivery ingest hit the identical
+//   defect one day earlier: Thiry's stop was entered BY HAND, so it carried no `qb_invoice_id`
+//   and the key could not see it either. The answer there was a second guard keyed on the
+//   CUSTOMER rather than on the id. The answer here is the same in shape and stricter in
+//   substance, because an order carries money and a stop does not.
+//
+// 🔴 AND IT IS NOT THEORETICAL. Seven of the eighteen future-dated invoices in the 2026-08-29
+//   capture carry a `TxnDate` of 26 or 27 August — the exact window the nine OCR orders were
+//   captured in. Six of them share ONE date, 2026-08-27. A date-and-amount guess across six
+//   same-day invoices is precisely where a careless match cross-links the wrong pair.
+//
+// 🔴 THE PRIMARY KEY IS THEIR OWN DOCUMENT NUMBER, NOT AN INFERENCE. `orders.source_document_
+//   number` holds "the number printed on the SOURCE DOCUMENT — for a history order that is
+//   LAWNS's own QuickBooks number" (20260827_history_orders.sql), which is the SAME string
+//   Intuit returns as `Invoice.DocNumber`. A match on it is an IDENTITY, not a guess.
+//
+//   The three fields David named — customer, date, amount — are then CORROBORATION rather than
+//   the key, and that ordering is [[D-47]]'s three-way rule, whose scar is #53: matching on one
+//   field the external system permits to collide cross-billed nine real invoices.
+//
+// 🔴 ONLY AN IDENTITY BACKFILLS. Everything else STOPS AND REPORTS.
+//     · document number matches AND all three corroborate  → SAME INVOICE. Record the id on the
+//       existing order, create nothing, and join the stop to it.
+//     · document number matches but a field DISAGREES      → REPORT. Same document, different
+//       money is a thing to look at, not a thing to reconcile.
+//     · no document number, but ≥2 of the three agree      → REPORT. However strong, it is an
+//       inference, and an inference that writes an id is permanent: the key would skip that
+//       order forever, rightly or wrongly.
+//     · more than one candidate either way                 → REPORT. Never pick.
+//   A reported invoice costs David a minute. A duplicate sale is silent and lives in their books.
+
+/** An order this tenant already holds that carries NO Intuit invoice id — invisible to the key. */
+export interface PriorOrder {
+  id: string;
+  customer_id: string | null;
+  sale_date: string | null;
+  total_amount: number | null;
+  source_document_number: string | null;
+  order_kind: string | null;
+}
+
+export type PriorOrderMatch =
+  /** Nothing this tenant holds looks like this invoice. Create the order. */
+  | { kind: 'none' }
+  /** Provably the same sale. Record the id on the existing order; create nothing. */
+  | { kind: 'same-invoice'; orderId: string; rule: string; evidence: string }
+  /** Looks like the same sale but is not proven. Create nothing, and say why. */
+  | { kind: 'probable'; orderId: string; rule: string; evidence: string }
+  /** More than one candidate. Create nothing, and never pick. */
+  | { kind: 'ambiguous'; rule: string; evidence: string };
+
+/** Document numbers are compared as the strings a human types: trimmed, case- and space-blind. */
+function normalizeDocNumber(v: string | null | undefined): string | null {
+  const s = String(v ?? '').trim().toLowerCase().replace(/\s+/g, '');
+  return s === '' ? null : s;
+}
+
+/** Money is compared in CENTS. `4864.21 !== 4864.209999` is a floating-point fact, not a
+ *  business one, and it would turn an identity into a "probable" on some invoices and not others. */
+function cents(v: number | null | undefined): number | null {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.round(n * 100) : null;
+}
+
+/** Which of David's three fields agree, which differ, and which could not be compared.
+ *  🔴 A NULL ON EITHER SIDE IS `unknown`, NEVER `agrees` — an absent field must not corroborate
+ *  anything (A9: absent is not empty). Two orders that both lack a sale_date have not matched
+ *  on date; they have simply failed to disagree. */
+function corroborate(
+  prior: PriorOrder,
+  invoice: { customerId: string | null; saleDate: string | null; total: number | null },
+): { agreed: string[]; differed: string[]; unknown: string[] } {
+  const agreed: string[] = [], differed: string[] = [], unknown: string[] = [];
+  const cmp = (name: string, a: unknown, b: unknown) => {
+    if (a === null || a === undefined || b === null || b === undefined) unknown.push(name);
+    else if (a === b) agreed.push(name);
+    else differed.push(name);
+  };
+  cmp('customer', prior.customer_id, invoice.customerId);
+  cmp('date',     prior.sale_date,   invoice.saleDate);
+  cmp('amount',   cents(prior.total_amount), cents(invoice.total));
+  return { agreed, differed, unknown };
+}
+
+function describe(prior: PriorOrder, c: ReturnType<typeof corroborate>): string {
+  const bits: string[] = [];
+  if (c.agreed.length)   bits.push(`${c.agreed.join(', ')} agree`);
+  if (c.differed.length) bits.push(`${c.differed.join(', ')} DIFFER`);
+  if (c.unknown.length)  bits.push(`${c.unknown.join(', ')} not recorded on the existing order`);
+  const kind = prior.order_kind === 'history' ? 'a captured-invoice order' : 'a checkout order';
+  return `${kind} (${prior.source_document_number ? `doc #${prior.source_document_number}` : 'no document number'}, ${prior.sale_date ?? 'no sale date'}, $${Number(prior.total_amount ?? 0).toFixed(2)}) — ${bits.join(' · ') || 'nothing comparable'}`;
+}
+
+/**
+ * Does this tenant ALREADY hold an order for this invoice, under a different name?
+ *
+ * `priors` must be the orders carrying NO `qb_invoice_id` — the ones the key cannot see. An order
+ * that already has one was handled by the key and must not be reconsidered here.
+ */
+export function matchPriorHistoryOrder(
+  invoice: { docNumber: string | null; customerId: string | null; saleDate: string | null; total: number | null },
+  priors: PriorOrder[],
+): PriorOrderMatch {
+  // ── ① THEIR OWN DOCUMENT NUMBER. An identity, not a guess. ──────────────────
+  const doc = normalizeDocNumber(invoice.docNumber);
+  if (doc) {
+    const byDoc = priors.filter(p => normalizeDocNumber(p.source_document_number) === doc);
+    if (byDoc.length > 1) {
+      return {
+        kind: 'ambiguous',
+        rule: 'document number matches more than one existing order → REPORT',
+        evidence: `${byDoc.length} orders this business already holds carry document number ${invoice.docNumber}. TRACE will not guess which one this invoice is.`,
+      };
+    }
+    if (byDoc.length === 1) {
+      const p = byDoc[0];
+      const c = corroborate(p, invoice);
+      if (c.differed.length === 0) {
+        return {
+          kind: 'same-invoice',
+          orderId: p.id,
+          rule: 'document number matches, and customer, date and amount corroborate → SAME SALE',
+          evidence: describe(p, c),
+        };
+      }
+      // 🔴 A CONTRADICTION IS NOT A WEAK MATCH, IT IS A REASON TO STOP. Same printed number and
+      // different money means one of the two records is wrong, and writing an id would freeze
+      // that disagreement in place where the key will skip it forever.
+      return {
+        kind: 'probable',
+        orderId: p.id,
+        rule: 'document number matches but a field DISAGREES → REPORT, never reconcile',
+        evidence: describe(p, c),
+      };
+    }
+  }
+
+  // ── ② DAVID'S THREE FIELDS, WITH NO DOCUMENT NUMBER TO ANCHOR THEM. ────────
+  // Two of three is enough to STOP. It is deliberately a low bar: this is a set of nine orders,
+  // a false stop costs one line on a screen, and the failure it prevents is a duplicate sale.
+  const scored = priors
+    .map(p => ({ p, c: corroborate(p, invoice) }))
+    .filter(x => x.c.agreed.length >= 2 && x.c.differed.length <= 1);
+  if (scored.length > 1) {
+    return {
+      kind: 'ambiguous',
+      rule: 'more than one existing order looks like this sale → REPORT',
+      evidence: `${scored.length} orders this business already holds match on at least two of customer, date and amount. TRACE will not guess which one this invoice is, and will not create a second.`,
+    };
+  }
+  if (scored.length === 1) {
+    return {
+      kind: 'probable',
+      orderId: scored[0].p.id,
+      rule: 'no document number to match on, but customer/date/amount line up → REPORT',
+      evidence: describe(scored[0].p, scored[0].c),
+    };
+  }
+  return { kind: 'none' };
+}
+
 /**
  * PLAN ONLY. Reads; writes nothing; returns exactly what a commit would do.
  *
@@ -336,12 +544,13 @@ export async function previewOrderIngest(
   const hasColumn = await qbInvoiceIdOnOrders(db);
   const state = hasColumn
     ? await readOrderIngestState(db, businessId)
-    : { stops: [] as StopNeedingOrder[], orderIdByInvoice: new Map<string, string>() };
+    : { stops: [] as StopNeedingOrder[], orderIdByInvoice: new Map<string, string>(), priors: [] as PriorOrder[] };
 
   const byInvoiceId = new Map(shipments.map(s => [s.id, s]));
   const planned: PlannedOrder[] = [];
   const refusals: OrderRefusal[] = [];
   const alreadyOrdered: AlreadyOrdered[] = [];
+  const priorOrders: PriorOrderFinding[] = [];
   let linesCarryingLot = 0;
 
   for (const stop of state.stops) {
@@ -377,6 +586,33 @@ export async function previewOrderIngest(
       });
       continue;
     }
+
+    // 🔴 THE PRIOR-ORDER GUARD. Runs on a plan that is otherwise READY TO WRITE, which is the
+    // correct place for it: the money and the customer are resolved, so the guard compares the
+    // order that WOULD be created against the orders that already exist.
+    const prior = matchPriorHistoryOrder(
+      {
+        docNumber: byInvoiceId.get(invoiceId)?.docNumber ?? null,
+        customerId: stop.customer_id,
+        saleDate: outcome.draft.order.sale_date,
+        total: outcome.draft.order.total_amount,
+      },
+      state.priors,
+    );
+    if (prior.kind !== 'none') {
+      priorOrders.push({
+        deliveryId: stop.id, invoiceId,
+        docNumber: byInvoiceId.get(invoiceId)?.docNumber ?? null,
+        deliveryDate: stop.delivery_date,
+        kind: prior.kind,
+        orderId: 'orderId' in prior ? prior.orderId : null,
+        rule: prior.rule, evidence: prior.evidence,
+      });
+      // NOTHING is planned for it either way. `same-invoice` records an id on the order that
+      // already exists; the other two write nothing at all. Neither creates a second sale.
+      continue;
+    }
+
     linesCarryingLot += outcome.draft.items.filter(l => l.businessInventoryId !== null).length;
     planned.push(outcome.planned);
   }
@@ -392,6 +628,12 @@ export async function previewOrderIngest(
     linesToWrite: planned.reduce((a, p) => a + p.lineCount, 0),
     notBalancing: planned.filter(p => !p.arithmeticBalances).length,
     linesCarryingLot,
+    // 🔴 The three the key could not see, counted separately — a run that quietly created nine
+    // duplicate sales would look identical to a clean one without these.
+    priorSameInvoice: priorOrders.filter(p => p.kind === 'same-invoice').length,
+    priorProbable:    priorOrders.filter(p => p.kind === 'probable').length,
+    priorAmbiguous:   priorOrders.filter(p => p.kind === 'ambiguous').length,
+    priorsConsidered: state.priors.length,
   });
 
   return {
@@ -399,8 +641,8 @@ export async function previewOrderIngest(
     blocker: hasColumn ? null
       : `The migration ${ORDER_UIDX_MIGRATION} has not been applied yet. Until it is, this pass cannot recognise an invoice that already has an order, and running it twice would give every stop a second one. Apply it in the Supabase SQL editor, then run this again.`,
     qbStops: state.stops.length,
-    alreadyOrdered, planned, refusals,
-    ordersWritten: 0, lineItemsWritten: 0, deliveriesLinked: 0, errors: [],
+    alreadyOrdered, planned, refusals, priorOrders,
+    ordersWritten: 0, idsRecorded: 0, lineItemsWritten: 0, deliveriesLinked: 0, errors: [],
     availabilityBefore: null, availabilityAfter: null, availabilityUnchanged: null,
     linesCarryingLot,
   };
@@ -437,9 +679,56 @@ export async function commitOrderIngest(
 
   const state = await readOrderIngestState(db, businessId);
   const byInvoiceId = new Map(shipments.map(s => [s.id, s]));
+  const byInvoiceIdForIds = byInvoiceId;
   const plannedIds = new Set(report.planned.map(p => p.deliveryId));
   const errors: OrderIngestReport['errors'] = [];
-  let ordersWritten = 0, lineItemsWritten = 0, deliveriesLinked = 0;
+  let ordersWritten = 0, lineItemsWritten = 0, deliveriesLinked = 0, idsRecorded = 0;
+  const priorOrders: PriorOrderFinding[] = report.priorOrders.map(p => ({ ...p }));
+
+  // ── 🔴 THE ID-RECORDING PASS. Runs FIRST, and it is the only write in this file that touches
+  // an order somebody else created. It writes TWO COLUMNS — `qb_invoice_id` and `qb_doc_number` —
+  // and nothing else: not the money, not the status, not the dates, not a single line. The
+  // existing order is the record of that sale and stays exactly as it was captured.
+  //
+  // Only a `same-invoice` verdict reaches here: their own document number matched AND customer,
+  // date and amount all corroborated. `probable` and `ambiguous` write NOTHING and are reported.
+  //
+  // ⚠️ WHAT THIS ACHIEVES IS PERMANENCE. Once the id is on the row, the ordinary key sees it and
+  // every future run skips this invoice for the right reason instead of re-deriving the match.
+  for (const finding of priorOrders) {
+    if (finding.kind !== 'same-invoice' || !finding.orderId) continue;
+    const invoice = byInvoiceIdForIds.get(finding.invoiceId);
+    const { data, error } = await db.from('orders')
+      .update({ qb_invoice_id: finding.invoiceId, qb_doc_number: invoice?.docNumber ?? null })
+      .eq('id', finding.orderId).eq('business_id', businessId).is('qb_invoice_id', null)
+      .select('id');
+    // A8, INSPECTED ON THE LINE AFTER THE WRITE. Zero rows means the `qb_invoice_id IS NULL`
+    // guard did not hold — benign (another run got there first), but it is NOT a recording THIS
+    // run performed, and counting it as one would report work that did not happen. PostgREST
+    // returns no error for a zero-row UPDATE, so without this the two are indistinguishable.
+    const landed = !error && (data ?? []).length === 1;
+    if (error) {
+      console.log('[TRACE:QBORDERS] recording the invoice id on an existing order FAILED', { orderId: finding.orderId, invoiceId: finding.invoiceId, message: error.message });
+      errors.push({ deliveryId: finding.deliveryId, invoiceId: finding.invoiceId, step: 'record-invoice-id', message: error.message });
+      finding.idRecorded = false;
+      continue;
+    }
+    finding.idRecorded = landed;
+    if (landed) { idsRecorded++; state.orderIdByInvoice.set(finding.invoiceId, finding.orderId); }
+    else console.log('[TRACE:QBORDERS] the existing order already carried an invoice id — nothing recorded', { orderId: finding.orderId, invoiceId: finding.invoiceId });
+  }
+
+  // 🔴 AND THE STOP IS JOINED TO THE ORDER THAT ALREADY EXISTED. Its load was always there; the
+  // stop simply had no way to point at it. Guarded `order_id IS NULL` so a stop that already has
+  // one is untouched.
+  for (const finding of priorOrders) {
+    if (finding.kind !== 'same-invoice' || !finding.orderId || finding.idRecorded === false) continue;
+    const { data, error } = await db.from('deliveries')
+      .update({ order_id: finding.orderId })
+      .eq('id', finding.deliveryId).eq('business_id', businessId).is('order_id', null).select('id');
+    if (error) { errors.push({ deliveryId: finding.deliveryId, invoiceId: finding.invoiceId, step: 'link-prior', message: error.message }); continue; }
+    if ((data ?? []).length === 1) deliveriesLinked++;
+  }
 
   // The repair pass first — a stop whose order already exists and was never joined. Cheap,
   // and it means a half-finished previous run resolves before anything new is written.
@@ -546,8 +835,10 @@ export async function commitOrderIngest(
   const availabilityUnchanged = availabilityBefore === availabilityAfter;
 
   console.log('[TRACE:QBORDERS] commit COMPLETE', {
-    businessId, ordersWritten, lineItemsWritten, deliveriesLinked,
+    businessId, ordersWritten, idsRecorded, lineItemsWritten, deliveriesLinked,
     alreadyOrdered: report.alreadyOrdered.length, refusals: report.refusals.length,
+    priorSameInvoice: priorOrders.filter(p => p.kind === 'same-invoice').length,
+    priorLeftForDavid: priorOrders.filter(p => p.kind !== 'same-invoice').length,
     errors: errors.length,
     availabilityUnchanged,
     orderKind: HISTORY_ORDER_KIND,
@@ -557,7 +848,7 @@ export async function commitOrderIngest(
   }
 
   return {
-    ...report, ordersWritten, lineItemsWritten, deliveriesLinked, errors,
+    ...report, ordersWritten, idsRecorded, lineItemsWritten, deliveriesLinked, errors, priorOrders,
     availabilityBefore, availabilityAfter, availabilityUnchanged,
   };
 }

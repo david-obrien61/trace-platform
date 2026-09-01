@@ -24,7 +24,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  previewOrderIngest, commitOrderIngest, availabilityFingerprint,
+  previewOrderIngest, commitOrderIngest, availabilityFingerprint, matchPriorHistoryOrder,
 } from './historyOrderWriter';
 import type { QboShipmentRow } from './shipmentIngest';
 import { parseInvoiceOrderLines } from './invoiceOrderLines';
@@ -89,11 +89,19 @@ function makeDb(seed: {
   hasColumn?: boolean; indexes?: FakeIndex[]; failOn?: { table: string; verb: string; message: string };
 } = {}) {
   const indexes = seed.indexes ?? REAL_INDEXES;
+  // 🔴 ROWS ARE COPIED, NOT SHARED — AND THIS WAS A REAL DEFECT IN THIS FILE, NOT A PRECAUTION.
+  // `[...seed.orders]` copies the ARRAY and shares the OBJECTS, so an `update` in one test
+  // mutated the fixture every later test spread from. §M's clash case built its order as
+  // `{ ...OCR, total_amount: 9999 }` and silently inherited the `qb_invoice_id` an EARLIER commit
+  // had written — so the ordinary key handled it, the prior-order guard never ran, and three
+  // assertions failed against correct code. **A negative case that is secretly a positive one
+  // proves nothing**, and here it very nearly reported a working guard as broken.
+  const copy = (rows: any[] | undefined) => (rows ?? []).map(r => ({ ...r }));
   const store: Record<string, any[]> = {
-    deliveries: [...(seed.deliveries ?? [])],
-    orders: [...(seed.orders ?? [])],
-    order_items: [...(seed.orderItems ?? [])],
-    business_inventory: [...(seed.lots ?? [])],
+    deliveries: copy(seed.deliveries),
+    orders: copy(seed.orders),
+    order_items: copy(seed.orderItems),
+    business_inventory: copy(seed.lots),
   };
   const hasColumn = seed.hasColumn !== false;
   const touched: { table: string; verb: string }[] = [];
@@ -254,6 +262,11 @@ async function run() {
   const delPatches = patches.filter(p => p.table === 'deliveries');
   ok(delPatches.length > 0 && delPatches.every(p => Object.keys(p.patch).join(',') === 'order_id'),
      'C3 🔴 the ONLY column ever updated on a delivery is order_id — the date, address and customer are Lauren\'s');
+  // 🔴 THE ONLY UPDATE THIS FILE EVER ISSUES AGAINST `orders` IS THE INVOICE-ID RECORDING, and on
+  // a clean run there is none at all. §M10 pins its column set; this pins that a run with no
+  // collision never touches an existing order in the first place.
+  ok(patches.filter(p => p.table === 'orders').length === 0,
+     'C3b and on a run with no prior-order collision, NO existing order is updated at all');
   ok(!writes.some(t => t.table === 'customers'),
      'C4 no customer is created or touched — that was the previous pass\'s job and it is done');
 }
@@ -408,6 +421,165 @@ async function run() {
      'J8 a rollback that itself fails says so AND names the order to delete by hand — never a silent half-state');
   ok(rs.ordersWritten === 1,
      'J9 🔴 and the count still reports the order that IS in the table — a failed rollback must not be counted as a clean one');
+}
+
+// ══ §L 🔴 THE PRIOR-ORDER GUARD — THE KEY IS BLIND TO THE OCR NINE ═════════
+//
+// LAWNS holds nine history orders transcribed from PHOTOGRAPHS. None carries a `qb_invoice_id`,
+// so the idempotency key cannot see any of them, and an ingest keyed only on that column would
+// create a SECOND order for every sale already captured — a duplicate in the seller's own revenue
+// reporting, silent and permanent. This is the Thiry shape at nine times the size, and it is not
+// theoretical: SEVEN of the eighteen future-dated invoices carry a TxnDate of 26 or 27 August,
+// the window the nine were captured in, and SIX of those share ONE date.
+{
+  const prior = (over: any = {}) => ({
+    id: 'ord-ocr-1', customer_id: 'cust-d1', sale_date: '2026-08-27',
+    total_amount: 2495.16, source_document_number: '3648.634', order_kind: 'history', ...over,
+  });
+  const invoiceFacts = (over: any = {}) => ({
+    docNumber: '3648.634', customerId: 'cust-d1', saleDate: '2026-08-27', total: 2495.16, ...over,
+  });
+
+  // ── ① THEIR OWN DOCUMENT NUMBER IS AN IDENTITY ───────────────────────────
+  const same = matchPriorHistoryOrder(invoiceFacts(), [prior()]);
+  ok(same.kind === 'same-invoice', 'L1 🔴 their own document number + all three corroborating = the SAME SALE, not a new order');
+  ok(same.kind === 'same-invoice' && same.orderId === 'ord-ocr-1', 'L1b and it names the order that already holds it');
+
+  ok(matchPriorHistoryOrder(invoiceFacts({ docNumber: ' 3648.634 ' }), [prior()]).kind === 'same-invoice',
+     'L2 document numbers are compared as a human types them — trimmed');
+  ok(matchPriorHistoryOrder(invoiceFacts(), [prior({ source_document_number: '3648.634 ' })]).kind === 'same-invoice',
+     'L2b from either side');
+
+  // Money in CENTS — a float tail must not turn an identity into a "probable" on some invoices.
+  ok(matchPriorHistoryOrder(invoiceFacts({ total: 2495.1600000000003 }), [prior()]).kind === 'same-invoice',
+     'L3 money is compared in cents, so a floating-point tail is not a business disagreement');
+
+  // ── ② A CONTRADICTION STOPS. IT DOES NOT RECONCILE. ──────────────────────
+  const clash = matchPriorHistoryOrder(invoiceFacts(), [prior({ total_amount: 2000 })]);
+  ok(clash.kind === 'probable', 'L4 🔴 same document number, DIFFERENT money → REPORT, never record an id over a disagreement');
+  ok(clash.kind === 'probable' && /amount DIFFER/.test(clash.evidence), 'L4b and the evidence names WHICH field disagreed');
+  ok(matchPriorHistoryOrder(invoiceFacts(), [prior({ customer_id: 'someone-else' })]).kind === 'probable',
+     'L5 same document number, different customer → REPORT');
+  ok(matchPriorHistoryOrder(invoiceFacts(), [prior({ sale_date: '2026-08-26' })]).kind === 'probable',
+     'L6 same document number, different date → REPORT');
+
+  // ── ③ TWO CANDIDATES ARE NEVER PICKED BETWEEN ────────────────────────────
+  const two = matchPriorHistoryOrder(invoiceFacts(), [prior(), prior({ id: 'ord-ocr-2' })]);
+  ok(two.kind === 'ambiguous', 'L7 🔴 two orders carrying the same document number → REPORT, never pick');
+  ok(two.kind === 'ambiguous' && !('orderId' in two), 'L7b and an ambiguous verdict names no order to write to');
+
+  // ── ④ NO DOCUMENT NUMBER — DAVID'S THREE FIELDS, AND THEY ONLY EVER STOP ──
+  const noDoc = matchPriorHistoryOrder(invoiceFacts(), [prior({ source_document_number: null })]);
+  ok(noDoc.kind === 'probable',
+     'L8 🔴 customer + date + amount all agreeing is enough to STOP — and NOT enough to record an id. An inference that writes a key is permanent.');
+  const twoOfThree = matchPriorHistoryOrder(invoiceFacts(), [prior({ source_document_number: null, total_amount: 999 })]);
+  ok(twoOfThree.kind === 'probable', 'L9 two of the three agreeing still stops — a false stop costs a line on a screen, a duplicate sale is permanent');
+  const oneOfThree = matchPriorHistoryOrder(invoiceFacts(), [prior({ source_document_number: null, total_amount: 999, sale_date: '2020-01-01' })]);
+  ok(oneOfThree.kind === 'none', 'L10 NEGATIVE CONTROL — customer alone is NOT a match, or every invoice for a repeat customer would block');
+  ok(matchPriorHistoryOrder(invoiceFacts(), []).kind === 'none', 'L11 with nothing to collide with, the invoice proceeds normally');
+
+  // 🔴 A NULL MUST NOT CORROBORATE. Two orders that both lack a date have not matched on date.
+  const nullish = matchPriorHistoryOrder(
+    invoiceFacts({ docNumber: null, saleDate: null, total: null }),
+    [prior({ source_document_number: null, sale_date: null, total_amount: null })]);
+  ok(nullish.kind === 'none',
+     'L12 🔴 nulls on both sides are UNKNOWN, never agreement — otherwise every empty order would match every invoice (A9: absent is not empty)');
+
+  // 🔴 THE SIX-SAME-DAY CASE, WHICH IS THE ONE THAT ACTUALLY EXISTS IN THEIR BOOKS.
+  const sixSameDay = [
+    prior({ id: 'a', source_document_number: null, total_amount: 4864.21 }),
+    prior({ id: 'b', source_document_number: null, total_amount: 2495.16 }),
+    prior({ id: 'c', source_document_number: null, total_amount: 2652.13 }),
+  ];
+  const picked = matchPriorHistoryOrder(invoiceFacts({ docNumber: null, total: 2495.16 }), sixSameDay);
+  ok(picked.kind === 'ambiguous',
+     'L13 🔴 three same-customer same-day orders and an exact amount match on ONE of them is STILL ambiguous — the other two agree on 2 of 3, and picking is how the wrong pair gets cross-linked (#53)');
+
+  // A CHECKOUT order with no invoice id is a candidate too, and the evidence says which it is.
+  const checkout = matchPriorHistoryOrder(invoiceFacts({ docNumber: null }), [prior({ source_document_number: null, order_kind: null })]);
+  ok(checkout.kind === 'probable' && /a checkout order/.test(checkout.evidence),
+     'L14 an ordinary checkout order with no invoice id is also a candidate, and the evidence says which kind it is');
+}
+
+// ══ §M THE GUARD END-TO-END — NOTHING IS DUPLICATED, NOTHING IS SILENT ═════
+{
+  // The OCR order for invoice 10436 / #3648.634, exactly as the backfill wrote it: no invoice id.
+  const OCR = { id: 'ord-ocr', business_id: BIZ, qb_invoice_id: null, customer_id: 'cust-d2',
+                sale_date: '2026-08-27', total_amount: 2495.16, source_document_number: '3648.634',
+                order_kind: 'history' };
+  const INV_OCR = inv('10436', '3648.634', '2026-08-27', [
+    salesLine('Myrtle:WM45', 'Wax Myrtle - 45 gallon (Install & Warranty)', 2, 1062.5, 2125),
+    salesLine('TB', 'Tree Bubbler', 2, 65, 130),
+    salesLine('TC', 'Trip Charge', 1, 50, 50),
+    subtotalLine(2305),
+  ], 190.16, 2495.16);
+
+  const { db, store, patches } = makeDb({
+    deliveries: [stop('d1', '10587'), stop('d2', '10436')],
+    orders: [OCR], lots: LOTS,
+  });
+
+  const preview = await previewOrderIngest(db, BIZ, [INV_A, INV_OCR]);
+  ok(preview.planned.length === 1 && preview.planned[0].invoiceId === '10587',
+     'M1 🔴 only the invoice with NO prior order is planned — the OCR one is not');
+  ok(preview.priorOrders.length === 1 && preview.priorOrders[0].kind === 'same-invoice',
+     'M2 and the collision is REPORTED on the preview, before anything is written — never silent');
+  ok(preview.priorOrders[0].orderId === 'ord-ocr' && /doc #3648.634/.test(preview.priorOrders[0].evidence),
+     'M3 naming the order it found and the evidence it matched on');
+  ok(store.orders.length === 1, 'M4 the preview wrote nothing at all');
+
+  const r = await commitOrderIngest(db, BIZ, [INV_A, INV_OCR]);
+  ok(r.ordersWritten === 1, 'M5 🔴 ONE order created, not two — the duplicate sale did not happen');
+  ok(store.orders.length === 2, 'M6 and the table holds the OCR order plus exactly one new one');
+  ok(r.idsRecorded === 1, 'M7 the existing order had the invoice id RECORDED on it');
+  ok(store.orders.find(o => o.id === 'ord-ocr').qb_invoice_id === '10436',
+     'M8 so every future run skips it for the RIGHT reason instead of re-deriving the match');
+  ok(store.orders.find(o => o.id === 'ord-ocr').total_amount === 2495.16,
+     'M9 🔴 and its MONEY is untouched — the captured order is the record of that sale');
+  const ocrPatch = patches.filter(p => p.table === 'orders');
+  ok(ocrPatch.length === 1 && Object.keys(ocrPatch[0].patch).sort().join(',') === 'qb_doc_number,qb_invoice_id',
+     'M10 🔴 exactly TWO columns are written on somebody else\'s order, and they are both identifiers');
+  ok(store.deliveries.find(d => d.id === 'd2').order_id === 'ord-ocr',
+     'M11 and the stop is joined to the order that already existed — its load was there all along');
+  ok(r.availabilityUnchanged === true, 'M12 available-to-sell still did not move');
+
+  // Run it again: nothing at all.
+  const second = await commitOrderIngest(db, BIZ, [INV_A, INV_OCR]);
+  ok(second.ordersWritten === 0 && second.idsRecorded === 0, 'M13 the second run writes nothing and records nothing');
+  ok(store.orders.length === 2, 'M14 🔴 still two orders — the id it recorded is what makes the second run cheap and correct');
+
+  // 🔴 THE CANDIDATE SET IS DECIDED BY THE READ, AND THE READ MUST NOT FILTER ON `order_kind`.
+  // Added after a mutant SURVIVED: restricting `priors` to `order_kind === 'history'` broke
+  // nothing, because §L feeds the matcher its candidates directly and could not see the read.
+  // An ordinary CHECKOUT order that was never pushed also carries no `qb_invoice_id`, so it is
+  // equally invisible to the key and equally duplicable — and at LAWNS a walk-in rung up at the
+  // counter for a sale that was ALSO invoiced in QuickBooks is exactly that shape.
+  {
+    const CHECKOUT = { id: 'ord-checkout', business_id: BIZ, qb_invoice_id: null,
+                       customer_id: 'cust-d2', sale_date: '2026-08-27', total_amount: 2495.16,
+                       source_document_number: null, order_kind: null };
+    const co = makeDb({ deliveries: [stop('d2', '10436')], orders: [CHECKOUT], lots: LOTS });
+    const rco = await commitOrderIngest(co.db, BIZ, [INV_OCR]);
+    ok(rco.priorOrders.length === 1,
+       'M19 🔴 a CHECKOUT order with no invoice id is a candidate too — the read must not filter on order_kind');
+    ok(rco.ordersWritten === 0,
+       'M20 🔴 and no second order is created for it — the duplication hazard is the MISSING ID, not the kind');
+    ok(rco.priorOrders[0].kind === 'probable' && /a checkout order/.test(rco.priorOrders[0].evidence),
+       'M21 it is reported as unproven (no document number to anchor it) and the evidence says which kind it is');
+    ok(co.store.orders[0].qb_invoice_id === null, 'M22 and nothing was written to it');
+  }
+
+  // 🔴 A `probable` VERDICT WRITES NOTHING AT ALL — not an order, not an id.
+  const clash = makeDb({
+    deliveries: [stop('d2', '10436')],
+    orders: [{ ...OCR, total_amount: 9999 }], lots: LOTS,
+  });
+  const rc = await commitOrderIngest(clash.db, BIZ, [INV_OCR]);
+  ok(rc.ordersWritten === 0, 'M15 🔴 a document number matching over DIFFERENT money creates no order');
+  ok(rc.idsRecorded === 0 && clash.store.orders[0].qb_invoice_id === null,
+     'M16 🔴 and records no id — a disagreement is not reconciled, it is reported');
+  ok(rc.priorOrders.length === 1 && rc.priorOrders[0].kind === 'probable', 'M17 and it comes back on the report for David');
+  ok(clash.store.deliveries[0].order_id === null, 'M18 the stop is left unjoined rather than pointed at an order we could not verify');
 }
 
 // ══ §K SOURCE + MIGRATION PROBES ═══════════════════════════════════════════

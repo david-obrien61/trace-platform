@@ -96,7 +96,13 @@ const ALLOWED_DIVERGENCE = {
     reason: 'Two narrow projections, two questions, neither the order record shape. Dashboard reads '
           + '3 columns to answer what the add-on banner may claim (order_kind is read because a '
           + 'history order\'s leakage_flag means UNEVALUATED, not clean); historyOrderWriter reads '
-          + '2 to answer which invoices already have an order, solely to decide NOT to write.',
+          + '7 to answer TWO questions one read serves — which invoices already have an order (the '
+          + 'idempotency key), and which orders the key CANNOT SEE because they carry no invoice '
+          + 'id at all (the nine OCR-captured LAWNS orders, the duplication hazard). The extra five '
+          + 'are exactly the match fields and nothing else: source_document_number is the primary '
+          + 'key, customer_id/sale_date/total_amount are David\'s three corroborating fields, and '
+          + 'order_kind only labels the evidence for the reader. Splitting it into two reads of one '
+          + 'table for one decision would be the worse code.',
     paths: ['packages/cultivar-os/src/pages/Dashboard.tsx',
             'packages/shared/src/quickbooks/historyOrderWriter.ts'],
   },

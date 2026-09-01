@@ -53,13 +53,19 @@ interface OrderRefusal {
 interface AlreadyOrdered {
   deliveryId: string; invoiceId: string; docNumber: string | null; linkRepaired: boolean;
 }
+interface PriorOrderFinding {
+  deliveryId: string; invoiceId: string; docNumber: string | null; deliveryDate: string | null;
+  kind: 'same-invoice' | 'probable' | 'ambiguous';
+  orderId: string | null; rule: string; evidence: string; idRecorded?: boolean;
+}
 interface OrderIngestReport {
   ok?: boolean; blocker?: string | null;
   qbStops?: number;
   alreadyOrdered?: AlreadyOrdered[];
   planned?: PlannedOrder[];
   refusals?: OrderRefusal[];
-  ordersWritten?: number; lineItemsWritten?: number; deliveriesLinked?: number;
+  priorOrders?: PriorOrderFinding[];
+  ordersWritten?: number; idsRecorded?: number; lineItemsWritten?: number; deliveriesLinked?: number;
   errors?: { deliveryId: string; invoiceId: string | null; step: string; message: string }[];
   availabilityUnchanged?: boolean | null;
   linesCarryingLot?: number;
@@ -108,6 +114,9 @@ export function QboOrderIngest({ businessId }: { businessId: string | null | und
 
   const planned   = report?.planned ?? [];
   const refusals  = report?.refusals ?? [];
+  const priors    = report?.priorOrders ?? [];
+  const priorSame = priors.filter(p => p.kind === 'same-invoice');
+  const priorOpen = priors.filter(p => p.kind !== 'same-invoice');
   const already   = report?.alreadyOrdered ?? [];
   const committed = report?.committed === true;
   const toRepair  = already.filter(a => a.linkRepaired).length;
@@ -138,11 +147,11 @@ export function QboOrderIngest({ businessId }: { businessId: string | null | und
         </button>
         <button
           onClick={() => void call('ingest')}
-          disabled={busy !== null || (planned.length === 0 && toRepair === 0) || report?.ok === false || committed}
+          disabled={busy !== null || (planned.length === 0 && toRepair === 0 && priorSame.length === 0) || report?.ok === false || committed}
           style={{ minHeight: 48, padding: '0 1.1rem',
-                   background: ((planned.length === 0 && toRepair === 0) || report?.ok === false || committed) ? '#d1d5db' : GREEN,
+                   background: ((planned.length === 0 && toRepair === 0 && priorSame.length === 0) || report?.ok === false || committed) ? '#d1d5db' : GREEN,
                    color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700,
-                   cursor: busy ? 'wait' : (planned.length === 0 && toRepair === 0) || committed ? 'not-allowed' : 'pointer' }}>
+                   cursor: busy ? 'wait' : (planned.length === 0 && toRepair === 0 && priorSame.length === 0) || committed ? 'not-allowed' : 'pointer' }}>
           {busy === 'ingest' ? 'Writing…' : `Record ${planned.length} load${planned.length === 1 ? '' : 's'}`}
         </button>
       </div>
@@ -165,9 +174,11 @@ export function QboOrderIngest({ businessId }: { businessId: string | null | und
               ? <>Recorded <strong style={{ color: GREEN }}>{report.ordersWritten ?? 0}</strong> load
                   {report.ordersWritten === 1 ? '' : 's'} · {report.lineItemsWritten ?? 0} line
                   {report.lineItemsWritten === 1 ? '' : 's'} · {report.deliveriesLinked ?? 0} stop
-                  {report.deliveriesLinked === 1 ? '' : 's'} joined to their order.</>
+                  {report.deliveriesLinked === 1 ? '' : 's'} joined to their order
+                  {(report.idsRecorded ?? 0) > 0 ? ` · ${report.idsRecorded} existing sale${report.idsRecorded === 1 ? '' : 's'} matched rather than duplicated` : ''}.</>
               : <>{planned.length} would be recorded ({plannedLines} line{plannedLines === 1 ? '' : 's'}, {money(plannedTotal)})
                   {already.length > 0 ? `, ${already.length} already have one` : ''}
+                  {priors.length > 0 ? `, ${priors.length} already exist as a captured sale` : ''}
                   {toRepair > 0 ? ` (${toRepair} of those still need joining)` : ''}
                   {refusals.length > 0 ? `, ${refusals.length} need you` : ''}.</>}
           </p>
@@ -188,6 +199,73 @@ export function QboOrderIngest({ businessId }: { businessId: string | null | und
                   ? 'These sales already happened, so none of them holds stock. Every lot’s on-hand and claimed quantity was fingerprinted before the first write and again after the last, and the two are identical.'
                   : 'Stop and report this before selling anything else — what the business can sell has changed, and nothing on this screen was supposed to change it.'}
               </p>
+            </div>
+          )}
+
+          {/* 🔴 THE COLLISIONS GO ABOVE EVERYTHING, INCLUDING THE REFUSALS. A duplicate sale in
+              the seller's own revenue reporting is the worst outcome this screen can produce,
+              and "do not reconcile silently" is a requirement about THIS PANEL, not about a log. */}
+          {priors.length > 0 && (
+            <div style={{ marginBottom: '.9rem', padding: '.7rem .8rem',
+                          background: priorOpen.length > 0 ? '#fffbeb' : '#f8fafc',
+                          border: `1px solid ${priorOpen.length > 0 ? AMBER : '#e2e8f0'}`, borderRadius: 6 }}>
+              <p style={{ margin: '0 0 .3rem', color: priorOpen.length > 0 ? AMBER : DARK, fontWeight: 700, fontSize: '.85rem' }}>
+                {priors.length} of these sales are already recorded here — no second copy was created
+              </p>
+              <p style={{ margin: '0 0 .5rem', color: GRAY, fontSize: '.78rem', lineHeight: 1.5 }}>
+                These invoices were <strong>photographed and captured</strong> before this ingest
+                existed, so the order behind them carries no QuickBooks id and the usual check
+                cannot see it. Each one below was matched on <strong>their own invoice number</strong>,
+                corroborated by customer, date and amount.
+              </p>
+              <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '.78rem' }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', color: GRAY }}>
+                    <th style={{ padding: '.25rem .4rem' }}>Invoice</th>
+                    <th style={{ padding: '.25rem .4rem' }}>Delivery</th>
+                    <th style={{ padding: '.25rem .4rem' }}>What TRACE found</th>
+                    <th style={{ padding: '.25rem .4rem' }}>What it did</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {priors.map(p => (
+                    <tr key={p.deliveryId} style={{ borderTop: '1px solid #eef2f7' }}>
+                      <td style={{ padding: '.3rem .4rem', color: DARK, whiteSpace: 'nowrap' }}>
+                        {p.docNumber ? `#${p.docNumber}` : p.invoiceId}
+                      </td>
+                      <td style={{ padding: '.3rem .4rem', color: GRAY, whiteSpace: 'nowrap' }}>{p.deliveryDate || '—'}</td>
+                      <td style={{ padding: '.3rem .4rem', color: DARK }}>
+                        {p.evidence}
+                        <div style={{ color: GRAY, fontSize: '.73rem', marginTop: '.1rem' }}>{p.rule}</div>
+                      </td>
+                      <td style={{ padding: '.3rem .4rem', whiteSpace: 'nowrap',
+                                   color: p.kind === 'same-invoice' ? GREEN : AMBER, fontWeight: 600 }}>
+                        {p.kind === 'same-invoice'
+                          ? (committed
+                              ? (p.idRecorded ? 'matched — invoice number recorded' : 'matched — already recorded')
+                              : 'will match, not duplicate')
+                          : '🔴 left for you'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {priorOpen.length > 0 && (
+                <p style={{ margin: '.55rem 0 0', color: AMBER, fontSize: '.78rem', lineHeight: 1.5 }}>
+                  🔴 <strong>{priorOpen.length} of these TRACE will not settle on its own.</strong> Either
+                  the numbers disagree, or there is no invoice number to match on and only the customer,
+                  date and amount line up. <strong>Nothing was written for them</strong> — no order, and
+                  no id on the one that exists. Open the existing order beside the invoice and decide;
+                  a wrong match here is permanent and invisible.
+                </p>
+              )}
+              {priorSame.length > 0 && !committed && (
+                <p style={{ margin: '.45rem 0 0', color: GRAY, fontSize: '.76rem', lineHeight: 1.5 }}>
+                  For the {priorSame.length} matched above, recording will write <strong>only the
+                  QuickBooks invoice number</strong> onto the order that already exists — never its
+                  money, its status or its lines — and join the stop to it.
+                </p>
+              )}
             </div>
           )}
 
@@ -223,10 +301,10 @@ export function QboOrderIngest({ businessId }: { businessId: string | null | und
             </div>
           )}
 
-          {planned.length === 0 && refusals.length === 0 && (
+          {planned.length === 0 && refusals.length === 0 && priorOpen.length === 0 && (
             <p style={{ color: GRAY, fontSize: '.85rem' }}>
-              {already.length > 0
-                ? `Every one of these ${already.length} stops already has its load recorded — there is nothing to do.`
+              {already.length + priors.length > 0
+                ? `Every one of these ${already.length + priors.length} stops already has its sale recorded — there is nothing to create.`
                 : 'No stop on your calendar came from a QuickBooks invoice, so there is nothing to load.'}
             </p>
           )}
