@@ -18,6 +18,7 @@ import { serviceWriteFailure } from './serviceWriteFailure';
 // Accounting card once a connection exists — it has nothing to read before then.
 import { QboBooksReader } from '../components/QboBooksReader';
 import { QboDeliveryIngest } from '../components/QboDeliveryIngest';
+import { QboOrderIngest } from '../components/QboOrderIngest';
 
 const GREEN = '#27500A';
 const SAGE  = '#EAF3DE';
@@ -714,6 +715,9 @@ export function Settings({
               </div>
               <QboBooksReader businessId={businessId} />
               <QboDeliveryIngest businessId={businessId} />
+              {/* BELOW the delivery ingest, and the order is the dependency: a stop must
+                  exist before it can have a load. */}
+              <QboOrderIngest businessId={businessId} />
             </div>
           ) : (
             <div>

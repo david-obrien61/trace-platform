@@ -19,7 +19,7 @@
     "quality:baseline": "node scripts/quality-gate.mjs --update",
     "test": "node scripts/run-tests.mjs",
     "verify:rls": "node scripts/run-rls-tests.mjs",
-    "verify": "node scripts/verify-api-parses.mjs && node scripts/quality-gate.mjs && npm run verify:universals && npm run verify:select-policies && npm run verify:write-paths && npm run verify:zero-row-writes && npm run verify:field-lists && npm run verify:tile-fields && npm run verify:profile-boundary && npm run verify:authority && npm run verify:unit-projection && npm test",
+    "verify": "node scripts/verify-api-parses.mjs && node scripts/quality-gate.mjs && npm run verify:universals && npm run verify:select-policies && npm run verify:write-paths && npm run verify:zero-row-writes && npm run verify:field-lists && npm run verify:tile-fields && npm run verify:profile-boundary && npm run verify:authority && npm run verify:unit-projection && npm run verify:handoff-retention && npm test",
     "verify:select-policies": "node scripts/verify-select-policies.mjs",
     "verify:write-paths": "node scripts/verify-write-paths.mjs",
     "write-paths:baseline": "node scripts/verify-write-paths.mjs --update",
@@ -33,7 +33,8 @@
     "verify:tile-fields": "node scripts/verify-tile-fields.mjs",
     "verify:profile-boundary": "node scripts/verify-profile-writer-boundary.mjs",
     "field-lists:baseline": "node scripts/verify-field-lists.mjs --update",
-    "verify:api-parses": "node scripts/verify-api-parses.mjs"
+    "verify:api-parses": "node scripts/verify-api-parses.mjs",
+    "verify:handoff-retention": "node scripts/verify-handoff-retention.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

@@ -35,6 +35,7 @@
 //   for nothing.
 // ══════════════════════════════════════════════════════════════════════════════
 import { parseRows } from './qboRead';
+import { parseInvoiceOrderLines, type QboOrderSourceLine } from './invoiceOrderLines';
 import { normalizePhone } from '../utils/normalizePhone';
 import { personNamesMatch } from '../utils/personName';
 
@@ -74,6 +75,18 @@ export interface QboShipmentRow {
   customerName: string | null;
   shipAddr: QboAddr | null;
   billAddr: QboAddr | null;
+  /**
+   * The invoice's own `Line[]`, parsed one level deeper.
+   *
+   * 🔴 THE SAME READ, NOT A SECOND ONE. `ShipDate` is not a filterable field on Intuit's
+   * Invoice query, so this ingest already walks EVERY invoice and already has each one's
+   * nested lines in hand — it simply threw them away. Carrying them costs no Intuit call, no
+   * new endpoint and no new Vercel function; it is the same 1,469 rows read one level deeper.
+   * Without them a stop is a place a truck goes with nothing on it.
+   */
+  lines: QboOrderSourceLine[];
+  /** `TxnTaxDetail.TotalTax` — the document's own tax, so it never has to be derived. */
+  totalTax: number | null;
 }
 
 export interface ParsedShipmentList {
@@ -125,6 +138,8 @@ export function parseShipmentList(rawBody: string): ParsedShipmentList {
     customerName: str(r?.CustomerRef?.name),
     shipAddr:     addr(r?.ShipAddr),
     billAddr:     addr(r?.BillAddr),
+    lines:        parseInvoiceOrderLines(r),
+    totalTax:     num(r?.TxnTaxDetail?.TotalTax),
   }));
   return { ok: true, shipments, parseError: null };
 }

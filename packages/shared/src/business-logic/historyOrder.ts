@@ -1,13 +1,18 @@
 // ============================================================
 // historyOrder — the ONE definition of "a captured document becomes an order"
 // ============================================================
-// PURPOSE:      Turn a captured source document (a customer invoice photographed and OCR'd)
-//               into an `orders` row + `order_items` rows, WITHOUT that order behaving like a
-//               sale this platform made. Used by BOTH writers: the backfill script (existing
-//               documents) and the OCR door (every document from now on).
+// PURPOSE:      Turn a captured source document into an `orders` row + `order_items` rows,
+//               WITHOUT that order behaving like a sale this platform made. THREE writers now:
+//               the backfill script (existing documents), the OCR door (a photographed invoice),
+//               and — since 2026-08-31 — the QuickBooks door (the seller's own invoice, read
+//               straight out of their books over the API, with no photograph in between).
+//
+// ⚠️ THE THIRD DOOR IS WHY `receiptId` IS NULLABLE AND WHY `lines` MAY BE SUPPLIED. Both are
+//    documented at their own declarations. What did NOT move is either invariant below — a
+//    door that reached them differently would be the drift this file exists to prevent.
 // DEPENDENCIES: none — pure. No db handle, no network, no env. Both callers own their transport.
 // OUTPUTS:      HISTORY_ORDER_KIND · historyOrderStatus / isDeliveryComplete · decodeCapturedDocument ·
-//               transportMethodForService · buildHistoryOrder.
+//               transportMethodForService · historyOrderLines · HistoryOrderLine · buildHistoryOrder.
 // ============================================================
 //
 // 🔴 WHY THIS FILE EXISTS AT ALL — §6 r8. Two writers need the same OPERATION, and the rule is
@@ -179,7 +184,20 @@ export function historyOrderLines(lineItemsOriginal: any): HistoryOrderLine[] {
 export interface HistoryOrderInput {
   businessId: string;
   customerId: string;
-  receiptId: string;
+  /**
+   * The captured document this order came off — or `null` when there is no document to point at.
+   *
+   * ⚠️ NULLABLE SINCE 2026-08-31, AND THE REASON IS A SECOND DOOR RATHER THAN A RELAXATION.
+   * A history order originally always came from a PHOTOGRAPHED invoice, so a `receipts` row
+   * always existed. The QuickBooks door reads the seller's own invoice straight out of their
+   * books: there is no photograph, no OCR and no receipt row, and inventing one to satisfy a
+   * type would be a fabricated record of a scan nobody performed (A9). The column is nullable
+   * in the schema (`20260827_history_orders.sql` — `ADD COLUMN receipt_id uuid REFERENCES
+   * receipts(id) ON DELETE SET NULL`), so the type now says what the table has always said.
+   * The provenance is not lost — it moves to `qbInvoiceId`, which is a stronger key than a
+   * photograph because it is the id the customer's own accounting system assigned.
+   */
+  receiptId: string | null;
   /** The document's own date — receipts.date, a first-class typed column. NOT created_at. */
   documentDate: string | null;
   /** receipts.amount — the total actually invoiced. */
@@ -190,6 +208,25 @@ export interface HistoryOrderInput {
   serviceType?: string | null;
   /** The delivery row's own status. Drives the order status — see historyOrderStatus. */
   deliveryStatus?: string | null;
+  /**
+   * Lines ALREADY BUILT by the caller, used INSTEAD of decoding `lineItemsOriginal`.
+   *
+   * The OCR door hands over a blob it wants transcribed; the QuickBooks door hands over lines
+   * it has already classified against Intuit's own vocabulary (`invoiceOrderLines.ts` — which
+   * construct is a note, which is a running total, which is a give-away that is still a tree).
+   * That classification cannot be expressed as an OCR blob and must not be re-derived here.
+   * What is NOT delegated is the invariant: the lines are typed `HistoryOrderLine`, so their
+   * lot id is the literal `null` whichever door built them.
+   */
+  lines?: HistoryOrderLine[];
+  /** Free text carried onto the order. The QuickBooks door puts the invoice's `DescriptionOnly`
+   *  lines here — they are things a person wrote, and they are not things to load. */
+  notes?: string | null;
+  /** Intuit's INTERNAL transaction id. The idempotency key: an invoice that already has an
+   *  order gets nothing. Distinct from `qbDocNumber`, the number a customer can quote. */
+  qbInvoiceId?: string | null;
+  /** QuickBooks' human-readable invoice number (`DocNumber`). */
+  qbDocNumber?: string | null;
 }
 
 export interface HistoryOrderDraft {
@@ -201,7 +238,10 @@ export interface HistoryOrderDraft {
     order_kind: string;
     source_document_number: string | null;
     sale_date: string | null;
-    receipt_id: string;
+    receipt_id: string | null;
+    qb_invoice_id: string | null;
+    qb_doc_number: string | null;
+    notes: string | null;
     delivery_date: string | null;
     subtotal: number;
     tax_amount: number;
@@ -239,7 +279,9 @@ export interface HistoryOrderDraft {
  * clean bill of health (see the dashboard add-on banner).
  */
 export function buildHistoryOrder(input: HistoryOrderInput): HistoryOrderDraft {
-  const items = historyOrderLines(input.lineItemsOriginal);
+  // Pre-built lines win when the caller supplied them; the OCR door supplies none and
+  // falls through to the transcription path exactly as before.
+  const items = input.lines ?? historyOrderLines(input.lineItemsOriginal);
   const lineSum = round2(items.reduce((a, l) => a + l.subtotal, 0));
   const total = Number(input.documentTotal ?? 0);
 
@@ -259,6 +301,9 @@ export function buildHistoryOrder(input: HistoryOrderInput): HistoryOrderDraft {
       source_document_number: input.decoded?.sourceDocumentNumber ?? null,
       sale_date: input.documentDate ?? null,
       receipt_id: input.receiptId,
+      qb_invoice_id: input.qbInvoiceId ?? null,
+      qb_doc_number: input.qbDocNumber ?? null,
+      notes: input.notes ?? null,
       delivery_date: input.deliveryDate ?? null,
       subtotal,
       tax_amount: tax,
