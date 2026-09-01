@@ -37,10 +37,11 @@ The delivery ingest put nineteen stops on the calendar and **not one of them say
 truck.** Saturday 5 September shows six stops and nothing tells anyone whether that is a full day
 or a light one — which is the question a day sheet exists to answer.
 
-**What this board is actually guarding against is not a missing line. It is a moved number.**
-These are recorded as sales in the seller's own reporting, and a sale that quietly holds stock
-reduces what LAWNS can sell with no ledger row and nothing to reverse. **CARD 5 is the card that
-matters most, and it is the one to run even if you skip the rest.**
+**What this board is actually guarding against is not a missing line. It is a moved number**, and
+there are two of them. These are recorded as sales in the seller's own reporting, so: a sale that
+quietly holds stock reduces what LAWNS can sell with no ledger row and nothing to reverse
+(**CARD 5**), and a sale recorded twice inflates their revenue with nothing to notice
+(**CARD 4b**). 🔴 **Those two are the cards to run even if you skip the rest.**
 
 ---
 
@@ -94,9 +95,45 @@ Count `/orders` **before** pressing Record, and again after.
 
 - Before: **9** (the history orders from the captured paper invoices, all dated 27 August).
 - After: **9 + N**, where N is the number the panel said it would write.
-- 🔴 **Nine plus nineteen, not nine plus twenty.** If it is one more than the panel promised,
-  something wrote outside the plan — stop and report the number.
-- The nine August orders are **untouched** — same dates, same totals, same line counts.
+- 🔴 **N is NOT automatically nineteen.** ⚠️ **CORRECTED 2026-09-01, and the correction is the
+  point of CARD 4b:** any invoice that already has one of those nine orders behind it is **matched,
+  not created**. So the honest expectation is *"nine plus whatever the panel promised"*, and the
+  panel's number is the assertion. **If the count is HIGHER than the panel promised, stop** —
+  something wrote outside the plan, and a duplicate sale is silent and permanent.
+- The nine August orders keep **their same dates, totals and line counts.** The only thing that may
+  change on one is that it now carries a QuickBooks invoice number — see CARD 4b.
+
+---
+
+## CARD 4b — 🔴 THE NINE CAPTURED SALES ARE MATCHED, NOT DUPLICATED
+STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
+
+**Run this BEFORE CARD 4, on the preview, and read it carefully. It is the second most important
+card on this board.**
+
+LAWNS holds **nine history orders transcribed from photographs** of paper invoices. None of them
+carries a QuickBooks invoice id — nothing in that path ever had one — so **the idempotency key is
+blind to all nine**, and a pass keyed only on that column would create a second order for every
+sale already captured. 🔴 **This is not theoretical: seven of the eighteen future-dated invoices
+carry a `TxnDate` of 26 or 27 August, the exact window those nine were captured in, and six of them
+share one date.**
+
+On the preview, above everything else, there is a panel: **"N of these sales are already recorded
+here — no second copy was created."**
+
+- Every row names **their own invoice number**, what TRACE found, and what it will do.
+- A row reading **"will match, not duplicate"** was matched on the invoice number **and** corroborated
+  by customer, date and amount. Recording writes **only the invoice number** onto the order that
+  already exists — never its money, its status or its lines — and joins the stop to it.
+- 🔴 **A row reading "left for you" is the one to look at.** Either the numbers disagree, or there
+  was no invoice number to match on and only customer/date/amount line up. **Nothing at all is
+  written for those** — no order, and no id on the existing one.
+- 🔴 **Open one "left for you" row's existing order beside its QuickBooks invoice and decide.**
+  A wrong match here is permanent and invisible — the key would skip that order forever.
+
+**Then check CARD 4's arithmetic against this panel:** the orders created should be
+`(stops from QuickBooks) − (already have one) − (already recorded as a captured sale) − (refusals)`.
+If the number is higher than that, stop.
 
 ---
 

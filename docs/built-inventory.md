@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-08-31 (**#247 — THE NINETEEN STOPS GET THEIR LINES.** `Invoice.Line[]` → a history order on each stop, through a THIRD door and the same `buildHistoryOrder`; the same read one level deeper, no new Intuit surface, api/ still 12/12. 🔴 **The finding: a `$0` line is NOT automatically a note** — invoice #3648.563 totals $0.00 and carries two real warranty-replacement trees, so the discriminator is `DetailType`. Migration `20260831c` **OWED**. See the QUICKBOOKS ORDER INGEST entry.) · Prior: #246 · #245 · #244 · #243 · #242.
+# Last updated: 2026-09-01 (**#247 — THE NINETEEN STOPS GET THEIR LINES, AND THE KEY WAS BLIND TO THE NINE ALREADY HERE.** `Invoice.Line[]` → a history order on each stop, through a THIRD door and the same `buildHistoryOrder`. 🔴 **Two findings: a `$0` line is NOT automatically a note** (#3648.563 totals $0.00 and carries two real warranty-replacement trees, so the discriminator is `DetailType`), **and the nine OCR history orders carry no `qb_invoice_id`, so `ON CONFLICT` cannot see them** — a prior-order guard matches on their own document number, records an id only on an identity, and reports everything else. Migration `20260831c` **OWED**. See the QUICKBOOKS ORDER INGEST entry.) · Prior: #246 · #245 · #244 · #243.
 
 
 > 📐 **CAMPAIGN LIFECYCLE — SCOPING + ESTIMATE (2026-08-23, ledger #192/#192b).** NOT a capability entry: **nothing was built.** A scoping document answering David's *"I can add but not edit or cancel or delete"* with nine questions, ten site keys, a proven F1/F2/F3 dependency order, three scopes (**MINIMUM ~2–3 · COHERENT ~5–7 · COMPLETE ~11–14 Thunder prompts; MINIMUM and COHERENT need ZERO migrations**) and eight rulings owed. Read it before ANY campaign build — it is the answer to "has this been scoped?" and its first finding is that the EDIT FORM ALREADY EXISTS as the create form (`Campaigns.tsx:120-198`). → [`docs/audits/campaign-lifecycle-scoping-2026-08-23.md`](audits/campaign-lifecycle-scoping-2026-08-23.md) · predecessor [`social-campaign-path-recon-2026-08-22.md`](audits/social-campaign-path-recon-2026-08-22.md)
@@ -2403,9 +2403,30 @@ rendered on the screen in the operator's own words). [[R-21]] · [[D-52]].
   index on `orders (business_id, qb_invoice_id)` **with NO predicate**, which is #246's one-day-old
   lesson applied before it could repeat. Without it the pass REFUSES and names the file.
 
+🔴 **THE PRIOR-ORDER GUARD — THE IDEMPOTENCY KEY IS BLIND TO THE ORDERS THAT MATTER MOST (added
+2026-09-01, David's catch).** The nine LAWNS history orders were transcribed from PHOTOGRAPHS, so
+none carries a `qb_invoice_id` and `ON CONFLICT` cannot see any of them; the same is true of every
+checkout order never pushed to QuickBooks. **A pass keyed only on that column creates a second order
+for every sale already captured.** Not theoretical: **seven of the eighteen future-dated invoices
+carry a `TxnDate` of 26 or 27 August, the window those nine were captured in, and six share one
+date.** The guard runs on every plan that is otherwise ready to write:
+- **PRIMARY: the customer's own `source_document_number`** — the same string Intuit returns as
+  `DocNumber`. A match on it is an IDENTITY, not a guess.
+- **CORROBORATION: customer, date and amount** (money in cents; a null on either side is `unknown`,
+  never agreement). This ordering is [[D-47]]'s three-way rule and #53's scar.
+- **ONLY AN IDENTITY WRITES ANYTHING, AND ALL IT WRITES IS THE ID** — `qb_invoice_id` +
+  `qb_doc_number` on the existing order, guarded `qb_invoice_id IS NULL`, and the stop is joined to
+  it. **Never its money, status, dates or lines.**
+- **Everything else STOPS AND REPORTS** — a document number matching over disagreeing money, an
+  unanchored two-of-three match, or more than one candidate. Rendered on the preview panel ABOVE
+  the refusals, because *"do not reconcile silently"* is a requirement about the SCREEN.
+⚠️ Residual: **tech-debt #141** — a matcher is a weaker thing than a key, and ~40 orders still carry
+no id.
+
 **What it does NOT do.** No inventory, no lot, no cost, no ledger row, nothing to Intuit. It updates
-exactly ONE column on a delivery — `order_id`, and only where it is NULL. `service_type` stays NULL
-(tech-debt #140) and nothing distinguishes a tree from a trip charge yet (tech-debt #139).
+exactly ONE column on a delivery — `order_id`, and only where it is NULL — and on an existing order,
+only the two identifier columns above. `service_type` stays NULL (tech-debt #140) and nothing
+distinguishes a tree from a trip charge yet (tech-debt #139).
 
 ## QUICKBOOKS DELIVERY INGEST — `Invoice.ShipDate` → a scheduled delivery
 **Last updated:** 2026-08-31 · **Bar: BUILDER-COMPLETE** (on `thunder/qb-deliveries`, not merged) · **Owner-test:** `docs/owner-tests/qb-delivery-ingest-full-surface-test.md`
