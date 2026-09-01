@@ -76,7 +76,14 @@ const ALLOWED_DIVERGENCE = {
     paths: ['packages/cultivar-os/api/customers/create.ts',
             'packages/cultivar-os/api/orders/submit.ts',
             'packages/cultivar-os/src/pages/DeliverySchedule.tsx',
-            'packages/shared/src/quickbooks/deliveryIngestWriter.ts'],
+            'packages/shared/src/quickbooks/deliveryIngestWriter.ts',
+            // DECLARED 2026-08-31 (the load pass). A FIFTH path, and the narrowest of the five:
+            // it writes exactly ONE column, `order_id`, on a row that already exists, and only
+            // where that column is currently NULL. It creates no delivery and it can change no
+            // date, address or customer — which is the ruling the ingest above turns on (Cultivar
+            // owns the delivery date). `historyOrderWriter.test.ts` §C3 asserts the patch key set
+            // is exactly ['order_id'], so the narrowness is measured rather than promised.
+            'packages/shared/src/quickbooks/historyOrderWriter.ts'],
   },
   // APPROVED 2026-07-29 (David) after inspection: no column overlap, and the state upsert was
   // proven non-clobbering (PostgREST builds ON CONFLICT DO UPDATE SET from the supplied columns
@@ -132,16 +139,28 @@ const ALLOWED_DIVERGENCE = {
           + 'to QuickBooks); customers/create.ts writes a HISTORY order transcribed from a captured '
           + 'document (priced by the document, never committed, never pushed). Merging would put a '
           + 'bypass branch through the pricing/commit/QBO path a history order must not touch. '
-          + 'Shared invariants live in shared/business-logic/historyOrder.ts.',
+          + 'Shared invariants live in shared/business-logic/historyOrder.ts. '
+          + 'THIRD PATH declared 2026-08-31: historyOrderWriter.ts is the same HISTORY act through '
+          + 'a different door — the seller\'s own QuickBooks invoice read over the API rather than '
+          + 'a photograph — and it goes through the SAME buildHistoryOrder, so the invariants are '
+          + 'not re-derived. It owns two columns neither other path writes on a history order '
+          + '(qb_invoice_id as the idempotency key, qb_doc_number) and is the only writer that '
+          + 'sets receipt_id NULL by construction. It cannot ride customers/create.ts: that path '
+          + 'is an OCR receipt handler keyed on a receipts row this door does not have.',
     paths: ['packages/cultivar-os/api/orders/submit.ts',
-            'packages/cultivar-os/api/customers/create.ts'],
+            'packages/cultivar-os/api/customers/create.ts',
+            'packages/shared/src/quickbooks/historyOrderWriter.ts'],
   },
   'order_items': {
     reason: 'Same two acts as `orders`. A history line carries a transcribed description/sku and a '
           + 'NULL business_inventory_id by invariant — it is deliberately NOT a catalog-resolved '
-          + 'line, which is exactly what submit.ts exists to produce.',
+          + 'line, which is exactly what submit.ts exists to produce. THIRD PATH declared '
+          + '2026-08-31 for the same reason as `orders`: historyOrderWriter.ts writes the same '
+          + 'history line shape from the QuickBooks door, and its NULL lot id is asserted at the '
+          + 'write (historyOrderWriter.test.ts A14) as well as in the type.',
     paths: ['packages/cultivar-os/api/orders/submit.ts',
-            'packages/cultivar-os/api/customers/create.ts'],
+            'packages/cultivar-os/api/customers/create.ts',
+            'packages/shared/src/quickbooks/historyOrderWriter.ts'],
   },
   // DECLARED 2026-08-01 (ledger #181) — TWO ACTS, NOT TWO WRITERS OF ONE ACT.
   // `moduleState.ts` CHANGES an existing tenant's module state (enable / configure), gated

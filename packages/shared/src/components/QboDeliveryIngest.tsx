@@ -297,7 +297,8 @@ export function QboDeliveryIngest({ businessId }: { businessId: string | null | 
             <p style={{ marginTop: '.7rem', color: GRAY, fontSize: '.78rem', lineHeight: 1.5 }}>
               An invoice does not say whether a stop is a <strong>planting</strong> or a <strong>drop-off</strong>,
               so TRACE leaves that unset rather than guessing — set it per stop on the delivery schedule.
-              No order and no inventory is created by this: these are calendar stops, nothing more.
+              This step creates <strong>calendar stops only</strong> — no inventory moves, and no sale is
+              recorded. What is <em>on</em> each stop is the next panel down.
             </p>
           )}
         </div>

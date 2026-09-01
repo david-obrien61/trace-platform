@@ -88,11 +88,17 @@ const ALLOWED_DIVERGENCE = {
   // 🔴 THE REAL FIX IS A RECEIPTS FIELD REGISTRY, and it is named rather than quietly skipped.
   // `receipts` has no registry (customers is the only entity that does), and minting one inside an
   // unrelated build is exactly the drift these caps exist to catch. Tech-debt #120.
+  // ⚠️ SECOND PATH ADDED 2026-08-31 (the load pass). `historyOrderWriter` reads TWO columns —
+  // `id, qb_invoice_id` — and they are the idempotency question in full: *"which invoices already
+  // have an order?"* It is the narrowest list on this entity and it is read solely to decide NOT
+  // to write.
   orders: {
-    reason: '3-column projection answering one question (what may the add-on banner claim), not the '
-          + 'order record shape. order_kind is read because a history order\'s leakage_flag means '
-          + 'UNEVALUATED, not clean.',
-    paths: ['packages/cultivar-os/src/pages/Dashboard.tsx'],
+    reason: 'Two narrow projections, two questions, neither the order record shape. Dashboard reads '
+          + '3 columns to answer what the add-on banner may claim (order_kind is read because a '
+          + 'history order\'s leakage_flag means UNEVALUATED, not clean); historyOrderWriter reads '
+          + '2 to answer which invoices already have an order, solely to decide NOT to write.',
+    paths: ['packages/cultivar-os/src/pages/Dashboard.tsx',
+            'packages/shared/src/quickbooks/historyOrderWriter.ts'],
   },
   // DECLARED 2026-08-31 (the QuickBooks ShipDate delivery ingest) — ⚠️ PENDING DAVID'S RATIFICATION.
   // The SAME distinction as `customers` above: a 4-column projection answering one question, not a
@@ -105,11 +111,28 @@ const ALLOWED_DIVERGENCE = {
   // either — `customers` is still the only entity that does. Minting one inside a delivery-ingest
   // build is the drift these caps exist to catch, so it is filed, not done here. Tech-debt #120's
   // class, the second entity to hit it.
+  // ⚠️ SECOND PATH ADDED 2026-08-31 (the load pass) — PENDING DAVID'S RATIFICATION like the rest.
+  // `historyOrderWriter.ts` reads a SEVEN-column projection answering a DIFFERENT question from
+  // the four-column one above: *"which stops came from a QuickBooks invoice, do they already have
+  // an order, and what should that order say?"* — `id, customer_id, delivery_date, service_type,
+  // status, qb_invoice_id, order_id`. The three it adds are all consumed and none is decorative:
+  // `status` drives the ORDER's status (a stop that is `scheduled` makes an `invoiced` order, not
+  // a `fulfilled` one), `service_type` drives `transport_method`, and `order_id` is the whole
+  // decision — a stop that has one is left alone.
+  // 🔴 IT CANNOT RIDE THE FOUR-COLUMN LIST: widening that one would pull three columns into the
+  // delivery ingest's dedup read that it has no use for, which is precisely the "read the record
+  // to answer a question" shape both declarations exist to refuse. Two questions, two projections.
+  // The residual is unchanged and still owed: `deliveries` has no field registry (tech-debt #120's
+  // class, second entity), and minting one inside this build is the drift these caps catch.
   deliveries: {
-    reason: '4-column projection answering one question — which stops already exist and whose are '
-          + 'they — read solely to decide NOT to write. Never the delivery record shape. '
+    reason: 'TWO projections answering TWO questions, neither a record shape. deliveryIngestWriter '
+          + 'reads 4 columns to decide NOT to write a stop; historyOrderWriter reads 7 to decide '
+          + 'whether a stop needs an order and what that order should say (status drives the '
+          + 'order status, service_type drives transport_method, order_id is the skip decision). '
+          + 'Widening one to serve both would hand each read columns it has no use for. '
           + 'deliveries has no field registry (tech-debt #120 class).',
-    paths: ['packages/shared/src/quickbooks/deliveryIngestWriter.ts'],
+    paths: ['packages/shared/src/quickbooks/deliveryIngestWriter.ts',
+            'packages/shared/src/quickbooks/historyOrderWriter.ts'],
   },
   receipts: {
     reason: 'The narrow projection the OCR door needs to build a history order from the receipt row '

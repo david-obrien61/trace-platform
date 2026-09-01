@@ -110,7 +110,13 @@ export function analyze(files) {
         status = 'UNCHECKABLE';                       // no select → the row count never comes back
       } else if (/\.single\(\)/.test(win)) {
         status = 'CHECKED';                           // single() errors (PGRST116) on zero rows
-      } else if (/\.length\s*===\s*0|\.length\s*<\s*1|!\s*\w+\?\.\s*length|!\w+\.length|\.length\s*>\s*0|length\s*===\s*0|\.length\s*!==?\s*\d+/.test(after)) {
+      // ⚠️ `=== <n>` ADDED 2026-08-31, AND IT IS THE CAP PUNISHING THE FIX AGAIN (see the header
+      // note at :24). `data.length !== 1` was recognised and `data.length === 1` was not — the
+      // SAME inspection, written the other way round, which is the natural form when the success
+      // branch is the interesting one (`if (rows.length === 1) { counted++ } else { report() }`).
+      // A cap that accepts one polarity and not the other teaches people to write the awkward
+      // one, and an awkward line written to satisfy a regex is not a safer line.
+      } else if (/\.length\s*===\s*0|\.length\s*<\s*1|!\s*\w+\?\.\s*length|!\w+\.length|\.length\s*>\s*0|length\s*===\s*0|\.length\s*!==?\s*\d+|\.length\s*===\s*[1-9]\d*/.test(after)) {
         status = 'CHECKED';                           // explicit affected-row inspection
       } else {
         status = 'NEEDS_CHECK';                       // selectable, not inspected
@@ -154,6 +160,12 @@ function runProbes() {
     st([f('a.ts', `const { data } = await supabase.from('t').update(p).eq('id', id).select('id');\nif (data?.length !== 1) throw new Error('not one row');`)]));
   ck('Z3c .select() with a loose exact-count check (!= 1) → CHECKED', 'CHECKED',
     st([f('a.ts', `const { data } = await supabase.from('t').update(p).eq('id', id).select('id');\nif (data?.length != 1) throw new Error('not one row');`)]));
+  ck('Z3e 🔴 .select() with an EXACT-COUNT check written the OTHER WAY (=== 1) → CHECKED — the same inspection, and the natural form when the success branch is the interesting one', 'CHECKED',
+    st([f('a.ts', `const { data } = await supabase.from('t').update(p).eq('id', id).select('id');\nif ((data ?? []).length === 1) { linked++; } else { report(); }`)]));
+  ck('Z3f the same on a DELETE, assigned rather than branched — the rollback shape', 'CHECKED',
+    st([f('a.ts', `const { data } = await supabase.from('t').delete().eq('id', id).select('id');\nconst removed = (data ?? []).length === 1;`)]));
+  ck('Z3g NEGATIVE CONTROL for Z3e — `=== 0` must still not be confused with a count of one, and neither may a bare length read', 'NEEDS_CHECK',
+    st([f('a.ts', `const { data } = await supabase.from('t').update(p).eq('id', id).select('id');\nconst n = data.length;`)]));
   ck('Z3d NEGATIVE CONTROL for Z3b — the widening must not make MERE USE of data read as a check', 'NEEDS_CHECK',
     st([f('a.ts', `const { data } = await supabase.from('t').update(p).eq('id', id).select('id');\nreturn data.map(r => r.id);`)]));
   ck('Z4 🔴 .select() with NO length check → NEEDS_CHECK (selectable, not inspected)', 'NEEDS_CHECK',

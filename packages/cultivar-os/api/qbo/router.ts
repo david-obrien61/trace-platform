@@ -13,6 +13,8 @@
  *   GET  /api/qbo/invoices  → _route=invoices   (READ-ONLY, paginated, complete, ceiling-capped)
  *   GET  /api/qbo/deliveries/preview → _route=deliveries-preview (READ-ONLY — plans, writes nothing)
  *   POST /api/qbo/deliveries/ingest  → _route=deliveries-ingest  (WRITES customers + deliveries ONLY)
+ *   GET  /api/qbo/orders/preview     → _route=orders-preview  (READ-ONLY — plans, writes nothing)
+ *   POST /api/qbo/orders/ingest      → _route=orders-ingest   (WRITES orders + order_items + deliveries.order_id ONLY)
  */
 
 import crypto from 'crypto';
@@ -29,6 +31,7 @@ import { parseCustomerList, summariseCustomers, previewCustomers } from '../../.
 import { parseInvoiceList, summariseInvoices } from '../../../shared/src/quickbooks/invoiceList';
 import { parseShipmentList } from '../../../shared/src/quickbooks/shipmentIngest';
 import { previewDeliveryIngest, commitDeliveryIngest } from '../../../shared/src/quickbooks/deliveryIngestWriter';
+import { previewOrderIngest, commitOrderIngest } from '../../../shared/src/quickbooks/historyOrderWriter';
 import { isPushHeld, QBO_PUSH_HOLD_ENV } from '../../../shared/src/quickbooks/pushHold';
 
 // ─── shared constants ────────────────────────────────────────────────────────
@@ -808,6 +811,58 @@ async function handleDeliveriesIngest(req: any, res: any) {
   }
 }
 
+// ─── the load — invoice lines → history orders ────────────────────────────────
+//
+// 🔴 WHY THESE TWO ALSO RIDE THIS ROUTER, AND WHY NO INTUIT SURFACE IS NEW. `api/` is at
+// 12 OF 12 (§6 r11) and function #13 does not error — it makes the whole deploy fail SILENTLY
+// while Vercel keeps serving the last-good bundle. These are branches on a function that
+// already exists. And the READ is the one `walkShipments` already performs: `Invoice.Line[]`
+// arrives nested inside the same 1,469 rows the delivery ingest walks, so this is the same
+// invoices read one level deeper — no new Intuit endpoint, no second token, no extra call.
+//
+// 🔴 THE PERMISSIONS ARE `orders:*`, NOT `deliveries:*`, AND THAT IS A DERIVATION FROM WHAT
+// THE CODE WRITES RATHER THAN FROM WHAT THE SCREEN IS CALLED (the 2026-07-31 ruling). This
+// pass writes `orders` and `order_items`; it touches `deliveries` only to set `order_id`, a
+// field on a row that already exists. `orders:create` is the act; `orders:read` gates the
+// preview, which carries what every customer bought and what they paid.
+
+async function handleOrdersPreview(req: any, res: any) {
+  const businessId = (req.query.business_id as string) || '';
+  if (!businessId) return res.status(400).json({ error: 'business_id required' });
+  if (!(await callerCan(req.headers?.authorization, businessId, 'orders:read'))) {
+    console.log('[TRACE:QBORDERS] preview REFUSED — caller lacks orders:read', { businessId });
+    return res.status(403).json({ error: 'Not authorized to read this business\'s orders', code: 'FORBIDDEN' });
+  }
+  const walked = await walkShipments(req, res);
+  if (!walked) return;
+  try {
+    const report = await previewOrderIngest(supabase(), businessId, walked.shipments);
+    return res.status(200).json({ ...report, realm_id: walked.realmId, queried_at: walked.queriedAt, committed: false });
+  } catch (e: any) {
+    console.log('[TRACE:QBORDERS] preview failed', { businessId, message: e?.message });
+    return res.status(500).json({ error: `Could not plan the order ingest: ${e?.message ?? 'unknown error'}` });
+  }
+}
+
+async function handleOrdersIngest(req: any, res: any) {
+  const businessId = (req.query.business_id as string) || '';
+  if (!businessId) return res.status(400).json({ error: 'business_id required' });
+  const auth = req.headers?.authorization;
+  if (!(await callerCan(auth, businessId, 'orders:create'))) {
+    console.log('[TRACE:QBORDERS] ingest REFUSED — caller lacks orders:create', { businessId });
+    return res.status(403).json({ error: 'Not authorized to create orders for this business', code: 'FORBIDDEN' });
+  }
+  const walked = await walkShipments(req, res);
+  if (!walked) return;
+  try {
+    const report = await commitOrderIngest(supabase(), businessId, walked.shipments);
+    return res.status(report.ok ? 200 : 409).json({ ...report, realm_id: walked.realmId, queried_at: walked.queriedAt, committed: report.ok });
+  } catch (e: any) {
+    console.log('[TRACE:QBORDERS] ingest failed', { businessId, message: e?.message });
+    return res.status(500).json({ error: `The order ingest failed: ${e?.message ?? 'unknown error'}` });
+  }
+}
+
 // ─── router (AC-5 dispatch) ───────────────────────────────────────────────────
 
 export default async function handler(req: any, res: any) {
@@ -821,6 +876,8 @@ export default async function handler(req: any, res: any) {
     case 'invoices':  return handleInvoices(req, res);
     case 'deliveries-preview': return handleDeliveriesPreview(req, res);
     case 'deliveries-ingest':  return handleDeliveriesIngest(req, res);
+    case 'orders-preview':     return handleOrdersPreview(req, res);
+    case 'orders-ingest':      return handleOrdersIngest(req, res);
     default:
       return res.status(400).json({ error: `Unknown QBO route: ${route || '(none)'}` });
   }

@@ -177,6 +177,10 @@ const LYDIA = freeform('Lydia Yustman', '(951) 323-3061', '105 Out Crop View Lan
 const mk = (id: string, name: string, shipDate: string | null, ship: QboAddr | null, amt = 6600): QboShipmentRow => ({
   id, docNumber: `10${id}`, shipDate, txnDate: '2026-08-01', totalAmt: amt,
   customerId: `C${id}`, customerName: name, shipAddr: ship, billAddr: null,
+  // Added 2026-08-31: the row now also carries the invoice's own lines and tax, because the
+  // SAME walk feeds the order ingest. This fixture is about ADDRESSES, so both are empty —
+  // and they are stated rather than omitted, so a reader is not left wondering.
+  lines: [], totalTax: null,
 });
 {
   const rows = [

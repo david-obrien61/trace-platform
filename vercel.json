@@ -8,6 +8,8 @@
     { "source": "/api/qbo/invoices",  "destination": "/api/qbo-connector?_route=invoices" },
     { "source": "/api/qbo/deliveries/preview", "destination": "/api/qbo-connector?_route=deliveries-preview" },
     { "source": "/api/qbo/deliveries/ingest",  "destination": "/api/qbo-connector?_route=deliveries-ingest" },
+    { "source": "/api/qbo/orders/preview", "destination": "/api/qbo-connector?_route=orders-preview" },
+    { "source": "/api/qbo/orders/ingest",  "destination": "/api/qbo-connector?_route=orders-ingest" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

@@ -34,6 +34,10 @@ const inv = (id: string, name: string, date: string, street: string): QboShipmen
   id, docNumber: `D${id}`, shipDate: date, txnDate: '2026-08-01', totalAmt: 6600,
   customerId: `QB${id}`, customerName: name,
   shipAddr: freeform(name, '(512) 555-0100', street, 'Leander, TX 78641'), billAddr: null,
+  // Added 2026-08-31 with the order ingest, which reads the SAME parsed row one level deeper.
+  // Deliberately EMPTY here: §E asserts this ingest writes no order and no order line, and a
+  // fixture carrying lines would let a regression that DID write one look plausible.
+  lines: [], totalTax: null,
 });
 
 /**
