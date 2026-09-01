@@ -121,26 +121,80 @@ const NOW = T('2026-08-31T17:00:00.000Z');
     '🔴 C8: the crew screen body must not mention module/config/entitlement/review — a paywall the customer can read over a shoulder is the worst kind');
 }
 
-// ══ §D THE THREE RULES THAT ARE NOT PREFERENCES ════════════════════════════════
+// ══ §D THE RULES THAT ARE NOT PREFERENCES ══════════════════════════════════════
+//
+// 🔴 DAVID'S RULING 2026-08-31: the rule is the CONSTRUCTION, not the topic — "anything of the
+// form 'it helps if you mention…' is the prohibited construction WHATEVER FOLLOWS IT." So the
+// probes below vary the OBJECT deliberately: if the check only fired on crews and plants it would
+// be enforcing a word list, not the policy clause.
 {
-  // D1 — the default copy must not direct content. This is the exact line the build prompt
-  // proposed, and Google's Rating Manipulation section prohibits it twice over.
+  // D1 — the shipped default must be clean. It is David's own wording.
+  ok(DEFAULT_REVIEW_GUIDANCE === "If you have a moment, we'd appreciate a review.",
+    'D1: the default is David\'s ruled wording — nothing about the contents');
   ok(reviewCopyProblems(DEFAULT_REVIEW_GUIDANCE).length === 0,
-    'D1: the shipped default guidance is policy-clean');
-  ok(reviewCopyProblems('It helps most if you mention what we planted and how the crew did.').length > 0,
-    '🔴 D2: a line directing WHAT to say and naming the CREW is refused — Google prohibits requesting specific content, including content identifying a staff member');
-  ok(reviewCopyProblems('Leave us a review and get 10% off your next order').length > 0,
-    '🔴 D3: an incentive is refused');
-  ok(reviewCopyProblems('If you are happy, please leave us a 5 star review').length > 0,
-    '🔴 D4: sentiment screening is refused');
-  ok(reviewCopyProblems('A review helps our small family business.').length === 0,
-    'D5 (negative control): an ordinary, clean line is NOT refused — the check must not be a blanket no');
-  ok(reviewCopyProblems('').length === 0 && reviewCopyProblems(null).length === 0,
-    'D6: an empty line has no problems (the default is used)');
+    'D1b: …and it passes its own check');
 
-  // D7 — the reasons are explanations, not codes. A refusal nobody understands gets worked around.
-  ok(reviewCopyProblems('get a free tree for a review')[0].includes('incentive'),
-    'D7: a refusal says WHY in words the owner can act on');
+  // 🔴 D2 — THE CONSTRUCTION, WITH FOUR DIFFERENT OBJECTS. Every one must be refused, and the
+  // last two are the point: they name nothing about staff or product, and are still the
+  // prohibited act. A word-list check would pass them.
+  const constructions = [
+    'It helps most if you mention what we planted and how the crew did.',
+    'It helps if you mention how quickly we arrived.',
+    'It helps if you mention the weather.',
+    'Please mention your experience.',
+    'Be sure to talk about the service.',
+    'Tell them what you thought.',
+    'Don\'t forget to include it in your review.',
+    'Make sure to describe the visit.',
+  ];
+  for (const line of constructions) {
+    ok(reviewCopyProblems(line).length > 0,
+      `🔴 D2: REFUSED whatever follows the directive — "${line}"`);
+  }
+
+  // D3 — the staff clause is enforced SEPARATELY, because Google enumerates it separately.
+  ok(reviewCopyProblems('A note about the crew is always welcome.').length > 0,
+    '🔴 D3: naming staff is refused on its own clause, with no directive verb present');
+  ok(reviewCopyProblems('Our driver appreciates your feedback.').length > 0,
+    'D3b: …and a different staff noun is caught too');
+
+  // D4 — incentives.
+  ok(reviewCopyProblems('Leave us a review and get 10% off your next order').length > 0,
+    '🔴 D4: an incentive is refused');
+  ok(reviewCopyProblems('A free tree for anyone who reviews us').length > 0,
+    'D4b: a different incentive is refused');
+
+  // D5 — screening.
+  ok(reviewCopyProblems('If you are happy, please leave us a 5 star review').length > 0,
+    '🔴 D5: sentiment screening is refused');
+  ok(reviewCopyProblems('How did we do today?').length > 0,
+    'D5b: the softest gating opener is refused');
+
+  // 🔴 D6 — NEGATIVE CONTROLS. A check that refuses everything is not a check, and it would push
+  // the owner into turning the feature off rather than writing a clean line.
+  const clean = [
+    "If you have a moment, we'd appreciate a review.",
+    'A review helps our small family business.',
+    'Thanks for your business.',
+    'Reviews mean a lot to a family farm.',
+    'We appreciate you taking the time.',
+  ];
+  for (const line of clean) {
+    ok(reviewCopyProblems(line).length === 0,
+      `D6 (negative control): an ordinary clean line is NOT refused — "${line}"`);
+  }
+  ok(reviewCopyProblems('').length === 0 && reviewCopyProblems(null).length === 0,
+    'D7: an empty line has no problems (the default is used)');
+
+  // D8 — the refusal must be an EXPLANATION, and it must carry the clause. A refusal nobody
+  // understands gets worked around; a refusal quoting the policy can be checked against it.
+  const why = reviewCopyProblems('It helps if you mention the crew.');
+  ok(why.some(w => /request that specific content be included/i.test(w)),
+    '🔴 D8: the content-direction refusal QUOTES clause ① back to the owner');
+  ok(why.some(w => /identifies a staff member/i.test(w)),
+    '🔴 D8b: the staff refusal QUOTES clause ② back to the owner');
+  ok(reviewCopyProblems('get a free tree for a review').some(w => /incentives/i.test(w)),
+    'D8c: the incentive refusal quotes its own clause');
 }
 
 // ══ §E THE ASK — every suppression renders the same nothing ════════════════════
@@ -240,14 +294,40 @@ const base: ReviewAskInput = {
     '🔴 G7: nothing in this module counts reviews RECEIVED — the platform cannot know that, and a tile reading "12 reviews generated" would invent a number nobody can know');
 }
 
-// ══ §H THE POLICY IS RECORDED AT THE CODE, NOT ONLY IN A DOC ═══════════════════
+// ══ §H THE POLICY IS QUOTED VERBATIM AT THE REFUSAL ════════════════════════════
+//
+// David, 2026-08-31: "cite the policy AT THE REFUSAL, not only in a doc — the two clauses
+// verbatim, beside the code that refuses. This is the rule most likely to be 'improved' in six
+// months by someone who thinks a helpful prompt is harmless. It came to me from a research summary
+// that recommended exactly what Google forbids."
 {
-  const src = readFileSync(SELF, 'utf8');
-  ok(/support\.google\.com\/business\/answer\/7400114/.test(src),
-    'H1: the policy source is cited at the code, with its URL');
-  ok(/Rating Manipulation/.test(src), 'H2: the specific policy section is named');
-  ok(/NO SCREENING|no review gating/i.test(src) && /NO INCENTIVES/i.test(src) && /NO CONTENT DIRECTION/i.test(src),
-    '🔴 H3: all THREE rules are stated at the code — this is the thing someone "improves" in six months by adding a helpful screening question');
+  const raw = readFileSync(SELF, 'utf8');
+  // A quoted clause wraps across comment lines, so match the WORDS, not the layout: strip the
+  // leading `//` of each line and collapse whitespace. Asserting the raw text would make the
+  // check fail on a reflow — a probe that breaks when nothing broke teaches people to delete it.
+  const src = raw.replace(/^\s*\/\/ ?/gm, ' ').replace(/\s+/g, ' ');
+  ok(/support\.google\.com\/business\/answer\/7400114/.test(raw),
+    'H1: the policy source URL is at the code');
+  ok(/Rating Manipulation/.test(src), 'H2: the section is named');
+
+  // 🔴 H3/H4 — THE TWO CLAUSES, WORD FOR WORD. Asserted as exact substrings so a paraphrase, a
+  // trim, or a well-meaning tidy-up fails here rather than quietly weakening the record.
+  ok(src.includes('nor should they request that specific content be included'),
+    '🔴 H3: clause ① is quoted VERBATIM beside the code that enforces it');
+  ok(src.includes('including content that identifies a staff member'),
+    '🔴 H4: clause ② is quoted VERBATIM beside the code that enforces it');
+  ok(src.includes('Discourage or prohibit negative reviews, or selectively solicit positive reviews'),
+    'H5: the gating clause is quoted verbatim');
+  ok(src.includes('in exchange for posting any review'),
+    'H6: the incentive clause is quoted verbatim');
+
+  // H7 — the provenance is recorded, because it is the reason the rule needs teeth at all.
+  ok(/research summary that recommended exactly what Google forbids/i.test(src),
+    '🔴 H7: WHERE the prohibited wording came from is recorded — it arrived looking like best practice, and the next one will too');
+
+  // H8 — the ruling that the rule is the construction, not the topic.
+  ok(/whatever follows it/i.test(src),
+    'H8: David\'s construction ruling is stated at the code');
 }
 
 console.log(`\ndeliveryFulfilment: ${passed} passed, ${failed} failed`);

@@ -258,14 +258,87 @@ export function crewStopModel(d: CrewStopInput): CrewStopModel {
 // This comment is here, at the code, and not only in a doc, because this is precisely the thing
 // somebody "improves" in six months by adding a helpful screening question.
 
-/** Phrases that would make the ask an incentive or a content instruction. Checked, not trusted. */
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// THE REFUSAL — and the policy, VERBATIM, beside the code that enforces it
+// ════════════════════════════════════════════════════════════════════════════════════════════
+//
+// 🔴 THE TWO CLAUSES ARE QUOTED HERE, IN FULL, AT THE POINT OF REFUSAL — not merely referenced.
+// Read 2026-08-31 from Google Business Profile Help → "Prohibited & restricted content"
+// (https://support.google.com/business/answer/7400114), section **Rating Manipulation**:
+//
+//   ① "When soliciting reviews, merchants should not require or pressure users to leave ratings
+//      or write reviews while on the premises, nor should they request that specific content be
+//      included."
+//
+//   ② "Merchants requesting that staff solicit reviews that include specific content, including
+//      content that identifies a staff member."
+//
+// and, for the incentive and gating rules that sit beside them in the same section:
+//
+//   ③ "Discourage or prohibit negative reviews, or selectively solicit positive reviews from
+//      customers"
+//   ④ "Offer incentives – such as payment, discounts, free goods and/or services - in exchange
+//      for posting any review or revision or removal of a negative review."
+//
+// 🔴 WHY THE QUOTES ARE HERE RATHER THAN IN A DOC, AND THIS IS THE LOAD-BEARING PART:
+// **THE PROHIBITED WORDING REACHED THIS PROJECT FROM A RESEARCH SUMMARY THAT RECOMMENDED EXACTLY
+// WHAT GOOGLE FORBIDS** (David, 2026-08-31). It arrived looking like best practice, because that
+// is what it looks like — asking the customer to name the work and the crew genuinely does produce
+// a better review, and that is precisely why the policy names it. So the failure mode is not
+// carelessness; it is a helpful-sounding suggestion from a plausible source, and the next one will
+// arrive the same way. A reader who has the clauses in front of them can check a proposal against
+// the words. A reader with only a pointer will follow the suggestion.
+//
+// 🔴 DAVID'S RULING, 2026-08-31 — THE RULE IS THE CONSTRUCTION, NOT THE TOPIC:
+// **"Anything of the form 'it helps if you mention…' is the prohibited construction whatever
+// follows it."**
+// This is STRICTER than the first implementation and it is the correct generalisation. The first
+// version keyed on the OBJECT — it caught "mention the crew" and "mention what we planted" — which
+// means it would have passed "it helps if you mention how quickly we arrived", a sentence that is
+// the same prohibited act with a different noun. Clause ① prohibits requesting that specific
+// content be included; it does not enumerate which content. **So the check fires on the DIRECTIVE,
+// and never asks what is being directed.**
+
+/**
+ * The three refusals. Each carries the clause it enforces so a refusal can be checked against the
+ * policy rather than merely obeyed.
+ */
 const REVIEW_COPY_FORBIDDEN: { pattern: RegExp; why: string }[] = [
-  { pattern: /\b(discount|coupon|voucher|free|gift|prize|giveaway|raffle|entry into|% off|store credit|refund)\b/i,
-    why: 'reads as an incentive in exchange for a review (Google: Rating Manipulation — no incentives)' },
-  { pattern: /\b(mention|include|say|tell them|write about|name)\b[^.]{0,40}\b(crew|driver|staff|team|installer|by name|we planted|what we)\b/i,
-    why: 'directs the content of the review, or names staff (Google: Rating Manipulation — no content direction)' },
-  { pattern: /\b([45]\s*star|five star|four star|only if|if you.{0,15}(happy|satisfied|enjoyed))\b/i,
-    why: 'screens by sentiment before showing the link (Google: Rating Manipulation — no review gating)' },
+  // ── ① + ② CONTENT DIRECTION — fires on the CONSTRUCTION, whatever follows it ──
+  //
+  // Two shapes, and neither one looks at the object:
+  //   (a) a bare directive verb of telling — mention / include / talk about / write about /
+  //       describe / tell them / let them know / be sure to say. In a line whose entire purpose is
+  //       to solicit a review, ANY of these is "request[ing] that specific content be included".
+  //   (b) the "it helps if/to/most…" frame David named, which is the polite form of the same act.
+  {
+    pattern: /\b(mention|mentioning|talk about|write about|describe|be sure to|don'?t forget to|make sure to)\b|\b(tell|let|remind)\s+(them|him|her|people|others|everyone)\b|\binclude\b[^.]{0,40}\b(review|it|that|this)\b|\bin your review\b|\bit\s+(would\s+)?helps?\s+(if|to|most)\b/i,
+    why: 'directs what the review should say. Google prohibits this whatever the topic is — '
+       + '"nor should they request that specific content be included" (Rating Manipulation). '
+       + 'Ask for a review; say nothing about its contents.',
+  },
+  // ② is a SEPARATE refusal, not a special case of ①, because it is separately enumerated and
+  // because naming staff is the single most tempting version of the mistake.
+  {
+    pattern: /\b(crew|driver|drivers|staff|installer|technician|team member|our guys|the men|the lads|by name)\b/i,
+    why: 'names or points at a staff member. Google separately prohibits "requesting that staff '
+       + 'solicit reviews that include specific content, including content that identifies a '
+       + 'staff member" (Rating Manipulation).',
+  },
+  // ④ INCENTIVES
+  {
+    pattern: /\b(discount|coupon|voucher|free|gift|prize|giveaway|raffle|entry into|store credit|refund|reward|on us)\b|%\s*off/i,
+    why: 'offers something in return for a review. Google prohibits "incentives – such as payment, '
+       + 'discounts, free goods and/or services - in exchange for posting any review" '
+       + '(Rating Manipulation).',
+  },
+  // ③ SCREENING / GATING
+  {
+    pattern: /\b([45]\s*star|five star|four star|only if|were you happy|how did we do)\b|\bif you(?:'?re| are)?\s{0,3}(happy|satisfied|pleased|enjoyed)\b/i,
+    why: 'screens by sentiment before the review page is shown. Google prohibits "discourag[ing] '
+       + 'or prohibit[ing] negative reviews, or selectively solicit[ing] positive reviews from '
+       + 'customers" (Rating Manipulation).',
+  },
 ];
 
 /**
@@ -278,14 +351,7 @@ export function reviewCopyProblems(line: string | null | undefined): string[] {
   return REVIEW_COPY_FORBIDDEN.filter(r => r.pattern.test(s)).map(r => r.why);
 }
 
-/**
- * The default guidance line. Deliberately says nothing about what the review should CONTAIN.
- *
- * ⚠️ It is a DEFAULT, not a constant: the line is per-business, because a pantry's line is not a
- * nursery's. It is stored in `business_modules.config` for `followup_engine` and validated against
- * `REVIEW_COPY_FORBIDDEN` on the way in.
- */
-export const DEFAULT_REVIEW_GUIDANCE = 'If you have a moment, a review helps us a lot.';
+export const DEFAULT_REVIEW_GUIDANCE = "If you have a moment, we'd appreciate a review.";   // David's wording, 2026-08-31
 
 /**
  * How long before the same customer may be asked again.

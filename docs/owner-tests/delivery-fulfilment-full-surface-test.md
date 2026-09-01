@@ -106,13 +106,14 @@ Mark another stop done and tap **`Not this one`**.
 **STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
 Open `/settings/all` as the owner → **Asking for reviews**.
 1. Paste your Google review link. Save.
-2. Now type into *What the customer reads*: **`Mention the crew by name and get 10% off`**.
+2. Leave *What the customer reads* **blank** and confirm the placeholder shows the shipped default: **"If you have a moment, we'd appreciate a review."**
+3. Now type: **`Mention the crew by name and get 10% off`**.
+4. Then replace it with: **`It helps if you mention how quickly we arrived.`**
 
-**PASS:** the Save button **goes dead** and red text names **both** problems in words — an incentive, and directing content / naming staff. Clearing the line re-enables Save.
-**FAIL:** it saves, or it merely warns.
-🔴 **This is not fussiness.** Google's Rating Manipulation policy prohibits incentives, sentiment screening, and *"request[ing] that specific content be included"* — expressly including *"content that identifies a staff member."* The obvious thing to type is the prohibited thing.
-
----
+**PASS:** at step ③ the Save button **goes dead** and red text names the problems in words, quoting the policy. **At step ④ it is STILL refused** — that line names no staff and no product, and is the same prohibited act. Clearing the field re-enables Save.
+**FAIL:** either line saves, or step ④ passes because the check only looks for words like "crew".
+🔴 **Step ④ is the one that matters.** David's ruling (R-34): *"anything of the form 'it helps if you mention…' is the prohibited construction whatever follows it."* A check that only caught the crew and the plants would be enforcing a word list, not Google's clause — which prohibits requesting that specific content be included and does **not** enumerate which content.
+⚠️ **Also confirm the refusal QUOTES the policy** rather than saying "not allowed". The owner should be able to check the refusal against the words.
 
 ## CARD 9 — the tile-off settings card tells the owner the truth
 **STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
