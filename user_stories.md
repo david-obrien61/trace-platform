@@ -98,14 +98,61 @@ Lauren never types a URL or a password. At the counter the desktop shows a QR; s
 
 _Capture → extract (one engine) → infer type → confirm → fan-out to many destinations._
 
-### Snap a document, let TRACE route it
-STATUS: needs-input
+### Snap a document, and it goes where it belongs
+STATUS: written
 SCOPE: vertical:cultivar, platform
+BUILD: active
 ARC: ocr-doc-routing
 MAPS-TO: —
-PIECES: ocr_capture, ocr_infer_type, ocr_fanout
-NEEDS: David to expand into full day-in-the-life prose. Built in Cultivar today, but the capture→infer→route pattern is cross-vertical (platform).
-_Placeholder (David to expand into full day-in-the-life prose)._ The owner photographs whatever paper lands in their hands — a vendor invoice, a receipt, a delivery slip — and TRACE reads it once, infers what kind of document it is, asks for a one-tap confirm, and routes it onward to the right destination (a cost, an inventory intake, a scheduled delivery) instead of dead-ending in a pile. Today capture + OCR exist (receipt-shaped); type-inference and fan-out routing are the gap.
+PIECES: capture_intent, document_destination, captured_evidence
+NEEDS: ⚠️ **MAPS-TO is `—` because the Receipt Keeper surface has no id on the 24-capability board** (3.1 is Leakage, 4.2 is `/inventory/reconcile`) — flagged at #252, still unminted; **David assigns one or says it rides another.** ⚠️ **The permission clause below is a RULING and is not yet numbered** — it answers the OWED row *"the permission dimension of a captured sale"* in David's own words; **David mints it as an `R-` row or leaves it living here.**
+_Dictated by David 2026-09-02, verbatim. **SUPERSEDES the placeholder `Snap a document, let TRACE route it`** (`needs-input` since the board was written), moved verbatim to `## ARCHIVED`. 🔴 **The expansion did not fill the placeholder in — it REVERSED its premise.** The placeholder said TRACE *"infers what kind of document it is"*; this story says **the door decides and TRACE never guesses.** That is [[R-50]] arriving as narrative (*the launch point sets the destination where one exists; where none exists, ASK*), and it is why the old prose is kept where it can still be read rather than quietly overwritten._
+
+Lauren photographs two completely different kinds of paper, and today the system
+treats them as one.
+
+One kind comes **in**. A vendor invoice from BWI, a bark delivery from Bailey
+Bark, a fuel receipt from the truck. That is a purchase. It is money going out,
+it is stock or supplies coming in, and it belongs in the cost side of the
+business.
+
+The other kind goes **out**. LAWNS's own invoice to a customer, with trees on it
+and an address to deliver them to. That is a sale. It has a customer, it becomes
+an order, and something has to go on a truck.
+
+Right now every photograph is filed as a purchase, and a sale only becomes an
+order because someone ticked a box afterwards. Nine of her seventeen captured
+documents are her own invoices, filed against a vendor called LAWNS Tree Farm,
+in a category called "supplies". The system read the paper correctly and had
+nowhere honest to put the answer.
+
+**Where she started from decides what it is.** If she opened the camera from
+Receipts, it is a purchase. If she opened it from the delivery screen, it is a
+sale. She already told the system which one by choosing where to tap, and the
+system already knows — it carries that fact all the way to the screen and then
+discards it in favour of guessing from the photograph.
+
+Where there is no door to infer from, it asks her. It never guesses.
+
+**A purchase writes a purchase record. A sale writes an order. Never both.**
+
+And she keeps the paper. Receipts fade, invoices get lost, and a year later
+someone asks what a tree cost or what a customer was charged. The photograph,
+what the reader made of it, and what she corrected are all kept — because she
+corrects something on every single capture, so what it originally read is part
+of the record, not a discarded draft.
+
+One more thing, and it is about who can do this. Ringing up a sale should not
+require permission to see what things cost her. The person who manages the
+website will sometimes take an order at Lauren's desk; the crew will take one on
+a tablet in the yard. None of them needs the buy-side margins to do it. **Selling
+does not require seeing cost.**
+
+**She knows it works when:** she photographs a vendor invoice from the receipts
+screen and it appears as a purchase with a cost, she photographs a customer
+invoice from the delivery screen and it appears as an order with a stop, neither
+one appears in the other place, and the screen she is standing on never tells her
+she is somewhere she is not.
 
 ### Receipt-keeper discount-line model is wrong (fix owed)
 STATUS: gap
@@ -1425,6 +1472,18 @@ PIECES: —
 ## ARCHIVED
 
 _Delivered or retired stories move here for history. They render muted and only appear in the All / Archived views._
+
+### Snap a document, let TRACE route it
+STATUS: needs-input
+SCOPE: vertical:cultivar, platform
+ARC: ocr-doc-routing
+BUILD: archived
+MAPS-TO: —
+PIECES: ocr_capture, ocr_infer_type, ocr_fanout
+NEEDS: David to expand into full day-in-the-life prose. Built in Cultivar today, but the capture→infer→route pattern is cross-vertical (platform).
+_SUPERSEDED 2026-09-02 by **"Snap a document, and it goes where it belongs"** (`ARC: ocr-doc-routing`), David's dictated expansion. **Kept verbatim because its premise was wrong in a specific way and the correction is the point:** it says TRACE *"infers what kind of document it is"* — the story that replaced it rules that **the door decides and TRACE never guesses** ([[R-50]]). Deleting it would erase the record of what changed._
+_Placeholder (David to expand into full day-in-the-life prose)._ The owner photographs whatever paper lands in their hands — a vendor invoice, a receipt, a delivery slip — and TRACE reads it once, infers what kind of document it is, asks for a one-tap confirm, and routes it onward to the right destination (a cost, an inventory intake, a scheduled delivery) instead of dead-ending in a pile. Today capture + OCR exist (receipt-shaped); type-inference and fan-out routing are the gap.
+
 
 ### Capture an invoice from where I manage deliveries (the second door)
 STATUS: written

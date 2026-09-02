@@ -294,6 +294,16 @@ the other eight of the nine follow. **Named, not investigated.**
 | **(c)** | **R-54** (not R-52 — taken). Draft: *"TRACE SURFACES; IT DOES NOT ADJUDICATE."* | **WITH DAVID** to mint or discard |
 | **(d)** | 🔴 **THE PERMISSION DIMENSION.** Lightning's read, for David to overrule: **a sale capture gates on customer and order authority; `costs:*` stays with purchases.** Not Thunder's to decide and not Lightning's. | **OPEN** |
 
+> **UPDATE 2026-09-02, same day — (a) and (d) are CLOSED by David; (b) was already confirmed; only (c) remains.**
+> **(a)** David dictated the story and it is filed verbatim as **`Snap a document, and it goes where it belongs`**
+> (`user_stories.md`, `ARC: ocr-doc-routing`, `STATUS: written`); the `needs-input` placeholder it supersedes is
+> preserved in `## ARCHIVED`. 🔴 **It reversed the placeholder's premise rather than filling it in** — the
+> placeholder had TRACE *"infer[ring] what kind of document it is"*, the story rules that **the door decides and
+> where there is no door it ASKS.** The §9 story gate is clear. **(d)** answered in David's own prose —
+> *"Selling does not require seeing cost."* — which is this table's own Lightning read, so a sale capture gates on
+> customer and order authority and `costs:*` stays with purchases. ⚠️ **It is not yet a numbered `R-` row:** the
+> mint (R-55) is David's, and the live defect stands until a build lands it. **(c) R-54 is still WITH DAVID.**
+
 ### The R-54 draft, unfiled
 
 Checked against all 53 rulings and `DECISIONS-INDEX.md`. **The principle exists in three narrow instances and
