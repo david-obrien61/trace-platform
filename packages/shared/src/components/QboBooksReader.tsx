@@ -57,11 +57,18 @@ import { BUNDLE_ITEM_NAMES, parseInvoiceList, type InvoiceBreakdown, type QboInv
 import { parseShipmentList } from '../quickbooks/shipmentIngest';
 import { evaluateBooks, type BooksInput, type Finding } from '../quickbooks/booksFindings';
 import { BooksReview } from './BooksReview';
+import { readCaptureFile, REPLAY_SOURCE } from '../quickbooks/captureReplay';
+import { projectCapture } from '../quickbooks/captureProjection';
 
 // The bundle items are NAMED BY THE MODULE THAT COUNTS THEM. A second list typed into this
 // screen is a second representation of one fact (STD-011), and it is the copy that drifts — a
 // heading naming three items above a table counting two.
 const BUNDLE_LABEL = BUNDLE_ITEM_NAMES.join(' / ');
+
+/** The owner's word for each entity. Never `Item`/`Customer`/`Invoice` on a screen she reads. */
+const ENTITY_NOUN: Record<QboEntity, string> = {
+  Item: 'products & services', Customer: 'customers', Invoice: 'invoices',
+};
 
 const GREEN = '#27500A';
 const GRAY  = '#6b7280';
@@ -90,6 +97,14 @@ interface ReadResponse {
   ceiling?: number;
   /** The verbatim page bodies. Written to the file; never rendered. */
   capture?: unknown;
+  /**
+   * 🔴 PRESENT ONLY ON A READ THAT CAME BACK FROM A FILE. The live endpoint never sets it, so
+   * `source === REPLAY_SOURCE` is a POSITIVE test for "this is a saved read" rather than an
+   * absence a screen has to remember to check. It is on the response type rather than held
+   * beside it because every consumer of a read must be able to tell the two apart — a file
+   * presented as a live pull is the one way this harness could mislead the person using it.
+   */
+  source?: typeof REPLAY_SOURCE;
 }
 
 /**
@@ -164,6 +179,8 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
   // shortfall is that a partial list must never be presented as a list, and feeding one to the
   // findings would launder exactly that (R-24 clause a).
   const [reads, setReads] = useState<Partial<Record<QboEntity, ReadResponse>>>({});
+  /** What the last file load did. A refusal is shown here and nothing is loaded. */
+  const [fileNote, setFileNote] = useState<{ ok: boolean; text: string } | null>(null);
 
   async function read(entity: QboEntity) {
     if (!businessId || loading) return;
@@ -210,6 +227,59 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
     } finally {
       setLoading(null);
     }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // 🔴 THE FILE DOOR. A SAVED READ GOES THROUGH THE SAME SCREENS AS A LIVE ONE.
+  // ══════════════════════════════════════════════════════════════════════════════
+  // David cannot be the first person to run this against LAWNS — if he runs it, there is
+  // nothing left for Lauren to show him, and SHE running it is the actual test. So he previews
+  // on a different company loading LAWNS's own saved file: same data, different destination.
+  //
+  // It writes into the SAME `reads` accumulator and the SAME `state` the live path writes, so
+  // the display, the findings, the corrections and the report below cannot tell the difference
+  // — which is the whole point. A parallel "file mode" rendering path would be a preview of
+  // something other than what Lauren gets.
+  //
+  // ⚠️ THE GATE IS `readCaptureFile`, AND IT IS STRICTER THAN THE LIVE PATH, NOT LOOSER. The
+  // live read counts its own pages; a file came off a disk and every number in it is re-derived
+  // from the pages underneath it before a single row is shown.
+  async function loadFile(f: File | null | undefined) {
+    if (!f || loading) return;
+    setFileNote(null);
+    let text: string;
+    try {
+      text = await f.text();
+    } catch (e: any) {
+      setFileNote({ ok: false, text: `That file could not be read from this device (${String(e?.message ?? e)}).` });
+      return;
+    }
+
+    const replayed = readCaptureFile(text);
+    if (!replayed.ok) {
+      // The refusal is shown VERBATIM and nothing is loaded. A file that half-loads behind a
+      // warning is the defect the counting-first design exists to prevent, arriving by post.
+      console.log('[TRACE:QBO] capture file REFUSED', { file: f.name, code: replayed.code });
+      setFileNote({ ok: false, text: replayed.headline });
+      return;
+    }
+
+    const projected = projectCapture(replayed);
+    console.log('[TRACE:QBO] capture file loaded', {
+      file: f.name, entity: projected.entity, realm_id: projected.realm_id,
+      expected: projected.expected_total, retrieved: projected.retrieved_total,
+      row_pages: projected.pages_fetched, source: projected.source,
+    });
+    setReads(prev => ({ ...prev, [projected.entity]: projected as ReadResponse }));
+    setState({
+      entity: projected.entity, body: projected as ReadResponse,
+      savedAs: null, saveFailed: false, error: null,
+      note: `Loaded from ${f.name} — a saved read, not a live pull.`,
+    });
+    setFileNote({
+      ok: true,
+      text: `Loaded ${projected.retrieved_total.toLocaleString()} ${ENTITY_NOUN[projected.entity]} from ${f.name}. QuickBooks was not contacted.`,
+    });
   }
 
   const btn: React.CSSProperties = {
@@ -282,6 +352,56 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
           {loading === 'Invoice' ? 'Reading invoice history…' : 'Read invoice history'}
         </button>
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          🔴 THE FILE DOOR — DELIBERATELY UGLY, AND THAT IS A FEATURE.
+          ══════════════════════════════════════════════════════════════════════
+          It is dashed, amber, and says what it is for in the first four words. A file loader
+          that looked like the rest of the page would become how people import things — someone
+          would mail a colleague a JSON file instead of connecting their books, and we would
+          find out months later. It sits BELOW the live buttons so the ordinary path is the
+          first thing reached, and it names its one legitimate use rather than describing a
+          capability. */}
+      <div style={{
+        marginTop: 14, padding: '12px 14px', borderRadius: 10,
+        border: `1px dashed ${AMBER}`, background: '#fffbeb',
+      }}>
+        <p style={{ fontSize: '0.8125rem', fontWeight: 800, color: AMBER, margin: '0 0 4px' }}>
+          TEST FACILITY — load a saved read instead of connecting
+        </p>
+        <p style={{ fontSize: '0.8125rem', color: DARK, margin: '0 0 10px', lineHeight: 1.5 }}>
+          This is for rehearsing the review on books that have already been read once. It opens a
+          file this screen saved earlier and runs it through exactly the same steps as a live
+          read — the same counts, the same checks, the same findings. <strong>QuickBooks is not
+          contacted and nothing is imported.</strong> It is not a way to bring data in.
+        </p>
+        <input
+          type="file" accept="application/json,.json" disabled={!!loading}
+          onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; void loadFile(f); }}
+          style={{ fontSize: '0.8125rem', color: DARK, minHeight: 44 }}
+        />
+        {fileNote && (
+          <p style={{
+            fontSize: '0.8125rem', margin: '8px 0 0', lineHeight: 1.5,
+            color: fileNote.ok ? GREEN : RED, fontWeight: fileNote.ok ? 600 : 700,
+          }}>
+            {fileNote.ok ? '✓ ' : '✗ '}{fileNote.text}
+          </p>
+        )}
+      </div>
+
+      {/* 🔴 A READ THAT CAME FROM A FILE SAYS SO WHEREVER IT IS SHOWN. The panels below are
+          shape-identical to the live ones by design, so without this line a saved read and a
+          live pull are indistinguishable on screen — and someone would eventually read a
+          rehearsal as their real books. */}
+      {state?.body?.source === REPLAY_SOURCE && (
+        <p style={{
+          fontSize: '0.8125rem', fontWeight: 700, color: AMBER, margin: '10px 0 0',
+          padding: '7px 10px', background: '#fffbeb', border: `1px solid ${AMBER}`, borderRadius: 8,
+        }}>
+          Showing a SAVED read loaded from a file — not a live pull from QuickBooks.
+        </p>
+      )}
 
       {/* 🔴 THE REVIEW SITS BETWEEN THE READS AND THE IMPORT PANELS BELOW, AND BESIDE THEM
           RATHER THAN IN FRONT OF THEM. It has no acknowledge-to-continue and nothing on it can
