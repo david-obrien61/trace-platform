@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-09-01 (**#252 — THE SIX WRITE-ONLY COLUMNS GET A READER, AND THE CAPTURE GETS TO SAY WHAT IT BECAME.** A read-only receipts list above the capture zone: the receipt as stored, the verdict banked at save time, and `receipt → order → delivery` with every absence STATED. 🔴 **Three prohibitions made mechanical rather than promised** — no re-evaluation (`line_items` is not even selected), no adjudication, no derived document type (`receipts` has 21 columns and no origin/shape/source, measured). **Writes nothing:** two duplicate captures and six order-less receipts are surfaced, not repaired. See the RECEIPT / EXPENSE STORAGE entry → Wave 3.) · Prior: #251 · #250 · #248 · #246 · #245 · #244 · #243.
+# Last updated: 2026-09-02 (**#254 — RECON + THE STALE-DECLARATION SWEEP. No capability changed; FOUR ENTRIES CORRECTED.** `thunder/calendar-window`, `thunder/docnumber-matcher`, `thunder/fulfilled-tap` and `thunder/qb-deliveries` were all recorded here as **not merged** and all four are IN `main` — every sha re-verified with `git merge-base --is-ancestor <sha> main` before a line was rewritten. Owner-proof remains OWED on all four; only the merge claim was wrong. See ledger #254 and `docs/decisions/2026-09-02-purchase-sale-split-recon.md`.) · Prior: #253 · #252 · #251 · #250 · #248 · #246 · #245 · #244 · #243.
 
 
 > 📐 **CAMPAIGN LIFECYCLE — SCOPING + ESTIMATE (2026-08-23, ledger #192/#192b).** NOT a capability entry: **nothing was built.** A scoping document answering David's *"I can add but not edit or cancel or delete"* with nine questions, ten site keys, a proven F1/F2/F3 dependency order, three scopes (**MINIMUM ~2–3 · COHERENT ~5–7 · COMPLETE ~11–14 Thunder prompts; MINIMUM and COHERENT need ZERO migrations**) and eight rulings owed. Read it before ANY campaign build — it is the answer to "has this been scoped?" and its first finding is that the EDIT FORM ALREADY EXISTS as the create form (`Campaigns.tsx:120-198`). → [`docs/audits/campaign-lifecycle-scoping-2026-08-23.md`](audits/campaign-lifecycle-scoping-2026-08-23.md) · predecessor [`social-campaign-path-recon-2026-08-22.md`](audits/social-campaign-path-recon-2026-08-22.md)
@@ -2213,7 +2213,7 @@ Entries where the correct Vertical or Type tag is ambiguous. Best guess noted.
 **① THE SELECTED DAY WAS BELOW THE FOLD.** The drill-in mounted at the very bottom of the page, **after** the "What this calendar shows" footnote, so clicking a day produced a correct and complete day view that nobody could see — and the truncated name in the cell read as the entire answer. ✏️ **The report was *"the day view is too small"*; the day view was fine and CARD 9 had already audited every affordance on it.** Fixed as display: the day section moves **directly under the grid** and selecting a day **scrolls it into view**. The drill-in is untouched — its green header already reads as the subject of the page; it was in the wrong PLACE, not the wrong SHAPE. ⚠️ Residual named rather than hidden: the day's date now prints twice, ~80px apart — tech-debt **#135**, not fixed because the second copy is CARD 9's proven text.
 **② THE CELL WAS WHAT WAS TOO SMALL.** A ~90px cell printing three names printed three ellipses and identified nobody. One stop still prints its name; more than one prints **the count** — `3 stops` · `3 stops · 1 planting` · `2 stops · all planting`. The planting sub-count survives because it is **the exact axis the day-type flag is about to use**, and a mixed-KIND day falls through to the same phrasing `conflictsFor` uses (§6 r8), so the cell and the flag cannot disagree about how to say *"2 maintenance jobs"*.
 **③ THE WINDOW MOVES, AND IT HAD BEEN HIDING REAL WORK.** Fixed at four weeks forward with no way back, the grid could not reach **Saturday 2026-08-29 — seven stops, six made, one rescheduled — one day before the window**, while the drill-in beneath it stated the cost in its own words: *"1 stop on this day · 9 scheduled in total."* `offsetWeeks` lives in the **MODEL**, not the page, so the labels move with it: a week now knows **how far it is from TODAY** rather than where it sits in the grid (the row-index label called a four-weeks-ago week *"This week"*), and *"this week and the three ahead"* is never printed over a window it does not describe (§6 r18). **The read follows the window** — moving the grid without re-reading would draw empty weeks over real work. ⚠️ **ONE MECHANISM, TWO PLACEMENTS, David's call:** dropdown on desktop, **48px** arrows on the phone and the yard tablet, *"where they are the whole interface"*, and one press home from either.
-**STATE.** BUILDER-COMPLETE on `thunder/calendar-window` (`c435620`), owner-proof owed. `npm run verify` exit 0, **ZERO NET-NEW** (5 / 245 / 10 / 12 / 15) · **52/52 files, 2463 assertions** · **8/8 mutants caught, measured** · **ZERO schema, ZERO migration, ZERO policy, api/ 12/12**. Board now **15 cards, 0 covered** — **CARD 14 is the test: move back four weeks, open Saturday 29 August, seven stops.**
+**STATE.** **MERGED into `main`** (merge `a28acd8`; `c435620` verified in `main` 2026-09-02, branch tip `673b77b`), owner-proof owed. `npm run verify` exit 0, **ZERO NET-NEW** (5 / 245 / 10 / 12 / 15) · **52/52 files, 2463 assertions** · **8/8 mutants caught, measured** · **ZERO schema, ZERO migration, ZERO policy, api/ 12/12**. Board now **15 cards, 0 covered** — **CARD 14 is the test: move back four weeks, open Saturday 29 August, seven stops.**
 
 ### 3.5 · DASHBOARD READOUTS — when it happened, not when it was typed (2026-08-27, ledger #223)
 **WHAT.** *Installs this week* counts `deliveries` where `service_type='planting'` inside a **bounded** week on `delivery_date` — it counted orders on an unbounded `created_at` before, which made it structurally blind to the OCR door and let a September planting count as done this week. *Today's sales* keys on `sale_date` (falling back to `created_at`), so a backfill cannot report as today's revenue.
@@ -2399,7 +2399,7 @@ capture would have been named `qbo-items-…`).
 ---
 
 ## QUICKBOOKS ORDER INGEST (THE LOAD) — `Invoice.Line[]` → a history order on each stop
-**Last updated:** 2026-09-01 · **Bar: BUILDER-COMPLETE** (merged as #248; the prior-order guard hardened on `thunder/docnumber-matcher`, NOT merged) · **Owner-test:** `docs/owner-tests/qb-order-ingest-full-surface-test.md`
+**Last updated:** 2026-09-01 · **Bar: BUILDER-COMPLETE** (merged as #248; the prior-order guard hardened in #250 on `thunder/docnumber-matcher`, **MERGED into `main` 2026-09-01, merge `5e5bf70`** — this line read "NOT merged" until the 2026-09-02 sweep) · **Owner-test:** `docs/owner-tests/qb-order-ingest-full-surface-test.md`
 
 🔴 **THE PRIOR-ORDER GUARD WAS HARDENED 2026-09-01 (ledger #250), AND THE PREMISE IT WAS BUILT ON
 WAS WRONG.** The guard called a matching document number *"an identity, not an inference."* It is
@@ -2499,7 +2499,7 @@ only the two identifier columns above. `service_type` stays NULL (tech-debt #140
 distinguishes a tree from a trip charge yet (tech-debt #139).
 ## THE FULFILMENT TAP + THE REVIEW ASK (cap 3.4 · 3.5 · ledger #247, 2026-08-31)
 
-**Last updated: 2026-08-31.** **BUILDER-COMPLETE, owner-proof owed** — `387d8aa` on `thunder/fulfilled-tap`, **not merged**. Board: `docs/owner-tests/delivery-fulfilment-full-surface-test.md` (11 cards, **0 covered**).
+**Last updated: 2026-08-31.** **MERGED into `main`** — `387d8aa` verified in `main` 2026-09-02; branch `thunder/fulfilled-tap` (tip `ff34d21`) merged at `3cd934a` per ledger #249. **Owner-proof still OWED.** Board: `docs/owner-tests/delivery-fulfilment-full-surface-test.md` (11 cards, **0 covered**).
 
 **WHAT IT IS.** Two things that ship together and package apart.
 
@@ -2530,7 +2530,7 @@ distinguishes a tree from a trip charge yet (tech-debt #139).
 ---
 
 ## QUICKBOOKS DELIVERY INGEST — `Invoice.ShipDate` → a scheduled delivery
-**Last updated:** 2026-08-31 · **Bar: BUILDER-COMPLETE** (on `thunder/qb-deliveries`, not merged) · **Owner-test:** `docs/owner-tests/qb-delivery-ingest-full-surface-test.md`
+**Last updated:** 2026-08-31 · **Bar: MERGED into `main`** (branch `thunder/qb-deliveries`, tip `a6e734e`, merged at `3cd934a`; verified 2026-09-02) · **owner-proof OWED** · **Owner-test:** `docs/owner-tests/qb-delivery-ingest-full-surface-test.md`
 
 **What it is.** `Invoice.ShipDate` is Lauren's delivery date and it was already in QuickBooks —
 present on 588 invoices and DIFFERENT from `TxnDate` on 553 of them, so it is a field she fills in

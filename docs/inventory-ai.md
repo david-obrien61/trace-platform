@@ -3,6 +3,15 @@
 # Canonical source for "what AI features exist, what model they use, and do they work"
 # Rule: update this file any session that adds, changes, or verifies an AI feature.
 
+
+> 🔴 **STALENESS BANNER — added 2026-09-02, and this doc has NOT been re-audited.**
+> `Last updated:` above is **2026-06-13**. The latest commit touching this doc's domain is **`f990df7` (2026-07-27, `receipts/ocr` caller-authority)**.
+> ⚠️ **Model ids drift fastest of anything in this file.** Measured 2026-09-02, live in code: `gemini-2.5-flash` + `claude-haiku-4-5-20251001` (`api/receipts/ocr.ts:42-43`), `claude-sonnet-4-6` (`api/pmi/suggest.ts:43`), and `gemini-2.0-flash` in the DEPRECATED `AIEngine.ts` path. Check the source, not this page.
+> **Treat every body claim below as of 2026-06-13 unless it carries its own later date.** CLAUDE.md's own
+> health check says the cost of a stale index is a re-audit — that re-audit is its own task and was **not**
+> done here. What WAS done: the single claim measured and found wrong is corrected inline and marked ✏️.
+> Nothing else in this file has been verified against the tree.
+
 ---
 
 ## Provider architecture

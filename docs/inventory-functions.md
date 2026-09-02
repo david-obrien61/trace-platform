@@ -3,11 +3,40 @@
 # Canonical source for "what functions exist, what they call, and are they deployed"
 # Rule: update this file any session that adds, removes, or materially changes a function.
 
+
+> 🔴 **STALENESS BANNER — added 2026-09-02, and this doc has NOT been re-audited.**
+> `Last updated:` above is **2026-06-13**. The latest commit touching this doc's domain is **`8063a8f` (2026-08-31, `feat(#247)` — touched `packages/cultivar-os/api/`)**.
+> **Eleven weeks of function-surface commits are not reflected here.**
+> **Treat every body claim below as of 2026-06-13 unless it carries its own later date.** CLAUDE.md's own
+> health check says the cost of a stale index is a re-audit — that re-audit is its own task and was **not**
+> done here. What WAS done: the single claim measured and found wrong is corrected inline and marked ✏️.
+> Nothing else in this file has been verified against the tree.
+
 ---
 
-## COUNT: 11 of 12 Vercel Hobby limit — ✅ 1 SLOT HEADROOM
+## COUNT: ✏️ **CORRECTED 2026-09-02 — 12 of 12. ZERO HEADROOM.**
 
-Vercel Hobby cap = 12 functions. Current deployed count = 11.
+🔴 **THIS BLOCK SAID `11 of 12 — ✅ 1 SLOT HEADROOM` AND IT WAS WRONG IN THE DANGEROUS DIRECTION.**
+**Measured 2026-09-02: `find api -name '*.ts' -type f | wc -l` → 12.** The twelve are
+`campaigns` · `customers/create` · `dashboard` · `discovery/ingest` · `members/invite` · `orders/submit` ·
+`pmi/suggest` · `qbo-connector` · `qbo/invoice/cultivar` · `receipts/ocr` · `social/enable` ·
+`social/generate-posts`.
+
+**CLAUDE.md §6 r11 has said `12 of 12 — zero headroom` since 2026-06-20. This doc contradicted it, and
+this is the copy a reader would have believed** — it is the one whose header calls itself *"canonical
+source for what functions exist."* A stale index claiming headroom that does not exist authorises minting
+function #13, and **function #13 does not error: the whole deploy fails SILENTLY and Vercel keeps serving
+the last-good bundle** (it bit this project on 2026-06-20 — the deliveries endpoint was #13, every deploy
+silently failed, prod served stale code). STD-011: two homes for one number, and the stale one was the
+permissive one.
+
+**Reuse-before-mint is therefore in force, not advisory.** Seams: `receipts/ocr.ts` `shape` param ·
+`discovery/ingest.ts` `action=` · `customers/create.ts` optional `delivery` block · `qbo-connector.ts`
+`?_route=`. Minting #13 is a **STOP-and-surface** event (CLAUDE.md §6 r11, tech-debt #41).
+
+_The historical note below was true when written and is preserved:_
+
+Vercel Hobby cap = 12 functions. Deployed count was 11 on 2026-06-13.
 QBO consolidation (2026-06-13, commit fcdfa97) collapsed auth-url + callback + status into
 one connector (api/qbo-connector.ts). 13 → 11. Deploy unblocked. AI-router build now cleared.
 

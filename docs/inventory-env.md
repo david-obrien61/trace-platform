@@ -4,6 +4,15 @@
 # NEVER stores values — names and presence only.
 # Rule: update this file any session that adds, removes, or reclassifies an env var.
 
+
+> 🔴 **STALENESS BANNER — added 2026-09-02, and this doc has NOT been re-audited.**
+> `Last updated:` above is **2026-06-13**. The latest commit touching this doc's domain is **`8063a8f` (2026-08-31)**.
+> ⚠️ **This doc is still CANONICAL for env vars** — CLAUDE.md §2 points here deliberately (2026-08-23) rather than keeping a second copy. Canonical and stale at once: prefer it over CLAUDE.md, verify against the Vercel dashboard before acting.
+> **Treat every body claim below as of 2026-06-13 unless it carries its own later date.** CLAUDE.md's own
+> health check says the cost of a stale index is a re-audit — that re-audit is its own task and was **not**
+> done here. What WAS done: the single claim measured and found wrong is corrected inline and marked ✏️.
+> Nothing else in this file has been verified against the tree.
+
 ---
 
 ## Source of truth
