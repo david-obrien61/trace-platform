@@ -2323,7 +2323,7 @@ mutant that puts `CustomerRef.name` back on the row.
 
 ---
 
-### 3.5 · 4.1 · TEST MODE, THE ORDER-COUNTING PRIMITIVE, AND THE BOOKS REVIEW (2026-09-02, ledger #254, R-55…R-61) — **BUILDER-COMPLETE · migration GATED · 0 of 14 owner-test cards**
+### 3.5 · 4.1 · TEST MODE, THE ORDER-COUNTING PRIMITIVE, AND THE BOOKS REVIEW (2026-09-02, ledger #255, R-55…R-61) — **BUILDER-COMPLETE · migration GATED · 0 of 14 owner-test cards**
 
 **What:** three things that travel together, because a business cannot safely practise on the platform unless all three hold.
 
