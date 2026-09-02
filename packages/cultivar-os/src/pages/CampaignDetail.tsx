@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { authHeaders } from '@trace/shared/auth';
 import { useBusinessContext } from '@trace/shared/context';
 import type { Campaign, CampaignPost } from '@trace/shared/campaigns/types';
+import { REAL_BUSINESS_PGRST } from '@trace/shared/business-logic/orderKind';
 
 const ADVERT_DEBUG = false;
 
@@ -61,10 +62,14 @@ export function CampaignDetail() {
     setPosts(postRows ?? []);
 
     if (camp?.start_date && camp?.end_date && businessId) {
+      // A campaign's revenue is a CLAIM about what the campaign produced, so a test order
+      // rung up during the window must not be in it. Excluded at the query through the one
+      // shared primitive rather than a filter remembered here (§6 r8 / orderKind.ts).
       const { data: orders } = await supabase
         .from('orders')
         .select('total_amount')
         .eq('business_id', businessId)
+        .or(REAL_BUSINESS_PGRST)
         .gte('created_at', camp.start_date)
         .lte('created_at', camp.end_date + 'T23:59:59');
       if (orders) {

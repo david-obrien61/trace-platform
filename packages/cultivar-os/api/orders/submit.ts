@@ -8,6 +8,7 @@ import { normalizeDiscountTypes, resolveTier, computeOrderPricing, resolveTaxRat
 import { nettedQuantity, lineSubtotal } from '../../src/lib/netting';
 import { ORDER_STATUSES } from '../../src/lib/orderStatus';
 import { fetchCommittedByLot, availableFrom, movesOnHand } from '../../src/lib/inventoryStates';
+import { orderKindForMode } from '../../../shared/src/business-logic/testMode';
 
 const LARGE_CONTAINERS = ['15 gal', '30 gal', '45 gal', '60 gal', '100 gal'];
 
@@ -828,6 +829,37 @@ async function handleCreate(req: any, res: any) {
     const seq  = String(now.getMinutes() * 60 + now.getSeconds()).padStart(3, '0');
     const invoiceNumber = `CLV-${dp}-${seq}`;
 
+    // ── 6b. IS THIS BUSINESS LIVE, OR STILL SEEING WHAT COMES OUT? ─────────
+    // 🔴 READ HERE, NOT INFERRED, AND NOT PASSED IN FROM THE CLIENT. The mode decides whether
+    // this order is real money, and a client-supplied "I am in test mode" is a claim the
+    // caller controls — a browser could mark a real sale as a test, or a real sale could be
+    // written live by a stale tab. The server asks the row.
+    //
+    // ⚠️ A FAILED READ MEANS TEST MODE, and that is the safe direction rather than an
+    // oversight: `isTestMode` treats undefined as test precisely so a fetch that did not come
+    // back cannot cause a real invoice to be pushed on the strength of a value nobody saw.
+    // The degradation is SURFACED in the trail, never silent.
+    //
+    // ⚠️ AND IT IS DEPLOY-WINDOW-SAFE. `qbo_writes_enabled` arrives with 20260902, which is
+    // GATED; until David applies it this select fails with 42703 and every order is written as
+    // a test order. That is the wrong-but-safe end of the two errors — the alternative default
+    // would push real invoices from a deploy whose migration had not landed.
+    const { data: modeRow, error: modeErr } = await db
+      .from('businesses')
+      .select('qbo_writes_enabled, name')
+      .eq('id', businessId)
+      .maybeSingle();
+    if (modeErr) {
+      console.log('[TRACE:TESTMODE] write-switch read FAILED — this order is written as a TEST order (safe direction, not silent)', {
+        businessId, code: (modeErr as { code?: string }).code ?? null, message: modeErr.message,
+      });
+    }
+    const writesEnabled = (modeRow as { qbo_writes_enabled?: boolean } | null)?.qbo_writes_enabled;
+    const bornKind = orderKindForMode(writesEnabled);
+    console.log('[TRACE:TESTMODE] order born —', {
+      businessId, writesEnabled: writesEnabled ?? null, order_kind: bornKind ?? '(live checkout order)',
+    });
+
     // ── 7. Create order ────────────────────────────────────────────────────
     const orderBase: Record<string, unknown> = {
       business_id:      businessId,
@@ -848,7 +880,11 @@ async function handleCreate(req: any, res: any) {
     // keys and retry (the order still lands; the gated fields re-enable once the migration applies).
     const deliveryDateVal: string | null =
       typeof deliveryDate === 'string' && deliveryDate.trim() ? deliveryDate.trim() : null;
-    const GATED_ORDER_KEYS = ['delivery_date', ...ORDER_EXEMPT_KEYS];
+    // `order_kind` rides the GATED set for the same reason the others do: it arrived with
+    // 20260827 and the fallback below strips it on a 42703 rather than losing the order. On a
+    // database without the column there is no test mode to record, and no push either — the
+    // seam refuses on the value it reads back, which would be absent.
+    const GATED_ORDER_KEYS = ['delivery_date', 'order_kind', ...ORDER_EXEMPT_KEYS];
     const gatedCols: Record<string, unknown> = {
       // D-40: persist the EFFECTIVE per-order tax state so every downstream surface renders the same
       // truth. applied = tax was actually exempted (an exempt flag with no reason falls to 'taxed').
@@ -858,6 +894,10 @@ async function handleCreate(req: any, res: any) {
       tax_exempt_by:       exemptBy,   // set only when it came from a per-order OVERRIDE (else null)
     };
     if (deliveryDateVal) gatedCols.delivery_date = deliveryDateVal;
+    // 🔴 ONLY SET WHEN IT IS A TEST ORDER. `orderKindForMode` returns null for live, which is
+    // the value an ordinary checkout order has always carried — so going live stops adding a
+    // mark rather than starting to write a different one, and not one live row changes shape.
+    if (bornKind !== null) gatedCols.order_kind = bornKind;
 
     let order: any;
     let orderErr: any;
@@ -1184,7 +1224,7 @@ async function handleCreate(req: any, res: any) {
     let qbInvoiceId: string | undefined;
     let qbInvoiceNumber: string | undefined;
     let qbInvoiceUrl: string | undefined;
-    let qbStatus: 'success' | 'failed' | 'not_connected' | 'held' = 'failed';
+    let qbStatus: 'success' | 'failed' | 'not_connected' | 'held' | 'test' = 'failed';
     let qbError: string | undefined;
     try {
       const qb = await pushQboInvoice(orderId, businessId);
@@ -1201,6 +1241,15 @@ async function handleCreate(req: any, res: any) {
         // order below is complete and correct; only the push was skipped.
         qbStatus = 'held';
         qbError  = String(qbBody.error ?? 'Sending invoices to QuickBooks is paused for this business.');
+      } else if (qb.status === 422 && qbBody.code === 'TEST_ORDER_NOT_PUSHABLE') {
+        // 🔴 A FIFTH STATE, AND IT IS NOT ANY OF THE OTHER FOUR. `failed` would send an owner
+        // hunting a problem that does not exist; `held` describes David's platform hold, which
+        // is a different person's decision and lifts differently; `not_connected` would tell
+        // them to reconnect a QuickBooks that is connected — the exact defect D-48 ended.
+        // Nothing went wrong here: the order is complete and correct, and the business asked
+        // for this. The confirmation screen says so in the business's own words.
+        qbStatus = 'test';
+        qbError  = String(qbBody.error ?? 'This is a test order. Nothing was sent to QuickBooks.');
       } else if (qb.status === 503) {
         qbStatus = 'not_connected';
         qbError  = String(qbBody.error ?? 'QuickBooks not connected');

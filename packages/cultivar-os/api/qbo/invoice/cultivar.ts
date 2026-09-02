@@ -11,6 +11,7 @@ import {
 } from '../../../../shared/src/quickbooks/customerIdentity';
 import { orderItemName, orderItemAnchor } from '../../../src/lib/orderItemName';
 import { HISTORY_ORDER_KIND } from '../../../../shared/src/business-logic/historyOrder';
+import { TEST_ORDER_KIND } from '../../../../shared/src/business-logic/orderKind';
 import { movesOnHand } from '../../../src/lib/inventoryStates';
 import {
   QBO_DETAIL_TYPE,
@@ -783,6 +784,39 @@ export async function pushQboInvoice(
     // refused. 422 (not 403): the caller is authorised, the REQUEST IS INCOHERENT — this order is
     // not the kind of thing that can be invoiced. A 403 would send someone hunting a permission
     // that would never have helped.
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // 🔴 A TEST ORDER NEVER REACHES QUICKBOOKS. NOT THE INVOICE, AND NOT THE CUSTOMER.
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // Test mode exists so an owner still deciding whether to buy can ring up fake orders all
+    // week and see what comes out. That is what a careful buyer does. It is only safe if the
+    // fake orders stay fake, and "stay fake" means NOT ONE WRITE into their real accounting.
+    //
+    // 🔴 IT SITS ABOVE `findOrCreateQBCustomer`, AND THAT IS THE HALF PEOPLE FORGET. An
+    // order that creates a QuickBooks CUSTOMER and no invoice has still written to their
+    // books — a new name in a real chart of customers, which somebody has to notice and
+    // delete. The history guard below is placed for the same reason and says so; this one
+    // inherits the placement rather than re-deriving it. `historyOrder.test.ts` §I asserts
+    // that ordering for history against the real source, and `testOrderGuard.test.ts` does
+    // the same for this one — the ordering is a GUARANTEE, so it is measured, not assumed.
+    //
+    // 🔴 IT IS A SEPARATE `if` FROM THE HISTORY GUARD ON PURPOSE. They refuse for genuinely
+    // different reasons and owe genuinely different sentences: a captured invoice is refused
+    // because it is ALREADY in these books, a test order because it describes NOTHING THAT
+    // HAPPENED. Collapsing them into one branch would force one message to cover both, and
+    // the owner reading it would learn the wrong thing about their own data.
+    //
+    // 422, matching the history refusal: the caller IS authorised, the REQUEST is incoherent.
+    if (order.order_kind === TEST_ORDER_KIND) {
+      console.log('[TRACE:QBO] REFUSED — test order must never push to QuickBooks (failed intent)', {
+        order_id, business_id, order_kind: order.order_kind,
+        reason: 'a test order describes nothing that happened; a push would invent a sale in real books',
+      });
+      return { status: 422, body: {
+        error: 'This is a test order. Test orders are never sent to QuickBooks — nothing was written to your books, and nothing is wrong with the order.',
+        code: 'TEST_ORDER_NOT_PUSHABLE',
+      } };
+    }
+
     if (order.order_kind === HISTORY_ORDER_KIND) {
       console.log('[TRACE:QBO] REFUSED — history order must never push to QuickBooks (failed intent)', {
         order_id, business_id, order_kind: order.order_kind,

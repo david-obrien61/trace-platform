@@ -3,8 +3,8 @@
   "stamped": "2026-08-27",
   "enumerations": [
     "packages/cultivar-os/api/campaigns.ts::advertChannels#business_voice_samples.select",
-    "packages/cultivar-os/api/dashboard.ts::todayStr#business_inventory.select",
-    "packages/cultivar-os/api/dashboard.ts::todayStr#orders.select",
+    "packages/cultivar-os/api/dashboard.ts::db#business_inventory.select",
+    "packages/cultivar-os/api/dashboard.ts::db#orders.select",
     "packages/cultivar-os/api/discovery/ingest.ts::db#businesses.select",
     "packages/cultivar-os/api/orders/submit.ts::availableQty#business_inventory.select",
     "packages/cultivar-os/api/orders/submit.ts::db#order_items.select",
@@ -36,5 +36,6 @@
     "packages/shared/src/business-logic/financialDataAccess.ts::childRes#labor_resource_wages.select",
     "packages/shared/src/components/CostToProduceSettings.tsx::cancelled#cost_objects.select",
     "packages/shared/src/components/CostToProduceSettings.tsx::reload#cost_objects.select"
-  ]
+  ],
+  "_rekeyed_2026_09_02": "api/dashboard.ts's two entries were re-keyed, NOT added. The identity is `file::binding#table.verb` (tech-debt #78) and the binding was `todayStr`, a dead local this build removed when the endpoint stopped keying today's sales on created_at. Same two reads, same file, new nearest-binding. COUNT PROVEN IDENTICAL BEFORE AND AFTER (34 -> 34, no duplicates) rather than regenerated: `npm run field-lists:baseline` would have written 39, sweeping in five enumerations that are exempt by PATH declaration and were never in this file \u2014 growing the baseline with entries whose exemption would then be invisible if the declaration were later removed. Blind --update is how a ratchet stops ratcheting."
 }

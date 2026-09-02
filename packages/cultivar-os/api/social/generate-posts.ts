@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { callerCan } from '../../../shared/src/auth/callerPermission';
 import { generateSocialDrafts } from '../../../shared/src/social/generate';
+import { REAL_BUSINESS_PGRST } from '../../../shared/src/business-logic/orderKind';
 
 const SOCIALDRAFT_DEBUG = false;
 const ADVERT_DEBUG      = false;
@@ -92,10 +93,17 @@ export default async function handler(req: any, res: any) {
 
   // ── Gather period context (vertical-assembled; passed to shared generator) ─
 
+  // 🔴 THE KIND FILTER IS AT THE QUERY, AND HERE IT HAS TO BE. `.limit(50)` is applied by
+  // Postgres BEFORE any JavaScript could filter, so a JS pass over the result would quietly
+  // return fewer than the 50 sales this was asked for — and in the worst case would build a
+  // post celebrating a week of business that was entirely test orders. `REAL_BUSINESS_PGRST`
+  // is the shared exclusion (§6 r8); the `.or(is.null, ...)` spelling is load-bearing — a
+  // bare `.neq` would drop every ordinary checkout order (see orderKind.ts).
   const { data: orders } = await db
     .from('orders')
     .select('id, customer_id, total, customers(first_name)')
     .eq('business_id', business_id)
+    .or(REAL_BUSINESS_PGRST)
     .gte('created_at', periodStart.toISOString())
     .lte('created_at', periodEnd.toISOString())
     .order('created_at', { ascending: false })

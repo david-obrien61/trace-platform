@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { fetchCommittedByLot, availableFrom } from '../src/lib/inventoryStates';
 import { callerIsMember, callerCan } from '../../shared/src/auth/callerPermission';
+import { isAssessable, REAL_BUSINESS_PGRST } from '../../shared/src/business-logic/orderKind';
+import { dayWindow, weekWindow } from '../src/lib/dashboardWindows';
 
 function supabase() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL!;
@@ -34,10 +36,24 @@ export default async function handler(req: any, res: any) {
 
   try {
     const db = supabase();
-    const todayStr = new Date().toISOString().slice(0, 10);
 
     const [ordersRes, cultivarPlantsRes, inventoryRes, businessRes] = await Promise.all([
-      db.from('orders').select('id, total_amount, leakage_flag, created_at, status').eq('business_id', businessId),
+      // ══════════════════════════════════════════════════════════════════════════════════════
+      // 🔴 THE KIND FILTER, WHICH THIS QUERY HAD NONE OF. Every order for the business came
+      // back and `leakage_count` was computed over the lot, while `Dashboard.tsx` excluded
+      // captured invoices before counting the same thing. One number, two definitions —
+      // and the moment a test order exists it lands in the identical hole.
+      //
+      // The exclusion is `REAL_BUSINESS_PGRST` from the ONE module that owns the question
+      // (§6 r8). It is spelled `.or(is.null, not.in.(...))` and NOT `.neq(...)` because a
+      // bare .neq drops every NULL row — which is every ordinary checkout order this
+      // platform has written. See orderKind.ts for the trap in full.
+      // ══════════════════════════════════════════════════════════════════════════════════════
+      db.from('orders')
+        .select('id, total_amount, leakage_flag, created_at, sale_date, order_kind, status')
+        .eq('business_id', businessId)
+        .neq('status', 'cancelled')
+        .or(REAL_BUSINESS_PGRST),
       // identity count — cultivar_plants rows (one per QR tag/lot identity)
       db.from('cultivar_plants').select('id', { count: 'exact', head: true }).eq('business_id', businessId),
       // stock facts — business_inventory rows (qty * unit_cost for inventory value)
@@ -49,11 +65,35 @@ export default async function handler(req: any, res: any) {
     const inventoryLots  = inventoryRes.data || [];
     const plant_count    = cultivarPlantsRes.count ?? 0;
 
-    const todayOrders    = orders.filter((o: any) => o.created_at?.slice(0, 10) === todayStr);
+    // ── WHEN A SALE COUNTS: `sale_date`, falling back to `created_at` ───────────────────────
+    // 🔴 THIS ENDPOINT KEYED ON `created_at` ALONE, which is the moment a ROW WAS WRITTEN.
+    // `Dashboard.tsx` fixed exactly this in its own copy and recorded why: six sales made
+    // across five earlier days, backfilled in one afternoon, reported $14,370.21 as TODAY'S
+    // revenue. The server copy never got the fix, so the two screens would have answered the
+    // same question with different numbers — the STD-011 shape, one fact in two places.
+    // The windows come from the SAME module the client uses, so they cannot drift either.
+    const day  = dayWindow();
+    const week = weekWindow();
+    const inWindow = (o: any, w: { startDate: string; endDate: string }) =>
+      o.sale_date ? (o.sale_date >= w.startDate && o.sale_date < w.endDate)
+                  : (o.created_at?.slice(0, 10) >= w.startDate && o.created_at?.slice(0, 10) < w.endDate);
+
+    const todayOrders    = orders.filter((o: any) => inWindow(o, day));
     const todayRevenue   = todayOrders.reduce((s: number, o: any) => s + Number(o.total_amount), 0);
     const availableLots  = inventoryLots.filter((l: any) => l.status === 'available');
     const inventoryValue = availableLots.reduce((s: number, l: any) => s + (Number(l.qty) * Number(l.unit_cost ?? 0)), 0);
-    const leakageCount   = orders.filter((o: any) => o.leakage_flag).length;
+
+    // ── LEAKAGE: THE SAME QUESTION THE CLIENT BANNER ASKS, ASKED THE SAME WAY ───────────────
+    // 🔴 TWO CORRECTIONS IN ONE LINE, and neither is cosmetic. (1) The window: this counted
+    // EVERY order the business had ever taken, against a client banner that counts THIS WEEK.
+    // (2) The predicate: `isAssessable` excludes a captured invoice, whose `leakage_flag` is
+    // false because the column is NOT NULL — false meaning UNEVALUATED, not "nothing leaked".
+    // Counting those let unassessed sales prove a clean bill of health.
+    // `assessable_sales` and `sales_in_window` ship alongside so the count can never be read
+    // without its denominator (a pass over an empty set is not a pass).
+    const weekOrders     = orders.filter((o: any) => inWindow(o, week));
+    const assessable     = weekOrders.filter((o: any) => isAssessable(o.order_kind));
+    const leakageCount   = assessable.filter((o: any) => o.leakage_flag === true).length;
 
     // ── D-52: the three numbers ────────────────────────────────────────────────────────────
     // `available_count` used to be the SUM OF ON-HAND, which was accurate only while D-42
@@ -76,6 +116,10 @@ export default async function handler(req: any, res: any) {
       committed_count,
       available_count,
       leakage_count:     leakageCount,
+      // The denominators, so `leakage_count: 0` can be told apart from "nothing was measured".
+      sales_in_window:   weekOrders.length,
+      assessable_sales:  assessable.length,
+      leakage_window:    { start: week.startDate, end: week.endDate },
       qb_connected:      !!businessRes.data?.accounting_company_id,
     });
   } catch (err: any) {

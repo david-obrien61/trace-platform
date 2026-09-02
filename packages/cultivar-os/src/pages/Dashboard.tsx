@@ -10,6 +10,7 @@ import { useQboConnect } from '@trace/shared/quickbooks/useQboConnect';
 import { useModules } from '../hooks/useModules';
 import { dayWindow, weekWindow, addOnBannerState } from '../lib/dashboardWindows';
 import { fetchCommittedByLot, availableFrom } from '../lib/inventoryStates';
+import { isAssessable, REAL_BUSINESS_PGRST } from '@trace/shared/business-logic/orderKind';
 import { requiredPermissionFor, tileByKey } from '../registry/tileRegistry';
 import { TileGrid } from '@trace/shared/components/tiles/TileGrid';
 import { Tile } from '@trace/shared/components/tiles/Tile';
@@ -231,11 +232,16 @@ export function Dashboard() {
       //
       // `sale_date` is the document's own date. The fallback to `created_at` is for an ordinary
       // checkout order, where the two genuinely coincide and nothing writes sale_date.
+      //
+      // ⚠️ AND IT NOW EXCLUDES TEST ORDERS — at the query, through the shared primitive.
+      // A test order is an order rung up to see what comes out; it is not money the business
+      // took, and this tile is the first place it would have looked like money.
       supabase
         .from('orders')
         .select('id, total_amount')
         .eq('business_id', businessId!)
         .neq('status', 'cancelled')
+        .or(REAL_BUSINESS_PGRST)
         .or(`and(sale_date.gte.${todayD},sale_date.lt.${tomorrowD}),and(sale_date.is.null,created_at.gte.${today},created_at.lt.${tomorrowT})`),
 
       // ── INSTALLS THIS WEEK — counted off DELIVERIES, not orders ──────────────────────
@@ -255,16 +261,24 @@ export function Dashboard() {
         .lt('delivery_date', weekEndD),
 
       // ── ADD-ON LEAKAGE — the same when-it-happened window, and only ASSESSABLE sales ──
-      // `order_kind=is.null` excludes history orders. That is not a filter for tidiness: leakage
-      // is computed at checkout from resolved catalog lines and container sizes (submit.ts:796),
-      // and a transcribed document line has neither. A history order's `leakage_flag` is false
-      // because the column is NOT NULL — false meaning UNEVALUATED, not "no leakage found".
-      // Counting it as clean would let six unassessed sales prove a universal positive.
+      // Leakage is computed at checkout from resolved catalog lines and container sizes
+      // (submit.ts:796), and a transcribed document line has neither. A captured invoice's
+      // `leakage_flag` is false because the column is NOT NULL — false meaning UNEVALUATED,
+      // not "no leakage found". Counting it as clean would let six unassessed sales prove a
+      // universal positive.
+      //
+      // ⚠️ THE COMMENT HERE USED TO SAY THE READ EXCLUDED THEM VIA `order_kind=is.null`. IT
+      // DID NOT. The query filtered only on status; the exclusion happened afterwards in JS as
+      // `!== 'history'` — a different rule, which admits a test order. Both halves now come
+      // from `orderKind`: the DENOMINATOR read (`sales_in_window`) drops test orders at the
+      // query, and `isAssessable` narrows to what can actually be judged. A prose description
+      // of a filter is not the filter (R-26).
       supabase
         .from('orders')
         .select('id, leakage_flag, order_kind')
         .eq('business_id', businessId!)
         .neq('status', 'cancelled')
+        .or(REAL_BUSINESS_PGRST)
         .or(`and(sale_date.gte.${weekD},sale_date.lt.${weekEndD}),and(sale_date.is.null,created_at.gte.${week},created_at.lt.${weekEndT})`),
     ]);
 
@@ -329,7 +343,7 @@ export function Dashboard() {
       // One read now answers all three of the banner's questions, so its three states can never
       // disagree with each other the way three separate counts eventually would (STD-011).
       const weekOrders = (leakageRes.data ?? []) as any[];
-      const assessable = weekOrders.filter(o => o.order_kind !== 'history');
+      const assessable = weekOrders.filter(o => isAssessable(o.order_kind));
       setWeekSalesCount(weekOrders.length);
       setAssessableSales(assessable.length);
       setLeakageCount(assessable.filter(o => o.leakage_flag === true).length);

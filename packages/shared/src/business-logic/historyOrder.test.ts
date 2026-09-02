@@ -213,7 +213,22 @@ const build = (over: any = {}) => buildHistoryOrder({
   // worth keeping: it searched the whole file for `method: 'POST'` and found one at line 38 — in a
   // helper DEFINED above pushQboInvoice but CALLED from inside it. Textual position is not control
   // flow. The probe failed, the code was correct, and the fix was to the probe.
-  const body      = src.slice(src.indexOf('export async function pushQboInvoice'));
+  //
+  // ⚠️ AND IT WAS WRONG A SECOND TIME, IN THE SAME FAMILY, FOUND 2026-09-02. This probe went RED
+  // against correct code when a NEW guard was added above the history one, because that guard's
+  // COMMENT explains that it sits above `findOrCreateQBCustomer` — so `indexOf` found the name
+  // inside prose, at a position before both guards, and the ordering assertion failed.
+  //
+  // 🔴 THE RED WAS THE HARMLESS DIRECTION AND IT IS NOT THE REASON THIS IS FIXED. A comment can
+  // move an index EITHER way: this probe would just as happily have PASSED on a DELETED guard so
+  // long as some comment still mentioned `findOrCreateQBCustomer` or `qbPost` — a green asserting
+  // an ordering that no longer exists, on the one guard whose failure is unrecoverable. That is
+  // R-33's class exactly (a check that cannot disagree), and it was live in this file the whole
+  // time. Stripping comments is what makes the assertion measure code.
+  const stripComments = (t: string): string =>
+    t.replace(/\/\*[\s\S]*?\*\//g, '')
+     .split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+  const body      = stripComments(src.slice(src.indexOf('export async function pushQboInvoice')));
   const guardAt   = body.indexOf('order.order_kind === HISTORY_ORDER_KIND');
   const payloadAt = body.indexOf('buildInvoicePayload');
   const custAt    = body.indexOf('findOrCreateQBCustomer');
