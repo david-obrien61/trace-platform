@@ -94,6 +94,45 @@ Lauren never types a URL or a password. At the counter the desktop shows a QR; s
 
 ---
 
+### Lauren tries the whole thing on for a week before a single invoice reaches her accountant
+STATUS: written
+SCOPE: platform, vertical:cultivar
+BUILD: active
+ARC: front-door
+MAPS-TO: 3.5
+PIECES: test_order_kind, qbo_write_switch, test_mode_banner, order_counting_primitive, books_review, printable_test_invoice
+NEEDS: 🔴 **Does a test order deplete stock?** OWED — on the RULINGS board. Built as NO on the [[R-21]] precedent because that is the reversible direction, and the prompt's own clause *"if the answer is no, the screen must SAY so"* is **not yet honoured** — the banner says nothing about stock. Also owed: the printable artefact (a test order should produce something she can hold), and somewhere to record an answer to the two findings that ask a question.
+⚠️ **WRITTEN AS-BUILT.** No matching story existed and the §9 gate says one is created BEFORE the build spec — this is the IN-CODE-NOT-ON-BOARD case, flagged rather than left silent.
+
+Lauren is not sure about this yet, and being not sure is the correct state for somebody about to move
+their business onto software. So she rings up fake orders — all week, whenever the yard is quiet. A
+customer who does not exist buys three Shumard oaks. She adds netting, takes it off, adds a delivery,
+cancels it, prints the invoice, and looks at what came out. **That is what a careful buyer does, and
+it is the only way she builds confidence in it.**
+
+None of it reaches her accountant. Not the invoices, and 🔴 **not the customers** — a fake buyer that
+creates a real name in her real chart of customers is somebody's Monday morning, and it is the half
+that gets forgotten because no invoice appears and it therefore looks like nothing happened.
+
+None of it reaches her numbers either. Her dashboard still says what it said on Monday, and it keeps
+saying so **after she goes live** — the practice orders never quietly become revenue, because what
+makes them practice is written on the row rather than remembered by whichever screen is doing the
+counting.
+
+And she can never be in test mode without knowing it. There is an amber bar on every screen that
+touches money, it does not scroll away, and there is nothing to close. 🔴 **The reason is the failure
+nobody builds for: not fake data reaching her books, but a fortnight of REAL sales that never left
+this platform because she thought she was live.** Her bookkeeper finds the hole and nobody can say
+which invoices are missing.
+
+When she is ready, she turns it on herself — she does not phone David for it. The system tells her,
+before it happens and in the future tense, that every order from now on will be a real invoice, that
+an invoice cannot be taken back, and 🔴 **that the week of practice orders is not affected.** That
+last sentence is the one she will actually be worried about, and it is the one a confirmation
+usually omits.
+
+---
+
 ## ARC: ocr-doc-routing
 
 _Capture → extract (one engine) → infer type → confirm → fan-out to many destinations._
