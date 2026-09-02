@@ -29,6 +29,23 @@
 -- written ONLY by the QBO push (cultivar.ts:717), and is ABSENT from ORDER_STATUSES — it starts
 -- counting as open the day that enum is ratified (R-STATUS, orderStatus.ts:7-8).
 --
+-- ⚠️⚠️ SUPERSEDED 2026-08-28, ANNOTATED 2026-09-02 — THE PARAGRAPH ABOVE IS PRESERVED BECAUSE IT WAS
+-- TRUE WHEN WRITTEN, AND IT IS NO LONGER THE RULE. R-STATUS was ratified: 'invoiced' is now IN
+-- ORDER_STATUSES, it DOES count as open, and that is CORRECT for a sale awaiting delivery. The
+-- warning was answered, not ignored. The authority is `shared/business-logic/historyOrder.ts:35-45`
+-- (invariant 2, "STATUS FOLLOWS THE DELIVERY"): 'fulfilled' once complete, 'invoiced' until then.
+--
+-- Measured live 2026-09-02 (LAWNS, population 30 orders, all order_kind='history'): status is
+-- 'invoiced' on 29 and 'fulfilled' on 1 — i.e. the paragraph above describes almost none of the
+-- table it governs. ✅ The D-52 landmine is nonetheless CLEAR, and it was measured rather than
+-- assumed: 0 of 39 order_items lines on receipt-linked orders carry a business_inventory_id, so
+-- invariant (1) alone is holding committed stock at zero. "BOTH, not either" now reads: invariant
+-- (1) is the load-bearing one; invariant (2) is a vocabulary that has since changed under it.
+--
+-- 🔴 THIS FILE IS APPLIED AND ITS SQL IS UNTOUCHED (§6 r1). Only this comment block was appended,
+-- following the precedent set by 20260802_trialling_modules_are_live.sql:2, which carries the same
+-- kind of post-hoc SUPERSEDED header on an applied migration.
+--
 -- ── WHAT IS DELIBERATELY *NOT* HERE ──────────────────────────────────────────────
 -- No CHECK on `order_kind`. The vocabulary is young and R-STATUS is an open ruling; a CHECK minted
 -- today is a constraint we would be editing next month, and §6 r1 makes migrations append-only.

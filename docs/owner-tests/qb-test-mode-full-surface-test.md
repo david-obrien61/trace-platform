@@ -47,7 +47,7 @@ reason stated. Thunder never sets `covered` (OP-14).
       **SQL editor** as `postgres` — *not* the table editor (§6 r17).
       **Run its VERIFY block, all four queries.** Query 3 is the one that matters: if `pg_policies`
       lists any UPDATE policy on `businesses` other than `businesses_owner_update`, **stop** — the
-      owner gate is not the only door and R-55's authority claim is false.
+      owner gate is not the only door and R-56's authority claim is false.
       ⚠️ **Until it is applied, every order is written as a test order** (a failed read of the
       switch means test mode — the safe direction, stated at `submit.ts`). That is by design, and
       it means an unapplied migration looks like a working feature. Confirm, do not assume.
@@ -125,7 +125,7 @@ Sign in as a **manager** (not the owner). Settings → Accounting.
 
 **PASS:** state visible, control absent, reason given.
 **FAIL:** a greyed-out button with no explanation (that reads as broken — §6 r13), **or** a working
-button. If a manager can flip it, stop and surface it: the database policy is not what R-55 says it is.
+button. If a manager can flip it, stop and surface it: the database policy is not what R-56 says it is.
 
 ---
 
