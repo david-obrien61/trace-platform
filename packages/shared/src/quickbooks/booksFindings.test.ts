@@ -15,7 +15,7 @@
  *   node_modules/.bin/esbuild packages/shared/src/quickbooks/booksFindings.test.ts \
  *     --bundle --platform=node --format=cjs | node
  */
-import { evaluateBooks, BOOKS_RULES, FINDING_TIERS } from './booksFindings';
+import { evaluateBooks, BOOKS_RULES, FINDING_TIERS, SHAPES } from './booksFindings';
 import type { QboInvoiceRow } from './invoiceList';
 import type { QboItemRow } from './itemList';
 import type { CustomerBreakdown } from './customerList';
@@ -30,8 +30,9 @@ const item = (id: string, name: string, o: Partial<QboItemRow> = {}): QboItemRow
   id, name, type: 'Inventory', incomeAccount: 'Sales of Nursery Stock', active: true,
   unitPrice: null, purchaseCost: null, sku: null, ...o,
 });
-const line = (itemId: string | null, itemName: string | null, unitPrice: number | null, amount: number, qty = 1) =>
-  ({ detailType: 'SalesItemLineDetail', itemId, itemName, qty, amount, unitPrice });
+const line = (itemId: string | null, itemName: string | null, unitPrice: number | null, amount: number, qty = 1,
+              discountInDescription = false) =>
+  ({ detailType: 'SalesItemLineDetail', itemId, itemName, qty, amount, unitPrice, discountInDescription });
 const inv = (id: string, docNumber: string | null, lines: ReturnType<typeof line>[]): QboInvoiceRow =>
   ({ id, docNumber, txnDate: '2026-05-01', totalAmt: 100, customerId: 'c1', lines });
 
@@ -128,9 +129,29 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
     inv('i2', '1001', [line('1', 'Tree', 90, 90)]),   // duplicate number — a RISK finding
   ];
   const fs = evaluateBooks({ items, invoices, customers: CUSTOMERS });
-  const tiers = fs.map(f => FINDING_TIERS.indexOf(f.tier));
-  ok(tiers.every((t, i) => i === 0 || tiers[i - 1] <= t),
-    '🔴 TIERS NEVER GO BACKWARDS. Twelve things wrong with her books sorted by how wrong they are reads as an audit; sorted by what they are worth to her it reads as help');
+
+  // ⚠️ THE ORDERING RULE CHANGED, AND THIS PROBE GOT STRICTER RATHER THAN LOOSER. It used to
+  // assert tier-monotonicity over the WHOLE list. The list is now measured-findings first
+  // (money → risk → tidiness) and everything that could NOT be computed last, across all tiers
+  // — so a not-measured money rule legitimately sits after a measured tidiness one, and a
+  // whole-list tier check would forbid the ruled behaviour. All three properties below are
+  // asserted separately so that relaxing any ONE of them still goes red.
+  const measured = fs.filter(f => f.measured);
+  const unmeasured = fs.filter(f => !f.measured);
+  const mTiers = measured.map(f => FINDING_TIERS.indexOf(f.tier));
+  ok(mTiers.every((t, i) => i === 0 || mTiers[i - 1] <= t),
+    '🔴 AMONG MEASURED FINDINGS TIERS NEVER GO BACKWARDS. Sorted by how wrong they are it reads as an audit of her work; money-first it reads as help');
+  ok(fs.findIndex(f => !f.measured) === -1 || measured.length === fs.findIndex(f => !f.measured),
+    '🔴 everything that could not be computed comes LAST, in one block — it is the most valuable page in the report and it is not a finding about her money');
+  ok(unmeasured.every(f => f.value === null),
+    'and nothing unmeasured carries a value, so it can never be ordered as though it had been measured and found worthless');
+
+  // Within a tier, the order is MONEY AT STAKE, computed from their own numbers.
+  for (const tier of FINDING_TIERS) {
+    const vals = measured.filter(f => f.tier === tier).map(f => (f.value === null ? -Infinity : f.value));
+    ok(vals.every((v, i) => i === 0 || vals[i - 1] >= v),
+      `🔴 within the ${tier} tier the order is by money at stake, descending — computed, never a number somebody typed`);
+  }
 
   // The sort must NOT be by size. Prove it with a tidiness finding that dwarfs every money one.
   const big = find(fs, 'sold-at-more-than-one-price');
@@ -229,6 +250,205 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
     'and discount eligibility is a POLICY about their business, not a pattern in their data');
   ok(trip!.quoted.includes('40'),
     'both still carry their quoted figure — an uncomputed finding is still worth showing, with the number somebody once reported');
+}
+
+
+// ══ §G THE SHAPES — THE PRODUCT IS THE RULE, NOT THE FINDING ═══════════════
+{
+  const shapes = Object.keys(SHAPES);
+  ok(shapes.length === 8, 'there are eight shapes');
+  ok(BOOKS_RULES.every(r => shapes.includes(r.shape)),
+    'every rule states which shape it is an instance of — a rule that states no shape is a one-off finding wearing a rule\'s clothes');
+  const covered = new Set(BOOKS_RULES.map(r => r.shape));
+  ok(shapes.every(sh => covered.has(sh)),
+    `🔴 all EIGHT shapes have at least one rule — missing: ${shapes.filter(sh => !covered.has(sh)).join(', ') || 'none'}`);
+
+  // 🔴 THE TEST THAT KEEPS THIS PLATFORM-SHAPED. If a rule needs a vertical's vocabulary to be
+  // stated, it is one business's finding and customer two gets a worse report, not a better one.
+  // Only STATIC text is checked — a sentence built from their own item names legitimately
+  // contains their words, and testing those would fail on any real catalogue.
+  const VERTICAL = /\b(tree|shrub|plant|nursery|gallon|oak|mulch|garden|landscap|seedling|cultivar)\w*/i;
+  const staticText = BOOKS_RULES.map(r => `${r.id} ${r.shape} ${r.quoted} ${r.cannotCompute ?? ''}`);
+  const offenders = staticText.filter(t => VERTICAL.test(t));
+  ok(offenders.length === 0,
+    `🔴 every rule is expressible WITHOUT naming a vertical — offenders: ${offenders.join(' | ') || 'none'}`);
+  ok(Object.values(SHAPES).every(label => !VERTICAL.test(label)),
+    'and so is every shape label');
+}
+
+// ══ §H THE RECOMMENDATION — ALL FOUR PARTS, AND COMPUTED RATHER THAN AUTHORED ══
+{
+  const items = [item('1', 'Widget', { unitPrice: 100 })];
+  const small = evaluateBooks({
+    items, customers: CUSTOMERS,
+    invoices: [inv('i1', '1001', [line('1', 'Widget', 90, 90)])],
+  });
+  const rec = small.find(f => f.recommendation !== null)?.recommendation;
+  ok(rec !== undefined && rec !== null, '🔴 at least one finding carries a RECOMMENDATION');
+  if (rec) {
+    ok(typeof rec.statusQuoCost === 'number', 'part 1 — what the status quo costs');
+    ok(typeof rec.remedy === 'string' && rec.remedy.length > 0, 'part 2 — the fix');
+    ok(typeof rec.remedyCost === 'number', 'part 3 — what the fix costs (zero is a real answer, and it is STATED)');
+    ok(typeof rec.paybackMonths === 'number', 'part 4 — the payback');
+    ok(typeof rec.limits === 'string' && rec.limits.length > 0,
+      '⚠️ and what it does NOT fix — a recommendation that hides its limits gets found out on day two');
+  }
+
+  // 🔴 COMPUTED, NOT AUTHORED — proven by CHANGING THE BOOKS AND WATCHING THE NUMBER MOVE. A
+  // probe asserting `statusQuoCost === 10` would pass just as happily against a hardcoded 10.
+  const bigger = evaluateBooks({
+    items, customers: CUSTOMERS,
+    invoices: [
+      inv('i1', '1001', [line('1', 'Widget', 90, 90)]),
+      inv('i2', '1002', [line('1', 'Widget', 50, 150, 3)]),   // 3 units, $50 under a $100 floor
+    ],
+  });
+  const rec2 = bigger.find(f => f.recommendation !== null)?.recommendation;
+  ok(rec2 !== undefined && rec2 !== null && rec !== null && rec2.statusQuoCost > rec.statusQuoCost,
+    '🔴 a second set of books produces a DIFFERENT status-quo cost — the four parts come from their numbers, not from this file');
+  ok(rec2 !== undefined && rec2 !== null && rec2.statusQuoCost === 10 + 150,
+    'and the arithmetic is the gap times the quantity actually sold: $10 + (3 x $50)');
+}
+
+// ══ §I MONEY AT STAKE ORDERS THE LIST, AND NULL IS NOT ZERO ════════════════
+{
+  const fs = evaluateBooks({
+    items: [item('1', 'Widget', { unitPrice: 100 })], customers: CUSTOMERS,
+    invoices: [inv('i1', '1001', [line('1', 'Widget', 40, 40)])],
+  });
+  const measuredMoney = fs.filter(f => f.measured && f.tier === 'money');
+  ok(measuredMoney.some(f => f.value !== null), 'a measured money finding carries a computed value');
+  ok(fs.filter(f => !f.measured).every(f => f.value === null && f.recommendation === null),
+    '🔴 nothing that could not be computed carries a value or a recommendation');
+  // null must not collapse into 0 — otherwise "not a money question" sorts as "worth nothing"
+  const withNull = fs.filter(f => f.measured && f.value === null);
+  ok(withNull.every(f => f.value === null && (f.value as number | null) !== 0),
+    'a finding that is not a money question keeps a NULL value, never a zero that would read as a measurement');
+}
+
+
+// ══ §J DISCOUNTING ANNOUNCED IN WORDING — THE MEASURABILITY FINDING ════════
+{
+  const items = [item('1', 'Widget', { unitPrice: 100 })];
+  const invoices = [
+    // two lines whose WORDING announces a discount, and which are not recorded as discounts
+    inv('i1', '1001', [line('1', 'Widget', 90, 90, 1, true), line('1', 'Widget', 80, 80, 1, true)]),
+    // one properly recorded discount line
+    inv('i2', '1002', [line('1', 'Widget', 100, 100), { detailType: 'DiscountLineDetail', itemId: null,
+      itemName: 'CD10%', qty: null, amount: -10, unitPrice: null, discountInDescription: false }],
+    ),
+  ];
+  const f = evaluateBooks({ items, invoices, customers: CUSTOMERS }).find(x => x.id === 'discount-in-wording');
+  ok(f !== undefined && f.measured, 'the wording rule runs');
+  ok(f?.population.matched === 2, 'it counts the two lines that ANNOUNCE a discount');
+  ok(f?.population.of === 4, 'out of every line read, not out of the discount lines');
+  ok(f?.value === 170, '🔴 the money at stake is what those lines carried ($90 + $80), computed');
+  ok(f?.sentence.includes('$170') && f?.sentence.includes('$10'),
+    'the sentence carries BOTH numbers — what is invisible, and what is recorded properly');
+  ok(!/\bare discounts\b/i.test(f?.sentence ?? ''),
+    '🔴 it never says these lines ARE discounts — the wording mentions one, and calling them discounts would be the retro-classification R-50 forbids');
+  ok(f?.shape === 'prose-not-a-field', 'and it declares its shape');
+}
+
+// ══ §K A RULE THAT CANNOT RUN SAYS WHY IN ITS OWN WORDS ════════════════════
+{
+  const fs = evaluateBooks({ items: [item('1', 'Widget')], invoices: [inv('i1', '1', [line('1', 'Widget', 5, 5)])],
+                             customers: CUSTOMERS });
+  const ar = fs.find(f => f.id === 'overdue-receivables');
+  ok(ar !== undefined && !ar.measured, 'receivables cannot be computed from these three reads');
+  ok(/unpaid|due/i.test(ar?.notMeasured ?? ''),
+    '🔴 and it names the FIELDS that would answer it, not a generic "only you can tell us" — a silent omission would read as a clean bill of health on receivables');
+  ok(!/only you can tell us/i.test(ar?.notMeasured ?? ''),
+    'blocked-on-a-field and blocked-on-policy are different problems with different next steps');
+}
+
+
+// ══ §L THE FOUR THAT A MUTANT FOUND — EACH NEEDED A FIXTURE THAT COULD TELL THE DIFFERENCE ══
+//
+// 🔴 ALL FOUR OF THESE SURVIVED A GREEN SUITE. Not because the assertions were wrong, but
+// because every fixture above happened to make the correct answer and the mutant's answer
+// IDENTICAL — one measured money finding sorts the same either way, a null and a zero tie when
+// nothing else is in the tier. The probes below are built specifically so that the two orderings
+// DISAGREE. Same lesson as the #248 seam and R-33: an assertion aimed near the property proves
+// nothing about the property.
+{
+  // ── M12: within a tier the order must be MONEY, not the order the rules are written in ──
+  // `sold-below-price-card` is declared EARLY and is worth $10 here; `discount-in-wording` is
+  // declared LATE and is worth $500. Declared order and money order therefore disagree, which
+  // is the only arrangement that can catch a sort that ignores the money.
+  const items = [item('1', 'Widget', { unitPrice: 100 }), item('2', 'Other')];
+  const invoices = [
+    inv('i1', '1001', [line('1', 'Widget', 90, 90)]),               // $10 under a $100 floor
+    inv('i2', '1002', [line('2', 'Other', 500, 500, 1, true)]),     // $500 announced in wording
+  ];
+  const fs = evaluateBooks({ items, invoices, customers: CUSTOMERS });
+  const at = (id: string) => fs.findIndex(f => f.id === id);
+  const card = fs.find(f => f.id === 'sold-below-price-card');
+  const word = fs.find(f => f.id === 'discount-in-wording');
+  ok(card?.value === 10 && word?.value === 500, 'the two money findings are worth $10 and $500');
+  ok(at('discount-in-wording') < at('sold-below-price-card'),
+    '🔴 the $500 finding outranks the $10 one even though it is DECLARED LATER — the order is hers, computed from her books, not ours');
+}
+{
+  // ── M14: a NULL value is not a ZERO one ──
+  // `discounts-that-do-not-work` is measured with NO money attached (null); `discount-in-wording`
+  // is measured at exactly $0. Both are money-tier, and the null one is DECLARED FIRST — so if
+  // null collapses to 0 the two tie and the declared order wins, putting the null one first.
+  const fs = evaluateBooks({
+    items: [item('1', 'Widget')], customers: CUSTOMERS,
+    invoices: [inv('i1', '1001', [line('1', 'Widget', 10, 10)])],
+    discounts: { byName: [{ itemName: 'CD10%', lines: 4, withBase: 4, baseTotal: 100, amountTotal: 10,
+                            verdicts: { equalsSubtotal: 4, belowSubtotal: 0, aboveSubtotal: 0, noBase: 0 },
+                            excludedFromBase: [], examples: [] }],
+                 unnamedDiscountLines: [] },
+  });
+  const word = fs.find(f => f.id === 'discount-in-wording');
+  const broke = fs.find(f => f.id === 'discounts-that-do-not-work');
+  ok(word?.value === 0, 'a business with no discounting-in-wording measures at exactly $0 — measured, not absent');
+  ok(broke?.measured === true && broke?.value === null, 'and the broken-discount finding is measured with NO money attached');
+  ok(fs.findIndex(f => f.id === 'discount-in-wording') < fs.findIndex(f => f.id === 'discounts-that-do-not-work'),
+    '🔴 a measured $0 outranks a NULL — "worth nothing" and "not a money question" are different answers, and only one of them belongs in a money ordering');
+}
+{
+  // ── M19: a line RECORDED as a discount is not a line that merely mentions one ──
+  // The formal discount line's own wording also says "discount" — which is entirely normal, and
+  // is exactly the case where counting a line twice would inflate the accusation.
+  const items = [item('1', 'Widget', { unitPrice: 100 })];
+  const invoices = [inv('i1', '1001', [
+    line('1', 'Widget', 90, 90, 1, true),
+    { detailType: 'DiscountLineDetail', itemId: null, itemName: 'CD10%', qty: null, amount: -10,
+      unitPrice: null, discountInDescription: true },
+  ])];
+  const f = evaluateBooks({ items, invoices, customers: CUSTOMERS }).find(x => x.id === 'discount-in-wording');
+  ok(f?.population.matched === 1,
+    '🔴 a properly recorded discount line whose wording ALSO says "discount" is counted ONCE, as recorded — not as evidence against them');
+}
+{
+  // ── M20: a catalogue with no formula has not broken one ──
+  // Every product priced independently is a legitimate way to run a business. Inventing a
+  // "formula" from whatever multiple happens to be most common and then reporting that the
+  // sales broke it would be a rule the owner never adopted, held against them.
+  const items = [
+    item('1', 'A', { unitPrice: 100, purchaseCost: 10 }),   // 10x
+    item('2', 'B', { unitPrice: 100, purchaseCost: 25 }),   // 4x
+    item('3', 'C', { unitPrice: 100, purchaseCost: 50 }),   // 2x
+  ];
+  const invoices = [inv('i1', '1001', [line('1', 'A', 100, 100), line('2', 'B', 100, 100), line('3', 'C', 100, 100)])];
+  const f = evaluateBooks({ items, invoices, customers: CUSTOMERS }).find(x => x.id === 'markup-formula-not-achieved');
+  ok(f !== undefined && f.measured === false,
+    '🔴 a catalogue with NO consistent markup reports not-measured — it is not told it broke a formula nobody set');
+
+  // …and the same rule DOES fire when a formula genuinely exists and the sales miss it.
+  const consistent = [
+    item('1', 'A', { unitPrice: 30, purchaseCost: 10 }), item('2', 'B', { unitPrice: 60, purchaseCost: 20 }),
+    item('3', 'C', { unitPrice: 90, purchaseCost: 30 }),
+  ];
+  const soldLow = [inv('i1', '1001', [line('1', 'A', 20, 20), line('2', 'B', 40, 40), line('3', 'C', 60, 60)])];
+  const g = evaluateBooks({ items: consistent, invoices: soldLow, customers: CUSTOMERS })
+    .find(x => x.id === 'markup-formula-not-achieved');
+  ok(g?.measured === true && g.sentence.includes('3x'),
+    'and where the list DOES follow a 3x rule it says so — the negative control, without which the probe above passes on a rule that never fires at all');
+  ok(g?.value === 60, 'the gap is computed: 3x on a $60 cost base is $180, and $120 was taken');
 }
 
 console.log(`\n  booksFindings — ${passed} passed, ${failed} failed`);

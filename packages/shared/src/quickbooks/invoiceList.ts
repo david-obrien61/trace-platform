@@ -67,6 +67,19 @@ export interface QboInvoiceLine {
    * difference between "they gave it away" and "we do not know" (D-9 / A9).
    */
   unitPrice: number | null;
+  /**
+   * 🔴 DID THIS LINE'S WORDING ANNOUNCE A DISCOUNT? A BOOLEAN, AND THE PROSE IS NEVER KEPT.
+   *
+   * A line description is free text an owner typed, and on real books it carries customer
+   * names, job notes and site addresses — so `Description` is read once, tested, and dropped.
+   * What survives is this flag, which is all any rule needs: the finding is "your discounting
+   * is announced in wording instead of recorded as a discount", and that is a COUNT question.
+   *
+   * ⚠️ THIS IS EVIDENCE OF A MEASUREMENT PROBLEM, NOT A RECLASSIFICATION. Nothing downstream
+   * may treat a true here as "this line IS a discount" — R-50. It says the wording mentions
+   * one, which is exactly why the money cannot be measured from the discount lines alone.
+   */
+  discountInDescription: boolean;
 }
 
 /** One invoice. 🔴 `customerId` and NO customer name — see the file header. */
@@ -128,6 +141,23 @@ export const DISCOUNT_ITEM_NAMES = [
  * tree above it — which is exactly how installation revenue becomes invisible.
  */
 export const BUNDLE_ITEM_NAMES = ['DIW', 'FDIW'];
+
+/**
+ * Wording that announces a discount in prose.
+ *
+ * 🔴 DELIBERATELY NARROW, WHICH IS THE OPPOSITE CALL FROM `isDiscountShaped` BELOW, AND THE
+ * REASON IS THE DIRECTION OF THE ERROR. That predicate catches what a NAMED list missed, so a
+ * false positive costs one visible row and a false negative hides money — broad wins. This one
+ * FEEDS A FINDING that tells an owner their discounting is unmeasurable, so a false positive
+ * INFLATES an accusation about their bookkeeping. `off` alone is excluded for exactly that
+ * reason: "off-white", "cut off" and "10 ft off the drive" are not discounts.
+ */
+export const DISCOUNT_WORDING = /discount|%\s*off|\bwaived\b|\bno charge\b|\bcomped\b/i;
+
+/** Does this line's free text announce a discount? The text itself is never returned. */
+export function mentionsDiscount(description: string | null | undefined): boolean {
+  return typeof description === 'string' && DISCOUNT_WORDING.test(description);
+}
 
 const DISCOUNT_SET = new Set(DISCOUNT_ITEM_NAMES.map(n => n.toLowerCase()));
 const BUNDLE_SET   = new Set(BUNDLE_ITEM_NAMES.map(n => n.toLowerCase()));
@@ -192,6 +222,8 @@ export function parseInvoiceList(rawBody: string): ParsedInvoiceList {
         // GroupLineDetail or any future block is read the same way instead of coming back
         // empty because the code guessed 'SalesItemLineDetail'.
         unitPrice: num(detail?.UnitPrice),
+        // Read, tested, discarded — the string never reaches the returned row. See the field.
+        discountInDescription: mentionsDiscount(str(l?.Description)),
       };
     });
 

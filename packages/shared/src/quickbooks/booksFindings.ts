@@ -57,10 +57,66 @@
 import type { QboInvoiceRow, DiscountBreakdown } from './invoiceList';
 import type { QboItemRow } from './itemList';
 import type { CustomerBreakdown } from './customerList';
+import { QBO_DETAIL_TYPE } from './invoiceLineShapes';
 
 /** Money before risk before tidiness. The array order IS the sort order. */
 export const FINDING_TIERS = ['money', 'risk', 'tidiness'] as const;
 export type FindingTier = (typeof FINDING_TIERS)[number];
+
+/**
+ * ══════════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 THE EIGHT SHAPES. THESE ARE THE PRODUCT; THE FINDINGS ARE WHAT FALLS OUT OF THEM.
+ * ══════════════════════════════════════════════════════════════════════════════════════════
+ * A list of things found at one nursery makes the second customer's report worse — it would be
+ * written by hand again, and it would find only what the first business happened to be doing
+ * wrong. Encoding the SHAPE instead means the second customer gets a BETTER report than the
+ * first, because their data trips rules the first one never did.
+ *
+ * ⚠️ THE TEST EVERY SHAPE MUST PASS: it is expressible WITHOUT NAMING A VERTICAL. No tree, no
+ * gallon, no nursery. A shape that needs one of those words is a single business's finding
+ * wearing a rule's clothes, and it will not survive contact with customer two. There is a probe
+ * that holds this file to it rather than leaving it to a reader's discretion.
+ */
+export const SHAPES = {
+  'two-sources-disagree':      'Two sources that should agree, and do not',
+  'prose-not-a-field':         'Announced in prose, where it should be a field',
+  'reused-unique-value':       'A value used twice that should be unique',
+  'written-never-read':        'Written and never read',
+  'implausible-distribution':  'A distribution that should not look like that',
+  'uncharged-money':           'Money that should have been charged and was not',
+  'field-adopted-midway':      'A field adopted part-way through the history',
+  'formula-breaks-where-it-matters': 'A formula that holds everywhere except where it matters',
+} as const;
+
+export type Shape = keyof typeof SHAPES;
+
+/**
+ * A finding says THIS IS TRUE. A recommendation says: this is costing you, here is the fix,
+ * here is what the fix costs, and here is the payback — all four, computed from their own
+ * numbers.
+ *
+ * 🔴 A RECOMMENDATION WITH NO NUMBER IS AN OPINION. If the arithmetic cannot be done from their
+ * books it stays a FINDING, and this field is absent. Nothing here may be authored.
+ */
+export interface Recommendation {
+  /** What carrying on unchanged costs, over the period actually read. Computed. */
+  statusQuoCost: number;
+  /** The fix, in one sentence an owner would say. */
+  remedy: string;
+  /**
+   * What the fix costs. 🔴 ZERO IS A REAL ANSWER AND IS STATED RATHER THAN HIDDEN — a remedy
+   * that is a decision rather than a purchase genuinely costs nothing, and saying so plainly is
+   * more honest than omitting the field and letting the reader wonder what was left out.
+   */
+  remedyCost: number;
+  /** Whole months until the remedy pays for itself. 0 = immediately. */
+  paybackMonths: number;
+  /**
+   * ⚠️ WHAT IT DOES NOT FIX. A recommendation that hides its limits gets found out on day two,
+   * and then none of the others are believed either.
+   */
+  limits: string;
+}
 
 /** Which of the three reads a rule needs. R-24: they are not one walk and must not pretend to be. */
 export type Walk = 'items' | 'customers' | 'invoices';
@@ -74,6 +130,19 @@ const WALK_LABEL: Record<Walk, string> = {
 export interface Finding {
   id: string;
   tier: FindingTier;
+  /** Which of the eight shapes this rule is an instance of. Every rule states one. */
+  shape: Shape;
+  /**
+   * 🔴 MONEY AT STAKE, COMPUTED FROM THEIR OWN NUMBERS — never a hardcoded weight and never a
+   * proxy for how bad the finding is. It is what orders the list.
+   *
+   * `null` means this finding is not expressible in money (a duplicate customer is a real
+   * problem and not a dollar figure). Null sorts LAST within its tier rather than as zero —
+   * "worth nothing" and "not a money question" are different answers.
+   */
+  value: number | null;
+  /** Present only when all four parts could be computed. See `Recommendation`. */
+  recommendation: Recommendation | null;
   /** ONE sentence an owner understands. No field names, no `DocNumber`, no `UnitPrice`. */
   sentence: string;
   /** How many matched, and OUT OF WHAT. Both, always. */
@@ -107,14 +176,30 @@ export interface BooksInput {
 interface Rule {
   id: string;
   tier: FindingTier;
+  shape: Shape;
   needs: Walk[];
   quoted: string;
+  /**
+   * Shown when `run` returns null. Without it the runner uses its generic "only you can tell
+   * us" sentence — true for a rule blocked on POLICY, wrong for one blocked on a field we did
+   * not read. Those are different problems with different next steps, and a reader cannot act
+   * on the wrong one.
+   */
+  cannotCompute?: string;
   /** Returns the measured half. `of` of zero is reported as not-measured by the runner. */
   run: (x: BooksInput) => { matched: number; of: number; noun: string; sentence: string;
-                            needsAnswer?: { question: string; options: string[] } } | null;
+                            needsAnswer?: { question: string; options: string[] };
+                            /** Money at stake, computed. Omit when the finding is not a money question. */
+                            value?: number | null;
+                            recommendation?: Recommendation } | null;
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+
+/** Whole dollars. An owner reads $614,053, not 614052.87 — and never a bare number. */
+const money = (n: number): string => `$${Math.round(n).toLocaleString()}`;
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+const pct = (n: number, of: number): string => `${of === 0 ? 0 : Math.round((n / of) * 100)}%`;
 
 const plural = (n: number, one: string, many: string): string => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
@@ -136,7 +221,7 @@ export const BOOKS_RULES: Rule[] = [
 
   // ══ MONEY ═════════════════════════════════════════════════════════════════
   {
-    id: 'trip-charge-missing', tier: 'money', needs: ['invoices'],
+    id: 'trip-charge-missing', tier: 'money', shape: 'uncharged-money', needs: ['invoices'],
     quoted: '40 invoices, about $6,000',
     // 🔴 DELIBERATELY UNCOMPUTED, AND THIS IS THE HONEST ANSWER RATHER THAN A LAZY ONE. The
     // rule needs to know WHICH ITEM MEANS "trip charge" in these books. Guessing it from item
@@ -146,7 +231,7 @@ export const BOOKS_RULES: Rule[] = [
     run: () => null,
   },
   {
-    id: 'sold-below-price-card', tier: 'money', needs: ['items', 'invoices'],
+    id: 'sold-below-price-card', tier: 'money', shape: 'two-sources-disagree', needs: ['items', 'invoices'],
     quoted: '53 rows, 32 items, 230 sales',
     run: (x) => {
       if (!x.items || !x.invoices) return null;
@@ -156,24 +241,46 @@ export const BOOKS_RULES: Rule[] = [
       const card = new Map<string, number>();
       for (const it of x.items) if (it.unitPrice !== null) card.set(it.id, it.unitPrice);
 
-      let below = 0, comparable = 0;
+      let below = 0, comparable = 0, shortfall = 0;
       const items = new Set<string>();
+      const months = new Set<string>();
       for (const inv of x.invoices) {
         for (const l of pricedLines(inv)) {
           const floor = l.itemId === null ? undefined : card.get(l.itemId);
           if (floor === undefined) continue;         // no published price → not comparable
           comparable++;
-          if ((l.unitPrice as number) < floor) { below++; if (l.itemName) items.add(l.itemName); }
+          if ((l.unitPrice as number) < floor) {
+            below++;
+            if (l.itemName) items.add(l.itemName);
+            // The gap, times what was actually sold. Qty is a COUNT on a goods line, and
+            // `pricedLines` has already excluded the lines where it is a dollar base.
+            const q = l.qty !== null && l.qty > 0 ? l.qty : 1;
+            shortfall += (floor - (l.unitPrice as number)) * q;
+            if (inv.txnDate) months.add(inv.txnDate.slice(0, 7));
+          }
         }
       }
+      // 🔴 THE FOUR PARTS, ALL COMPUTED FROM THEIR OWN NUMBERS — NOTHING AUTHORED. The remedy
+      // costs nothing because it is a decision about what gets typed, not a purchase, and that
+      // is STATED rather than left out. A recommendation with an authored number is an opinion.
+      const span = Math.max(1, months.size);
+      const recommendation = below === 0 ? undefined : {
+        statusQuoCost: shortfall,
+        remedy: 'Charge your published price on those products, or change the published price to what you actually mean to charge — today the two disagree and the invoice wins.',
+        remedyCost: 0,
+        paybackMonths: 0,
+        limits: `This counts only sales we could compare — ${comparable.toLocaleString()} of your lines had a published price to compare against. It cannot see a discount you meant to give, and some of these will be deliberate.`,
+      };
       return {
         matched: below, of: comparable, noun: 'sales we could compare against a published price',
-        sentence: `${plural(below, 'sale was', 'sales were')} charged below the price you have set for that item in QuickBooks — ${plural(items.size, 'product', 'products')} in total.`,
+        sentence: `${plural(below, 'sale was', 'sales were')} charged below the price you have set for that item in QuickBooks — ${plural(items.size, 'product', 'products')} in total, ${money(shortfall)} less than your own price list over ${plural(span, 'month', 'months')}.`,
+        value: shortfall,
+        recommendation,
       };
     },
   },
   {
-    id: 'discount-never-applied', tier: 'money', needs: ['invoices', 'customers'],
+    id: 'discount-never-applied', tier: 'money', shape: 'two-sources-disagree', needs: ['invoices', 'customers'],
     quoted: '7 customers',
     // Also deliberately uncomputed: it needs the POLICY — who qualifies for which discount.
     // That is a rule about their business, not a pattern in their data, and the data cannot
@@ -181,7 +288,7 @@ export const BOOKS_RULES: Rule[] = [
     run: () => null,
   },
   {
-    id: 'discounts-that-do-not-work', tier: 'money', needs: ['invoices'],
+    id: 'discounts-that-do-not-work', tier: 'money', shape: 'written-never-read', needs: ['invoices'],
     quoted: '3 military, 2 broken',
     run: (x) => {
       if (!x.discounts) return null;
@@ -206,7 +313,7 @@ export const BOOKS_RULES: Rule[] = [
 
   // ══ RISK ══════════════════════════════════════════════════════════════════
   {
-    id: 'duplicate-invoice-numbers', tier: 'risk', needs: ['invoices'],
+    id: 'duplicate-invoice-numbers', tier: 'risk', shape: 'reused-unique-value', needs: ['invoices'],
     quoted: '22 numbers, 44 invoices',
     run: (x) => {
       if (!x.invoices) return null;
@@ -229,7 +336,7 @@ export const BOOKS_RULES: Rule[] = [
     },
   },
   {
-    id: 'invoices-without-delivery-date', tier: 'risk', needs: ['invoices'],
+    id: 'invoices-without-delivery-date', tier: 'risk', shape: 'field-adopted-midway', needs: ['invoices'],
     quoted: '881 of 1,469',
     run: (x) => {
       if (!x.invoices || !x.shipDates) return null;
@@ -246,7 +353,7 @@ export const BOOKS_RULES: Rule[] = [
     },
   },
   {
-    id: 'possible-duplicate-customers', tier: 'risk', needs: ['customers'],
+    id: 'possible-duplicate-customers', tier: 'risk', shape: 'reused-unique-value', needs: ['customers'],
     quoted: 'about 72',
     run: (x) => {
       if (!x.customers) return null;
@@ -275,7 +382,7 @@ export const BOOKS_RULES: Rule[] = [
     },
   },
   {
-    id: 'customers-with-no-contact', tier: 'risk', needs: ['customers'],
+    id: 'customers-with-no-contact', tier: 'risk', shape: 'implausible-distribution', needs: ['customers'],
     quoted: '110 of 1,927',
     run: (x) => {
       if (!x.customers) return null;
@@ -292,7 +399,7 @@ export const BOOKS_RULES: Rule[] = [
 
   // ══ TIDINESS ══════════════════════════════════════════════════════════════
   {
-    id: 'sold-at-more-than-one-price', tier: 'tidiness', needs: ['invoices'],
+    id: 'sold-at-more-than-one-price', tier: 'tidiness', shape: 'implausible-distribution', needs: ['invoices'],
     quoted: '286 of 414',
     run: (x) => {
       if (!x.invoices) return null;
@@ -314,7 +421,7 @@ export const BOOKS_RULES: Rule[] = [
     },
   },
   {
-    id: 'income-accounts-in-use', tier: 'tidiness', needs: ['items'],
+    id: 'income-accounts-in-use', tier: 'tidiness', shape: 'implausible-distribution', needs: ['items'],
     quoted: '41 accounts',
     run: (x) => {
       if (!x.items) return null;
@@ -327,7 +434,7 @@ export const BOOKS_RULES: Rule[] = [
     },
   },
   {
-    id: 'never-sold', tier: 'tidiness', needs: ['items', 'invoices'],
+    id: 'never-sold', tier: 'tidiness', shape: 'written-never-read', needs: ['items', 'invoices'],
     quoted: 'not previously computed',
     run: (x) => {
       if (!x.items || !x.invoices) return null;
@@ -342,6 +449,127 @@ export const BOOKS_RULES: Rule[] = [
         sentence: `${plural(never, 'item in your list has', 'items in your list have')} not been sold once in the whole of the history we read.`,
       };
     },
+  },
+
+  // ── shape: prose-not-a-field ───────────────────────────────────────────────
+  // 🔴 THE LARGEST MONEY FINDING THERE IS, AND IT IS ABOUT MEASURABILITY RATHER THAN LOSS.
+  // Nobody is being robbed. The point is that the business CANNOT ANSWER "what does discounting
+  // cost me", because the discount was typed into a line's wording instead of recorded as a
+  // discount — so it is invisible to every report they or their accountant will ever run.
+  //
+  // ⚠️ IT DOES NOT RECLASSIFY ANYTHING (R-50). `discountInDescription` says the WORDING mentions
+  // a discount. It never asserts the line IS one, and the sentence below says "say" and "not
+  // recorded as one" rather than calling them discounts.
+  {
+    id: 'discount-in-wording', tier: 'money', shape: 'prose-not-a-field', needs: ['invoices'],
+    quoted: '504 lines carrying $614,053, against 66 formal discount lines totalling $31,985',
+    run: (x) => {
+      if (!x.invoices) return null;
+      let wordingLines = 0, wordingAmount = 0, formalLines = 0, formalAmount = 0, allLines = 0;
+      for (const inv of x.invoices) {
+        for (const l of inv.lines) {
+          allLines++;
+          const formal = (l.detailType ?? '') === QBO_DETAIL_TYPE.discount || (l.amount ?? 0) < 0;
+          if (formal) { formalLines++; formalAmount += Math.abs(l.amount ?? 0); }
+          else if (l.discountInDescription) { wordingLines++; wordingAmount += Math.max(0, l.amount ?? 0); }
+        }
+      }
+      return {
+        matched: wordingLines, of: allLines, noun: 'invoice lines',
+        // The money is the point, so the money is in the sentence.
+        sentence: `${plural(wordingLines, 'line says', 'lines say')} a discount in their wording but ${wordingLines === 1 ? 'is' : 'are'} not recorded as one, covering ${money(wordingAmount)} of what you sold — against ${plural(formalLines, 'line', 'lines')} totalling ${money(formalAmount)} that ARE recorded as discounts. You cannot tell what discounting costs you, because most of it is done by editing the price.`,
+        value: wordingAmount,
+      };
+    },
+  },
+
+  // ── shape: formula-breaks-where-it-matters ─────────────────────────────────
+  // A price list can be perfectly consistent and still describe nothing that happens. This
+  // compares the rule the CATALOGUE follows against the rule the SALES follow, and it is a
+  // money finding because the gap between them is the money.
+  {
+    id: 'markup-formula-not-achieved', tier: 'money',
+    shape: 'formula-breaks-where-it-matters', needs: ['items', 'invoices'],
+    quoted: 'cost x 3 on 345 of 345 rows; actual sales run 2.81x',
+    cannotCompute: 'We could not work out the markup your price list uses, because your products do not record both a cost and a list price.',
+    run: (x) => {
+      if (!x.items || !x.invoices) return null;
+      const cost = new Map<string, number>();
+      const ratios: number[] = [];
+      for (const it of x.items) {
+        if (it.purchaseCost !== null && it.purchaseCost > 0) {
+          cost.set(it.id, it.purchaseCost);
+          if (it.unitPrice !== null && it.unitPrice > 0) ratios.push(round2(it.unitPrice / it.purchaseCost));
+        }
+      }
+      if (ratios.length === 0) return null;
+
+      // Is there a FORMULA at all? The most common multiple, and how much of the list obeys it.
+      const tally = new Map<number, number>();
+      for (const r of ratios) tally.set(r, (tally.get(r) ?? 0) + 1);
+      let formula = 0, holds = 0;
+      for (const [r, n] of tally) if (n > holds) { formula = r; holds = n; }
+      // 🔴 NO FORMULA IS NOT A FINDING OF THIS SHAPE. A catalogue priced item-by-item is a
+      // legitimate way to run a business, and reporting it here would be inventing a rule the
+      // owner never adopted and then telling them they broke it.
+      if (holds / ratios.length < 0.9) return null;
+
+      let costSum = 0, revSum = 0, lines = 0;
+      for (const inv of x.invoices) {
+        for (const l of pricedLines(inv)) {
+          const c = l.itemId ? cost.get(l.itemId) : undefined;
+          if (c === undefined) continue;
+          const q = l.qty !== null && l.qty > 0 ? l.qty : 1;
+          costSum += c * q;
+          revSum  += (l.unitPrice as number) * q;
+          lines++;
+        }
+      }
+      if (lines === 0 || costSum === 0) return null;
+      const achieved = revSum / costSum;
+      const gap = (formula - achieved) * costSum;
+      return {
+        matched: holds, of: ratios.length, noun: 'products with both a cost and a list price',
+        sentence: `Your price list marks up ${formula}x on cost, and it holds on ${holds} of ${ratios.length} products. What you actually sold ran ${round2(achieved)}x${gap > 0 ? ` — ${money(gap)} less than your own list price would have brought in over the invoices we read` : ''}.`,
+        value: gap > 0 ? gap : null,
+      };
+    },
+  },
+
+  // ── shape: implausible-distribution ────────────────────────────────────────
+  {
+    id: 'customers-who-bought-once', tier: 'tidiness',
+    shape: 'implausible-distribution', needs: ['invoices'],
+    quoted: '83% of customers bought exactly once, and they are 56% of revenue',
+    run: (x) => {
+      if (!x.invoices) return null;
+      const perCustomer = new Map<string, number>();
+      for (const inv of x.invoices) {
+        if (inv.customerId) perCustomer.set(inv.customerId, (perCustomer.get(inv.customerId) ?? 0) + 1);
+      }
+      const total = perCustomer.size;
+      const once = [...perCustomer.values()].filter(n => n === 1).length;
+      return {
+        matched: once, of: total, noun: 'customers who have bought',
+        sentence: `${plural(once, 'customer has', 'customers have')} bought from you exactly once — ${pct(once, total)} of everyone who has ever bought.`,
+        // Real, and not a dollar figure: what a repeat customer WOULD have spent is a forecast,
+        // and a forecast dressed as a measurement is the thing this whole file refuses to do.
+        value: null,
+      };
+    },
+  },
+
+  // ── shape: implausible-distribution — AND IT CANNOT BE COMPUTED, WHICH IS THE POINT ───
+  // 🔴 THIS RULE EXISTS PRECISELY BECAUSE IT CANNOT RUN. It is the second-largest money finding
+  // there is, and a silent omission would read as a clean bill of health on receivables. It
+  // names the two fields that would answer it, so the next conversation starts from a request
+  // rather than from a rediscovery.
+  {
+    id: 'overdue-receivables', tier: 'money',
+    shape: 'implausible-distribution', needs: ['invoices'],
+    quoted: '$30,736 outstanding, of which $11,157 more than 30 days past due',
+    cannotCompute: 'We cannot tell you what you are owed. The invoice read does not include how much of each invoice is still unpaid, or when it was due — so nothing here should be read as "your receivables are fine".',
+    run: () => null,
   },
 ];
 
@@ -368,8 +596,14 @@ export function evaluateBooks(input: BooksInput): Finding[] {
   for (const rule of BOOKS_RULES) {
     const missing = rule.needs.filter(w => !present[w]);
     const base = {
-      id: rule.id, tier: rule.tier, quoted: rule.quoted,
+      id: rule.id, tier: rule.tier, shape: rule.shape, quoted: rule.quoted,
       needsAnswer: null as Finding['needsAnswer'],
+      // A finding that could not run has no money at stake and no recommendation. Reporting
+      // either as 0 would put it in the ordering as though it had been measured and found
+      // worthless — the same conflation of "nothing" with "we did not look" this file exists
+      // to refuse, arriving through the sort instead of through the text.
+      value: null as number | null,
+      recommendation: null as Recommendation | null,
     };
 
     if (missing.length > 0) {
@@ -385,7 +619,8 @@ export function evaluateBooks(input: BooksInput): Finding[] {
     if (r === null) {
       out.push({
         ...base, measured: false,
-        notMeasured: 'We cannot work this one out from your books on their own — it needs something only you can tell us.',
+        notMeasured: rule.cannotCompute
+          ?? 'We cannot work this one out from your books on their own — it needs something only you can tell us.',
         sentence: '', population: { matched: 0, of: 0, noun: '' },
       });
       continue;
@@ -409,13 +644,35 @@ export function evaluateBooks(input: BooksInput): Finding[] {
       sentence: r.sentence,
       population: { matched: r.matched, of: r.of, noun: r.noun },
       needsAnswer: r.needsAnswer ?? null,
+      value: r.value ?? null,
+      recommendation: r.recommendation ?? null,
     });
   }
 
-  // TIER ORDER, then the rules' own declared order. NEVER by count or dollar size — see ②.
+  // ══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 MONEY AT STAKE, COMPUTED — THEN RISK, THEN SHAPE, THEN WHAT COULD NOT BE COMPUTED.
+  // ══════════════════════════════════════════════════════════════════════════════════════
+  // ⚠️ THIS IS A DELIBERATE CHANGE FROM THIS FILE'S ORIGINAL RULE, WHICH FORBADE SORTING BY
+  // "count or dollar size" and used the rules' hand-written order instead. That prohibition was
+  // aimed at WORST-FIRST — twelve things wrong with her books, sorted by how wrong they are,
+  // reads as an audit of her work. Sorting by WHAT IT IS WORTH TO HER is a different axis and
+  // reads as help: the ordering is hers, not ours. So the tier order stays exactly as it was
+  // (money before risk before tidiness, never severity), and only the WITHIN-TIER order changes
+  // from a number a person typed to a number computed from their own books.
+  //
+  // 🔴 AND UNMEASURED FINDINGS GO LAST, ACROSS ALL TIERS, RATHER THAN SORTING AS ZERO. "What we
+  // could not work out" is the most valuable page in the report — it is the list of things the
+  // business itself cannot answer — but it is not a finding about their money, and interleaving
+  // it with findings that were measured makes both harder to read.
+  //
+  // A null value is NOT zero: "not a money question" and "worth nothing" are different answers,
+  // so nulls sort after every measured value within their tier rather than below them.
   const tierIndex = (t: FindingTier) => FINDING_TIERS.indexOf(t);
   const ruleIndex = new Map(BOOKS_RULES.map((r, i) => [r.id, i]));
+  const worth = (f: Finding) => (f.value === null ? -Infinity : f.value);
   return out.sort((a, b) =>
+    Number(!a.measured) - Number(!b.measured) ||
     tierIndex(a.tier) - tierIndex(b.tier) ||
+    worth(b) - worth(a) ||
     (ruleIndex.get(a.id) as number) - (ruleIndex.get(b.id) as number));
 }

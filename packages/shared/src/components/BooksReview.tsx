@@ -30,7 +30,7 @@
 //   drops the field structurally) and a customer BREAKDOWN rather than customer records. R-24
 //   clause (b) holds by construction, not by care.
 // ─────────────────────────────────────────────────────────────────────────────
-import type { Finding, FindingTier } from '../quickbooks/booksFindings';
+import type { Finding, FindingTier, Recommendation } from '../quickbooks/booksFindings';
 
 const GREEN = '#27500A';
 const GRAY  = '#6b7280';
@@ -53,6 +53,38 @@ const TIER_SUB: Record<FindingTier, string> = {
   tidiness: 'Things that are simply true about your books, and useful to know.',
 };
 
+/** Whole dollars, the way an owner says them. */
+const money = (n: number): string => `$${Math.round(n).toLocaleString()}`;
+
+/**
+ * 🔴 A FINDING SAYS "THIS IS TRUE". A RECOMMENDATION SAYS "THIS IS COSTING YOU, HERE IS THE FIX,
+ * HERE IS WHAT IT COSTS, HERE IS THE PAYBACK" — and it is the thing that makes an owner act.
+ * All four parts are rendered, and so is the fifth that stops it being a sales pitch: what it
+ * does NOT fix. A recommendation that hides its limits gets found out on day two, and then none
+ * of the others are believed either.
+ */
+function RecommendationBlock({ r }: { r: Recommendation }) {
+  return (
+    <div style={{ marginTop: 9, padding: '9px 11px', borderRadius: 8, background: '#f0fdf4', border: `1px solid ${GREEN}` }}>
+      <p style={{ fontSize: '0.75rem', fontWeight: 800, color: GREEN, margin: '0 0 5px', letterSpacing: '0.03em' }}>
+        WHAT WE'D DO ABOUT IT
+      </p>
+      <p style={{ fontSize: '0.8125rem', color: DARK, margin: '0 0 5px', lineHeight: 1.55 }}>{r.remedy}</p>
+      <p style={{ fontSize: '0.8125rem', color: DARK, margin: 0, lineHeight: 1.6 }}>
+        Costing you now: <strong>{money(r.statusQuoCost)}</strong>
+        {' · '}
+        {/* Zero is a real answer and is SAID, not omitted — a blank here reads as an unknown. */}
+        The fix costs: <strong>{r.remedyCost === 0 ? 'nothing — it is a decision, not a purchase' : money(r.remedyCost)}</strong>
+        {' · '}
+        Pays for itself: <strong>{r.paybackMonths === 0 ? 'immediately' : `in about ${r.paybackMonths} months`}</strong>
+      </p>
+      <p style={{ fontSize: '0.75rem', color: GRAY, margin: '5px 0 0', lineHeight: 1.5 }}>
+        What it does not fix: {r.limits}
+      </p>
+    </div>
+  );
+}
+
 export function BooksReview({ findings }: { findings: Finding[] }) {
   if (findings.length === 0) return null;
   const measuredCount = findings.filter(f => f.measured).length;
@@ -71,7 +103,11 @@ export function BooksReview({ findings }: { findings: Finding[] }) {
       </p>
 
       {(Object.keys(TIER_HEADING) as FindingTier[]).map(tier => {
-        const rows = findings.filter(f => f.tier === tier);
+        // 🔴 MEASURED ONLY. Everything that could not be computed is collected into its own
+        // section below rather than trailing each tier in grey, because it is not a weaker
+        // finding about her money — it is the list of questions her books cannot answer, and
+        // that is where the next conversation starts.
+        const rows = findings.filter(f => f.tier === tier && f.measured);
         if (rows.length === 0) return null;
         return (
           <div key={tier} style={{ marginBottom: 14 }}>
@@ -105,6 +141,17 @@ export function BooksReview({ findings }: { findings: Finding[] }) {
                           a second measurement of the same thing. */}
                       <span style={{ color: AMBER }}>29 Aug analysis said: {f.quoted}</span>
                     </p>
+                    {/* 🔴 THE MONEY, WHERE THERE IS MONEY. It is what ordered this list, so it
+                        is shown rather than left as an invisible sort key — a reader who cannot
+                        see why one row is above another has to take the ordering on trust. A
+                        finding with no money attached shows NOTHING here, never "$0", because
+                        "not a money question" and "worth nothing" are different answers. */}
+                    {f.value !== null && (
+                      <p style={{ fontSize: '0.8125rem', color: DARK, margin: '6px 0 0', fontWeight: 700 }}>
+                        {money(f.value)} at stake
+                      </p>
+                    )}
+                    {f.recommendation && <RecommendationBlock r={f.recommendation} />}
                     {f.needsAnswer && (
                       <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e5e7eb' }}>
                         <p style={{ fontSize: '0.8125rem', color: DARK, margin: '0 0 6px', fontWeight: 600 }}>
@@ -137,7 +184,35 @@ export function BooksReview({ findings }: { findings: Finding[] }) {
         );
       })}
 
-      <p style={{ fontSize: '0.75rem', color: GREEN, margin: '4px 0 0', lineHeight: 1.5 }}>
+      {/* ══════════════════════════════════════════════════════════════════════
+          🔴 WHAT WE COULD NOT WORK OUT — AND IT IS DELIBERATELY LAST AND PRESENT.
+          ══════════════════════════════════════════════════════════════════════
+          A silent omission reads as a clean bill of health. Several of the sharpest questions
+          about a business need something these three reads do not carry, and saying so is more
+          useful than a shorter list: it is the list of things the business itself cannot
+          answer today. */}
+      {findings.some(f => !f.measured) && (
+        <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
+          <p style={{ fontSize: '0.8125rem', color: DARK, fontWeight: 700, margin: '0 0 2px' }}>
+            What we could not work out
+          </p>
+          <p style={{ fontSize: '0.75rem', color: GRAY, margin: '0 0 8px', lineHeight: 1.5 }}>
+            These are not problems we found. They are questions we could not answer from what has
+            been read — so nothing below should be taken as good news or bad.
+          </p>
+          {findings.filter(f => !f.measured).map(f => (
+            <div key={f.id} style={{ padding: '9px 11px', borderRadius: 9, marginBottom: 7,
+                                     background: '#fff', border: '1px solid #f3f4f6' }}>
+              <p style={{ fontSize: '0.8125rem', color: GRAY, margin: 0, lineHeight: 1.55 }}>
+                {f.notMeasured}
+                <span style={{ color: AMBER }}> · 29 Aug analysis said: {f.quoted}</span>
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p style={{ fontSize: '0.75rem', color: GREEN, margin: '10px 0 0', lineHeight: 1.5 }}>
         Nothing on this panel changed anything in QuickBooks or here. It is a read.
       </p>
     </div>
