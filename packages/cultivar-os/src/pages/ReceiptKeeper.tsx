@@ -12,6 +12,8 @@ import { resizeAndCompressImage } from '../utils/imageCompression';
 import { toISODate } from '../utils/dateParse';
 import { ConflictDialog } from '../components/ConflictDialog';
 import { LineItemGrid } from '../components/LineItemGrid';
+import { ReceiptsList } from '../components/receipts/ReceiptsList';
+import { listVisibleForStep } from '../lib/receiptsList';
 
 const TRACE_RECEIPT  = true; // [TRACE:RECEIPT] STD-003 — comment out when David says "proven"
 const TRACE_OCR      = true; // [TRACE:OCR] STD-003 — capture + device-detect path
@@ -785,6 +787,16 @@ export function ReceiptKeeper() {
 
   return (
     <div style={PAGE}>
+      {/* ── THE READ SURFACE ─────────────────────────────────────────────────────────────
+          Added 2026-09-01. The seven-state capture wizard below is UNCHANGED — this is an
+          addition, not a replacement. The list sits ABOVE the capture zone (David's ruling)
+          and steps aside while the wizard is mid-flow; `listVisibleForStep` holds that
+          decision so it can be asserted, rather than living as a condition in this file.
+          `savedReceiptId` is passed as the refresh token: it changes when a capture is
+          written, which is what makes the new receipt appear without a reload. */}
+      {listVisibleForStep(step) && (
+        <ReceiptsList businessId={businessId} refreshToken={savedReceiptId} />
+      )}
       <div style={CARD}>
         <h1 style={TITLE}>{CAPTURE_COPY.title}</h1>
         <p style={SUBTITLE}>{CAPTURE_COPY.subtitle}</p>
