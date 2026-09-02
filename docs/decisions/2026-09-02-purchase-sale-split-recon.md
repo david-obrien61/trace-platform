@@ -183,6 +183,112 @@ capability and asks nothing about orders. A manager who may take orders and may 
 capture a customer invoice today.** Not a Stage 1 nicety — it is why the split has a permission dimension.
 **OPEN RULING (d).**
 
+### 6b · 🔴 PROVEN — does `orders:create` ACTUALLY ENFORCE? (David's flag, 2026-09-02)
+
+**The flag, verbatim:** *"gating a sale capture on `orders:create` may cite a string that enforces
+nothing. That is R-31's exact scar. PROVE THE GATE ENFORCES BEFORE THE SPEC RELIES ON IT."*
+
+**Method:** repo read + a **read-only** live probe against LAWNS (`ed2e5933-…`), run both
+directions with negative controls, per [[R-33]] (*a check that cannot disagree is not a check*).
+**Wrote nothing** — three `.select()`s and eleven `has_permission_for` RPC calls, no insert, no
+update, no delete. Population stated: **all 3 `business_members` rows, none sampled.**
+
+**ANSWER: THE STRING ENFORCES. It is not a fake pill.** Three legs:
+
+**① The machinery is real and strict.** `has_permission` / `has_permission_for` are `SECURITY
+DEFINER`, `STABLE`, `SET search_path = ''`, and require an **ACTIVE** membership row whose
+`permissions` jsonb contains the string **or an alias of it**. **No owner branch** since
+2026-07-30 — the owner passes by holding the string like everyone else.
+
+**② Live, both directions, with negative controls:**
+
+| Probe | Result |
+|---|---|
+| OWNER (×2, active, 57 perms) · `orders:create` | **true** |
+| MANAGER (**`active=false`**, 25 perms, array *contains* `orders:create`) | **false** — the active clause is doing work |
+| every member · `__not_a_real_permission__` | **false** — **the check can disagree** |
+| non-member uid · `orders:create` | **false** |
+| a real member · a **different** `business_id` | **false** |
+
+**③ There is already a LIVE ENFORCING CALL SITE for this exact act.**
+`api/qbo/router.ts:851` — the QB order ingest, an external document becoming a history order —
+runs `callerCan(auth, businessId, 'orders:create')` and returns **403 `FORBIDDEN`** with a
+`[TRACE:QBORDERS] ingest REFUSED` emit. Same act, same string, already refusing. **The spec copies
+that shape rather than inventing one.**
+
+---
+
+#### 🔴 BUT — THREE QUALIFICATIONS THE SPEC MUST CARRY, AND THE THIRD IS THE ONE THAT BITES
+
+**(i) The string enforces WHERE IT IS CALLED, and the sale-write path does not call it.** The
+recon's claim stands, verified: `api/customers/create.ts` — the handler that INSERTs the order at
+`:221` — gates on `customers:create` (`:67`) and `deliveries:create` (`:71`) and **never checks
+`orders:create`**. So citing the string in the spec is safe **only if the spec ADDS the
+`callerCan` call.** It inherits nothing.
+
+**(ii) `submit.ts`'s silence is a RULING, not a gap — and the sale door is a DIFFERENT door.**
+`api/orders/submit.ts:189-196` carries no order-creation gate **deliberately**: the anon QR
+checkout path carries **no token at all**, so *"a permission gate here would not narrow the act —
+it would delete it."* The OCR sale door is authenticated by construction (a member standing at a
+screen), so gating it does **not** contradict that ruling. ⚠️ **Anyone reading submit.ts's comment
+and concluding "orders need no gate" will have read a ruling about the ANON door as a ruling about
+ALL doors.** Stated here so the spec does not have to re-derive it.
+
+**(iii) A LEGACY ALIAS CAN SATISFY THE GATE — dormant here, not absent.** `permission_aliases`
+carries `('qr_checkout','orders:create')` **bidirectionally**
+(`20260726_permission_alias_layer.sql:149-150`), so a member holding only the legacy `qr_checkout`
+string passes an `orders:create` check. **Measured: 0 of 3 LAWNS members hold `qr_checkout`** — so
+it is dormant *on this tenant*, which is a fact and not a guarantee for the next one.
+
+---
+
+#### 🔴 AND THE STRUCTURAL FINDING THE FLAG UNCOVERED: A HANDLER GATE CANNOT DELIVER THE RULING
+
+**"Selling does not require seeing cost" is not reachable by changing a handler gate, because the
+binding constraint is an RLS policy on a CLIENT-SIDE insert.**
+
+The sale door writes in two steps, and only the second is server-side:
+
+1. **`ReceiptKeeper.tsx:438` — `supabase.from('receipts').insert(…)`, from the BROWSER, under
+   RLS.** `receipts_member_insert` requires **`costs:create`**
+   (`20260727_rbac_resource_action_flip.sql:116-117`). There is no handler here to add a gate to —
+   **the enforcement IS the policy.**
+2. `POST /api/customers/create` with the `receiptId` → service key (bypasses RLS) → `orders` +
+   `order_items`.
+
+🔴 **So a manager holding `orders:create` and not `costs:create` is refused at STEP 1, before any
+handler is reached.** Adding `orders:create` to the handler is necessary and **not sufficient**;
+on its own it would produce a gate that reads correct in the spec and still refuses the exact
+person the ruling admits.
+
+**Two ways out, NEED → WANT (OP-8) — David's call, not decided here:**
+
+- **NEED (cheapest, no migration, available today):** the sale door's document write goes
+  **server-side** through a service-key handler gated on `orders:create` — the shape the order
+  write already uses. `receipts` RLS is untouched and keeps guarding the purchase door's client
+  insert. **Rides an existing endpoint** (`customers/create` already takes the receipt id;
+  `receipts/ocr.ts` already has a `shape` seam), so **no api/ function is minted** against a
+  directory at **12 of 12** (§6 r11).
+- **WANT (durable, a MIGRATION):** a document-kind column on `receipts` + kind-scoped INSERT
+  policies — `costs:create` for a purchase, `orders:create` for a sale. This puts the rule **in
+  the database rather than in a handler**, which is [[R-9]]'s own shape (*a confidential column is
+  enforced in the database, not by a linter*). ✏️ **It converges with [[R-50]] anyway:** pinning
+  the door at capture requires a kind column, and `receipts` has none — **21 columns, measured, no
+  `origin`/`shape`/`source`/`doc_type`/`document_type`/`kind`.**
+
+---
+
+#### ⚠️ ONE LIVE FACT THE OWNER-TEST CARD MUST NOT TRIP OVER
+
+**LAWNS's only MANAGER row is `active = false`.** So the ruling's own scenario — *a person who may
+sell and may not see cost* — **cannot be owner-proven on this tenant today** without activating
+that row or seeding a member. A card written against it would report a pass over an unreachable
+state, which is the [[R-33]] defect wearing a checkmark. **The card says `needs-test` with that
+reason, or the row is activated first.**
+
+_Probe: read-only, run 2026-09-02, not retained as a script (it asserts nothing repeatable — its
+value was the one-time answer). Re-derivable from `business_members` + `has_permission_for`._
+
 ### 7 · Blast radius
 
 | Surface | Count | Detail |
