@@ -31,9 +31,9 @@ If ①–③ do not agree, **STOP**. Do not record a pass or a fail.
 
 ---
 
-## ⛔ GATE 0b — THE MERGE IS DONE; THE MIGRATION IS STILL NOT APPLIED
+## ⛔ GATE 0b — ✅ THE MERGE IS DONE AND THE MIGRATIONS ARE APPLIED. THIS GATE IS CLOSED.
 
-🔴 **Two things had to be true before any card below could run. ✅ One is now true. 🔴 One is not.**
+✅ **Two things had to be true before any card below could run. BOTH ARE NOW TRUE** — and the header said otherwise for three sessions while its own body said both clauses were closed. **A header is a claim (§6 r18); this one contradicted the text underneath it, which is the version of that defect nobody looks for.** Corrected 2026-09-02.
 
 ✅ **(a) MERGED — THIS CLAUSE IS CLOSED.** `feat/operations-calendar` merged to `main` as **`8bbaec4`** on 2026-08-30 and is live. The hold ran its course: Saturday 2026-08-29's seven installs were run on the old `/delivery-schedule`, and David released the hold afterwards. **The branch was never held for a technical reason.**
 

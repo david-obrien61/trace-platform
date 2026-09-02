@@ -60,7 +60,9 @@ Settings → Accounting → **Preview the loads**.
 ---
 
 ## CARD 2 — Before the migration, it refuses and NAMES the blocker
-STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
+STATUS: needs-test · DEVICE: desktop · LAST-PROVEN: —
+
+⚠️ **PRECONDITION CLOSED UNRUN — measured live 2026-09-02 (ledger #253 merge session), not inherited.** **The refusal is gated on the COLUMN `orders.qb_invoice_id`, not on the index** — `previewOrderIngest` sets `ok: hasColumn` and `hasColumn` comes from `qbInvoiceIdOnOrders`, a `select('qb_invoice_id').limit(1)`. That column was added by `20260827_history_orders.sql` and is live: **19 LAWNS orders carry a value in it** (population: 30 LAWNS orders). So the blocker panel cannot be produced any more, and the card says so rather than being run and read as a failure. ⚠️ **The card's own warning was right and is now spent:** *"once the index exists, reproducing this means dropping it."*
 
 Do this **before** applying `20260831c`. Press **Preview the loads**.
 
@@ -167,9 +169,11 @@ wrote its id onto that order permanently, the second was silently discarded as a
 race, and **the second sale got no order at all.** Which of two real sales the existing order was
 declared to be came down to loop order.
 
-**How to provoke it deliberately, if you want to see it work:** in the SQL editor set one existing
-order's `source_document_number` to a number two of your invoices share, run the preview (**it writes
-nothing**), confirm both rows say "left for you" and name each other, then set it back.
+🔴 **CORRECTED 2026-09-02 — THE REASON ABOVE IS TRUE AND IS NOT THE BINDING BLOCKER, AND THE DIFFERENCE CHANGES THE RECIPE.** Measured live: **all 19 stops carrying a `qb_invoice_id` ALREADY CARRY AN `order_id`** (population: 30 LAWNS deliveries; 19 with an invoice id, 19 of those already ordered, **0 plannable**). `previewOrderIngest` loops `state.stops` and short-circuits into `alreadyOrdered` before `matchPriorHistoryOrder` is ever called — so **the guard is not reached at all, and no document number, colliding or not, can provoke it.** The DocNumber fact is a second reason standing behind a first one that binds harder.
+
+🔴 **AND THE COLLISION THE GUARD REFUSES IS ALREADY SITTING IN YOUR PRIOR SET.** Two orders — `dc943a79` and `eb3ab2b0` — both carry `source_document_number` **19837964** (population: 11 LAWNS orders with a NULL `qb_invoice_id`, i.e. the whole candidate set the guard compares against). They are the two halves of the bwi 2026-07-29 duplicate capture that the receipts view surfaced. **So on the day the history import creates its first plannable stop, this guard fires on real data — it is waiting, not hypothetical.**
+
+**How to provoke it deliberately** *(the old recipe is no longer sufficient on its own — setting a document number cannot help while no stop is plannable)*: you would have to manufacture a plannable stop as well, by unlinking one of the nineteen from its order. **That is a write against live customer data on a path nobody has proven, and it is not recommended ahead of the import** — the import produces the state for free. Ask if you want the statements and they can be written against the real constraints (`orders.customer_id` and `orders.transport_method` are both NOT NULL — measured by probe, nothing written).
 
 ⚠️ **A run where this panel is empty proves nothing about this card** — an empty set is not a pass.
 

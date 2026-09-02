@@ -10,12 +10,18 @@
 **Capability:** 3.4 (scheduling) · 3.5 (delivery / routing) · the first capability behind `followup_engine`
 **Story:** `user_stories.md` → *The stop is done — one tap, and a moved stop says where it went* (PIECES `fulfilment_tap`, `delivery_complete_state`) · *Ask for a review at the door* (new this build)
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 12 covered** (11 `owed` · 1 `needs-test`).
+**Board: 0 of 12 covered** (10 `owed` · 2 `needs-test` — CARD 1 joined them 2026-09-02, its pre-migration precondition closed unrun).
 **DEVICE:** CARDS 1–7 and CARD 12 are **`DEVICE: phone`** — this is a crew surface in a customer's garden, and every one of them is provable **without a console**. CARDS 8–10 are `DEVICE: desktop` (the owner's settings). CARD 11 is `needs-test`.
 
 ---
 
-## ⛔ GATE 0b — THE MIGRATION IS NOT APPLIED, AND THE SCREEN WILL TELL YOU SO
+## ⛔ GATE 0b — ✅ THE MIGRATION IS APPLIED. THIS GATE IS CLOSED.
+
+✅ **APPLIED — verified live 2026-09-02 by selecting all four columns through PostgREST (`started_at`, `completed_at`, `review_asked_at`, `review_ask_outcome` — all PRESENT; an absent column returns `42703`). Population: 30 LAWNS `deliveries` rows.** It had been carried forward as *unapplied* through three sessions without anyone re-checking — a status inherited rather than measured, which is [[R-26]]'s exact shape and the same defect this board already records against `20260830b`. **CARD 1 below tested the pre-migration state and can no longer be run.**
+
+⚠️ **The tap itself is entirely UNRUN, so cards 2–12 are all live:** 0 of 30 deliveries carry `started_at`, 0 carry `completed_at`, 0 carry `review_asked_at`, and all 30 read `scheduled`.
+
+<details><summary>The original gate text, kept because it was true when written</summary>
 
 🔴 **`supabase/migrations/20260831d_deliveries_fulfilment_and_review_ask.sql` is GATED and UNAPPLIED.** Four nullable columns on `deliveries`. Until you run it in the **SQL editor** (§6 r17 — *not* the table editor, whose default ACL hands `anon` TRUNCATE and REFERENCES, a privilege RLS cannot filter):
 
@@ -28,8 +34,14 @@ The migration carries its own pre-write and post-apply verification queries, inc
 
 ---
 
+</details>
+
+---
+
 ## CARD 1 — the pre-migration state is honest, not silently missing
-**STATUS:** owed · **DEVICE:** phone · **LAST-PROVEN:** —
+**STATUS:** needs-test · **DEVICE:** phone · **LAST-PROVEN:** —
+
+⚠️ **PRECONDITION CLOSED UNRUN — measured live 2026-09-02 (ledger #253 merge session), not inherited.** `20260831d` is APPLIED, so the pre-migration state this card describes no longer exists and reproducing it would mean dropping four live columns. **Do not run it; it cannot pass and its failure would mean nothing.** Recorded rather than deleted — the fallback it tested was real and shipped, and a card quietly removed reads as a card that was never owed.
 1. **Before** applying `20260831d`, open `/delivery-schedule`.
 2. The stops still list — names, addresses, dates, "Route this day" all as before.
 
