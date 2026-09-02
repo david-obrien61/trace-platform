@@ -49,15 +49,24 @@ Open `/receipts` as the owner.
 On any row, look at **What the platform banked at save time**.
 
 1. A coloured readout — green for `match` — reading *"✓ Lines: $X = Total: $Y"*.
-2. Under it, in plain sentences: what OCR read versus what was saved, and whether the owner changed
-   anything before saving.
+2. Under it, in plain sentences: what OCR read versus what was saved, and what the edit flag can
+   honestly support.
 
 **PASS:** every row shows a banked verdict, and the figures are the receipt's own.
 🔴 **`reconcile_status`, `reconcile_delta`, `reconcile_overridden_at`, `accept_vs_edit`,
 `amount_original` and `header_amount_edited` have been WRITE-ONLY since 14 June.** This card is the
 first time anything has read them back.
-⚠️ **Expect every row to say the owner changed something before saving** — that is 17/17 live, and
-**why** is an OPEN question this screen does not answer. It makes it visible; it does not explain it.
+🔴 **UPDATED 2026-09-02 (ledger #257) — THE EXPECTED SENTENCE CHANGED, AND THE OLD ONE IS NOW A FAIL.**
+This card used to say *"expect every row to say the owner changed something before saving"* and to
+call **why** an open question. It is no longer open: measured field by field against the reader's own
+parsed output (population 35) — **vendor differs 0 · amount 3 · category 2 · date 29 · lines 30**,
+and the two large counts are **the platform's own doing** (the code normalises `06/22/2026` to ISO
+and compares the normalised value against the raw one; and it injects its own `Tax` line and then
+counts the line it added). `header_amount_edited` is **false on 36 of 36**.
+⚠️ **So the row must NOT read *"Owner changed something before saving."*** It should say it is flagged
+as edited **but the total was not changed**, and that the flag also counts the platform's own
+reformatting. ⚠️ **The FLAG itself is still computed wrongly at write time — tech-debt #148, deliberately
+deferred.** This card checks the sentence, not the column.
 **FAIL:** the verdict block is missing, or a row shows `$0.00` where a figure was not stored.
 
 ---

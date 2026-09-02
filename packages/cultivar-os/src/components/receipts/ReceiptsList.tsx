@@ -40,6 +40,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import {
   RECEIPTS_SELECT,
@@ -74,6 +75,12 @@ const LINE1: React.CSSProperties = {
   display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'baseline', justifyContent: 'space-between',
 };
 const VENDOR: React.CSSProperties = { fontWeight: 700, color: '#1f2937', fontSize: '0.9375rem' };
+const VENDOR_LINK: React.CSSProperties = { ...VENDOR, color: '#27500A', textDecoration: 'none' };
+// 48px min touch target (§6 r3) — this is the tap that opens the receipt on a phone.
+const OPEN_LINK: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', minHeight: 48, marginTop: 2,
+  fontSize: '0.8125rem', fontWeight: 600, color: '#27500A', textDecoration: 'none',
+};
 const META: React.CSSProperties = { fontSize: '0.8125rem', color: '#64748b' };
 const AMOUNT: React.CSSProperties = { fontWeight: 700, color: '#27500A', fontSize: '0.9375rem' };
 const NOTE: React.CSSProperties = { fontSize: '0.8125rem', color: '#64748b', marginTop: 4 };
@@ -121,9 +128,12 @@ function ReceiptCard({ row }: { row: ReceiptRowModel }) {
       <div style={LINE1}>
         {/* The vendor string EXACTLY as stored. No derived document type, and no icon standing in
             for one — the table carries no origin/shape/source column (measured 2026-09-01). */}
-        <span style={VENDOR}>{row.vendorText}</span>
+        <Link to={`/receipts/${row.id}`} style={VENDOR_LINK}>{row.vendorText}</Link>
         <span style={AMOUNT}>{row.amountText}</span>
       </div>
+      {/* The line the list cannot show. A receipt is $1,301.98 of "Services" from here; the
+          detail view is where the quantity and the rate are, which is what the cost model needs. */}
+      <Link to={`/receipts/${row.id}`} style={OPEN_LINK}>Open this receipt &rsaquo;</Link>
       <div style={META}>
         {row.dateText} · {row.categoryText} · captured {row.capturedAtText} · {row.statusText}
       </div>
