@@ -170,9 +170,18 @@ worthless without it.)
                                   '[{"description":"x","amount":1}]'::jsonb);
    ```
 3. It must **ERROR: only the business owner may edit receipt line items**.
-4. And an `audit_log` row appears with `action='receipt.line_edit_denied'`, `outcome='denied'`.
+4. 🔴 **AND CHECK THAT NO `audit_log` ROW APPEARS FOR IT.** This step was written the other way
+   round — *"an `audit_log` row appears with `action='receipt.line_edit_denied'`"* — and it was
+   **wrong, and would have failed**. The refusal cannot audit itself: the RPC has no enclosing
+   `EXCEPTION` block, so the `RAISE` aborts the transaction and any INSERT above it is rolled back
+   with everything else. The doomed INSERT has been removed rather than left to look like a record
+   that exists. The gap is **tech-debt #150**, and this step now proves the gap is where we say it
+   is instead of asserting a row that cannot be there.
+   ```sql
+   SELECT count(*) FROM audit_log WHERE action = 'receipt.line_edit_denied';   -- expect 0
+   ```
 
-**PASS:** the attempt is refused **by the database**, and the refusal is itself recorded.
+**PASS:** the attempt is refused **by the database**, and no phantom record of the refusal exists.
 🔴 **WHY THIS PARTICULAR MANAGER AND NOT ANY MANAGER.** A manager holding no `costs:*` would be
 refused by the **read** long before reaching the guard — the test would pass with the guard
 **deleted**, which is the false green this whole card exists to avoid (R-33). Before this build,

@@ -162,11 +162,20 @@ BEGIN
   ) INTO v_is_owner;
 
   IF NOT v_is_owner THEN
-    -- The refusal is itself an audited event: a denied attempt on a money surface is exactly
-    -- what audit_log's A4 index exists to make countable (once vs repeated).
-    INSERT INTO public.audit_log (business_id, actor_user_id, action, target_type, target_id, detail, outcome)
-    VALUES (v_receipt.business_id, v_actor, 'receipt.line_edit_denied', 'receipt', p_receipt_id::text,
-            jsonb_build_object('reason', 'not_business_owner'), 'denied');
+    -- 🔴 THE DENIAL IS *NOT* AUDITED HERE, AND THAT IS A CORRECTION, NOT AN OMISSION.
+    -- This block used to INSERT a `receipt.line_edit_denied` row into audit_log and then RAISE.
+    -- It cannot work: there is no enclosing EXCEPTION block, so the RAISE aborts the transaction
+    -- and takes the INSERT with it. The row is never committed. The probe that guarded it asserted
+    -- the STRING `receipt.line_edit_denied` was present in this file — which it was, doing nothing.
+    -- That is R-33 / §6 r19 exactly: a check incapable of disagreeing, one layer out from the seven
+    -- mutants this build already caught for the same reason.
+    -- Shipping a statement that claims to record a refusal it cannot record is worse than not
+    -- recording it, so it is REMOVED and the gap is named: tech-debt #150. A rollback-proof denial
+    -- log needs a sink outside the aborting transaction (the durable options are a non-raising
+    -- return the caller must inspect, or an out-of-transaction writer); neither is decided, and
+    -- neither is invented inside this build.
+    -- The REFUSAL itself is unaffected — it is hard, and `trg_receipts_snapshot_and_line_guard`
+    -- refuses the same write again on every other path.
     RAISE EXCEPTION 'only the business owner may edit receipt line items'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
@@ -242,7 +251,18 @@ BEGIN
     FOREACH v_field IN ARRAY ARRAY['description','amount','quantity','unit_price','sku'] LOOP
       v_old_v := CASE WHEN v_old_line IS NULL THEN NULL ELSE v_old_line -> v_field END;
       v_new_v := CASE WHEN v_line     IS NULL THEN NULL ELSE v_line     -> v_field END;
-      IF v_old_v IS DISTINCT FROM v_new_v THEN
+      -- 🔴 AN ABSENT KEY AND A PRESENT `null` ARE THE SAME ANSWER — "no value" — AND MUST NOT
+      -- READ AS A CHANGE. `->` returns SQL NULL for a key that is not there and jsonb `null` for
+      -- a key explicitly set to null, and `IS DISTINCT FROM` calls those two different. Every one
+      -- of the 36 receipts captured before today stores TWO keys per line, while the edit form
+      -- sends FIVE with nulls where blank — so without this fold, correcting one description on
+      -- the Sudderth invoice would record ONE real change and NINE phantom ones (three lines x
+      -- quantity/unit_price/sku, each "from nothing to nothing"), and the page would tell Lauren
+      -- she changed ten values. Telling the owner she edited something she never touched is the
+      -- same false accusation this build removed from the list's edit sentence; it does not get
+      -- to reappear in the audit trail. `'null'::jsonb` on both sides collapses the two forms of
+      -- absence onto each other and leaves every real change untouched.
+      IF COALESCE(v_old_v, 'null'::jsonb) IS DISTINCT FROM COALESCE(v_new_v, 'null'::jsonb) THEN
         v_changes := v_changes || jsonb_build_object(
           'line',  v_idx,
           'field', v_field,
@@ -405,7 +425,8 @@ CREATE TRIGGER vendor_preferences_updated_at
 --     the MANAGER on `Test Dave's Tree Nest` (the principal measured 2026-09-02 to hold all four
 --     costs:* verbs — i.e. the one who WOULD get through if the guard were absent):
 --   SELECT edit_receipt_line_items('<a receipt id in that business>', '[{"description":"x","amount":1}]'::jsonb);
---   [ERROR: only the business owner may edit receipt line items]   + one audit_log row,
---    action = 'receipt.line_edit_denied', outcome = 'denied'
+--   [ERROR: only the business owner may edit receipt line items]
+--   ⚠️ AND NO audit_log ROW — a refusal cannot audit itself from inside the transaction it aborts.
+--   See the owner check above and tech-debt #150; the earlier draft of this file claimed one.
 --   ⚠️ A MANAGER WHO HOLDS NO `costs:*` PROVES NOTHING HERE — they would be refused by the read
 --   before ever reaching the guard, and the test would pass on a deleted guard (R-33).

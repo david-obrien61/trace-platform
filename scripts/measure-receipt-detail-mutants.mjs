@@ -112,7 +112,7 @@ const MUTANTS = [
    () => mutate('model', "  const count = Math.max(current.length, original.length);", "  const count = current.length;")],
 
   ['M17 the RPC drops its owner check',
-   () => mutate('sql', "  IF NOT v_is_owner THEN\n    -- The refusal is itself an audited event", "  IF false THEN\n    -- The refusal is itself an audited event")],
+   () => mutate('sql', "  IF NOT v_is_owner THEN\n    -- \u{1F534} THE DENIAL IS *NOT* AUDITED HERE", "  IF false THEN\n    -- \u{1F534} THE DENIAL IS *NOT* AUDITED HERE")],
 
   ['M19 the edit form opens on the STORED line, so an unrelated save deletes the rate',
    () => mutate('model', "      if (!(f in line) && present(org[f])) (seeded as Record<string, unknown>)[f] = org[f];", "")],
@@ -122,6 +122,15 @@ const MUTANTS = [
 
   ['M18 the trigger drops its owner check on line_items',
    () => mutate('sql', "    IF NOT v_is_owner THEN\n      RAISE EXCEPTION 'only the business owner may change receipt line items'", "    IF false THEN\n      RAISE EXCEPTION 'only the business owner may change receipt line items'")],
+
+  // ── the two added 2026-09-02 in review of this build, each restoring a real defect it shipped ──
+  ['M21 the refusal writes an audit row it cannot commit (the RAISE rolls it back)',
+   () => mutate('sql', "    RAISE EXCEPTION 'only the business owner may edit receipt line items'",
+     "    INSERT INTO public.audit_log (business_id, actor_user_id, action, target_type, target_id, detail, outcome)\n    VALUES (v_receipt.business_id, v_actor, 'receipt.line_edit_denied', 'receipt', p_receipt_id::text,\n            jsonb_build_object('reason', 'not_business_owner'), 'denied');\n    RAISE EXCEPTION 'only the business owner may edit receipt line items'")],
+
+  ['M22 an absent key and a present null are compared as different (nine phantom changes on Sudderth)',
+   () => mutate('sql', "      IF COALESCE(v_old_v, 'null'::jsonb) IS DISTINCT FROM COALESCE(v_new_v, 'null'::jsonb) THEN",
+     "      IF v_old_v IS DISTINCT FROM v_new_v THEN")],
 ];
 
 let caught = 0; const survived = [];

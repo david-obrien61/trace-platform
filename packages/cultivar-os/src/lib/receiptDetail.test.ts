@@ -336,17 +336,60 @@ ok((SQL_SRC.match(/IF NOT v_is_owner THEN/g) ?? []).length === 2,
   'U4 🔴 the owner check GUARDS BOTH PATHS — once in the RPC, once in the trigger — and it is the branch that is asserted, not the error message beneath it');
 ok(/owner_id = auth\.uid\(\)/.test(rpc) && /only the business owner may edit receipt line items/.test(rpc),
   'U5 the RPC resolves ownership from `businesses.owner_id`, in the database, not in the component');
-ok(/receipt\.line_edit_denied/.test(SQL_SRC) && /'denied'/.test(SQL_SRC),
-  'U6 a REFUSED attempt is audited too — audit_log’s A4 index exists to make denied attempts countable');
-// The RPC holds TWO audit inserts and their ORDER is the point: the DENIED row is written before
-// the update is ever reached (there is no update to describe), and the SUCCESS row after it.
-// Asserting on the first occurrence tested the wrong one — U7 failed on its first run saying so.
-ok((rpc.match(/INSERT INTO public\.audit_log/g) ?? []).length === 2,
-  'U7a both the denied attempt and the successful edit are audited');
+// 🔴 U6 IS THE INVERSE OF WHAT IT USED TO ASSERT, AND THE INVERSION IS THE FINDING.
+// It read: `/receipt\.line_edit_denied/.test(SQL_SRC)` — i.e. that a STRING appeared somewhere in
+// the file. It did, inside an INSERT that could never commit: the refusal block INSERTed an
+// audit row and then RAISEd, and with no enclosing EXCEPTION block the RAISE aborts the
+// transaction and rolls that INSERT back. The probe was structurally incapable of noticing,
+// because a rolled-back statement is textually identical to a committed one.
+// What is asserted now is the rule that actually holds: NOTHING IS WRITTEN INSIDE A BLOCK THAT
+// ENDS IN A RAISE. The block is located and its contents are asserted, not the file's.
+const refuseStart = rpc.indexOf('IF NOT v_is_owner THEN');
+const refuseBlock = refuseStart === -1 ? '' : rpc.slice(refuseStart, rpc.indexOf('END IF;', refuseStart));
+ok(refuseBlock.length > 40 && /RAISE EXCEPTION/.test(refuseBlock),
+  'U6a the owner-refusal block was actually located and does raise — the slice is non-empty (U0’s lesson, applied to a second slice)');
+ok(!/INSERT INTO/.test(refuseBlock),
+  'U6b 🔴 the refusal writes NOTHING before it raises — a RAISE with no enclosing EXCEPTION block aborts the transaction, so any INSERT above it is rolled back and the row never exists. Shipping a statement that claims to record a refusal it cannot record is worse than not recording it (tech-debt #150)');
+// 🔴 AGAINST `SQL_RAW`, NOT `SQL_SRC`, AND THE REASON IS THE PROBE'S OWN SUBJECT. `SQL_SRC` has
+// its comments stripped — deliberately, because U10 had been reading an explanation of a defect
+// AS the defect. But what this asserts is a NAMED GAP, and a named gap lives in a comment by
+// nature. Run against the stripped copy this fails while the file plainly says it (it did, on
+// the first run). Matching the wrong layer of a thing is the shape §6 warns about; here the
+// layers are raw and stripped, and each probe has to say which one its claim lives in.
+ok(/tech-debt #150/.test(SQL_RAW),
+  'U6c and the gap it leaves is NAMED in the migration rather than silently absent — an unrecorded hole is a lie by omission (OP-14 clause 2)');
+// One audit insert remains — the SUCCESS row — and it is written after the write it describes.
+ok((rpc.match(/INSERT INTO public\.audit_log/g) ?? []).length === 1,
+  'U7a exactly ONE audit insert survives in the RPC: the success row. The second one was a promise the transaction could not keep');
 ok(rpc.lastIndexOf('INSERT INTO public.audit_log') > rpc.indexOf('UPDATE public.receipts'),
   'U7b the success audit row is written AFTER the write, in the SAME transaction — two client statements can half-land, one plpgsql body cannot');
-ok(rpc.indexOf('INSERT INTO public.audit_log') < rpc.indexOf('UPDATE public.receipts'),
-  'U7c (negative): the denied row is written BEFORE any update is attempted — a refusal has no write to describe');
+ok(rpc.indexOf('INSERT INTO public.audit_log') > refuseStart && refuseStart !== -1,
+  'U7c (negative): the surviving insert sits BELOW the refusal, not inside it — it is on the path that commits');
+
+// ── the per-line diff must not invent changes out of two spellings of "absent" ───────────────
+// 🔴 THE DEFECT THIS CATCHES, MEASURED: `->` yields SQL NULL for a key that is ABSENT and jsonb
+// `null` for a key explicitly set to null, and `IS DISTINCT FROM` calls those two different.
+// All 36 receipts captured before today store TWO keys per line; the edit form sends FIVE. So a
+// one-word correction on the Sudderth invoice would have logged ONE real change and NINE
+// phantom ones, and told the owner she changed ten values.
+const diffCmp = SQL_SRC.slice(SQL_SRC.indexOf('v_old_v :='), SQL_SRC.indexOf('v_changes := v_changes ||'));
+ok(diffCmp.length > 80, 'U11a the diff comparison was actually located');
+ok(/COALESCE\(v_old_v,\s*'null'::jsonb\)\s*IS DISTINCT FROM\s*COALESCE\(v_new_v,\s*'null'::jsonb\)/.test(diffCmp),
+  'U11b 🔴 an ABSENT key and a PRESENT null are folded onto each other before comparison — both mean "no value", and only one of them is a change');
+// And the rule itself, executed rather than grepped. This models `->`'s two forms of absence the
+// way Postgres returns them; it is a model, NOT a database, and it is labelled as one.
+const pgArrow = (obj: Record<string, unknown> | undefined, k: string): 'sql-null' | 'json-null' | unknown =>
+  obj === undefined || !(k in obj) ? 'sql-null' : (obj[k] === null ? 'json-null' : obj[k]);
+const foldedDiffers = (a: unknown, b: unknown) => {
+  const f = (v: unknown) => (v === 'sql-null' || v === 'json-null' ? 'ABSENT' : v);
+  return f(a) !== f(b);
+};
+ok(pgArrow({ description: 'x' }, 'quantity') !== pgArrow({ description: 'x', quantity: null }, 'quantity'),
+  'U11c (the premise) the two forms of absence ARE distinguishable — without this the fold would be testing nothing');
+ok(!foldedDiffers(pgArrow({ description: 'x' }, 'quantity'), pgArrow({ description: 'x', quantity: null }, 'quantity')),
+  'U11d a stored line missing `quantity` against a submitted line whose `quantity` is null is NOT a change');
+ok(foldedDiffers(pgArrow({ quantity: null }, 'quantity'), pgArrow({ quantity: 20.72 }, 'quantity')),
+  'U11e (negative) and a real value arriving where there was none STILL IS one — the fold does not swallow the change it exists beside');
 ok(/IF NOT p_acknowledged_mismatch THEN/.test(rpc) && /large_mismatch_overridden/.test(rpc),
   'U8 🔴 a large mismatch must be acknowledged BEFORE it can be stored — the GUARD is asserted, not the parameter: the parameter survives its own `IF false` (mutant M11)');
 // the capture path no longer throws the three keys away
