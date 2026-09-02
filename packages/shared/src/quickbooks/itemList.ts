@@ -33,6 +33,27 @@ export interface QboItemRow {
   /** The revenue bucket. This is the field that makes the Nursery-Stock/Services split real. */
   incomeAccount: string | null;
   active: boolean | null;
+  /**
+   * The item's own published price — Intuit's `UnitPrice` on the Item record.
+   *
+   * 🔴 THIS IS THE PRICE CARD, AND IT IS THE OTHER HALF OF EVERY PRICING FINDING. An invoice
+   * line says what was CHARGED; only this says what the business decided to charge. Neither
+   * alone can answer "did we sell below our own price"; the two together can, and nothing else
+   * in these books can.
+   *
+   * ⚠️ NULL MEANS THE ITEM DOES NOT PUBLISH A PRICE, which is entirely normal for a Category
+   * folder, for a service billed by quote, and for an item somebody never filled in. It is a
+   * fact to report, never a zero to compare against — a floor of $0.00 would make every sale
+   * "at or above list" and quietly empty the finding.
+   */
+  unitPrice: number | null;
+  /** What it costs the business, where QuickBooks holds one. Reported, never used as a floor —
+   *  selling below cost is a different (and worse) finding than selling below list, and this
+   *  build does not make that claim on a customer's behalf. */
+  purchaseCost: number | null;
+  /** Intuit's `Sku`. 🔴 The join key that already works — 248 of 250 rows in the pricing tab
+   *  match a catalogue name exactly. Standardise the DISPLAY, keep the SKU. */
+  sku: string | null;
 }
 
 export interface ParsedItemList {
@@ -46,6 +67,20 @@ function str(v: unknown): string | null {
   if (v === null || v === undefined) return null;
   const s = String(v).trim();
   return s === '' ? null : s;
+}
+
+/**
+ * A number, or null.
+ *
+ * 🔴 AN UNREADABLE VALUE BECOMES NULL, NEVER 0. Intuit sends prices as JSON numbers, but this
+ * parse also runs over hand-saved capture files and over whatever a future minorversion sends;
+ * coercing `"n/a"` or `""` to zero would publish a price card of free items, and every
+ * below-the-floor finding downstream would then be measured against it. Absent is not empty.
+ */
+function num(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
 /**
@@ -75,6 +110,9 @@ export function parseItemList(rawBody: string): ParsedItemList {
       type: str(it?.Type),
       incomeAccount: str(income?.name),
       active: typeof it?.Active === 'boolean' ? (it.Active as boolean) : null,
+      unitPrice: num(it?.UnitPrice),
+      purchaseCost: num(it?.PurchaseCost),
+      sku: str(it?.Sku),
     });
   }
   return { ok: true, items, parseError: null };

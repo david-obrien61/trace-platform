@@ -52,6 +52,21 @@ export interface QboInvoiceLine {
   /** On a goods line this is a COUNT. On these books' discount lines it is a DOLLAR BASE. */
   qty: number | null;
   amount: number | null;
+  /**
+   * WHAT THIS LINE CHARGED PER UNIT — Intuit's `UnitPrice`, inside the detail block.
+   *
+   * 🔴 IT IS NOT `amount / qty` AND THE DIFFERENCE IS THE WHOLE POINT. Deriving it would be
+   * arithmetic over two numbers that are already on the record, and it would silently invent a
+   * price on every line where `qty` is null, zero, or a DOLLAR BASE rather than a count (which
+   * is what qty means on these books' discount lines — see `isNamedDiscount`). A derived
+   * per-unit price on a discount line is a number that describes nothing.
+   *
+   * ⚠️ NULL IS A REAL AND COMMON ANSWER. A `DescriptionOnly` line has no unit price, a
+   * `SubTotalLineDetail` has none, and a goods line can omit it. Every reader below must treat
+   * null as "this line does not say", never as zero — a $0.00 price and an absent one are the
+   * difference between "they gave it away" and "we do not know" (D-9 / A9).
+   */
+  unitPrice: number | null;
 }
 
 /** One invoice. 🔴 `customerId` and NO customer name — see the file header. */
@@ -173,6 +188,10 @@ export function parseInvoiceList(rawBody: string): ParsedInvoiceList {
         itemName: str(itemRef?.name),
         qty: num(detail?.Qty),
         amount: num(l?.Amount),
+        // Read by the SAME detail-block key as ItemRef above, for the same reason: a
+        // GroupLineDetail or any future block is read the same way instead of coming back
+        // empty because the code guessed 'SalesItemLineDetail'.
+        unitPrice: num(detail?.UnitPrice),
       };
     });
 
