@@ -25,6 +25,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   previewOrderIngest, commitOrderIngest, availabilityFingerprint, matchPriorHistoryOrder,
+  refuseCompetingPriorClaims,
 } from './historyOrderWriter';
 import type { QboShipmentRow } from './shipmentIngest';
 import { parseInvoiceOrderLines } from './invoiceOrderLines';
@@ -440,7 +441,10 @@ async function run() {
     docNumber: '3648.634', customerId: 'cust-d1', saleDate: '2026-08-27', total: 2495.16, ...over,
   });
 
-  // ── ① THEIR OWN DOCUMENT NUMBER IS AN IDENTITY ───────────────────────────
+  // ── ① THEIR OWN DOCUMENT NUMBER IS THE ANCHOR ───────────────────────────
+  // ✏️ THIS HEADING READ "IS AN IDENTITY" AND THAT WAS MEASURABLY WRONG — see §N, which counts 22
+  // DocNumbers shared by two different invoices each in LAWNS's own books. It anchors; it does not
+  // identify, and the difference is what §N's corroboration bar exists to carry.
   const same = matchPriorHistoryOrder(invoiceFacts(), [prior()]);
   ok(same.kind === 'same-invoice', 'L1 🔴 their own document number + all three corroborating = the SAME SALE, not a new order');
   ok(same.kind === 'same-invoice' && same.orderId === 'ord-ocr-1', 'L1b and it names the order that already holds it');
@@ -580,6 +584,60 @@ async function run() {
      'M16 🔴 and records no id — a disagreement is not reconciled, it is reported');
   ok(rc.priorOrders.length === 1 && rc.priorOrders[0].kind === 'probable', 'M17 and it comes back on the report for David');
   ok(clash.store.deliveries[0].order_id === null, 'M18 the stop is left unjoined rather than pointed at an order we could not verify');
+
+  // ══ 🔴 THE SEAM. ADDED BECAUSE A MUTANT SURVIVED, AND IT IS THE FINDING OF THIS BUILD. ══
+  //
+  // `refuseCompetingPriorClaims` had twelve passing unit probes (§N) and I then mutated the ONE
+  // line that hands its result to the report — `priorOrders: settledPriors` back to `priorOrders`,
+  // so the pass runs, costs nothing, and is thrown away. NOTHING WENT RED. Twelve green assertions
+  // sat on a function whose output never reached the screen.
+  //
+  // That is #248's own lesson arriving one build later (*"the unit was well tested and the seam
+  // above it was not"*, tech-debt #134) and it is why this probe drives `previewOrderIngest` and
+  // `commitOrderIngest` rather than adding a thirteenth assertion beside the other twelve.
+  //
+  // The fixture is REAL. #5120 in LAWNS's books is Megan Rooney at $1,948.50 (ship 2025-11-07) AND
+  // Bruce Elliott at $2,181.24 (ship 2025-10-17) — two invoices, one document number, measured in
+  // the 2026-08-29 capture. Four such pairs sit inside the 564-invoice history-import set.
+  {
+    const INV_MEGAN = inv('20001', '5120', '2025-10-28', [
+      salesLine('Oak:LO30', 'Live Oak 30 gallon', 1, 1800, 1800), subtotalLine(1800),
+    ], 148.50, 1948.50);
+    const INV_BRUCE = inv('20002', '5120', '2025-10-08', [
+      salesLine('Elm:CE45', 'Cedar Elm 45 gallon', 1, 2015, 2015), subtotalLine(2015),
+    ], 166.24, 2181.24);
+
+    // The prior corroborates MEGAN on all three, and contradicts BRUCE on two. Before this build
+    // that asymmetry decided the outcome; it must not decide it now.
+    const DUP = { id: 'ord-dup', business_id: BIZ, qb_invoice_id: null, customer_id: 'cust-m1',
+                  sale_date: '2025-10-28', total_amount: 1948.50,
+                  source_document_number: '5120', order_kind: 'history' };
+    const c = makeDb({
+      deliveries: [stop('m1', '20001'), stop('b1', '20002')],
+      orders: [DUP], lots: LOTS,
+    });
+
+    const pv = await previewOrderIngest(c.db, BIZ, [INV_MEGAN, INV_BRUCE]);
+    ok(pv.priorOrders.length === 2,
+       'M23 both invoices reach the guard — the one that corroborates and the one that contradicts');
+    ok(pv.priorOrders.every(p => p.kind === 'ambiguous'),
+       'M24 🔴 SEAM — and the REPORT carries them BOTH as ambiguous. A mutant that computed the pass and then handed the report the unsettled list survived twelve green unit probes; this is the assertion that kills it');
+    ok(pv.priorOrders.every(p => p.orderId === null),
+       'M25 neither names an order, so the id-recording pass has nothing to reach for');
+    ok(pv.planned.length === 0,
+       'M26 and NEITHER is planned — a contested claim creates no order at all, which is a real cost and is the honest one: TRACE cannot tell which sale that order records');
+
+    const rr = await commitOrderIngest(c.db, BIZ, [INV_MEGAN, INV_BRUCE]);
+    ok(rr.idsRecorded === 0 && c.store.orders[0].qb_invoice_id === null,
+       'M27 🔴 the commit records NO id — before this build, whichever invoice the loop reached first would have written one, permanently, and the other sale would have vanished unplanned');
+    ok(rr.ordersWritten === 0 && c.store.orders.length === 1,
+       'M28 and no order is created for either');
+    ok(c.store.deliveries.every(d => d.order_id === null),
+       'M29 both stops are left unjoined rather than pointed at an order we could not verify');
+    const ev = pv.priorOrders.map(p => p.evidence).join(' ');
+    ok(/20002/.test(ev) && /20001/.test(ev),
+       'M30 and each names the invoice it is contested by, so the screen can be settled rather than only read');
+  }
 }
 
 // ══ §K SOURCE + MIGRATION PROBES ═══════════════════════════════════════════
@@ -605,6 +663,136 @@ async function run() {
      'K6 🔴 and with NO predicate — a partial unique index is UNINFERABLE from PostgREST\'s column-list onConflict');
   ok(/\bWHERE\b/i.test('CREATE UNIQUE INDEX x ON public.orders (a, b) WHERE b IS NOT NULL;'),
      'K6b and the probe DOES fire on a predicate — verified to bite, not assumed to');
+}
+
+// ══ §N 🔴 THE DOCUMENT NUMBER IS NOT AN IDENTITY, AND ONE ORDER IS NOT TWO SALES ═══
+//
+// §L's own heading called the document number "an identity". IT IS NOT, and this is measured
+// rather than argued: the 2026-08-29 raw capture of LAWNS's books (1469 of 1469, `complete:true`)
+// contains 22 DocNumbers used by TWO DIFFERENT INVOICES EACH — 44 invoices, every pair a
+// different customer and a different amount. #3274 is Dyan Bourne at $811.88 AND Jeffrey
+// Gyurkovic at $4,717.50.
+//
+// FOUR of those pairs are inside the 564-invoice history-import set (#5120 #5121 #5124 #5125,
+// all October 2025), and ZERO are inside the 18 future-dated invoices the merged code runs
+// against today. So both defects below are LATENT on main and go LIVE at the import — which is
+// the whole reason this ships as its own build first.
+//
+// TWO DEFECTS, ONE FALSE PREMISE:
+//   ① `corroborate` sorts fields into agreed / differed / UNKNOWN, and the verdict then tested
+//      only `differed.length === 0`. An ALL-UNKNOWN corroboration passed it. The distinction was
+//      computed and never consulted — [[R-33]]: the check could not disagree.
+//   ② Collisions were checked among OUR priors (rule ③) and never among INCOMING invoices. Two
+//      invoices matching one prior each got `same-invoice` on the same orderId. The first to be
+//      looped wrote the id; the second was refused by the `qb_invoice_id IS NULL` guard and
+//      logged as benign — and, having been consumed by the guard, NEVER GOT ITS OWN ORDER. A
+//      real sale disappears, and which of the two survives is decided by loop order.
+{
+  let n = 0;
+  const prior = (over: any = {}) => ({
+    id: 'ord-ocr-1', customer_id: 'cust-d1', sale_date: '2026-08-27',
+    total_amount: 2495.16, source_document_number: '3648.634', order_kind: 'history', ...over,
+  });
+  const invoiceFacts = (over: any = {}) => ({
+    docNumber: '3648.634', customerId: 'cust-d1', saleDate: '2026-08-27', total: 2495.16, ...over,
+  });
+
+  // ── ① AN UNKNOWN MUST NOT CORROBORATE ────────────────────────────────────
+  // The prior is a real shape, not a contrived one: an order captured from a photograph whose
+  // OCR could not read the customer, the date or the money still carries a document number.
+  const allUnknown = matchPriorHistoryOrder(
+    invoiceFacts(), [prior({ customer_id: null, sale_date: null, total_amount: null })]);
+  n++; ok(allUnknown.kind !== 'same-invoice',
+     'N1 🔴 document number matches and NOTHING corroborates — this may not read as the same sale. `unknown` is not `agreed`, and a same-invoice verdict writes a permanent key');
+  n++; ok(allUnknown.kind === 'probable',
+     'N1b it is REPORTED rather than dropped — a document-number match is real evidence, just not proof');
+  n++; ok(allUnknown.kind === 'probable' && allUnknown.orderId === 'ord-ocr-1',
+     'N1c and it still names the order, because David settles it by opening the two side by side');
+
+  const oneAgreed = matchPriorHistoryOrder(
+    invoiceFacts(), [prior({ sale_date: null, total_amount: null })]);
+  n++; ok(oneAgreed.kind === 'probable',
+     'N2 🔴 one field agreeing and two unknown is not corroboration either — a repeat customer agrees on `customer` for every invoice they have ever had');
+
+  // The bar, stated: the document number PLUS at least two of David's three fields, none of them
+  // disagreeing. Two-of-three is not a new number — it is §②'s own settled bar (L9), which this
+  // reuses rather than inventing a second standard for the same question.
+  const twoAgreed = matchPriorHistoryOrder(invoiceFacts(), [prior({ sale_date: null })]);
+  n++; ok(twoAgreed.kind === 'same-invoice',
+     'N3 CONTROL — document number + customer + amount, with only the date unknown, IS the same sale. The fix must not refuse the nine it exists to find');
+  n++; ok(matchPriorHistoryOrder(invoiceFacts(), [prior()]).kind === 'same-invoice',
+     'N3b CONTROL — all three agreeing is still the same sale (L1 restated here so a tightening that broke it fails in BOTH sections)');
+  n++; ok(matchPriorHistoryOrder(invoiceFacts(), [prior({ total_amount: 2000 })]).kind === 'probable',
+     'N3c CONTROL — a DISAGREEMENT still stops, and did not become a same-invoice on the way past');
+
+  n++; ok(allUnknown.kind === 'probable' && /not recorded on the existing order/.test(allUnknown.evidence),
+     'N4 the evidence names the fields that could not be compared, so the screen says WHY it refused rather than only that it did');
+  n++; ok(allUnknown.kind === 'probable' && /corroborat/i.test(allUnknown.rule),
+     'N4b and the rule line says corroboration was the shortfall');
+
+  // ── ② ONE ORDER MAY NOT BE CLAIMED BY TWO INVOICES ───────────────────────
+  // The real pair, carried verbatim from the capture so the fixture has provenance.
+  const finding = (over: any = {}) => ({
+    deliveryId: 'del-1', invoiceId: 'inv-A', docNumber: '5120', deliveryDate: '2025-11-07',
+    kind: 'same-invoice' as const, orderId: 'ord-X', rule: 'r', evidence: 'e', ...over,
+  });
+
+  const twoClaims = refuseCompetingPriorClaims([
+    finding({ deliveryId: 'del-1', invoiceId: 'inv-megan',  docNumber: '5120' }),
+    finding({ deliveryId: 'del-2', invoiceId: 'inv-bruce',  docNumber: '5120' }),
+  ]);
+  n++; ok(twoClaims.every(f => f.kind === 'ambiguous'),
+     'N5 🔴 #5120 is Megan Rooney AND Bruce Elliott in their real books — two invoices claiming ONE existing order are BOTH refused, never resolved by loop order');
+  n++; ok(twoClaims.every(f => f.orderId === null),
+     'N5b and an ambiguous finding names no order to write to, so the id-recording pass cannot reach it');
+  n++; ok(twoClaims.every(f => /claimed by 2 invoices|more than one invoice/i.test(f.rule)),
+     'N5c the rule says a competing claim was the reason, not the original doc-number rule');
+  n++; ok(twoClaims.some(f => /inv-bruce/.test(f.evidence)) && twoClaims.some(f => /inv-megan/.test(f.evidence)),
+     'N5d 🔴 and each names the OTHER invoice — a screen that says "ambiguous" without saying against what cannot be settled');
+
+  // A same-invoice and a probable on one order is the same hazard wearing a different hat: the
+  // same-invoice would write the id while the probable sits on the screen looking merely advisory.
+  const mixed = refuseCompetingPriorClaims([
+    finding({ invoiceId: 'inv-A', kind: 'same-invoice' }),
+    finding({ invoiceId: 'inv-B', kind: 'probable', deliveryId: 'del-2' }),
+  ]);
+  n++; ok(mixed.every(f => f.kind === 'ambiguous'),
+     'N6 🔴 a same-invoice competing with a probable is refused too — otherwise the writing verdict wins by being the confident one');
+
+  // NEGATIVE CONTROLS — the pass must not fire when there is no competition, or every clean run
+  // would be demoted into noise and the guard would be switched off within a week.
+  const distinct = refuseCompetingPriorClaims([
+    finding({ invoiceId: 'inv-A', orderId: 'ord-X' }),
+    finding({ invoiceId: 'inv-B', orderId: 'ord-Y', deliveryId: 'del-2' }),
+  ]);
+  n++; ok(distinct.every(f => f.kind === 'same-invoice'),
+     'N7 NEGATIVE CONTROL — two invoices claiming DIFFERENT orders are both left exactly as they were');
+  n++; ok(distinct[0].orderId === 'ord-X' && distinct[1].orderId === 'ord-Y',
+     'N7b and they keep their orders');
+  const single = refuseCompetingPriorClaims([finding()]);
+  n++; ok(single.length === 1 && single[0].kind === 'same-invoice' && single[0].orderId === 'ord-X',
+     'N8 NEGATIVE CONTROL — one claim on one order is untouched');
+  n++; ok(refuseCompetingPriorClaims([]).length === 0,
+     'N8b an empty set produces an empty set rather than throwing');
+
+  // Already-ambiguous findings carry a null orderId. Two of them are not "competing" for anything
+  // and must not be re-described as competing with each other.
+  const nullOrders = refuseCompetingPriorClaims([
+    finding({ invoiceId: 'inv-A', kind: 'ambiguous', orderId: null, rule: 'original-rule' }),
+    finding({ invoiceId: 'inv-B', kind: 'ambiguous', orderId: null, rule: 'original-rule', deliveryId: 'del-2' }),
+  ]);
+  n++; ok(nullOrders.every(f => f.rule === 'original-rule'),
+     'N9 🔴 NEGATIVE CONTROL — findings that already name no order are not grouped together by their shared null and given a competing-claim reason they did not earn');
+
+  // The same invoice appearing twice (two stops, one invoice) is not two invoices competing.
+  const sameInvoiceTwice = refuseCompetingPriorClaims([
+    finding({ invoiceId: 'inv-A', deliveryId: 'del-1' }),
+    finding({ invoiceId: 'inv-A', deliveryId: 'del-2' }),
+  ]);
+  n++; ok(sameInvoiceTwice.every(f => f.kind === 'same-invoice'),
+     'N10 🔴 ONE invoice on two stops is not a competing claim — it is one sale that shipped in two loads, and demoting it would refuse a case the ingest is meant to handle');
+
+  console.log(`  §N population — ${n} assertions over 8 matcher verdicts and 7 claim sets`);
 }
 
 console.log(`\n  historyOrderWriter — ${passed} passed, ${failed} failed`);

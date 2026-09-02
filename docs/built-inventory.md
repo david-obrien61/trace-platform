@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-09-01 (**#248 — THE NINETEEN STOPS GET THEIR LINES, AND THE KEY WAS BLIND TO THE NINE ALREADY HERE.** `Invoice.Line[]` → a history order on each stop, through a THIRD door and the same `buildHistoryOrder`. 🔴 **Two findings: a `$0` line is NOT automatically a note** (#3648.563 totals $0.00 and carries two real warranty-replacement trees, so the discriminator is `DetailType`), **and the nine OCR history orders carry no `qb_invoice_id`, so `ON CONFLICT` cannot see them** — a prior-order guard matches on their own document number, records an id only on an identity, and reports everything else. Migration `20260831c` **OWED**. See the QUICKBOOKS ORDER INGEST entry.) · Prior: #246 · #245 · #244 · #243.
+# Last updated: 2026-09-01 (**#250 — THE DOCUMENT NUMBER IS AN ANCHOR, NOT AN IDENTITY.** Two defects in the prior-order guard, both latent on `main` and both live at the 564-invoice history import, which is why it ships first and alone. **`unknown` was computed and never consulted** (the verdict tested only that nothing DIFFERED, so an all-null order corroborated nothing and got a permanent id) — now two of three must POSITIVELY agree. **And two invoices could both claim one order**, the winner decided by loop order and the loser's sale never created — now every contested claim is refused and names its rival. 🔴 **Measured: 22 DocNumbers shared by two invoices each in LAWNS's own books; four inside the 564.** See the QUICKBOOKS ORDER INGEST entry.) · Prior: #249 · #248 · #246 · #245 · #244 · #243.
 
 
 > 📐 **CAMPAIGN LIFECYCLE — SCOPING + ESTIMATE (2026-08-23, ledger #192/#192b).** NOT a capability entry: **nothing was built.** A scoping document answering David's *"I can add but not edit or cancel or delete"* with nine questions, ten site keys, a proven F1/F2/F3 dependency order, three scopes (**MINIMUM ~2–3 · COHERENT ~5–7 · COMPLETE ~11–14 Thunder prompts; MINIMUM and COHERENT need ZERO migrations**) and eight rulings owed. Read it before ANY campaign build — it is the answer to "has this been scoped?" and its first finding is that the EDIT FORM ALREADY EXISTS as the create form (`Campaigns.tsx:120-198`). → [`docs/audits/campaign-lifecycle-scoping-2026-08-23.md`](audits/campaign-lifecycle-scoping-2026-08-23.md) · predecessor [`social-campaign-path-recon-2026-08-22.md`](audits/social-campaign-path-recon-2026-08-22.md)
@@ -2357,7 +2357,35 @@ capture would have been named `qbo-items-…`).
 ---
 
 ## QUICKBOOKS ORDER INGEST (THE LOAD) — `Invoice.Line[]` → a history order on each stop
-**Last updated:** 2026-08-31 · **Bar: BUILDER-COMPLETE** (on `thunder/history-order-lines`, not merged) · **Owner-test:** `docs/owner-tests/qb-order-ingest-full-surface-test.md`
+**Last updated:** 2026-09-01 · **Bar: BUILDER-COMPLETE** (merged as #248; the prior-order guard hardened on `thunder/docnumber-matcher`, NOT merged) · **Owner-test:** `docs/owner-tests/qb-order-ingest-full-surface-test.md`
+
+🔴 **THE PRIOR-ORDER GUARD WAS HARDENED 2026-09-01 (ledger #250), AND THE PREMISE IT WAS BUILT ON
+WAS WRONG.** The guard called a matching document number *"an identity, not an inference."* It is
+not: the 2026-08-29 raw capture of LAWNS's books (**1469 of 1469, `complete: true`**) contains **22
+DocNumbers used by two different invoices each — 44 invoices**, every pair a different customer and
+a different amount. Two defects followed from that false premise, and **both were latent against the
+nineteen future-dated stops and both go live at the 564-invoice history import**, which is why the
+fix ships first and alone.
+
+- **`unknown` was sorted and then never consulted.** `corroborate()` carefully separated agreed /
+  differed / unknown, and the verdict tested only `differed.length === 0` — so an existing order
+  whose customer, date and money were all null **disagreed with nothing** and was written to. A
+  `same-invoice` verdict writes a permanent `qb_invoice_id`, after which the ordinary key skips that
+  order forever. Now requires **`DOC_MATCH_MIN_CORROBORATION = 2`** fields POSITIVELY agreeing, with
+  none disagreeing — §②'s own settled bar reused rather than a second standard invented here.
+- **Competition between INCOMING invoices was never checked.** Rule ③ refused when one invoice found
+  two priors; nothing refused when two invoices found one prior. Both returned `same-invoice` naming
+  the same order, the id-recording pass wrote for whichever the loop reached first, and the second
+  was logged as a benign race — **and, consumed by the guard, was never planned, so its order was
+  never created.** New pure `refuseCompetingPriorClaims` demotes every contested claim to
+  `ambiguous`, clears the order id, and names the rival invoice on the screen.
+
+✏️ **The seam, not the unit, was the gap — and a mutant proved it.** Reverting the single line that
+hands the pass's result to the report survived **twelve green unit probes**: the function ran, cost
+nothing, and was discarded. Closed by `historyOrderWriter.test.ts` **§M23–M30**, which drive
+`previewOrderIngest`/`commitOrderIngest` end-to-end. This is tech-debt **#134**'s class and #248's
+own recorded lesson arriving one build later. **12/13 mutants caught, 1 proven equivalent by a
+differential run over 10 input sets, 0 real survivors.**
 
 **What it is.** The delivery ingest below put nineteen stops on the calendar and **none of them
 says what is on the truck.** This reads the `Line[]` of the SAME invoices those stops came from and
