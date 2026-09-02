@@ -367,6 +367,31 @@ Lauren rings up a customer at the lot: take a plant order, offer transport and s
 
 ---
 
+### The calendar holds what actually happened — fourteen months of it, imported once
+
+STATUS: written
+SCOPE: vertical:cultivar, platform
+BUILD: active
+ARC: delivery
+MAPS-TO: 3.4, 3.5, 2.1
+PIECES: ship_date_as_delivery_date, past_stop_is_fulfilled, history_order_per_invoice, customer_create_or_match, chunked_resumable_import, bounded_delivery_read, warranty_window_read
+NEEDS: 🔴 **NOTHING TO START THE IMPORT ITSELF — David ruled Option B on 2026-09-01 and the two rulings are [[R-36]] and [[R-37]].** What is genuinely owed and is NOT decided here: **whether `Tailgate Delivery` becomes a stored fact.** It is deferred to its own build by ruling, and the measurement is already done rather than owed — see the finding below.
+
+A nursery does not begin the day it buys software. LAWNS has been selling and planting trees since long before Cultivar existed, and every one of those jobs is a row in their QuickBooks. Today that history is a list of invoices; on a screen it is nothing at all.
+
+**Lauren wants to see it on a calendar, and the reason is not nostalgia.** David: *"Seeing on a calendar is different than seeing orders lying on a desk — visual patterns arise."* A list of 564 sales sorted by date tells you almost nothing. The same 564 laid out across fourteen months tells you which weeks are heavy, which months are dead, that October is the wall and February is empty, and how this September compares to last.
+
+**And it makes the warranty window computable for the first time.** LAWNS warrant a planted tree for six months. A shipped tree's ship date is its planting date to within a few days, and on a six-month window that error changes no answer — so a delivery dated on the invoice's `ShipDate` is what turns *"when did we plant this?"* from an invoice hunt into a date the system already holds. Today Lauren answers it by digging through paper by customer name, with no window at all.
+
+🔴 **THE SYSTEM NARROWS. IT DOES NOT ADJUDICATE, AND THAT LINE IS THE STORY'S OWN LIMIT.** It shows what shipped inside the window and lets Lauren decide coverage. It must NOT assert that a given tree is covered, because whether LAWNS *planted* it is not reliably knowable from this data — **`(Install & Warranty)` is typed by hand into a line description, and only 8 of 685 catalogue item descriptions mention install, warranty or planting at all.** A candidate set is a large improvement on a paper hunt; a confident wrong coverage answer is worse than none.
+
+**What is imported, and what is deliberately not.** The **564 invoices carrying a `ShipDate`** become past deliveries, orders and lines — 1,565 item lines, up to 489 customer resolutions. **The other 881 get nothing**, and the reason is measured rather than assumed: LAWNS did not adopt `ShipDate` until **September 2025** (before that, 2 invoices in 495 carry one), so for 558 of them a missing ship date **carries no information at all**, and for the remaining 323 the absence is weak evidence of a counter sale. The 564 already span **fourteen months against a six-month warranty window**, so the shipped set covers the whole need with eight months to spare. A `TxnDate`-dated delivery would buy calendar density at the cost of the one property that makes the calendar worth reading: **that every stop on it happened.**
+
+⚠️ **AND A FINDING THAT IS NOT THIS STORY'S TO ACT ON, RECORDED SO IT IS NOT REDISCOVERED.** `Tailgate Delivery` and `TC` (trip charge) are **mutually exclusive across all 1,469 invoices — zero co-occurrences.** `Tailgate Delivery` does not predict whether a job shipped (40% carry a `ShipDate` either way, identically), but it separates install almost perfectly: **0 of 124 tailgate invoices carry `(Install & Warranty)`, against 163 of the 1,345 without.** That is a real drop-off signal sitting in their books. It is **deferred by ruling** to its own build — no `planted_by_lawns` column, no coverage boolean, nothing derived on the strength of history inside an import.
+
+⚠️ **THE READ BEHIND THE CALENDAR HAD TO BE FIXED FIRST, AND THAT HALF IS BUILT (ledger #251).** The delivery list asked for the oldest 200 rows with no date bound and filtered the selected day in the browser — correct-looking at twenty-six rows, and broken at 590: the imported past would have filled the 200, and **selecting any day outside them would have reported "Nothing scheduled on this day" for a day that has stops.** The bound now reaches the query. `bounded_delivery_read` is that piece, and it is the only one of the seven that exists today.
+
+
 ## ARC: discovery
 
 _Website read → two-pass (Haiku identity / Sonnet analysis) → synthesis email → seed.ts → catalog-populate._

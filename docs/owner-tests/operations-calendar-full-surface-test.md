@@ -214,7 +214,7 @@ On **LAWNS**, at the top of `/delivery-schedule`:
 4. The green subtitle reads **"Four weeks · 4 weeks back — Aug 2 to Aug 29"**. 🔴 **It must NOT read "This week and the three ahead"** — that sentence is true of exactly one window (§6 r18).
 5. Every day is dimmed and **nothing is marked TODAY** — the whole window is in the past and says so.
 6. 🔴 **Saturday 2026-08-29 is the last cell in the last row, and it reads "7 stops."**
-7. **Click it.** The day view comes into view (CARD 12) and its header reads **"Saturday, Aug 29, 2026"** and **"7 stops on this day · 9 scheduled in total"**.
+7. **Click it.** The day view comes into view (CARD 12) and its header reads **"Saturday, Aug 29, 2026"** and **"7 stops on this day"**. ✏️ **THE "· 9 scheduled in total" CLAUSE IS GONE AS OF 2026-09-01 (ledger #251) AND ITS ABSENCE IS THE CORRECT ANSWER.** The day view now asks the database for THAT DAY rather than filtering the first 200 rows in the browser, so a business-wide total is no longer something this read establishes — and the grid one line above already carries every other day's count. **A header that still printed a total would be printing this day's own number under another name.**
 8. 🔴 **ALL SEVEN ARE LISTED BY NAME.** Measured live 2026-08-28: Paul Christ · Mark & Vanessa Ashcraft · Andrea & Angel Navarrette · Humberto Garza · Ariel Thiry · Sherry Cooper · Leroy & Lila Ludemann. **If you see a number other than 7, say what it is before judging anything else on this page.**
 9. Every affordance still works on this past day: inline date edit, Edit customer, Route this day, Capture an invoice, both route buttons. **A past day is not a read-only day** — a stop entered on the wrong date still needs moving.
 
@@ -222,6 +222,41 @@ Then the other wall:
 
 10. Move **forward** past Sep 26 (dropdown, or **▶** twice from here). The grid reaches October. The week rows read **"In 4 weeks"** and up. Nothing errors and nothing is empty-with-no-explanation — an empty future window still says **"Nothing scheduled in the next four weeks."**
 
+---
+
+## CARD 16 — 🔴 THE DAY VIEW ASKS FOR THE DAY. THE REGRESSION TEST FOR THE HISTORY IMPORT.
+STATUS: owed · DEVICE: desktop · LAST-PROVEN: —
+
+🔴 **RUN THIS BEFORE THE HISTORY IMPORT AND AGAIN AFTER IT. It is the same card both times, and
+the point is that the answer does not change.**
+
+Until 2026-09-01 the day view read `deliveries` with **no date bound at all** — the oldest 200 rows,
+ascending — and then filtered the selected day **in the browser**. With twenty-six stops in the
+table that is indistinguishable from correct. **With 564 imported past stops it is not:** every one
+of them sorts before the nineteen future ones, so the 200 fill with 2025, and a client-side filter
+can only ever narrow what was already fetched. **Selecting a day outside those 200 would have
+returned nothing, and the screen would have said "Nothing scheduled on this day" for a day that has
+stops** — absence asserted without ever being established, on the surface the fulfilment tap and the
+open-order notice mount on.
+
+1. Open `/delivery-schedule`. With **no day selected**, the green subtitle reads
+   **"N deliveries — the last 30 days and everything ahead."** 🔴 **It must NOT say "N scheduled
+   deliveries"** — after the import that sentence would be claiming fourteen months it is not showing.
+2. 🔴 **The nineteen QuickBooks stops are all still listed, and so are Saturday 29 August's six.**
+   This is the acceptance test the import's own prompt names. Count them.
+3. Move back four weeks and click **Saturday 29 August** (CARD 14). **Seven stops, by name.**
+4. 🔴 **Now go somewhere genuinely old.** After the import, move back to **any month in 2025 with a
+   stop on the grid** and click that day. **The stops must be listed.** Before this fix they would
+   not have been — and the screen would have blamed the day rather than the query.
+5. Open the console (desktop, and this one step needs it): each day you select prints
+   **`[TRACE:DELIVERY] list bound — {kind: 'day', date: '…'}`** with the date you clicked, and the
+   unfiltered list prints **`{kind: 'window', from: '…'}`** thirty days back. 🔴 **If you ever see a
+   `window` bound while a day is selected, stop** — the day is being filtered in the browser again.
+6. ⚠️ **A stop with NO date must still appear** in the unfiltered list, grouped last. The window is
+   built as *"undated OR on/after the floor"* precisely so a bare date floor could not silently
+   drop it; if undated stops vanish, that clause has been lost.
+
+---
 ## CARD 15 — One press home, and the control is where the device needs it
 STATUS: owed · DEVICE: desktop + phone · LAST-PROVEN: —
 

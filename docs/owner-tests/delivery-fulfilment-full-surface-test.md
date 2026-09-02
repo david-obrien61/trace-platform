@@ -137,6 +137,13 @@ On Test Dave's, find a customer with **two** stops (or schedule a second one for
 ---
 
 ## CARD 11 — the QuickBooks-ingested stops can be marked done
+> ⚠️ **THE LIST BEHIND THIS CARD CHANGED 2026-09-01 (ledger #251) AND THE CARD ITSELF DID NOT.** The
+> delivery list is now bounded — a selected day is asked for BY DATE, and the unfiltered list reaches
+> thirty days back plus everything ahead — instead of reading the oldest 200 rows with no date bound
+> at all. Nothing on this card should behave differently **today**; the change exists so that nothing
+> on it behaves differently **after 564 past deliveries are imported**, when the old read would have
+> pushed every stop on this card off the screen. **If any stop you expect is missing, that is this
+> change and it is CARD 16 on the operations-calendar board, not a fulfilment defect.**
 **STATUS:** needs-test · **DEVICE:** phone · **LAST-PROVEN:** —
 **Reason it is `needs-test` rather than `owed`:** the nineteen rows the #246 ingest wrote are **LAWNS production data describing real customers and real future dates**, and this build has not been proven anywhere yet. Marking one done would write a completion time to a job that may not have happened. **This card becomes runnable once CARDS 1–10 pass on Test Dave's** — and even then it is David's call, not a builder's, because it is a claim about work at a real customer.
 

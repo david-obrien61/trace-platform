@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-09-01 (**#250 — THE DOCUMENT NUMBER IS AN ANCHOR, NOT AN IDENTITY.** Two defects in the prior-order guard, both latent on `main` and both live at the 564-invoice history import, which is why it ships first and alone. **`unknown` was computed and never consulted** (the verdict tested only that nothing DIFFERED, so an all-null order corroborated nothing and got a permanent id) — now two of three must POSITIVELY agree. **And two invoices could both claim one order**, the winner decided by loop order and the loser's sale never created — now every contested claim is refused and names its rival. 🔴 **Measured: 22 DocNumbers shared by two invoices each in LAWNS's own books; four inside the 564.** See the QUICKBOOKS ORDER INGEST entry.) · Prior: #249 · #248 · #246 · #245 · #244 · #243.
+# Last updated: 2026-09-01 (**#251 — THE DELIVERY LIST ASKS FOR A DATE, AND THE DRILL-IN WOULD HAVE LIED WITHOUT IT.** The read behind `/delivery-schedule` had NO date bound and filtered the selected day CLIENT-SIDE over the oldest 200 rows — correct-looking at 26 rows, and at 590 it means **selecting any day outside those 200 reports "Nothing scheduled on this day" for a day that HAS stops.** The bound now reaches the query. Plus the §9 story and rulings **[[R-36]]** / **[[R-37]]**. ⚠️ **Sibling: #250** (the document-number matcher), on its own branch. See the OPERATIONS CALENDAR / DELIVERY LIST entry.) · Prior: #249 · #248 · #246 · #245 · #244 · #243.
 
 
 > 📐 **CAMPAIGN LIFECYCLE — SCOPING + ESTIMATE (2026-08-23, ledger #192/#192b).** NOT a capability entry: **nothing was built.** A scoping document answering David's *"I can add but not edit or cancel or delete"* with nine questions, ten site keys, a proven F1/F2/F3 dependency order, three scopes (**MINIMUM ~2–3 · COHERENT ~5–7 · COMPLETE ~11–14 Thunder prompts; MINIMUM and COHERENT need ZERO migrations**) and eight rulings owed. Read it before ANY campaign build — it is the answer to "has this been scoped?" and its first finding is that the EDIT FORM ALREADY EXISTS as the create form (`Campaigns.tsx:120-198`). → [`docs/audits/campaign-lifecycle-scoping-2026-08-23.md`](audits/campaign-lifecycle-scoping-2026-08-23.md) · predecessor [`social-campaign-path-recon-2026-08-22.md`](audits/social-campaign-path-recon-2026-08-22.md)
@@ -160,6 +160,36 @@
 - **Schema (APPLIED + CATALOG-PROVEN 2026-06-20):** `supabase/migrations/20260620_deliveries.sql` — new `deliveries` table (id, business_id, customer_id FK→customers ON DELETE SET NULL, delivery_date, address_line1/city/state/zip, status default 'scheduled' NO CHECK per AC-4, source, notes, created_at) + `deliveries_business_date_idx` + membership-scoped RLS (owner_all + member_all, AC-2/AC-3). **No existing table altered.** Catalog gate `scripts/verify-deliveries.mjs` **14/14 GREEN** (A) table, (B) columns+types, (C) FKs (customer SET NULL / business CASCADE), (D) RLS+rowsecurity, (E) status default+NO-CHECK, (F) day index + round-trip insert. PAT applied-then-revoked.
 - **Write path (B2) — CONSOLIDATED 2026-06-20 (Vercel 12-function ceiling, tech-debt #41):** "Schedule delivery" is a live checkbox. On confirm, `doSave` (`ReceiptKeeper.tsx`) makes ONE call to `/api/customers/create` with the customer fields + (when scheduling) a `delivery` block; the endpoint resolves the customer once (findOrCreateCustomer) AND creates the single linked delivery in the same request. **No-double-create is now structural** (one call → one customer → at most one delivery). The standalone `api/deliveries/create.ts` was REMOVED to stay ≤12 serverless functions (it was the 13th → silent failed deploys; see #41). Checkboxes coupled (schedule→on forces add-customer; add-customer→off clears schedule). Delivery uses ship-to (falls back to bill-to) + ISO delivery_date.
 - **Day view (B3):** `src/pages/DeliverySchedule.tsx` (`/delivery-schedule`) — scheduled deliveries grouped by `delivery_date` (soonest day forward, undated last; local-midnight parse so the day never slips). Reachable from the dashboard `delivery_routing` tile (repointed `/deliveries`→`/delivery-schedule`). Each day has "Route this day →".
+
+  🔴 **THE READ IS DATE-BOUNDED AS OF 2026-09-01 (ledger #251), AND IT WAS NOT BEFORE.** This list
+  asked for `deliveries` with **no date bound at all** — `.order('delivery_date', ascending).limit(200)`
+  — and the operations calendar's selected day was then filtered **in the browser**
+  (`rows.filter(r => r.delivery_date === filterDate)`). At twenty-six rows that is indistinguishable
+  from correct. It is not correct, and the 564-invoice history import ([[R-37]]) is what makes the
+  difference visible: every imported past stop sorts BEFORE the nineteen future ones, so the oldest
+  200 fill with 2025 and **a client-side filter can only ever narrow what was already fetched**.
+
+  - **The predicted defect:** the nineteen QuickBooks stops and Saturday 2026-08-29's six fall off
+    the working list.
+  - 🔴 **The worse one, which the Stage 0 recon did not predict and reading the code found:**
+    selecting **any** day outside those 200 returns EMPTY, so the drill-in reports *"Nothing
+    scheduled on this day"* **for a day that has stops** — absence asserted without ever being
+    established, on the surface the fulfilment tap and `openOrderNotice` mount on.
+
+  The bound now reaches the query and is decided in a pure lib — `src/lib/deliveryWindow.ts`, because
+  a bound computed inline in a `.tsx` cannot be asserted (tech-debt **#134**). A selected day is
+  `.eq()`'d **unclamped, at any distance in the past**; the unfiltered working list is
+  **`.or('delivery_date.is.null,delivery_date.gte.<30 days back>')`** — the `is null` half kept
+  deliberately, because `delivery_date` is nullable and this list groups undated stops last, so a
+  bare floor would silently drop a state the UI already handles. `filterDate` became a `useEffect`
+  dependency in the same change: correct to omit while the filter lived in memory, wrong the moment
+  it reached the query. ⚠️ **Two header claims were REMOVED rather than recomputed** — the drill-in's
+  *"· N scheduled in total"* and the empty state's *"N deliveries are scheduled on other days"* both
+  became false once the read was bounded to one day, and the grid one line above already carries
+  every day's count (a second copy is the one that drifts, STD-011). Tests: `deliveryWindow.test.ts`,
+  19 assertions across 3 sections, including a leap-day boundary, a local-vs-UTC probe, and a
+  negative control proving the window moves with the clock. Owner-test: **CARD 16** on the
+  operations-calendar board, written to be run before AND after the import with the same answer.
 - **Route map (B4 — REUSED, not rebuilt):** `DeliveryRoute.tsx` gains a `?date=YYYY-MM-DD` branch that loads the `deliveries` table for that day, maps each row into the existing `DeliveryOrder` shape, and routes via the **existing `buildMapsUrl` (DeliveryRoute.tsx:37)** + existing route UI — the cart-order path (no `date` param) is unchanged (regression-safe).
 - **Scope fence:** NO live tracking, GPS, dispatch board, route optimization, re-sequencing, or add-a-stop. Loop closes at: delivery exists with a date → shows under its day → plots on the existing map.
 - **Marcus Webb end-to-end proof (service-key, 6/6 GREEN):** resolve customer twice → ONE created, second REUSES (no double-create) → exactly 1 customer row → delivery created 2026-06-25 Wimberley linked to Marcus Webb → day-view read groups it under Jun 25, 2026 → cleanup. Migration is now APPLIED to live DB.
