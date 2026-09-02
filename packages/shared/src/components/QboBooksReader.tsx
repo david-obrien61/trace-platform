@@ -53,7 +53,10 @@ import { authHeaders } from '../auth/authHeaders';
 import { rawCaptureFileName, QBO_ROUTE, type QboEntity } from '../quickbooks/qboRead';
 import type { QboItemRow, ItemBreakdown } from '../quickbooks/itemList';
 import type { QboCustomerRow, CustomerBreakdown } from '../quickbooks/customerList';
-import { BUNDLE_ITEM_NAMES, type InvoiceBreakdown } from '../quickbooks/invoiceList';
+import { BUNDLE_ITEM_NAMES, parseInvoiceList, type InvoiceBreakdown, type QboInvoiceRow } from '../quickbooks/invoiceList';
+import { parseShipmentList } from '../quickbooks/shipmentIngest';
+import { evaluateBooks, type BooksInput, type Finding } from '../quickbooks/booksFindings';
+import { BooksReview } from './BooksReview';
 
 // The bundle items are NAMED BY THE MODULE THAT COUNTS THEM. A second list typed into this
 // screen is a second representation of one fact (STD-011), and it is the copy that drifts — a
@@ -146,6 +149,21 @@ interface ReadState {
 export function QboBooksReader({ businessId }: { businessId: string | null | undefined }) {
   const [loading, setLoading] = useState<QboEntity | null>(null);
   const [state, setState] = useState<ReadState | null>(null);
+  // ══════════════════════════════════════════════════════════════════════════════
+  // 🔴 THE REVIEW SPANS THREE WALKS, SO THE READS MUST ACCUMULATE (R-24).
+  // ══════════════════════════════════════════════════════════════════════════════
+  // `state` above holds the ONE read currently on screen and is replaced on every button
+  // press — which is right for the panels below, and useless for a review whose price card is
+  // on the Item walk, whose duplicate customers are on the Customer walk and whose money is on
+  // the Invoice walk. This map keeps the last COMPLETE read of each entity, so the findings
+  // panel improves as the walks are done and, crucially, can say WHICH walk is still missing
+  // rather than reporting a clean result over books it has only half read.
+  //
+  // ⚠️ IT KEEPS ONLY `ok` READS. A refusal — an INCOMPLETE walk, a 401, a partial page — is
+  // deliberately NOT accumulated: the entire reason this endpoint counts first and refuses a
+  // shortfall is that a partial list must never be presented as a list, and feeding one to the
+  // findings would launder exactly that (R-24 clause a).
+  const [reads, setReads] = useState<Partial<Record<QboEntity, ReadResponse>>>({});
 
   async function read(entity: QboEntity) {
     if (!businessId || loading) return;
@@ -176,6 +194,8 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
       }
 
       const failed = !res.ok || body.ok === false;
+      // Accumulate ONLY a complete, successful read — see the note at `reads`.
+      if (!failed && body.ok) setReads(prev => ({ ...prev, [entity]: body }));
       setState({
         entity, body, savedAs, saveFailed,
         // Every refusal names ITSELF. A generic "the read failed" would send someone hunting
@@ -199,6 +219,40 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
     fontWeight: 700, fontSize: '0.9375rem', borderRadius: 10, border: 'none',
     cursor: loading || !businessId ? 'default' : 'pointer',
   };
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // 🔴 THE INVOICES ARE PARSED HERE, IN THE BROWSER, FROM THE CAPTURE THE BROWSER ALREADY HAS.
+  // ══════════════════════════════════════════════════════════════════════════════
+  // The invoice endpoint deliberately never sends parsed invoice records — it sends a breakdown
+  // and the verbatim bodies, because an invoice names the human who bought and what they paid.
+  // That constraint is not weakened here: `parseInvoiceList` produces `QboInvoiceRow`, which
+  // carries a `customerId` and NO customer name, address, email or line description at all —
+  // the field is absent from the type, so no finding can name a person even if a future rule
+  // tried. The bodies are already in this component (it writes them to the operator's file);
+  // parsing them costs no second call to a customer's books and mints no api/ function.
+  //
+  // ⚠️ THE SHIPMENT PARSE IS USED FOR ONE FIELD AND THE ROWS ARE DISCARDED IMMEDIATELY.
+  // `QboShipmentRow` DOES carry names and addresses — it is the delivery ingest's shape — so
+  // only `id → shipDate` survives this expression. Nothing else is held and nothing is rendered.
+  const findings: Finding[] = (() => {
+    const inv = reads.Invoice;
+    let invoices: QboInvoiceRow[] | undefined;
+    let shipDates: Map<string, string | null> | undefined;
+    if (inv?.capture) {
+      const pages = (inv.capture as { pages?: { body?: string }[] }).pages ?? [];
+      const bodies = pages.map(p => p.body ?? '').filter(Boolean);
+      invoices = bodies.flatMap(raw => parseInvoiceList(raw).invoices);
+      shipDates = new Map(bodies.flatMap(raw => parseShipmentList(raw).shipments).map(sh => [sh.id, sh.shipDate]));
+    }
+    const input: BooksInput = {
+      items:     reads.Item?.items,
+      customers: reads.Customer?.breakdown as CustomerBreakdown | undefined,
+      invoices,
+      discounts: (reads.Invoice?.breakdown as InvoiceBreakdown | undefined)?.discounts,
+      shipDates,
+    };
+    return evaluateBooks(input);
+  })();
 
   const b = state?.body;
   const itemBreak = state?.entity === 'Item' ? (b?.breakdown as ItemBreakdown | undefined) : undefined;
@@ -228,6 +282,12 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
           {loading === 'Invoice' ? 'Reading invoice history…' : 'Read invoice history'}
         </button>
       </div>
+
+      {/* 🔴 THE REVIEW SITS BETWEEN THE READS AND THE IMPORT PANELS BELOW, AND BESIDE THEM
+          RATHER THAN IN FRONT OF THEM. It has no acknowledge-to-continue and nothing on it can
+          disable an ingest button: a finding that could stop Lauren is a finding that makes her
+          phone David, and then the build has failed however good the finding was. */}
+      <BooksReview findings={findings} />
 
       {state?.savedAs && (
         <p style={{ fontSize: '0.8125rem', color: GREEN, margin: '10px 0 0', wordBreak: 'break-all' }}>
