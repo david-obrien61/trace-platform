@@ -244,15 +244,46 @@ export function bankedVerdict(row: RawReceiptRow): BankedVerdict {
   }
 
   // ── accept vs edit ────────────────────────────────────────────────────────────────────────
-  // Reported, not explained. Every one of LAWNS's 17 rows reads `edited` while
-  // `header_amount_edited` is false on every one of them (measured 2026-09-01) — so whatever was
-  // edited, it was not the total. WHY it reads `edited` on every row is an OPEN question and this
-  // screen does not answer it; it makes it visible for the first time.
-  if (row.accept_vs_edit === 'edited') notes.push('Owner changed something before saving.');
-  else if (row.accept_vs_edit === 'accepted_as_is') notes.push('Saved exactly as read.');
-  else notes.push('Whether the owner edited before saving was not recorded.');
+  // 🔴 THE OPEN QUESTION FROM #252 IS ANSWERED, AND THE OLD SENTENCE WAS FALSE. It read "Owner
+  // changed something before saving." on 35 of 36 rows. MEASURED 2026-09-02, field by field,
+  // against the OCR's own parsed output (population 35 rows whose parsed JSON is recoverable):
+  //
+  //     vendor differs    0        amount differs    3        category differs  2
+  //     date differs     29   ← the CODE normalises "06/22/2026" to ISO, then compares the
+  //                             normalised value against the raw one and calls that an edit
+  //     lines differ     30   ← the CODE injects its own `Tax` line, then counts the line it
+  //                             added as a line the owner added
+  //
+  // Both large counts are SELF-INFLICTED by the save path (`detectAcceptVsEdit` compares
+  // `fields.date`, already run through `toISODate`, against the raw `p.date`; and
+  // `countEditedLineItems` compares the tax-injected array against the un-injected snapshot).
+  // The flag measures our own formatting, not the owner's intent — so the screen was quietly
+  // accusing Lauren of an edit she did not make, on nearly every row she ever captured.
+  //
+  // What the flag can HONESTLY support is stated instead, and only from this row's own columns:
+  // `header_amount_edited` is the one half of it that is a real, isolated fact.
+  if (row.accept_vs_edit === 'edited') {
+    if (row.header_amount_edited === false) {
+      notes.push(
+        'Flagged as edited, but the total was not changed — the flag also counts the platform\u2019s own '
+        + 'date reformatting and the tax line it adds, so it does not establish that anyone edited anything.',
+      );
+    } else if (row.header_amount_edited === true) {
+      notes.push('Flagged as edited, and the total field itself was changed.');
+    } else {
+      notes.push(
+        'Flagged as edited. What changed was not recorded, and the flag also counts the platform\u2019s own '
+        + 'reformatting — so it does not establish that anyone edited anything.',
+      );
+    }
+  } else if (row.accept_vs_edit === 'accepted_as_is') {
+    notes.push('Saved exactly as read.');
+  } else {
+    notes.push('Whether the owner edited before saving was not recorded.');
+  }
 
-  if (row.header_amount_edited === true) notes.push('The total field itself was edited.');
+  // (the `header_amount_edited === true` case is stated by the branch above — saying it twice
+  //  would be one fact in two places, and the second copy is the one that drifts: STD-011)
 
   return { readout, notes };
 }

@@ -121,6 +121,25 @@ const HAS_CAN_CALL = /\bcan\s*\(/;
 // carries the reason it is not authority. Keyed file:pattern so it cannot silently widen.
 const EXEMPT = [
   {
+    file: 'packages/cultivar-os/src/pages/ReceiptDetail.tsx',
+    match: /isOwner/,
+    why: 'DISPLAY, and the enforcement is the DATABASE. Editing a receipt line is OWNER-ONLY BY '
+       + 'OWNERSHIP, not by a delegable permission — there is deliberately no `receipts:line_edit` '
+       + 'string to check, and minting one would make the rule delegable, which is the opposite of '
+       + 'what was ruled. isOwner here decides what RENDERS; whether an edit LANDS is decided by '
+       + 'edit_receipt_line_items (SECURITY DEFINER, owner check) and by '
+       + 'trg_receipts_snapshot_and_line_guard, which refuses a non-owner change to line_items on '
+       + 'EVERY path including a direct PostgREST update that never loads this page '
+       + '(20260902_receipt_line_edit_and_vendor_preference.sql). '
+       + 'NOT the `isOwner ||` bypass the 2026-07-30 ruling retired: that was an OR that WIDENED '
+       + 'access past a permission check; this narrows, and the server is authoritative either way. '
+       + 'Owner-test CARD 8 proves it by ATTEMPTING the edit as a manager who holds all four '
+       + 'costs:* verbs, not by reading this branch. '
+       + '⚠️ IF DAVID EVER WANTS LINE-EDITING DELEGABLE, this exemption is what has to go — it '
+       + 'becomes a permission string, a manifest entry and a policy, and this comment is the note '
+       + 'saying so.',
+  },
+  {
     file: 'packages/shared/src/context/BusinessProvider.tsx',
     match: /activeRole|isOwnerActive\s*\?\s*'OWNER'|isOwner: isOwnerActive|role:/,
     why: 'DISPLAY + the resolution site itself. This file COMPUTES isOwner and the role label; the '

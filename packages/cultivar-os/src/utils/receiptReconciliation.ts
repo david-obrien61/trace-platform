@@ -7,11 +7,21 @@ const SMALL_GAP_PCT   = 0.10;  // <10% of total = small gap
 
 export const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
-// Editable line item — string amounts for free-form input; parsed to number on save
+// Editable line item — string amounts for free-form input; parsed to number on save.
+//
+// 🔴 `quantity` / `unit_price` / `sku` RIDE THROUGH UNTOUCHED, AND THAT IS THE POINT. The OCR
+// reads all five (measured 2026-09-02: `line_items_original` carries all five keys on 141 of 141
+// stored lines) and the confirm path used to emit only two, so `line_items` carried TWO keys on
+// 171 of 171 lines and the rate that answers "what did this cost" survived nowhere but the
+// snapshot. The capture UI still edits only description and amount — these are carried, not
+// edited, so the working copy is no longer less informative than the record it was made from.
 export interface LineItem {
   id: string;
   description: string;
   amount: string;
+  quantity?: number | null;
+  unit_price?: number | null;
+  sku?: string | null;
 }
 
 export interface ReconcileResult {

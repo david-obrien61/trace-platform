@@ -28,6 +28,7 @@ import { CampaignDetail }    from './pages/CampaignDetail';
 import { AddBusiness }       from './pages/AddBusiness';
 import { DiscoveryInspect }  from './pages/DiscoveryInspect';
 import { ReceiptKeeper }     from './pages/ReceiptKeeper';
+import { ReceiptDetail }     from './pages/ReceiptDetail';
 import { BusinessAssets }    from './pages/BusinessAssets';
 import { AssetCapture }      from './pages/AssetCapture';
 import { BusinessInventory } from './pages/BusinessInventory';
@@ -228,6 +229,10 @@ export function AppRouter() {
               viewer expressible for the first time. */}
           <Route element={<PermissionRoute permission="costs:read" />}>
             <Route path="/receipts"          element={<ReceiptKeeper />} />
+            {/* The detail view reads the SAME table behind the SAME `costs:read` gate as the list.
+                Editing a line is narrower than reading one and is enforced server-side by
+                edit_receipt_line_items + trg_receipts_snapshot_and_line_guard, not by this route. */}
+            <Route path="/receipts/:id"      element={<ReceiptDetail />} />
             <Route path="/operating-costs"   element={<OperatingCosts />} />
           </Route>
           {/* /assets reads `cost_objects` (BusinessAssets.tsx:122) — the SAME table /receipts and

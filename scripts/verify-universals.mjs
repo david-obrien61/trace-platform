@@ -719,6 +719,10 @@ function capR(key, v) {
     '/checkout/scan',         // sub-flow: multi-item scan-loop order entry, reached from /orders "New order"
     '/orders/:id',            // drill-in: order detail, reached by clicking a roster card on /orders
     '/customers/:id',         // drill-in: customer detail + order history, reached by clicking a name on /customers
+    '/receipts/:id',          // drill-in: the receipt's lines, tax and document, reached by clicking a row on /receipts
+                              // (also the deep-link target of ProjectCostDrillIn's Receipt button). Declared for the
+                              // same reason as /orders/:id above: a drill-in belongs BELOW its list, not beside it in
+                              // the nav rail — a "Receipt" rail entry would have no receipt to point at.
     '/plant/:tagId', '/plant/:tagId/addons',
     '/demo/quickbooks-invoice', '/discovery/inspect',
     '/roles',                 // redirect → /team
