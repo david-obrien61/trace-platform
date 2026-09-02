@@ -17,6 +17,7 @@ import { serviceWriteFailure } from './serviceWriteFailure';
 // The QuickBooks item-list read (read-only against Intuit, stores nothing). Mounted inside the
 // Accounting card once a connection exists — it has nothing to read before then.
 import { QboBooksReader } from '../components/QboBooksReader';
+import { QboWriteSwitch } from '../components/QboWriteSwitch';
 import { QboDeliveryIngest } from '../components/QboDeliveryIngest';
 import { QboOrderIngest } from '../components/QboOrderIngest';
 
@@ -713,6 +714,11 @@ export function Settings({
                 </a>
               )}
               </div>
+              {/* 🔴 ABOVE the read tools, deliberately: whether this business's orders reach
+                  QuickBooks is the fact that governs everything below it, and burying it under
+                  three import panels is how somebody spends a week not knowing which mode they
+                  are in. */}
+              <QboWriteSwitch businessId={businessId} />
               <QboBooksReader businessId={businessId} />
               <QboDeliveryIngest businessId={businessId} />
               {/* BELOW the delivery ingest, and the order is the dependency: a stop must

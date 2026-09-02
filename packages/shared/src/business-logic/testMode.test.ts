@@ -32,6 +32,33 @@ function ok(cond: boolean, msg: string): void {
   if (cond) passed++; else { failed++; console.error('   ✗ ' + msg); }
 }
 
+/**
+ * 🔴 STRIP COMMENTS BEFORE ASSERTING ANYTHING ABOUT SOURCE — and this build needed it THREE
+ * TIMES, which is why it is a shared helper rather than three local copies.
+ *
+ *   ① §D's ordering probe went red because the new guard's comment NAMES `findOrCreateQBCustomer`
+ *   ② `historyOrder.test.ts` §I went red for the identical reason, on a probe that had passed
+ *      for weeks — meaning it had been readable-as-prose the whole time
+ *   ③ §F's "no service key" probe matched the word SERVICE KEY inside a paragraph explaining
+ *      why this component deliberately does NOT use one
+ *
+ * ✏️ THE THIRD IS THE ONE THAT SHOWS THE SHAPE, because it is the opposite polarity: ① and ②
+ * were false REDS against correct code, ③ was a false RED against code that says the right
+ * thing. The same mechanism produces false GREENS — a probe asserting a guard exists will pass
+ * on a deleted guard whose comment survives. That is R-33 exactly (the thing asserting was
+ * incapable of disagreeing), and a source probe is the easiest place in this repo to build one
+ * by accident, because the file being read is mostly prose by volume.
+ *
+ * ⚠️ THE LIMIT, STATED: block comments and WHOLE-LINE `//` comments only. A trailing comment
+ * after code on the same line survives, deliberately — stripping those safely means not
+ * mangling `https://` inside a string literal, and no probe here needs lexing to stop reading
+ * a doc-comment as control flow.
+ */
+function stripComments(t: string): string {
+  return t.replace(/\/\*[\s\S]*?\*\//g, '')
+          .split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+}
+
 // ══ §A THE MODE ═════════════════════════════════════════════════════════════
 {
   ok(isTestMode(false) === true,  'writes off → test mode');
@@ -71,25 +98,8 @@ function ok(cond: boolean, msg: string): void {
 {
   const src  = readFileSync(join(process.cwd(), 'packages/cultivar-os/api/qbo/invoice/cultivar.ts'), 'utf8');
 
-  // 🔴 COMMENTS ARE STRIPPED BEFORE ANY INDEX IS TAKEN, AND THIS PROBE FOUND OUT WHY THE HARD
-  // WAY — it went RED on its first run against correct code. The guard's own comment explains
-  // that it sits above `findOrCreateQBCustomer`, so `indexOf` found that NAME inside the
-  // comment, at a position BEFORE the guard, and the ordering assertion failed. The guard was
-  // right; the probe was measuring prose.
-  //
-  // That is the same lesson historyOrder.test.ts §I already carries in a different disguise
-  // ("textual position is not control flow") — and it is worse than the version recorded there,
-  // because a comment can move an index in EITHER direction. A probe like this could just as
-  // easily have PASSED on a deleted guard because some comment still mentioned it. Stripping
-  // is not tidiness; it is the difference between reading code and reading a description of it.
-  //
-  // ⚠️ THE LIMIT, STATED: this strips block comments and WHOLE-LINE `//` comments only. A
-  // trailing comment after code on the same line survives, deliberately — stripping those
-  // safely means not mangling `https://` inside a string literal, and this file does not need
-  // to solve lexing to stop reading a doc-comment as control flow.
-  const stripComments = (t: string): string =>
-    t.replace(/\/\*[\s\S]*?\*\//g, '')
-     .split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+  // Comments are stripped first — see `stripComments` above for the three separate times this
+  // build needed it and why the false-GREEN direction is the dangerous one.
 
   // Scoped to pushQboInvoice's BODY. historyOrder.test.ts §I records why: `findOrCreateQBCustomer`
   // is DEFINED above this function and CALLED from inside it, and textual position is not
@@ -157,6 +167,44 @@ function ok(cond: boolean, msg: string): void {
   ok(/on\b/.test(LIVE_MODE_CONFIRMED) && /QuickBooks/.test(LIVE_MODE_CONFIRMED), 'the live confirmation states the new state');
   ok(testModeExplanation().length > TEST_MODE_BANNER.length,
     'the settings explanation is the longer form — the banner is not simply repeated where there is room to explain');
+}
+
+// ══ §F 🔴 THE WRITE SWITCH — NARROWNESS AND AUTHORITY, ASSERTED IN SOURCE ═══
+// This section exists because `verify-write-paths.mjs` DECLARES this path as an allowed fourth
+// writer of `businesses`, and that declaration makes two claims: the write touches exactly one
+// column, and its authority is the RLS policy rather than a hand-written check. A declaration
+// citing a probe that does not exist is R-31's class in the caps' own machinery — so the probe
+// exists, and it fails the build if either claim stops being true.
+{
+  const swRaw = readFileSync(join(process.cwd(), 'packages/shared/src/components/QboWriteSwitch.tsx'), 'utf8');
+  const sw = stripComments(swRaw);
+
+  const update = /\.update\(\{([^}]*)\}\)/.exec(sw);
+  const keys = update ? update[1].split(',').map(k => k.split(':')[0].trim()).filter(Boolean) : [];
+  ok(keys.length === 1 && keys[0] === 'qbo_writes_enabled',
+    `🔴 THE PATCH KEY SET IS EXACTLY ['qbo_writes_enabled'] — the write-paths declaration says this table has four DISJOINT writers, and a second key here would silently make that false (got: ${JSON.stringify(keys)})`);
+
+  ok(/\.select\('id'\)/.test(sw) && /data\.length !== 1/.test(sw),
+    '🔴 R-12 — THE WRITE PROVES IT WROTE. A Postgres UPDATE matching ZERO rows returns error:null, which is exactly what a manager\'s refused attempt looks like; reporting that as done would tell someone their books are live when nothing changed');
+
+  ok(!/fetch\(/.test(sw) && !/SERVICE_KEY/.test(sw),
+    '🔴 IT DOES NOT GO THROUGH A SERVICE-KEY ENDPOINT. The write runs under the owner\'s OWN session so `businesses_owner_update` is the gate — routing it through the service key would replace a real database policy with a hand-written check somebody has to keep correct');
+
+  ok(/isOwner/.test(sw) && /Only the account owner/.test(sw),
+    'a non-owner is TOLD whose decision this is rather than shown a dead greyed control (§6 r13 — locked WITH an explanation, never mystery-locked)');
+  ok(/writeSwitchConfirmation/.test(sw),
+    'and turning writes on goes through the confirmation that states what changes');
+}
+
+// ══ §G THE BANNER IS NOT DISMISSABLE — asserted, because it is the whole feature ══
+{
+  const bn = stripComments(readFileSync(join(process.cwd(), 'packages/shared/src/components/TestModeBanner.tsx'), 'utf8'));
+  ok(!/onClick/.test(bn) && !/dismiss/i.test(bn),
+    '🔴 THE BANNER HAS NO CLICK HANDLER AND NO DISMISS PATH IN ITS CODE — a banner that can be dismissed is dismissed on day one, and the mode is then invisible for the rest of the week');
+  ok(/isTestMode/.test(bn) && /TEST_MODE_BANNER/.test(bn),
+    'it reads the mode and the sentence from the SAME module the order writer reads, so it cannot claim a state the server disagrees with');
+  ok(/if \(loading\) return null/.test(bn),
+    'and it stays silent during the FIRST load — a warning that flashes on every navigation for a live business is a warning people learn to ignore');
 }
 
 console.log(`\n  testMode — ${passed} passed, ${failed} failed`);

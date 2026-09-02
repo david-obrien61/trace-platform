@@ -133,6 +133,14 @@ export interface Business {
   accounting_needs_reconnect: boolean;
   accounting_company_id: string | null;
   trial_started_at: string | null;
+  // ⚠️ OPTIONAL, AND THE `?` IS LOAD-BEARING — it is the correction the phantom `tax_rate`
+  // above teaches. `qbo_writes_enabled` is NOT NULL DEFAULT false in the schema, but its
+  // migration (20260902) is GATED: until David applies it the column does not exist, the
+  // `select('*')` above simply does not return it, and the value here is genuinely undefined.
+  // Declaring it non-nullable would promise a boolean that cannot arrive — the same lie, and
+  // invisible to tsc for the same reason. `isTestMode` reads undefined as TEST MODE, which is
+  // the safe direction: a business whose switch we could not read does not push invoices.
+  qbo_writes_enabled?: boolean;
   created_at: string;
 }
 

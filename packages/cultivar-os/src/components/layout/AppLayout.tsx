@@ -15,6 +15,7 @@
 import { useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { AppHeader } from '@trace/shared/components/AppHeader';
+import { TestModeBanner } from '@trace/shared/components/TestModeBanner';
 import { useBusinessContext } from '@trace/shared/context';
 import { bindDevSurfaceIdentity, clearDevSurfaces } from '@trace/shared/devtools';
 import { AppNav } from '../nav/AppNav';
@@ -52,6 +53,13 @@ export function AppLayout() {
         {/* devSurfaces is a CAPABILITY (it exposes internal state), so it is keyed on a held
             string rather than on who the person is — ruling 2026-07-30. */}
         <AppHeader onSignOut={handleSignOut} devSurfaces={can('owner-only')} />
+        {/* 🔴 INSIDE THE STICKY STACK, ABOVE THE NAV, AND MOUNTED ONCE. Every authenticated
+            route is a child of this layout, so "on every screen that touches money" is a
+            STRUCTURAL property here rather than a rule each new page has to remember. Putting
+            it in the sticky stack also means it cannot be scrolled away — a warning that
+            leaves the viewport is a warning that is off for most of the session. It renders
+            nothing at all once the business is live. */}
+        <TestModeBanner />
         <div className="appchrome">
           <AppNav />
           <Breadcrumb />

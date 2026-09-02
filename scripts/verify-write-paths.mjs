@@ -231,14 +231,36 @@ const ALLOWED_DIVERGENCE = {
           + 'refresh, a machine act, same concern as the business_accounting_secrets entry). '
           + 'OnboardingWizard:608 and DiscoveryGlimpse:183 stay DIRECT and are declared, not merged: '
           + 'set_business_profile SETs all five identity columns unconditionally and is not a patch '
-          + 'API, so routing a subset writer through it would null-clobber columns neither site reads.',
+          + 'API, so routing a subset writer through it would null-clobber columns neither site reads. '
+          + 'A FOURTH act is declared 2026-09-02: MODE (qbo_writes_enabled) — see the note below.',
     paths: ['packages/cultivar-os/api/qbo/router.ts',
             'packages/cultivar-os/src/pages/OnboardingWizard.tsx',
             'packages/shared/src/auth/OwnerSignup.tsx',
             'packages/shared/src/discovery/DiscoveryGlimpse.tsx',
             'packages/shared/src/pages/Settings.tsx',
             'packages/shared/src/quickbooks/refresh.ts',
-            'packages/shared/src/quickbooks/secrets.ts'],
+            'packages/shared/src/quickbooks/secrets.ts',
+            // DECLARED 2026-09-02 (the QuickBooks write switch) — ⚠️ PENDING DAVID'S
+            // RATIFICATION, the same standing as the entries above. A FOURTH disjoint act on
+            // this table: MODE. It writes exactly ONE column, `qbo_writes_enabled`, which
+            // nothing else in the repo writes — zero overlap with CREATION, IDENTITY or
+            // ACCOUNTING, so it cannot clobber and cannot be clobbered.
+            //
+            // 🔴 IT CANNOT RIDE ANY EXISTING PATH, AND THE REASON IS THE AUTHORITY RATHER THAN
+            // THE COLUMNS. The three ACCOUNTING writers (`qbo/router.ts`, `refresh.ts`,
+            // `secrets.ts`) all run under the SERVICE KEY in serverless functions — RLS
+            // bypassed — because they are machine acts on OAuth tokens. This is not a machine
+            // act: it is the OWNER deciding whether their own books get written to, and the
+            // gate that makes it owner-only IS `businesses_owner_update` (20260529), which
+            // only applies to a write made under the person's own session. Routing it through
+            // a service-key function would REPLACE a real database gate with a hand-written
+            // check in a function somebody then has to keep correct — the fake-gate class R-31
+            // is about. And `set_business_profile` sets all five identity columns
+            // unconditionally, so riding it would null-clobber name, address, phone and email
+            // every time an owner flipped a switch.
+            // The narrowness is asserted, not promised: `testMode.test.ts` §F pins the patch
+            // key set to exactly ['qbo_writes_enabled'].
+            'packages/shared/src/components/QboWriteSwitch.tsx'],
   },
 };
 
