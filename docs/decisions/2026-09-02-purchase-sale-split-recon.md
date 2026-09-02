@@ -116,9 +116,9 @@ See **C2**. The shape is dropped **three times, three different ways**:
 
 1. `enteredFrom` reaches the component and dies in a log line.
 2. `docType` is derived and never persisted.
-3. 🔴 `ocr.ts:342` **re-derives the shape a second time** — `req.body?.shape === 'asset' ? 'asset' : 'receipt'`
+3. 🔴 `ocr.ts:341` **re-derives the shape a second time** — `req.body?.shape === 'asset' ? 'asset' : 'receipt'`
    — for the authority check, collapsing `'invoice'` into `'receipt'`. **One request field, two independent
-   derivations, twelve lines apart in one function**, and the second is the one that decides which permission
+   derivations, TWENTY lines apart in one function** (the first is `ocr.ts:320-321`, the second `:341`), and the second is the one that decides which permission
    an invoice capture needs. STD-011. **Carried into Stage 1 per §1.6 item 2 — a docs pass is not that build.**
 
 ### 4 · The breadcrumb
@@ -357,7 +357,7 @@ and stops that loss.** A stops the loss for sales by never capturing them.
 🔴 **BINDING ADDITION TO B (David, 2026-09-02).** During the overlap the capture evidence exists in **two**
 places — `receipts`' ten columns and `captured_documents`. **The Stage 1 spec must state WHICH IS AUTHORITATIVE
 and route all new writes to one of them only.** Two homes for one fact is how the next session inherits a guess,
-and it is the shape this session has already named twice (`ocr.ts:342`'s double derivation; the function-count
+and it is the shape this session has already named twice (`ocr.ts:341`'s double derivation; the function-count
 contradiction in Part 5).
 
 ---
@@ -372,7 +372,7 @@ contradiction in Part 5).
 2. `captured_documents` + the two nullable pointers. Additive, gated migration, authoritative-home stated.
 3. `captureIntent` threaded door → component → write, replacing the discarded `enteredFrom` and `docType`.
    Where absent: **ask** ([[R-50]]).
-4. Split `doSave` into two destinations; collapse `ocr.ts:342`'s second shape derivation while the file is open
+4. Split `doSave` into two destinations; collapse `ocr.ts:341`'s second shape derivation while the file is open
    (§1.6 item 2).
 5. The permission dimension — **blocked on ruling (d)**.
 6. Breadcrumb reads the intent, not the pathname.

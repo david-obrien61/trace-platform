@@ -16,6 +16,7 @@ import {
 } from '../lib/netting';
 import type { ServiceOffering } from '../types/plant';
 import { NotPermitted } from '@trace/shared/components/SurfaceState';
+import { TestModeStockCaveat } from '@trace/shared/components/TestModeStockCaveat';
 
 const TRACE_CART = true; // [TRACE:CART] STD-003 — on until OWNER-PROVEN
 
@@ -630,6 +631,15 @@ export function CartReview() {
           <p style={{ fontSize: '0.875rem', color: '#7f1d1d' }}>{submitError}</p>
         </div>
       )}
+
+      {/* 🔴 IMMEDIATELY ABOVE THE TWO SUBMIT BUTTONS, WHICH IS THE POINT OF ACTION.
+          David's ruling (2026-09-02): test mode's banner states the protection, and this
+          states what is NOT being proven — stock does not move, so ringing this up is not a
+          test of whether the system tracks the trees. Placed here rather than in the global
+          banner because it is only true of the ring-up act, and because a two-sentence
+          standing banner on every page is how a standing notice becomes wallpaper.
+          Renders nothing when the business is live. */}
+      <TestModeStockCaveat />
 
       {/* Actions */}
       <div className="section" style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>

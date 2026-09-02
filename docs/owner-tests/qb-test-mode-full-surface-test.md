@@ -23,8 +23,9 @@ somebody remembered**, and it stays excluded after go-live.
 **(3)** Nobody can be in test mode without knowing it — because the expensive failure is not fake
 data reaching real books, it is somebody working in test mode for a week believing they are live.
 
-**Board: 0 of 14.** Every card is `STATUS: owed` except **13**, which is `needs-test` with its
-reason stated. Thunder never sets `covered` (OP-14).
+**Board: 0 of 15.** Every card is `STATUS: owed` except **13**, which is `needs-test` with its
+reason stated. **Card 15 is R-63's** — it was added after David ruled the stock sentence, and it is
+the one that closes the question this build raised and could not decide. Thunder never sets `covered` (OP-14).
 
 ---
 
@@ -62,17 +63,20 @@ reason stated. Thunder never sets `covered` (OP-14).
 As the owner, with the switch OFF (its default), sign in and look at the top of the screen.
 
 1. An amber bar sits under the header on **every** page — dashboard, orders, inventory, settings.
-2. It says QuickBooks is not being written to, **and that orders are still being saved**, **and**
-   that they are kept out of the sales figures.
+2. 🔴 **Read it word for word. It must say exactly:**
+   *"TEST MODE — nothing you do here reaches QuickBooks, and your tree counts do not change."*
 3. **Scroll down.** It stays put — it is inside the sticky chrome.
 4. **There is no × and no "dismiss".** Look for one.
 
-**PASS:** the bar is on every page, says all three things, and cannot be closed.
+**PASS:** the bar is on every page, reads exactly that sentence, and cannot be closed.
 🔴 **The banner is the feature; the toggle is the detail.** If only one of the two worked, this is
 the one that must.
-**FAIL:** any page without it · a close button · or wording that only says "test mode" without
-saying the orders are still being saved. An owner who thinks their work is being thrown away will
-stop working.
+🔴 **THE SECOND HALF OF THE SENTENCE IS THE NEW PART AND IT IS THE ANSWER TO A QUESTION THIS BUILD
+COULD NOT DECIDE:** a test order does **not** move stock, and R-63 is that the screen has to say so
+rather than leave you to notice. **Card 14b is the other half of it — do not treat this card as
+covering that one.**
+**FAIL:** any page without it · a close button · or any paraphrase. The wording is the ruling here,
+not the meaning — if it differs, check whether David changed it before assuming the code is wrong.
 
 ---
 
@@ -83,7 +87,12 @@ Settings → the Accounting card, with QuickBooks connected.
 
 1. **Above** the three read buttons there is a section headed **Sending invoices to QuickBooks**.
 2. It names the current state in a full sentence, in a coloured box, **before** any control.
-3. In test mode it also explains, in plain words, what still works and what does not.
+3. 🔴 **In test mode that sentence is the SAME sentence as the banner** — word for word, not a
+   shorter version of it. (It used to be a second, shorter copy, and that copy went stale the day
+   the wording changed: two screens describing one mode differently.)
+4. Below it, the longer explanation **includes the stock caveat** and does **not** claim you can use
+   every part of the system exactly as you would for real — because you cannot; stock is the part
+   that is switched off.
 
 **PASS:** you can tell which mode you are in without pressing anything.
 **FAIL:** the state has to be inferred from the label on a button. That is how somebody spends a
@@ -251,7 +260,11 @@ Settings → Accounting. Press **Read item list** ONLY — not the other two. Sc
    **The earlier reads do not disappear** — the panel accumulates.
 
 **PASS:** all three.
-🔴 **Point 2 is the card.** A row you cannot see is a row you assume passed. Hiding the unrun checks
+🔴 **Point 2 is the card, and here is the failure mode in one line: A FINDING MISSING IS THE
+FAILURE, NOT A FINDING BEING WRONG.** This surface fails toward REASSURANCE — every way it can break
+makes the screen shorter, calmer and more confident than the truth, and a calm screen looks like good
+news. **So looking at it can never find them.** Four of the five mutants that survived the first run
+were exactly this shape. A row you cannot see is a row you assume passed. Hiding the unrun checks
 would give a shorter, calmer, more confident screen than the truth — which is exactly why it would
 never be noticed.
 **FAIL:** unrun checks are hidden · a check reports a clean result over a read that never happened ·
@@ -312,3 +325,27 @@ After running Cards 11 and 12 (three reads + the review), and **without** ringin
 🔴 **The review is a READ.** If reading somebody's books changes them, the whole sequence in §9 —
 import, then configure, then go live — is built on sand.
 **FAIL:** anything changed.
+
+---
+
+## CARD 15 — 🔴 the screen says what test mode is NOT proving
+**STATUS:** owed · **DEVICE:** either · **LAST-PROVEN:** —
+
+With the switch OFF, build a cart and go to the review screen — the one with **Send invoice + pay
+online** and **I'll pay at the office**.
+
+1. Directly **above those two buttons** there is a quieter amber note.
+2. 🔴 **It reads exactly:** *"Because stock does not move in test mode, this is not a test of whether
+   the system tracks your trees. That happens after you switch writes on."*
+3. Turn the switch ON and come back to the same screen. **The note is gone.**
+
+**PASS:** all three.
+🔴 **THIS IS THE CARD THE WHOLE STOCK QUESTION COMES DOWN TO, AND IT IS NOT THE BANNER'S JOB.** The
+banner says what is PROTECTED. This says what is **not being proven** — and without it somebody can
+ring up practice orders for a week, watch everything behave, and conclude the system tracks their
+trees. It does not, yet. They would find out after go-live, on real stock.
+🔴 **A note that says "stock is unaffected" is a FAIL, not a near-miss.** That reads as a feature
+being offered. The point is the opposite: a capability you care about is deliberately switched off,
+and you should know which one.
+**FAIL:** no note · a note below the buttons (a caveat read after the action is not a caveat) · any
+paraphrase · or a note that is still there once writes are on.

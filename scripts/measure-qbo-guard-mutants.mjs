@@ -39,6 +39,24 @@ function suitesGreen() {
   });
 }
 
+// ── the wording mutants live in a SECOND target ─────────────────────────────
+// David ruled the two test-mode sentences himself (2026-09-02, R-63) and the suite asserts them
+// VERBATIM. That is only worth anything if the assertion can fail, so it is mutated here like
+// any guard: a paraphrase that keeps the meaning does not keep the ruling.
+const WORDING = ROOT + 'packages/shared/src/business-logic/testMode.ts';
+const wordingSrc = readFileSync(WORDING, 'utf8');
+const WORDING_MUTANTS = [
+  { id: 'W1', why: '🔴 the banner drops the stock half — back to the pre-ruling wording',
+    from: 'nothing you do here reaches QuickBooks, and your tree counts do not change.',
+    to:   'nothing you do here reaches QuickBooks.' },
+  { id: 'W2', why: '🔴 the caveat is shortened to "stock is unaffected" — the phrasing David named as the one to avoid',
+    from: 'Because stock does not move in test mode, this is not a test of whether the system tracks your trees. That happens after you switch writes on.',
+    to:   'Stock is unaffected in test mode.' },
+  { id: 'W3', why: 'the settings explanation goes back to claiming every part of the system behaves as it really would',
+    from: 'While test mode is on you can ring up orders, price them, tax them, print them and look at what comes out',
+    to:   'While test mode is on, you can use every part of the system exactly as you would in the real thing' },
+];
+
 const src = readFileSync(TARGET, 'utf8');
 
 /** Everything from an `if (order.order_kind === X)` through its closing `    }`. */
@@ -104,9 +122,21 @@ try {
     if (suitesGreen()) { survived++; console.log(`  ${m.id}  SURVIVED 🔴  ${m.why}`); }
     else               { caught++;  console.log(`  ${m.id}  CAUGHT   ✓   ${m.why}`); }
   }
+  // ── the wording mutants, against the same green control ──────────────────
+  for (const m of WORDING_MUTANTS) {
+    if (!wordingSrc.includes(m.from)) {
+      console.log(`  ${m.id.padEnd(4)} ERROR    the from-text is not in testMode.ts — mutant never applied`);
+      errored++; continue;
+    }
+    writeFileSync(WORDING, wordingSrc.replace(m.from, m.to));
+    if (suitesGreen()) { survived++; console.log(`  ${m.id.padEnd(4)} SURVIVED 🔴  ${m.why}`); }
+    else               { caught++;  console.log(`  ${m.id.padEnd(4)} CAUGHT   ✓   ${m.why}`); }
+    writeFileSync(WORDING, wordingSrc);
+  }
 } finally {
   writeFileSync(TARGET, src);
+  writeFileSync(WORDING, wordingSrc);
 }
 
-console.log(`\n  ── ${caught}/${MUTANTS.length} caught · ${survived} survived · ${errored} never applied ──`);
+console.log(`\n  ── ${caught}/${MUTANTS.length + WORDING_MUTANTS.length} caught · ${survived} survived · ${errored} never applied ──`);
 if (survived > 0 || errored > 0) process.exit(1);

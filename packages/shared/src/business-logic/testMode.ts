@@ -86,19 +86,59 @@ export function pushPermitted(x: { writesEnabled: boolean | null | undefined; pl
 /**
  * The banner sentence, on every screen that touches money, for as long as the mode lasts.
  *
- * It names BOTH halves — what is not happening AND what is — because "test mode" alone leaves
- * an owner to guess whether their orders are being saved at all. They are: the order is real,
- * complete and correct in this platform. Only the accounting write is withheld.
+ * 🔴 DAVID'S WORDING, VERBATIM (2026-09-02, [[R-63]]) — DO NOT PARAPHRASE IT. It answers the
+ * question this build raised and deliberately did not decide: *does a test order deplete stock?*
+ * The answer is NO, and his own clause was that **if the answer is no, the screen must say so**.
+ * This is the screen saying so.
+ *
+ * It names THREE halves now, not two. The header of this file already argued the banner must say
+ * what IS and IS NOT happening; the ruling agrees with that argument and extends the list from
+ * (QuickBooks / orders saved) to (QuickBooks / orders saved / **stock**).
+ *
+ * ⚠️ IT MUST NOT BE SHORTENED TO "stock is unaffected." That reads as a FEATURE — as though not
+ * moving stock were a protection being offered. It is not: a capability she cares about is
+ * deliberately not being exercised yet, and the second sentence (`TEST_MODE_STOCK_CAVEAT`) is the
+ * one that says so. See its own note — it is the load-bearing half.
  */
 export const TEST_MODE_BANNER =
-  'Test mode — nothing is being sent to QuickBooks. Orders you ring up are saved here so you can see what comes out, and they are kept out of your sales figures.';
+  'TEST MODE — nothing you do here reaches QuickBooks, and your tree counts do not change.';
 
-/** The longer form, for the settings screen where there is room to explain. */
+/**
+ * 🔴 THE SENTENCE THAT SAYS WHAT IS *NOT* BEING PROVEN — and it is the one that matters.
+ *
+ * David's wording, verbatim, and his reasoning with it: a screen that only says what it PROTECTS
+ * lets somebody conclude they have tested something they have not. The first sentence states the
+ * protection. This one states the gap.
+ *
+ * The failure it prevents is specific and it is the more expensive of the two: an owner rings up
+ * a week of practice orders, watches the system behave, and concludes it tracks her trees —
+ * because nothing on any screen told her that the one capability she cares about most was the one
+ * deliberately switched off. She finds out after go-live, on real stock.
+ *
+ * ⚠️ IT BELONGS WHERE AN ORDER IS RUNG UP, NOT IN THE GLOBAL BANNER. Two reasons, and the second
+ * is why it is a separate export rather than a longer banner: it is only TRUE of the ring-up act
+ * (nothing about reading a dashboard is a test of stock tracking), and a global banner carrying
+ * both sentences would put a paragraph on every page — which is how a standing notice becomes
+ * wallpaper, costing the FIRST sentence the attention it needs.
+ */
+export const TEST_MODE_STOCK_CAVEAT =
+  'Because stock does not move in test mode, this is not a test of whether the system tracks your trees. That happens after you switch writes on.';
+
+/**
+ * The longer form, for the settings screen where there is room to explain.
+ *
+ * ⚠️ CORRECTED 2026-09-02 WITH THE BANNER, BECAUSE IT CONTRADICTED IT. The first line read
+ * *"you can use every part of the system exactly as you would in the real thing"* — which is
+ * now false in the one way that matters: stock does not move, so the part of the system she
+ * most wants to try is precisely the part not being exercised. A banner and an explanation
+ * disagreeing about the same mode is the STD-011 defect where it does the most damage: the
+ * longer text is the one a careful reader trusts, and it was the wrong one.
+ */
 export function testModeExplanation(): string {
   return [
-    'While test mode is on, you can use every part of the system exactly as you would in the real thing.',
-    'Orders you ring up are saved, priced, taxed and can be printed — they simply do not reach QuickBooks, and they are left out of your sales totals, your add-on alerts and your campaign figures.',
-    'They stay marked as test orders forever, so they will never quietly join your numbers later.',
+    'While test mode is on you can ring up orders, price them, tax them, print them and look at what comes out — none of it reaches QuickBooks, and none of it lands in your sales totals, your add-on alerts or your campaign figures.',
+    TEST_MODE_STOCK_CAVEAT,
+    'Test orders stay marked as tests forever, so they will never quietly join your numbers later.',
   ].join(' ');
 }
 

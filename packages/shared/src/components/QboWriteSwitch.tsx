@@ -34,7 +34,7 @@ import { useState } from 'react';
 import { supabase } from '../supabase/client';
 import { useBusinessContext } from '../context';
 import {
-  isTestMode, testModeExplanation, writeSwitchConfirmation, LIVE_MODE_CONFIRMED,
+  isTestMode, testModeExplanation, writeSwitchConfirmation, LIVE_MODE_CONFIRMED, TEST_MODE_BANNER,
 } from '../business-logic/testMode';
 
 const GREEN = '#27500A';
@@ -109,8 +109,13 @@ export function QboWriteSwitch({ businessId }: { businessId: string | null | und
         background: testMode ? '#FEF3C7' : '#f0fdf4',
         border: `1px solid ${testMode ? AMBER : GREEN}`,
       }}>
+        {/* ⚠️ THE TEST-MODE HALF WAS A SECOND, SHORTER COPY OF THE BANNER AND IT WENT STALE
+            THE DAY THE BANNER CHANGED — it still read "nothing is being sent to QuickBooks"
+            after David's ruling added the stock half, so the settings screen and every other
+            screen described the same mode differently (STD-011, and the settings copy is the
+            one a careful reader trusts). It now renders `TEST_MODE_BANNER` itself. */}
         <p style={{ fontSize: '0.8125rem', margin: 0, fontWeight: 700, color: testMode ? AMBER : GREEN }}>
-          {testMode ? 'Test mode — nothing is being sent to QuickBooks.' : 'Live — new orders are sent to QuickBooks as invoices.'}
+          {testMode ? TEST_MODE_BANNER : 'Live — new orders are sent to QuickBooks as invoices.'}
         </p>
         {testMode && (
           <p style={{ fontSize: '0.8125rem', color: AMBER, margin: '6px 0 0', lineHeight: 1.5 }}>

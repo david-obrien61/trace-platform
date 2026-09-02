@@ -23,7 +23,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import {
   isTestMode, orderKindForMode, pushPermitted,
-  TEST_MODE_BANNER, testModeExplanation, writeSwitchConfirmation, LIVE_MODE_CONFIRMED,
+  TEST_MODE_BANNER, TEST_MODE_STOCK_CAVEAT, testModeExplanation, writeSwitchConfirmation, LIVE_MODE_CONFIRMED,
 } from './testMode';
 import { TEST_ORDER_KIND } from './orderKind';
 
@@ -145,12 +145,39 @@ function stripComments(t: string): string {
 
 // ══ §E THE SENTENCES — what they must and must not say ══════════════════════
 {
-  ok(/QuickBooks/.test(TEST_MODE_BANNER) && /not/i.test(TEST_MODE_BANNER),
-    'the banner names QuickBooks and says something is NOT happening');
-  ok(/saved/i.test(TEST_MODE_BANNER),
-    '🔴 and it says the orders ARE saved — "test mode" alone leaves an owner guessing whether their work is being kept at all');
-  ok(/sales figures|totals/i.test(TEST_MODE_BANNER),
-    'and that they are kept out of the figures');
+  // ══════════════════════════════════════════════════════════════════════════
+  // 🔴 THESE TWO ARE ASSERTED VERBATIM, WHICH IS UNUSUAL AND DELIBERATE.
+  // ══════════════════════════════════════════════════════════════════════════
+  // Everywhere else this suite tests BEHAVIOUR and lets wording move. Here the wording IS the
+  // ruling: David wrote both sentences himself (2026-09-02) to answer the question this build
+  // raised and did not decide — *does a test order deplete stock?* — and his clause was that
+  // if the answer is no, the SCREEN MUST SAY SO. A paraphrase that keeps the meaning does not
+  // keep the ruling, and the earlier version of this section asserted the shape of MY wording,
+  // so it went green on copy David had not seen and red on copy he had written.
+  //
+  // ⚠️ If these fail, the right move is to check whether David changed the wording — not to
+  // relax the assertion.
+  ok(TEST_MODE_BANNER === 'TEST MODE — nothing you do here reaches QuickBooks, and your tree counts do not change.',
+    '🔴 THE BANNER IS DAVID\'S SENTENCE, VERBATIM');
+  ok(TEST_MODE_STOCK_CAVEAT === 'Because stock does not move in test mode, this is not a test of whether the system tracks your trees. That happens after you switch writes on.',
+    '🔴 AND SO IS THE STOCK CAVEAT — the sentence that says what is NOT being proven, which is the one that matters');
+
+  ok(/QuickBooks/.test(TEST_MODE_BANNER) && /do not change/.test(TEST_MODE_BANNER),
+    'the banner names BOTH protections — the accounting write and the tree counts');
+  ok(/not a test of/.test(TEST_MODE_STOCK_CAVEAT) && /after you switch writes on/.test(TEST_MODE_STOCK_CAVEAT),
+    '🔴 the caveat names the GAP and when it closes — a screen that only says what it protects lets somebody conclude they have tested something they have not');
+  ok(!/stock is unaffected/i.test(TEST_MODE_BANNER + TEST_MODE_STOCK_CAVEAT),
+    '🔴 AND IT IS NOT SHORTENED TO "stock is unaffected" — David named that phrasing as the one to avoid, because it reads as a FEATURE rather than as a capability deliberately not exercised yet');
+
+  // 🔴 THE CONTRADICTION THAT SHIPPED FOR AN HOUR AND WOULD HAVE SHIPPED FOREVER.
+  // testModeExplanation opened with "you can use every part of the system exactly as you would
+  // in the real thing" — false in the one way that matters once stock is named, and it is the
+  // LONGER text, which is the one a careful reader trusts. A banner and an explanation
+  // disagreeing about one mode is STD-011 where it does the most damage.
+  ok(!/every part of the system exactly as you would/.test(testModeExplanation()),
+    '🔴 THE SETTINGS EXPLANATION DOES NOT CONTRADICT THE BANNER — it no longer claims every part of the system behaves as it really would');
+  ok(testModeExplanation().includes(TEST_MODE_STOCK_CAVEAT),
+    'and it CARRIES the caveat rather than restating it in its own words (one sentence, one home)');
 
   const c = writeSwitchConfirmation('LAWNS Tree Farm');
   ok(/LAWNS Tree Farm/.test(c), 'the confirmation names the business whose books are about to be written to');
@@ -205,6 +232,25 @@ function stripComments(t: string): string {
     'it reads the mode and the sentence from the SAME module the order writer reads, so it cannot claim a state the server disagrees with');
   ok(/if \(loading\) return null/.test(bn),
     'and it stays silent during the FIRST load — a warning that flashes on every navigation for a live business is a warning people learn to ignore');
+
+  // 🔴 THE CAVEAT HAS A HOME, AND IT IS THE POINT OF ACTION. The hand-off that carried David's
+  // ruling noted this string had "no home yet — a new string plus a mount, not an edit". A
+  // sentence exported and never rendered is the write-only-column defect #252 was built to end.
+  const cv = stripComments(readFileSync(join(process.cwd(), 'packages/shared/src/components/TestModeStockCaveat.tsx'), 'utf8'));
+  ok(/TEST_MODE_STOCK_CAVEAT/.test(cv) && /isTestMode/.test(cv),
+    'the caveat component renders the shared sentence and gates on the shared mode');
+  const cart = stripComments(readFileSync(join(process.cwd(), 'packages/cultivar-os/src/pages/CartReview.tsx'), 'utf8'));
+  ok(/<TestModeStockCaveat \/>/.test(cart),
+    '🔴 AND IT IS MOUNTED ON THE RING-UP SCREEN — the sentence is only TRUE of the act of ringing an order up, so it belongs where that happens rather than in the global banner');
+  const submitAt = cart.indexOf('handleSubmit(true)');
+  ok(cart.indexOf('<TestModeStockCaveat />') > -1 && cart.indexOf('<TestModeStockCaveat />') < submitAt,
+    'and it sits ABOVE the submit buttons — a caveat read after the action is not a caveat');
+
+  // 🔴 ONE COPY OF THE BANNER SENTENCE. The settings screen carried its own shorter version and
+  // it went stale the moment the ruling landed, describing the same mode differently.
+  const sw2 = stripComments(readFileSync(join(process.cwd(), 'packages/shared/src/components/QboWriteSwitch.tsx'), 'utf8'));
+  ok(/TEST_MODE_BANNER/.test(sw2) && !/nothing is being sent to QuickBooks/.test(sw2),
+    '🔴 the settings screen RENDERS the shared banner string rather than keeping a second, shorter copy of it (STD-011 — the copy that drifts is never the one you are looking at)');
 }
 
 console.log(`\n  testMode — ${passed} passed, ${failed} failed`);

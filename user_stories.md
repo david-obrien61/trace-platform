@@ -101,7 +101,7 @@ BUILD: active
 ARC: front-door
 MAPS-TO: 3.5
 PIECES: test_order_kind, qbo_write_switch, test_mode_banner, order_counting_primitive, books_review, printable_test_invoice
-NEEDS: 🔴 **Does a test order deplete stock?** OWED — on the RULINGS board. Built as NO on the [[R-21]] precedent because that is the reversible direction, and the prompt's own clause *"if the answer is no, the screen must SAY so"* is **not yet honoured** — the banner says nothing about stock. Also owed: the printable artefact (a test order should produce something she can hold), and somewhere to record an answer to the two findings that ask a question.
+NEEDS: ✅ **Does a test order deplete stock? ANSWERED 2026-09-02 by [[R-63]] — NO, and the screen now says so** in David's own two sentences (the banner states the protection; a note above the ring-up buttons states what is not being proven). Still owed: the printable artefact (a test order should produce something she can hold), and somewhere to record an answer to the two findings that ask a question.
 ⚠️ **WRITTEN AS-BUILT.** No matching story existed and the §9 gate says one is created BEFORE the build spec — this is the IN-CODE-NOT-ON-BOARD case, flagged rather than left silent.
 
 Lauren is not sure about this yet, and being not sure is the correct state for somebody about to move
