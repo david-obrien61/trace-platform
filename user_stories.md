@@ -204,6 +204,46 @@ words what it is for, because a file loader that looks like the rest of the page
 import things. A read that came from a file says so wherever it is shown, since everything below it
 is shape-identical to a live pull by design.
 
+### Terry knows which vendor to buy from. Now so does Lauren.
+STATUS: written
+SCOPE: vertical:cultivar, platform
+BUILD: active
+ARC: ocr-doc-routing
+MAPS-TO: —
+PIECES: vendor_identity, vendor_alias, vendor_preference, capture_resolution
+NEEDS: ⚠️ **MAPS-TO is `—` for the same reason the story above it carries `—`** — the Receipt Keeper surface has no id on the 24-capability board, flagged at #252 and still unminted. A vendor list is arguably its own capability; **David assigns an id or says it rides another.** 🔴 **The billing-unit half is R-64's OTHER half and lives in `vendor_preferences`, NOT here — and `vendors` deliberately has no column for it.** Two different questions
+about one vendor: *is Sudderth the vendor I prefer?* (this story) and *when Sudderth bills me, is 20.72 yards or tons?* (`/receipts/:id`). **R-65 names the gap explicitly**, so it is
+owed by ruling rather than missed; #259 gives that table a real `vendor_id` and a resolved view — a join, not an answer. **Whether it ever becomes a column on `vendors` is David's call.**
+_Written as-built 2026-09-02 (ledger #259). Bounced against the board first: **no matching story existed**, and the §9 gate says one is created before the spec. David's ruling in his own words: **"Terry sets preferred vendor in a screen, not necessarily by item — both items were the same tree, the quality was different."** That is Option C, and it is the same shape David gave the receipt-detail session the same day, filed there as [[R-64]] — **cited, not duplicated.**_
+
+Terry buys the same tree from two vendors. One is cheaper and the stock is
+poorer; the other costs more and is better. He would rather pay more for the
+quality — so that vendor is the preferred one, and he or Lauren sets it.
+
+Search for a cedar in forty-five gallon and **both vendors appear.** One carries
+a preferred mark. **Neither is hidden**, because on the day the preferred vendor
+is out of stock the other one is the answer, and a list that buries it has taken
+the decision away from the person making it.
+
+🔴 **The mark tells Lauren which row to look at. The note tells her why** — and
+why is the part she needs when she is standing in for Terry. *"Better stock
+quality"* is not derivable from any number in the data: measured from LAWNS's own
+invoices, the same 100-gallon Eagleston Holly is **$450 from KBB in April and
+$725 from Enchanted in June, 61% apart**, and a system that knew only price would
+route to the cheaper one every time and be wrong every time.
+
+**This is succession knowledge.** *"Buy the cedars from B"* lives in Terry's head,
+and he is retiring. Writing it down is the same asset as the grow ladder and the
+parent trees.
+
+And underneath it, the thing that makes "ask once" true: **a vendor is one
+business even when it bills under several names.** Athens Tree Farm, KBB Tree
+Farm and KBE Trucking are one operation at adjacent addresses on one road.
+`Sudderth Brothers Contracting, Inc.` and `Sudderth Brothers` are one supplier.
+**TRACE asks once, the owner answers, and it never asks again** — and it never
+merges two firms on its own, because a duplicate is fixable and a wrong merge is
+not.
+
 ### Snap a document, and it goes where it belongs
 STATUS: written
 SCOPE: vertical:cultivar, platform

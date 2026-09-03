@@ -9,7 +9,59 @@
     "clauses_absent_from_board": 11,
     "_board_measured": "2026-09-03: ui-standards.html renders 3 of the 6 sections of the standard. Absent: G9, F4, E1, E2, E3, E4, E5, E6, S1, R1, R2. E1 — 'one record, one edit surface' — is the clause that answers modal-vs-route, and it is not on the board a prompt-writer would check. Fixing the renderer drops this to 0."
   },
-  "divergences": [],
+  "divergences": [
+    {
+      "file": "packages/cultivar-os/src/pages/Vendors.tsx",
+      "declared": "2026-09-03",
+      "declared_by": "the thunder/vendor-identity MERGE — the branch forked at 62d3d34, BEFORE this cap existed (#265), so the surface was never measured against it. Declared at merge time rather than left to trip the ratchet.",
+      "sections": [
+        "1"
+      ],
+      "shape_taken": "CARD / ROW LIST — one bordered block per vendor (name + PREFERRED mark + the reason note + Contact + 'Also bills as' aliases), rendered from divs.",
+      "shape_dropped": "DATA GRID (<DataSheet>).",
+      "reason": "⚠️ THIS REASON IS RECORDED AS UNEXAMINED, NOT AS SETTLED — deliberately, because the last declaration filed here carried a confident reason that was false when written (see the ReceiptsList entry under `converged`). What is MEASURED: the surface renders no <table> and no columns (0 matches for `<table`, `sticky`, `overflow`, `maxHeight` in the file), so the grid clauses below are answered against a card list. What is NOT established: that a card list is the right shape for vendors. Nobody has put that question to David, and this declaration does not answer it. At the measured population — `vendors` holds 0 rows in every tenant (measured 2026-09-03, ledger #259) — the shape has never been seen carrying data.",
+      "recorded_where": "this declaration · the thunder/vendor-identity merge commit · CLOSE-OUT-LEDGER #259. NOT on ui-standards.html — that board still renders 3 of the standard's 6 sections and no per-surface rows (baseline.clauses_absent_from_board).",
+      "note": "🔴 THE SURFACE IS OWNER-PROOF OWED AND ITS BOARD IS 0 OF 12 COVERED, so every verdict below is a READ OF THE CODE, not of a screen anyone has driven. G4/G6/G7 are `owed` for the same reason they were owed on /receipts before it converged: a list that expects to grow needs sort, search and a bounded box, and this one has none of the three. They are cheap here precisely because nothing has been built on top of them yet.",
+      "clauses": {
+        "G1": {
+          "verdict": "dropped",
+          "reason": "There is no header row to make sticky — the shape is a card list, not a table. Every value is labelled in place on its own card (SECTION_LABEL, Vendors.tsx:254/264), so the need G1 serves — never lose which column you are reading — does not arise."
+        },
+        "G2": {
+          "verdict": "dropped",
+          "reason": "There is no horizontal axis: cards wrap within the page width and the file contains no overflow container, so there is no h-scrollbar to make reachable."
+        },
+        "G3": {
+          "verdict": "dropped",
+          "reason": "No columns, so no identifier column to freeze. The vendor name leads each card (LINE1) and never scrolls away from its own record."
+        },
+        "G4": {
+          "verdict": "owed",
+          "reason": "🔴 A REAL GAP. There is no sort control of any kind — the only ordering is `orderVendorsForDisplay` (vendorIdentity.ts:480-481), a fixed alphabetical `localeCompare` with an id tiebreak, applied client-side. The owner cannot re-sort. Defensible while `vendors` holds 0 rows; not defensible as an unrecorded omission once capture starts creating them."
+        },
+        "G5": {
+          "verdict": "dropped",
+          "reason": "There are no columns to show or hide. The card shows a fixed set of facts and the operator cannot trim it — a consequence of the shape, not an independent decision. If the card grows past one screen this becomes owed rather than dropped."
+        },
+        "G6": {
+          "verdict": "owed",
+          "reason": "🔴 A REAL GAP. No text search and no status filter — the file contains no input for either (0 matches for a search/filter control; the only <input> is the preference-note editor). A vendor list is exactly the surface an owner scans by name, and CARD 3's own flow assumes several same-vendor spellings will accumulate as aliases."
+        },
+        "G7": {
+          "verdict": "owed",
+          "reason": "🔴 A REAL GAP. The cards are not in a bounded scroll box — they scroll the page (no maxHeight, no overflow in the file) — and there is no compact density. Unlike /receipts, no virtualisation argument was ever made here either way."
+        },
+        "G8": {
+          "verdict": "met",
+          "reason": "MEASURED, and narrower than the clause's spreadsheet framing: the surface has exactly ONE editable thing — `preferred` + `preference_note`, written together at Vendors.tsx:178. It is edited inline with explicit chrome and an explicit exit (Mark preferred → note field → Save/Cancel, Vendors.tsx:282-300); every other value renders as read-only text. There is no cell that looks editable and is not. ⚠️ Read this as 'the affordance is unambiguous', NOT as 'per-cell editing exists' — there is no cell matrix to edit."
+        },
+        "G9": {
+          "verdict": "dropped",
+          "reason": "🔴 DELIBERATE, AND RULED — this is the clause G9 itself allows ('unless a clause here names another'). G9 orders by the date the document carries; a vendor is not a dated document and `VENDORS_SELECT` (vendorIdentity.ts:52-53) carries no date field at all, so the clause's premise is absent. The order is alphabetical BY RULING: the preferred vendor deliberately does NOT float to the top, because — in the file's own words (Vendors.tsx:17) — 'a sort is the quiet form of a filter', and on the day the preferred vendor is out of stock the other row is the answer. Owner-test CARD 9 exists to prove exactly this and FAILS the build if preferred rows float."
+        }
+      }
+    }
+  ],
   "converged": [
     {
       "file": "packages/cultivar-os/src/components/receipts/ReceiptsList.tsx",

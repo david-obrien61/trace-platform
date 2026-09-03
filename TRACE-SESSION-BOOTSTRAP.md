@@ -86,6 +86,17 @@
 - 🔴 **TWO SHARED-CONTROL QUESTIONS OWED DOC-FIRST (R-74), NOT DECIDED IN A SURFACE:** ① the expand toggle is **trailing + chevron**, not a leading plus/minus — a `DataSheet.tsx` change for every consumer. ② the count pill **cannot name a server-side cap** (*"100 of 100"* for a tenant holding 236).
 - ⚠️ **COLUMN DEFAULTS ARE AN UNVERIFIED PREMISE** — David's set relayed by a peer session; flagged in the file, one word flips it. **LINES needs `line_items` in the select, which the file's invariant forbids — David's call, not settled.**
 
+> 🟡 **Vendors — identity + the preferred vendor** · BUILDER-COMPLETE, ✅ **MERGED to `main` 2026-09-03**, **both migrations APPLIED** · owner-proof OWED (12 cards, 0 covered) · branch `thunder/vendor-identity` (session `d967011d`), pushed · **verify exit 0 zero net-new · re-measured ON THE COMBINED TREE at merge: 70/70 files / 3630 assertions (the branch's own 62/62 · 3241 was a single-branch run) · 19/19 mutants · vendorIdentity 96 · vendorFoldAgreement 8** · ⚠️ **CARD 5 + CARD 6 must run at `f7ec5d67` as `test obrien`** — Lauren holds role OWNER at LAWNS, so she is not a manager there, and joel joiner is `active=false` · → `docs/owner-tests/vendors-full-surface-test.md` · ledger **#259** · [[R-65]] corrected (#259)
+
+> 🔴 **BRANCH / WORKTREE STATE IS MEASURED, NEVER REMEMBERED — run these two, do not read them off a prose line (added 2026-09-02).**
+> ```
+> git worktree list                 # what is actually checked out right now
+> git branch --merged main          # what is already IN main — the only answer to "is it merged?"
+> git merge-base --is-ancestor <sha> main && echo in-main
+> ```
+> **Measured 2026-09-02 (#259 — RE-MEASURED AGAIN; the 18:37 reading below was already stale, which is the third time this block has proved its own point):** `main` = **`62d3d34`** · **4 worktrees** — primary + `thunder/receipt-detail-view` (`00b23536`) + `thunder/qbo-review-test-mode` (`a528e4bf`) + `thunder/vendor-identity` (`d967011d`) · 🔴 **`thunder/qbo-review-test-mode` held 12 commits and was LOCAL-ONLY at 16:32** — no remote ref contained its tip; **push it from its own session** · `thunder/vendor-identity` pushed · `origin/assets` still unowned, remote-only since 2026-06-28. ✏️ **Re-run the commands. Do not read this sentence.** (#259)
+> ✏️ **WHY THIS BLOCK IS HERE.** On 2026-09-02 a build prompt opened on *"ten worktrees are live"* and *"`thunder/receipts-view` is NOT MERGED"*. Two worktrees were live and the branch had merged the previous morning. Neither number was invented — both were **true when written into §3 narrative on 2026-09-01** and neither was re-measured. This file is the one every session starts from, so a stale count here becomes the next prompt's premise. **A branch state is a fact about the repo, and the repo will answer in under a second.** [[R-26]].
+
 ### 🔴 UI STANDARD — THE STANDARD OUTRANKS THE PROMPT (2026-09-03, ledger #265, R-73 · R-74)
 
 - 🟡 **`/receipts` SORT CHANGED — G9, BUILDER-COMPLETE, OWNER-PROOF OWED.** Ordered by **`receipts.date`, the date on the document**, not `created_at`. On LAWNS's rows they disagree (07-02 captured after 07-29), so **the visible row order moves**. → `receiptsList.ts` · `ReceiptsList.tsx` · probe `E7` proven red against the old sort.

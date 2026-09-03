@@ -38,6 +38,7 @@ import { InventoryImport }    from './pages/InventoryImport';
 import { CostToProduce }     from './pages/CostToProduce';
 import { OperatingCosts }    from './pages/OperatingCosts';
 import { Customers }         from './pages/Customers';
+import Vendors               from './pages/Vendors';
 import { CustomerDetail }    from './pages/CustomerDetail';
 import { Discounts }         from './pages/Discounts';
 import PMI                   from './pages/PMI';
@@ -282,6 +283,16 @@ export function AppRouter() {
             <Route path="/customers"         element={<Customers />} />
             <Route path="/customers/:id"     element={<CustomerDetail />} />
           </Route>
+
+          {/* VENDORS — the buy-side mirror of the customer roster, and deliberately NOT wrapped in
+              a PermissionRoute. The gate is MEMBERSHIP: `vendors` carries owner + member RLS on
+              business_id (20260902_vendor_identity_and_preference.sql §5) and the nav node is
+              required_permission:'member', so nav, route and table all say the same thing.
+              🔴 NOT `costs:read`. A vendor's NAME is not its cost basis, and gating here would put
+              the preferred mark behind the confidential-cost gate — which is the one thing this
+              screen exists to show a manager who is not permitted to see cost basis. Setting the
+              preference is owner-only and is enforced by a trigger, not by this route. */}
+          <Route path="/vendors"             element={<Vendors />} />
         </Route>
       </Route>
 

@@ -88,6 +88,27 @@ const ALLOWED_DIVERGENCE = {
           + '— which is the manifest\'s own rule for this table. One writer, reached through one RPC.',
     paths: ['packages/cultivar-os/src/pages/ReceiptDetail.tsx'],
   },
+  // DECLARED 2026-09-02 (vendor identity, ledger #259). TWO paths, and they are disjoint by
+  // CONSTRUCTION rather than by convention — which is the only reason this is a declaration and
+  // not a consolidation.
+  // 🔴 THE COLUMN SETS CANNOT OVERLAP, AND THE DATABASE IS WHAT STOPS THEM. `Vendors.tsx` writes
+  //    ONLY `preferred` and `preference_note`, and `ReceiptKeeper.tsx` writes ONLY `business_id`
+  //    and `name` — it never sets a preference, and if it tried, the INSERT trigger
+  //    `vendors_preference_owner_only_insert` would REFUSE it from a manager's session with 42501.
+  //    So "the capture path does not set preferences" is enforced server-side, not promised here.
+  // ⚠️ THEY ALSO CANNOT BE MERGED INTO ONE WRITER, which is the question a reader should ask.
+  //    One runs at a DESK, owner-only, editing a row that exists; the other runs on a PHONE in a
+  //    lot, as any active member, creating a row from a document. Teaching either to do the other's
+  //    job means teaching the capture path to write an owner-only column — the opposite of the
+  //    separation the trigger exists to enforce.
+  'vendors': {
+    reason: 'Two disjoint concerns: Vendors.tsx writes ONLY preferred/preference_note (owner-only, '
+          + 'enforced by trigger); ReceiptKeeper.tsx writes ONLY business_id/name when resolve-or-'
+          + 'create yields a new vendor at capture. No column overlap, and the INSERT trigger '
+          + 'refuses a preference from the capture path rather than trusting it not to try.',
+    paths: ['packages/cultivar-os/src/pages/ReceiptKeeper.tsx',
+            'packages/cultivar-os/src/pages/Vendors.tsx'],
+  },
   // DECLARED 2026-08-31 (the QuickBooks ShipDate delivery ingest). `deliveries` already carried
   // three approved writers; this is a FOURTH, and it is declared rather than folded because the
   // three that exist all write a delivery ATTACHED TO AN ORDER (checkout, OCR invoice, the
