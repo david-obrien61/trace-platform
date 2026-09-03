@@ -32,12 +32,17 @@ import {
   RECEIPTS_SELECT, RECEIPTS_PAGE_LIMIT,
   bankedVerdict, captureOutcome, receiptRowModel, receiptListModel, countLabel, listVisibleForStep,
   receiptSortKey, compareReceiptsForDisplay,
+  outcomeSummaryText, outcomeFilterValue, receiptSearchText, OUTCOME_FILTER_OPTIONS,
   type RawReceiptRow, type RawOrderRow,
 } from './receiptsList';
 
 // Repo-root-relative, NOT __dirname/import.meta: esbuild bundles this file elsewhere, so only
 // process.cwd() reliably points at the repo root. Same convention as deliveryFulfilment.test.ts.
 const SELF = readFileSync(join(process.cwd(), 'packages/cultivar-os/src/lib/receiptsList.ts'), 'utf8');
+// The grid's own source. Read for the same reason SELF is: the column CONFIG is a decision, it
+// lives in a .tsx, and a decision inside a component cannot be asserted any other way
+// (tech-debt #134). This reads the config as TEXT — it does not render anything.
+const GRID = readFileSync(join(process.cwd(), 'packages/cultivar-os/src/components/receipts/ReceiptsList.tsx'), 'utf8');
 
 let passed = 0, failed = 0;
 const failures: string[] = [];
@@ -291,6 +296,118 @@ const bwiOrder: RawOrderRow = {
 
   const empty = receiptListModel([], 0);
   ok(empty.rows.length === 0 && empty.emptyNote === 'No receipts captured yet.', 'E10: an empty list says it is empty (distinct from a failed read)');
+}
+
+// ══ §G THE GRID CONTRACT — the surface moved onto <DataSheet>, and these are the ways that
+//    move could have quietly broken something ═══════════════════════════════════════════════
+{
+  // ── G1 THE SORT KEYS ARE ORDERABLE, NOT DISPLAY STRINGS ──────────────────────────────────
+  // 🔴 The defect this prevents is silent and looks fine on screen: sorting the RENDERED text.
+  // `"$1,283.88" < "$920.13"` is TRUE as a string comparison, so a money column sorted on its
+  // own label puts nine hundred dollars above twelve hundred and nothing about the page looks
+  // wrong.
+  const big   = receiptRowModel(R({ amount: 1283.88 }));
+  const small = receiptRowModel(R({ amount: 920.13 }));
+  ok(big.amountSort > small.amountSort,
+    '🔴 G1: $1,283.88 sorts ABOVE $920.13. As display strings it is the other way round — which is what sorting the rendered label would have done');
+  ok(big.amountText < small.amountText,
+    '🔴 G1b (the negative control that gives G1 its teeth): the DISPLAY strings really do compare backwards, so G1 is testing a live hazard rather than an imaginary one');
+
+  // ── G2 AN UNPARSEABLE AMOUNT SORTS SOMEWHERE, AND IS STILL NOT A NUMBER ──────────────────
+  const junk = receiptRowModel(R({ amount: 'x' }));
+  ok(junk.amountText === 'No amount recorded',
+    'G2: an unparseable amount still SAYS it is absent — the sort key does not leak into the display');
+  ok(junk.amountSort === Number.NEGATIVE_INFINITY,
+    'G2b: …and it is not coerced to 0, which would sort it among genuinely-zero receipts and read as a fact (D-9)');
+  ok(receiptRowModel(R({ amount: 0 })).amountSort > junk.amountSort,
+    '🔴 G2c (negative): a REAL $0.00 receipt sorts above an unreadable one. If absent were coerced to 0 these two would be indistinguishable — which is the whole D-9 failure');
+
+  // ── G3 THE COLUMN'S SORT KEY IS G9's KEY ─────────────────────────────────────────────────
+  ok(receiptRowModel(R({ date: '2026-07-29' })).sortKey === receiptSortKey({ date: '2026-07-29', created_at: null }),
+    'G3: the Date column sorts on the SAME key the list is ordered by, so re-sorting by that header cannot disagree with the order the list arrives in');
+
+  // ── G4 THE ENGINE'S SINGLE-KEY SORT PRESERVES G9's TIEBREAK ──────────────────────────────
+  // 🔴 THIS IS THE COMPOSITION RISK OF THE WHOLE MOVE AND IT IS ASSERTED RATHER THAN ASSUMED.
+  // The model sorts by (date, then capture time). The engine re-sorts by ONE key. That is only
+  // safe because Array.prototype.sort is stable (ES2019) — equal dates keep the order they
+  // arrived in. If it were not, two same-day receipts would silently reorder on every render.
+  const sameDay = receiptListModel([
+    R({ id: 'early', date: '2026-07-29', created_at: '2026-08-26T08:00:00.000Z' }),
+    R({ id: 'late',  date: '2026-07-29', created_at: '2026-08-26T20:50:00.000Z' }),
+  ], 2).rows;
+  const engineSorted = [...sameDay].sort((a, b) => {
+    const va = a.sortKey, vb = b.sortKey;
+    const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+    return -cmp;                       // DataSheet.tsx:153-157, desc — the engine's own comparator
+  });
+  ok(engineSorted.map(r => r.id).join(',') === 'late,early',
+    '🔴 G4: the engine re-sorting by the date key alone PRESERVES the capture-time tiebreak the model applied. Stable sort — asserted, not assumed');
+
+  // ── G5 THE OUTCOME SUMMARY NAMES NO FAULT ────────────────────────────────────────────────
+  // D13/D14's vocabulary rule, applied to the new column and the new filter. The screen exists
+  // because captures that produced no order looked like captures that did; saying so must not
+  // tip into saying something is WRONG. Six of 17 live rows are in that state and they read as
+  // vendor purchase invoices — a READING, not a fact (R-54: we surface, the owner decides).
+  const none = outcomeSummaryText(captureOutcome(R({ orders: [] })));
+  ok(none === 'No order recorded', 'G5: a receipt with no order says exactly that');
+  ok(!/orphan|missing|unlinked|error|should|fail|problem|invalid|broken/i.test(none),
+    '🔴 G5b (negative): …and it names no fault. The vocabulary is asserted, not trusted to whoever edits the string next');
+  for (const opt of OUTCOME_FILTER_OPTIONS) {
+    ok(!/orphan|missing|unlinked|error|should|fail|problem/i.test(opt),
+      `G5c (negative): the filter option "${opt}" names no fault either — a dropdown is copy too`);
+  }
+  ok(outcomeSummaryText(captureOutcome(R({ orders: [bwiOrder] }))).startsWith('1 order'),
+    'G5d: one order reads as one order, singular');
+  ok(outcomeFilterValue(captureOutcome(R({ orders: [bwiOrder] }))) === OUTCOME_FILTER_OPTIONS[0]
+    && outcomeFilterValue(captureOutcome(R({ orders: [] }))) === OUTCOME_FILTER_OPTIONS[1],
+    'G5e: the filter partitions on a FACT — an orders row exists, or it does not. Nothing inferred');
+
+  // ── G6 SEARCH REACHES INTO THE DRAWER ────────────────────────────────────────────────────
+  // 🔴 A disclosure grid hides most of its own text by default. A search that reads only the
+  // visible row answers "not found" about data that is present one click away — read-honesty
+  // failure in the shape of a search box.
+  const withChain = receiptSearchText(receiptRowModel(R({ orders: [bwiOrder] })));
+  ok(withChain.includes('19837964'),
+    '🔴 G6: the order document number is searchable even though it lives in the collapsed drawer');
+  ok(withChain.includes('bwi'), 'G6b: the summary row is searchable too');
+  ok(!receiptSearchText(receiptRowModel(R({ orders: [] }))).includes('19837964'),
+    'G6c (negative): a receipt WITHOUT that order does not match it — the corpus is per-row, not global');
+
+  // ── G7 EVERY SORTABLE COLUMN DECLARES A SORT VALUE ───────────────────────────────────────
+  // Read from the grid's source: a column marked `sortable: true` with no `sortVal` renders a
+  // clickable header that does nothing. DataSheet.tsx:151 sorts only `if (col?.sortVal)`, so the
+  // failure is a dead control, and a dead control is silent.
+  // ⚠️ `[a-z_]+`, not `[a-z]+`. The first draft of this pattern could not match a key containing
+  // an underscore, so a `receipt_id` column would have been SKIPPED BY THE LOOP ENTIRELY and its
+  // missing sortVal would have passed silently — a check that quietly declines to look at the
+  // thing it was pointed at (R-33). Found while adding exactly such a column.
+  const cols = [...GRID.matchAll(/\{\s*(?:\/\/[^\n]*\n\s*)*key:\s*'([a-z_]+)'[\s\S]*?render:/g)];
+  ok(cols.length >= 7, `G7 setup: the column config parsed (${cols.length} columns found) — if this drops to 0 the checks below are vacuous`);
+  for (const m of cols) {
+    const block = m[0];
+    if (/sortable:\s*true/.test(block)) {
+      ok(/sortVal:/.test(block),
+        `🔴 G7: column '${m[1]}' is marked sortable and declares a sortVal — without one DataSheet renders a header that looks clickable and does nothing`);
+      ok(!/sortVal:\s*r\s*=>\s*r\.(amountText|dateText)\b/.test(block),
+        `🔴 G7b (negative): column '${m[1]}' does not sort on a FORMATTED display string — that is the G1 defect entering through the config`);
+    }
+  }
+
+  // ── G8 THE FAILED-READ SENTENCE SURVIVED THE MOVE ────────────────────────────────────────
+  // §6 R1 is BINDING as of 2026-09-03. The engine keeps failed and empty apart structurally
+  // (its empty state is gated on `!loading && !error`), but the SENTENCE is the surface's.
+  ok(/NOT an empty list/.test(GRID),
+    '🔴 G8: the failed read still says it is a failed read and not an empty one — the sentence was not lost when the card stack was replaced');
+  ok(/emptyText="No receipts captured yet\."/.test(GRID),
+    'G8b: and the genuinely-empty state still says something DIFFERENT from the failure');
+
+  // ── G9 THE DIVERGENCE IS GONE, AND THE FALSE REASON IS NOT REINSTATED ────────────────────
+  ok(/from '\.\.\/datasheet\/DataSheet'/.test(GRID),
+    'G9: the surface imports the shared grid engine. The divergence declaration is deleted, and the cap fails the build if one is left claiming otherwise');
+  ok(/renderExpand=/.test(GRID),
+    '🔴 G9b: one row per receipt with the chain in a disclosure drawer — which is what the withdrawn reason claimed a grid could not do');
+  ok(/FALSE WHEN IT WAS WRITTEN|withdrawn/i.test(GRID),
+    'G9c: the withdrawn claim is recorded rather than deleted — a claim that was once believed is evidence about how we work (R-26)');
 }
 
 // ══ §F THE RULINGS ARE RECORDED AT THE CODE, NOT ONLY IN A LEDGER ROW ════════════════════════

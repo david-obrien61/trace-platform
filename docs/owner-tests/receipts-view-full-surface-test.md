@@ -14,7 +14,7 @@ capture half has shipped since 2026-06-11 and has never had a row. Flagged for D
 Joins only: **3.5** delivery and the orders roster.
 **Story:** `user_stories.md` → *I captured a receipt — show me it landed, and show me what it turned into*
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 9 of 11 covered** (**1 `owed`** · 1 `needs-test`) — flipped 2026-09-03 from David's live run of 2026-09-02 on build `7952cb1` (ledger #261), then 🔴 **CARD 1 flipped BACK `covered` → `owed` the same day when G9 moved the sort off `created_at` onto the document date.** The 09-02 proof cited capture timestamps and its step read *"newest capture first"*; that ordering no longer exists. **This is OP-14 clause 3 working as intended, not a regression in the record** — a green check on a moved surface asserts a proof nobody performed.
+**Board: 0 of 14 covered** (**13 `owed`** · 1 `needs-test`) — 🔴 **EVERY CARD FLIPPED `covered` → `owed` ON 2026-09-03 BECAUSE THE SURFACE WAS REPLACED, NOT BECAUSE ANY PROOF WAS BAD.** `/receipts` moved from a bespoke card stack onto **`<DataSheet>` with `renderExpand`** — one row per receipt, the chain in a disclosure drawer (David's ruling). **Every card below was written against a card stack that no longer exists**, and OP-14 clause 3 is explicit: *changing a surface flips `covered` → `owed`* — a green check on a moved surface asserts a proof nobody performed. **Each card's 2026-09-02 evidence is PRESERVED VERBATIM in its own body**; nothing is overwritten. ⚠️ **THE RE-PROOF IS CHEAPER THAN THE FLIP LOOKS: seven of these still settle from ONE print of `/receipts`** — take the print and 1, 2, 3, 4, 5, 7 and 11 go together.
 🔴 **CARD 8 is `covered` with its FAILURE preserved** — it failed, #257 fixed it, and the failure is not overwritten.
 📄 **NINE OF THESE WERE PROVEN FROM PRINTED PDFs OF `/receipts`, NOT FROM LIVE INTERACTION.** **CARDS 1, 2, 3, 4, 5, 7 and 11 are all provable from ONE print of `/receipts`** — take the print, and those seven settle together. ⚠️ **CARD 1 is owed again and rides that same print** — one new print of `/receipts` re-settles it, so the re-proof costs nothing beyond taking the print. CARD 6 (a capture with no reload) and CARD 9 (three loads at three times) need interaction; CARD 10 needs an account that does not exist.
 **DEVICE:** CARDS 1–5 and 7–11 are `DEVICE: desktop` — this is a reconcile surface, and reconcile is desktop (capture=mobile / reconcile=desktop). **CARD 6 is `DEVICE: phone`** and is provable **without a console**.
@@ -53,7 +53,7 @@ it still passes.
 
 Open `/receipts` as the owner.
 
-1. Above the capture zone there is a card headed **Receipts captured**.
+1. Above the capture zone there is a **GRID** headed **Receipts captured** — a table with column headers, a search box and a filter, **not the stack of cards it was before 2026-09-03**.
 2. 🔴 The rows read, top to bottom, **newest date ON THE DOCUMENT first** — the `date` column shown
    in each row, NOT the `captured` timestamp beside it.
 3. Each row carries **vendor · date · amount · category · when it was captured**.
@@ -72,7 +72,7 @@ unchanged) · or a row with no date shows a date anyway.
 ---
 
 ## CARD 2 — the six write-only columns finally have a reader
-**STATUS:** covered · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** 2026-09-02
+**STATUS:** owed · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** — (reset 2026-09-03, the grid move)
 **PROVEN 2026-09-02 on build `7952cb1`** — every row shows `✓ Lines: $X = Total: $Y` plus the OCR sentences; **no `$0.00` where a figure was stored**. Evidence: the same printed PDF as CARD 1.
 On any row, look at **What the platform banked at save time**.
 
@@ -103,7 +103,7 @@ deferred.** This card checks the sentence, not the column.
 ---
 
 ## CARD 3 — both duplicate captures appear as two rows, and the screen does not call them duplicates
-**STATUS:** covered · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** 2026-09-02
+**STATUS:** owed · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** — (reset 2026-09-03, the grid move)
 **PROVEN 2026-09-02 on build `7952cb1`** — bwi 07-29 **$1,283.88 twice**, at its own two capture times; Bailey Bark 07-07 **$2,316.03 twice**. **Neither pair is labelled a duplicate**, which is what this card asserts. Evidence: the same printed PDF as CARD 1.
 Find **bwi · 2026-07-29 · $1,283.88**. Then find **Bailey Bark Materials, Inc. · 2026-07-07 · $2,316.03**.
 
@@ -116,7 +116,7 @@ was to stop hiding them.
 ---
 
 ## CARD 4 — 🔴 the two bwi orders both appear, against their own receipts
-**STATUS:** covered · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** 2026-09-02
+**STATUS:** owed · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** — (reset 2026-09-03, the grid move)
 **PROVEN 2026-09-02 on build `7952cb1`** — each bwi row shows exactly one order, `history · Invoiced · #19837964`, each with a delivery reading **No date set**. Evidence: the same printed PDF as CARD 1.
 On each of the two bwi 2026-07-29 rows, look at **What it became**.
 
@@ -129,7 +129,7 @@ Two orders carrying the same document number is a fact about the data, not a ren
 ---
 
 ## CARD 5 — the receipts that produced nothing say so, with no verdict attached
-**STATUS:** covered · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** 2026-09-02
+**STATUS:** owed · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** — (reset 2026-09-03, the grid move)
 **PROVEN 2026-09-02 on build `7952cb1`** — all six named rows read exactly *"No order recorded for this receipt."* **and nothing else** — no verdict attached. Evidence: the same printed PDF as CARD 1.
 Six rows produced no order: **bwi 2026-07-22 $1,098.86** · **bwi 2026-07-02 $1,356.31** ·
 **Sudderth Brothers 2026-08-20 $1,301.98** · **Bailey Bark 2026-04-28 $2,394.92** · and **both**
@@ -145,7 +145,7 @@ absence a reader has to interpret is the defect, not the fix.
 ---
 
 ## CARD 6 — the capture wizard is untouched, and a new capture appears in the list
-**STATUS:** covered · **DEVICE:** phone · **PROOF:** 🖱 NEEDS INTERACTION · **LAST-PROVEN:** 2026-09-02
+**STATUS:** owed · **DEVICE:** phone · **PROOF:** 🖱 NEEDS INTERACTION · **LAST-PROVEN:** — (reset 2026-09-03, the grid move)
 **PROVEN 2026-09-02 on build `7952cb1`** — a new capture **rose to the top without a reload**. 🖱 Not print-provable: the evidence *is* the absence of a reload, which a printed page cannot show.
 On a phone, at `/receipts`:
 
@@ -160,7 +160,7 @@ On a phone, at `/receipts`:
 ---
 
 ## CARD 7 — the count is honest
-**STATUS:** covered · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** 2026-09-02
+**STATUS:** owed · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** — (reset 2026-09-03, the grid move)
 **PROVEN 2026-09-02 on build `7952cb1`** — the header reads a plain **"17 receipts"**, matching the **17 rows counted on the same page**. Evidence: the same printed PDF as CARD 1 — the count and the rows it counts are both in the one print, which is what makes this card provable on paper at all.
 Read the line under **Receipts captured**.
 
@@ -174,7 +174,7 @@ not a third.
 ---
 
 ## CARD 8 — the list steps aside while you are filling the confirm form
-**STATUS:** covered · **DEVICE:** desktop · **PROOF:** 🖱 NEEDS INTERACTION · **LAST-PROVEN:** 2026-09-02
+**STATUS:** owed · **DEVICE:** desktop · **PROOF:** 🖱 NEEDS INTERACTION · **LAST-PROVEN:** — (reset 2026-09-03, the grid move)
 🔴 **THIS CARD FAILED FIRST, AND THE FAILURE IS KEPT — it is a better record than a green check.**
 **FAILED 2026-09-02 on build `7952cb1`:** the receipts list was on screen while the confirm form was
 up, **pushing the proven capture flow below the fold** — exactly the FAIL this card describes.
@@ -193,7 +193,7 @@ push the proven flow below the fold.
 ---
 
 ## CARD 9 — 🔴 nothing was written
-**STATUS:** covered · **DEVICE:** desktop · **PROOF:** 🖱 NEEDS INTERACTION · **LAST-PROVEN:** 2026-09-02
+**STATUS:** owed · **DEVICE:** desktop · **PROOF:** 🖱 NEEDS INTERACTION · **LAST-PROVEN:** — (reset 2026-09-03, the grid move)
 **PROVEN 2026-09-02 on build `7952cb1`** — orders **30 before and 30 after**; receipts **17 across three loads at 14:11, 16:18 and 16:52**; **both duplicate pairs intact**; no figure moved. 🖱 Not print-provable from one print: the assertion is that three loads at three times agree, so it needs three prints or three live reads.
 Before opening `/receipts`, note the receipt count and the order count on `/orders`. Open
 `/receipts`, scroll the whole list, reload it three times. Go back.
@@ -223,7 +223,7 @@ the door behaves differently, something was minted by accident.
 ---
 
 ## CARD 11 — a delivery with no date says it has no date
-**STATUS:** covered · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** 2026-09-02
+**STATUS:** owed · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** — (reset 2026-09-03, the grid move)
 **PROVEN 2026-09-02 on build `7952cb1`** — **both** bwi deliveries read **No date set**, in words, in the date position. Evidence: the same printed PDF as CARD 1.
 On either bwi 2026-07-29 row, look at the delivery under the order.
 
@@ -232,3 +232,69 @@ On either bwi 2026-07-29 row, look at the delivery under the order.
 A blank there is a stop that looks scheduled and is not.
 **FAIL:** the date position is empty, or shows a placeholder like `—` that could be read as a date
 the screen failed to load.
+
+---
+
+## CARD 12 — 🔴 the grid sorts, and it sorts on the VALUE not the label (G4)
+**STATUS:** owed · **DEVICE:** desktop · **PROOF:** 🖱 NEEDS INTERACTION · **LAST-PROVEN:** —
+
+This clause was recorded **`owed`** on this surface for two days — the old card stack had no sort
+control of any kind — and it arrives with the shared grid rather than being built here.
+
+Open `/receipts` as the owner.
+
+1. Click the **Amount** header. Click it again to reverse.
+2. Click the **Date** header. Click **Vendor**, **What it became**, **Banked verdict**, **Captured**.
+
+**PASS:** every one of those headers reorders the rows, and an arrow shows which way.
+🔴 **THE SHARP CHECK, AND IT IS THE ONLY STEP HERE THAT CAN FAIL QUIETLY: sort by Amount descending
+and confirm `$1,283.88` sits ABOVE `$920.13`.** Sorted as text — which is what sorting the printed
+label does — nine hundred sorts above twelve hundred and **the page looks completely normal.**
+**FAIL:** a header does nothing when clicked (a dead control) · no arrow · **or $920.13 above
+$1,283.88 on a descending Amount sort.**
+
+---
+
+## CARD 13 — search reaches into the closed drawer (G6)
+**STATUS:** owed · **DEVICE:** desktop · **PROOF:** 🖱 NEEDS INTERACTION · **LAST-PROVEN:** —
+
+Also `owed` until the grid landed. 🔴 **A disclosure grid hides most of its own text by default, so
+a search that reads only the visible row answers "not found" about data sitting one click away** —
+a read-honesty failure wearing a search box.
+
+Open `/receipts` as the owner.
+
+1. Type **`19837964`** into the search box — an order document number that appears **only inside a
+   collapsed drawer**, nowhere on any summary row.
+2. Clear it. Open the **outcomes** filter and choose **No order recorded**.
+3. Choose **Produced an order**.
+
+**PASS:** step 1 narrows the grid to the receipt(s) carrying that order **without you having
+expanded anything.** Step 2 shows **exactly the six receipts** that produced nothing. Step 3 shows
+the rest, and 6 + (step 3's count) equals the total.
+**FAIL:** step 1 finds nothing · the filter offers only one option (a control that cannot do
+anything) · or the two filter halves do not add up to the whole.
+
+---
+
+## CARD 14 — one receipt is still ONE row (the clause the withdrawn reason got right)
+**STATUS:** owed · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** —
+
+🔴 **THIS IS THE CARD THAT GUARDS THE ONE TRUE HALF OF THE REASON THAT WAS WITHDRAWN.** The old
+comment claimed a grid could only render a receipt's chain by exploding one receipt into several
+rows. That claim was false — `renderExpand` had existed for two months — **but the requirement
+underneath it was real and still binds: a receipt appears ONCE.** Two LAWNS receipts are duplicate
+captures of one invoice (tech-debt #143); if the grid split rows by order they would read as four,
+which is exactly the confusion this screen exists to remove.
+
+Open `/receipts` as the owner.
+
+1. Count the rows. Compare against the count line above the grid.
+2. Find the two **bwi 2026-07-29** rows. Expand each with the toggle at the end of its row.
+3. Collapse them again.
+
+**PASS:** **17 rows for 17 receipts** — every receipt on exactly one row, no receipt appearing twice
+because it has an order. Each drawer opens **beneath its own row** and holds that receipt's order
+and delivery. Collapsing restores the row count exactly.
+**FAIL:** more rows than receipts · a receipt appearing on two rows · a drawer opening under the
+wrong row · or the row count not returning after collapse.

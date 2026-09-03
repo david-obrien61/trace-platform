@@ -18,33 +18,51 @@
 //               file renders the model it is handed and holds no logic of its own (tech-debt
 //               #134 — a render condition inside a `.tsx` cannot be asserted).
 //
-// UI STANDARD (§6 r16 — name the standard, then decide):  the established pattern for a
-//               homogeneous record set is a DATA GRID, and this platform has one (`<DataSheet>`,
-//               §6 r14 — bounded scroll box, sticky header, frozen identifier column).
+// UI STANDARD (§6 r16 — name the standard, then decide): ✅ **THE STANDARD IS TAKEN. This is a
+//               `<DataSheet>` — one row per receipt, the chain in a `renderExpand` disclosure.**
+//               David's ruling, 2026-09-03. There is no divergence here any more, and the
+//               declaration that used to describe one is **MOVED OUT OF `divergences` into a
+//               `converged` record** in `docs/decisions/ui-standard-divergences.json`. The cap's
+//               own self-pruning check named this file the moment the import landed — *"NOW USES
+//               THE SHARED CONTROL … the surface converged. Delete the entry."* — which is that
+//               check firing on the GOOD outcome. ✏️ **It is MOVED and not DELETED on purpose:
+//               the withdrawn premise and its correction are evidence about how we work, and
+//               deleting the entry would erase that along with the divergence.**
 //
-//               🔴 THE REASON THIS FILE GAVE FOR NOT USING IT WAS FALSE WHEN IT WAS WRITTEN, AND
-//               IS WITHDRAWN (David's ruling, 2026-09-03). It read: "each row carries a
-//               variable-length chain (0..n orders, each with 0..n deliveries), which a
-//               fixed-column grid can only render by truncating the chain or by exploding one
-//               receipt into several rows." `<DataSheet>` has carried `renderExpand` — "Optional
-//               per-row detail drawer. When present, a trailing expand toggle column appears."
-//               (DataSheet.tsx:81-82) — since 2026-07-01, commit e3e6796. THIS COMMENT WAS
-//               WRITTEN 2026-09-01, commit ab617b2: two months later. One row per record with
-//               the chain nested inside it is precisely what the widget already did.
-//               ✏️ R-26's class — a written declaration nobody checked against reality, steering
-//               a decision — and the second instance this week of a comment contradicting its own
-//               repo (tech-debt #61 was the first: this file's sibling asserted a scrape feature
-//               was "never built" while it existed and was wired).
+//               🔴 IT USED TO BE A BESPOKE CARD STACK, AND THE REASON GIVEN WAS FALSE WHEN IT WAS
+//               WRITTEN. It read: "each row carries a variable-length chain (0..n orders, each
+//               with 0..n deliveries), which a fixed-column grid can only render by truncating
+//               the chain or by exploding one receipt into several rows." `<DataSheet>` has
+//               carried `renderExpand` — "Optional per-row detail drawer. When present, a
+//               trailing expand toggle column appears." (DataSheet.tsx:81-82) — since
+//               2026-07-01, commit `e3e6796`. The comment was written 2026-09-01, `ab617b2`:
+//               two months later. ✏️ R-26's class — a written declaration nobody checked against
+//               reality, steering a decision. The record is kept rather than deleted because a
+//               claim that was once believed is evidence about how we work.
 //
-//               WHAT THE WITHDRAWN REASON GOT RIGHT, AND IT STILL BINDS: a receipt must appear
-//               ONCE — two LAWNS receipts are duplicate captures of one invoice (tech-debt #143)
-//               and must never read as four rows. `renderExpand` satisfies that; it did not need
-//               a bespoke shape.
-//               ⚠️ WHETHER THE CARD SHAPE IS THE RIGHT ONE IS STILL OPEN. The premise is
-//               withdrawn; the choice is not thereby decided either way. The full clause-by-clause
-//               position is docs/decisions/ui-standard-divergences.json (G4/G6/G7 owed), and the
-//               record is docs/decisions/2026-09-03-receipts-rulings-and-the-false-divergence.md.
-//               At 17 rows against a 100-row cap there is nothing here that needs virtualising.
+//               WHAT THE WITHDRAWN REASON GOT RIGHT, AND IT STILL BINDS: **a receipt must appear
+//               ONCE.** Two LAWNS receipts are duplicate captures of one invoice (tech-debt #143)
+//               and must never read as four rows. `renderExpand` satisfies that — one `<tr>` per
+//               receipt, the orders and deliveries in the drawer beneath it.
+//
+//               WHAT THE MOVE BUYS, and it is the whole reason the shared control exists:
+//               **G4 sortable columns · G6 global search + a quick status filter · G7 density in
+//               a bounded scroll box**, all inherited from the engine rather than rebuilt here.
+//               Those three were `owed` on this surface — recorded, unbuilt — and they arrive
+//               with the grid. G1 sticky header · G2 reachable h-scrollbar · G3 frozen
+//               identifier column arrive with it too.
+//
+//               ⚠️ TWO THINGS ARE DELIBERATELY *NOT* DECIDED HERE, BECAUSE THEY ARE
+//               SHARED-CONTROL QUESTIONS AND THIS IS A SURFACE (R-74: doc → widget → surfaces):
+//               ① the expand toggle is TRAILING and uses a chevron, not a leading plus/minus.
+//               The industry-standard disclosure grid puts the toggle in a LEADING column; the
+//               engine puts it last. **That is a change to `DataSheet.tsx` for every consumer,
+//               and it is owed doc-first — not quietly forked into this file.**
+//               ② the engine's count pill reads "N of M <noun>", which at the 100-row cap would
+//               say "100 of 100" about a tenant holding 236. `itemNoun` is set so the pill makes
+//               no claim about a total, and the honest capped count keeps its own line above the
+//               grid (`model.countText`). A pill that can name a server-side cap is likewise a
+//               widget change, owed doc-first.
 //
 // DEPENDENCIES: `../../lib/supabase` (one select, RLS-enforced — `/receipts` already gates on
 //               `costs:read` at router.tsx and `receipts` carries dual owner+member RLS on
@@ -52,17 +70,24 @@
 //               no migration) · `../../lib/receiptsList` (the model) ·
 //               `../../utils/receiptReconciliation` (the severity styles, via the model).
 //
-// OUTPUTS:      <ReceiptsList businessId refreshToken /> — a list, a count that names its own
-//               cap, and honest loading / empty / failed-read states.
+// OUTPUTS:      <ReceiptsList businessId refreshToken /> — a <DataSheet> grid with a disclosure
+//               row per receipt, a count that names its own cap, and honest loading / empty /
+//               failed-read states (§6 R1, BINDING since 2026-09-03).
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Receipt } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { DataSheet, type DataSheetColumn } from '../datasheet/DataSheet';
 import {
   RECEIPTS_SELECT,
   RECEIPTS_PAGE_LIMIT,
   receiptListModel,
+  outcomeSummaryText,
+  outcomeFilterValue,
+  receiptSearchText,
+  OUTCOME_FILTER_OPTIONS,
   type RawReceiptRow,
   type ReceiptListModel,
   type ReceiptRowModel,
@@ -72,46 +97,33 @@ import {
 const TRACE_RECEIPTS_LIST = true; // [TRACE:receipts-list] STD-003 — ON until David owner-proves
 
 // A read either produced data or FAILED. Keeping the two distinguishable is the whole point of
-// the read-honesty ruling (2026-08-23): a failed read that renders as "no receipts" is a
-// confident false statement about the tenant's data.
+// the read-honesty ruling (2026-08-23), now §6 R1 of the UI standard and BINDING: a failed read
+// that renders as "no receipts" is a confident false statement about the tenant's data. The
+// engine keeps them apart too — its empty state is gated on `!loading && !error` — but the
+// SENTENCE is ours, because "Error: <postgrest message>" does not tell an owner that the count
+// they are looking at is unknown rather than zero.
 type ReadState =
   | { phase: 'loading' }
   | { phase: 'failed'; message: string }
   | { phase: 'loaded'; model: ReceiptListModel };
 
-const CARD: React.CSSProperties = {
-  background: '#fff', borderRadius: 12, padding: '1.25rem',
-  boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginBottom: 16,
-};
-const H: React.CSSProperties = { fontSize: '1.125rem', fontWeight: 700, color: '#27500A', margin: 0 };
-const COUNT: React.CSSProperties = { fontSize: '0.8125rem', color: '#64748b', marginTop: 4 };
-const ROW: React.CSSProperties = {
-  border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 14px', marginTop: 12,
-};
-const LINE1: React.CSSProperties = {
-  display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'baseline', justifyContent: 'space-between',
-};
-const VENDOR: React.CSSProperties = { fontWeight: 700, color: '#1f2937', fontSize: '0.9375rem' };
-const VENDOR_LINK: React.CSSProperties = { ...VENDOR, color: '#27500A', textDecoration: 'none' };
-// 48px min touch target (§6 r3) — this is the tap that opens the receipt on a phone.
-const OPEN_LINK: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', minHeight: 48, marginTop: 2,
-  fontSize: '0.8125rem', fontWeight: 600, color: '#27500A', textDecoration: 'none',
-};
 const META: React.CSSProperties = { fontSize: '0.8125rem', color: '#64748b' };
-const AMOUNT: React.CSSProperties = { fontWeight: 700, color: '#27500A', fontSize: '0.9375rem' };
 const NOTE: React.CSSProperties = { fontSize: '0.8125rem', color: '#64748b', marginTop: 4 };
-const SECTION: React.CSSProperties = { marginTop: 10, paddingTop: 10, borderTop: '1px dashed #e5e7eb' };
+const AMOUNT: React.CSSProperties = { fontWeight: 700, color: '#27500A' };
+const VENDOR_LINK: React.CSSProperties = { fontWeight: 700, color: '#27500A', textDecoration: 'none' };
+const COUNT: React.CSSProperties = { fontSize: '0.8125rem', color: '#64748b', margin: '0 0 8px' };
+const SECTION: React.CSSProperties = { marginTop: 10 };
 const SECTION_LABEL: React.CSSProperties = {
   fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.06em',
   textTransform: 'uppercase', color: '#94a3b8', marginBottom: 6,
 };
+const EXPAND: React.CSSProperties = { padding: '12px 16px', background: '#f9fafb' };
 const badge = (color: string, bg: string): React.CSSProperties => ({
   display: 'inline-block', padding: '2px 8px', borderRadius: 999,
   fontSize: '0.6875rem', fontWeight: 700, color, background: bg,
 });
 const ABSENCE: React.CSSProperties = {
-  fontSize: '0.8125rem', color: '#6b7280', background: '#f9fafb',
+  fontSize: '0.8125rem', color: '#6b7280', background: '#fff',
   border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 10px',
 };
 
@@ -138,29 +150,16 @@ function OrderBlock({ order }: { order: OutcomeOrder }) {
   );
 }
 
-function ReceiptCard({ row }: { row: ReceiptRowModel }) {
+/** The drawer: what the platform banked at save time, and what the capture became. */
+function ReceiptExpansion({ row }: { row: ReceiptRowModel }) {
   const { verdict, outcome } = row;
   return (
-    <div style={ROW}>
-      <div style={LINE1}>
-        {/* The vendor string EXACTLY as stored. No derived document type, and no icon standing in
-            for one — the table carries no origin/shape/source column (measured 2026-09-01). */}
-        <Link to={`/receipts/${row.id}`} style={VENDOR_LINK}>{row.vendorText}</Link>
-        <span style={AMOUNT}>{row.amountText}</span>
-      </div>
-      {/* The line the list cannot show. A receipt is $1,301.98 of "Services" from here; the
-          detail view is where the quantity and the rate are, which is what the cost model needs. */}
-      <Link to={`/receipts/${row.id}`} style={OPEN_LINK}>Open this receipt &rsaquo;</Link>
-      <div style={META}>
-        {row.dateText} · {row.categoryText} · captured {row.capturedAtText} · {row.statusText}
-      </div>
-
-      <div style={SECTION}>
+    <div style={EXPAND}>
+      <div>
         <div style={SECTION_LABEL}>What the platform banked at save time</div>
         {verdict.readout && <div style={verdict.readout.style}>{verdict.readout.text}</div>}
         {verdict.notes.map((n, i) => <div key={i} style={NOTE}>{n}</div>)}
       </div>
-
       <div style={SECTION}>
         <div style={SECTION_LABEL}>What it became</div>
         {outcome.multipleOrders && (
@@ -174,6 +173,84 @@ function ReceiptCard({ row }: { row: ReceiptRowModel }) {
     </div>
   );
 }
+
+// ── THE COLUMN SET, AND WHERE IT CAME FROM ──────────────────────────────────────────────────
+// ⚠️ THE DEFAULT-VISIBLE SET IS DAVID'S, RELAYED BY A PEER SESSION, AND I HAVE NOT READ THE
+//    PROMPT IT CAME FROM. `trace-platform-e2` quoted its build prompt verbatim: "COLUMNS,
+//    default: RECEIPT DATE · VENDOR · INVOICE NUMBER · TOTAL · LINES · CATEGORY · BECAME.
+//    Available and off: captured, verdict, receipt id." The ruling I hold ("Grid. /receipts moves
+//    to DataSheet with renderExpand … G4, G6 and G7 come with it") says nothing about columns, so
+//    the peer's is the more specific instruction and I invented the set it corrects. `captured`
+//    and `banked` are now available-and-OFF, and `receipt_id` is added in that state.
+//    🔴 **THIS IS AN UNVERIFIED PREMISE AND IT IS FLAGGED RATHER THAN ABSORBED** — acting on a
+//    quotation of a document I cannot read is the R-26 shape, which is this build's own subject.
+//    It is taken because it is cheap, reversible, and the Columns menu (G5) makes it a click
+//    either way. **David: if the relayed column set is not yours, say so and it flips back.**
+//
+// 🔴 TWO RULED COLUMNS ARE ABSENT, AND NEITHER IS AN OVERSIGHT:
+//    · **INVOICE NUMBER** — blocked on `trace-platform-e2`'s migration; it does not exist to read
+//      yet. The document number is reachable today only inside the drawer and through search.
+//    · **LINES** — a line COUNT needs `line_items` in `RECEIPTS_SELECT`, and this file's own
+//      invariant forbids it: *"`line_items` MUST NOT be present — its absence is what makes
+//      re-evaluation impossible rather than merely discouraged"* (receiptsList.ts §1). Selecting
+//      it would downgrade a STRUCTURAL guard to a review-only one — *we have the inputs and
+//      choose not to re-derive* instead of *the inputs are not in hand*. **That is David's call,
+//      it is not settled, and it is not being decided inside a column config.**
+//
+// ⚠️ ONE ORDERING DIFFERENCE IS DELIBERATE AND IS A STANDARD-BEATS-PROMPT CASE (R-74): the
+//    relayed set leads with RECEIPT DATE; this grid leads with VENDOR because **G3 pins the
+//    leading IDENTIFIER column** ("the leading name/id column pins on horizontal scroll") and a
+//    date is not an identifier. Not silently reordered either way — surfaced for David.
+//
+// ── The columns. `sortVal` is what makes G4 real, and every column that carries an orderable
+//    fact declares one. The identifier column is frozen with a RESERVED TRACK (§6 r14). ──
+const columns: DataSheetColumn<ReceiptRowModel>[] = [
+  {
+    key: 'vendor', header: 'Vendor', frozen: true, frozenWidth: 200, hideable: false,
+    sortable: true, sortVal: r => r.vendorText.toLowerCase(),
+    render: r => <Link to={`/receipts/${r.id}`} style={VENDOR_LINK}>{r.vendorText}</Link>,
+  },
+  {
+    // 🔴 G9's column. `sortVal` is the SAME key the model sorts by — the document's date, falling
+    // back to the capture DAY when there is none — so re-sorting by this header cannot disagree
+    // with the default order the list arrives in.
+    key: 'date', header: 'Date', sortable: true, sortVal: r => r.sortKey,
+    render: r => r.dateText,
+  },
+  { key: 'amount', header: 'Amount', sortable: true, sortVal: r => r.amountSort,
+    render: r => <span style={AMOUNT}>{r.amountText}</span> },
+  { key: 'category', header: 'Category', sortable: true, sortVal: r => r.categoryText.toLowerCase(),
+    render: r => r.categoryText },
+  {
+    key: 'outcome', header: 'What it became', sortable: true,
+    sortVal: r => outcomeSummaryText(r.outcome),
+    render: r => <span style={META}>{outcomeSummaryText(r.outcome)}</span>,
+  },
+  {
+    key: 'banked', header: 'Banked verdict', sortable: true, defaultVisible: false,
+    sortVal: r => r.verdict.readout?.text ?? '',
+    render: r => (r.verdict.readout
+      ? <span style={r.verdict.readout.style}>{r.verdict.readout.text}</span>
+      : <span style={META}>Nothing banked</span>),
+  },
+  { key: 'captured', header: 'Captured', sortable: true, defaultVisible: false,
+    sortVal: r => r.capturedAtText,
+    render: r => <span style={META}>{r.capturedAtText}</span> },
+  // Available and OFF. A provenance handle an owner reaches for when reconciling against another
+  // record, never something they read by default.
+  // ⚠️ THE KEY IS `id`, NOT `receipt_id`, AND THAT IS A CORRECTNESS CHOICE RATHER THAN A NAMING
+  // ONE. DataSheet locks a column by looking its KEY up in the system-managed registry and
+  // rendering that registry's explanation (F2: the popover must say WHAT sets the field and WHY).
+  // The registry's `receipt_id` reads "Linked by the receipt/invoice-scan flow; ties the row to
+  // its source receipt" — true on /inventory, and FALSE here, where the value is the receipt's
+  // OWN id and links to nothing. `id` reads "System row identifier, assigned automatically",
+  // which is exactly what this is. A lock that explains itself wrongly is worse than no lock: it
+  // is a confident sentence about the wrong field.
+  { key: 'id', header: 'Receipt id', sortable: true, defaultVisible: false,
+    sortVal: r => r.id, render: r => <span style={META}>{r.id}</span> },
+  { key: 'status', header: 'Status', sortable: true, sortVal: r => r.statusText,
+    defaultVisible: false, render: r => <span style={META}>{r.statusText}</span> },
+];
 
 export function ReceiptsList({ businessId, refreshToken }: { businessId: string | null; refreshToken?: string | null }) {
   const [state, setState] = useState<ReadState>({ phase: 'loading' });
@@ -199,8 +276,16 @@ export function ReceiptsList({ businessId, refreshToken }: { businessId: string 
       // whose date the OCR failed to read is the row most needing attention; sending undated
       // rows to the bottom would make them the first dropped once the tenant passes 100
       // receipts — rebuilding, at the cap, the invisibility this whole surface was built to
-      // fix. The client then places them by capture day. Not live at 17 rows; named because it
-      // becomes live silently.
+      // fix. The client then places them by capture day.
+      //
+      // 🔴 AND IT IS NOT HYPOTHETICAL — CORRECTED 2026-09-03 AFTER A PEER SESSION MEASURED IT.
+      // This comment first read "not live at 17 rows", which was true of LAWNS and false of the
+      // table: `receipts.date` is NULL on **1 of 37 rows** — `H-E-B`, created 2026-06-28, on
+      // **Test Dave's tenant, which is the tenant David tests on**. 0 on LAWNS. So the undated
+      // path has a live row behind it today, and probes E7c/E7d cover real data rather than a
+      // shape nobody occupies. ✏️ *"Not live" was a claim about the tenant I happened to be
+      // looking at, stated as a claim about the table* — the same shape as everything else this
+      // build is about.
       .order('date', { ascending: false, nullsFirst: true })
       .order('created_at', { ascending: false })
       .limit(RECEIPTS_PAGE_LIMIT);
@@ -220,7 +305,7 @@ export function ReceiptsList({ businessId, refreshToken }: { businessId: string 
         rows: rows.length, total: count ?? 'not counted', capped: model.capped,
         withOrder: rows.filter(r => (r.orders?.length ?? 0) > 0).length,
         withoutOrder: rows.filter(r => (r.orders?.length ?? 0) === 0).length,
-        orders, deliveries,
+        orders, deliveries, grid: 'DataSheet',
       });
     }
     setState({ phase: 'loaded', model });
@@ -228,28 +313,40 @@ export function ReceiptsList({ businessId, refreshToken }: { businessId: string 
 
   useEffect(() => { void load(); }, [load, refreshToken]);
 
+  const loaded = state.phase === 'loaded' ? state.model : null;
+
   return (
-    <div style={CARD}>
-      <div style={LINE1}>
-        <h2 style={H}>Receipts captured</h2>
-      </div>
+    <>
+      {/* The honest count keeps its OWN line. The engine's pill counts the rows it was handed
+          ("N of M"), which at the cap would assert a total the read never measured. This line is
+          the one that names the cap. */}
+      {loaded && <p style={COUNT}>{loaded.countText}</p>}
 
-      {state.phase === 'loading' && <div style={COUNT}>Loading receipts…</div>}
-
-      {state.phase === 'failed' && (
-        <div style={{ ...ABSENCE, marginTop: 8, color: '#A32D2D', background: '#fef2f2', borderColor: '#fca5a5' }}>
-          Could not read receipts — {state.message}. This is a failed read, NOT an empty list:
-          how many receipts exist is unknown right now.
-        </div>
-      )}
-
-      {state.phase === 'loaded' && (
-        <>
-          <div style={COUNT}>{state.model.countText}</div>
-          {state.model.emptyNote && <div style={{ ...ABSENCE, marginTop: 10 }}>{state.model.emptyNote}</div>}
-          {state.model.rows.map(r => <ReceiptCard key={r.id} row={r} />)}
-        </>
-      )}
-    </div>
+      <DataSheet<ReceiptRowModel>
+        title="Receipts captured"
+        rows={loaded?.rows ?? []}
+        loading={state.phase === 'loading'}
+        // 🔴 §6 R1 (BINDING): a failed read must not read as an empty one. The engine renders
+        // this string instead of the empty state, and the string says which of the two it is.
+        error={state.phase === 'failed'
+          ? `could not read receipts — ${state.message}. This is a failed read, NOT an empty list: how many receipts exist is unknown right now.`
+          : null}
+        getRowId={r => r.id}
+        columns={columns}
+        searchText={receiptSearchText}
+        searchPlaceholder="Search vendor, amount, order number…"
+        statusFilter={{
+          label: 'outcomes',
+          options: [...OUTCOME_FILTER_OPTIONS],
+          get: r => outcomeFilterValue(r.outcome),
+        }}
+        defaultSortKey="date"
+        defaultSortDir="desc"
+        renderExpand={r => <ReceiptExpansion row={r} />}
+        itemNoun="on this page"
+        emptyIcon={<Receipt size={32} color="#d1d5db" style={{ marginBottom: 8 }} />}
+        emptyText="No receipts captured yet."
+      />
+    </>
   );
 }

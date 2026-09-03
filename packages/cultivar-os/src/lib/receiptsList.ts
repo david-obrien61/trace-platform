@@ -51,7 +51,8 @@
 //               inside a `.tsx` cannot be asserted (tech-debt #134), so every decision lives here.
 //
 // OUTPUTS:      RECEIPTS_SELECT · RECEIPTS_PAGE_LIMIT · receiptSortKey · compareReceiptsForDisplay ·
-//               receiptRowModel · receiptListModel ·
+//               receiptRowModel · receiptListModel · outcomeSummaryText ·
+//               OUTCOME_FILTER_OPTIONS · outcomeFilterValue · receiptSearchText ·
 //               countLabel · bankedVerdict · captureOutcome.
 // ============================================================
 
@@ -384,6 +385,23 @@ export interface ReceiptRowModel {
   statusText: string;
   verdict: BankedVerdict;
   outcome: CaptureOutcome;
+  /**
+   * G4's sort keys — the ORDERABLE forms of two display strings, carried on the row so the grid
+   * never sorts the rendered text.
+   *
+   * 🔴 SORTING A FORMATTED STRING IS A DEFECT, NOT A SHORTCUT: `"$1,283.88" < "$920.13"` is TRUE
+   * as a string, so a money column sorted on its own label puts nine hundred dollars above
+   * twelve hundred. Same class as the date, where `"2026-07-29"` compared against a full ISO
+   * timestamp ranks by string length rather than by time.
+   *
+   * ⚠️ AND BOTH KEYS ARE POSITIONS, NEVER VALUES — the D-9 rule that governs this whole file.
+   * `amountSort` is `-Infinity` when the stored amount cannot be parsed, so an unreadable amount
+   * sorts to one end instead of being coerced to a `0` that would sit among real zeros and read
+   * as a fact; `amountText` still says "No amount recorded". A sort key may say where a row goes.
+   * It may never say what the row is.
+   */
+  sortKey: string;
+  amountSort: number;
 }
 
 export function receiptRowModel(row: RawReceiptRow): ReceiptRowModel {
@@ -397,6 +415,8 @@ export function receiptRowModel(row: RawReceiptRow): ReceiptRowModel {
     statusText: row.status ?? 'No status',
     verdict: bankedVerdict(row),
     outcome: captureOutcome(row),
+    sortKey: receiptSortKey(row),
+    amountSort: toNum(row.amount) ?? Number.NEGATIVE_INFINITY,
   };
 }
 
@@ -494,6 +514,70 @@ export function receiptListModel(
     capped: total !== null ? sorted.length < total : sorted.length >= limit,
     emptyNote: sorted.length === 0 ? 'No receipts captured yet.' : null,
   };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// §4b THE GRID'S OWN DECISIONS — the column summary, the search corpus, the status filter
+//
+// The surface moved to <DataSheet> (David's ruling, 2026-09-03) after the reason it gave for
+// NOT using the shared grid was withdrawn as false: `renderExpand` — "Optional per-row detail
+// drawer" — had been in the engine since 2026-07-01, two months before the comment claiming a
+// grid could only render the chain by exploding one receipt into several rows.
+//
+// These three live HERE and not in the .tsx for the same reason everything else does: a render
+// condition inside a component cannot be asserted (tech-debt #134). The grid is now the engine's
+// job; WHAT IT SAYS is still this file's.
+// ════════════════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * The one-line answer to the question the whole surface exists to ask: did this capture become
+ * an order?
+ *
+ * 🔴 IT NAMES NO FAULT. `null` orders reads *"No order recorded"* — never *missing*, *orphaned*,
+ * *unlinked*, *error*, *should* or *problem*. Six of LAWNS's 17 receipts are in that state and
+ * they read as vendor purchase invoices, which is a READING and not a fact ([[R-54]]: we surface,
+ * the owner decides). Probe D13/D14 asserts the vocabulary in both directions.
+ */
+export function outcomeSummaryText(outcome: CaptureOutcome): string {
+  const n = outcome.orders.length;
+  if (n === 0) return 'No order recorded';
+  const statuses = [...new Set(outcome.orders.map(o => o.status.label))].join(' · ');
+  return n === 1 ? `1 order — ${statuses}` : `${n} orders — ${statuses}`;
+}
+
+/**
+ * The two values the quick status filter offers (G6).
+ *
+ * ⚠️ THE FILTER IS ON THE OUTCOME, NOT ON `receipts.status`, AND THAT IS A CHOICE WORTH STATING.
+ * `receipts.status` reads `confirmed` on every live row — a filter over one value is a control
+ * that cannot do anything. The outcome split is the question this screen was built to answer
+ * (*"a capture that silently produced no order looked exactly like one that did"*), and BOTH of
+ * its values are facts about stored rows — an `orders` row referencing this receipt exists, or it
+ * does not. Nothing is inferred and no document type is derived ([[R-50]]).
+ */
+export const OUTCOME_FILTER_OPTIONS = ['Produced an order', 'No order recorded'] as const;
+
+export function outcomeFilterValue(outcome: CaptureOutcome): string {
+  return outcome.orders.length > 0 ? OUTCOME_FILTER_OPTIONS[0] : OUTCOME_FILTER_OPTIONS[1];
+}
+
+/**
+ * What a global search matches against (G6).
+ *
+ * It spans the SUMMARY ROW *and* the expansion — order document numbers and delivery service
+ * types included — because a disclosure grid hides most of its own text by default, and a search
+ * that only reads the visible row silently answers "not found" about data that is present one
+ * click away. That is a read-honesty failure in the shape of a search box.
+ */
+export function receiptSearchText(row: ReceiptRowModel): string {
+  const chain = row.outcome.orders.flatMap(o => [
+    o.kindText, o.status.label, o.docNumberText, o.totalText, o.saleDateText,
+    ...o.deliveries.flatMap(d => [d.status.label, d.dateText, d.serviceText, d.sourceText]),
+  ]);
+  return [
+    row.vendorText, row.dateText, row.amountText, row.categoryText,
+    row.capturedAtText, row.statusText, outcomeSummaryText(row.outcome), ...chain,
+  ].filter(Boolean).join(' ');
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════
