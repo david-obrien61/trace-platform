@@ -14,9 +14,10 @@ capture half has shipped since 2026-06-11 and has never had a row. Flagged for D
 Joins only: **3.5** delivery and the orders roster.
 **Story:** `user_stories.md` → *I captured a receipt — show me it landed, and show me what it turned into*
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 14 covered** (**13 `owed`** · 1 `needs-test`) — 🔴 **EVERY CARD FLIPPED `covered` → `owed` ON 2026-09-03 BECAUSE THE SURFACE WAS REPLACED, NOT BECAUSE ANY PROOF WAS BAD.** `/receipts` moved from a bespoke card stack onto **`<DataSheet>` with `renderExpand`** — one row per receipt, the chain in a disclosure drawer (David's ruling). **Every card below was written against a card stack that no longer exists**, and OP-14 clause 3 is explicit: *changing a surface flips `covered` → `owed`* — a green check on a moved surface asserts a proof nobody performed. **Each card's 2026-09-02 evidence is PRESERVED VERBATIM in its own body**; nothing is overwritten. ⚠️ **THE RE-PROOF IS CHEAPER THAN THE FLIP LOOKS: seven of these still settle from ONE print of `/receipts`** — take the print and 1, 2, 3, 4, 5, 7 and 11 go together.
+**Board: 0 of 17 covered** (**16 `owed`** · 1 `needs-test`) — 🔴 **EVERY CARD FLIPPED `covered` → `owed` ON 2026-09-03 BECAUSE THE SURFACE WAS REPLACED, NOT BECAUSE ANY PROOF WAS BAD.** `/receipts` moved from a bespoke card stack onto **`<DataSheet>` with `renderExpand`** — one row per receipt, the chain in a disclosure drawer (David's ruling). **Every card below was written against a card stack that no longer exists**, and OP-14 clause 3 is explicit: *changing a surface flips `covered` → `owed`* — a green check on a moved surface asserts a proof nobody performed. **Each card's 2026-09-02 evidence is PRESERVED VERBATIM in its own body**; nothing is overwritten. ⚠️ **THE RE-PROOF IS CHEAPER THAN THE FLIP LOOKS: seven of these still settle from ONE print of `/receipts`** — take the print and 1, 2, 3, 4, 5, 7 and 11 go together.
 🔴 **CARD 8 is `covered` with its FAILURE preserved** — it failed, #257 fixed it, and the failure is not overwritten.
 📄 **NINE OF THESE WERE PROVEN FROM PRINTED PDFs OF `/receipts`, NOT FROM LIVE INTERACTION.** **CARDS 1, 2, 3, 4, 5, 7 and 11 are all provable from ONE print of `/receipts`** — take the print, and those seven settle together. ⚠️ **CARD 1 is owed again and rides that same print** — one new print of `/receipts` re-settles it, so the re-proof costs nothing beyond taking the print. CARD 6 (a capture with no reload) and CARD 9 (three loads at three times) need interaction; CARD 10 needs an account that does not exist.
+🆕 **CARDS 15–17 ADDED 2026-09-03 (#270) — the invoice number and the unit.** CARD 15 (number stored) and CARD 17 (unit read off the invoice) **share ONE capture and ONE query** — do them together. 🔴 **CARD 15 needs `20260903c` APPLIED; CARD 17 does not** (the unit fields ride inside the existing `line_items` jsonb, so no column is involved). ⚠️ **CARD 16 has a CLOSING WINDOW** — it tests the gap between the deploy and the apply, and applying the migration makes it unrunnable by design: mark it `superseded`, never `failed`.
 **DEVICE:** CARDS 1–5 and 7–11 are `DEVICE: desktop` — this is a reconcile surface, and reconcile is desktop (capture=mobile / reconcile=desktop). **CARD 6 is `DEVICE: phone`** and is provable **without a console**.
 
 > ⛔ **NO MIGRATION GATE.** This build applies none. It adds no table, no column, no policy, no
@@ -298,3 +299,120 @@ because it has an order. Each drawer opens **beneath its own row** and holds tha
 and delivery. Collapsing restores the row count exactly.
 **FAIL:** more rows than receipts · a receipt appearing on two rows · a drawer opening under the
 wrong row · or the row count not returning after collapse.
+
+---
+
+## CARD 15 — 🔴 the invoice number is stored, on a column that did not exist yesterday
+**STATUS:** owed · **DEVICE:** phone (capture) then desktop (the query) · **PROOF:** 🔧 NEEDS SETUP · **LAST-PROVEN:** —
+
+**TENANT:** LAWNS (`ed2e5933-45dc-4b9b-a331-ddfd125e7a74`) — or `Test Dave's`, either is fine.
+**ACTOR:** the owner.
+
+**WHAT MUST BE TRUE FIRST — BOTH, OR THIS CARD PROVES NOTHING:**
+1. **`20260903c_receipts_receipt_number.sql` HAS BEEN APPLIED.** Confirm with the check query in
+   that file: `SELECT column_name FROM information_schema.columns WHERE table_name='receipts' AND
+   column_name='receipt_number';` → **exactly one row**. Zero rows means not applied — **stop, this
+   card cannot run**, and what you would be testing is CARD 16 instead.
+2. **The SHA at the foot of the screen is `681194c` or later** (GATE 0). The new OCR prompt and the
+   writer both ship in that range; on an older bundle the number is never read in the first place.
+
+**SHARES ITS WORK WITH CARD 17** — one capture and one query settle both. Do them together.
+
+**Use a document that HAS a printed number.** A bwi invoice does (top right). A Sudderth ticket may
+not — do not use one, or the card proves nothing through no fault of the code.
+
+1. On the phone, open `/receipts` and capture the invoice as normal.
+2. Confirm and save it. The confirmation screen appears.
+3. 🔴 **There must be NO amber notice about the invoice number.** If you see *"the receipt was saved,
+   but its invoice number could not be stored"*, the migration is NOT applied — go to CARD 16.
+4. On the desktop, in the Supabase SQL editor, run:
+   `SELECT vendor, date, receipt_number, created_at FROM receipts ORDER BY created_at DESC LIMIT 3;`
+
+**PASS:** the top row is the receipt you just captured, and **`receipt_number` holds the number
+printed on the document**, matching it character for character. The two rows beneath it — captured
+before today — have `receipt_number` **NULL**, which is correct: nothing was backfilled.
+
+**FAIL:** `receipt_number` is NULL on the row you just captured (read but not written) · it holds a
+number that is not the one on the paper (the OCR misread it — a real failure, but of the parser, not
+the column) · **or the two older rows have values**, which would mean something backfilled them and
+nobody authorised that.
+
+🔴 **WHAT THIS CARD CANNOT PROVE:** that the number is CORRECTABLE. The ruling is that
+`receipt_number` is editable — a document fact the OCR can misread, not platform provenance — but
+**no surface exposes it for editing yet.** The grid column and the edit affordance are both owed.
+This card proves the value is captured and stored, and nothing about fixing a wrong one.
+It also cannot prove dedup: the unique index that tech-debt #143 needs is deliberately NOT in this
+migration, because it would reject the two duplicate LAWNS captures that are still live.
+
+---
+
+## CARD 16 — ⚠️ the capture still works when the migration ISN'T applied, and says why
+**STATUS:** owed · **DEVICE:** phone · **PROOF:** 🖱 NEEDS INTERACTION · **LAST-PROVEN:** —
+
+**TENANT:** any. **ACTOR:** the owner.
+
+🔴 **THIS CARD HAS A CLOSING WINDOW AND IT CLOSES WHEN YOU APPLY THE MIGRATION.** It tests the
+behaviour in the gap between the deploy and the apply. **Once `20260903c` is applied this card is
+no longer runnable**, and that is expected — mark it `superseded`, not `failed`. If you have already
+applied the migration, skip it; there is nothing here to catch afterwards.
+
+**WHAT MUST BE TRUE FIRST:** `20260903c` is **NOT** yet applied (the column query above returns
+**zero** rows) and the SHA is `681194c` or later.
+
+**WHY IT EXISTS:** measured against the live database, an INSERT carrying `receipt_number` while the
+column is missing is refused **whole** — `PGRST204`, at the schema cache, before the database is
+reached. Not a dropped field: **the entire save fails.** Without the guard this build shipped, every
+capture in that window would have died on *"Failed to save receipt"*.
+
+1. On the phone, capture any receipt that has a printed invoice number.
+2. Confirm and save.
+
+**PASS:** **the receipt SAVES.** The confirmation screen appears with the receipt id, AND an amber
+notice reads *"The receipt was saved, but its invoice number (…) could not be stored — that column
+is not live on this database yet."* The receipt then appears in the list below like any other.
+
+**FAIL:** 🔴 **the save fails with "Failed to save receipt"** — the guard did not fire and captures
+are broken until the migration is applied · **or** the receipt saves with **no notice at all**,
+which is worse than it looks: the number was read and thrown away silently, which is exactly the
+defect #257 fixed for quantity, unit price and SKU.
+
+🔴 **WHAT THIS CARD CANNOT PROVE:** that the retry is narrow. It fires only on `PGRST204` and only
+when a number was actually read — an FK violation, an RLS refusal or a dropped connection still
+fail loudly and are still reported. Proving THAT needs a forced error, which this card does not do.
+
+---
+
+## CARD 17 — 🔴 the unit comes off the invoice, both places it is printed
+**STATUS:** owed · **DEVICE:** phone (capture) then desktop (the query) · **PROOF:** 🔧 NEEDS SETUP · **LAST-PROVEN:** —
+
+**TENANT:** LAWNS. **ACTOR:** the owner. **SHARES ITS CAPTURE WITH CARD 15.**
+
+**WHAT MUST BE TRUE FIRST:** the SHA is `681194c` or later. **No migration is needed for this card** —
+the unit fields ride inside the existing `line_items` jsonb, so this half works whether or not
+`20260903c` has been applied.
+
+🔴 **USE A bwi INVOICE.** It is the document this was built from and it states the unit **twice**:
+a `BG`/`BN` code in its own column beside each quantity, and the unit restated inside the
+description — *"4.4 cf"*, *"50 lb"*, *"40 lb"*, *"(12 Pack)"*. A vendor that prints neither cannot
+fail this card meaningfully.
+
+1. Capture the bwi invoice on the phone and save it.
+2. On the desktop, in the SQL editor, run:
+   `SELECT vendor, jsonb_pretty(line_items) FROM receipts ORDER BY created_at DESC LIMIT 1;`
+
+**PASS:** every line object carries **`uom`**, **`pack_size`** and **`pack_unit`** as keys, and on
+the lines where the invoice prints them they hold real values — `"uom": "BG"` or `"BN"`, and for a
+*"50 lb"* description `"pack_size": 50` with `"pack_unit": "lb"`. A line where the document is
+genuinely silent shows them as `null`, which is a pass: **null means the paper did not say.**
+
+**FAIL:** the three keys are **absent entirely** (the new prompt did not reach this capture — check
+the SHA) · `uom` is null on a line whose row plainly shows `BG` on the paper · `pack_size` holds the
+*price* or the *quantity* rather than the pack size · or `pack_unit` holds description text with no
+number in front of it (*"Osmocote"* rather than *"lb"*).
+
+🔴 **WHAT THIS CARD CANNOT PROVE — AND IT IS THE THING THE FEATURE IS FOR:** that the
+vendor-preference screen **stops asking**. Reading the unit and *using* it to suppress *"when bwi
+bills you, is it by the yard or the ton?"* are two different builds; only the first shipped. The
+screen may still ask. That is the next piece of work, not a failure of this card.
+It also cannot prove any DERIVED figure — *"(12 Pack)"* at $25.71 being $2.14 a roll is arithmetic
+on these values that nothing computes yet, deliberately.
