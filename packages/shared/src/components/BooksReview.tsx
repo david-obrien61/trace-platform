@@ -25,6 +25,13 @@
 //   rather than restating a stale number as a current fact (R-26). They are deliberately never
 //   subtracted from each other: one is a quote, the other is a measurement.
 //
+// 🔴 AND SINCE 2026-09-03 A THIRD NUMBER APPEARS WHERE ONE EXISTS: `remeasured`, the value the
+//   SAME capture actually yields. The sweep found TEN of the quoted figures wrong, stale, or
+//   measured over a population nobody stated — and FOURTEEN exact. Both outcomes are shown,
+//   because a re-measurement displayed only when it disagrees is one the reader cannot trust.
+//   The quoted figure is never edited: overwriting it would erase the drift and leave a
+//   corrected number nobody could tell had ever been wrong.
+//
 // ⚠️ NOTHING HERE NAMES A PERSON. The findings carry counts and nouns only — `evaluateBooks`
 //   receives parsed invoice rows that have no customer NAME on them at all (invoiceList.ts
 //   drops the field structurally) and a customer BREAKDOWN rather than customer records. R-24
@@ -140,6 +147,7 @@ export function BooksReview({ findings }: { findings: Finding[] }) {
                       {/* The QUOTE, labelled as a quote and dated, so it cannot be mistaken for
                           a second measurement of the same thing. */}
                       <span style={{ color: AMBER }}>29 Aug analysis said: {f.quoted}</span>
+                      {f.remeasured && <span style={{ color: GREEN }}> · re-measured 3 Sep: {f.remeasured}</span>}
                     </p>
                     {/* 🔴 THE MONEY, WHERE THERE IS MONEY. It is what ordered this list, so it
                         is shown rather than left as an invisible sort key — a reader who cannot
@@ -176,6 +184,8 @@ export function BooksReview({ findings }: { findings: Finding[] }) {
                     <span style={{ color: '#9ca3af' }}>Not checked — </span>
                     {f.notMeasured}
                     <span style={{ color: AMBER }}> · 29 Aug analysis said: {f.quoted}</span>
+                {f.remeasured && <span style={{ color: GREEN }}> · re-measured 3 Sep: {f.remeasured}</span>}
+                    {f.remeasured && <span style={{ color: GREEN }}> · re-measured 3 Sep: {f.remeasured}</span>}
                   </p>
                 )}
               </div>

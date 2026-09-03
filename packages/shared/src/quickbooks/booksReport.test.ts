@@ -152,10 +152,32 @@ const build = (o: Partial<ReportInput> = {}) => buildBooksReport({
 // ── §F 🔴 IT ASKS FOR NOTHING ────────────────────────────────────────────────
 {
   const html = renderBooksReportHtml(build());
-  const ASKS = ['<button', 'Accept', 'Ingest my data', 'Continue', 'Next step', 'Click here', 'onclick'];
+
+  // 🔴 THIS PROBE WAS NARROWED ON 2026-09-03, AND THE NARROWING IS THE INTERESTING PART.
+  // It used to ban the STRING `<button` outright, and it caught the save control the moment one
+  // was added — correctly, by its own text, and for the wrong reason. "The report asks for
+  // nothing" is about DECISIONS: no Accept, no Ingest, no next step, nothing that advances a
+  // funnel. A control that lets an owner KEEP the document asks for nothing; it is the opposite
+  // of an ask, and the report having no way to be saved was a defect rather than a virtue.
+  //
+  // ⚠️ SO THE BAN IS NOW ON THE ASK, AND THE SAVE CONTROL IS ASSERTED POSITIVELY BELOW —
+  // because a probe that merely stopped banning buttons would let a "Continue" through as long
+  // as nobody wrote the word.
+  // ⚠️ `Ingest` ALONE cannot be banned — the report's own TITLE is "FIRST LOOK PRIOR TO
+  // INGEST", which is a description of when it was written, not an invitation to press
+  // anything. The banned forms are imperative.
+  const ASKS = ['Accept', 'Ingest my data', 'Ingest now', 'Continue', 'Next step', 'Click here', 'Get started', 'Sign up'];
   const found = ASKS.filter(a => html.toLowerCase().includes(a.toLowerCase()));
   ok(found.length === 0,
-    `🔴 the report ends by asking for NOTHING — the screen is where a decision is made; this is what they keep. Found: ${found.join(', ') || 'none'}`);
+    `🔴 the report asks for NO DECISION — the screen is where a decision is made; this is what they keep. Found: ${found.join(', ') || 'none'}`);
+
+  // The ONLY control it may carry, and it must be exactly one.
+  ok((html.match(/<button/g) ?? []).length === 1,
+    '🔴 EXACTLY ONE control — the save bar. A second button on this page is a funnel appearing');
+  ok(/window\.print\(\)/.test(html),
+    'and it is the print/save control: the owner can keep the document. Its absence was the real gap inside the "do we need a PDF library" question — the answer to which was already settled as print-to-PDF');
+  ok(/@media print\s*\{\s*\.bar\s*\{\s*display:\s*none/.test(html),
+    '🔴 AND IT REMOVES ITSELF FROM THE PRINT — the saved PDF must not carry a button nobody can press on paper');
   ok(!html.includes('<script'), 'and carries no script — it is a document, not an application');
 }
 

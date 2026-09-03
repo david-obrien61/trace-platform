@@ -126,10 +126,27 @@ function walkLine(w: WalkState): string {
   return `<li><strong>${esc(WALK_TITLE[w.entity])}</strong> — read in full: all ${w.expected.toLocaleString()} of them${w.fromFile ? ', from a saved copy of your books' : ''}.</li>`;
 }
 
+/**
+ * 🔴 THE RE-MEASUREMENT, PRINTED BESIDE THE CLAIM RATHER THAN INSTEAD OF IT.
+ *
+ * The figures in the 2026-08-29 analysis were never checked before they were written down, and
+ * when they were checked on 2026-09-03 ten of them were wrong, stale, or measured over a
+ * population nobody stated. Printing only the corrected number would leave a document nobody
+ * could tell had ever been wrong — which is how a figure gets quoted confidently a second time.
+ * Printing only the claim is worse. Both, always, and the report says which is which.
+ *
+ * ⚠️ IT IS EMITTED FOR CONFIRMATIONS TOO. *"We checked and it held"* is a result, and a
+ * re-measurement shown only when it disagrees is a re-measurement the reader cannot trust.
+ */
+function remeasuredLine(f: Finding): string {
+  if (!f.remeasured) return '';
+  return `<p class="p">Re-measured 3 September 2026: ${esc(f.remeasured)}</p>`;
+}
+
 function findingLine(f: Finding): string {
   const worth = f.value === null ? '' : ` <span class="worth">${esc(money(f.value))} at stake</span>`;
   return `<li><p class="s">${esc(f.sentence)}${worth}</p>
-    <p class="p">${f.population.matched.toLocaleString()} of ${f.population.of.toLocaleString()} ${esc(f.population.noun)}</p></li>`;
+    <p class="p">${f.population.matched.toLocaleString()} of ${f.population.of.toLocaleString()} ${esc(f.population.noun)}</p>${remeasuredLine(f)}</li>`;
 }
 
 function recBlock(r: Recommendation, f: Finding): string {
@@ -168,7 +185,7 @@ export function renderBooksReportHtml(r: BooksReport): string {
      <p class="note">These are not problems we found. They are questions we could not answer from
      what has been read — so nothing below should be taken as good news or bad. They are usually
      the most useful page in here, because they are the questions your books cannot answer today.</p>
-     <ul class="f">${r.notComputed.map(f => `<li><p class="s">${esc(f.notMeasured ?? '')}</p></li>`).join('')}</ul>`;
+     <ul class="f">${r.notComputed.map(f => `<li><p class="s">${esc(f.notMeasured ?? '')}</p>${remeasuredLine(f)}</li>`).join('')}</ul>`;
 
   const corrections = r.corrections.length === 0
     // 🔴 SAID, NOT OMITTED. An absent line reads as "none were needed".
@@ -195,7 +212,27 @@ export function renderBooksReportHtml(r: BooksReport): string {
   table.four td:first-child { color: #6b7280; width: 42%; }
   .lim { font-size: 9.5pt; color: #6b7280; margin: 4px 0 0; }
   ul.w { font-size: 10pt; }
+  /* ══════════════════════════════════════════════════════════════════════════════
+     🔴 THE SAVE BAR — AND IT IS THE ONLY THING ON THE PAGE THAT DOES NOT PRINT.
+     ══════════════════════════════════════════════════════════════════════════════
+     There was NO print or download control here at all: the report opened in a window
+     with no way to keep it but the browser's own menu, and the button an owner presses
+     to walk away with the document was simply missing. That was the real gap inside the
+     "should we add a PDF library" question — the answer to which was already settled and
+     built (print-to-PDF, the qr/print.ts precedent, no dependency).
+     The @media print block removes it, so the saved PDF never carries a button that cannot be
+     pressed on paper. */
+  .bar { position: sticky; top: 0; background: #fff; border-bottom: 1px solid #e5e7eb;
+         margin: -24px -24px 18px; padding: 11px 24px; display: flex; gap: 10px; align-items: center; }
+  .bar button { font: inherit; font-size: 10pt; font-weight: 700; color: #fff; background: #27500A;
+                border: none; border-radius: 8px; padding: 9px 15px; cursor: pointer; min-height: 40px; }
+  .bar span { color: #6b7280; font-size: 9.5pt; }
+  @media print { .bar { display: none; } }
 </style></head><body>
+  <div class="bar">
+    <button type="button" onclick="window.print()">&#x2193;&nbsp; Download or print this report</button>
+    <span>Choose &ldquo;Save as PDF&rdquo; to keep a copy.</span>
+  </div>
   <h1>${esc(r.title)}</h1>
   <p class="sub">Generated ${esc(r.generatedAt)}</p>
   ${corrections}

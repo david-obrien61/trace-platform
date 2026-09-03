@@ -221,6 +221,35 @@ above was produced by four greps — so it is capable of being a cap.** None was
 before David rules answers a ruling with a constant (the #188 precedent). Full measurement, method,
 and per-site listing: `docs/audits/social-campaign-path-recon-2026-08-22.md` → **THE COUNT**.
 
+## 7. LONG-RUNNING OPERATIONS (a wait the reader cannot see is a wait the reader reads as broken)
+
+✅ **BINDING — ruled by David 2026-09-03, minted here BEFORE the widget and before the surface (§5 of
+*How this is enforced*, R-74's order). This section did not exist when the question was asked, and a
+build spec asked for the behaviour directly — which is the corollary case: where this doc is silent
+it is amended first, never answered in a component.**
+
+Applies to any operation that keeps a reader waiting on a result they asked for: a multi-step
+external read, an import, a long computation. It does **not** apply to a sub-second fetch.
+
+| # | Standard | Descends from | Why |
+|---|---|---|---|
+| **W1** | **THE RANGE IS STATED BEFORE THE FIRST REQUEST GOES OUT, NEVER AFTER THE FIRST STEP RETURNS.** A range that is beaten is honest; a number that is missed is not — so the copy is *"this will take a few minutes"*, not *"about twenty seconds"*. | Every installer, every long upload. | 🔴 **Said nothing, the expectation is INSTANTANEOUS and we fail against it.** Said after step one returns, the silent gap at the front — the part that reads as broken — is exactly the part left uncovered. |
+| **W2** | **NO COUNTDOWN AND NO PERCENTAGE BAR** unless the total work is known in advance AND the progress against it is really observed. | Determinate vs indeterminate progress. | A bar stalled at 60% is worse than no bar: it makes a *specific false claim* that keeps being true-looking. Real counts landing one after another cannot stall misleadingly. |
+| **W3** | **EACH COMPLETED STEP NARRATES ITS REAL RESULT, WITH ITS COUNT** — *"read 685 products & services — that is all of them"* — and **states that the step is WHOLE**. | R-24 (*a list that cannot prove it is the whole list is a failure*), surfaced rather than merely asserted. | A completeness claim nobody can see is a completeness claim nobody checks. The count belongs on screen even when it agrees. |
+| **W4** | 🔴 **NARRATION REPORTS ONLY PROGRESS THAT ACTUALLY HAPPENED, AT THE GRANULARITY THE ARCHITECTURE CAN OBSERVE.** Where finer progress is not observable, the coarser honest form ships and **no finer one is simulated**. | D-9 (Surface Honesty) applied to progress. | This is the clause with teeth. Per-row narration (*"1,000 of 1,927"*) is not emittable while a walk counts, pages and returns inside ONE request — and the way to obtain it, client-driven paging, **moves the completeness refusal into the browser, which is precisely what R-24 clause (a) exists to prevent.** A progress number is not worth relocating a refusal. |
+| **W5** | **A FAILED STEP STOPS THE NARRATION AND SAYS WHICH STEP FAILED** — it never leaves a half-finished trail that reads as still-running, and never lets a later success overwrite an earlier failure. | §6 R1 (*failed must stay distinguishable from empty*), on the time axis. | A narration that goes quiet is indistinguishable from one that is still working. |
+
+**Current implementation (2026-09-03):** `QboBooksReader` — one *Read my QuickBooks data* button
+sequencing the three existing reads. W1 met (the range is set before the first `fetch`), W2 met (no
+bar, no countdown), W3 met (each walk reports expected/retrieved and states it is whole), W4 met by
+**deliberately shipping per-walk rather than per-row granularity**, W5 met (the sequence halts on the
+first refusal and names the walk).
+
+**Enforcement:** review-only. No cap reads copy. The mechanical half is the sweep: a surface that
+gains a second long operation is measured against W1–W5 before it ships.
+
+---
+
 ## System-managed field registry (the F2/F3 set — David to confirm)
 
 The canonical locked set in `systemManagedFields.ts`, keyed by DB field name (a grid locks the field wherever it shows it):

@@ -154,6 +154,8 @@ export interface Finding {
   measured: boolean;
   /** Named when `measured` is false, so the reader knows what to do about it. */
   notMeasured: string | null;
+  /** The 2026-09-03 re-measurement of the quoted figure, where one was done. See `Rule`. */
+  remeasured: string | null;
   /** The 29 August figure, VERBATIM, as a quote. Never compared arithmetically. */
   quoted: string;
   /**
@@ -171,6 +173,15 @@ export interface BooksInput {
   discounts?: DiscountBreakdown;
   /** Invoice id → whether the invoice carried a ShipDate. From the shipment walk. */
   shipDates?: Map<string, string | null>;
+  /**
+   * 🔴 THE DATE THE BOOKS WERE READ, `YYYY-MM-DD` — SUPPLIED, NEVER TAKEN FROM THE CLOCK.
+   * Only the receivables rule needs it, and it needs it to mean *"past due as at the moment
+   * this read happened"*. Reading `new Date()` here would make the same capture produce a
+   * different answer tomorrow, and would make the finding untestable — a rule whose output
+   * moves on its own cannot be probed (R-33). Absent = the rule reports itself uncomputed,
+   * which is the honest answer rather than a silent substitution of today.
+   */
+  asOf?: string;
 }
 
 interface Rule {
@@ -178,7 +189,17 @@ interface Rule {
   tier: FindingTier;
   shape: Shape;
   needs: Walk[];
+  /** What the 2026-08-29 analysis claimed. NEVER edited — it is the claim, not the answer. */
   quoted: string;
+  /**
+   * 🔴 WHAT THE SAME CAPTURE ACTUALLY SAYS, MEASURED 2026-09-03, AND WHY BOTH ARE KEPT.
+   * David: *"Correct every one to your measurement and record BOTH values."* Overwriting
+   * `quoted` would erase the drift and leave a corrected number nobody could tell had ever
+   * been wrong — which is how a figure gets quoted confidently for a second time. Ten of the
+   * 2026-08-29 figures were wrong, stale, or measured over an unstated population; fourteen
+   * were exact. **Both outcomes are recorded, because "we checked and it held" is a result.**
+   */
+  remeasured?: string;
   /**
    * Shown when `run` returns null. Without it the runner uses its generic "only you can tell
    * us" sentence — true for a rule blocked on POLICY, wrong for one blocked on a field we did
@@ -223,6 +244,7 @@ export const BOOKS_RULES: Rule[] = [
   {
     id: 'trip-charge-missing', tier: 'money', shape: 'uncharged-money', needs: ['invoices'],
     quoted: '40 invoices, about $6,000',
+    remeasured: 'NOT COMPUTABLE — and the quoted rate is not in their catalogue. The five delivery-shaped items are $125, $75, $50, $0 and $0; none is the $150 the $6,000 was priced at.',
     // 🔴 DELIBERATELY UNCOMPUTED, AND THIS IS THE HONEST ANSWER RATHER THAN A LAZY ONE. The
     // rule needs to know WHICH ITEM MEANS "trip charge" in these books. Guessing it from item
     // names would produce a number that happens to be right on the rows we have looked at and
@@ -231,49 +253,110 @@ export const BOOKS_RULES: Rule[] = [
     run: () => null,
   },
   {
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // 🔴 WITHDRAWN 2026-09-03 BY DAVID'S RULING. IT WAS TWO FINDINGS WEARING ONE SENTENCE.
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // It was WORDED about the business's PUBLISHED PRICE CARD and COMPUTED against the
+    // QuickBooks `UnitPrice`. Those are different floors, and only one of them is what the
+    // sentence claimed. David: *"WITHDRAW the rule until it compares against the published
+    // card. That is the finding David measured — 53 rows, 32 items, 230 sales — and it needs
+    // the card, which these three reads do not carry."*
+    //
+    // 🔴 WHY WITHDRAWING MATTERED RATHER THAN RE-WORDING. Measured over LAWNS's 2026-08-29
+    // capture it produced **$1,607,416 — 52% of their $3,187,796 of revenue** — and under R-66
+    // (money-at-stake ordering) that sorts it FIRST, as the opening line of the document an
+    // owner hands their accountant. David: *"Hand Terry that on page one and the report loses
+    // its credibility before he reaches anything true."*
+    //
+    // ⚠️ THE HONEST SUCCESSOR IS THE NEXT RULE, AND IT IS A DIFFERENT RULE WITH A DIFFERENT
+    // NAME — not this one repaired. Keeping this id alive with new arithmetic would leave the
+    // corpus with one id that has meant two things.
     id: 'sold-below-price-card', tier: 'money', shape: 'two-sources-disagree', needs: ['items', 'invoices'],
     quoted: '53 rows, 32 items, 230 sales',
+    remeasured: 'NOT COMPUTABLE from these three reads — it needs the printed price card, which they do not carry.',
+    cannotCompute: 'We cannot check your sales against your printed price list, because we have not been given it. What we can check is the price recorded on each product in QuickBooks, and that is the next line — it is not the same thing, and it should not be read as if it were.',
+    run: () => null,
+  },
+  {
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // 🔴 THE SUCCESSOR RULE, AND IT SAYS EXACTLY WHICH FLOOR IT USES IN ITS OWN SENTENCE.
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // Two corrections David ruled into it, both of which change the number:
+    //
+    //   ① **A GIVEAWAY IS NOT A DISCOUNT.** 74 lines were charged exactly $0 and each was
+    //      counted at its FULL list price, so a comped tree scored as the largest possible
+    //      shortfall. Those lines are EXCLUDED and the exclusion is stated in `limits` — a
+    //      line removed silently is a line the reader assumes was never there.
+    //
+    //   ② **PER-LINE OR PER-UNIT IS A CHOICE, AND THE REPORT MUST PICK ONE AND SAY WHICH.**
+    //      The same books give **$761,504 per line** and **$1,657,696 once quantity is
+    //      applied** — one fact told two ways, and 36 bulk lines carry the difference.
+    //      🔴 **PER-LINE IS TAKEN.** Multiplying by quantity turns deliberate volume pricing
+    //      into a headline loss, which is what made the withdrawn rule unshippable. The basis
+    //      is NAMED in the sentence, not buried in a footnote.
+    //
+    // ⚠️ AND THE NUMBER UNDERNEATH IT, WHICH SURVIVES EITHER FRAMING: the median charged/list
+    // ratio is **0.87**. That is the useful figure — the typical sale is 13% under the recorded
+    // price — and it is reported BESIDE the total so a reader has a shape, not just a sum.
+    id: 'sold-below-quickbooks-list', tier: 'money', shape: 'two-sources-disagree', needs: ['items', 'invoices'],
+    quoted: 'measured 2026-09-03: 1,966 lines, $761,504 per line',
     run: (x) => {
       if (!x.items || !x.invoices) return null;
-      // The price card, by item id. Only items that PUBLISH a price are in it — an item with
-      // no price has no floor, and comparing against a null-read-as-zero would put every sale
-      // "at or above list" and silently empty this finding.
+      // Only items that PUBLISH a price are in the card. An item with no price has no floor,
+      // and comparing against a null-read-as-zero would put every sale "at or above list".
       const card = new Map<string, number>();
       for (const it of x.items) if (it.unitPrice !== null) card.set(it.id, it.unitPrice);
 
-      let below = 0, comparable = 0, shortfall = 0;
-      const items = new Set<string>();
+      let below = 0, comparable = 0, shortfall = 0, freeLines = 0;
+      const products = new Set<string>();
       const months = new Set<string>();
+      const ratios: number[] = [];
       for (const inv of x.invoices) {
+        // 🔴 THE GIVEAWAYS ARE COUNTED HERE, OFF THE RAW LINES, BECAUSE THAT IS WHERE THEY
+        // STILL EXIST. Measured against the real capture: all 74 zero-priced lines carry an
+        // AMOUNT of $0 too, so `pricedLines` — which requires `amount > 0` — has already
+        // dropped every one of them before the loop below ever sees it. Counting them inside
+        // that loop produced `freeLines === 0` and a `limits` sentence claiming an exclusion
+        // that was doing nothing. **The exclusion was already correct; the REPORTING of it was
+        // the lie**, and a sentence describing a filter that never fires is worse than silence.
+        for (const l of inv.lines) {
+          if (l.itemId === null || !card.has(l.itemId)) continue;
+          if (l.unitPrice === 0) freeLines++;
+        }
         for (const l of pricedLines(inv)) {
           const floor = l.itemId === null ? undefined : card.get(l.itemId);
-          if (floor === undefined) continue;         // no published price → not comparable
+          if (floor === undefined || floor <= 0) continue;   // no published price → not comparable
+          const charged = l.unitPrice as number;
+          // ① A GIVEAWAY IS NOT A DISCOUNT — never scored as a shortfall. Today `pricedLines`
+          // has already removed every such line (see the count above), so this is a DEFENSIVE
+          // guard for the shape that has not appeared yet: a $0 unit price on a line carrying a
+          // positive amount. It is reachable, so it is probed.
+          if (charged === 0) continue;
           comparable++;
-          if ((l.unitPrice as number) < floor) {
+          ratios.push(charged / floor);
+          if (charged < floor) {
             below++;
-            if (l.itemName) items.add(l.itemName);
-            // The gap, times what was actually sold. Qty is a COUNT on a goods line, and
-            // `pricedLines` has already excluded the lines where it is a dollar base.
-            const q = l.qty !== null && l.qty > 0 ? l.qty : 1;
-            shortfall += (floor - (l.unitPrice as number)) * q;
+            if (l.itemName) products.add(l.itemName);
+            // ② PER LINE. No `* qty` — see the note above.
+            shortfall += floor - charged;
             if (inv.txnDate) months.add(inv.txnDate.slice(0, 7));
           }
         }
       }
-      // 🔴 THE FOUR PARTS, ALL COMPUTED FROM THEIR OWN NUMBERS — NOTHING AUTHORED. The remedy
-      // costs nothing because it is a decision about what gets typed, not a purchase, and that
-      // is STATED rather than left out. A recommendation with an authored number is an opinion.
+      if (comparable === 0) return null;
+      ratios.sort((a, b) => a - b);
+      const median = ratios[Math.floor(ratios.length / 2)];
       const span = Math.max(1, months.size);
       const recommendation = below === 0 ? undefined : {
         statusQuoCost: shortfall,
-        remedy: 'Charge your published price on those products, or change the published price to what you actually mean to charge — today the two disagree and the invoice wins.',
+        remedy: 'Either charge the price recorded on the product, or change the recorded price to what you actually mean to charge. Today the two disagree and the invoice wins, so the recorded price is not telling you anything.',
         remedyCost: 0,
         paybackMonths: 0,
-        limits: `This counts only sales we could compare — ${comparable.toLocaleString()} of your lines had a published price to compare against. It cannot see a discount you meant to give, and some of these will be deliberate.`,
+        limits: `This compares each sale against the price recorded on that product in QuickBooks — NOT against a printed price list, which we have not been given. It counts the gap ONCE PER LINE, not per item sold, so a discount given on fifty trees counts once. ${plural(freeLines, 'line that was', 'lines that were')} charged nothing at all ${freeLines === 1 ? 'is' : 'are'} left out entirely, because giving something away is a decision and not a pricing mistake. Many of the rest will be deliberate too.`,
       };
       return {
-        matched: below, of: comparable, noun: 'sales we could compare against a published price',
-        sentence: `${plural(below, 'sale was', 'sales were')} charged below the price you have set for that item in QuickBooks — ${plural(items.size, 'product', 'products')} in total, ${money(shortfall)} less than your own price list over ${plural(span, 'month', 'months')}.`,
+        matched: below, of: comparable, noun: 'sales we could compare against a recorded price',
+        sentence: `${plural(below, 'sale was', 'sales were')} charged below the price recorded on that product in QuickBooks — ${plural(products.size, 'product', 'products')} over ${plural(span, 'month', 'months')}, ${money(shortfall)} counted once per sale rather than per item. Typically people paid ${pct(Math.round(median * 100), 100)} of the recorded price.`,
         value: shortfall,
         recommendation,
       };
@@ -282,6 +365,7 @@ export const BOOKS_RULES: Rule[] = [
   {
     id: 'discount-never-applied', tier: 'money', shape: 'two-sources-disagree', needs: ['invoices', 'customers'],
     quoted: '7 customers',
+    remeasured: 'NOT COMPUTABLE — it needs the discount policy, which is a rule about their business rather than a pattern in their data.',
     // Also deliberately uncomputed: it needs the POLICY — who qualifies for which discount.
     // That is a rule about their business, not a pattern in their data, and the data cannot
     // be made to yield it without inventing the policy first.
@@ -290,6 +374,7 @@ export const BOOKS_RULES: Rule[] = [
   {
     id: 'discounts-that-do-not-work', tier: 'money', shape: 'written-never-read', needs: ['invoices'],
     quoted: '3 military, 2 broken',
+    remeasured: '3 military discount items CONFIRMED. 5 discount items in total did not take their percentage off the whole invoice.',
     run: (x) => {
       if (!x.discounts) return null;
       // REUSES `summariseInvoices`' own DiscountBreakdown rather than re-deriving it (§6 r8).
@@ -315,6 +400,7 @@ export const BOOKS_RULES: Rule[] = [
   {
     id: 'duplicate-invoice-numbers', tier: 'risk', shape: 'reused-unique-value', needs: ['invoices'],
     quoted: '22 numbers, 44 invoices',
+    remeasured: 'CONFIRMED EXACT — 22 numbers across 44 invoices.',
     run: (x) => {
       if (!x.invoices) return null;
       const byNumber = new Map<string, number>();
@@ -338,6 +424,7 @@ export const BOOKS_RULES: Rule[] = [
   {
     id: 'invoices-without-delivery-date', tier: 'risk', shape: 'field-adopted-midway', needs: ['invoices'],
     quoted: '881 of 1,469',
+    remeasured: 'CONFIRMED EXACT — 881 of 1,469. Adoption 2% of the 570 invoices before 2025-09 and 64% of the 899 after.',
     run: (x) => {
       if (!x.invoices || !x.shipDates) return null;
       let without = 0, seen = 0;
@@ -355,6 +442,7 @@ export const BOOKS_RULES: Rule[] = [
   {
     id: 'possible-duplicate-customers', tier: 'risk', shape: 'reused-unique-value', needs: ['customers'],
     quoted: 'about 72',
+    remeasured: '54 — sharing an email address or a phone number with another record.',
     run: (x) => {
       if (!x.customers) return null;
       // 🔴 READ OFF THE TYPED BREAKDOWN, NOT A CAST. `summariseCustomers` already sizes this
@@ -384,6 +472,7 @@ export const BOOKS_RULES: Rule[] = [
   {
     id: 'customers-with-no-contact', tier: 'risk', shape: 'implausible-distribution', needs: ['customers'],
     quoted: '110 of 1,927',
+    remeasured: '110 of 1,936. The count was right and the DENOMINATOR was stale — the customer read is 1,936, and 1,927 had already been corrected once.',
     run: (x) => {
       if (!x.customers) return null;
       // `withNoContactAtAll` is the field's own name for exactly this: carries NONE of email,
@@ -401,6 +490,7 @@ export const BOOKS_RULES: Rule[] = [
   {
     id: 'sold-at-more-than-one-price', tier: 'tidiness', shape: 'implausible-distribution', needs: ['invoices'],
     quoted: '286 of 414',
+    remeasured: 'CONFIRMED EXACT — 286 of 414.',
     run: (x) => {
       if (!x.invoices) return null;
       const prices = new Map<string, Set<number>>();
@@ -423,6 +513,7 @@ export const BOOKS_RULES: Rule[] = [
   {
     id: 'income-accounts-in-use', tier: 'tidiness', shape: 'implausible-distribution', needs: ['items'],
     quoted: '41 accounts',
+    remeasured: '13 accounts across the 685 products, 9 of which appear on an invoice line. 41 is not derivable from any of the three reads.',
     run: (x) => {
       if (!x.items) return null;
       const accounts = new Set<string>();
@@ -463,6 +554,7 @@ export const BOOKS_RULES: Rule[] = [
   {
     id: 'discount-in-wording', tier: 'money', shape: 'prose-not-a-field', needs: ['invoices'],
     quoted: '504 lines carrying $614,053, against 66 formal discount lines totalling $31,985',
+    remeasured: '412 lines carrying $461,835, against 88 recorded discount lines totalling $36,287. (Counting raw discount LINES rather than discount ITEMS gives 66 and $31,985 — the quoted pair is right under that second definition, and this rule states which one it uses.)',
     run: (x) => {
       if (!x.invoices) return null;
       let wordingLines = 0, wordingAmount = 0, formalLines = 0, formalAmount = 0, allLines = 0;
@@ -541,6 +633,7 @@ export const BOOKS_RULES: Rule[] = [
     id: 'customers-who-bought-once', tier: 'tidiness',
     shape: 'implausible-distribution', needs: ['invoices'],
     quoted: '83% of customers bought exactly once, and they are 56% of revenue',
+    remeasured: 'CONFIRMED EXACT — 905 of the 1,093 customers who have ever bought, 83%, and 56% of revenue.',
     run: (x) => {
       if (!x.invoices) return null;
       const perCustomer = new Map<string, number>();
@@ -565,11 +658,59 @@ export const BOOKS_RULES: Rule[] = [
   // names the two fields that would answer it, so the next conversation starts from a request
   // rather than from a rediscovery.
   {
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // 🔴 BUILT 2026-09-03. THE `cannotCompute` THIS REPLACES WAS FALSE ABOUT OUR OWN READ.
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    // It said: *"The invoice read does not include how much of each invoice is still unpaid,
+    // or when it was due."* **`Balance` and `DueDate` are on 1,469 of 1,469 rows** of the
+    // 2026-08-29 capture. What dropped them was `invoiceList.ts`'s parser, not Intuit — so the
+    // sentence blamed a customer's books for something we did to them.
+    //
+    // 🔴 THAT IS WORSE THAN A MISSING FINDING, AND IT IS WHY THIS ONE WAS BUILT RATHER THAN
+    // RE-WORDED. A missing finding is a silence. A false cannot-compute is an ASSERTION — it
+    // tells an owner their data lacks something their data carries, and it forecloses the
+    // question for every future reader who believes it.
     id: 'overdue-receivables', tier: 'money',
     shape: 'implausible-distribution', needs: ['invoices'],
     quoted: '$30,736 outstanding, of which $11,157 more than 30 days past due',
-    cannotCompute: 'We cannot tell you what you are owed. The invoice read does not include how much of each invoice is still unpaid, or when it was due — so nothing here should be read as "your receivables are fine".',
-    run: () => null,
+    remeasured: 'CONFIRMED — $30,736 across 14 invoices, $11,158 of it on 6 invoices more than 30 days past due as at the 2026-08-29 read, oldest due 2026-04-22.',
+    cannotCompute: 'We cannot tell you what you are owed, because we were not told what date to count from. Nothing here should be read as "your receivables are fine".',
+    run: (x) => {
+      if (!x.invoices || !x.asOf) return null;
+      const asOf = Date.parse(`${x.asOf}T00:00:00Z`);
+      if (!Number.isFinite(asOf)) return null;
+
+      let openTotal = 0, openCount = 0, lateTotal = 0, lateCount = 0, undated = 0, unreadable = 0;
+      let oldestDue: string | null = null;
+      for (const inv of x.invoices) {
+        // 🔴 A NULL BALANCE IS NOT A ZERO BALANCE, AND THE DIFFERENCE IS DECLARED RATHER THAN
+        // ABSORBED. An invoice whose balance we could not read is not an invoice that is paid.
+        // Skipping it silently and skipping a settled invoice silently produce the same total
+        // and mean opposite things (D-9 / A9) — so the unreadable ones are COUNTED and the
+        // sentence says how many, exactly as the undated ones are.
+        if (inv.balance === null) { unreadable++; continue; }
+        if (inv.balance <= 0) continue;
+        openTotal += inv.balance; openCount++;
+        if (!inv.dueDate) { undated++; continue; }
+        const due = Date.parse(`${inv.dueDate}T00:00:00Z`);
+        if (!Number.isFinite(due)) { undated++; continue; }
+        if (oldestDue === null || inv.dueDate < oldestDue) oldestDue = inv.dueDate;
+        if ((asOf - due) / 86_400_000 > 30) { lateTotal += inv.balance; lateCount++; }
+      }
+      if (openCount === 0) return null;
+
+      const oldestClause = oldestDue === null ? ''
+        : ` The oldest was due on ${oldestDue}.`;
+      const undatedClause = undated === 0 ? ''
+        : ` ${plural(undated, 'invoice has', 'invoices have')} no due date we could read, so ${undated === 1 ? 'it is' : 'they are'} counted in the total owed but not in the overdue figure.`;
+      const unreadableClause = unreadable === 0 ? ''
+        : ` A further ${plural(unreadable, 'invoice does', 'invoices do')} not record a balance we could read, so ${unreadable === 1 ? 'it is' : 'they are'} in neither figure — ${unreadable === 1 ? 'it is' : 'they are'} not known to be paid.`;
+      return {
+        matched: openCount, of: x.invoices.length, noun: 'invoices',
+        sentence: `${money(openTotal)} is still owed to you across ${plural(openCount, 'invoice', 'invoices')}, and ${money(lateTotal)} of that — ${plural(lateCount, 'invoice', 'invoices')} — was more than 30 days past due when we read your books.${oldestClause}${undatedClause}${unreadableClause}`,
+        value: openTotal,
+      };
+    },
   },
 ];
 
@@ -581,9 +722,11 @@ export const BOOKS_RULES: Rule[] = [
  * quietly asserts everything worth checking was checked — the exact failure the `measured`
  * flag exists to prevent. A rule the reader cannot see is a rule the reader assumes passed.
  *
- * `now` is not a parameter because nothing here depends on the clock; the "23 months" framing
- * in the quoted figure is a property of the CAPTURE's date range, which the invoice read
- * already reports above this panel.
+ * ⚠️ NOTHING HERE READS THE CLOCK. One rule — receivables — needs a date to measure "past due"
+ * against, and it takes it as `input.asOf` (the date the books were READ). That keeps the same
+ * capture producing the same answer next month, which is what makes the rule probeable at all:
+ * a finding whose output drifts on its own cannot be asserted against (R-33). Absent `asOf`,
+ * the rule reports itself uncomputed rather than quietly substituting today.
  */
 export function evaluateBooks(input: BooksInput): Finding[] {
   const present: Record<Walk, boolean> = {
@@ -597,6 +740,7 @@ export function evaluateBooks(input: BooksInput): Finding[] {
     const missing = rule.needs.filter(w => !present[w]);
     const base = {
       id: rule.id, tier: rule.tier, shape: rule.shape, quoted: rule.quoted,
+      remeasured: rule.remeasured ?? null,
       needsAnswer: null as Finding['needsAnswer'],
       // A finding that could not run has no money at stake and no recommendation. Reporting
       // either as 0 would put it in the ordering as though it had been measured and found

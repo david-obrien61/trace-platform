@@ -53,7 +53,7 @@ import { authHeaders } from '../auth/authHeaders';
 import { rawCaptureFileName, QBO_ROUTE, QBO_ENTITIES, type QboEntity } from '../quickbooks/qboRead';
 import type { QboItemRow, ItemBreakdown } from '../quickbooks/itemList';
 import type { QboCustomerRow, CustomerBreakdown } from '../quickbooks/customerList';
-import { BUNDLE_ITEM_NAMES, parseInvoiceList, type InvoiceBreakdown, type QboInvoiceRow } from '../quickbooks/invoiceList';
+import { BUNDLE_ITEM_NAMES, parseInvoiceList, invoiceRowsForDisplay, type InvoiceBreakdown, type QboInvoiceRow } from '../quickbooks/invoiceList';
 import { parseShipmentList } from '../quickbooks/shipmentIngest';
 import { evaluateBooks, type BooksInput, type Finding } from '../quickbooks/booksFindings';
 import { BooksReview } from './BooksReview';
@@ -71,11 +71,27 @@ const ENTITY_NOUN: Record<QboEntity, string> = {
   Item: 'products & services', Customer: 'customers', Invoice: 'invoices',
 };
 
+/**
+ * How many invoice rows the screen shows. It is a DISPLAY cap, never a read cap — the walk is
+ * always complete and the count beside the table says so, per R-24: a list that cannot prove it
+ * is the whole list is a failure, and a list that IS capped must say what it is capped to.
+ */
+export const INVOICE_ROWS_SHOWN = 100;
+
 const GREEN = '#27500A';
 const GRAY  = '#6b7280';
 const RED   = '#A32D2D';
 const DARK  = '#111827';
 const AMBER = '#92400e';
+
+/**
+ * One line of the read narration. `kind` drives the colour and nothing else — the TEXT carries
+ * the meaning, so a screenshot with no colour still reads correctly.
+ */
+interface NarrationLine {
+  kind: 'notice' | 'working' | 'done' | 'failed';
+  text: string;
+}
 
 interface ReadResponse {
   ok?: boolean;
@@ -182,9 +198,11 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
   const [reads, setReads] = useState<Partial<Record<QboEntity, ReadResponse>>>({});
   /** What the last file load did. A refusal is shown here and nothing is loaded. */
   const [fileNote, setFileNote] = useState<{ ok: boolean; text: string } | null>(null);
+  /** The narration trail for the one-button read. Append-only within a run; see `readAll`. */
+  const [narration, setNarration] = useState<NarrationLine[]>([]);
 
-  async function read(entity: QboEntity) {
-    if (!businessId || loading) return;
+  async function read(entity: QboEntity): Promise<ReadResponse | null> {
+    if (!businessId || loading) return null;
     setLoading(entity);
     setState(null);
     // 🔴 THE ROUTE COMES FROM THE SHARED MAP, NOT A TERNARY. This line used to read
@@ -222,12 +240,66 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
         error: failed ? (body.headline || body.detail || body.error || `The read failed (HTTP ${res.status}).`) : null,
         note: body.points_at ? `Points at: ${body.points_at}` : null,
       });
+      return failed ? null : body;
     } catch (e: any) {
       setState({ entity, body: {}, savedAs: null, saveFailed: false,
         error: `The read could not complete: ${String(e?.message ?? e)}`, note: null });
+      return null;
     } finally {
       setLoading(null);
     }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // 🔴 ONE BUTTON, AND A NARRATION THAT ONLY EVER REPORTS WHAT HAPPENED (§7 W1–W5).
+  // ══════════════════════════════════════════════════════════════════════════════
+  // The owner presses ONE thing and waits through three reads. Everything about how that wait
+  // is described is now a filed standard rather than this component's opinion —
+  // `ui-control-standards.md` §7, minted BEFORE this code was written (R-74's order: the doc
+  // moves, then the widget, then the surface).
+  //
+  // W1 — THE RANGE GOES UP BEFORE THE FIRST REQUEST, not after the first walk returns. The
+  //   silent gap at the FRONT is the part that reads as broken, so covering only the middle
+  //   would be covering the wrong half. "A few minutes" and not "twenty seconds", because a
+  //   range that is beaten is honest and a number that is missed is not — and three walks over
+  //   a connection we do not control is not ours to promise to the second.
+  //
+  // W4 — 🔴 THE GRANULARITY IS PER WALK, DELIBERATELY, AND THIS IS THE CLAUSE THAT COST
+  //   SOMETHING. "reading customers, 1,000 of 1,927" cannot be emitted: `readAllPages` counts,
+  //   pages and returns INSIDE ONE REQUEST, so the browser learns nothing until the walk lands.
+  //   The only way to obtain a running count is to drive the paging from here — which moves the
+  //   completeness refusal into the browser, and that refusal existing on the SERVER is exactly
+  //   what R-24 clause (a) is. A progress number is not worth relocating a refusal, so the
+  //   coarser honest form ships and no finer one is simulated.
+  //
+  // W5 — a refused walk STOPS the sequence and the line says which walk stopped it. Carrying on
+  //   would leave a later success painted over an earlier failure, and a narration that simply
+  //   goes quiet is indistinguishable from one still working.
+  async function readAll() {
+    if (!businessId || loading) return;
+    // W1: BEFORE the first fetch. Not after, not concurrently — before.
+    setNarration([{ kind: 'notice', text: 'This will take a few minutes. Reading your QuickBooks company now — nothing is being changed there, and nothing is saved here.' }]);
+    for (const entity of QBO_ENTITIES) {
+      setNarration(prev => [...prev, { kind: 'working', text: `Reading your ${ENTITY_NOUN[entity]}…` }]);
+      const body = await read(entity);
+      if (!body) {
+        // W5. The sequence halts and names the walk; the panel below carries the real reason.
+        setNarration(prev => [...prev.slice(0, -1), {
+          kind: 'failed',
+          text: `Stopped while reading your ${ENTITY_NOUN[entity]}. The reads after this one were not attempted, so nothing below describes them.`,
+        }]);
+        return;
+      }
+      // W3: the real count, and the walk states that it is WHOLE. The endpoint has already
+      // REFUSED anything short of its own pre-counted total (R-24), so this is surfacing a
+      // proof rather than making a claim — and it is on screen even when it agrees, because a
+      // completeness claim nobody can see is a completeness claim nobody checks.
+      setNarration(prev => [...prev.slice(0, -1), {
+        kind: 'done',
+        text: `Read ${(body.retrieved_total ?? 0).toLocaleString()} ${ENTITY_NOUN[entity]} — that is all of them.`,
+      }]);
+    }
+    setNarration(prev => [...prev, { kind: 'notice', text: 'All three reads finished. Everything below came from your own books.' }]);
   }
 
   // ══════════════════════════════════════════════════════════════════════════════
@@ -348,22 +420,28 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
   // ⚠️ THE SHIPMENT PARSE IS USED FOR ONE FIELD AND THE ROWS ARE DISCARDED IMMEDIATELY.
   // `QboShipmentRow` DOES carry names and addresses — it is the delivery ingest's shape — so
   // only `id → shipDate` survives this expression. Nothing else is held and nothing is rendered.
-  const findings: Finding[] = (() => {
+  const parsed = (() => {
     const inv = reads.Invoice;
-    let invoices: QboInvoiceRow[] | undefined;
-    let shipDates: Map<string, string | null> | undefined;
-    if (inv?.capture) {
-      const pages = (inv.capture as { pages?: { body?: string }[] }).pages ?? [];
-      const bodies = pages.map(p => p.body ?? '').filter(Boolean);
-      invoices = bodies.flatMap(raw => parseInvoiceList(raw).invoices);
-      shipDates = new Map(bodies.flatMap(raw => parseShipmentList(raw).shipments).map(sh => [sh.id, sh.shipDate]));
-    }
+    if (!inv?.capture) return { invoices: undefined as QboInvoiceRow[] | undefined, shipDates: undefined as Map<string, string | null> | undefined };
+    const pages = (inv.capture as { pages?: { body?: string }[] }).pages ?? [];
+    const bodies = pages.map(p => p.body ?? '').filter(Boolean);
+    return {
+      invoices: bodies.flatMap(raw => parseInvoiceList(raw).invoices),
+      shipDates: new Map(bodies.flatMap(raw => parseShipmentList(raw).shipments).map(sh => [sh.id, sh.shipDate])),
+    };
+  })();
+
+  const findings: Finding[] = (() => {
     const input: BooksInput = {
       items:     reads.Item?.items,
       customers: reads.Customer?.breakdown as CustomerBreakdown | undefined,
-      invoices,
+      invoices:  parsed.invoices,
       discounts: (reads.Invoice?.breakdown as InvoiceBreakdown | undefined)?.discounts,
-      shipDates,
+      shipDates: parsed.shipDates,
+      // 🔴 THE DATE THE BOOKS WERE READ, NOT TODAY. The receivables rule measures "past due"
+      // against the moment of the read, so a capture re-opened next month still describes the
+      // day it was taken rather than silently ageing every invoice in it.
+      asOf: (reads.Invoice?.queried_at ?? '').slice(0, 10) || undefined,
     };
     return evaluateBooks(input);
   })();
@@ -385,6 +463,37 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
         full response downloads to this device.
       </p>
 
+      {/* 🔴 THE ONE BUTTON. Everything else on this row is the operator's own path and is
+          demoted below it — Lauren presses this and waits. */}
+      <button
+        onClick={() => void readAll()}
+        disabled={!!loading || !businessId}
+        style={{ ...btn, width: '100%', flex: 'none', minHeight: 56, fontSize: '1rem', marginBottom: 12 }}
+      >
+        {loading ? 'Reading your QuickBooks data…' : 'Read my QuickBooks data'}
+      </button>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          THE NARRATION (§7 W1–W5). Real counts only; no bar, no countdown (W2).
+          ══════════════════════════════════════════════════════════════════════ */}
+      {narration.length > 0 && (
+        <div style={{ margin: '0 0 14px', padding: '12px 14px', background: '#f9fafb',
+                      border: '1px solid #e5e7eb', borderRadius: 10 }}>
+          {narration.map((n, i) => (
+            <p key={i} style={{
+              margin: i === 0 ? 0 : '6px 0 0', fontSize: '0.8125rem', lineHeight: 1.5,
+              color: n.kind === 'failed' ? RED : n.kind === 'done' ? GREEN : n.kind === 'working' ? DARK : GRAY,
+              fontWeight: n.kind === 'done' || n.kind === 'failed' ? 700 : 400,
+            }}>
+              {n.kind === 'done' ? '✓ ' : n.kind === 'working' ? '· ' : ''}{n.text}
+            </p>
+          ))}
+        </div>
+      )}
+
+      <p style={{ fontSize: '0.75rem', color: GRAY, margin: '0 0 6px' }}>
+        Or read one list at a time:
+      </p>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <button onClick={() => void read('Item')} disabled={!!loading || !businessId} style={btn}>
           {loading === 'Item' ? 'Reading items…' : 'Read item list'}
@@ -467,6 +576,72 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
           RATHER THAN IN FRONT OF THEM. It has no acknowledge-to-continue and nothing on it can
           disable an ingest button: a finding that could stop Lauren is a finding that makes her
           phone David, and then the build has failed however good the finding was. */}
+      {/* ══════════════════════════════════════════════════════════════════════════════
+          🔴 HER OWN INVOICES — NUMBER, DATE AND TOTAL. NO BUYER NAME. (David, OPTION B.)
+          ══════════════════════════════════════════════════════════════════════════════
+          The build prompt asked for her customers' NAMES here and called their absence "the
+          gap you measured". It is not a gap, it is R-24 clause (b) — *"a read of personal data
+          is summarised, never listed"* — and the sentence the prompt quoted as evidence was the
+          comment implementing it. David ruled OPTION B: recognition comes from her ITEM NAMES
+          and her INVOICE NUMBERS, and neither of those is personal data, so R-24 stays where it
+          was ruled rather than being stretched to a case it did not consider.
+
+          🔴 THE ABSENCE IS STATED, NOT LEFT TO BE INFERRED. David: *"say on the screen what is
+          NOT shown and why — an absence a reader has to interpret is the defect, not the fix."*
+
+          ⚠️ IT CANNOT SHOW A NAME EVEN IF SOMEONE LATER TRIED. `QboInvoiceRow` has no customer
+          name field at all (`invoiceList.ts` reads `CustomerRef.value` and never `.name`), so
+          the constraint is structural and does not depend on this JSX staying careful.
+
+          ⚠️ AND IT IS NOT `<DataSheet>`, WHICH IS A DELIBERATE LIMIT RATHER THAN A CHOICE:
+          this component lives in `packages/shared` and the grid engine lives in
+          `packages/cultivar-os` — shared never imports the app, so the platform grid is not
+          reachable from here. A plain bounded table is what this surface can honestly have. */}
+      {parsed.invoices && parsed.invoices.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <p style={{ fontSize: '0.875rem', color: DARK, fontWeight: 700, margin: '0 0 4px' }}>
+            Your invoices
+          </p>
+          <p style={{ fontSize: '0.8125rem', color: GRAY, margin: '0 0 10px', lineHeight: 1.5 }}>
+            {/* The cap NAMES itself. A capped list that reports a bare total is a list quietly
+                claiming to be whole — the same defect the walk's own completeness refusal
+                exists to prevent, arriving one layer up in the display. */}
+            Showing the {Math.min(INVOICE_ROWS_SHOWN, parsed.invoices.length).toLocaleString()} most
+            recent of {parsed.invoices.length.toLocaleString()} invoices, newest first.
+            {' '}<strong>We do not list your customers&rsquo; details here</strong> — who bought is
+            not shown on this screen. The complete records, including every buyer, are in the file
+            that downloaded to this device.
+          </p>
+          <div style={{ maxHeight: 360, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 10 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
+              <thead>
+                <tr>
+                  {/* The module's own `head`/`cell` styles, not a second copy — this file
+                      already had both for its other tables (§6 r8). */}
+                  {['Invoice number', 'Date', 'Total'].map((h, i) => (
+                    <th key={h} style={{ ...head, textAlign: i === 2 ? 'right' : 'left' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {invoiceRowsForDisplay(parsed.invoices, INVOICE_ROWS_SHOWN).map(inv => (
+                  <tr key={inv.id}>
+                    <td style={cell}>{inv.docNumber ?? <span style={{ color: GRAY }}>No number</span>}</td>
+                    {/* D-9 / A9 — a missing date is NEVER rendered as a real one. */}
+                    <td style={cell}>{inv.txnDate ?? <span style={{ color: GRAY }}>No date recorded</span>}</td>
+                    <td style={{ ...cell, textAlign: 'right' }}>
+                      {inv.totalAmt === null
+                        ? <span style={{ color: GRAY }}>Not recorded</span>
+                        : `$${inv.totalAmt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <BooksReview findings={findings} />
 
       {state?.savedAs && (

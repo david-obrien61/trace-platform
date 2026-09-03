@@ -33,8 +33,10 @@ const item = (id: string, name: string, o: Partial<QboItemRow> = {}): QboItemRow
 const line = (itemId: string | null, itemName: string | null, unitPrice: number | null, amount: number, qty = 1,
               discountInDescription = false) =>
   ({ detailType: 'SalesItemLineDetail', itemId, itemName, qty, amount, unitPrice, discountInDescription });
-const inv = (id: string, docNumber: string | null, lines: ReturnType<typeof line>[]): QboInvoiceRow =>
-  ({ id, docNumber, txnDate: '2026-05-01', totalAmt: 100, customerId: 'c1', lines });
+const inv = (id: string, docNumber: string | null, lines: ReturnType<typeof line>[],
+             o: Partial<QboInvoiceRow> = {}): QboInvoiceRow =>
+  ({ id, docNumber, txnDate: '2026-05-01', totalAmt: 100, balance: 0, dueDate: null,
+     customerId: 'c1', lines, ...o });
 
 const CUSTOMERS: CustomerBreakdown = {
   total: 1927, withEmail: 900, withPhone: 1200, withAddress: 1500, withCompanyName: 300,
@@ -45,7 +47,17 @@ const CUSTOMERS: CustomerBreakdown = {
 
 const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => f.id === id);
 
-// ══ §A THE PRICE-CARD RULE — the one the parser widening exists for ═════════
+// ══ §A THE WITHDRAWN PRICE-CARD RULE, AND ITS HONEST SUCCESSOR ══════════════
+//
+// 🔴 WHAT THIS SECTION IS REALLY GUARDING. `sold-below-price-card` was WORDED about the
+// business's printed price card and COMPUTED against the QuickBooks list price. Those are
+// different floors, and the sentence claimed the one it did not use. Over LAWNS's real books it
+// produced $1,607,416 — 52% of their revenue — and under money-at-stake ordering that sorts
+// FIRST, as the opening line of the document an owner hands their accountant.
+//
+// So the probe below is not "does the arithmetic work". It is: CAN THE WITHDRAWN RULE COME BACK
+// TO LIFE. A future edit that gives it a `run` again would restore the false headline silently,
+// and every existing assertion about ordering and populations would keep passing.
 {
   const items = [item('1', 'Shumard Oak 30 gal', { unitPrice: 500 }),
                  item('2', 'Cedar Elm 15 gal',   { unitPrice: 200 }),
@@ -56,16 +68,101 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
     inv('i3', '1003', [line('2', 'Cedar Elm 15 gal',   250, 250)]),   // above list
     inv('i4', '1004', [line('3', 'Consulting',         999, 999)]),   // NO published price
   ];
-  const f = find(evaluateBooks({ items, invoices }), 'sold-below-price-card');
+  const withdrawn = find(evaluateBooks({ items, invoices }), 'sold-below-price-card');
+  ok(withdrawn?.measured === false,
+    '🔴 THE PRICE-CARD RULE NEVER MEASURES — it is withdrawn, and a probe that only checked the successor would not notice it coming back');
+  ok((withdrawn?.notMeasured ?? '').includes('printed price list'),
+    'and it says WHY it cannot: we were never given the printed list. A generic "only you can tell us" would send the reader to the wrong question');
+  ok(!(withdrawn?.notMeasured ?? '').includes('$'),
+    '🔴 AND IT QUOTES NO MONEY FIGURE — the withdrawn number must not survive in the prose of its own withdrawal');
+
+  // ── the successor, which names the floor it actually uses ──────────────────
+  const f = find(evaluateBooks({ items, invoices }), 'sold-below-quickbooks-list');
   ok(f?.measured === true && f.population.matched === 1,
-    'one sale below the published price is found');
+    'one sale below the RECORDED price is found');
   ok(f?.population.of === 3,
-    '🔴 THE DENOMINATOR EXCLUDES THE UNPRICED ITEM — 3 comparable sales, not 4. An item with no published price has no floor, and counting it would make the percentage meaningless');
+    '🔴 THE DENOMINATOR EXCLUDES THE UNPRICED ITEM — 3 comparable sales, not 4. An item with no recorded price has no floor, and counting it would make the percentage meaningless');
+  ok((f?.sentence ?? '').includes('recorded on that product in QuickBooks'),
+    '🔴 THE SENTENCE NAMES ITS FLOOR. This is the entire defect of the withdrawn rule: it must be impossible to read this as a comparison against a printed card');
+  ok(!(f?.sentence ?? '').toLowerCase().includes('price list') || (f?.sentence ?? '').includes('QuickBooks'),
+    'and it never calls the QuickBooks field a "price list" unqualified');
+
+  // 🔴 ① A GIVEAWAY IS NOT A DISCOUNT — and this probe had to be REBUILT to mean anything.
+  //
+  // The first version used a $0 unit price on a $0 amount, which is the shape all 74 real
+  // giveaway lines take — and `pricedLines` (amount > 0) had ALREADY removed every one of them
+  // before the rule saw it. So the probe passed without ever reaching the guard it named, and
+  // the mutation harness proved it: M21 SURVIVED. Both shapes are asserted now.
+  //   (a) the REAL shape — excluded upstream, but still COUNTED so `limits` can be true;
+  //   (b) the shape that reaches the guard — a $0 unit price on a positive amount.
+  const withFree = [...invoices, inv('i5', '1005', [line('1', 'Shumard Oak 30 gal', 0, 0)])];
+  const g = find(evaluateBooks({ items, invoices: withFree }), 'sold-below-quickbooks-list');
+  ok(g?.population.matched === 1 && g.population.of === 3,
+    '🔴 A LINE CHARGED EXACTLY $0 IS NOT COUNTED AS A SALE BELOW LIST — nor in the denominator. Scored, it would contribute the LARGEST possible shortfall (the full list price) for what is a decision to give something away. 74 such lines were live in the real books');
+  ok(g?.value === f?.value,
+    'and the money at stake does not move when a giveaway is added — proof the exclusion is real and not merely a smaller sentence');
+  ok((g?.recommendation?.limits ?? '').includes('1 line that was charged nothing at all'),
+    '🔴 AND THE EXCLUSION IS STATED WITH A REAL COUNT. Counting giveaways inside the priced loop gave ZERO — a sentence describing a filter that never fired, which is worse than silence');
+
+  const reachesGuard = [...invoices, inv('i6', '1006', [line('1', 'Shumard Oak 30 gal', 0, 5)])];
+  const gg = find(evaluateBooks({ items, invoices: reachesGuard }), 'sold-below-quickbooks-list');
+  ok(gg?.population.matched === 1 && gg.population.of === 3,
+    '🔴 AND A $0 UNIT PRICE ON A POSITIVE AMOUNT — the shape that actually reaches the in-loop guard — is excluded from both sides too. Without this line the guard is unreachable and asserting on it proves nothing');
+
+  // 🔴 ② PER LINE, NOT PER UNIT — and the same books must not yield two answers.
+  const bulk = [inv('i9', '1009', [line('1', 'Shumard Oak 30 gal', 450, 4500, 10)])];
+  const h = find(evaluateBooks({ items, invoices: bulk }), 'sold-below-quickbooks-list');
+  ok(h?.value === 50,
+    '🔴 THE GAP COUNTS ONCE PER SALE, NOT ONCE PER TREE — $50 on a line of ten, not $500. Multiplying by quantity turns deliberate volume pricing into a headline loss, which is what made the withdrawn rule unshippable ($761,504 per line vs $1,657,696 with quantity, on one set of books)');
+  ok((h?.sentence ?? '').includes('once per sale'),
+    'and the basis is NAMED in the sentence rather than buried in a footnote — the report must pick one and say which');
 
   // 🔴 THE FAILURE THAT WOULD EMPTY THIS FINDING SILENTLY.
-  const noCard = find(evaluateBooks({ items: [item('1', 'Shumard Oak 30 gal')], invoices: [invoices[0]] }), 'sold-below-price-card');
+  const noCard = find(evaluateBooks({ items: [item('1', 'Shumard Oak 30 gal')], invoices: [invoices[0]] }), 'sold-below-quickbooks-list');
   ok(noCard?.measured === false,
     '🔴 A CATALOGUE WITH NO PRICES AT ALL REPORTS NOT-MEASURED, NOT "no problems". If a null price were read as a floor of $0.00, every sale on earth is at or above list and this finding reports a clean bill of health over data it never compared');
+}
+
+// ══ §A2 RECEIVABLES — the finding whose "we cannot" was false about our own read ══
+//
+// 🔴 THE ORIGINAL DEFECT WAS NOT A MISSING FEATURE, IT WAS AN ASSERTION. The rule told owners
+// *"the invoice read does not include how much of each invoice is still unpaid, or when it was
+// due"* while `Balance` and `DueDate` sat on 1,469 of 1,469 rows of the capture. A false
+// cannot-compute forecloses the question for every reader who believes it.
+{
+  const open = (id: string, balance: number, dueDate: string | null) =>
+    inv(id, id, [line('1', 'Tree', 100, 100)], { balance, dueDate });
+  const invoices = [
+    open('a', 500, '2026-01-01'),   // long past due
+    open('b', 300, '2026-04-20'),   // 40 days before asOf — past due
+    open('c', 200, '2026-05-25'),   //  6 days before asOf — owed, NOT late
+    open('d',   0, '2026-01-01'),   // settled — never counted
+    open('e', 100, null),           // owed, no due date we can read
+    { ...open('f', 0, '2026-01-01'), balance: null },   // balance we could not read at all
+  ];
+  const f = find(evaluateBooks({ invoices, asOf: '2026-05-31' }), 'overdue-receivables');
+  ok(f?.measured === true, '🔴 IT MEASURES. The fields were always in the read; the parser dropped them');
+  ok(f?.value === 1100, 'the total owed is every positive balance — $1,100, and the settled invoice is not in it');
+  ok((f?.sentence ?? '').includes('not known to be paid'),
+    '🔴 AN INVOICE WHOSE BALANCE WE COULD NOT READ IS DECLARED, NOT ABSORBED. Skipping it silently and skipping a SETTLED invoice silently produce the same total and mean opposite things — the mutation harness caught this as an equivalent mutant (M24 survived) precisely because the code could not tell them apart');
+  ok((f?.sentence ?? '').includes('$800'),
+    '🔴 ONLY WHAT IS MORE THAN 30 DAYS PAST DUE IS LATE — $800, not $1,100. A rule that called every open invoice overdue would be alarming and wrong');
+  ok((f?.sentence ?? '').includes('2026-01-01'),
+    'the oldest due date is named, because "how long has this been going on" is the question a total cannot answer');
+  ok((f?.sentence ?? '').includes('no due date'),
+    '🔴 THE UNDATED INVOICE IS DECLARED, NOT DROPPED — it is in the total owed and out of the overdue figure, and the sentence says exactly that. Silently omitting it would understate one number while overstating the reader\'s confidence in both');
+
+  // 🔴 THE CLOCK IS SUPPLIED, NEVER READ — this is what makes the rule probeable at all.
+  const noDate = find(evaluateBooks({ invoices }), 'overdue-receivables');
+  ok(noDate?.measured === false,
+    '🔴 WITHOUT A DATE TO COUNT FROM IT REPORTS UNCOMPUTED rather than quietly substituting today. A finding whose output moves on its own cannot be asserted against');
+  ok(!(noDate?.notMeasured ?? '').includes('read does not include'),
+    '🔴 AND THE OLD FALSE REASON IS GONE. It blamed the customer\'s books for a field our own parser discarded');
+
+  // A NEGATIVE CONTROL: books where nothing is owed must not report a clean $0 finding.
+  const paid = find(evaluateBooks({ invoices: [open('z', 0, '2026-01-01')], asOf: '2026-05-31' }), 'overdue-receivables');
+  ok(paid?.measured === false,
+    'and a set with no open balance reports not-measured rather than "$0 owed" — a pass over an empty population is a failure (§C)');
 }
 
 // ══ §B PRICED LINES — what counts as a sale at a price ══════════════════════
@@ -77,7 +174,7 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
     { detailType: 'DiscountLineDetail', itemId: 'd', itemName: 'CD10%', qty: 900, amount: -90, unitPrice: null },
     { detailType: 'SubTotalLineDetail', itemId: null, itemName: null, qty: null, amount: 90, unitPrice: null },
   ])];
-  const f = find(evaluateBooks({ items, invoices }), 'sold-below-price-card');
+  const f = find(evaluateBooks({ items, invoices }), 'sold-below-quickbooks-list');
   ok(f?.population.of === 1,
     '🔴 A NOTE, A DISCOUNT AND A SUBTOTAL ARE NOT SALES AT A PRICE. All three have no unit price; treating them as $0 sales would manufacture three below-list findings out of one invoice');
 
@@ -306,8 +403,8 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
   const rec2 = bigger.find(f => f.recommendation !== null)?.recommendation;
   ok(rec2 !== undefined && rec2 !== null && rec !== null && rec2.statusQuoCost > rec.statusQuoCost,
     '🔴 a second set of books produces a DIFFERENT status-quo cost — the four parts come from their numbers, not from this file');
-  ok(rec2 !== undefined && rec2 !== null && rec2.statusQuoCost === 10 + 150,
-    'and the arithmetic is the gap times the quantity actually sold: $10 + (3 x $50)');
+  ok(rec2 !== undefined && rec2 !== null && rec2.statusQuoCost === 10 + 50,
+    '🔴 and the arithmetic is PER LINE, not per unit: $10 + $50, NOT $10 + (3 x $50). The three-unit line contributes its gap ONCE. This assertion is the per-line ruling expressed as a number, and it is the one that fails first if someone reinstates the quantity multiplier');
 }
 
 // ══ §I MONEY AT STAKE ORDERS THE LIST, AND NULL IS NOT ZERO ════════════════
@@ -354,10 +451,17 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
 {
   const fs = evaluateBooks({ items: [item('1', 'Widget')], invoices: [inv('i1', '1', [line('1', 'Widget', 5, 5)])],
                              customers: CUSTOMERS });
+  // ⚠️ THIS SECTION CHANGED TARGET ON 2026-09-03 AND THE REASON IS THE FINDING. It used to
+  // prove that receivables named the FIELDS it lacked — and that reason was false: the fields
+  // were in the read all along. The rule now computes, so the surviving unrunnable case is the
+  // one where no date was supplied to measure "past due" against.
   const ar = fs.find(f => f.id === 'overdue-receivables');
-  ok(ar !== undefined && !ar.measured, 'receivables cannot be computed from these three reads');
-  ok(/unpaid|due/i.test(ar?.notMeasured ?? ''),
-    '🔴 and it names the FIELDS that would answer it, not a generic "only you can tell us" — a silent omission would read as a clean bill of health on receivables');
+  ok(ar !== undefined && !ar.measured, 'receivables does not run when nothing is owed and no date was given');
+  ok(/date to count from/i.test(ar?.notMeasured ?? ''),
+    '🔴 and it names what is genuinely missing — the date — not a generic "only you can tell us", and NOT the old claim that their books lack a balance they carry on every row');
+  const trip = fs.find(f => f.id === 'trip-charge-missing');
+  ok(trip !== undefined && !trip.measured && (trip.notMeasured ?? '').length > 0,
+    'and a rule blocked on POLICY rather than on a field still says so in its own words');
   ok(!/only you can tell us/i.test(ar?.notMeasured ?? ''),
     'blocked-on-a-field and blocked-on-policy are different problems with different next steps');
 }
@@ -373,7 +477,7 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
 // nothing about the property.
 {
   // ── M12: within a tier the order must be MONEY, not the order the rules are written in ──
-  // `sold-below-price-card` is declared EARLY and is worth $10 here; `discount-in-wording` is
+  // `sold-below-quickbooks-list` is declared EARLY and is worth $10 here; `discount-in-wording` is
   // declared LATE and is worth $500. Declared order and money order therefore disagree, which
   // is the only arrangement that can catch a sort that ignores the money.
   const items = [item('1', 'Widget', { unitPrice: 100 }), item('2', 'Other')];
@@ -383,7 +487,7 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
   ];
   const fs = evaluateBooks({ items, invoices, customers: CUSTOMERS });
   const at = (id: string) => fs.findIndex(f => f.id === id);
-  const card = fs.find(f => f.id === 'sold-below-price-card');
+  const card = fs.find(f => f.id === 'sold-below-quickbooks-list');
   const word = fs.find(f => f.id === 'discount-in-wording');
   ok(card?.value === 10 && word?.value === 500, 'the two money findings are worth $10 and $500');
   ok(at('discount-in-wording') < at('sold-below-price-card'),

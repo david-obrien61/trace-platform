@@ -68,8 +68,8 @@ const MUTANTS = [
     from: "        sentence: '', population: { matched: 0, of: 0, noun: '' },\n      });\n      continue;\n    }\n\n    const r = rule.run(input);",
     to:   "        sentence: 'Nothing found.', population: { matched: 0, of: 0, noun: '' },\n      });\n      continue;\n    }\n\n    const r = rule.run(input);" },
   { id: 'M5', why: '🔴 an unpriced item is compared against a floor of $0 — every sale reads at-or-above list',
-    from: '          if (floor === undefined) continue;         // no published price → not comparable',
-    to:   '          const f2 = floor ?? 0; if (false) continue;' },
+    from: '          if (floor === undefined || floor <= 0) continue;   // no published price → not comparable',
+    to:   '          if (false) continue;' },
   { id: 'M6', why: '🔴 notes, discounts and subtotals count as sales at $0 — findings manufactured from one invoice',
     from: '  return inv.lines.filter(l => l.itemName !== null && l.unitPrice !== null && (l.amount ?? 0) > 0);',
     to:   '  return inv.lines.filter(l => l.itemName !== null) as never;' },
@@ -88,6 +88,38 @@ const MUTANTS = [
   { id: 'M11', why: 'a sentence leaks a QuickBooks field name to a nursery owner',
     from: "        sentence: `${plural(dupInvoices, 'invoice shares', 'invoices share')} an invoice number",
     to:   "        sentence: `${plural(dupInvoices, 'invoice shares', 'invoices share')} a DocNumber" },
+
+  // ── 2026-09-03: the withdrawn price-card rule, the per-line basis, the giveaway
+  //    exclusion, and the receivables rule whose old refusal was false. Every one of these
+  //    makes the screen MORE confident: a bigger headline, a fuller-looking list, or a
+  //    question quietly closed.
+  { id: 'M19', why: '🔴 THE WITHDRAWN PRICE-CARD RULE COMES BACK TO LIFE, restoring a $1.6M headline worded about a price card it never read',
+    from: "    cannotCompute: 'We cannot check your sales against your printed price list, because we have not been given it. What we can check is the price recorded on each product in QuickBooks, and that is the next line — it is not the same thing, and it should not be read as if it were.',\n    run: () => null,",
+    to:   "    cannotCompute: 'We cannot check your sales against your printed price list, because we have not been given it. What we can check is the price recorded on each product in QuickBooks, and that is the next line — it is not the same thing, and it should not be read as if it were.',\n    run: (x) => x.items && x.invoices ? { matched: 1, of: 3, noun: 'sales', sentence: 'sales were charged below your price card.', value: 1607416 } : null," },
+  { id: 'M20', why: '🔴 the shortfall goes back to being multiplied by QUANTITY — deliberate volume pricing rendered as a headline loss',
+    from: '            shortfall += floor - charged;',
+    to:   '            shortfall += (floor - charged) * (l.qty !== null && l.qty > 0 ? l.qty : 1);' },
+  { id: 'M21', why: '🔴 a line charged EXACTLY $0 is scored as a sale below list — a giveaway counted at the full list price, the largest gap possible',
+    from: '          if (charged === 0) continue;',
+    to:   '          if (charged === 0) { /* scored */ }' },
+  { id: 'M21b', why: '🔴 giveaways are counted inside the priced loop again, where pricedLines has already removed all 74 of them — freeLines becomes 0 and `limits` describes a filter that never fired',
+    from: '          if (l.unitPrice === 0) freeLines++;',
+    to:   '          if (l.unitPrice === 0 && false) freeLines++;' },
+  { id: 'M22', why: '🔴 the successor rule stops naming WHICH price it compares against — the exact defect that made the withdrawn rule unshippable',
+    from: 'below the price recorded on that product in QuickBooks',
+    to:   'below your price list' },
+  { id: 'M23', why: '🔴 receivables reads the CLOCK instead of the supplied read date — the same capture answers differently tomorrow and nothing can assert against it',
+    from: '      if (!x.invoices || !x.asOf) return null;\n      const asOf = Date.parse(`${x.asOf}T00:00:00Z`);',
+    to:   '      if (!x.invoices) return null;\n      const asOf = Date.parse(new Date().toISOString().slice(0, 10) + `T00:00:00Z`);' },
+  { id: 'M24', why: '🔴 an invoice whose balance we could not read is ABSORBED into the same silence as a settled one — a null read as a zero, and the reader cannot tell "paid" from "we could not see"',
+    from: '        if (inv.balance === null) { unreadable++; continue; }',
+    to:   '        if (inv.balance === null) { continue; }' },
+  { id: 'M25', why: '🔴 EVERY open invoice is reported as more than 30 days past due — alarming, and wrong',
+    from: '        if ((asOf - due) / 86_400_000 > 30) { lateTotal += inv.balance; lateCount++; }',
+    to:   '        { lateTotal += inv.balance; lateCount++; }' },
+  { id: 'M26', why: '🔴 the invoice with no readable due date is dropped from the total owed instead of declared',
+    from: '        if (!inv.dueDate) { undated++; continue; }',
+    to:   '        if (!inv.dueDate) { continue; }' },
 ];
 
 const original = readFileSync(TARGET, 'utf8');

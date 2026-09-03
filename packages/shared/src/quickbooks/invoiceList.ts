@@ -89,6 +89,22 @@ export interface QboInvoiceRow {
   /** Intuit's `YYYY-MM-DD`, kept as the STRING it arrived as — see `monthOf`. */
   txnDate: string | null;
   totalAmt: number | null;
+  /**
+   * 🔴 WHAT IS STILL UNPAID, AND WHEN IT WAS DUE — BOTH ADDED 2026-09-03, BOTH ALWAYS PRESENT.
+   * These two were dropped by this parser while `booksFindings`' receivables rule told the owner
+   * *"the invoice read does not include how much of each invoice is still unpaid, or when it was
+   * due"*. Measured against the 2026-08-29 capture: `Balance` and `DueDate` are on 1,469 of 1,469
+   * rows. **The read included them the whole time; WE discarded them, and then blamed their data
+   * for it.** A cannot-compute that is false about our own read is worse than a missing finding —
+   * it tells an owner their books lack something their books carry.
+   *
+   * ⚠️ NEITHER IS PERSONAL DATA. A balance and a due date describe the DOCUMENT, not the person,
+   * so R-24 clause (b) is untouched by carrying them — `customerId` remains the only reference to
+   * a human on this row and there is still no name field anywhere in it.
+   */
+  balance: number | null;
+  /** Intuit's `YYYY-MM-DD`, kept as the STRING it arrived as — same treatment as `txnDate`. */
+  dueDate: string | null;
   customerId: string | null;
   lines: QboInvoiceLine[];
 }
@@ -232,12 +248,44 @@ export function parseInvoiceList(rawBody: string): ParsedInvoiceList {
       docNumber: str(inv?.DocNumber),
       txnDate: str(inv?.TxnDate),
       totalAmt: num(inv?.TotalAmt),
+      balance: num(inv?.Balance),
+      dueDate: str(inv?.DueDate),
       // 🔴 THE ID ONLY. `CustomerRef.name` is read nowhere in this file.
       customerId: str(custRef?.value),
       lines,
     });
   }
   return { ok: true, invoices, parseError: null };
+}
+
+/**
+ * The invoice rows a screen shows, newest DOCUMENT date first, capped for display.
+ *
+ * 🔴 G9, AND IT IS THE DOCUMENT'S OWN DATE — NOT AN ARRIVAL ORDER. `ui-control-standards.md`
+ * §1 G9: *"DEFAULT SORT IS THE MOST RECENT RECORD DATE FIRST: the date the document or event
+ * itself carries, NOT the row's creation timestamp… Where the record's own date is absent, the
+ * row falls back… for POSITION and says on its face that it has no date."* QuickBooks returns
+ * these in its own order, which is neither.
+ *
+ * ⚠️ AN UNDATED INVOICE SORTS LAST AND STILL RENDERS "No date recorded". The fallback buys a
+ * POSITION and never a displayed value (D-9 / A9) — the caller prints the null, not this order.
+ *
+ * ⚠️ THE CAP IS A DISPLAY CAP OVER A COMPLETE READ. The walk has already refused anything short
+ * of its own pre-counted total (R-24), so nothing here is hiding a truncation; the caller states
+ * the cap beside the total so the screen cannot read as the whole list.
+ *
+ * Pure and total: it never mutates the array it is given.
+ */
+export function invoiceRowsForDisplay(invoices: QboInvoiceRow[], limit = 100): QboInvoiceRow[] {
+  return [...invoices]
+    .sort((a, b) => {
+      // '' sorts below every real `YYYY-MM-DD`, which puts undated rows last under `desc`.
+      const cmp = (b.txnDate ?? '').localeCompare(a.txnDate ?? '');
+      // A STABLE TIE-BREAK, so two invoices on one day do not swap places between renders and
+      // make the screen look like it is changing under the reader.
+      return cmp !== 0 ? cmp : a.id.localeCompare(b.id);
+    })
+    .slice(0, limit);
 }
 
 // ─── the breakdown ───────────────────────────────────────────────────────────
