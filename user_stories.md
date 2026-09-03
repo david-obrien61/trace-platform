@@ -137,6 +137,44 @@ usually omits.
 
 _Capture → extract (one engine) → infer type → confirm → fan-out to many destinations._
 
+### Lauren decides once how her sizes read, and the old price list steps aside for the real one
+STATUS: written
+SCOPE: platform, vertical:cultivar
+BUILD: active
+ARC: ocr-doc-routing
+MAPS-TO: 4.1
+PIECES: retire_and_replace_plan, normalisation_consent, display_standards, audit_of_the_decision
+NEEDS: nothing to write it — as-built (#261). The APPLIERS and both SCREENS are owed; owner-test CARD 23 is `needs-test` and names them.
+
+Her product list already has 447 rows in it from an import nobody can account for — no SKUs, almost
+everything at zero, some products in there twice. QuickBooks has the real list: 685 items with
+SKUs, prices, descriptions and categories. So the old list **steps aside** rather than being
+deleted, and the real one takes its place.
+
+🔴 **Except for the handful of rows she has actually counted.** A price list can be pulled again in
+a minute. A count is somebody walking the lot with a phone, and nothing recreates it — so a counted
+row is never retired, and if QuickBooks has that same product the row **keeps its count and takes
+the QuickBooks details** rather than a second row appearing beside it. Two rows for one product
+would split her on-hand in half, silently, on the one number that matters.
+
+Then it asks her about the way she writes things. It finds she writes one size four different ways,
+tells her **which one she already uses most and how many items that is**, and offers to show them
+all that way. It only asks where there is something to choose — a tidy catalogue is asked nothing.
+And it separates two kinds of question that look identical on screen: *`30 gal` or `30 Gallon`* is
+spelling, and it suggests one; ***is a #3 the same product as a #5*** is a fact about her business,
+and it **does not guess**. Where it cannot read a size at all it says so plainly and invites her to
+leave it exactly as it is.
+
+⚠️ **Leaving it is an answer, and it is written down as one.** Otherwise the same question comes
+back on every import for the rest of the time she uses this, which is the thing the whole feature
+exists to stop. What she was offered and what she chose are both recorded — *"we suggested `30 gal`,
+she chose `30 Gallon`, 214 items"* — because a setting on its own can only be wondered about, while
+a decision can be questioned.
+
+⚠️ **Nothing rewrites what she typed.** The size she entered stays exactly as it is; the standard
+changes how it is DISPLAYED. And no SKU is invented — 248 of 250 rows in her pricing tab already
+match a QuickBooks name.
+
 ### David rehearses the import on a saved copy, so Lauren can be the first to really run it
 STATUS: written
 SCOPE: platform, vertical:cultivar

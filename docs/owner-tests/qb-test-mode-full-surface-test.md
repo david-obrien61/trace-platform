@@ -472,3 +472,76 @@ Do a full pass: load all three files, read the findings, press Visualize, print 
 thing under test. This whole surface is a READ, and the only proof of that is the other system's
 own screen.
 **FAIL:** anything at all appeared in either place.
+
+---
+
+## CARD 21 — 🔴 the retirement column lands, and retires nothing by landing
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+
+Apply **`supabase/migrations/20260903_inventory_retire_lifecycle.sql`** in the Supabase **SQL
+editor** (not the table editor — §6 r17). Then run its VERIFY block, V1 through V5.
+
+1. **V1** — `retired_at` and `retired_reason` both exist, both nullable, neither with a default.
+2. 🔴 **V2 — `already_retired` is `0`.** Applying the migration retired nothing.
+3. **V3** — the index exists and its definition contains `WHERE (retired_at IS NOT NULL)`.
+4. 🔴 **V4 — the policy list is UNCHANGED**: `business_inventory_owner_all` and
+   `business_inventory_member_all`, and nothing else.
+5. **V5** — record the three numbers it returns. This is the baseline the replacement is judged
+   against, and it is worth having *before* anything runs.
+
+**PASS:** all five.
+🔴 **STEP 2 IS THE ONE THAT MATTERS AND IT LOOKS LIKE A FORMALITY.** A migration that quietly
+retired rows would be indistinguishable from the feature working — you would see rows disappear and
+conclude it had run correctly. Nothing should have moved yet.
+🔴 **STEP 5 IS NOT OPTIONAL EITHER.** If the counts come back materially different from ~447 total
+and ~4 with a real count, **stop** — the data has changed since the ruling was made, and the plan
+was written against those numbers.
+**FAIL:** any column with a default · anything already retired · a changed policy list · a
+non-partial index.
+
+---
+
+## CARD 22 — 🔴 the display-standards table, and the policy that decides whether Lauren is locked out
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+
+Apply **`supabase/migrations/20260903b_display_standards.sql`** in the **SQL editor**. This one
+**creates a table**, so the editor you use changes what you get. Run V1–V5.
+
+1. 🔴 **V1 — `tableowner` is `postgres`, not `supabase_admin`.** `supabase_admin` means it was made
+   in the table editor, and it arrives carrying a TRUNCATE grant for `anon` that RLS cannot filter.
+2. **V2** — no `anon` TRUNCATE/REFERENCES rows come back at all.
+3. 🔴 **V3 — RLS is on AND BOTH policies exist** — `..._owner_all` **and** `..._member_all`.
+4. **V4** — one unique index on `(business_id, domain, group_key)`.
+5. **V5** — the table is empty. Applying it decided nothing.
+
+**PASS:** all five.
+🔴 **STEP 3 IS THE LAUREN CASE AND IT IS WHY THIS CARD EXISTS.** An owner-only policy keyed on
+`businesses.owner_id` would lock Lauren out of her own tenant: she holds `role = OWNER` in
+`business_members` at LAWNS with a `user_id` that is **not** `businesses.owner_id` — the only such
+row in the database. **If only the owner policy is there, stop.** A first draft elsewhere tested
+`owner_id` alone and would have refused her; that is measured, not hypothetical.
+⚠️ **AND A KNOWN GAP TO READ, NOT TEST:** `audit_log`'s read policy *is* `owner_id`-keyed, so Lauren
+can write the record of her own decision and **cannot read it back**. Not fixed here and not a
+failure of this card — named so it is not discovered as a surprise.
+**FAIL:** owner `supabase_admin` · any anon TRUNCATE · a missing member policy · no unique index.
+
+---
+
+## CARD 23 — the two screens do not exist yet
+**STATUS:** needs-test · **DEVICE:** desktop · **LAST-PROVEN:** —
+
+**REASON THIS IS `needs-test` RATHER THAN A CHECK:** #261 built the two **decisions** and the two
+**places they live** — the plan that decides what is retired, adopted, carried and created, and the
+questions that ask an owner how a size should read. **Neither has a screen, and nothing yet writes
+`retired_at`, creates the 685, or applies a chosen label.** There is no surface to drive.
+
+**What is owed before this becomes a real card:**
+- the applier that walks the plan and writes it, and the reader-side filter that hides a retired row
+  (a retired row that still appears everywhere is not retired)
+- the screen that asks the normalisation questions and records the answer in **both** places —
+  `audit_log` (how it was decided) and `business_display_standards` (what is true now)
+- the report that states **retired · created · carried**, which is the third clause of R-70 and is
+  the only way an owner can check the replacement did what it said
+
+🔴 **WRITING THIS DOWN IS THE POINT.** An unrecorded hole looks exactly like a covered surface on a
+board where every other row is green, and #261 could otherwise read as "retire-and-replace: done."
