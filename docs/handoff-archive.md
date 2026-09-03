@@ -40,7 +40,7 @@
      the wrong order. This file was rebuilt from the pre-merge archive instead, and both parents
      were then proven to have lost NOTHING. entries-in == entries-out: 282 -> 284. -->
 
-<!-- MOVED FROM CLAUDE.md §3 on 2026-09-03 by the #261 close-out (N=3, OP-13).
+<!-- MOVED FROM CLAUDE.md §3 on 2026-09-03 by the #262 close-out (N=3, OP-13).
      §3 held 3 before this entry was written; this is the overflow, moved VERBATIM.
      entries-in == entries-out: 1 archived, 1 written, §3 back to 3. -->
 

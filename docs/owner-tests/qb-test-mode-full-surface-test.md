@@ -530,7 +530,7 @@ failure of this card — named so it is not discovered as a surprise.
 ## CARD 23 — the two screens do not exist yet
 **STATUS:** needs-test · **DEVICE:** desktop · **LAST-PROVEN:** —
 
-**REASON THIS IS `needs-test` RATHER THAN A CHECK:** #261 built the two **decisions** and the two
+**REASON THIS IS `needs-test` RATHER THAN A CHECK:** #262 built the two **decisions** and the two
 **places they live** — the plan that decides what is retired, adopted, carried and created, and the
 questions that ask an owner how a size should read. **Neither has a screen, and nothing yet writes
 `retired_at`, creates the 685, or applies a chosen label.** There is no surface to drive.
@@ -544,4 +544,4 @@ questions that ask an owner how a size should read. **Neither has a screen, and 
   the only way an owner can check the replacement did what it said
 
 🔴 **WRITING THIS DOWN IS THE POINT.** An unrecorded hole looks exactly like a covered surface on a
-board where every other row is green, and #261 could otherwise read as "retire-and-replace: done."
+board where every other row is green, and #262 could otherwise read as "retire-and-replace: done."
