@@ -78,6 +78,16 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🔴 THE GRID ENGINE IS PLATFORM CODE NOW (2026-09-03, ledger #272)
+
+- 🟢 **DONE, ZERO BEHAVIOUR CHANGE — no owner-proof owed.** `<DataSheet>` + its unit moved `packages/cultivar-os/src/components/datasheet/` → **`packages/shared/src/components/datasheet/`**, verbatim (`020793b`). **37 changed lines in the engine, every one a comment** — proven by filtering the rename-detected diff, not asserted. → `packages/shared/src/components/datasheet/DataSheet.tsx` · ledger **#272**
+- 🔴 **THE ASSUMED COUPLING DID NOT EXIST.** Entire transitive closure = `react` + `lucide-react` + two zero-import siblings. No supabase, no business context, no permission hook, no router. **8 consumers, one import line each.**
+- 🔴 **THE PROMOTION TRIGGER IN ITS OWN HEADER HAD ALREADY FIRED AND NOBODY RE-READ IT** — it said *"when a real second-vertical consumer appears"*, and the consumer was `QboBooksReader` **inside `shared` itself**. [[R-26]]'s class.
+- ⚠️ **`datasheet/` DIRECTORY NAME IS LOAD-BEARING — DO NOT RENAME.** `usesSharedGrid` matches that path fragment; renaming silently converts all 8 consumers into undeclared bespoke surfaces. Carrier paths in `ui-control-standards.md:18-19` move WITH the file or the engine is measured as a divergence from itself.
+- 🔴 **TWO DECISIONS LEFT OPEN, BOTH DAVID'S:** ① **widening the divergence cap's `SCAN_ROOT`** — deliberately NOT done; it re-baselines `undeclared_bespoke_surfaces:23` into an unknown, and the honest reading is MORE unaudited surfaces. ② **how a shared component learns which vertical it renders in** — tech-debt #157's real blocker, unanswered.
+- ⚠️ **OWED, NOT DONE:** `QboBooksReader` is **still a plain table** — the reach is real now, so that is a CHOICE rather than a limit. Converting it is its own build against G1–G7 with its own cards.
+- ⚠️ **FILED, NOT FIXED:** tech-debt **#156** (the `shared → cultivar-os` boundary is enforced by **nothing** — tsconfig/eslint/package.json/knip/vite all checked) · **#157** (`tokens.ts` palette, ZERO importers, vs **42 cultivar literals across 21 files** in `shared`) · AC-1 leak `populate.ts:77` → CLAUDE.md §1.5.
+
 ### 🔴 `/receipts` IS A GRID NOW (2026-09-03, ledger #269)
 
 - 🟡 **BUILDER-COMPLETE, OWNER-PROOF OWED.** `<DataSheet>` + `renderExpand` — one row per receipt, the chain in the drawer. **G4 sort · G6 search + outcome filter · G7 density came from the engine; none was built.** → `ReceiptsList.tsx` · `receiptsList.ts` · 134 probes, 4 proven red first.

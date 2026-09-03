@@ -182,5 +182,99 @@ now produced the error twice in one week, from both an analysis pass and a recon
 **A CHEAP MECHANICAL HALF EXISTS AND IS NOT BUILT:** the import direction `shared → cultivar-os` is
 empty today and could be asserted, which would at least make *"is it reachable"* answerable by a
 check rather than by memory. Named, not taken — it guards one direction of one boundary, and the
-class is wider than that.
+class is wider than that. → **now filed in its own right as #156**, because the deeper finding is
+not that the check is missing but that **nothing enforces the boundary at all.**
 
+⚠️ **UPDATED 2026-09-03 (#272) — INSTANCE 2 IS RESOLVED IN FACT, AND THE WAY IT RESOLVED IS THE
+LESSON.** `DataSheet.tsx` was PROMOTED to `packages/shared/src/components/datasheet/`, so
+`QboBooksReader` can now reach the grid engine and the reported reach is real. 🔴 **But note what
+the correct answer turned out to be: the reach question was answered accurately and the CONCLUSION
+drawn from it was still wrong.** *"Shared cannot import the app, therefore this surface gets a plain
+table"* treats a package placement as a fixed constraint — and when David asked why the platform's
+one grid engine lived inside a single vertical, the measured answer was that **nothing had ever held
+it there**: the entire transitive closure is `react`, `lucide-react` and two zero-import siblings.
+✏️ **So the class widens rather than closes.** *"Can this caller use it"* has a third form nobody
+asked: **"and should the capability be where it is?"** A dependency direction is a fact; treating it
+as immovable is a choice. ⚠️ **The books-read surface is still a plain table** — converting it is a
+separate build against G1–G7 with its own owner-test cards, deliberately not ridden along on a move
+whose whole virtue was that `verify` proved it changed no behaviour.
+
+
+
+### #156 — THE `shared → cultivar-os` BOUNDARY IS ENFORCED BY NOTHING. IT IS A CONVENTION, NOT A CONSTRAINT (2026-09-03) 🔴
+
+**Filed by David's instruction 2026-09-03 (#272), on the measurement that produced the DataSheet
+promotion.** The one-way rule *"`packages/shared` never imports a vertical"* is real, correct, load-
+bearing — and **held up by nothing but habit.** A file in `packages/shared` could add
+`import { X } from '../../cultivar-os/src/…'` today and **every check in `npm run verify` would
+pass.** Measured, mechanism by mechanism:
+
+| Mechanism | What it actually does | Enforces? |
+|---|---|---|
+| `packages/shared/tsconfig.json` | `"include": ["src"]`, `paths` maps only `@trace/shared`. TypeScript **follows a relative import out of `include`** and type-checks it happily. No `references`, no project boundary. | ❌ No |
+| `eslint.config.mjs` | Plugins: `@eslint/js`, `typescript-eslint`, `eslint-plugin-react-hooks`, `globals`. **No `no-restricted-imports`, no `eslint-plugin-boundaries`, no `import/no-restricted-paths`** — zero matches for `restricted` or `boundaries` in the file. | ❌ No |
+| `packages/shared/package.json` | Does not list `cultivar-os` — but until 2026-09-03 it did not list `react` or `lucide-react` either, which shared uses in 20+ files. **A manifest already silent about real dependencies cannot enforce anything.** | ❌ No |
+| `knip.json` | Per-workspace `entry`/`project` globs. Knip reports **dead code**; it has no cross-workspace boundary assertion. | ❌ No |
+| `vite.config.ts` (both apps) | Aliases `@trace/shared` → `../shared/src`. Bundles whatever it is handed. | ❌ No |
+
+🔴 **WHY THIS IS THE ENTRY AND NOT A FOOTNOTE — DAVID'S REASONING, RECORDED IN HIS WORDS:** *"it is
+the reason this decision was ever available to get wrong, and the next person will assume a rule
+exists."* An unenforced rule is not a weak rule; it is a rule that **reads as settled while being
+re-decidable by anyone**, which is how a grid engine ended up inside one vertical and stayed there
+through eight consumers and two stale placement comments.
+
+⚠️ **THE BOUNDARY IS ALREADY CROSSED IN ONE NON-IMPORT WAY, AND IT IS DELIBERATE.** Five test files
+in shared `readFileSync` cultivar-os source as string assertions — `rosterAuthority.test.ts:145`,
+`testMode.test.ts:99` and `:242`, `historyOrder.test.ts:211` and `:257`. **Not runtime coupling, and
+it must not be broken by a naive rule**: any check written here has to assert *import edges*, not
+*the string `cultivar-os`*, or it fails five legitimate probes on day one.
+
+**REPAIR (not chosen — the direction is one line, the scope is the question):** the narrow form is a
+cap asserting **zero ES import/export edges from `packages/shared/src` into any sibling package**,
+derived from the source rather than a hardcoded list, proven RED by planting one edge before it is
+trusted ([[R-33]] / §6 r19). The wide form is `eslint-plugin-boundaries` with a declared layer graph,
+which enforces **every** direction rather than the one we happened to think of — and is a new
+dependency and a standard-by-value call (§6 r10). ⚠️ **Either way it must be proven against a planted
+violation**, because a boundary cap that has never refused anything is exactly the false green §6 r19
+exists to name.
+
+**TRIGGER:** before the next vertical acquires a real surface — that is when the direction starts
+getting tested by ordinary work rather than by a recon.
+
+---
+
+### #157 — THE PER-VERTICAL PALETTE EXISTS, IS CORRECT, AND HAS ZERO IMPORTERS — WHILE 42 HARDCODED CULTIVAR LITERALS SIT IN `shared` (2026-09-03) 🟡
+
+**Filed by David's instruction 2026-09-03 (#272), explicitly AGAINST `packages/shared` and NOT
+against `DataSheet` — his words: *"the 35 literals were there first."*** `packages/shared/src/design-
+system/tokens.ts:210` exports a complete per-vertical palette (`cultivar` with `bg.page '#EAF3DE'`,
+`green.primary '#27500A'`, `green.hover`, `green.light`, `red.netting`…, alongside an `ignition`
+palette and shared `spacing`/`radius`/`font`). Its own header names the intended usage:
+`import { ignition, cultivar, spacing, radius, font } from '@trace/shared/design-system/tokens'`.
+
+🔴 **NOTHING IMPORTS IT. Population, not a sample:** a repo-wide grep for `design-system/tokens`
+returns only the file itself. **The mechanism for the colour debt was built and never wired**, and
+meanwhile the debt it was built to fix kept growing by hand.
+
+**MEASURED 2026-09-03:** `#27500A` appears **35 times across 20 files in `packages/shared/src`**
+before the DataSheet promotion — including `Button.tsx`, `Badge.tsx`, `AppHeader.tsx`, `Tile.tsx`,
+`ProgressBar.tsx`, `LockedOverlay.tsx`, `OwnerSignup.tsx`, `BusinessProvider.tsx`. The promotion
+carried in **7 more** (plus 1 × `#EAF3DE`) inside `DataSheet.tsx`'s `sheetStyles`, for **42**.
+
+⚠️ **THIS IS CLAUDE.md §1.5's KNOWN AC-4 VIOLATION, WITH A NUMBER ATTACHED FOR THE FIRST TIME.**
+§1.5 says *"Cultivar green `#27500A` default in shared UI primitives (post-August 2026)"* — true, and
+unquantified, which is why it has been easy to keep paying. **42 occurrences, 21 files.**
+
+🔴 **WHY IT MUST NOT BE FIXED INSIDE A COMPONENT:** fixing `DataSheet`'s 7 alone produces a clean
+component in a package that is not clean, at the cost of a one-off theming mechanism that the other
+35 do not share — i.e. a **second** way to express a colour, which is STD-011's shape and the drift
+that makes the next fix harder rather than easier. The unit of repair is `shared`, not a file.
+
+**REPAIR (not chosen):** wire `tokens.ts` as the single source and replace the literals package-wide
+— which requires first answering **how a shared component learns which vertical it is rendering in**
+(a `ThemeProvider`/context, a prop, or a build-time token swap). That question is unanswered and is
+the actual blocker; the literals are a symptom of never having answered it. AC-4's own wording
+— *structure shared, only tokens and vocabulary vary per vertical* — presumes a token channel exists.
+
+**TRIGGER:** the first vertical that is not cultivar acquiring a real UI surface. Until then every
+literal is accidentally correct, which is precisely why the count grows unnoticed.

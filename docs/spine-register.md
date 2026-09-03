@@ -44,7 +44,7 @@ never in a vertical folder. Bias toward spine.
 | 11 | **Notifications** | `packages/shared/src/notifications` (send/queue + templates). | **shipped-shared** (templates are per-vertical data, correctly). |
 | 12 | **QR** (generate + print) | `packages/shared/src/qr`. | **shipped-shared.** |
 | 13 | **Formatters / utils** (currency, dates, `normalizePhone`, statusColors) | Shared utils barrel; `normalizePhone` consolidated (rule-of-three, 2026-06-24). | **shipped-shared.** |
-| 14 | **DataSheet engine** (generic `DataSheet<T>` grid) | `packages/cultivar-os/src/components/datasheet/DataSheet.tsx` — presentation-only, table-agnostic; 3 consumers (inventory, assets, customers). | **vertical-trapped** — genuinely generic but lives in cultivar-os; spine-worthy (3rd consumer proves it). *(status unverified — recon owed on move to shared.)* |
+| 14 | **DataSheet engine** (generic `DataSheet<T>` grid) | `packages/shared/src/components/datasheet/DataSheet.tsx` — presentation-only, table-agnostic; **8 consumers** (5 render the grid: inventory, assets, customers, inventory-reconcile, receipts; 3 import `sheetStyles` only). | ✅ **PROMOTED TO SHARED 2026-09-03 (#272).** The recon this row asked for was run and the answer was that nothing held it back: the whole transitive closure is `react` + `lucide-react` + two sibling files with **zero imports**. 🔴 The trigger in its own header had already fired and nobody re-read it — `QboBooksReader` (in `packages/shared`) wanted the grid and shipped a plain table instead. The header assumed the second consumer would be a VERTICAL; it came from inside shared. |
 
 ---
 
