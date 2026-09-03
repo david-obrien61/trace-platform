@@ -211,6 +211,25 @@ const columns: DataSheetColumn<ReceiptRowModel>[] = [
     render: r => <Link to={`/receipts/${r.id}`} style={VENDOR_LINK}>{r.vendorText}</Link>,
   },
   {
+    // 🔴 THE COLUMN DAVID READS THIS SCREEN FOR (2026-09-03, ledger #270). `receipts.receipt_number`
+    // arrived with 20260903c, applied 2026-09-03 — before it there was no column and the OCR's
+    // answer was discarded at save on every capture since June.
+    //
+    // ⚠️ EVERY ROW CAPTURED BEFORE THE APPLY READS "No number captured", and that is CORRECT, not a
+    // gap to fill: nothing was backfilled. The wording is deliberate and is NOT "None" or "—" — we
+    // cannot see whether those documents carried a number, only that we never stored one, and a
+    // dash would leave the reader to guess which of the two it meant (D-9 / A9, and the same
+    // absence-is-a-sentence rule as "No vendor recorded" beside it).
+    //
+    // Sorted on `invoiceNumberSort` — the RAW value — never on the displayed string, or the
+    // placeholder would sort among real numbers starting with N.
+    key: 'invoice_number', header: 'Invoice #', sortable: true,
+    sortVal: r => r.invoiceNumberSort,
+    render: r => (r.invoiceNumberText === 'No number captured'
+      ? <span style={META}>{r.invoiceNumberText}</span>
+      : <span style={{ fontFamily: 'monospace' }}>{r.invoiceNumberText}</span>),
+  },
+  {
     // 🔴 G9's column. `sortVal` is the SAME key the model sorts by — the document's date, falling
     // back to the capture DAY when there is none — so re-sorting by this header cannot disagree
     // with the default order the list arrives in.

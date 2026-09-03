@@ -56,6 +56,7 @@ const base: RawReceiptRow = {
   created_at: '2026-09-01T15:51:00.000Z', status: 'confirmed',
   reconcile_status: 'match', reconcile_delta: 0, reconcile_overridden_at: null,
   accept_vs_edit: 'edited', amount_original: 1283.88, header_amount_edited: false,
+  receipt_number: null,
   orders: [],
 };
 const R = (over: Partial<RawReceiptRow>): RawReceiptRow => ({ ...base, ...over });
@@ -430,6 +431,41 @@ const bwiOrder: RawOrderRow = {
   ok(!listVisibleForStep('ocr_running'), 'G5 (negative): not mid-OCR');
   ok(!listVisibleForStep('saving'), 'G6 (negative): not mid-save');
   ok(!listVisibleForStep(''), 'G7 (negative): an unknown step does not open the list by accident');
+}
+
+// ══ §I THE INVOICE NUMBER (#270) — the column David reads this screen for ════════════════════
+// 🔴 Every probe here was proven RED first, by reverting the thing it asserts:
+//   I1 — drop `receipt_number` from RECEIPTS_SELECT  -> I1 fails
+//   I2 — render `row.receipt_number ?? '—'`          -> I2/I3 fail
+//   I4 — sort on `invoiceNumberText` not the raw     -> I4 fails
+//   I6 — drop it from receiptSearchText              -> I6 fails
+// A green run against the unmodified file is only meaningful because each was seen to go red.
+{
+  ok(/\breceipt_number\b/.test(RECEIPTS_SELECT),
+    '🔴 I1: receipt_number IS selected — without it the column renders "No number captured" on EVERY row, which is a confident false statement about rows that DO carry a number');
+
+  const withNum = receiptRowModel(R({ receipt_number: '4417453' }));
+  ok(withNum.invoiceNumberText === '4417453',
+    'I2: a stored number is displayed EXACTLY as stored — no formatting, no prefix');
+
+  ok(receiptRowModel(R({ receipt_number: null })).invoiceNumberText === 'No number captured',
+    '🔴 I3: an absent number is a SENTENCE, not a blank and not a dash — "No number captured" is a claim about OUR record, because a row captured before 20260903c could not store one and we cannot see whether the paper had it (D-9/A9)');
+
+  ok(receiptRowModel(R({ receipt_number: '   ' })).invoiceNumberText === 'No number captured',
+    'I3b: whitespace is absence, not a value — a blank-looking cell must not read as a captured number');
+
+  // The defect this catches: sorting the DISPLAY string ranks the placeholder among genuine
+  // numbers beginning with N, i.e. it sorts a sentence about our record as if it were a number.
+  ok(receiptRowModel(R({ receipt_number: null })).invoiceNumberSort === '',
+    '🔴 I4: the sort key for an absent number is EMPTY — a POSITION, never the placeholder text');
+  ok(receiptRowModel(R({ receipt_number: 'N-900' })).invoiceNumberSort === 'n-900',
+    'I5: the sort key is the RAW value lowercased, so ordering never depends on how the cell is rendered');
+
+  ok(receiptSearchText(receiptRowModel(R({ receipt_number: '4417453' }))).includes('4417453'),
+    '🔴 I6: the number is SEARCHABLE — finding a receipt by the number printed on it is the reason the column was asked for');
+
+  ok(/key: 'invoice_number'/.test(GRID) && /sortVal: r => r\.invoiceNumberSort/.test(GRID),
+    '🔴 I7: the grid declares the column AND sorts it on the raw key — a render condition in a .tsx is unreachable to a probe (tech-debt #134), so this reads the config as text');
 }
 
 console.log(`\nreceiptsList: ${passed} passed, ${failed} failed`);

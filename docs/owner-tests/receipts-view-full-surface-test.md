@@ -302,8 +302,13 @@ wrong row · or the row count not returning after collapse.
 
 ---
 
-## CARD 15 — 🔴 the invoice number is stored, on a column that did not exist yesterday
-**STATUS:** owed · **DEVICE:** phone (capture) then desktop (the query) · **PROOF:** 🔧 NEEDS SETUP · **LAST-PROVEN:** —
+## CARD 15 — 🔴 the invoice number is stored, and it is ON THE SCREEN
+**STATUS:** owed · **DEVICE:** phone (capture) then desktop (the grid) · **PROOF:** 📄 PRINT-PROVABLE (after one capture) · **LAST-PROVEN:** —
+
+✅ **UPDATED 2026-09-03 — THE GRID COLUMN LANDED** once David confirmed `20260903c` applied
+(A: one row · B: no rows · C: 37 total / 0 populated · D: RLS true, **five** policies). The column
+is **`Invoice #`, between Vendor and Date, default-visible**, so this card no longer needs the SQL
+editor — though the query below still settles it if you prefer.
 
 **TENANT:** LAWNS (`ed2e5933-45dc-4b9b-a331-ddfd125e7a74`) — or `Test Dave's`, either is fine.
 **ACTOR:** the owner.
@@ -325,17 +330,25 @@ not — do not use one, or the card proves nothing through no fault of the code.
 2. Confirm and save it. The confirmation screen appears.
 3. 🔴 **There must be NO amber notice about the invoice number.** If you see *"the receipt was saved,
    but its invoice number could not be stored"*, the migration is NOT applied — go to CARD 16.
-4. On the desktop, in the Supabase SQL editor, run:
+4. On the desktop open `/receipts`. There is an **`Invoice #`** column between **Vendor** and
+   **Date**. Find the row you just captured.
+5. *(Optional, same answer from the database)* in the SQL editor:
    `SELECT vendor, date, receipt_number, created_at FROM receipts ORDER BY created_at DESC LIMIT 3;`
 
-**PASS:** the top row is the receipt you just captured, and **`receipt_number` holds the number
-printed on the document**, matching it character for character. The two rows beneath it — captured
-before today — have `receipt_number` **NULL**, which is correct: nothing was backfilled.
+**PASS:** the row you just captured shows **the number printed on the document, character for
+character**, in a monospace cell. 🔴 **AND EVERY ROW CAPTURED BEFORE TODAY READS `No number
+captured` — IN WORDS, NOT A DASH AND NOT A BLANK.** That is the pass condition, not a gap: nothing
+was backfilled, and the sentence says *we never stored one*, which is all we know. We cannot see
+whether those older documents carried a number, so a cell claiming *"None"* would be asserting
+something nobody checked (D-9 / A9).
+⚠️ **Sorting by `Invoice #` must NOT scatter the `No number captured` rows among the real numbers** —
+they cluster at one end, because the column sorts on the stored value and not on the words shown.
 
-**FAIL:** `receipt_number` is NULL on the row you just captured (read but not written) · it holds a
-number that is not the one on the paper (the OCR misread it — a real failure, but of the parser, not
-the column) · **or the two older rows have values**, which would mean something backfilled them and
-nobody authorised that.
+**FAIL:** the new row reads `No number captured` (read but not written) · it shows a number that is
+not the one on the paper (the OCR misread it — a real failure, but of the parser, not the column) ·
+**an older row shows a value**, which would mean something backfilled them and nobody authorised it ·
+🔴 **or an empty cell / a `—` anywhere in the column**, which is the absence-as-a-dash defect this
+build exists to avoid.
 
 🔴 **WHAT THIS CARD CANNOT PROVE:** that the number is CORRECTABLE. The ruling is that
 `receipt_number` is editable — a document fact the OCR can misread, not platform provenance — but

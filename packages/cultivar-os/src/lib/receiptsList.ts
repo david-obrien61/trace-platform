@@ -94,7 +94,7 @@ export const RECEIPTS_PAGE_LIMIT = 100;
  * embed returns all 17 LAWNS receipts with their orders and deliveries attached.
  */
 export const RECEIPTS_SELECT = `
-  id, vendor, date, amount, category, created_at, status,
+  id, vendor, date, amount, category, created_at, status, receipt_number,
   reconcile_status, reconcile_delta, reconcile_overridden_at,
   accept_vs_edit, amount_original, header_amount_edited,
   orders (
@@ -134,6 +134,8 @@ export interface RawReceiptRow {
   category: string | null;
   created_at: string | null;
   status: string | null;
+  /** The document's OWN number, as printed. Column added by 20260903c (applied 2026-09-03). */
+  receipt_number: string | null;
   reconcile_status: string | null;
   reconcile_delta: number | string | null;
   reconcile_overridden_at: string | null;
@@ -379,6 +381,16 @@ export interface ReceiptRowModel {
   /** EXACTLY as stored. No inferred document type, no icon standing in for one (③ above). */
   vendorText: string;
   dateText: string;
+  /**
+   * The invoice / receipt number printed on the document.
+   *
+   * 🔴 ABSENCE IS A SENTENCE, NOT A DASH — the rule this whole file follows. A blank or a "—"
+   * makes the reader guess between "the document had no number" and "we never captured one",
+   * and those are different facts. It reads "No number captured", which is a claim about OUR
+   * record and NOT about the paper: for every row captured before 20260903c there was no column
+   * to store it in, so we genuinely do not know whether the document carried one (D-9 / A9).
+   */
+  invoiceNumberText: string;
   amountText: string;
   categoryText: string;
   capturedAtText: string;
@@ -402,6 +414,14 @@ export interface ReceiptRowModel {
    */
   sortKey: string;
   amountSort: number;
+  /**
+   * The orderable form of `invoiceNumberText` — the RAW stored number, lowercased, and `''` when
+   * there is none. Same discipline as `amountSort`: sorting the DISPLAY string would rank the
+   * placeholder "No number captured" among the genuine values beginning with N, i.e. it would
+   * sort a sentence about our record as though it were a document's number. Rows with no number
+   * cluster at one end; that is a POSITION, and it asserts nothing about the row.
+   */
+  invoiceNumberSort: string;
 }
 
 export function receiptRowModel(row: RawReceiptRow): ReceiptRowModel {
@@ -409,6 +429,8 @@ export function receiptRowModel(row: RawReceiptRow): ReceiptRowModel {
     id: row.id,
     vendorText: row.vendor ?? 'No vendor recorded',
     dateText: row.date ?? 'No date recorded',
+    invoiceNumberText: row.receipt_number?.trim() || 'No number captured',
+    invoiceNumberSort: row.receipt_number?.trim().toLowerCase() ?? '',
     amountText: money(row.amount) ?? 'No amount recorded',
     categoryText: row.category ?? 'No category',
     capturedAtText: row.created_at ?? 'No capture time recorded',
@@ -575,7 +597,7 @@ export function receiptSearchText(row: ReceiptRowModel): string {
     ...o.deliveries.flatMap(d => [d.status.label, d.dateText, d.serviceText, d.sourceText]),
   ]);
   return [
-    row.vendorText, row.dateText, row.amountText, row.categoryText,
+    row.vendorText, row.invoiceNumberText, row.dateText, row.amountText, row.categoryText,
     row.capturedAtText, row.statusText, outcomeSummaryText(row.outcome), ...chain,
   ].filter(Boolean).join(' ');
 }
