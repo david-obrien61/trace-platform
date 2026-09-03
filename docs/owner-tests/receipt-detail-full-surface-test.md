@@ -15,13 +15,29 @@ paper, and what the reader made of it"* clause — **corrected this session**, s
 **Board: 0 of 12 covered** (11 `owed` · 1 `needs-test`).
 **DEVICE:** all cards `DEVICE: desktop` — this is a reconcile-and-correct surface, and reconcile is desktop (capture=mobile / reconcile=desktop).
 
-> 🔴 **MIGRATION GATE — THIS ONE DOES NOT WORK WITHOUT IT.**
-> `supabase/migrations/20260902_receipt_line_edit_and_vendor_preference.sql` **must be applied**
-> before CARDS 6–11. It creates `edit_receipt_line_items`, the
-> `trg_receipts_snapshot_and_line_guard` trigger, and the `vendor_preferences` table.
-> Un-applied, the **read** cards (1–5) still pass and every **edit** card fails with
-> *"Could not find the function"* — which would read as a code defect and is not one.
-> Run the migration's own CATALOG-VERIFICATION GATE (A)–(F) after applying.
+> ✅ **MIGRATION GATE — CLEARED 2026-09-03. CARDS 6–11 ARE NO LONGER BLOCKED.**
+> `supabase/migrations/20260902_receipt_line_edit_and_vendor_preference.sql` **is APPLIED.**
+> David ran it and returned the catalog verification (A)–(F): `edit_receipt_line_items` and
+> `guard_receipt_snapshot_and_lines` both `prosecdef=true`, both **owned by `postgres`**;
+> `trg_receipts_snapshot_and_line_guard` `tgenabled='O'`; `vendor_preferences` `relrowsecurity=true`
+> with its four policies (`member_insert a` · `member_select r` · `member_update w` · `owner_all *`)
+> and both indexes incl. `vendor_preferences_one_per_vendor_kind_uidx`.
+>
+> 🔴 **AND THE WRITE-ONCE GUARD WAS PROVEN BY BEING REFUSED — TWICE, AS `postgres`, FROM THE SQL EDITOR:**
+> ```
+> ERROR: 42501: receipts.line_items_original is write-once:
+>        it is the record of what the OCR read
+> CONTEXT: PL/pgSQL function public.guard_receipt_snapshot_and_lines() line 9
+> ```
+> **That is not a UI check, and not a policy a caller with the right permission can slip past. It
+> refuses everybody, the superuser included.** A refusal that names its own reason in plain words is
+> the evidence — and it is the negative control this guard could not have passed by accident
+> ([[R-33]]). **Recorded OWNER-PROVEN at the schema layer**; the CARDS below still owe the UI run.
+>
+> ✏️ **ORIGINAL GATE TEXT, PRESERVED** (do not delete a claim that was once true): *"THIS ONE DOES
+> NOT WORK WITHOUT IT … Un-applied, the read cards (1–5) still pass and every edit card fails with
+> 'Could not find the function' — which would read as a code defect and is not one."* That warning
+> was correct and is now HISTORY. Ledger #261.
 
 > ⚠️ **WHAT THIS BUILD DOES NOT TOUCH.** No `api/` function (12/12 untouched), no new permission
 > string, and **not one row of live receipt data is modified except by you, deliberately, on

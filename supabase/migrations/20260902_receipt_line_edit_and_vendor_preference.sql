@@ -5,7 +5,49 @@
 --
 -- NEVER EDIT APPLIED MIGRATIONS. Append new migrations for changes.
 --
--- ⚠️  APPLY NOTE FOR DAVID: run in the Supabase SQL editor as the default `postgres` role.
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- ✅ APPLIED 2026-09-03 BY DAVID. THIS FILE IS NO LONGER GATED.
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- ANNOTATION ONLY — not one line of SQL below is altered (CLAUDE.md §6 r1; the same
+-- comment-only precedent as 20260802_trialling_modules_are_live.sql:2 and #254's annotation of
+-- 20260827_history_orders.sql). The original APPLY NOTE is PRESERVED verbatim below it:
+-- do not delete a claim that was once true.
+--
+-- CATALOG VERIFICATION (A)-(F), returned by David from the SQL editor:
+--   proname                            prosecdef  owner
+--   edit_receipt_line_items            true       postgres
+--   guard_receipt_snapshot_and_lines   true       postgres
+--   tgname                                  tgenabled
+--   trg_receipts_snapshot_and_line_guard    O
+--   relrowsecurity: true
+--   polname                            polcmd
+--   vendor_preferences_member_insert   a
+--   vendor_preferences_member_select   r
+--   vendor_preferences_member_update   w
+--   vendor_preferences_owner_all       *
+--   indexname
+--   vendor_preferences_pkey
+--   vendor_preferences_one_per_vendor_kind_uidx
+--
+-- 🔴 THE WRITE-ONCE GUARD WAS PROVEN BY BEING REFUSED, TWICE, AS `postgres`, FROM THE SQL EDITOR:
+--
+--   ERROR: 42501: receipts.line_items_original is write-once:
+--          it is the record of what the OCR read
+--   CONTEXT: PL/pgSQL function public.guard_receipt_snapshot_and_lines() line 9
+--
+-- That is not a UI check and not a policy a sufficiently-permissioned caller can slip past.
+-- It refuses EVERYBODY, the superuser included. A refusal that names its own reason in plain
+-- words is the evidence — the negative control this guard could not have passed by accident
+-- ([[R-33]]: a check that cannot disagree is not a check; this one disagreed, on demand, twice).
+--
+-- UNBLOCKED BY THIS APPLY: docs/owner-tests/receipt-detail-full-surface-test.md CARDS 6-11.
+-- Also clears STEP 2 of the three-migration vendor chain that thunder/vendor-identity's
+-- 20260902b_vendor_preferences_join_on_vendor_id.sql names in its own APPLY ORDER block.
+-- Ledger #261.
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+--
+-- ⚠️  APPLY NOTE FOR DAVID (ORIGINAL, PRESERVED — this is the pre-apply instruction, now HISTORY):
+--     run in the Supabase SQL editor as the default `postgres` role.
 --   Both functions must be OWNED BY postgres + SECURITY DEFINER — the same load-bearing
 --   ownership rule as is_active_member / has_permission / reject_audit_log_mutation.
 --

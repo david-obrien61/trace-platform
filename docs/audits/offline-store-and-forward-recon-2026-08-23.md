@@ -795,6 +795,12 @@ David's live airplane-mode run flips one.** These replace the single `needs-test
 > **It says nothing about whether the mechanism exists, and the mechanism does exist.** The two facts
 > are independent and were being read as one; that conflation is what cost tonight's re-establishment.
 
+> 📄 **MOVED 2026-09-03 → [`docs/owner-tests/offline-store-and-forward-full-surface-test.md`](../owner-tests/offline-store-and-forward-full-surface-test.md).**
+> These **seven** cards sat in a fenced block in this audit doc from 2026-08-23 to 2026-09-03. **A card outside
+> `docs/owner-tests/` is a card nobody runs** — it is not rendered and it is not swept. The cards are now a real
+> board, moved verbatim. **The original block is preserved below**, per *do not delete a claim that was once true*;
+> the board at the path above is AUTHORITATIVE and this copy is HISTORY. Ledger #261.
+
 ```
 ## SURFACE: offline — store-and-forward
 _The SyncEngine (`packages/shared/src/sync/`) — back-acre dead zones (ledger #54, #143).
