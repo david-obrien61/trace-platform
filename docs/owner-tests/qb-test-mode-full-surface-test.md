@@ -475,60 +475,153 @@ own screen.
 
 ---
 
-## CARD 21 — 🔴 the retirement column lands, and retires nothing by landing
+## CARD 22 — 🔴 the new table's TWO policies · RUN THIS ONE FIRST · it has a STOP
 **STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**KIND:** 🔧 database card — Supabase SQL editor. **NOT provable from a print**, and it shares a
+print with nothing: there is no app screen involved. Cards 21 and 22 are the only two like this.
 
-Apply **`supabase/migrations/20260903_inventory_retire_lifecycle.sql`** in the Supabase **SQL
-editor** (not the table editor — §6 r17). Then run its VERIFY block, V1 through V5.
+**BEFORE YOU START — all three must be true:**
+- 🔴 `supabase/migrations/20260903b_display_standards.sql` **is visible in your checkout.** If it is
+  not, **stop — it is still on an unmerged branch and cannot be applied.** See ⚡ ACTIVE STATUS.
+- You are in the **Supabase SQL editor** for project **`bgobkjcopcxusjsetfob`** (cultivar-os).
+- **Not** the dashboard **Table editor**. This card creates a table, and the editor you use changes
+  what you get (§6 r17).
 
-1. **V1** — `retired_at` and `retired_reason` both exist, both nullable, neither with a default.
-2. 🔴 **V2 — `already_retired` is `0`.** Applying the migration retired nothing.
-3. **V3** — the index exists and its definition contains `WHERE (retired_at IS NOT NULL)`.
-4. 🔴 **V4 — the policy list is UNCHANGED**: `business_inventory_owner_all` and
-   `business_inventory_member_all`, and nothing else.
-5. **V5** — record the three numbers it returns. This is the baseline the replacement is judged
-   against, and it is worth having *before* anything runs.
+**TENANT / ACTOR:** none — this is a catalog card. It reads Postgres's own metadata, so it does not
+matter which business or which login you have; it is the same answer for everyone.
 
-**PASS:** all five.
-🔴 **STEP 2 IS THE ONE THAT MATTERS AND IT LOOKS LIKE A FORMALITY.** A migration that quietly
-retired rows would be indistinguishable from the feature working — you would see rows disappear and
-conclude it had run correctly. Nothing should have moved yet.
-🔴 **STEP 5 IS NOT OPTIONAL EITHER.** If the counts come back materially different from ~447 total
-and ~4 with a real count, **stop** — the data has changed since the ruling was made, and the plan
-was written against those numbers.
-**FAIL:** any column with a default · anything already retired · a changed policy list · a
-non-partial index.
+**DO THIS:**
+1. Open the SQL editor → **New query**.
+2. Paste the **whole file** `20260903b_display_standards.sql` and press **Run**.
+   **Expected:** `Success. No rows returned.`
+3. New query. Paste and Run:
+   ```sql
+   SELECT tablename, tableowner FROM pg_tables
+    WHERE schemaname='public' AND tablename='business_display_standards';
+   ```
+   **Expected:** exactly **1 row**, `tableowner` = **`postgres`**.
+4. New query. Paste and Run:
+   ```sql
+   SELECT policyname, cmd FROM pg_policies
+    WHERE schemaname='public' AND tablename='business_display_standards'
+    ORDER BY policyname;
+   ```
+   🔴 **Expected: exactly 2 rows**, both `cmd` = `ALL`:
+   `business_display_standards_member_all` and `business_display_standards_owner_all`.
+5. New query. Paste and Run:
+   ```sql
+   SELECT grantee, privilege_type FROM (
+     SELECT (aclexplode(relacl)).grantee::regrole::text AS grantee,
+            (aclexplode(relacl)).privilege_type       AS privilege_type
+       FROM pg_class WHERE relname='business_display_standards') g
+    WHERE grantee='anon' AND privilege_type IN ('TRUNCATE','REFERENCES');
+   ```
+   **Expected: 0 rows.**
+6. New query. Paste and Run:
+   ```sql
+   SELECT count(*) AS decided FROM public.business_display_standards;
+   ```
+   **Expected: `0`.**
+
+**PASS:** step 3 says `postgres` · **step 4 returns BOTH policy names** · step 5 returns nothing ·
+step 6 returns `0`.
+
+🔴 **THE STOP IS STEP 4, AND IT IS THE WHOLE REASON THIS CARD GOES FIRST.** If only
+`..._owner_all` comes back, **stop and do not run CARD 21 or anything else on this board.** That
+policy keys on `businesses.owner_id`, and **Lauren is not `owner_id` at LAWNS** — she is
+`role = OWNER` in `business_members` with a different `user_id`, the only such row in the database.
+An owner-only policy locks her out of her own tenant. **This is the `audit_log` defect repeating**
+(tech-debt **#152**), and if it fires here nothing else matters until it is fixed.
+
+**FAIL, specifically:**
+- `tableowner` = `supabase_admin` → it was created in the **Table editor**. Drop it and re-run the
+  file in the **SQL editor**. It arrived carrying a TRUNCATE grant for `anon` that RLS cannot filter.
+- step 4 returns **1 row** → the stop above.
+- step 5 returns **any row** → same as `supabase_admin`; the anon grant is present.
+- step 6 returns anything but `0` → applying the file decided something, which it must not.
+
+⚠️ **WHAT THIS CARD DOES NOT PROVE, STATED SO NOBODY READS IT AS MORE THAN IT IS.** It proves the
+policy **EXISTS**. It does **not** prove Lauren can actually read and write the table, because in
+the SQL editor you are `postgres`: **`auth.uid()` is NULL and RLS is bypassed entirely**, so every
+policy here would "pass" even if its logic were wrong. Proving she can use it needs her signed into
+the app, and **that card cannot be written until the screen exists (CARD 23).** A card that tested
+policy behaviour from the SQL editor would pass on a policy that never ran.
 
 ---
 
-## CARD 22 — 🔴 the display-standards table, and the policy that decides whether Lauren is locked out
+## CARD 21 — 🔴 the retirement column lands, and retires NOTHING by landing
 **STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**KIND:** 🔧 database card — Supabase SQL editor. **NOT provable from a print.** Same print-group as
+CARD 22 (i.e. none); run them in one sitting, **CARD 22 first**.
 
-Apply **`supabase/migrations/20260903b_display_standards.sql`** in the **SQL editor**. This one
-**creates a table**, so the editor you use changes what you get. Run V1–V5.
+**BEFORE YOU START:**
+- 🔴 `supabase/migrations/20260903_inventory_retire_lifecycle.sql` **is visible in your checkout.**
+  If not, **stop** — unmerged branch, cannot be applied.
+- **CARD 22 has passed.** If its step 4 stopped you, do not run this.
+- SQL editor, project `bgobkjcopcxusjsetfob`. This one alters an existing table and creates nothing,
+  so the table-editor hazard does not apply — but use the SQL editor anyway.
 
-1. 🔴 **V1 — `tableowner` is `postgres`, not `supabase_admin`.** `supabase_admin` means it was made
-   in the table editor, and it arrives carrying a TRUNCATE grant for `anon` that RLS cannot filter.
-2. **V2** — no `anon` TRUNCATE/REFERENCES rows come back at all.
-3. 🔴 **V3 — RLS is on AND BOTH policies exist** — `..._owner_all` **and** `..._member_all`.
-4. **V4** — one unique index on `(business_id, domain, group_key)`.
-5. **V5** — the table is empty. Applying it decided nothing.
+**TENANT / ACTOR:** catalog card for steps 2–4, so no tenant. **Step 5 is LAWNS-specific** and the
+business id is in the query already — `ed2e5933-45dc-4b9b-a331-ddfd125e7a74`.
 
-**PASS:** all five.
-🔴 **STEP 3 IS THE LAUREN CASE AND IT IS WHY THIS CARD EXISTS.** An owner-only policy keyed on
-`businesses.owner_id` would lock Lauren out of her own tenant: she holds `role = OWNER` in
-`business_members` at LAWNS with a `user_id` that is **not** `businesses.owner_id` — the only such
-row in the database. **If only the owner policy is there, stop.** A first draft elsewhere tested
-`owner_id` alone and would have refused her; that is measured, not hypothetical.
-⚠️ **AND A KNOWN GAP TO READ, NOT TEST:** `audit_log`'s read policy *is* `owner_id`-keyed, so Lauren
-can write the record of her own decision and **cannot read it back**. Not fixed here and not a
-failure of this card — named so it is not discovered as a surprise.
-**FAIL:** owner `supabase_admin` · any anon TRUNCATE · a missing member policy · no unique index.
+**DO THIS:**
+1. New query → paste the **whole file** `20260903_inventory_retire_lifecycle.sql` → **Run**.
+   **Expected:** `Success. No rows returned.`
+2. New query:
+   ```sql
+   SELECT column_name, is_nullable, column_default
+     FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='business_inventory'
+      AND column_name IN ('retired_at','retired_reason')
+    ORDER BY column_name;
+   ```
+   **Expected: exactly 2 rows** — `retired_at` and `retired_reason`, **both `is_nullable = YES`**,
+   **both `column_default` empty/NULL**.
+3. 🔴 New query:
+   ```sql
+   SELECT count(*) AS already_retired
+     FROM public.business_inventory WHERE retired_at IS NOT NULL;
+   ```
+   **Expected: `0`.**
+4. New query:
+   ```sql
+   SELECT indexdef FROM pg_indexes
+    WHERE schemaname='public' AND indexname='business_inventory_retired_idx';
+   ```
+   **Expected: 1 row**, and the text **contains `WHERE (retired_at IS NOT NULL)`**.
+5. New query — **write the three numbers down**:
+   ```sql
+   SELECT count(*) AS live_rows,
+          count(*) FILTER (WHERE qty > 0)                       AS rows_with_a_real_count,
+          count(*) FILTER (WHERE sku IS NULL OR btrim(sku)='')  AS rows_with_no_sku
+     FROM public.business_inventory
+    WHERE business_id = 'ed2e5933-45dc-4b9b-a331-ddfd125e7a74'
+      AND retired_at IS NULL;
+   ```
+   **Expected, roughly:** `live_rows` ≈ **447** · `rows_with_a_real_count` ≈ **4** ·
+   `rows_with_no_sku` ≈ **447**.
+
+**PASS:** two nullable columns with no default · `already_retired` = `0` · the index definition
+contains its `WHERE` clause · step 5 recorded.
+
+🔴 **STEP 3 LOOKS LIKE A FORMALITY AND IS THE POINT OF THE CARD.** A migration that quietly retired
+rows would be **indistinguishable from the feature working** — you would see rows vanish from the
+catalogue and conclude it had run. Nothing should have moved: this adds two empty columns.
+
+🔴 **STEP 5 IS A GO / NO-GO FOR THE WHOLE REPLACEMENT.** If `live_rows` is not close to 447, or
+`rows_with_a_real_count` is materially more than 4, **stop and say so.** The plan was written
+against those numbers, and the one clause that cannot be undone is *a row carrying a real count is
+never retired.* More counted rows than expected means more rows the replacement must preserve.
+
+**FAIL, specifically:** either column with a default, or `is_nullable = NO` · `already_retired` > 0 ·
+the index missing, or present **without** the `WHERE` clause (a full index instead of a partial one) ·
+step 5 materially away from 447 / 4.
 
 ---
 
 ## CARD 23 — the two screens do not exist yet
 **STATUS:** needs-test · **DEVICE:** desktop · **LAST-PROVEN:** —
+**KIND:** none — there is nothing to run.
 
 **REASON THIS IS `needs-test` RATHER THAN A CHECK:** #262 built the two **decisions** and the two
 **places they live** — the plan that decides what is retired, adopted, carried and created, and the
@@ -537,11 +630,14 @@ questions that ask an owner how a size should read. **Neither has a screen, and 
 
 **What is owed before this becomes a real card:**
 - the applier that walks the plan and writes it, and the reader-side filter that hides a retired row
-  (a retired row that still appears everywhere is not retired)
-- the screen that asks the normalisation questions and records the answer in **both** places —
+  — 🔴 **a retired row that still appears everywhere is not retired**
+- the screen that asks the normalisation questions and records the answer in **both** places:
   `audit_log` (how it was decided) and `business_display_standards` (what is true now)
-- the report that states **retired · created · carried**, which is the third clause of R-70 and is
-  the only way an owner can check the replacement did what it said
+- the report that states **retired · created · carried**, which is R-70's third clause and the only
+  way an owner can check the replacement did what it said
+- ⚠️ **and the card CARD 22 could not write** — Lauren signed into the app, reading and writing a
+  display standard on LAWNS under her own session. That is the only thing that proves the member
+  policy WORKS rather than merely EXISTS, and it needs a screen.
 
 🔴 **WRITING THIS DOWN IS THE POINT.** An unrecorded hole looks exactly like a covered surface on a
 board where every other row is green, and #262 could otherwise read as "retire-and-replace: done."

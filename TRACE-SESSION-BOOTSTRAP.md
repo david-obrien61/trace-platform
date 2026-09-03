@@ -78,6 +78,70 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🔴 MIGRATIONS — WHAT DAVID CAN APPLY, IN ORDER (measured 2026-09-03, ledger #262)
+
+**What is visible in a `main` checkout, dated 2026-09:** exactly three, and **all three belong to
+`thunder/vendor-identity`** (merged). Reported here, not coordinated across the branch — [[R-62]];
+David relays.
+
+| # | File | State | Apply |
+|---|---|---|---|
+| 1 | `20260902_receipt_line_edit_and_vendor_preference.sql` | ✅ **APPLIED 2026-09-02**, catalog-confirmed | done |
+| 2 | `20260902_vendor_identity_and_preference.sql` | ⏳ not applied | **FIRST** |
+| 3 | `20260902b_vendor_preferences_join_on_vendor_id.sql` | ⏳ not applied | **SECOND** |
+
+**WHY THAT ORDER, from the files rather than from habit:** #3 opens with a `DO $preflight$` block
+that requires **both** `vendors` (created by #2) and `vendor_preferences` (created by #1). Paste #3
+first and it stops with a **named refusal**, not a crash:
+`consolidation pre-flight FAILED — 'vendors' does not exist. Apply 20260902_vendor_identity_and_preference.sql first.`
+🔴 **That refusal is the feature working.** Expect it if the order slips; it is better evidence than
+a row count, because it names the missing prerequisite instead of leaving a bare `42P01`.
+
+**WHAT EACH UNBLOCKS:** #2 creates `vendors` + `vendor_aliases` and adds `receipts.vendor_id` — the
+consolidated vendor store ([[R-65]]) the receipt detail view resolves against. #3 adds
+`vendor_preferences.vendor_id`, the `vendor_preferences_resolved` view and `link_vendor_preference`,
+which is what lets the billing-unit answer be read through the vendor rather than through a
+name-key. Together they close tech-debt **#151** (two stores answering one question).
+
+**🔴 DID APPLYING #1 BEFORE #2 CAUSE A PROBLEM? NO — AND HERE IS THE MEASUREMENT, NOT A REASSURANCE.**
+`20260902_vendor_identity_and_preference.sql` contains **zero occurrences of the string
+`vendor_preferences`** (grepped, whole file). The two touch **disjoint objects**: #1 creates
+`vendor_preferences` and the receipt-line guards; #2 creates `vendors`, `vendor_aliases` and
+`receipts.vendor_id`. Neither alters the other's tables, so there is no ordering between them.
+⚠️ **THE FAILURE THAT WOULD HAVE MATTERED, AND WHY IT DOES NOT APPLY:** if #2 had *also* created
+`vendor_preferences`, its `CREATE TABLE IF NOT EXISTS` would have **silently skipped** the existing
+one and left a table with #1's shape under #2's assumptions — a silent wrong-shape, not an error.
+It does not name the table at all, so that cannot happen.
+⚠️ **THIS IS MEASURED FROM THE FILES, NOT FROM THE LIVE CATALOG — I have no database access.**
+Prove it in the SQL editor before trusting it:
+```sql
+SELECT table_name, count(*) AS cols
+  FROM information_schema.columns
+ WHERE table_schema='public' AND table_name IN ('vendor_preferences','vendors','vendor_aliases')
+ GROUP BY table_name ORDER BY table_name;
+```
+**A pass looks like:** `vendor_preferences` present **now**; `vendors` and `vendor_aliases`
+**absent until #2 runs**, present after. If `vendors` already exists before you run #2, stop — the
+order assumption is wrong and #2 needs re-reading.
+
+### 🔴 AND THREE MIGRATIONS DAVID CANNOT APPLY, BECAUSE THEY ARE NOT ON `main`
+
+**Measured 2026-09-03** (`git ls-tree origin/main` vs the branch). These exist only on
+**`thunder/qbo-review-test-mode`**, which is **BUILDER-COMPLETE, PUSHED and NOT MERGED** — so they
+are **invisible in his checkout and cannot be pasted**:
+
+- `20260902_business_qbo_writes_switch.sql` — **owed since 2026-09-02** (#255). Until it is applied
+  **every order is written as a test order**, so an unapplied migration *looks like a working
+  feature*. Blocks the test-mode board's GATE 0 ②.
+- `20260903_inventory_retire_lifecycle.sql` — **blocks owner-test CARD 21.**
+- `20260903b_display_standards.sql` — **blocks owner-test CARD 22**, which is the card with the stop.
+
+🔴 **THIS IS THE BLOCKER, AND NOTHING ELSE ON THAT BOARD MOVES UNTIL IT CLEARS.** A migration on a
+feature branch cannot be applied, so the build waits and nothing says so — which is why it is
+recorded here rather than left in a report. **The branch merging is the unblock; there is no
+workaround, and copying the file by hand would apply SQL that is not in `main`'s history.**
+
+
 > One screen. Statuses + pointers ONLY — never inline depth (depth lives in the linked feeders).
 > Legend: 🔴 not-started / fake / broken · 🟡 in-flight (built-not-wired OR wired-not-proven) · 🟢 live + proven (demoable). States stack.
 > LIFECYCLE: when an item is 🟢-proven AND no longer demo-active it ARCHIVES to §A (bottom). The active list stays one screen because DONE leaves.
