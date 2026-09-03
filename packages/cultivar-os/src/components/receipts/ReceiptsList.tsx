@@ -92,7 +92,11 @@ import {
   type ReceiptListModel,
   type ReceiptRowModel,
   type OutcomeOrder,
+  RECEIPT_LINES_SELECT,
+  receiptLinesModel,
+  linesProvenanceNote,
 } from '../../lib/receiptsList';
+import type { RawReceiptDetailRow, LineRowModel } from '../../lib/receiptDetail';
 
 const TRACE_RECEIPTS_LIST = true; // [TRACE:receipts-list] STD-003 — ON until David owner-proves
 
@@ -151,10 +155,124 @@ function OrderBlock({ order }: { order: OutcomeOrder }) {
 }
 
 /** The drawer: what the platform banked at save time, and what the capture became. */
-function ReceiptExpansion({ row }: { row: ReceiptRowModel }) {
+// ── THE LINES, FETCHED WHEN THE DRAWER OPENS ────────────────────────────────────────────────
+// 🔴 THIS IS A PER-ROW READ, NOT A LIST READ, AND THE DISTINCTION IS DAVID'S RULING. The list
+// query still carries no `line_items` (probe A5), so re-deriving a banked verdict from the list
+// remains impossible; this fetches ONE receipt's lines, only when its drawer opens, under the
+// SAME projection and the SAME model `/receipts/:id` uses (§6 r8 — no second line model).
+//
+// `renderExpand` is called only when a row is open (`DataSheet.tsx`: `renderExpand && isOpen`),
+// so mounting IS expanding and the effect needs no open-state of its own.
+//
+// AC-3: scoped on `business_id` as well as `id` — another tenant's receipt is NOT FOUND, never
+// shown, exactly as `/receipts/:id` does it.
+type LinesState =
+  | { phase: 'loading' }
+  | { phase: 'failed'; message: string }
+  | { phase: 'loaded'; lines: LineRowModel[]; note: string | null };
+
+function ReceiptLines({ receiptId, businessId }: { receiptId: string; businessId: string | null }) {
+  const [state, setState] = useState<LinesState>({ phase: 'loading' });
+
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      if (!businessId) return;
+      if (TRACE_RECEIPTS_LIST) console.log('[TRACE:receipts-list] drawer lines read', { receiptId });
+      const { data, error } = await supabase
+        .from('receipts')
+        .select(RECEIPT_LINES_SELECT)
+        .eq('id', receiptId)
+        .eq('business_id', businessId)
+        .maybeSingle();
+      if (!live) return;
+      if (error || !data) {
+        if (TRACE_RECEIPTS_LIST) console.log('[TRACE:receipts-list] drawer lines FAILED', error?.message);
+        setState({ phase: 'failed', message: error?.message ?? 'the receipt could not be read' });
+        return;
+      }
+      const lines = receiptLinesModel(data as unknown as RawReceiptDetailRow);
+      setState({ phase: 'loaded', lines, note: linesProvenanceNote(lines) });
+    })();
+    return () => { live = false; };
+  }, [receiptId, businessId]);
+
+  if (state.phase === 'loading') return <div style={META}>Reading the lines…</div>;
+
+  // §6 R1: a failed read must not read as an empty one. It says which of the two it is.
+  if (state.phase === 'failed') {
+    return (
+      <div style={ABSENCE}>
+        The lines could not be read — {state.message}. This is a failed read, NOT a receipt with no
+        lines: how many lines it has is unknown right now.
+      </div>
+    );
+  }
+
+  if (state.lines.length === 0) {
+    return <div style={ABSENCE}>No lines were captured for this receipt.</div>;
+  }
+
+  return (
+    <>
+      {/* 🔴 The caveat is COMPUTED, not hardcoded — it disappears the day a capture lands with the
+          keys actually stored, instead of becoming furniture nobody reads. */}
+      {state.note && <div style={{ ...ABSENCE, marginBottom: 8 }}>{state.note}</div>}
+      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.8125rem' }}>
+        <thead>
+          <tr>
+            {['', 'Description', 'Qty', 'Rate', 'Amount'].map((h, i) => (
+              <th key={i} style={{ textAlign: i > 1 ? 'right' : 'left', padding: '3px 8px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #e5e7eb' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {state.lines.map(l => (
+            <tr key={l.index}>
+              <td style={{ padding: '3px 8px', color: '#94a3b8' }}>{l.index + 1}</td>
+              <td style={{ padding: '3px 8px' }}>
+                <LineCell f={l.fields.description} />
+                {l.originNote && <div style={{ ...META, fontStyle: 'italic' }}>{l.originNote}</div>}
+              </td>
+              <td style={{ padding: '3px 8px', textAlign: 'right' }}><LineCell f={l.fields.quantity} /></td>
+              <td style={{ padding: '3px 8px', textAlign: 'right' }}><LineCell f={l.fields.unit_price} /></td>
+              <td style={{ padding: '3px 8px', textAlign: 'right' }}><LineCell f={l.fields.amount} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+// One cell, four states — the model decides, this only renders (tech-debt #134).
+// 🔴 `never-carried` is shown in the UNCONFIRMED style and is NEVER dressed as a saved value:
+// the figure is real, our record of it is not.
+function LineCell({ f }: { f: LineRowModel['fields'][keyof LineRowModel['fields']] | undefined }) {
+  if (!f) return null;
+  if (f.state === 'absent') return <span style={META}>—</span>;
+  if (f.state === 'never-carried') {
+    return <span style={{ color: '#92400e' }} title="From the reader's scan — the saved copy never carried this value">{f.originalText}</span>;
+  }
+  if (f.state === 'changed') {
+    return (
+      <span>
+        {f.currentText}
+        <span style={{ ...META, marginLeft: 4 }} title="What the reader originally read">was {f.originalText}</span>
+      </span>
+    );
+  }
+  return <span>{f.currentText}</span>;
+}
+
+function ReceiptExpansion({ row, businessId }: { row: ReceiptRowModel; businessId: string | null }) {
   const { verdict, outcome } = row;
   return (
     <div style={EXPAND}>
+      <div style={{ marginBottom: 10 }}>
+        <div style={SECTION_LABEL}>What was on the document</div>
+        <ReceiptLines receiptId={row.id} businessId={businessId} />
+      </div>
       <div>
         <div style={SECTION_LABEL}>What the platform banked at save time</div>
         {verdict.readout && <div style={verdict.readout.style}>{verdict.readout.text}</div>}
@@ -361,7 +479,7 @@ export function ReceiptsList({ businessId, refreshToken }: { businessId: string 
         }}
         defaultSortKey="date"
         defaultSortDir="desc"
-        renderExpand={r => <ReceiptExpansion row={r} />}
+        renderExpand={r => <ReceiptExpansion row={r} businessId={businessId} />}
         itemNoun="on this page"
         emptyIcon={<Receipt size={32} color="#d1d5db" style={{ marginBottom: 8 }} />}
         emptyText="No receipts captured yet."

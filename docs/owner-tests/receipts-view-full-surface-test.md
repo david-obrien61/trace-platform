@@ -14,7 +14,7 @@ capture half has shipped since 2026-06-11 and has never had a row. Flagged for D
 Joins only: **3.5** delivery and the orders roster.
 **Story:** `user_stories.md` → *I captured a receipt — show me it landed, and show me what it turned into*
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 17 covered** (**16 `owed`** · 1 `needs-test`) — 🔴 **EVERY CARD FLIPPED `covered` → `owed` ON 2026-09-03 BECAUSE THE SURFACE WAS REPLACED, NOT BECAUSE ANY PROOF WAS BAD.** `/receipts` moved from a bespoke card stack onto **`<DataSheet>` with `renderExpand`** — one row per receipt, the chain in a disclosure drawer (David's ruling). **Every card below was written against a card stack that no longer exists**, and OP-14 clause 3 is explicit: *changing a surface flips `covered` → `owed`* — a green check on a moved surface asserts a proof nobody performed. **Each card's 2026-09-02 evidence is PRESERVED VERBATIM in its own body**; nothing is overwritten. ⚠️ **THE RE-PROOF IS CHEAPER THAN THE FLIP LOOKS: seven of these still settle from ONE print of `/receipts`** — take the print and 1, 2, 3, 4, 5, 7 and 11 go together.
+**Board: 0 of 18 covered** (**17 `owed`** · 1 `needs-test`) — 🔴 **EVERY CARD FLIPPED `covered` → `owed` ON 2026-09-03 BECAUSE THE SURFACE WAS REPLACED, NOT BECAUSE ANY PROOF WAS BAD.** `/receipts` moved from a bespoke card stack onto **`<DataSheet>` with `renderExpand`** — one row per receipt, the chain in a disclosure drawer (David's ruling). **Every card below was written against a card stack that no longer exists**, and OP-14 clause 3 is explicit: *changing a surface flips `covered` → `owed`* — a green check on a moved surface asserts a proof nobody performed. **Each card's 2026-09-02 evidence is PRESERVED VERBATIM in its own body**; nothing is overwritten. ⚠️ **THE RE-PROOF IS CHEAPER THAN THE FLIP LOOKS: seven of these still settle from ONE print of `/receipts`** — take the print and 1, 2, 3, 4, 5, 7 and 11 go together.
 🔴 **CARD 8 is `covered` with its FAILURE preserved** — it failed, #257 fixed it, and the failure is not overwritten.
 📄 **NINE OF THESE WERE PROVEN FROM PRINTED PDFs OF `/receipts`, NOT FROM LIVE INTERACTION.** **CARDS 1, 2, 3, 4, 5, 7 and 11 are all provable from ONE print of `/receipts`** — take the print, and those seven settle together. ⚠️ **CARD 1 is owed again and rides that same print** — one new print of `/receipts` re-settles it, so the re-proof costs nothing beyond taking the print. CARD 6 (a capture with no reload) and CARD 9 (three loads at three times) need interaction; CARD 10 needs an account that does not exist.
 🆕 **CARDS 15–17 ADDED 2026-09-03 (#270) — the invoice number and the unit.** CARD 15 (number stored) and CARD 17 (unit read off the invoice) **share ONE capture and ONE query** — do them together. 🔴 **CARD 15 needs `20260903c` APPLIED; CARD 17 does not** (the unit fields ride inside the existing `line_items` jsonb, so no column is involved). ⚠️ **CARD 16 has a CLOSING WINDOW** — it tests the gap between the deploy and the apply, and applying the migration makes it unrunnable by design: mark it `superseded`, never `failed`.
@@ -429,3 +429,48 @@ bills you, is it by the yard or the ton?"* are two different builds; only the fi
 screen may still ask. That is the next piece of work, not a failure of this card.
 It also cannot prove any DERIVED figure — *"(12 Pack)"* at $25.71 being $2.14 a roll is arithmetic
 on these values that nothing computes yet, deliberately.
+
+---
+
+## CARD 18 — 🔴 the drawer shows what was ON the document, and says which figures nobody confirmed
+**STATUS:** owed · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE (one print, drawer open) · **LAST-PROVEN:** —
+
+**TENANT:** LAWNS (`ed2e5933-…`). **ACTOR:** the owner.
+**WHAT MUST BE TRUE FIRST:** the SHA at the foot of the screen is the one carrying #270's drawer.
+**No migration needed.**
+
+**RIDES THE SAME PRINT AS CARD 14** (one receipt = one row). Open a drawer, take one print, and
+both settle.
+
+**USE the bwi 2026-07-29 receipt** — it has real lines with quantities and rates on the paper.
+
+1. On `/receipts`, expand the **bwi 2026-07-29** row.
+2. A section headed **What was on the document** appears ABOVE *"What the platform banked at save
+   time"*, with a table: **# · Description · Qty · Rate · Amount**.
+3. Read the amber sentence directly above that table.
+4. Compare the **Qty** and **Rate** cells against the paper invoice.
+
+**PASS:** the lines are there with **quantity and rate**, matching the document. 🔴 **AND the amber
+sentence names them:** *"The quantity and rate shown here came from the reader's original scan of
+this document. The saved copy never carried them, so nobody has confirmed these figures — read them
+as what the scan said, not as settled."* The Qty and Rate values render in **amber, not plain black**,
+because they are the scan's reading and not a saved value.
+Any tax line the platform added reads *"Added by the platform from the tax the reader found — it was
+not a line on the document."*
+
+**FAIL:** the drawer shows only the banked verdict and the order chain, with no lines (the fetch did
+not fire — check the console for `[TRACE:receipts-list] drawer lines read`) · quantity and rate are
+**blank** on every line (the drawer read only the saved copy, which carries neither) · 🔴 **the amber
+sentence is ABSENT while amber values are on screen** — that is the exact defect this card exists to
+catch, unconfirmed figures presented as settled · **or** a tax line reads *"Not among the lines the
+reader read"*, which accuses you of adding a line the platform added.
+
+🔴 **WHAT THIS CARD CANNOT PROVE:**
+- **That the figures are RIGHT.** It proves we show the scan's reading and label it as such. Whether
+  the OCR read the paper correctly is a different question and this card does not ask it.
+- **That the caveat ever goes away.** It is computed — it disappears when a capture lands whose
+  saved copy carries the five keys. **No such row exists yet** (#257's writer fix merged after the
+  newest capture), so today the sentence appears on every receipt. Proving it *disappears* needs a
+  fresh capture on the fixed writer, which is CARD 17's capture — worth checking there once.
+- **Tenant isolation.** The read is scoped on `business_id` and a probe asserts it, but proving a
+  cross-tenant refusal needs a second tenant's receipt id and a console. Not provable from here.

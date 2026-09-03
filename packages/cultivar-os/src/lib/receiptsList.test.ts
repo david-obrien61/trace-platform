@@ -29,7 +29,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  RECEIPTS_SELECT, RECEIPTS_PAGE_LIMIT,
+  RECEIPTS_SELECT,
+  RECEIPT_LINES_SELECT,
+  receiptLinesModel,
+  linesProvenanceNote, RECEIPTS_PAGE_LIMIT,
   bankedVerdict, captureOutcome, receiptRowModel, receiptListModel, countLabel, listVisibleForStep,
   receiptSortKey, compareReceiptsForDisplay,
   outcomeSummaryText, outcomeFilterValue, receiptSearchText, OUTCOME_FILTER_OPTIONS,
@@ -431,6 +434,63 @@ const bwiOrder: RawOrderRow = {
   ok(!listVisibleForStep('ocr_running'), 'G5 (negative): not mid-OCR');
   ok(!listVisibleForStep('saving'), 'G6 (negative): not mid-save');
   ok(!listVisibleForStep(''), 'G7 (negative): an unknown step does not open the list by accident');
+}
+
+// ══ §J THE DRAWER'S LINES (#270) — a PER-ROW read, and the guard that actually carries weight ═
+// 🔴 Proven RED first, each by reverting the thing it asserts:
+//   J1 — strip line_items from RECEIPT_LINES_SELECT        -> J1 fails
+//   J3 — return null from linesProvenanceNote              -> J3 fails
+//   J4 — return a constant string from linesProvenanceNote -> J4 fails
+//   J5 — pass null for parsedTax inside receiptDetailModel -> J5 fails
+//   A6b — call computeReconcile( in either file            -> A6b fails
+{
+  const detail = (over: Partial<Parameters<typeof receiptLinesModel>[0]>) => ({
+    id: 'r-1', business_id: 'b-1', vendor: 'bwi', date: '2026-07-29', amount: 100,
+    category: 'supplies', created_at: '2026-09-01T00:00:00Z', updated_at: null, status: 'confirmed',
+    image_url: null, line_items: null, line_items_original: null, ocr_raw: null,
+    reconcile_status: 'match', reconcile_delta: 0, reconcile_overridden_at: null,
+    accept_vs_edit: 'accepted', amount_original: 100, header_amount_edited: false,
+    ...over,
+  });
+
+  ok(/\bline_items\b/.test(RECEIPT_LINES_SELECT) && /\bline_items_original\b/.test(RECEIPT_LINES_SELECT),
+    '🔴 J1: the DRAWER projection carries BOTH line stores — the current copy and the reader\'s scan. Without the second, quantity and rate are invisible on all 37 rows, which is the whole reason the drawer exists');
+
+  ok(/\bocr_raw\b/.test(RECEIPT_LINES_SELECT),
+    '🔴 J2: it carries ocr_raw — without the parsed tax, lineRowModel cannot tell a PLATFORM-injected tax line from one the OWNER added, and would accuse Lauren of adding a line we added on ~30 of 35 receipts');
+
+  // The live shape: the saved copy carries two keys, the scan carries five.
+  const legacy = receiptLinesModel(detail({
+    line_items: [{ description: 'Osmocote 50 lb', amount: 68.24 }],
+    line_items_original: [{ description: 'Osmocote 50 lb', amount: 68.24, quantity: 1, unit_price: 68.24, sku: '099' }],
+  }) as any);
+  ok(legacy[0].fields.quantity.state === 'never-carried',
+    'J3a: on the live shape, quantity is never-carried — NOT "changed", which would tell Lauren she deleted a quantity she never touched');
+
+  const note = linesProvenanceNote(legacy);
+  ok(note !== null && /reader's original scan/.test(note) && /nobody has confirmed/.test(note),
+    '🔴 J3: the drawer SAYS the quantity and rate are the scan\'s reading and nobody confirmed them — David\'s caveat, carried on the surface rather than left for the reader to infer (D-9)');
+  ok(note !== null && /rate/.test(note) && /quantity/.test(note),
+    'J3b: the note NAMES which figures are unconfirmed rather than waving at the whole table');
+
+  // Both stores carrying the same five keys is what a capture on the fixed writer (#257) produces.
+  const confirmed = receiptLinesModel(detail({
+    line_items: [{ description: 'Osmocote 50 lb', amount: 68.24, quantity: 1, unit_price: 68.24, sku: '099' }],
+    line_items_original: [{ description: 'Osmocote 50 lb', amount: 68.24, quantity: 1, unit_price: 68.24, sku: '099' }],
+  }) as any);
+  ok(linesProvenanceNote(confirmed) === null,
+    '🔴 J4: the caveat DISAPPEARS when the saved copy carries the figures — it is computed from the modelled state, not hardcoded, so it cannot rot into permanent furniture nobody reads');
+
+  // 🔴 A6b — THE GUARD THAT ACTUALLY CARRIES THE WEIGHT, strengthened in this build.
+  // A6 inspects only the import from '../utils/receiptReconciliation'. This file now imports
+  // `receiptDetail`, WHICH ITSELF IMPORTS computeReconcile — so the old probe would keep passing
+  // while "re-deriving is not one edit away" quietly stopped being true. This asserts the property
+  // itself: the function is never CALLED on the list path, in either file.
+  ok(!/computeReconcile\s*\(/.test(SELF) && !/computeReconcile\s*\(/.test(GRID),
+    '🔴 A6b: computeReconcile is never CALLED on the list path — neither in the model nor in the grid. The verdict on screen stays the one that was banked, and reusing receiptDetail (which does import it) did not quietly buy a second verdict');
+
+  ok(/\.eq\('business_id', businessId\)/.test(GRID),
+    '🔴 J6: the drawer read is tenant-scoped — AC-3, another tenant\'s receipt is NOT FOUND rather than shown');
 }
 
 // ══ §I THE INVOICE NUMBER (#270) — the column David reads this screen for ════════════════════

@@ -16,9 +16,20 @@
 //   ① IT DOES NOT RE-EVALUATE. `computeReconcile` is NOT run over a stored row. The verdict on
 //      screen is the one the platform banked at save time, displayed as banked. Re-deriving it
 //      here would produce a SECOND verdict over the same row with no way to tell which one the
-//      owner actually saw — and `line_items` is not even SELECTED (see RECEIPTS_SELECT), so the
-//      inputs a re-evaluation would need are not in hand. Falsifying the banked verdict is a
-//      separate, deliberate piece of work.
+//      owner actually saw. Falsifying the banked verdict is a separate, deliberate piece of work.
+//
+//      ⚠️ THIS SENTENCE WAS NARROWED 2026-09-03 (#270) BECAUSE IT USED TO OVERCLAIM. It read:
+//      "`line_items` is not even SELECTED, so the inputs a re-evaluation would need are not in
+//      hand." That was true of the LIST and is no longer true of an EXPANDED ROW: the drawer
+//      fetches one receipt's lines on demand (§1b). David's ruling, and his reasoning is the
+//      reason it is safe: the guard is about the LIST QUERY. `RECEIPTS_SELECT` still carries no
+//      `line_items` — probe A5 is untouched and still green — so re-deriving a verdict from the
+//      list read remains impossible rather than discouraged.
+//      🔴 AND THE GUARANTEE THAT ACTUALLY CARRIES THE WEIGHT WAS NEVER THE PROJECTION: it is that
+//      `computeReconcile` is NEVER CALLED on this path. That is asserted directly, on BOTH files,
+//      by probes A6/A6b — strengthened in this build precisely because importing `receiptDetail`
+//      (which does import `computeReconcile`) would otherwise have left the old probe passing
+//      while the property it names quietly weakened.
 //
 //      The one arithmetic here is RECONSTRUCTION, not derivation: `reconcile_delta` was DEFINED
 //      at write time as `lineSum − amount` (20260614_receipts_reconciliation.sql:51-55), so
@@ -62,6 +73,12 @@ import {
   reconcileReadoutText,
   type ReconcileResult,
 } from '../utils/receiptReconciliation';
+import {
+  RECEIPT_DETAIL_SELECT,
+  receiptDetailModel,
+  type RawReceiptDetailRow,
+  type LineRowModel,
+} from './receiptDetail';
 import { orderStatusMeta } from './orderStatus';
 import { deliveryStatusMeta } from './deliveryFulfilment';
 import type { CSSProperties } from 'react';
@@ -102,6 +119,58 @@ export const RECEIPTS_SELECT = `
     deliveries ( id, delivery_date, status, service_type, source )
   )
 `;
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// §1b THE DRAWER'S READ — ONE RECEIPT'S LINES, ON EXPAND
+// ════════════════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * The projection the DRAWER uses — deliberately `RECEIPT_DETAIL_SELECT`, the SAME one `/receipts/:id`
+ * reads, not a second one written here (§6 r8: the same operation lives in exactly one place).
+ *
+ * 🔴 IT IS A DIFFERENT CONSTANT FROM `RECEIPTS_SELECT` AND THAT IS THE WHOLE POINT. The list query
+ * still carries no `line_items`; this one is issued per-row, only when a drawer opens, for a single
+ * `id`. Probe A5 asserts the separation.
+ *
+ * ⚠️ IT FETCHES `ocr_raw`, WHICH IS BULKY, AND THAT IS A DELIBERATE PRICE. `lineRowModel` needs the
+ * parsed tax to tell a line the PLATFORM injected from one the OWNER added — measured, the injected
+ * tax line matches the parsed figure on 30 of 30 rows. Passing `null` instead would label ~30 of 35
+ * receipts' tax line "Not among the lines the reader read", i.e. it would accuse Lauren of adding a
+ * line we added. A heavier read on demand is worth strictly more than a cheap false accusation.
+ */
+export const RECEIPT_LINES_SELECT = RECEIPT_DETAIL_SELECT;
+
+/** The drawer's lines, modelled by the SAME function `/receipts/:id` uses. No second line model. */
+export function receiptLinesModel(row: RawReceiptDetailRow): LineRowModel[] {
+  return receiptDetailModel(row).lines;
+}
+
+/**
+ * 🔴 THE PROVENANCE SENTENCE — David's caveat, computed rather than hardcoded.
+ *
+ * All 37 stored receipts carry only `description` and `amount` in `line_items`; `quantity`,
+ * `unit_price` and `sku` live ONLY in `line_items_original`, the reader's own scan, which nobody
+ * confirmed. `lineRowModel` already calls that state `never-carried` — "the saved copy never
+ * carried this; here is what was read" — so this reads the modelled state instead of asserting a
+ * fact about the corpus that will stop being true the first time a capture lands on the fixed
+ * writer (#257 shipped after the newest row; measured 0 captures on it so far).
+ *
+ * Returns null when nothing on screen is unconfirmed — so the note DISAPPEARS on its own rather
+ * than becoming a permanent piece of furniture that stops being read.
+ */
+export function linesProvenanceNote(lines: LineRowModel[]): string | null {
+  const unconfirmed = new Set<string>();
+  for (const l of lines) {
+    for (const f of ['quantity', 'unit_price', 'sku'] as const) {
+      if (l.fields[f]?.state === 'never-carried') unconfirmed.add(f === 'unit_price' ? 'rate' : f);
+    }
+  }
+  if (unconfirmed.size === 0) return null;
+  const names = [...unconfirmed].sort().join(' and ');
+  return `The ${names} shown here came from the reader's original scan of this document. `
+       + `The saved copy never carried ${unconfirmed.size > 1 ? 'them' : 'it'}, so nobody has confirmed `
+       + `${unconfirmed.size > 1 ? 'these figures' : 'this figure'} — read them as what the scan said, not as settled.`;
+}
 
 // ── Row shapes as PostgREST returns them ────────────────────────────────────────────────────
 // `numeric` columns arrive as JSON numbers, but the string form is accepted too rather than
