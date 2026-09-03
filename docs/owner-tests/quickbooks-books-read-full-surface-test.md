@@ -223,3 +223,64 @@ panels are separate components sitting immediately BELOW this one on the same Ac
 they are gated on `deliveries:create` / `orders:create` — **permissions a manager holds.** So on the
 Accounting page as a whole, a manager CAN reach a write control. That is a scope decision for David,
 not something this build changed. See ledger #268 flag (b).
+
+---
+
+## 🔴 BEFORE THURSDAY — WHICH CARDS DAVID RUNS ALONE, AND WHICH NEED LAUREN
+
+David has **one pass** at the demo, so this board is split by **who has to be standing there**,
+not by card order.
+
+### ✅ RUN ALONE, BEFORE THE DEMO — on Test Dave's, loading LAWNS's saved JSON (R-69's harness)
+**CARDS 1 · 2 · 4 · 5 · 6 · 7 · 8.** All seven are readable from the file harness: *a file replaces
+a CONNECTION, not a CODE PATH*, so these are the same screens in the same order Lauren will see.
+🔴 **These are the ones that catch a wrong number before a customer reads it** — especially **CARD 5**
+(the ~$1.6M sentence must be GONE) and **CARD 6** (receivables must be measured, not grey).
+⚠️ **Run these first and run them all.** Every one is a defect David can still fix on Wednesday.
+
+### 🔴 NEEDS LAUREN AT THE SCREEN — and cannot be rehearsed away
+**CARD 1's timing half** and **CARD 2's counts** are read ALONE for correctness, but their real
+test is **live, on LAWNS, with Lauren pressing the button** — R-69: *"David does not run the import.
+Lauren runs it, on LAWNS, live, while he stands behind her. That IS the test — can a customer do
+this."* The file harness cannot tell you whether **three real walks over Intuit's connection**
+land inside *"a few minutes"*. **Nothing else on this board depends on her.**
+
+### ⚠️ CANNOT BE RUN BEFORE THURSDAY, AND SHOULD NOT BE
+**CARD 3** (`needs-test`) — a mid-sequence failure needs a deliberately expired token. **Do not
+expire a token against LAWNS's live company for a checkbox.**
+
+**CARD 9** (nothing is written) — the row-count half runs alone on Test Dave's. ⚠️ **Its manager
+half is NEW and now has a card of its own (CARD 10) — that one needs a second sign-in, not Lauren.**
+
+### 📋 THE ONE-LINE ANSWER
+**Seven cards alone, on the file, before Wednesday night. One card (10) needs a manager login.
+Two things need Lauren and only two: whether "a few minutes" is true over her connection, and
+whether she can do it without asking David anything** — which is R-69's real acceptance bar:
+*"every question Lauren asks David is written down, and every one is a defect in this build."*
+
+---
+
+### CARD 10 — 🔴 A MANAGER CANNOT IMPORT, AND IS TOLD WHY RATHER THAN SHOWN A DEAD BUTTON
+STATUS: owed
+LAST-PROVEN: never
+DEVICE: desktop
+COVERS: #271 · [[R-80]]
+SIGNAL: `[TRACE:QBORDERS] ingest REFUSED — importing a company's books is an owner act` · same for `[TRACE:QBDELIVERY]`.
+
+**Sign in as a MANAGER** (not the owner) and open **Settings → Accounting**.
+
+- **PASS:** both **"Scheduled deliveries from QuickBooks"** and **"Past orders from QuickBooks"**
+  render the sentence *"Bringing records in from QuickBooks is done by the account owner"* and
+  **carry no button at all** — an explained absence, not a greyed control.
+- **PASS:** the **books read still works** for her — that is deliberate ([[R-56]]: *"reading your own
+  books"* is `settings:read`, which a manager holds).
+- **PASS:** the delivery and order **PREVIEWS still work** — they read and write nothing, and hiding
+  them would hide the shape of the work from the person who does the work.
+- 🔴 **FAIL:** an ingest button is visible, or pressing anything writes a row.
+
+⚠️ **THE SERVER IS THE GATE, NOT THIS SCREEN.** If you can reach the endpoint directly with a
+manager's token it must still return **403 `OWNER_ONLY`** — the panel copy is the courtesy half.
+
+⚠️ **STILL OPEN AND FLAGGED, NOT FIXED BY THIS CARD:** a manager also holds `settings:update`, so
+**Reconnect / Connect QuickBooks is manager-reachable** — she can start an OAuth flow and change
+which company is connected. Reported at ledger #271; David's call.
