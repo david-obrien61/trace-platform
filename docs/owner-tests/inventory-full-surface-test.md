@@ -1654,3 +1654,38 @@ SIGNAL: `[TRACE:CART] scan columns: NO-COST (unit_cost withheld)`
 - **FAIL:** `unit_cost` appears in the `select=` parameter or in any returned row, or the TRACE line says `cost-bearing` for a session that does not hold `costs:read`.
 - **Then confirm the other direction (this is half the card — a wall that withholds from everyone is not a wall, it is a break):** repeat as the OWNER. `unit_cost` **must** be present and the TRACE line must say **`cost-bearing (costs:read)`**.
 - **⚠️ AND THE HONEST LIMIT, which is the point of card 25 existing at all:** in that same console, as the manager, run `await supabase.from('business_inventory').select('id,name,unit_cost')` — **it still returns the costs.** That is #81, it is still open, and this card must never be read as proving otherwise.
+
+---
+
+## SURFACE: the shared grid engine (added 2026-09-03, ledger #270)
+
+### 🔴 Inline editing still works after the disclosure toggle moved
+STATUS: owed
+DEVICE: desktop
+COVERS: #270, G10
+LAST-PROVEN: —
+SIGNAL: none — this card has no trace line, and that is the hazard. See below.
+
+- **Why this card is on the INVENTORY board when the change was built for `/receipts`:** it was a
+  change to **`DataSheet.tsx`, the shared grid engine with eight consumers**. The disclosure toggle
+  moved to a leading pinned column and **the row became a click target**. `/inventory` took that
+  change without anyone opening it, and inventory is an **editable** grid where `/receipts` is not.
+- 🔴 **The failure this exists to catch is SILENT and has no symptom of its own.** The row handler
+  is written to ignore clicks that start in an `input`, `button`, `a`, `select`, `label` or
+  `textarea`. If that guard is wrong, **clicking into a cell to edit it toggles a drawer instead of
+  giving the cell focus** — the grid still looks completely correct, the columns are all there, and
+  editing has simply stopped working. Nothing is logged and nothing turns red.
+- **Do:** open `/inventory`. ① Click into an editable cell — a name, a price, a quantity — and type.
+  ② Press the leading **`+`** on a row to open its drawer, then click into an editable cell on that
+  same row and type. ③ Click a row's empty space, away from any control.
+- **PASS:** ① and ② — the cell takes focus and your typing lands, and **the drawer does not open or
+  close while you are editing**. ③ — the drawer opens. The `+`/`−` sits in a narrow pinned column at
+  the far LEFT and stays put when you scroll sideways, without overlapping or hiding the name column.
+- **FAIL:** a cell that will not take focus · a drawer opening or closing each time you click into a
+  cell · the pinned block sliding over the name column on horizontal scroll (that is the #104/#105
+  defect returning) · or the toggle still at the far right of the row.
+- **⚠️ THE HONEST LIMIT:** the probes behind this read `DataSheet.tsx` as **source text** — a render
+  condition inside a `.tsx` is unreachable to our harness (tech-debt #134). They prove the code
+  **says** the right thing. **Only this card proves a browser did it**, and only for `/inventory`;
+  `/assets`, `/customers`, the reconcile and import grids took the same change and are not covered
+  here. Clicking one editable cell on any of them is the whole test.

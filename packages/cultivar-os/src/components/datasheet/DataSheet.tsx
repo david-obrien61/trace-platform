@@ -19,9 +19,15 @@
 //               loads/writes (invsheet for inventory, assets for the asset grid).
 // ============================================================
 import { useState, useMemo, useEffect, Fragment } from 'react';
-import { ChevronRight, ChevronDown, SlidersHorizontal, Search, Lock } from 'lucide-react';
+import { Plus, Minus, SlidersHorizontal, Search, Lock } from 'lucide-react';
 import { lockInfoFor, type SystemFieldInfo } from './systemManagedFields';
 import { partitionFlagged } from './flagCounts';
+
+/** G10's reserved track: the border-box width of the leading disclosure-toggle column. A fixed,
+ *  deterministic width is the whole point — §6 r14's rule is that a pinned column's width must be
+ *  its ACTUAL rendered width, or the left offsets stop accumulating and the scrolling columns pass
+ *  underneath the pinned block (the #104/#105 defect). 36px holds a 14px glyph plus its padding. */
+const EXPAND_TRACK_W = 36;
 
 // ── Column descriptor: drives <thead>/<tbody> render, sort, the show/hide menu, the frozen-column
 //    pin, and the system-managed lock. ──
@@ -185,7 +191,15 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
   const scrollCols = shownCols.slice(firstScroll);
 
   const frozenMap = new Map<string, { left: number; width: number; last: boolean }>();
-  let frozenAcc = 0;
+  // 🔴 G10 — THE DISCLOSURE TOGGLE LEADS, AND IT RESERVES TRACK 0 (2026-09-03, ledger #270).
+  // It is pinned BEFORE the frozen identifier run, so `frozenAcc` starts at its width rather than
+  // 0 and every downstream `left` offset shifts by exactly one track. This is the §6 r14 rule
+  // applied to a new column rather than worked around: the toggle's width is its ACTUAL
+  // border-box width, so the offsets still accumulate exactly and the scrolling region still
+  // begins at the pinned block's right edge. Getting this wrong is the #104/#105 defect — a
+  // pinned column with no deterministic width, which scrolling columns then pass underneath.
+  const expandPin = renderExpand ? { left: 0, width: EXPAND_TRACK_W } : null;
+  let frozenAcc = expandPin ? expandPin.width : 0;
   for (const c of frozenCols) {
     const w = c.frozenWidth ?? 160;
     frozenMap.set(c.key, { left: frozenAcc, width: w, last: false });
@@ -307,6 +321,9 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
               <table style={S.table}>
                 <thead>
                   <tr>
+                    {expandPin && (
+                      <th key="__expand__" style={{ ...S.th, left: expandPin.left, width: expandPin.width, minWidth: expandPin.width, boxSizing: 'border-box', zIndex: 3, background: '#fff' }} aria-label="Details" />
+                    )}
                     {frozenCols.map(headerCell)}
                     {actionsPin && (
                       <th key="__actions__" style={{ ...S.th, left: actionsPin.left, width: actionsPin.width, minWidth: actionsPin.width, boxSizing: 'border-box', zIndex: 3, background: '#fff', ...S.frozenEdgeTh }}>
@@ -314,7 +331,6 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
                       </th>
                     )}
                     {scrollCols.map(headerCell)}
-                    {renderExpand && <th style={S.th}></th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -325,7 +341,32 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
                     const tdStyle = { ...S.td, ...(flagged ? S.tdDup : {}) };
                     return (
                       <Fragment key={id}>
-                        <tr>
+                        {/* 🔴 G10 second half — THE ROW IS THE CLICK TARGET, and the guard is the
+                            load-bearing part. `closest()` walks up from whatever was actually
+                            clicked, so a click that STARTED in an input, button, link, select or
+                            label never reaches the toggle. Without it this swallows inline edit
+                            (G8) on the six editable consumers and every in-cell link — the reason
+                            the clause carries that exclusion in writing. A grid with no
+                            `renderExpand` gets no handler at all, so no mystery click target. */}
+                        <tr
+                          onClick={renderExpand ? (e => {
+                            if ((e.target as HTMLElement).closest('input,button,a,select,label,textarea,[role="button"]')) return;
+                            toggleExpand(id);
+                          }) : undefined}
+                          style={renderExpand ? { cursor: 'pointer' } : undefined}
+                        >
+                          {expandPin && (
+                            <td key="__expand__" style={{ ...tdStyle, left: expandPin.left, width: expandPin.width, minWidth: expandPin.width, boxSizing: 'border-box' as const, position: 'sticky' as const, zIndex: 1, background: flagged ? '#fffbeb' : '#fff' }}>
+                              <button
+                                style={S.expandBtn}
+                                onClick={ev => { ev.stopPropagation(); toggleExpand(id); }}
+                                aria-expanded={isOpen}
+                                title={isOpen ? 'Hide details' : 'Show details'}
+                              >
+                                {isOpen ? <Minus size={14} /> : <Plus size={14} />}
+                              </button>
+                            </td>
+                          )}
                           {frozenCols.map(col => bodyCell(col, row, tdStyle, flagged))}
                           {actionsPin && (
                             <td key="__actions__" style={{ ...tdStyle, left: actionsPin.left, width: actionsPin.width, minWidth: actionsPin.width, boxSizing: 'border-box' as const, position: 'sticky' as const, zIndex: 1, background: flagged ? '#fffbeb' : '#fff', ...S.frozenEdgeTd }}>
@@ -333,13 +374,6 @@ export function DataSheet<T>(props: DataSheetProps<T>) {
                             </td>
                           )}
                           {scrollCols.map(col => bodyCell(col, row, tdStyle, flagged))}
-                          {renderExpand && (
-                            <td style={tdStyle}>
-                              <button style={S.expandBtn} onClick={() => toggleExpand(id)} title="Details">
-                                {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                              </button>
-                            </td>
-                          )}
                         </tr>
                         {renderExpand && isOpen && (
                           <tr style={S.expandRow}>

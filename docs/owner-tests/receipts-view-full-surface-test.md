@@ -14,7 +14,7 @@ capture half has shipped since 2026-06-11 and has never had a row. Flagged for D
 Joins only: **3.5** delivery and the orders roster.
 **Story:** `user_stories.md` → *I captured a receipt — show me it landed, and show me what it turned into*
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 18 covered** (**17 `owed`** · 1 `needs-test`) — 🔴 **EVERY CARD FLIPPED `covered` → `owed` ON 2026-09-03 BECAUSE THE SURFACE WAS REPLACED, NOT BECAUSE ANY PROOF WAS BAD.** `/receipts` moved from a bespoke card stack onto **`<DataSheet>` with `renderExpand`** — one row per receipt, the chain in a disclosure drawer (David's ruling). **Every card below was written against a card stack that no longer exists**, and OP-14 clause 3 is explicit: *changing a surface flips `covered` → `owed`* — a green check on a moved surface asserts a proof nobody performed. **Each card's 2026-09-02 evidence is PRESERVED VERBATIM in its own body**; nothing is overwritten. ⚠️ **THE RE-PROOF IS CHEAPER THAN THE FLIP LOOKS: seven of these still settle from ONE print of `/receipts`** — take the print and 1, 2, 3, 4, 5, 7 and 11 go together.
+**Board: 0 of 19 covered** (**18 `owed`** · 1 `needs-test`) — 🔴 **EVERY CARD FLIPPED `covered` → `owed` ON 2026-09-03 BECAUSE THE SURFACE WAS REPLACED, NOT BECAUSE ANY PROOF WAS BAD.** `/receipts` moved from a bespoke card stack onto **`<DataSheet>` with `renderExpand`** — one row per receipt, the chain in a disclosure drawer (David's ruling). **Every card below was written against a card stack that no longer exists**, and OP-14 clause 3 is explicit: *changing a surface flips `covered` → `owed`* — a green check on a moved surface asserts a proof nobody performed. **Each card's 2026-09-02 evidence is PRESERVED VERBATIM in its own body**; nothing is overwritten. ⚠️ **THE RE-PROOF IS CHEAPER THAN THE FLIP LOOKS: seven of these still settle from ONE print of `/receipts`** — take the print and 1, 2, 3, 4, 5, 7 and 11 go together.
 🔴 **CARD 8 is `covered` with its FAILURE preserved** — it failed, #257 fixed it, and the failure is not overwritten.
 📄 **NINE OF THESE WERE PROVEN FROM PRINTED PDFs OF `/receipts`, NOT FROM LIVE INTERACTION.** **CARDS 1, 2, 3, 4, 5, 7 and 11 are all provable from ONE print of `/receipts`** — take the print, and those seven settle together. ⚠️ **CARD 1 is owed again and rides that same print** — one new print of `/receipts` re-settles it, so the re-proof costs nothing beyond taking the print. CARD 6 (a capture with no reload) and CARD 9 (three loads at three times) need interaction; CARD 10 needs an account that does not exist.
 🆕 **CARDS 15–17 ADDED 2026-09-03 (#270) — the invoice number and the unit.** CARD 15 (number stored) and CARD 17 (unit read off the invoice) **share ONE capture and ONE query** — do them together. 🔴 **CARD 15 needs `20260903c` APPLIED; CARD 17 does not** (the unit fields ride inside the existing `line_items` jsonb, so no column is involved). ⚠️ **CARD 16 has a CLOSING WINDOW** — it tests the gap between the deploy and the apply, and applying the migration makes it unrunnable by design: mark it `superseded`, never `failed`.
@@ -474,3 +474,51 @@ reader read"*, which accuses you of adding a line the platform added.
   fresh capture on the fixed writer, which is CARD 17's capture — worth checking there once.
 - **Tenant isolation.** The read is scoped on `business_id` and a probe asserts it, but proving a
   cross-tenant refusal needs a second tenant's receipt id and a console. Not provable from here.
+
+---
+
+## CARD 19 — 🔴 G10: the toggle leads, the row opens it, and INLINE EDIT STILL WORKS
+**STATUS:** owed · **DEVICE:** desktop · **PROOF:** 🖱 NEEDS INTERACTION · **LAST-PROVEN:** —
+
+**TENANT:** LAWNS. **ACTOR:** the owner.
+**WHAT MUST BE TRUE FIRST:** the SHA carries #270's G10 change. **No migration needed.**
+
+🔴 **THIS CARD IS NOT ABOUT `/receipts`. IT IS ABOUT THE SHARED GRID ENGINE, WHICH HAS EIGHT
+CONSUMERS.** The change moved the disclosure toggle to a leading pinned column and made the ROW a
+click target, in `DataSheet.tsx` — so `/inventory`, `/assets`, `/customers`, the reconcile and
+import grids all took the change whether or not anyone looked at them. **Steps 4-6 are the ones
+that matter; steps 1-3 are the easy half.**
+
+**PART A — the disclosure (on `/receipts`)**
+1. The **first column** of the grid is a narrow track holding a **`+`** on each row — to the LEFT of
+   Vendor, and it stays put when you scroll sideways.
+2. Click the **`+`** on any row. It becomes a **`−`**, the drawer opens beneath that row.
+3. Click anywhere else on a *different* row — on the date, the amount, empty space in a cell —
+   **not** on a link. That row's drawer opens too.
+
+**PART B — 🔴 THE REGRESSION HALF. Do not skip it; this is the half that can be broken invisibly.**
+4. Go to **`/inventory`**. Click into an editable cell (a name, a price, a quantity) and type.
+   **The cell must take focus and accept the text.**
+5. Still on `/inventory`, expand a row with the leading `+`, then click into an editable cell on
+   that same row.
+6. Back on `/receipts`, click the **vendor name** on any row.
+
+**PASS:** A: the toggle is leading and pinned, `+`/`−` (not a chevron), and clicking the row body
+opens the drawer. B: **step 4 and 5 — the cell takes focus and your typing lands, and the drawer
+does NOT open or close while you are editing.** Step 6 — the vendor link **navigates to
+`/receipts/:id`** and does not merely toggle a drawer.
+
+**FAIL:** 🔴 **the biggest one is step 4/5: a cell that will not take focus, or a drawer that
+opens/closes every time you click into a cell.** That means the row handler is swallowing clicks it
+was written to ignore, and it breaks editing across six grids at once — a grid that still LOOKS
+completely correct while its inputs have stopped working. Also failing: the toggle is still at the
+far right · the pinned block overlaps or hides the Vendor column when you scroll sideways (the
+#104/#105 defect returning) · step 6 toggles the drawer instead of navigating · the drawer opens
+and instantly closes on one click of `+`.
+
+🔴 **WHAT THIS CARD CANNOT PROVE:** it exercises **two** of the eight consumers. `/assets`,
+`/customers`, `/inventory/reconcile`, `/inventory/import` and the two editor components took the
+same engine change and **are not covered here** — if you have a minute on any of them, clicking one
+editable cell is the whole test. The probes behind this card read `DataSheet.tsx` as **source text**
+(a render condition inside a `.tsx` is unreachable to our harness, tech-debt #134), so they prove
+the code SAYS the right thing — **only this card proves a browser DID it.**

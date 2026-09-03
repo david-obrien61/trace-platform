@@ -114,6 +114,10 @@ const MANIFEST = [
         note:'Compact rows in the bounded scroll box; handles 111 rows today. Row virtualization deferred (standard-by-value) — not worth it at current scale.' },
       { id:'G8', std:'Per-cell inline edit + clear editable-vs-readonly affordance', status:'green',
         note:'Inline <code>TextCell</code>/<code>NumberCell</code>/<code>AmountCell</code>/<code>SelectCell</code>; readonly system fields carry the §3 lock.' },
+      { id:'G9', std:'Default sort is the most recent RECORD DATE first (the document\u2019s own date, not the row\u2019s created_at)', status:'amber',
+        note:'Ruled 2026-09-03 (R-73). <b>Met on <code>/receipts</code></b> \u2014 ordered on <code>receipts.date</code> with <code>created_at</code> as tiebreak only. \u26a0\ufe0f <b>UNAUDITED on the three other DataSheet consumers</b> (inventory / assets / customers): not found wanting, not looked at.' },
+      { id:'G10', std:'Row disclosure opens from a LEADING toggle, and the row itself is a click target', status:'green',
+        note:'Leading frozen toggle track + row-level click, in <code>DataSheet.tsx</code> so both expansion consumers (<code>/receipts</code>, <code>/inventory</code>) inherit it. <b>Clicks originating in an interactive descendant are ignored</b>, so inline edit (G8) and in-cell links are not swallowed; a grid with no <code>renderExpand</code> gets no click target.' },
     ],
   },
   {
