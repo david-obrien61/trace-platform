@@ -126,7 +126,17 @@ re-affirm a decision without telling them what it does.
 ## CARD 4 — a manager cannot flip it, and is told why rather than shown a dead button
 **STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
 
-Sign in as a **manager** (not the owner). Settings → Accounting.
+🔴 **RUN THIS ON TEST DAVE'S, NOT ON LAWNS — AND THE REASON IS A CORRECTION, NOT A PREFERENCE.**
+**Lauren is not a manager.** She holds `role = OWNER` at LAWNS with a `user_id` that is not
+`businesses.owner_id` — the only such row in the database, and exactly what the 2026-08-28 ruling
+gave her. So signing in as Lauren tests the OWNER path and would pass this card while proving
+nothing. ⚠️ **The only active MANAGER anywhere is `test obrien` at `f7ec5d67`** — `joel joiner` is a
+manager at LAWNS but `active = false`, and an inactive member is not a test subject either.
+✏️ **Measured by the vendor session, not by me** — a first draft on that branch tested `owner_id`
+alone and **would have refused Lauren on her own tenant.** If this card ever seems to need Lauren,
+the card is wrong, not the database.
+
+Sign in as **`test obrien` (manager) on Test Dave's**. Settings → Accounting.
 
 1. The current mode is still shown — a manager may **see** which mode the business is in.
 2. There is **no switch**.
@@ -135,6 +145,8 @@ Sign in as a **manager** (not the owner). Settings → Accounting.
 **PASS:** state visible, control absent, reason given.
 **FAIL:** a greyed-out button with no explanation (that reads as broken — §6 r13), **or** a working
 button. If a manager can flip it, stop and surface it: the database policy is not what R-56 says it is.
+🔴 **ALSO A FAIL: running this as Lauren and recording a pass.** Owner-role is the path she is on;
+this card is about the path she is not.
 
 ---
 
