@@ -87,6 +87,23 @@ will not be caught by me having read it; it will be caught by E1 at build time.
 
 ---
 
+## 2. WHY IT DEVIATED — ⚠️ **SUPERSEDED 2026-09-03: the divergence was NOT correct, and this section's heading was the claim that got overturned**
+
+> 🔴 **AMENDED IN PLACE, ORIGINAL TEXT PRESERVED BELOW (David's ruling, same day, hours later).**
+> This section grades the original divergence as *"a correct divergence"* and its reason as sound.
+> **The reason was false when it was written.** `<DataSheet>` has carried `renderExpand` — *"Optional
+> per-row detail drawer. When present, a trailing expand toggle column appears."* (`DataSheet.tsx:81-82`)
+> — since **2026-07-01**, commit `e3e6796`; the claim that a grid *"can render that only by truncating
+> or by exploding one receipt into several rows"* was written **2026-09-01**, commit `ab617b2`, two
+> months later. **David: "THE DIVERGENCE WAS NOT A GAP IN THE WIDGET. IT WAS AN UNCHECKED CLAIM ABOUT
+> OUR OWN WIDGET."** R-26's class, and the second instance this week after tech-debt #61.
+> ✏️ **The two defects this section goes on to name are UNAFFECTED and remain the report's finding** —
+> the record was narrower than the divergence taken, and it was filed where nobody looks. A THIRD now
+> sits above them: the reason itself did not survive contact with the component it was about.
+> Full record: `docs/decisions/2026-09-03-receipts-rulings-and-the-false-divergence.md`.
+
+### Original section, unedited:
+
 ## 2. WHY IT DEVIATED — a correct divergence, filed where nobody looks
 
 `ReceiptsList` shipped as a card stack rather than a `<DataSheet>`. That was **(a) a filed

@@ -20,13 +20,30 @@
 //
 // UI STANDARD (§6 r16 — name the standard, then decide):  the established pattern for a
 //               homogeneous record set is a DATA GRID, and this platform has one (`<DataSheet>`,
-//               §6 r14 — bounded scroll box, sticky header, frozen identifier column). DEVIATED
-//               DELIBERATELY: each row carries a variable-length chain (0..n orders, each with
-//               0..n deliveries), which a fixed-column grid can only render by truncating the
-//               chain or by exploding one receipt into several rows — and a receipt appearing
-//               twice because it has two orders is exactly the confusion this screen exists to
-//               remove. The pattern taken instead is the standard SUMMARY ROW + INLINE DETAIL
-//               (record list with disclosure): one card per receipt, the chain nested inside it.
+//               §6 r14 — bounded scroll box, sticky header, frozen identifier column).
+//
+//               🔴 THE REASON THIS FILE GAVE FOR NOT USING IT WAS FALSE WHEN IT WAS WRITTEN, AND
+//               IS WITHDRAWN (David's ruling, 2026-09-03). It read: "each row carries a
+//               variable-length chain (0..n orders, each with 0..n deliveries), which a
+//               fixed-column grid can only render by truncating the chain or by exploding one
+//               receipt into several rows." `<DataSheet>` has carried `renderExpand` — "Optional
+//               per-row detail drawer. When present, a trailing expand toggle column appears."
+//               (DataSheet.tsx:81-82) — since 2026-07-01, commit e3e6796. THIS COMMENT WAS
+//               WRITTEN 2026-09-01, commit ab617b2: two months later. One row per record with
+//               the chain nested inside it is precisely what the widget already did.
+//               ✏️ R-26's class — a written declaration nobody checked against reality, steering
+//               a decision — and the second instance this week of a comment contradicting its own
+//               repo (tech-debt #61 was the first: this file's sibling asserted a scrape feature
+//               was "never built" while it existed and was wired).
+//
+//               WHAT THE WITHDRAWN REASON GOT RIGHT, AND IT STILL BINDS: a receipt must appear
+//               ONCE — two LAWNS receipts are duplicate captures of one invoice (tech-debt #143)
+//               and must never read as four rows. `renderExpand` satisfies that; it did not need
+//               a bespoke shape.
+//               ⚠️ WHETHER THE CARD SHAPE IS THE RIGHT ONE IS STILL OPEN. The premise is
+//               withdrawn; the choice is not thereby decided either way. The full clause-by-clause
+//               position is docs/decisions/ui-standard-divergences.json (G4/G6/G7 owed), and the
+//               record is docs/decisions/2026-09-03-receipts-rulings-and-the-false-divergence.md.
 //               At 17 rows against a 100-row cap there is nothing here that needs virtualising.
 //
 // DEPENDENCIES: `../../lib/supabase` (one select, RLS-enforced — `/receipts` already gates on
