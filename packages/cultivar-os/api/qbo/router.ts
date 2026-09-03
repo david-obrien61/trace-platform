@@ -18,7 +18,7 @@
  */
 
 import crypto from 'crypto';
-import { callerCan } from '../../../shared/src/auth/callerPermission';
+import { callerCan, callerIsBusinessOwner } from '../../../shared/src/auth/callerPermission';
 import { createClient } from '@supabase/supabase-js';
 import { refreshQBToken } from '../../../shared/src/quickbooks/refresh';
 import { readQBSecrets, writeQBSecrets, QBO_CONNECTION_COLUMNS } from '../../../shared/src/quickbooks/secrets';
@@ -788,10 +788,47 @@ async function handleDeliveriesPreview(req: any, res: any) {
 // INGEST — the same plan, then the write. Two verbs are required and BOTH are enforced verbs
 // (`status: enforced` in the manifest, not declared-unwired — R-31), because this genuinely does
 // both things: it creates customers and it creates deliveries.
+/**
+ * ══════════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 IMPORTING A COMPANY'S BOOKS IS AN OWNER ACT (David, 2026-09-03).
+ * ══════════════════════════════════════════════════════════════════════════════════════════
+ * David's ruling, verbatim: *"INGESTING A CUSTOMER'S BOOKS INTO THE SYSTEM IS AN OWNER ACT,
+ * the same class as the QuickBooks writes switch, which is already owner-gated.
+ * `deliveries:create` and `orders:create` are the wrong gates for it — those are for taking an
+ * order, not for importing a company."*
+ *
+ * 🔴 WHY THE VERB-PERMISSIONS WERE THE WRONG GATE, MEASURED RATHER THAN ASSUMED. The MANAGER
+ * floor (`20260727_align_floor_to_bundles.sql:48`) holds **`orders:create`** — so the order
+ * ingest, which writes a whole company's sales history, was reachable by a manager under a
+ * permission that exists so she can ring up ONE sale. ⚠️ The delivery ingest happened to be
+ * closed, because the floor grants `deliveries:read`/`:update` and NOT `deliveries:create` —
+ * **closed by an accident of bundle composition, not by anybody's decision**, which is exactly
+ * the kind of protection that disappears the next time a bundle is edited.
+ *
+ * ⚠️ THIS IS AN AND, NOT AN OR. The verb permission still has to hold — an owner who somehow
+ * lacks `orders:create` is still refused by it. Owner-ness is an ADDITIONAL requirement for the
+ * import class, not a bypass of the existing one.
+ *
+ * ⚠️ AND IT IS NOT `settings:update`, WHICH WOULD HAVE LOOKED RIGHT AND BEEN WRONG: the manager
+ * floor holds that too. The only gate that means *the owner* is `businesses.owner_id`, which is
+ * what `callerIsBusinessOwner` compares — and it is the same authority the writes switch rests
+ * on (`businesses_owner_update`), so the two controls are now one class rather than two.
+ */
+async function refuseUnlessOwner(auth: string | undefined, businessId: string, area: string, res: any): Promise<boolean> {
+  if (await callerIsBusinessOwner(auth, businessId)) return true;
+  console.log(`[TRACE:${area}] ingest REFUSED — importing a company's books is an owner act`, { businessId });
+  res.status(403).json({
+    error: 'Importing records from QuickBooks is done by the business owner. Ask them to run this import.',
+    code: 'OWNER_ONLY',
+  });
+  return false;
+}
+
 async function handleDeliveriesIngest(req: any, res: any) {
   const businessId = (req.query.business_id as string) || '';
   if (!businessId) return res.status(400).json({ error: 'business_id required' });
   const auth = req.headers?.authorization;
+  if (!(await refuseUnlessOwner(auth, businessId, 'QBDELIVERY', res))) return;
   if (!(await callerCan(auth, businessId, 'deliveries:create'))) {
     console.log('[TRACE:QBDELIVERY] ingest REFUSED — caller lacks deliveries:create', { businessId });
     return res.status(403).json({ error: 'Not authorized to schedule deliveries for this business', code: 'FORBIDDEN' });
@@ -848,6 +885,7 @@ async function handleOrdersIngest(req: any, res: any) {
   const businessId = (req.query.business_id as string) || '';
   if (!businessId) return res.status(400).json({ error: 'business_id required' });
   const auth = req.headers?.authorization;
+  if (!(await refuseUnlessOwner(auth, businessId, 'QBORDERS', res))) return;
   if (!(await callerCan(auth, businessId, 'orders:create'))) {
     console.log('[TRACE:QBORDERS] ingest REFUSED — caller lacks orders:create', { businessId });
     return res.status(403).json({ error: 'Not authorized to create orders for this business', code: 'FORBIDDEN' });

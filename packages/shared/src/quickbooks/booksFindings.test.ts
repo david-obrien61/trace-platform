@@ -82,10 +82,21 @@ const find = (fs: ReturnType<typeof evaluateBooks>, id: string) => fs.find(f => 
     'one sale below the RECORDED price is found');
   ok(f?.population.of === 3,
     '🔴 THE DENOMINATOR EXCLUDES THE UNPRICED ITEM — 3 comparable sales, not 4. An item with no recorded price has no floor, and counting it would make the percentage meaningless');
-  ok((f?.sentence ?? '').includes('recorded on that product in QuickBooks'),
+  ok(/recorded in QuickBooks/.test(f?.sentence ?? ''),
     '🔴 THE SENTENCE NAMES ITS FLOOR. This is the entire defect of the withdrawn rule: it must be impossible to read this as a comparison against a printed card');
-  ok(!(f?.sentence ?? '').toLowerCase().includes('price list') || (f?.sentence ?? '').includes('QuickBooks'),
-    'and it never calls the QuickBooks field a "price list" unqualified');
+  ok(!/price (list|card)/i.test(f?.sentence ?? ''),
+    'and it never calls the QuickBooks field a "price list" or a "price card" — those name the document we were never given');
+
+  // 🔴 THE ORDER OF THE CLAUSES IS THE FINDING, NOT ITS PRESENTATION (David, 2026-09-03).
+  // Led by the total, an owner reads "$724,273" and hears *"you lost three-quarters of a
+  // million dollars"*. Led by the ratio, they read the same numbers as *"we discount by about
+  // 13% as a matter of routine"* — which is what the data says. Same figures, opposite meaning,
+  // so the order is asserted rather than left to whoever next edits the string.
+  const sent = f?.sentence ?? '';
+  ok(sent.indexOf('%') < sent.indexOf('$') && sent.indexOf('%') !== -1 && sent.indexOf('$') !== -1,
+    '🔴 THE RATIO COMES BEFORE THE TOTAL — the finding leads and the money supports it, never the reverse');
+  ok(/^Across /.test(sent),
+    'and it opens by naming the span it covers, so no figure in it is read without the period it describes');
 
   // 🔴 ① A GIVEAWAY IS NOT A DISCOUNT — and this probe had to be REBUILT to mean anything.
   //

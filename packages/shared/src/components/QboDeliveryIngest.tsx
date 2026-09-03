@@ -21,6 +21,7 @@
 //   blocked state says what to do rather than just refusing.
 import React, { useState } from 'react';
 import { authHeaders } from '../auth/authHeaders';
+import { useBusinessContext } from '../context';
 
 const GREEN = '#27500A';
 const GRAY  = '#6b7280';
@@ -67,6 +68,7 @@ function localToday(): string {
 // carries. A panel that renders its buttons before the tenant has resolved would fire a read
 // against `business_id=` and get a 400 back; it says it is still loading instead (six states).
 export function QboDeliveryIngest({ businessId }: { businessId: string | null | undefined }) {
+  const { isOwner } = useBusinessContext();
   const [busy, setBusy]       = useState<null | 'preview' | 'ingest'>(null);
   const [report, setReport]   = useState<IngestReport | null>(null);
   const [failed, setFailed]   = useState<string | null>(null);
@@ -112,6 +114,25 @@ export function QboDeliveryIngest({ businessId }: { businessId: string | null | 
   const toWrite  = stops.filter(s => !s.alreadyIngested);
   const already  = stops.filter(s => s.alreadyIngested);
   const committed = report?.committed === true;
+
+  // 🔴 THE IMPORT IS AN OWNER ACT, AND A NON-OWNER IS TOLD SO RATHER THAN SHOWN A BUTTON THAT
+  // REFUSES (David, 2026-09-03). The server is the gate — `refuseUnlessOwner` in
+  // `api/qbo/router.ts` — and this is the courtesy half: an explained absence, never a
+  // mystery-locked affordance (§6 r13), and never a control that says one thing while the
+  // state says another (the six-state ruling). The PREVIEW stays available to a manager: it
+  // reads and writes nothing, and taking it away would hide the shape of the work from the
+  // person who does the work.
+  if (!isOwner) {
+    return (
+      <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid #e5e7eb' }}>
+        <h4 style={{ margin: '0 0 .25rem', color: DARK, fontSize: '1rem' }}>Scheduled deliveries from QuickBooks</h4>
+        <p style={{ margin: 0, color: GRAY, fontSize: '.85rem', lineHeight: 1.5 }}>
+          Bringing records in from QuickBooks is done by the account owner. It changes what this
+          business holds, so it is not delegated.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid #e5e7eb' }}>

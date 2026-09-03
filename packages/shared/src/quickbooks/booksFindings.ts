@@ -356,7 +356,12 @@ export const BOOKS_RULES: Rule[] = [
       };
       return {
         matched: below, of: comparable, noun: 'sales we could compare against a recorded price',
-        sentence: `${plural(below, 'sale was', 'sales were')} charged below the price recorded on that product in QuickBooks — ${plural(products.size, 'product', 'products')} over ${plural(span, 'month', 'months')}, ${money(shortfall)} counted once per sale rather than per item. Typically people paid ${pct(Math.round(median * 100), 100)} of the recorded price.`,
+        // 🔴 THE FINDING LEADS, THE TOTAL SUPPORTS IT (David, 2026-09-03). Read the other way
+        // round an owner sees $724,273 first and hears *"you lost three-quarters of a million
+        // dollars"*; what the finding actually says is that they discount routinely by about
+        // 13%, and that arrived LAST. Same numbers, opposite meaning — the ORDER of the clauses
+        // is the finding, which is why it is not a presentation detail.
+        sentence: `Across ${plural(span, 'month', 'months')}, people typically paid ${pct(Math.round(median * 100), 100)} of the price recorded in QuickBooks. ${plural(below, 'sale', 'sales')} on ${plural(products.size, 'product', 'products')} ${below === 1 ? 'was' : 'were'} charged below it, ${money(shortfall)} below in total, counted once per sale.`,
         value: shortfall,
         recommendation,
       };
