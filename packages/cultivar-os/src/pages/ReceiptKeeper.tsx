@@ -15,7 +15,7 @@ import { LineItemGrid } from '../components/LineItemGrid';
 import { ReceiptsList } from '../components/receipts/ReceiptsList';
 import { listVisibleForStep } from '../lib/receiptsList';
 import {
-  resolveVendor, planVendorWrite,
+  resolveVendor, planVendorWrite, VENDORS_SELECT, VENDOR_ALIASES_SELECT,
   type VendorRow, type VendorAliasRow, type VendorChoice, type VendorResolution,
 } from '@trace/shared/business-logic';
 
@@ -198,10 +198,10 @@ export function ReceiptKeeper() {
     void (async () => {
       const [v, a] = await Promise.all([
         supabase.from('vendors')
-          .select('id, business_id, name, email, account_number, preferred, preference_note')
+          .select(VENDORS_SELECT)
           .eq('business_id', businessId),
         supabase.from('vendor_aliases')
-          .select('id, business_id, vendor_id, alias')
+          .select(VENDOR_ALIASES_SELECT)
           .eq('business_id', businessId),
       ]);
       if (cancelled) return;

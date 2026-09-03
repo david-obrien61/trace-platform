@@ -29,7 +29,7 @@
 //               same shape ReceiptsList uses. At 8 distinct vendor strings across the whole
 //               database there is nothing here to virtualise.
 //
-// GATE:         MEMBERSHIP, not a permission string, and deliberately NOT `costs:read`. A
+// GATE:         READING is MEMBERSHIP-scoped and deliberately NOT `costs:read`. A
 //               vendor's NAME is not its cost basis; binding the two would put the preferred mark
 //               behind the confidential-cost gate and Lauren would lose sight of the thing this
 //               screen is for. `vendors` carries owner + member RLS on business_id
@@ -43,7 +43,7 @@
 //
 // DEPENDENCIES: `../lib/supabase` (two selects, one update — all RLS-enforced; NO new endpoint,
 //               NO new api/ function, the 12/12 ceiling is untouched) · `@trace/shared/context`
-//               (businessId, role) · `@trace/shared/business-logic` (orderVendorsForDisplay,
+//               (businessId, can) · `@trace/shared/business-logic` (orderVendorsForDisplay,
 //               vendorListHeading — every decision, so probes can reach them).
 //
 // OUTPUTS:      /vendors. Reads vendors + vendor_aliases. Writes ONLY `preferred` and
@@ -57,7 +57,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
 import {
-  orderVendorsForDisplay, vendorListHeading,
+  orderVendorsForDisplay, vendorListHeading, VENDORS_SELECT, VENDOR_ALIASES_SELECT,
   type VendorRow, type VendorAliasRow,
 } from '@trace/shared/business-logic';
 
@@ -112,13 +112,21 @@ const SECTION_LABEL: React.CSSProperties = {
 };
 
 export default function Vendors() {
-  const { businessId, role } = useBusinessContext();
+  const { businessId, can } = useBusinessContext();
 
-  // The client mirror of the SERVER predicate `public.is_business_owner`. `role` is 'OWNER' both
-  // for the account holder and for an OWNER-ROLE member who is not — which is exactly the
-  // disjunction the trigger tests. Measured live 2026-09-02: Lauren Bishop is the second case, so
-  // an `isOwner`-only check here would disagree with the database on her session.
-  const canSetPreference = role === 'OWNER';
+  // 🔴 THIS WAS `role === 'OWNER'` AND capA REFUSED IT, CORRECTLY. Authority comes from a
+  //    permission string the session HOLDS, never from a role compare — the cap is build-failing
+  //    precisely so a fourth surface does not re-key authority on identity the way
+  //    20260828_owner_role_carries_authority.sql catalogued on three.
+  //
+  //    `owner-only` is the platform's existing sentinel for this and is already the accepted
+  //    idiom (AppLayout's owner-only render gate, Dashboard's readout fallback). It gives the
+  //    exact semantics needed here, AND it covers the case the role compare was reaching for:
+  //    a session whose ROLE is OWNER resolves to OWNER_LOCKED_SET, so Lauren Bishop — role OWNER
+  //    at LAWNS, and NOT `businesses.owner_id`, measured live 2026-09-02 — passes without
+  //    `owner_id` being consulted at all. Two owners are expressible; a role compare was the
+  //    long way round to a worse version of what `can()` already does.
+  const canSetPreference = can('owner-only');
 
   const [state, setState] = useState<Phase>({ phase: 'loading' });
   const [editing, setEditing] = useState<string | null>(null);
@@ -131,10 +139,10 @@ export default function Vendors() {
     setState({ phase: 'loading' });
     const [v, a] = await Promise.all([
       supabase.from('vendors')
-        .select('id, business_id, name, email, phone, account_number, website, preferred, preference_note, notes')
+        .select(VENDORS_SELECT)
         .eq('business_id', businessId),
       supabase.from('vendor_aliases')
-        .select('id, business_id, vendor_id, alias, source')
+        .select(VENDOR_ALIASES_SELECT)
         .eq('business_id', businessId),
     ]);
     if (v.error) {
@@ -148,23 +156,35 @@ export default function Vendors() {
       console.log('[TRACE:VENDOR] loaded — vendors:', vendors.length,
         'aliases:', aliases.length,
         'preferred:', vendors.filter(x => x.preferred).length,
-        'role:', role, 'canSetPreference:', canSetPreference,
+        'canSetPreference:', canSetPreference,
         aliases.length === 0 && a.error ? `aliases read failed: ${a.error.message}` : '');
     }
     setState({ phase: 'loaded', vendors, aliases });
-  }, [businessId, role, canSetPreference]);
+  }, [businessId, canSetPreference]);
 
   useEffect(() => { void load(); }, [load]);
 
   async function writePreference(v: VendorRow, preferred: boolean, note: string | null) {
     setSaving(true); setWriteError(null);
     if (TRACE_VENDOR) console.log('[TRACE:VENDOR] preference write —', v.id, 'preferred:', preferred, 'note len:', (note ?? '').length);
-    const { error } = await supabase
+    // 🔴 `.select('id')` IS LOAD-BEARING, NOT DECORATION (A8). A row-level refusal is not an
+    //    error: if the policy's USING clause filters the row out, PostgREST returns SUCCESS with
+    //    ZERO ROWS, and an error-only check reports "saved" while nothing changed. That is exactly
+    //    the manager case this build has to get right — a control that appears to work and
+    //    silently does not is worse than one that refuses out loud. The trigger raises 42501 for
+    //    an owner-check failure; this catches the other shape, where the row was never reachable.
+    const { data, error } = await supabase
       .from('vendors')
       .update({ preferred, preference_note: note })
       .eq('id', v.id)
-      .eq('business_id', v.business_id);   // AC-3: never reach past the tenant
+      .eq('business_id', v.business_id)   // AC-3: never reach past the tenant
+      .select('id');
     setSaving(false);
+    if (!error && (!data || data.length === 0)) {
+      if (TRACE_VENDOR) console.log('[TRACE:VENDOR] preference write matched ZERO rows —', v.id);
+      setWriteError('That vendor could not be updated from your account. Nothing was saved.');
+      return;
+    }
     if (error) {
       // The trigger raises 42501. Surfaced honestly rather than swallowed — a control that
       // appears to work and silently does not is worse than one that refuses out loud.

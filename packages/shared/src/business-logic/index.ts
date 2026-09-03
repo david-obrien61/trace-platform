@@ -192,6 +192,8 @@ export type { TrialTerms } from './trialClock';
 // Resolve a captured free-text vendor name to a stable id under D-47's rule — ambiguity never
 // auto-links — plus the display decisions the screen must not make for itself. Pure; no DB.
 export {
+  VENDORS_SELECT,
+  VENDOR_ALIASES_SELECT,
   normalizeVendorName,
   looseVendorKey,
   emailDomain,

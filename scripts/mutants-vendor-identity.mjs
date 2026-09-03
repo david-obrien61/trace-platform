@@ -74,9 +74,20 @@ const MUTANTS = [
            "      subhead: 'No vendors yet. Mark one preferred to get started.',",
    'the header makes a preference claim about rows that do not exist'],
 
-  [MODULE, "    .replace(/\\b(inc|llc|l\\.l\\.c|ltd|co|corp|company|incorporated|contracting)\\b/g, ' ')",
-           "    .replace(/\\b(zzzz)\\b/g, ' ')",
-   'legal suffixes are not set aside, so the Sudderth pair is never even offered as a question'],
+  [MODULE, "const VENDOR_SUFFIXES = ['inc', 'llc', 'llp', 'ltd', 'co', 'corp', 'company', 'incorporated'];",
+           "const VENDOR_SUFFIXES: string[] = [];",
+   'legal suffixes are not set aside at all -- and the two folds silently stop agreeing'],
+
+  // Anchored on the TWO-LINE sequence rather than the punctuation class itself: that line
+  // contains a backtick, which cannot survive a JS template literal, and an anchor that never
+  // matches reports NOT APPLIED -- a mutant that was never run reading as a guarantee held.
+  [MODULE, "]/g, ' ')\n    .replace(/\\s+/g, ' ')",
+           "]/g, '')\n    .replace(/\\s+/g, ' ')",
+   'punctuation is DELETED rather than replaced with a space -- H-E-B and Co-op fold wrongly, which is the exact bug this fold was rewritten to fix'],
+
+  [MODULE, "  while (words.length > 1 && VENDOR_SUFFIXES.includes(words[words.length - 1])) {\n    words = words.slice(0, -1);\n  }",
+           "  if (words.length > 1 && VENDOR_SUFFIXES.includes(words[words.length - 1])) {\n    words = words.slice(0, -1);\n  }",
+   'suffixes come off ONCE instead of repeatedly -- "Foo Co, Inc." keeps a suffix'],
 
   [MODULE, "  if (d && emailDomain(v.email) === d) return { agreed: true, field: 'email' };",
            "  if (d) return { agreed: true, field: 'email' };",

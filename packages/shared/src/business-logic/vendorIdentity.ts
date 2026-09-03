@@ -35,6 +35,25 @@
  *   Callers perform the write; this module performs none.
  */
 
+/* ────────────────────────────────────────────────────────────────────────────────────────────────
+ * THE FIELD DECLARATIONS — ONE per entity, and every reader derives from them (A4)
+ * ──────────────────────────────────────────────────────────────────────────────────────────────*/
+
+/**
+ * 🔴 ONE LIST, TWO READERS, AND THAT IS THE WHOLE POINT. `/vendors` and the capture path both read
+ * this table, and a second hand-written enumeration is how a column added to one reader reads back
+ * null forever in the other with nothing able to notice — `customers` carried SIX parallel lists
+ * before this rule existed.
+ *
+ * ⚠️ The capture path does not need `notes` or `website`, and takes them anyway. Two lists that
+ * differ by two columns are still two lists, and at 8 distinct vendors across the entire database
+ * the cost of the wider read is nothing measurable against the cost of them drifting apart.
+ */
+export const VENDORS_SELECT =
+  'id, business_id, name, email, phone, account_number, website, preferred, preference_note, notes';
+
+export const VENDOR_ALIASES_SELECT = 'id, business_id, vendor_id, alias, source';
+
 /** What the caller should do. Mirrors CountOnceSeam's MatchOutcome idiom (§6 r8: one shape). */
 export type VendorOutcome = 'LINK' | 'CREATE' | 'NEED_CONFIRMATION';
 
