@@ -223,7 +223,11 @@ export function ReceiptKeeper() {
 
   // Line items state — user-editable grid from OCR output
   const [lineItems, setLineItems]               = useState<LineItem[]>([]);
-  const [lineItemsOriginal, setLineItemsOriginal] = useState<Array<{ description: string; amount: number }> | null>(null);
+  // The OCR snapshot, written ONCE to `line_items_original` and never again (enforced from
+  // 2026-09-02 by the trg_receipts_snapshot_and_line_guard trigger, not merely by intent). Typed
+  // with all five keys because that is what it has always actually held — measured 141 of 141.
+  const [lineItemsOriginal, setLineItemsOriginal] =
+    useState<Array<{ description: string; amount: number; quantity?: number | null; unit_price?: number | null; sku?: string | null }> | null>(null);
   const [amountOriginal, setAmountOriginal]     = useState<number | null>(null);
   const [showConflictDialog, setShowConflictDialog] = useState(false);
 
@@ -302,17 +306,26 @@ export function ReceiptKeeper() {
       });
 
       // Initialize editable line items from OCR
-      const ocrLines: Array<{ description: string; amount: number }> = data.parsed?.line_items ?? [];
+      const ocrLines: Array<{ description: string; amount: number; quantity?: number | null; unit_price?: number | null; sku?: string | null }> =
+        data.parsed?.line_items ?? [];
       const initialLineItems: LineItem[] = ocrLines.map(item => ({
         id:          crypto.randomUUID(),
         description: item.description ?? '',
         amount:      item.amount != null ? Number(item.amount).toFixed(2) : '',
+        // Carried, not edited — see the LineItem header. Dropping these on save is what left the
+        // Sudderth rate ($35.00 against 20.72) recoverable only from the snapshot.
+        quantity:    item.quantity   ?? null,
+        unit_price:  item.unit_price ?? null,
+        sku:         item.sku        ?? null,
       }));
       // Inject tax as a line item when OCR captured it and it's not already in the line items
       const parsedTax: number | null = data.parsed?.tax ?? null;
       const taxAlreadyInLines = ocrLines.some((l: any) => /tax/i.test(l.description ?? ''));
       if (parsedTax != null && !taxAlreadyInLines) {
-        initialLineItems.push({ id: crypto.randomUUID(), description: 'Tax', amount: Number(parsedTax).toFixed(2) });
+        initialLineItems.push({
+          id: crypto.randomUUID(), description: 'Tax', amount: Number(parsedTax).toFixed(2),
+          quantity: null, unit_price: null, sku: null,
+        });
       }
       setLineItems(initialLineItems);
       setLineItemsOriginal(ocrLines.length > 0 ? ocrLines : null);
@@ -466,9 +479,25 @@ export function ReceiptKeeper() {
     const rs = opts.reconcileState;
 
     // Build final line_items from current editable state (owner-confirmed, not raw OCR)
+    // 🔴 ALL FIVE KEYS, AND A BLANK AMOUNT STAYS BLANK. Two corrections in one line:
+    // (a) quantity / unit_price / sku are emitted instead of dropped — `line_items` had carried
+    //     two keys on 171 of 171 stored lines while the read carried five;
+    // (b) `parseFloat(item.amount) || 0` turned an EMPTY amount into a real-looking $0.00, which
+    //     is a fabricated measurement (D-9) and would then reconcile as though the line were free.
+    //     Absent stays absent; the detail view and `edit_receipt_line_items` both report a line
+    //     with no amount as unreconcilable rather than summing it as zero.
     const finalLineItems = lineItems
       .filter(item => item.description.trim() || item.amount.trim())
-      .map(item => ({ description: item.description.trim(), amount: parseFloat(item.amount) || 0 }));
+      .map(item => {
+        const parsed = parseFloat(item.amount);
+        return {
+          description: item.description.trim(),
+          amount:      Number.isFinite(parsed) ? parsed : null,
+          quantity:    item.quantity   ?? null,
+          unit_price:  item.unit_price ?? null,
+          sku:         item.sku        ?? null,
+        };
+      });
 
     // Reconcile status mapping: only 'large_mismatch' becomes 'large_mismatch_overridden' in DB
     const dbReconcileStatus: string | null = rs.status === 'no_lines'
