@@ -78,6 +78,14 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🔴 `/receipts` IS A GRID NOW (2026-09-03, ledger #269)
+
+- 🟡 **BUILDER-COMPLETE, OWNER-PROOF OWED.** `<DataSheet>` + `renderExpand` — one row per receipt, the chain in the drawer. **G4 sort · G6 search + outcome filter · G7 density came from the engine; none was built.** → `ReceiptsList.tsx` · `receiptsList.ts` · 134 probes, 4 proven red first.
+- 🔴 **THE BOARD IS 0 OF 14 COVERED (13 `owed` · 1 `needs-test`)** — all 9 covered cards flipped because the surface they described no longer exists (OP-14 cl.3); each keeps its 09-02 evidence. ⚠️ **Seven still settle from ONE print of `/receipts`.** **Sharpest new step (CARD 12): sort Amount descending — `$1,283.88` must sit ABOVE `$920.13`.** Sorted as text it does not, and the page looks normal.
+- ✅ **THE DIVERGENCE CAP NAMED THE CONVERGED FILE ITSELF** — self-pruning firing on the good outcome. Declaration **moved to `converged`, not deleted.**
+- 🔴 **TWO SHARED-CONTROL QUESTIONS OWED DOC-FIRST (R-74), NOT DECIDED IN A SURFACE:** ① the expand toggle is **trailing + chevron**, not a leading plus/minus — a `DataSheet.tsx` change for every consumer. ② the count pill **cannot name a server-side cap** (*"100 of 100"* for a tenant holding 236).
+- ⚠️ **COLUMN DEFAULTS ARE AN UNVERIFIED PREMISE** — David's set relayed by a peer session; flagged in the file, one word flips it. **LINES needs `line_items` in the select, which the file's invariant forbids — David's call, not settled.**
+
 ### 🔴 UI STANDARD — THE STANDARD OUTRANKS THE PROMPT (2026-09-03, ledger #265, R-73 · R-74)
 
 - 🟡 **`/receipts` SORT CHANGED — G9, BUILDER-COMPLETE, OWNER-PROOF OWED.** Ordered by **`receipts.date`, the date on the document**, not `created_at`. On LAWNS's rows they disagree (07-02 captured after 07-29), so **the visible row order moves**. → `receiptsList.ts` · `ReceiptsList.tsx` · probe `E7` proven red against the old sort.
