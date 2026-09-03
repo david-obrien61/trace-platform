@@ -26,7 +26,7 @@ export interface SystemFieldInfo {
 // The registry. Field key → what it is + why it's system-managed. This is the ONLY place the
 // "which fields get the lock" decision lives — the single source. Consumed via lockInfoFor()
 // (the DataSheet's read API), so the raw map stays module-internal. cost_confidence /
-// estimated_value_confidence are DELIBERATELY ABSENT — see the note below.
+// estimated_value_confidence are DELIBERATELY ABSENT — see the note below, as is receipt_number.
 const SYSTEM_MANAGED_FIELDS: Record<string, SystemFieldInfo> = {
   // ── Timestamps (set by the platform on write) ──
   created_at: {
@@ -96,6 +96,22 @@ const SYSTEM_MANAGED_FIELDS: Record<string, SystemFieldInfo> = {
 // they are genuinely editable on those surfaces, they must NOT be auto-locked — the derivation is
 // the default, the owner has the final say. If a future grid shows them read-only, that grid can
 // force the lock per-column via `systemManaged: true`.
+
+// 🔴 OCR-SOURCED IS NOT PROVENANCE — `receipt_number` is intentionally NOT in the registry
+// (David's ruling, 2026-09-03; documented so the exclusion is a decision, not an oversight).
+// It is THE DOCUMENT'S OWN NUMBER as printed on the invoice, read by the OCR at capture — and an
+// OCR read is exactly the kind of value that can be WRONG. A misread invoice number the owner
+// cannot correct is a locked-in error on the field that identifies the document.
+//
+// ⚠️ THE TRAP THIS NOTE EXISTS TO STOP, because the wrong answer looks consistent: `receipt_id`
+// and `source` ARE locked, two entries above, and both also arrive "from the receipt flow". The
+// distinction is WHO AUTHORED THE VALUE, not where it entered. `receipt_id` is a link the
+// PLATFORM assigns and no human can meaningfully retype; `receipt_number` is a fact the VENDOR
+// printed and the platform merely transcribed. Transcription can be corrected; assignment cannot.
+// Do not add it here by pattern-matching on "it comes from the scan".
+//
+// Its column lives on `receipts` (20260903c_receipts_receipt_number.sql), which records the same
+// ruling at the column COMMENT so the database and this registry cannot drift apart silently.
 
 // A generic reason for a column that force-declares itself system-managed but has no registry entry.
 const GENERIC_SYSTEM_REASON =

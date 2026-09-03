@@ -49,6 +49,29 @@ const CLAUDE_VISION_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'im
 // (e.g., 1.611 instead of 1.61). Totals are always exact. Benched until a unit_price
 // display column is added to the line-item grid UI — round to 2 decimal places on display.
 
+// 🔴 UNIT OF MEASURE — THE READER WAS NEVER ASKED, WHICH IS WHY THE SCREEN ASKED THE OWNER
+// (added 2026-09-03, David's ruling). Measured before the change: ZERO occurrences of `uom` /
+// `unit_of_measure` anywhere in this file, and ZERO `uom` keys across all 315 stored line objects
+// (37 receipts, both `line_items` and `line_items_original`). So the vendor-preference screen asked
+// "when bwi bills you, is it by the yard or the ton?" about an invoice that ANSWERS IT TWICE — a
+// `BG`/`BN` unit column beside each quantity, and the unit restated inside every description
+// ("4.4 cf", "50 lb", "40 lb", "(12 Pack)").
+//
+// THE RULE THIS SERVES — PARSE FIRST, ASK LAST. Every question the screen asks is a failure, not a
+// feature. Ask only where the document is genuinely silent, which across this whole corpus is ONE
+// vendor in eight (Sudderth prints "20.72" with no unit anywhere on the page). A vendor whose
+// documents always state their units must never surface the question.
+//
+// BOTH READINGS ARE CAPTURED because they are different facts and either may be absent: `uom` is a
+// code in its own column; `pack_size`/`pack_unit` are the unit stated inside the description. Both
+// are LITERALLY PRINTED, so asking for them does not weaken the "extract only what is printed"
+// discipline (D-9) — the prompts say so explicitly, because a model told never to infer will
+// otherwise decline to read a unit out of a description it can plainly see.
+//
+// ⚠️ DERIVATION IS DELIBERATELY NOT DONE HERE, AND NOT BY THE MODEL. "(12 Pack)" at $25.71 is $2.14
+// a roll and 50 lb at $68.24 is $1.36 a pound — arithmetic on values already parsed, so it belongs
+// to a consumer that can show its working, never to an extraction prompt. Captured, not computed.
+
 // Strict OCR prompt — validated in bake-off against McCoy's receipt (2026-06-11).
 // "Extract ONLY what's printed" eliminates hallucination on missing fields.
 const PROMPT = `You are a receipt parser. Extract ONLY what is literally printed on this receipt — do not infer, estimate, or fill in values that are not visible.
@@ -61,7 +84,7 @@ Return a JSON object with these exact fields (use null for any field you cannot 
   "subtotal": number or null — subtotal before tax if printed,
   "tax": number or null — tax amount if printed,
   "category": "string — best fit from: fuel, supplies, meals, parts, equipment, maintenance, office, other",
-  "line_items": array or null — each item as: {"description": "as printed", "quantity": number or null, "unit_price": number or null, "amount": number} — null if no itemized list is visible,
+  "line_items": array or null — each item as: {"description": "as printed", "quantity": number or null, "uom": "string or null", "pack_size": number or null, "pack_unit": "string or null", "unit_price": number or null, "amount": number} — null if no itemized list is visible,
   "payment_method": "string or null — cash, credit, debit, check, as indicated on the receipt",
   "receipt_number": "string or null — receipt, invoice, or transaction number if printed"
 }
@@ -69,6 +92,10 @@ Return a JSON object with these exact fields (use null for any field you cannot 
 Rules:
 - Extract ONLY values that appear on the receipt. Do not infer or estimate missing values.
 - For line_items: include quantity and unit_price only if they are printed on the receipt; otherwise set to null.
+- UNIT OF MEASURE — READ IT, NEVER ASK FOR IT. A unit can be printed in two independent places and BOTH are "literally printed", so extracting either is reading, not inferring:
+  (a) "uom" — a unit code in its OWN column beside the quantity, copied EXACTLY as printed (BG, BN, EA, CS, LB, YD, TON, GAL...). null if the receipt has no such column.
+  (b) "pack_size" + "pack_unit" — a unit stated INSIDE the description text. "Osmocote 50 lb" is pack_size 50, pack_unit "lb". "Mulch 4.4 cf" is 4.4 + "cf". "Trim Tape (12 Pack)" is 12 + "Pack". Read these off the description; do NOT compute anything from them, and do NOT copy the pack text into pack_unit when no number precedes it.
+  Both are null only when the document is genuinely silent about the unit. Do not leave them null because the other one is filled — a receipt often states the unit twice, and both readings are wanted.
 - For amounts: numeric values only — no currency symbols, no commas.
 - Return ONLY the JSON object. No explanation, no markdown fences, no commentary.`;
 
@@ -91,7 +118,7 @@ Return a JSON object with these exact fields (use null for any field you cannot 
   "customer_email": "string or null — the customer's email if printed",
   "bill_to": {"line1": "string or null", "city": "string or null", "state": "string or null", "zip": "string or null"} or null,
   "ship_to": {"line1": "string or null", "city": "string or null", "state": "string or null", "zip": "string or null"} or null,
-  "line_items": array or null — each item as: {"description": "as printed", "sku": "string or null", "quantity": number or null, "unit_price": number or null, "amount": number} — null if no itemized list is visible,
+  "line_items": array or null — each item as: {"description": "as printed", "sku": "string or null", "quantity": number or null, "uom": "string or null", "pack_size": number or null, "pack_unit": "string or null", "unit_price": number or null, "amount": number} — null if no itemized list is visible,
   "subtotal": number or null — subtotal before tax if printed,
   "tax": number or null — tax amount if printed,
   "amount": number — invoice total (numeric only, no currency symbol),
@@ -106,6 +133,10 @@ Rules:
 - Always return customer_kind ('person' or 'organization') classifying customer_name — this is a classification, not a copied value, so it is exempt from the "only what is printed" rule.
 - bill_to is the customer's billing address; ship_to is the delivery address — keep them separate even if identical.
 - For line_items: include sku, quantity, unit_price only if printed; otherwise set to null.
+- UNIT OF MEASURE — READ IT, NEVER ASK FOR IT. A unit can be printed in two independent places and BOTH are "literally printed", so extracting either is reading, not inferring:
+  (a) "uom" — a unit code in its OWN column beside the quantity, copied EXACTLY as printed (BG, BN, EA, CS, LB, YD, TON, GAL...). null if the invoice has no such column.
+  (b) "pack_size" + "pack_unit" — a unit stated INSIDE the description text. "Osmocote 50 lb" is pack_size 50, pack_unit "lb". "Mulch 4.4 cf" is 4.4 + "cf". "Trim Tape (12 Pack)" is 12 + "Pack". Read these off the description; do NOT compute anything from them, and do NOT copy the pack text into pack_unit when no number precedes it.
+  Both are null only when the document is genuinely silent about the unit. Do not leave them null because the other one is filled — an invoice often states the unit twice, and both readings are wanted.
 - For amounts: numeric values only — no currency symbols, no commas.
 - Return ONLY the JSON object. No explanation, no markdown fences, no commentary.`;
 

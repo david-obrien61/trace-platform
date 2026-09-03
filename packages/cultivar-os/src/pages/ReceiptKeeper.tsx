@@ -92,7 +92,7 @@ interface OcrResult {
     subtotal?: number | null;
     tax?: number | null;
     category?: string | null;
-    line_items?: Array<{ description: string; amount: number; sku?: string | null; quantity?: number | null; unit_price?: number | null }> | null;
+    line_items?: Array<{ description: string; amount: number; sku?: string | null; quantity?: number | null; unit_price?: number | null; uom?: string | null; pack_size?: number | null; pack_unit?: string | null }> | null;
     receipt_number?: string | null;
     payment_method?: string | null;
     // Invoice-shape fields (Wave 2) — null/absent for plain receipts
@@ -157,6 +157,14 @@ export function ReceiptKeeper() {
   const [ocrResult, setOcrResult]       = useState<OcrResult | null>(null);
   const [fields, setFields]             = useState<EditableFields>({ vendor: '', date: '', amount: '', category: '' });
   const [savedReceiptId, setSavedReceiptId] = useState<string | null>(null);
+  // 🔴 THE DOCUMENT'S OWN NUMBER — CARRIED, NOT EDITED HERE (2026-09-03, tech-debt #153).
+  // The OCR has always been asked for this (ocr.ts asks for `receipt_number` in BOTH prompt
+  // shapes) and the save has always dropped it, because until 20260903c there was no column to
+  // put it in. It is held as its own state rather than added to `EditableFields` deliberately:
+  // the capture screen edits four fields and a fifth input on a phone, in a lot, is friction
+  // (the Golden Rule). Correcting a misread number belongs to the record's ONE edit surface,
+  // /receipts/:id (E1) — which is why the field is NOT locked in systemManagedFields.ts.
+  const [receiptNumber, setReceiptNumber] = useState<string | null>(null);
 
   // Invoice-shape + infer-then-confirm router state (Wave 2)
   const [invoice, setInvoice]           = useState<InvoiceFields>(EMPTY_INVOICE);
@@ -183,7 +191,7 @@ export function ReceiptKeeper() {
   // 2026-09-02 by the trg_receipts_snapshot_and_line_guard trigger, not merely by intent). Typed
   // with all five keys because that is what it has always actually held — measured 141 of 141.
   const [lineItemsOriginal, setLineItemsOriginal] =
-    useState<Array<{ description: string; amount: number; quantity?: number | null; unit_price?: number | null; sku?: string | null }> | null>(null);
+    useState<Array<{ description: string; amount: number; quantity?: number | null; unit_price?: number | null; sku?: string | null; uom?: string | null; pack_size?: number | null; pack_unit?: string | null }> | null>(null);
   const [amountOriginal, setAmountOriginal]     = useState<number | null>(null);
   const [showConflictDialog, setShowConflictDialog] = useState(false);
 
@@ -260,9 +268,12 @@ export function ReceiptKeeper() {
         amount:   data.parsed?.amount != null ? Number(data.parsed.amount).toFixed(2) : '',
         category: data.parsed?.category ?? '',
       });
+      // Trimmed to null rather than kept as '' — an empty string would read as "the document has
+      // a number and it is blank", which is a different claim from "no number was printed" (D-9).
+      setReceiptNumber(data.parsed?.receipt_number?.trim() || null);
 
       // Initialize editable line items from OCR
-      const ocrLines: Array<{ description: string; amount: number; quantity?: number | null; unit_price?: number | null; sku?: string | null }> =
+      const ocrLines: Array<{ description: string; amount: number; quantity?: number | null; unit_price?: number | null; sku?: string | null; uom?: string | null; pack_size?: number | null; pack_unit?: string | null }> =
         data.parsed?.line_items ?? [];
       const initialLineItems: LineItem[] = ocrLines.map(item => ({
         id:          crypto.randomUUID(),
@@ -273,6 +284,9 @@ export function ReceiptKeeper() {
         quantity:    item.quantity   ?? null,
         unit_price:  item.unit_price ?? null,
         sku:         item.sku        ?? null,
+        uom:         item.uom        ?? null,
+        pack_size:   item.pack_size  ?? null,
+        pack_unit:   item.pack_unit  ?? null,
       }));
       // Inject tax as a line item when OCR captured it and it's not already in the line items
       const parsedTax: number | null = data.parsed?.tax ?? null;
@@ -280,7 +294,7 @@ export function ReceiptKeeper() {
       if (parsedTax != null && !taxAlreadyInLines) {
         initialLineItems.push({
           id: crypto.randomUUID(), description: 'Tax', amount: Number(parsedTax).toFixed(2),
-          quantity: null, unit_price: null, sku: null,
+          quantity: null, unit_price: null, sku: null, uom: null, pack_size: null, pack_unit: null,
         });
       }
       setLineItems(initialLineItems);
@@ -452,6 +466,9 @@ export function ReceiptKeeper() {
           quantity:    item.quantity   ?? null,
           unit_price:  item.unit_price ?? null,
           sku:         item.sku        ?? null,
+          uom:         item.uom        ?? null,
+          pack_size:   item.pack_size  ?? null,
+          pack_unit:   item.pack_unit  ?? null,
         };
       });
 
@@ -471,6 +488,7 @@ export function ReceiptKeeper() {
       image_url,
       ocr_raw:                 ocrResult?.ocr_raw,
       vendor:                  fields.vendor.trim() || null,
+      receipt_number:          receiptNumber,
       date:                    fields.date.trim()   || null,
       amount:                  isNaN(parsedAmount)  ? null : parsedAmount,
       category:                fields.category      || null,
@@ -633,6 +651,7 @@ export function ReceiptKeeper() {
     setOcrResult(null);
     setFields({ vendor: '', date: '', amount: '', category: '' });
     setSavedReceiptId(null);
+    setReceiptNumber(null);
     setLineItems([]);
     setLineItemsOriginal(null);
     setAmountOriginal(null);

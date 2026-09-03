@@ -22,6 +22,15 @@ export interface LineItem {
   quantity?: number | null;
   unit_price?: number | null;
   sku?: string | null;
+  // 🔴 THE UNIT, READ RATHER THAN ASKED (2026-09-03). Same "carried, not edited" contract as the
+  // three above: the capture UI never edits these, and dropping them on save would repeat exactly
+  // the defect the comment above records. `uom` is a code from the document's own unit column
+  // (bwi prints BG / BN); `pack_size` + `pack_unit` are the unit restated inside the description
+  // ("50 lb" -> 50 + "lb"). Both are captured because a document commonly states the unit twice
+  // and either half can be absent. Measured before the change: 0 uom keys across 315 stored lines.
+  uom?: string | null;
+  pack_size?: number | null;
+  pack_unit?: string | null;
 }
 
 export interface ReconcileResult {
