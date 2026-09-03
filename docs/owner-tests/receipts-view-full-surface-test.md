@@ -66,7 +66,10 @@ call **why** an open question. It is no longer open: measured field by field aga
 parsed output (population 35) — **vendor differs 0 · amount 3 · category 2 · date 29 · lines 30**,
 and the two large counts are **the platform's own doing** (the code normalises `06/22/2026` to ISO
 and compares the normalised value against the raw one; and it injects its own `Tax` line and then
-counts the line it added). `header_amount_edited` is **false on 36 of 36**.
+counts the line it added). `header_amount_edited` is **false on 36 of 36 AS MEASURED 2026-09-02**.
+⚠️ **Re-measured 2026-09-03 the corpus is 37, not 36** (`Test Dave's Tree Nest` 18 · **LAWNS 17,
+unchanged** · `Test David's new Business` 2). Seeing 37 rows is not this card failing — the claim is
+the ratio, and the denominator is a snapshot of a corpus Lauren is still uploading to. Ledger #263.
 ⚠️ **So the row must NOT read *"Owner changed something before saving."*** It should say it is flagged
 as edited **but the total was not changed**, and that the flag also counts the platform's own
 reformatting. ⚠️ **The FLAG itself is still computed wrongly at write time — tech-debt #148, deliberately

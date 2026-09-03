@@ -5,6 +5,43 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
 -- Target project: bgobkjcopcxusjsetfob (cultivar-os)
 --
+-- ════════════════════════════════════════════════════════════════════════════════════════════════
+-- ✅ APPLIED 2026-09-03 BY DAVID. THIS FILE IS NO LONGER GATED.
+-- ════════════════════════════════════════════════════════════════════════════════════════════════
+-- ANNOTATION ONLY — not one line of SQL below is altered (CLAUDE.md §6 r1; the same comment-only
+-- precedent as 20260802_trialling_modules_are_live.sql:2 and #261's annotation of
+-- 20260902_receipt_line_edit_and_vendor_preference.sql). Proven by filtering the diff BOTH
+-- directions: 0 non-comment lines added AND 0 removed.
+--
+-- CATALOG VERIFICATION (A)-(F), returned by David from the SQL editor:
+--   (A) relname/relrowsecurity:  vendors true · vendor_aliases true
+--   (B) 7 policies, exactly as specified:
+--         vendors:        owner_all(ALL) member_select(SELECT) member_insert(INSERT) member_update(UPDATE)
+--         vendor_aliases: owner_all(ALL) member_select(SELECT) member_insert(INSERT)
+--   (C) receipts.vendor text YES *and* receipts.vendor_id uuid YES — the captured string SURVIVES
+--       beside the link, which is R-50 holding in the schema rather than in a comment.
+--   (D) both uidx defs carry btree(business_id, lower(btrim(...))) — spelling and whitespace fold.
+--   (E) three triggers: vendors_preference_owner_only, ..._insert, vendors_updated_at.
+--       Owner-only is enforced on BOTH verbs — a column GRANT could not have done it, because
+--       owner and manager are both the `authenticated` role.
+--
+-- 🔴 (F) IS THE ONE THAT MATTERED, AND IT IS THE EVIDENCE — NOT THE WORD "APPLIED":
+--
+--     unresolved  total
+--     37          37
+--
+--     EVERY receipt is UNRESOLVED. Nothing was silently linked to a vendor. That is [[R-50]]
+--     holding AT THE DATABASE: the machine did not retro-classify a single stored row. A count
+--     that names its own population is what survives six months; "applied" is not.
+--
+-- ⚠️ THE POPULATION MOVED WHILE THIS FILE WAS BEING WRITTEN, AND THE FILE SAYS 36 IN THREE PLACES
+--     (lines ~37, ~54, ~457 below). Those are HONEST DATED SNAPSHOTS — "re-measured live
+--     2026-09-02" — and they are LEFT AS WRITTEN rather than back-edited. What was 36 is now 37:
+--     a 37th receipt, `TRACTOR SUPPLY CO` $8.65, was captured on
+--     `Test Dave's Tree Nest` at 2026-09-02T21:56:12Z by dave_obrian@outlook.com. LAWNS is
+--     UNCHANGED at 17. See ledger #263; measured by scripts/measure-vendor-chain-applied.mjs.
+-- ════════════════════════════════════════════════════════════════════════════════════════════════
+--
 -- NEVER EDIT APPLIED MIGRATIONS. Append new migrations for changes. (CLAUDE.md §6 r1.)
 --
 -- ── WHAT THIS IS FOR, IN TERRY'S TERMS ──────────────────────────────────────────────────────────

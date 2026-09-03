@@ -117,7 +117,9 @@ Scroll to **The document** on Sudderth, then open any **jpg** capture.
 2. A jpg capture renders as an **image**.
 
 **PASS:** you can read the actual paper in both cases.
-🔴 **8 of 36 captures are PDFs, Sudderth among them.** An `<img>` pointed at a PDF renders nothing
+🔴 **8 captures are PDFs, Sudderth among them** — **8 of 17 LAWNS rows** (re-measured 2026-09-03;
+the figure was written as *8 of 36* against the all-tenant corpus, which has since moved to 37 — the
+numerator did not change, the denominator did. Ledger #263). An `<img>` pointed at a PDF renders nothing
 and reports nothing — an empty frame here is a fail, not a slow load.
 **FAIL:** a broken image icon, an empty frame, or a download that never opens.
 
@@ -280,5 +282,9 @@ On `/receipts`, read the sentence under **What the platform banked at save time*
 **PASS:** the sentence no longer asserts an owner edit that did not happen.
 🔴 **Measured 2026-09-02, population 35:** vendor differs **0**, amount **3**, category **2**, date
 **29** (our ISO conversion), lines **30** (our injected Tax line). `header_amount_edited` false on
-**36 of 36**.
+**36 of 36 AS MEASURED THAT DAY**.
+⚠️ **THE POPULATION HAS MOVED — expect 37, and 37 is not a failure of this card.** Re-measured
+2026-09-03: 37 receipts across 3 tenants (`Test Dave's Tree Nest` 18 · **LAWNS 17, unchanged** ·
+`Test David's new Business` 2). The 37th is `TRACTOR SUPPLY CO` $8.65, captured on Test Dave's at
+2026-09-02T21:56:12Z. The RATIO is what this card asserts; the denominator is a snapshot. Ledger #263.
 **FAIL:** the old sentence is still there.

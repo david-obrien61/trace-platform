@@ -145,13 +145,14 @@ later whether a figure is hers or its is to have kept both.
 ⚠️ **CORRECTED 2026-09-02 (ledger #257).** This paragraph previously read *"she
 corrects something on every single capture, so what it originally read is part of
 the record, not a discarded draft"* — and the premise was **measurably false**.
-It rested on `accept_vs_edit`, which reads `edited` on 35 of 36 rows; measured
+It rested on `accept_vs_edit`, which reads `edited` on 35 of 36 rows **as measured that day**
+(the corpus is **37** as of 2026-09-03 — LAWNS unchanged at 17, ledger #263); measured
 field by field against the reader's own parsed output (population 35): **vendor
 differs 0 · amount 3 · category 2 · date 29 · lines 30**. The two large counts
 are **the platform's own doing** — the code normalises `06/22/2026` to ISO and
 then compares the normalised value against the raw one, and it injects its own
 `Tax` line and then counts the line it added as a line the owner added.
-`header_amount_edited` is **false on 36 of 36**. So the flag measures our
+`header_amount_edited` is **false on 36 of 36** (that day's population). So the flag measures our
 formatting, not her intent, and the story was asserting a habit of Lauren's that
 the data does not show. **The reason for keeping the original is untouched and
 is the sentence above: the parsed document is stored in no field of its own.**

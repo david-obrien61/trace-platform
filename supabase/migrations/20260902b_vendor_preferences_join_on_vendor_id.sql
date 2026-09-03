@@ -4,6 +4,43 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
 -- Target project: bgobkjcopcxusjsetfob (cultivar-os)
 --
+-- ════════════════════════════════════════════════════════════════════════════════════════════════
+-- ✅ APPLIED 2026-09-03 BY DAVID, AS STEP 3 OF 3. THE CHAIN IS COMPLETE. NO LONGER GATED.
+-- ════════════════════════════════════════════════════════════════════════════════════════════════
+-- ANNOTATION ONLY — not one line of SQL below is altered (CLAUDE.md §6 r1). Proven by filtering
+-- the diff BOTH directions: 0 non-comment lines added AND 0 removed.
+--
+-- VERIFICATION returned by David:
+--   (A) vendor_id uuid NULL beside vendor_key text NOT NULL — the join-not-an-answer shape, i.e.
+--       a preference answered before its vendor existed is still a real answer.
+--   (B) 🔴 vendor_preferences_one_per_vendor_kind_uidx SURVIVED. That index is what keeps
+--       "asked once" STRUCTURAL rather than a UI promise, and the §1 note below explains why it
+--       was deliberately NOT re-keyed onto the nullable vendor_id.
+--   (C) vendor_preferences_resolved returned zero rows without erroring. Its relrowsecurity reads
+--       false, which is NORMAL for a view — it is not SECURITY DEFINER, so it inherits the RLS of
+--       vendors and vendor_preferences beneath it.
+--
+-- ⚠️ (D) DID NOT RUN AND IS OWED, NOT PASSED — and it is recorded that way deliberately.
+--     The cross-tenant refusal needs a preference row in one business and a vendor row in another;
+--     BOTH TABLES ARE EMPTY (measured 2026-09-03: vendors 0, vendor_aliases 0,
+--     vendor_preferences 0, against a negative control proving a missing table errors PGRST205 —
+--     so "0 rows" is a real read, not a failed one). David pasted the placeholder text literally
+--     and got `22P02: invalid input syntax for type uuid`. THAT IS THE PLACEHOLDER, NOT THE GUARD.
+--     link_vendor_preference()'s AC-3 refusal is UNPROVEN until two tenants each hold a row.
+--     [[R-33]]: a check that has never been seen to refuse is a claim.
+--
+-- ⚠️ THE OPTIONAL PRE-FLIGHT NEGATIVE CONTROL WAS NOT REPORTED EITHER WAY. Whether the §0 guard
+--     refused by name before `vendors` existed is UNKNOWN — not passed, not failed. Recorded as
+--     unknown because what is written here is what is known, not what was intended.
+--
+-- ✏️ THE CHAIN'S OWN FINDING, MEASURED IN BOTH DIRECTIONS: the APPLY ORDER block below was about
+--     THIS FILE'S PRE-FLIGHT the whole time. David applied step 2 before step 1 and it caused
+--     NOTHING — the receipt migration calls only is_active_member and has_permission (both
+--     long-live), and 20260902_vendor_identity_and_preference.sql contains zero references to
+--     vendor_preferences. `is_business_owner` LOOKED like a hard dependency (created by step 1,
+--     absent from main's other 117 migrations) and is never called by step 2. Ledger #263.
+-- ════════════════════════════════════════════════════════════════════════════════════════════════
+--
 -- APPLY ORDER (it matters, and the guard below enforces it rather than trusting it):
 --   1. 20260902_vendor_identity_and_preference.sql        (creates `vendors`)
 --   2. 20260902_receipt_line_edit_and_vendor_preference.sql (creates `vendor_preferences`)
