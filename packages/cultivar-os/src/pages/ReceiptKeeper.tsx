@@ -165,6 +165,9 @@ export function ReceiptKeeper() {
   // (the Golden Rule). Correcting a misread number belongs to the record's ONE edit surface,
   // /receipts/:id (E1) — which is why the field is NOT locked in systemManagedFields.ts.
   const [receiptNumber, setReceiptNumber] = useState<string | null>(null);
+  // Set only when the save fell back because 20260903c is not applied yet — drives an honest
+  // notice rather than letting a read number vanish without a word.
+  const [receiptNumberDropped, setReceiptNumberDropped] = useState(false);
 
   // Invoice-shape + infer-then-confirm router state (Wave 2)
   const [invoice, setInvoice]           = useState<InvoiceFields>(EMPTY_INVOICE);
@@ -481,7 +484,27 @@ export function ReceiptKeeper() {
       ? parseFloat(fields.amount) !== amountOriginal
       : null;
 
-    const { data, error } = await supabase.from('receipts').insert({
+    // 🔴 THE CAPTURE MUST NOT DEPEND ON WHEN THE MIGRATION IS APPLIED (2026-09-03).
+    // MEASURED against the live database before this guard existed: an INSERT carrying
+    // `receipt_number` while 20260903c is unapplied is REJECTED WHOLE — PostgREST refuses it at
+    // the schema cache, `PGRST204: Could not find the 'receipt_number' column of 'receipts'`,
+    // before the database is reached. The identical insert WITHOUT the field got as far as the
+    // FK check (23503), which is what proves the column — not the payload — is the blocker.
+    // So the field does NOT degrade to "dropped": it takes the ENTIRE SAVE DOWN WITH IT, and an
+    // owner capturing a receipt in the window between this deploy and the apply would simply be
+    // told "Failed to save receipt".
+    //
+    // That is a deploy-ORDER dependency, and §6 r6 ("integration failure never blocks an order")
+    // plus the Golden Rule both say the capture wins. So the write is OPTIMISTIC AND SELF-HEALING:
+    // try with the column, and on PGRST204 alone retry once without it. The moment David applies
+    // the migration the first attempt succeeds and the fallback goes cold on its own — no second
+    // deploy, no coordination, and no window in which capture is broken.
+    //
+    // ⚠️ THE FALLBACK IS NOT SILENT. Losing the number quietly would be exactly the defect #257
+    // fixed for quantity/unit_price/sku — read, then thrown away without saying so. It emits a
+    // [TRACE:RECEIPT] line naming the reason, and `receiptNumberDropped` drives an honest notice
+    // on the confirmation screen (D-9: the owner is told the number was read but not stored).
+    const receiptRow: Record<string, unknown> = {
       id:                      receiptId,
       business_id:             businessId,
       uploaded_by:             user.id,
@@ -502,7 +525,18 @@ export function ReceiptKeeper() {
       reconcile_overridden_at: opts.overriddenAt ?? null,
       reconcile_delta:         rs.status !== 'no_lines' ? Math.round(rs.delta * 100) / 100 : null,
       header_amount_edited:    headerAmountEdited,
-    }).select('id').single();
+    };
+
+    let { data, error } = await supabase.from('receipts').insert(receiptRow).select('id').single();
+
+    // The ONLY error this retries is the missing column, and only when we actually sent one.
+    // Any other failure (FK, RLS refusal, network) is a real failure and is reported as one.
+    if (error?.code === 'PGRST204' && receiptNumber !== null) {
+      if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] receipt_number column not live (PGRST204) — retrying without it; the number was READ but will NOT be stored:', receiptNumber);
+      setReceiptNumberDropped(true);
+      const { receipt_number: _omitted, ...withoutNumber } = receiptRow;
+      ({ data, error } = await supabase.from('receipts').insert(withoutNumber).select('id').single());
+    }
 
     if (error) {
       console.error('[TRACE:RECEIPT] DB insert error:', error.message);
@@ -652,6 +686,7 @@ export function ReceiptKeeper() {
     setFields({ vendor: '', date: '', amount: '', category: '' });
     setSavedReceiptId(null);
     setReceiptNumber(null);
+    setReceiptNumberDropped(false);
     setLineItems([]);
     setLineItemsOriginal(null);
     setAmountOriginal(null);
@@ -1231,6 +1266,15 @@ export function ReceiptKeeper() {
               <button style={{ ...BTN_GHOST, marginBottom: 8 }} onClick={() => navigate('/delivery-schedule')}>
                 View scheduled deliveries →
               </button>
+            )}
+            {/* 🔴 D-9: the number was READ and NOT STORED, and the owner is told so rather than
+                left to discover it. Appears only in the window before 20260903c is applied. */}
+            {receiptNumberDropped && (
+              <div style={{ fontSize: '0.8125rem', color: '#92400e', background: '#fef3c7', borderRadius: 8, padding: '8px 12px', marginBottom: 8 }}>
+                The receipt was saved, but its invoice number{receiptNumber ? ` (${receiptNumber})` : ''} could not be
+                stored — that column is not live on this database yet. Everything else was kept. The number is still
+                on the photo, and it will be captured normally once the update is applied.
+              </div>
             )}
             <div style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: 24 }}>
               {savedReceiptId && <span style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{savedReceiptId.slice(0, 8)}…</span>}
