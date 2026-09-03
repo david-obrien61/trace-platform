@@ -25,7 +25,18 @@
  *   aggregate (by construction), and labor + other === poolKnownMonthly / capital === capexKnown
  *   (the tree totals). A penny-level divergence (seam-merged dup) is surfaced, never hidden.
  *   SCOPE FENCE: read-only — no inline edit, no reassign, no project-assignment (the banked
- *   /assets gap). Receipt deep-link (/receipts/:id) does not exist yet → 🟡 links to /receipts.
+ *   /assets gap).
+ *   ✅ **CORRECTED 2026-09-03 — THIS LINE READ "Receipt deep-link (/receipts/:id) does not exist
+ *   yet → 🟡 links to /receipts" WHILE THE CODE 170 LINES BELOW IT ALREADY NAVIGATED TO
+ *   `/receipts/${receiptId}`.** The route shipped (`router.tsx` → `<Route path="/receipts/:id"
+ *   element={<ReceiptDetail />} />`) and `openReceipt` was wired to it; the header was never
+ *   updated. A file's own header contradicting its own body is R-26 at the shortest possible
+ *   range, and it is the second record found saying this route does not exist — the other is
+ *   CLAUDE.md tech-debt #145. **Current behaviour: deep-links to `/receipts/:id` when the cost
+ *   item carries a `receipt_id`, and falls back to `/receipts` when it does not** — because
+ *   without one there is nothing to deep-link TO, and `/receipts/undefined` would render a
+ *   failed read. That fallback is the remaining 🟡, and it is a DATA gap (tech-debt #144: the
+ *   `cost_objects.receipt_id` seam is populated 0 of 5), not a routing one.
  *
  *   NO pricing / margin / N / sensitivity here (D-14: cost truth ≠ price strategy). Phase 2
  *   adds the pricing layer (settable N + margin + cross-branch carve-out). Per Surface

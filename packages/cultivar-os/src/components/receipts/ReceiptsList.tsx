@@ -1,5 +1,5 @@
 // ============================================================
-// ReceiptsList — the receipts that have been captured, newest first.
+// ReceiptsList — the receipts that have been captured, newest DOCUMENT DATE first (G9).
 //
 // PURPOSE:      /receipts could capture and could not show. Seventeen receipts exist at LAWNS,
 //               six of them captured on one afternoon, and NOTHING rendered them — so a capture
@@ -173,6 +173,18 @@ export function ReceiptsList({ businessId, refreshToken }: { businessId: string 
       .from('receipts')
       .select(RECEIPTS_SELECT, { count: 'exact' })
       .eq('business_id', businessId)
+      // 🔴 G9 — ordered by the DOCUMENT's date, not the capture timestamp (David, 2026-09-03).
+      // `created_at` is the tiebreak, not the key. The display order is recomputed by
+      // `compareReceiptsForDisplay` in the model where a probe can reach it; this ordering is
+      // what decides WHICH rows a capped page contains.
+      //
+      // ⚠️ `nullsFirst: true` IS DELIBERATE AND IS ABOUT THE CAP, NOT ABOUT THE DISPLAY. A row
+      // whose date the OCR failed to read is the row most needing attention; sending undated
+      // rows to the bottom would make them the first dropped once the tenant passes 100
+      // receipts — rebuilding, at the cap, the invisibility this whole surface was built to
+      // fix. The client then places them by capture day. Not live at 17 rows; named because it
+      // becomes live silently.
+      .order('date', { ascending: false, nullsFirst: true })
       .order('created_at', { ascending: false })
       .limit(RECEIPTS_PAGE_LIMIT);
 

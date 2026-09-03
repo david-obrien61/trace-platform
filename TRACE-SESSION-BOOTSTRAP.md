@@ -78,6 +78,17 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🔴 UI STANDARD — THE STANDARD OUTRANKS THE PROMPT (2026-09-03, ledger #265, R-73 · R-74)
+
+- 🟡 **`/receipts` SORT CHANGED — G9, BUILDER-COMPLETE, OWNER-PROOF OWED.** Ordered by **`receipts.date`, the date on the document**, not `created_at`. On LAWNS's rows they disagree (07-02 captured after 07-29), so **the visible row order moves**. → `receiptsList.ts` · `ReceiptsList.tsx` · probe `E7` proven red against the old sort.
+- 🔴 **`receipts-view` CARD 1 flipped `covered` → `owed`** (OP-14 cl.3) — board now **9 covered · 1 owed · 1 needs-test**. **The discriminating step: bwi 07-29 must appear ABOVE bwi 07-02.** Rides the same one print of `/receipts` as six other cards.
+- 🟢 **DIVERGENCE CAP LIVE** — `npm run verify:ui-divergence`. A bespoke record-list surface declares its divergence **clause by clause**; the clause list is **derived from `ui-control-standards.md`**, so adding a clause invalidates every declaration until re-answered. Proven red 7 ways. → `scripts/verify-ui-standard-divergence.mjs` · `docs/decisions/ui-standard-divergences.json`
+- 🔴 **`ui-standards.html` RENDERS 3 OF THE STANDARD'S 6 SECTIONS — its own build, David authorises.** 11 clauses defined and rendered nowhere (`G9, F4, E1–E6, S1, R1, R2`); **E1 (*one record, one edit surface*) is the clause that answers modal-vs-route and is not on the board a prompt-writer would check.** Ratcheted at 11; when the reader lands it goes to 0 and the cap locks it.
+- ⚠️ **23 bespoke surfaces are UNDECLARED AND UNAUDITED** — not found wanting, not looked at. Next sweep. ⚠️ **G9 unaudited against `DataSheet`'s consumers** (inventory / assets / customers).
+- ✅ **THREE STALE RECORDS CORRECTED:** tech-debt **#145** (said *"no `/receipts/:id`"* while the route was shipped, boarded and wired) · `ProjectCostDrillIn.tsx:28` (same claim, **170 lines above the code that uses the route**) · `ui-control-standards.md` §6 (read `DRAFT — DAVID RULES` eleven days after the ruling that settled it). ✏️ **`built-inventory.md` had #145 right the whole time; the two records a prompt-writer reads did not.**
+- 📄 **The report: `docs/decisions/2026-09-03-ui-standard-divergence-report.md`** — filed as a document, not reported in chat (#264's own finding).
+
+
 ### 🔴 MIGRATIONS — WHAT DAVID CAN APPLY, IN ORDER (measured 2026-09-03, ledger #262)
 
 **What is visible in a `main` checkout, dated 2026-09:** exactly three, and **all three belong to

@@ -50,7 +50,8 @@
 //               Otherwise pure — no React, no Supabase, no DOM, no clock. A render condition
 //               inside a `.tsx` cannot be asserted (tech-debt #134), so every decision lives here.
 //
-// OUTPUTS:      RECEIPTS_SELECT · RECEIPTS_PAGE_LIMIT · receiptRowModel · receiptListModel ·
+// OUTPUTS:      RECEIPTS_SELECT · RECEIPTS_PAGE_LIMIT · receiptSortKey · compareReceiptsForDisplay ·
+//               receiptRowModel · receiptListModel ·
 //               countLabel · bankedVerdict · captureOutcome.
 // ============================================================
 
@@ -438,16 +439,55 @@ export interface ReceiptListModel {
 }
 
 /**
- * `rows` arrive newest-first from the query (`.order('created_at', {ascending:false})`) and the
- * order is asserted here as well rather than trusted: the reason a list is wanted at all is that
- * a day's captures were invisible, and the newest ones are the ones being looked for.
+ * 🔴 G9 — THE SORT KEY IS THE DOCUMENT'S OWN DATE, NOT THE ROW'S CAPTURE TIMESTAMP.
+ *
+ * David's ruling, 2026-09-03, and recorded at `docs/standards/ui-control-standards.md` G9:
+ * *"DEFAULT SORT IS THE MOST RECENT RECORD DATE FIRST: the date the document or event itself
+ * carries, NOT the row's creation timestamp."*
+ *
+ * ⚠️ THE TWO DISAGREE ON THE LIVE DATA, WHICH IS WHY THIS IS A BEHAVIOUR CHANGE AND NOT A
+ * TIDY-UP. `receipts.date` is what the paper says; `created_at` is when somebody photographed
+ * it. LAWNS captured the **2026-07-02** bwi invoice AFTER the **2026-07-29** one, so the previous
+ * `created_at` order put July 2nd above July 29th — a list of invoices that contradicted the
+ * invoices.
+ *
+ * A ROW WITH NO DOCUMENT DATE IS POSITIONED BY ITS CAPTURE DAY AND SAYS SO ON ITS FACE. The
+ * fallback buys a POSITION, never a displayed value: `dateText` still reads "No date recorded"
+ * (D-9 / A9 — absent is not empty). The alternative considered and rejected was sending undated
+ * rows to the bottom: the row whose date OCR failed is the one most needing attention, and the
+ * reason this list exists at all is that captures were invisible. Burying them rebuilds the
+ * defect.
+ *
+ * The key is sliced to 10 characters so the two scales are comparable at all: `date` is
+ * `YYYY-MM-DD` and `created_at` is a full ISO timestamp, and comparing them raw would rank a
+ * dated row against a timestamped one by string length rather than by time.
+ *
+ * The order is computed HERE and asserted by a probe rather than trusted to the query, because a
+ * `.order()` in a `.tsx` cannot be asserted (tech-debt #134) and this one is now a ruling.
  */
+export function receiptSortKey(row: Pick<RawReceiptRow, 'date' | 'created_at'>): string {
+  return String(row.date ?? row.created_at ?? '').slice(0, 10);
+}
+
+/**
+ * Descending by document date, tie-broken by capture time — two receipts dated the same day are
+ * ordered by which was captured later, which is the only further fact the row carries.
+ */
+export function compareReceiptsForDisplay(
+  a: Pick<RawReceiptRow, 'date' | 'created_at'>,
+  b: Pick<RawReceiptRow, 'date' | 'created_at'>,
+): number {
+  const byDate = receiptSortKey(b).localeCompare(receiptSortKey(a));
+  if (byDate !== 0) return byDate;
+  return String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''));
+}
+
 export function receiptListModel(
   raw: RawReceiptRow[],
   total: number | null,
   limit = RECEIPTS_PAGE_LIMIT,
 ): ReceiptListModel {
-  const sorted = [...raw].sort((a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')));
+  const sorted = [...raw].sort(compareReceiptsForDisplay);
   return {
     rows: sorted.map(receiptRowModel),
     countText: countLabel(sorted.length, total, limit),

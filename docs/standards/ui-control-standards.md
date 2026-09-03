@@ -1,6 +1,6 @@
 # UI Control Standards — the bar every platform control meets
 
-**Last updated: 2026-07-29**
+**Last updated: 2026-09-03**
 **Status: BINDING (CLAUDE.md §6 rules 13–15). Rendered board: [/ui-standards.html](../../ui-standards.html) (pure renderer of the compliance manifest).**
 
 This is the **bar**, not a found-issue log. Each entry states the industry-standard behavior a
@@ -35,8 +35,13 @@ Every grid rendering business rows MUST have:
 | G6 | **Search / filter** — a global text search + (where a status field exists) a quick status filter. | Every CRM/inventory list. | Scanning by eye doesn't scale past a screenful. |
 | G7 | **Density for 100+ rows** — compact rows + a bounded scroll box that handles hundreds of rows without paginating away context. | Data-grid density modes. | The real inventory is 111 rows today and grows. |
 | G8 | **Per-cell inline edit with a clear editable-vs-readonly affordance** — editable cells look editable (input chrome); non-editable cells are visibly distinguished (see §3). | Spreadsheet in-cell editing. | An edit surface must not make you guess which cells accept input. |
+| G9 | 🔴 **DEFAULT SORT IS THE MOST RECENT RECORD DATE FIRST: the date the document or event itself carries, NOT the row's creation timestamp**, unless a clause here names another. Where the record's own date is absent, the row falls back to its capture timestamp for POSITION and **says on its face that it has no date** — a missing date is never silently rendered as a real one (D-9 / A9, *absent is not empty*). | Every records list a business operator reads — a bank statement, a ledger, an invoice register — is ordered by the date on the paper. | 🔴 **The two differ, and the difference is not cosmetic: the owner reasons in DOCUMENT time and the database records CAPTURE time.** On LAWNS's live 17 receipts they disagree — the **2026-07-02** bwi invoice was captured AFTER the **2026-07-29** one — so a `created_at` sort puts July 2nd above July 29th and the list contradicts the paper it is a list of. Ruled by David 2026-09-03. |
 
 **Current implementation:** `DataSheet.tsx` implements G1–G8. G1 (sticky `<thead>` + box-shadow underline that survives `border-collapse`), G2 (bounded `overflow:auto` + `maxHeight:calc(100vh-280px)` scroll box), G3 (leading `frozen:true` run pinned `position:sticky;left:…` with cumulative offsets + right-edge shadow), G4 (`sortable`/`sortVal` + arrow), G5 (`Columns` menu over `hideable` cols), G6 (global search + optional `statusFilter`), G7 (compact rows in the bounded box), G8 (inline `TextCell`/`NumberCell`/`AmountCell`/`SelectCell` + the §3 lock affordance).
+
+🔴 **G9 IS NEW (2026-09-03) AND IS NOT YET MET ANYWHERE — it is a KNOWN RED, not an assumed green.** It landed as a ruling, so every list surface now owes an answer to it. First application: `ReceiptsList` moved from `created_at` to `receipts.date` in the same pass that recorded the clause (③ follows ①), and **its owner-test CARD 1 flipped `covered` → `owed`** because the surface moved — the prior proof read *"newest capture first"* and cited capture timestamps, so it proved the ordering this clause replaces. `DataSheet`'s own consumers (inventory / assets / customers) are **unaudited against G9** and are the next sweep.
+
+**⚠️ THE QUESTION G9 CLOSES, RECORDED SO IT DOES NOT RETURN: "unreviewed-first" IS NOT AN ALTERNATIVE TO THIS — IT IS AN UNBUILDABLE ASK.** It was put to David on 2026-09-03 as a choice against newest-first. **It needs a column that does not exist.** Measured live 2026-09-01 and recorded at [R-50]: *"`receipts` has 21 columns and NONE of `origin`/`shape`/`source`/`doc_type`/`document_type`/`kind`"* — and `reconcile_status` is the verdict the platform **banked at capture time**, not a review state a human sets. There is no reviewed/unreviewed bit on any receipt. **A sort order cannot be chosen over a field the table does not have**, and offering it as an option invites a ruling that no build can honour.
 
 **Known gap (on the board):** G7 is met by a bounded scroll box, NOT row virtualization — fine at 111 rows and into the low thousands; if a grid ever holds tens of thousands, virtualization becomes the next rung (deferred, standard-by-value — not worth it at current scale).
 
@@ -152,7 +157,27 @@ mechanical half is the sweep: when a section gains a row state it did not have, 
 
 ## 6. DATA READS (a failed read must not be indistinguishable from an empty one)
 
-🔴 **DRAFT — 2026-08-22. DAVID RULES. Written before any code that would need it.**
+✅ **BINDING — ruled 2026-08-23, recorded here 2026-09-03. It read `DRAFT — DAVID RULES` for eleven days AFTER the ruling that settled it, and that staleness is itself the finding.**
+
+David ruled it on **2026-08-23**, and the ruling did not merely approve the draft — it changed its
+form: *"**READ HONESTY IS A TYPE, NOT A DISCIPLINE — THE DRAFT RULE IS RULED IN SHAPE, AND THE
+SHAPE IS A DISCRIMINATED UNION**"* (`docs/RULINGS.md`, 2026-08-23). A rule enforced by the type
+system cannot be forgotten by a tired author; a rule enforced by discipline can.
+
+**It has SHIPPED in that shape since 2026-09-01** — `ReceiptsList.tsx` carries the three-arm union
+verbatim (`{phase:'loading'} | {phase:'failed';message} | {phase:'loaded';model}`), with the reason
+written beside it: *"a failed read that renders as 'no receipts' is a confident false statement
+about the tenant's data."* The screen renders **"Could not read receipts — … This is a failed read,
+NOT an empty list: how many receipts exist is unknown right now."**
+
+🔴 **A DOC SECTION STILL READING `DRAFT — DAVID RULES` AFTER BOTH THE RULING AND THE BUILD THAT
+SATISFIES IT IS [R-26] IN OUR OWN CORPUS** — a written declaration nobody checked against reality,
+steering a decision. It would have told the next build that read-honesty was an open question it
+could answer locally. **The R1/R2 counts below are UNCHANGED and still OWED** — 30 confirmed
+instances, 9 HTTP-body sites, 7 auth reads — binding the rule does not repair the 30.
+
+⚠️ **THE AUTH CARVE-OUT IS NOT RULED AND IS NOT SWEPT UP BY THIS** — see the sharp-edge note at the
+end of this section. Binding R1/R2 does **not** decide `callerPermission.ts`.
 
 **R1 — A READ WHOSE ERROR PATH RETURNS A VALUE MUST KEEP "FAILED" DISTINGUISHABLE FROM "EMPTY."**
 
@@ -225,3 +250,13 @@ Per-grid coverage (locks the field only where that grid shows it as a column):
 2. **The compliance board is glanceable.** [/ui-standards.html](../../ui-standards.html) renders control × standard from a manifest, so remaining gaps (escape/focus-trap/backdrop) are visible, not buried.
 3. **New controls are measured here.** A new grid, modal, or form is checked against §1/§2/§3/§4 in its build (CLAUDE.md §1.6 gate item 5 — UI/modals). A control below the bar is a KNOWN amber/red row, reconciled or explicitly deferred — never a silent gap.
 4. **A new edit surface is measured against §4 BEFORE it is written.** The question is not "is this component good?" but "does this record already have an edit surface?" — if it does, mount that one (E1). A build that adds a second editor for a record already covered is re-derivation, and it is caught here or not at all.
+
+5. 🔴 **THE ORDER OF OPERATIONS — THE DESIGN DOC MOVES FIRST, THE WIDGET MOVES ONCE, THE SURFACES INHERIT (David, 2026-09-03).** When a display question is open, it is answered in exactly this order:
+
+   **① THIS DOC IS UPDATED → ② THEN THE SHARED DISPLAY WIDGET IS UPDATED, ONCE → ③ SURFACES USE THE WIDGET.**
+
+   **NOT:** each surface reasoning about the question separately. **This is the code-reuse rule (CLAUDE.md §6 r8, rule of three) applied to DESIGN** — the same operation settled in one place instead of drifting into near-duplicate answers per screen — and it is why the same display question must not be re-asked once it has been answered here.
+
+   **AND THE CLAUSE THAT GIVES IT TEETH — A BUILD SPEC IS NOT A HIGHER AUTHORITY THAN THIS DOCUMENT.** Where a build prompt contradicts a filed standard, **the STANDARD WINS and the contradiction goes back to David as a question.** It is **never silently built either way** — not to the prompt, and not to the standard while the prompt says otherwise. A prompt that re-asks a settled display question is itself the defect: the answer is to amend the prompt and rerun it, not to build around it. (The instance: 2026-09-03, a receipts prompt asked David to re-rule list ordering and modal-vs-route, both of which the corpus had already settled — see the divergence report of that date.)
+
+   ⚠️ **THE COROLLARY, AND IT IS THE HALF THAT ACTUALLY COSTS SOMETHING: WHERE THIS DOC IS SILENT, IT IS AMENDED BEFORE THE WIDGET IS TOUCHED — NOT AFTER, AND NOT INSTEAD.** A question this doc does not answer is a **gap in the standard**, and answering it in a component is how the next surface comes to re-derive it. Silence is not permission to decide locally.

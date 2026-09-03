@@ -14,9 +14,9 @@ capture half has shipped since 2026-06-11 and has never had a row. Flagged for D
 Joins only: **3.5** delivery and the orders roster.
 **Story:** `user_stories.md` → *I captured a receipt — show me it landed, and show me what it turned into*
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 10 of 11 covered** (0 `owed` · 1 `needs-test`) — **flipped 2026-09-03 from David's live run of 2026-09-02 on build `7952cb1`** (ledger #261).
+**Board: 9 of 11 covered** (**1 `owed`** · 1 `needs-test`) — flipped 2026-09-03 from David's live run of 2026-09-02 on build `7952cb1` (ledger #261), then 🔴 **CARD 1 flipped BACK `covered` → `owed` the same day when G9 moved the sort off `created_at` onto the document date.** The 09-02 proof cited capture timestamps and its step read *"newest capture first"*; that ordering no longer exists. **This is OP-14 clause 3 working as intended, not a regression in the record** — a green check on a moved surface asserts a proof nobody performed.
 🔴 **CARD 8 is `covered` with its FAILURE preserved** — it failed, #257 fixed it, and the failure is not overwritten.
-📄 **NINE OF THESE WERE PROVEN FROM PRINTED PDFs OF `/receipts`, NOT FROM LIVE INTERACTION.** **CARDS 1, 2, 3, 4, 5, 7 and 11 are all provable from ONE print of `/receipts`** — take the print, and those seven settle together. CARD 6 (a capture with no reload) and CARD 9 (three loads at three times) need interaction; CARD 10 needs an account that does not exist.
+📄 **NINE OF THESE WERE PROVEN FROM PRINTED PDFs OF `/receipts`, NOT FROM LIVE INTERACTION.** **CARDS 1, 2, 3, 4, 5, 7 and 11 are all provable from ONE print of `/receipts`** — take the print, and those seven settle together. ⚠️ **CARD 1 is owed again and rides that same print** — one new print of `/receipts` re-settles it, so the re-proof costs nothing beyond taking the print. CARD 6 (a capture with no reload) and CARD 9 (three loads at three times) need interaction; CARD 10 needs an account that does not exist.
 **DEVICE:** CARDS 1–5 and 7–11 are `DEVICE: desktop` — this is a reconcile surface, and reconcile is desktop (capture=mobile / reconcile=desktop). **CARD 6 is `DEVICE: phone`** and is provable **without a console**.
 
 > ⛔ **NO MIGRATION GATE.** This build applies none. It adds no table, no column, no policy, no
@@ -31,19 +31,43 @@ Joins only: **3.5** delivery and the orders roster.
 
 ---
 
-## CARD 1 — the receipts are on screen at all, newest first
-**STATUS:** covered · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** 2026-09-02
-**PROVEN 2026-09-02 on build `7952cb1`** — 17 rows, newest first: 15:51:49 at the top down to 08-26 20:50, **no inversions**. Evidence: a printed PDF of `/receipts`.
+## CARD 1 — the receipts are on screen at all, newest DOCUMENT DATE first
+**STATUS:** owed · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** — (reset 2026-09-03)
+
+🔴 **FLIPPED `covered` → `owed` 2026-09-03 BECAUSE THE SURFACE MOVED UNDER THE PROOF, NOT BECAUSE
+THE PROOF WAS BAD.** OP-14 clause 3: *changing a surface flips `covered` → `owed`* — a green check
+on a moved surface asserts a proof nobody performed.
+
+**WHAT THE PRIOR RUN ACTUALLY PROVED, PRESERVED VERBATIM:** *"PROVEN 2026-09-02 on build `7952cb1`
+— 17 rows, newest first: 15:51:49 at the top down to 08-26 20:50, **no inversions**. Evidence: a
+printed PDF of `/receipts`."* ⚠️ **READ THE EVIDENCE: `15:51:49` AND `08-26 20:50` ARE CAPTURE
+TIMESTAMPS, and step 2 read *"newest CAPTURE first"*.** That run proved capture order — correctly,
+against the build it was run on — and capture order is exactly what **G9** has now replaced. The
+proof is not wrong; it is a proof of the previous behaviour.
+
+**WHAT CHANGED:** the list is now ordered by **`receipts.date`, the date on the document**, with
+capture time as the tiebreak only (David's G9 ruling, 2026-09-03). On LAWNS's own rows these
+disagree — the **2026-07-02** bwi invoice was captured AFTER the **2026-07-29** one — so **the
+visible row order changes**, which is the whole point of re-running this card rather than assuming
+it still passes.
+
 Open `/receipts` as the owner.
 
 1. Above the capture zone there is a card headed **Receipts captured**.
-2. The rows read, top to bottom, newest capture first.
+2. 🔴 The rows read, top to bottom, **newest date ON THE DOCUMENT first** — the `date` column shown
+   in each row, NOT the `captured` timestamp beside it.
 3. Each row carries **vendor · date · amount · category · when it was captured**.
+4. 🔴 **THE DISCRIMINATING CHECK — do this one specifically, it is the only step that can tell the
+   two orders apart.** Find the **bwi 2026-07-29** row and the **bwi 2026-07-02** row. **07-29 must
+   appear ABOVE 07-02.** Their `captured` timestamps run the OTHER way, so if 07-02 is on top the
+   list is still on capture order and the change did not land.
 
-**PASS:** the list is there and the newest capture is at the top.
+**PASS:** the list is there, the newest **document date** is at the top, and 2026-07-29 sits above
+2026-07-02.
 🔴 **This is the whole build.** Seventeen receipts have existed and nothing has ever rendered them; on
 1 September eight were captured in one afternoon and nobody could see them.
-**FAIL:** no list, or the oldest capture is first.
+**FAIL:** no list · the oldest date is first · **or 07-02 appears above 07-29** (capture order,
+unchanged) · or a row with no date shows a date anyway.
 
 ---
 

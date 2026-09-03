@@ -31,6 +31,7 @@ import { join } from 'node:path';
 import {
   RECEIPTS_SELECT, RECEIPTS_PAGE_LIMIT,
   bankedVerdict, captureOutcome, receiptRowModel, receiptListModel, countLabel, listVisibleForStep,
+  receiptSortKey, compareReceiptsForDisplay,
   type RawReceiptRow, type RawOrderRow,
 } from './receiptsList';
 
@@ -234,13 +235,57 @@ const bwiOrder: RawOrderRow = {
     '🔴 E5c (negative): an unparseable delta yields no readout rather than a reconstructed figure built on a fabricated zero');
   ok(receiptRowModel(R({ category: null })).categoryText === 'No category', 'E6 (negative): an absent category says so');
 
-  // E7 — newest first. The reason the list is wanted at all is that a day's captures were invisible.
+  // ══ E7 — G9: THE DOCUMENT'S DATE ORDERS THE LIST, NOT THE CAPTURE TIMESTAMP ════════════════
+  //
+  // 🔴 THE OLD E7 COULD NOT HAVE CAUGHT THIS AND IS THE REASON THIS BLOCK IS WRITTEN THE WAY IT
+  // IS. It varied `created_at` ALONE across three rows that all carried the fixture's single
+  // `date`, so the two candidate orders agreed on every input it supplied — it would have gone
+  // GREEN against a capture-time sort and GREEN against a document-date sort alike. R-33: a
+  // check that cannot disagree is not a check. The inputs below are built so the two orders
+  // DISAGREE, which is the only construction that tests which one is implemented.
+  //
+  // The dates are LAWNS's own: the 2026-07-02 bwi invoice was captured AFTER the 2026-07-29 one.
+  const g9 = receiptListModel([
+    R({ id: 'jul02-captured-last',  date: '2026-07-02', created_at: '2026-09-01T15:51:00.000Z' }),
+    R({ id: 'jul29-captured-first', date: '2026-07-29', created_at: '2026-08-26T20:50:00.000Z' }),
+  ], 2);
+  ok(g9.rows.map(r => r.id).join(',') === 'jul29-captured-first,jul02-captured-last',
+    '🔴 E7: G9 — the DOCUMENT date orders the list. These two rows are ordered one way by `date` and the OPPOSITE way by `created_at`, so this assertion fails against a capture-time sort — which is what the previous probe could not do');
+
+  // E7b — the tiebreak, and it is the ONLY thing `created_at` still decides.
+  const tie = receiptListModel([
+    R({ id: 'same-day-early', date: '2026-07-29', created_at: '2026-08-26T08:00:00.000Z' }),
+    R({ id: 'same-day-late',  date: '2026-07-29', created_at: '2026-08-26T20:50:00.000Z' }),
+  ], 2);
+  ok(tie.rows.map(r => r.id).join(',') === 'same-day-late,same-day-early',
+    'E7b: two receipts dated the same day fall back to capture time, later first');
+
+  // E7c — an undated row is POSITIONED by its capture day and still SAYS it has no date. The
+  // fallback buys a position, never a displayed value (D-9 / A9 — absent is not empty).
+  const undated = receiptListModel([
+    R({ id: 'dated-june',  date: '2026-06-01', created_at: '2026-06-01T09:00:00.000Z' }),
+    R({ id: 'no-date-aug', date: null,         created_at: '2026-08-26T20:50:00.000Z' }),
+  ], 2);
+  ok(undated.rows.map(r => r.id).join(',') === 'no-date-aug,dated-june',
+    'E7c: an undated row is placed by its capture day rather than dropped to the bottom — the row whose date the OCR missed is the one needing attention');
+  ok(undated.rows[0].dateText === 'No date recorded',
+    '🔴 E7d (negative): the capture-day fallback is a POSITION only — the undated row must still say it has no date, never render its capture time as though it were the document date');
+
+  // E7e — the comparator is total and stable on rows carrying neither date. It must not throw
+  // and must not invent an order that depends on input sequence.
+  ok(compareReceiptsForDisplay({ date: null, created_at: null }, { date: null, created_at: null }) === 0,
+    'E7e (negative): two rows with no date and no capture time compare EQUAL rather than throwing or guessing');
+  ok(receiptSortKey({ date: '2026-07-29', created_at: '2026-09-01T15:51:00.000Z' }) === '2026-07-29',
+    'E7f: the sort key is the document date when one exists');
+  ok(receiptSortKey({ date: null, created_at: '2026-09-01T15:51:00.000Z' }) === '2026-09-01',
+    'E7g: the sort key falls back to the capture DAY — sliced to 10 chars so a YYYY-MM-DD date and a full ISO timestamp are comparable at all, rather than ranked by string length');
+
   const list = receiptListModel([
-    R({ id: 'old', created_at: '2026-08-26T20:50:00.000Z' }),
-    R({ id: 'new', created_at: '2026-09-01T15:51:00.000Z' }),
-    R({ id: 'mid', created_at: '2026-08-27T20:39:00.000Z' }),
+    R({ id: 'old', date: '2026-06-01' }),
+    R({ id: 'new', date: '2026-08-01' }),
+    R({ id: 'mid', date: '2026-07-01' }),
   ], 3);
-  ok(list.rows.map(r => r.id).join(',') === 'new,mid,old', '🔴 E7: newest first');
+  ok(list.rows.map(r => r.id).join(',') === 'new,mid,old', 'E7h: newest document date first');
   ok(list.countText === '3 receipts', 'E8: the count reads plainly when nothing is capped');
   ok(list.emptyNote === null, 'E9 (negative): a non-empty list carries no empty note');
 
