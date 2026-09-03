@@ -137,6 +137,35 @@ usually omits.
 
 _Capture → extract (one engine) → infer type → confirm → fan-out to many destinations._
 
+### David rehearses the import on a saved copy, so Lauren can be the first to really run it
+STATUS: written
+SCOPE: platform, vertical:cultivar
+BUILD: active
+ARC: ocr-doc-routing
+MAPS-TO: 3.5
+PIECES: capture_file_export, capture_file_replay, books_findings, first_look_report
+NEEDS: nothing — written as-built (#257). The acceptance run itself is owed: Lauren drives it on LAWNS live while David watches, and every question she asks him is a defect.
+
+Lauren connects her QuickBooks and the platform says *give me a few minutes with your accounting
+information*. It reads her products, her customers and her invoice history — counting first, and
+**refusing to present a partial list as a list**. Then it tells her, in her own words and with the
+denominator attached every time, what is in there: where there is money in it, what could cause
+trouble later, and what shape her business is. She presses **Visualize** and gets a report she can
+print and hand to her accountant, which asks her for nothing at all. Then she presses Ingest — and
+she can press it with **every finding unresolved**, because a finding that could stop her is a
+finding that makes her phone David at 4pm on a Friday.
+
+🔴 **THE STORY IS REALLY ABOUT WHO GOES FIRST.** David cannot run this on LAWNS before she does — if
+he does, there is nothing left for her to see, and *can a customer do this* is the only question the
+build is trying to answer. So he rehearses on a different company, loading **LAWNS's own saved file**:
+same data, different destination. That is why the read-back exists at all, and why it lives on the
+accounting page rather than a dev route — a rehearsal on different screens rehearses nothing.
+
+⚠️ **AND IT IS A TEST FACILITY, LOUDLY.** The file door is dashed, amber, and says in its first four
+words what it is for, because a file loader that looks like the rest of the page becomes how people
+import things. A read that came from a file says so wherever it is shown, since everything below it
+is shape-identical to a live pull by design.
+
 ### Snap a document, and it goes where it belongs
 STATUS: written
 SCOPE: vertical:cultivar, platform

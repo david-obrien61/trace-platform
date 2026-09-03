@@ -349,3 +349,114 @@ being offered. The point is the opposite: a capability you care about is deliber
 and you should know which one.
 **FAIL:** no note · a note below the buttons (a caveat read after the action is not a caveat) · any
 paraphrase · or a note that is still there once writes are on.
+
+---
+
+## CARD 16 — 🔴 the file door opens, and it is visibly a test facility
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+
+On **Test Dave's**, Settings → the QuickBooks accounting panel.
+
+1. Below the three green read buttons there is an **amber, dashed** box whose first line reads
+   **TEST FACILITY — load a saved read instead of connecting**.
+2. It says, in its own words, that QuickBooks is **not contacted**, that nothing is imported, and
+   that **it is not a way to bring data in**.
+3. Choose a `qbo-*.json` file saved earlier from LAWNS. It loads, and a green line names how many
+   records came in and from which file.
+4. 🔴 **An amber strip appears above the findings:** *"Showing a SAVED read loaded from a file — not
+   a live pull from QuickBooks."*
+
+**PASS:** all four.
+🔴 **STEP 4 IS THE ONE THAT MATTERS AND IT IS EASY TO SKIM PAST.** Everything below the read is
+shape-identical to a live pull *by design* — that is the whole point of the harness. Which means
+that without that strip, a rehearsal and real books are indistinguishable on screen, and somebody
+will eventually read one as the other.
+**FAIL:** the box looks like the rest of the page (a file loader that blends in becomes how people
+import things) · no strip · or the strip appears on a **live** read.
+
+---
+
+## CARD 17 — 🔴 a file that disagrees with itself is REFUSED, by name
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+
+Take a saved `qbo-invoices-*.json`, open it in a text editor, and **delete one whole page object**
+from the `pages` array (leave the header numbers alone). Save it as a copy. Load that copy.
+
+1. It is **refused**. Nothing loads — no counts, no findings, no partial list.
+2. The refusal names the problem in a sentence, with **both numbers** — what the file claims and
+   what is actually in it.
+3. The findings panel is **unchanged** from before you tried.
+
+**PASS:** all three.
+🔴 **A HALF-LOADED FILE BEHIND A WARNING IS THE FAILURE THIS CARD EXISTS TO CATCH.** A truncated
+download looks exactly like this, and a books review computed over 61% of a business's invoices is
+confidently wrong about a real company. A warning printed above a table gets read as a footnote to
+the table — which is the #229 defect arriving by post.
+**FAIL:** it loads with a warning · it loads silently · a generic "could not read that file" that
+does not say what disagreed.
+
+---
+
+## CARD 18 — 🔴 the findings are ordered by MONEY, and the money is on screen
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+
+With all three reads loaded (live or from file), look at the findings panel.
+
+1. Findings are grouped **money → risk → the shape of your business**.
+2. Inside the money group, each finding that has a dollar figure shows **"$N at stake"**, and they
+   are in **descending** order of it.
+3. A finding with **no** dollar figure shows **nothing** there — not "$0".
+4. 🔴 At the very bottom there is a section headed **What we could not work out**, and it says these
+   are neither good news nor bad.
+
+**PASS:** all four.
+🔴 **STEP 3 IS NOT A DETAIL.** "Worth nothing" and "not a money question" are different answers, and
+a $0 in that spot asserts the first when we mean the second.
+🔴 **STEP 4 IS THE MOST VALUABLE SECTION IN THE PANEL** — it is the list of questions your books
+cannot answer today. **If it is missing, that is the failure**, because a silent omission reads as a
+clean bill of health.
+**FAIL:** any group out of order · a "$0 at stake" · the not-computed section absent or interleaved
+with the real findings.
+
+---
+
+## CARD 19 — 🔴 Visualize produces something you would show your accountant
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+
+Press **Visualize**. A new tab opens with the report.
+
+1. It is headed **DATA ANALYSIS: FIRST LOOK PRIOR TO INGEST** and states the date it was generated.
+2. 🔴 It states **which corrections it reflects** — today that line reads **"no corrections"**,
+   because nothing records them yet. **A missing line is a FAIL, not a pass.**
+3. **What this is built on** names each of the three reads in your words — *your products &
+   services*, *your customers*, *your invoice history* — and each says whether it was read **in
+   full**, with its count. A read you did not run says **"not read"**.
+4. Read it end to end. 🔴 **It asks you for nothing** — no Accept, no Ingest, no button at all.
+5. Print it (⌘P → Save as PDF). It paginates without cutting a finding in half.
+6. Go back to the app. **Visualize is still there** and still works.
+
+**PASS:** all six.
+🔴 **STEP 2 AND STEP 3 ARE THE HONESTY OF THE DOCUMENT.** It outlives this session and gets emailed
+to somebody who cannot ask it a question — so a read that was never run must be **named**, not left
+out, and a report with no corrections must **say so** rather than going quiet. Absence reads as
+"none were needed".
+🔴 **AND READ IT AS A NURSERY OWNER.** If any line names a database field, a table, or an Intuit
+word (`DocNumber`, `UnitPrice`, `Invoice`), that is a FAIL.
+**FAIL:** no date · no corrections line · a walk missing rather than named · any control asking for
+a decision · jargon on the page · Visualize consumed by being pressed once.
+
+---
+
+## CARD 20 — 🔴 nothing was written, and QuickBooks is where you check
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+
+Do a full pass: load all three files, read the findings, press Visualize, print the report.
+
+1. Open **QuickBooks itself**. No new invoice. No new customer. No new item.
+2. In the app, nothing appeared in inventory, orders, customers or deliveries.
+
+**PASS:** both.
+🔴 **CHECK QUICKBOOKS, NOT OUR LOGS.** A log line saying we did not write is a claim made by the
+thing under test. This whole surface is a READ, and the only proof of that is the other system's
+own screen.
+**FAIL:** anything at all appeared in either place.

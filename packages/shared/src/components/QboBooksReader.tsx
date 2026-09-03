@@ -50,7 +50,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 import React, { useState } from 'react';
 import { authHeaders } from '../auth/authHeaders';
-import { rawCaptureFileName, QBO_ROUTE, type QboEntity } from '../quickbooks/qboRead';
+import { rawCaptureFileName, QBO_ROUTE, QBO_ENTITIES, type QboEntity } from '../quickbooks/qboRead';
 import type { QboItemRow, ItemBreakdown } from '../quickbooks/itemList';
 import type { QboCustomerRow, CustomerBreakdown } from '../quickbooks/customerList';
 import { BUNDLE_ITEM_NAMES, parseInvoiceList, type InvoiceBreakdown, type QboInvoiceRow } from '../quickbooks/invoiceList';
@@ -59,6 +59,7 @@ import { evaluateBooks, type BooksInput, type Finding } from '../quickbooks/book
 import { BooksReview } from './BooksReview';
 import { readCaptureFile, REPLAY_SOURCE } from '../quickbooks/captureReplay';
 import { projectCapture } from '../quickbooks/captureProjection';
+import { buildBooksReport, renderBooksReportHtml, type WalkState } from '../quickbooks/booksReport';
 
 // The bundle items are NAMED BY THE MODULE THAT COUNTS THEM. A second list typed into this
 // screen is a second representation of one fact (STD-011), and it is the copy that drifts — a
@@ -282,6 +283,49 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
     });
   }
 
+  // ══════════════════════════════════════════════════════════════════════════════
+  // 🔴 VISUALIZE — THE REPORT IS A PAGE, NOT A FILE, AND THAT IS A FEATURE.
+  // ══════════════════════════════════════════════════════════════════════════════
+  // A print stylesheet plus `window.print()` (the `qr/print.ts` precedent) rather than a PDF
+  // dependency. Which means it can be REGENERATED after they fix something — and the second run
+  // showing fewer findings is the best demonstration this product has, so the button stays
+  // available afterwards rather than being consumed by pressing it.
+  //
+  // ⚠️ THE DOCUMENT ASKS FOR NOTHING. No Accept, no Ingest, no script. The screen is where the
+  // decision gets made; this is what they keep and show an accountant.
+  //
+  // ⚠️ CORRECTIONS ARE PASSED AS AN EMPTY LIST BECAUSE NOTHING RECORDS THEM YET. The report
+  // then STATES that it reflects no corrections, which is true and is the honest rendering —
+  // the alternative, omitting the line, would read as "none were needed".
+  function visualize() {
+    const walks: WalkState[] = QBO_ENTITIES.map(e => {
+      const r = reads[e];
+      return {
+        entity: e,
+        read: r !== undefined,
+        expected: r?.expected_total ?? null,
+        retrieved: r?.retrieved_total ?? 0,
+        complete: r?.complete === true,
+        fromFile: r?.source === REPLAY_SOURCE,
+      };
+    });
+    const html = renderBooksReportHtml(buildBooksReport({
+      generatedAt: new Date(), walks, findings, corrections: [],
+    }));
+    console.log('[TRACE:QBO] visualize — report generated', {
+      walks_read: walks.filter(w => w.read).length,
+      measured: findings.filter(f => f.measured).length, total_rules: findings.length,
+    });
+    const w = window.open('', '_blank');
+    if (!w) {
+      // A blocked pop-up is SILENT otherwise, and the owner would conclude the button is broken.
+      setFileNote({ ok: false, text: 'Your browser blocked the report window. Allow pop-ups for this site and press Visualize again.' });
+      return;
+    }
+    w.document.write(html);
+    w.document.close();
+  }
+
   const btn: React.CSSProperties = {
     flex: 1, minHeight: 48, padding: '13px 16px',
     background: loading || !businessId ? '#e5e7eb' : GREEN,
@@ -401,6 +445,22 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
         }}>
           Showing a SAVED read loaded from a file — not a live pull from QuickBooks.
         </p>
+      )}
+
+      {/* 🔴 VISUALIZE IS OFFERED ONLY ONCE A READ EXISTS. A report over nothing would be a
+          document full of "not read", which is honest and useless — and it would teach her
+          that the button does not work. */}
+      {Object.keys(reads).length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <button onClick={visualize} style={{ ...btn, background: DARK, color: '#fff', flex: 'none', width: '100%' }}>
+            Visualize — open the first-look report
+          </button>
+          <p style={{ fontSize: '0.75rem', color: GRAY, margin: '6px 0 0', lineHeight: 1.5 }}>
+            Opens a printable report of everything read so far. Use your browser&apos;s Print
+            dialog to save it as a PDF. It asks for nothing and changes nothing — and you can
+            open it again at any time, including after importing.
+          </p>
+        </div>
       )}
 
       {/* 🔴 THE REVIEW SITS BETWEEN THE READS AND THE IMPORT PANELS BELOW, AND BESIDE THEM
