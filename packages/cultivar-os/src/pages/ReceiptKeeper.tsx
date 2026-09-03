@@ -14,6 +14,10 @@ import { ConflictDialog } from '../components/ConflictDialog';
 import { LineItemGrid } from '../components/LineItemGrid';
 import { ReceiptsList } from '../components/receipts/ReceiptsList';
 import { listVisibleForStep } from '../lib/receiptsList';
+import {
+  resolveVendor, planVendorWrite,
+  type VendorRow, type VendorAliasRow, type VendorChoice, type VendorResolution,
+} from '@trace/shared/business-logic';
 
 const TRACE_RECEIPT  = true; // [TRACE:RECEIPT] STD-003 — comment out when David says "proven"
 const TRACE_OCR      = true; // [TRACE:OCR] STD-003 — capture + device-detect path
@@ -158,6 +162,15 @@ export function ReceiptKeeper() {
   const [fields, setFields]             = useState<EditableFields>({ vendor: '', date: '', amount: '', category: '' });
   const [savedReceiptId, setSavedReceiptId] = useState<string | null>(null);
 
+  // ── VENDOR IDENTITY (2026-09-02) — resolve the captured name to a stable id at capture time.
+  //    The vendor directory is small (8 distinct strings across the entire database, measured), so
+  //    it is loaded once per capture rather than queried per keystroke. An empty or failed read is
+  //    not fatal: `resolveVendor` over an empty candidate set returns CREATE, which is the honest
+  //    answer when we cannot see what exists — it never links on incomplete information.
+  const [vendorRows, setVendorRows]     = useState<VendorRow[]>([]);
+  const [vendorAliases, setVendorAliases] = useState<VendorAliasRow[]>([]);
+  const [vendorChoice, setVendorChoice] = useState<VendorChoice>(null);
+
   // Invoice-shape + infer-then-confirm router state (Wave 2)
   const [invoice, setInvoice]           = useState<InvoiceFields>(EMPTY_INVOICE);
   const [docType, setDocType]           = useState<'invoice-customer' | 'receipt'>('receipt');
@@ -176,6 +189,37 @@ export function ReceiptKeeper() {
   useEffect(() => {
     if (TRACE_ROUTER) console.log('[TRACE:ROUTER] invoice capture opened — entered-from:', enteredFrom, 'shape:', OCR_SHAPE);
   }, [enteredFrom]);
+
+  // Vendor directory, loaded once per capture. A failed read leaves both arrays empty, which makes
+  // `resolveVendor` answer CREATE — never a LINK on information we could not actually see.
+  useEffect(() => {
+    if (!businessId) return;
+    let cancelled = false;
+    void (async () => {
+      const [v, a] = await Promise.all([
+        supabase.from('vendors')
+          .select('id, business_id, name, email, account_number, preferred, preference_note')
+          .eq('business_id', businessId),
+        supabase.from('vendor_aliases')
+          .select('id, business_id, vendor_id, alias')
+          .eq('business_id', businessId),
+      ]);
+      if (cancelled) return;
+      if (TRACE_RECEIPT) console.log('[TRACE:VENDOR] directory loaded — vendors:', v.data?.length ?? 0,
+        'aliases:', a.data?.length ?? 0, v.error ? `read failed: ${v.error.message}` : '');
+      setVendorRows((v.data ?? []) as VendorRow[]);
+      setVendorAliases((a.data ?? []) as VendorAliasRow[]);
+    })();
+    return () => { cancelled = true; };
+  }, [businessId]);
+
+  // The resolution is DERIVED, never stored — it must follow the vendor field as the owner edits it,
+  // and a stale resolution is how a link gets written against a name nobody typed.
+  const vendorResolution: VendorResolution = resolveVendor({
+    capturedName: fields.vendor,
+    vendors: vendorRows,
+    aliases: vendorAliases,
+  });
 
   // Line items state — user-editable grid from OCR output
   const [lineItems, setLineItems]               = useState<LineItem[]>([]);
@@ -435,13 +479,59 @@ export function ReceiptKeeper() {
       ? parseFloat(fields.amount) !== amountOriginal
       : null;
 
+    // ── VENDOR IDENTITY — resolve to a stable id BEFORE the receipt is written, so the link lands
+    //    with the row rather than in a second pass that can half-happen.
+    //
+    //    🔴 EVERY FAILURE HERE IS NON-FATAL AND THE RECEIPT STILL SAVES with vendor_id null. That
+    //    is §6 r6 applied to identity: a document in hand is worth more than a link, and a null
+    //    vendor_id is the honest state every pre-existing row is already in. It is never a reason
+    //    to lose a capture.
+    let resolvedVendorId: string | null = null;
+    try {
+      const plan = planVendorWrite(vendorResolution, vendorChoice, fields.vendor);
+      if (TRACE_RECEIPT) console.log('[TRACE:VENDOR] plan —', plan.reasoning,
+        'link:', plan.linkToVendorId, 'create:', plan.createVendorNamed, 'alias:', plan.recordAlias);
+
+      if (plan.linkToVendorId) {
+        resolvedVendorId = plan.linkToVendorId;
+        if (plan.recordAlias) {
+          // source='capture': a human confirmed this at the moment of capture. Never written by an
+          // inference — planVendorWrite only emits an alias when the owner answered "same as".
+          const al = await supabase.from('vendor_aliases').insert({
+            business_id: businessId, vendor_id: plan.linkToVendorId,
+            alias: plan.recordAlias, source: 'capture',
+          });
+          if (TRACE_RECEIPT) console.log('[TRACE:VENDOR] alias recorded —', plan.recordAlias,
+            al.error ? `failed: ${al.error.message}` : 'ok');
+        }
+      } else if (plan.createVendorNamed) {
+        // NOTE: `preferred` is deliberately NOT set here. A vendor created at capture is never
+        // born preferred — that is an owner judgement made on the vendor screen, and the INSERT
+        // trigger would refuse it from a manager's session anyway.
+        const created = await supabase.from('vendors')
+          .insert({ business_id: businessId, name: plan.createVendorNamed })
+          .select('id').single();
+        if (created.error) {
+          if (TRACE_RECEIPT) console.log('[TRACE:VENDOR] create failed —', created.error.message);
+        } else {
+          resolvedVendorId = created.data.id;
+          if (TRACE_RECEIPT) console.log('[TRACE:VENDOR] vendor created —', resolvedVendorId);
+        }
+      }
+    } catch (e) {
+      if (TRACE_RECEIPT) console.log('[TRACE:VENDOR] resolution threw, saving receipt unresolved —', String(e));
+    }
+
     const { data, error } = await supabase.from('receipts').insert({
       id:                      receiptId,
       business_id:             businessId,
       uploaded_by:             user.id,
       image_url,
       ocr_raw:                 ocrResult?.ocr_raw,
+      // 🔴 KEPT, never replaced by vendor_id. R-50: the captured string is EVIDENCE of what the
+      //    document said, which a resolved id is not — and the list still renders this, verbatim.
       vendor:                  fields.vendor.trim() || null,
+      vendor_id:               resolvedVendorId,
       date:                    fields.date.trim()   || null,
       amount:                  isNaN(parsedAmount)  ? null : parsedAmount,
       category:                fields.category      || null,
@@ -929,9 +1019,64 @@ export function ReceiptKeeper() {
               <input
                 style={INPUT}
                 value={fields.vendor}
-                onChange={e => setFields(f => ({ ...f, vendor: e.target.value }))}
+                onChange={e => { setFields(f => ({ ...f, vendor: e.target.value })); setVendorChoice(null); }}
                 placeholder="e.g. RaceTrac, Home Depot"
               />
+
+              {/* THE UNIT QUESTION — asked here, beside the field it is about, and asked ONCE.
+                  Answering "same as" records an alias, so the next document carrying this spelling
+                  resolves silently. Declining creates a separate vendor. Leaving it alone saves the
+                  receipt with no vendor bound — an identity question never costs you a document
+                  (§6 r6 applied to identity; the rule lives in planVendorWrite where a probe
+                  reaches it, not in this file). */}
+              {vendorResolution.outcome === 'NEED_CONFIRMATION' && vendorResolution.disposition && (
+                <div style={{
+                  marginTop: 8, padding: '10px 12px', borderRadius: 8,
+                  background: '#f7faf2', border: '1px solid #cfe0b8',
+                }}>
+                  <div style={{ fontSize: '0.875rem', color: '#1f2937', lineHeight: 1.45 }}>
+                    {vendorResolution.disposition.question}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                    {vendorResolution.disposition.candidates.map(c => (
+                      <button
+                        key={c.vendorId}
+                        type="button"
+                        onClick={() => setVendorChoice({ kind: 'same-as', vendorId: c.vendorId })}
+                        style={{
+                          minHeight: 44, padding: '0 12px', borderRadius: 8, cursor: 'pointer',
+                          fontSize: '0.8125rem', fontWeight: 700,
+                          border: '1px solid #27500A',
+                          background: vendorChoice && vendorChoice.kind === 'same-as' && vendorChoice.vendorId === c.vendorId ? '#27500A' : '#fff',
+                          color: vendorChoice && vendorChoice.kind === 'same-as' && vendorChoice.vendorId === c.vendorId ? '#fff' : '#27500A',
+                        }}
+                      >Same as {c.name}</button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setVendorChoice({ kind: 'new' })}
+                      style={{
+                        minHeight: 44, padding: '0 12px', borderRadius: 8, cursor: 'pointer',
+                        fontSize: '0.8125rem', fontWeight: 700,
+                        border: '1px solid #27500A',
+                        background: vendorChoice?.kind === 'new' ? '#27500A' : '#fff',
+                        color: vendorChoice?.kind === 'new' ? '#fff' : '#27500A',
+                      }}
+                    >A different vendor</button>
+                  </div>
+                  {/* The candidate's REASON is shown, not just its name — "shares the email domain"
+                      and "one name is the start of the other" are different strengths of evidence
+                      and the owner is the one judging them. */}
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 8 }}>
+                    {vendorResolution.disposition.candidates.map(c => `${c.name} — ${c.why}`).join(' · ')}
+                  </div>
+                  {vendorChoice === null && (
+                    <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: 6 }}>
+                      You can leave this unanswered — the receipt still saves, with no vendor linked.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div style={FIELD_ROW}>

@@ -42,18 +42,39 @@ export interface GrowthGoal {
   activated_at: string | null;
 }
 
-export interface Vendor {
-  id:            string;
-  tenant_id:     string;
-  name:          string;
-  contact_name:  string | null;
-  phone:         string | null;
-  email:         string | null;
-  categories:    string[];
-  payment_terms: string | null;
-  notes:         string | null;
-  created_at:    string;
-}
+// 🔴 THE `Vendor` INTERFACE THAT STOOD HERE WAS REMOVED 2026-09-02, AND WHAT IT WAS IS WORTH ONE
+// PARAGRAPH BECAUSE THE SHAPE RECURS. It declared a `vendors` table with
+// `{ id, tenant_id, name, contact_name, phone, email, categories, payment_terms, notes, created_at }`
+// and THE TABLE DID NOT EXIST: 116 migrations swept, zero `create table … vendor`, zero
+// `.from('vendors')` in any source file, and `tenant_id` — the pre-`business_id` generation naming —
+// appears in ZERO migrations. Nothing imported it (three repo-wide hits for the string `Vendor`;
+// the other two were the words "You Paid Vendor" and "Vendor / Store" in JSX labels), so removing
+// it broke nothing.
+//
+// ✏️ THE COST OF LEAVING IT WAS NOT CLUTTER, IT WAS A CONFIDENT WRONG ANSWER. Anyone reading this
+// file to settle "do we have vendors?" got YES. That is the same class as the inventory doc that
+// said a function slot was free when the count was 12 of 12 — a stale declaration is worse than a
+// missing one, because it is the one that gets believed. The real table arrived the same day, in
+// 20260902_vendor_identity_and_preference.sql, `business_id`-scoped and under RLS.
+//
+// 🔴 AND MEASURING IT FOUND THREE MORE — THE FILE IS NOT ONE STALE TYPE, IT IS A PATTERN.
+// Probed live 2026-09-02 against a negative control (a table name that cannot exist, to prove
+// ABSENT was distinguishable from a broken read) plus `receipts` as a positive control:
+//     vendors ABSENT · vendor_aliases ABSENT · growth_goals ABSENT ·
+//     notification_log ABSENT · ai_usage_log ABSENT · receipts EXISTS
+// So `GrowthGoal`, `NotificationLog` and `AIUsageLog` are phantoms of exactly the same kind as
+// `Vendor` was — all four carry `tenant_id`, none has a migration, none is imported anywhere.
+//
+// ⚠️ ONLY `Vendor` IS REMOVED HERE, because only `Vendor` is this build's business. The other
+// three are FLAGGED, not swept: deleting types unrelated to vendors inside a vendor build is the
+// scope creep that makes a diff unreviewable, and the file header still calls these "tables that
+// exist in every vertical's schema", which is a claim someone should correct deliberately.
+//
+// ✏️ Worth recording HOW this was found, because the first attempt lied in the reassuring
+// direction: the probe reported `vendors` as EXISTING while its own migration sat unapplied.
+// That was impossible, so the probe was wrong rather than the database — it was reading `count`
+// from a HEAD request that returns null, and null was being read as success. A negative control
+// turned it from a table of fiction into the measurement above.
 
 export interface AIUsageLog {
   id:           string;

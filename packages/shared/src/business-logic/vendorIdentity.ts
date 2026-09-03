@@ -44,7 +44,9 @@ export interface VendorRow {
   business_id: string;
   name: string;
   email?: string | null;
+  phone?: string | null;
   account_number?: string | null;
+  website?: string | null;
   preferred?: boolean | null;
   preference_note?: string | null;
 }
@@ -125,19 +127,55 @@ export function normalizeVendorName(s: string | null | undefined): string {
 }
 
 /**
+ * Corporate suffixes stripped before folding. Deliberately SHORT — every entry is a form that
+ * carries no distinguishing information. A longer list starts eating words that DO distinguish
+ * ("Materials" is part of Bailey Bark's identity, not noise; so is "Contracting").
+ *
+ * ⚠️ IDENTICAL TO `VENDOR_SUFFIXES` IN packages/cultivar-os/src/lib/vendorKey.ts, ON PURPOSE —
+ * see looseVendorKey. Two folds that disagree are the obstacle R-65 names; this is the half of
+ * the reconciliation that can be done from this side without editing another session's branch.
+ */
+const VENDOR_SUFFIXES = ['inc', 'llc', 'llp', 'ltd', 'co', 'corp', 'company', 'incorporated'];
+
+/**
  * LOOSE — for SURFACING candidates only. NEVER used to link.
  *
- * Collapses internal whitespace and drops trailing legal suffixes and punctuation, so that
- * `Sudderth Brothers Contracting, Inc.` and `Sudderth Brothers` can be recognised as WORTH ASKING
- * ABOUT. It is an inference, so its only permitted output is a question.
+ * 🔴 THIS ALGORITHM IS DELIBERATELY THE SAME AS `vendorKey()` ON MAIN, AND MY FIRST VERSION WAS
+ * BOTH DIFFERENT AND WORSE. Two rules for folding one vendor name is the obstacle R-65 names as
+ * the real cost of consolidating the two vendor stores. Measured over a 17-string corpus, the two
+ * disagreed on three, and every disagreement was mine being wrong:
+ *   · `Co-op Gardens` → `-op gardens`   (I stripped `co` ANYWHERE, so a hyphen became a word
+ *                                        boundary and ate half a real word. `vendorKey`'s comment
+ *                                        names this exact trap and strips from the END only.)
+ *   · `H-E-B`         → `h-e-b`         (I deleted only `.` and `,`; punctuation must become a
+ *                                        SPACE, or a hyphenated name folds differently to a spaced one.)
+ *   · `Sudderth Brothers Contracting, Inc.` → I had `contracting` in the suffix list, which folded
+ *                                        it onto `Sudderth Brothers`.
+ *
+ * ✏️ THAT LAST ONE ALSO CORRECTS R-65'S OWN EXAMPLE, WHICH IS WHY IT IS RECORDED RATHER THAN
+ * QUIETLY FIXED. R-65 states that `vendorKey()` folds the Sudderth pair to ONE key and the strict
+ * index gives TWO. Measured: `vendorKey` yields `sudderth brothers contracting` and
+ * `sudderth brothers` — **TWO keys**, because `contracting` is not a corporate suffix. It was MY
+ * fold that made them one. The two stores do disagree, but not in the direction the ruling records.
+ *
+ * 🔴 AND DROPPING `contracting` COSTS THE SUDDERTH CASE NOTHING, which is the point: the resolver
+ * surfaces that pair by PREFIX CONTAINMENT (`sudderth brothers` is the start of
+ * `sudderth brothers contracting`), not by suffix-stripping. The §D probes prove it still asks.
  */
 export function looseVendorKey(s: string | null | undefined): string {
-  return (s ?? '')
+  const cleaned = (s ?? '')
     .toLowerCase()
-    .replace(/[.,]/g, ' ')
-    .replace(/\b(inc|llc|l\.l\.c|ltd|co|corp|company|incorporated|contracting)\b/g, ' ')
+    .replace(/[.,/#!$%^&*;:{}=\-_`~()'"]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+  if (cleaned === '') return '';
+  // Suffixes come off the END only, and repeatedly ("Foo Co, Inc." → "foo"). Stripping them
+  // anywhere turns "Co-op Gardens" into "op gardens".
+  let words = cleaned.split(' ');
+  while (words.length > 1 && VENDOR_SUFFIXES.includes(words[words.length - 1])) {
+    words = words.slice(0, -1);
+  }
+  return words.join(' ');
 }
 
 /** Email domain, lowercased. `office@athenstreefarm.com` → `athenstreefarm.com`. */
@@ -313,6 +351,97 @@ function secondSignalAgreement(
   const a = normAcct(input.capturedAccountNumber);
   if (a && normAcct(v.account_number) === a) return { agreed: true, field: 'account' };
   return { agreed: false, field: '' };
+}
+
+/* ────────────────────────────────────────────────────────────────────────────────────────────────
+ * THE WRITE PLAN — what the caller should actually do about a resolution
+ * ──────────────────────────────────────────────────────────────────────────────────────────────*/
+
+/**
+ * The owner's answer to a NEED_CONFIRMATION. `null` means they have not answered yet — which is a
+ * real state, not a missing value: the receipt still saves, with no vendor bound.
+ */
+export type VendorChoice =
+  | { kind: 'same-as'; vendorId: string }   // "yes, this is that vendor" -> link AND record the alias
+  | { kind: 'new' }                         // "no, it is a different firm" -> create
+  | null;                                   // unanswered
+
+export interface VendorWritePlan {
+  /** Create a vendor with this name, then link the receipt to it. */
+  createVendorNamed: string | null;
+  /** Link the receipt to this existing vendor id. */
+  linkToVendorId: string | null;
+  /** Record this string as another name for `linkToVendorId`, so it is never asked again. */
+  recordAlias: string | null;
+  /** Why — carried to the trace log so an owner-prove can see the decision, not infer it. */
+  reasoning: string;
+}
+
+const NO_WRITE = (reasoning: string): VendorWritePlan =>
+  ({ createVendorNamed: null, linkToVendorId: null, recordAlias: null, reasoning });
+
+/**
+ * Turn a resolution (+ the owner's answer, if they gave one) into the writes to perform.
+ *
+ * 🔴 A NEED_CONFIRMATION WITH NO ANSWER WRITES NOTHING AND THE RECEIPT STILL SAVES. That is the
+ * whole point of §6 rule 6 applied to identity: an unanswered identity question must never block
+ * a capture. The receipt lands with `vendor_id` null — honestly unresolved, exactly as every row
+ * captured before this build is — and can be resolved later. Blocking the save would trade a
+ * missing link for a lost document.
+ */
+export function planVendorWrite(
+  resolution: VendorResolution,
+  choice: VendorChoice,
+  capturedName: string | null | undefined,
+): VendorWritePlan {
+  const captured = (capturedName ?? '').trim();
+
+  if (resolution.outcome === 'LINK' && resolution.vendorId) {
+    return {
+      createVendorNamed: null,
+      linkToVendorId: resolution.vendorId,
+      recordAlias: null,          // already known by name or by an existing alias
+      reasoning: `linked by ${resolution.matchedOn}`,
+    };
+  }
+
+  if (resolution.outcome === 'CREATE') {
+    if (captured === '') return NO_WRITE('no vendor name captured — nothing to create');
+    return {
+      createVendorNamed: captured,
+      linkToVendorId: null,
+      recordAlias: null,
+      reasoning: 'no existing vendor matched, so this is a new one',
+    };
+  }
+
+  // NEED_CONFIRMATION
+  if (choice === null) return NO_WRITE('identity question unanswered — receipt saves unresolved');
+
+  if (choice.kind === 'new') {
+    if (captured === '') return NO_WRITE('no vendor name captured — nothing to create');
+    return {
+      createVendorNamed: captured,
+      linkToVendorId: null,
+      recordAlias: null,
+      reasoning: 'owner said this is a different vendor',
+    };
+  }
+
+  // 'same-as' — link, AND record the alias. Recording it is what makes this ask ONCE rather than
+  // every time; without the alias the same question returns on the next document.
+  const offered = resolution.disposition?.candidates.some((c) => c.vendorId === choice.vendorId) ?? false;
+  if (!offered) {
+    // The chosen vendor was not among the candidates we surfaced. Refuse rather than link — a
+    // choice we cannot account for is not an answer to the question we asked.
+    return NO_WRITE('chosen vendor was not one of the surfaced candidates — not linking');
+  }
+  return {
+    createVendorNamed: null,
+    linkToVendorId: choice.vendorId,
+    recordAlias: captured === '' ? null : captured,
+    reasoning: 'owner confirmed this is another name for an existing vendor',
+  };
 }
 
 /* ────────────────────────────────────────────────────────────────────────────────────────────────

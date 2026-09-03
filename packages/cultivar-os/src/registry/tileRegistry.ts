@@ -752,6 +752,13 @@ export const NAV_IA: NavNode[] = [
   // ── Dashboard branch ──
   { key: 'nav_orders',          section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'qr_checkout' },
   { key: 'nav_customers',       section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'customers' },
+  // Vendors — the buy-side mirror of the customer roster, so it sits BESIDE Customers rather than
+  // under Operating Costs, whose placement would imply a cost gate this surface deliberately does
+  // not have. required_permission is EXPLICIT and is the membership sentinel: without it,
+  // navPermission() falls back to the retired `view_dashboard` and the node goes invisible to
+  // everyone including the owner (tech-debt #87 — a landmine, and this is the next node that
+  // would have stepped on it). 'member' matches the table's member RLS exactly.
+  { key: 'nav_vendors',         section: 'dashboard', parent: 'sec_dashboard',       label: 'Vendors', route: '/vendors', matchRoute: '/vendors', required_permission: 'member' },
   { key: 'nav_delivery',        section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'delivery' },
   { key: 'nav_delivery_route',  section: 'dashboard', parent: 'nav_delivery',        label: 'Route', route: '/deliveries', matchRoute: '/deliveries', required_permission: 'deliveries.route:read' },
   { key: 'nav_operating_costs', section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'operating_costs' },

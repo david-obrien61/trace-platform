@@ -196,6 +196,69 @@ COMMENT ON COLUMN receipts.vendor_id IS
 --     (fixing a misspelt name, adding the phone number off an invoice), so the row must be
 --     writable by her while TWO of its columns must not be.
 -- Hiding the control in the UI is not enforcement (§1.6 item 4: server-side, not merely hidden).
+
+-- ────────────────────────────────────────────────────────────────────────────────────────────────
+-- WHO COUNTS AS AN OWNER — measured, not assumed, and a RECORDED DIVERGENCE (§6 r10)
+-- ────────────────────────────────────────────────────────────────────────────────────────────────
+-- 🔴 THE FIRST DRAFT OF THIS FILE TESTED `businesses.owner_id = auth.uid()` AND WOULD HAVE REFUSED
+--    LAUREN. Measured live 2026-09-02 across 3 businesses / 8 member rows: at LAWNS,
+--    `businesses.owner_id` is David (98f4e56b…) and **Lauren Bishop holds role=OWNER, active=true,
+--    with a DIFFERENT user_id (790b31d2…)** — she is the only OWNER-role member in the database who
+--    is not the account holder. An owner_id-only test reproduces precisely the defect
+--    20260828_owner_role_carries_authority.sql was written to fix, on a fourth surface.
+--
+-- ⚠️ AND IT CORRECTS THE BUILD'S OWN FRAMING: the spec says "Lauren — a manager, not an owner".
+--    She is not a manager. David's 2026-08-28 ruling ("Lauren needs all perms and authority to act")
+--    gave her the OWNER role deliberately, so at LAWNS she both reads AND sets the preference. The
+--    only ACTIVE manager anywhere is `test obrien` at Test Dave's Tree Nest (f7ec5d67…), which is
+--    therefore the tenant where the manager-side acceptance is actually provable. joel joiner is
+--    MANAGER at LAWNS but active=false.
+--
+-- ── THE DIVERGENCE, STATED (§6 r10 — no silent divergence) ──────────────────────────────────────
+-- 20260828:171 says: "🔴 NOT keyed on `role = 'OWNER'`. The grant decision lives in the MANIFEST,
+-- once; baking it into a policy would duplicate it per-table and break the day a tenant renames
+-- the role." This file DIVERGES and keys on the role. The reasons, and the cost accepted:
+--   · The manifest path requires MINTING a permission string, which is not a code change but a
+--     CHAIN: manifest entry + status + alias layer + a funnel run to materialise it onto every
+--     existing OWNER member + the capQ ratchet. Skip the funnel half and the client offers a
+--     control the database refuses — the exact inversion 20260828's own header describes.
+--   · That objection is about duplicating a grant decision ACROSS TABLES. This is ONE predicate in
+--     ONE function used by two triggers on one table. Converging later is a one-body change here,
+--     not an edit to N policies — which is the property the objection was protecting.
+--   · The rename risk is real and accepted: a tenant renaming OWNER breaks this predicate. There is
+--     no tenant-renamed role today (measured: roles in use are OWNER, MANAGER, STAFF).
+-- CONVERGENCE TRIGGER: when `vendors:set_preference` is minted in the manifest and materialised by
+-- the funnel, replace this function's BODY with a has_permission() call. Nothing else changes.
+CREATE OR REPLACE FUNCTION public.is_business_owner(p_business_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = ''
+AS $$
+  SELECT EXISTS (
+    -- the account holder
+    SELECT 1 FROM public.businesses
+     WHERE id = p_business_id AND owner_id = auth.uid()
+  ) OR EXISTS (
+    -- an OWNER-ROLE member who is not the account holder (Lauren's case, 20260828's ruling)
+    SELECT 1 FROM public.business_members
+     WHERE business_id = p_business_id
+       AND user_id = auth.uid()
+       AND active = true
+       AND upper(role) = 'OWNER'
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.is_business_owner(uuid) FROM public;
+GRANT EXECUTE ON FUNCTION public.is_business_owner(uuid) TO authenticated;
+
+COMMENT ON FUNCTION public.is_business_owner(uuid) IS
+  'Owner authority for vendor preference. Account holder OR active OWNER-role member — the second '
+  'disjunct is 20260828_owner_role_carries_authority.sql''s ruling, without which Lauren Bishop '
+  '(role OWNER, not businesses.owner_id) is refused. Recorded divergence from that migration''s '
+  '"not keyed on role" guidance; see the header for the reason and the convergence trigger.';
+
 CREATE OR REPLACE FUNCTION public.enforce_vendor_preference_is_owner_only()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -217,10 +280,7 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1 FROM public.businesses
-    WHERE id = NEW.business_id AND owner_id = auth.uid()
-  ) THEN
+  IF NOT public.is_business_owner(NEW.business_id) THEN
     RAISE EXCEPTION
       'vendor preference is owner-only: preferred / preference_note may be changed only by the '
       'business owner (vendor %, business %)', NEW.id, NEW.business_id
@@ -250,10 +310,7 @@ BEGIN
   IF auth.uid() IS NULL THEN
     RETURN NEW;
   END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM public.businesses
-    WHERE id = NEW.business_id AND owner_id = auth.uid()
-  ) THEN
+  IF NOT public.is_business_owner(NEW.business_id) THEN
     RAISE EXCEPTION
       'vendor preference is owner-only: a new vendor may not be created already preferred '
       '(business %)', NEW.business_id
@@ -292,9 +349,13 @@ ALTER TABLE vendors        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vendor_aliases ENABLE ROW LEVEL SECURITY;
 
 -- ── vendors ────────────────────────────────────────────────────────────────────────────────────
+-- 🔴 THE PREDICATE, NOT AN INLINE owner_id TEST — and the difference is not cosmetic. An inline
+--    `owner_id = auth.uid()` here would give Lauren (role OWNER, not the account holder) read and
+--    write through the MEMBER policies below while silently denying her DELETE, which is the same
+--    partial-authority defect 20260828 catalogued on three surfaces. One predicate, one answer.
 CREATE POLICY vendors_owner_all ON vendors
-  USING (EXISTS (SELECT 1 FROM businesses WHERE id = vendors.business_id AND owner_id = auth.uid()))
-  WITH CHECK (EXISTS (SELECT 1 FROM businesses WHERE id = vendors.business_id AND owner_id = auth.uid()));
+  USING (public.is_business_owner(business_id))
+  WITH CHECK (public.is_business_owner(business_id));
 
 CREATE POLICY vendors_member_select ON vendors
   FOR SELECT USING (
@@ -322,8 +383,8 @@ CREATE POLICY vendors_member_update ON vendors
 
 -- ── vendor_aliases ─────────────────────────────────────────────────────────────────────────────
 CREATE POLICY vendor_aliases_owner_all ON vendor_aliases
-  USING (EXISTS (SELECT 1 FROM businesses WHERE id = vendor_aliases.business_id AND owner_id = auth.uid()))
-  WITH CHECK (EXISTS (SELECT 1 FROM businesses WHERE id = vendor_aliases.business_id AND owner_id = auth.uid()));
+  USING (public.is_business_owner(business_id))
+  WITH CHECK (public.is_business_owner(business_id));
 
 CREATE POLICY vendor_aliases_member_select ON vendor_aliases
   FOR SELECT USING (

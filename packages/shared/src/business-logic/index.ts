@@ -187,3 +187,28 @@ export type { ModuleSeedRow, ModuleSeedResult } from './seedBusinessModules';
 // marketplace reads the same function, so the two can never disagree about a customer's days.
 export { trialDaysRemaining } from './trialClock';
 export type { TrialTerms } from './trialClock';
+
+// Vendor identity and the preferred vendor (THUNDER · 2026-09-02, David's Option C ruling).
+// Resolve a captured free-text vendor name to a stable id under D-47's rule — ambiguity never
+// auto-links — plus the display decisions the screen must not make for itself. Pure; no DB.
+export {
+  normalizeVendorName,
+  looseVendorKey,
+  emailDomain,
+  resolveVendor,
+  planVendorWrite,
+  orderVendorsForDisplay,
+  vendorListHeading,
+} from './vendorIdentity';
+
+export type {
+  VendorOutcome,
+  VendorRow,
+  VendorAliasRow,
+  VendorCandidate,
+  VendorDisposition,
+  VendorResolution,
+  ResolveVendorInput,
+  VendorChoice,
+  VendorWritePlan,
+} from './vendorIdentity';

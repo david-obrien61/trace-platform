@@ -26,7 +26,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  normalizeVendorName, looseVendorKey, emailDomain, resolveVendor,
+  normalizeVendorName, looseVendorKey, emailDomain, resolveVendor, planVendorWrite,
   orderVendorsForDisplay, vendorListHeading,
   type VendorRow, type VendorAliasRow,
 } from './vendorIdentity';
@@ -83,9 +83,18 @@ const LIVE: VendorRow[] = [SUDDERTH, BWI, BAILEY, LAWNSCO];
 
 // ══ §B THE LOOSE KEY IS FOR ASKING, NEVER FOR LINKING ════════════════════════════════════════
 {
-  ok(looseVendorKey('Sudderth Brothers Contracting, Inc.') === 'sudderth brothers',
-    'B1: legal suffixes and punctuation are set aside for the SURFACING key');
-  ok(looseVendorKey('Sudderth Brothers') === 'sudderth brothers', 'B2: …and the shorthand reduces to the same key');
+  ok(looseVendorKey('Bailey Bark Materials, Inc.') === 'bailey bark materials',
+    'B1: a real corporate suffix and its punctuation are set aside for the SURFACING key');
+  ok(looseVendorKey('Sudderth Brothers Contracting, Inc.') === 'sudderth brothers contracting',
+    '🔴 B2: "Contracting" SURVIVES the fold — it is part of the name, not a corporate suffix. This corrects R-65, which records this pair as folding to ONE key; measured, it is two');
+  ok(looseVendorKey('Sudderth Brothers') === 'sudderth brothers',
+    'B2b: …and the shorthand is a strict PREFIX of it, which is how the resolver still surfaces the pair (§D) without a suffix hack');
+  ok(looseVendorKey('Co-op Gardens') === 'co op gardens',
+    '🔴 B2c: "Co-op Gardens" keeps both words. Stripping `co` anywhere rather than off the END ate half a real word in the first version of this function');
+  ok(looseVendorKey('H-E-B') === 'h e b',
+    '🔴 B2d: punctuation becomes a SPACE, not nothing — otherwise a hyphenated name folds differently to the spaced one and the two stores disagree');
+  ok(looseVendorKey('Foo Co, Inc.') === 'foo',
+    'B2e: suffixes come off repeatedly, not once');
   ok(looseVendorKey('Mcgill Farms') !== looseVendorKey('McGill'),
     'B3 (negative): "Mcgill Farms" and "McGill" do NOT reduce to one key — Farms is not a legal suffix, so this stays a question, not a merge');
   ok(emailDomain('office@athenstreefarm.com') === 'athenstreefarm.com', 'B4: email domain is extracted');
@@ -265,6 +274,47 @@ const LIVE: VendorRow[] = [SUDDERTH, BWI, BAILEY, LAWNSCO];
     'G5: the first vendor ever captured is a CREATE, not an error');
 }
 
+// ══ §L THE WRITE PLAN — and the rule that an identity question never costs you a document ═══
+{
+  const linked = resolveVendor({ capturedName: 'bwi', vendors: LIVE, aliases: [] });
+  const p1 = planVendorWrite(linked, null, 'bwi');
+  ok(p1.linkToVendorId === 'ven-bwi' && p1.createVendorNamed === null,
+    'L1: a LINK links, and creates nothing');
+  ok(p1.recordAlias === null,
+    'L2 (negative): …and records no alias — the name already IS the vendor, and an alias equal to the canonical name is noise the unique index would later trip over');
+
+  const fresh = resolveVendor({ capturedName: 'Greenleaf', vendors: LIVE, aliases: [] });
+  const p2 = planVendorWrite(fresh, null, 'Greenleaf');
+  ok(p2.createVendorNamed === 'Greenleaf' && p2.linkToVendorId === null,
+    'L3: a CREATE creates, with the captured spelling as the canonical name');
+
+  // 🔴 THE RULE THAT MATTERS MOST HERE.
+  const asks = resolveVendor({ capturedName: 'Sudderth Brothers', vendors: LIVE, aliases: [] });
+  const p3 = planVendorWrite(asks, null, 'Sudderth Brothers');
+  ok(p3.linkToVendorId === null && p3.createVendorNamed === null && p3.recordAlias === null,
+    '🔴 L4: an UNANSWERED identity question writes NOTHING — no link, no vendor, no alias');
+  ok(/unanswered/.test(p3.reasoning),
+    'L5: …and says so, so a null vendor_id is legible as "not yet answered" rather than as a bug');
+
+  const p4 = planVendorWrite(asks, { kind: 'same-as', vendorId: 'ven-sud' }, 'Sudderth Brothers');
+  ok(p4.linkToVendorId === 'ven-sud', 'L6: answering "same as" links to the confirmed vendor');
+  ok(p4.recordAlias === 'Sudderth Brothers',
+    '🔴 L7: …AND records the alias. Without this the identical question returns on the next document, and "ask once, keep forever" is just "ask"');
+
+  const p5 = planVendorWrite(asks, { kind: 'new' }, 'Sudderth Brothers');
+  ok(p5.createVendorNamed === 'Sudderth Brothers' && p5.linkToVendorId === null,
+    'L8: answering "different vendor" creates a separate one');
+
+  // 🔴 Negative control: a choice naming a vendor we never offered is refused, not honoured.
+  const p6 = planVendorWrite(asks, { kind: 'same-as', vendorId: 'ven-bwi' }, 'Sudderth Brothers');
+  ok(p6.linkToVendorId === null,
+    '🔴 L9 (negative): a "same-as" naming a vendor that was NOT among the surfaced candidates is refused — an answer to a question we did not ask is not consent');
+
+  const p7 = planVendorWrite(resolveVendor({ capturedName: '  ', vendors: LIVE, aliases: [] }), null, '  ');
+  ok(p7.createVendorNamed === null,
+    'L10 (negative): a blank name never creates a vendor, even on the CREATE path');
+}
+
 // ══ §H THE SCREEN — both vendors appear, and the preferred one is not sorted to the top ═════
 {
   const a = v('ven-a', 'Alpha Trees');
@@ -358,6 +408,38 @@ const LIVE: VendorRow[] = [SUDDERTH, BWI, BAILEY, LAWNSCO];
     'J7 (negative): there is no member DELETE policy — deletion is owner-only, fail-closed on the one verb that destroys history');
   ok(/ENABLE ROW LEVEL SECURITY/.test(SQL_ONLY) && (SQL_ONLY.match(/ENABLE ROW LEVEL SECURITY/g) ?? []).length === 2,
     'J8: RLS is enabled on BOTH new tables — a table with policies and RLS off is wide open');
+}
+
+// ══ §K WHO COUNTS AS AN OWNER — the assertion that caught a shipped-shaped defect ════════════
+// Measured live 2026-09-02 (3 businesses, 8 member rows): at LAWNS, `businesses.owner_id` is David
+// and Lauren Bishop holds role=OWNER with a DIFFERENT user_id. A first draft of the migration
+// tested owner_id alone and would have refused her — reproducing the defect
+// 20260828_owner_role_carries_authority.sql exists to fix, on a fourth surface.
+{
+  ok(/CREATE OR REPLACE FUNCTION public\.is_business_owner/.test(SQL_ONLY),
+    'K1: owner authority is ONE named predicate, not an inline test copied into each trigger');
+
+  const fn = SQL_ONLY.slice(SQL_ONLY.indexOf('FUNCTION public.is_business_owner'),
+                            SQL_ONLY.indexOf('REVOKE ALL ON FUNCTION public.is_business_owner'));
+  ok(/owner_id = auth\.uid\(\)/.test(fn),
+    'K2: the account holder is an owner');
+  ok(/upper\(role\) = 'OWNER'/.test(fn) && /active = true/.test(fn),
+    "🔴 K3: …and so is an ACTIVE OWNER-ROLE member who is not the account holder. Without this disjunct Lauren Bishop — role OWNER, not businesses.owner_id, measured live — cannot set the preference on her own tenant");
+  ok(/business_members/.test(fn),
+    'K4: the role half really reads the membership table rather than asserting the role from somewhere else');
+
+  // 🔴 Both triggers must go through the predicate. An inline owner_id test surviving in either one
+  //    is the defect re-entering by the back door, and it would look correct in review.
+  const inlineOwnerTests = (SQL_ONLY.match(/owner_id = auth\.uid\(\)/g) ?? []).length;
+  ok(inlineOwnerTests === 1,
+    `🔴 K5: owner_id = auth.uid() appears EXACTLY ONCE in executable SQL — inside the predicate — found ${inlineOwnerTests}. A second occurrence means a trigger is testing the account holder directly again`);
+  ok((SQL_ONLY.match(/public\.is_business_owner\(NEW\.business_id\)/g) ?? []).length === 2,
+    'K6: both the INSERT and the UPDATE guard call the predicate');
+
+  // The divergence from 20260828 is RECORDED, not silent (§6 r10). Asserted against the raw file,
+  // because a recorded divergence lives in prose by definition.
+  ok(/20260828/.test(MIGRATION) && /CONVERGENCE TRIGGER/.test(MIGRATION),
+    '🔴 K7: the divergence from 20260828s "not keyed on role" guidance is stated in the file WITH a convergence trigger — no silent divergence (§6 r10)');
 }
 
 console.log(`\nvendorIdentity: ${passed} passed, ${failed} failed`);

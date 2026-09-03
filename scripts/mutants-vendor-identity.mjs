@@ -94,6 +94,15 @@ const MUTANTS = [
 
   [MIGRATION, "ALTER TABLE vendor_aliases ENABLE ROW LEVEL SECURITY;", "-- rls off",
    'vendor_aliases carries policies with RLS disabled -- wide open'],
+
+  // The one that was actually shipped-shaped in the first draft of this build.
+  [MIGRATION, "  ) OR EXISTS (\n    -- an OWNER-ROLE member who is not the account holder (Lauren's case, 20260828's ruling)\n    SELECT 1 FROM public.business_members\n     WHERE business_id = p_business_id\n       AND user_id = auth.uid()\n       AND active = true\n       AND upper(role) = 'OWNER'\n  );",
+              "  );",
+   'owner authority is the ACCOUNT HOLDER only -- Lauren (role OWNER, not owner_id, measured live) cannot set the preference on her own tenant'],
+
+  [MIGRATION, "  IF NOT public.is_business_owner(NEW.business_id) THEN\n    RAISE EXCEPTION\n      'vendor preference is owner-only: a new vendor may not be created already preferred '",
+              "  IF NOT EXISTS (SELECT 1 FROM public.businesses WHERE id = NEW.business_id AND owner_id = auth.uid()) THEN\n    RAISE EXCEPTION\n      'vendor preference is owner-only: a new vendor may not be created already preferred '",
+   'one trigger goes back to testing owner_id inline, bypassing the shared predicate'],
 ];
 
 let caught = 0;
