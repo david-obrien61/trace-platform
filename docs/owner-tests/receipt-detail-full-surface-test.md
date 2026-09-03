@@ -15,13 +15,29 @@ paper, and what the reader made of it"* clause — **corrected this session**, s
 **Board: 0 of 12 covered** (11 `owed` · 1 `needs-test`).
 **DEVICE:** all cards `DEVICE: desktop` — this is a reconcile-and-correct surface, and reconcile is desktop (capture=mobile / reconcile=desktop).
 
-> 🔴 **MIGRATION GATE — THIS ONE DOES NOT WORK WITHOUT IT.**
-> `supabase/migrations/20260902_receipt_line_edit_and_vendor_preference.sql` **must be applied**
-> before CARDS 6–11. It creates `edit_receipt_line_items`, the
-> `trg_receipts_snapshot_and_line_guard` trigger, and the `vendor_preferences` table.
-> Un-applied, the **read** cards (1–5) still pass and every **edit** card fails with
-> *"Could not find the function"* — which would read as a code defect and is not one.
-> Run the migration's own CATALOG-VERIFICATION GATE (A)–(F) after applying.
+> ✅ **MIGRATION GATE — CLEARED 2026-09-03. CARDS 6–11 ARE NO LONGER BLOCKED.**
+> `supabase/migrations/20260902_receipt_line_edit_and_vendor_preference.sql` **is APPLIED.**
+> David ran it and returned the catalog verification (A)–(F): `edit_receipt_line_items` and
+> `guard_receipt_snapshot_and_lines` both `prosecdef=true`, both **owned by `postgres`**;
+> `trg_receipts_snapshot_and_line_guard` `tgenabled='O'`; `vendor_preferences` `relrowsecurity=true`
+> with its four policies (`member_insert a` · `member_select r` · `member_update w` · `owner_all *`)
+> and both indexes incl. `vendor_preferences_one_per_vendor_kind_uidx`.
+>
+> 🔴 **AND THE WRITE-ONCE GUARD WAS PROVEN BY BEING REFUSED — TWICE, AS `postgres`, FROM THE SQL EDITOR:**
+> ```
+> ERROR: 42501: receipts.line_items_original is write-once:
+>        it is the record of what the OCR read
+> CONTEXT: PL/pgSQL function public.guard_receipt_snapshot_and_lines() line 9
+> ```
+> **That is not a UI check, and not a policy a caller with the right permission can slip past. It
+> refuses everybody, the superuser included.** A refusal that names its own reason in plain words is
+> the evidence — and it is the negative control this guard could not have passed by accident
+> ([[R-33]]). **Recorded OWNER-PROVEN at the schema layer**; the CARDS below still owe the UI run.
+>
+> ✏️ **ORIGINAL GATE TEXT, PRESERVED** (do not delete a claim that was once true): *"THIS ONE DOES
+> NOT WORK WITHOUT IT … Un-applied, the read cards (1–5) still pass and every edit card fails with
+> 'Could not find the function' — which would read as a code defect and is not one."* That warning
+> was correct and is now HISTORY. Ledger #261.
 
 > ⚠️ **WHAT THIS BUILD DOES NOT TOUCH.** No `api/` function (12/12 untouched), no new permission
 > string, and **not one row of live receipt data is modified except by you, deliberately, on
@@ -101,7 +117,9 @@ Scroll to **The document** on Sudderth, then open any **jpg** capture.
 2. A jpg capture renders as an **image**.
 
 **PASS:** you can read the actual paper in both cases.
-🔴 **8 of 36 captures are PDFs, Sudderth among them.** An `<img>` pointed at a PDF renders nothing
+🔴 **8 captures are PDFs, Sudderth among them** — **8 of 17 LAWNS rows** (re-measured 2026-09-03;
+the figure was written as *8 of 36* against the all-tenant corpus, which has since moved to 37 — the
+numerator did not change, the denominator did. Ledger #263). An `<img>` pointed at a PDF renders nothing
 and reports nothing — an empty frame here is a fail, not a slow load.
 **FAIL:** a broken image icon, an empty frame, or a download that never opens.
 
@@ -264,5 +282,9 @@ On `/receipts`, read the sentence under **What the platform banked at save time*
 **PASS:** the sentence no longer asserts an owner edit that did not happen.
 🔴 **Measured 2026-09-02, population 35:** vendor differs **0**, amount **3**, category **2**, date
 **29** (our ISO conversion), lines **30** (our injected Tax line). `header_amount_edited` false on
-**36 of 36**.
+**36 of 36 AS MEASURED THAT DAY**.
+⚠️ **THE POPULATION HAS MOVED — expect 37, and 37 is not a failure of this card.** Re-measured
+2026-09-03: 37 receipts across 3 tenants (`Test Dave's Tree Nest` 18 · **LAWNS 17, unchanged** ·
+`Test David's new Business` 2). The 37th is `TRACTOR SUPPLY CO` $8.65, captured on Test Dave's at
+2026-09-02T21:56:12Z. The RATIO is what this card asserts; the denominator is a snapshot. Ledger #263.
 **FAIL:** the old sentence is still there.

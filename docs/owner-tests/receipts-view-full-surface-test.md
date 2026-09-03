@@ -14,7 +14,9 @@ capture half has shipped since 2026-06-11 and has never had a row. Flagged for D
 Joins only: **3.5** delivery and the orders roster.
 **Story:** `user_stories.md` → *I captured a receipt — show me it landed, and show me what it turned into*
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to `covered`, with a date.**
-**Board: 0 of 11 covered** (11 `owed` · 0 `needs-test`).
+**Board: 10 of 11 covered** (0 `owed` · 1 `needs-test`) — **flipped 2026-09-03 from David's live run of 2026-09-02 on build `7952cb1`** (ledger #261).
+🔴 **CARD 8 is `covered` with its FAILURE preserved** — it failed, #257 fixed it, and the failure is not overwritten.
+📄 **NINE OF THESE WERE PROVEN FROM PRINTED PDFs OF `/receipts`, NOT FROM LIVE INTERACTION.** **CARDS 1, 2, 3, 4, 5, 7 and 11 are all provable from ONE print of `/receipts`** — take the print, and those seven settle together. CARD 6 (a capture with no reload) and CARD 9 (three loads at three times) need interaction; CARD 10 needs an account that does not exist.
 **DEVICE:** CARDS 1–5 and 7–11 are `DEVICE: desktop` — this is a reconcile surface, and reconcile is desktop (capture=mobile / reconcile=desktop). **CARD 6 is `DEVICE: phone`** and is provable **without a console**.
 
 > ⛔ **NO MIGRATION GATE.** This build applies none. It adds no table, no column, no policy, no
@@ -30,7 +32,8 @@ Joins only: **3.5** delivery and the orders roster.
 ---
 
 ## CARD 1 — the receipts are on screen at all, newest first
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** 2026-09-02
+**PROVEN 2026-09-02 on build `7952cb1`** — 17 rows, newest first: 15:51:49 at the top down to 08-26 20:50, **no inversions**. Evidence: a printed PDF of `/receipts`.
 Open `/receipts` as the owner.
 
 1. Above the capture zone there is a card headed **Receipts captured**.
@@ -45,7 +48,8 @@ Open `/receipts` as the owner.
 ---
 
 ## CARD 2 — the six write-only columns finally have a reader
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** 2026-09-02
+**PROVEN 2026-09-02 on build `7952cb1`** — every row shows `✓ Lines: $X = Total: $Y` plus the OCR sentences; **no `$0.00` where a figure was stored**. Evidence: the same printed PDF as CARD 1.
 On any row, look at **What the platform banked at save time**.
 
 1. A coloured readout — green for `match` — reading *"✓ Lines: $X = Total: $Y"*.
@@ -62,7 +66,10 @@ call **why** an open question. It is no longer open: measured field by field aga
 parsed output (population 35) — **vendor differs 0 · amount 3 · category 2 · date 29 · lines 30**,
 and the two large counts are **the platform's own doing** (the code normalises `06/22/2026` to ISO
 and compares the normalised value against the raw one; and it injects its own `Tax` line and then
-counts the line it added). `header_amount_edited` is **false on 36 of 36**.
+counts the line it added). `header_amount_edited` is **false on 36 of 36 AS MEASURED 2026-09-02**.
+⚠️ **Re-measured 2026-09-03 the corpus is 37, not 36** (`Test Dave's Tree Nest` 18 · **LAWNS 17,
+unchanged** · `Test David's new Business` 2). Seeing 37 rows is not this card failing — the claim is
+the ratio, and the denominator is a snapshot of a corpus Lauren is still uploading to. Ledger #263.
 ⚠️ **So the row must NOT read *"Owner changed something before saving."*** It should say it is flagged
 as edited **but the total was not changed**, and that the flag also counts the platform's own
 reformatting. ⚠️ **The FLAG itself is still computed wrongly at write time — tech-debt #148, deliberately
@@ -72,7 +79,8 @@ deferred.** This card checks the sentence, not the column.
 ---
 
 ## CARD 3 — both duplicate captures appear as two rows, and the screen does not call them duplicates
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** 2026-09-02
+**PROVEN 2026-09-02 on build `7952cb1`** — bwi 07-29 **$1,283.88 twice**, at its own two capture times; Bailey Bark 07-07 **$2,316.03 twice**. **Neither pair is labelled a duplicate**, which is what this card asserts. Evidence: the same printed PDF as CARD 1.
 Find **bwi · 2026-07-29 · $1,283.88**. Then find **Bailey Bark Materials, Inc. · 2026-07-07 · $2,316.03**.
 
 **PASS:** each appears **twice**, at its own capture time, and neither row is labelled a duplicate,
@@ -84,7 +92,8 @@ was to stop hiding them.
 ---
 
 ## CARD 4 — 🔴 the two bwi orders both appear, against their own receipts
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** 2026-09-02
+**PROVEN 2026-09-02 on build `7952cb1`** — each bwi row shows exactly one order, `history · Invoiced · #19837964`, each with a delivery reading **No date set**. Evidence: the same printed PDF as CARD 1.
 On each of the two bwi 2026-07-29 rows, look at **What it became**.
 
 **PASS:** **each** of the two rows shows **one order** — both reading `history` · `Invoiced` ·
@@ -96,7 +105,8 @@ Two orders carrying the same document number is a fact about the data, not a ren
 ---
 
 ## CARD 5 — the receipts that produced nothing say so, with no verdict attached
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** 2026-09-02
+**PROVEN 2026-09-02 on build `7952cb1`** — all six named rows read exactly *"No order recorded for this receipt."* **and nothing else** — no verdict attached. Evidence: the same printed PDF as CARD 1.
 Six rows produced no order: **bwi 2026-07-22 $1,098.86** · **bwi 2026-07-02 $1,356.31** ·
 **Sudderth Brothers 2026-08-20 $1,301.98** · **Bailey Bark 2026-04-28 $2,394.92** · and **both**
 Bailey Bark 2026-07-07 rows.
@@ -111,7 +121,8 @@ absence a reader has to interpret is the defect, not the fix.
 ---
 
 ## CARD 6 — the capture wizard is untouched, and a new capture appears in the list
-**STATUS:** owed · **DEVICE:** phone · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** phone · **PROOF:** 🖱 NEEDS INTERACTION · **LAST-PROVEN:** 2026-09-02
+**PROVEN 2026-09-02 on build `7952cb1`** — a new capture **rose to the top without a reload**. 🖱 Not print-provable: the evidence *is* the absence of a reload, which a printed page cannot show.
 On a phone, at `/receipts`:
 
 1. The list is above; **📷 Take Photo** is below it, unchanged.
@@ -125,7 +136,8 @@ On a phone, at `/receipts`:
 ---
 
 ## CARD 7 — the count is honest
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** 2026-09-02
+**PROVEN 2026-09-02 on build `7952cb1`** — the header reads a plain **"17 receipts"**, matching the **17 rows counted on the same page**. Evidence: the same printed PDF as CARD 1 — the count and the rows it counts are both in the one print, which is what makes this card provable on paper at all.
 Read the line under **Receipts captured**.
 
 **PASS:** with fewer than 100 receipts it reads a plain **"N receipts"**, and N equals the number of
@@ -138,7 +150,15 @@ not a third.
 ---
 
 ## CARD 8 — the list steps aside while you are filling the confirm form
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** desktop · **PROOF:** 🖱 NEEDS INTERACTION · **LAST-PROVEN:** 2026-09-02
+🔴 **THIS CARD FAILED FIRST, AND THE FAILURE IS KEPT — it is a better record than a green check.**
+**FAILED 2026-09-02 on build `7952cb1`:** the receipts list was on screen while the confirm form was
+up, **pushing the proven capture flow below the fold** — exactly the FAIL this card describes.
+✅ **FIXED by #257** — `listVisibleForStep('confirm')` returns false, shipped with a **negative
+probe** so the list cannot silently come back. The fix is in `main` (`32d5297` merge, `62d3d34` tip).
+⚠️ **RE-PROOF IS OWED ON THE FIXED BUILD.** `covered` here records the card was RUN and the loop
+closed; the fix itself has not been driven through the UI since it landed. 🖱 Not print-provable —
+the assertion is about what is on screen *during* a form step.
 Start a capture and get as far as the **confirm** screen (vendor / date / total / line items).
 
 **PASS:** the receipts list is **not** on screen — the form is at the top of the page where it has
@@ -149,7 +169,8 @@ push the proven flow below the fold.
 ---
 
 ## CARD 9 — 🔴 nothing was written
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** desktop · **PROOF:** 🖱 NEEDS INTERACTION · **LAST-PROVEN:** 2026-09-02
+**PROVEN 2026-09-02 on build `7952cb1`** — orders **30 before and 30 after**; receipts **17 across three loads at 14:11, 16:18 and 16:52**; **both duplicate pairs intact**; no figure moved. 🖱 Not print-provable from one print: the assertion is that three loads at three times agree, so it needs three prints or three live reads.
 Before opening `/receipts`, note the receipt count and the order count on `/orders`. Open
 `/receipts`, scroll the whole list, reload it three times. Go back.
 
@@ -162,7 +183,12 @@ repair happens to live customer data on a screen nobody asked to write.
 ---
 
 ## CARD 10 — the door is the one that was already there
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS:** needs-test · **DEVICE:** desktop · **PROOF:** 🔧 NEEDS SETUP · **LAST-PROVEN:** —
+🔧 **REASON IT CANNOT BE RUN: the account does not exist.** There is **no staff session without
+`costs:read` on `Test Dave's Tree Nest`**. This card needs the same account as Joel's
+production-manager role. Recorded as `needs-test` rather than left `owed`, because `owed` says
+*nobody has run it yet* and the truth is *nobody can run it yet* (OP-14 clause 2: an unrecorded
+hole is a lie by omission).
 Sign in as a member **without** `costs:read` (a STAFF session on Test Dave's) and go to `/receipts`.
 
 **PASS:** the page refuses the way it always has — the permission route renders and says so. The
@@ -173,7 +199,8 @@ the door behaves differently, something was minted by accident.
 ---
 
 ## CARD 11 — a delivery with no date says it has no date
-**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+**STATUS:** covered · **DEVICE:** desktop · **PROOF:** 📄 PRINT-PROVABLE · **LAST-PROVEN:** 2026-09-02
+**PROVEN 2026-09-02 on build `7952cb1`** — **both** bwi deliveries read **No date set**, in words, in the date position. Evidence: the same printed PDF as CARD 1.
 On either bwi 2026-07-29 row, look at the delivery under the order.
 
 **PASS:** it reads **No date set** — in words, in the same place a date would be.

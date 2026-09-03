@@ -6,6 +6,8 @@
 **Verifies:** `docs/customer-onboarding-capability_v1.md` (Lightning's 24-capability synthesis)
 **Method:** Four sources, only two are authority. (A) the v1 package = a claim. (B) `built-inventory.md` = a claim (same artifact-class as PLATFORM_STATE.md, which produced the phantom `pmi_assets`). (C) Cultivar code + tables + endpoints = authority. (D) Ignition code = authority for "already-proven-elsewhere." Every verdict below was formed from the CODE first (file:line), THEN compared to the flags. **Anti-anchoring held:** I did not confirm a flag because the doc said so.
 
+> ⚠️ **CORRECTED 2026-09-03 — THIS NOTE IS ONE GENERATION STALE. The live board now holds 26 rows** (0.1 · 1.1–1.5 · 2.1–2.3 · 3.1–3.7 · 4.1–4.3 · **5.1–5.7**), i.e. **25 L1–L5 capabilities**, not 24. Counted mechanically against `TRACE-SESSION-BOOTSTRAP.md` 2026-09-03 (ledger #261). The original note, preserved because it was true when written:
+>
 > **Note on the count.** The v1 doc is titled "24-capability" but enumerates **25 rows**: L0/0.1 is the foundation ("the why under everything"), not a demo-touching capability. The 24 are L1–L5. This report covers all 25; headline math uses the 24 (L1–L5) with 0.1 broken out.
 
 ---
