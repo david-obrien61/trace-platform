@@ -2,7 +2,7 @@
 
 **Capability:** vendor identity + preference (`/vendors`, and the vendor question on `/receipts`)
 **Ledger:** #259 · **Branch:** `thunder/vendor-identity` · **Rulings:** R-64 (implemented here for the quality preference) · R-65 (consolidation) · D-47 (identity) · R-50 · R-54
-**Last updated:** 2026-09-02
+**Last updated:** 2026-09-03
 **Proven:** 0 of 12 · **Owed:** 11 · **needs-test:** 1
 
 > Thunder never marks a card `covered`. Only David's live run does, with a date.
@@ -71,7 +71,11 @@ So:
 3. `/vendors` shows **two** rows. Nothing was merged.
 
 ### CARD 5 — 🔴 A MANAGER SEES THE MARK AND THE REASON (acceptance 2)
-**STATUS:** owed · **DEVICE:** desktop · **TENANT:** `f7ec5d67` as `test obrien`
+**STATUS:** owed · **DEVICE:** desktop
+🔴 **RUN THIS ON TEST DAVE'S TREE NEST (`f7ec5d67`) AS `test obrien`. NOT ON LAWNS.**
+**Running it on LAWNS gives a FALSE PASS.** Lauren holds `role = OWNER` there (David's 2026-08-28 ruling), so she is not a manager and would see the control she is
+supposed to be denied. `joel joiner` is MANAGER at LAWNS but `active = false`, so he cannot sign in either.
+**`test obrien` at `f7ec5d67` is the only active manager in the entire database** — measured 2026-09-02 across 3 businesses / 8 member rows.
 1. As an OWNER at `f7ec5d67`, mark a vendor preferred with a note.
 2. **Sign in as `test obrien` (MANAGER).** Open `/vendors`.
 3. **Expect: the vendor list loads, the PREFERRED mark is visible, and the note is readable.**
@@ -80,7 +84,10 @@ So:
 
 ### CARD 6 — 🔴 A MANAGER CANNOT SET IT, PROVEN BY ATTEMPTING (acceptance 3)
 **STATUS:** needs-test — **and the reason is stated rather than hidden.** The UI does not offer the control to a manager, so this cannot be proven through the UI alone; proving it needs a direct write, which is a console/SQL step and this card is therefore not `DEVICE: phone`.
-**How to actually prove it** (SQL editor, signed in as the manager is not possible there — so use the API/client console at `f7ec5d67` as `test obrien`):
+🔴 **RUN THIS ON TEST DAVE'S TREE NEST (`f7ec5d67`) AS `test obrien`. NOT ON LAWNS.**
+**On LAWNS this card CANNOT FAIL and therefore proves nothing** — Lauren is an OWNER there, so the write she attempts is one she is entitled to make and it will
+succeed correctly. A green tick from LAWNS would assert a refusal nobody ever provoked (R-33: a check that cannot disagree is not a check).
+**How to actually prove it** (the SQL editor runs as `postgres`, where `auth.uid()` is NULL and the guard deliberately permits the write — so it must be the browser console in a real manager session):
 ```js
 await supabase.from('vendors').update({ preferred: true }).eq('id', '<a vendor id>')
 ```
@@ -140,4 +147,9 @@ Read the subhead in each state and confirm it is *true*, not approximately true:
 - **It does not fix double-counting.** The seam now compares an id where one exists, but `cost_objects.receipt_id` is 0 of 5 and `business_inventory.receipt_id` is 0 of 447 (tech-debt #144) — the seam is fed by nothing on the live path. This is a correct mechanism on a path that is not yet travelled.
 - **It does not repair the two duplicate receipt pairs** (tech-debt #143, $1,283.88 overstated). Vendor identity makes them more visible, not fixed.
 - **It does not resolve any pre-existing receipt.** `receipts.vendor_id` is NULL on all 36 rows and stays that way — R-50 forbids retro-classifying a stored row.
-- **It does not answer the billing-unit question.** That is R-64's `vendor_preferences`, built by the other session; this build gives it a join key and a view, not an answer.
+- 🔴 **`vendors` HAS NO HOME FOR THE BILLING-UNIT ANSWER, AND THAT IS OWED BY RULING — NOT AN OVERSIGHT.** R-65 names it in its own words: *"`vendors` also has no home
+  for the billing-unit answer yet — `preferred`/`preference_note` answer a different question."* **They are two different questions about the same vendor:** *is Sudderth
+  the vendor I prefer?* (this build, R-64's quality half) and *when Sudderth bills me, is 20.72 yards or tons?* (R-64's billing half, answered on `/receipts/:id` and stored
+  in `vendor_preferences`). **Collapsing them onto one flag would make `preferred` mean two things**, and `preference_kind` exists in the other session's table precisely so
+  the axis can grow. This build gives that table a real `vendor_id`, a `vendor_preferences_resolved` view and a per-row link function — **a join, not an answer.**
+  ⚠️ **Whether the billing unit eventually moves onto `vendors` as a column, or stays a `preference_kind` row, is David's call and nobody should infer it from this build.**

@@ -105,7 +105,9 @@ BUILD: active
 ARC: ocr-doc-routing
 MAPS-TO: —
 PIECES: vendor_identity, vendor_alias, vendor_preference, capture_resolution
-NEEDS: ⚠️ **MAPS-TO is `—` for the same reason the story above it carries `—`** — the Receipt Keeper surface has no id on the 24-capability board, flagged at #252 and still unminted. A vendor list is arguably its own capability; **David assigns an id or says it rides another.** ⚠️ **The billing-unit half is R-64's and lives in `vendor_preferences`** — this story is the QUALITY preference, a different question about the same vendor.
+NEEDS: ⚠️ **MAPS-TO is `—` for the same reason the story above it carries `—`** — the Receipt Keeper surface has no id on the 24-capability board, flagged at #252 and still unminted. A vendor list is arguably its own capability; **David assigns an id or says it rides another.** 🔴 **The billing-unit half is R-64's OTHER half and lives in `vendor_preferences`, NOT here — and `vendors` deliberately has no column for it.** Two different questions
+about one vendor: *is Sudderth the vendor I prefer?* (this story) and *when Sudderth bills me, is 20.72 yards or tons?* (`/receipts/:id`). **R-65 names the gap explicitly**, so it is
+owed by ruling rather than missed; #259 gives that table a real `vendor_id` and a resolved view — a join, not an answer. **Whether it ever becomes a column on `vendors` is David's call.**
 _Written as-built 2026-09-02 (ledger #259). Bounced against the board first: **no matching story existed**, and the §9 gate says one is created before the spec. David's ruling in his own words: **"Terry sets preferred vendor in a screen, not necessarily by item — both items were the same tree, the quality was different."** That is Option C, and it is the same shape David gave the receipt-detail session the same day, filed there as [[R-64]] — **cited, not duplicated.**_
 
 Terry buys the same tree from two vendors. One is cheaper and the stock is
