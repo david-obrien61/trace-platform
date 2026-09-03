@@ -1,0 +1,102 @@
+-- supabase/migrations/20260903c_receipts_receipt_number.sql
+-- Adds `receipt_number text` to the receipts table.
+-- Ledger #270 · tech-debt #153 · David's ruling 2026-09-03.
+--
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- WHY — THE READER WAS ALREADY ASKED AND THE WRITER THREW THE ANSWER AWAY
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- This is not a new capability. It is a column for a value the platform has been extracting,
+-- paying for, and discarding on every capture since the receipts table was created.
+--
+--   ASKED  — api/receipts/ocr.ts asks for it in BOTH prompt shapes, by name:
+--              receipt shape : "receipt_number": "string or null — receipt, invoice, or
+--                               transaction number if printed"
+--              invoice shape : "receipt_number": "string or null — invoice / order number
+--                               if printed"
+--   READ   — the 2026-09-02 census of all 36 stored rows found receipt_number among the 17
+--            fields the model actually emits (recorded in 20260902_vendor_identity_and_
+--            preference.sql, "THE CENSUS FOUND THE CONSTRAINT" block).
+--   DROPPED— there is NO receipt_number column on `receipts` (the table is created by
+--            20260612_receipts.sql; the only later column adds are 20260613 line_items and
+--            20260614's five reconciliation columns), and it is absent from the INSERT in
+--            ReceiptKeeper.tsx. The value is parsed, then silently discarded at save.
+--
+-- MEASURED 2026-09-03 (read-only, service key, negative control returned PGRST205 so a zero is a
+-- real read and not a failed one): 37 receipts across 3 tenants — LAWNS 17, Test Dave's 18, a
+-- third 2. None of them can name the document it came from.
+--
+-- WHAT IT IS FOR, in the order the value lands:
+--   (1) IT IDENTIFIES THE DOCUMENT. "bwi invoice 4417453" is how a human refers to a receipt;
+--       "the 2026-07-02 bwi one" is how we have been forced to. It is the column David reads
+--       this screen for.
+--   (2) IT IS THE DEDUP KEY tech-debt #143 NEEDS. Two LAWNS receipts are duplicate captures of
+--       one vendor invoice and overstate spend by $1,283.88. `receipts` today has no unique
+--       index but its primary key, so nothing stops a third. A document number is the only
+--       field that can tell "the same invoice photographed twice" from "two real invoices to
+--       the same vendor on the same day for the same amount".
+--
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- WHAT THIS MIGRATION DELIBERATELY DOES NOT DO
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- 🔴 IT DOES NOT ADD THE UNIQUE INDEX, AND THAT IS NOT AN OVERSIGHT. The durable fix for #143 is
+--    a partial unique index on (business_id, vendor_id, receipt_number). It CANNOT LAND YET, for
+--    the same reason tech-debt #58 has not: an index that would REJECT rows already in the table
+--    cannot be created while those rows are there. The two duplicate LAWNS captures are live and
+--    unsettled. Creating the column now is what makes the backfill possible; the index follows
+--    once the duplicate pair is resolved, as its own migration. Adding both here would fail on
+--    apply and leave the column unshipped with it.
+--
+-- 🔴 IT DOES NOT BACKFILL. The 37 stored rows keep `receipt_number` NULL. The number is
+--    recoverable for many of them — `ocr_raw` holds the model's original text output — but a
+--    backfill that re-parses a stored envelope is a data write derived from a re-read, and
+--    D-9/A9 apply: an unpopulated column reads honestly as "not captured", whereas a column
+--    populated by a second, unreviewed parse reads as captured fact. Backfill is its own
+--    decision with its own evidence, and David has not been asked for it.
+--
+-- 🔴 IT IS NOT SYSTEM-MANAGED, AND THE REGISTRY SAYS SO. David's ruling, 2026-09-03: EDITABLE.
+--    It is a document fact the OCR can misread, not platform provenance like `receipt_id` or
+--    `source`. `systemManagedFields.ts` is deliberately NOT given a `receipt_number` entry, so
+--    the shared <DataSheet> lock does not apply and the owner can correct a misread number.
+--
+-- NO RLS CHANGE IS REQUIRED OR MADE. A new column on an existing table inherits that table's
+-- row-level policies; `receipts` already carries per-command member policies (SELECT gated on
+-- costs:read, UPDATE on costs:update — 20260727_rbac_resource_action_flip.sql) plus the
+-- owner-only edit guard added by 20260902_receipt_line_edit_and_vendor_preference.sql. There is
+-- no new table, so no entry in select-policy-declarations.json is owed.
+--
+-- ⚠️ APPLY NOTE FOR DAVID: run in the Supabase SQL editor as the default `postgres` role.
+--    NOT the dashboard TABLE EDITOR — that path is owned by `supabase_admin` and re-grants
+--    TRUNCATE/REFERENCES to `anon` (CLAUDE.md §6 r17). This is an ALTER on an existing table, so
+--    the ownership hazard does not arise, but the same window applies for consistency.
+--    It is additive, nullable, and takes no lock beyond a brief ACCESS EXCLUSIVE on a 37-row
+--    table: safe to run at any time, and safe to run twice.
+
+ALTER TABLE receipts ADD COLUMN IF NOT EXISTS receipt_number text;
+
+COMMENT ON COLUMN receipts.receipt_number IS
+  'The document''s own number as printed (invoice / receipt / transaction no.), read by OCR and correctable by the owner. NOT platform provenance: deliberately absent from systemManagedFields.ts so it stays editable. Intended dedup key for tech-debt #143; the partial unique index is owed and cannot land until the duplicate LAWNS captures are settled.';
+
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- VERIFICATION (run in the Supabase SQL editor AFTER applying — catalog-backed, §9 schema gate)
+-- ════════════════════════════════════════════════════════════════════════════════════════════
+-- (A) THE COLUMN EXISTS AND IS NULLABLE TEXT:
+--   SELECT column_name, data_type, is_nullable
+--   FROM information_schema.columns
+--   WHERE table_name = 'receipts' AND column_name = 'receipt_number';
+--   EXPECT exactly one row: receipt_number | text | YES
+--   A ZERO-ROW RESULT MEANS THE MIGRATION DID NOT APPLY — it does not mean "no data yet".
+--
+-- (B) NEGATIVE CONTROL — proves (A) can return nothing when it should:
+--   SELECT column_name FROM information_schema.columns
+--   WHERE table_name = 'receipts' AND column_name = 'receipt_number_xyz';
+--   EXPECT zero rows. If this returns a row, (A) is not evidence of anything.
+--
+-- (C) EVERY EXISTING ROW IS NULL — no silent backfill happened:
+--   SELECT count(*) AS total, count(receipt_number) AS populated FROM receipts;
+--   EXPECT total 37 (or higher if captures continued), populated 0.
+--
+-- (D) RLS IS STILL ON AND THE POLICY SET IS UNCHANGED (an ALTER must not disturb it):
+--   SELECT relrowsecurity FROM pg_class WHERE relname = 'receipts';        -- EXPECT true
+--   SELECT polname, polcmd FROM pg_policy
+--   WHERE polrelid = 'public.receipts'::regclass ORDER BY polname;
+--   EXPECT the same policy list as before this migration — adding a column changes none of them.
