@@ -33,7 +33,7 @@ import { CATEGORY_OPTS } from '@trace/shared/business-logic';
 import {
   DataSheet, TextCell, NumberCell, AmountCell, SelectCell, confidenceStyleFor, sheetStyles as SS,
   type DataSheetColumn,
-} from '../components/datasheet/DataSheet';
+} from '@trace/shared/components/datasheet/DataSheet';
 
 const STATUS_OPTIONS = ['ACTIVE', 'IN_REPAIR', 'OFFLINE', 'RETIRED'] as const;
 type AssetStatus = typeof STATUS_OPTIONS[number];

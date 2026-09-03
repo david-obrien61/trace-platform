@@ -26,7 +26,7 @@ import { useNavigate } from 'react-router-dom';
 import { ScanLine, AlertTriangle, Check, X, HelpCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
-import { DataSheet, sheetStyles as SS, type DataSheetColumn } from '../components/datasheet/DataSheet';
+import { DataSheet, sheetStyles as SS, type DataSheetColumn } from '@trace/shared/components/datasheet/DataSheet';
 import { fetchCommittedByLot, ALL_STATUS_VALUES, type CommittedByLot } from '../lib/inventoryStates';
 import {
   reconcileRow, buildWritePlan, planNetDelta,

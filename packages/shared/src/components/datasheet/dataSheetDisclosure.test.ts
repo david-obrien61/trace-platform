@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SRC = readFileSync(
-  join(process.cwd(), 'packages/cultivar-os/src/components/datasheet/DataSheet.tsx'), 'utf8');
+  join(process.cwd(), 'packages/shared/src/components/datasheet/DataSheet.tsx'), 'utf8');
 
 let passed = 0, failed = 0;
 const failures: string[] = [];

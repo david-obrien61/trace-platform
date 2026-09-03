@@ -79,7 +79,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Receipt } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { DataSheet, type DataSheetColumn } from '../datasheet/DataSheet';
+import { DataSheet, type DataSheetColumn } from '@trace/shared/components/datasheet/DataSheet';
 import {
   RECEIPTS_SELECT,
   RECEIPTS_PAGE_LIMIT,

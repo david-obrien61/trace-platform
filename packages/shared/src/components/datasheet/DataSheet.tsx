@@ -1,20 +1,45 @@
 // ============================================================
-// DataSheet — the ONE editable-grid engine (Cultivar OS)
+// DataSheet — the ONE editable-grid engine (PLATFORM — @trace/shared)
 // PURPOSE:      A generic, config-driven datasheet grid extracted from the inventory
 //               reconcile surface (board 5.1). Owns everything a business_* grid needs —
 //               global search, status quick-filter, sortable columns, show/hide-columns
 //               menu, per-row flag highlight + banner, optional row-expand, loading/error/
 //               empty states, count pill, header actions — so /inventory AND /assets are
-//               ONE engine + two column configs (AC-4 settle-once; kills the two-grid drift
+//               ONE engine + N column configs (AC-4 settle-once; kills the two-grid drift
 //               where assets was the old pre-datasheet pattern lacking sort/search/hide).
-// DEPENDENCIES: React only. NO supabase, NO business context — the engine is presentational.
+//               8 consumers today, all cultivar-os; it is reachable from any vertical and from
+//               `packages/shared` itself since the 2026-09-03 promotion.
+// DEPENDENCIES: `react` + `lucide-react` (icons) + the two files beside it, which import NOTHING.
+//               NO supabase, NO business context, NO permission hook, NO router — presentational.
 //               Each consuming page owns its data fetch + write handlers and wires them into
 //               the column render functions (which call the exported inline cell components).
 // OUTPUTS:      Renders the page chrome (title + actions), the toolbar, and the table. Emits
 //               nothing itself; writes happen inside the page's column render callbacks.
-// PLACEMENT:    cultivar components/ (not the shared package) — both consumers are cultivar
-//               pages and no second vertical consumes it yet. Promote to @trace/shared only
-//               when a real second-vertical consumer appears (standard-by-value, §6 r10).
+// PLACEMENT:    @trace/shared/components/datasheet — PROMOTED 2026-09-03 (#272), David's ruling.
+// 🔴 THE PRIOR PLACEMENT NOTE HERE WAS RIGHT WHEN WRITTEN AND WENT STALE WITHOUT ANYONE RE-READING IT.
+//               It said: "both consumers are cultivar pages and no second vertical consumes it yet —
+//               promote only when a real second-vertical consumer appears." That trigger HAD fired.
+//               `QboBooksReader.tsx` lives in packages/shared, wanted this grid, could not reach it
+//               (shared does not import the app) and shipped a plain bounded table instead. **The
+//               note assumed the second consumer would be a VERTICAL; it arrived from inside SHARED
+//               — a case the condition did not contemplate, so the condition read as unmet.**
+//               A trigger nobody re-reads is a decision that defaults silently (R-26's shape).
+// ⚠️ WHAT THE MOVE COST, MEASURED, because "it depends on cultivar" was the assumed obstacle and was
+//               false: the ENTIRE transitive closure is `react`, `lucide-react`, and the two sibling
+//               files beside this one — both of which import NOTHING. No supabase, no business
+//               context, no permission hook, no router, no tile registry. 8 consumer import lines.
+// ⚠️ THE DIRECTORY NAME `datasheet/` IS LOAD-BEARING AND MUST NOT BE RENAMED. The divergence cap
+//               (`verify-ui-standard-divergence.mjs`) detects a consumer by the path fragment
+//               `datasheet/DataSheet`; rename the folder and all 8 consumers silently become
+//               undeclared bespoke surfaces. Its carrier list keys on the full path too —
+//               `docs/standards/ui-control-standards.md` lines 18-19 move WITH this file or the
+//               engine is measured as a divergence from itself.
+// ⚠️ CULTIVAR COLOURS REMAIN IN `sheetStyles` (7x #27500A, 1x #EAF3DE) — an AC-4 debt CARRIED here,
+//               not created here: packages/shared already held 35 occurrences across 20 files before
+//               this file arrived. The fix is `design-system/tokens.ts` (which exports a per-vertical
+//               palette and has ZERO importers), and it is owed against SHARED, not against this
+//               component. Do not fix it here alone — 7 of 42 is a clean component in a package that
+//               is not clean.
 // INSTRUMENTATION (STD-003): the engine is silent; consumers emit `[TRACE:<area>]` on their
 //               loads/writes (invsheet for inventory, assets for the asset grid).
 // ============================================================

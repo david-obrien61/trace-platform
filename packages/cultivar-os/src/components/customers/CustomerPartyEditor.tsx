@@ -36,7 +36,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useBusinessContext } from '@trace/shared/context';
-import { sheetStyles as SS } from '../datasheet/DataSheet';
+import { sheetStyles as SS } from '@trace/shared/components/datasheet/DataSheet';
 import {
   persistCustomerPatch, insertCustomer, buildCustomerPatch, type CustomerTextField,
 } from './customerEdit';

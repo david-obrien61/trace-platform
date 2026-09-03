@@ -87,7 +87,7 @@ const ALLOWED = new Map([
   ['packages/shared/src/inventory/index.ts',               'the barrel re-export'],
   ['scripts/verify-unit-projection.mjs',                   'this cap'],
   ['scripts/backfill-inventory-units.ts',                  'the backfill — reads the derive, writes what it returns'],
-  ['packages/cultivar-os/src/components/datasheet/systemManagedFields.ts', 'the lock registry (declares them non-editable)'],
+  ['packages/shared/src/components/datasheet/systemManagedFields.ts', 'the lock registry (declares them non-editable)'],
 ]);
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -141,7 +141,7 @@ for (const { path, src } of FILES) {
 
 // B2 — the lock registry must claim all five, so the day one IS rendered it locks with a reason
 // (CLAUDE.md §6 r13) rather than appearing as a mystery-greyed cell.
-const REGISTRY = 'packages/cultivar-os/src/components/datasheet/systemManagedFields.ts';
+const REGISTRY = 'packages/shared/src/components/datasheet/systemManagedFields.ts';
 const regSrc = read(REGISTRY);
 for (const c of UNIT_COLS) {
   if (!new RegExp(`^\\s*${c}:\\s*\\{`, 'm').test(regSrc))

@@ -20,7 +20,7 @@
  * number that disagrees with its own trace is how the NEXT session misdiagnoses this.
  *
  * Run (pure TS, no React imported — esbuild → node):
- *   node_modules/.bin/esbuild packages/cultivar-os/src/components/datasheet/flagCounts.test.ts \
+ *   node_modules/.bin/esbuild packages/shared/src/components/datasheet/flagCounts.test.ts \
  *     --bundle --platform=node --format=cjs | node
  */
 

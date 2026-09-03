@@ -33,7 +33,7 @@ import { useBusinessContext } from '@trace/shared/context';
 import {
   DataSheet, SelectCell, sheetStyles as SS,
   type DataSheetColumn,
-} from '../components/datasheet/DataSheet';
+} from '@trace/shared/components/datasheet/DataSheet';
 import { CustomerPartyEditor, BLANK_PARTY_CUSTOMER, type PartyCustomer } from '../components/customers/CustomerPartyEditor';
 import { CUSTOMER_SELECT_CORE, CUSTOMER_SELECT_FULL, CUSTOMER_SEARCH_FIELDS, customerSearchHaystack } from '../components/customers/customerFieldRegistry';
 import { readPricingConfig, normalizeDiscountTypes, RETAIL_TIER_NAME, taxExemptionLabel, type DiscountType } from '@trace/shared/business-logic';

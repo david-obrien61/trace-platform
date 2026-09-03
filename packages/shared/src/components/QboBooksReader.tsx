@@ -593,10 +593,23 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
           name field at all (`invoiceList.ts` reads `CustomerRef.value` and never `.name`), so
           the constraint is structural and does not depend on this JSX staying careful.
 
-          ⚠️ AND IT IS NOT `<DataSheet>`, WHICH IS A DELIBERATE LIMIT RATHER THAN A CHOICE:
-          this component lives in `packages/shared` and the grid engine lives in
-          `packages/cultivar-os` — shared never imports the app, so the platform grid is not
-          reachable from here. A plain bounded table is what this surface can honestly have. */}
+          🔴 IT IS NOT `<DataSheet>`, AND THE REASON PREVIOUSLY WRITTEN HERE WAS FALSE. This said
+          the plain table was "a deliberate limit rather than a choice" because the grid engine lived
+          in `packages/cultivar-os` and shared never imports the app. The fact was true; the word
+          "limit" was not. **A package placement is not a structural constraint — it is a decision
+          somebody made, and this sentence dressed it as physics.** Measured when it was finally
+          questioned (2026-09-03, #272): the engine's ENTIRE dependency closure was `react`,
+          `lucide-react` and two zero-import siblings. Nothing had ever held it in cultivar-os.
+          `DataSheet.tsx` now lives at `@trace/shared/components/datasheet/DataSheet` and IS
+          reachable from here.
+          ⚠️ THIS TABLE IS STILL PLAIN, AND THAT IS NOW A CHOICE RATHER THAN A LIMIT — the promotion
+          did not convert this surface, deliberately: that is a separate build against G1-G7 with its
+          own owner-test cards, not a drive-by inside a move whose whole virtue is that `verify`
+          proves it changed no behaviour. Converting it is OWED, not done.
+          ✏️ FILED AS ITS OWN LESSON because it is the second time in a week a component comment
+          asserted a constraint its own repo contradicted (tech-debt #61 was the first, the
+          `ReceiptsList` divergence the second): a reason written once and never re-read becomes a
+          fact nobody checks. */}
       {parsed.invoices && parsed.invoices.length > 0 && (
         <div style={{ marginTop: 16 }}>
           <p style={{ fontSize: '0.875rem', color: DARK, fontWeight: 700, margin: '0 0 4px' }}>

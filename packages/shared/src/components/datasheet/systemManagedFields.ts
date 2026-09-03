@@ -1,5 +1,5 @@
 // ============================================================
-// systemManagedFields — the canonical SYSTEM-MANAGED field registry (Cultivar OS)
+// systemManagedFields — the canonical SYSTEM-MANAGED field registry (PLATFORM — @trace/shared)
 // PURPOSE:      The SINGLE SOURCE for the DataSheet "locked field" rule. A field listed here is
 //               SYSTEM-WRITE-ONLY — the platform sets it, the user NEVER edits it (timestamps,
 //               provenance links, identity/scope). Its DataSheet column renders a clickable LOCK
@@ -12,8 +12,15 @@
 //               calls per column). Keyed by field/column key — column keys match DB field names
 //               across the inventory / assets / customers configs, so ONE flat registry covers all
 //               three grids (add a field once → every grid that shows it locks it).
-// PLACEMENT:    beside DataSheet.tsx (cultivar components/) — promote to @trace/shared with the
-//               engine when a second-vertical consumer appears (standard-by-value, §6 r10).
+// PLACEMENT:    @trace/shared/components/datasheet, beside DataSheet.tsx — PROMOTED 2026-09-03
+//               (#272) with the engine. The prior note here carried the SAME stale trigger the
+//               engine's header did ("promote when a second-vertical consumer appears"): it had
+//               fired, from inside shared rather than from a vertical, and neither copy was re-read.
+// ⚠️ THIS PATH IS ASSERTED MECHANICALLY IN TWO PLACES — moving this file again means moving both:
+//               `scripts/verify-unit-projection.mjs` (lines 90 + 144, which READ this file and
+//               CRASH on ENOENT if it is not where they expect) and CLAUDE.md §6 r13, which names
+//               it as the canonical registry. The unit-projection cap was proven RED against the
+//               move before either was corrected.
 // ============================================================
 
 export interface SystemFieldInfo {

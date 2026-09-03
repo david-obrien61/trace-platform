@@ -36,7 +36,7 @@ import { findDuplicateSizeGroups, sizeGroupKey } from '@trace/shared/discovery/d
 import {
   DataSheet, TextCell, NumberCell, AmountCell, SelectCell, confidenceStyleFor, sheetStyles as SS,
   type DataSheetColumn,
-} from '../components/datasheet/DataSheet';
+} from '@trace/shared/components/datasheet/DataSheet';
 import { InventoryEditor, BLANK_INVENTORY_ITEM, type EditorInventoryItem, type InventoryPeer } from '../components/inventory/InventoryEditor';
 import { persistInventoryPatch, renameVariety, deleteInventoryRow } from '../components/inventory/inventoryEdit';
 import {

@@ -41,7 +41,7 @@ import { useBusinessContext } from '@trace/shared/context';
 import { variantGroupSlug, suggestSiblingSku, baseSkuOf } from '@trace/shared/inventory';
 import { findSizeTwin } from '@trace/shared/discovery/dupSize';
 import { errBorder, FieldError } from '@trace/shared/components/FieldError';
-import { sheetStyles as SS } from '../datasheet/DataSheet';
+import { sheetStyles as SS } from '@trace/shared/components/datasheet/DataSheet';
 import { insertInventory, persistInventoryPatch, renameVariety } from './inventoryEdit';
 import { statusSelectValue, resolveStatusSelection } from '../../lib/inventoryStates';
 

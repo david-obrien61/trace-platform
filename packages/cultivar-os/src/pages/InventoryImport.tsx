@@ -26,7 +26,7 @@ import { useNavigate } from 'react-router-dom';
 import { Upload, ArrowLeft, Check, AlertTriangle, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useBusinessContext } from '@trace/shared/context';
-import { sheetStyles as SS } from '../components/datasheet/DataSheet';
+import { sheetStyles as SS } from '@trace/shared/components/datasheet/DataSheet';
 import {
   parseCsv, mapColumns, duplicateSpineTargets, projectRows, resolveImportPlan, planAgainstLot,
   type ColumnMapping, type MapTarget, type MappedRow, type ImportRowPlan, type ImportVerdict,

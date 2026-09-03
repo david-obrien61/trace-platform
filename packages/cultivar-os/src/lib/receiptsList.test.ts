@@ -406,8 +406,14 @@ const bwiOrder: RawOrderRow = {
     'G8b: and the genuinely-empty state still says something DIFFERENT from the failure');
 
   // ── G9 THE DIVERGENCE IS GONE, AND THE FALSE REASON IS NOT REINSTATED ────────────────────
-  ok(/from '\.\.\/datasheet\/DataSheet'/.test(GRID),
-    'G9: the surface imports the shared grid engine. The divergence declaration is deleted, and the cap fails the build if one is left claiming otherwise');
+  // ⚠️ ASSERTS THE @trace/shared PATH, NOT A RELATIVE ONE — TIGHTENED 2026-09-03 (#272), when the
+  // engine was promoted out of cultivar-os. The previous form matched `'../datasheet/DataSheet'`,
+  // which encoded the ENGINE'S ADDRESS as if it were the assertion; the assertion was always "this
+  // surface uses the shared engine rather than a hand-rolled grid." Naming the shared package is
+  // STRICTLY STRONGER than the old form: it now also fails if someone forks a local copy back into
+  // cultivar-os and imports that, which the relative-path version would have happily accepted.
+  ok(/from '@trace\/shared\/components\/datasheet\/DataSheet'/.test(GRID),
+    'G9: the surface imports the shared grid engine FROM @trace/shared. The divergence declaration is deleted, and the cap fails the build if one is left claiming otherwise');
   ok(/renderExpand=/.test(GRID),
     '🔴 G9b: one row per receipt with the chain in a disclosure drawer — which is what the withdrawn reason claimed a grid could not do');
   ok(/FALSE WHEN IT WAS WRITTEN|withdrawn/i.test(GRID),

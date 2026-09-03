@@ -15,8 +15,8 @@ in either direction (below the bar, or gold-plating above our scope) requires an
 decision per the standard-by-value rule (CLAUDE.md §6 r10).
 
 The shared controls that carry these standards:
-- **`packages/cultivar-os/src/components/datasheet/DataSheet.tsx`** — the ONE grid engine (inventory / assets / customers inherit).
-- **`packages/cultivar-os/src/components/datasheet/systemManagedFields.ts`** — the field-display lock registry.
+- **`packages/shared/src/components/datasheet/DataSheet.tsx`** — the ONE grid engine (inventory / assets / customers inherit).
+- **`packages/shared/src/components/datasheet/systemManagedFields.ts`** — the field-display lock registry.
 - **`DataSheet.tsx → sheetStyles.modal`** — the shared modal/sheet convention.
 
 ---
