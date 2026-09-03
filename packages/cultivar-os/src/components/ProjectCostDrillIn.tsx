@@ -191,7 +191,13 @@ export function ProjectCostDrillIn({
     if (willOpen) console.log('[TRACE:PROJECTLENS] drill-in expand', { projectId: group.id, aggregate: key, lineItemCount: count, anyUncategorized: s.anyUncategorized });
     setOpen((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
   };
-  const openReceipt = () => { onClose(); navigate('/receipts'); }; // 🟡 no /receipts/:id deep-link yet
+  // 🟢 The deep link this line has wanted since it was written. `receiptId` is the cost item's
+  // own substantiating document; without one there is nothing to deep-link TO, so the list stays
+  // the honest destination rather than a /receipts/undefined that renders a failed read.
+  const openReceipt = (receiptId?: string | null) => {
+    onClose();
+    navigate(receiptId ? `/receipts/${receiptId}` : '/receipts');
+  };
 
   const hasMonthly = s.poolKnownMonthly > 0 || s.laborItems.length > 0 || s.otherItems.length > 0;
   const hasCapital = s.capitalItems.length > 0;
@@ -295,7 +301,7 @@ function LineRow({ label, value, strong }: { label: string; value: string; stron
  */
 function Aggregate({ label, value, suffix, items, isOpen, onToggle, onReceipt, strong }: {
   label: string; value: string; suffix: string; items: LineItem[];
-  isOpen: boolean; onToggle: () => void; onReceipt: () => void; strong?: boolean;
+  isOpen: boolean; onToggle: () => void; onReceipt: (receiptId: string | null) => void; strong?: boolean;
 }) {
   const expandable = items.length > 0;
   return (
@@ -321,7 +327,7 @@ function Aggregate({ label, value, suffix, items, isOpen, onToggle, onReceipt, s
 }
 
 /** One constituent cost row: name · category · confidence badge · amount · receipt link. Read-only. */
-function LineItemRow({ it, suffix, onReceipt }: { it: LineItem; suffix: string; onReceipt: () => void }) {
+function LineItemRow({ it, suffix, onReceipt }: { it: LineItem; suffix: string; onReceipt: (receiptId: string | null) => void }) {
   const weak = it.confidence === 'UNKNOWN' || it.confidence === 'ESTIMATED';
   return (
     <div style={S.itemRow}>
@@ -331,7 +337,7 @@ function LineItemRow({ it, suffix, onReceipt }: { it: LineItem; suffix: string; 
       </span>
       <span style={{ ...S.badge, background: weak ? '#fee2e2' : '#dcfce7', color: weak ? '#991b1b' : '#166534' }}>{it.confidence}</span>
       {it.receiptId
-        ? <button style={S.receipt} onClick={onReceipt} title="View in Receipt Keeper (no per-receipt link yet)"><Receipt size={12} /> Receipt</button>
+        ? <button style={S.receipt} onClick={() => onReceipt(it.receiptId)} title="Open this receipt"><Receipt size={12} /> Receipt</button>
         : <span style={S.noReceipt}>—</span>}
       <span style={S.itemAmt}>{money(it.amount)}{suffix}</span>
     </div>

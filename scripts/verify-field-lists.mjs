@@ -51,6 +51,26 @@ const COLUMN_LIST = /^[a-z_][a-z0-9_]*(\s*,\s*[a-z_][a-z0-9_]*){2,}$/i;
 // An entity deliberately carrying more than one enumeration, WITH ITS REASON. Same discipline as the
 // other caps: a decision on the record, never a convenience the builder grants itself.
 const ALLOWED_DIVERGENCE = {
+  // DECLARED 2026-09-02 (ledger #257) — ⚠️ PENDING DAVID'S RATIFICATION, the same standing as the
+  // two entries below. `vendor_preferences` is a table this build CREATED, and this is its FIRST
+  // and ONLY reader, so there is no restated field set yet — the ratchet is flagging a new list,
+  // not a divergence.
+  //
+  // 🔴 A REGISTRY IS NOT MINTED HERE, DELIBERATELY, AND TECH-DEBT #120 IS WHY. That row already
+  // records the call for exactly this shape: `receipts` is read through two hand-written lists and
+  // `cost_objects` through four, and the conclusion there was that "minting a registry inside an
+  // unrelated build is exactly the drift these caps exist to catch". Minting one for a table with a
+  // single reader, inside a build about receipt lines, would be the same mistake in the other
+  // direction — a registry per table on the day the table is born, none of them exercised.
+  //
+  // ⚠️ THE TRIGGER IS A SECOND READER. `cost_objects` (4 lists) and `receipts` (2) both outrank this
+  // one and should be taken together, as #120 says.
+  vendor_preferences: {
+    reason: 'Table created by this build; ONE reader (the standing vendor answer on /receipts/:id). '
+          + 'No restated record shape exists to derive from yet. A registry is owed when a SECOND '
+          + 'reader appears — and cost_objects and receipts outrank it (tech-debt #120).',
+    paths: ['packages/cultivar-os/src/pages/ReceiptDetail.tsx'],
+  },
   // APPROVED 2026-07-29 (David). THE DISTINCTION IS THE POINT OF THE ENTRY, so the next reader does
   // not "fix" it: these are 3-column lookup PROJECTIONS, not record shapes. A4 exists to stop a
   // RECORD's field set being restated in many places; a projection selecting three columns to answer

@@ -59,6 +59,35 @@ const isTooling = p => p.startsWith('scripts/');
 // known multi-path tables are held by the BASELINE, not by declarations — the baseline says
 // "known today", a declaration says "correct forever". They are different claims.
 const ALLOWED_DIVERGENCE = {
+  // DECLARED 2026-09-02 (ledger #257) — a NEW write path to two tables, both reached through ONE
+  // RPC, and the cap is right to have flagged it: `edit_receipt_line_items` writes `receipts` and
+  // appends to `audit_log`, and this page calls it, so the fold attributes both correctly.
+  //
+  // 🔴 IT IS ONE PATH, NOT TWO, AND IT IS THE ONLY SANCTIONED ONE. The whole reason the edit is an
+  // RPC rather than a client `.update()` plus a client audit insert is that two client statements
+  // can HALF-LAND — the correction persists and the audit row does not, leaving a trail with a
+  // hole in it that reads as complete. One plpgsql body cannot. `permissionManifest` already rules
+  // that audit rows are written "inside the funnel/RPCs as a side effect of an audited action" and
+  // that `audit_log:create` is not a grantable verb; this honours that rather than working around it.
+  //
+  // ⚠️ THE PAGE ITSELF WRITES NEITHER TABLE DIRECTLY. It holds no `.from('receipts').update()` and
+  // no `.from('audit_log').insert()` — `receiptDetail.test.ts` §U asserts the RPC's own UPDATE does
+  // not name `line_items_original` or `amount_original`, and the BEFORE UPDATE trigger refuses those
+  // columns on every path regardless of caller.
+  'receipts': {
+    reason: 'Line corrections go through edit_receipt_line_items (SECURITY DEFINER, owner-only), '
+          + 'which recomputes the reconcile verdict server-authoritatively and appends the audit '
+          + 'row in the SAME transaction. ReceiptKeeper still owns the INSERT at capture; this '
+          + 'path owns the UPDATE and nothing else writes it.',
+    paths: ['packages/cultivar-os/src/pages/ReceiptKeeper.tsx',
+            'packages/cultivar-os/src/pages/ReceiptDetail.tsx'],
+  },
+  'audit_log': {
+    reason: 'Append-only by RLS + trigger + REVOKE. The row is written INSIDE the audited action '
+          + '(edit_receipt_line_items) rather than by a separate client insert that could half-land '
+          + '— which is the manifest\'s own rule for this table. One writer, reached through one RPC.',
+    paths: ['packages/cultivar-os/src/pages/ReceiptDetail.tsx'],
+  },
   // DECLARED 2026-08-31 (the QuickBooks ShipDate delivery ingest). `deliveries` already carried
   // three approved writers; this is a FOURTH, and it is declared rather than folded because the
   // three that exist all write a delivery ATTACHED TO AN ORDER (checkout, OCR invoice, the
