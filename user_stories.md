@@ -144,7 +144,7 @@ BUILD: active
 ARC: ocr-doc-routing
 MAPS-TO: 3.5
 PIECES: capture_file_export, capture_file_replay, books_findings, first_look_report
-NEEDS: nothing — written as-built (#257). The acceptance run itself is owed: Lauren drives it on LAWNS live while David watches, and every question she asks him is a defect.
+NEEDS: nothing — written as-built (#260). The acceptance run itself is owed: Lauren drives it on LAWNS live while David watches, and every question she asks him is a defect.
 
 Lauren connects her QuickBooks and the platform says *give me a few minutes with your accounting
 information*. It reads her products, her customers and her invoice history — counting first, and

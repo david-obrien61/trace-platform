@@ -15,7 +15,7 @@
      VERBATIM. entries-in == entries-out: archive 281 -> 281 (one removed, one added),
      §3 back to 3. -->
 
-<!-- MOVED FROM CLAUDE.md §3 on 2026-09-02 by the #257 close-out (N=3, OP-13).
+<!-- MOVED FROM CLAUDE.md §3 on 2026-09-02 by the #260 close-out (N=3, OP-13).
      §3 held 3 before this entry was written; this is the overflow, moved VERBATIM.
      entries-in == entries-out: 1 archived, 1 written, §3 back to 3. -->
 
