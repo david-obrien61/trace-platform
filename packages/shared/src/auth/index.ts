@@ -72,10 +72,13 @@ export type {
 export {
   createInvitation,
   revokeInvitation,
+  resetInvitationExpiry,
   getPendingInvitations,
   expireInvitations,
+  invitationValidity,
+  INVITE_TTL_DAYS,
 } from './invitations';
-export type { CreateInvitationInput, CreateInvitationResult } from './invitations';
+export type { CreateInvitationInput, CreateInvitationResult, InvitationValidity } from './invitations';
 
 // Server-side: call from Vercel functions with service key
 export { previewInvitation, acceptInvitation } from './acceptInvitation';

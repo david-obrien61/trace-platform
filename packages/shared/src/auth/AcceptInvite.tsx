@@ -65,9 +65,17 @@ export function AcceptInvite({ apiBase = '', onRedirectTo, supabaseSignIn, navig
       .then(r => r.json())
       .then((data: { valid: boolean; businessName?: string; invitedName?: string; role?: string; reason?: string }) => {
         if (!data.valid) {
+          // 🔴 THIS SENTENCE CITED A PATH NOBODY HAD BUILT UNTIL 2026-09-04. It read "Ask the
+          // owner to send a new one" — and a sweep of all 1,061 commits on every branch found NO
+          // resend, reissue or regenerate had ever existed, in this repo or in the Ignition donor
+          // it was extracted from. Tech-debt #180's class: copy citing a path nobody built reads
+          // exactly like copy citing one that exists, which is what makes it persuasive. The
+          // owner now has "Reset invite" on this person's page, so the sentence is rewritten to
+          // name what that control actually does — the SAME link starts working again, so he
+          // should keep this one rather than wait for a new one to arrive.
           const msg =
             data.reason === 'used'    ? 'This invite link has already been used.' :
-            data.reason === 'expired' ? 'This invite link has expired (links are valid for 7 days). Ask the owner to send a new one.' :
+            data.reason === 'expired' ? 'This invite link has expired — invites are valid for 7 days. Ask whoever invited you to reset it, and this same link will start working again. Keep it.' :
             'This invite link is invalid.';
           setErrorMsg(msg);
           setPhase('error');

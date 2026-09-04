@@ -21,7 +21,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   getMembersByBusiness, removeMember, setMemberActive, setMemberPhone,
-  createInvitation, getPendingInvitations, revokeInvitation,
+  createInvitation, getPendingInvitations, revokeInvitation, resetInvitationExpiry,
+  invitationValidity, INVITE_TTL_DAYS,
   getRoleDefinitions, resolveRoles,
   saveRolePermissions, assignMemberRole, diffPermissions, CONFIDENTIAL_EXPOSURE,
   OWNER_LOCKED_SET,
@@ -422,13 +423,25 @@ function UsersTab(p: {
 
       {pending.length > 0 && (
         <div style={card}>
-          <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 800, color: T.sub, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Pending invites</p>
+          {/* S1 — the header names what the section can now hold. It used to say "Pending invites"
+              over a list the query guaranteed was live; open a person's row to reset a dead one. */}
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 800, color: T.sub, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Pending invites</p>
+          <p style={{ margin: '0 0 10px', fontSize: 12, color: T.sub }}>
+            Not yet accepted. An expired one is still recoverable — open that person to reset it.
+          </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {pending.map((inv) => (
               <div key={inv.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', background: '#fffbeb', borderRadius: 10, border: '1px solid #fcd34d' }}>
+                {/* 🔴 EXPIRED INVITATIONS REACH THIS LIST NOW (ledger #274). Until today the query
+                    filtered them out, so this row could only ever describe a live invite and
+                    "expires <date>" was true by construction. It no longer is — S1: a header's
+                    claim must hold for every row the section can CURRENTLY contain — so the row
+                    states which it is, in the same words the person's own card uses. */}
                 <div>
                   <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: T.ink }}>{inv.name}</p>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#b45309' }}>{inv.role} · expires {new Date(inv.expires_at).toLocaleDateString()}</p>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: invitationValidity(inv.expires_at).expired ? T.danger : '#b45309' }}>
+                    {inv.role} · {invitationValidity(inv.expires_at).label}
+                  </p>
                 </div>
                 <button onClick={() => { void handleRevoke(inv.id); }} disabled={working === inv.id}
                   style={{ background: '#fef2f2', border: 'none', borderRadius: 7, padding: '6px 12px', color: T.danger, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
@@ -499,6 +512,10 @@ function MemberDetail(p: {
 
   const myDevices = useMemo(() => devices.filter((d) => d.member_id === member.id), [devices, member.id]);
   const isOwnerRow = (member.role ?? '').toUpperCase() === 'OWNER';
+  // A PIN is an unlock gesture on top of a REAL Supabase session (CLAUDE.md §2, the locked auth
+  // rule) — so it presupposes an account, and `user_id` is the only honest test for one. `active`
+  // is NOT a substitute: a deactivated member still has an account and their PIN is still resettable.
+  const hasAccount = member.user_id !== null;
 
   // 🔴 THREE ROSTER WRITES ARE STILL FENCED ON `businesses.owner_id` (bm_owner_all), and the
   // 2026-08-28 access pass widened only the roster READ. Without these locks, an OWNER-ROLE member
@@ -544,6 +561,27 @@ function MemberDetail(p: {
     } catch (err) { setLoadError(err instanceof Error ? err.message : 'Phone update failed'); }
     finally { setBusy(false); }
   }
+  // ── RESET INVITE ────────────────────────────────────────────────────────────────────────────
+  // E7 — "A CONTROL THAT CHANGES ONE RECORD LIVES WHERE THAT RECORD IS OPENED, NOT ON THE ROW."
+  // This is the person's own page, inside the card that hands out their link, which is where the
+  // owner is standing when they discover the link is dead. NOT on the pending-invites row.
+  async function resetInvite() {
+    if (!pendingInvite) return;
+    setWorking('invite'); setBusy(true);
+    try {
+      const { newExpiresAt } = await resetInvitationExpiry(supabase, pendingInvite.business_id, pendingInvite.id);
+      console.log('[TRACE:INVITE] expiry reset', {
+        invitationId: pendingInvite.id, memberId: member.id, newExpiresAt,
+        note: 'same token — the link and QR on screen are unchanged',
+      });
+      // A9 — reload rather than patch local state. The screen must show what the DATABASE now
+      // says, not what this browser hoped it would; the RPC already refused loudly if it did not.
+      await reload();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Could not reset the invite');
+    } finally { setWorking(null); setBusy(false); }
+  }
+
   async function resetPin() {
     if (!window.confirm(`Reset ${member.name}'s PIN? Their current PIN stops working until they set a new one.`)) return;
     setBusy(true);
@@ -652,30 +690,80 @@ function MemberDetail(p: {
         </div>
       )}
 
-      {/* Invite — only meaningful while the member is still pending (link + QR, same token) */}
-      {pendingInvite && (
-        <div style={card}>
+      {/* ══ INVITE — link & QR ════════════════════════════════════════════════════════════════
+          Renders only while the invitation is PENDING (`used = false`); an accepted or withdrawn
+          invitation leaves `pending` and this card disappears, which is correct — there is nothing
+          to share and nothing to reset.
+
+          🔴 THIS CARD READ `expires_at` NOWHERE UNTIL 2026-09-04, and that was the defect, not an
+          omission of polish. Six sites in the whole repo read that column and this one — the only
+          surface that hands a human a link — was none of them, so a live invite on day 6 rendered
+          identically to one on day 1. David: "I could have sent that QR this morning and he would
+          have hit a dead end." The date is now stated BOTH WAYS, because an undated card and a
+          card that only warns when it is already too late are the same lie at different times. */}
+      {pendingInvite && (() => {
+        const validity = invitationValidity(pendingInvite.expires_at);
+        return (
+        <div style={{ ...card, borderColor: validity.expired ? '#f3d0d0' : T.border }}>
           <p style={sectionLabel}>Invite — link &amp; QR</p>
-          <p style={{ margin: '0 0 10px', fontSize: 13, color: T.sub }}>{member.name} hasn’t joined yet. Share the link or QR — both carry the same one-time token.</p>
+          <p style={{ margin: '0 0 6px', fontSize: 13, color: T.sub }}>
+            {validity.expired
+              ? `${member.name} hasn’t joined, and this link no longer works. Reset it and the same link and QR below start working again.`
+              : `${member.name} hasn’t joined yet. Share the link or QR — both carry the same one-time token.`}
+          </p>
+          {/* The state, in its own line, in the same words the pending list uses. */}
+          <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, color: validity.expired ? T.danger : T.primary }}>
+            {validity.expired ? '⚠️ ' : ''}{validity.label}
+          </p>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
             <input readOnly value={inviteLink} style={{ flex: 1, boxSizing: 'border-box', padding: '10px 12px', border: `1.5px solid ${T.border}`, borderRadius: 9, fontFamily: 'monospace', fontSize: 12, color: T.ink, background: '#fff' }} onFocus={(e) => e.currentTarget.select()} />
             <button onClick={() => copy(inviteLink, 'invite')} style={{ background: T.primary, color: '#fff', fontWeight: 800, padding: '0 16px', borderRadius: 9, border: 'none', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>{copied === 'invite' ? 'Copied!' : 'Copy link'}</button>
           </div>
           <QrImage content={inviteLink} T={T} caption="Scan to join" />
+          <div style={{ marginTop: 14, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
+            <button onClick={() => { void resetInvite(); }} disabled={busy || working === 'invite'}
+              style={{ background: validity.expired ? T.primary : 'none', color: validity.expired ? '#fff' : T.primary,
+                       fontWeight: 800, padding: '9px 16px', borderRadius: 9,
+                       border: validity.expired ? 'none' : `1px solid ${T.border}`,
+                       fontSize: 13, cursor: 'pointer', opacity: busy ? 0.5 : 1 }}>
+              {working === 'invite' ? 'Resetting…' : 'Reset invite'}
+            </button>
+            {/* The control says what it will do BEFORE it is pressed. "Reset" alone could as
+                easily mean a new link, and a new link is the one thing this must never do. */}
+            <p style={{ margin: '8px 0 0', fontSize: 12, color: T.sub, lineHeight: 1.45 }}>
+              Gives this invitation another {INVITE_TTL_DAYS} days. <strong>The link and QR above do not change</strong> —
+              anything already sent to {member.name} starts working again.
+            </p>
+          </div>
         </div>
-      )}
+        );
+      })()}
 
-      {/* Reset PIN — owner arms the reset; member sets a new PIN via the reset screen */}
+      {/* ══ RESET PIN ═════════════════════════════════════════════════════════════════════════
+          🔴 INERT FOR SOMEONE WHO HAS NEVER JOINED, AND IT USED TO LOOK LIKE A WORKING CONTROL.
+          A PIN is a daily unlock on a real Supabase account, and there is no account until the
+          invitation is accepted (`acceptInvitation.ts:85` is what creates the auth user). So for
+          a member whose `user_id` is NULL the whole path is dead in three places at once:
+          `armPinReset` nulls a `pin_hash` that is ALREADY null; the button then renders a
+          /reset-pin link; and `ResetPin.tsx:49-50` sends whoever opens it to a sign-in form they
+          have no credentials for. The button reported success and handed over a locked door.
+          Locked WITH AN EXPLANATION rather than hidden (§6 r13) — the control is real, it simply
+          is not available YET, and saying so is what distinguishes it from a broken one. */}
       {!isOwnerRow && (
         <div style={card}>
           <p style={sectionLabel}>Reset PIN</p>
           <p style={{ margin: '0 0 10px', fontSize: 13, color: T.sub }}>Revoke this person’s current PIN and let them set a new one from the reset screen.</p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button onClick={() => { void resetPin(); }} disabled={busy} style={{ background: T.primary, color: '#fff', fontWeight: 800, padding: '9px 16px', borderRadius: 9, border: 'none', fontSize: 13, cursor: 'pointer', opacity: busy ? 0.5 : 1 }}>Reset PIN</button>
+            <button onClick={() => { void resetPin(); }} disabled={busy || !hasAccount}
+              title={hasAccount ? undefined : 'Available once they have joined.'}
+              style={{ background: hasAccount ? T.primary : T.chipOffBg, color: hasAccount ? '#fff' : T.sub, fontWeight: 800, padding: '9px 16px', borderRadius: 9, border: hasAccount ? 'none' : `1px solid ${T.border}`, fontSize: 13, cursor: hasAccount ? 'pointer' : 'not-allowed', opacity: busy ? 0.5 : 1 }}>Reset PIN</button>
             <button disabled title="SMS not configured — connect later" style={{ background: T.chipOffBg, color: T.sub, fontWeight: 700, padding: '9px 16px', borderRadius: 9, border: `1px dashed ${T.border}`, fontSize: 13, cursor: 'not-allowed' }}>
               Send reset code by SMS — not configured
             </button>
           </div>
+          {!hasAccount && (
+            <LockNote T={T} text={`A PIN unlocks an account, and ${member.name} doesn’t have one until they accept their invite. Reset the invite above instead.`} />
+          )}
           {member.phone
             ? <p style={{ margin: '8px 0 0', fontSize: 12, color: T.sub }}>SMS would go to {member.phone} once texting is connected.</p>
             : <p style={{ margin: '8px 0 0', fontSize: 12, color: T.sub }}>Add a phone number to enable SMS delivery later.</p>}

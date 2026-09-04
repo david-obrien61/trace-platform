@@ -15,6 +15,7 @@ import {
   createInvitation,
   getPendingInvitations,
   revokeInvitation,
+  invitationValidity,
 } from '@trace/shared/auth';
 import type { Member, Invitation } from '@trace/shared/auth';
 import {
@@ -520,8 +521,19 @@ function TeamSection({ businessId }: { businessId: string }) {
           {/* Pending invitations */}
           {pending.length > 0 && (
             <>
-              <p style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+              {/* 🔴 EXPIRED INVITATIONS REACH THIS LIST NOW (ledger #274) — getPendingInvitations
+                  no longer filters them out, deliberately. The SAME helper the /team card uses
+                  states validity here, because two spellings of one fact is the drift STD-011
+                  names and the redundant copy is the one that goes stale.
+                  ⚠️ THE RESET CONTROL IS NOT HERE, AND ITS ABSENCE IS E7, NOT AN OVERSIGHT: "a
+                  control that changes one record lives where that record is opened, not on the
+                  row." This surface has no per-person page, so the row carries the read-only MARK
+                  and /team → the person → Invite carries the control. */}
+              <p style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
                 Pending invites
+              </p>
+              <p style={{ fontSize: '0.75rem', color: GRAY, marginBottom: 8 }}>
+                Not yet accepted. Reset an expired one from Team → that person.
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {pending.map(inv => (
@@ -531,8 +543,8 @@ function TeamSection({ businessId }: { businessId: string }) {
                   }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ margin: 0, fontWeight: 600, fontSize: '0.875rem', color: DARK }}>{inv.name}</p>
-                      <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#b45309' }}>
-                        Expires {new Date(inv.expires_at).toLocaleDateString()}
+                      <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: invitationValidity(inv.expires_at).expired ? RED : '#b45309' }}>
+                        {invitationValidity(inv.expires_at).expired ? '⚠️ ' : ''}{invitationValidity(inv.expires_at).label}
                       </p>
                     </div>
                     <span style={{

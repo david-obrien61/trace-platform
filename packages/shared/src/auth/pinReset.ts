@@ -36,11 +36,27 @@ export async function armPinReset(
   supabase: SupabaseClient,
   memberId: string,
 ): Promise<void> {
-  const { error } = await supabase
+  // 🔴 `.select('id')` ASKS FOR EVIDENCE IT LANDED, and this write needed it more than most.
+  // `bm_owner_all` is `owner_id`-scoped, so for an OWNER-ROLE member who is NOT
+  // `businesses.owner_id` this UPDATE matches ZERO ROWS AND RETURNS NO ERROR — and the console
+  // then printed "PIN revoked. Share this reset link:" over a link to a locked door. Its own
+  // sibling has guarded against exactly this since 2026-08-28 (invitations.ts, revokeInvitation),
+  // eight lines away in a neighbouring module, and this one did not. E5: "A write that changed
+  // nothing MUST NOT report success — a mutation reports success only on evidence it landed
+  // (affected-row count), not merely on the absence of an error."
+  //
+  // ⚠️ A ZERO-ROW RESULT HAS A SECOND CAUSE WORTH KNOWING: the member id does not exist. Both are
+  // "nothing was revoked", which is the only thing the caller can act on, so they share one
+  // sentence rather than guessing which happened.
+  const { data: hit, error } = await supabase
     .from('business_members')
     .update({ pin_hash: null })
-    .eq('id', memberId);
+    .eq('id', memberId)
+    .select('id');
   if (error) throw new Error(`armPinReset: ${error.message}`);
+  if (!hit?.length) {
+    throw new Error('armPinReset: the PIN was not revoked — you may not have permission to change this member');
+  }
 }
 
 /**
