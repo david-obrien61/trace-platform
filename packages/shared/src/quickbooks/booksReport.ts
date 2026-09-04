@@ -51,6 +51,17 @@ export interface WalkState {
   complete: boolean;
   /** True when this read came back from a saved file rather than a live connection. */
   fromFile: boolean;
+  /**
+   * 🔴 WHEN THIS WALK READ THEIR BOOKS — `YYYY-MM-DD`, or null if the read never ran.
+   *
+   * The report used to print "Generated <today>", which is the day somebody pressed a button.
+   * David: *"the report states ONE number — the one measured from the read in front of it — and
+   * says WHEN IT WAS READ. That is the only date on the page."* Generation date and read date
+   * are the same day on a live pull and can be weeks apart on a saved one, and it is the read
+   * date that every figure below is a fact about. The field did not previously reach this
+   * module at all, so deleting the drift lines alone would have left the wrong date behind.
+   */
+  queriedAt: string | null;
 }
 
 /** One thing the owner chose, and what it was applied to. Recorded so the paper can cite it. */
@@ -61,7 +72,9 @@ export interface ReportCorrection {
 }
 
 export interface ReportInput {
-  generatedAt: Date;
+  // 🔴 `generatedAt: Date` WAS HERE AND IS REMOVED. The page no longer carries a generation
+  // date, so a required input nobody reads is a dead parameter the next author would assume
+  // matters — and the clock is the one dependency this pure module is better off without.
   walks: WalkState[];
   findings: Finding[];
   corrections: ReportCorrection[];
@@ -69,7 +82,18 @@ export interface ReportInput {
 
 export interface BooksReport {
   title: string;
-  generatedAt: string;
+  /**
+   * 🔴 THE ONE DATE ON THE PAGE: when their books were READ.
+   *
+   * `{ kind: 'one' }` when every walk that ran read on the same day — the ordinary case.
+   * `{ kind: 'span' }` when they did not, because two walks read a fortnight apart is a fact
+   * about the report and collapsing it to one date would be inventing one. `{ kind: 'none' }`
+   * when nothing has been read; the renderer then says so rather than printing today.
+   */
+  readOn:
+    | { kind: 'one'; date: string }
+    | { kind: 'span'; earliest: string; latest: string }
+    | { kind: 'none' };
   /** Present and honest even when empty — see ② in the header. */
   corrections: ReportCorrection[];
   walks: WalkState[];
@@ -94,11 +118,25 @@ const money = (n: number): string => `$${Math.round(n).toLocaleString()}`;
 /** Assemble the model. No formatting decisions here — those belong to the renderer. */
 export function buildBooksReport(input: ReportInput): BooksReport {
   const measured = input.findings.filter(f => f.measured);
+
+  // 🔴 THE DATE COMES OFF THE WALKS, NOT OFF THE CLOCK. Only walks that actually RAN carry one —
+  // an unread walk contributes no date, because a read that did not happen did not happen on a
+  // day. The DATE ONLY: an accountant does not need 14:32:07, and a timestamp that precise
+  // invites someone to treat the page as a transaction record.
+  const dates = [...new Set(
+    input.walks.filter(w => w.read && w.queriedAt).map(w => (w.queriedAt as string).slice(0, 10)),
+  )].sort();
+  const readOn: BooksReport['readOn'] =
+    dates.length === 0 ? { kind: 'none' }
+    : dates.length === 1 ? { kind: 'one', date: dates[0] }
+    // Not an average, not the newest: BOTH ends, named. Two walks a fortnight apart is a fact
+    // about this report, and choosing one of the two dates would be asserting a read that never
+    // happened on that day for half the figures below it.
+    : { kind: 'span', earliest: dates[0], latest: dates[dates.length - 1] };
+
   return {
     title: REPORT_TITLE,
-    // The DATE ONLY. A report shown to an accountant does not need to say 14:32:07, and a
-    // timestamp that precise invites someone to treat it as a transaction record.
-    generatedAt: input.generatedAt.toISOString().slice(0, 10),
+    readOn,
     corrections: input.corrections,
     walks: input.walks,
     measured,
@@ -126,27 +164,38 @@ function walkLine(w: WalkState): string {
   return `<li><strong>${esc(WALK_TITLE[w.entity])}</strong> — read in full: all ${w.expected.toLocaleString()} of them${w.fromFile ? ', from a saved copy of your books' : ''}.</li>`;
 }
 
-/**
- * 🔴 THE RE-MEASUREMENT, PRINTED BESIDE THE CLAIM RATHER THAN INSTEAD OF IT.
- *
- * The figures in the 2026-08-29 analysis were never checked before they were written down, and
- * when they were checked on 2026-09-03 ten of them were wrong, stale, or measured over a
- * population nobody stated. Printing only the corrected number would leave a document nobody
- * could tell had ever been wrong — which is how a figure gets quoted confidently a second time.
- * Printing only the claim is worse. Both, always, and the report says which is which.
- *
- * ⚠️ IT IS EMITTED FOR CONFIRMATIONS TOO. *"We checked and it held"* is a result, and a
- * re-measurement shown only when it disagrees is a re-measurement the reader cannot trust.
- */
-function remeasuredLine(f: Finding): string {
-  if (!f.remeasured) return '';
-  return `<p class="p">Re-measured 3 September 2026: ${esc(f.remeasured)}</p>`;
-}
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// 🔴 `remeasuredLine()` WAS HERE AND IS DELIBERATELY GONE (David, 2026-09-04). NOT A TIDY-UP.
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// It printed "Re-measured 3 September 2026: …" under every finding, beside the quoted figure —
+// so the document Terry is handed carried TWO NUMBERS FOR ONE FACT, DISAGREEING. On the page:
+// *"$32,934 is still owed to you across 15 invoices"* directly above *"CONFIRMED — $30,736
+// across 14 invoices"*. And *"887 invoices do not record the date"* above *"CONFIRMED EXACT —
+// 881 of 1,469"*.
+//
+// David: *"That is my error. I asked for the measured value beside the quoted one so drift was
+// visible. THAT WAS FOR MY RECORD, NOT HER REPORT."*
+//
+// It also carried working notes into a customer document — *"41 is not derivable from any of the
+// three reads"*, *"the quoted pair is right under that second definition"*, *"not previously
+// computed"*. That is us talking to ourselves, in a document a customer keeps.
+//
+// ⚠️ THE DRIFT RECORD IS NOT DELETED, IT IS RELOCATED — it stays on the SCREEN panel, which
+// David reads and Lauren does not print (`BooksReview.tsx` still renders quoted + re-measured
+// side by side, and the reasoning for keeping both there is unchanged). The `remeasured` field
+// stays on `Finding` for exactly that reason. What changed is the AUDIENCE, not the honesty:
+// a report states ONE number — the one measured from the read in front of it — and says when
+// that read happened.
+//
+// ⚠️ AND THE TWO READS DISAGREE FOR A REAL REASON, RECORDED ONCE HERE SO NOBODY RE-DERIVES IT:
+// the live read is 1,480 invoices and 1,946 customers; the 29 August capture was 1,469 and
+// 1,936. HER BOOKS GREW. That is time passing, not drift — which is the other half of why a
+// report carrying both numbers misleads rather than informs.
 
 function findingLine(f: Finding): string {
   const worth = f.value === null ? '' : ` <span class="worth">${esc(money(f.value))} at stake</span>`;
   return `<li><p class="s">${esc(f.sentence)}${worth}</p>
-    <p class="p">${f.population.matched.toLocaleString()} of ${f.population.of.toLocaleString()} ${esc(f.population.noun)}</p>${remeasuredLine(f)}</li>`;
+    <p class="p">${f.population.matched.toLocaleString()} of ${f.population.of.toLocaleString()} ${esc(f.population.noun)}</p></li>`;
 }
 
 function recBlock(r: Recommendation, f: Finding): string {
@@ -161,6 +210,29 @@ function recBlock(r: Recommendation, f: Finding): string {
     </table>
     <p class="lim">What it does not fix: ${esc(r.limits)}</p>
   </div>`;
+}
+
+/**
+ * 🔴 THE ONLY DATE ON THE PAGE, AND IT IS THE DATE THEIR BOOKS WERE READ.
+ *
+ * Every figure below it is a fact about a moment, and that moment is the read — not the moment
+ * somebody pressed the button to print. A saved read re-opened in November still describes
+ * the day it was taken, exactly as the findings engine already measures "past due" against the
+ * read rather than against today.
+ *
+ * ⚠️ THE NO-READ CASE SAYS SO RATHER THAN FALLING BACK TO TODAY. A date printed over a report
+ * built on nothing is the report's most confident-looking claim and its least true one.
+ */
+function readOnLine(r: BooksReport): string {
+  if (r.readOn.kind === 'none') {
+    return 'Nothing has been read yet — this report is not based on your books.';
+  }
+  if (r.readOn.kind === 'one') {
+    return `Read from your QuickBooks company on ${esc(r.readOn.date)}. Everything in this report describes your books as they were on that day.`;
+  }
+  // BOTH ends named. See the builder: collapsing a span to one date asserts a read that did not
+  // happen on that day for half the figures underneath it.
+  return `Read from your QuickBooks company between ${esc(r.readOn.earliest)} and ${esc(r.readOn.latest)} — the parts of this report were read on different days, and both are given rather than one standing in for the other.`;
 }
 
 /**
@@ -185,7 +257,7 @@ export function renderBooksReportHtml(r: BooksReport): string {
      <p class="note">These are not problems we found. They are questions we could not answer from
      what has been read — so nothing below should be taken as good news or bad. They are usually
      the most useful page in here, because they are the questions your books cannot answer today.</p>
-     <ul class="f">${r.notComputed.map(f => `<li><p class="s">${esc(f.notMeasured ?? '')}</p>${remeasuredLine(f)}</li>`).join('')}</ul>`;
+     <ul class="f">${r.notComputed.map(f => `<li><p class="s">${esc(f.notMeasured ?? '')}</p></li>`).join('')}</ul>`;
 
   const corrections = r.corrections.length === 0
     // 🔴 SAID, NOT OMITTED. An absent line reads as "none were needed".
@@ -234,7 +306,7 @@ export function renderBooksReportHtml(r: BooksReport): string {
     <span>Choose &ldquo;Save as PDF&rdquo; to keep a copy.</span>
   </div>
   <h1>${esc(r.title)}</h1>
-  <p class="sub">Generated ${esc(r.generatedAt)}</p>
+  <p class="sub">${readOnLine(r)}</p>
   ${corrections}
   <h2>What this is built on</h2>
   <ul class="f w">${r.walks.map(walkLine).join('')}</ul>

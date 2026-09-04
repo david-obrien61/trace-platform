@@ -169,6 +169,28 @@ const EXEMPT = [
        + 'because folding two team surfaces together is its own build with its own owner-test.',
   },
   {
+    file: 'packages/shared/src/components/QboBooksReader.tsx',
+    match: /isOwner/,
+    why: 'THE TEST-FACILITY FILE LOADER — display, and it is the WEAKEST kind of case for this '
+       + 'list, which is why the reasoning is spelled out rather than gestured at. Unlike every '
+       + 'other entry here there is NO server enforcement behind it, because there is nothing to '
+       + 'enforce: the loader takes a file the person already has on their own machine, parses it '
+       + 'in their own browser, contacts nothing and writes nothing. A manager holding a capture '
+       + 'file can read it in a text editor; hiding this box removes no access they had. '
+       + '🔴 SO IT IS NOT AN ACCESS CONTROL AND MUST NOT BE CITED AS ONE. It is a PRESENTATION '
+       + 'decision, ruled by David 2026-09-04: a control offering to load "a saved read instead of '
+       + 'connecting" is a rehearsal instrument for previewing one company\'s books inside '
+       + 'another, and Lauren opening her accounting page should never have to parse that '
+       + 'sentence. Minting a permission string for it would be worse than this exemption — it '
+       + 'would assert a protection that does not exist, which is a false claim about a protection '
+       + 'rather than a missing one. '
+       + '⚠️ THE THING THAT WOULD MAKE THIS A REAL AUTHORITY DECISION IS IF THE LOADER EVER GAINED '
+       + 'A WRITE — an "import this file" path. At that moment this exemption must go and the '
+       + 'server becomes the gate, exactly as it already is for the two ingest panels. '
+       + 'Owner-test CARD 14 proves the rendering as a manager; nothing proves an access boundary, '
+       + 'because there is not one to prove.',
+  },
+  {
     file: 'packages/cultivar-os/src/pages/Profile.tsx',
     match: /isOwner/,
     why: 'DISPLAY-PATH BRANCH: which SOURCE a person\'s own name comes from (auth full_name vs the '

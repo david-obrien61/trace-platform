@@ -57,6 +57,24 @@ const MUTANTS = [
   // not a law — so it is guarded by an explicit invariant probe (captureReplay.test.ts §F),
   // which goes red the moment the completeness refusal is relaxed. If §F ever fails, this
   // entry stops being equivalent and becomes a real survivor.
+  // ══════════════════════════════════════════════════════════════════════════════════════
+  // P9-P11 — THE DEFECT THAT ACTUALLY SHIPPED, AND THE TWO NEAR-MISSES BESIDE IT.
+  // ══════════════════════════════════════════════════════════════════════════════════════
+  // P9 IS NOT A HYPOTHETICAL. It restores the code exactly as it ran in production for two days:
+  // `capture` absent from the projection, so a saved read rendered no invoice table and 13 of 16
+  // findings reported "could not work this out" over a file that held every invoice they needed.
+  // 🔴 THIS HARNESS PASSED THROUGHOUT. Every mutant above it changes a line some probe reads;
+  // the shipped defect changed a line NO probe reached, and a mutation score says nothing about
+  // an unreached seam. P9 exists so the harness now measures the thing it previously could not.
+  { id: 'P9', why: '🔴 THE SHIPPED DEFECT, RESTORED — `capture` is dropped, so the file door renders no invoice table and 13 of 16 findings go dark on a complete file',
+    from: '      pages: replay.rowBodies.map(body => ({ body })),',
+    to:   '      pages: [] as { body: string }[],' },
+  { id: 'P10', why: 'the capture carries the row bodies EMPTY-STRINGED — present, well-shaped, and parses to nothing (a key check that only tests presence would pass this)',
+    from: '      pages: replay.rowBodies.map(body => ({ body })),',
+    to:   '      pages: replay.rowBodies.map(() => ({ body: \'\' })),' },
+  { id: 'P11', why: '🔴 the capture reports a retrieved_total its own bodies do not support — completeness claimed over rows it is not carrying',
+    from: '      retrieved_total: replay.retrievedTotal,\n      complete: true as const,',
+    to:   '      retrieved_total: replay.retrievedTotal + 1,\n      complete: true as const,' },
   { id: 'P8', equivalent: 'guarded by captureReplay.test.ts §F — the gate makes expected !== retrieved unreachable',
     why: 'the retrieved count is taken from the expected count rather than from the rows',
     from: '    retrieved_total: replay.retrievedTotal,',

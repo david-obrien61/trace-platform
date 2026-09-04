@@ -184,7 +184,12 @@ export function BooksReview({ findings }: { findings: Finding[] }) {
                     <span style={{ color: '#9ca3af' }}>Not checked — </span>
                     {f.notMeasured}
                     <span style={{ color: AMBER }}> · 29 Aug analysis said: {f.quoted}</span>
-                {f.remeasured && <span style={{ color: GREEN }}> · re-measured 3 Sep: {f.remeasured}</span>}
+                    {/* ✏️ THIS LINE WAS HERE TWICE, identically, at two indent levels — a
+                        paste that would have printed the re-measurement twice in one sentence.
+                        It never showed, because the tier loop above filters to `f.measured` and
+                        this whole branch is unreachable today; that made it invisible to review
+                        AND to the screen. Recorded rather than silently deduped: the branch is
+                        kept (a tier could stop filtering) and the duplicate is not. */}
                     {f.remeasured && <span style={{ color: GREEN }}> · re-measured 3 Sep: {f.remeasured}</span>}
                   </p>
                 )}

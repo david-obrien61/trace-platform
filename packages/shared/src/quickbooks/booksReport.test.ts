@@ -15,6 +15,7 @@
  * §E  what could not be worked out is present and framed as neither good nor bad
  * §F  🔴 it asks for nothing
  * §G  escaping — a catalogue is free text
+ * §H  🔴 one number per fact, and one date: the day their books were READ
  *
  * Run:
  *   node_modules/.bin/esbuild packages/shared/src/quickbooks/booksReport.test.ts \
@@ -30,18 +31,21 @@ function ok(cond: boolean, msg: string): void {
 }
 
 const walk = (entity: WalkState['entity'], o: Partial<WalkState> = {}): WalkState =>
-  ({ entity, read: true, expected: 100, retrieved: 100, complete: true, fromFile: false, ...o });
+  ({ entity, read: true, expected: 100, retrieved: 100, complete: true, fromFile: false,
+     queriedAt: '2026-08-29T09:00:00.000Z', ...o });
 
 const finding = (o: Partial<Finding> = {}): Finding => ({
   id: 'f1', tier: 'money', shape: 'two-sources-disagree',
   sentence: 'Nine sales were charged below the price you set.',
   population: { matched: 9, of: 230, noun: 'sales' },
   measured: true, notMeasured: null, quoted: '53 rows', value: 1200,
+  // The drift record the REPORT must never print. It stays on `Finding` because the SCREEN
+  // still shows it — the audience changed, not the data.
+  remeasured: 'CONFIRMED — $30,736 across 14 invoices. 41 is not derivable from any of the three reads.',
   recommendation: null, needsAnswer: null, ...o,
 });
 
 const build = (o: Partial<ReportInput> = {}) => buildBooksReport({
-  generatedAt: new Date('2026-09-02T14:32:07.000Z'),
   walks: [walk('Item'), walk('Customer'), walk('Invoice')],
   findings: [finding()], corrections: [], ...o,
 });
@@ -50,7 +54,13 @@ const build = (o: Partial<ReportInput> = {}) => buildBooksReport({
 {
   const html = renderBooksReportHtml(build());
   ok(html.includes(REPORT_TITLE), 'the report carries its title');
-  ok(html.includes('2026-09-02'), 'and states WHEN it was generated — it outlives the session that made it');
+  // 🔴 RETARGETED 2026-09-04, AND THE OLD FORM IS RECORDED BECAUSE IT WAS THE DEFECT.
+  // This read `html.includes('2026-09-02')` — the fixture's GENERATION timestamp — and passed
+  // for as long as the page printed "Generated <today>". It asserted the document outlives its
+  // session, which is true and is not the point: the date a reader needs is the day the books
+  // were READ, because every figure below it is a fact about that moment and about no other.
+  ok(html.includes('2026-08-29'),
+    'and states WHEN THEIR BOOKS WERE READ — it outlives the session that made it, and the date it carries is the one the figures are true of');
   ok(!html.includes('14:32'), 'to the DAY, not the second — a precise timestamp invites it to be read as a transaction record');
   ok(/no corrections/i.test(html),
     '🔴 with NO corrections it SAYS "no corrections" — an absent line reads as "none were needed" rather than "none were made"');
@@ -190,6 +200,95 @@ const build = (o: Partial<ReportInput> = {}) => buildBooksReport({
     '🔴 anything from their own books is escaped — an item name is free text, and one with a bracket in it would break the document they are about to hand someone');
   ok(!html.includes('<B&B>'), 'and the raw form does not survive into the markup');
 }
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// §H 🔴 THE CUSTOMER DOCUMENT CARRIES ONE NUMBER PER FACT, AND ONE DATE: WHEN IT WAS READ
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// WHAT WAS ON THE PAGE HANDED TO TERRY, and why this section exists: every finding printed its
+// live figure AND a "Re-measured 3 September 2026" line, and they disagreed —
+//   "$32,934 is still owed to you across 15 invoices"
+//   "Re-measured 3 September 2026: CONFIRMED — $30,736 across 14 invoices"
+// Two numbers for one fact, disagreeing, in a document a customer keeps. Alongside working
+// notes addressed to us: "41 is not derivable from any of the three reads", "the quoted pair is
+// right under that second definition", "not previously computed".
+//
+// 🔴 NO PROBE IN THIS FILE EVER ASSERTED ANYTHING ABOUT THAT LINE, in either direction. The
+// report suite tested structure and never read the sentences the document actually prints —
+// which is why a working note could sit in a customer deliverable through a green suite.
+//
+// The drift record is NOT deleted, it is RELOCATED to the screen panel David reads. So these
+// probes assert an AUDIENCE boundary: `remeasured` is populated on every fixture finding here,
+// and must appear nowhere in the rendered HTML.
+{
+  const html = renderBooksReportHtml(build());
+
+  ok(html.indexOf('Re-measured') === -1 && html.indexOf('re-measured') === -1,
+    '🔴 the report prints NO re-measurement line — the fixture findings all carry one, so this can only pass by the renderer refusing it');
+  ok(html.indexOf('$30,736') === -1,
+    'and the second, disagreeing figure is not in the document at all — one fact, one number');
+  for (const note of ['not derivable', 'not previously computed', 'second definition']) {
+    ok(html.indexOf(note) === -1,
+      `and the working note "${note}" does not reach a page a customer keeps`);
+  }
+
+  // 🔴 THE COULD-NOT-WORK-OUT PAGE TOO — ADDED AFTER A MUTANT SURVIVED (R13).
+  // The block above renders only MEASURED findings, so it exercised one of the two places that
+  // printed the drift line. A mutant restoring it on the OTHER page passed green: the notes most
+  // likely to be internal are attached to the rules that could not be computed, which is exactly
+  // the page this probe was not looking at. Both surfaces, or the probe covers the tidier half.
+  const unmeasured = renderBooksReportHtml(build({ findings: [finding({
+    measured: false,
+    notMeasured: 'We could not work out how many income accounts are in use.',
+    remeasured: '13 accounts across the 685 products. 41 is not derivable from any of the three reads.',
+  })] }));
+  ok(unmeasured.indexOf('We could not work out how many income accounts') !== -1,
+    'the unmeasured finding really is on the page — otherwise the next assertion proves nothing');
+  ok(unmeasured.indexOf('Re-measured') === -1 && unmeasured.indexOf('not derivable') === -1,
+    '🔴 and the could-not-work-out page carries no drift line and no working note either — the page whose notes are MOST likely to be internal');
+
+  // ── the one date, and it is the READ ──────────────────────────────────────────────
+  ok(html.indexOf('2026-08-29') !== -1,
+    '🔴 the page carries the date their books were READ (2026-08-29), taken off the walks');
+  ok(html.indexOf('Generated') === -1,
+    'and it does NOT say "Generated" — that was the day someone pressed a button, not the day the figures became true');
+  ok((html.match(/2026-\d\d-\d\d/g) ?? []).every(d => d === '2026-08-29'),
+    '🔴 and it is the ONLY date on the page — every date the document prints is that same read date');
+}
+
+// ── §H2 the read date is derived, not assumed: span, absence, and a negative control ──
+{
+  // Walks read on different days: BOTH ends named, never one standing in for the other.
+  const span = renderBooksReportHtml(build({ walks: [
+    walk('Item',     { queriedAt: '2026-08-29T09:00:00.000Z' }),
+    walk('Customer', { queriedAt: '2026-08-29T09:10:00.000Z' }),
+    walk('Invoice',  { queriedAt: '2026-09-04T11:00:00.000Z' }),
+  ] }));
+  ok(span.indexOf('2026-08-29') !== -1 && span.indexOf('2026-09-04') !== -1,
+    '🔴 walks read on different days print BOTH ends — collapsing them would assert a read that did not happen on that day for half the figures below it');
+
+  // Nothing read: it says so. A date over a report built on nothing is its most confident-
+  // looking claim and its least true one.
+  const none = renderBooksReportHtml(build({ walks: [
+    walk('Item',     { read: false, queriedAt: null }),
+    walk('Customer', { read: false, queriedAt: null }),
+    walk('Invoice',  { read: false, queriedAt: null }),
+  ] }));
+  ok(none.indexOf('Nothing has been read yet') !== -1,
+    'a report over nothing SAYS it is over nothing rather than falling back to today');
+  ok((none.match(/\d{4}-\d\d-\d\d/g) ?? []).length === 0,
+    '🔴 and it prints no date at all — not even one that looks harmless');
+
+  // NEGATIVE CONTROL (R-33): an unread walk must not contribute its stale timestamp.
+  const mixed = buildBooksReport({
+    walks: [walk('Item', { queriedAt: '2026-09-04T11:00:00.000Z' }),
+            walk('Customer', { read: false, queriedAt: '2026-01-01T00:00:00.000Z' }),
+            walk('Invoice', { read: false, queriedAt: null })],
+    findings: [finding()], corrections: [],
+  });
+  ok(mixed.readOn.kind === 'one' && mixed.readOn.date === '2026-09-04',
+    '🔴 NEGATIVE CONTROL — a walk that never RAN contributes no date, even carrying one: a read that did not happen did not happen on a day');
+}
+
 
 console.log(`\n  booksReport — ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

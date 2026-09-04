@@ -39,12 +39,30 @@ import { parseCustomerList, summariseCustomers, previewCustomers,
          type QboCustomerRow, type CustomerBreakdown } from './customerList';
 import { parseInvoiceList, summariseInvoices, type InvoiceBreakdown } from './invoiceList';
 
-/** The keys each entity's LIVE payload carries, as data, so a probe can hold this file to it. */
+/**
+ * The keys each entity's LIVE payload carries, as data, so a probe can hold this file to it.
+ *
+ * 🔴 THESE ARE THE DIFFERENTIATING KEYS, AND SAYING SO IS NOT PEDANTRY — IT IS THE BUG.
+ * `capture` is returned by all three live handlers identically, so it is not listed here, and
+ * for two days it was not RETURNED here either: a shape stated as a set of differences cannot
+ * describe a key that every shape shares, and neither can a probe built from that set. The
+ * universal keys are enumerated separately, below, precisely so the next one cannot go missing
+ * by being unremarkable.
+ */
 export const PROJECTED_KEYS = {
   Item:     ['items', 'breakdown'],
   Customer: ['breakdown', 'preview'],
   Invoice:  ['breakdown'],
 } as const;
+
+/**
+ * The keys EVERY projected read carries, whatever the entity. `capture` earns its place here
+ * rather than in the map above because it is the one the asymmetry hid.
+ */
+export const UNIVERSAL_PROJECTED_KEYS = [
+  'ok', 'entity', 'realm_id', 'queried_at', 'expected_total', 'retrieved_total',
+  'complete', 'pages_fetched', 'breakdown', 'stored', 'source', 'capture',
+] as const;
 
 export interface ProjectedRead {
   ok: true;
@@ -64,6 +82,35 @@ export interface ProjectedRead {
   stored: false;
   /** 🔴 The one field the live payload does NOT have. A screen must be able to say so. */
   source: CaptureReplay['source'];
+  /**
+   * 🔴 THE VERBATIM ROW BODIES, CARRIED THROUGH — THE FIELD WHOSE ABSENCE MADE THE FILE DOOR
+   * A DIFFERENT DOOR.
+   *
+   * The live handlers all return `capture: done.capture`, and `QboBooksReader` parses the
+   * invoice list out of it in the browser (the invoice endpoint deliberately never sends parsed
+   * invoice records, so the raw bodies are the ONLY route to them). Dropping it here meant a
+   * saved read rendered no invoice table and left every invoice-derived finding unmeasured —
+   * on a file that held every invoice those findings needed.
+   *
+   * ⚠️ IT IS RECONSTRUCTED, NOT PASSED THROUGH, AND IT CARRIES ROW PAGES ONLY. `CaptureReplay`
+   * keeps `rowBodies` and discards the `select count(*)` page once it has USED it to prove the
+   * file complete. Row pages are what a parser wants and `pages_fetched` already counts exactly
+   * them, so the two agree by construction instead of by an off-by-one nobody would see.
+   *
+   * ⚠️ IT EXPOSES NOTHING NEW. These bytes came off a file the operator opened on their own
+   * machine; the browser held them before it called this function. The withholding that matters
+   * — no parsed customer records, no parsed invoice records, no preview on the invoice path —
+   * is unchanged, and §C of the probe file asserts it over every parsed field.
+   */
+  capture: {
+    entity: CaptureReplay['entity'];
+    realm_id: string;
+    queried_at: string | null;
+    expected_total: number;
+    retrieved_total: number;
+    complete: true;
+    pages: { body: string }[];
+  };
 }
 
 /**
@@ -85,6 +132,16 @@ export function projectCapture(replay: CaptureReplay): ProjectedRead {
     pages_fetched: replay.rowPageCount,
     stored: false as const,
     source: replay.source,
+    // See the field doc above: row pages only, reconstructed from the bodies the gate verified.
+    capture: {
+      entity: replay.entity,
+      realm_id: replay.realmId,
+      queried_at: replay.queriedAt,
+      expected_total: replay.expectedTotal,
+      retrieved_total: replay.retrievedTotal,
+      complete: true as const,
+      pages: replay.rowBodies.map(body => ({ body })),
+    },
   };
 
   if (replay.entity === 'Item') {

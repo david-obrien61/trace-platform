@@ -50,13 +50,16 @@
 // ══════════════════════════════════════════════════════════════════════════════
 import React, { useState } from 'react';
 import { authHeaders } from '../auth/authHeaders';
+import { useBusinessContext } from '../context';
 import { rawCaptureFileName, QBO_ROUTE, QBO_ENTITIES, type QboEntity } from '../quickbooks/qboRead';
 import type { QboItemRow, ItemBreakdown } from '../quickbooks/itemList';
 import type { QboCustomerRow, CustomerBreakdown } from '../quickbooks/customerList';
-import { BUNDLE_ITEM_NAMES, parseInvoiceList, invoiceRowsForDisplay, type InvoiceBreakdown, type QboInvoiceRow } from '../quickbooks/invoiceList';
+import { BUNDLE_ITEM_NAMES, parseInvoiceList, type InvoiceBreakdown, type QboInvoiceRow } from '../quickbooks/invoiceList';
 import { parseShipmentList } from '../quickbooks/shipmentIngest';
 import { evaluateBooks, type BooksInput, type Finding } from '../quickbooks/booksFindings';
 import { BooksReview } from './BooksReview';
+import { DataSheet } from './datasheet/DataSheet';
+import { buildInvoiceGrid, invoiceSearchText, type InvoiceGridRow, type InvoiceFlag } from '../quickbooks/invoiceGrid';
 import { readCaptureFile, REPLAY_SOURCE } from '../quickbooks/captureReplay';
 import { projectCapture } from '../quickbooks/captureProjection';
 import { buildBooksReport, renderBooksReportHtml, type WalkState } from '../quickbooks/booksReport';
@@ -71,18 +74,124 @@ const ENTITY_NOUN: Record<QboEntity, string> = {
   Item: 'products & services', Customer: 'customers', Invoice: 'invoices',
 };
 
-/**
- * How many invoice rows the screen shows. It is a DISPLAY cap, never a read cap — the walk is
- * always complete and the count beside the table says so, per R-24: a list that cannot prove it
- * is the whole list is a failure, and a list that IS capped must say what it is capped to.
- */
-export const INVOICE_ROWS_SHOWN = 100;
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// 🔴 `INVOICE_ROWS_SHOWN = 100` WAS HERE. IT IS GONE, AND WHY IT WAS WRONG IS THE RECORD.
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// Its comment read: *"a DISPLAY cap, never a read cap — the walk is always complete and the count
+// beside the table says so."* Every clause of that was true and the conclusion was still wrong.
+// The WALK was complete; the SCREEN was not, and the grid's search filters over what the screen
+// was handed. At LAWNS's 1,480 invoices a search for a 2024 invoice reported nothing found for an
+// invoice that exists — a WRONG ANSWER, not a slow one, on a page where every visible pixel is
+// correct. A caption naming the cap does not travel with the answer a reader gets four minutes
+// later, which is the half "the count beside the table says so" did not cover.
+//
+// The ceiling now lives in `../quickbooks/invoiceGrid` at 5,000 — high enough that LAWNS is not
+// capped at all, so the search is EXACT rather than merely labelled — and when it IS reached the
+// limit is stated on the search control itself. Removed rather than raised in place, because the
+// number was never the defect: deciding completeness in a component nothing could probe was.
+// See `invoiceGrid.ts` for the reasoning and `invoiceGrid.test.ts` §B for the provoked case.
 
 const GREEN = '#27500A';
 const GRAY  = '#6b7280';
 const RED   = '#A32D2D';
 const DARK  = '#111827';
 const AMBER = '#92400e';
+/** 🔴 THE FACILITY'S OWN COLOUR, SO IT STOPS BORROWING THE WARNING'S. See the file-door block
+ *  below: amber on this card means "a warning about state" (the test-mode banner, the saved-read
+ *  banner, the file-holds-names notice). A facility is not a warning, and when both wore amber
+ *  the one thing this screen wants noticed — a single green button — was competing with a file
+ *  input for the eye. */
+const SLATE = '#475569';
+
+/**
+ * 🔴 THE OWNER'S WORDS FOR EACH FLAG, IN ONE PLACE — and this column is a READ-ONLY MARK, which
+ * is now a filed clause rather than a preference. `ui-control-standards.md` E7 (minted 2026-09-04,
+ * after this grid was designed): *"A control that changes one record lives where that record is
+ * opened, not on the row. The row carries a READ-ONLY MARK of the result."* Its two binding
+ * constraints are both met here and both were checked rather than assumed:
+ *   ① §5 clause 4 — the mark carries what distinguishes THIS row and never restates the header.
+ *     The banner says how many rows need a look and what the three reasons are; each cell says
+ *     WHICH one applies to that row. Header carries the shared fact, cell carries the difference.
+ *   ② G8 — it must not read as clickable. These are plain text spans: no handler, no pointer
+ *     cursor, no button chrome. A mark that looks like a control and is not is a dead affordance.
+ *
+ * ⚠️ `'zz-nothing-found'` IS A SORT TOKEN, NOT A LABEL, AND IT IS NEVER RENDERED. The cell for an
+ * unflagged row reads "Nothing found"; this string exists only to sort every clean row BELOW every
+ * flagged one under `asc`, so clicking this header brings the rows needing attention to the top —
+ * which is the only reason anyone would sort by it. Named ugly on purpose so nobody mistakes it
+ * for copy and "fixes" it into the display.
+ */
+const FLAG_LABEL: Record<NonNullable<InvoiceFlag> | 'none', string> = {
+  'duplicate-number':            'Invoice number used twice',
+  'duplicate-customer-same-day': 'Billed twice on one day',
+  'unreadable':                  'Could not read this record',
+  'none':                        'zz-nothing-found',
+};
+
+/**
+ * Money, or an honest statement that there is none recorded.
+ *
+ * 🔴 `$0.00` AND "NOT RECORDED" ARE DIFFERENT ANSWERS AND MUST STAY DIFFERENT ON SCREEN. A
+ * settled invoice really does have a zero balance; an unreadable one has no balance at all, and
+ * rendering the second as the first tells an owner a bill was paid (D-9 / A9 — absent is not
+ * empty). Every money cell on this grid goes through here so no column can drift into deciding
+ * that for itself.
+ */
+function Money({ n }: { n: number | null }) {
+  if (n === null) return <span style={{ color: GRAY }}>Not recorded</span>;
+  return <>{`$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</>;
+}
+
+/**
+ * The row drawer: what was on this invoice.
+ *
+ * ⚠️ NO SECOND READ, AND THAT IS NOT AN OPTIMISATION — IT IS WHY THIS DRAWER IS ALLOWED TO
+ * EXIST. `QboInvoiceRow` already carries `lines`, parsed in the browser out of the capture the
+ * browser already holds. The receipts drawer needed a per-row fetch because putting `line_items`
+ * into that list projection downgraded a structural guard from *"the inputs are not in hand"* to
+ * *"we have them and choose not to re-derive"*. Nothing of the sort applies here.
+ *
+ * ⚠️ AND NOTHING IN A LINE NAMES A PERSON. `QboInvoiceLine` carries a detail type, an item id
+ * and name, a quantity, an amount and a unit price — there is no free-text description field on
+ * the type at all, so the drawer cannot surface a note someone typed about a customer.
+ */
+function InvoiceLines({ row }: { row: { lines: { detailType: string | null; itemName: string | null;
+                                                 qty: number | null; amount: number | null;
+                                                 unitPrice: number | null }[] } }) {
+  if (row.lines.length === 0) {
+    // Named, not blank. An empty drawer reads as a loading failure.
+    return <p style={{ margin: 0, fontSize: '0.8125rem', color: GRAY }}>
+      This invoice came back with no lines on it.
+    </p>;
+  }
+  return (
+    <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.8125rem' }}>
+      <thead>
+        <tr>{['What', 'Qty', 'Each', 'Amount'].map((h, i) => (
+          <th key={h} style={{ ...head, textAlign: i === 0 ? 'left' : 'right' }}>{h}</th>
+        ))}</tr>
+      </thead>
+      <tbody>
+        {row.lines.map((l, i) => (
+          <tr key={i}>
+            {/* An item name is what R-77 permits and what recognition runs on. A line with no
+                item is a discount, a subtotal or a note — it says which rather than showing a
+                blank the reader has to account for. */}
+            <td style={cell}>{l.itemName ?? <span style={{ color: GRAY }}>{l.detailType ?? 'No item recorded'}</span>}</td>
+            <td style={{ ...cell, textAlign: 'right' }}>
+              {l.qty === null ? <span style={{ color: GRAY }}>—</span> : l.qty.toLocaleString()}
+            </td>
+            {/* 🔴 UNIT PRICE IS INTUIT'S OWN FIELD AND IS NEVER DERIVED FROM amount/qty. Deriving
+                it would invent a price on every line where qty is null, zero, or a DOLLAR BASE
+                rather than a count — which is what qty means on these books' discount lines. */}
+            <td style={{ ...cell, textAlign: 'right' }}><Money n={l.unitPrice} /></td>
+            <td style={{ ...cell, textAlign: 'right' }}><Money n={l.amount} /></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
 
 /**
  * One line of the read narration. `kind` drives the colour and nothing else — the TEXT carries
@@ -179,6 +288,14 @@ interface ReadState {
 }
 
 export function QboBooksReader({ businessId }: { businessId: string | null | undefined }) {
+  // 🔴 THE REHEARSAL DOOR IS THE OWNER'S, AND ONLY THE OWNER'S (David, 2026-09-04).
+  // The READ itself stays at `settings:read` — that ruling is untouched, and Lauren pressing
+  // "Read my QuickBooks data" is the entire point of this screen. What is owner-only is the
+  // FILE LOADER below: a rehearsal instrument for previewing one company's books inside
+  // another, which is a sentence that should never have to be explained to the person running
+  // the business. David: *"I said make it visibly a test facility; I never said she must not
+  // see it. My omission, corrected now."*
+  const { isOwner } = useBusinessContext();
   const [loading, setLoading] = useState<QboEntity | null>(null);
   const [state, setState] = useState<ReadState | null>(null);
   // ══════════════════════════════════════════════════════════════════════════════
@@ -379,10 +496,15 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
         retrieved: r?.retrieved_total ?? 0,
         complete: r?.complete === true,
         fromFile: r?.source === REPLAY_SOURCE,
+        // 🔴 WHEN THIS WALK READ THEIR BOOKS — the report's only date, and the reason it is
+        // taken from the READ rather than from `new Date()`. A saved read re-opened weeks later
+        // still describes the day it was taken. Same field the findings engine already measures
+        // "past due" against, for the same reason.
+        queriedAt: r?.queried_at ?? null,
       };
     });
     const html = renderBooksReportHtml(buildBooksReport({
-      generatedAt: new Date(), walks, findings, corrections: [],
+      walks, findings, corrections: [],
     }));
     console.log('[TRACE:QBO] visualize — report generated', {
       walks_read: walks.filter(w => w.read).length,
@@ -446,6 +568,18 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
     return evaluateBooks(input);
   })();
 
+  /**
+   * 🔴 THE GRID'S WHOLE MODEL — ordering, the cap, the flags and the two sentences — comes from
+   * ONE pure function so a probe can provoke the case that only appears at a scale nobody has in
+   * front of them. The failure it exists to prevent is a search returning "nothing found" for an
+   * invoice that exists, on a page where every visible pixel is correct; that cannot be found by
+   * looking, so it must be decided somewhere a test can reach. `undefined` before the invoice
+   * walk has run, which is what keeps the whole block off the screen.
+   */
+  const invoiceGrid = parsed.invoices && parsed.invoices.length > 0
+    ? buildInvoiceGrid(parsed.invoices)
+    : undefined;
+
   const b = state?.body;
   const itemBreak = state?.entity === 'Item' ? (b?.breakdown as ItemBreakdown | undefined) : undefined;
   const custBreak = state?.entity === 'Customer' ? (b?.breakdown as CustomerBreakdown | undefined) : undefined;
@@ -507,19 +641,36 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          🔴 THE FILE DOOR — DELIBERATELY UGLY, AND THAT IS A FEATURE.
+          🔴 THE FILE DOOR — OWNER-ONLY, AND NO LONGER WEARING THE WARNING COLOUR.
           ══════════════════════════════════════════════════════════════════════
-          It is dashed, amber, and says what it is for in the first four words. A file loader
-          that looked like the rest of the page would become how people import things — someone
-          would mail a colleague a JSON file instead of connecting their books, and we would
-          find out months later. It sits BELOW the live buttons so the ordinary path is the
-          first thing reached, and it names its one legitimate use rather than describing a
-          capability. */}
+          It is dashed and says what it is for in the first four words. A file loader that
+          looked like the rest of the page would become how people import things — someone would
+          mail a colleague a JSON file instead of connecting their books, and we would find out
+          months later. It sits BELOW the live buttons so the ordinary path is reached first,
+          and it names its one legitimate use rather than describing a capability.
+
+          🔴 `isOwner &&` IS THE CHANGE THAT MATTERS. Lauren opens this card to read her books;
+          a control offering to load *"a saved read instead of connecting"* is a rehearsal
+          instrument for previewing one company's books inside another, and there is no version
+          of that sentence she should have to parse. It is not disabled and not explained — it
+          is absent, the way an operator tool is absent from an operator's customer's screen.
+
+          ⚠️ AND THE COLOUR WAS WRONG IN A WAY THAT COST MORE THAN IT LOOKED. This panel used
+          AMBER on `#fffbeb` — byte-identical to the TEST-MODE banner a few hundred pixels above
+          it (`QboWriteSwitch` renders `#FEF3C7` with the same `#92400e`). One of those is a
+          WARNING ABOUT STATE — *your writes are not reaching QuickBooks* — and the other is a
+          facility. Wearing one palette they read as the same kind of thing, and the facility
+          competed for attention with the single button this screen exists to offer. It is now
+          NEUTRAL SLATE: still visibly not part of the ordinary path (dashed, its own box, its
+          own first four words), no longer borrowing the vocabulary of alarm. The amber constant
+          stays for the genuine warnings below — the saved-read banner and the file-holds-names
+          notice — which is the point: amber means something again. */}
+      {isOwner && (
       <div style={{
         marginTop: 14, padding: '12px 14px', borderRadius: 10,
-        border: `1px dashed ${AMBER}`, background: '#fffbeb',
+        border: `1px dashed ${SLATE}`, background: '#f8fafc',
       }}>
-        <p style={{ fontSize: '0.8125rem', fontWeight: 800, color: AMBER, margin: '0 0 4px' }}>
+        <p style={{ fontSize: '0.8125rem', fontWeight: 800, color: SLATE, margin: '0 0 4px' }}>
           TEST FACILITY — load a saved read instead of connecting
         </p>
         <p style={{ fontSize: '0.8125rem', color: DARK, margin: '0 0 10px', lineHeight: 1.5 }}>
@@ -542,6 +693,7 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
           </p>
         )}
       </div>
+      )}
 
       {/* 🔴 A READ THAT CAME FROM A FILE SAYS SO WHEREVER IT IS SHOWN. The panels below are
           shape-identical to the live ones by design, so without this line a saved read and a
@@ -576,86 +728,179 @@ export function QboBooksReader({ businessId }: { businessId: string | null | und
           RATHER THAN IN FRONT OF THEM. It has no acknowledge-to-continue and nothing on it can
           disable an ingest button: a finding that could stop Lauren is a finding that makes her
           phone David, and then the build has failed however good the finding was. */}
-      {/* ══════════════════════════════════════════════════════════════════════════════
-          🔴 HER OWN INVOICES — NUMBER, DATE AND TOTAL. NO BUYER NAME. (David, OPTION B.)
-          ══════════════════════════════════════════════════════════════════════════════
-          The build prompt asked for her customers' NAMES here and called their absence "the
-          gap you measured". It is not a gap, it is R-24 clause (b) — *"a read of personal data
-          is summarised, never listed"* — and the sentence the prompt quoted as evidence was the
-          comment implementing it. David ruled OPTION B: recognition comes from her ITEM NAMES
-          and her INVOICE NUMBERS, and neither of those is personal data, so R-24 stays where it
-          was ruled rather than being stretched to a case it did not consider.
-
-          🔴 THE ABSENCE IS STATED, NOT LEFT TO BE INFERRED. David: *"say on the screen what is
-          NOT shown and why — an absence a reader has to interpret is the defect, not the fix."*
+      {/* ══════════════════════════════════════════════════════════════════════════════════
+          🔴 HER OWN INVOICES — ON THE PLATFORM'S GRID, NOT A TABLE THIS FILE WROTE.
+          ══════════════════════════════════════════════════════════════════════════════════
+          WHAT DISPLAYS AND WHAT DOES NOT is [[R-77]], unchanged: *"an owner may see her own
+          records that are not about a person: items in full, invoices by number, date and total,
+          no buyer name."* Recognition comes from her invoice numbers and her item names, and
+          neither is personal data — so [[R-24]] clause (b) stays where it was ruled rather than
+          being stretched to a case it did not consider. The absence is STATED in the caption
+          below, because an absence a reader has to interpret is the defect, not the fix.
 
           ⚠️ IT CANNOT SHOW A NAME EVEN IF SOMEONE LATER TRIED. `QboInvoiceRow` has no customer
-          name field at all (`invoiceList.ts` reads `CustomerRef.value` and never `.name`), so
-          the constraint is structural and does not depend on this JSX staying careful.
+          name field at all — `invoiceList` reads `CustomerRef.value` and never `.name` — so the
+          constraint is structural and does not depend on this JSX staying careful.
 
-          🔴 IT IS NOT `<DataSheet>`, AND THE REASON PREVIOUSLY WRITTEN HERE WAS FALSE. This said
-          the plain table was "a deliberate limit rather than a choice" because the grid engine lived
-          in `packages/cultivar-os` and shared never imports the app. The fact was true; the word
-          "limit" was not. **A package placement is not a structural constraint — it is a decision
-          somebody made, and this sentence dressed it as physics.** Measured when it was finally
-          questioned (2026-09-03, #272): the engine's ENTIRE dependency closure was `react`,
-          `lucide-react` and two zero-import siblings. Nothing had ever held it in cultivar-os.
-          `DataSheet.tsx` now lives at `@trace/shared/components/datasheet/DataSheet` and IS
-          reachable from here.
-          ⚠️ THIS TABLE IS STILL PLAIN, AND THAT IS NOW A CHOICE RATHER THAN A LIMIT — the promotion
-          did not convert this surface, deliberately: that is a separate build against G1-G7 with its
-          own owner-test cards, not a drive-by inside a move whose whole virtue is that `verify`
-          proves it changed no behaviour. Converting it is OWED, not done.
-          ✏️ FILED AS ITS OWN LESSON because it is the second time in a week a component comment
-          asserted a constraint its own repo contradicted (tech-debt #61 was the first, the
-          `ReceiptsList` divergence the second): a reason written once and never re-read becomes a
-          fact nobody checks. */}
-      {parsed.invoices && parsed.invoices.length > 0 && (
+          🔴 IT IS NOW `<DataSheet>`, AND THE COMMENT THAT USED TO SIT HERE EXPLAINING WHY IT WAS
+          NOT IS THE REASON THIS PARAGRAPH EXISTS. That comment said the plain table was "a
+          deliberate limit rather than a choice" because the grid engine lived in
+          `packages/cultivar-os` and shared never imports the app. The fact was true; the word
+          "limit" was not — a package placement is a decision somebody made, and that sentence
+          dressed it as physics. Measured when it was finally questioned: the engine's ENTIRE
+          dependency closure is `react`, `lucide-react` and two zero-import siblings. It moved,
+          and the surface now uses it: G3 frozen identifier · G4 sortable · G6 search · G7 a
+          bounded box at 1,480 rows · G9 newest document date first · plus the row drawer.
+
+          ⚠️ G10 IS A KNOWN RED AND IS NOT FIXED HERE. The engine renders the disclosure toggle
+          TRAILING and the row is not a click target; the standard says so about itself. Fixing
+          it is a change to `DataSheet.tsx` for all eight consumers — doc, then widget, then
+          surfaces ([[R-74]]) — and riding it along inside a surface build is exactly the order
+          that ruling forbids.
+
+          🔴 AND NOTHING MECHANICAL GUARDS ANY OF THIS. `verify-ui-standard-divergence.mjs` scans
+          `packages/cultivar-os/src`; this component is in `packages/shared`, so `npm run verify`
+          neither measured the old plain table as a divergence nor credits this conversion. The
+          probes in `invoiceGrid.test.ts`, the mutants in `measure-invoice-grid-mutants.mjs`, and
+          the owner-test cards are the entire guard. */}
+      {invoiceGrid && (
         <div style={{ marginTop: 16 }}>
           <p style={{ fontSize: '0.875rem', color: DARK, fontWeight: 700, margin: '0 0 4px' }}>
             Your invoices
           </p>
           <p style={{ fontSize: '0.8125rem', color: GRAY, margin: '0 0 10px', lineHeight: 1.5 }}>
-            {/* The cap NAMES itself. A capped list that reports a bare total is a list quietly
-                claiming to be whole — the same defect the walk's own completeness refusal
-                exists to prevent, arriving one layer up in the display. */}
-            Showing the {Math.min(INVOICE_ROWS_SHOWN, parsed.invoices.length).toLocaleString()} most
-            recent of {parsed.invoices.length.toLocaleString()} invoices, newest first.
+            {/* 🔴 ONE SENTENCE, ONE SOURCE. The caption and the search placeholder below both
+                read from `invoiceGrid`, so they cannot drift into saying different things about
+                one set — which is precisely the contradiction that appears when a caption states
+                a cap correctly and the grid's own count pill, one line under it, does not. */}
+            {invoiceGrid.caption}
             {' '}<strong>We do not list your customers&rsquo; details here</strong> — who bought is
             not shown on this screen. The complete records, including every buyer, are in the file
             that downloaded to this device.
           </p>
-          <div style={{ maxHeight: 360, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 10 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
-              <thead>
-                <tr>
-                  {/* The module's own `head`/`cell` styles, not a second copy — this file
-                      already had both for its other tables (§6 r8). */}
-                  {['Invoice number', 'Date', 'Total'].map((h, i) => (
-                    <th key={h} style={{ ...head, textAlign: i === 2 ? 'right' : 'left' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {invoiceRowsForDisplay(parsed.invoices, INVOICE_ROWS_SHOWN).map(inv => (
-                  <tr key={inv.id}>
-                    <td style={cell}>{inv.docNumber ?? <span style={{ color: GRAY }}>No number</span>}</td>
-                    {/* D-9 / A9 — a missing date is NEVER rendered as a real one. */}
-                    <td style={cell}>{inv.txnDate ?? <span style={{ color: GRAY }}>No date recorded</span>}</td>
-                    <td style={{ ...cell, textAlign: 'right' }}>
-                      {inv.totalAmt === null
-                        ? <span style={{ color: GRAY }}>Not recorded</span>
-                        : `$${inv.totalAmt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+
+          <DataSheet<InvoiceGridRow>
+            title=""
+            rows={invoiceGrid.rows}
+            loading={false}
+            error={null}
+            getRowId={r => r.row.id}
+            itemNoun="invoices"
+            emptyText="No invoices came back in this read."
+            /* 🔴 THE SCOPE RIDES THE SEARCH CONTROL, not only the caption. The failure this
+               guards is a confident absence returned to a QUERY — a reader who scrolls past a
+               caption and types four minutes later needs the limit at the moment they ask, not
+               at the moment they arrived ([[R-75]]). */
+            searchPlaceholder={invoiceGrid.searchScope}
+            searchText={r => invoiceSearchText(r.row)}
+            defaultSortKey="date"
+            defaultSortDir="desc"
+            /* Red is ONLY what she can act on — a reused invoice number, one customer billed
+               twice on one day, and a row we could not read. An unusual amount is not red; an
+               old invoice is not red. Red spent on the merely-notable is red she stops reading. */
+            rowFlag={r => r.flag !== null}
+            flagBanner={(inView, elsewhere) => (
+              <span>
+                <strong>{inView.toLocaleString()}</strong> row{inView === 1 ? '' : 's'} here need
+                {inView === 1 ? 's' : ''} a look — a repeated invoice number, one customer billed
+                twice on the same day, or a record we could not read.
+                {elsewhere > 0 && (
+                  <> {' '}<strong>{elsewhere.toLocaleString()}</strong> more
+                  {invoiceGrid.capped ? ' are outside what this page is showing' : ' are hidden by the current search or filter'}.</>
+                )}
+              </span>
+            )}
+            renderExpand={r => <InvoiceLines row={r.row} />}
+            columns={[
+              {
+                key: 'number', header: 'Invoice number', sortable: true, hideable: false,
+                // G3 — the identifier column pins, with a RESERVED TRACK (§6 r14): the width is
+                // the cell's actual border-box width, or the scrolling columns pass underneath it.
+                frozen: true, frozenWidth: 150,
+                sortVal: r => r.row.docNumber ?? '',
+                render: r => r.row.docNumber ?? <span style={{ color: GRAY }}>No number</span>,
+              },
+              {
+                key: 'date', header: 'Date', sortable: true,
+                // G9's ordering rule, expressed as the sort key. '' sorts below every real
+                // `YYYY-MM-DD`, so undated rows land LAST under `desc` rather than first.
+                sortVal: r => r.row.txnDate ?? '',
+                // D-9 / A9 — a missing date is NEVER rendered as a real one, and it says so in
+                // words rather than as a dash a reader has to interpret.
+                render: r => r.row.txnDate ?? <span style={{ color: GRAY }}>No date recorded</span>,
+              },
+              {
+                key: 'total', header: 'Total', sortable: true,
+                // 🔴 THE SORT KEY IS THE NUMBER, NOT THE FORMATTED STRING. Sorted as text,
+                // "$1,283.88" sits BELOW "$920.13" — and the page looks completely normal while
+                // the most expensive invoice is nowhere near the top.
+                sortVal: r => r.row.totalAmt ?? -Infinity,
+                render: r => <Money n={r.row.totalAmt} />,
+              },
+              {
+                key: 'balance', header: 'Still owed', sortable: true,
+                sortVal: r => r.row.balance ?? -Infinity,
+                // A settled invoice is $0.00 and says so; an unreadable balance says something
+                // else entirely. Collapsing the two would tell an owner a bill was paid.
+                render: r => <Money n={r.row.balance} />,
+              },
+              {
+                key: 'due', header: 'Due', sortable: true,
+                sortVal: r => r.row.dueDate ?? '',
+                render: r => r.row.dueDate ?? <span style={{ color: GRAY }}>No due date</span>,
+              },
+              {
+                // ⚠️ THE LINE COUNT IS FREE HERE AND WAS NOT ON THE RECEIPTS GRID, and the
+                // difference is worth recording. There, showing it needed `line_items` in the
+                // list projection, which downgraded a structural guard. Here the lines are
+                // already parsed in the browser off a capture it already holds, so this column
+                // costs no request, no field and no weakened guard.
+                key: 'lines', header: 'Lines', sortable: true,
+                sortVal: r => r.row.lines.length,
+                render: r => r.row.lines.length,
+              },
+              {
+                key: 'needs', header: 'Needs a look', sortable: true,
+                sortVal: r => FLAG_LABEL[r.flag ?? 'none'],
+                render: r => r.flag === null
+                  // 🔴 AN ABSENCE SURVIVES AS A CELL IN WORDS — never a blank, never a dash.
+                  // A blank cell in this column would read as "not checked" beside rows that
+                  // were, which is the silence D-9 forbids.
+                  ? <span style={{ color: GRAY }}>Nothing found</span>
+                  : <span style={{ color: RED, fontWeight: 700 }}>{FLAG_LABEL[r.flag]}</span>,
+              },
+            ]}
+          />
         </div>
       )}
 
-      <BooksReview findings={findings} />
+      {/* ══════════════════════════════════════════════════════════════════════════════════
+          🔴 BEFORE THE FIRST READ THERE IS NO FINDINGS SECTION AT ALL (David, 2026-09-04).
+          ══════════════════════════════════════════════════════════════════════════════════
+          `evaluateBooks({})` returns SIXTEEN rules with ZERO measured, and every one of them
+          carries a figure quoted from the 29 August analysis. So the screen used to open — before
+          anybody pressed anything — with sixteen grey "not checked" rows reciting *"504 lines
+          carrying $614,053"* and *"881 of 1,469"*. Measured 2026-09-04: 16 rows, 0 measured,
+          16 carrying a quoted figure.
+
+          David: *"Sixteen 'not checked' rows carrying 29 August figures, before I press anything,
+          is the system explaining its internals to someone who has not started."* And: *"the 29
+          August figures must not appear on a page where nothing has been read — '$614,053' and
+          '881 of 1,469' are prose about her business shown to her before she pressed anything."*
+
+          🔴 THIS DOES NOT WEAKEN THE PANEL'S OWN HONESTY RULE, WHICH IS WHY THE GATE IS HERE AND
+          NOT INSIDE IT. `BooksReview` renders unmeasured rows deliberately — a hidden row is a
+          row the reader assumes passed. That rule is about a review THAT RAN: three outcomes —
+          fired, did not fire, could not run — are answers, and answers require a question. Before
+          the read there was no question, so there is nothing to be honest or dishonest about. A
+          "could not run" printed over a read nobody requested is not a disclosure, it is noise
+          wearing a disclosure's clothes.
+
+          ⚠️ THE CONDITION IS THE SAME ONE THE VISUALIZE BUTTON ALREADY USES, deliberately: one
+          fact — has anything been read — must not be asked two ways on one screen (STD-011), or
+          the two answers drift and the page shows a report button over an absent review, or the
+          reverse. */}
+      {Object.keys(reads).length > 0 && <BooksReview findings={findings} />}
 
       {state?.savedAs && (
         <p style={{ fontSize: '0.8125rem', color: GREEN, margin: '10px 0 0', wordBreak: 'break-all' }}>

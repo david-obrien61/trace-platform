@@ -122,17 +122,36 @@ export function QboDeliveryIngest({ businessId }: { businessId: string | null | 
   // state says another (the six-state ruling). The PREVIEW stays available to a manager: it
   // reads and writes nothing, and taking it away would hide the shape of the work from the
   // person who does the work.
-  if (!isOwner) {
-    return (
-      <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid #e5e7eb' }}>
-        <h4 style={{ margin: '0 0 .25rem', color: DARK, fontSize: '1rem' }}>Scheduled deliveries from QuickBooks</h4>
-        <p style={{ margin: 0, color: GRAY, fontSize: '.85rem', lineHeight: 1.5 }}>
-          Bringing records in from QuickBooks is done by the account owner. It changes what this
-          business holds, so it is not delegated.
-        </p>
-      </div>
-    );
-  }
+  // ══════════════════════════════════════════════════════════════════════════════════════
+  // 🔴 A NON-OWNER SEES NOTHING HERE AT ALL. NOT A DISABLED BUTTON — NOT A PANEL EITHER.
+  // ══════════════════════════════════════════════════════════════════════════════════════
+  // David, 2026-09-04: *"Gating them owner-only was the right fix for the wrong problem — I
+  // answered 'she can press it' instead of 'why is it on her screen.'"* This panel is an
+  // OPERATOR IMPORT TOOL that happened to be mounted on the card Lauren opens to look at her
+  // accounting connection. Importing a company's books is an owner act; a manager is not
+  // waiting on permission to do it, so there is nothing for an explained absence to explain.
+  //
+  // ⚠️ THIS IS NOT THE MYSTERY-LOCK §6 r13 FORBIDS, AND THE DISTINCTION IS THE RULE. That rule
+  // is about a FIELD OR CONTROL THE READER CAN SEE, greyed with no reason — the reader knows
+  // something is there and cannot learn why it is shut. Here there is no control and no state:
+  // a whole tool that is not hers is absent, the way /admin/subscription is absent rather than
+  // greyed. An explanation of an absence she was never going to notice is the page explaining
+  // its own internals to someone who did not ask.
+  //
+  // 🔴 THE SERVER REMAINS THE GATE AND IS UNCHANGED — `refuseUnlessOwner` on both ingest
+  // handlers in `api/qbo/router.ts`. This is visibility, never authority; a hidden button has
+  // never stopped anybody, and nothing here is load-bearing for the refusal.
+  //
+  // ✏️ THE COMMENT REMOVED FROM THIS SPOT CLAIMED SOMETHING ITS OWN CODE CONTRADICTED, and it
+  // is recorded rather than quietly dropped: it read *"The PREVIEW stays available to a manager:
+  // it reads and writes nothing, and taking it away would hide the shape of the work from the
+  // person who does the work."* The branch it sat on RETURNED BEFORE the preview button, so the
+  // preview was never available to a manager — the intent was written down and never built. The
+  // server bears this out from the other side: only the two INGEST handlers call
+  // `refuseUnlessOwner`; both preview routes remain open to any member who can reach them, so
+  // the capability that comment describes is real and is simply not surfaced anywhere. If a
+  // manager should be able to preview, that is a build with its own card, not a comment.
+  if (!isOwner) return null;
 
   return (
     <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid #e5e7eb' }}>
