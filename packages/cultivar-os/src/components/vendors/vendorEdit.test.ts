@@ -184,7 +184,19 @@ const VENDOR: VendorRow = {
   ok(!/Save as preferred/.test(PAGE_CODE),
     '🔴 E1: the page no longer carries a "Save as preferred" control — the per-record control left the row (E7)');
   ok(!/Why is this vendor preferred/.test(PAGE_CODE),
-    '🔴 E2: the note editor left the row too — David: "the control and the note go in the modal, together"');
+    '🔴 E2: the note EDITOR left the row — the textarea and its Save button are what E7 removed');
+  // 🔴 E2b — REVERSED SAME DAY BY DAVID, AND THE CLAUSE ALLOWS IT IN ITS OWN WORDS: "The row
+  //    carries a READ-ONLY MARK of the result." The reason IS part of the mark. What must stay
+  //    gone from the row is the CONTROL, which E2 above asserts.
+  ok(/style=\{NOTE\}>\{v\.preference_note\}/.test(PAGE_CODE),
+    '🔴 E2b: the REASON is rendered on the row, read-only — "who is preferred" and "why" are ONE FACT, and a flag without its reason only tells her which row to click (David, 2026-09-04)');
+  ok(/Marked preferred, but no reason was recorded/.test(PAGE_CODE),
+    'E2c: and an absent reason ANNOUNCES itself on the row rather than rendering as a blank (D-9/A9)');
+  const noteStyle = PAGE.match(/const NOTE: React\.CSSProperties = \{[\s\S]*?\};/);
+  ok(noteStyle !== null && !/cursor/.test(noteStyle[0]),
+    '🔴 E2d: the note style sets NO cursor — it is content, not a control, so E7 still holds');
+  ok(!/<div style=\{NOTE\}[^>]*onClick/.test(PAGE_CODE),
+    'E2e: and it carries no click handler — a read-only line, which is exactly what E7 provides for');
   ok(/Why is this vendor preferred/.test(EDITOR_CODE),
     'E3: …and landed in the modal, rather than being deleted');
 
@@ -276,12 +288,22 @@ const VENDOR: VendorRow = {
 {
   ok(describeDocumentNumber('19893519', '19893519').provenance === 'read',
     'H1: read and unaltered');
-  ok(describeDocumentNumber(null, '19893519').provenance === 'typed',
-    '🔴 H2: NOTHING READ + a value present = TYPED. This is the case that cannot be reconstructed later, and the reason the original is banked rather than derived');
+  ok(describeDocumentNumber('', '19893519').provenance === 'typed',
+    '🔴 H2: the reader read NOTHING (banked as the `\'\'` sentinel) + a value present = TYPED. This is the case that cannot be reconstructed later, and the reason the original is banked rather than derived');
+  // 🔴 H2b IS THE CORRECTION LIVE DATA FORCED, HOURS AFTER SHIPPING. NULL must NOT read as typed.
+  ok(describeDocumentNumber(null, '595431').provenance === 'unknown',
+    '🔴 H2b: a NULL original is UNKNOWN, never TYPED. Measured on LAWNS 2026-09-04T16:03Z: `Bailey Bark Materials, Inc.` $2180.79 carried receipt_number 595431 with a NULL original, and 595431 IS IN THAT ROW\'S ocr_raw — the reader read it. The first rule would have told her she typed it (R-79: a false claim about our own read).');
+  ok(!describeDocumentNumber(null, '595431').isHumanSupplied,
+    'H2c: and it is not attributed to a human — an unknown provenance accuses nobody');
+  ok(/cannot say/.test(describeDocumentNumber(null, '595431').notice),
+    'H2d: the gap is ANNOUNCED rather than filled (D-9) — "we cannot say", not silence and not a guess');
+  ok(describeDocumentNumber(null, null).provenance === 'unknown'
+    && describeDocumentNumber(null, null).notice === '',
+    'H2e: an unnumbered pre-column row says nothing at all — there is no gap to announce when there is no number');
   ok(describeDocumentNumber('19893518', '19893519').provenance === 'corrected',
     'H3: read then corrected is its own state — not "read", and not "typed"');
-  ok(describeDocumentNumber(null, null).provenance === 'absent',
-    'H4: nothing either side is an honest blank');
+  ok(describeDocumentNumber('', '').provenance === 'absent',
+    'H4: the reader read nothing and nobody typed anything — an honest blank');
   ok(describeDocumentNumber('19893519', '').provenance === 'absent'
     && /cleared/.test(describeDocumentNumber('19893519', '').notice),
     '🔴 H5: a number that was READ and then CLEARED says so — "you cleared one" is a different fact from "there was none", and a bare blank would conflate them');
@@ -291,7 +313,7 @@ const VENDOR: VendorRow = {
   ok(describeDocumentNumber('INV-4021', 'inv4021').provenance === 'corrected',
     '🔴 H7 (negative control): case and punctuation are NOT folded — those are two different assertions about what is printed, and folding them would silently reclassify a correction as a read');
 
-  ok(describeDocumentNumber(null, 'X').isHumanSupplied && !describeDocumentNumber('X', 'X').isHumanSupplied,
+  ok(describeDocumentNumber('', 'X').isHumanSupplied && !describeDocumentNumber('X', 'X').isHumanSupplied,
     'H8: isHumanSupplied separates the owner\'s assertion from the document\'s');
   ok(describeDocumentNumber('X', 'X').notice === '',
     'H9: the normal case is silent — a notice on every capture is noise, and noise is what stops the abnormal one being read');
@@ -301,8 +323,8 @@ const VENDOR: VendorRow = {
     '🔴 H10: the confirm form HAS the field — 19893519 was captured correctly and never shown, while vendor/date/total/lines were all reviewable');
   ok(/describeDocumentNumber\(receiptNumberOriginal, receiptNumber\)/.test(KEEPER_CODE),
     'H11: and it renders the verdict from the shared rule rather than re-deriving one');
-  ok(/setReceiptNumberOriginal\(readNumber\)/.test(KEEPER_CODE),
-    'H12: the original is banked at PARSE time');
+  ok(/setReceiptNumberOriginal\(readNumber \?\? ''\)/.test(KEEPER_CODE),
+    "🔴 H12: the original is banked at PARSE time AS THE `''` SENTINEL when the reader found nothing — banking null there would make every unread number read as TYPED");
   const typingResets = /onChange[\s\S]{0,200}setReceiptNumberOriginal/.test(KEEPER_CODE);
   ok(!typingResets,
     '🔴 H13: typing NEVER touches the banked original — if it did, every typed number would read as "read from the page", which is the exact lie this column exists to prevent');
@@ -340,5 +362,7 @@ const VENDOR: VendorRow = {
 }
 
 console.log(`\nvendorEdit: ${passed} passed, ${failed} failed`);
-console.log('  populations — live 2026-09-04 census: `vendors` 1 row / 0 of 11 non-key columns filled; `vendor_aliases` 0 rows; `receipts` 39 rows across 3 tenants, vendor_id 1/39, receipt_number 1/39. Every case above is CONSTRUCTED because one empty vendor cannot exercise a diff, a duplicate, or a preference (R-33).');
+console.log('  populations — SNAPSHOT 2026-09-04T16:03Z, and every receipts figure is a snapshot with a tenant or it is wrong by the time it is read: `vendors` 1 row ALL TENANTS / 0 of 11 non-key columns filled; `vendor_aliases` 0 rows; `receipts` 31 rows ALL TENANTS (LAWNS ed2e5933 = 10, Test Dave\'s f7ec5d67 = 19, 06065fe7 = 2), receipt_number 2/31, receipt_number_original 0/31.');
+console.log('  🔴 THE COUNT MOVES WHILE THIS RUNS. It was 39 all-tenant at 14:30Z, 30 after nine LAWNS rows were deleted at ~15:01Z, and 31 at 16:03Z when Lauren landed one. Anything quoting a receipts figure without a timestamp AND a tenant is wrong twice over.');
+console.log('  Every case above is CONSTRUCTED: one empty vendor cannot exercise a diff, a duplicate, or a preference (R-33).');
 if (failed) { console.error('\nFAILURES:\n' + failures.map(f => '  · ' + f).join('\n')); process.exit(1); }

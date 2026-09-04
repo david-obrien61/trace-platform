@@ -24,7 +24,8 @@ export type DocumentNumberProvenance =
   | 'absent'     // nothing read, nothing supplied — an honest blank
   | 'read'       // read off the document and left alone
   | 'corrected'  // read off the document, then changed by a person
-  | 'typed';     // NOT read — a person supplied it entirely
+  | 'typed'      // NOT read — a person supplied it entirely
+  | 'unknown';   // 🔴 nothing was ever BANKED for this row. See the sentinel note below.
 
 export interface DocumentNumberVerdict {
   provenance: DocumentNumberProvenance;
@@ -35,7 +36,26 @@ export interface DocumentNumberVerdict {
 }
 
 /**
- * @param original what the reader READ at capture, banked once and never overwritten.
+ * 🔴 THE SENTINEL, AND IT WAS FOUND BY LIVE DATA WITHIN HOURS OF SHIPPING (2026-09-04).
+ *
+ *   The first version had NULL doing two jobs, and they are not the same fact:
+ *     · "the reader read nothing"        → a number present must then be TYPED by a person
+ *     · "nothing was ever banked here"   → we know nothing about where the number came from
+ *
+ *   Every row captured before this column existed is the SECOND case, and so is any capture from
+ *   a browser tab still running a pre-deploy bundle — which is not hypothetical: **measured on
+ *   LAWNS at 2026-09-04T16:03Z, `Bailey Bark Materials, Inc.` $2180.79 carried
+ *   `receipt_number = 595431` with `receipt_number_original = NULL`, and 595431 IS PRESENT IN
+ *   THAT ROW'S `ocr_raw`.** The reader read it. The first rule would have told an owner she typed
+ *   a number she never touched — [[R-79]]'s class exactly: a false claim about our OWN read,
+ *   which is worse than a missing finding because it ASSERTS rather than omits.
+ *
+ *   So: **`''` (empty string) is the sentinel for "the reader read nothing"**, written
+ *   deliberately at capture. **NULL means "not banked" and yields `unknown`** — an honest refusal
+ *   to characterise, never an accusation.
+ *
+ * @param original what the reader READ at capture: a string, `''` if it read nothing, or NULL/
+ *                 undefined if nothing was banked for this row at all.
  * @param current  what will be stored — the same value, or one a person edited.
  *
  * ⚠️ COMPARISON IS ON THE TRIMMED STRING AND IS OTHERWISE EXACT. It deliberately does NOT fold
@@ -47,8 +67,22 @@ export function describeDocumentNumber(
   original: string | null | undefined,
   current: string | null | undefined,
 ): DocumentNumberVerdict {
+  // 🔴 NULL/undefined is NOT '' here, and the whole correction lives in this distinction.
+  const banked = original !== null && original !== undefined;
   const o = (original ?? '').trim();
   const c = (current ?? '').trim();
+
+  if (!banked) {
+    return {
+      provenance: 'unknown',
+      // It ANNOUNCES the gap rather than filling it (D-9). An owner reading a receipt captured
+      // before this column existed is told we cannot say, not told she typed something.
+      notice: c === ''
+        ? ''
+        : 'This number was captured before we started recording where document numbers come from, so we cannot say whether it was read from the page or entered by hand.',
+      isHumanSupplied: false,
+    };
+  }
 
   if (c === '') {
     return {

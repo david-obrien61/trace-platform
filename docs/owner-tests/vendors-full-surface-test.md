@@ -3,8 +3,10 @@
 **Capability:** vendor identity + preference (`/vendors`, and the vendor question on `/receipts`)
 **Ledger:** #259 · **#273** (the record editor, E7/R-83) · **Branch:** `main` · **Rulings:** R-83 (a per-record control lives where the record is opened) · R-64 (quality preference) · R-65 (consolidation) · D-47 (identity) · R-50 · R-54
 **Last updated:** 2026-09-04
-**Proven:** 0 of 18 · **Owed:** 17 · **needs-test:** 1
+**Proven:** 0 of 19 · **Owed:** 18 · **needs-test:** 1
 
+> ✅ **ALL FIVE FLIPPED CARDS ARE RUNNABLE RIGHT NOW.** None was ever blocked on the migration — CARDS 1, 2, 5, 6, 7 exercise the vendor list, the vendor modal and the manager gate, all of which have been live since `577295b`. Only CARDS 16–18 were migration-blocked, and they are unblocked too. **The one prerequisite for all of them is the hard refresh in GATE 0 item 4.**
+>
 > 🔴 **CARDS 1, 2, 5, 6 AND 7 WERE FLIPPED `covered` → `owed` ON 2026-09-04 — none of them had ever been proven, so nothing green was lost, but they are listed here because the SURFACE THEY DESCRIBED NO LONGER EXISTS.** Under E7 the preference control and its note left the row and moved into a modal. A card describing the old inline editor would have walked David through steps that cannot be performed. Their original wording is preserved inline under each card as **WAS**, because the prior text is evidence about what the surface used to assert (OP-14 cl.3).
 
 > Thunder never marks a card `covered`. Only David's live run does, with a date.
@@ -21,7 +23,9 @@
    1. `20260902_vendor_identity_and_preference.sql` (creates `vendors`, `vendor_aliases`, `receipts.vendor_id`)
    2. `20260902_receipt_line_edit_and_vendor_preference.sql` (the other session's — creates `vendor_preferences`)
    3. `20260902b_vendor_preferences_join_on_vendor_id.sql` (the consolidation)
-   4. 🔴 **NEW — `20260904_receipts_receipt_number_original.sql`** (adds `receipts.receipt_number_original`). **CARDS 16–18 CANNOT PASS WITHOUT IT**, and the capture will not break without it either: the save retries once without both document-number columns and shows an amber notice saying the number was read but not stored. If you see that notice, this migration is the reason.
+   4. ✅ **`20260904_receipts_receipt_number_original.sql` — APPLIED 2026-09-04.** `receipt_number_original | text | YES`, `with_original` 0 (the pass: nothing backfilled). **CARDS 16–18 are UNBLOCKED.**
+
+4. 🔴 **HARD-REFRESH THE TAB YOU ARE TESTING IN, AND HAVE LAUREN DO THE SAME.** This is not boilerplate today. Measured 2026-09-04T16:03Z: a receipt landed on LAWNS at **15:59:50Z**, **22 minutes after the deploy**, carrying a document number with a **NULL** original — the shape a pre-deploy bundle writes. The live bundle at `cultivar-os.app` **is** `577295b` and **does** contain the code (verified by fetching `assets/index-COIX2UKt.js` and grepping it). **An open tab does not reload itself.** A stale tab writes rows this board's cards cannot then explain.
 
    **File 3 REFUSES with a named error if 1 or 2 is missing** — it pre-flights rather than trusting the order. If you see that error, apply the missing one and re-run; it is the guard working, not a fault.
 
@@ -98,11 +102,11 @@ supposed to be denied. `joel joiner` is MANAGER at LAWNS but `active = false`, s
 1. As an OWNER at `f7ec5d67`, mark a vendor preferred with a note.
 2. **Sign in as `test obrien` (MANAGER).** Open **`/vendors`**.
 3. **Expect: the vendor list loads and the PREFERRED chip is visible on that row.**
-4. 🔴 **THE NOTE IS NOT ON THE LIST ANY MORE — THAT IS CORRECT, NOT A FAIL.** Click **Edit vendor** on that row.
+4. 🔴 **THE REASON IS ON THE LIST, DIRECTLY UNDER THE MARK — read it there.** She should not have to open anything to learn WHY. (This was briefly moved into the modal on 2026-09-04 and **reversed the same day**: *"'who is preferred' and 'why' are ONE FACT."*) Now click **Edit vendor** on that row to check the gated half.
 5. In the modal, scroll to **Preference**. Expect a bordered read-only block reading **"Marked preferred by the owner"**, the note itself beneath it, and: *"The preferred vendor is set by the owner. You can see the mark and the reason, and they cannot be changed from your account. Everything else on this form you can edit."*
 6. 🔴 **Expect NO checkbox and NO note textarea** in that block.
 7. Confirm the rest of the form IS editable for her — change the phone, press **Save changes**, and expect it to save.
-**FAIL LOOKS LIKE:** an empty vendor list (she inherited a gate she must not have); the note missing entirely from the modal (she has lost the thing the screen exists to give her); a *checkbox* she can tick; or step 7 refusing — a manager may edit every field except the preference pair.
+**FAIL LOOKS LIKE:** an empty vendor list (she inherited a gate she must not have); 🔴 **the reason missing from the LIST** (she has lost the thing the screen exists to give her, and a bare flag only tells her which row to click); the reason missing from the modal too; a *checkbox* she can tick; or step 7 refusing — a manager may edit every field except the preference pair.
 **THIS CARD CANNOT PROVE:** that the server would refuse her. Hiding a control is not enforcement — **CARD 6 is the one that proves it, by attempting the write.**
 > **WAS (2026-09-03, never proven):** step 3 read *"the PREFERRED mark is visible, and the note is readable"* on the LIST, and step 4 looked for the absence of a **Mark preferred** button on the row. Both describe the inline editor E7 removed. The note is now one click away rather than on the row — a real change in what one glance buys, taken deliberately (David, 2026-09-04: *"the control and the note go in the modal, together"*).
 
@@ -129,12 +133,13 @@ await supabase.from('vendors').update({ preferred: true }).eq('id', '<a vendor i
 2. Scroll to **Preference**. Tick **"This is my preferred vendor"**.
 3. In **"Why is this vendor preferred?"** type a real reason — e.g. *"Stock quality is better, even though the price is higher."*
 4. Press **Save changes**. The modal closes and the list reloads.
-5. 🔴 **Expect a small green `PREFERRED` chip on that row — and NO note text on the list.** The reason lives in the modal now.
-5b. 🔴 **Now try to CLICK the chip itself.** Expect **nothing to happen** — no modal, no cursor change to a pointer when you hover it, no highlight. It states a fact; it is not a control. **A chip that looks pressable and does nothing is a dead affordance, and it is the defect E7 would otherwise trade for the one it fixes.** (The **Edit vendor** button is the control. Asserted mechanically too — `vendorEdit.test.ts` §E, mutant M2.)
+5. 🔴 **Expect a small green `PREFERRED` chip on that row, AND your sentence rendered directly beneath it** — content-sized, not caption-sized, readable without opening anything.
+5b. 🔴 **Now try to CLICK the chip, and the sentence.** Neither is a control. Expect **nothing to happen for either** — no modal, no pointer cursor on hover, no highlight. They state a fact; they are not controls. **That is precisely why the reason is allowed back on the row:** E7's own sentence is *"The row carries a READ-ONLY MARK of the result"* — a read-only line IS the mark. What E7 removed was the textarea and the Save button, and those are still gone. **A chip that looks pressable and does nothing is a dead affordance, and it is the defect E7 would otherwise trade for the one it fixes.** (The **Edit vendor** button is the control. Asserted mechanically too — `vendorEdit.test.ts` §E, mutant M2.)
 6. Re-open **Edit vendor** on the same row. **Expect the tick still on and your exact sentence still in the box.**
 7. Now untick **"This is my preferred vendor"** and press **Save changes**. Re-open it: 🔴 **the note must be GONE as well as the tick** — a reason explaining a preference that no longer exists would come back with the mark if it were kept.
-**FAIL LOOKS LIKE:** the note surviving after the mark is cleared (step 7); the chip appearing with no way to see the reason; your sentence not coming back in step 6 (it saved the tick and dropped the text — the two are written together or not at all).
-**THIS CARD CANNOT PROVE:** that a manager sees the note — that is CARD 5.
+**FAIL LOOKS LIKE:** the note surviving on the row after the mark is cleared (step 7); the chip appearing on the list with **no reason under it**; a textarea or Save button reappearing on the row; your sentence not coming back in step 6 (it saved the tick and dropped the text — the two are written together or not at all).
+6b. Mark a **second** vendor preferred and leave the reason **EMPTY**. Save. 🔴 **On the list, expect *"Marked preferred, but no reason was recorded."*** — an honest absence, never a blank gap where a sentence should be.
+**THIS CARD CANNOT PROVE:** that a manager sees the reason — that is CARD 5.
 > **WAS (2026-09-03, never proven):** *"open /vendors, choose a vendor, tap **Mark preferred**… Expect the note displayed WITH the mark on the card — not behind a hover, not behind a click."* 🔴 **Its step 5 also asserted *"Marked preferred, but no reason was recorded."* on the list, and THAT SENTENCE STILL EXISTS — it moved to the manager's read-only block in the modal (CARD 5, step 5). It is not on the list any more.** The old text is kept because it records what the surface used to claim, and because the honest-absence sentence it was protecting is still worth proving.
 
 ### CARD 8 — the heading is a true claim in every state (§6 r18)
@@ -212,20 +217,20 @@ Read the subhead in each state and confirm it is *true*, not approximately true:
 **THIS CARD CANNOT PROVE:** case-and-spacing behaviour. The index folds on `lower(btrim(name))`, so `  BWI  ` also collides; try it as a bonus step if you like.
 
 ### CARD 16 — 🔴 THE INVOICE NUMBER IS REVIEWABLE **BEFORE** IT IS SAVED
-**STATUS:** owed · **DEVICE:** phone (provable without a console) · 🔧 **NEEDS SETUP** (`20260904` applied — GATE 0 item 4)
-**TENANT:** Test Dave's `f7ec5d67` · **ACTOR:** any active member
-**MUST BE TRUE FIRST:** GATE 0 passed **including migration 4**. Use a document with a printed invoice number — the bwi invoice carries **19893519**.
+**STATUS:** owed · **DEVICE:** phone (provable without a console) · 🔧 **NEEDS SETUP** (a document with a printed number)
+**TENANT:** either — but 🔴 **WRITE DOWN WHICH ONE**, and the time. **ACTOR:** any active member
+**MUST BE TRUE FIRST:** GATE 0 passed **including the hard refresh (item 4)** — a stale tab is the one thing that makes this card lie. Migration 4 is applied. Use a document with a printed invoice number: the bwi invoice carries **19893519**, the Bailey Bark one **595431**.
 1. Capture that document and reach the confirm screen.
 2. 🔴 **Expect a field labelled "Invoice / receipt number", between Date and the line items, already containing `19893519`.**
 3. Expect **no notice** beneath it. The normal case is silent.
 4. Save. Open **`/receipts`** and confirm the number appears on that row.
-**FAIL LOOKS LIKE:** no such field (you are on a pre-#273 bundle); the field present but **empty** on a document that plainly prints a number; or an amber notice saying the number *"could not be stored"* — that last one means migration 4 is not applied, and it is the system telling the truth rather than a defect.
+**FAIL LOOKS LIKE:** no such field — **you are on a stale tab, not a broken build; hard-refresh and start again**; the field present but **empty** on a document that plainly prints a number; or an amber notice saying the number *"could not be stored"*, which would now mean the column vanished (it did not — it is applied and verified).
 **THIS CARD CANNOT PROVE:** that the number is unique or deduplicated. **Nothing dedupes on it yet** — the partial unique index is still blocked by tech-debt #143's two live duplicate pairs.
 📄 Shares one capture with CARDS 17 and 18 — do all three in one pass.
 
 ### CARD 17 — 🔴 A NUMBER **YOU** TYPED IS VISIBLY YOURS
-**STATUS:** owed · **DEVICE:** phone · 🔧 **NEEDS SETUP** (same capture as CARD 16)
-**TENANT:** Test Dave's `f7ec5d67` · **ACTOR:** any active member
+**STATUS:** owed · **DEVICE:** phone · 🖱 **NEEDS INTERACTION** (rides CARD 16's capture — do not start a new one)
+**TENANT:** the same tenant you used for CARD 16 · **ACTOR:** any active member
 1. On the confirm screen from CARD 16, **clear the number field completely**.
 2. 🔴 **Expect an amber notice: "A number was read from this page (19893519) and has been cleared. It will be saved without one."**
 3. Now type a **different** number, e.g. `19893520`.
@@ -236,8 +241,8 @@ Read the subhead in each state and confirm it is *true*, not approximately true:
 
 ### CARD 18 — 🔴 THE TYPED FALLBACK, WHERE THE READER FOUND NOTHING
 **STATUS:** owed · **DEVICE:** phone · 🔧 **NEEDS SETUP** (a document with NO printed number — a fuel or store receipt is ideal)
-**TENANT:** Test Dave's `f7ec5d67` · **ACTOR:** any active member
-**MUST BE TRUE FIRST:** GATE 0 including migration 4.
+**TENANT:** 🔴 **use Test Dave's `f7ec5d67`, NOT LAWNS** — this card deliberately writes a made-up number, and LAWNS is a real customer's books that Lauren is actively filling. **ACTOR:** any active member
+**MUST BE TRUE FIRST:** GATE 0 including the hard refresh.
 1. Capture a document that prints **no** invoice or transaction number.
 2. On the confirm screen the number field should be **empty**, with the placeholder *"Not printed on this document"* and the notice *"No document number was found on this page, and none was entered."*
 3. Type a number off the paperwork yourself — say `LAWNS-0001`.
@@ -249,7 +254,39 @@ Read the subhead in each state and confirm it is *true*, not approximately true:
 ```sql
 SELECT vendor, receipt_number, receipt_number_original FROM receipts ORDER BY created_at DESC LIMIT 3;
 ```
-🔴 **Expect `receipt_number_original` to be NULL on the row from this card while `receipt_number` holds `LAWNS-0001`** — that pair IS the evidence. On CARD 16's row the two must be **equal**.
+🔴 **Expect `receipt_number_original` to be the EMPTY STRING `''` — not NULL — on the row from this card, while `receipt_number` holds `LAWNS-0001`.** That pair is the evidence that you typed it.
+⚠️ **NULL AND `''` ARE DIFFERENT ANSWERS AND THE DIFFERENCE IS THE WHOLE POINT** (corrected 2026-09-04, from live data, hours after the column shipped):
+| `receipt_number_original` | means |
+|---|---|
+| `''` + a number | 🔴 **you typed it** — the reader read nothing |
+| equal to the number | read off the page, unaltered |
+| different, both set | read, then you corrected it |
+| `''` + no number | honest blank — nothing printed, nothing typed |
+| **NULL** | 🔴 **UNKNOWN — nothing was banked.** A pre-column row, or one captured from a stale tab. The platform says *"we cannot say"* and accuses nobody. |
+**If you see NULL on a row you just captured, you were on a stale tab** — that is the signal, and it is worth knowing rather than puzzling over.
+
+### CARD 19 — 🔴 AN OLD ROW SAYS "WE CANNOT SAY", NOT "YOU TYPED IT"
+**STATUS:** owed · **DEVICE:** desktop · 📄 **PRINT-PROVABLE** (one query; shares nothing)
+**TENANT:** all — the query is deliberately unscoped, and it names its own scope in the output
+**ACTOR:** David (SQL editor)
+**MUST BE TRUE FIRST:** nothing. This card reads history; it changes nothing.
+🔴 **WHY THIS CARD EXISTS:** the column shipped with NULL doing two jobs — *the reader read nothing* and *nothing was ever banked* — and live data caught it within the hour. Measured 2026-09-04T16:03Z on LAWNS: `Bailey Bark Materials, Inc.` $2180.79 carried `receipt_number = 595431` with a **NULL** original, **and 595431 is present in that row's own `ocr_raw`**. The reader read it. Under the first rule the platform would have told Lauren she typed a number she never touched.
+1. Run:
+```sql
+SELECT business_id, vendor, amount, receipt_number, receipt_number_original,
+       CASE WHEN receipt_number_original IS NULL           THEN 'unknown — not banked'
+            WHEN receipt_number IS NULL                    THEN 'absent'
+            WHEN receipt_number_original = ''              THEN 'TYPED by a person'
+            WHEN receipt_number_original = receipt_number  THEN 'read from the page'
+            ELSE 'read, then corrected' END AS provenance, created_at
+  FROM receipts ORDER BY created_at DESC LIMIT 15;
+```
+2. Every row captured **before** 2026-09-04 must read **`unknown — not banked`**.
+3. 🔴 **No historical row may read `TYPED by a person`.** Not one of them was typed; the column did not exist when they were captured.
+4. Open any receipt with a number in the app. Expect the honest sentence — *"This number was captured before we started recording where document numbers come from, so we cannot say whether it was read from the page or entered by hand."*
+**FAIL LOOKS LIKE:** any pre-2026-09-04 row reading `TYPED by a person`. That is the platform making a confident false statement about a real customer's records — the thing this correction exists to prevent.
+**THIS CARD CANNOT PROVE:** that new captures are attributed correctly — CARDS 16–18 do that. It proves only that the **old** ones are not slandered.
+⚠️ **COUNTS MOVE.** At 16:03Z this returned 31 rows all-tenant (LAWNS 10 · Test Dave's 19 · 06065fe7 2), 2 with a number, 0 with an original. **It was 39 at 14:30Z and 30 after nine LAWNS deletions at ~15:01Z.** Read your own output; do not compare against a number written here.
 
 ---
 

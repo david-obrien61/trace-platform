@@ -31,12 +31,20 @@
 //               not acquire a mystery click target."* This is a card list with no disclosure, so
 //               the record is opened by an explicit named button per row.
 //
-// ⚠️ THE NOTE NOW LIVES IN THE MODAL, BY DAVID'S RULING 2026-09-04 (*"the control and the note go
-//               in the modal, together"*). A manager still SEES it — `VendorEditor` renders the
-//               mark and the reason read-only, with the explanation of why it is not editable —
-//               but she opens the record to read it instead of scanning it off the list. That is
-//               a real change in what one glance buys, taken deliberately, and owner-test CARD 7
-//               is rewritten to the new surface rather than left asserting the old one.
+// 🔴 THE NOTE IS BACK ON THE LIST, READ-ONLY, UNDER THE CHIP — REVERSED SAME DAY BY DAVID.
+//               The first cut moved the note into the modal with its control. David reversed it
+//               within hours and the reasoning is the load-bearing part: *"'who is preferred' and
+//               'why' are ONE FACT — splitting them means she scans the list, sees a mark, and
+//               has to open a record to learn anything. The reason is the asset; the flag alone
+//               just tells her which row to click."*
+//
+//               ⚠️ E7 IS NOT VIOLATED AND THE CLAUSE SAYS SO ITSELF: *"A CONTROL that changes one
+//               record lives where that record is opened… The row carries a READ-ONLY MARK of the
+//               result."* A read-only line IS the mark; it is not a control. What E7 removed from
+//               the row was the textarea and the Save button, and those are still gone.
+//
+//               So the row now carries the whole FACT and none of the CONTROL — which is what the
+//               clause was always asking for, and closer to it than the modal-only cut was.
 //
 //               BOTH VENDORS ALWAYS APPEAR. A preference MARKS; it does not filter — and the
 //               order is alphabetical, not preference-first, because a sort is the quiet form of
@@ -114,6 +122,12 @@ const NAME: React.CSSProperties = { fontWeight: 700, color: '#1f2937', fontSize:
 const META: React.CSSProperties = { fontSize: '0.8125rem', color: '#64748b' };
 const LINE1: React.CSSProperties = {
   display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'baseline', justifyContent: 'space-between',
+};
+// The reason, given the visual weight of CONTENT rather than of a caption — it is the asset, and
+// a caption-sized reason is one nobody reads. Read-only: no border-as-input, no cursor, no control.
+const NOTE: React.CSSProperties = {
+  fontSize: '0.875rem', color: '#1f2937', marginTop: 8, lineHeight: 1.5,
+  background: '#f7faf2', border: '1px solid #e3edd3', borderRadius: 8, padding: '8px 10px',
 };
 const MARK: React.CSSProperties = {
   display: 'inline-block', padding: '2px 8px', borderRadius: 999,
@@ -249,6 +263,17 @@ export default function Vendors() {
                     would be the dead affordance G8 forbids. */}
                 {v.preferred === true && <span style={MARK}>PREFERRED</span>}
               </div>
+
+              {/* 🔴 THE REASON TRAVELS WITH THE MARK (David, 2026-09-04). Read-only — no onClick,
+                  no cursor, no input chrome — so it is part of E7's "read-only mark of the
+                  result", not a control that changes the record. The control is in the modal.
+                  An absent reason ANNOUNCES itself rather than rendering as a blank (D-9/A9):
+                  "marked preferred and nobody said why" is a real state and a useful one. */}
+              {v.preferred === true && (
+                v.preference_note
+                  ? <div style={NOTE}>{v.preference_note}</div>
+                  : <div style={ABSENCE}>Marked preferred, but no reason was recorded.</div>
+              )}
 
               {contact.length > 0 && (
                 <>

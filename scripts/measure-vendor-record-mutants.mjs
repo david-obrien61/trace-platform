@@ -65,6 +65,26 @@ const MUTANTS = [
     why: 'a field group names a column that is not in the shared editable set (an input that discards what is typed into it)',
     from: `  { title: 'Notes',    fields: ['notes'] },`,
     to: `  { title: 'Notes',    fields: ['notes', 'internal_rating'] },` },
+
+  { id: 'M10', file: 'packages/shared/src/business-logic/documentNumber.ts',
+    why: 'a NULL original is treated as "the reader read nothing", so an unattributed number reads as TYPED BY HER (the live LAWNS defect)',
+    from: `  const banked = original !== null && original !== undefined;`,
+    to: `  const banked = true;` },
+
+  { id: 'M11', file: 'packages/cultivar-os/src/pages/ReceiptKeeper.tsx',
+    why: 'the capture banks null instead of the empty-string sentinel when the reader found no number',
+    from: `      setReceiptNumberOriginal(readNumber ?? '');`,
+    to: `      setReceiptNumberOriginal(readNumber);` },
+
+  { id: 'M12', file: 'packages/cultivar-os/src/pages/Vendors.tsx',
+    why: 'the read-only reason is dropped from the row again, leaving a flag that only says which row to click',
+    from: `                  ? <div style={NOTE}>{v.preference_note}</div>`,
+    to: `                  ? null` },
+
+  { id: 'M13', file: 'packages/cultivar-os/src/pages/Vendors.tsx',
+    why: 'the read-only reason becomes a control (a click target on the row)',
+    from: `const NOTE: React.CSSProperties = {\n  fontSize: '0.875rem', color: '#1f2937', marginTop: 8, lineHeight: 1.5,`,
+    to: `const NOTE: React.CSSProperties = {\n  cursor: 'pointer',\n  fontSize: '0.875rem', color: '#1f2937', marginTop: 8, lineHeight: 1.5,` },
 ];
 
 function runSuite() {

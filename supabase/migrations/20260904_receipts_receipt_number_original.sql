@@ -6,9 +6,33 @@
 -- Target project: bgobkjcopcxusjsetfob (cultivar-os)
 --
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
--- ⛔ NOT YET APPLIED. David applies this from his own checkout on main. Nothing below depends on
---    another migration; it is one ADD COLUMN IF NOT EXISTS and one COMMENT.
+-- ✅ APPLIED 2026-09-04 BY DAVID. THIS FILE IS NO LONGER GATED.
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
+-- ANNOTATION ONLY — not one line of SQL below is altered (CLAUDE.md §6 r1).
+--
+-- CATALOG VERIFICATION, returned by David:
+--     receipt_number_original | text | YES
+--     total  with_number  with_original
+--        30            1              0
+--
+-- 🔴 with_original = 0 IS THE PASS, NOT A GAP. Nothing was backfilled, deliberately. The evidence
+--    rule works from here forward, and only forward.
+--
+-- ⚠️ SCOPE CORRECTION, MEASURED 2026-09-04T16:03Z (and it corrects the reading, not the numbers):
+--    `total 30` is the ALL-TENANT count, not LAWNS alone. LAWNS (ed2e5933) holds **10**.
+--    The arithmetic: 39 all-tenant before nine LAWNS rows were deleted, 39 − 9 = 30 all-tenant.
+--    Re-measured at 16:03Z it was **31** — Lauren landed one at 15:59:50Z while this was written.
+--    🔴 ANY RECEIPTS FIGURE IS A SNAPSHOT WITH A TIMESTAMP AND A TENANT, OR IT IS WRONG BY THE
+--       TIME IT IS READ. This table moved three times in one morning.
+--
+-- 🔴 THE COLUMN NEEDED A SENTINEL AND LIVE DATA FOUND IT WITHIN THE HOUR (see the note below on
+--    the three states — it is now FOUR). NULL was doing two jobs: "the reader read nothing" and
+--    "nothing was ever banked for this row". Measured at 16:03Z on LAWNS: `Bailey Bark Materials,
+--    Inc.` $2180.79 carried `receipt_number = 595431` with a NULL original, and **595431 is
+--    present in that row's `ocr_raw`** — the reader read it. Read the first way, the platform
+--    would have told Lauren she typed a number she never touched. `''` is now the sentinel for
+--    "read nothing"; NULL means "not banked" and yields `unknown`. NO SCHEMA CHANGE — the column
+--    is nullable text and `''` is a legal value in it.
 --
 -- WHY A COLUMN AND NOT A DERIVATION
 --   The obvious cheaper answer is "compare `receipt_number` against `ocr_raw` and infer". It does
@@ -20,11 +44,15 @@
 --       precisely an ABSENCE, and an absence cannot be recovered from a value that is present.
 --   So the original is BANKED, exactly as `line_items_original` banks the line snapshot.
 --
--- WHAT THE THREE STATES MEAN, and this is the whole point of the column:
---   original IS NULL      AND number IS NOT NULL  → 🔴 THE OWNER TYPED IT. We read nothing.
+-- WHAT THE FOUR STATES MEAN (three when written; the fourth was forced by live data the same day):
+--   original = ''         AND number IS NOT NULL  → 🔴 THE OWNER TYPED IT. The reader read nothing.
 --   original = number                             → read from the document, unaltered.
---   original <> number                            → we read one, the owner corrected it.
---   original IS NULL      AND number IS NULL      → no number, nobody supplied one. Honest blank.
+--   original <> number    (both non-null)         → we read one, the owner corrected it.
+--   original = ''         AND number IS NULL      → no number, nobody supplied one. Honest blank.
+--   original IS NULL                              → 🔴 UNKNOWN. Nothing was banked for this row —
+--                                                   it predates the column, or it was captured
+--                                                   from a browser tab running an older bundle.
+--                                                   We say we cannot tell. We do NOT accuse.
 --
 -- ⚠️ IT DOES NOT BACKFILL, AND IT MUST NOT. The 39 stored rows keep both columns as they are
 --    (measured 2026-09-04: `receipt_number` is populated on 1 of 39). Writing `receipt_number`
@@ -60,5 +88,7 @@ COMMENT ON COLUMN receipts.receipt_number_original IS
 --          count(receipt_number)          AS with_number,
 --          count(receipt_number_original) AS with_original
 --     FROM receipts;
---   EXPECT (as of 2026-09-04): total 39 · with_number 1 · with_original 0
+--   EXPECT: with_original 0 immediately after applying. ⚠️ DO NOT EXPECT A FIXED total — it was
+--   39 all-tenant at 14:30Z, 30 after nine LAWNS deletions at ~15:01Z, and 31 at 16:03Z. Scope
+--   every reading with `WHERE business_id = …` and a timestamp, or it means nothing.
 --   🔴 with_original > 0 immediately after applying means something backfilled. Investigate.

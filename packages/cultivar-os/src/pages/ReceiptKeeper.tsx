@@ -348,7 +348,12 @@ export function ReceiptKeeper() {
       // a number and it is blank", which is a different claim from "no number was printed" (D-9).
       const readNumber = data.parsed?.receipt_number?.trim() || null;
       setReceiptNumber(readNumber);
-      setReceiptNumberOriginal(readNumber);   // banked ONCE; typing never changes it
+      // 🔴 BANK '' — NOT null — WHEN THE READER FOUND NOTHING. NULL is reserved for "nothing was
+      //    ever banked for this row" (a pre-column capture, or a browser tab still running an
+      //    older bundle), and those are different facts. Conflating them makes the rule tell an
+      //    owner she TYPED a number the reader actually read — measured live on LAWNS the day
+      //    this shipped. Banked ONCE, here; typing never changes it.
+      setReceiptNumberOriginal(readNumber ?? '');
 
       // Initialize editable line items from OCR
       const ocrLines: Array<{ description: string; amount: number; quantity?: number | null; unit_price?: number | null; sku?: string | null; uom?: string | null; pack_size?: number | null; pack_unit?: string | null }> =
