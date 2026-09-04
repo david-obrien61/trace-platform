@@ -137,6 +137,26 @@ const MANIFEST = [
     ],
   },
   {
+    group: 'Record editing',
+    control: 'CustomerPartyEditor (reference record) + VendorEditor (/vendors, 2026-09-04)',
+    items: [
+      { id:'E1', std:'One record, one edit surface', status:'amber',
+        note:'<b>Met on vendors</b> \u2014 <code>VendorEditor</code> is the only component that edits a vendor row. <b>NOT met on customers</b>: <code>CustomerPartyEditor</code> is the full editor, but <code>CustomerEditModal</code>+<code>CustomerFields</code> are a second and <code>CustomerCapture</code> a third.' },
+      { id:'E2', std:'One commit model per surface (the shape decides)', status:'amber',
+        note:'<b>Met on vendors</b> \u2014 the record is the unit of work, so the panel is a FORM: every field buffers, one Save, create and edit differ only in title and insert-vs-update. <b>NOT met on customers</b>: <code>mode=\'create\'</code> buffers to one INSERT while <code>mode=\'edit\'</code> auto-saves per field.' },
+      { id:'E3', std:'The copy states the commit model and the surface implements it', status:'green',
+        note:'Met. Vendor editor states \u201cNothing is saved until you press Save\u201d and every field on the sheet obeys it.' },
+      { id:'E4', std:'The unchanged-check reads the PERSISTED value, never the working copy', status:'green',
+        note:'Met. Two-value pattern: <code>draft</code> (working) vs <code>saved</code> (persisted), split on both the customer and vendor editors; the patch is a diff of one against the other.' },
+      { id:'E5', std:'A write that changed nothing MUST NOT report success', status:'amber',
+        note:'<b>Met on vendors</b> \u2014 the update carries <code>.select(\'id\')</code> and a zero-row match is surfaced as a refusal, because a PostgREST UPDATE matching no rows returns NO error. <b>NOT met platform-wide</b>: no mutation on customers checks affected rows.' },
+      { id:'E6', std:'One declarative field list per record, including writers with no UI', status:'amber',
+        note:'<b>Met on vendors</b> \u2014 <code>VENDOR_FIELDS</code> is the single source the select, the form and the patch all derive from. \ud83d\udd34 It was NOT met before 2026-09-04: <code>VENDORS_SELECT</code> named 10 columns while the migration created 14, so the four address columns had no reader and would have read back null forever (tech-debt #179). <b>NOT met on customers</b>: six parallel lists.' },
+      { id:'E7', std:'A control that changes one record lives where the record is opened, not on the row', status:'amber',
+        note:'Ruled 2026-09-04 (R-83). <b>Met on <code>/vendors</code></b> \u2014 the preference control and its note moved into the modal; the row carries a read-only <code>PREFERRED</code> chip with no click target. \u26a0\ufe0f <b>Every other record list is UNAUDITED against E7</b>: not found wanting, not looked at.' },
+    ],
+  },
+  {
     group: 'Field display',
     control: 'systemManagedFields.ts (single registry) + DataSheet',
     items: [

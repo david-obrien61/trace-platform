@@ -40,17 +40,67 @@
  * ──────────────────────────────────────────────────────────────────────────────────────────────*/
 
 /**
- * 🔴 ONE LIST, TWO READERS, AND THAT IS THE WHOLE POINT. `/vendors` and the capture path both read
- * this table, and a second hand-written enumeration is how a column added to one reader reads back
- * null forever in the other with nothing able to notice — `customers` carried SIX parallel lists
- * before this rule existed.
+ * 🔴 ONE LIST, EVERY READER — AND THE LIST IS DECLARED ONCE SO `VENDORS_SELECT` IS DERIVED FROM IT (E6).
  *
- * ⚠️ The capture path does not need `notes` or `website`, and takes them anyway. Two lists that
- * differ by two columns are still two lists, and at 8 distinct vendors across the entire database
- * the cost of the wider read is nothing measurable against the cost of them drifting apart.
+ * `/vendors`, the vendor editor and the capture path all read this table. A second hand-written
+ * enumeration is how a column added to one reader reads back null forever in the other with
+ * nothing able to notice — `customers` carried SIX parallel lists before this rule existed.
+ *
+ * ⚠️ IT WAS NOT, AND THE COMMENT ABOVE WAS TRUE ABOUT ITS INTENT AND FALSE ABOUT ITS EFFECT
+ *    (tech-debt #179, filed 2026-09-04). The hand-written select named TEN columns —
+ *    `id, business_id, name, email, phone, account_number, website, preferred, preference_note,
+ *    notes` — while the migration that creates the table declares FOURTEEN non-timestamp columns.
+ *    The four it omitted are the ADDRESS: `address_line1`, `address_city`, `address_state`,
+ *    `address_zip` (20260902_vendor_identity_and_preference.sql:136-139).
+ *
+ *    🔴 NOTHING COULD HAVE CAUGHT IT. A column with no reader and no writer is invisible to tsc
+ *    (the type declared what the list declared), to eslint, to knip, and to every probe — the
+ *    only thing that finds it is a build that needs the fourth column, which is what happened.
+ *    "One list, two readers" failed SILENTLY: the failure mode is not a wrong value, it is an
+ *    address typed into a form reading back null forever with no error anywhere.
+ *
+ *    So the list is now the SOURCE and the select is COMPUTED. A column added to the table gets
+ *    added HERE, once, and the select, the row type, the form and the patch builder all move
+ *    together — which is what E6 asks for and what a hand-maintained string cannot give.
  */
-export const VENDORS_SELECT =
-  'id, business_id, name, email, phone, account_number, website, preferred, preference_note, notes';
+
+/** Keys. Never edited, never in a patch — they scope the row (AC-3) and identify it. */
+export const VENDOR_KEY_FIELDS = ['id', 'business_id'] as const;
+
+/**
+ * Editable by any active member (the `vendors_member_update` policy). `name` leads because it is
+ * the identity the unique index is built on.
+ */
+export const VENDOR_EDITABLE_FIELDS = [
+  'name',
+  'email',
+  'phone',
+  'account_number',
+  'address_line1',
+  'address_city',
+  'address_state',
+  'address_zip',
+  'website',
+  'notes',
+] as const;
+
+/**
+ * 🔴 OWNER-ONLY, AND THE DATABASE IS WHAT SAYS SO — not this array. The
+ * `vendors_preference_owner_only` trigger refuses these two from a non-owner on INSERT and UPDATE
+ * alike (§4 of the migration). This list exists so the FORM knows which controls to gate and which
+ * explanation to show; it is not the enforcement and must never be mistaken for it.
+ */
+export const VENDOR_OWNER_ONLY_FIELDS = ['preferred', 'preference_note'] as const;
+
+export type VendorEditableField = (typeof VENDOR_EDITABLE_FIELDS)[number];
+export type VendorOwnerOnlyField = (typeof VENDOR_OWNER_ONLY_FIELDS)[number];
+
+/** DERIVED — never hand-written again. */
+export const VENDORS_SELECT = [
+  ...VENDOR_KEY_FIELDS,
+  ...VENDOR_EDITABLE_FIELDS,
+  ...VENDOR_OWNER_ONLY_FIELDS,
+].join(', ');
 
 export const VENDOR_ALIASES_SELECT = 'id, business_id, vendor_id, alias, source';
 
@@ -65,7 +115,13 @@ export interface VendorRow {
   email?: string | null;
   phone?: string | null;
   account_number?: string | null;
+  /** The four address columns the select omitted until 2026-09-04 (tech-debt #179). */
+  address_line1?: string | null;
+  address_city?: string | null;
+  address_state?: string | null;
+  address_zip?: string | null;
   website?: string | null;
+  notes?: string | null;
   preferred?: boolean | null;
   preference_note?: string | null;
 }
@@ -518,4 +574,59 @@ export function vendorListHeading(
     heading: 'Vendors',
     subhead: `${vendors.length} vendors. ${preferred.length} are marked preferred.`,
   };
+}
+
+/* ────────────────────────────────────────────────────────────────────────────────────────────────
+ * CAPTURE → VENDOR CONTACT — what the document already told us, kept instead of discarded
+ * ──────────────────────────────────────────────────────────────────────────────────────────────*/
+
+/** The vendor-side fields a captured document can carry. Shape mirrors the OCR contract. */
+export interface CapturedVendorContact {
+  vendor_phone?: string | null;
+  vendor_email?: string | null;
+  vendor_website?: string | null;
+  vendor_address?: { line1?: string | null; city?: string | null; state?: string | null; zip?: string | null } | null;
+  our_account_number?: string | null;
+}
+
+/**
+ * Map what the reader found on the document onto the vendor columns, for a vendor being CREATED
+ * at capture.
+ *
+ * 🔴 THIS EXISTS BECAUSE THE CAPTURE WAS EXTRACT-AND-DISCARD, TWICE OVER. `resolve-or-create`
+ * wrote `{business_id, name}` and nothing else, so a letterhead carrying an address, a phone and
+ * our account number produced a vendor row with eleven empty columns. That is the same defect
+ * #257 fixed for quantity/unit_price/sku and #270 fixed for receipt_number — a value READ and
+ * then thrown away one layer down, with no error and nothing to notice it. Third instance.
+ *
+ * ⚠️ POPULATE ON CREATE ONLY — never on a later capture, and never over an existing row. David's
+ * rule for this is *"populate on create; the modal corrects it"*: a read value the owner can fix
+ * beats a blank she must fill, but a second document silently rewriting a phone she corrected by
+ * hand would be the machine overruling the human. An existing vendor is left exactly as it is.
+ *
+ * ⚠️ EVERY FIELD IS OPTIONAL AND AN ABSENT ONE IS OMITTED, not written as null or as ''. An
+ * absence must stay an absence (D-9 / A9); writing '' would make "we never read one" and "the
+ * document says it is blank" indistinguishable forever.
+ */
+export function vendorContactFromCapture(
+  parsed: CapturedVendorContact | null | undefined,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!parsed) return out;
+  const put = (col: string, raw: unknown) => {
+    const v = typeof raw === 'string' ? raw.trim() : '';
+    if (v !== '') out[col] = v;
+  };
+  put('phone', parsed.vendor_phone);
+  put('email', parsed.vendor_email);
+  put('website', parsed.vendor_website);
+  put('account_number', parsed.our_account_number);
+  const a = parsed.vendor_address;
+  if (a) {
+    put('address_line1', a.line1);
+    put('address_city', a.city);
+    put('address_state', a.state);
+    put('address_zip', a.zip);
+  }
+  return out;
 }

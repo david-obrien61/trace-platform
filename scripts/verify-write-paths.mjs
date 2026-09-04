@@ -88,26 +88,40 @@ const ALLOWED_DIVERGENCE = {
           + '— which is the manifest\'s own rule for this table. One writer, reached through one RPC.',
     paths: ['packages/cultivar-os/src/pages/ReceiptDetail.tsx'],
   },
-  // DECLARED 2026-09-02 (vendor identity, ledger #259). TWO paths, and they are disjoint by
-  // CONSTRUCTION rather than by convention — which is the only reason this is a declaration and
-  // not a consolidation.
-  // 🔴 THE COLUMN SETS CANNOT OVERLAP, AND THE DATABASE IS WHAT STOPS THEM. `Vendors.tsx` writes
-  //    ONLY `preferred` and `preference_note`, and `ReceiptKeeper.tsx` writes ONLY `business_id`
-  //    and `name` — it never sets a preference, and if it tried, the INSERT trigger
-  //    `vendors_preference_owner_only_insert` would REFUSE it from a manager's session with 42501.
-  //    So "the capture path does not set preferences" is enforced server-side, not promised here.
-  // ⚠️ THEY ALSO CANNOT BE MERGED INTO ONE WRITER, which is the question a reader should ask.
-  //    One runs at a DESK, owner-only, editing a row that exists; the other runs on a PHONE in a
-  //    lot, as any active member, creating a row from a document. Teaching either to do the other's
-  //    job means teaching the capture path to write an owner-only column — the opposite of the
-  //    separation the trigger exists to enforce.
+  // DECLARED 2026-09-02 (vendor identity, ledger #259) · 🔴 REWRITTEN 2026-09-04 (#273), BECAUSE
+  // THE PATHS CHANGED AND THE OLD REASON BECAME FALSE IN BOTH HALVES.
+  //   It said: "`Vendors.tsx` writes ONLY `preferred` and `preference_note`" — that page now
+  //   writes NOTHING AT ALL. Under E7/R-83 the per-record control left the row, so every vendor
+  //   write goes through `VendorEditor`, the modal over the opened record (E1: one record, one
+  //   edit surface). `Vendors.tsx` has left this list entirely.
+  //   It also said `ReceiptKeeper.tsx` writes "ONLY `business_id` and `name`" — it now also writes
+  //   the vendor-side contact the DOCUMENT carried (address, phone, our account number), which it
+  //   had been reading and discarding. Both halves are corrected rather than patched.
+  //
+  // 🔴 THE COLUMN SETS STILL CANNOT COLLIDE, AND THE DATABASE IS STILL WHAT STOPS THEM. The
+  //    capture path never sets a preference, and if it tried, `vendors_preference_owner_only_insert`
+  //    would REFUSE it from a manager's session with 42501. That is enforced server-side, not
+  //    promised here. What the two paths now share is the CONTACT columns — and they cannot fight
+  //    over them, because the capture path populates ON CREATE ONLY and never touches an existing
+  //    row (`vendorContactFromCapture` is called only inside the `plan.createVendorNamed` branch).
+  //    A second document from the same vendor changes nothing the owner typed.
+  //
+  // ⚠️ THEY STILL CANNOT BE MERGED, which is the question a reader should ask. One runs at a DESK,
+  //    editing a row that exists, with an owner-only block; the other runs on a PHONE in a lot, as
+  //    any active member, creating a row from a document nobody has reviewed yet. Teaching either
+  //    to do the other's job means teaching the capture path to write an owner-only column — the
+  //    opposite of the separation the trigger exists to enforce.
   'vendors': {
-    reason: 'Two disjoint concerns: Vendors.tsx writes ONLY preferred/preference_note (owner-only, '
-          + 'enforced by trigger); ReceiptKeeper.tsx writes ONLY business_id/name when resolve-or-'
-          + 'create yields a new vendor at capture. No column overlap, and the INSERT trigger '
-          + 'refuses a preference from the capture path rather than trusting it not to try.',
+    reason: 'Two disjoint concerns. VendorEditor.tsx is the ONE edit surface (E1) — it inserts and '
+          + 'updates the full editable set, plus preferred/preference_note for an owner only, '
+          + 'enforced by trigger not by the UI. ReceiptKeeper.tsx writes ONLY on CREATE, at '
+          + 'capture: business_id, name, and the vendor-side contact the document itself carried. '
+          + 'It never updates an existing row and never sets a preference; the INSERT trigger '
+          + 'refuses a preference from that path rather than trusting it not to try. '
+          + 'Vendors.tsx was removed from this declaration on 2026-09-04: under E7 it performs no '
+          + 'write at all.',
     paths: ['packages/cultivar-os/src/pages/ReceiptKeeper.tsx',
-            'packages/cultivar-os/src/pages/Vendors.tsx'],
+            'packages/cultivar-os/src/components/vendors/VendorEditor.tsx'],
   },
   // DECLARED 2026-08-31 (the QuickBooks ShipDate delivery ingest). `deliveries` already carried
   // three approved writers; this is a FOURTH, and it is declared rather than folded because the

@@ -96,7 +96,7 @@
 - 🔴 **TWO SHARED-CONTROL QUESTIONS OWED DOC-FIRST (R-74), NOT DECIDED IN A SURFACE:** ① the expand toggle is **trailing + chevron**, not a leading plus/minus — a `DataSheet.tsx` change for every consumer. ② the count pill **cannot name a server-side cap** (*"100 of 100"* for a tenant holding 236).
 - ⚠️ **COLUMN DEFAULTS ARE AN UNVERIFIED PREMISE** — David's set relayed by a peer session; flagged in the file, one word flips it. **LINES needs `line_items` in the select, which the file's invariant forbids — David's call, not settled.**
 
-> 🟡 **Vendors — identity + the preferred vendor** · BUILDER-COMPLETE, ✅ **MERGED to `main` 2026-09-03**, **both migrations APPLIED** · owner-proof OWED (12 cards, 0 covered) · branch `thunder/vendor-identity` (session `d967011d`), pushed · **verify exit 0 zero net-new · re-measured ON THE COMBINED TREE at merge: 70/70 files / 3630 assertions (the branch's own 62/62 · 3241 was a single-branch run) · 19/19 mutants · vendorIdentity 96 · vendorFoldAgreement 8** · ⚠️ **CARD 5 + CARD 6 must run at `f7ec5d67` as `test obrien`** — Lauren holds role OWNER at LAWNS, so she is not a manager there, and joel joiner is `active=false` · → `docs/owner-tests/vendors-full-surface-test.md` · ledger **#259** · [[R-65]] corrected (#259)
+> 🟡 **Vendors — identity + the preferred vendor + THE RECORD EDITOR** · BUILDER-COMPLETE, on `main` · **owner-proof OWED — 18 cards, 0 covered, 1 `needs-test`** (was 12; **CARDS 1/2/5/6/7 flipped `covered`→`owed`** — none was ever proven, but each described the inline row editor **E7/R-83** removed) · **verify exit 0 zero net-new · 72/72 files · 3710 assertions · vendorEdit 70 probes · 9/9 mutants** · 🔴 **`20260904_receipts_receipt_number_original.sql` NOT APPLIED — CARDS 16-18 cannot pass without it**; the three vendor migrations ARE applied · ⚠️ **CARD 5 + CARD 6 must run at `f7ec5d67` as `test obrien`** — Lauren holds role OWNER at LAWNS so she is not a manager there, and joel joiner is `active=false` · → `docs/owner-tests/vendors-full-surface-test.md` · ledger **#259**, **#273** · [[R-83]] · tech-debt **#179**/**#180**/**#181**
 
 > 🔴 **BRANCH / WORKTREE STATE IS MEASURED, NEVER REMEMBERED — run these two, do not read them off a prose line (added 2026-09-02).**
 > ```
@@ -128,8 +128,9 @@ David relays.
 | # | File | State | Apply |
 |---|---|---|---|
 | 1 | `20260902_receipt_line_edit_and_vendor_preference.sql` | ✅ **APPLIED 2026-09-02**, catalog-confirmed | done |
-| 2 | `20260902_vendor_identity_and_preference.sql` | ⏳ not applied | **FIRST** |
-| 3 | `20260902b_vendor_preferences_join_on_vendor_id.sql` | ⏳ not applied | **SECOND** |
+| 2 | `20260902_vendor_identity_and_preference.sql` | ✅ **APPLIED 2026-09-03**, catalog-confirmed | done |
+| 3 | `20260902b_vendor_preferences_join_on_vendor_id.sql` | ✅ **APPLIED 2026-09-03**, catalog-confirmed | done |
+| 4 | `20260904_receipts_receipt_number_original.sql` | 🔴 **NOT APPLIED** (#273) | **NEXT — blocks vendors CARDS 16-18** |
 
 **WHY THAT ORDER, from the files rather than from habit:** #3 opens with a `DO $preflight$` block
 that requires **both** `vendors` (created by #2) and `vendor_preferences` (created by #1). Paste #3

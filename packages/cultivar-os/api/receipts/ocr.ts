@@ -86,6 +86,11 @@ Return a JSON object with these exact fields (use null for any field you cannot 
   "category": "string — best fit from: fuel, supplies, meals, parts, equipment, maintenance, office, other",
   "line_items": array or null — each item as: {"description": "as printed", "quantity": number or null, "uom": "string or null", "pack_size": number or null, "pack_unit": "string or null", "unit_price": number or null, "amount": number} — null if no itemized list is visible,
   "payment_method": "string or null — cash, credit, debit, check, as indicated on the receipt",
+  "vendor_phone": "string or null — the VENDOR's own phone, from their letterhead/header. Not the customer's.",
+  "vendor_email": "string or null — the VENDOR's own email, from their letterhead/header. Not the customer's.",
+  "vendor_website": "string or null — the VENDOR's website if printed",
+  "vendor_address": {"line1": "string or null", "city": "string or null", "state": "string or null", "zip": "string or null"} or null — the VENDOR's own address, from their letterhead/header,
+  "our_account_number": "string or null — OUR customer/account number WITH this vendor, as printed on their document (often labelled Account, Acct #, Customer #, Cust ID, or a short alphanumeric code near the top such as SLAW040). This is the number THEY use for US. It is NOT their company number, NOT their tax/EIN, and NOT the invoice number.",
   "receipt_number": "string or null — receipt, invoice, or transaction number if printed"
 }
 
@@ -96,6 +101,8 @@ Rules:
   (a) "uom" — a unit code in its OWN column beside the quantity, copied EXACTLY as printed (BG, BN, EA, CS, LB, YD, TON, GAL...). null if the receipt has no such column.
   (b) "pack_size" + "pack_unit" — a unit stated INSIDE the description text. "Osmocote 50 lb" is pack_size 50, pack_unit "lb". "Mulch 4.4 cf" is 4.4 + "cf". "Trim Tape (12 Pack)" is 12 + "Pack". Read these off the description; do NOT compute anything from them, and do NOT copy the pack text into pack_unit when no number precedes it.
   Both are null only when the document is genuinely silent about the unit. Do not leave them null because the other one is filled — a receipt often states the unit twice, and both readings are wanted.
+- 🔴 VENDOR SIDE vs CUSTOMER SIDE. The vendor_* fields describe the business that ISSUED this document (letterhead, top of page, "Remit to"). Never copy a bill-to / sold-to / ship-to value into a vendor_* field. If the document shows only ONE address and you cannot tell whose it is, return null rather than guessing — a wrong vendor address is worse than none.
+- 🔴 our_account_number is OUR number WITH THEM, not their number. Read it only from a field that identifies the RECIPIENT of the document (Account, Acct #, Customer #, Cust ID). If the only number you can find identifies the issuer (their tax id, their DUNS, their own company number), return null.
 - For amounts: numeric values only — no currency symbols, no commas.
 - Return ONLY the JSON object. No explanation, no markdown fences, no commentary.`;
 
@@ -124,6 +131,11 @@ Return a JSON object with these exact fields (use null for any field you cannot 
   "amount": number — invoice total (numeric only, no currency symbol),
   "category": "string — best fit from: fuel, supplies, meals, parts, equipment, maintenance, office, other",
   "payment_method": "string or null — cash, credit, debit, check, as indicated",
+  "vendor_phone": "string or null — the VENDOR's own phone, from their letterhead/header. Not the customer's.",
+  "vendor_email": "string or null — the VENDOR's own email, from their letterhead/header. Not the customer's.",
+  "vendor_website": "string or null — the VENDOR's website if printed",
+  "vendor_address": {"line1": "string or null", "city": "string or null", "state": "string or null", "zip": "string or null"} or null — the VENDOR's own address, from their letterhead/header,
+  "our_account_number": "string or null — OUR customer/account number WITH this vendor, as printed on their document (often labelled Account, Acct #, Customer #, Cust ID, or a short alphanumeric code near the top such as SLAW040). This is the number THEY use for US. It is NOT their company number, NOT their tax/EIN, and NOT the invoice number.",
   "receipt_number": "string or null — invoice / order number if printed"
 }
 
@@ -137,6 +149,8 @@ Rules:
   (a) "uom" — a unit code in its OWN column beside the quantity, copied EXACTLY as printed (BG, BN, EA, CS, LB, YD, TON, GAL...). null if the invoice has no such column.
   (b) "pack_size" + "pack_unit" — a unit stated INSIDE the description text. "Osmocote 50 lb" is pack_size 50, pack_unit "lb". "Mulch 4.4 cf" is 4.4 + "cf". "Trim Tape (12 Pack)" is 12 + "Pack". Read these off the description; do NOT compute anything from them, and do NOT copy the pack text into pack_unit when no number precedes it.
   Both are null only when the document is genuinely silent about the unit. Do not leave them null because the other one is filled — an invoice often states the unit twice, and both readings are wanted.
+- 🔴 VENDOR SIDE vs CUSTOMER SIDE. The vendor_* fields describe the business that ISSUED this document (letterhead, top of page, "Remit to"). Never copy a bill-to / sold-to / ship-to value into a vendor_* field. If the document shows only ONE address and you cannot tell whose it is, return null rather than guessing — a wrong vendor address is worse than none.
+- 🔴 our_account_number is OUR number WITH THEM, not their number. Read it only from a field that identifies the RECIPIENT of the document (Account, Acct #, Customer #, Cust ID). If the only number you can find identifies the issuer (their tax id, their DUNS, their own company number), return null.
 - For amounts: numeric values only — no currency symbols, no commas.
 - Return ONLY the JSON object. No explanation, no markdown fences, no commentary.`;
 

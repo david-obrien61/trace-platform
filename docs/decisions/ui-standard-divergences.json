@@ -1,139 +1,139 @@
 {
- "_purpose": "Every bespoke surface that diverges from docs/standards/ui-control-standards.md declares it HERE, clause by clause. Read by scripts/verify-ui-standard-divergence.mjs, which derives the clause list from the standard itself — so ADDING A CLAUSE TO THE STANDARD INVALIDATES EVERY DECLARATION UNTIL IT IS RE-ANSWERED. That is the order of operations (doc first, widget once, surfaces inherit) made mechanical.",
- "_verdicts": "met = the surface satisfies the clause. dropped = deliberately not taken, REQUIRES a reason. owed = a real gap, not yet closed, recorded rather than hidden. 'owed' is an honest answer and is meant to be used.",
- "_rule": "A declaration is not a waiver. 'dropped' with a sentence is a decision; 'owed' is a debt with a name. Neither is a pass.",
- "baseline": {
-  "_note": "BASELINE-AND-RATCHET, ruled by David 2026-09-03. A day-one hard fail would have been paid off with ~23 rubber-stamp declarations, and a declaration file full of rubber stamps is R-33's exact defect — a check incapable of disagreeing. These numbers may only SHRINK. When one drops, re-measure and commit the lower number.",
-  "undeclared_bespoke_surfaces": 23,
-  "_undeclared_measured": "2026-09-03, re-measured after /receipts converged onto DataSheet: 23 bespoke record-list surfaces under packages/cultivar-os/src, 0 declared, 23 undeclared. ⚠️ THE NUMBER DID NOT IMPROVE, AND THE REASON MATTERS: it was 23 before too. ReceiptsList was the ONE declared surface, so removing it from the bespoke population left the undeclared count untouched — a surface LEFT the population rather than a declaration being cleared. Read this as 23 UNAUDITED surfaces: not found wanting, not looked at. It is a debt, not a clean bill.",
-  "clauses_absent_from_board": 10,
-  "_board_measured": "2026-09-03: ui-standards.html renders 3 of the 6 sections of the standard. Absent: G9, F4, E1, E2, E3, E4, E5, E6, S1, R1, R2. E1 — 'one record, one edit surface' — is the clause that answers modal-vs-route, and it is not on the board a prompt-writer would check. Fixing the renderer drops this to 0.",
-  "clauses_absent_from_board_note": "Lowered 11 -> 10 on 2026-09-03 (#270). G9 and G10 were ADDED to ui-standards.html rather than the baseline being raised to absorb a new clause — adding G10 to the standard pushed this to 12 and the cap refused, which is the ratchet working. Ten clauses remain defined and rendered nowhere (F4, E1-E6, S1, R1, R2); that is the board's own build, still owed and still David's to authorise."
- },
- "divergences": [
-  {
-   "file": "packages/cultivar-os/src/pages/Vendors.tsx",
-   "declared": "2026-09-03",
-   "declared_by": "the thunder/vendor-identity MERGE — the branch forked at 62d3d34, BEFORE this cap existed (#265), so the surface was never measured against it. Declared at merge time rather than left to trip the ratchet.",
-   "sections": [
-    "1"
-   ],
-   "shape_taken": "CARD / ROW LIST — one bordered block per vendor (name + PREFERRED mark + the reason note + Contact + 'Also bills as' aliases), rendered from divs.",
-   "shape_dropped": "DATA GRID (<DataSheet>).",
-   "reason": "⚠️ THIS REASON IS RECORDED AS UNEXAMINED, NOT AS SETTLED — deliberately, because the last declaration filed here carried a confident reason that was false when written (see the ReceiptsList entry under `converged`). What is MEASURED: the surface renders no <table> and no columns (0 matches for `<table`, `sticky`, `overflow`, `maxHeight` in the file), so the grid clauses below are answered against a card list. What is NOT established: that a card list is the right shape for vendors. Nobody has put that question to David, and this declaration does not answer it. At the measured population — `vendors` holds 0 rows in every tenant (measured 2026-09-03, ledger #259) — the shape has never been seen carrying data.",
-   "recorded_where": "this declaration · the thunder/vendor-identity merge commit · CLOSE-OUT-LEDGER #259. NOT on ui-standards.html — that board still renders 3 of the standard's 6 sections and no per-surface rows (baseline.clauses_absent_from_board).",
-   "note": "🔴 THE SURFACE IS OWNER-PROOF OWED AND ITS BOARD IS 0 OF 12 COVERED, so every verdict below is a READ OF THE CODE, not of a screen anyone has driven. G4/G6/G7 are `owed` for the same reason they were owed on /receipts before it converged: a list that expects to grow needs sort, search and a bounded box, and this one has none of the three. They are cheap here precisely because nothing has been built on top of them yet.",
-   "clauses": {
-    "G1": {
-     "verdict": "dropped",
-     "reason": "There is no header row to make sticky — the shape is a card list, not a table. Every value is labelled in place on its own card (SECTION_LABEL, Vendors.tsx:254/264), so the need G1 serves — never lose which column you are reading — does not arise."
-    },
-    "G2": {
-     "verdict": "dropped",
-     "reason": "There is no horizontal axis: cards wrap within the page width and the file contains no overflow container, so there is no h-scrollbar to make reachable."
-    },
-    "G3": {
-     "verdict": "dropped",
-     "reason": "No columns, so no identifier column to freeze. The vendor name leads each card (LINE1) and never scrolls away from its own record."
-    },
-    "G4": {
-     "verdict": "owed",
-     "reason": "🔴 A REAL GAP. There is no sort control of any kind — the only ordering is `orderVendorsForDisplay` (vendorIdentity.ts:480-481), a fixed alphabetical `localeCompare` with an id tiebreak, applied client-side. The owner cannot re-sort. Defensible while `vendors` holds 0 rows; not defensible as an unrecorded omission once capture starts creating them."
-    },
-    "G5": {
-     "verdict": "dropped",
-     "reason": "There are no columns to show or hide. The card shows a fixed set of facts and the operator cannot trim it — a consequence of the shape, not an independent decision. If the card grows past one screen this becomes owed rather than dropped."
-    },
-    "G6": {
-     "verdict": "owed",
-     "reason": "🔴 A REAL GAP. No text search and no status filter — the file contains no input for either (0 matches for a search/filter control; the only <input> is the preference-note editor). A vendor list is exactly the surface an owner scans by name, and CARD 3's own flow assumes several same-vendor spellings will accumulate as aliases."
-    },
-    "G7": {
-     "verdict": "owed",
-     "reason": "🔴 A REAL GAP. The cards are not in a bounded scroll box — they scroll the page (no maxHeight, no overflow in the file) — and there is no compact density. Unlike /receipts, no virtualisation argument was ever made here either way."
-    },
-    "G8": {
-     "verdict": "met",
-     "reason": "MEASURED, and narrower than the clause's spreadsheet framing: the surface has exactly ONE editable thing — `preferred` + `preference_note`, written together at Vendors.tsx:178. It is edited inline with explicit chrome and an explicit exit (Mark preferred → note field → Save/Cancel, Vendors.tsx:282-300); every other value renders as read-only text. There is no cell that looks editable and is not. ⚠️ Read this as 'the affordance is unambiguous', NOT as 'per-cell editing exists' — there is no cell matrix to edit."
-    },
-    "G9": {
-     "verdict": "dropped",
-     "reason": "🔴 DELIBERATE, AND RULED — this is the clause G9 itself allows ('unless a clause here names another'). G9 orders by the date the document carries; a vendor is not a dated document and `VENDORS_SELECT` (vendorIdentity.ts:52-53) carries no date field at all, so the clause's premise is absent. The order is alphabetical BY RULING: the preferred vendor deliberately does NOT float to the top, because — in the file's own words (Vendors.tsx:17) — 'a sort is the quiet form of a filter', and on the day the preferred vendor is out of stock the other row is the answer. Owner-test CARD 9 exists to prove exactly this and FAILS the build if preferred rows float."
-    },
-    "G10": {
-     "verdict": "dropped",
-     "reason": "VACUOUS HERE, and answered rather than left to fail the cap. G10 governs a grid that renders PER-ROW EXPANSION: the toggle must lead and the row must be a click target. Vendors.tsx is a bespoke card list with no disclosure of any kind — it passes no renderExpand and imports no DataSheet (grep: the only occurrence of 'DataSheet' in the file is the header comment naming the standard it diverges from). A surface with nothing to disclose cannot violate a clause about how disclosure is opened. If this surface ever gains an expansion it inherits G10 from the shared control, and this cell must be re-answered. ⚠️ ANSWERED BY trace-platform-e2 (ledger #270), NOT by the session that built this surface: G10 was minted after this declaration was written, and adding a clause invalidates every declaration until it is re-answered — which is the cap working as designed, not a defect. The verdict is confined to G10; nothing else in this declaration was touched."
+  "_purpose": "Every bespoke surface that diverges from docs/standards/ui-control-standards.md declares it HERE, clause by clause. Read by scripts/verify-ui-standard-divergence.mjs, which derives the clause list from the standard itself — so ADDING A CLAUSE TO THE STANDARD INVALIDATES EVERY DECLARATION UNTIL IT IS RE-ANSWERED. That is the order of operations (doc first, widget once, surfaces inherit) made mechanical.",
+  "_verdicts": "met = the surface satisfies the clause. dropped = deliberately not taken, REQUIRES a reason. owed = a real gap, not yet closed, recorded rather than hidden. 'owed' is an honest answer and is meant to be used.",
+  "_rule": "A declaration is not a waiver. 'dropped' with a sentence is a decision; 'owed' is a debt with a name. Neither is a pass.",
+  "baseline": {
+    "_note": "BASELINE-AND-RATCHET, ruled by David 2026-09-03. A day-one hard fail would have been paid off with ~23 rubber-stamp declarations, and a declaration file full of rubber stamps is R-33's exact defect — a check incapable of disagreeing. These numbers may only SHRINK. When one drops, re-measure and commit the lower number.",
+    "undeclared_bespoke_surfaces": 23,
+    "_undeclared_measured": "2026-09-03, re-measured after /receipts converged onto DataSheet: 23 bespoke record-list surfaces under packages/cultivar-os/src, 0 declared, 23 undeclared. ⚠️ THE NUMBER DID NOT IMPROVE, AND THE REASON MATTERS: it was 23 before too. ReceiptsList was the ONE declared surface, so removing it from the bespoke population left the undeclared count untouched — a surface LEFT the population rather than a declaration being cleared. Read this as 23 UNAUDITED surfaces: not found wanting, not looked at. It is a debt, not a clean bill.",
+    "clauses_absent_from_board": 4,
+    "_board_measured": "2026-09-03: ui-standards.html renders 3 of the 6 sections of the standard. Absent: G9, F4, E1, E2, E3, E4, E5, E6, S1, R1, R2. E1 — 'one record, one edit surface' — is the clause that answers modal-vs-route, and it is not on the board a prompt-writer would check. Fixing the renderer drops this to 0.",
+    "clauses_absent_from_board_note": "Lowered 10 -> 4 on 2026-09-04 (#273). Adding E7 to the standard pushed this to 11 and the cap REFUSED the commit (D1) — proven RED before it was made to pass, which is the ratchet working exactly as the 09-03 note describes. It was fixed by RENDERING section 4 (Record editing, E1-E7) on ui-standards.html rather than by raising the baseline, so the board now carries the clause a prompt-writer would check. Four clauses remain defined and rendered nowhere: F4, S1, R1, R2 — sections 5 (headers), 6 (data reads) and F4. That is the board's remaining build, still owed and still David's to authorise; §4 was taken now because THIS build added a clause to it, and a clause you cannot see is a clause the next prompt will not check."
+  },
+  "divergences": [
+    {
+      "file": "packages/cultivar-os/src/pages/Vendors.tsx",
+      "declared": "2026-09-03",
+      "declared_by": "the thunder/vendor-identity MERGE — the branch forked at 62d3d34, BEFORE this cap existed (#265), so the surface was never measured against it. Declared at merge time rather than left to trip the ratchet.",
+      "sections": [
+        "1"
+      ],
+      "shape_taken": "CARD / ROW LIST — one bordered block per vendor (name + PREFERRED mark + the reason note + Contact + 'Also bills as' aliases), rendered from divs.",
+      "shape_dropped": "DATA GRID (<DataSheet>).",
+      "reason": "⚠️ THIS REASON IS RECORDED AS UNEXAMINED, NOT AS SETTLED — deliberately, because the last declaration filed here carried a confident reason that was false when written (see the ReceiptsList entry under `converged`). What is MEASURED: the surface renders no <table> and no columns (0 matches for `<table`, `sticky`, `overflow`, `maxHeight` in the file), so the grid clauses below are answered against a card list. What is NOT established: that a card list is the right shape for vendors. Nobody has put that question to David, and this declaration does not answer it. At the measured population — `vendors` holds 0 rows in every tenant (measured 2026-09-03, ledger #259) — the shape has never been seen carrying data.",
+      "recorded_where": "this declaration · CLOSE-OUT-LEDGER #273 · ui-standards.html section 'Record editing' (E1-E7, rendered 2026-09-04 — this surface's E7 answer is now visible on the board a prompt-writer checks, which it was not before) · Vendors.tsx header · docs/RULINGS.md R-83",
+      "note": "🔴 THE SURFACE IS OWNER-PROOF OWED AND ITS BOARD IS 0 OF 12 COVERED, so every verdict below is a READ OF THE CODE, not of a screen anyone has driven. G4/G6/G7 are `owed` for the same reason they were owed on /receipts before it converged: a list that expects to grow needs sort, search and a bounded box, and this one has none of the three. They are cheap here precisely because nothing has been built on top of them yet.",
+      "clauses": {
+        "G1": {
+          "verdict": "dropped",
+          "reason": "There is no header row to make sticky — the shape is a card list, not a table. Every value is labelled in place on its own card (the SECTION_LABEL rows: Contact, Address, Also bills as), so the need G1 serves — never lose which column you are reading — does not arise."
+        },
+        "G2": {
+          "verdict": "dropped",
+          "reason": "There is no horizontal axis: cards wrap within the page width and the file contains no overflow container, so there is no h-scrollbar to make reachable."
+        },
+        "G3": {
+          "verdict": "dropped",
+          "reason": "No columns, so no identifier column to freeze. The vendor name leads each card (LINE1) and never scrolls away from its own record."
+        },
+        "G4": {
+          "verdict": "owed",
+          "reason": "🔴 A REAL GAP. There is no sort control of any kind — the only ordering is `orderVendorsForDisplay` (vendorIdentity.ts:480-481), a fixed alphabetical `localeCompare` with an id tiebreak, applied client-side. The owner cannot re-sort. Defensible while `vendors` holds 0 rows; not defensible as an unrecorded omission once capture starts creating them."
+        },
+        "G5": {
+          "verdict": "dropped",
+          "reason": "There are no columns to show or hide. The card shows a fixed set of facts and the operator cannot trim it — a consequence of the shape, not an independent decision. If the card grows past one screen this becomes owed rather than dropped."
+        },
+        "G6": {
+          "verdict": "owed",
+          "reason": "🔴 A REAL GAP. No text search and no status filter — the file contains no input for either (0 matches for a search/filter control; the only <input> is the preference-note editor). A vendor list is exactly the surface an owner scans by name, and CARD 3's own flow assumes several same-vendor spellings will accumulate as aliases."
+        },
+        "G7": {
+          "verdict": "owed",
+          "reason": "🔴 A REAL GAP. The cards are not in a bounded scroll box — they scroll the page (no maxHeight, no overflow in the file) — and there is no compact density. Unlike /receipts, no virtualisation argument was ever made here either way."
+        },
+        "G8": {
+          "verdict": "dropped",
+          "reason": "🔴 RE-ANSWERED 2026-09-04 (#273) AND THE PREVIOUS REASON IS NOW FALSE, WHICH IS WHY IT IS REPLACED RATHER THAN LEFT. It read: 'the surface has exactly ONE editable thing — preferred + preference_note, written together at Vendors.tsx:178 … edited inline with explicit chrome and an explicit exit (Mark preferred → note field → Save/Cancel, Vendors.tsx:282-300)'. Under E7 that inline editor is GONE: the control and its note moved into VendorEditor, the modal over the opened record. The page now has ZERO editable things — every value renders as read-only text beside one explicit 'Edit vendor' button. So G8 (per-cell inline edit with a clear editable-vs-readonly affordance) is vacuous here in the strongest possible way: there is no cell that looks editable, because there is no editable cell. ⚠️ The clause's SECOND half is met and is asserted mechanically rather than claimed — vendorEdit.test.ts §E proves the PREFERRED chip carries no onClick, role, tabIndex or cursor in its JSX AND no cursor in its style, with a negative control (E9) confirming the same test does detect the real interactive control on the row. Mutant M2 (chip gains an onClick) is caught."
+        },
+        "G9": {
+          "verdict": "dropped",
+          "reason": "🔴 DELIBERATE, AND RULED — this is the clause G9 itself allows ('unless a clause here names another'). G9 orders by the date the document carries; a vendor is not a dated document and `VENDORS_SELECT` (vendorIdentity.ts:52-53) carries no date field at all, so the clause's premise is absent. The order is alphabetical BY RULING: the preferred vendor deliberately does NOT float to the top, because — in the file's own words (Vendors.tsx:17) — 'a sort is the quiet form of a filter', and on the day the preferred vendor is out of stock the other row is the answer. Owner-test CARD 9 exists to prove exactly this and FAILS the build if preferred rows float."
+        },
+        "G10": {
+          "verdict": "dropped",
+          "reason": "VACUOUS HERE, and answered rather than left to fail the cap. G10 governs a grid that renders PER-ROW EXPANSION: the toggle must lead and the row must be a click target. Vendors.tsx is a bespoke card list with no disclosure of any kind — it passes no renderExpand and imports no DataSheet (grep: the only occurrence of 'DataSheet' in the file is the header comment naming the standard it diverges from). A surface with nothing to disclose cannot violate a clause about how disclosure is opened. If this surface ever gains an expansion it inherits G10 from the shared control, and this cell must be re-answered. ⚠️ ANSWERED BY trace-platform-e2 (ledger #270), NOT by the session that built this surface: G10 was minted after this declaration was written, and adding a clause invalidates every declaration until it is re-answered — which is the cap working as designed, not a defect. The verdict is confined to G10; nothing else in this declaration was touched."
+        }
+      }
     }
-   }
-  }
- ],
- "converged": [
-  {
-   "file": "packages/cultivar-os/src/components/receipts/ReceiptsList.tsx",
-   "declared": "2026-09-03",
-   "sections": [
-    "1"
-   ],
-   "shape_taken": "SUMMARY ROW + INLINE DETAIL (record list with disclosure) — one card per receipt, the receipt → order → delivery chain nested inside it.",
-   "shape_dropped": "DATA GRID (<DataSheet>).",
-   "reason": "🔴 THE STATED REASON WAS FALSE WHEN IT WAS WRITTEN, AND THAT — NOT THE SHAPE — IS WHAT THIS DECLARATION RECORDS (David's ruling, 2026-09-03). The original note read: \"a fixed-column grid can render that only by truncating the chain or by exploding one receipt into several rows.\" <DataSheet> has carried renderExpand — \"Optional per-row detail drawer. When present, a trailing expand toggle column appears.\" (DataSheet.tsx:81-82) — since 2026-07-01, commit e3e6796. The divergence comment was written 2026-09-01, commit ab617b2, TWO MONTHS LATER. A disclosure row is exactly what the widget already had, so the grid was not dropped because it could not render the chain; it was dropped on an unchecked claim about our own component. David: \"THE DIVERGENCE WAS NOT A GAP IN THE WIDGET. IT WAS AN UNCHECKED CLAIM ABOUT OUR OWN WIDGET.\" This is R-26's class (a written declaration nobody checked against reality, steering a decision) and the SECOND instance this week of a comment contradicting its own repo — tech-debt #61, where countPromote.ts:24 asserted scrape-reads-variations was \"never built\" while fetchProductVariants and extractSizeVariants existed and were wired, was the first. ⚠️ WHETHER THE CARD SHAPE IS NONETHELESS THE RIGHT ONE IS A SEPARATE QUESTION AND IT IS STILL OPEN. It is not settled by the reason that was on file, and the true observations that reason contained — that a receipt must appear ONCE, and that two LAWNS receipts are duplicate captures of one invoice which must not read as four rows — are satisfied by renderExpand, which is one row per record with the chain nested inside it.",
-   "recorded_where": "ReceiptsList.tsx header (UI STANDARD block) · this declaration · docs/decisions/2026-09-03-ui-standard-divergence-report.md · CLOSE-OUT-LEDGER #264. NOT on ui-standards.html — the board renders no per-surface rows at all yet, which is the reader gap tracked as baseline.clauses_absent_from_board.",
-   "note": "🔴 THIS IS THE DECLARATION THAT PROVES THE CAP, AND IT PROVES IT TWICE OVER — THE SECOND WAY BEING THE ONE NOBODY EXPECTED. The first: the original divergence explained dropping the grid and said NOTHING about G4, G5 and G6, which the surface also does not have, so a narrow record read as a complete one; answering all nine clauses is what surfaces that, and G4/G6/G7 are owed below. The second, and it overturns this note's own first draft: THE REASON ITSELF WAS FALSE, not merely incomplete. That draft graded it \"REASONED AND CORRECT about the shape\" — corrected 2026-09-03 by David's ruling after renderExpand was measured at DataSheet.tsx:81-82, shipped 2026-07-01, two months before the claim that it could not exist. ⚠️ THE DOWNSTREAM CLAUSES INHERIT THE DEFECT AND ARE RE-ANSWERABLE: G1, G2, G3 and G5 are each declared 'dropped' for a reason of the form \"the shape is a card list, not a table,\" which is downstream of the withdrawn premise. They are not thereby wrong — they are unexamined, and they get re-answered when the shape question is reopened. G9's 'met' and G4/G6/G7's 'owed' are independent of the premise and stand as measured.",
-   "clauses": {
-    "G1": {
-     "verdict": "dropped",
-     "reason": "There is no header row to make sticky — the shape is a card list, not a table. The need G1 serves (never lose which column you are reading) does not arise when every value is labelled in place on its own card."
-    },
-    "G2": {
-     "verdict": "dropped",
-     "reason": "There is no horizontal axis: cards wrap within the page width, so there is no h-scrollbar to make reachable."
-    },
-    "G3": {
-     "verdict": "dropped",
-     "reason": "No columns, so no identifier column to freeze. The vendor name is the first thing on every card and never scrolls away from its own row."
-    },
-    "G4": {
-     "verdict": "owed",
-     "reason": "🔴 A REAL GAP, AND IT IS ONE OF THE THREE THE ORIGINAL DIVERGENCE NOTE WAS SILENT ABOUT. There is no sort control of any kind — the order is fixed by G9 and the owner cannot re-sort by vendor, amount or category. Defensible at 17 rows; it is not defensible as an unrecorded omission."
-    },
-    "G5": {
-     "verdict": "dropped",
-     "reason": "There are no columns to show or hide. The card shows a fixed set of six facts and the operator cannot trim it — which is a consequence of the shape, not an independent decision. If the card grows past what fits on one screen this becomes owed rather than dropped."
-    },
-    "G6": {
-     "verdict": "owed",
-     "reason": "🔴 A REAL GAP, THE SECOND OF THE THREE. No text search and no status filter, on a surface whose own count label admits it caps at 100. At 17 rows an owner reads the screen; at 100 they cannot, and the cap says 100 is expected."
-    },
-    "G7": {
-     "verdict": "owed",
-     "reason": "🔴 THE THIRD. The cards are not in a bounded scroll box — they scroll the page — and there is no compact density. The standard's own reason applies directly: G7 exists because a list is expected to hold hundreds. The build's header addressed only VIRTUALISATION ('nothing here that needs virtualising at 17 rows'), which is a different clause of G7 and is a fair call; the density and bounded-box half was never answered."
-    },
-    "G8": {
-     "verdict": "dropped",
-     "reason": "The surface is READ-ONLY by ruling — it issues one .select() and writes nothing. Editing a receipt lives at /receipts/:id (ReceiptDetail), which is the record's ONE edit surface under E1. Adding inline edit here would create the second editor E1 forbids."
-    },
-    "G9": {
-     "verdict": "met",
-     "reason": "Ordered by receipts.date — the date on the document — with created_at as tiebreak only. Asserted in the model by compareReceiptsForDisplay and probed by E7, which is constructed so the two candidate orders DISAGREE on its inputs (the previous probe varied created_at alone and would have passed either way)."
+  ],
+  "converged": [
+    {
+      "file": "packages/cultivar-os/src/components/receipts/ReceiptsList.tsx",
+      "declared": "2026-09-03",
+      "sections": [
+        "1"
+      ],
+      "shape_taken": "SUMMARY ROW + INLINE DETAIL (record list with disclosure) — one card per receipt, the receipt → order → delivery chain nested inside it.",
+      "shape_dropped": "DATA GRID (<DataSheet>).",
+      "reason": "🔴 THE STATED REASON WAS FALSE WHEN IT WAS WRITTEN, AND THAT — NOT THE SHAPE — IS WHAT THIS DECLARATION RECORDS (David's ruling, 2026-09-03). The original note read: \"a fixed-column grid can render that only by truncating the chain or by exploding one receipt into several rows.\" <DataSheet> has carried renderExpand — \"Optional per-row detail drawer. When present, a trailing expand toggle column appears.\" (DataSheet.tsx:81-82) — since 2026-07-01, commit e3e6796. The divergence comment was written 2026-09-01, commit ab617b2, TWO MONTHS LATER. A disclosure row is exactly what the widget already had, so the grid was not dropped because it could not render the chain; it was dropped on an unchecked claim about our own component. David: \"THE DIVERGENCE WAS NOT A GAP IN THE WIDGET. IT WAS AN UNCHECKED CLAIM ABOUT OUR OWN WIDGET.\" This is R-26's class (a written declaration nobody checked against reality, steering a decision) and the SECOND instance this week of a comment contradicting its own repo — tech-debt #61, where countPromote.ts:24 asserted scrape-reads-variations was \"never built\" while fetchProductVariants and extractSizeVariants existed and were wired, was the first. ⚠️ WHETHER THE CARD SHAPE IS NONETHELESS THE RIGHT ONE IS A SEPARATE QUESTION AND IT IS STILL OPEN. It is not settled by the reason that was on file, and the true observations that reason contained — that a receipt must appear ONCE, and that two LAWNS receipts are duplicate captures of one invoice which must not read as four rows — are satisfied by renderExpand, which is one row per record with the chain nested inside it.",
+      "recorded_where": "ReceiptsList.tsx header (UI STANDARD block) · this declaration · docs/decisions/2026-09-03-ui-standard-divergence-report.md · CLOSE-OUT-LEDGER #264. NOT on ui-standards.html — the board renders no per-surface rows at all yet, which is the reader gap tracked as baseline.clauses_absent_from_board.",
+      "note": "🔴 THIS IS THE DECLARATION THAT PROVES THE CAP, AND IT PROVES IT TWICE OVER — THE SECOND WAY BEING THE ONE NOBODY EXPECTED. The first: the original divergence explained dropping the grid and said NOTHING about G4, G5 and G6, which the surface also does not have, so a narrow record read as a complete one; answering all nine clauses is what surfaces that, and G4/G6/G7 are owed below. The second, and it overturns this note's own first draft: THE REASON ITSELF WAS FALSE, not merely incomplete. That draft graded it \"REASONED AND CORRECT about the shape\" — corrected 2026-09-03 by David's ruling after renderExpand was measured at DataSheet.tsx:81-82, shipped 2026-07-01, two months before the claim that it could not exist. ⚠️ THE DOWNSTREAM CLAUSES INHERIT THE DEFECT AND ARE RE-ANSWERABLE: G1, G2, G3 and G5 are each declared 'dropped' for a reason of the form \"the shape is a card list, not a table,\" which is downstream of the withdrawn premise. They are not thereby wrong — they are unexamined, and they get re-answered when the shape question is reopened. G9's 'met' and G4/G6/G7's 'owed' are independent of the premise and stand as measured.",
+      "clauses": {
+        "G1": {
+          "verdict": "dropped",
+          "reason": "There is no header row to make sticky — the shape is a card list, not a table. The need G1 serves (never lose which column you are reading) does not arise when every value is labelled in place on its own card."
+        },
+        "G2": {
+          "verdict": "dropped",
+          "reason": "There is no horizontal axis: cards wrap within the page width, so there is no h-scrollbar to make reachable."
+        },
+        "G3": {
+          "verdict": "dropped",
+          "reason": "No columns, so no identifier column to freeze. The vendor name is the first thing on every card and never scrolls away from its own row."
+        },
+        "G4": {
+          "verdict": "owed",
+          "reason": "🔴 A REAL GAP, AND IT IS ONE OF THE THREE THE ORIGINAL DIVERGENCE NOTE WAS SILENT ABOUT. There is no sort control of any kind — the order is fixed by G9 and the owner cannot re-sort by vendor, amount or category. Defensible at 17 rows; it is not defensible as an unrecorded omission."
+        },
+        "G5": {
+          "verdict": "dropped",
+          "reason": "There are no columns to show or hide. The card shows a fixed set of six facts and the operator cannot trim it — which is a consequence of the shape, not an independent decision. If the card grows past what fits on one screen this becomes owed rather than dropped."
+        },
+        "G6": {
+          "verdict": "owed",
+          "reason": "🔴 A REAL GAP, THE SECOND OF THE THREE. No text search and no status filter, on a surface whose own count label admits it caps at 100. At 17 rows an owner reads the screen; at 100 they cannot, and the cap says 100 is expected."
+        },
+        "G7": {
+          "verdict": "owed",
+          "reason": "🔴 THE THIRD. The cards are not in a bounded scroll box — they scroll the page — and there is no compact density. The standard's own reason applies directly: G7 exists because a list is expected to hold hundreds. The build's header addressed only VIRTUALISATION ('nothing here that needs virtualising at 17 rows'), which is a different clause of G7 and is a fair call; the density and bounded-box half was never answered."
+        },
+        "G8": {
+          "verdict": "dropped",
+          "reason": "The surface is READ-ONLY by ruling — it issues one .select() and writes nothing. Editing a receipt lives at /receipts/:id (ReceiptDetail), which is the record's ONE edit surface under E1. Adding inline edit here would create the second editor E1 forbids."
+        },
+        "G9": {
+          "verdict": "met",
+          "reason": "Ordered by receipts.date — the date on the document — with created_at as tiebreak only. Asserted in the model by compareReceiptsForDisplay and probed by E7, which is constructed so the two candidate orders DISAGREE on its inputs (the previous probe varied created_at alone and would have passed either way)."
+        }
+      },
+      "premise_withdrawn": {
+        "withdrawn": "A fixed-column grid can render a variable-length chain only by truncating it or by exploding one receipt into several rows.",
+        "refuted_by": "DataSheet.tsx:81-82 renderExpand, shipped 2026-07-01 in e3e6796; the claim was written 2026-09-01 in ab617b2.",
+        "ruled_by": "David, 2026-09-03",
+        "class": "R-26 — a written declaration nobody checked against reality, steering a decision. Second instance this week; tech-debt #61 was the first.",
+        "still_open": "Whether the card shape is the right one. The premise is withdrawn; the choice is not thereby decided either way.",
+        "clauses_inheriting_it": [
+          "G1",
+          "G2",
+          "G3",
+          "G5"
+        ]
+      },
+      "converged": "2026-09-03 — /receipts MOVED ONTO <DataSheet> with renderExpand (David's ruling). One row per receipt, the chain in the disclosure drawer. THE DIVERGENCE NO LONGER EXISTS.",
+      "what_the_move_delivered": "G4 sortable columns, G6 global search + a quick status filter, and G7 density in a bounded scroll box — the three clauses this declaration had recorded as `owed` — arrive from the engine rather than being rebuilt. G1 (sticky header), G2 (reachable h-scrollbar) and G3 (frozen identifier column) come with them. Every clause of section 1 is now MET by the shared control.",
+      "why_it_is_kept_here": "🔴 MOVED, NOT DELETED. The cap's self-pruning check (C1) fired on its own and named this file the moment the import landed — 'NOW USES THE SHARED CONTROL … the surface converged. Delete the entry.' That is the check working on the GOOD outcome, which is the half of a self-pruning declaration nobody sees until it happens. The entry is preserved out of `divergences` because a claim that was once believed, and the correction that withdrew it, are evidence about how we work (R-26). Deleting it would erase the record of the false premise along with the divergence.",
+      "still_true_and_still_binding": "A receipt must appear ONCE. Two LAWNS receipts are duplicate captures of one invoice (tech-debt #143) and must never read as four rows. renderExpand satisfies that — one <tr> per receipt. This was the only correct half of the withdrawn reason, and the grid honours it."
     }
-   },
-   "premise_withdrawn": {
-    "withdrawn": "A fixed-column grid can render a variable-length chain only by truncating it or by exploding one receipt into several rows.",
-    "refuted_by": "DataSheet.tsx:81-82 renderExpand, shipped 2026-07-01 in e3e6796; the claim was written 2026-09-01 in ab617b2.",
-    "ruled_by": "David, 2026-09-03",
-    "class": "R-26 — a written declaration nobody checked against reality, steering a decision. Second instance this week; tech-debt #61 was the first.",
-    "still_open": "Whether the card shape is the right one. The premise is withdrawn; the choice is not thereby decided either way.",
-    "clauses_inheriting_it": [
-     "G1",
-     "G2",
-     "G3",
-     "G5"
-    ]
-   },
-   "converged": "2026-09-03 — /receipts MOVED ONTO <DataSheet> with renderExpand (David's ruling). One row per receipt, the chain in the disclosure drawer. THE DIVERGENCE NO LONGER EXISTS.",
-   "what_the_move_delivered": "G4 sortable columns, G6 global search + a quick status filter, and G7 density in a bounded scroll box — the three clauses this declaration had recorded as `owed` — arrive from the engine rather than being rebuilt. G1 (sticky header), G2 (reachable h-scrollbar) and G3 (frozen identifier column) come with them. Every clause of section 1 is now MET by the shared control.",
-   "why_it_is_kept_here": "🔴 MOVED, NOT DELETED. The cap's self-pruning check (C1) fired on its own and named this file the moment the import landed — 'NOW USES THE SHARED CONTROL … the surface converged. Delete the entry.' That is the check working on the GOOD outcome, which is the half of a self-pruning declaration nobody sees until it happens. The entry is preserved out of `divergences` because a claim that was once believed, and the correction that withdrew it, are evidence about how we work (R-26). Deleting it would erase the record of the false premise along with the divergence.",
-   "still_true_and_still_binding": "A receipt must appear ONCE. Two LAWNS receipts are duplicate captures of one invoice (tech-debt #143) and must never read as four rows. renderExpand satisfies that — one <tr> per receipt. This was the only correct half of the withdrawn reason, and the grid honours it."
-  }
- ]
+  ]
 }

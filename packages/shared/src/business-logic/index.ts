@@ -194,6 +194,12 @@ export type { TrialTerms } from './trialClock';
 export {
   VENDORS_SELECT,
   VENDOR_ALIASES_SELECT,
+  // The field lists VENDORS_SELECT is DERIVED from (E6). Exported because the vendor editor and
+  // the capture writer must consume the SAME list — a second hand-written enumeration in either
+  // is exactly how the four address columns went unread for two days (tech-debt #179).
+  VENDOR_KEY_FIELDS,
+  VENDOR_EDITABLE_FIELDS,
+  VENDOR_OWNER_ONLY_FIELDS,
   normalizeVendorName,
   looseVendorKey,
   emailDomain,
@@ -201,9 +207,12 @@ export {
   planVendorWrite,
   orderVendorsForDisplay,
   vendorListHeading,
+  vendorContactFromCapture,
 } from './vendorIdentity';
 
 export type {
+  VendorEditableField,
+  VendorOwnerOnlyField,
   VendorOutcome,
   VendorRow,
   VendorAliasRow,
@@ -213,4 +222,11 @@ export type {
   ResolveVendorInput,
   VendorChoice,
   VendorWritePlan,
+  CapturedVendorContact,
 } from './vendorIdentity';
+
+// A document number that was READ off a page and one a person TYPED are different evidence
+// (David, 2026-09-04). The pair `receipt_number` / `receipt_number_original` carries the
+// difference; this module is the ONE place that interprets it, so no surface re-derives the rule.
+export { describeDocumentNumber } from './documentNumber';
+export type { DocumentNumberProvenance, DocumentNumberVerdict } from './documentNumber';

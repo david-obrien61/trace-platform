@@ -15,7 +15,8 @@ import { LineItemGrid } from '../components/LineItemGrid';
 import { ReceiptsList } from '../components/receipts/ReceiptsList';
 import { listVisibleForStep } from '../lib/receiptsList';
 import {
-  resolveVendor, planVendorWrite, VENDORS_SELECT, VENDOR_ALIASES_SELECT,
+  resolveVendor, planVendorWrite, vendorContactFromCapture, describeDocumentNumber,
+  VENDORS_SELECT, VENDOR_ALIASES_SELECT,
   type VendorRow, type VendorAliasRow, type VendorChoice, type VendorResolution,
 } from '@trace/shared/business-logic';
 
@@ -107,6 +108,16 @@ interface OcrResult {
     ship_to?: OcrAddress | null;
     due_date?: string | null;
     delivery_date?: string | null;
+    // VENDOR-SIDE contact (2026-09-04, ledger #273). Asked for in BOTH prompt shapes. Until this
+    // build the OCR was asked for NONE of these — every contact field it emitted was CUSTOMER-side,
+    // because the prompt was written for sales invoices. Read AND stored: a prompt change alone
+    // would have the writer discard them at save, which is exactly #257's defect.
+    vendor_phone?: string | null;
+    vendor_email?: string | null;
+    vendor_website?: string | null;
+    vendor_address?: OcrAddress | null;
+    /** 🔴 OUR account number WITH them — never their own company number. See ocr.ts's rule. */
+    our_account_number?: string | null;
   } | null;
   ocr_raw: any;
   parseError: string | null;
@@ -161,14 +172,29 @@ export function ReceiptKeeper() {
   const [ocrResult, setOcrResult]       = useState<OcrResult | null>(null);
   const [fields, setFields]             = useState<EditableFields>({ vendor: '', date: '', amount: '', category: '' });
   const [savedReceiptId, setSavedReceiptId] = useState<string | null>(null);
-  // 🔴 THE DOCUMENT'S OWN NUMBER — CARRIED, NOT EDITED HERE (2026-09-03, tech-debt #153).
-  // The OCR has always been asked for this (ocr.ts asks for `receipt_number` in BOTH prompt
-  // shapes) and the save has always dropped it, because until 20260903c there was no column to
-  // put it in. It is held as its own state rather than added to `EditableFields` deliberately:
-  // the capture screen edits four fields and a fifth input on a phone, in a lot, is friction
-  // (the Golden Rule). Correcting a misread number belongs to the record's ONE edit surface,
-  // /receipts/:id (E1) — which is why the field is NOT locked in systemManagedFields.ts.
+  // 🔴 THE DOCUMENT'S OWN NUMBER — NOW REVIEWABLE BEFORE SAVING (2026-09-04, David's ruling).
+  //
+  // ⚠️ THIS COMMENT PREVIOUSLY DEFERRED THE FIELD TO A SURFACE THAT CANNOT EDIT IT, AND THE
+  //    DEFERRAL IS RECORDED AS A DEFECT RATHER THAN QUIETLY DELETED (tech-debt #180). It read:
+  //    "Correcting a misread number belongs to the record's ONE edit surface, /receipts/:id (E1)."
+  //    `/receipts/:id` does not edit `receipt_number`. Grepped 2026-09-04: the string appears in
+  //    ReceiptsList, receiptsList.ts, this file, systemManagedFields.ts, historyOrder.ts and the
+  //    migration — and in NEITHER `ReceiptDetail.tsx` NOR `receiptDetail.ts`. That page edits
+  //    line items and the vendor billing preference; nothing else. So the field was editable
+  //    NOWHERE while a comment asserted it was editable somewhere.
+  //    🔴 A DEFERRAL TO A SURFACE THAT WAS NEVER BUILT READS EXACTLY LIKE A DEFERRAL TO ONE THAT
+  //    WAS, and nothing catches the difference — R-26 inside our own corpus, third instance this
+  //    week (tech-debt #61's false comment, #145's stale route row, this).
+  //
+  //    E1 is therefore NOT in play: adding the field here creates no second edit surface, because
+  //    there was no first one. And the Golden-Rule friction argument survives intact — in the
+  //    normal case the value arrives READ and the owner types nothing.
   const [receiptNumber, setReceiptNumber] = useState<string | null>(null);
+  // 🔴 WHAT THE READER READ, BANKED ONCE — the same shape as `line_items_original`, and the
+  //    reason the field below can be an honest input rather than an unattributed value.
+  //    NULL here while `receiptNumber` is set means the OWNER TYPED IT: we read nothing.
+  //    Set only at parse time; never reset by typing (that is the whole point).
+  const [receiptNumberOriginal, setReceiptNumberOriginal] = useState<string | null>(null);
   // Set only when the save fell back because 20260903c is not applied yet — drives an honest
   // notice rather than letting a read number vanish without a word.
   const [receiptNumberDropped, setReceiptNumberDropped] = useState(false);
@@ -210,7 +236,10 @@ export function ReceiptKeeper() {
       const [v, a] = await Promise.all([
         supabase.from('vendors')
           .select(VENDORS_SELECT)
-          .eq('business_id', businessId),
+          .eq('business_id', businessId)
+          // See Vendors.tsx: VENDORS_SELECT is DERIVED (tech-debt #179), so supabase-js can no
+          // longer infer the row shape from a literal. Stated at the boundary rather than cast.
+          .returns<VendorRow[]>(),
         supabase.from('vendor_aliases')
           .select(VENDOR_ALIASES_SELECT)
           .eq('business_id', businessId),
@@ -218,7 +247,7 @@ export function ReceiptKeeper() {
       if (cancelled) return;
       if (TRACE_RECEIPT) console.log('[TRACE:VENDOR] directory loaded — vendors:', v.data?.length ?? 0,
         'aliases:', a.data?.length ?? 0, v.error ? `read failed: ${v.error.message}` : '');
-      setVendorRows((v.data ?? []) as VendorRow[]);
+      setVendorRows(v.data ?? []);
       setVendorAliases((a.data ?? []) as VendorAliasRow[]);
     })();
     return () => { cancelled = true; };
@@ -317,7 +346,9 @@ export function ReceiptKeeper() {
       });
       // Trimmed to null rather than kept as '' — an empty string would read as "the document has
       // a number and it is blank", which is a different claim from "no number was printed" (D-9).
-      setReceiptNumber(data.parsed?.receipt_number?.trim() || null);
+      const readNumber = data.parsed?.receipt_number?.trim() || null;
+      setReceiptNumber(readNumber);
+      setReceiptNumberOriginal(readNumber);   // banked ONCE; typing never changes it
 
       // Initialize editable line items from OCR
       const ocrLines: Array<{ description: string; amount: number; quantity?: number | null; unit_price?: number | null; sku?: string | null; uom?: string | null; pack_size?: number | null; pack_unit?: string | null }> =
@@ -557,8 +588,18 @@ export function ReceiptKeeper() {
         // NOTE: `preferred` is deliberately NOT set here. A vendor created at capture is never
         // born preferred — that is an owner judgement made on the vendor screen, and the INSERT
         // trigger would refuse it from a manager's session anyway.
+        //
+        // 🔴 THE DOCUMENT'S OWN VENDOR DETAILS ARE KEPT (2026-09-04, ledger #273). Until this
+        //    build the insert was `{business_id, name}` and every other column the letterhead
+        //    carried — address, phone, our account number — was READ and DISCARDED. Third
+        //    instance of extract-and-discard in one week (#257 quantity/unit_price/sku, #270
+        //    receipt_number, this). The mapping is a pure function so a probe can reach it;
+        //    it populates ON CREATE ONLY and never overwrites an existing row.
+        const contact = vendorContactFromCapture(ocrResult?.parsed);
+        if (TRACE_RECEIPT) console.log('[TRACE:VENDOR] contact from document —',
+          Object.keys(contact).length ? Object.keys(contact).join(',') : '(none on this document)');
         const created = await supabase.from('vendors')
-          .insert({ business_id: businessId, name: plan.createVendorNamed })
+          .insert({ business_id: businessId, name: plan.createVendorNamed, ...contact })
           .select('id').single();
         if (created.error) {
           if (TRACE_RECEIPT) console.log('[TRACE:VENDOR] create failed —', created.error.message);
@@ -616,15 +657,23 @@ export function ReceiptKeeper() {
       reconcile_delta:         rs.status !== 'no_lines' ? Math.round(rs.delta * 100) / 100 : null,
       header_amount_edited:    headerAmountEdited,
     };
+    // Banked separately from `receipt_number` so the two can DISAGREE — which is the evidence.
+    receiptRow.receipt_number_original = receiptNumberOriginal;
 
     let { data, error } = await supabase.from('receipts').insert(receiptRow).select('id').single();
 
-    // The ONLY error this retries is the missing column, and only when we actually sent one.
+    // The ONLY error this retries is a missing column, and only when we actually sent one.
     // Any other failure (FK, RLS refusal, network) is a real failure and is reported as one.
-    if (error?.code === 'PGRST204' && receiptNumber !== null) {
-      if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] receipt_number column not live (PGRST204) — retrying without it; the number was READ but will NOT be stored:', receiptNumber);
+    //
+    // ⚠️ TWO COLUMNS CAN NOW BE MISSING, ON TWO DIFFERENT MIGRATIONS (20260903c and 20260904),
+    //    and PostgREST names only ONE per rejection — so a single-column strip would fail again
+    //    on the second. Both are dropped together: the pair is one piece of evidence and half of
+    //    it is not worth a second round-trip.
+    if (error?.code === 'PGRST204' && (receiptNumber !== null || receiptNumberOriginal !== null)) {
+      if (TRACE_RECEIPT) console.log('[TRACE:RECEIPT] a document-number column is not live (PGRST204) —',
+        error.message, '— retrying without both; the number was READ but will NOT be stored:', receiptNumber);
       setReceiptNumberDropped(true);
-      const { receipt_number: _omitted, ...withoutNumber } = receiptRow;
+      const { receipt_number: _omitted, receipt_number_original: _omitted2, ...withoutNumber } = receiptRow;
       ({ data, error } = await supabase.from('receipts').insert(withoutNumber).select('id').single());
     }
 
@@ -1170,6 +1219,43 @@ export function ReceiptKeeper() {
                 value={fields.date}
                 onChange={e => setFields(f => ({ ...f, date: e.target.value }))}
               />
+            </div>
+
+            {/* ── INVOICE / DOCUMENT NUMBER (2026-09-04, David's ruling) ──────────────────────
+                It was captured correctly and never shown. Vendor, date, total and every line
+                were reviewable before saving; the one field the DEDUP KEY will be built on was
+                not — and a vendor whose invoices the reader cannot read would have had no key
+                at all, silently.
+
+                🔴 IT IS ALSO THE TYPED FALLBACK, AND THE TWO CASES STAY DISTINGUISHABLE. The
+                verdict comes from `describeDocumentNumber` (shared, pure, probe-reachable), which
+                compares what will be stored against `receipt_number_original` — what the reader
+                actually read, banked once. A number the owner typed is announced as hers on this
+                screen and recorded as hers in the row, so nobody downstream mistakes it for
+                something printed on the paper. */}
+            <div style={FIELD_ROW}>
+              <label style={LABEL}>Invoice / receipt number</label>
+              <input
+                style={INPUT}
+                value={receiptNumber ?? ''}
+                onChange={e => setReceiptNumber(e.target.value.trim() === '' ? null : e.target.value)}
+                placeholder="Not printed on this document"
+                inputMode="text"
+                autoCapitalize="characters"
+              />
+              {(() => {
+                const v = describeDocumentNumber(receiptNumberOriginal, receiptNumber);
+                if (!v.notice) return null;
+                return (
+                  <div style={{
+                    marginTop: 6, fontSize: '0.75rem', lineHeight: 1.45,
+                    color: v.isHumanSupplied ? '#92400e' : '#6b7280',
+                    background: v.isHumanSupplied ? '#fffbeb' : '#f9fafb',
+                    border: `1px solid ${v.isHumanSupplied ? '#fde68a' : '#e5e7eb'}`,
+                    borderRadius: 6, padding: '6px 10px',
+                  }}>{v.notice}</div>
+                );
+              })()}
             </div>
 
             {/* ── LINE ITEMS GRID (between Date and Total Amount) ── */}

@@ -13,6 +13,31 @@
 //               zero decisions, with vendor selection done by `vendors[idx % vendors.length]`.
 //               Here the mark is read — by this screen, and by the capture resolver.
 //
+// 🔴 E7 / R-83 (2026-09-04) — THE CONTROL MOVED AND THE ROW KEPT ONLY THE RESULT.
+//               This page used to hold *"Why is this vendor preferred?"* and *"Save as preferred"*
+//               INSIDE the row. It no longer does: the control and its note live in
+//               `VendorEditor`, the modal over the opened record, and the row carries a
+//               READ-ONLY `PREFERRED` chip. Two constraints travel with that chip and both are
+//               asserted rather than intended:
+//                 · §5 cl.4 — it carries what only THIS row knows (preferred-ness), never what
+//                   the subhead already said.
+//                 · G8 — it must NOT read as clickable. No onClick, no cursor:pointer, no
+//                   role/tabIndex, and `aria-hidden` on nothing it needs. A mark that looks like
+//                   a control and is not is a DEAD AFFORDANCE — the defect this clause would
+//                   otherwise trade for the one it fixes.
+//
+// ⚠️ THE ROW IS NOT A CLICK TARGET, AND THAT IS G10's OWN EXCLUSION, NOT AN OMISSION. G10 makes
+//               a row clickable *"ONLY on a grid that HAS an expansion — a grid without one must
+//               not acquire a mystery click target."* This is a card list with no disclosure, so
+//               the record is opened by an explicit named button per row.
+//
+// ⚠️ THE NOTE NOW LIVES IN THE MODAL, BY DAVID'S RULING 2026-09-04 (*"the control and the note go
+//               in the modal, together"*). A manager still SEES it — `VendorEditor` renders the
+//               mark and the reason read-only, with the explanation of why it is not editable —
+//               but she opens the record to read it instead of scanning it off the list. That is
+//               a real change in what one glance buys, taken deliberately, and owner-test CARD 7
+//               is rewritten to the new surface rather than left asserting the old one.
+//
 //               BOTH VENDORS ALWAYS APPEAR. A preference MARKS; it does not filter — and the
 //               order is alphabetical, not preference-first, because a sort is the quiet form of
 //               a filter and the unmarked vendor IS the answer on the day the preferred one is
@@ -21,13 +46,17 @@
 //
 // UI STANDARD (§6 r16 — name the standard, then decide): the established pattern for a
 //               homogeneous record set is a DATA GRID, and this platform has one (`<DataSheet>`).
-//               DEVIATED DELIBERATELY: the load-bearing field here is `preference_note`, free
-//               prose of unbounded length that must be READ, not scanned — and a grid cell either
-//               truncates it or forces a hover, both of which hide the one thing this screen
-//               exists to show (§4: the note is displayed WITH the mark, not behind a hover or a
-//               click). Pattern taken instead: the standard RECORD LIST with inline detail, the
-//               same shape ReceiptsList uses. At 8 distinct vendor strings across the whole
-//               database there is nothing here to virtualise.
+//               DEVIATED DELIBERATELY: at 8 distinct vendor strings across the whole database
+//               there is nothing here to virtualise, sort or filter, and the row carries a
+//               free-prose `notes` field a grid cell would truncate. Pattern taken instead: the
+//               standard RECORD LIST — a scannable row per record, opening into a modal form.
+//               ⚠️ THE ORIGINAL REASON FOR THIS DEVIATION NO LONGER APPLIES AND IS RECORDED AS
+//               WITHDRAWN RATHER THAN QUIETLY DROPPED: it argued the grid was wrong because
+//               `preference_note` had to be displayed WITH the mark on the row. Under E7 the note
+//               is in the modal, so that argument is gone. The deviation still holds on the
+//               remaining grounds above — but it is now a WEAKER case than it was, and the next
+//               session to touch this file should re-answer it rather than inherit it.
+//               Its clause-by-clause answers live in docs/decisions/ui-standard-divergences.json.
 //
 // GATE:         READING is MEMBERSHIP-scoped and deliberately NOT `costs:read`. A
 //               vendor's NAME is not its cost basis; binding the two would put the preferred mark
@@ -41,16 +70,18 @@
 //               non-owner AND says why (§6 r13: locked-with-explanation, never mystery-locked) —
 //               but the hiding is not the enforcement, and acceptance proves it by attempting.
 //
-// DEPENDENCIES: `../lib/supabase` (two selects, one update — all RLS-enforced; NO new endpoint,
-//               NO new api/ function, the 12/12 ceiling is untouched) · `@trace/shared/context`
+// DEPENDENCIES: `../lib/supabase` (TWO SELECTS ONLY — this page no longer writes) ·
+//               `../components/vendors/VendorEditor` (every write, E1) · `@trace/shared/context`
 //               (businessId, can) · `@trace/shared/business-logic` (orderVendorsForDisplay,
 //               vendorListHeading — every decision, so probes can reach them).
+//               NO new endpoint, NO new api/ function, the 12/12 ceiling is untouched.
 //
-// OUTPUTS:      /vendors. Reads vendors + vendor_aliases. Writes ONLY `preferred` and
-//               `preference_note`, and only when the actor is an owner.
+// OUTPUTS:      /vendors. Reads vendors + vendor_aliases. All WRITES go through `VendorEditor`
+//               (E1 — this page performs none): the full editable set for any active member, plus
+//               `preferred`/`preference_note` for an owner only, enforced by trigger.
 //
-// INSTRUMENTATION (STD-003): `[TRACE:VENDOR]` on load, on every preference write, and on refusal.
-//               ON BY DEFAULT and stays on until OWNER-PROVEN.
+// INSTRUMENTATION (STD-003): `[TRACE:VENDOR]` on load and on opening a record; the write trail
+//               lives with the writer, in `VendorEditor`. ON BY DEFAULT until OWNER-PROVEN.
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react';
@@ -60,6 +91,7 @@ import {
   orderVendorsForDisplay, vendorListHeading, VENDORS_SELECT, VENDOR_ALIASES_SELECT,
   type VendorRow, type VendorAliasRow,
 } from '@trace/shared/business-logic';
+import VendorEditor from '../components/vendors/VendorEditor';
 
 const TRACE_VENDOR = true;
 
@@ -88,12 +120,6 @@ const MARK: React.CSSProperties = {
   fontSize: '0.6875rem', fontWeight: 700, color: '#27500A', background: '#eaf3de',
   border: '1px solid #cfe0b8',
 };
-// The note is given the visual weight of content, not of a caption — it is the reason, and the
-// reason is the point of the screen.
-const NOTE: React.CSSProperties = {
-  fontSize: '0.875rem', color: '#1f2937', marginTop: 8, lineHeight: 1.5,
-  background: '#f7faf2', border: '1px solid #e3edd3', borderRadius: 8, padding: '8px 10px',
-};
 const ABSENCE: React.CSSProperties = {
   fontSize: '0.8125rem', color: '#6b7280', background: '#f9fafb',
   border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 10px', marginTop: 8,
@@ -101,10 +127,6 @@ const ABSENCE: React.CSSProperties = {
 const BTN: React.CSSProperties = {
   minHeight: 44, padding: '0 14px', borderRadius: 8, border: '1px solid #27500A',
   background: '#fff', color: '#27500A', fontWeight: 700, fontSize: '0.8125rem', cursor: 'pointer',
-};
-const TEXTAREA: React.CSSProperties = {
-  width: '100%', minHeight: 72, marginTop: 8, padding: '8px 10px', borderRadius: 8,
-  border: '1px solid #cbd5e1', fontSize: '0.875rem', fontFamily: 'inherit', lineHeight: 1.5,
 };
 const SECTION_LABEL: React.CSSProperties = {
   fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.06em',
@@ -129,10 +151,10 @@ export default function Vendors() {
   const canSetPreference = can('owner-only');
 
   const [state, setState] = useState<Phase>({ phase: 'loading' });
-  const [editing, setEditing] = useState<string | null>(null);
-  const [draftNote, setDraftNote] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [writeError, setWriteError] = useState<string | null>(null);
+  // `undefined` = closed · `null` = open in CREATE mode · a row = open in EDIT mode.
+  // Three states, because "closed" and "creating" are genuinely different and a single nullable
+  // cannot say which is which.
+  const [editing, setEditing] = useState<VendorRow | null | undefined>(undefined);
 
   const load = useCallback(async () => {
     if (!businessId) return;
@@ -140,7 +162,14 @@ export default function Vendors() {
     const [v, a] = await Promise.all([
       supabase.from('vendors')
         .select(VENDORS_SELECT)
-        .eq('business_id', businessId),
+        .eq('business_id', businessId)
+        // ⚠️ `.returns<>()` IS REQUIRED HERE AND IT IS A CONSEQUENCE OF E6, NOT A SHORTCUT.
+        //    supabase-js infers the row shape from a LITERAL select string. `VENDORS_SELECT` is
+        //    now DERIVED from the field lists (tech-debt #179), so its type is plain `string` and
+        //    the client can no longer infer — it widens to GenericStringError[]. Stating the row
+        //    type at the boundary is the honest fix; casting the result through `unknown` would
+        //    silence the same problem while asserting more.
+        .returns<VendorRow[]>(),
       supabase.from('vendor_aliases')
         .select(VENDOR_ALIASES_SELECT)
         .eq('business_id', businessId),
@@ -150,7 +179,7 @@ export default function Vendors() {
       setState({ phase: 'failed', message: v.error.message });
       return;
     }
-    const vendors = (v.data ?? []) as VendorRow[];
+    const vendors = v.data ?? [];
     const aliases = (a.data ?? []) as VendorAliasRow[];
     if (TRACE_VENDOR) {
       console.log('[TRACE:VENDOR] loaded — vendors:', vendors.length,
@@ -163,41 +192,6 @@ export default function Vendors() {
   }, [businessId, canSetPreference]);
 
   useEffect(() => { void load(); }, [load]);
-
-  async function writePreference(v: VendorRow, preferred: boolean, note: string | null) {
-    setSaving(true); setWriteError(null);
-    if (TRACE_VENDOR) console.log('[TRACE:VENDOR] preference write —', v.id, 'preferred:', preferred, 'note len:', (note ?? '').length);
-    // 🔴 `.select('id')` IS LOAD-BEARING, NOT DECORATION (A8). A row-level refusal is not an
-    //    error: if the policy's USING clause filters the row out, PostgREST returns SUCCESS with
-    //    ZERO ROWS, and an error-only check reports "saved" while nothing changed. That is exactly
-    //    the manager case this build has to get right — a control that appears to work and
-    //    silently does not is worse than one that refuses out loud. The trigger raises 42501 for
-    //    an owner-check failure; this catches the other shape, where the row was never reachable.
-    const { data, error } = await supabase
-      .from('vendors')
-      .update({ preferred, preference_note: note })
-      .eq('id', v.id)
-      .eq('business_id', v.business_id)   // AC-3: never reach past the tenant
-      .select('id');
-    setSaving(false);
-    if (!error && (!data || data.length === 0)) {
-      if (TRACE_VENDOR) console.log('[TRACE:VENDOR] preference write matched ZERO rows —', v.id);
-      setWriteError('That vendor could not be updated from your account. Nothing was saved.');
-      return;
-    }
-    if (error) {
-      // The trigger raises 42501. Surfaced honestly rather than swallowed — a control that
-      // appears to work and silently does not is worse than one that refuses out loud.
-      if (TRACE_VENDOR) console.log('[TRACE:VENDOR] preference REFUSED —', error.code, error.message);
-      setWriteError(
-        error.message.includes('owner-only') || error.code === '42501'
-          ? 'Only an owner can set the preferred vendor. Your change was not saved.'
-          : `Could not save: ${error.message}`);
-      return;
-    }
-    setEditing(null);
-    await load();
-  }
 
   if (!businessId) return <div style={PAGE}><div style={CARD}><p style={META}>No business selected.</p></div></div>;
 
@@ -221,41 +215,52 @@ export default function Vendors() {
   return (
     <div style={PAGE}>
       <div style={CARD}>
-        <h2 style={H}>{heading}</h2>
-        <p style={SUB}>{subhead}</p>
-
-        {writeError && <div style={{ ...ABSENCE, color: '#A32D2D', borderColor: '#e7c6c6', background: '#fdf5f5' }}>{writeError}</div>}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <h2 style={H}>{heading}</h2>
+            <p style={SUB}>{subhead}</p>
+          </div>
+          <button style={BTN} onClick={() => setEditing(null)}>Add vendor</button>
+        </div>
 
         {ordered.length === 0 && (
           <div style={ABSENCE}>
-            No vendors yet. One is recorded the first time you capture a document from them.
+            No vendors yet. One is recorded the first time you capture a document from them — or
+            add one here.
           </div>
         )}
 
         {ordered.map((v) => {
           const aliases = state.aliases.filter(a => a.vendor_id === v.id);
-          const isEditing = editing === v.id;
+          const contact = [
+            v.email, v.phone,
+            v.account_number ? `Acct ${v.account_number}` : null,
+            v.website,
+          ].filter(Boolean);
+          const address = [v.address_line1, v.address_city, v.address_state, v.address_zip]
+            .filter(Boolean).join(', ');
           return (
             <div key={v.id} style={ROW}>
               <div style={LINE1}>
                 <span style={NAME}>{v.name}</span>
+                {/* 🔴 READ-ONLY MARK (E7 + G8). No onClick, no cursor:pointer, no role, no
+                    tabIndex — it states a fact about this row and offers nothing. The control
+                    that SETS it is in the modal. A chip that looked pressable and did nothing
+                    would be the dead affordance G8 forbids. */}
                 {v.preferred === true && <span style={MARK}>PREFERRED</span>}
               </div>
 
-              {/* The note travels with the mark. Not a hover, not a click — §4. */}
-              {v.preferred === true && !isEditing && (
-                v.preference_note
-                  ? <div style={NOTE}>{v.preference_note}</div>
-                  : <div style={ABSENCE}>Marked preferred, but no reason was recorded.</div>
-              )}
-
-              {(v.email || v.phone || v.account_number || v.website) && (
+              {contact.length > 0 && (
                 <>
                   <div style={SECTION_LABEL}>Contact</div>
-                  <div style={META}>
-                    {[v.email, v.phone, v.account_number ? `Acct ${v.account_number}` : null, v.website]
-                      .filter(Boolean).join('  ·  ')}
-                  </div>
+                  <div style={META}>{contact.join('  ·  ')}</div>
+                </>
+              )}
+
+              {address && (
+                <>
+                  <div style={SECTION_LABEL}>Address</div>
+                  <div style={META}>{address}</div>
                 </>
               )}
 
@@ -266,52 +271,32 @@ export default function Vendors() {
                 </>
               )}
 
-              {isEditing ? (
-                <div style={{ marginTop: 10 }}>
-                  <div style={SECTION_LABEL}>Why is this vendor preferred?</div>
-                  <textarea
-                    style={TEXTAREA}
-                    value={draftNote}
-                    placeholder="e.g. Stock quality is better, even though the price is higher."
-                    onChange={(e) => setDraftNote(e.target.value)}
-                  />
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                    <button
-                      style={{ ...BTN, background: '#27500A', color: '#fff' }}
-                      disabled={saving}
-                      onClick={() => void writePreference(v, true, draftNote.trim() || null)}
-                    >{saving ? 'Saving…' : 'Save as preferred'}</button>
-                    <button style={BTN} disabled={saving} onClick={() => { setEditing(null); setWriteError(null); }}>
-                      Cancel
-                    </button>
-                    {v.preferred === true && (
-                      <button
-                        style={{ ...BTN, borderColor: '#A32D2D', color: '#A32D2D' }}
-                        disabled={saving}
-                        onClick={() => void writePreference(v, false, null)}
-                      >Remove preference</button>
-                    )}
-                  </div>
-                </div>
-              ) : canSetPreference ? (
-                <div style={{ marginTop: 10 }}>
-                  <button
-                    style={BTN}
-                    onClick={() => { setEditing(v.id); setDraftNote(v.preference_note ?? ''); setWriteError(null); }}
-                  >{v.preferred === true ? 'Edit preference' : 'Mark preferred'}</button>
-                </div>
-              ) : (
-                // §6 r13 — locked WITH an explanation. A control that is simply absent reads as a
-                // missing feature; this says what sets the field and why it is not editable here.
-                <div style={{ ...ABSENCE, marginTop: 10 }}>
-                  The preferred vendor is set by the owner. You can see the mark and the reason, and
-                  they cannot be changed from your account.
-                </div>
-              )}
+              {/* The record is OPENED here. This button navigates; it changes nothing (E7). Its
+                  label says what the actor can actually do, because a manager may edit every
+                  field except the preference pair and "View" would understate that. */}
+              <div style={{ marginTop: 10 }}>
+                <button
+                  style={BTN}
+                  onClick={() => {
+                    if (TRACE_VENDOR) console.log('[TRACE:VENDOR] open record —', v.id, v.name);
+                    setEditing(v);
+                  }}
+                >Edit vendor</button>
+              </div>
             </div>
           );
         })}
       </div>
+
+      {editing !== undefined && (
+        <VendorEditor
+          vendor={editing}
+          businessId={businessId}
+          canSetPreference={canSetPreference}
+          onClose={() => setEditing(undefined)}
+          onSaved={() => { setEditing(undefined); void load(); }}
+        />
+      )}
     </div>
   );
 }
