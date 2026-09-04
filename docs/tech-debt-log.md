@@ -285,3 +285,115 @@ the actual blocker; the literals are a symptom of never having answered it. AC-4
 
 **TRIGGER:** the first vertical that is not cultivar acquiring a real UI surface. Until then every
 literal is accidentally correct, which is precisely why the count grows unnoticed.
+
+### #186 — THE TEST RUNNER'S FILE DISCOVERY IS NON-DETERMINISTIC ON A SHARED TREE, AND A SHORT RUN STILL SAYS "ALL TEST FILES PASS" (2026-09-04) 🔴
+
+**Observed, not theorised.** Two consecutive `node scripts/run-tests.mjs` runs, minutes apart, on the
+same working tree:
+
+```
+── UNIT TESTS — 74 file(s) ──   → 74/74 files pass · 3838 assertions
+── UNIT TESTS — 72 file(s) ──   → 72/72 files pass · 3775 assertions
+```
+
+The 72-file run **omitted two real, passing test files** — `invoiceGrid.test.ts` (35 assertions) and
+another session's `invitationExpiry.test.ts` — and finished with **`All test files pass.`** Both
+files existed on disk throughout; running either alone passed immediately.
+
+🔴 **THE DEFECT IS NOT THE MISS, IT IS THAT THE MISS IS INDISTINGUISHABLE FROM SUCCESS.** The runner
+walks the filesystem with `readdirSync` while up to four sessions write into one tree, so a file
+being created mid-walk can be skipped. **It then reports a confident green over a corpus 63
+assertions smaller than the one it believes it ran.** Nothing compares the discovered count to
+anything; `74` and `72` are both printed with equal confidence, and the only reason this was caught
+is that a human happened to read two totals in sequence.
+
+**This is [[R-33]]'s shape in our own tooling:** the check cannot disagree with itself about what it
+checked. A green from a partial corpus is exactly the false green the ruling is about, and it is
+worse than a normal one because it appears at the moment the tree is busiest — which is the moment
+several people are relying on it.
+
+⚠️ **AND IT DEGRADES THE RATCHET AND EVERY MUTATION HARNESS THAT SHELLS OUT TO IT**, since a mutant
+whose only probe file went undiscovered is reported CAUGHT-or-SURVIVED against a suite that never
+ran it.
+
+**The fix is a floor, not a rewrite:** record the discovered file count in `quality-baseline.json`
+and **fail when it drops**, the same ratchet the lint counts already use. A file legitimately
+deleted re-baselines deliberately; a file that vanished because someone else was typing fails loudly.
+**Surfaced, not fixed** — changing the runner inside a surface build is the drift the gate exists to
+catch, and this needs its own red-first proof.
+
+---
+
+### #187 — THE UI DIVERGENCE CAP CANNOT SEE `packages/shared`, SO A SURFACE THAT LIVES THERE IS UNMEASURED IN BOTH DIRECTIONS (2026-09-04) 🟡
+
+`scripts/verify-ui-standard-divergence.mjs` sets `const SCAN_ROOT = 'packages/cultivar-os/src'`.
+`QboBooksReader.tsx` — the accounting read, one of the surfaces an owner and their accountant
+actually look at — is in `packages/shared/src/components`.
+
+**So for the whole of its life the cap has said nothing about it, in either direction:**
+- while it rendered a hand-written table it was **never counted as a bespoke surface**;
+- now that it uses the shared grid it is **not credited as converged** either.
+
+🔴 **THE ASYMMETRY IS THE PART THAT MATTERS.** A gap the cap can see is debt; a gap it cannot see is
+invisible, and the board reports `undeclared_bespoke_surfaces: 23` as though that were the population.
+It is the population **of one directory**. Nobody reading the number is told which directory.
+
+⚠️ **WIDENING `SCAN_ROOT` IS NOT A ONE-LINE FIX AND MUST NOT BE DONE CASUALLY** — it re-baselines
+that count into an unknown, and *"more unaudited surfaces, not fewer"* is a decision David has
+already declined to bundle into a build once (#272). It is also **not the same as tech-debt #156**,
+which is about import edges between the packages; this one is about the cap's field of view.
+
+**What is true meanwhile, and is why #275's cards are written the way they are:** nothing mechanical
+guards the books-read surface. Its probes, its mutants and its owner-test board are the entire guard,
+and the board says so on its face rather than assuming a cap is watching.
+
+---
+
+### #188 — A COMMENT SAYS STAFF HOLDS `settings:read`. STAFF DOES NOT (2026-09-04) 🟡
+
+`packages/shared/src/positions/positionStore.ts:16` reads: *"a STAFF member holds `settings:read`
+and NOT `settings:update`, so every mutation in here…"*
+
+**Measured against the manifest:** `settings:read` appears in `MANAGER_DEFAULT_BUNDLE` and in
+`OWNER_DEFAULT_BUNDLE`. `STAFF_DEFAULT_BUNDLE` holds exactly nine strings —
+`orders:create`, `orders:read`, `order_items:read`, `order_service_selections:read`,
+`order_compliance_records:read`, `customers:read`, `inventory:read`, `deliveries:read`,
+`deliveries:update` — **and no `settings:*` at all.**
+
+**The cost is not the wrong word; it is that this comment is load-bearing for the reasoning around
+it.** It is the stated justification for why the mutations in that file are shaped as they are, and
+anyone reading it to answer *"who can reach positions?"* gets a confidently wrong answer that widens
+the audience by a whole role.
+
+⚠️ **THIS IS THE FOURTH COMMENT-CONTRADICTS-ITS-OWN-REPO FINDING IN A FORTNIGHT** — after #61
+(`countPromote.ts` asserting a capability that existed), `DataSheet.tsx`'s placement trigger, and
+`QboDeliveryIngest`'s claim that a manager could still preview (the branch returned first). **The
+class is worth a name more than any one instance is worth a fix:** a reason written once and never
+re-read becomes a fact nobody checks, and it is cheapest to catch when someone is already in the file.
+
+**Comment-only fix. Surfaced not fixed** — `positionStore.ts` is nowhere near this build, and editing
+a file to correct a sentence is how a reviewable diff stops being one.
+
+---
+
+### #189 — THE AUTHORITY CAP SEES ONE SHAPE OF AN OWNER GATE AND NOT THE OTHER (2026-09-04) 🟡
+
+`scripts/verify-authority-checks.mjs` correctly flagged `{isOwner && (` in `QboBooksReader.tsx` as
+*"guards a rendered control"* and demanded a declared reason. **In the same commit,
+`if (!isOwner) return null;` was added to `QboDeliveryIngest.tsx` and `QboOrderIngest.tsx` and the
+cap said nothing about either.**
+
+Both express one decision. The early-return form is if anything the *stronger* gate — it removes the
+entire panel rather than one control — and it is the form a builder reaches for naturally when
+hiding a whole tool.
+
+⚠️ **NOT A FALSE GREEN, AND THE DISTINCTION MATTERS:** the cap passes on its real assertion, and
+these two panels are correct. But a cap whose coverage depends on which of two equivalent
+spellings the author chose teaches the wrong lesson to anyone who notices — the way past it is to
+write the gate differently, which nobody would intend and everybody would eventually do by accident.
+
+**The fix is a pattern, not a policy change:** recognise `if (!<identity>) return` / `return null`
+alongside the JSX-guard form. **Surfaced, not fixed** — extending an authority cap inside a surface
+build needs its own red-first proof, and a cap changed without one is the thing [[R-33]] is about.
+
+---

@@ -78,6 +78,17 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🔴 THE ACCOUNTING READ HAS A DISPLAY — AND THE REHEARSAL PATH WAS DARK (2026-09-04, ledger #275)
+
+- 🟡 **BUILDER-COMPLETE · 18 owner-test cards, 0 COVERED** (16 `owed` · 2 `needs-test`) · **NO migration · api/ 12/12 · NO new permission string** · `npm run verify` **exit 0, zero net-new**. → `docs/owner-tests/quickbooks-books-read-full-surface-test.md`
+- 🔴 **THE ONE-LINE DEFECT: `projectCapture` DROPPED `capture`.** A saved read rendered **no invoice table**, and **13 of 16 findings** — every money rule — said *"could not work this out"* over a file holding every invoice they needed. **The probe file and the mutation harness over that module could not have failed: no assertion ever read the field.** The shape witness enumerated the keys that DIFFER between entities, and `capture` is common to all three.
+- 🔴 **THE 100-ROW CAP WAS A WRONG ANSWER, NOT A SLOW ONE** — a search for a real 2024 invoice reported *nothing found* against 1,480 books, with nothing on the page looking unusual. Ceiling now **5,000** (`invoiceGrid.ts`), so LAWNS is **not capped and the search is exact**; the capped case is **PROVOKED in a probe** and mutation-proven rather than observed at a scale where it cannot occur.
+- 🔴 **THE CUSTOMER REPORT STOPPED TALKING TO US** — every *"Re-measured 3 September"* line and its working notes are gone, and the page dates itself by **when the books were READ**, not by when the button was pressed. The drift record stays on the SCREEN panel David reads.
+- 🔴 **OFF A NON-OWNER'S PAGE ENTIRELY:** both ingest panels, the TEST FACILITY (also **recoloured off amber** — it was byte-identical to the test-mode banner), and the pre-read findings section (measured: **16 rules, 0 measured, 16 quoting 29-Aug figures** incl. `$614,053`, shown before anybody pressed anything).
+- ⚠️ **NOTHING MECHANICAL GUARDS THIS SURFACE** — the divergence cap scans `packages/cultivar-os/src` only, so this component was never measured as bespoke and is not credited as converged. **Probes + mutants + cards are the entire guard.** tech-debt **#187**.
+- 🔴 **OPEN, DAVID'S CALL:** ① **where the ingest panels should LIVE** — `/admin` is `settings:read`, which the **manager floor holds**, so moving them there changes the address and not the reach; ② **three clauses drafted unnumbered** in `docs/standards/OWED-CLAUSES.md` (test-facility placement · pre-first-run state · owner-tool placement), NOT filed, per David's *"do not wait"*; ③ **the SHA to match is `1f039b4`** — the first build carrying the invoice table AND the narration.
+- ⚠️ **FILED, NOT FIXED:** tech-debt **#186** (the test runner reported **72 of 74 files** on a busy tree and still said *All test files pass*) · **#187** · **#188** (a comment claims STAFF holds `settings:read`; it does not) · **#189** (the authority cap sees `{isOwner && (` but not `if (!isOwner) return null`).
+
 ### 🔴 THE GRID ENGINE IS PLATFORM CODE NOW (2026-09-03, ledger #272)
 
 - 🟢 **DONE, ZERO BEHAVIOUR CHANGE — no owner-proof owed.** `<DataSheet>` + its unit moved `packages/cultivar-os/src/components/datasheet/` → **`packages/shared/src/components/datasheet/`**, verbatim (`020793b`). **37 changed lines in the engine, every one a comment** — proven by filtering the rename-detected diff, not asserted. → `packages/shared/src/components/datasheet/DataSheet.tsx` · ledger **#272**
@@ -85,7 +96,7 @@
 - 🔴 **THE PROMOTION TRIGGER IN ITS OWN HEADER HAD ALREADY FIRED AND NOBODY RE-READ IT** — it said *"when a real second-vertical consumer appears"*, and the consumer was `QboBooksReader` **inside `shared` itself**. [[R-26]]'s class.
 - ⚠️ **`datasheet/` DIRECTORY NAME IS LOAD-BEARING — DO NOT RENAME.** `usesSharedGrid` matches that path fragment; renaming silently converts all 8 consumers into undeclared bespoke surfaces. Carrier paths in `ui-control-standards.md:18-19` move WITH the file or the engine is measured as a divergence from itself.
 - 🔴 **TWO DECISIONS LEFT OPEN, BOTH DAVID'S:** ① **widening the divergence cap's `SCAN_ROOT`** — deliberately NOT done; it re-baselines `undeclared_bespoke_surfaces:23` into an unknown, and the honest reading is MORE unaudited surfaces. ② **how a shared component learns which vertical it renders in** — tech-debt #157's real blocker, unanswered.
-- ⚠️ **OWED, NOT DONE:** `QboBooksReader` is **still a plain table** — the reach is real now, so that is a CHOICE rather than a limit. Converting it is its own build against G1–G7 with its own cards.
+- ✅ **CLOSED BY #275 (2026-09-04): `QboBooksReader` IS THE GRID NOW.** This line read *"OWED, NOT DONE — still a plain table; the reach is real now, so that is a CHOICE rather than a limit."* It was, and the choice was taken. See the #275 block below.
 - ⚠️ **FILED, NOT FIXED:** tech-debt **#156** (the `shared → cultivar-os` boundary is enforced by **nothing** — tsconfig/eslint/package.json/knip/vite all checked) · **#157** (`tokens.ts` palette, ZERO importers, vs **42 cultivar literals across 21 files** in `shared`) · AC-1 leak `populate.ts:77` → CLAUDE.md §1.5.
 
 ### 🔴 `/receipts` IS A GRID NOW (2026-09-03, ledger #269)
