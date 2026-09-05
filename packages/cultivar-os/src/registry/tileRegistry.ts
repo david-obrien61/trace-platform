@@ -770,6 +770,14 @@ export const NAV_IA: NavNode[] = [
   // is entered from the grid mid-task; this one earns its own node so it is discoverable without
   // knowing the URL. Same view_costs gate as its route (nav and route agree, by construction).
   { key: 'nav_inventory_reconcile', section: 'dashboard', parent: 'nav_inventory', label: 'Reconcile count', route: '/inventory/reconcile', required_permission: 'inventory:read' },
+  // Uppot plan — a REAL destination on the same reasoning as Reconcile: the production manager goes
+  // to it deliberately to decide how much stock moves up a size, not as a sub-flow of the grid. It
+  // earns its own node so it is discoverable without knowing the URL — capA's nav-integrity
+  // assertion caught it as a URL-only orphan on its first run, which is exactly what that check is
+  // for. `inventory:read` matches its route gate by construction; the COMMIT is separately gated on
+  // `inventory:create` inside the page, so a STAFF member reaches the screen and finds the commit
+  // locked with a reason rather than the whole surface missing.
+  { key: 'nav_inventory_uppot', section: 'dashboard', parent: 'nav_inventory', label: 'Uppot plan', route: '/inventory/uppot', required_permission: 'inventory:read' },
   { key: 'nav_receipts',        section: 'dashboard', parent: 'nav_operating_costs', tileKey: 'receipt_keeper' },
   { key: 'nav_pmi',             section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'pmi' },
   { key: 'nav_social',          section: 'dashboard', parent: 'sec_dashboard',       tileKey: 'social_media' },

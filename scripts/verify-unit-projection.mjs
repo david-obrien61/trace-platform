@@ -88,6 +88,23 @@ const ALLOWED = new Map([
   ['scripts/verify-unit-projection.mjs',                   'this cap'],
   ['scripts/backfill-inventory-units.ts',                  'the backfill — reads the derive, writes what it returns'],
   ['packages/shared/src/components/datasheet/systemManagedFields.ts', 'the lock registry (declares them non-editable)'],
+
+  // ── PURE READERS, added 2026-09-05 (ledger #276) ────────────────────────────────────────────
+  // 🔴 A THIRD MODE THIS CAP'S OWN COMMENT DOES NOT NAME. It says a file naming a unit column is
+  // "either a second derive or an editable surface — the two failure modes." These five are
+  // NEITHER: they READ the projection, which is the entire reason R-27 built it. Nothing here
+  // computes a unit, nothing writes one, and nothing renders one editable — the planner groups
+  // rungs on `unit_value` precisely BECAUSE it is derived and trustworthy.
+  // ⚠️ The residual is real and is filed as tech-debt #190 rather than fixed here: the cap matches
+  // on the NAME, so it cannot tell a read from a write, and every future reader of the projection
+  // will land on this list. Rewriting the cap to assert the WRITE inside a planning build is the
+  // scope creep the gate exists to catch. The entries below are declarations, not a widening —
+  // each names a file whose relationship to the columns is stated and checkable by eye.
+  ['packages/cultivar-os/src/lib/uppotPlanFields.ts',      'READS: the plan surface field list — selects the projection, never computes it'],
+  ['packages/cultivar-os/src/lib/uppotPlanRead.ts',        'READS: maps the selected projection onto LotInput; no unit is derived here'],
+  ['packages/cultivar-os/src/lib/uppotPlanRead.test.ts',   'READS: asserts the field list matches the migration corpus (tech-debt #179 class)'],
+  ['scripts/measure-production-plan-mutants.mjs',          'names them inside mutant strings only — mutates the PLANNER, never the derive'],
+  ['scripts/seed-uppot-harness.mjs',                       'names them in its own console output to say the projection has NOT run on seeded rows'],
 ]);
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════

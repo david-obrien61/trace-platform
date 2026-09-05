@@ -4,6 +4,47 @@ Intentional workarounds that violate architectural intent for a real-world reaso
 Each entry documents the workaround, the correct architecture, and the trigger for repair.
 Maintained per the Honest Friction principle (see PLATFORM_STRATEGY.md Design Principles).
 
+---
+
+## #191 — 🟡 THE UI-DIVERGENCE CAP COUNTS A SETTINGS FORM AS A RECORD LIST (NEW 2026-09-05)
+
+`isRecordList()` in `verify-ui-standard-divergence.mjs` matches a file that reads rows **AND** maps
+over anything: `/\.from\(['"`]/ && /\.select\(/ && /\.map\(/`. `OperationsSettings.tsx` reads
+**one** config row and maps over a **static array of field groups**, so it is counted as a bespoke
+record-list surface while being a form over a single record. It has no table, no columns and no rows.
+
+**Not a false green** — the cap over-reports rather than under-reports, and the surface was declared
+honestly rather than argued away, *because a surface that trips a cap and is then exempted by
+reasoning nobody wrote down is how a cap stops being read.* But it inflates the bespoke population
+with files that have nothing to converge onto, which makes the baseline number mean less each time.
+
+**Fix:** require evidence of REPEATED ROWS FROM THE READ — that the mapped collection is the query
+result — rather than the co-occurrence of a read and any `.map`. Sibling of **#187** (the cap's
+`SCAN_ROOT` misses `shared`) and **#181** (it absolves any file importing `sheetStyles`); all three
+are about the cap's POPULATION rather than its assertions.
+
+---
+
+## #190 — 🟡 THE UNIT-PROJECTION CAP CANNOT TELL A READER FROM A WRITER (NEW 2026-09-05)
+
+`verify-unit-projection.mjs` fails any file outside a six-entry allow-list that NAMES a `unit_*`
+column, on the stated reasoning that such a file is *"either a second derive or an editable surface
+— the two failure modes."*
+
+🔴 **THERE IS A THIRD MODE AND IT IS THE COMMON ONE: A PURE READER.** R-27 built the projection so
+that code could READ a trustworthy unit instead of re-parsing `size`. The uppot planner does exactly
+that — it groups rungs on `unit_value` **because** it is derived — and tripped the cap on five files
+(the field list, the read, its probe, the mutant harness and the seed script's console output).
+
+**Declared, not fixed**, with each file's relationship to the columns stated in the allow-list.
+Rewriting a cap to assert the WRITE inside a planning build is the scope creep the gate exists to
+catch — the #73 lesson. **But every future reader of the projection will land on this list**, and an
+allow-list that grows with legitimate readers is the shape `OWNER_ONLY_PENDING` had before it became
+unread noise. **Fix:** assert the WRITE (an assignment or an insert/update payload naming a unit
+column) rather than the NAME.
+
+
+
 **Routing rule:** TECH DEBT = built WRONG (shortcut/hardcode/compromise that works but isn't right).
 NAMED GAP = honest shell intended to fill on a stated horizon. Don't conflate them.
 

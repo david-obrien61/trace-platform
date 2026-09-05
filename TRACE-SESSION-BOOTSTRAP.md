@@ -78,6 +78,18 @@
 
 ## ⚡ ACTIVE STATUS — open this FIRST (in-flight + demo-critical only)
 
+### 🔴 UPPOT PLANNING — THE SPLIT SHIPS, AND THE HOLD IS THE PLAN (2026-09-05, ledger #276)
+
+- 🟡 **BUILDER-COMPLETE · 21 owner-test cards, 0 COVERED** (19 `owed` · 2 `needs-test`) · ⛔ **MIGRATION `supabase/migrations/20260905_production_planning.sql` NOT APPLIED — CARDS 8–17 BLOCKED** · `api/` 12/12 · NO new permission string · `npm run verify` exit 0 zero net-new · **76/76 files, 4022 assertions** · **40/40 mutants caught** · → `docs/owner-tests/uppot-planning-full-surface-test.md`
+- 🔴 **THE HOLD IS DERIVED, NOT A COLUMN.** `held_for_uppot` = the sum of unfinished quantity on open plan lines, exactly as committed stock is a sum over open orders. **`business_inventory` gains nothing**, and the migration's VERIFY (D) asserts it. R-84 / R-27.
+- 🔴 **BATCH SIZE IS THE LEVER, NOT CREW SIZE.** Labour is **60 min setup a run + 3 min a pot**, which reconciles David's two figures (3 was handling; 6 was the job at a 20-pot batch). The same 1,245-pot plan is **187 crew-hours or 73**. Every split costs one extra setup and the screen prices it.
+- 🔴 **THE POT CASCADE SAVES 708 POTS OF 1,328** on the workbook's own ten varieties — same work, same trees, same window. Down the ladder, block breaks the tie, **and every block revisit is named with its cost** rather than resolved silently.
+- 🔴 **CANNOT BE DEMONSTRATED ON LAWNS, MEASURED:** 447 lots, **2 with a count and each holds ONE TREE**. Seed Test Dave's (`scripts/seed-uppot-harness.mjs` — it refuses to run against LAWNS) then `npm run units:backfill`.
+- ⚠️ **NOT BUILT AND SAID SO:** batch completion (schema + rules + tests ship, **no button**) · the two seven-day flags (computed and tested, **rendered nowhere**) · the graduation movement · the audit row · sales-a-month (stage ④), so every *Keep* figure is 0 until typed.
+- 🔴 **OPEN, DAVID'S CALL:** ① **where the seven-day OPEN flag lives** — he asked for the owner's surface, and `isOwner` in an authority position is forbidden by capA while §3 forbids a new string; the one string that both excludes the manager and honestly describes the capability is **`audit_log:read`**, and it is a PRESENTATION gate, not a protection. ② the four-way-split **story is owed** — the ladder story covers the dates, nothing covers the split.
+- ⚠️ **FILED, NOT FIXED:** tech-debt **#190** (the unit-projection cap cannot tell a reader from a writer) · **#191** (the divergence cap counts a settings form as a record list).
+- ⚠️ **PROMPT PREMISE THAT DID NOT HOLD:** §0 said the three workbook defects were already fixed in the file and N4 named a new cascade sheet — **the workbook on disk is byte-identical to yesterday's**, nine sheets, all three defects still present. Did not block; the prompt states each fix in one sentence and the build followed the prompt.
+
 ### 🔴 THE ACCOUNTING READ HAS A DISPLAY — AND THE REHEARSAL PATH WAS DARK (2026-09-04, ledger #275)
 
 - 🟡 **BUILDER-COMPLETE · 18 owner-test cards, 0 COVERED** (16 `owed` · 2 `needs-test`) · **NO migration · api/ 12/12 · NO new permission string** · `npm run verify` **exit 0, zero net-new**. → `docs/owner-tests/quickbooks-books-read-full-surface-test.md`

@@ -65,6 +65,150 @@
           "reason": "VACUOUS HERE, and answered rather than left to fail the cap. G10 governs a grid that renders PER-ROW EXPANSION: the toggle must lead and the row must be a click target. Vendors.tsx is a bespoke card list with no disclosure of any kind — it passes no renderExpand and imports no DataSheet (grep: the only occurrence of 'DataSheet' in the file is the header comment naming the standard it diverges from). A surface with nothing to disclose cannot violate a clause about how disclosure is opened. If this surface ever gains an expansion it inherits G10 from the shared control, and this cell must be re-answered. ⚠️ ANSWERED BY trace-platform-e2 (ledger #270), NOT by the session that built this surface: G10 was minted after this declaration was written, and adding a clause invalidates every declaration until it is re-answered — which is the cap working as designed, not a defect. The verdict is confined to G10; nothing else in this declaration was touched."
         }
       }
+    },
+    {
+      "file": "packages/cultivar-os/src/pages/UppotPlan.tsx",
+      "declared": "2026-09-05",
+      "declared_by": "ledger #276 — declared IN the build that created the surface, before the ratchet was re-baselined. The cap flagged it on its first run alongside OperationsSettings (23 -> 25) and the commit was held until both were answered.",
+      "sections": [
+        "1",
+        "4"
+      ],
+      "shape_taken": "HAND-ROLLED <table> with one editable numeric cell per row (UPPOT NOW) and a live totals panel beside it.",
+      "shape_dropped": "DATA GRID (<DataSheet>).",
+      "reason": "🔴 MEASURED, NOT ASSUMED: <DataSheet> renders values and a fixed set of editable column types; this surface needs a NUMERIC INPUT whose every keystroke re-runs the whole plan — the split, the mix, the pot cascade, the crew-days and the window check — and re-renders a panel that is not a column sum. The comparison the screen exists for is BETWEEN rows while typing, and a per-row commit would break it (E2's own worked example: 'a Save button per row would be absurd'). ⚠️ WHAT IS NOT ESTABLISHED: that DataSheet could not be EXTENDED to carry a live-recompute cell. Nobody has costed that, and this declaration does not claim it is impossible — only that it does not do it today. That extension is the honest convergence path and it is named here rather than left implicit.",
+      "recorded_where": "this declaration · CLOSE-OUT-LEDGER #276 · UppotPlan.tsx header · docs/owner-tests/uppot-planning-full-surface-test.md",
+      "note": "🔴 OWNER-PROOF OWED, BOARD 0 OF 21. Every verdict below is a READ OF THE CODE, not of a screen anyone has driven. The grid clauses that are `owed` are owed honestly: at the seeded population (18 rows at Test Dave's) sort and search are not yet felt, and they will be the moment this meets a 447-row catalogue.",
+      "clauses": {
+        "G1": {
+          "verdict": "owed",
+          "reason": "The header row is not sticky. At 18 seeded rows it is not felt; at LAWNS's 447 it will be, and this is recorded rather than hidden."
+        },
+        "G2": {
+          "verdict": "met",
+          "reason": "The table sits in a container with overflowX:auto, so the horizontal scrollbar belongs to the box and not to the page."
+        },
+        "G3": {
+          "verdict": "owed",
+          "reason": "The variety column is not frozen. Same population argument as G1 — real at 447 rows, not yet real at 18."
+        },
+        "G4": {
+          "verdict": "owed",
+          "reason": "No column sorting. The rows arrive ordered by name from the read; the manager cannot re-sort by delta, which is the sort he would actually want."
+        },
+        "G5": {
+          "verdict": "owed",
+          "reason": "No search. Recorded as a debt with a name, not a gap."
+        },
+        "G6": {
+          "verdict": "dropped",
+          "reason": "No pagination: the plan is a whole-set decision. Showing the manager a page of it would let him commit a plan whose totals describe rows he never saw — the R-75 defect in a surface where the total is the point."
+        },
+        "G7": {
+          "verdict": "met",
+          "reason": "Empty and refused states are both rendered explicitly: 'Nothing is planned yet' in the totals panel, and every unplannable lot appears in a named list with its reason."
+        },
+        "G8": {
+          "verdict": "met",
+          "reason": "The one editable cell is a real <input>; nothing else in the row reads as a control. No dead affordance."
+        },
+        "G9": {
+          "verdict": "dropped",
+          "reason": "Default sort is by variety name, not most-recent. There is no time axis on a catalogue of stock — 'most recent' has no meaning for a lot — so the clause's subject does not arise here."
+        },
+        "G10": {
+          "verdict": "dropped",
+          "reason": "The row is not a click target and the grid has no expansion, which is G10's own stated exclusion: a grid without a disclosure must not acquire a mystery click target."
+        },
+        "E1": {
+          "verdict": "met",
+          "reason": "The plan is edited in exactly one component. No second surface writes production_plan_lines."
+        },
+        "E2": {
+          "verdict": "met",
+          "reason": "ONE commit model, and David ruled the reasoning so it is not re-litigated: the record being decided is THE PLAN, not the lot. The cells are inputs buffered in component state and committed by ONE explicit button — a form, whose fields happen to be laid out as a grid."
+        },
+        "E3": {
+          "verdict": "met",
+          "reason": "The copy states the model: 'Nothing here is saved until you commit the plan.' True of every field on the surface."
+        },
+        "E4": {
+          "verdict": "dropped",
+          "reason": "There is no unchanged-check to get wrong: the commit always INSERTS a new plan rather than updating an existing one, so there is no persisted value to compare a working copy against."
+        },
+        "E5": {
+          "verdict": "met",
+          "reason": "Both writes check the affected-row count and refuse to report success on an empty result — and the failure path's own cancel is row-count-checked too, which verify-zero-row-writes caught as UNCHECKABLE on its first run."
+        },
+        "E6": {
+          "verdict": "met",
+          "reason": "One declarative field list in uppotPlanFields.ts, in its own zero-dep leaf so its probe can import it without a database handle; uppotPlanRead.test.ts asserts it against the migration corpus in both directions (the tech-debt #179 class)."
+        },
+        "E7": {
+          "verdict": "met",
+          "reason": "David's ruling: the cell stays a cell, because the unit of work is the plan and not the lot, and E7's own text says 'a cell edited in a list of many stays a cell'. The E7 MOMENT is the commit, which carries one reason for the whole batch rather than fourteen."
+        }
+      }
+    },
+    {
+      "file": "packages/cultivar-os/src/components/settings/OperationsSettings.tsx",
+      "declared": "2026-09-05",
+      "declared_by": "ledger #276 — declared in the build that created it.",
+      "sections": [
+        "3",
+        "4"
+      ],
+      "shape_taken": "SETTINGS FORM — labelled numeric fields in named groups, each carrying the basis of its own default, committed by one Save.",
+      "shape_dropped": "DATA GRID (<DataSheet>).",
+      "reason": "⚠️ THIS SURFACE IS ARGUABLY NOT IN THE CAP'S POPULATION AT ALL, AND THAT IS REPORTED RATHER THAN WORKED AROUND. `isRecordList` matches a file that reads rows AND maps over something; this file reads ONE config row and maps over a static array of field GROUPS, so it is caught as a record list while being a form over a single record. Filed as tech-debt #191. It is declared anyway rather than argued away, because a surface that trips a cap and is then exempted by reasoning nobody wrote down is how a cap stops being read. The grid section is not answered because the surface has no table, no columns and no rows.",
+      "recorded_where": "this declaration · CLOSE-OUT-LEDGER #276 · OperationsSettings.tsx header · docs/owner-tests/uppot-planning-full-surface-test.md",
+      "note": "OWNER-PROOF OWED. Verdicts below are a read of the code.",
+      "clauses": {
+        "F1": {
+          "verdict": "met",
+          "reason": "Every field is labelled in place, never by position or placeholder alone."
+        },
+        "F2": {
+          "verdict": "met",
+          "reason": "The blended mix cost is displayed read-only WITH the sentence saying where it is edited — locked with an explanation, not mystery-greyed."
+        },
+        "F3": {
+          "verdict": "dropped",
+          "reason": "No column in the shared SYSTEM_MANAGED_FIELDS registry is rendered here. Every field on this surface is owner-set configuration, which is the opposite of system-managed."
+        },
+        "F4": {
+          "verdict": "met",
+          "reason": "Each field renders its BASIS beside it — fact, suggestion or guess — so a guessed default cannot be mistaken for a measured one."
+        },
+        "E1": {
+          "verdict": "met",
+          "reason": "The operations config is edited in exactly one component."
+        },
+        "E2": {
+          "verdict": "met",
+          "reason": "ONE commit model: the whole record is the unit of work, every field buffers, and one Save commits. Create and edit are the same path — the write is an upsert, so there is no second mode to diverge."
+        },
+        "E3": {
+          "verdict": "met",
+          "reason": "'Changes save when you press Save, not as you type' — stated on the surface and true of every field on it."
+        },
+        "E4": {
+          "verdict": "owed",
+          "reason": "🔴 A REAL GAP, RECORDED. `dirty` is set by any keystroke and is never compared against the PERSISTED value, so typing a number and typing it back leaves the form believing it changed. It over-saves rather than under-saves, which is the safe direction, and the write is idempotent — but it is not the two-value pattern E4 asks for."
+        },
+        "E5": {
+          "verdict": "met",
+          "reason": "The upsert checks the returned row and reports 'Not saved' with the reason on an empty result."
+        },
+        "E6": {
+          "verdict": "met",
+          "reason": "The field list IS the OperationsConfig type, and OPERATIONS_BASIS is keyed on the same names, so a new constant without a basis entry is a type error rather than a number that renders unlabelled."
+        },
+        "E7": {
+          "verdict": "dropped",
+          "reason": "No record list and no rows, so there is no row for a control to sit on. The clause's subject does not arise."
+        }
+      }
     }
   ],
   "converged": [

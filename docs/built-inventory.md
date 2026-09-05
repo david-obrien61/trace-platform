@@ -1,7 +1,7 @@
 # TRACE Built Inventory
 # Flat catalog of every major capability built across all TRACE repos
 # Read this before starting any build session — the thing you're about to build may already exist
-# Last updated: 2026-09-04 (**#275 — THE DISPLAY, AND A ONE-LINE DEFECT THAT MADE THE REHEARSAL PATH LIE QUIETLY.** `projectCapture` dropped `capture`, so a saved read showed **no invoice table** and **13 of 16 findings** went dark over a file holding every invoice they needed — and the probe file and mutation harness over that module **could not have caught it, because no assertion ever read the field**. The invoice list moves onto `<DataSheet>`; the 100-row cap that answered *nothing found* for a real 1,480-book invoice is gone, **provoked in a test rather than observed**; the customer report loses every *Re-measured* line and dates itself by **when the books were READ**; and the ingest panels, the test facility and the pre-read findings section are off a non-owner's screen. ⛔ NO migration. See also #274, #273.)
+# Last updated: 2026-09-05 (**#276 — UPPOT PLANNING ①+②: THE FOUR-WAY SPLIT, AND THE HOLD THAT IS THE PLAN.** A production manager sets how much of each variety moves up a container size; the screen computes must-keep / cushion / delta, takes his number, and reports the mix, the pots, the crew-hours, the batch dates and the window fit — then holds the stock on commit. 🔴 **THE HOLD IS DERIVED FROM OPEN PLAN LINES; there is no `held_qty` column anywhere**, asserted by the migration's own VERIFY (D). Labour is **setup + handling**, so batch size is the lever — the same 1,245-pot plan is 187 crew-hours or 73. The **pot cascade** works down the ladder and saves 708 pots of 1,328 on the workbook's own varieties. Every number carries **fact / suggestion / guess**. ⛔ **MIGRATION `20260905_production_planning.sql` NOT APPLIED.** ⚠️ Batch completion, the seven-day flags and sales-a-month are NOT built. See also #275, #274.)
 
 
 > 📐 **CAMPAIGN LIFECYCLE — SCOPING + ESTIMATE (2026-08-23, ledger #192/#192b).** NOT a capability entry: **nothing was built.** A scoping document answering David's *"I can add but not edit or cancel or delete"* with nine questions, ten site keys, a proven F1/F2/F3 dependency order, three scopes (**MINIMUM ~2–3 · COHERENT ~5–7 · COMPLETE ~11–14 Thunder prompts; MINIMUM and COHERENT need ZERO migrations**) and eight rulings owed. Read it before ANY campaign build — it is the answer to "has this been scoped?" and its first finding is that the EDIT FORM ALREADY EXISTS as the create form (`Campaigns.tsx:120-198`). → [`docs/audits/campaign-lifecycle-scoping-2026-08-23.md`](audits/campaign-lifecycle-scoping-2026-08-23.md) · predecessor [`social-campaign-path-recon-2026-08-22.md`](audits/social-campaign-path-recon-2026-08-22.md)
@@ -2717,3 +2717,45 @@ learns.
 - ⚠️ **DO NOT recover an expired invite by inviting again** — tech-debt **#183**. And **do not wire `expireInvitations`** — tech-debt **#184**.
 
 **DataSheet engine PROMOTED to `@trace/shared` (2026-09-03, ledger #272, `020793b` — BUILDER-COMPLETE, ZERO behaviour change):** the platform's ONE grid engine moved out of `packages/cultivar-os` into `packages/shared/src/components/datasheet/` — `DataSheet.tsx` + `systemManagedFields.ts` + `flagCounts.ts` + `flagCounts.test.ts` + `dataSheetDisclosure.test.ts`, by `git mv`, **verbatim**. 🔴 **THE MEASUREMENT THAT SETTLED IT:** the engine's entire transitive dependency closure is `react`, `lucide-react`, and two sibling files that import **nothing** — no supabase, no business context, no permission hook, no router, no tile registry. *The coupling everyone reasoned around did not exist.* **8 consumers, one import line each** — 5 render the grid (`BusinessInventory`, `BusinessAssets`, `Customers`, `InventoryReconcile`, `ReceiptsList`), 3 import `sheetStyles` only (`CustomerPartyEditor`, `InventoryEditor`, `InventoryImport`). 🔴 **The promotion trigger in `DataSheet.tsx`'s own header had ALREADY FIRED and nobody re-read it:** it said *"promote when a real second-vertical consumer appears"*, and the second consumer was `QboBooksReader` **inside `packages/shared` itself** — a case the condition did not contemplate, so it read as unmet and the default held ([[R-26]]'s class). **Moved in the same commit because they break otherwise:** the divergence cap keys `CARRIERS` on the full path, so `docs/standards/ui-control-standards.md:18-19` moved too; `scripts/verify-unit-projection.mjs` hardcoded the registry path twice and was **proven RED on ENOENT before being fixed** ([[R-33]]); `receiptsList.test.ts` **G9** asserted the engine's ADDRESS as a proxy for its INTENT and was retargeted at `@trace/shared` — **strictly stronger, and mutation-tested** (it now also catches a forked local copy, which the relative-path form accepted). ⚠️ **The `datasheet/` DIRECTORY NAME is load-bearing** — `usesSharedGrid` matches that path fragment; renaming it silently converts all 8 consumers into undeclared bespoke surfaces. ⚠️ **Divergence-cap `SCAN_ROOT` deliberately NOT widened** (David: widening re-baselines `undeclared_bespoke_surfaces:23` into an unknown — a separate decision, not bundled). **Manifest made honest:** `react` + `lucide-react` added to `packages/shared/package.json` at cultivar-os's pinned versions; **lockfile regenerated (`--package-lock-only`) because it was out of sync and `npm ci` on Vercel would have failed** — nothing in `npm run verify` would have caught that. **CARRIED, not created:** 7× `#27500A` + 1× `#EAF3DE` ride along in `sheetStyles`; `packages/shared` already held **35 across 20 files**, so the AC-4 debt is now **42 across 21** — filed as tech-debt **#157** against `shared`, not against this component. `npm run verify` **exit 0 zero NET-NEW** (tsc 5 / eslint 244 / knip 10·12·15); **71/71 test files, 3640 assertions**; `build:cultivar` clean 7.96s. **NO migration · api/ 12/12 · NO new permission.** 🔴 **NO owner-test card moved, and that was proven rather than claimed:** the rename-detected diff shows **37 changed lines in the engine, every one a comment**, and zero non-comment changes under `packages/` beyond 8 import lines, 3 manifest lines and 1 test path literal — so no surface changed and OP-14 cl.3 does not fire. **Also corrected:** `QboBooksReader.tsx:596`, which called the old placement *"a deliberate limit rather than a choice"* — the fact was true and the word "limit" was not; **the surface is still a plain table, which is now a CHOICE and is OWED as its own G1–G7 build.**
+
+---
+
+### UPPOT / PRODUCTION PLANNING — the four-way split and the derived hold
+**Last updated:** 2026-09-05 · **BUILDER-COMPLETE, OWNER-PROOF OWED** · ledger #276 · board 0 of 21
+
+**WHAT IT IS.** A production manager decides how much of each variety moves up a container size.
+The count splits four ways in this order — **must-keep-sellable** (sales a month × cover months) ·
+**cushion** (a share on top, per-variety) · **delta** (what is left) · **uppot now** (his number,
+defaulting to the whole delta) — and the surface reports the mix, the materials, the pots, the
+crew-hours, the batch dates and whether the plan fits the window, **before** anything is committed.
+
+**WHERE.**
+- `packages/shared/src/production/` — the whole model, pure, zero I/O: `basis.ts` ·
+  `productionConfig.ts` · `productionMath.ts` · `productionHold.ts` · `productionFlags.ts`
+- `packages/cultivar-os/src/pages/UppotPlan.tsx` — `/inventory/uppot`, nav entry `nav_inventory_uppot`
+- `packages/cultivar-os/src/components/settings/OperationsSettings.tsx` — `/settings/operations`
+- `packages/cultivar-os/src/lib/uppotPlanRead.ts` · `uppotPlanFields.ts` · `uppotPlanWrite.ts`
+- `supabase/migrations/20260905_production_planning.sql` — **NOT APPLIED**
+
+**THE LOAD-BEARING DECISIONS.**
+- 🔴 **The hold is DERIVED** (R-84/R-27) — `held_for_uppot` is the sum of unfinished quantity on open
+  plan lines, the mirror of `fetchCommittedByLot`. **No column on `business_inventory`.** `draft`
+  holds, deliberately: fail toward not overselling.
+- 🔴 **Labour is setup + handling** (R-89), so batch size is the lever, not crew size.
+- 🔴 **Group on the unit projection, never on `size`** — 46 spellings fold to 13 numbers at LAWNS.
+  A range (`10/15 gallon`) is shown and **refused**, never assigned an end.
+- 🔴 **Three read states** — counted · never counted · read failed. 445 of LAWNS's 447 rows are the
+  middle one, so the empty screen is the normal case.
+- 🔴 **The money wall splits** (R-87) — non-money constants behind `settings:*`; labour rates and pot
+  prices behind `pricing_recipe:read`, rendering withheld-with-a-reason. **The mix cost crosses**, by
+  David's exception.
+
+**NOT BUILT, AND SAID SO:** batch completion (schema, rules and tests ship; **no button**) · the two
+seven-day flags (computed, tested, **rendered nowhere**) · the graduation ledger movement · the audit
+row · sales-a-month from history (stage ④) · a UI cancel for a committed plan.
+
+**PROOF:** `productionPlan.test.ts` 156 probes · `uppotPlanRead.test.ts` 28 probes ·
+`scripts/measure-production-plan-mutants.mjs` **40 mutants, 40 caught, 0 survived**.
+**DEMO NOTE:** cannot be shown on LAWNS — 447 lots, 2 counted, each holding one tree. Seed Test
+Dave's with `scripts/seed-uppot-harness.mjs`, which refuses to run against LAWNS.
+

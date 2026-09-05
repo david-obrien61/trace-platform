@@ -35,6 +35,7 @@ import { BusinessInventory } from './pages/BusinessInventory';
 import { InventoryCount }    from './pages/InventoryCount';
 import { InventoryReconcile } from './pages/InventoryReconcile';
 import { InventoryImport }    from './pages/InventoryImport';
+import UppotPlan               from './pages/UppotPlan';
 import { CostToProduce }     from './pages/CostToProduce';
 import { OperatingCosts }    from './pages/OperatingCosts';
 import { Customers }         from './pages/Customers';
@@ -263,6 +264,15 @@ export function AppRouter() {
                 /team, enforced SERVER-SIDE by the import_write_price RPC. Routing this owner-only
                 would block the manager's quantity import the ruling explicitly allows. */}
             <Route path="/inventory/import"  element={<InventoryImport />} />
+            {/* UPPOT PLAN — the production manager's decision surface. Same `inventory:read` gate as
+                its siblings, deliberately: it reads the same stock and, on commit, holds it. The
+                COMMIT is separately gated on `inventory:create` inside the page and enforced
+                server-side by production_plans' member INSERT policy, so the route gate is
+                defence-in-depth rather than the only lock. Measured live at LAWNS 2026-09-05:
+                MANAGER holds read/create/update so the production manager can plan and commit;
+                STAFF holds `inventory:read` ALONE, so staff reach the screen, see the plan, and
+                find the Commit button locked with a reason rather than missing (§6 r13). */}
+            <Route path="/inventory/uppot"   element={<UppotPlan />} />
           </Route>
 
           {/* OWNER-ONLY — the cost moat (D-009) + owner-scoped account surfaces. Even a Manager who

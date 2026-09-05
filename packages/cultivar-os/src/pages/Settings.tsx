@@ -8,6 +8,7 @@ import { generateQR } from '@trace/shared/qr/generate';
 import { BUSINESS_MODULE_COLUMNS, setBusinessModuleState, type BusinessModuleRow } from '@trace/shared/business-logic/moduleState';
 import { readReviewAskConfig, reviewCopyProblems, isUsableReviewUrl, DEFAULT_REVIEW_GUIDANCE } from '../lib/deliveryFulfilment';
 import { supabase } from '../lib/supabase';
+import OperationsSettings from '../components/settings/OperationsSettings';
 import {
   getMembersByBusiness,
   removeMember,
@@ -741,6 +742,11 @@ export function Settings() {
       ? sectionParam
       : undefined;
 
+  // OPERATIONS is a cultivar VERTICAL section, not one of the shared page's three. It is matched
+  // separately so the shared component's own union does not have to grow a member for a section it
+  // knows nothing about — the same reason CostToProduce and Nursery live in `verticalContent`.
+  const isOperations = sectionParam === 'operations';
+
   // [TRACE:NAV] which Settings section-destination resolved (ON by default, STD-003).
   console.log('[TRACE:NAV] settings section', { param: sectionParam ?? null, resolved: section ?? 'full' });
 
@@ -773,8 +779,12 @@ export function Settings() {
 
   // The vertical sections (cost config / install price / team) live on the FULL page only — when a
   // section filter is active the shared page renders just that one card, so we pass nothing here.
-  const verticalContent = (businessId && !section) ? (
+  const verticalContent = businessId && isOperations ? (
+    // /settings/operations — the direct destination, rendering JUST this card (RULE 2a).
+    <OperationsSettings businessId={businessId} canWrite={canManageSettings} canReadMoney={can('pricing_recipe:read')} />
+  ) : (businessId && !section) ? (
     <>
+      <OperationsSettings businessId={businessId} canWrite={canManageSettings} canReadMoney={can('pricing_recipe:read')} />
       <CostToProduceSettings />
       <NurserySection businessId={businessId} />
       <ReviewAskSection businessId={businessId} />
