@@ -7,6 +7,24 @@
 > the TREE and *any* push to `main`, docs included, moves the stamp. *(OP-15.)*
 
 **Capability:** 2.3 / 5.1 (inventory) · **Ledger:** #277
+**SHA THIS BOARD WAS WRITTEN AGAINST:** `0c277f2`. **`84bd7d5` (ledger #278, the customer import) is
+a DESCENDANT of it and every card below still holds** — verified 2026-09-06: #278 added its own
+modules and two router branches, touched none of `itemImportWriter.ts` / `qboItemAdapter.ts` /
+`retiredFilter.ts` / any inventory reader, and my `items-preview` / `items-ingest` / `items-undo`
+dispatch is intact at `router.ts:1091-1093`. On the merged tree: `npm run verify` **exit 0**,
+232 probes green, **40/40 mutants caught**. ⚠️ **ONE CARD MOVED — CARD 22's stated REASON, not its
+pass criterion.** See that card.
+
+> 🔴 **BEFORE TUESDAY, READ THIS ONCE — IT IS ABOUT THE OTHER IMPORT, NOT THIS ONE.**
+> **The customer import (#278) HAS NO UNDO ROUTE.** `undoCustomerImport` exists as a function with
+> **zero HTTP reachability**: `customers:delete` is an UNMINTABLE verb (R2/A3), so there is no
+> permission to gate the endpoint on, and #278's own guidance is *"import onto Test Dave's until
+> David rules"* (its tech-debt #197).
+>
+> **So "import, look, wipe, reload" is TRUE OF THE CATALOGUE AND NOT YET TRUE OF THE CUSTOMERS.**
+> If both are run on LAWNS on the day, half of it is reversible by button and half is not. That is
+> a sequencing fact about the pair, and neither board says it alone.
+
 **Story:** ⚠️ **OPEN — and I did not close it by inventing one.** `user_stories.md` has no heading
 covering "import my product list out of my own accounting system". The nearest is the count-promotes
 story, which is about walking a lot. **Recorded OPEN rather than papered over** (§9 story gate:
@@ -531,11 +549,29 @@ not pick one. Tech-debt **#193**.
 
 ## CARD 22 — the customer half of the undo, when it exists
 **STATUS:** needs-test · **DEVICE:** desktop · **LAST-PROVEN:** —
-**REASON IT IS `needs-test`:** it cannot be proven today and saying so is the point.
-`customers.import_run_id` is NULL on all 30 rows because the customer merge is deliberately out of
-this build (§5 — it waits on a `customer_qb_links` join table, since one local customer can map to
-two QuickBooks ids and `qb_customer_id` is single-valued). The undo **issues** the delete and
-reports `customersDeleted: 0`, which CARD 10 step 3 checks.
+**REASON IT IS `needs-test`:** it cannot be proven by THIS build, and the reason changed under it.
+
+✏️ **CORRECTED 2026-09-06 — THE ORIGINAL REASON IS NOW HALF FALSE.** It said *"`customers.import_run_id`
+is NULL on all 30 rows because the customer merge is deliberately out of this build."* The column now
+has a writer: **ledger #278's customer import (`customerImportWriter.ts:156`) stamps it on every
+customer it CREATES** — and deliberately not on the narrow UPDATE that reconciles the 19 pre-existing
+QuickBooks-linked rows, because a PostgREST upsert would have stamped those too and its own undo
+would then have deleted real customers.
+
+🔴 **CARD 10 STEP 3 IS STILL CORRECT AND STILL MEANINGFUL, AND THE REASON IS THE RUN ID.** A run id
+is a fresh uuid per run, so a customer created by the customer import carries the CUSTOMER run's id
+and can never match the ITEM run's id. `customersDeleted: 0` on CARD 10 remains the right expectation
+no matter how many customer imports have happened first.
+
+⚠️ **AND THE HAZARD THAT DOES EXIST IS A HUMAN ONE, NOT A CODE ONE: two undos, two run-id
+namespaces, one uuid shape.** Handing `items-undo` a CUSTOMER run id deletes those customers and
+reports `inventoryDeleted: 0, unretired: 0, ok: true` — which reads as *"an item import that made
+nothing"* rather than as *"you undid the other import"*. It is not destructive (it performs the same
+delete the customer undo would) but it is **misreported**. Keep the two run ids labelled.
+
+**What this card becomes:** the day `customers:delete` is ruled and the customer import gets its own
+undo route, prove that each undo touches only its own run. Until then a green check here would
+assert a proof nobody performed.
 
 **What this card becomes the day the merge lands:** import customers, undo, and confirm the run's
 customers are gone while every hand-made customer and every previous run's customer survives.
