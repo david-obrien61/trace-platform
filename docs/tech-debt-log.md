@@ -6,6 +6,134 @@ Maintained per the Honest Friction principle (see PLATFORM_STRATEGY.md Design Pr
 
 ---
 
+## #199 — 🔴 LAWNS'S PRICING CONFIG IS A ONE-KEY STUB, AND THE SEEDER THAT EXISTS TO PREVENT THIS CANNOT REPAIR IT (NEW 2026-09-06)
+
+**MEASURED live, both tenants, service key, `.select()` only.**
+
+```
+LAWNS      business_pricing_config.config = {"taxRate": 0.0825}          ← one key
+Test Dave's                              = version · unitLabel · denominators · margin{baseline,tiers}
+                                           · priceReference · locations[{labor{rate,hours,period,confidence},
+                                             recurring,overheadPerUnit}] · pricingTiers[retail,contractor,
+                                             wholesale] · discountTypes[Contractor t1/t2, Landscaper t1/t2]
+                                           · aiBiEnabled
+```
+
+🔴 **THAT ROW IS WHAT CHECKOUT PRICES FROM.** David: *"Lauren rings up a contractor sale on Tuesday and there
+is no contractor tier."* The LAWNS row was created **2026-08-25 by a Settings tax-rate save**, not by the
+seeder — `mergePricingConfig` writes only the key its screen owns, so the row came into existence holding
+exactly one key and has held exactly one key since.
+
+🔴 **AND `seedPricingConfig` IS STRUCTURALLY INCAPABLE OF FIXING IT.** Its upsert carries
+`ignoreDuplicates: true`, deliberately — *"a re-run must never CLOBBER a configured tenant. Seeding is a
+create-if-absent act."* LAWNS **has** a row. The seeder is a permanent no-op against the one tenant that
+needs it. **This is that file's own stated defect — a tenant behaving "as though the business had never been
+configured, silently" — arriving from the direction it did not guard.**
+
+**CORRECT ARCHITECTURE (ruled R-103, NOT BUILT):** a fill-absent merge — `{...defaults, ...current}`, the
+operand order of `mergePricingConfig` reversed, so a set key always wins and only genuinely-absent keys are
+filled. Scoped to one `business_id`, run by David, never wired into a path something can trip.
+
+**TRIGGER FOR REPAIR:** 🔴 **AHEAD OF THE CATALOGUE IMPORT — David's explicit priority call, 2026-09-06.**
+
+⚠️ **THE CLASS IS OPEN AND UNMEASURED: no cap can see a config key that is ABSENT rather than WRONG.** Every
+check we own reads code or migrations; this is a jsonb blob whose shape is asserted nowhere. Sibling of
+**#178** (a types file confidently declaring tables that do not exist) — a confident wrong answer, not clutter.
+
+---
+
+## #198 — 🟡 THE DISCOVERY REVEAL SHOWS SIX PROPOSALS AND NEVER SAYS SIX OF WHAT (NEW 2026-09-06)
+
+`DiscoveryGlimpse` renders `profile.suggestedOfferings.slice(0, 2)`; `DiscoveryInspect` renders all of them.
+**Neither states the population.** Measured against LAWNS this session: the same analysis pass produced
+**16 real services in `servicesFound`** and **6 proposals**, and the owner sees the 6 with nothing telling
+them a list of 16 was read and discarded, nor that their books carry ~20.
+
+🔴 **This is R-24 / `ui-control-standards.md` W3 exactly** — *"EACH COMPLETED STEP NARRATES ITS REAL RESULT,
+WITH ITS COUNT — 'read 685 products & services — that is all of them' — and STATES THAT THE STEP IS WHOLE."*
+David: *"A list that cannot prove it is the whole list is a failure, and six proposals presented against a
+real service list of twenty is exactly that shape."*
+
+**CORRECT ARCHITECTURE:** the reveal states what was read and what is being proposed as two different
+numbers, and says which one it is showing. It lands with **R-102** — the field change makes the count
+honest and the copy has to say so.
+
+**TRIGGER FOR REPAIR:** the R-102 build.
+
+---
+
+## #197 — 🔴 FIVE $0 SERVICES ARE ACTIVE AND PRE-TICKED AT CHECKOUT, AND NOTHING RECORDS WHO TURNED THEM ON (NEW 2026-09-06)
+
+**MEASURED on Test Dave's (`f7ec5d67`):** five `service_offerings` rows carry `price: 0`, `is_active: true`,
+`pre_selected: true`, **and a `service_note` that still reads *"Suggested by discovery — price not set;
+confirm before activating."*** Warranty Check-In · Tree Selection Consultation · Seasonal Fertilization ·
+Wholesale Account · Deer and Trunk Protection Bundle.
+
+**They are attached to every cart.** `useCart.ts` initialises `selected: o.pre_selected`, and `AddOns.tsx`
+picks the default transport branch from `transportOfferings.find(o => o.pre_selected)`.
+
+**WHAT PUT THEM THERE — two different mechanisms, and only one is a mistake:**
+- ✅ **`pre_selected: true` is the COLUMN DEFAULT** — `20260529_businesses_f_service_offerings.sql:49`,
+  `pre_selected boolean NOT NULL DEFAULT true`. The seeder never names the column, so every discovery-seeded
+  row is born pre-ticked. **The seeder's honesty contract has a hole it does not know about.**
+- 🔴 **`is_active: true` was NOT the seeder.** Verified against the tree as it stood at the seed timestamp
+  (`04425a2`, 2026-06-21, five days before the 2026-06-26T17:31:05 batch): `is_active: false` was already
+  explicit, with the reason in the header — *"so 0 can never read as a real 'free' price or be sold."*
+  Something flipped five rows afterwards.
+
+🔴 **AND IT CANNOT BE ATTRIBUTED, WHICH IS THE REAL FINDING.** The only writer that can flip it is
+`toggleOffering` in `Settings.tsx` (one row per click, `.update({ is_active: !current })`). But
+**`service_offerings` has NO `updated_at` column**, and **`audit_log` carries ZERO `service_offerings`
+actions** — all 66 rows on this tenant are role, permission, module and inventory events. *The 8 rows that
+grep-match "service_offering" are permission STRINGS inside role arrays, not service writes.* **So a control
+that changes what a customer is charged writes no audit row and leaves no timestamp.**
+
+**CORRECT ARCHITECTURE:** (a) the seeder names `pre_selected: false` explicitly rather than inheriting a
+default that contradicts its own contract; (b) `service_offerings` gains `updated_at` and an audit row on
+activate/deactivate/price-change — it is a money surface and it is the only one of its class with neither.
+
+**TRIGGER FOR REPAIR:** (a) is a two-line fix in the R-102 build. (b) is a migration; it is **#54/#58's
+shape** — schema, David applies.
+
+---
+
+## #196 — 🔴 AN UNAUTHENTICATED POST WRITES `service_offerings` INTO ANY TENANT WHOSE UUID YOU KNOW (NEW 2026-09-06)
+
+`api/discovery/ingest.ts` checks `req.method !== 'POST'` and **nothing else** on the analysis path. It then
+reads `businessId` straight from the request body and fires the seed on its presence alone:
+
+```
+let seeded = 0;
+if (businessId) { … const r = await seedServiceOfferings(profile, businessId, db); seeded = r.seeded; }
+```
+
+The write uses `SUPABASE_SERVICE_KEY`, so **RLS is not in the path** — `business_id` is whatever the caller
+typed. One `curl` adds rows to the checkout screen of any tenant.
+
+🔴 **THE ASYMMETRY IS THE TELL, NOT THE ABSENCE.** The same file gates `cost-apply` properly
+(`callerHoldsPermission` / `VIEW_COSTS`, described in its own header as the *"MB_D-015 write-wall"*), and
+`populate` carries a written justification for being ungated — *"it touches only namespaced sandbox/DISC-
+rows (never real inventory) and sets unit_cost=null."* **`seedServiceOfferings` has neither a gate nor a
+justification, and that argument does not transfer: it writes un-namespaced rows into the sellable-services
+table.** It was not decided to be open; it was never asked.
+
+⚠️ **NOT EXPLOITED, AND THE BLAST RADIUS IS BOUNDED IN ONE DIRECTION:** the seeder is name-idempotent and
+inserts at `is_active: false`, so it cannot overwrite or reprice an existing service. **But #197 above proves
+the `is_active: false` half does not hold in practice on this table, and `pre_selected` defaults to `true`.**
+
+**CORRECT ARCHITECTURE:** the same `callerHoldsPermission` gate the neighbouring branch already uses, on
+`service_offerings:create`, which exists in the manifest today.
+
+**TRIGGER FOR REPAIR:** before public self-serve signup — the same trigger as the auth/SMTP launch gate.
+Reported not fixed 2026-09-06, per David: *"File it."*
+
+⚠️ **IDS START AT 196 DELIBERATELY.** #192–#195 are cited in CLAUDE.md §3 and **still do not exist in this
+file** — the log runs 155 → 157, 186 → 191. That is tech-debt **#195**'s own finding, unresolved and now one
+session wider. Starting at 196 leaves those four ids claimable by the session that owns them rather than
+overwriting them.
+
+---
+
 ## #191 — 🟡 THE UI-DIVERGENCE CAP COUNTS A SETTINGS FORM AS A RECORD LIST (NEW 2026-09-05)
 
 `isRecordList()` in `verify-ui-standard-divergence.mjs` matches a file that reads rows **AND** maps
