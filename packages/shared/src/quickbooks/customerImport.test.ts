@@ -227,6 +227,25 @@ function person(over: Record<string, unknown> = {}): Record<string, unknown> {
 // ══ THE DOUBLE — it models the UNIQUE INDEX, so it can refuse what Postgres refuses ═════
 function makeDb(opts: {
   customers?: any[];
+  /** Orders pointing at a customer id. 🔴 THE DOUBLE ENFORCES `ON DELETE RESTRICT` OVER THESE —
+   *  confirmed against `pg_constraint` 2026-09-06 (`orders_customer_id_fkey`, confdeltype 'r').
+   *  A double that lets a customer-with-orders be deleted is more forgiving than the database,
+   *  and the whole blocked-list feature would be untested decoration (§6 r19a / tech-debt #138). */
+  orders?: { id: string; customer_id: string }[];
+  /** Deliveries pointing at a customer. `ON DELETE SET NULL` — these do NOT block; they are
+   *  silently unlinked, which is exactly why the report counts them. */
+  deliveries?: { id: string; customer_id: string }[];
+  /** The owner's own switch, `businesses.qbo_writes_enabled`. Defaults to FALSE = test mode =
+   *  undo OPEN, which is LAWNS's live state. `undefined` makes the businesses read return no row,
+   *  which must CLOSE the undo rather than open it. */
+  writesEnabled?: boolean | null;
+  /** The businesses read errors outright. */
+  failBusinessRead?: boolean;
+  /** 🔴 THE RACE, MODELLED. An order for this customer appears AFTER the pre-read of `orders` has
+   *  completed — i.e. Lauren rings up a sale while the undo is running. The pre-read cannot see
+   *  it, so ONLY the per-row fallback can catch it. Without this the fallback could be deleted
+   *  and every other assertion would still pass. */
+  lateOrderFor?: string;
   /** Simulates an RLS refusal: no error, nothing changes — exactly what PostgREST returns. */
   refuseWrites?: boolean;
   /** 🔴 SIMULATES A DELETE THAT REPORTS ROWS AND LEAVES THEM THERE. Not contrived: a partial
@@ -239,7 +258,13 @@ function makeDb(opts: {
 } = {}) {
   const calls: { table: string; verb: string; filters: [string, string, any][]; payload?: any }[] = [];
   const customers: any[] = (opts.customers ?? []).map(r => ({ ...r }));
-  const other: Record<string, any[]> = {};
+  const other: Record<string, any[]> = {
+    orders: (opts.orders ?? []).map(r => ({ ...r })),
+    deliveries: (opts.deliveries ?? []).map(r => ({ ...r })),
+    businesses: opts.writesEnabled === undefined && 'writesEnabled' in opts
+      ? []
+      : [{ id: BIZ, qbo_writes_enabled: opts.writesEnabled ?? false }],
+  };
   let nextId = 1;
 
   function builder(table: string, verb: string, payload?: any) {
@@ -252,12 +277,20 @@ function makeDb(opts: {
       select(_c?: string, o?: any) { if (o?.head) headMode = true; return b; },
       eq(c: string, v: any) { filters.push([c, 'eq', v]); return b; },
       not(c: string, op: string, v: any) { filters.push([c, `not.${op}`, v]); return b; },
+      in(c: string, v: any[]) { filters.push([c, 'in', v]); return b; },
       is(c: string, v: any) { filters.push([c, 'is', v]); return b; },
       range() { return b; },
+      maybeSingle() {
+        const r = result();
+        if (r.error) return Promise.resolve(r);
+        const rows = (r.data ?? []) as any[];
+        return Promise.resolve({ data: rows.length ? rows[0] : null, error: null });
+      },
       then(resolve: any) { return Promise.resolve(result()).then(resolve); },
     };
     function matches(row: any): boolean {
       for (const [c, op, v] of filters) {
+        if (op === 'in' && !(v as any[]).map(String).includes(String(row[c]))) return false;
         if (op === 'eq' && String(row[c]) !== String(v)) return false;
         if (op === 'not.is' && v === null && row[c] == null) return false;
         if (op === 'is' && v === null && row[c] != null) return false;
@@ -265,10 +298,17 @@ function makeDb(opts: {
       return true;
     }
     function result(): any {
+      if (table === 'businesses' && opts.failBusinessRead) {
+        return { data: null, error: { message: 'simulated businesses read failure' }, count: null };
+      }
       if (opts.failOn === verb) return { data: null, error: { message: `simulated ${verb} failure` }, count: null };
       const rows_ = store();
       if (verb === 'select') {
         const hits = rows_.filter(matches);
+        // The late order lands the moment the pre-read of `orders` has been answered.
+        if (table === 'orders' && opts.lateOrderFor && !other.orders.some(o => o.id === '__late')) {
+          other.orders.push({ id: '__late', customer_id: opts.lateOrderFor });
+        }
         return headMode ? { data: null, error: null, count: hits.length } : { data: hits, error: null, count: hits.length };
       }
       if (verb === 'insert') {
@@ -297,6 +337,23 @@ function makeDb(opts: {
       if (verb === 'delete') {
         if (opts.refuseWrites) return { data: [], error: null, count: 0 };
         const hits = rows_.filter(matches);
+        // 🔴 ON DELETE RESTRICT, MODELLED — and it fails the WHOLE statement, because that is what
+        // Postgres does. A per-row double would quietly turn "nothing was deleted" into "most of
+        // them were", which is the exact difference the per-row fallback exists to handle.
+        if (table === 'customers') {
+          const blocked = hits.find((h: any) => other.orders.some(o => String(o.customer_id) === String(h.id)));
+          if (blocked) {
+            return { data: null, count: null, error: {
+              code: '23503',
+              message: 'update or delete on table "customers" violates foreign key constraint '
+                + '"orders_customer_id_fkey" on table "orders"',
+            } };
+          }
+          // SET NULL on the OTHER fk — the delivery survives with a blanked customer.
+          for (const h of hits) {
+            for (const d of other.deliveries) if (String(d.customer_id) === String(h.id)) d.customer_id = null as any;
+          }
+        }
         // Reports the rows, removes nothing — see `phantomDelete` above.
         if (!opts.phantomDelete) for (const r of hits) rows_.splice(rows_.indexOf(r), 1);
         return { data: hits, error: null, count: hits.length };
@@ -431,17 +488,146 @@ async function main() {
   ] });
 
   const before = calls.length;
-  const refused = await undoCustomerImport(db as any, BIZ, RUN, undefined); // env unset → NO hold
-  ok(refused.ok === false && refused.refusedBecause !== null,
-    '🔴 the undo REFUSES while QuickBooks writes are on — a refusal, not a warning (R-95)');
+  // 🔴 WRITES ON = the OWNER's switch true. The env var is irrelevant here, and that is the point:
+  // the first draft gated on the env var ALONE, so at LAWNS (owner's switch false, env unset) it
+  // computed "writes are on" and refused the undo in exactly the state it exists to serve.
+  const { db: dbLive } = makeDb({ customers: [{ id: 'mine', business_id: BIZ, import_run_id: RUN }], writesEnabled: true });
+  const refused = await undoCustomerImport(dbLive as any, BIZ, RUN, undefined);
+  ok(refused.ok === false && refused.refusedBecause !== null && /writes are ON/.test(refused.refusedBecause!),
+    '🔴 the undo REFUSES while the OWNER\'s qbo_writes_enabled is true — a refusal, not a warning (R-95)');
   ok(!calls.slice(before).some(c => c.verb === 'delete'),
     '…and the refusal issues NOT ONE delete, asserted against the recorder rather than against the return value');
   ok(customers.length === 3, 'nothing was removed by the refused undo');
 
-  const held = await undoCustomerImport(db as any, BIZ, RUN, 'all'); // hold ON → undo permitted
+  const held = await undoCustomerImport(db as any, BIZ, RUN, undefined); // owner in TEST MODE → undo open
   ok(held.ok === true && held.deleted === 1 && held.remainingWithThisRun === 0, 'with writes held, the undo removes this run\'s row');
   ok(customers.some(c => c.id === 'old') && customers.some(c => c.id === 'earlier'),
     '🔴 a customer that PREDATES the run and one from an EARLIER run both survive — the scope is import_run_id, so they are outside the delete by construction rather than by a clause somebody could drop');
+}
+
+// ══ §J2 RESTRICT — ONE BLOCKED CUSTOMER MUST NOT TAKE THE RUN DOWN ═════════════════════
+{
+  // Three customers from this run. The middle one has an order; the last has a delivery.
+  const { db, customers } = makeDb({
+    customers: [
+      { id: 'c1', business_id: BIZ, qb_customer_id: '701', import_run_id: RUN, display_name: 'Clean One' },
+      { id: 'c2', business_id: BIZ, qb_customer_id: '702', import_run_id: RUN, display_name: 'Bought Something' },
+      { id: 'c3', business_id: BIZ, qb_customer_id: '703', import_run_id: RUN, display_name: 'Has A Delivery' },
+      { id: 'old', business_id: BIZ, qb_customer_id: '704', import_run_id: null, display_name: 'Predates The Run' },
+    ],
+    orders: [{ id: 'o1', customer_id: 'c2' }, { id: 'o2', customer_id: 'c2' }],
+    deliveries: [{ id: 'd1', customer_id: 'c3' }],
+  });
+  const r = await undoCustomerImport(db as any, BIZ, RUN, 'all');
+
+  ok(r.deleted === 2,
+    '🔴 the two removable customers WERE removed — a single blocked row must not take the run down with it. A bulk DELETE is ONE statement, so under RESTRICT one blocked customer deletes NOTHING at all, not "most of them"');
+  ok(r.blocked.length === 1 && r.blocked[0].customerId === 'c2',
+    'the blocked customer is named individually, not reported as a failed batch');
+  ok(r.blocked[0].displayName === 'Bought Something' && r.blocked[0].orders === 2,
+    '🔴 …by NAME and with the order count — "2 customers could not be removed" is not actionable; "Bought Something, 2 orders" is');
+  ok(/ON DELETE RESTRICT/.test(r.refusedBecause ?? '') && /protection working, not a fault/.test(r.refusedBecause ?? ''),
+    'the sentence explains that the refusal IS the protection — an operator told only "failed" retries something that will refuse again for the same good reason');
+  ok(r.ok === true,
+    '🔴 ok is TRUE: everything that COULD go, went. A partial undo blocked only by real orders is a success, not a failure — calling it a failure invites a retry loop');
+  ok(r.remainingWithThisRun === 1 && customers.some(c => c.id === 'c2'),
+    'exactly the blocked row remains, and it really is still there');
+  ok(customers.some(c => c.id === 'old'),
+    'the customer that predates the run is untouched — scoped by import_run_id, by construction');
+  ok(r.deliveriesUnlinked === 1,
+    '🔴 the delivery is COUNTED. `deliveries.customer_id` is ON DELETE SET NULL, so it survives with a blanked customer — nothing refuses and nothing warns, and this number is the only place that says it happened');
+}
+
+// ══ §J3 AN ORDER THAT LANDS AFTER THE PRE-READ IS STILL CAUGHT ═════════════════════════
+{
+  // 🔴 THE TOCTOU CASE. The pre-read decides who to skip; an order arriving between that read and
+  // the delete is invisible to it. Only the per-row fallback catches this, and without a probe the
+  // fallback could be deleted and every other assertion would still pass.
+  const { db } = makeDb({
+    customers: [
+      { id: 'c1', business_id: BIZ, qb_customer_id: '801', import_run_id: RUN, display_name: 'Fine' },
+      { id: 'c2', business_id: BIZ, qb_customer_id: '802', import_run_id: RUN, display_name: 'Raced Us' },
+    ],
+    orders: [],
+    lateOrderFor: 'c2',
+  });
+  const r = await undoCustomerImport(db as any, BIZ, RUN, 'all');
+  ok(r.deleted === 1 && r.blocked.length === 1 && r.blocked[0].customerId === 'c2',
+    '🔴 an order that lands after the pre-read still blocks exactly one customer and the other is still removed — the chunk refusal is retried ROW BY ROW rather than reported as a failed batch');
+  ok(r.blocked[0].orders === 0,
+    '…and its order count honestly reads 0, because the pre-read never saw it — a fabricated count would be worse than an absent one');
+}
+
+// ══ §J4 A NON-FK ERROR IS NOT A BLOCKED CUSTOMER ══════════════════════════════════════
+{
+  // 🔴 THE DIFFERENCE BETWEEN "the database protected an order" AND "something went wrong".
+  // Treating every error as a foreign-key refusal would report a permissions failure as
+  // "this customer carries orders" — a lie with a plausible reason attached, which is worse
+  // than a crash because it stops anybody investigating.
+  const { db } = makeDb({
+    customers: [{ id: 'c1', business_id: BIZ, qb_customer_id: '901', import_run_id: RUN, display_name: 'Someone' }],
+    failOn: 'delete',
+  });
+  let threw = '';
+  try { await undoCustomerImport(db as any, BIZ, RUN, 'all'); }
+  catch (e: unknown) { threw = e instanceof Error ? e.message : ''; }
+  ok(/undo failed: simulated delete failure/.test(threw),
+    '🔴 an error that is NOT a foreign-key violation THROWS and names itself — it is never folded into the blocked list as though an order had protected the row');
+}
+
+// ══ §J5 AN UNDO WITH NOTHING TO DO IS A SUCCESS ═══════════════════════════════════════
+{
+  const { db, calls } = makeDb({ customers: [
+    { id: 'old', business_id: BIZ, qb_customer_id: '950', import_run_id: null },
+  ] });
+  const r = await undoCustomerImport(db as any, BIZ, 'a-run-that-made-nothing', 'all');
+  ok(r.ok === true && r.deleted === 0 && r.blocked.length === 0,
+    'an undo for a run that created nothing reports SUCCESS, not failure — there is nothing to take back and that is not an error');
+  ok(!calls.some(c => c.verb === 'delete'),
+    '…and it issues NO delete at all, asserted against the recorder');
+}
+
+// ══ §J6 THE UNDO GATE READS BOTH SWITCHES — THE ENV-ONLY VERSION WAS INVERTED ══════════
+{
+  // 🔴 LAWNS'S ACTUAL STATE: the owner's switch is FALSE (test mode) and QBO_PUSH_HOLD is UNSET.
+  // An env-only gate reads "no hold" as "writes are on" and REFUSES — in exactly the state the
+  // undo exists to serve. This probe is the one that would have caught it.
+  const { db, customers } = makeDb({
+    customers: [{ id: 'mine', business_id: BIZ, import_run_id: RUN, display_name: 'Imported' }],
+    writesEnabled: false,
+  });
+  const r = await undoCustomerImport(db as any, BIZ, RUN, undefined);
+  ok(r.ok === true && r.deleted === 1 && customers.length === 0,
+    '🔴 owner\'s switch FALSE + env UNSET = the undo is OPEN. This is LAWNS today, and an env-only gate refuses here — not incomplete, INVERTED in practice');
+
+  // 🔴 THE TRUTH TABLE, BOTH WAYS ROUND. The undo is open exactly when a push is NOT permitted,
+  // and a push needs BOTH switches to allow it. So EITHER switch blocking re-opens the undo —
+  // including the operator's hold over a business whose owner has gone live, because with the
+  // hold on nothing actually reached QuickBooks and there is no document to orphan.
+  const { db: db2 } = makeDb({ customers: [{ id: 'm', business_id: BIZ, import_run_id: RUN }], writesEnabled: true });
+  const r2 = await undoCustomerImport(db2 as any, BIZ, RUN, 'all');
+  ok(r2.ok === true && r2.deleted === 1,
+    '🔴 owner LIVE but the operator HOLDING = the undo is OPEN. Nothing reached QuickBooks, so nothing can be orphaned — "either one saying no means no" is about the PUSH, and the undo is its exact inverse');
+
+  // The one combination that closes it: both switches permitting a push.
+  const { db: db3 } = makeDb({ customers: [{ id: 'm', business_id: BIZ, import_run_id: RUN }], writesEnabled: true });
+  const r3 = await undoCustomerImport(db3 as any, BIZ, RUN, undefined);
+  ok(r3.ok === false && r3.deleted === 0,
+    '…and ONLY when both permit a push is the undo closed — which is the single state in which an invoice may already carry an imported customer\'s name');
+}
+
+// ══ §J7 A GATE THAT CANNOT READ ITS SWITCH CLOSES, AND SAYS SO DIFFERENTLY ══════════════
+{
+  const { db, calls, customers } = makeDb({
+    customers: [{ id: 'mine', business_id: BIZ, import_run_id: RUN }],
+    failBusinessRead: true,
+  });
+  const r = await undoCustomerImport(db as any, BIZ, RUN, undefined);
+  ok(r.ok === false && r.deleted === 0 && customers.length === 1,
+    '🔴 a FAILED read of the switch CLOSES the undo — failing open would delete customers on the strength of a query that did not answer (tech-debt #75\'s class: a check whose error path is "allow" is not a check)');
+  ok(/could not check/.test(r.refusedBecause ?? '') && !/writes are ON/.test(r.refusedBecause ?? ''),
+    '🔴 …and it says "we could not tell", worded DIFFERENTLY from "you are live" — two states, two sentences, or the operator fixes the wrong thing');
+  ok(!calls.some(c => c.verb === 'delete'), 'not one delete was issued');
 }
 
 // ══ §K A REFUSED DELETE IS NOT A SUCCESSFUL ONE ════════════════════════════════════════
@@ -458,7 +644,8 @@ async function main() {
   // the EXPLANATION disappears. An undo that fails silently and an undo that says "the database
   // declined this, nothing changed" are different products; the operator acts on the sentence.
   ok(r.refusedBecause !== null && /declined/.test(r.refusedBecause!)
-    && /1 rows carry this run id/.test(r.refusedBecause!),
+    && /1 rows still carry this run id/.test(r.refusedBecause!)
+    && /no foreign key explains it/.test(r.refusedBecause!),
     '🔴 …and it SAYS a refusal happened, naming how many rows were left — a silent ok:false leaves the operator to guess whether the undo had nothing to do or was not allowed to do it');
   ok(r.deleted === 0, 'nothing is reported as deleted');
 }

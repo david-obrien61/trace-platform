@@ -12,10 +12,11 @@ covering "bring my customer list across from my accounting system". The same gap
 the catalogue import. **Recorded OPEN rather than papered over** (§9 story gate).
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to
 `covered`, with a date.**
-**Board: 0 of 17 covered** (15 `owed` · 2 `needs-test`).
+**Board: 0 of 22 covered** (20 `owed` · 2 `needs-test`).
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74` · Test Dave's = `f7ec5d67-a9ef-4cb0-b807-438d67687d1b`.
 **ACTOR:** the business OWNER on every card unless the card says otherwise. The ingest is
 owner-gated (R-80) **and** requires `customers:create` + `customers:update` — an AND, not an OR.
+The **undo** carries the same gate, deliberately without a delete verb (see the notice below).
 
 ---
 
@@ -35,12 +36,22 @@ owner-gated (R-80) **and** requires `customers:create` + `customers:update` — 
 > If CARD 4 comes back 21, the import read the wrong source and **those six get charged tax on
 > their next sale.**
 
-> ⚠️ **THERE IS NO UNDO ROUTE, DELIBERATELY, AND CARD 17 IS WHERE THAT DECISION LIVES.**
-> `undoCustomerImport` is written and probe-covered but **is not wired to any endpoint**, because
-> `customers:delete` is one of the five UNMINTABLE deletes (`permissionManifest.ts` R2/A3: *"must
-> be UNFINDABLE by grep"*), gated on *first answering the FK-cascade query* — and that query
-> **cannot be answered from the repo**: `orders.customer_id` is live-only schema (tech-debt #39)
-> and its `ON DELETE` rule is in no migration. **Import onto Test Dave's until David rules.**
+> ✅ **THE UNDO IS WIRED — DAVID ANSWERED THE FK QUESTION 2026-09-06 AND IT CAME BACK IN THE
+> STRONGEST FORM.** `pg_constraint` on `orders`: `orders_customer_id_fkey` is **confdeltype `r` —
+> ON DELETE RESTRICT.** A customer carrying orders **cannot** be deleted; the database refuses
+> outright. No cascade, no orphan, no silent damage. That satisfies R2/A3's condition on
+> `customers:delete`.
+>
+> 🔴 **BUT RESTRICT ERRORS RATHER THAN DEGRADING, AND A BULK DELETE IS ONE STATEMENT — so a single
+> blocked customer would delete NOTHING AT ALL, not "most of them".** The undo therefore reads
+> which customers carry orders first, deletes the rest, and **retries a refused chunk row by row**
+> so one refusal cannot take the run down. It reports the blocked ones **by name, with their order
+> count**. CARD 18 is the card that proves it.
+>
+> ⚠️ **NO `customers:delete` VERB WAS MINTED.** It remains one of the five unmintable deletes; the
+> route is gated on OWNER + `customers:create` + `customers:update`, and can only ever remove rows
+> carrying its own `import_run_id`. Minting a general customer-delete capability is a decision
+> David has not made and this build did not make for him.
 
 > ⚠️ **THERE IS NO SCREEN, AND SAYING SO STOPS A MISSING THING READING AS A BROKEN ONE.**
 > The two endpoints are reachable by URL (`/api/qbo/customers/preview`, `/api/qbo/customers/ingest`)
@@ -51,7 +62,7 @@ owner-gated (R-80) **and** requires `customers:create` + `customers:update` — 
 >
 > **THE CALL, used by every card that says "run the preview" or "run the ingest":**
 > ```js
-> const r = await fetch('/api/qbo/customers/preview?business_id=<tenant>', {   // or /ingest, POST
+> const r = await fetch('/api/qbo/customers/preview?business_id=<tenant>', {   // or /ingest, /undo — both POST
 >   method: 'GET',                                                            // ingest: method: 'POST'
 >   headers: { Authorization: 'Bearer ' + (await window.supabase.auth.getSession()).data.session.access_token }
 > });
@@ -190,14 +201,78 @@ SELECT import_run_id, count(*) FROM customers
 **PASS:** one run id, one count, matching the report. This is the only handle that exists on what
 the run made — see CARD 17.
 
-## CARD 17 — ⚠️ THERE IS NO UNDO, AND THIS CARD RECORDS WHY · `STATUS: needs-test` · `DEVICE: desktop`
-**REASON IT IS `needs-test` RATHER THAN A CHECK:** `undoCustomerImport` exists, refuses while
-QuickBooks writes are on (R-95), is scoped to its own run id, and is proven by 23 mutants — **but
-it is wired to no route.** `customers:delete` is one of the five UNMINTABLE deletes (R2/A3), and
-the manifest conditions any future one on *first answering the FK-cascade query*, which
-**`orders.customer_id` cannot answer from the repo** (live-only schema, tech-debt #39).
-**DAVID RULES.** Until he does: **import onto Test Dave's, not LAWNS**, because on LAWNS there is
-no supported way to take 1,927 rows back out.
+## CARD 17 — the undo removes exactly what the run created · `STATUS: owed` · `DEVICE: desktop`
+**COVERS: #278**
+🔴 **FIRST, AND THIS IS NOT THE ENV VAR:** the undo is open exactly when a push is **NOT**
+permitted, and a push needs **BOTH** switches to allow it — the operator's `QBO_PUSH_HOLD` **and**
+the owner's own `businesses.qbo_writes_enabled` (what the TEST MODE banner reads). **At LAWNS the
+owner's switch is `false`, so the undo is ALREADY OPEN and no env var is needed.** Confirm at
+`/api/qbo/status` → `writes_permitted: false`. **Reading it there is the check; assuming the state
+is not.** ⚠️ An earlier draft of this card said to set `QBO_PUSH_HOLD` — that was the single-switch
+reading corrected in `e04a697`, and following it would have had you set a deploy-wide variable to
+duplicate a switch the product already gives the owner.
+1. Import. Note the `runId` from the response.
+2. Run the **undo** call with `&run_id=<the run id>`.
+3. `SELECT count(*) FROM customers WHERE business_id = '<tenant>';`
+**PASS:** the count is back to what it was before the import (**30** on LAWNS), `deleted` equals
+what was created, `blocked` is **empty**, and `remainingWithThisRun` is **0**.
+
+## CARD 18 — 🔴 A CUSTOMER WITH AN ORDER BLOCKS ITSELF AND NOTHING ELSE · `STATUS: owed` · `DEVICE: desktop`
+**This is the card that proves RESTRICT is handled rather than merely survived.**
+1. Import.
+2. **Ring up an order against one imported customer** through the normal checkout.
+3. Run the undo.
+**PASS, all four:**
+- `deleted` is **everything except that one**. 🔴 **If `deleted` is 0, the per-row fallback is gone
+  and one blocked customer took the whole run down** — that is the defect this card exists for.
+- `blocked` has **one entry**, carrying that customer's **name** and **order count** — not an id,
+  not a bare number.
+- `ok` is **true**. A partial undo blocked only by real orders is a SUCCESS; reporting failure
+  invites a retry that will refuse again for the same good reason.
+- the sentence says the refusal **is the protection working**, and that clearing it means dealing
+  with the orders first.
+
+## CARD 19 — 🔴 THE UNDO CLOSES ONLY WHEN BOTH SWITCHES PERMIT A PUSH · `STATUS: owed` · `DEVICE: desktop`
+**Three states, and the middle one is the one that was inverted.**
+1. **Owner in test mode, no operator hold** (LAWNS today): run the undo → **it works.** 🔴 If it
+   refuses here, the gate is reading the env var alone and is inverted in practice.
+2. **Owner LIVE (`qbo_writes_enabled = true`), operator holding (`QBO_PUSH_HOLD=all`)**: run the
+   undo → **it still works.** Nothing reached QuickBooks, so there is no document to orphan.
+3. **Owner LIVE, no operator hold** — the only state in which an invoice may already carry an
+   imported customer's name: run the undo → **409**, `refusedBecause` names the writes switch,
+   `deleted: 0`, customer count **does not move**.
+**PASS:** all three behave as above. `/api/qbo/status` → `writes_enabled` and `writes_permitted`
+should agree with what you set each time.
+
+## CARD 19b — a gate that cannot read its switch CLOSES, and says so differently · `STATUS: needs-test` · `DEVICE: desktop`
+**REASON IT IS `needs-test`:** provoking a failed read of `businesses.qbo_writes_enabled` from the
+UI means breaking a policy or a row on purpose, and there is no safe way to do that on a live
+tenant. It is held by probe §J7 and mutants **G2** and **G4** instead: a failed read **closes** the
+undo (failing open would delete customers on the strength of a query that did not answer), and it
+says *"we could not check"* — worded **differently** from *"you are live"*, so the operator does
+not fix the wrong thing.
+
+## CARD 20 — ⚠️ a delivery is silently unlinked, and the report is the only place that says so · `STATUS: owed` · `DEVICE: desktop`
+1. Import. Attach a **delivery** (not an order) to an imported customer.
+2. Undo.
+**PASS:** the undo **succeeds** — `deliveries.customer_id` is `ON DELETE SET NULL`, so nothing
+refuses — and `deliveriesUnlinked` is **1**. 🔴 **Then check the delivery still exists with a blank
+customer.** Nothing in the UI will tell you this happened; that number is the whole warning.
+
+## CARD 21 — 🔴 THE UNDO IS NOT A FULL RESTORE, AND THIS IS THE ASYMMETRY · `STATUS: owed` · `DEVICE: desktop`
+The exemption **reconcile** on rows that already existed is **not reversed** by the undo. Those 19
+rows keep their corrected `tax_exempt` / `tax_exempt_reason` / `tax_exempt_cert_ref`.
+1. Before importing: `SELECT qb_customer_id, tax_exempt, tax_exempt_reason, tax_exempt_cert_ref
+   FROM customers WHERE business_id = '<tenant>' AND qb_customer_id IS NOT NULL ORDER BY 1;`
+2. Import, then undo.
+3. Run the same query.
+**PASS on LAWNS: the 19 rows are UNCHANGED.** ✅ **Measured 2026-09-06: ZERO of LAWNS's 19
+QuickBooks-linked customers are exempt in QuickBooks**, and all 19 already hold
+`false / null / null` — so the reconcile writes them the values they already have and there is
+nothing to reverse. **Only `updated_at` moves.**
+⚠️ **On any OTHER tenant this card can legitimately FAIL**, and that is not a bug: a corrected
+exemption is a correction toward the books, deliberately kept. Capture step 1's output first if a
+byte-for-byte restore matters.
 
 ---
 
@@ -205,6 +280,9 @@ no supported way to take 1,927 rows back out.
 - **`people` rows.** This import creates none, on purpose (`people` has no `import_run_id`, so they
   could never be undone). Nothing on this board asserts that from the UI; probe §H asserts it
   against a recording client.
+- **Orders belonging to a blocked customer.** The undo REPORTS them and never deletes them. David
+  chose report over remove: deleting a customer's orders to make an undo tidy is a different
+  decision, and `orders:delete` exists but is not this build's to spend.
 - **The merge.** Not built, and not merely unbuilt: `customers.qb_customer_id` is single-valued, so
   one local customer cannot hold two QuickBooks ids. Waits on `customer_qb_links`.
 - **Terms and discounts.** Deliberately not imported. `SalesTermRef` is on **2 of 1,946** customer

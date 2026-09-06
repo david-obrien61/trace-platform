@@ -70,6 +70,7 @@
 // contact details; only its tax status is reconciled.
 // ─────────────────────────────────────────────────────────────────────────────
 import { isPushHeld } from './pushHold';
+import { pushPermitted } from '../business-logic/testMode';
 import {
   CUSTOMER_IMPORT_SOURCE, type AdaptedCustomer, type CustomerAdaptation, type DuplicateFlag,
 } from './qboCustomerAdapter';
@@ -118,7 +119,24 @@ export interface CustomerUndoReport {
   ok: boolean;
   runId: string;
   deleted: number;
-  /** Non-null when the undo REFUSED. A refusal is not an error and not a silent no-op. */
+  /**
+   * 🔴 THE CUSTOMERS THE DATABASE REFUSED TO DELETE, NAMED, WITH THE REASON.
+   *
+   * `orders_customer_id_fkey` is **ON DELETE RESTRICT** (confirmed against `pg_constraint`,
+   * 2026-09-06), so a customer carrying an order cannot be removed — Postgres refuses outright.
+   * That is the strongest possible answer to R2/A3's FK-cascade condition: no cascade, no orphan,
+   * no silent damage. But RESTRICT ERRORS rather than degrading, so the undo has to expect it and
+   * report it, not die on it.
+   */
+  blocked: { customerId: string; displayName: string; orders: number }[];
+  /**
+   * ⚠️ THE OTHER FK BEHAVES DIFFERENTLY AND IT IS COUNTED RATHER THAN ASSUMED HARMLESS.
+   * `deliveries.customer_id` is **ON DELETE SET NULL** (`20260620_deliveries.sql:28`), so a
+   * delivery raised against an imported customer SURVIVES the undo with its customer blanked.
+   * Nothing refuses; nothing warns. This number is the only place that says it happened.
+   */
+  deliveriesUnlinked: number;
+  /** Non-null when the undo REFUSED WHOLESALE. A refusal is not an error and not a silent no-op. */
   refusedBecause: string | null;
   remainingWithThisRun: number;
 }
@@ -340,43 +358,200 @@ export async function commitCustomerImport(
  * how many rows still carry the run id (#274's lesson: a PostgREST write matching zero rows
  * reports success).
  */
+/** How many ids go in one `.in(...)` — a URL, not a body, so it has a real length limit. */
+const UNDO_ID_CHUNK = 200;
+
+/** Postgres 23503 = foreign_key_violation. Matched on CODE first, message second — a message
+ *  match alone would break the day Supabase rewords it, and a code match alone misses a driver
+ *  that only forwards text. */
+function isForeignKeyRefusal(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return error.code === '23503' || /violates foreign key constraint/i.test(error.message ?? '');
+}
+
+/**
+ * Delete these customer ids, and NEVER let one refusal take the batch down with it.
+ *
+ * 🔴 A BULK DELETE IS ONE STATEMENT, SO UNDER RESTRICT A SINGLE BLOCKED CUSTOMER REMOVES NOTHING
+ * AT ALL — not "most of them". That is why a chunk that comes back with a foreign-key refusal is
+ * retried ROW BY ROW rather than reported as a failed chunk: the honest outcome is "1,926 gone,
+ * this one stayed and here is why", and only per-row retry can produce it.
+ */
+async function deleteCustomerIds(
+  db: DbLike, businessId: string, ids: string[],
+): Promise<{ deleted: number; refused: string[] }> {
+  let deleted = 0;
+  const refused: string[] = [];
+  for (let i = 0; i < ids.length; i += UNDO_ID_CHUNK) {
+    const chunk = ids.slice(i, i + UNDO_ID_CHUNK);
+    const { data, error } = await db.from('customers')
+      .delete().eq('business_id', businessId).in('id', chunk).select('id');
+    if (!error) {
+      // A8: no error and no rows, on ids we have just read back, is not "nothing to do" — it is a
+      // policy declining the delete. NOT thrown: the post-delete re-read in the caller is the
+      // authority and reports `remaining` honestly, so aborting here would turn a reportable
+      // partial into a crash. It is logged so the trail says which chunk went quiet.
+      if (((data ?? []) as unknown[]).length === 0 && chunk.length > 0) {
+        console.log('[TRACE:CUSTIMPORT] undo — a chunk removed NOTHING and reported no error', {
+          businessId, asked: chunk.length,
+        });
+      }
+      deleted += ((data ?? []) as unknown[]).length;
+      continue;
+    }
+    if (!isForeignKeyRefusal(error)) throw new Error(`undo failed: ${error.message}`);
+    // The chunk held at least one customer with an order. Find out which, one at a time.
+    for (const id of chunk) {
+      const one = await db.from('customers')
+        .delete().eq('business_id', businessId).eq('id', id).select('id');
+      if (!one.error) {
+        // Same A8 reading, per row: no error, no row, on an id we just read.
+        if (((one.data ?? []) as unknown[]).length === 0) {
+          console.log('[TRACE:CUSTIMPORT] undo — a row removed NOTHING and reported no error', { businessId, id });
+        }
+        deleted += ((one.data ?? []) as unknown[]).length;
+        continue;
+      }
+      if (!isForeignKeyRefusal(one.error)) throw new Error(`undo failed: ${one.error.message}`);
+      refused.push(id);
+    }
+  }
+  return { deleted, refused };
+}
+
+/**
+ * UNDO — remove exactly the customers this run created, and say plainly what it could not remove.
+ *
+ * 🔴 IT REFUSES ENTIRELY WHILE QUICKBOOKS WRITES ARE ON, reusing the existing `QBO_PUSH_HOLD`
+ * rather than a second mechanism that could disagree with it (R-95).
+ *
+ * 🔴 WHAT IT CANNOT TOUCH IS BY CONSTRUCTION, NOT BY A FILTER. Every customer that predates this
+ * run has a different `import_run_id` or none — including all 19 QuickBooks-linked rows the
+ * reconcile updated, which were never stamped — so they are outside `WHERE import_run_id = <run>`
+ * by definition rather than by a clause somebody could drop.
+ *
+ * ⚠️ IT IS NOT A FULL RESTORE AND THE REPORT MUST NOT IMPLY THAT IT IS. The exemption RECONCILE
+ * is not reversed: rows that already existed had three columns corrected toward QuickBooks and
+ * they keep those values. That is a deliberate asymmetry — the reconcile is a correction, not
+ * something this run invented — but it means "undo" means "un-create", never "put the tenant back
+ * byte for byte".
+ */
 export async function undoCustomerImport(
   db: DbLike, businessId: string, runId: string, pushHoldRaw: string | undefined,
 ): Promise<CustomerUndoReport> {
-  // The raw env value is PASSED IN, never read here — `pushHold.ts` is deliberately env-free so
-  // the server, the status endpoint and this undo cannot disagree about whether a hold is on.
-  if (!isPushHeld(pushHoldRaw, businessId)) {
-    console.log('[TRACE:CUSTIMPORT] undo REFUSED — QuickBooks writes are on', { businessId, runId });
+  const empty = { runId, deleted: 0, blocked: [] as CustomerUndoReport['blocked'], deliveriesUnlinked: 0 };
+
+  // ── 🔴 BOTH SWITCHES, AND-ED THROUGH THE ONE SHARED PREDICATE ──────────────────────────────
+  // CORRECTED 2026-09-06, before this ever ran: the first draft read ONLY `QBO_PUSH_HOLD`, which
+  // is the OPERATOR's deploy-wide hold. The OWNER has their own switch — `businesses.
+  // qbo_writes_enabled` (`20260902_business_qbo_writes_switch.sql:65`), what `QboWriteSwitch.tsx`
+  // flips, what the TEST MODE banner reads, and what `api/orders/submit.ts` gates the real push
+  // on. **At LAWNS today that column is `false` and the env var is unset**, so an env-only gate
+  // computes "writes are on" and REFUSES THE UNDO IN EXACTLY THE STATE IT EXISTS TO SERVE — not
+  // incomplete, inverted in practice. The same defect was found in the catalogue import's undo by
+  // David asking which switch it read (#277, `e04a697`); this one is corrected from that finding
+  // rather than from its own failure.
+  //
+  // `pushPermitted` is the ONE shared predicate — its own header: *"TWO SWITCHES, AND-ED, BECAUSE
+  // THEY BELONG TO DIFFERENT PEOPLE… Either one saying no means no."* The undo is open exactly
+  // when a push is NOT permitted.
+  const platformHeld = isPushHeld(pushHoldRaw, businessId);
+  const biz = await db.from('businesses').select('qbo_writes_enabled').eq('id', businessId).maybeSingle();
+  if (biz.error || !biz.data) {
+    // 🔴 A FAILED READ CLOSES THE UNDO, and says something DIFFERENT from "you are live". Failing
+    // open here would delete customers on the strength of a query that did not answer.
+    console.log('[TRACE:CUSTIMPORT] undo CLOSED — could not read qbo_writes_enabled', {
+      businessId, runId, message: (biz.error as { message?: string } | null)?.message ?? 'no row',
+    });
     return {
-      ok: false, runId, deleted: 0,
-      refusedBecause: 'QuickBooks writes are ON. Once writes are on, an invoice can have been '
-        + 'raised against an imported customer, and deleting them would orphan a real document. '
-        + 'Nothing was deleted.',
+      ...empty, ok: false,
+      refusedBecause: 'We could not check whether this business is sending invoices to QuickBooks, '
+        + 'so the undo is closed. This is not a statement that you are live — it is that we could '
+        + 'not tell. Nothing was deleted.',
       remainingWithThisRun: await countStamped(db, businessId, runId),
     };
   }
-  // Asked BEFORE, so "deleted nothing" can be told apart from "there was nothing to delete".
-  const before = await countStamped(db, businessId, runId);
-  const { data, error } = await db.from('customers')
-    .delete().eq('business_id', businessId).eq('import_run_id', runId).select('id');
-  if (error) throw new Error(`undo failed: ${error.message}`);
-  const rows = (data ?? []) as unknown[];
-  if (rows.length === 0 && before > 0) {
-    // A8: no error, no rows, and there WERE rows — that is a refusal, and it must not read as a
-    // clean undo. Reported rather than thrown: the caller is told the tenant is unchanged.
-    console.log('[TRACE:CUSTIMPORT] undo REFUSED BY THE DATABASE — no error, no rows', { businessId, runId, before });
+  const writesEnabled = (biz.data as { qbo_writes_enabled?: boolean }).qbo_writes_enabled ?? null;
+  if (pushPermitted({ writesEnabled, platformHeld })) {
+    console.log('[TRACE:CUSTIMPORT] undo REFUSED — QuickBooks writes are on', { businessId, runId, writesEnabled, platformHeld });
     return {
-      ok: false, runId, deleted: 0,
-      refusedBecause: `The database declined the delete: ${before} rows carry this run id and none `
-        + 'were removed. Nothing was changed. This is a permissions refusal, not an empty undo.',
-      remainingWithThisRun: before,
+      ...empty, ok: false,
+      refusedBecause: 'QuickBooks writes are ON for this business. Once writes are on, an invoice '
+        + 'can have been raised against an imported customer, and deleting them would orphan a '
+        + 'real document. Nothing was deleted.',
+      remainingWithThisRun: await countStamped(db, businessId, runId),
     };
   }
-  const deleted = rows.length;
+
+  // ── who this run made, by id and by name, so a refusal can be reported as a PERSON ──
+  const mine: { id: string; display_name: string | null }[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db.from('customers')
+      .select('id, display_name')
+      .eq('business_id', businessId).eq('import_run_id', runId)
+      .range(from, from + 999);
+    if (error) throw new Error(`could not read this run's customers: ${error.message}`);
+    const rows = (data ?? []) as { id: string; display_name: string | null }[];
+    mine.push(...rows);
+    if (rows.length < 1000) break;
+  }
+  if (mine.length === 0) {
+    console.log('[TRACE:CUSTIMPORT] undo — nothing carries this run id', { businessId, runId });
+    return { ...empty, ok: true, refusedBecause: null, remainingWithThisRun: 0 };
+  }
+  const nameOf = new Map(mine.map(r => [r.id, r.display_name ?? '(unnamed)']));
+  const ids = mine.map(r => r.id);
+
+  // ── what points at them, read BEFORE the delete so both FK behaviours are reportable ──
+  const orderCount = new Map<string, number>();
+  let deliveriesUnlinked = 0;
+  for (let i = 0; i < ids.length; i += UNDO_ID_CHUNK) {
+    const chunk = ids.slice(i, i + UNDO_ID_CHUNK);
+    const o = await db.from('orders').select('customer_id').in('customer_id', chunk);
+    if (o.error) throw new Error(`could not read orders: ${o.error.message}`);
+    for (const r of ((o.data ?? []) as { customer_id: string }[])) {
+      orderCount.set(r.customer_id, (orderCount.get(r.customer_id) ?? 0) + 1);
+    }
+    // SET NULL, so these are not blocked — they are SILENTLY unlinked, which is why they are counted.
+    const d = await db.from('deliveries').select('id').in('customer_id', chunk);
+    if (d.error) throw new Error(`could not read deliveries: ${d.error.message}`);
+    deliveriesUnlinked += ((d.data ?? []) as unknown[]).length;
+  }
+
+  // Skip the ones we already know Postgres will refuse — a delete we know will error is not worth
+  // issuing. The per-row fallback below still catches any order that lands after this read.
+  const knownBlocked = new Set([...orderCount.keys()]);
+  const attempt = ids.filter(id => !knownBlocked.has(id));
+
+  const { deleted, refused } = await deleteCustomerIds(db, businessId, attempt);
+  for (const id of refused) knownBlocked.add(id);
+
+  const blocked = [...knownBlocked].map(id => ({
+    customerId: id,
+    displayName: nameOf.get(id) ?? '(unnamed)',
+    orders: orderCount.get(id) ?? 0,
+  }));
+
   // 🔴 THE RE-READ IS THE PROOF, NOT THE ROW COUNT. A PostgREST delete an RLS policy declines
-  // returns NO error and zero rows — identical to a delete that had nothing to do. Only asking
-  // again "how many still carry this run id" tells those two apart (#274's lesson).
+  // returns NO error and zero rows — identical to a delete that had nothing to do (#274).
   const remaining = await countStamped(db, businessId, runId);
-  console.log('[TRACE:CUSTIMPORT] undo', { businessId, runId, deleted, remaining });
-  return { ok: remaining === 0, runId, deleted, refusedBecause: null, remainingWithThisRun: remaining };
+  console.log('[TRACE:CUSTIMPORT] undo', { businessId, runId, deleted, blocked: blocked.length, deliveriesUnlinked, remaining });
+
+  // 🔴 ok MEANS "EVERYTHING THAT COULD GO, WENT" — not "the table is empty". A run with three
+  // blocked customers and 1,924 removed is a SUCCESSFUL partial undo, and calling it a failure
+  // would push an operator to retry something that will refuse again for the same good reason.
+  const ok = remaining === blocked.length;
+  return {
+    ok, runId, deleted, blocked, deliveriesUnlinked,
+    remainingWithThisRun: remaining,
+    refusedBecause: blocked.length === 0
+      ? (ok ? null : `The database declined the delete: ${remaining} rows still carry this run id `
+          + 'and no foreign key explains it. Nothing further was attempted. This is a permissions '
+          + 'refusal, not an empty undo.')
+      : `${blocked.length} customer(s) could not be removed because they carry orders — the `
+        + 'database refuses to delete a customer an order points at (ON DELETE RESTRICT), which is '
+        + 'the protection working, not a fault. Everything else this run created was removed. To '
+        + 'clear these, the orders have to go first, and that is a separate decision.',
+  };
 }
+
