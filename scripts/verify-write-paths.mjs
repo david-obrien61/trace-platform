@@ -97,11 +97,19 @@ const ALLOWED_DIVERGENCE = {
     paths: ['packages/shared/src/quickbooks/itemImportWriter.ts'],
   },
   'customers': {
-    reason: 'The catalogue import\'s UNDO issues a DELETE scoped to import_run_id. It matches zero '
-          + 'rows today by construction — the customer merge is out of this build pending a '
-          + 'customer_qb_links join table — and is declared now so the undo is complete on the day '
-          + 'the merge lands rather than silently partial.',
-    paths: ['packages/shared/src/quickbooks/itemImportWriter.ts'],
+    reason: 'TWO import paths, declared together. (1) The catalogue import\'s UNDO issues a DELETE '
+          + 'scoped to import_run_id. (2) The CUSTOMER import creates the rows that DELETE will '
+          + 'one day match, and reconciles tax exemption on ones already here. It deliberately '
+          + 'does NOT ride findOrCreateCustomer, and that is R-93\'s argument on this table: that '
+          + 'path creates a `people` row per person, `people` has NO import_run_id (probed live '
+          + '2026-09-06 — 9 columns, no run provenance), so an import of 1,946 would mint ~1,900 '
+          + 'person rows NOTHING CAN UNDO. It is also one round trip per record, and its '
+          + 'fill-never-clobber semantics are a capture path\'s, not an import\'s — the import\'s '
+          + 'identity is qb_customer_id, which the non-partial unique index makes a database fact. '
+          + 'Resolving ONE customer from a counter sale and seeding a company\'s whole customer '
+          + 'book are not the same OPERATION, and the people spine is what distinguishes them.',
+    paths: ['packages/shared/src/quickbooks/itemImportWriter.ts',
+            'packages/shared/src/quickbooks/customerImportWriter.ts'],
   },
   // DECLARED 2026-09-02 (ledger #257) — a NEW write path to two tables, both reached through ONE
   // RPC, and the cap is right to have flagged it: `edit_receipt_line_items` writes `receipts` and

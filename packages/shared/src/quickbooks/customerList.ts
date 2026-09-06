@@ -6,7 +6,8 @@
 //   SHARED with the item read (§6 r8).
 // DEPENDENCIES: ./qboRead (parseRows).
 // OUTPUTS: QboCustomerRow · ParsedCustomerList · parseCustomerList · CustomerBreakdown ·
-//   summariseCustomers · previewCustomers.
+//   summariseCustomers · previewCustomers · normEmail · normPhone (exported 2026-09-06 so the
+//   customer IMPORT flags the same pairs this read SIZES — one normaliser, not two that drift).
 //
 // ══════════════════════════════════════════════════════════════════════════════
 // 🔴 THIS FILE HANDLES A DIFFERENT KIND OF THING FROM itemList.ts AND IS BUILT DIFFERENTLY
@@ -110,7 +111,7 @@ export function parseCustomerList(rawBody: string): ParsedCustomerList {
  * and a resolver that treats them as two people would mint the duplicate it exists to prevent
  * — which is D-47's own history (email-alone matching cross-billed nine real invoices).
  */
-function normEmail(v: string | null): string | null {
+export function normEmail(v: string | null): string | null {
   if (!v) return null;
   const s = v.trim().toLowerCase();
   return s === '' ? null : s;
@@ -125,7 +126,7 @@ function normEmail(v: string | null): string | null {
  * fragment would report a duplicate that is not one, and OVERSTATING the duplicate problem
  * is as misleading as missing it when the number is about to size a build.
  */
-function normPhone(v: string | null): string | null {
+export function normPhone(v: string | null): string | null {
   if (!v) return null;
   const digits = v.replace(/\D/g, '');
   if (digits.length < 7) return null;

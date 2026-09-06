@@ -18,6 +18,8 @@
  *   GET  /api/qbo/items/preview      → _route=items-preview   (READ-ONLY — plans the catalogue import, writes nothing)
  *   POST /api/qbo/items/ingest       → _route=items-ingest    (WRITES business_inventory ONLY — creates + retires)
  *   POST /api/qbo/items/undo         → _route=items-undo      (DELETES this run's rows, un-retires what it hid)
+ *   GET  /api/qbo/customers/preview  → _route=customers-preview (READ-ONLY — plans the customer import, writes nothing)
+ *   POST /api/qbo/customers/ingest   → _route=customers-ingest  (WRITES `customers` ONLY — creates, and reconciles tax exemption)
  */
 
 import crypto from 'crypto';
@@ -37,6 +39,8 @@ import { previewDeliveryIngest, commitDeliveryIngest } from '../../../shared/src
 import { previewOrderIngest, commitOrderIngest } from '../../../shared/src/quickbooks/historyOrderWriter';
 import { isPushHeld, QBO_PUSH_HOLD_ENV } from '../../../shared/src/quickbooks/pushHold';
 import { previewItemImport, commitItemImport, undoItemImport } from '../../../shared/src/quickbooks/itemImportWriter';
+import { adaptCustomers } from '../../../shared/src/quickbooks/qboCustomerAdapter';
+import { previewCustomerImport, commitCustomerImport } from '../../../shared/src/quickbooks/customerImportWriter';
 import { randomUUID } from 'crypto';
 
 // ─── shared constants ────────────────────────────────────────────────────────
@@ -999,6 +1003,76 @@ async function handleItemsUndo(req: any, res: any) {
   }
 }
 
+// ─── customer import (READS the customer list, WRITES `customers` only) ───────
+
+/**
+ * Walk the whole customer list and hand back the VERBATIM page bodies.
+ *
+ * 🔴 THE RAW BODIES, NOT `parseCustomerList`'s ROWS. That parser is the READ screen's, and its
+ * row is deliberately reduced to seven fields for privacy — it drops `Taxable`, `ResaleNum` and
+ * `Notes` and flattens the address into one display string, so it cannot fill an address column
+ * or answer the exemption question. The import adapter parses the same bodies for its own shape.
+ * Completeness is still proven with the read's own parser, so a truncated walk is refused here
+ * exactly as it is on the read path.
+ */
+async function walkCustomersForImport(req: any, res: any) {
+  const walked = await readAllPages(req, res, 'Customer', raw => {
+    const p = parseCustomerList(raw);
+    return { ok: p.ok, count: p.customers.length, parseError: p.parseError };
+  });
+  if (!walked) return null;
+  const counted = walked.rows.flatMap(raw => parseCustomerList(raw).customers).length;
+  const done = completenessOrRefuse(res, 'Customer', walked.realmId, walked.queriedAt, walked.expected, counted, walked.pages);
+  if (!done) return null;
+  return { bodies: walked.rows, realmId: walked.realmId, queriedAt: walked.queriedAt };
+}
+
+async function handleCustomersPreview(req: any, res: any) {
+  const businessId = (req.query.business_id as string) || '';
+  if (!businessId) return res.status(400).json({ error: 'business_id required' });
+  if (!(await callerCan(req.headers?.authorization, businessId, 'customers:read'))) {
+    console.log('[TRACE:CUSTIMPORT] preview REFUSED — caller lacks customers:read', { businessId });
+    return res.status(403).json({ error: 'Not authorized to read this business\'s customers', code: 'FORBIDDEN' });
+  }
+  const walked = await walkCustomersForImport(req, res);
+  if (!walked) return;
+  try {
+    const report = await previewCustomerImport(supabase(), businessId, adaptCustomers(walked.bodies));
+    return res.status(200).json({ ...report, realm_id: walked.realmId, queried_at: walked.queriedAt, committed: false });
+  } catch (e: any) {
+    console.log('[TRACE:CUSTIMPORT] preview failed', { businessId, message: e?.message });
+    return res.status(500).json({ error: `Could not plan the customer import: ${e?.message ?? 'unknown error'}` });
+  }
+}
+
+async function handleCustomersIngest(req: any, res: any) {
+  const businessId = (req.query.business_id as string) || '';
+  if (!businessId) return res.status(400).json({ error: 'business_id required' });
+  const auth = req.headers?.authorization;
+  // R-80: importing a customer's books is an OWNER act, and it is an AND — the verb still has to
+  // hold. `customers:create` alone would admit the MANAGER floor, which is R-80's own measurement.
+  if (!(await refuseUnlessOwner(auth, businessId, 'CUSTIMPORT', res))) return;
+  // BOTH verbs, because the run does both things: it CREATES the new customers and UPDATES the
+  // exemption on ones already here. Asking only for create would be a gate narrower than the write.
+  if (!(await callerCan(auth, businessId, 'customers:create'))
+      || !(await callerCan(auth, businessId, 'customers:update'))) {
+    console.log('[TRACE:CUSTIMPORT] ingest REFUSED — caller lacks customers:create + customers:update', { businessId });
+    return res.status(403).json({ error: 'Not authorized to create or update customers for this business', code: 'FORBIDDEN' });
+  }
+  const walked = await walkCustomersForImport(req, res);
+  if (!walked) return;
+  // 🔴 THE RUN ID IS MINTED SERVER-SIDE. A client-supplied one would let a caller stamp this run
+  // with an EARLIER run's id, and anything keyed on it would then act on two runs at once.
+  const runId = randomUUID();
+  try {
+    const report = await commitCustomerImport(supabase(), businessId, adaptCustomers(walked.bodies), runId);
+    return res.status(200).json({ ...report, realm_id: walked.realmId, queried_at: walked.queriedAt });
+  } catch (e: any) {
+    console.log('[TRACE:CUSTIMPORT] ingest failed', { businessId, runId, message: e?.message });
+    return res.status(500).json({ error: `The customer import failed: ${e?.message ?? 'unknown error'}`, run_id: runId });
+  }
+}
+
 // ─── router (AC-5 dispatch) ───────────────────────────────────────────────────
 
 export default async function handler(req: any, res: any) {
@@ -1017,6 +1091,8 @@ export default async function handler(req: any, res: any) {
     case 'items-preview':      return handleItemsPreview(req, res);
     case 'items-ingest':       return handleItemsIngest(req, res);
     case 'items-undo':         return handleItemsUndo(req, res);
+    case 'customers-preview':  return handleCustomersPreview(req, res);
+    case 'customers-ingest':   return handleCustomersIngest(req, res);
     default:
       return res.status(400).json({ error: `Unknown QBO route: ${route || '(none)'}` });
   }
