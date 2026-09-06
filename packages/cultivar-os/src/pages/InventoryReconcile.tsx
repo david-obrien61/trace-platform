@@ -123,6 +123,7 @@ export function InventoryReconcile() {
       .select('id,name,sku,size,qty,status')
       .eq('business_id', businessId)
       .neq('status', 'archived')
+      .is('retired_at', null)   // RETIRED_COLUMN — composes with the archived filter, replaces nothing
       .order('name', { ascending: true });
     if (lotErr) {
       console.error('[TRACE:RECONCILE] lot load FAILED', lotErr.message);

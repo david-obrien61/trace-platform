@@ -70,9 +70,47 @@ const isTooling = p => p.startsWith('scripts/') && !isTestInfra(p);
 
 // A mutation that is DELIBERATELY unchecked, with its reason. Same discipline as the write-path cap:
 // declaring is a decision on the record, not a convenience the builder grants itself.
+const UNDO_REREAD_REASON =
+  'The catalogue undo. A zero-row delete is a LEGITIMATE outcome here, so `length === 0` cannot be '
++ 'the failure condition. Checked instead by a RE-READ after all three statements: nothing may '
++ 'still carry this run id in import_run_id or retired_by_run_id. That separates a refused write '
++ 'from an empty one, which a row count cannot do on these three sites.';
+
 const ALLOWED_UNCHECKED = {
-  // (empty — the 84 known sites are held by the BASELINE, which says "known today", not by
-  //  declarations, which would say "correct forever". Different claims.)
+  // (Was empty by design — the 84 known sites are held by the BASELINE, which says "known today",
+  //  not by declarations, which would say "correct forever". Different claims. The three entries
+  //  below are the first, and they are the shape a declaration is FOR: not "we know about this",
+  //  but "a row count is the WRONG check here, and a stronger one is in place".)
+  //
+  // ── DECLARED 2026-09-06 — the QuickBooks catalogue UNDO (ledger #277) ─────────────────────────
+  // 🔴 A ROW COUNT WOULD BE THE WRONG CHECK ON ALL THREE, AND IT WOULD BE WRONG IN THE DIRECTION
+  //    THAT MATTERS. Deleting zero rows is a LEGITIMATE outcome for every one of them: the customer
+  //    delete matches nothing today by construction (the merge is not built), the inventory delete
+  //    matches nothing if the run created nothing, and the un-retire matches nothing if the run
+  //    retired nothing. Making `length === 0` a failure would turn three correct outcomes into
+  //    three errors and teach the operator to ignore the error.
+  //
+  // 🔴 WHAT IS IN PLACE INSTEAD IS STRICTLY STRONGER: AFTER all three statements, `undoItemImport`
+  //    RE-READS the tenant and counts what still carries this run id — in `import_run_id` on both
+  //    tables and in `retired_by_run_id` on the inventory. A refused delete leaves rows behind and
+  //    that count is non-zero; a legitimately empty delete leaves nothing and it is zero. That
+  //    distinguishes "refused" from "nothing to do", which is the exact thing this cap exists to
+  //    make possible and the exact thing a row count CANNOT do here.
+  //    `leftovers[]` on the report carries the finding; `itemImportWriter.test.ts` asserts both
+  //    directions and the mutation harness pins them (U1/U2).
+  //
+  // ⚠️ THE COMMIT'S OWN WRITES ARE NOT DECLARED AND MUST NOT BE. Its INSERT and its retire UPDATE
+  //    both have an expected count — every row, and the planned figure — so both are checked
+  //    inline against it and a total shortfall THROWS.
+  //
+  // ⚠️ KEYED ON `key`, NOT ON `tag`. `tag` carries a LINE NUMBER, and the first draft of these
+  //    three declarations used it — then adding one line to the file shifted every site by one and
+  //    all three declarations went dead silently, re-failing the build. That is tech-debt #78's
+  //    exact lesson (`file::binding#table.verb` is the identity; the line is for the human), and
+  //    `judge` already accepts either. A declaration that a comment edit can void is not one.
+  'packages/shared/src/quickbooks/itemImportWriter.ts::cust#customers.delete': UNDO_REREAD_REASON,
+  'packages/shared/src/quickbooks/itemImportWriter.ts::inv#business_inventory.delete': UNDO_REREAD_REASON,
+  'packages/shared/src/quickbooks/itemImportWriter.ts::un#business_inventory.update': UNDO_REREAD_REASON,
 };
 
 function stripComments(src) {

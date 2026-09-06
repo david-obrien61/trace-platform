@@ -44,6 +44,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { nameTokenSet, tokenSetsEqual } from '../utils/canonicalName';
 import { normalizeSize } from '../utils/sizeLabel';
 import { readOk, readFailed, type ReadResult } from '../utils/readResult';
+import { onlyLiveInventory } from './retiredFilter';
 
 // A resolved business_inventory row. The core identity fields are always selected; the
 // pricing/status fields are present only when the caller requests the extended column set
@@ -237,11 +238,14 @@ export async function resolveStockLine(
 
   // L2 — SKU exact as a TARGETED query, unchanged: preserves the count flow's proven query shape
   // (#72 no-regress) and returns without fetching the whole tenant on a SKU hit.
-  const { data: lot, error: lotErr } = await supabase
+  // 🔴 A RETIRED LOT MUST NOT RESOLVE. This ladder is what the order picker and the count walk
+  // both call, so a hit here is a product somebody is about to SELL or COUNT. Hiding it on the
+  // grid and still resolving it on a scan would be the worse half of both worlds.
+  const { data: lot, error: lotErr } = await onlyLiveInventory(supabase
     .from('business_inventory')
     .select(columns)
     .eq('business_id', businessId)
-    .ilike('sku', id)
+    .ilike('sku', id))
     .maybeSingle();
   // A failed L2 must NOT fall through to L4: in a dead zone L4 fails too, and the ladder would
   // arrive at "no_match" having never read a single row.
@@ -253,10 +257,10 @@ export async function resolveStockLine(
   // misses here (the targeted query above already missed), so the result is identical to the
   // former inline logic — with the sole marginal difference that a SKU differing only in
   // whitespace, which .ilike would miss, now matches; that is a strict improvement, not a regress.
-  const { data: rows, error: rowsErr } = await supabase
+  const { data: rows, error: rowsErr } = await onlyLiveInventory(supabase
     .from('business_inventory')
     .select(columns)
-    .eq('business_id', businessId);
+    .eq('business_id', businessId));
   // 🔴 THE ORIGINAL LIE, IN ONE LINE: `(rows ?? [])` handed the pure ladder an EMPTY CATALOG on
   // a wire failure, and an empty catalog matches nothing. It reported "not recognized".
   if (rowsErr) return readFailed(rowsErr);
@@ -286,10 +290,10 @@ export async function searchStockLines(
   const t = term.trim().toLowerCase();
   if (!t) return readOk([]);   // an empty term genuinely has zero results — answered, not failed
 
-  const { data: rows, error: rowsErr } = await supabase
+  const { data: rows, error: rowsErr } = await onlyLiveInventory(supabase
     .from('business_inventory')
     .select(columns)
-    .eq('business_id', businessId);
+    .eq('business_id', businessId));
   // The same defect as L4 above, and worse on this surface: "0 matches" reads to a person as a
   // statement ABOUT THEIR CATALOG, when nothing was ever read.
   if (rowsErr) return readFailed(rowsErr);

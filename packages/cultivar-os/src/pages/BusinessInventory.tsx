@@ -39,6 +39,7 @@ import {
 } from '@trace/shared/components/datasheet/DataSheet';
 import { InventoryEditor, BLANK_INVENTORY_ITEM, type EditorInventoryItem, type InventoryPeer } from '../components/inventory/InventoryEditor';
 import { persistInventoryPatch, renameVariety, deleteInventoryRow } from '../components/inventory/inventoryEdit';
+import { onlyLiveInventory } from '@trace/shared/inventory/retiredFilter';
 import {
   fetchCommittedByLot, availableFrom, statusSelectValue, statusSelectOptions,
   resolveStatusSelection, ALL_STATUS_VALUES, type CommittedByLot,
@@ -157,19 +158,24 @@ export function BusinessInventory() {
   async function loadItems() {
     setListLoading(true);
     setListError(null);
-    const full = await supabase
+    // 🔴 RETIRED ROWS ARE HIDDEN HERE. Without this line a QuickBooks import leaves LAWNS's 447
+    // replaced rows sitting beside the 647 new ones — 1,094 rows where the ruling promised a
+    // clean catalogue. Hidden, never deleted: they are still in the table and still recoverable.
+    const full = await onlyLiveInventory(supabase
       .from('business_inventory')
       .select(fullCols(canViewCosts))
-      .eq('business_id', businessId)
+      .eq('business_id', businessId))
       .order('created_at', { ascending: false });
     let data: unknown = full.data;
     let error = full.error;
     if (error && (error.code === '42703' || error.code === 'PGRST204' || /reorder_point|does not exist/i.test(error.message))) {
       console.warn('[TRACE:invsheet] reorder_point absent — FULL→CORE fallback (migration pending)');
-      const core = await supabase
+      // The fallback hides retired rows too. A degraded read that quietly widens what it shows
+      // is how a filter gets discovered to be conditional at the worst possible moment.
+      const core = await onlyLiveInventory(supabase
         .from('business_inventory')
         .select(coreCols(canViewCosts))
-        .eq('business_id', businessId)
+        .eq('business_id', businessId))
         .order('created_at', { ascending: false });
       data = core.data; error = core.error;
     }

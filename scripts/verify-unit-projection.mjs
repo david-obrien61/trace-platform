@@ -105,6 +105,22 @@ const ALLOWED = new Map([
   ['packages/cultivar-os/src/lib/uppotPlanRead.test.ts',   'READS: asserts the field list matches the migration corpus (tech-debt #179 class)'],
   ['scripts/measure-production-plan-mutants.mjs',          'names them inside mutant strings only — mutates the PLANNER, never the derive'],
   ['scripts/seed-uppot-harness.mjs',                       'names them in its own console output to say the projection has NOT run on seeded rows'],
+
+  // ── THE CATALOGUE IMPORT, added 2026-09-06 (ledger #277) ────────────────────────────────────
+  // 🔴 THE SECOND INSTANCE OF TECH-DEBT #190 IN TWO DAYS, WHICH IS THE ARGUMENT FOR FIXING THE CAP
+  // RATHER THAN THE LIST. Neither entry derives a unit or makes one editable; the writer spreads
+  // `unitColumnsFor(item.size)` verbatim onto the row — it does not compute a single field of it —
+  // and the two occurrences are a DECLARED COLUMN LIST and a PROBE that the derive ran. A cap that
+  // matches on the column NAME cannot tell any of those apart from a parallel truth, and every
+  // future correct user of the projection will land here. #190 stands and now has two instances.
+  ['packages/shared/src/quickbooks/itemImportWriter.ts',
+   'READS/DECLARES: ITEM_IMPORT_INSERT_COLUMNS enumerates what an imported row carries (the #179 '
+   + 'defence — a select naming fewer columns than its migration creates is invisible to tsc). The '
+   + 'values come from `...unitColumnsFor(item.size)`, spread whole; no field is computed here.'],
+  ['packages/shared/src/quickbooks/itemImportWriter.test.ts',
+   'READS: asserts the derive RAN on an imported row (unit_kind=container, unit_value=30) and that '
+   + 'an unreadable size lands unit_parsed_from NULL rather than a guess. Checking that the ONE '
+   + 'derive was used is the opposite of forking it.'],
 ]);
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════

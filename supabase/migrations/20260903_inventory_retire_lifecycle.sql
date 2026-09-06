@@ -36,9 +36,19 @@
 -- the 685 QuickBooks items. Retired means hidden and recoverable. There is no DELETE anywhere in
 -- this build, and `planRetireAndReplace` has no `delete` disposition for a caller to reach for.
 --
--- ⚠️ ANY ROW CARRYING A REAL COUNT IS NEVER RETIRED. Four of the 447 do. A price list can be
--- re-imported in a minute; a physical count is somebody walking a lot with a phone, and nothing
--- reconstructs it. The planner checks qty BEFORE anything else and there is no path past it.
+-- ⚠️ CORRECTED 2026-09-06 — TWO STATEMENTS ON THIS LINE WERE WRONG AND BOTH ARE FIXED HERE.
+-- It said: "ANY ROW CARRYING A REAL COUNT IS NEVER RETIRED. Four of the 447 do."
+--   ① IT IS TWO, NOT FOUR. Measured live 2026-09-06: `qty > 0` returns exactly 2 rows — Brodie
+--      Juniper 30 gallon (qty 1) and Arizona Cypress, Blue Ice 30 gallon (qty 1). The other two
+--      rows that look special are `status='archived'` at qty 0 — "tree" and
+--      `__harness_replay_lot` — which is a different fact entirely.
+--   ② THEY ARE RETIRED NOW. David's ruling, 2026-09-06: *"ALL 447 RETIRE. NO EXCEPTIONS. The two
+--      rows carrying a count are MY test data — I put them there to see whether the inventory
+--      widget worked."* One tree each, against a smallest real variety of seventy. The
+--      keep-the-counted-rows clause of R-58/R-70 was written to protect a physical count nobody
+--      could recreate; there is no such count here, and the clause is superseded by R-94.
+-- The retire is scoped `business_id` + `retired_at IS NULL` — NOT a snapshot id list, because
+-- Lauren is uploading all weekend and a snapshot can go stale between the plan and the apply.
 -- ════════════════════════════════════════════════════════════════════════════════
 
 BEGIN;

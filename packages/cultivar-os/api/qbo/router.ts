@@ -15,6 +15,9 @@
  *   POST /api/qbo/deliveries/ingest  → _route=deliveries-ingest  (WRITES customers + deliveries ONLY)
  *   GET  /api/qbo/orders/preview     → _route=orders-preview  (READ-ONLY — plans, writes nothing)
  *   POST /api/qbo/orders/ingest      → _route=orders-ingest   (WRITES orders + order_items + deliveries.order_id ONLY)
+ *   GET  /api/qbo/items/preview      → _route=items-preview   (READ-ONLY — plans the catalogue import, writes nothing)
+ *   POST /api/qbo/items/ingest       → _route=items-ingest    (WRITES business_inventory ONLY — creates + retires)
+ *   POST /api/qbo/items/undo         → _route=items-undo      (DELETES this run's rows, un-retires what it hid)
  */
 
 import crypto from 'crypto';
@@ -33,6 +36,8 @@ import { parseShipmentList } from '../../../shared/src/quickbooks/shipmentIngest
 import { previewDeliveryIngest, commitDeliveryIngest } from '../../../shared/src/quickbooks/deliveryIngestWriter';
 import { previewOrderIngest, commitOrderIngest } from '../../../shared/src/quickbooks/historyOrderWriter';
 import { isPushHeld, QBO_PUSH_HOLD_ENV } from '../../../shared/src/quickbooks/pushHold';
+import { previewItemImport, commitItemImport, undoItemImport } from '../../../shared/src/quickbooks/itemImportWriter';
+import { randomUUID } from 'crypto';
 
 // ─── shared constants ────────────────────────────────────────────────────────
 
@@ -901,6 +906,99 @@ async function handleOrdersIngest(req: any, res: any) {
   }
 }
 
+// ─── the catalogue — QuickBooks items → business_inventory ────────────────────
+//
+// 🔴 THESE THREE RIDE THIS ROUTER AND NO NEW VERCEL FUNCTION IS CREATED. `api/` is at 12 OF 12
+// (§6 r11) and function #13 does not error — it makes the whole deploy fail SILENTLY while Vercel
+// keeps serving the last-good bundle. These are branches on a function that already exists, and
+// the READ is the one `handleItems` already performs.
+//
+// 🔴 ALL THREE ARE OWNER-GATED (R-80). *"INGESTING A CUSTOMER'S BOOKS INTO THE SYSTEM IS AN OWNER
+// ACT, the same class as the QuickBooks writes switch, which is already owner-gated."* The undo
+// is gated identically and for a stronger reason: it DELETES rows.
+//
+// ⚠️ THE VERB PERMISSION STILL HAS TO HOLD — an AND, not an OR, exactly as the other two ingests
+// do it. `inventory:read` for the preview; `inventory:create` for the write; and the undo needs
+// BOTH `inventory:create` and `inventory:delete`, because deleting a catalogue is what it does.
+
+/** Walk the complete Item list, or refuse. Same read the items endpoint performs. */
+async function walkItems(req: any, res: any) {
+  const walked = await readAllPages(req, res, 'Item', raw => {
+    const p = parseItemList(raw);
+    return { ok: p.ok, count: p.items.length, parseError: p.parseError };
+  });
+  if (!walked) return null;
+  const items = walked.rows.flatMap(raw => parseItemList(raw).items);
+  const done = completenessOrRefuse(res, 'Item', walked.realmId, walked.queriedAt, walked.expected, items.length, walked.pages);
+  if (!done) return null;
+  return { items, realmId: walked.realmId, queriedAt: walked.queriedAt };
+}
+
+async function handleItemsPreview(req: any, res: any) {
+  const businessId = (req.query.business_id as string) || '';
+  if (!businessId) return res.status(400).json({ error: 'business_id required' });
+  if (!(await callerCan(req.headers?.authorization, businessId, 'inventory:read'))) {
+    console.log('[TRACE:QBITEMS] preview REFUSED — caller lacks inventory:read', { businessId });
+    return res.status(403).json({ error: 'Not authorized to read this business\'s catalogue', code: 'FORBIDDEN' });
+  }
+  const walked = await walkItems(req, res);
+  if (!walked) return;
+  try {
+    const report = await previewItemImport(supabase(), businessId, walked.items);
+    return res.status(200).json({ ...report, realm_id: walked.realmId, queried_at: walked.queriedAt, committed: false });
+  } catch (e: any) {
+    console.log('[TRACE:QBITEMS] preview failed', { businessId, message: e?.message });
+    return res.status(500).json({ error: `Could not plan the catalogue import: ${e?.message ?? 'unknown error'}` });
+  }
+}
+
+async function handleItemsIngest(req: any, res: any) {
+  const businessId = (req.query.business_id as string) || '';
+  if (!businessId) return res.status(400).json({ error: 'business_id required' });
+  const auth = req.headers?.authorization;
+  if (!(await refuseUnlessOwner(auth, businessId, 'QBITEMS', res))) return;
+  if (!(await callerCan(auth, businessId, 'inventory:create'))) {
+    console.log('[TRACE:QBITEMS] ingest REFUSED — caller lacks inventory:create', { businessId });
+    return res.status(403).json({ error: 'Not authorized to create inventory for this business', code: 'FORBIDDEN' });
+  }
+  const walked = await walkItems(req, res);
+  if (!walked) return;
+  // 🔴 THE RUN ID IS MINTED SERVER-SIDE. A client-supplied one would let a caller stamp this run
+  // with an EARLIER run's id — and the undo is keyed on it, so one undo would then delete two
+  // runs' rows, including rows the owner had decided to keep.
+  const runId = randomUUID();
+  try {
+    const report = await commitItemImport(supabase(), businessId, walked.items, runId, process.env[QBO_PUSH_HOLD_ENV]);
+    return res.status(report.committed ? 200 : 409).json({ ...report, realm_id: walked.realmId, queried_at: walked.queriedAt });
+  } catch (e: any) {
+    console.log('[TRACE:QBITEMS] ingest failed', { businessId, runId, message: e?.message });
+    return res.status(500).json({ error: `The catalogue import failed: ${e?.message ?? 'unknown error'}`, run_id: runId });
+  }
+}
+
+async function handleItemsUndo(req: any, res: any) {
+  const businessId = (req.query.business_id as string) || '';
+  const runId = (req.query.run_id as string) || '';
+  if (!businessId) return res.status(400).json({ error: 'business_id required' });
+  // A blank run id must NEVER be treated as "undo everything". It is a bad request.
+  if (!runId) return res.status(400).json({ error: 'run_id required — an undo names exactly one import run' });
+  const auth = req.headers?.authorization;
+  if (!(await refuseUnlessOwner(auth, businessId, 'QBITEMS', res))) return;
+  if (!(await callerCan(auth, businessId, 'inventory:create'))
+      || !(await callerCan(auth, businessId, 'inventory:delete'))) {
+    console.log('[TRACE:QBITEMS] undo REFUSED — caller lacks inventory:create + inventory:delete', { businessId });
+    return res.status(403).json({ error: 'Not authorized to remove inventory for this business', code: 'FORBIDDEN' });
+  }
+  try {
+    const report = await undoItemImport(supabase(), businessId, runId, process.env[QBO_PUSH_HOLD_ENV]);
+    // 409 for a refusal (writes are on) — a distinct code from a 500, because nothing went wrong.
+    return res.status(report.ok ? 200 : (report.refused ? 409 : 500)).json(report);
+  } catch (e: any) {
+    console.log('[TRACE:QBITEMS] undo failed', { businessId, runId, message: e?.message });
+    return res.status(500).json({ error: `The undo failed: ${e?.message ?? 'unknown error'}` });
+  }
+}
+
 // ─── router (AC-5 dispatch) ───────────────────────────────────────────────────
 
 export default async function handler(req: any, res: any) {
@@ -916,6 +1014,9 @@ export default async function handler(req: any, res: any) {
     case 'deliveries-ingest':  return handleDeliveriesIngest(req, res);
     case 'orders-preview':     return handleOrdersPreview(req, res);
     case 'orders-ingest':      return handleOrdersIngest(req, res);
+    case 'items-preview':      return handleItemsPreview(req, res);
+    case 'items-ingest':       return handleItemsIngest(req, res);
+    case 'items-undo':         return handleItemsUndo(req, res);
     default:
       return res.status(400).json({ error: `Unknown QBO route: ${route || '(none)'}` });
   }

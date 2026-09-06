@@ -28,7 +28,7 @@ function ok(cond: boolean, msg: string): void {
 // ── fixtures ─────────────────────────────────────────────────────────────────
 const item = (id: string, name: string, o: Partial<QboItemRow> = {}): QboItemRow => ({
   id, name, type: 'Inventory', incomeAccount: 'Sales of Nursery Stock', active: true,
-  unitPrice: null, purchaseCost: null, sku: null, ...o,
+  unitPrice: null, purchaseCost: null, sku: null, description: null, fullyQualifiedName: null, ...o,
 });
 const line = (itemId: string | null, itemName: string | null, unitPrice: number | null, amount: number, qty = 1,
               discountInDescription = false) =>

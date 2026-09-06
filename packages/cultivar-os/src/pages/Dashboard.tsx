@@ -221,6 +221,7 @@ export function Dashboard() {
         // column simply stopped being requested. Fixing the string above restores it.
         .select(canViewCosts ? 'qty, unit_cost' : 'qty')
         .eq('business_id', businessId!)
+        .is('retired_at', null)   // a retired row is not stock the business holds
         .eq('status', 'available'),
 
       // ── TODAY'S SALES — keyed on WHEN THE SALE HAPPENED, not when the row was written ──

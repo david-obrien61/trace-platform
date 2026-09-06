@@ -560,6 +560,12 @@ export function InventoryCount() {
       // duplicate (D-9 omit-not-fake) — the owner can assign it in the editor.
       let sku = target.sku;
       if (sku) {
+        // ⚠️ RETIRED-FILTER-EXEMPT: a retired row still OCCUPIES its SKU string in the table, so
+        // a collision check that ignored hidden rows would hand a new lot a SKU already in use and
+        // the duplicate would only surface if the old row came back. Hiding is about what a person
+        // SEES; uniqueness is about what the table HOLDS. The marker is what `retiredFilter.test.ts`
+        // reads — a deliberate omission has to be DECLARED where it sits, or it is indistinguishable
+        // from a forgotten one.
         const { data: clash } = await supabase
           .from('business_inventory').select('id')
           .eq('business_id', businessId).ilike('sku', sku).maybeSingle();
@@ -606,9 +612,13 @@ export function InventoryCount() {
 
       // Read back the id the RPC minted — required to link the count record. Online-only
       // (guarded above), so `applied` is the expected status here.
+      // `.is('retired_at', null)` matters here even though the row was just made: name+size can
+      // also match a row a QuickBooks import RETIRED, and reading that id back would link the
+      // count to a hidden lot instead of the one the RPC minted.
       const { data: made } = await supabase
         .from('business_inventory').select('id')
         .eq('business_id', businessId).eq('name', ctx.varietyName).eq('size', target.size)
+        .is('retired_at', null)
         .order('created_at', { ascending: false }).limit(1).maybeSingle();
       targetId = (made as { id: string } | null)?.id ?? null;
       outcome = 'created';

@@ -82,7 +82,7 @@ export function CostToProduce() {
       const [modRes, invRes] = await Promise.all([
         // pricing config via the gated table (Phase 2 wall) with legacy fallback
         readPricingConfig(supabase, businessId),
-        supabase.from('business_inventory').select(canViewCosts ? 'name, unit_cost, cost_confidence' : 'name').eq('business_id', businessId),
+        supabase.from('business_inventory').select(canViewCosts ? 'name, unit_cost, cost_confidence' : 'name').eq('business_id', businessId).is('retired_at', null),
       ]);
       if (cancelled) return;
 

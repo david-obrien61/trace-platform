@@ -59,6 +59,50 @@ const isTooling = p => p.startsWith('scripts/');
 // known multi-path tables are held by the BASELINE, not by declarations — the baseline says
 // "known today", a declaration says "correct forever". They are different claims.
 const ALLOWED_DIVERGENCE = {
+  // DECLARED 2026-09-06 (QuickBooks catalogue import, ledger #277). TWO tables, ONE file, and the
+  // cap is right to have flagged both — this IS a new write path and it is a deliberate one.
+  //
+  // 🔴 IT CANNOT REUSE THE EXISTING PATH, AND THAT IS A RULING (R-93), NOT A PREFERENCE.
+  //    `importWrites.ts` is the sanctioned business_inventory write path and its own header states
+  //    the contract: *"Every qty change rides the D-50 Layer-1 RPCs… A CREATE is
+  //    count_promote_create_inventory at qty 0"*. That RPC emits a ledger row of
+  //    kind='opening_balance'. Riding it here would land 647 IMMUTABLE rows in
+  //    `business_inventory_ledger` — append-only, its trigger rejects even `postgres` — and the
+  //    UNDO COULD NOT BE COMPLETE. Lauren is promised she can import, look, wipe and reload as
+  //    often as she likes while QuickBooks writes are held; each cycle would leave permanent
+  //    sediment nothing can remove. So this file uses a PLAIN INSERT, which writes no ledger row
+  //    (verified: the only two triggers on the table are `updated_at` and `unit_projection`).
+  //
+  // ⚠️ §6 r8 SAYS REUSE BEFORE FORKING, SO A BUILDER FOLLOWING THE STANDARDS DOES THE WRONG THING
+  //    CORRECTLY HERE. That is precisely why it is filed as a ruling and declared in this list
+  //    rather than left as a comment somebody could reasonably overrule.
+  //
+  // ⚠️ THE COLUMN SETS CANNOT COLLIDE WITH `importWrites.ts`. This file writes only rows it
+  //    created (stamped `import_run_id`) plus the three retirement columns — `retired_at`,
+  //    `retired_reason`, `retired_by_run_id` — which `importWrites.ts` does not know exist. It
+  //    never touches qty on an existing row; the CSV importer never touches retirement.
+  //
+  // ⚠️ THE `customers` PATH WRITES NOTHING TODAY, BY CONSTRUCTION. It is the undo's DELETE, scoped
+  //    to `import_run_id`, and no customer row carries one because the customer merge is
+  //    deliberately out of this build (it waits on a `customer_qb_links` join table: one local
+  //    customer can map to two QuickBooks ids and `qb_customer_id` is single-valued). It is
+  //    declared now because an undo that knows about only one of the two tables it will eventually
+  //    have to clean is an undo somebody will trust past the point where it is complete.
+  'business_inventory': {
+    reason: 'The QuickBooks catalogue import writes with a PLAIN INSERT and a retirement UPDATE, '
+          + 'deliberately NOT through importWrites.ts/the D-50 RPCs (R-93): those emit immutable '
+          + 'opening_balance ledger rows, and 647 of them per run would make the undo incomplete. '
+          + 'It touches only rows carrying its own import_run_id plus the three retirement columns, '
+          + 'which no other writer knows about.',
+    paths: ['packages/shared/src/quickbooks/itemImportWriter.ts'],
+  },
+  'customers': {
+    reason: 'The catalogue import\'s UNDO issues a DELETE scoped to import_run_id. It matches zero '
+          + 'rows today by construction — the customer merge is out of this build pending a '
+          + 'customer_qb_links join table — and is declared now so the undo is complete on the day '
+          + 'the merge lands rather than silently partial.',
+    paths: ['packages/shared/src/quickbooks/itemImportWriter.ts'],
+  },
   // DECLARED 2026-09-02 (ledger #257) — a NEW write path to two tables, both reached through ONE
   // RPC, and the cap is right to have flagged it: `edit_receipt_line_items` writes `receipts` and
   // appends to `audit_log`, and this page calls it, so the fold attributes both correctly.

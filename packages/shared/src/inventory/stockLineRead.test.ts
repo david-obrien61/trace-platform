@@ -40,9 +40,16 @@ function stub(mode: Mode) {
     const hit = mode.rows.find(r => (r.sku ?? '').toLowerCase() === id.toLowerCase()) ?? null;
     return Promise.resolve({ data: hit, error: null });
   };
+  // 🔴 `is` ADDED 2026-09-06 AND IT WAS A REAL RED, NOT A CHORE. The resolver now wraps every read
+  // in `onlyLiveInventory` so a RETIRED lot cannot be scanned, searched or sold; this double had
+  // no `.is`, so the whole suite threw the moment the guard landed. Recording it here because the
+  // failure was the double being NARROWER than the client, which is the harmless direction — the
+  // dangerous one is a double that is more FORGIVING than the real thing (tech-debt #138), and a
+  // stub that silently accepted an unknown method would have hidden a missing filter instead.
   const builder: any = {
     eq: () => builder,
-    ilike: (_c: string, id: string) => ({ maybeSingle: () => single(id) }),
+    is: () => builder,
+    ilike: (_c: string, id: string) => ({ maybeSingle: () => single(id), is: () => ({ maybeSingle: () => single(id) }) }),
     then: (res: any, rej: any) => Promise.resolve(answer).then(res, rej),
   };
   return { from: () => ({ select: () => builder }) } as any;

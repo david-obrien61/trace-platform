@@ -165,10 +165,10 @@ SIGNAL: `[TRACE:DEVGATE] identity cleared — all dev surfaces OFF`
 _Scan → identity. The ladder: L1 plant tag → L2 SKU → L4 name token-set → L5 size-picker._
 
 ### A possessive variety resolves on the first scan
-STATUS: covered
+STATUS: owed   <!-- 🔴 FLIPPED covered → owed 2026-09-06 (#277). The READ behind this card changed: it now excludes rows with `retired_at IS NOT NULL` (via `onlyLiveInventory` in `stockLineResolver.ts` / `BusinessInventory.tsx` / `InventoryCount.tsx`). Nothing is retired at LAWNS today, so the observable result is unchanged — but a green check on a moved surface asserts a proof nobody performed (OP-14 clause 3). Re-run it; it should pass unaltered. PRIOR: STATUS: covered -->
 DEVICE: phone
 COVERS: #132, D-45
-LAST-PROVEN: 2026-07-16
+LAST-PROVEN: —   <!-- reset 2026-09-06 (#277) — prior date preserved in git history -->
 SIGNAL: `[TRACE:RESOLVE] L4 name-token — … key: bashams crape myrtle party pink`
 - **Do:** scan **Basham's Party Pink Crape Myrtle** (or Evey's Pride Mimosa · Summer's Tower Redbud · Hearts A'fire Redbud).
 - **PASS:** resolves to the right row. The review sheet opens.
@@ -176,10 +176,10 @@ SIGNAL: `[TRACE:RESOLVE] L4 name-token — … key: bashams crape myrtle party p
 - **Why:** the token key treated `'` as a word boundary and the 1-char filter ate the possessive `s`, so `Basham's` → `{basham}` never matched its own slug's `{bashams}`. **4 of 6 apostrophe varieties were silently unscannable in live data.** It hid because *wrapping* quotes survive either way — and every prove had been done on `'Sierra'`, which has no possessive. **The one case anybody eyeballs worked.**
 
 ### A multi-size variety fires the SIZE PICKER, not a guess
-STATUS: covered
+STATUS: owed   <!-- 🔴 FLIPPED covered → owed 2026-09-06 (#277). The READ behind this card changed: it now excludes rows with `retired_at IS NOT NULL` (via `onlyLiveInventory` in `stockLineResolver.ts` / `BusinessInventory.tsx` / `InventoryCount.tsx`). Nothing is retired at LAWNS today, so the observable result is unchanged — but a green check on a moved surface asserts a proof nobody performed (OP-14 clause 3). Re-run it; it should pass unaltered. PRIOR: STATUS: covered -->
 DEVICE: phone
 COVERS: #72, D-45
-LAST-PROVEN: 2026-07-16
+LAST-PROVEN: —   <!-- reset 2026-09-06 (#277) — prior date preserved in git history -->
 - **Do:** scan **`'Sierra' Mexican Red Oak`** (2 sizes, both grouped).
 - **PASS:** the size picker offers both sizes. Neither is auto-picked.
 - **FAIL:** it picks one for you, or goes UNKNOWN.
@@ -201,10 +201,10 @@ SIGNAL: `[TRACE:RESOLVE] L4 MISS — ambiguous: 2 … candidates: [{size:"15",�
 _The walk-and-count loop: scan → resolve → which size + qty → save → next._
 
 ### A blank size is REFUSED 🔴
-STATUS: covered
+STATUS: owed   <!-- 🔴 FLIPPED covered → owed 2026-09-06 (#277). The READ behind this card changed: it now excludes rows with `retired_at IS NOT NULL` (via `onlyLiveInventory` in `stockLineResolver.ts` / `BusinessInventory.tsx` / `InventoryCount.tsx`). Nothing is retired at LAWNS today, so the observable result is unchanged — but a green check on a moved surface asserts a proof nobody performed (OP-14 clause 3). Re-run it; it should pass unaltered. PRIOR: STATUS: covered -->
 DEVICE: phone
 COVERS: #135, D-49, D-34
-LAST-PROVEN: 2026-07-17
+LAST-PROVEN: —   <!-- reset 2026-09-06 (#277) — prior date preserved in git history -->
 SIGNAL: `[TRACE:INVENTORY] promote — REFUSED at the sheet: size-required`
 - **Do:** scan a variety that already has sizes. **Leave Size EMPTY.** Enter a count. Save → Next.
 - **PASS:** blocked. Size red-bordered. A message under it says why. **No row written.**
@@ -393,10 +393,10 @@ LAST-PROVEN: never
 _The `/inventory` datasheet — the reconcile surface (desktop-first, per capture=mobile/reconcile=desktop)._
 
 ### A clean filtered view does NOT claim a collision is here
-STATUS: covered
+STATUS: owed   <!-- 🔴 FLIPPED covered → owed 2026-09-06 (#277). The READ behind this card changed: it now excludes rows with `retired_at IS NOT NULL` (via `onlyLiveInventory` in `stockLineResolver.ts` / `BusinessInventory.tsx` / `InventoryCount.tsx`). Nothing is retired at LAWNS today, so the observable result is unchanged — but a green check on a moved surface asserts a proof nobody performed (OP-14 clause 3). Re-run it; it should pass unaltered. PRIOR: STATUS: covered -->
 DEVICE: desktop
 COVERS: #135
-LAST-PROVEN: 2026-07-17
+LAST-PROVEN: —   <!-- reset 2026-09-06 (#277) — prior date preserved in git history -->
 - **Do:** search **`alley`**.
 - **PASS (either):** no banner, **OR** a banner saying the flagged rows are **elsewhere** — *"N flagged rows elsewhere … nothing on this screen is affected."*
 - **FAIL:** *"N flagged rows here"* while no visible row carries ⚠️.
@@ -405,20 +405,20 @@ LAST-PROVEN: 2026-07-17
 - **✅ PROVEN 2026-07-17 (David, live) — filtered to `alley` (4/123, sizes 15/30/45/60 all distinct):** *"2 flagged rows **elsewhere in your inventory** share a variant group and size — **nothing on this screen is affected.** Clear the search or status filter to see them."* The "elsewhere" branch, exactly.
 
 ### Filtering to the real collision DOES fire the banner
-STATUS: covered
+STATUS: owed   <!-- 🔴 FLIPPED covered → owed 2026-09-06 (#277). The READ behind this card changed: it now excludes rows with `retired_at IS NOT NULL` (via `onlyLiveInventory` in `stockLineResolver.ts` / `BusinessInventory.tsx` / `InventoryCount.tsx`). Nothing is retired at LAWNS today, so the observable result is unchanged — but a green check on a moved surface asserts a proof nobody performed (OP-14 clause 3). Re-run it; it should pass unaltered. PRIOR: STATUS: covered -->
 DEVICE: desktop
 COVERS: #135
-LAST-PROVEN: 2026-07-17
+LAST-PROVEN: —   <!-- reset 2026-09-06 (#277) — prior date preserved in git history -->
 - **Do:** search **`acoma`**.
 - **PASS:** banner fires, says **here**, and ⚠️ is on the **two rows that actually collide**.
 - **FAIL:** no banner, or the icon is on the wrong rows.
 - **✅ PROVEN 2026-07-17 (David, live) — via the UNFILTERED full board (123/123), NOT an `acoma` search:** *"2 flagged rows **here** — each shares a variant group and size with another row, so the scanner can't tell them apart."* The two flagged rows ARE the Acoma twin (the only collision in the data, in view because unfiltered), so every PASS condition held — banner fires · says "here" · ⚠️ on the two colliding rows. Same banner code path as the narrow `acoma` filter; David reached "here" via the full view and "elsewhere" via the `alley` filter.
 
 ### The count noun agrees with its own trace
-STATUS: covered
+STATUS: owed   <!-- 🔴 FLIPPED covered → owed 2026-09-06 (#277). The READ behind this card changed: it now excludes rows with `retired_at IS NOT NULL` (via `onlyLiveInventory` in `stockLineResolver.ts` / `BusinessInventory.tsx` / `InventoryCount.tsx`). Nothing is retired at LAWNS today, so the observable result is unchanged — but a green check on a moved surface asserts a proof nobody performed (OP-14 clause 3). Re-run it; it should pass unaltered. PRIOR: STATUS: covered -->
 DEVICE: desktop
 COVERS: #135
-LAST-PROVEN: 2026-07-17
+LAST-PROVEN: —   <!-- reset 2026-09-06 (#277) — prior date preserved in git history -->
 SIGNAL: `[TRACE:invsheet] dup-size flags { collisions: 1, flaggedRows: 2, … }`
 - **PASS:** the banner counts **rows** ("2 flagged rows"), matching the two ⚠️ you can see, and the trace agrees.
 - **FAIL:** it says "2 collisions" — there is **one** collision involving **two** rows. **A number that disagrees with its own trace is how the next session misdiagnoses this.**

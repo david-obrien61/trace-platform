@@ -57,7 +57,8 @@ export default async function handler(req: any, res: any) {
       // identity count — cultivar_plants rows (one per QR tag/lot identity)
       db.from('cultivar_plants').select('id', { count: 'exact', head: true }).eq('business_id', businessId),
       // stock facts — business_inventory rows (qty * unit_cost for inventory value)
-      db.from('business_inventory').select('qty, unit_cost, status').eq('business_id', businessId),
+      // `.is('retired_at', null)` — inventory VALUE must not count rows a catalogue import hid.
+      db.from('business_inventory').select('qty, unit_cost, status').eq('business_id', businessId).is('retired_at', null),
       db.from('businesses').select('accounting_company_id, name').eq('id', businessId).single(),
     ]);
 

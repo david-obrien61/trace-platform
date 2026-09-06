@@ -73,6 +73,13 @@ async function resolveItemForServer(
   item: { business_inventory_id: string | null },
 ): Promise<{ sellPrice: number | null; inventoryId: string | null; container: string | null; name: string }> {
   if (item.business_inventory_id) {
+    // ⚠️ DELIBERATELY NOT FILTERED ON `retired_at`, AND IT IS A STATED BOUNDARY RATHER THAN AN
+    // OVERSIGHT. A retired lot cannot be PICKED — `stockLineResolver` hides it from every scan,
+    // search and catalogue read (2026-09-06), so this by-id read is only ever reached with an id
+    // the picker already handed out. The stronger guard belongs here too, but the site below uses
+    // `.single()`, which ERRORS rather than returning null when the filter excludes the row, and
+    // re-shaping checkout's error path inside a catalogue-import build is scope this build
+    // declines. OWED, and named in the close-out rather than left for someone to find.
     const { data } = await db
       .from('business_inventory')
       .select('sell_price, size, name')

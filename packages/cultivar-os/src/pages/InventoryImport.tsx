@@ -144,8 +144,10 @@ export function InventoryImport() {
 
       // The tenant's catalog (business_id-scoped — RLS + explicit filter, AC-3).
       const { data: cat, error: catErr } = await supabase
+        // A retired row must not be MATCHED by a CSV import either — a FILL or UPDATE against a
+        // hidden row would revive a product the owner replaced, and the grid would not show it.
         .from('business_inventory').select(STOCK_LINE_IMPORT_COLUMNS)
-        .eq('business_id', businessId).neq('status', 'deleted');
+        .eq('business_id', businessId).neq('status', 'deleted').is('retired_at', null);
       if (catErr) throw new Error(catErr.message);
       const catalogRows = (cat ?? []) as unknown as StockLineRow[];
 

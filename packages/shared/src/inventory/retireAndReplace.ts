@@ -18,9 +18,18 @@
 // ══════════════════════════════════════════════════════════════════════════════════════════
 // 🔴 A ROW CARRYING A REAL COUNT IS NEVER RETIRED. THAT IS THE DATA NOBODY CAN RECREATE.
 // ══════════════════════════════════════════════════════════════════════════════════════════
-// Four of the 447 carry a non-zero quantity. A price list can be re-imported from QuickBooks in
-// a minute; a physical count is somebody walking a lot with a phone, and nothing on earth
-// reconstructs it. So `qty > 0` is checked BEFORE anything else and wins over every other rule.
+// ⚠️ CORRECTED 2026-09-06, AND THE RULE ABOVE IS NOW SUPERSEDED FOR LAWNS BY R-94.
+//   ① "Four of the 447" WAS WRONG — it is TWO. Measured live 2026-09-06: `qty > 0` returns Brodie
+//      Juniper 30 gallon (qty 1) and Arizona Cypress, Blue Ice 30 gallon (qty 1), and nothing
+//      else. The two rows people confuse them with are `status='archived'` at qty ZERO.
+//   ② R-94 (David, 2026-09-06): *"ALL 447 RETIRE. NO EXCEPTIONS. The two rows carrying a count are
+//      MY test data — I put them there to see whether the inventory widget worked."* This clause
+//      exists to protect a count nobody could walk a lot twice to recreate; one tree apiece, put
+//      there to test a widget, is not that. The catalogue import (`itemImportWriter.ts`) therefore
+//      retires on `business_id` + `retired_at IS NULL` and does not consult this planner's
+//      adopt/carry buckets at all.
+// The rule stays HERE, unweakened, because it is right for the general case and for the next
+// tenant — a business with real counted stock must never lose it to a price-list replacement.
 //
 // ══════════════════════════════════════════════════════════════════════════════════════════
 // 🔴 THE SHARP ONE: A COUNTED ROW THAT MATCHES AN INCOMING ITEM IS *ADOPTED*, NOT CARRIED
@@ -94,11 +103,19 @@ export interface RetireReplacePlan {
 /**
  * 🔴 MATCHING IS TWO PASSES, AND THE REASON IS THE ONE FACT THAT DEFINES THIS DATA SET.
  *
- * The 447 existing rows have NO SKUs. The 685 QuickBooks items ALL have SKUs. So a single
- * "SKU wins if present" key is asymmetric: every existing row keys by name, every incoming item
- * keys by SKU, and NOTHING EVER MATCHES — which retires every counted row and creates a
- * duplicate for it, splitting the on-hand across two rows. That is precisely the defect this
- * file exists to prevent, arriving through the matcher instead of through the plan.
+ * 🔴 CORRECTED 2026-09-06 — THE SECOND HALF OF THIS SENTENCE WAS FALSE AND IT WAS LOAD-BEARING.
+ * It said: *"The 447 existing rows have NO SKUs. The 685 QuickBooks items ALL have SKUs."*
+ * MEASURED against LAWNS's complete capture (`qbo-items-9341455222430707-2026-09-04`, 685 items,
+ * `complete: true`): **`Sku` is present on 2 of 685.** `docs/RULINGS.md` R-70 carried the same
+ * claim (*"the 685 QuickBooks items, which carry SKUs"*) and `itemList.ts` carried a third
+ * version of it. All three are corrected; the real join field is `Description`, on 632 of 685.
+ *
+ * ✏️ THE TWO-PASS DESIGN BELOW IS STILL CORRECT — it is the REASON that changed, not the code.
+ * A single "SKU wins if present" key is asymmetric whenever the two sides carry SKUs at different
+ * rates, and 447-with-none against 685-with-two is a more extreme version of that, not a milder
+ * one. Nothing would ever match, every counted row would be retired and duplicated, and the
+ * on-hand would split across two rows — precisely the defect this file exists to prevent,
+ * arriving through the matcher instead of through the plan.
  *
  * ✏️ It was written that way in the first draft and caught by the §C probe, not by reading.
  *

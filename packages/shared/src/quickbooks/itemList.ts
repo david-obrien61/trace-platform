@@ -24,7 +24,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { parseRows } from './qboRead';
 
-/** One item, reduced to the five fields that answer "what should a tree map to?". */
+/** One item, reduced to the fields that answer "what should a tree map to?" and "what IS this
+ *  product?". `description` and `fullyQualifiedName` were added 2026-09-06 for the catalogue
+ *  import: the first carries the product's real name and size, the second tells two
+ *  identically-named items apart. */
 export interface QboItemRow {
   id: string;
   name: string;
@@ -51,9 +54,42 @@ export interface QboItemRow {
    *  selling below cost is a different (and worse) finding than selling below list, and this
    *  build does not make that claim on a customer's behalf. */
   purchaseCost: number | null;
-  /** Intuit's `Sku`. 🔴 The join key that already works — 248 of 250 rows in the pricing tab
-   *  match a catalogue name exactly. Standardise the DISPLAY, keep the SKU. */
+  /**
+   * Intuit's `Sku`.
+   *
+   * 🔴 CORRECTED 2026-09-06 — THIS IS NOT A JOIN KEY AND THE OLD COMMENT HERE SAID IT WAS.
+   * MEASURED against LAWNS's complete 685-item capture (2026-09-04): **`Sku` is present on 2 of
+   * 685.** The prior sentence — *"the join key that already works — 248 of 250 rows in the
+   * pricing tab match a catalogue name exactly"* — described a match on the item's NAME and then
+   * called the result a SKU. Two different fields, one claim, and the claim steered a build.
+   * `docs/RULINGS.md` R-70 and `retireAndReplace.ts` carried the same false statement; all three
+   * are corrected in this pass. Keep the field — 2 rows do carry one — but never key on it.
+   */
   sku: string | null;
+  /**
+   * Intuit's `Description`.
+   *
+   * 🔴 THIS IS THE FIELD THAT CARRIES THE PRODUCT. MEASURED: present on 632 of 685, and at LAWNS
+   * it is TRACE's own name and size concatenated — item `AP45` has the description
+   * *"Afgan Black Pine, 45 Gallon"*. `Name` is the shorthand code the office types; `Description`
+   * is what a person would call the thing. A catalogue built from `Name` would show Lauren 647
+   * rows reading "AP45", "NZCM30", "BPJ30REP".
+   *
+   * ⚠️ NULL IS A REAL STATE — 15 of the 647 sellable items have no description at all — and it
+   * must stay distinguishable from an empty string, because "the field is absent" and "somebody
+   * typed nothing" are different facts about someone else's books (D-9 / A9).
+   */
+  description: string | null;
+  /**
+   * Intuit's `FullyQualifiedName` — the item's path through the category hierarchy, e.g.
+   * `Crape Myrtle:NZCM30`. Present on 685 of 685.
+   *
+   * 🔴 IT IS THE ONLY THING THAT TELLS TWO IDENTICALLY-NAMED ITEMS APART ON SCREEN. LAWNS has
+   * two items both named `NZCM30`: Id 859 (`Crape Myrtle:NZCM30`, NonInventory, $900) and Id 150
+   * (`NZCM30`, Service, $350). Reported so a collision can be shown to the owner as two
+   * distinguishable rows rather than as one row and a silent choice.
+   */
+  fullyQualifiedName: string | null;
 }
 
 export interface ParsedItemList {
@@ -113,6 +149,8 @@ export function parseItemList(rawBody: string): ParsedItemList {
       unitPrice: num(it?.UnitPrice),
       purchaseCost: num(it?.PurchaseCost),
       sku: str(it?.Sku),
+      description: str(it?.Description),
+      fullyQualifiedName: str(it?.FullyQualifiedName),
     });
   }
   return { ok: true, items, parseError: null };
