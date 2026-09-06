@@ -13,43 +13,68 @@ story, which is about walking a lot. **Recorded OPEN rather than papered over** 
 NO MATCH → a story is created first; this build was fired without one and says so).
 **Standing test.** Thunder writes the cards and sets `owed`. **Only David's live run flips a card to
 `covered`, with a date.**
-**Board: 0 of 22 covered** (20 `owed` · 2 `needs-test`).
+**Board: 0 of 23 covered** (21 `owed` · 2 `needs-test`).
 **TENANT:** LAWNS = `ed2e5933-45dc-4b9b-a331-ddfd125e7a74` · Test Dave's = `f7ec5d67-a9ef-4cb0-b807-438d67687d1b`.
 **ACTOR:** the business OWNER on every card unless the card says otherwise. All three endpoints are
 owner-gated (R-80) **and** require the verb permission — it is an AND, not an OR.
 
 ---
 
-> ⛔ **MIGRATION GATE — THREE MIGRATIONS, NONE APPLIED. CARDS 5 THROUGH 22 CANNOT PASS WITHOUT THEM.**
-> Apply IN THIS ORDER, as `postgres`, **in the SQL editor — never the dashboard TABLE EDITOR**
-> (§6 r17: the table editor's `supabase_admin` default ACL grants TRUNCATE + REFERENCES to `anon`,
-> and RLS cannot filter TRUNCATE):
+> 🔴 **THE UNDO IS THE THING BEING TESTED, NOT THE IMPORT. DAVID'S WORDS: *"If the wipe does not
+> bring the tenant back clean, Tuesday does not happen."*** An import that works once is a demo; an
+> import you can take back is a thing a customer can be handed. **The five cards that test the
+> undo, in the order they must be run:**
 >
-> 1. `supabase/migrations/20260906_inventory_import_run_provenance.sql`
->    — `business_inventory` gains `import_run_id`, `retired_by_run_id`, `qb_item_id` (all nullable,
->    no default, no backfill) + two partial provenance indexes.
-> 2. `supabase/migrations/20260906b_customers_import_run.sql`
->    — `customers` gains `import_run_id` + one partial index.
-> 3. `supabase/migrations/20260906c_qb_identity_unique_indexes.sql`
->    — the two **NON-PARTIAL** unique indexes. **RUN ITS THREE `BEFORE` QUERIES FIRST** and only
->    proceed when (b) and (c) both return **zero rows**.
+> | | Card | What it proves |
+> |---|---|---|
+> | 1 | **CARD 5** | The whole loop — import, wipe, verify — on **Test Dave's FIRST**. R-97 permits a LAWNS rehearsal *because* the undo makes it restorable, and at that moment the undo has never met real data. |
+> | 2 | **CARD 10** | 🔴 **THE WIPE.** 647 deleted, 447 un-retired, `leftovers` **empty**, receipts 111/111 and deliveries 31/31 before and after. |
+> | 3 | **CARD 11** | 🔴 **THE RE-RUN.** Twice must not mean double — 647 again, not 1,294. |
+> | 4 | **CARD 15** | The unique index **actually refuses** a duplicate. This is what makes CARD 11 believable rather than lucky, and it can only run after an import. |
+> | 5 | **CARD 12** | The undo **REFUSES** once QuickBooks writes are on. |
 >
-> 🔴 **THE THIRD ONE IS THE ONE THAT CAN FAIL, AND FAILING IS THE CORRECT OUTCOME** — two rows
-> against one QuickBooks id is a defect to look at, not a state to index around. It is a separate
-> file precisely so a failure there does not take three harmless `ALTER TABLE`s with it.
+> **CARD 23 is the closing sequence** — wipe, reload clean, writes on — the one you will actually
+> perform on the day. It is last because it **deliberately closes the undo**.
 >
-> 🔴 **AND IT LANDS CLEAN TODAY AND WILL NOT LATER.** Measured live 2026-09-06: LAWNS has 30
-> customers, 19 carrying a `qb_customer_id`, **19 distinct, zero duplicates**. That window closes
-> the moment any import runs without the index. Unlike tech-debt #58 and #183 — both blocked because
-> their tables already hold the rows the index would reject — this one can land on the first try.
+> ⚠️ **CARD 10 step 4 is the one to read slowly.** `leftovers` being empty is a STRONGER claim than
+> `inventoryDeleted: 647`, because under RLS a **refused** delete returns no error and zero rows —
+> indistinguishable, to the caller, from "there was nothing to delete". The undo re-reads the tenant
+> afterwards and counts what still carries the run id. A count of zero deleted with an empty
+> `leftovers` is a clean tenant; a count of zero with a non-empty one is a refusal.
+
+> ✅ **MIGRATION GATE — CLEARED 2026-09-06. ALL THREE APPLIED. CARDS 5–22 ARE NO LONGER BLOCKED.**
+> David ran them in the SQL editor and returned the catalog. All three columns on
+> `business_inventory` (`import_run_id` uuid · `qb_item_id` text · `retired_by_run_id` uuid) are
+> **nullable with no default**, and **447 rows carry zero of them** — applying the migration
+> stamped nothing, which is the check that matters (a migration that quietly wrote rows would be
+> indistinguishable from the build working). `customers.import_run_id` likewise: **30 rows, 0
+> stamped.** Both provenance indexes are PARTIAL; **both unique indexes are UNIQUE and NON-PARTIAL.**
 >
-> ⚠️ **DO NOT BUILD #54's PARTIAL FORM.** Tech-debt #54 proposes
-> `(business_id, qb_customer_id) WHERE NOT NULL`. It predates the 2026-08-31 failure where a partial
-> unique index was invisible to PostgREST's `onConflict` and the delivery ingest **failed on all 19
-> rows live**. `20260906c` is non-partial deliberately and says so in its own header.
+> ✅ **AND R-93 IS VISIBLY INTACT IN THE CATALOG:** `business_inventory` carries exactly two
+> triggers — `business_inventory_unit_projection` and `business_inventory_updated_at` — **neither
+> of which emits a ledger row.** A plain INSERT stays undoable. That is the premise the whole test
+> mode rests on, and it is now confirmed against the database rather than against the corpus.
 >
-> **Nothing breaks meanwhile:** with the migrations un-applied, the preview endpoint returns an
-> error naming the missing column. That is the honest failure rather than a silent one.
+> ✅ **DAVID SKIPPED `20260906c`'s BEFORE CHECKS AND HE WAS RIGHT TO.** His reasoning, verbatim:
+> *"both unique indexes created WITHOUT ERROR, which is itself the proof there were no duplicates —
+> an index cannot build over them."* **That is correct and it is the stronger proof**, not a
+> shortcut: `CREATE UNIQUE INDEX` fails loudly on a duplicate, so a successful build IS the
+> zero-duplicate assertion. The BEFORE queries only ever bought a friendlier error message.
+> ⚠️ **One nuance worth knowing for next time, and it does not apply here:** `IF NOT EXISTS`
+> matches on the index NAME alone, so had an index of that name already existed with different
+> columns or without UNIQUE, the statement would have been **silently skipped** and proven nothing.
+> The catalog paste rules that out — both are `UNIQUE (business_id, qb_item_id)` and
+> `UNIQUE (business_id, qb_customer_id)` as written.
+>
+> ✅ **THE NULLS-ARE-DISTINCT PROOF IS ALREADY IN HIS PASTE: 11 customers with a NULL
+> `qb_customer_id`, 447 inventory rows with a NULL `qb_item_id`.** Both far greater than one, under
+> unique indexes that committed — so NULLS DISTINCT is confirmed, and CARD 16 is satisfied by the
+> apply itself.
+>
+> 🔴 **STILL OWED, AND DAVID NAMED IT HIMSELF: the duplicate-refusal probe is a NO-OP TODAY.** No
+> row carries a `qb_item_id` yet, so the SELECT returns nothing and the INSERT proves nothing. **It
+> is CARD 15**, which already says exactly that in its own preamble and runs AFTER the first
+> import. *An index nobody has watched refuse is a claim.*
 
 > ⚠️ **WHAT THIS BUILD DOES NOT DO, STATED SO A MISSING THING IS NOT READ AS A BROKEN THING.**
 > There is **no screen**. The three endpoints are reachable by URL (`/api/qbo/items/preview`,
@@ -515,3 +540,32 @@ reports `customersDeleted: 0`, which CARD 10 step 3 checks.
 **What this card becomes the day the merge lands:** import customers, undo, and confirm the run's
 customers are gone while every hand-made customer and every previous run's customer survives.
 Until then a green check here would assert a proof nobody performed.
+
+---
+
+## CARD 23 — 🔴 THE CLOSING SEQUENCE: wipe, reload clean, writes on
+**STATUS:** owed · **DEVICE:** desktop · **LAST-PROVEN:** —
+🔴 **RUN THIS LAST. IT DELIBERATELY CLOSES THE UNDO, AND AFTER IT THERE IS NO GOING BACK BY BUTTON.**
+This is the sequence you actually perform on the day, after Lauren has finished experimenting.
+
+1. **WIPE.** Run CARD 10 with the run id from her session. Confirm `leftovers` is empty and
+   `/inventory` is back to **447**.
+2. **RELOAD CLEAN.** Run CARD 6 once more — a fresh run id, 647 created, 447 retired. Write the new
+   run id down. **This is the catalogue that becomes permanent.**
+3. **LOOK BEFORE YOU LATCH.** Re-run CARD 9 (647 rows), CARD 2's collision list, and spot-check the
+   sizes on CARD 3's numbers. **This is the last moment the undo is open.**
+4. **WRITES ON.** Remove LAWNS from `QBO_PUSH_HOLD` in Vercel, redeploy, and confirm
+   `/api/qbo/status` reports **`push_held: false`** — read it there, do not trust that the env var
+   propagated.
+5. **CONFIRM THE UNDO IS NOW CLOSED.** Call the undo with the run id from step 2.
+   **EXPECT HTTP 409, `refused: true`, and the catalogue untouched.**
+
+**PASS:** step 5 refuses, and `/inventory` still shows the 647.
+🔴 **Step 5 is not a formality — it is the only thing that proves the safety model is a MECHANISM
+and not a habit.** Up to step 4 the undo has been open every time you pressed it; step 5 is the
+first time it must say no. If it proceeds, the switch is not wired to the door and a later
+mis-click deletes rows behind invoices you have already sent.
+⚠️ **If you need to change the catalogue after this point, it is a normal edit or a new import —
+not an undo.** That is the trade you are making at step 4, deliberately.
+**FAIL:** step 5 returns 200 — **stop, and re-set `QBO_PUSH_HOLD` immediately.** Or step 2's re-run
+creates ~1,294 rows, which means step 1's wipe did not land and CARD 10 lied.

@@ -108,10 +108,20 @@ COMMIT;
 --    AND indexname IN ('business_inventory_import_run_idx','business_inventory_retired_by_run_idx')
 --  ORDER BY indexname;
 --
--- V4 — 🔴 NO POLICY WAS ADDED, ALTERED OR DROPPED. EXPECT the same set as before
---      (business_inventory_owner_all + business_inventory_member_all, from 20260612).
+-- V4 — 🔴 NO POLICY WAS ADDED, ALTERED OR DROPPED. Compare against the set from BEFORE this
+--      migration — do NOT compare against a list written here.
 -- SELECT policyname, cmd FROM pg_policies
 --  WHERE schemaname='public' AND tablename='business_inventory' ORDER BY policyname;
+--
+--      ✏️ CORRECTED 2026-09-06, AFTER APPLYING. This comment originally predicted
+--      "business_inventory_owner_all + business_inventory_member_all, from 20260612" — TWO
+--      policies. The live catalog returns FIVE: an owner_all plus SEPARATE member
+--      select/insert/update/delete policies. The pair was split at some point after 20260612 and
+--      this file was written from the migration that created them rather than from the catalog.
+--      🔴 THE ASSERTION WAS NEVER WRONG — nothing here touches a policy — but the EXPECTED VALUE
+--      was, and a verification step that names the wrong expected value sends the next reader
+--      hunting for a change nobody made. This is the repo-≠-catalog gap (tech-debt #39's class)
+--      arriving inside a verification comment. Compare before-and-after; never against prose.
 --
 -- V5 — 🔴 NO TRIGGER WAS ADDED. EXPECT exactly the two that were already there:
 --      business_inventory_updated_at and business_inventory_unit_projection.
